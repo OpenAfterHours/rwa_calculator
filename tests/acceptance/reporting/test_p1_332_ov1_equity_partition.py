@@ -77,7 +77,7 @@ from dataclasses import dataclass
 import polars as pl
 import pytest
 from tests.acceptance.reporting.test_reporting_golden import _REGIMES as _RICH_REGIMES
-from tests.fixtures.reporting_portfolio import build_reporting_bundle
+from tests.fixtures.reporting_portfolio import ALL_EQUITY_REFERENCES, build_reporting_bundle
 from tests.properties import portfolios as props
 
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -161,24 +161,35 @@ _FRAMEWORKS: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 # / 5 are covered by the partition identity below, which is what makes the block
 # a partition rather than a set of overlapping subsets.
 #
-# rich (crr): the equity leg is sealed ``irb_simple`` (Art. 155(2)) at 2,900,000.
-#     Row 2 MOVES 20,253,450.00 -> 17,353,450.00; UK 4a SURVIVES at 2,900,000.00.
+# rich (crr): ALL THREE equity-table legs are sealed ``irb_simple`` (Art. 155(2))
+#     — 2,900,000 listed + 7,400,000 + 14,800,000 for the two Art. 112(1)(o) CIU
+#     legs P2.54 added, which take the Art. 155(2)(c) 370% "all other equity"
+#     residual because ``_apply_equity_weights_irb_simple`` has no CIU branch.
+#     Row 2 MOVES (it sheds all three); UK 4a SURVIVES at 25,100,000.00, a figure
+#     the P1.373 infrastructure pair merged in from master does not touch — those
+#     are loans, not equity-table legs, so they move row 2 and row 1 only.
+#     **The CIU legs belong in UK 4a here, not in row 2, for the SAME reason the
+#     listed one does** — the row is keyed on the sealed ``equity_method``, which
+#     is what Art. 155(2) disclosure means, and the class the leg reports under is
+#     not what UK 4a partitions on. So P2.54 widens this cell; it does not split it.
 # absent (crr): the equity leg seals no method at all, so it is Art. 133 SA.
 #     Row 2 KEEPS its 9,850,000.00; UK 4a FALLS 1,500,000.00 -> 0.00.
-# b31 (both books): no UK 4a row exists and every equity leg is stamped ``sa``,
-#     so nothing whatever moves.
+# b31 (both books): no UK 4a row exists and every equity leg is stamped ``sa``, so
+#     the whole equity table sits in row 2 — 22,080,833.33 + the CIU legs'
+#     28,000,000 (Art. 132(2) 1,250% fall-back on 2,000,000 and a 75% mandate
+#     weight on 4,000,000) = 50,080,833.33.
 _EXPECTED: dict[tuple[str, str], dict[str, float | None]] = {
     ("rich", "crr"): {
-        "1": 147_850_803.769868,
+        "1": 170_050_803.769868,
         _ROW_SA: 17_353_450.0,
-        _ROW_EQUITY_SIMPLE: 2_900_000.0,
-        "29": 147_850_803.769868,
+        _ROW_EQUITY_SIMPLE: 25_100_000.0,
+        "29": 170_050_803.769868,
     },
     ("rich", "b31"): {
-        "1": 140_185_313.4668259,
-        _ROW_SA: 23_355_833.333333332,
+        "1": 168_185_313.4668259,
+        _ROW_SA: 51_355_833.33333333,
         _ROW_EQUITY_SIMPLE: None,
-        "29": 140_185_313.4668259,
+        "29": 168_185_313.4668259,
     },
     ("absent", "crr"): {
         "1": 30_098_477.213579975,
@@ -194,12 +205,14 @@ _EXPECTED: dict[tuple[str, str], dict[str, float | None]] = {
     },
 }
 
-# The equity RWEA each book carries at origin. Non-zero is what makes this test
-# able to distinguish "correct" from "incomplete" at all — a 0.00 equity leg
-# makes both keyings agree (.claude/LESSONS.md C2, in its equity form).
+# The equity-ORIGIN RWEA each book carries: the whole equity population OV1 row 2
+# and row UK 4a divide between them, which on the rich book is three legs (one
+# Art. 112(1)(p) listed + two Art. 112(1)(o) CIUs) and not one. Non-zero is what
+# makes this test able to distinguish "correct" from "incomplete" at all — a 0.00
+# equity leg makes both keyings agree (.claude/LESSONS.md C2, in its equity form).
 _EQUITY_RWEA: dict[tuple[str, str], float] = {
-    ("rich", "crr"): 2_900_000.0,
-    ("rich", "b31"): 2_500_000.0,
+    ("rich", "crr"): 25_100_000.0,
+    ("rich", "b31"): 30_500_000.0,
     ("absent", "crr"): 1_500_000.0,
     ("absent", "b31"): 3_750_000.0,
 }
@@ -310,20 +323,28 @@ def test_ov1_equity_rows_report_their_hand_derived_values(
         )
 
 
-def test_ov1_uk4a_keeps_the_irb_simple_leg_it_alone_may_report(
+def test_ov1_uk4a_keeps_the_irb_simple_legs_it_alone_may_report(
     runs: dict[tuple[str, str], _Run],
 ) -> None:
-    """The rich CRR book's UK 4a cell SURVIVES at 2,900,000.00 — it does not zero.
+    """The rich CRR book's UK 4a cell SURVIVES at 25,100,000.00 — it does not zero.
 
-    The half of P1.332 an inverted reading gets backwards. This leg is sealed
+    The half of P1.332 an inverted reading gets backwards. These legs are sealed
     ``equity_method == "irb_simple"``, i.e. Art. 155(2) simple risk-weighted IRB
-    equity, which is exactly and only what UK 4a discloses. Removing it from
+    equity, which is exactly and only what UK 4a discloses. Removing them from
     UK 4a (rather than from row 2) would also make the of-which rows foot to
     row 1, so the partition identity cannot tell the two fixes apart.
 
+    Three legs since P2.54, not one, and the cell is their SUM: the two
+    Art. 112(1)(o) CIU legs seal ``irb_simple`` too, because
+    ``_resolve_approach`` keys on the firm's permissions and the pack Feature and
+    never on ``equity_type``. UK 4a partitions on the METHOD, so a class (o) leg
+    under an IRB-permitted CRR firm is as much an Art. 155(2) disclosure as the
+    class (p) one beside it.
+
     Arrange: the rich reporting portfolio under CRR.
     Act:     run the pipeline -> Pillar 3 OV1 + the sealed ledger.
-    Assert:  the leg is sealed irb_simple, and UK 4a reports its whole RWEA.
+    Assert:  every equity-origin leg is sealed irb_simple, and UK 4a reports the
+             whole of their RWEA — not just the listed leg's 2,900,000.
     """
     # Arrange + Act
     run = runs[("rich", "crr")]
@@ -336,13 +357,19 @@ def test_ov1_uk4a_keeps_the_irb_simple_leg_it_alone_may_report(
         "discriminator UK 4a is keyed on (CRR Art. 155(2) vs Art. 133)."
     )
     assert set(equity["equity_method"].to_list()) == {"irb_simple"}, (
-        "the rich book's equity leg must be sealed 'irb_simple' for this assertion to "
-        f"be about UK 4a at all; got {equity['equity_method'].to_list()}."
+        "every one of the rich book's equity-table legs must be sealed 'irb_simple' for "
+        f"this assertion to be about UK 4a at all; got {equity['equity_method'].to_list()}."
     )
-    assert uk4a["a"] == pytest.approx(2_900_000.0, rel=_REL, abs=_ABS), (
+    assert equity.height == len(ALL_EQUITY_REFERENCES), (
+        f"the rich book must carry all {len(ALL_EQUITY_REFERENCES)} equity-table legs for "
+        f"the figure below to be their sum, got {equity.height}"
+    )
+    assert uk4a["a"] == pytest.approx(_EQUITY_RWEA[("rich", "crr")], rel=_REL, abs=_ABS), (
         f"OV1 row UK 4a reports {uk4a['a']}, but this book's Art. 155(2) simple "
-        "risk-weighted equity leg is 2,900,000.00 (listed, RW 290%, EAD 1,000,000). "
-        "UK 4a is the cell that SURVIVES the fix; row 2 is the cell that moves."
+        f"risk-weighted equity population is {_EQUITY_RWEA[('rich', 'crr')]:,.2f} — the "
+        "listed leg's 2,900,000 (RW 290%, EAD 1,000,000) plus the two CIU legs at the "
+        "370% residual. UK 4a is the cell that SURVIVES the fix; row 2 is the cell "
+        "that moves."
     )
 
 

@@ -27,32 +27,32 @@
       "templates_covered": 11
     },
     "b31/rich": {
-      "PASS": 197,
+      "PASS": 209,
       "FAIL": 4,
-      "VACUOUS": 221,
-      "NOT_EVALUATED": 386,
+      "VACUOUS": 223,
+      "NOT_EVALUATED": 372,
       "rules_enforced": 808,
-      "rules_executed": 422,
+      "rules_executed": 436,
       "templates_emitted": 12,
       "templates_covered": 12
     },
     "crr/off-bs": {
-      "PASS": 48,
+      "PASS": 56,
       "FAIL": 1,
-      "VACUOUS": 69,
-      "NOT_EVALUATED": 623,
+      "VACUOUS": 67,
+      "NOT_EVALUATED": 617,
       "rules_enforced": 741,
-      "rules_executed": 118,
+      "rules_executed": 124,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/off-bs": {
-      "PASS": 51,
+      "PASS": 61,
       "FAIL": 3,
-      "VACUOUS": 123,
-      "NOT_EVALUATED": 631,
+      "VACUOUS": 129,
+      "NOT_EVALUATED": 615,
       "rules_enforced": 808,
-      "rules_executed": 177,
+      "rules_executed": 193,
       "templates_emitted": 5,
       "templates_covered": 5
     },
@@ -438,7 +438,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "failing_coordinates": 18,
+      "failing_coordinates": 23,
       "coordinates": [
         "OF07.00.01.01[institution][r0010]",
         "OF07.00.01.01[institution][r0182]",
@@ -466,7 +466,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "failing_coordinates": 14,
+      "failing_coordinates": 15,
       "coordinates": [
         "OF07.00.01.01[central_govt_central_bank][r0010]",
         "OF07.00.01.01[institution][r0010]",
@@ -1140,30 +1140,6 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0486",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 44 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[institution] r0190 c0220 = null, OF07.00.01.01[institution] r0190 c0200 = null, OF07.00.01.01[corporate] r0190 c0220 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "irb-classes",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 6,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0190, c: 0220} = {t: OF07.00.01.01, r: 0190, c: 0200} * 0.35"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0488",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 44 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[institution] r0210 c0220 = null, OF07.00.01.01[institution] r0210 c0200 = null, OF07.00.01.01[corporate] r0210 c0220 = null.",
@@ -1180,35 +1156,11 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0210, c: 0220} = {t: OF07.00.01.01, r: 0210, c: 0200} * 0.7"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0492",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 44 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[institution] r0270 c0220 = null, OF07.00.01.01[institution] r0270 c0200 = null, OF07.00.01.01[corporate] r0270 c0220 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "irb-classes",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 6,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0270, c: 0220} = {t: OF07.00.01.01, r: 0270, c: 0200} * 12.5"
     },
     {
       "regime": "b31",
@@ -1228,7 +1180,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1252,7 +1204,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1276,7 +1228,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1300,7 +1252,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1324,7 +1276,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1348,7 +1300,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1372,7 +1324,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1396,7 +1348,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1420,7 +1372,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1444,7 +1396,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1468,7 +1420,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1492,7 +1444,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1516,7 +1468,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 6,
+      "vacuous_coordinates": 7,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1556,7 +1508,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 16,
+      "vacuous_coordinates": 18,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1580,7 +1532,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -1644,7 +1596,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 224,
+      "vacuous_coordinates": 252,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1668,7 +1620,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1692,7 +1644,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1716,7 +1668,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1740,7 +1692,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1764,7 +1716,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1788,7 +1740,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1812,7 +1764,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1836,7 +1788,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1860,7 +1812,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1884,7 +1836,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1908,7 +1860,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1932,7 +1884,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1956,7 +1908,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1980,7 +1932,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2004,7 +1956,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2028,7 +1980,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2052,7 +2004,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2076,7 +2028,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2100,7 +2052,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2124,7 +2076,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2148,7 +2100,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2172,7 +2124,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2196,7 +2148,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2314,7 +2266,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2434,30 +2386,6 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0731",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: an OF 07.00 / OF 09.01 of-which footing (real-estate and defaulted sub-rows) over rows that are emitted and unpopulated; every operand is EMITTED BUT UNREPORTED (null) - 680 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF09.01.01.01[TOTAL] r0140 c0010 = null, OF09.01.01.01[TOTAL] r0141 c0010 = null, OF09.01.01.01[TOTAL] r0142 c0010 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "irb-classes",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 40,
-      "tables": [
-        "OF09.01.01.01"
-      ],
-      "expression": "{t: OF09.01.01.01, r: 0140} = sum({t: OF09.01.01.01, r: 0141; 0142; 0143})"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0732_1",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 / OF 09.01 of-which footing (real-estate and defaulted sub-rows) over rows that are emitted and unpopulated; the operands split: 4 EMITTED AND EXACTLY 0.00 against 77 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF07.00.01.02[institution] r0340 c0210 = null, OF07.00.01.02[institution] r0341 c0210 = null, OF07.00.01.02[institution] r0342 c0210 = null.",
@@ -2474,7 +2402,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2786,7 +2714,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2811,7 +2739,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2836,7 +2764,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 192,
+      "vacuous_coordinates": 216,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2848,9 +2776,10 @@
       "severity": "ERROR",
       "reason": "A PUBLISHED-RULE DEFECT, banked deliberately: do NOT engineer output toward a PASS. The expression is {r0015} >= {r0010} - r0015 is 'of which: Defaulted exposures' and r0010 is the class total, so as published it asserts defaulted >= total, which no correct report can satisfy on any sheet with a performing portion. IGNORE ITS SHORT_LABEL, which describes a different check entirely ('the three of which rows r0024, r0025 and r0026 should add up to the total row r0023' - the project-finance phase rows); label and expression disagree in the published ruleset, so the label must not be read as describing what this entry covers. It was NOT_EVALUATED until P1.371: the scope is z 0001;0012;0015;0016, and of those four only z0016 resolves to an emitted sheet - z0001 (Total) and z0015 (CIU) carry empty bundle_keys by design (no ExposureClass analogue), and z0012 is empty here too (P2.55 declares it as ('high_risk',), after which it still resolves to no emitted sheet because no registered portfolio produces the class). The 9 coordinates are the equity sheet across the 9 scoped columns 0030/0035/0050/0060/0070/0080/0090/0130/0140, every one a CRM-substitution or CCF column: measured 0.0 on r0010 and null on r0015, which is correct for a plain on-balance-sheet equity holding with no protection and no undrawn component. That zero is the only thing keeping an ERROR-severity rule off the break list - an equity fixture with guarantees or an off-balance-sheet commitment would make it FAIL on a right answer. Treat it then as a published-rule limit (the boe_b0471 precedent), never as an output defect.",
       "portfolios": [
+        "off-bs",
         "rich"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 18,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2874,11 +2803,27 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 72,
+      "vacuous_coordinates": 81,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0024} >= {t: OF07.00.01.01, r: 0023}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0967",
+      "severity": "WARNING",
+      "reason": "P2.54 ADMISSION, not a defect, and the exact CIU twin of boe_b0265 (the equity entry triaged under P1.371 - read them together). NOT_EVALUATED until P2.54 bound s0015 to ('ciu',), because z0015 had no emitted sheet and resolve_sheet_codes skipped it silently - a coverage hole that looked like a clean run. It now evaluates and holds vacuously only because the estate has no DEFAULTED CIU. The rule ties defaulted CIU on the class sheet to the OF 09.01 CIU row: measured OF07.00.01.01[ciu] r0015 c0010 = null (r0015 is 'of which: Defaulted exposures'; both CIU legs are performing) against OF09.01.01.01[TOTAL] r0140 c0020 = 0.0. Both sides agree there is no defaulted CIU, and vacuity policy counts 0 = 0 as no evidence. The non-vacuous half of the same cross-template pairing IS asserted: boe_b0996/0997/0998 tie OF 09.01 r0142 to OF 07.00 r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, so the CIU tie-out is genuinely checked. Becomes a real PASS the moment a fixture carries a defaulted CIU holding; no output change is wanted for it.",
+      "portfolios": [
+        "off-bs",
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.01",
+        "OF09.01.01.01"
+      ],
+      "expression": "{t: OF07.00.01.01, r: 0015, c: 0010, z: 0015} = {t: OF09.01.01.01, r: 0140, c: 0020, filter: [eba_dim:CEG] = [eba_GA:x1]}"
     },
     {
       "regime": "b31",
@@ -3200,6 +3145,54 @@
     },
     {
       "regime": "b31",
+      "rule_id": "boe_b0993",
+      "severity": "WARNING",
+      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap — the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null — the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
+      "portfolios": [
+        "off-bs",
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.01",
+        "OF09.01.01.01"
+      ],
+      "expression": "{t: OF09.01.01.01, r: 0141, c: 0010, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0281, c: 0010, z: 0015}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0994",
+      "severity": "WARNING",
+      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap — the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null — the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
+      "portfolios": [
+        "off-bs",
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.01",
+        "OF09.01.01.01"
+      ],
+      "expression": "{t: OF09.01.01.01, r: 0141, c: 0075, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0281, c: 0200, z: 0015}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0995",
+      "severity": "WARNING",
+      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap — the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null — the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
+      "portfolios": [
+        "off-bs",
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.01",
+        "OF09.01.01.01"
+      ],
+      "expression": "{t: OF09.01.01.01, r: 0141, c: 0090, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0281, c: 0220, z: 0015}"
+    },
+    {
+      "regime": "b31",
       "rule_id": "boe_b1002",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: the OF 07.00 defaulted-exposure block - r0023 and its r0024/0025/0026 of-which rows - which is unpopulated, so 'defaulted exposures shall not exceed total exposures' is satisfied by 0 >= 0 on every registered portfolio; the operands split: 9 EMITTED AND EXACTLY 0.00 against 477 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF07.00.01.01[institution] r0025 c0030 = null, OF07.00.01.01[institution] r0023 c0030 = null, OF07.00.01.01[institution] r0025 c0035 = null.",
@@ -3216,7 +3209,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 72,
+      "vacuous_coordinates": 81,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3240,7 +3233,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 72,
+      "vacuous_coordinates": 81,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3264,7 +3257,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 72,
+      "vacuous_coordinates": 81,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3288,7 +3281,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 72,
+      "vacuous_coordinates": 81,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3696,7 +3689,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 9,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -4076,29 +4069,6 @@
         "C 08.07"
       ],
       "expression": "{c0040} <= 1"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09798_m",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: a C 09.01.a <-> C 07.00.a cross-template consistency check at the all-geographies total (CEG=eba_GA:x1) - the two templates are reconciled at 0 = 0; every operand is EMITTED BUT UNREPORTED (null) - 468 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: C 09.01.a[TOTAL] r0140 c0010 = null, C 09.01.a[TOTAL] r0141 c0010 = null, C 09.01.a[TOTAL] r0142 c0010 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 27,
-      "tables": [
-        "C 09.01.a"
-      ],
-      "expression": "{r0140} = {r0141} + {r0142} + {r0143}"
     },
     {
       "regime": "crr",

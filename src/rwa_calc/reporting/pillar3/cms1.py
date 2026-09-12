@@ -34,10 +34,25 @@ Cell semantics (recorded decisions, this slice):
 - **Rows.** 0010 ("Credit risk", which "excludes ... capital requirements
   relating to a counterparty credit risk charge, which are reported in row
   0020") and 0020 (CCR) partition the credit-risk book by ``risk_type``; 0080
-  (Total) is the whole book and hence their sum. Rows 0030-0070
-  (CVA/securitisation/market/op-risk/residual) stay a FIXED all-null set —
-  genuinely out of scope for a credit-risk calculator, and null is not the same
-  claim as 0.0. Row 0020 is BOUND and zero-fills on a book with no CCR.
+  (Total) is the whole book and hence their sum. Rows 0030-0060
+  (CVA/securitisation/market/op-risk) stay a FIXED all-null set — genuinely out
+  of scope for a credit-risk calculator, and null is not the same claim as 0.0.
+  Row 0020 is BOUND and zero-fills on a book with no CCR.
+- **Row 0070 is bound, and it is deliberately INCOMPLETE.** Its instruction
+  covers "RWA not captured within rows 0010 to 0060 (ie the RWA arising from
+  equity investments in funds (rows 12 to 14 in Template OV1), settlement risk
+  …)", and this calculator can produce exactly ONE of those components: the
+  Art. 112(1)(o) CIU RWEA (P2.54). Settlement risk, the trading-book switch and
+  threshold deductions are genuinely outside it and are NOT represented, so a
+  populated row 0070 is a CIU figure, never a complete residual — do not read it
+  as one, and do not infer from a 0.0 here that the other components are zero.
+  Binding it is what keeps 0080 = 0010 + 0020 + 0070 true once the CIU leaves
+  row 0010, and what makes the published ``CMS2 r0070 == CMS1 r0010`` hold.
+  Unlike every other bound row it does NOT zero-fill: a CIU-free book leaves all
+  four cells null, because 0.0 there would assert the components it cannot see
+  are nil. The cost of that choice is visible on a book WITH a CIU — column a
+  (modelled) reads null rather than 0.0, since the null/zero policy is one
+  decision per cell and the row-empty case is the one worth getting right.
 
 Lineage-instrumented (R21): ``cms1_plans`` exposes the single (no sheet axis)
 execution plan — its frame is the full sealed ledger with the derived
@@ -69,7 +84,7 @@ from rwa_calc.reporting.cellspec import (
     execute,
 )
 from rwa_calc.reporting.metadata import ReportingContext
-from rwa_calc.reporting.pillar3.templates import CMS1_COLUMNS, CMS1_ROWS
+from rwa_calc.reporting.pillar3.templates import CMS1_COLUMNS, CMS1_ROWS, CMS2_TOTAL_CLASSES
 from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
@@ -101,14 +116,43 @@ _CCR_RISK_TYPES: tuple[str, ...] = ("CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FU
 _IS_MODELLED: str = "cms1_is_modelled"
 _IS_CCR: str = "cms1_is_ccr"
 
-# 0010 (credit risk excl. CCR) + 0020 (CCR) partition the book; 0080 is the
-# whole book, and therefore their sum.
-_ROW_CCR_FLAG: dict[str, bool | None] = {"0010": False, "0020": True, "0080": None}
+#: The credit-risk population discriminator, SHARED with CMS2 (``derive_in_credit_risk``).
+#: ONE sentence of PS1/26 governs both templates: row 0070's instruction reads "RWA
+#: not captured within rows 0010 to 0060 (ie the RWA arising from equity investments
+#: in funds (rows 12 to 14 in Template OV1), settlement risk …)", so an
+#: Art. 112(1)(o) CIU's RWEA belongs in row 0070, is therefore NOT in rows 0010-0060,
+#: and is therefore outside the credit-risk RWA that CMS2 decomposes.
+IN_CREDIT_RISK: str = "cms_in_credit_risk"
+
+# Row axes: (is_ccr, in_credit_risk). 0010 (credit risk excl. CCR and excl. the
+# row-0070 carve-out) + 0020 (CCR) + 0070 (the carve-out) partition the book; 0080
+# is the whole book, and therefore their sum. 0020 takes no credit-risk-population
+# term: a CCR leg cannot be a CIU, so constraining it would only add a way for the
+# CCR charge to fall out of every row.
+_RESIDUAL_ROW: str = "0070"
+_ROW_AXES: dict[str, tuple[bool | None, bool | None]] = {
+    "0010": (False, True),
+    "0020": (True, None),
+    _RESIDUAL_ROW: (None, False),
+    "0080": (None, None),
+}
 
 
 def _total_actual(cells: Mapping[str, float | None], _prior: bool) -> float | None:
     """Column c = a + b — the Annex II intra-row sum, over columns that
     PARTITION the row's population, so it is the row's whole actual RWA."""
+    return (cells["a"] or 0.0) + (cells["b"] or 0.0)
+
+
+def _total_actual_or_null(cells: Mapping[str, float | None], _prior: bool) -> float | None:
+    """Row 0070's column c: the same sum, but NULL when neither side is populated.
+
+    ``_total_actual`` would report 0.0 on an empty population, which on the
+    incomplete residual row is a claim this calculator cannot make — see the
+    module docstring.
+    """
+    if cells["a"] is None and cells["b"] is None:
+        return None
     return (cells["a"] or 0.0) + (cells["b"] or 0.0)
 
 
@@ -120,27 +164,34 @@ def build_cms1_spec() -> TemplateSpec:
     standardised RWEA comparison.
     """
     cells: dict[tuple[str, str], CellSpec] = {}
-    for ref, is_ccr in _ROW_CCR_FLAG.items():
+    for ref, (is_ccr, in_cr) in _ROW_AXES.items():
+        # Row 0070 is the ONE row whose empty population must stay NULL rather
+        # than zero-fill: it carries a single component of a residual whose other
+        # components (settlement risk, the trading-book switch, threshold
+        # deductions) this calculator cannot see, so 0.0 on a CIU-free book would
+        # claim those are nil. Every other row is a claim the calculator can make.
+        residual = ref == _RESIDUAL_ROW
+        total_fn = _total_actual_or_null if residual else _total_actual
         # a MODELLED / b its COMPLEMENT: together the row's whole population,
         # so c (their Formula sum) is the row's whole actual RWA.
         cells[(ref, "a")] = CellSpec(
             Sum("rwa_final"),
-            predicate=_predicate(is_ccr, modelled=True),
-            empty_cell="zero",
+            predicate=_predicate(is_ccr, modelled=True, in_credit_risk=in_cr),
+            empty_cell="null" if residual else "zero",
         )
         cells[(ref, "b")] = CellSpec(
             Sum("rwa_final"),
-            predicate=_predicate(is_ccr, modelled=False),
-            empty_cell="zero",
+            predicate=_predicate(is_ccr, modelled=False, in_credit_risk=in_cr),
+            empty_cell="null" if residual else "zero",
         )
-        cells[(ref, "c")] = CellSpec(Formula(refs=("a", "b"), fn=_total_actual))
+        cells[(ref, "c")] = CellSpec(Formula(refs=("a", "b"), fn=total_fn))
         # d (full-SA) spans the row's whole population, modelled or not — the
         # SA recomputation of the exposures giving rise to column c. Zero-fills
         # on an empty population; ``sa_rwa`` absent still yields null.
         cells[(ref, "d")] = CellSpec(
             Sum("sa_rwa"),
-            predicate=_predicate(is_ccr, modelled=None),
-            empty_cell="zero",
+            predicate=_predicate(is_ccr, modelled=None, in_credit_risk=in_cr),
+            empty_cell="null" if residual else "zero",
         )
     return TemplateSpec(
         name="cms1",
@@ -224,20 +275,50 @@ def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
         if "risk_type" in cols
         else pl.lit(value=False)
     )
-    return results.with_columns(modelled.alias(_IS_MODELLED), is_ccr.alias(_IS_CCR))
+    return derive_in_credit_risk(
+        results.with_columns(modelled.alias(_IS_MODELLED), is_ccr.alias(_IS_CCR)), cols
+    )
 
 
-def _predicate(is_ccr: bool | None, *, modelled: bool | None) -> RowPredicate | None:
-    """The conjunctive cell predicate: a risk-type side and an approach side.
+def derive_in_credit_risk(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
+    """Add :data:`IN_CREDIT_RISK` — the population rows 0010/0020 and the whole of
+    CMS2 decompose. SHARED with CMS2, because one PS1/26 sentence governs both.
 
-    ``None`` on either axis imposes no constraint (row 0080 spans both risk-type
-    sides; column d spans both approach sides).
+    ALWAYS derived, and literal True when ``exposure_class`` is absent: a tolerant
+    ``equals`` term matches NOTHING on an absent column, so an absent class would
+    empty row 0010 and CMS2's Total outright — the whole book reported nowhere.
+    Every synthetic unit frame in the Pillar 3 estate is such a frame. A leg whose
+    class the ledger did NOT seal is likewise inside the population: it cannot be a
+    CIU, which is the only thing the carve-out removes.
+
+    ``CMS2_TOTAL_CLASSES`` is the allow-list form of the same decision and is the
+    single declaration of it — stated as a set so that a twentieth
+    ``ExposureClass`` member is a decision rather than a silent admission.
+    """
+    in_credit_risk = (
+        pl.col("exposure_class").is_in(list(CMS2_TOTAL_CLASSES)).fill_null(value=True)
+        if "exposure_class" in cols
+        else pl.lit(value=True)
+    )
+    return results.with_columns(in_credit_risk.alias(IN_CREDIT_RISK))
+
+
+def _predicate(
+    is_ccr: bool | None, *, modelled: bool | None, in_credit_risk: bool | None = None
+) -> RowPredicate | None:
+    """The conjunctive cell predicate: a risk-type side, an approach side and the
+    credit-risk-population side.
+
+    ``None`` on any axis imposes no constraint (row 0080 spans both risk-type
+    sides and the whole population; column d spans both approach sides).
     """
     terms: list[tuple[str, str | bool]] = []
     if is_ccr is not None:
         terms.append((_IS_CCR, is_ccr))
     if modelled is not None:
         terms.append((_IS_MODELLED, modelled))
+    if in_credit_risk is not None:
+        terms.append((IN_CREDIT_RISK, in_credit_risk))
     return RowPredicate(equals=tuple(terms)) if terms else None
 
 

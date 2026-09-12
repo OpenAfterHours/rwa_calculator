@@ -207,7 +207,7 @@ _C07_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode(
         "0015",
         "Art. 112(1)(o) collective investment undertakings",
-        (),
+        ("ciu",),
         "COREP Annex II C 07.00 rows 0281-0283; v09743_m",
     ),
     SheetCode(
@@ -315,7 +315,7 @@ _OF07_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode(
         "0015",
         "Art. 112(1)(o) collective investment undertakings",
-        (),
+        ("ciu",),
         "PS1/26 Annex II OF 09.01 row 0140",
     ),
     SheetCode(

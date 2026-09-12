@@ -456,6 +456,7 @@
         "tests/acceptance/crr/test_p1_154_art_118_international_organisation_class.py",
         "tests/acceptance/reporting/test_c07_art112_class_axis.py",
         "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
+        "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_cell_rederivation.py",
         "tests/conformance/test_classification_conformance.py",
@@ -5985,11 +5986,13 @@
         "contracts/edges.py",
         "data/schemas.py",
         "domain/enums.py",
+        "engine/aggregator/_equity_prep.py",
         "engine/aggregator/aggregator.py",
         "reporting/corep/sheet_labels.py",
         "reporting/validations/scope.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_covered_bonds.py",
@@ -7031,11 +7034,13 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "contracts/edges.py",
         "engine/equity/calculator.py",
         "reporting/pillar3/ov1.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
+        "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/unit/test_p1_166_ciu_fallback_docstring.py"
       ],
       "watchfire_index_gap": false
@@ -7105,6 +7110,7 @@
         "tests/acceptance/basel31/test_p2_19_unlisted_young_equity_higher_risk.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
         "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
+        "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/conformance/test_cell_rederivation.py",
         "tests/fixtures/p1_182/p1_182.py",
         "tests/fixtures/p2_19/p2_19.py",

@@ -22,6 +22,10 @@ Coverage (one exposure each unless noted):
     IRB         F-IRB corporate, A-IRB corporate, A-IRB retail
     Slotting    specialised lending (project finance, strong)
     Equity      one listed equity holding (Art. 133 SA / Art. 155 IRB simple)
+    CIU         two collective investment undertakings, booked as
+                ``equity_type='ciu'``. Art. 132 fall-back and Art. 132A
+                mandate-based under Basel 3.1; both fall to the Art. 155(2)(c)
+                IRB-simple residual under CRR — see ``_equity_exposures``
     SF overlap  two performing corporate-SMEs on an infrastructure product —
                 one SA, one A-IRB — so Art. 501 and Art. 501a are BOTH eligible
                 on one row, on both the SA and the IRB template families
@@ -136,8 +140,24 @@ CP_AIRB_RET = "RP-CP-AIRB-RET"
 CP_SL = "RP-CP-SL"
 CP_EQUITY = "RP-CP-EQUITY"
 
-# Equity exposure reference (separate equity input table, not a loan)
+# Equity exposure references (separate equity input table, not loans)
 EQ_LISTED = "RP-EQ-LISTED"
+EQ_CIU_FALLBACK = "RP-EQ-CIU-FALLBACK"
+EQ_CIU_MANDATE = "RP-EQ-CIU-MANDATE"
+
+# Every equity-table reference, for smoke / adequacy assertions. A test keyed on
+# "the equity leg" singular is stale: there are three, of which two are CIUs.
+ALL_EQUITY_REFERENCES = (EQ_LISTED, EQ_CIU_FALLBACK, EQ_CIU_MANDATE)
+
+# The mandate-based CIU's weighted-average risk weight, as the FIRM reports it
+# under Art. 132A(2) — a fixture INPUT, not a regulatory scalar. The engine reads
+# it verbatim (``_ciu_computed_rw_expr("ciu_mandate_rw")``), so it is the one
+# equity risk weight in this portfolio that does not come from the pack. Set at
+# 75% so that on the Basel 3.1 arm the two CIU legs span the extremes of the
+# Art. 132 ladder (1,250% fall-back against this) and a sign or mapping error
+# cannot hide in a small difference. Not read at all on the CRR arm — see
+# ``_equity_exposures``.
+CIU_MANDATE_RW_INPUT = 0.75
 
 # Loan references
 LN_SOV = "RP-LN-SOV"
@@ -316,12 +336,80 @@ def _counterparties() -> pl.DataFrame:
 
 
 def _equity_exposures() -> pl.DataFrame:
-    """One listed equity holding — exercises the separate equity calculator path.
+    """One listed equity holding plus two CIUs — the separate equity calculator path.
 
     Equity routes via the ``equity_exposures`` input table (not loans). The
     aggregator concatenates the prepared equity frame into ``result.results``
-    before the seal, so this row appears with ``approach_applied='equity'`` /
-    ``exposure_class='equity'`` and surfaces equity in the reporting templates.
+    before the seal, so these rows reach the sealed ledger with
+    ``approach_applied='equity'`` and surface in the reporting templates. All
+    three share ``CP_EQUITY``.
+
+    CIUs (P2.54) are modelled as ``equity_type='ciu'`` through the same
+    calculator — there is no separate CIU input table, and ``equity_type`` is the
+    only thing that distinguishes one, never the counterparty's ``entity_type``.
+    Art. 112(1)(o) makes a CIU its own reporting class, so these two legs are
+    what makes that axis reachable at all: before them the estate held no CIU row
+    anywhere, and every supervisory rule over the CIU sheet evaluated as
+    NOT_EVALUATED, which is indistinguishable from a clean estate
+    (``.claude/LESSONS.md`` B5).
+
+    Why TWO CIU legs on DIFFERENT approaches rather than one: C 07.00 decomposes
+    row 0010 into the "of which" rows 0281 (look-through) / 0282 (mandate-based)
+    / 0283 (fall-back), and ``boe_b0728`` / ``v09743_m`` both state
+    ``r0010 = r0281 + r0282 + r0283``. A single leg makes that a one-term
+    tautology that holds under any mapping; two legs on two approaches make it a
+    genuine two-term identity.
+
+    Three input details that each change the arithmetic, all measured:
+
+    - ``ciu_approach`` is matched against exactly ``fallback`` /
+      ``mandate_based`` / ``look_through``
+      (``engine/equity/calculator.py::_append_ciu_branches``, validated against
+      ``VALID_CIU_APPROACHES``). Any other value — **including null** — falls
+      through to the 1,250% fall-back, so a misspelling degrades silently to a
+      number that looks deliberate.
+    - ``ciu_third_party_calc`` is left defaulted (False). True applies
+      Art. 132(4)'s 1.2x uplift, which would make the mandate leg 90% not 75%.
+    - neither leg carries a ``ciu_holdings`` row, and neither needs one: only
+      ``look_through`` reads that table (``tests/fixtures/p2_15`` holds the shape
+      to copy if a look-through leg is ever added here).
+
+    Measured on this portfolio under both ``RUNS`` configs. ``ead_final`` equals
+    the carrying/fair value with no conversion — an equity holding is wholly
+    drawn, so no CCF applies:
+
+    ======================  ==========  ==========  ===========  ==========  ===========
+    leg                            EAD     B31 RW     B31 RWEA      CRR RW     CRR RWEA
+    ======================  ==========  ==========  ===========  ==========  ===========
+    ``RP-EQ-LISTED``         1,000,000       2.50     2,500,000        2.90    2,900,000
+    ``RP-EQ-CIU-FALLBACK``   2,000,000      12.50    25,000,000        3.70    7,400,000
+    ``RP-EQ-CIU-MANDATE``    4,000,000       0.75     3,000,000        3.70   14,800,000
+    ======================  ==========  ==========  ===========  ==========  ===========
+
+    CIU subtotal: 6,000,000 EAD against 28,000,000 RWEA (B31) / 22,200,000 (CRR).
+
+    **Every weight moves by regime, and the CIU legs move for a reason that is
+    not the Art. 132 ladder.** Both ``RUNS`` configs for this portfolio carry IRB
+    permission, so under CRR the equity calculator takes the Art. 155(2) IRB
+    simple-risk-weight path and seals ``equity_method='irb_simple'``. That path
+    has no CIU branch at all: ``_apply_equity_weights_irb_simple`` sorts on
+    ``equity_type`` and a ``ciu`` falls to its Art. 155(2)(c) "all other equity"
+    residual, 370%. So ``ciu_approach`` is read only under Basel 3.1 here, where
+    the SA path (``equity_method='sa'``) applies Art. 132's ladder and gives the
+    12.50 / 0.75 pair the two legs were chosen for.
+
+    Two consequences worth stating before asserting on this fixture:
+
+    - the CRR figures are NOT an Art. 132/152 CIU treatment, and a test must not
+      read them as one;
+    - the CRR legs are excluded from C 07.00 altogether, because
+      ``c07.py::_equity_admission`` drops any leg whose ``equity_method`` is an
+      ``EQUITY_IRB_METHODS`` member (COREP Annex II ¶50 scopes that template to
+      Chapter 2 of Title II Part Three). Measured: no ``ciu`` — and no
+      ``equity`` — sheet is emitted on the CRR arm, and the CIU RWEA lands in
+      C 02.00 r0420 "Equity IRB" instead. **A CIU assertion over C 07.00 must be
+      Basel-3.1-only on this portfolio**; the CRR half of that axis needs a
+      CIU portfolio run under an SA config, which this one is not.
     """
     return pl.DataFrame(
         [
@@ -332,8 +420,31 @@ def _equity_exposures() -> pl.DataFrame:
                 "currency": "GBP",
                 "carrying_value": 1_000_000.0,
                 "fair_value": 1_000_000.0,
-            }
-        ]
+            },
+            {
+                "exposure_reference": EQ_CIU_FALLBACK,
+                "counterparty_reference": CP_EQUITY,
+                "equity_type": "ciu",
+                "currency": "GBP",
+                "carrying_value": 2_000_000.0,
+                "fair_value": 2_000_000.0,
+                "ciu_approach": "fallback",
+            },
+            {
+                "exposure_reference": EQ_CIU_MANDATE,
+                "counterparty_reference": CP_EQUITY,
+                "equity_type": "ciu",
+                "currency": "GBP",
+                "carrying_value": 4_000_000.0,
+                "fair_value": 4_000_000.0,
+                "ciu_approach": "mandate_based",
+                "ciu_mandate_rw": CIU_MANDATE_RW_INPUT,
+            },
+        ],
+        # The listed row omits both CIU columns, so without an explicit schema
+        # Polars would infer them from the later rows alone; pinning them keeps
+        # the frame's dtypes independent of row order.
+        schema_overrides={"ciu_approach": pl.String, "ciu_mandate_rw": pl.Float64},
     )
 
 

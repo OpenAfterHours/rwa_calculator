@@ -1,4 +1,4 @@
 {"row_ref":"1","row_name":"Private equity exposures","a":null,"b":null,"c":190.0,"d":null,"e":null,"f":null}
 {"row_ref":"2","row_name":"Exchange-traded equity exposures","a":1000000.0,"b":null,"c":290.0,"d":1000000.0,"e":2900000.0,"f":8000.0}
-{"row_ref":"3","row_name":"Other equity exposures","a":null,"b":null,"c":370.0,"d":null,"e":null,"f":null}
-{"row_ref":"4","row_name":"Total","a":1000000.0,"b":null,"c":null,"d":1000000.0,"e":2900000.0,"f":8000.0}
+{"row_ref":"3","row_name":"Other equity exposures","a":6000000.0,"b":null,"c":370.0,"d":6000000.0,"e":22200000.0,"f":144000.0}
+{"row_ref":"4","row_name":"Total","a":7000000.0,"b":null,"c":null,"d":7000000.0,"e":25100000.0,"f":152000.0}

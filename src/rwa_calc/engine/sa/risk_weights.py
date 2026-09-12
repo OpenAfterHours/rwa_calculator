@@ -1324,6 +1324,11 @@ def _apply_b31_risk_weight_overrides(
         # transitional floor) lives in the dedicated equity table.
         .when(uc == "EQUITY")
         .then(pl.lit(_SA_B31_RW["equity"]))
+        # CIU (o): DEFENCE-IN-DEPTH, unreachable — the equity file never reaches
+        # this ladder, where the 100% residual would LOWER the B31 SA-equivalent
+        # (so the floor) by 150pp. The pack value is Art. 132(2)'s fall-back.
+        .when(uc == "CIU")
+        .then(pl.lit(_B31_EQ_RW[EquityType.CIU]))
         .otherwise(pl.col("risk_weight").fill_null(1.0))
         .alias("risk_weight")
     )
@@ -1524,6 +1529,9 @@ def _apply_crr_risk_weight_overrides(
         # Equity (Art. 133(2)): flat 100%.
         .when(uc == "EQUITY")
         .then(pl.lit(_SA_CRR_RW["equity"]))
+        # CIU (o): the same unreachable conservative backstop as the B31 ladder.
+        .when(uc == "CIU")
+        .then(pl.lit(_CRR_EQ_RW[EquityType.CIU]))
         .otherwise(pl.col("risk_weight").fill_null(1.0))
         .alias("risk_weight")
     )

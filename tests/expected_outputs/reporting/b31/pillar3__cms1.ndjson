@@ -4,5 +4,5 @@
 {"row_ref":"0040","row_name":"Securitisation exposures in the banking book","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0050","row_name":"Market risk","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0060","row_name":"Operational risk","a":null,"b":null,"c":null,"d":null}
-{"row_ref":"0070","row_name":"Residual RWA","a":null,"b":null,"c":null,"d":null}
-{"row_ref":"0080","row_name":"Total","a":116829480.13349256,"b":23355833.333333332,"c":140185313.4668259,"d":167130833.3333333}
+{"row_ref":"0070","row_name":"Residual RWA","a":null,"b":28000000.0,"c":28000000.0,"d":28000000.0}
+{"row_ref":"0080","row_name":"Total","a":116829480.13349256,"b":51355833.33333333,"c":168185313.4668259,"d":195130833.3333333}

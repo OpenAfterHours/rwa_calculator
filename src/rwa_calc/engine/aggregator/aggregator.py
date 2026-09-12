@@ -718,12 +718,16 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
         & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
     )
-    # Classes that outrank real estate in BOTH rankings (PS1/26 Table A2 rows
-    # (1)-(6); COREP Annex II para 62 ranks 1-5) and so keep their own class even
-    # when property-secured. Defaulted is already handled by the limb above.
+    # Classes that outrank real estate in BOTH rankings and so keep their own
+    # class even when property-secured. PS1/26 Table A2 rows (1)-(6) are
+    # securitisation, CIU, subordinated-debt/equity, items of particularly high
+    # risk, default and covered bonds (COREP Annex II para 62 ranks 1-5);
+    # securitisation has no ``ExposureClass`` member, so the list below is the
+    # other five. Defaulted is already handled by the limb above.
     outranks_real_estate = pl.col("exposure_class").is_in(
         [
             ExposureClass.HIGH_RISK.value,
+            ExposureClass.CIU.value,
             ExposureClass.EQUITY.value,
             ExposureClass.COVERED_BOND.value,
             ExposureClass.DEFAULTED.value,

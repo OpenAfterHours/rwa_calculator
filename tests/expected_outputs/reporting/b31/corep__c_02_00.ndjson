@@ -1,10 +1,10 @@
-{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":140185313.4668259,"0020":167130833.3333333,"0030":140185313.4668259}
+{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":168185313.4668259,"0020":195130833.3333333,"0030":168185313.4668259}
 {"row_ref":"0034","row_name":"Output floor activated","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0035","row_name":"Output floor multiplier","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0036","row_name":"Output floor adjustment (OF-ADJ)","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":11214825.077346072,"0020":13370466.666666666,"0030":11214825.077346072}
-{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":140185313.4668259,"0020":167130833.3333333,"0030":140185313.4668259}
-{"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":23355833.333333332,"0020":23355833.333333332,"0030":23355833.333333332}
+{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":13454825.077346072,"0020":15610466.666666666,"0030":13454825.077346072}
+{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":168185313.4668259,"0020":195130833.3333333,"0030":168185313.4668259}
+{"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":51355833.33333333,"0020":51355833.33333333,"0030":51355833.33333333}
 {"row_ref":"0070","row_name":"Central governments and central banks","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0080","row_name":"Regional governments and local authorities","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0090","row_name":"Public sector entities","0010":0.0,"0020":0.0,"0030":0.0}
@@ -19,7 +19,7 @@
 {"row_ref":"0170","row_name":"Higher-risk items","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0180","row_name":"Covered bonds","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0190","row_name":"Short-term credit assessment","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0200","row_name":"Collective investment undertakings (CIU)","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0200","row_name":"Collective investment undertakings (CIU)","0010":28000000.0,"0020":28000000.0,"0030":28000000.0}
 {"row_ref":"0210","row_name":"Equity","0010":2500000.0,"0020":2500000.0,"0030":2500000.0}
 {"row_ref":"0211","row_name":"Other items","0010":20000.0,"0020":20000.0,"0030":20000.0}
 {"row_ref":"0220","row_name":"Of which: IRB Approach","0010":116829480.13349256,"0020":0.0,"0030":0.0}

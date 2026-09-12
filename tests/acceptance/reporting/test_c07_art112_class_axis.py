@@ -16,7 +16,7 @@ they key a sheet:
         + commercial_mortgage                        -> (i) real_estate
 
 Before that merge the estate published ``corporate`` 8,000,000 and
-``corporate_sme`` 500,000 as two separate sheets, and letter (g) had NO total
+``corporate_sme`` 2,000,000 as two separate sheets, and letter (g) had NO total
 anywhere in the template. Worse, the SME breakdown row was a casualty of the
 same split: with the SME exposures on their own sheet, row 0020 "of which: SME"
 on the corporate sheet had nothing to report and published **null** — the
@@ -72,9 +72,12 @@ _EXPECTED_SHEETS: frozenset[str] = frozenset(
 )
 
 #: Letter (g): ``LN_CORP_RATED`` 5,000,000 + ``LN_CORP_UNRATED`` 3,000,000
-#: (both ``corporate``) + ``LN_SME`` 500,000 (``corporate_sme``).
-_CORPORATE_TOTAL: float = 8_500_000.0
-_CORPORATE_SME: float = 500_000.0
+#: (both ``corporate``) + ``LN_SME`` 500,000 + ``LN_SME_INFRA`` 1,500,000 (both
+#: ``corporate_sme``). The second SME leg is the P1.373 supporting-factor overlap
+#: row — a performing corporate-SME on an infrastructure product — so the SME
+#: of-which is 2,000,000, not 500,000.
+_CORPORATE_TOTAL: float = 10_000_000.0
+_CORPORATE_SME: float = 2_000_000.0
 
 #: Letter (h): ``LN_RETAIL`` 250,000 (``retail_other``).
 _RETAIL_TOTAL: float = 250_000.0

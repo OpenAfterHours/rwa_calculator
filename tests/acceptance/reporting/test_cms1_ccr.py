@@ -183,13 +183,16 @@ class _Run:
 
 # portfolio -> row_ref -> column_ref -> value.
 #
-# rich: 14 loans + 1 equity + 2 CIUs, NO CCR. Modelled = F-IRB 48,244,060.92 +
-#   A-IRB 14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58; standardised =
-#   the SA book + equity + CIU = 50,080,833.33. They sum to the whole portfolio
+# rich: 16 loans + 1 equity + 2 CIUs, NO CCR. Modelled = F-IRB 48,244,060.92 +
+#   A-IRB 16,085,419.21 + slotting 52,500,000.00 = 116,829,480.13; standardised =
+#   the SA book + equity + CIU = 51,355,833.33. They sum to the whole portfolio
 #   (== C 02.00 row 0010 TREA). Column d is the book's whole sa_rwa:
-#   192,155,833.33 — including equity's own 2,500,000 and the CIU legs' 28,000,000
+#   195,130,833.33 — including equity's own 2,500,000 and the CIU legs' 28,000,000
 #   standardised-equivalent RWA (B31 equity is SA-only, Art. 147A; the aggregator
-#   populates an equity-table leg's sa_rwa as its rwa — R4).
+#   populates an equity-table leg's sa_rwa as its rwa — R4). The A-IRB and SA legs
+#   both carry the P1.373 supporting-factor overlap pair (RP-LN-SME-INFRA,
+#   RP-LN-AIRB-INFRA) merged in from master, which is CRR-only relief and so
+#   contributes unrelieved RWA under Basel 3.1.
 #   Row 0020 is a populated ZERO — the book has no CCR, which is a claim the
 #   calculator can make; Total therefore equals row 0010.
 #
@@ -212,17 +215,17 @@ class _Run:
 _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
     "rich": {
         "0010": {
-            "a": 115_369_130.58029616,
-            "b": 22_080_833.333333332,
-            "c": 137_449_963.9136295,
-            "d": 164_155_833.3333333,
+            "a": 116_829_480.13349256,
+            "b": 23_355_833.333333332,
+            "c": 140_185_313.4668259,
+            "d": 167_130_833.3333333,
         },
         "0020": {"a": 0.0, "b": 0.0, "c": 0.0, "d": 0.0},
         "0080": {
-            "a": 115_369_130.58029616,
-            "b": 50_080_833.33333333,
-            "c": 165_449_963.91362947,
-            "d": 192_155_833.3333333,
+            "a": 116_829_480.13349256,
+            "b": 51_355_833.33333333,
+            "c": 168_185_313.4668259,
+            "d": 195_130_833.3333333,
         },
     },
     "ccr": {

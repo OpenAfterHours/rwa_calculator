@@ -109,13 +109,21 @@ class _Run:
 
 # portfolio -> row_ref -> column_ref -> value.
 #
-# rich: 14 loans + 1 equity + 2 CIUs, NO CCR. Modelled = F-IRB 48,244,060.92 +
-#   A-IRB 14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58 (== C 02.00 row
-#   0220); standardised = the SA book + equity + CIU = 50,080,833.33 (== C 02.00
-#   row 0060). They sum to the whole portfolio, 165,449,963.91 (== C 02.00 row
-#   0010). S-TREA (column 0040) = whole-book sa_rwa = 192,155,833.33.
+# rich: 16 loans + 1 equity + 2 CIUs, NO CCR. Modelled = F-IRB 48,244,060.92 +
+#   A-IRB 16,085,419.21 + slotting 52,500,000.00 = 116,829,480.13 (== C 02.00 row
+#   0220); standardised = the SA book + equity + CIU = 51,355,833.33 (== C 02.00
+#   row 0060). They sum to the whole portfolio, 168,185,313.47 (== C 02.00 row
+#   0010). S-TREA (column 0040) = whole-book sa_rwa = 195,130,833.33.
 #
-#   **The standardised partition grew 22,080,833.33 -> 50,080,833.33 with P2.54**,
+#   The A-IRB and SA legs both carry the P1.373 supporting-factor overlap pair
+#   (RP-LN-SME-INFRA, RP-LN-AIRB-INFRA) merged in from master; supporting factors
+#   are CRR-only, so under Basel 3.1 those two legs contribute their full
+#   unrelieved RWA here. They are what moves the modelled partition
+#   115,369,130.58 -> 116,829,480.13 and S-TREA 192,155,833.33 -> 195,130,833.33
+#   against the P2.54 branch's own figures; the CIU legs below are unaffected by
+#   them and vice versa, the two deltas being additive.
+#
+#   **The standardised partition grew 23,355,833.33 -> 51,355,833.33 with P2.54**,
 #   by exactly the 28,000,000 of Art. 112(1)(o) CIU RWEA the two new equity-table
 #   legs carry (2,000,000 at the Art. 132(2) 1,250% fall-back + 4,000,000 at a
 #   75% mandate weight). That belongs in column 0020 and nowhere else: a CIU's own
@@ -130,19 +138,19 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
     "rich": {
         # Credit risk excluding CCR — the whole book (this portfolio has no CCR).
         "0010": {
-            "0010": 115_369_130.58029616,
-            "0020": 50_080_833.33333333,
-            "0030": 165_449_963.91362947,
-            "0040": 192_155_833.3333333,
+            "0010": 116_829_480.13349256,
+            "0020": 51_355_833.33333333,
+            "0030": 168_185_313.4668259,
+            "0040": 195_130_833.3333333,
         },
         # Counterparty credit risk — populated, and empty because the book has none.
         "0020": {"0010": 0.0, "0020": 0.0, "0030": 0.0, "0040": 0.0},
         # Total — 0010 + 0020, which here equals row 0010.
         "0080": {
-            "0010": 115_369_130.58029616,
-            "0020": 50_080_833.33333333,
-            "0030": 165_449_963.91362947,
-            "0040": 192_155_833.3333333,
+            "0010": 116_829_480.13349256,
+            "0020": 51_355_833.33333333,
+            "0030": 168_185_313.4668259,
+            "0040": 195_130_833.3333333,
         },
     },
     "ccr": {

@@ -165,7 +165,9 @@ _FRAMEWORKS: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 #     — 2,900,000 listed + 7,400,000 + 14,800,000 for the two Art. 112(1)(o) CIU
 #     legs P2.54 added, which take the Art. 155(2)(c) 370% "all other equity"
 #     residual because ``_apply_equity_weights_irb_simple`` has no CIU branch.
-#     Row 2 MOVES (it sheds all three); UK 4a SURVIVES at 25,100,000.00.
+#     Row 2 MOVES (it sheds all three); UK 4a SURVIVES at 25,100,000.00, a figure
+#     the P1.373 infrastructure pair merged in from master does not touch — those
+#     are loans, not equity-table legs, so they move row 2 and row 1 only.
 #     **The CIU legs belong in UK 4a here, not in row 2, for the SAME reason the
 #     listed one does** — the row is keyed on the sealed ``equity_method``, which
 #     is what Art. 155(2) disclosure means, and the class the leg reports under is
@@ -178,16 +180,16 @@ _FRAMEWORKS: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 #     weight on 4,000,000) = 50,080,833.33.
 _EXPECTED: dict[tuple[str, str], dict[str, float | None]] = {
     ("rich", "crr"): {
-        "1": 167_711_467.28986624,
-        _ROW_SA: 16_228_450.0,
+        "1": 170_050_803.769868,
+        _ROW_SA: 17_353_450.0,
         _ROW_EQUITY_SIMPLE: 25_100_000.0,
-        "29": 167_711_467.28986624,
+        "29": 170_050_803.769868,
     },
     ("rich", "b31"): {
-        "1": 165_449_963.91362947,
-        _ROW_SA: 50_080_833.33333333,
+        "1": 168_185_313.4668259,
+        _ROW_SA: 51_355_833.33333333,
         _ROW_EQUITY_SIMPLE: None,
-        "29": 165_449_963.91362947,
+        "29": 168_185_313.4668259,
     },
     ("absent", "crr"): {
         "1": 30_098_477.213579975,

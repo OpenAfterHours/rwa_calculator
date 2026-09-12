@@ -163,42 +163,34 @@ _LBL_SLOT_CAT5 = "Category 5 (Default)"
 
 
 # =============================================================================
-# SA EXPOSURE CLASS FILTER — used by generator to filter pipeline data
+# C 08.01-08.05 — IRB EXPOSURE-CLASS SHEET LABELS
 # =============================================================================
 
-# Mapping: ExposureClass.value -> (row_ref, display_name)
-# These are filter values used by the generator to select data for each
-# per-exposure-class template submission. They are NOT the row structure
-# of the template itself — see SA_ROW_SECTIONS for that.
-SA_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
-    "central_govt_central_bank": ("0010", _LBL_SA_CENTRAL_GOVT),
-    "rgla": ("0020", _LBL_SA_RGLA),
-    "pse": ("0030", _LBL_SA_PSE),
-    "mdb": ("0040", _LBL_SA_MDB),
-    "international_organisation": ("0050", _LBL_SA_INTL_ORG),
-    "institution": ("0060", "Institutions"),
-    "corporate": ("0070", "Corporates"),
-    "corporate_sme": ("0071", "  Of which: SME corporates"),
-    "retail_mortgage": ("0080", _LBL_SA_MORTGAGES),
-    "retail_other": ("0090", "Retail"),
-    "retail_qrre": ("0091", "  Of which: Qualifying revolving"),
-    "defaulted": ("0100", _LBL_SA_DEFAULTED),
-    "covered_bond": ("0105", _LBL_SA_COVERED_BOND),
-    "equity": ("0110", "Equity exposures"),
-    "other": ("0120", _LBL_SA_OTHER),
-}
-
-# IRB exposure class filter values — used by generator for per-class filtering.
-# Not the row structure; see IRB_ROW_SECTIONS for that.
-IRB_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
-    "central_govt_central_bank": ("0010", _LBL_IRB_CENTRAL_GOVT),
-    "institution": ("0020", "Institutions"),
-    "corporate": ("0030", "Corporates - Other"),
-    "corporate_sme": ("0040", "Corporates - SME"),
-    "specialised_lending": ("0050", "Corporates - Specialised lending"),
-    "retail_mortgage": ("0060", "Retail - Secured by immovable property"),
-    "retail_qrre": ("0070", "Retail - Qualifying revolving (QRRE)"),
-    "retail_other": ("0080", "Retail - Other"),
+# Readable name per Art. 147(2) IRB class, for the Excel tab of the five
+# templates submitted once per class — C 08.01, C 08.02, C 08.03, C 08.04 and
+# C 08.05 (``corep/generator.py::_export_all_template_sheets``). One map serves
+# both regimes; its SA counterpart is regime-paired and lives in
+# ``corep/sheet_labels.py``, PS1/26 having renamed four Art. 112(1) classes.
+#
+# LABELS ONLY, and deliberately so. Each entry used to carry a row ref beside
+# its name, and no ref addressed any template: this axis is the z-dimension, so
+# a class here gets a SHEET, not a row. Each ref was also a live address for a
+# DIFFERENT row — ``corporate`` carried "0030", which on C 08.01 is "Off balance
+# sheet items subject to credit risk" — while the one template that does put an
+# Art. 147(2) class on a row, C 08.07, puts corporates on 0050 and disagrees
+# with 7 of the 8 refs. The SA twin ``SA_EXPOSURE_CLASS_ROWS`` was a second,
+# staler copy of the same shape and is deleted: the C 07.00 / OF 07.00 sheet
+# axis is ``C07_00_SA_SHEET_MAP`` with its labels in ``corep/sheet_labels.py``,
+# and the C 02.00 / OF 02.00 SA class rows are ``C02_00_SA_CLASS_MAP``.
+IRB_EXPOSURE_CLASS_LABELS: dict[str, str] = {
+    "central_govt_central_bank": _LBL_IRB_CENTRAL_GOVT,
+    "institution": "Institutions",
+    "corporate": "Corporates - Other",
+    "corporate_sme": "Corporates - SME",
+    "specialised_lending": "Corporates - Specialised lending",
+    "retail_mortgage": "Retail - Secured by immovable property",
+    "retail_qrre": "Retail - Qualifying revolving (QRRE)",
+    "retail_other": "Retail - Other",
 }
 
 

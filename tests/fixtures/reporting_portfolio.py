@@ -26,6 +26,42 @@ Coverage (one exposure each unless noted):
                 ``equity_type='ciu'``. Art. 132 fall-back and Art. 132A
                 mandate-based under Basel 3.1; both fall to the Art. 155(2)(c)
                 IRB-simple residual under CRR — see ``_equity_exposures``
+    SF overlap  two performing corporate-SMEs on an infrastructure product —
+                one SA, one A-IRB — so Art. 501 and Art. 501a are BOTH eligible
+                on one row, on both the SA and the IRB template families
+                (CRR only; supporting factors are withdrawn under Basel 3.1)
+
+Supporting-factor overlap (P1.373): before ``LN_SME_INFRA`` / ``LN_AIRB_INFRA``
+were added, no registered reporting portfolio set ``product_type`` at all, so
+``is_infrastructure`` was null on every row that reached ``apply_factors`` and the
+CRR supporting-factor adjustment columns keyed on it — C 07.00 col 0217, C 08.01
+col 0257, C 09.01 col 0082, C 09.02 col 0122 — could not be reached from any
+golden or from the supervisory validation register. C 07.00 row 0035 ("of which:
+Exposures subject to infrastructure supporting factor") was all-null in every
+golden in the estate's history.
+
+Each overlap row carries ``is_sme`` AND ``is_infrastructure``, which is the state
+in which the engine's single generic ``supporting_factor_applied`` flag gets
+attributed to the SME and the infrastructure column at once. Two arms rather than
+one because a leg is either SA or IRB, and the same ``_sf_adjustment_cell`` shape
+is written four times — ``reporting/corep/c07.py``, ``c08.py`` and ``c09.py``
+twice — so an SA-only leg leaves half of it uncovered.
+
+``LN_SME`` (SA) and ``LN_AIRB`` (IRB) are deliberately left SME-ONLY: each is the
+surviving contributor to its template's SME adjustment column (C 07.00 col 0216,
+C 08.01 col 0256, C 09.01 col 0081, C 09.02 col 0121), so those cells stay
+non-zero once the attribution is corrected and a golden over them can tell "the
+fix worked" from "the fix zeroed the cell" (LESSONS B5).
+
+Published backing (all six currently enforced — note that ``is_currently_enforced``
+in ``reporting/validations/rules.py`` counts a ``deactivated`` rule carrying a
+``reactivated_on`` date as in force):
+    {c0215}+{c0216}+{c0217}={c0220}   v09747_m (C 07.00.c), v0329_m (C 07.00.a)
+    {c0260}={c0255}+{c0256}+{c0257}   v0348_m  (C 08.02),   v0341_m (C 08.01.a)
+    {c0080}+{c0081}+{c0082}={c0090}   v0407_m  (C 09.01.a)
+    {c0110}+{c0121}+{c0122}={c0125}   v4785_m  (C 09.02)
+The BoE Basel 3.1 catalogue has no member of this family — cols 0215-0217 do not
+exist under Basel 3.1.
 
 Equity (added Phase 7 S1): equity flows through the separate
 ``get_equity_result_bundle`` path, but the aggregator already concatenates the
@@ -91,6 +127,7 @@ CP_INST = "RP-CP-INST"
 CP_CORP_RATED = "RP-CP-CORP-RATED"
 CP_CORP_UNRATED = "RP-CP-CORP-UNRATED"
 CP_SME = "RP-CP-SME"
+CP_SME_INFRA = "RP-CP-SME-INFRA"
 CP_RETAIL = "RP-CP-RETAIL"
 CP_RRE = "RP-CP-RRE"
 CP_CRE = "RP-CP-CRE"
@@ -98,6 +135,7 @@ CP_DEFAULT = "RP-CP-DEFAULT"
 CP_OTHER = "RP-CP-OTHER"
 CP_FIRB = "RP-CP-FIRB"
 CP_AIRB = "RP-CP-AIRB"
+CP_AIRB_INFRA = "RP-CP-AIRB-INFRA"
 CP_AIRB_RET = "RP-CP-AIRB-RET"
 CP_SL = "RP-CP-SL"
 CP_EQUITY = "RP-CP-EQUITY"
@@ -127,6 +165,7 @@ LN_INST = "RP-LN-INST"
 LN_CORP_RATED = "RP-LN-CORP-RATED"
 LN_CORP_UNRATED = "RP-LN-CORP-UNRATED"
 LN_SME = "RP-LN-SME"
+LN_SME_INFRA = "RP-LN-SME-INFRA"
 LN_RETAIL = "RP-LN-RETAIL"
 LN_RRE = "RP-LN-RRE"
 LN_CRE = "RP-LN-CRE"
@@ -134,6 +173,7 @@ LN_DEFAULT = "RP-LN-DEFAULT"
 LN_OTHER = "RP-LN-OTHER"
 LN_FIRB = "RP-LN-FIRB"
 LN_AIRB = "RP-LN-AIRB"
+LN_AIRB_INFRA = "RP-LN-AIRB-INFRA"
 LN_AIRB_RET = "RP-LN-AIRB-RET"
 LN_SL = "RP-LN-SL"
 
@@ -144,6 +184,7 @@ ALL_LOAN_REFERENCES = (
     LN_CORP_RATED,
     LN_CORP_UNRATED,
     LN_SME,
+    LN_SME_INFRA,
     LN_RETAIL,
     LN_RRE,
     LN_CRE,
@@ -151,6 +192,7 @@ ALL_LOAN_REFERENCES = (
     LN_OTHER,
     LN_FIRB,
     LN_AIRB,
+    LN_AIRB_INFRA,
     LN_AIRB_RET,
     LN_SL,
 )
@@ -207,6 +249,16 @@ def _counterparties() -> pl.DataFrame:
             "country_code": "GB",
             "annual_revenue": 30_000_000.0,
         },
+        # SME + infrastructure OVERLAP leg (P1.373). Same revenue as CP_SME so
+        # both are corporate-SME under the CRR EUR 50m and the Basel 3.1 GBP 44m
+        # turnover tests; the discriminator between the two legs is the loan's
+        # ``product_type``, not the counterparty.
+        {
+            "counterparty_reference": CP_SME_INFRA,
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 30_000_000.0,
+        },
         {
             "counterparty_reference": CP_RETAIL,
             "entity_type": "individual",
@@ -247,6 +299,15 @@ def _counterparties() -> pl.DataFrame:
         },
         {
             "counterparty_reference": CP_AIRB,
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 30_000_000.0,
+        },
+        # IRB arm of the SME + infrastructure OVERLAP (P1.373). Same revenue as
+        # CP_AIRB so both are corporate-SME; CP_AIRB stays SME-ONLY and is the
+        # surviving contributor to C 08.01 col 0256 / C 09.02 col 0121.
+        {
+            "counterparty_reference": CP_AIRB_INFRA,
             "entity_type": "corporate",
             "country_code": "GB",
             "annual_revenue": 30_000_000.0,
@@ -395,6 +456,30 @@ def _loans() -> pl.DataFrame:
         _loan(LN_CORP_RATED, CP_CORP_RATED, 5_000_000.0),
         _loan(LN_CORP_UNRATED, CP_CORP_UNRATED, 3_000_000.0),
         _loan(LN_SME, CP_SME, 500_000.0),
+        # P1.373 overlap leg: a PERFORMING corporate-SME on an infrastructure
+        # product, so the classifier sets is_sme AND is_infrastructure on the
+        # same row and both CRR supporting factors are eligible at once.
+        #
+        # Eligible under Art. 501a(1)(a) as read from docs/assets/crr.pdf p.418:
+        # "the exposure is included either in the corporate exposure class or in
+        # the specialised lending exposures class, with the exclusion of
+        # exposures in default" — this row is corporate_sme and performing, so
+        # the Art. 501a class/default eligibility gate admits it.
+        #
+        # Drawn 1,500,000 sits below the Art. 501 tier threshold
+        # (``sme_exposure_threshold`` EUR 2.5m x eur_gbp_rate), so E* is
+        # tier-1 only and the SME factor is the pack's
+        # ``sme_factor_under_threshold``; the flat Art. 501a
+        # ``infrastructure_factor`` is lower, so ``min_horizontal`` binds on
+        # infrastructure and the engine emits ONE relief. LN_SME above stays
+        # SME-only and is the surviving contributor to C 07.00 col 0216, so the
+        # cell cannot go dead when the attribution is corrected (LESSONS B5).
+        _loan(
+            LN_SME_INFRA,
+            CP_SME_INFRA,
+            1_500_000.0,
+            product_type="INFRASTRUCTURE_LOAN",
+        ),
         _loan(LN_RETAIL, CP_RETAIL, 250_000.0),
         # Residential real estate: property on the loan row drives the RE branch.
         _loan(
@@ -426,6 +511,31 @@ def _loans() -> pl.DataFrame:
             lgd=0.30,
             has_sufficient_collateral_data=True,
         ),
+        # P1.373 overlap leg, IRB arm: same A-IRB corporate-SME shape as
+        # LN_AIRB above (firm LGD, same PD grade so it shares LN_AIRB's C 08.02
+        # / C 08.03 PD band rather than opening a new one) plus the
+        # infrastructure product_type. Art. 501a(1)(a) admits it on the same
+        # grounds as LN_SME_INFRA: corporate exposure class, performing.
+        #
+        # Reaches C 08.01 cols 0256/0257 and C 09.02 cols 0121/0122, which the
+        # SA overlap leg structurally cannot — a leg is either SA or IRB, and
+        # those two columns are where the identical ``_sf_adjustment_cell``
+        # shape lives in ``reporting/corep/{c08,c09}.py``.
+        #
+        # Deliberately a SEPARATE counterparty rather than a product_type on
+        # LN_AIRB: that would consume the only SME-only IRB contributor to
+        # C 08.01 col 0256, leaving nothing to distinguish "attribution
+        # corrected" from "cell zeroed" (LESSONS B5), and would swing a
+        # 20,000,000-EAD row's factor from the blended SME rate to the flat
+        # Art. 501a one.
+        _loan(
+            LN_AIRB_INFRA,
+            CP_AIRB_INFRA,
+            2_000_000.0,
+            lgd=0.30,
+            has_sufficient_collateral_data=True,
+            product_type="INFRASTRUCTURE_LOAN",
+        ),
         # A-IRB retail: firm LGD estimate, retail obligor -> advanced.
         _loan(
             LN_AIRB_RET,
@@ -455,6 +565,8 @@ def _ratings() -> pl.DataFrame:
         # Internal PD ratings -> IRB routing (model_id matches the permissions).
         _internal(CP_FIRB, pd=0.0075),
         _internal(CP_AIRB, pd=0.0100),
+        # Same PD as CP_AIRB so the IRB overlap leg shares its PD band.
+        _internal(CP_AIRB_INFRA, pd=0.0100),
         _internal(CP_AIRB_RET, pd=0.0050),
         # Slotting: model_id (for the permission match) but NO PD, so the
         # F-IRB/A-IRB SL branches are unavailable and the exposure falls to
@@ -532,6 +644,7 @@ def _loan(
     property_type: str | None = None,
     ltv: float | None = None,
     has_income_cover: bool = False,
+    product_type: str | None = None,
 ) -> dict:
     """Build one loan row dict (unset optional columns seal to schema defaults)."""
     row: dict = {
@@ -551,6 +664,8 @@ def _loan(
         row["property_type"] = property_type
     if ltv is not None:
         row["ltv"] = ltv
+    if product_type is not None:
+        row["product_type"] = product_type
     return row
 
 

@@ -90,6 +90,14 @@ class SheetCode:
             (the ``Total`` sheet, or a class we do not model) — a skip, never a
             zero. A code ABSENT from the map is one whose meaning could not be
             established; it is reported as ``sheet_index_map_unknown``.
+
+            "No analogue" is about the MODEL, never about a run or a regime: a
+            class we do model names its key here even where the regime can never
+            produce the sheet (z0012 under CRR, where Art. 128 was omitted from
+            the onshored text — see ``_C07_SHEETS``). Both read as
+            ``sheet_not_emitted``, but only the declared form says WHY, and the
+            empty form additionally claims the code addresses nothing of ours —
+            which makes an emitted sheet unreachable by every rule scoped to it.
         source: How the entry was established.
     """
 
@@ -113,8 +121,26 @@ class SheetCode:
 #     exposure classes 'Items associated with a particular high risk' and
 #     'Equity exposures'") empty everywhere except 0001, 0012 and 0016
 #     ->  s0012 = 112(1)(k), s0016 = 112(1)(p), s0001 = Total.
+#     s0012's key is ``high_risk`` and s0016's is ``equity`` — the two sheet keys
+#     ``templates.C07_00_SA_SHEET_MAP`` gives those classes. Declaring s0012 here
+#     is a claim about the MAPPING, not about this regime: Art. 128 was omitted
+#     from the onshored UK CRR by SI 2021/1078 reg. 6(3)(a), and
+#     ``engine/classify/attributes.py`` demotes the class to OTHER whenever the
+#     pack Feature ``b31_high_risk_class_applicable`` is off, so a CRR run emits
+#     no ``high_risk`` sheet and every rule scoped to z0012 resolves to
+#     ``sheet_not_emitted`` — now for the CORRECT reason (we have a sheet for the
+#     code; this run produced none) rather than the false one an empty tuple
+#     states (the code addresses nothing of ours, so it is unaddressable and the
+#     supervisory gate fails open). Same shape as s0016, whose ``equity`` key is
+#     declared though no portfolio in the estate emits an equity sheet (P1.371).
 #   * v09743_m applies the CIU look-through/mandate/fall-back decomposition
 #     (rows 0281-0283) on sheet 0015 only  ->  s0015 = 112(1)(o).
+#
+# s0014 and s0015 keep an EMPTY tuple and that is not the same defect: neither
+# Art. 112(1)(n) (short-term credit assessment) nor (o) (CIUs) has an
+# ``ExposureClass`` member or a ``C07_00_SA_SHEET_MAP`` value, so there is no
+# sheet of ours for them to address. ``high_risk`` was the only key the estate
+# can emit that no code named.
 _C07_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode("0001", "Total (all SA exposure classes)", (), "COREP Annex II C 07.00; v4728_m"),
     SheetCode(
@@ -168,7 +194,7 @@ _C07_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode(
         "0012",
         "Art. 112(1)(k) items associated with particularly high risk",
-        (),
+        ("high_risk",),
         "COREP Annex II C 07.00 row 0015; v4728_m",
     ),
     SheetCode("0013", "Art. 112(1)(l) covered bonds", ("covered_bond",), "CRR Art. 112(1)(l)"),
@@ -267,10 +293,17 @@ _OF07_SHEETS: Final[tuple[SheetCode, ...]] = (
         ("defaulted",),
         "PS1/26 Annex II OF 09.01 row 0100",
     ),
+    # Reachable here, unlike on the CRR axis: Art. 128 is re-introduced under
+    # PS1/26 (pack Feature ``b31_high_risk_class_applicable``), so a Basel 3.1 run
+    # with a high-risk obligor emits a ``high_risk`` sheet and the 131 enforced
+    # BoE rules listing z:0012 (112 of them ERROR, across 136 per-table scopes)
+    # evaluate on it. With an empty tuple they all scored
+    # NOT_EVALUATED / ``sheet_not_emitted`` instead — a silent loss of coverage,
+    # and the emitted sheet was unaddressable by any published rule.
     SheetCode(
         "0012",
         "Art. 112(1)(k) exposures associated with particularly high risk",
-        (),
+        ("high_risk",),
         "PS1/26 Annex II OF 09.01 row 0110",
     ),
     SheetCode(

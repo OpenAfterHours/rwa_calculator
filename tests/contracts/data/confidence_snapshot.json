@@ -461,6 +461,7 @@
         "tests/conformance/test_classification_conformance.py",
         "tests/conformance/test_reporting_class_keys.py",
         "tests/contracts/test_c07_art112_sheet_axis.py",
+        "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/contracts/test_sheet_index_bundle_key_cardinality.py",
         "tests/fixtures/p1_154/p1_154.py",
         "tests/fixtures/p1_183/p1_183.py",
@@ -473,6 +474,7 @@
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_aggregator.py",
         "tests/unit/test_classifier.py",
+        "tests/unit/test_covered_bonds.py",
         "tests/unit/test_exposure_class_applied.py",
         "tests/unit/test_high_risk_items.py",
         "tests/unit/test_other_items_risk_weights.py",
@@ -5649,6 +5651,7 @@
         "engine/slotting/calculator.py",
         "engine/stages/calc.py",
         "engine/supporting_factors.py",
+        "reporting/corep/supporting_factors.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -5663,6 +5666,7 @@
         "tests/acceptance/crr/test_scenario_crr_b_firb.py",
         "tests/acceptance/crr/test_scenario_crr_f_supporting_factors.py",
         "tests/acceptance/crr/test_scenario_crr_h_complex.py",
+        "tests/acceptance/reporting/test_p1_373_supporting_factor_attribution.py",
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/p1_196/p1_196.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
@@ -5983,7 +5987,9 @@
         "reporting/validations/scope.py"
       ],
       "test_files": [
+        "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/unit/test_b31_sa_risk_weights.py",
+        "tests/unit/test_covered_bonds.py",
         "tests/unit/test_exposure_class_applied.py"
       ],
       "watchfire_index_gap": false
@@ -6965,6 +6971,7 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_p2_14_art_128_high_risk_uk_omitted.py",
+        "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/fixtures/p2_14/p2_14.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",

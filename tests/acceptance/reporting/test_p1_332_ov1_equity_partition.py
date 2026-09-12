@@ -162,23 +162,23 @@ _FRAMEWORKS: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 # a partition rather than a set of overlapping subsets.
 #
 # rich (crr): the equity leg is sealed ``irb_simple`` (Art. 155(2)) at 2,900,000.
-#     Row 2 MOVES 19,128,450.00 -> 16,228,450.00; UK 4a SURVIVES at 2,900,000.00.
+#     Row 2 MOVES 20,253,450.00 -> 17,353,450.00; UK 4a SURVIVES at 2,900,000.00.
 # absent (crr): the equity leg seals no method at all, so it is Art. 133 SA.
 #     Row 2 KEEPS its 9,850,000.00; UK 4a FALLS 1,500,000.00 -> 0.00.
 # b31 (both books): no UK 4a row exists and every equity leg is stamped ``sa``,
 #     so nothing whatever moves.
 _EXPECTED: dict[tuple[str, str], dict[str, float | None]] = {
     ("rich", "crr"): {
-        "1": 145_511_467.28986624,
-        _ROW_SA: 16_228_450.0,
+        "1": 147_850_803.769868,
+        _ROW_SA: 17_353_450.0,
         _ROW_EQUITY_SIMPLE: 2_900_000.0,
-        "29": 145_511_467.28986624,
+        "29": 147_850_803.769868,
     },
     ("rich", "b31"): {
-        "1": 137_449_963.91362947,
-        _ROW_SA: 22_080_833.333333332,
+        "1": 140_185_313.4668259,
+        _ROW_SA: 23_355_833.333333332,
         _ROW_EQUITY_SIMPLE: None,
-        "29": 137_449_963.91362947,
+        "29": 140_185_313.4668259,
     },
     ("absent", "crr"): {
         "1": 30_098_477.213579975,

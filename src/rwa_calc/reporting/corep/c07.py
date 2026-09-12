@@ -174,6 +174,10 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
+from rwa_calc.reporting.corep.supporting_factors import (
+    sf_adjustment_terms,
+    sf_infra_flag_exprs,
+)
 from rwa_calc.reporting.corep.templates import (
     C07_00_SA_SHEET_KEYS,
     C07_00_SA_SHEET_MAP,
@@ -826,6 +830,12 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         exprs.append(
             (pl.col("collateral_market_value").fill_null(0.0) - adjusted).alias("c07_vol_mat_adj")
         )
+
+    # The null-safe infrastructure discriminator col 0216 excludes on, so the two
+    # "(-)" columns stay disjoint. Derived on its own source-column gate rather
+    # than folded into the delta below, so it is present on exactly the frames
+    # ``sf_adjustment_terms`` asks for it (``corep/supporting_factors.py``).
+    exprs.extend(sf_infra_flag_exprs(cols))
 
     # Supporting-factor RWEA delta (cols 0216/0217 = pre - post per row).
     if "rwa_pre_factor" in cols:
@@ -1573,7 +1583,7 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
             Sum("rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col), predicate=post_member
         )
         cells["0216"] = _sf_adjustment_cell(
-            post_terms, cols, "sme_supporting_factor_applied", "is_sme"
+            post_terms, cols, "sme_supporting_factor_applied", "is_sme", exclude_infra=True
         )
         cells["0217"] = _sf_adjustment_cell(
             post_terms, cols, "infrastructure_factor_applied", "is_infrastructure"
@@ -1627,23 +1637,15 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     return {ref: cell for ref, cell in cells.items() if ref in column_refs}
 
 
-def _sf_adjustment_cell(terms: _Terms, cols: set[str], dedicated: str, flag_col: str) -> CellSpec:
+def _sf_adjustment_cell(
+    terms: _Terms, cols: set[str], dedicated: str, flag_col: str, *, exclude_infra: bool = False
+) -> CellSpec:
     """Supporting-factor RWEA adjustment (retired _supporting_factor_adjustment):
-    Σ(rwa_pre_factor - rwa) over the applied rows; None when no carrier.
-    ``dedicated`` is the factor's own applied-flag column (note the retired
-    asymmetric names: sme_supporting_factor_applied vs
-    infrastructure_factor_applied)."""
-    if "rwa_pre_factor" not in cols:
+    Σ(rwa_pre_factor - rwa) over the rows the factor was applied to; None when no
+    carrier. The three-limb row selection — and why the SME column passes
+    ``exclude_infra`` while the infrastructure column does not — is
+    ``corep/supporting_factors.py::sf_adjustment_terms``."""
+    extra = sf_adjustment_terms(cols, dedicated, flag_col, exclude_infra=exclude_infra)
+    if extra is None:
         return CellSpec(Formula(refs=(), fn=_const(None)))
-    if dedicated in cols:
-        return CellSpec(
-            Sum("c07_sf_delta"), predicate=RowPredicate(equals=(*terms, (dedicated, True)))
-        )
-    if flag_col in cols and "supporting_factor_applied" in cols:
-        return CellSpec(
-            Sum("c07_sf_delta"),
-            predicate=RowPredicate(
-                equals=(*terms, (flag_col, True), ("supporting_factor_applied", True))
-            ),
-        )
-    return CellSpec(Formula(refs=(), fn=_const(None)))
+    return CellSpec(Sum("c07_sf_delta"), predicate=RowPredicate(equals=(*terms, *extra)))

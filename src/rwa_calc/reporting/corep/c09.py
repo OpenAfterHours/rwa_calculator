@@ -138,7 +138,10 @@ Cell semantics (recorded decisions, this slice):
   factor's applied subset (the retired asymmetric dedicated flag names —
   sme_supporting_factor_applied / infrastructure_factor_applied — falling
   back to is_sme / is_infrastructure + supporting_factor_applied on the
-  sealed ledger, which never carries the dedicated names), so
+  sealed ledger, which never carries the dedicated names). The two
+  populations are DISJOINT — the SME column additionally excludes
+  infrastructure rows, because the engine applies min(sme, infra) and the
+  pack pins infra strictly lower (corep/supporting_factors.py) — so
   0080 + 0081 + 0082 = 0090 and 0110 + 0121 + 0122 = 0125 foot. Under B31
   none of these refs exist (supporting factors are CRR-only), so the change
   is scoped by column presence, not by regime branching.
@@ -199,6 +202,7 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.corep.c07 import c07_population
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
+from rwa_calc.reporting.corep.supporting_factors import sf_adjustment_terms, sf_infra_flag_exprs
 from rwa_calc.reporting.corep.templates import (
     C09_01_SA_CLASS_MAP,
     get_c09_01_columns,
@@ -715,7 +719,7 @@ def _c09_01_spec(
         if "0080" in column_refs:
             cells[(ref, "0080")] = _sum_or_null(rwa_pre_col, post_pred)
             cells[(ref, "0081")] = _c09_sf_adjustment_cell(
-                post_pred, cols, "sme_supporting_factor_applied", "is_sme"
+                post_pred, cols, "sme_supporting_factor_applied", "is_sme", exclude_infra=True
             )
             cells[(ref, "0082")] = _c09_sf_adjustment_cell(
                 post_pred, cols, "infrastructure_factor_applied", "is_infrastructure"
@@ -1012,7 +1016,7 @@ def _c09_02_spec(
             cells[(ref, "0120")] = CellSpec(Sum(rwa_col), predicate=post_def_pred)
         if "0121" in column_refs:
             cells[(ref, "0121")] = _c09_sf_adjustment_cell(
-                post_pred, cols, "sme_supporting_factor_applied", "is_sme"
+                post_pred, cols, "sme_supporting_factor_applied", "is_sme", exclude_infra=True
             )
             cells[(ref, "0122")] = _c09_sf_adjustment_cell(
                 post_pred, cols, "infrastructure_factor_applied", "is_infrastructure"
@@ -1261,38 +1265,43 @@ def _c09_sf_delta_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     threaded from the generate call), so a row's 0080/0110 (pre) minus the delta
     over its applied subset foots to its 0090/0125 (post). Absent when there is
     no pre-factor snapshot (a synthetic frame or a B31 run), which leaves the
-    "(-)" adjustment cells structurally null."""
+    "(-)" adjustment cells structurally null.
+
+    The infrastructure discriminator the SME columns (0081/0121) exclude on is
+    derived here too, but on its OWN source-column gate — it must be present on
+    exactly the frames ``sf_adjustment_terms`` asks for it, and that question is
+    independent of whether a pre-factor snapshot exists."""
+    exprs = sf_infra_flag_exprs(cols)
     if "rwa_pre_factor" not in cols or rwa_col is None:
-        return []
-    return [
+        return exprs
+    exprs.append(
         (pl.col("rwa_pre_factor").fill_null(0.0) - pl.col(rwa_col).fill_null(0.0)).alias(
             "c09_sf_delta"
         )
-    ]
+    )
+    return exprs
 
 
 def _c09_sf_adjustment_cell(
-    pred: RowPredicate, cols: set[str], dedicated: str, flag_col: str
+    pred: RowPredicate,
+    cols: set[str],
+    dedicated: str,
+    flag_col: str,
+    *,
+    exclude_infra: bool = False,
 ) -> CellSpec:
     """A CRR "(-)" supporting-factor adjustment cell: Σ ``c09_sf_delta`` over the
     row's applied subset, negated post-execute. Mirrors C 07.00 / C 08.01's
-    ``_sf_adjustment_cell`` verbatim, including the retired asymmetric dedicated
-    flag names (``sme_supporting_factor_applied`` vs
-    ``infrastructure_factor_applied``). Those dedicated names are not on the
-    sealed ledger, so on a real run the fallback fires: the factor's own
-    ``is_sme`` / ``is_infrastructure`` flag conjoined with the generic
-    ``supporting_factor_applied``. Returns the structural-null Formula when no
-    pre-factor snapshot exists (the adjustment cannot be computed)."""
-    if "rwa_pre_factor" not in cols:
+    ``_sf_adjustment_cell``, sharing their row selection (and the
+    ``exclude_infra`` disjointness the SME columns set) through
+    ``corep/supporting_factors.py::sf_adjustment_terms``; only the predicate
+    combinator differs, because a geo row predicate may carry ``any_of`` limbs
+    that ``_narrow`` has to preserve. Returns the structural-null Formula when
+    no pre-factor snapshot exists (the adjustment cannot be computed)."""
+    extra = sf_adjustment_terms(cols, dedicated, flag_col, exclude_infra=exclude_infra)
+    if extra is None:
         return CellSpec(Formula(refs=(), fn=_const(None)))
-    if dedicated in cols:
-        return CellSpec(Sum("c09_sf_delta"), predicate=_conjoin(pred, (dedicated, True)))
-    if flag_col in cols and "supporting_factor_applied" in cols:
-        return CellSpec(
-            Sum("c09_sf_delta"),
-            predicate=_narrow(pred, (flag_col, True), ("supporting_factor_applied", True)),
-        )
-    return CellSpec(Formula(refs=(), fn=_const(None)))
+    return CellSpec(Sum("c09_sf_delta"), predicate=_narrow(pred, *extra))
 
 
 def _pre_ccf_gross_binding(cols: set[str], *, with_ccr: bool) -> ValueBinding | None:

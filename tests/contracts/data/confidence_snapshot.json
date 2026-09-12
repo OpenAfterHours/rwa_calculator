@@ -1120,7 +1120,8 @@
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/crr/test_p1_255_art_122_2_unrated_corporate_sovereign_floor.py",
         "tests/unit/test_guarantor_exposure_class_rw.py",
-        "tests/unit/test_output_floor_ig_assessment.py"
+        "tests/unit/test_output_floor_ig_assessment.py",
+        "tests/unit/test_output_floor_supporting_factor_isolation.py"
       ],
       "watchfire_index_gap": false
     },
@@ -1375,6 +1376,7 @@
         "tests/oracle/derivations/sa_crr.py",
         "tests/properties/corpus.py",
         "tests/unit/crr/test_crr_sa.py",
+        "tests/unit/crr/test_p1_211_art_501a_infrastructure_eligibility.py",
         "tests/unit/reporting/corep/test_c07.py",
         "tests/unit/test_defaulted_secured_split.py"
       ],
@@ -5666,6 +5668,7 @@
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_homogeneity.py",
         "tests/unit/crr/test_crr_sa.py",
+        "tests/unit/crr/test_p1_211_art_501a_infrastructure_eligibility.py",
         "tests/unit/reporting/corep/test_c07.py",
         "tests/unit/rulebook/test_supporting_factors_features.py",
         "tests/unit/test_b31_sa_risk_weights.py",
@@ -5673,6 +5676,7 @@
         "tests/unit/test_capital_impact.py",
         "tests/unit/test_classifier.py",
         "tests/unit/test_corporate_to_retail_reclassification.py",
+        "tests/unit/test_output_floor_supporting_factor_isolation.py",
         "tests/unit/test_slotting_supporting_factors.py",
         "tests/unit/test_supporting_factors.py",
         "tests/unit/test_supporting_factors_cross_approach.py"
@@ -5682,6 +5686,7 @@
     {
       "article": "501a",
       "code_functions": [
+        "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.apply_factors",
         "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.calculate_infrastructure_factor"
       ],
       "confidence": "HIGH",
@@ -5699,9 +5704,11 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_scenario_crr_f_supporting_factors.py",
+        "tests/fixtures/contract_columns.py",
         "tests/fixtures/exposures/loans.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/crr/test_crr_sa.py",
+        "tests/unit/crr/test_p1_211_art_501a_infrastructure_eligibility.py",
         "tests/unit/reporting/corep/test_c07.py",
         "tests/unit/test_slotting_supporting_factors.py"
       ],
@@ -5874,6 +5881,7 @@
         "tests/unit/test_output_floor_ig_assessment.py",
         "tests/unit/test_output_floor_non_finite_guard.py",
         "tests/unit/test_output_floor_skip_transitional.py",
+        "tests/unit/test_output_floor_supporting_factor_isolation.py",
         "tests/unit/test_p2_20_total_rwa_post_floor_naming.py",
         "tests/unit/test_portfolio_level_floor.py",
         "tests/unit/test_t2_cap_floor_isolation.py",

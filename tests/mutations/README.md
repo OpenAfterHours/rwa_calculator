@@ -340,6 +340,91 @@ Six of these are worth understanding.
   vacuity guard counts calls where the ORIGINAL had something to say, because
   the note is blank by design on a diagonal cell — a run of diagonal cells only
   would agree on every call.
+## The C 07.00 row-scope set
+
+Written for the 2026-09-10 row 0040 fix (P2.53) — the COREP Annex II sentence
+"Only reported in exposure class 'Secured by mortgages on immovable property'",
+carried as a sheet-key term beside the row's `property_type` term. The fix was
+shipped with the scope **unobservable**, reported as such by its own implementer,
+and this plugin is what closed that.
+
+| plugin | what it changes | red / green | reddens |
+|---|---|---|---|
+| `mutate_row_0040_is_not_sheet_scoped` | every sheet-key pair stripped from `_terms_for_row`'s return — the pre-fix predicate, and nothing else | **4 / 12** on `test_c07_row_scope.py`; **2 NEW breaks** on the 26-run register; **0** on the 24-run register and **0** on the goldens | the CRR out-of-scope null, the memorandum-twin discriminator, the published-rule family, the BASEL 3.1 out-of-scope null, and `test_no_supervisory_validation_break_outside_the_baseline` |
+
+**One plugin covers both regimes, and deliberately so.** It strips the sheet term
+from whatever rows carry one rather than naming rows, so when the scope was
+extended from CRR row 0040 to the Basel 3.1 0330-0360 family mid-item it picked
+them up with no edit: the summary line went from `1 call(s) lost a sheet term, on
+rows ['0040']` to `15 call(s) ... on rows ['0040', '0330', '0331', '0332', '0340',
+'0341', '0342', '0343', '0344', '0350', '0351', '0352', '0353', '0354', '0360']`.
+That row list IS the coverage report — a row that loses a sheet term and reddens
+nothing is a scoped row with no assertion behind it.
+
+The Basel 3.1 red matters more than the CRR one, because **no published rule
+seconds it**: there is no `{r0330} = empty` in either extract, so
+`TestBasel31RowScope` is the only gate those rows will ever have.
+
+    E   AssertionError: corporate: row 0330 col 0010 reports 2000000.0; PS1/26
+        Annex II reports it only in exposure class 'real estate exposures'
+        (Article 112(1)(i))
+    E   assert 2000000.0 is None
+
+Four measurements. The pairing of the third and fourth is the finding:
+
+- **On `test_c07_row_scope.py` the baseline is 16 passed and the mutation scores
+  4 failed / 12 passed.** `test_row_0040_is_null_on_every_out_of_scope_sheet`
+  reports `corporate: row 0040 col 0010 reports 2000000.0`;
+  `test_the_unscoped_memorandum_twin_reports_the_crossing_leg` reports
+  `assert 2000000.0 is None`; and
+  `test_the_scope_rule_family_is_evaluated_and_unbroken` reports
+  `['v7477_m', 'v7478_m'] report a figure in row 0040 where the publisher forbids
+  one`, at `C 07.00.a[corporate][c0010..c0060]` and `C 07.00.b[corporate][c0210]`.
+  Both live members of the family break, which is why the file enumerates the
+  family by FORMULA rather than by the one rule id a brief named.
+- **With `row-scope` in `RUNS` the supervisory register catches it**, which is why
+  the portfolio is registered rather than left as an acceptance-only
+  construction: `test_no_supervisory_validation_break_outside_the_baseline`
+  reports `2 NEW supervisory validation break(s)` —
+  `crr/v7477_m [WARNING] left = 1.0000 vs right = 0.0000 on 17 cell(s)` and
+  `crr/v7478_m ... on 1 cell(s)`, all on `[corporate]`.
+- **Without it, the same register passes under the same mutation.** Measured by
+  removing only the two `row-scope` `GateInput`s: **1 passed**, with the plugin
+  reporting `9 call(s) lost a sheet term`. So the 24-run register ran genuinely
+  mutated and saw nothing. `test_c07_art112_class_axis.py` +
+  `test_re_split_template_coverage.py` + `test_reporting_golden.py` likewise score
+  **1 failed / 54 passed / 2 xfailed in both states** (the one failure is the
+  row-0040 golden awaiting its re-bank, in both states).
+
+  The cause is upstream of reporting: no registered portfolio puts a
+  residential-property-secured leg on a sheet other than `real_estate`, because
+  the RE splitter moves the secured part onto that sheet and leaves the corporate
+  residual with `property_type` NULL. Measured on `crr/re-split`, every one of the
+  five residual legs carries `property_type = null`, so row 0040's predicate
+  matches nothing off the real-estate sheet however the scope is written.
+
+That pairing is the whole point of the plugin. A guard nobody has seen fail is not
+a guard, and here the *estate* could not make it fail — **unreachable rather than
+undetected**, which a green suite renders identically. The shape that closes it is
+one leg: a corporate term loan secured on an income-producing residential block
+(`tests/fixtures/reporting_row_scope_portfolio.py`), which CRR Art. 125(2)(b)
+keeps out of the preferential treatment and the engine keeps on the `corporate`
+sheet, carrying `property_type = "residential"` all the way to the template.
+
+**And one trap this plugin paid for, recorded because it is not specific to it.**
+The fixture is `scope="session"`, and the first version was function-scoped. pytest
+sets broader-scoped fixtures up FIRST, so a function-scoped patch lands *after* any
+module- or session-scoped fixture has already built its frames — and
+`test_supervisory_validations.py` builds all 26 runs in a `scope="module"` fixture.
+Under the function-scoped version that whole register ran **unmutated** while
+looking like a clean green: the plugin's own vacuity line
+(`0 call(s) lost a sheet term ... VACUOUS`) is the only thing that said so, and
+without it the "the register is blind to this" claim would have been published off
+a run that never applied the mutation. That is README rule 2's mechanism 3 in a
+form `print(module.__file__)` cannot detect — the right file was patched, just too
+late — so **any plugin run against a suite with module- or session-scoped fixtures
+must be session-scoped, and must count its applications.**
+
 ## Writing another
 
 Five rules, all learned the expensive way in the batch that produced these:

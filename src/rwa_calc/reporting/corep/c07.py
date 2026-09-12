@@ -223,6 +223,34 @@ _BASIS_ORIGIN_COL: str = _BASIS.basis_origin
 _BASIS_POST_COL: str = _BASIS.basis_post
 _ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
 
+# THE ROW-LEVEL SHEET SCOPE. Annex II scopes a few rows to ONE exposure class —
+# row 0040 is "of which: Secured by mortgages on immovable property -
+# Residential property. Article 125 CRR. Only reported in exposure class
+# 'Secured by mortgages on immovable property'" (COREP Annex II C 07.00, rows
+# table) — while rows are evaluated PER SHEET over that sheet's own population
+# and ``_terms_for_row`` is handed no sheet key. So the sheet key is
+# materialised as a CONSTANT column on each sheet frame and the scope is written
+# as an ordinary tolerant-equals term beside the row's data terms.
+#
+# Chosen over a per-sheet ``row_terms`` override or a per-sheet ``TemplateSpec``
+# because it adds NO mechanism: a scoped row's subset is empty on every other
+# sheet, so ``postpass.null_empty_rows`` renders it all-null exactly as it
+# already does for an unpopulated row; ONE spec still serves every sheet; and
+# the lineage drill-down runs the very same predicate, so the reported figure
+# and its explanation cannot disagree. The alternatives are both invisible at
+# the row's own definition, which is where a future editor looks. A frame
+# lacking the column compiles the term to match-nothing
+# (``cellspec.RowPredicate._compile``), so the fail-safe direction is "null",
+# never "reported on every sheet".
+#
+# The published rule set enforces the scope: ``v7477_m`` (live, WARNING) is
+# ``{r0040} = empty`` on every C 07.00 z-code except the Total and 0010.
+_SHEET_KEY_COL: str = "c07_sheet"
+
+# Article 112(1)(i) — read back from the sheet map so the scope cannot drift
+# from the z-axis it scopes against.
+_RE_SHEET_KEY: str = C07_00_SA_SHEET_MAP["residential_mortgage"]
+
 # The ``c07_bs`` labels rows 0070 / 0080 filter on, and the keys the col 0100
 # inflow is split by when it lands on them.
 _ON_BS: str = "on"
@@ -527,7 +555,11 @@ def c07_plans(
         bands = inflows.by_rw_band.get(ec, {})
         plans[ec] = SheetPlan(
             spec=spec,
-            frame=sheet_frame(_BASIS, sa_df, ec),
+            # Tagged with its own sheet key so a row Annex II scopes to one
+            # exposure class can say so as a membership term (_SHEET_KEY_COL).
+            frame=sheet_frame(_BASIS, sa_df, ec).with_columns(
+                pl.lit(ec, dtype=pl.String).alias(_SHEET_KEY_COL)
+            ),
             ctx=ReportingContext(
                 substitution_inflow=inflows.total.get(ec, 0.0),
                 substitution_inflow_on_bs=sides.get(_ON_BS, 0.0),
@@ -1395,6 +1427,28 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
             return _supporting_factor_terms(cols, "sme")
         if ref == "0035":
             return _supporting_factor_terms(cols, "infrastructure")
+        if ref == "0040":
+            # "of which: Secured by mortgages on immovable property -
+            # Residential property. Article 125 CRR. Only reported in exposure
+            # class 'Secured by mortgages on immovable property'". The sheet
+            # term IS that instruction (see _SHEET_KEY_COL); the data term is
+            # ``property_type``, the same one memorandum row 0310 keys.
+            #
+            # NO QUALIFICATION TERM, deliberately. Art. 125 is headed
+            # "Exposures fully and completely secured by mortgages on
+            # residential property", so the row is in principle the qualifying
+            # subset — but under CRR this engine applies the Art. 125 treatment
+            # to EVERY residential-RE-class leg (the part above the
+            # Art. 125(2)(d) 80% limit is blended within the same branch, not
+            # reclassified: engine/sa/risk_weights.py::
+            # _crr_append_real_estate_branches), and ``is_qualifying_re`` is the
+            # Art. 124A Basel 3.1 flag, which no CRR risk-weight path reads. So
+            # the Art. 125 population and the residential population coincide
+            # here, and adding ``c07_qualifying_re`` would narrow on a flag with
+            # no CRR meaning — reproducing on this row the C 07.00-vs-C 09.01
+            # disagreement recorded as P1.353, which is blocked on acquiring the
+            # published row layout. Revisit with P1.353 / P1.292.
+            return _terms((_SHEET_KEY_COL, _RE_SHEET_KEY), ("property_type", "residential"))
         if ref == "0050":
             return _terms(("c07_ppu", True))
         if ref == "0060":
@@ -1453,8 +1507,32 @@ def _re_terms(
     is_adc: bool | None = None,
     is_qualifying: bool | None = None,
 ) -> _Terms | None:
-    """RE "of which" membership terms (retired _filter_re semantics)."""
-    terms: list[tuple[str, str | bool]] = []
+    """RE "of which" membership terms (retired _filter_re semantics).
+
+    SHEET-SCOPED, and this is the ONE place all fourteen of them are built.
+    PS1/26 Annex II closes every OF 07.00 row this builder serves — 0330, 0331,
+    0332, 0340, 0341, 0342, 0343, 0344, 0350 (and the 0351-0354 / 0360 variants
+    the repo declares) — with the identical sentence: "Only reported in exposure
+    class 'real estate exposures' (Article 112(1)(i) of the Credit Risk:
+    Standardised Approach (CRR) Part)". Rows are evaluated PER SHEET over that
+    sheet's own population, so without the scope an exposure carrying
+    ``property_type`` while classified OUTSIDE Art. 112(1)(i) publishes these
+    rows on its own class's sheet. Measured on the ``row-scope`` portfolio: an
+    income-producing corporate leg secured on residential property published
+    r0330 = r0332 = 2,000,000 on the Basel 3.1 ``corporate`` sheet.
+
+    The scope is the same ``_SHEET_KEY_COL`` term CRR row 0040 carries, so the
+    two cannot drift: both read ``_RE_SHEET_KEY`` back from
+    ``templates.C07_00_SA_SHEET_MAP``. Deliberately applied HERE rather than per
+    row — a row added to ``_RE_ROW_FILTERS`` is scoped by construction, which is
+    what stops the next RE row repeating this defect.
+
+    NOT applied to the memorandum rows 0290/0300/0310/0320, which are a
+    different question with a different answer (¶52/¶54-55 scope them to the
+    OBLIGOR classes, the two Annex IIs' lists differ, and ¶55 positively
+    REQUIRES 0300/0320 on the 'in default' sheet). See P1.377.
+    """
+    terms: list[tuple[str, str | bool]] = [(_SHEET_KEY_COL, _RE_SHEET_KEY)]
     if property_type is not None:
         terms.append(("property_type", property_type))
     else:

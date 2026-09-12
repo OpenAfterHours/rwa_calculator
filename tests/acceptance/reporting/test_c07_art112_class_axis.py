@@ -254,11 +254,14 @@ class TestRealEstateLetterI:
         residential/commercial distinction the sheet axis used to carry.
 
         Note the row NOT used here: CRR section-1 row 0040 ("of which: Secured
-        by mortgages on immovable property - Residential") is null on this
-        sheet. It is declared in the template and wired to no predicate
-        (``corep/c07.py`` ``_terms_for_row`` falls through to ``return None``),
-        so it was null on the pre-merge ``retail_mortgage`` and
-        ``commercial_mortgage`` sheets too — measured, and filed separately.
+        by mortgages on immovable property - Residential"). It used to be null on
+        this sheet — declared in the template and wired to no predicate, so
+        ``_terms_for_row`` fell through to ``return None`` — which is what the
+        note here recorded, and what was filed and fixed as P2.53. It now reports
+        the same figure as row 0310 on this sheet, and nothing at all on the
+        sheets Annex II scopes it away from. Both halves of that, and the
+        supervisory rule behind them, belong to ``test_c07_row_scope.py``; this
+        file stays on the merge.
         """
         _results, corep = _run("crr")
 

@@ -636,7 +636,8 @@
     "PS1/26, paragraph 235"
   ],
   "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.apply_factors": [
-    "CRR Art. 501"
+    "CRR Art. 501",
+    "CRR Art. 501a"
   ],
   "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.calculate_infrastructure_factor": [
     "CRR Art. 501a"

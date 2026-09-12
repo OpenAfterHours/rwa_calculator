@@ -186,12 +186,17 @@ _RICH_EQUITY_TABLE_RWEA: float = _RICH_CIU_RWEA + _RICH_LISTED_RWEA  # 30,500,00
 #: C 02.00 r0010 / r0050 (TREA) and r0060 (of which: SA) on ``b31/rich``. Pinned
 #: because the class move must not touch either: the totals are keyed on the
 #: APPROACH, which is why they could not have caught the 28,000,000 going missing.
-_RICH_B31_TREA: float = 165_449_963.91362947
-_RICH_B31_SA_TOTAL: float = 50_080_833.33333333
+#: Both grew when master's P1.373 supporting-factor overlap pair (RP-LN-SME-INFRA,
+#: RP-LN-AIRB-INFRA) merged in — those are loans carrying no Basel 3.1 relief, and
+#: they move the approach totals without touching the equity table below, so the
+#: CIU constants are deliberately unchanged.
+_RICH_B31_TREA: float = 168_185_313.4668259
+_RICH_B31_SA_TOTAL: float = 51_355_833.33333333
 
 #: CMS2 row 0070 column c on ``b31/rich`` — the whole ledger LESS the CIU, which
-#: is what ``CMS2_TOTAL_CLASSES`` carves out.
-_RICH_CMS2_TOTAL_C: float = 137_449_963.91362947
+#: is what ``CMS2_TOTAL_CLASSES`` carves out. Still exactly
+#: ``_RICH_B31_TREA - _RICH_CIU_RWEA`` (168,185,313.47 - 28,000,000).
+_RICH_CMS2_TOTAL_C: float = 140_185_313.4668259
 
 #: The whole equity table's CRR RWEA: 2,900,000 (listed, Art. 155(2) 290%) +
 #: 7,400,000 + 14,800,000 (both CIU legs at the Art. 155(2)(c) 370% residual).

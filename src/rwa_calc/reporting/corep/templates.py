@@ -526,6 +526,22 @@ C07_00_SA_SHEET_MAP: dict[str, str] = {
 # an Art. 112(1) class. Consumed by ``corep/c07.py::c07_plans``.
 C07_00_SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
 
+# The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
+# report under the IRB umbrella: Art. 155(2) simple-RW and Art. 155(3) PD/LGD.
+# Under Basel 3.1 no equity leg carries these (Art. 147A removes IRB equity —
+# every leg is stamped ``sa``), so the IRB partition empties by construction.
+# Equity whose method the ledger did not seal is treated as SA (never disclosed
+# as IRB equity without an explicit method). Raw strings match the corep modules'
+# approach-label idiom.
+#
+# SHARED by the two templates that must agree on where equity reports, because
+# a live EBA ERROR rule ties them together: ``v4244_i`` asserts
+# ``{C 02.00, r0210, c0010} == {C 07.00.a, r0010, c0220, s0016}``. C 02.00 splits
+# rows 0210 (SA class) / 0420 (Equity IRB) on this tuple and C 07.00 admits its
+# equity population on it, so one copy each would let the two drift either side of
+# that identity.
+EQUITY_IRB_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd")
+
 
 # =============================================================================
 # SA RISK WEIGHT BANDS

@@ -71,6 +71,23 @@ _EXPECTED_SHEETS: frozenset[str] = frozenset(
     }
 )
 
+#: Letter (p) is REGIME-DEPENDENT, and the difference is a scope rule rather than
+#: a data one — which is why it is an extra entry rather than a loosening of the
+#: exact set above. Under Basel 3.1 every equity leg is SA (Art. 147A; the pack
+#: Feature ``equity_irb_approaches_available`` is False), and PS1/26 Annex II ¶48
+#: excludes only securitisation and own-funds deductions from OF CR SA, so
+#: ``RP-EQ-LISTED`` opens the (p) sheet. Under CRR the same leg is Art. 155(2)
+#: simple-risk-weight equity, and COREP Annex II ¶50 scopes C 07.00 to "Chapter 2
+#: of Title II of Part Three CRR" — the Standardised Approach — so it is
+#: correctly absent and the live EBA ERROR rule ``v4244_i`` holds it there.
+#: ``test_p1_371_equity_class_p.py`` owns that boundary and its arithmetic; this
+#: entry exists so the exact-set assertion keeps seeing an unexpected EXTRA sheet
+#: without also forbidding the one Basel 3.1 genuinely has.
+_EXPECTED_EXTRA_SHEETS: dict[str, frozenset[str]] = {
+    "crr": frozenset(),
+    "b31": frozenset({"equity"}),  # (p)
+}
+
 #: Letter (g): ``LN_CORP_RATED`` 5,000,000 + ``LN_CORP_UNRATED`` 3,000,000
 #: (both ``corporate``) + ``LN_SME`` 500,000 + ``LN_SME_INFRA`` 1,500,000 (both
 #: ``corporate_sme``). The second SME leg is the P1.373 supporting-factor overlap
@@ -156,7 +173,7 @@ class TestSheetAxis:
     def test_the_estate_opens_exactly_the_art_112_sheets(self, regime_key: str) -> None:
         _results, corep = _run(regime_key)
 
-        assert set(corep.c07_00) == set(_EXPECTED_SHEETS)
+        assert set(corep.c07_00) == _EXPECTED_SHEETS | _EXPECTED_EXTRA_SHEETS[regime_key]
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_every_merged_sheet_has_non_null_money_columns(self, regime_key: str) -> None:

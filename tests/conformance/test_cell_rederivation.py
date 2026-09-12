@@ -450,39 +450,36 @@ def test_output_floor_column_is_the_floor_amount(templates, floor_summaries) -> 
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "An SA-treated equity leg reaches no C 07.00 sheet. Measured under CRR: LN011 carries "
-        "reporting_approach 'equity', ead_final 1,500,000 and rwa_final 1,500,000, and C 02.00 "
-        "row 0210 ('1.1.1.1.15 Equity', whose whole instruction is 'See CR SA template') "
-        "publishes that 1,500,000 — but C 07.00 emits sheets for exactly four Art. 112(1) "
-        "letters ((a) central_govt_central_bank, (f) institution, (g) corporate, (h) retail) "
-        "and none of them is "
-        "equity. CRR Art. 112(1)(p) makes equity exposures an SA exposure class, and Annex II "
-        "paragraphs 47-48 put every SA class except securitisation positions in CR SA, so the "
-        "row C 02.00 points at does not exist: 1,500,000 of exposure value and RWEA sits in the "
-        "footing template with nothing to tie to. The engine is believed wrong on the missing "
-        "sheet. Caveat: CRR also has a CR EQU IRB template for IRB-METHOD equity "
-        "(Art. 155(2)/(3)) which this generator does not produce at all, so a fix has to decide "
-        "which of the two templates each equity method belongs in rather than just adding a "
-        "sheet."
-    ),
-)
 def test_an_sa_equity_leg_reaches_a_c0700_sheet(templates, ledgers) -> None:
     """An equity leg treated under the SA appears on a C 07.00 exposure-class sheet.
 
     Arrange: the CRR ledger and the generated C 07.00 sheets.
     Act: find the legs whose applied approach is ``equity`` with non-zero RWEA,
     then look for a C 07.00 sheet keyed on their reporting class.
-    Assert: one exists. Scoped to CRR to keep this finding — that no C 07.00
-    sheet is emitted for the equity class — separate from the regime-divergent
-    weighting of the same leg (CRR Art. 133(2) 100% vs PS1/26 Art. 133(3) 250%).
-    The scoping is deliberate, not a workaround: the leg's Basel 3.1
-    ``rwa_final`` was null until P1.317, and the CRR-only filter was originally
-    chosen to avoid conflating that defect with this one. P1.317 is fixed and
-    both regimes now carry the RWEA, so widening this to Basel 3.1 is available
-    and would add C 07.00 coverage for the B31 equity leg.
+    Assert: one exists.
+
+    **Was a strict xfail until P1.371** (2026-09-10), which admitted
+    CRR Art. 112(1)(p) to ``c07_population``. The recorded finding was: LN011 carries
+    ``reporting_approach`` ``equity`` with ``ead_final`` / ``rwa_final`` of
+    1,500,000 and C 02.00 row 0210 — whose whole published instruction is *"See
+    CR SA template"* — reported it, while C 07.00 emitted sheets for only four
+    Art. 112(1) letters, none of them equity. So 1,500,000 of exposure value and
+    RWEA sat in the footing template with nothing to tie to.
+
+    **This portfolio is where the CRR limb of that fix is exercised.** Its equity
+    leg is SA-method, so COREP Annex II ¶50 (the template covers Chapter 2 of
+    Title II Part Three — the Standardised Approach) puts it IN, and a CRR
+    ``equity`` sheet is now emitted here. The reporting-golden estate's CRR leg is
+    ``equity_method="irb_simple"`` and is correctly excluded, so no CRR golden
+    moves — the two facts are about different portfolios and neither generalises
+    to "CRR emits no equity sheet".
+
+    Kept scoped to CRR. The xfail reason noted that widening to Basel 3.1 was
+    available once P1.317 landed; that coverage now exists in
+    ``tests/acceptance/reporting/test_p1_371_equity_class_p.py``, so widening here
+    would duplicate it and cost this test its CRR-specific meaning. The B31 leg is
+    weighted differently anyway (CRR Art. 133(2) 100% vs PS1/26 Art. 133(3) 250%),
+    which is the conflation the original scoping avoided.
 
     The ledger's ``reporting_class`` is an engine class and the C 07.00 sheet
     keys are Art. 112(1) letters, so the leg is routed through

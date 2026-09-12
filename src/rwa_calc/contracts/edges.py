@@ -1990,10 +1990,10 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_on_balance_sheet": EdgeColumn(
             dtype=pl.Boolean,
             null_meaning=(
-                "exposure_type outside the loan/facility/contingent vocabulary — "
-                "the row belongs to neither the on- nor the off-balance-sheet "
-                "template cells (matches the reporting kernel's exposure_type "
-                "rule; must NOT be filled to a side)"
+                "exposure_type outside the loan/equity/facility/contingent "
+                "vocabulary — the row belongs to neither the on- nor the "
+                "off-balance-sheet template cells (matches the reporting kernel's "
+                "exposure_type rule; must NOT be filled to a side)"
             ),
         ),
         "reporting_rw": EdgeColumn(dtype=pl.Float64),

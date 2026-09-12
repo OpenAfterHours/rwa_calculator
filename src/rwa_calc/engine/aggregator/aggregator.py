@@ -1025,10 +1025,15 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
       outflow/inflow reconstruct as two sums over the ``guaranteed`` legs
       grouped by origin vs post-substitution class.
     - ``reporting_on_balance_sheet`` — declared at source from
-      ``exposure_type`` (loan -> on; facility/contingent -> off; anything else
-      null = excluded from both on- and off-BS template cells). Mirrors the
+      ``exposure_type`` (loan/equity -> on; facility/contingent -> off; anything
+      else null = excluded from both on- and off-BS template cells). Mirrors the
       production rule in ``reporting/kernel/filters.py`` (``bs_type`` never
       reaches the aggregator, so the exposure-type rule IS today's behaviour).
+      ``equity`` joins the on-side rather than staying null, unlike
+      ``facility_undrawn``: that row is genuinely two-sided (CR4/CR5 patch it to
+      off-balance-sheet locally, CR6/CR10 make their own call), whereas an equity
+      holding is unambiguously an on-balance-sheet asset under CRR Art. 133(3) and
+      no template would place it anywhere else.
     - ``reporting_subclass`` / ``reporting_ead`` / ``reporting_rw`` — aliases of
       ``exposure_subclass`` / ``ead_final`` / ``risk_weight``.
     - ``reporting_gross_drawn`` / ``_interest`` / ``_nominal`` / ``_undrawn`` —
@@ -1046,12 +1051,18 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
       ``facility_undrawn`` for undrawn commitment headroom, a value that ladder
       leaves null, silently dropping the leg from both gross sides while its EAD
       stays in the EAD/RWEA cells). The side rule keys on ``exposure_type``:
-      an on-balance credit type (loan/contingent/facility_undrawn) with an
+      an on-balance credit type (loan/contingent/facility_undrawn/equity) with an
       unknown drawn AND interest stays null (unknown stays unknown), else its
       on-side is the floored drawn + interest (a null component counts as 0);
       the off-side is a contingent's floored nominal, a facility_undrawn's
       floored undrawn (counted exactly ONCE — the two carriers alias the same
-      headroom), a loan's true 0.0, else null. The legacy ``"facility"`` alias
+      headroom), a loan's or equity holding's true 0.0, else null. ``equity``
+      earns its rung because ``_equity_prep.py`` seals ``drawn_amount =
+      ead_final`` on the holding (CRR Art. 133(3): the accounting value, wholly
+      drawn, no conversion factor); without it the Art. 112(1)(p) leg falls out of
+      BOTH gross sides while its exposure value and RWEA stay in the EAD/RWEA
+      cells — the ``facility_undrawn`` defect above in a new class. The legacy
+      ``"facility"`` alias
       (never emitted by the pipeline but recognised by the on/off-BS
       discriminators and R11-era fixtures) joins the on-side credit types and
       takes the aliased-pair ``max_horizontal(nominal, undrawn)`` off-side, so a
@@ -1118,7 +1129,7 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         .otherwise(pl.lit("whole"))
     )
     on_balance_sheet = (
-        pl.when(pl.col("exposure_type") == "loan")
+        pl.when(pl.col("exposure_type").is_in(["loan", "equity"]))
         .then(pl.lit(True))
         .when(pl.col("exposure_type").is_in(["facility", "contingent"]))
         .then(pl.lit(False))
@@ -1168,7 +1179,9 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
     # credit-type list on-side and takes the aliased-pair off-side rule below.
     on_bs_carrier = (
         pl.when(
-            pl.col("exposure_type").is_in(["loan", "contingent", "facility_undrawn", "facility"])
+            pl.col("exposure_type").is_in(
+                ["loan", "contingent", "facility_undrawn", "facility", "equity"]
+            )
         )
         .then(
             pl.when(pl.col("drawn_amount").is_null() & pl.col("interest").is_null())
@@ -1192,7 +1205,10 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         .then(pl.col("nominal_amount").clip(lower_bound=0.0))
         .when(pl.col("exposure_type") == "facility_undrawn")
         .then(pl.col("undrawn_amount").clip(lower_bound=0.0))
-        .when(pl.col("exposure_type") == "loan")
+        # A loan and an equity holding are both wholly on-balance-sheet, so their
+        # off-side is a TRUE 0.0 rather than an unknown (equity: CRR Art. 133(3) —
+        # no commitment, no conversion factor).
+        .when(pl.col("exposure_type").is_in(["loan", "equity"]))
         .then(pl.lit(0.0))
         # Legacy "facility" alias: its off-BS carrier home is ambiguous
         # (nominal or undrawn), which pipeline facility_undrawn rows alias, so

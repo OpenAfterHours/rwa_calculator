@@ -24,6 +24,6 @@
 {"row_ref":"0141","row_name":"  Look-through approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0142","row_name":"  Mandate-based approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0143","row_name":"  Fall-back approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0150","row_name":"Subordinated debt, equity and other own funds instruments","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
+{"row_ref":"0150","row_name":"Subordinated debt, equity and other own funds instruments","0010":1000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":1000000.0,"0090":2500000.0}
 {"row_ref":"0160","row_name":"Other items","0010":100000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":100000.0,"0090":20000.0}
-{"row_ref":"0170","row_name":"Total exposures","0010":24750000.0,"0020":1000000.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":24750000.0,"0090":20855833.333333332}
+{"row_ref":"0170","row_name":"Total exposures","0010":25750000.0,"0020":1000000.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":25750000.0,"0090":23355833.333333336}

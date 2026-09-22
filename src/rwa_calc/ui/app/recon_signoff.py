@@ -43,7 +43,6 @@ _STATE_FILENAME = "reconciliation_signoff.json"
 # the implicit, unstored default (no decision yet); only the two terminal
 # dispositions below are ever persisted.
 Status = Literal["accepted", "rejected"]
-STATUS_OPEN = "open"
 _VALID_STATUSES: frozenset[str] = frozenset({"accepted", "rejected"})
 
 

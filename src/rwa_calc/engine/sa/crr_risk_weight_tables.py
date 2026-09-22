@@ -39,7 +39,6 @@ _SA_RW_PACK = resolve("crr", date(2026, 1, 1))
 # module (their VALUES live in packs/b31.py; the bindings stay here for now).
 _SA_RW_PACK_B31 = resolve("b31", date(2027, 1, 1))
 _RETAIL_RISK_WEIGHT_DEC: Decimal = _SA_RW_PACK.scalar_param("retail_risk_weight").value
-_OTHER_ITEMS_DEFAULT_RW_DEC: Decimal = _SA_RW_PACK.scalar_param("other_items_default_rw").value
 
 
 def _cqs_rw_from_pack(name: str, pack: ResolvedRulepack = _SA_RW_PACK) -> dict[CQS, Decimal]:

@@ -59,7 +59,7 @@ from rwa_calc.reporting.corep.c34 import (
 from rwa_calc.reporting.corep.of02 import generate_of_02_01
 from rwa_calc.reporting.corep.sheet_labels import get_c07_sheet_labels
 from rwa_calc.reporting.corep.templates import (
-    IRB_EXPOSURE_CLASS_ROWS,
+    IRB_EXPOSURE_CLASS_LABELS,
     OF_02_01_COLUMNS,
     get_c02_00_columns,
     get_c07_columns,
@@ -434,9 +434,8 @@ class COREPGenerator:
         is_b31 = framework == "BASEL_3_1"
         # Readable tab names. The C 07.00 axis is the Art. 112(1) class and its
         # labels are regime-dependent (PS1/26 renames four of them), so they are
-        # resolved per framework; the IRB axis is the raw Art. 147 class, whose
-        # names the row table already carries.
-        irb_labels = {key: name for key, (_ref, name) in IRB_EXPOSURE_CLASS_ROWS.items()}
+        # resolved per framework; the IRB axis is the raw Art. 147(2) class, and
+        # ``IRB_EXPOSURE_CLASS_LABELS`` names it identically under both.
         total = 0
         total += self._write_template_sheets(
             workbook,
@@ -449,35 +448,35 @@ class COREPGenerator:
             workbook,
             bundle.c08_01,
             "C 08.01",
-            irb_labels,
+            IRB_EXPOSURE_CLASS_LABELS,
             column_name_map(get_c08_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_02,
             "C 08.02",
-            irb_labels,
+            IRB_EXPOSURE_CLASS_LABELS,
             column_name_map(get_c08_02_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_03,
             "C 08.03",
-            irb_labels,
+            IRB_EXPOSURE_CLASS_LABELS,
             column_name_map(get_c08_03_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_04,
             "OF 08.04" if is_b31 else "C 08.04",
-            irb_labels,
+            IRB_EXPOSURE_CLASS_LABELS,
             column_name_map(get_c08_04_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_05,
             "OF 08.05" if is_b31 else "C 08.05",
-            irb_labels,
+            IRB_EXPOSURE_CLASS_LABELS,
             column_name_map(get_c08_05_columns(framework)),
         )
         total += self._write_template_sheets(

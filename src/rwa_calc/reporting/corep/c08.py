@@ -408,6 +408,7 @@ from rwa_calc.reporting.corep.postpass import (
     null_empty_rows,
     provisions_postfix,
 )
+from rwa_calc.reporting.corep.supporting_factors import sf_adjustment_terms, sf_infra_flag_exprs
 from rwa_calc.reporting.corep.templates import (
     C08_04_ROWS,
     C08_06_CATEGORY_MAP,
@@ -628,6 +629,9 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
             .alias("c08_bs")
         )
 
+    # The col 0256 disjointness flag, on its own source-column gate (see c07.py).
+    exprs.extend(sf_infra_flag_exprs(cols))
+
     # Supporting-factor RWEA delta (CRR cols 0256/0257).
     if "rwa_pre_factor" in cols:
         rwa_source = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -730,24 +734,17 @@ def _lfse_cell(
     )
 
 
-def _sf_adjustment_cell(terms: _Terms, cols: set[str], dedicated: str, flag_col: str) -> CellSpec:
-    """CRR supporting-factor adjustment: Σ(rwa_pre_factor - rwa) over the
-    applied rows; None when no carrier. ``dedicated`` preserves the retired
-    asymmetric flag names."""
-    if "rwa_pre_factor" not in cols:
+def _sf_adjustment_cell(
+    terms: _Terms, cols: set[str], dedicated: str, flag_col: str, *, exclude_infra: bool = False
+) -> CellSpec:
+    """CRR supporting-factor adjustment: Σ(rwa_pre_factor - rwa) over the rows
+    the factor was applied to; None when no carrier. Row selection (and the
+    ``exclude_infra`` disjointness the SME column sets) is
+    ``corep/supporting_factors.py::sf_adjustment_terms``."""
+    extra = sf_adjustment_terms(cols, dedicated, flag_col, exclude_infra=exclude_infra)
+    if extra is None:
         return CellSpec(Formula(refs=(), fn=_const(None)))
-    if dedicated in cols:
-        return CellSpec(
-            Sum("c08_sf_delta"), predicate=RowPredicate(equals=(*terms, (dedicated, True)))
-        )
-    if flag_col in cols and "supporting_factor_applied" in cols:
-        return CellSpec(
-            Sum("c08_sf_delta"),
-            predicate=RowPredicate(
-                equals=(*terms, (flag_col, True), ("supporting_factor_applied", True))
-            ),
-        )
-    return CellSpec(Formula(refs=(), fn=_const(None)))
+    return CellSpec(Sum("c08_sf_delta"), predicate=RowPredicate(equals=(*terms, *extra)))
 
 
 def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
@@ -908,7 +905,9 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         "0255": CellSpec(
             Sum("rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col), predicate=post_member
         ),
-        "0256": _sf_adjustment_cell(post, cols, "sme_supporting_factor_applied", "is_sme"),
+        "0256": _sf_adjustment_cell(
+            post, cols, "sme_supporting_factor_applied", "is_sme", exclude_infra=True
+        ),
         "0257": _sf_adjustment_cell(
             post, cols, "infrastructure_factor_applied", "is_infrastructure"
         ),

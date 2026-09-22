@@ -1,6 +1,29 @@
 """COREP template-definition constants (structural, no generation).
 
 Split from tests/unit/test_corep.py (Phase 7 Sn) — bodies verbatim.
+
+The SA class assertions were repointed off ``SA_EXPOSURE_CLASS_ROWS`` (P1.372).
+That map was a SECOND, stale sheet vocabulary living beside the live one: PR #497
+re-keyed the C 07.00 / OF 07.00 exposure-class dimension onto Art. 112(1)
+(``C07_00_SA_SHEET_MAP``) and moved the display names to ``sheet_labels.py``,
+after which nothing in ``src/`` read it. Its membership half is asserted here
+against ``ExposureClass`` and its label half against ``get_c07_sheet_labels``.
+The defect #497 fixed was production and its tests sharing an INVENTED
+vocabulary; a stale one kept alive by a test is the same trap in slower motion
+(``.claude/LESSONS.md`` B2 / B3).
+
+The ROW REFS both maps carried are deliberately NOT repointed, because neither
+set addressed the template it was read as describing. An exposure class on these
+axes gets a SHEET, not a row, so there was no row for a ref to be. ``0071`` ("Of
+which: SME corporates") and ``0091`` ("Of which: Qualifying revolving") are rows
+of nothing at all — neither C 07.00 nor OF 07.00 declares a QRRE row in either
+regime — and the refs that DO exist elsewhere address a different cell entirely:
+``B31_C09_01_ROWS`` row 0071 is a real-estate sub-row, and on the IRB side
+``corporate``'s "0030" is C 08.01's "Off balance sheet items subject to credit
+risk". ``generator.py`` reads the IRB map for the NAME alone and throws the ref
+away. So ``test_row_refs_are_unique`` asserted uniqueness over an axis no
+submission carries; the live form of that claim — two workbook tabs may not
+print the same name — is asserted on the labels instead.
 """
 
 from __future__ import annotations
@@ -9,21 +32,24 @@ import math
 
 import pytest
 
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.reporting.corep.sheet_labels import get_c07_sheet_labels
 from rwa_calc.reporting.corep.templates import (
     B31_C07_COLUMNS,
     B31_C08_COLUMNS,
     B31_IRB_ROW_SECTIONS,
     B31_SA_RISK_WEIGHT_BANDS,
     B31_SA_ROW_SECTIONS,
+    C07_00_SA_SHEET_KEYS,
+    C07_00_SA_SHEET_MAP,
     C07_COLUMNS,
     C08_01_COLUMNS,
     CRR_C07_COLUMNS,
     CRR_C08_COLUMNS,
     CRR_IRB_ROW_SECTIONS,
     CRR_SA_ROW_SECTIONS,
-    IRB_EXPOSURE_CLASS_ROWS,
+    IRB_EXPOSURE_CLASS_LABELS,
     PD_BANDS,
-    SA_EXPOSURE_CLASS_ROWS,
     SA_RISK_WEIGHT_BANDS,
     get_c07_columns,
     get_c08_columns,
@@ -31,30 +57,110 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
+from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
+
+#: The frameworks ``get_c07_sheet_labels`` resolves. PS1/26 renames four of the
+#: fourteen Art. 112(1) classes, so a one-regime assertion covers half the estate.
+_FRAMEWORKS: tuple[str, ...] = ("CRR", "BASEL_3_1")
+
+
+def _duplicated(labels: dict[str, str]) -> list[str]:
+    """Labels carried by more than one key — a workbook tab a reader cannot index."""
+    names = sorted(labels.values())
+    return sorted({name for name in names if names.count(name) > 1})
 
 
 class TestTemplateDefinitions:
     """Tests for COREP template structure definitions."""
 
-    def test_sa_exposure_class_rows_cover_all_sa_classes(self) -> None:
-        """All SA exposure classes have a COREP row mapping."""
-        assert "corporate" in SA_EXPOSURE_CLASS_ROWS
-        assert "institution" in SA_EXPOSURE_CLASS_ROWS
-        assert "retail_other" in SA_EXPOSURE_CLASS_ROWS
-        assert "central_govt_central_bank" in SA_EXPOSURE_CLASS_ROWS
-        assert "defaulted" in SA_EXPOSURE_CLASS_ROWS
-        assert "equity" in SA_EXPOSURE_CLASS_ROWS
-        assert "international_organisation" in SA_EXPOSURE_CLASS_ROWS
+    def test_sa_sheet_map_covers_every_exposure_class(self) -> None:
+        """Every engine SA class has an Art. 112(1) sheet to be submitted on.
 
-    def test_irb_exposure_class_rows_cover_irb_classes(self) -> None:
-        """All IRB exposure classes have a COREP row mapping."""
-        assert "corporate" in IRB_EXPOSURE_CLASS_ROWS
-        assert "corporate_sme" in IRB_EXPOSURE_CLASS_ROWS
-        assert "institution" in IRB_EXPOSURE_CLASS_ROWS
-        assert "retail_mortgage" in IRB_EXPOSURE_CLASS_ROWS
-        assert "retail_qrre" in IRB_EXPOSURE_CLASS_ROWS
-        assert "retail_other" in IRB_EXPOSURE_CLASS_ROWS
-        assert "specialised_lending" in IRB_EXPOSURE_CLASS_ROWS
+        Anchored on ``ExposureClass`` itself (LESSONS B2 / B3). The map this
+        replaced named seven classes by hand, so it could only ever check the
+        classes its author had already thought of, and it agreed with nothing.
+        A class the map omits does not surface as a missing row:
+        ``reporting/kernel/bases.py::sheet_axis`` passes the raw class string
+        through and opens a sheet no published z-code addresses, whereupon every
+        rule scoped to that code scores NOT_EVALUATED and the gate fails OPEN.
+        """
+        classes = {member.value for member in ExposureClass}
+
+        assert set(C07_00_SA_SHEET_MAP) == classes, (
+            "C07_00_SA_SHEET_MAP is not total over ExposureClass: unmapped "
+            f"{sorted(classes - set(C07_00_SA_SHEET_MAP))}, non-members "
+            f"{sorted(set(C07_00_SA_SHEET_MAP) - classes)}"
+        )
+
+    @pytest.mark.parametrize("framework", _FRAMEWORKS)
+    def test_every_sa_sheet_key_is_named_for_the_reader(self, framework: str) -> None:
+        """Each Art. 112(1) sheet the map can open carries a display name.
+
+        The display-name half of the ``(row_ref, name)`` map this replaced, which
+        nothing else asserts. Anchored on ``C07_00_SA_SHEET_KEYS`` — built from
+        ``C07_00_SA_SHEET_MAP``'s own values — so it cannot be satisfied by a list
+        copied out of ``sheet_labels.py``. An unlabelled key is not cosmetic: the
+        Excel tab and the UI sheet picker fall back to the raw key, which is how a
+        sheet holding commercial mortgages came to be shown as ``retail_mortgage``.
+        """
+        labels = get_c07_sheet_labels(framework)
+
+        assert set(labels) == set(C07_00_SA_SHEET_KEYS), (
+            f"{framework}: the C 07.00 label vocabulary and the sheet keys "
+            "C07_00_SA_SHEET_MAP produces disagree — unlabelled "
+            f"{sorted(set(C07_00_SA_SHEET_KEYS) - set(labels))}, labelled but "
+            f"unreachable {sorted(set(labels) - set(C07_00_SA_SHEET_KEYS))}"
+        )
+        blank = sorted(key for key, name in labels.items() if not name.strip())
+        assert not blank, f"{framework}: sheet key(s) {blank} carry an empty label"
+
+    @pytest.mark.parametrize("framework", _FRAMEWORKS)
+    def test_sa_sheet_labels_are_distinct(self, framework: str) -> None:
+        """Two Art. 112(1) sheets may not print the same name.
+
+        The live form of the row-ref uniqueness this replaced: the label is what
+        a reader indexes a workbook tab by, where the refs the old map carried
+        indexed no template at all (see the module docstring).
+        """
+        duplicated = _duplicated(get_c07_sheet_labels(framework))
+
+        assert not duplicated, (
+            f"{framework}: C 07.00 label(s) carried by more than one sheet key, "
+            f"so the workbook holds two tabs a reader cannot tell apart: {duplicated}"
+        )
+
+    @pytest.mark.parametrize("sheet_map_name", ["c08", "of08"])
+    def test_every_published_irb_sheet_is_named_for_the_reader(self, sheet_map_name: str) -> None:
+        """Every IRB sheet the published z-axis can address carries a name.
+
+        Anchored on ``validations/scope.py::SHEET_INDEX_MAPS`` — the Art. 147(2)
+        z-axis read off the live EBA/BoE rule sets, which cannot drift with
+        ``templates.py``. Containment, not equality: ``of08`` names no
+        ``central_govt_central_bank`` sheet because PS1/26 withdraws the IRB
+        sovereign class, and a label for a class only CRR emits is correct.
+        """
+        published = {
+            key for entry in SHEET_INDEX_MAPS[sheet_map_name].values() for key in entry.bundle_keys
+        }
+        assert published, f"{sheet_map_name}: no SheetCode names a bundle key at all"
+
+        unlabelled = sorted(published - set(IRB_EXPOSURE_CLASS_LABELS))
+        assert not unlabelled, (
+            f"{sheet_map_name}: IRB sheet key(s) {unlabelled} are addressed by a "
+            "published z-code but carry no label, so generator.py names their "
+            "C 08.0x tab by the raw class key"
+        )
+
+    def test_irb_sheet_labels_are_distinct(self) -> None:
+        """Two IRB sheets may not print the same name — the live form of the
+        row-ref uniqueness this replaced, for the same reason as the SA side."""
+        assert IRB_EXPOSURE_CLASS_LABELS, "no IRB class label map declared"
+
+        duplicated = _duplicated(IRB_EXPOSURE_CLASS_LABELS)
+        assert not duplicated, (
+            "IRB label(s) carried by more than one class, so the workbook holds "
+            f"two C 08.0x tabs a reader cannot tell apart: {duplicated}"
+        )
 
     def test_sa_risk_weight_bands_in_ascending_order(self) -> None:
         """Risk weight bands must be in ascending order."""
@@ -80,14 +186,6 @@ class TestTemplateDefinitions:
         for col in C08_01_COLUMNS:
             assert col.ref.isdigit()
             assert len(col.name) > 0
-
-    def test_row_refs_are_unique(self) -> None:
-        """Row references must be unique within each template."""
-        sa_refs = [ref for ref, _ in SA_EXPOSURE_CLASS_ROWS.values()]
-        assert len(sa_refs) == len(set(sa_refs))
-
-        irb_refs = [ref for ref, _ in IRB_EXPOSURE_CLASS_ROWS.values()]
-        assert len(irb_refs) == len(set(irb_refs))
 
 
 class TestCRRC07ColumnDefinitions:

@@ -163,42 +163,34 @@ _LBL_SLOT_CAT5 = "Category 5 (Default)"
 
 
 # =============================================================================
-# SA EXPOSURE CLASS FILTER — used by generator to filter pipeline data
+# C 08.01-08.05 — IRB EXPOSURE-CLASS SHEET LABELS
 # =============================================================================
 
-# Mapping: ExposureClass.value -> (row_ref, display_name)
-# These are filter values used by the generator to select data for each
-# per-exposure-class template submission. They are NOT the row structure
-# of the template itself — see SA_ROW_SECTIONS for that.
-SA_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
-    "central_govt_central_bank": ("0010", _LBL_SA_CENTRAL_GOVT),
-    "rgla": ("0020", _LBL_SA_RGLA),
-    "pse": ("0030", _LBL_SA_PSE),
-    "mdb": ("0040", _LBL_SA_MDB),
-    "international_organisation": ("0050", _LBL_SA_INTL_ORG),
-    "institution": ("0060", "Institutions"),
-    "corporate": ("0070", "Corporates"),
-    "corporate_sme": ("0071", "  Of which: SME corporates"),
-    "retail_mortgage": ("0080", _LBL_SA_MORTGAGES),
-    "retail_other": ("0090", "Retail"),
-    "retail_qrre": ("0091", "  Of which: Qualifying revolving"),
-    "defaulted": ("0100", _LBL_SA_DEFAULTED),
-    "covered_bond": ("0105", _LBL_SA_COVERED_BOND),
-    "equity": ("0110", "Equity exposures"),
-    "other": ("0120", _LBL_SA_OTHER),
-}
-
-# IRB exposure class filter values — used by generator for per-class filtering.
-# Not the row structure; see IRB_ROW_SECTIONS for that.
-IRB_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
-    "central_govt_central_bank": ("0010", _LBL_IRB_CENTRAL_GOVT),
-    "institution": ("0020", "Institutions"),
-    "corporate": ("0030", "Corporates - Other"),
-    "corporate_sme": ("0040", "Corporates - SME"),
-    "specialised_lending": ("0050", "Corporates - Specialised lending"),
-    "retail_mortgage": ("0060", "Retail - Secured by immovable property"),
-    "retail_qrre": ("0070", "Retail - Qualifying revolving (QRRE)"),
-    "retail_other": ("0080", "Retail - Other"),
+# Readable name per Art. 147(2) IRB class, for the Excel tab of the five
+# templates submitted once per class — C 08.01, C 08.02, C 08.03, C 08.04 and
+# C 08.05 (``corep/generator.py::_export_all_template_sheets``). One map serves
+# both regimes; its SA counterpart is regime-paired and lives in
+# ``corep/sheet_labels.py``, PS1/26 having renamed four Art. 112(1) classes.
+#
+# LABELS ONLY, and deliberately so. Each entry used to carry a row ref beside
+# its name, and no ref addressed any template: this axis is the z-dimension, so
+# a class here gets a SHEET, not a row. Each ref was also a live address for a
+# DIFFERENT row — ``corporate`` carried "0030", which on C 08.01 is "Off balance
+# sheet items subject to credit risk" — while the one template that does put an
+# Art. 147(2) class on a row, C 08.07, puts corporates on 0050 and disagrees
+# with 7 of the 8 refs. The SA twin ``SA_EXPOSURE_CLASS_ROWS`` was a second,
+# staler copy of the same shape and is deleted: the C 07.00 / OF 07.00 sheet
+# axis is ``C07_00_SA_SHEET_MAP`` with its labels in ``corep/sheet_labels.py``,
+# and the C 02.00 / OF 02.00 SA class rows are ``C02_00_SA_CLASS_MAP``.
+IRB_EXPOSURE_CLASS_LABELS: dict[str, str] = {
+    "central_govt_central_bank": _LBL_IRB_CENTRAL_GOVT,
+    "institution": "Institutions",
+    "corporate": "Corporates - Other",
+    "corporate_sme": "Corporates - SME",
+    "specialised_lending": "Corporates - Specialised lending",
+    "retail_mortgage": "Retail - Secured by immovable property",
+    "retail_qrre": "Retail - Qualifying revolving (QRRE)",
+    "retail_other": "Retail - Other",
 }
 
 
@@ -482,7 +474,7 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
 # the class TOTAL — a ``corporate_sme`` sheet beside ``corporate`` left point (g)
 # reported nowhere and row 0020 "of which: SME" null on the sheet that carries it.
 #
-# 12 of the 19 keys map to themselves. The three fan-ins are the families split
+# 13 of the 20 keys map to themselves. The three fan-ins are the families split
 # FINER here than in the template. Every distinction the template DECLARES is
 # still reported, on the row axis; the merge loses only distinctions the template
 # never asked for:
@@ -501,8 +493,10 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
 # ``real_estate`` is PS1/26's own name for (i) (Table A2 row (7), "Articles 124 to
 # 124L"), deliberately NOT ``C09_01_SA_CLASS_MAP``'s vocabulary, which fans the
 # family onto ``retail_mortgage`` — a name reading as retail-only to any reader
-# a sheet key reaches. (o) CIU has no ``ExposureClass`` member here so it has no
-# entry, matching the empty ``bundle_keys`` on its z-code in validations/scope.py.
+# a sheet key reaches. (o) CIU self-maps in BOTH regimes: (o) and (p) are
+# disjoint, told apart by the risk-weight article (Arts. 132-132C vs Art. 133),
+# so a CIU on the (p) sheet would leave (o) empty by construction — what COREP
+# Annex II ¶61 exists to prevent. z0015's ``bundle_keys`` binds this key.
 #
 # TOTAL over ``ExposureClass``; a value outside it passes through UNCHANGED
 # (``corep/c07.py::_art112_sheet_key``) so nothing can vanish, and ``c07_plans``
@@ -525,6 +519,7 @@ C07_00_SA_SHEET_MAP: dict[str, str] = {
     "defaulted": "defaulted",  # (j)
     "high_risk": "high_risk",  # (k)
     "covered_bond": "covered_bond",  # (l)
+    "ciu": "ciu",  # (o)
     "equity": "equity",  # (p)
     "other": "other",  # (q)
 }
@@ -533,6 +528,22 @@ C07_00_SA_SHEET_MAP: dict[str, str] = {
 # key outside this set reached the axis by the pass-through limb, i.e. it is not
 # an Art. 112(1) class. Consumed by ``corep/c07.py::c07_plans``.
 C07_00_SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
+
+# The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
+# report under the IRB umbrella: Art. 155(2) simple-RW and Art. 155(3) PD/LGD.
+# Under Basel 3.1 no equity leg carries these (Art. 147A removes IRB equity —
+# every leg is stamped ``sa``), so the IRB partition empties by construction.
+# Equity whose method the ledger did not seal is treated as SA (never disclosed
+# as IRB equity without an explicit method). Raw strings match the corep modules'
+# approach-label idiom.
+#
+# SHARED by the two templates that must agree on where equity reports, because
+# a live EBA ERROR rule ties them together: ``v4244_i`` asserts
+# ``{C 02.00, r0210, c0010} == {C 07.00.a, r0010, c0220, s0016}``. C 02.00 splits
+# rows 0210 (SA class) / 0420 (Equity IRB) on this tuple and C 07.00 admits its
+# equity population on it, so one copy each would let the two drift either side of
+# that identity.
+EQUITY_IRB_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd")
 
 
 # =============================================================================
@@ -1657,10 +1668,12 @@ B31_C02_00_COLUMN_REFS: list[str] = [c.ref for c in B31_C02_00_COLUMNS]
 #                        <- retail_mortgage + the Art. 124A/124H loan-splitter
 #                           legs, the same union as C 09.01 row 0090
 #                           (c09.py::_C09_01_RE_CLASSES)
-# Rows 0190 (n, short-term assessment) and 0200 (o, CIU) have NO key: this
-# calculator emits no exposure in either class, exactly as ``_C07_SHEETS`` gives
-# s0014 / s0015 empty bundle keys. An absent key zero-fills the row; it never
-# silently re-homes RWEA into a neighbouring class.
+#   0200 (o) CIU      <- ciu, stamped off ``equity_type`` in
+#                        engine/aggregator/_equity_prep.py; (o) and (p) are
+#                        disjoint, so 0200 is NOT an of-which of 0210
+# Row 0190 (n) alone has NO key: this calculator emits no short-term-assessment
+# exposure, as ``_C07_SHEETS`` gives s0014 empty bundle keys. An absent key drops
+# the RWEA out of the breakdown SILENTLY (measured: ``ciu`` lost 28,000,000).
 C02_00_SA_CLASS_MAP: dict[str, str] = {
     "central_govt_central_bank": "0070",
     "rgla": "0080",
@@ -1679,6 +1692,7 @@ C02_00_SA_CLASS_MAP: dict[str, str] = {
     "defaulted": "0160",
     "high_risk": "0170",
     "covered_bond": "0180",
+    "ciu": "0200",
     "equity": "0210",
     "other": "0211",
 }
@@ -2004,6 +2018,8 @@ C09_01_SA_CLASS_MAP: dict[str, str] = {
     "defaulted": "defaulted",
     "high_risk": "high_risk",
     "covered_bond": "covered_bond",
+    # Art. 112(1)(o) row 0140; rows 0141-0143 key ``ciu_approach``, not a class.
+    "ciu": "ciu",
     "equity": "equity",
     "other": "other",
     "specialised_lending": "corporate",

@@ -65,7 +65,11 @@ from rwa_calc.reporting.cellspec import (
     execute,
 )
 from rwa_calc.reporting.metadata import ReportingContext
-from rwa_calc.reporting.pillar3.cms1 import MODELLED_APPROACHES
+from rwa_calc.reporting.pillar3.cms1 import (
+    IN_CREDIT_RISK,
+    MODELLED_APPROACHES,
+    derive_in_credit_risk,
+)
 from rwa_calc.reporting.pillar3.templates import (
     CMS2_COLUMNS,
     CMS2_ROWS,
@@ -135,14 +139,27 @@ def build_cms2_spec() -> TemplateSpec:
         if row.ref in _NULL_REFS:
             continue
         if row.is_total:
-            cells[(row.ref, "a")] = CellSpec(
-                Sum("rwa_final"), predicate=RowPredicate(approaches_origin=MODELLED_APPROACHES)
+            # Constrained to CMS2's own population — the credit-risk RWA CMS1 row
+            # 0010 carries, which is what this template decomposes. An
+            # unconstrained Sum counts the Art. 112(1)(o) CIU RWEA that CMS1 row
+            # 0070's instruction carves OUT of rows 0010-0060, and for which CMS2
+            # therefore has no row, so the breakdown stopped footing to the Total
+            # by exactly that amount — in column d, the output-floor comparison,
+            # as well as c. Keyed on the DERIVED ``IN_CREDIT_RISK`` flag rather
+            # than on a tolerant per-class ``equals`` union, because the union
+            # matches nothing on a frame that seals no ``exposure_class`` and
+            # would zero the Total outright; ``CMS2_TOTAL_CLASSES`` remains the
+            # single declaration of the population, read by the derivation.
+            modelled = RowPredicate(
+                equals=((IN_CREDIT_RISK, True),), approaches_origin=MODELLED_APPROACHES
             )
-            cells[(row.ref, "b")] = CellSpec(
-                Sum("sa_rwa"), predicate=RowPredicate(approaches_origin=MODELLED_APPROACHES)
+            published = RowPredicate(equals=((IN_CREDIT_RISK, True),))
+            cells[(row.ref, "a")] = CellSpec(Sum("rwa_final"), predicate=modelled)
+            cells[(row.ref, "b")] = CellSpec(Sum("sa_rwa"), predicate=modelled)
+            cells[(row.ref, "c")] = CellSpec(
+                Sum("rwa_final"), predicate=published, empty_cell="zero"
             )
-            cells[(row.ref, "c")] = CellSpec(Sum("rwa_final"), empty_cell="zero")
-            cells[(row.ref, "d")] = CellSpec(Sum("sa_rwa"))
+            cells[(row.ref, "d")] = CellSpec(Sum("sa_rwa"), predicate=published)
             continue
         if row.ref == "0041":
             firb = _class_member(_CORPORATE_CLASSES, approaches_origin=("foundation_irb",))
@@ -183,13 +200,14 @@ def cms2_plans(
     """Build the single CMS2 execution plan (the lineage seam).
 
     CMS2 has no sheet axis, so the one plan keys under the single-frame
-    canonical key. The plan's frame is the full sealed ledger itself — CMS2
-    keys the raw origination ``exposure_class`` directly, so there is no
-    ``_prepare`` step. CMS2 is Basel 3.1 only, so a CRR run yields ``{}`` —
-    lineage then returns a clean "no lineage" rather than crashing. Preserves
-    the imperative generator's error contract: a missing RWA column records the
-    CMS2 error and yields no plan. There is no post-execute pass, so
-    ``negative_cols`` is empty.
+    canonical key. The plan's frame is the full sealed ledger plus the ONE
+    derived discriminator the Total row keys (``cms1.derive_in_credit_risk`` —
+    shared with CMS1, which owns the population decision); the breakdown rows key
+    the raw origination ``exposure_class`` directly. CMS2 is Basel 3.1 only, so a
+    CRR run yields ``{}`` — lineage then returns a clean "no lineage" rather than
+    crashing. Preserves the imperative generator's error contract: a missing RWA
+    column records the CMS2 error and yields no plan. There is no post-execute
+    pass, so ``negative_cols`` is empty.
     """
     if framework != "BASEL_3_1":
         return {}
@@ -199,7 +217,7 @@ def cms2_plans(
     return {
         _SHEET_KEY: SheetPlan(
             spec=_CMS2_SPEC,
-            frame=results.collect(),
+            frame=derive_in_credit_risk(results, cols).collect(),
             ctx=ReportingContext(),
             negative_cols=frozenset(),
         )

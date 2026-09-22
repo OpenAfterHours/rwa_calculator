@@ -16,7 +16,7 @@ they key a sheet:
         + commercial_mortgage                        -> (i) real_estate
 
 Before that merge the estate published ``corporate`` 8,000,000 and
-``corporate_sme`` 500,000 as two separate sheets, and letter (g) had NO total
+``corporate_sme`` 2,000,000 as two separate sheets, and letter (g) had NO total
 anywhere in the template. Worse, the SME breakdown row was a casualty of the
 same split: with the SME exposures on their own sheet, row 0020 "of which: SME"
 on the corporate sheet had nothing to report and published **null** — the
@@ -71,10 +71,37 @@ _EXPECTED_SHEETS: frozenset[str] = frozenset(
     }
 )
 
+#: Letters (o) and (p) are REGIME-DEPENDENT, and the difference is a scope rule
+#: rather than a data one — which is why they are extra entries rather than a
+#: loosening of the exact set above. Under Basel 3.1 every equity-table leg is SA
+#: (Art. 147A; the pack Feature ``equity_irb_approaches_available`` is False), and
+#: PS1/26 Annex II ¶48 excludes only securitisation and own-funds deductions from
+#: OF CR SA, so ``RP-EQ-LISTED`` opens the (p) sheet and the two CIU legs open the
+#: (o) sheet. Under CRR all three are Art. 155(2) simple-risk-weight equity —
+#: ``_resolve_approach`` reads the firm's permissions, never ``equity_type`` — and
+#: COREP Annex II ¶50 scopes C 07.00 to "Chapter 2 of Title II of Part Three CRR",
+#: the Standardised Approach, so both letters are correctly absent and the live
+#: EBA ERROR rule ``v4244_i`` holds (p) there.
+#:
+#: The CRR absence is a property of THIS PORTFOLIO's IRB permission, not of the
+#: CRR regime: the class stamp is regime-blind, and ``off-bs`` — a CRR portfolio
+#: run ``PermissionMode.STANDARDISED`` — does open a CRR (o) sheet
+#: (``test_p2_54_ciu_class_o.py`` owns that control). ``test_p1_371_equity_class_p``
+#: and ``test_p2_54_ciu_class_o`` own the two boundaries and their arithmetic; these
+#: entries exist so the exact-set assertion keeps seeing an unexpected EXTRA sheet
+#: without also forbidding the ones Basel 3.1 genuinely has.
+_EXPECTED_EXTRA_SHEETS: dict[str, frozenset[str]] = {
+    "crr": frozenset(),
+    "b31": frozenset({"ciu", "equity"}),  # (o), (p)
+}
+
 #: Letter (g): ``LN_CORP_RATED`` 5,000,000 + ``LN_CORP_UNRATED`` 3,000,000
-#: (both ``corporate``) + ``LN_SME`` 500,000 (``corporate_sme``).
-_CORPORATE_TOTAL: float = 8_500_000.0
-_CORPORATE_SME: float = 500_000.0
+#: (both ``corporate``) + ``LN_SME`` 500,000 + ``LN_SME_INFRA`` 1,500,000 (both
+#: ``corporate_sme``). The second SME leg is the P1.373 supporting-factor overlap
+#: row — a performing corporate-SME on an infrastructure product — so the SME
+#: of-which is 2,000,000, not 500,000.
+_CORPORATE_TOTAL: float = 10_000_000.0
+_CORPORATE_SME: float = 2_000_000.0
 
 #: Letter (h): ``LN_RETAIL`` 250,000 (``retail_other``).
 _RETAIL_TOTAL: float = 250_000.0
@@ -153,7 +180,13 @@ class TestSheetAxis:
     def test_the_estate_opens_exactly_the_art_112_sheets(self, regime_key: str) -> None:
         _results, corep = _run(regime_key)
 
-        assert set(corep.c07_00) == set(_EXPECTED_SHEETS)
+        expected = _EXPECTED_SHEETS | _EXPECTED_EXTRA_SHEETS[regime_key]
+        assert set(corep.c07_00) == expected, (
+            f"[{regime_key}] the C 07.00 sheet axis is {sorted(corep.c07_00)}, expected "
+            f"{sorted(expected)}. An EXTRA sheet means a class is reported under a letter "
+            "the estate does not intend (or a merged letter has been re-split); a MISSING "
+            "one means a population has silently left the template"
+        )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_every_merged_sheet_has_non_null_money_columns(self, regime_key: str) -> None:
@@ -251,11 +284,14 @@ class TestRealEstateLetterI:
         residential/commercial distinction the sheet axis used to carry.
 
         Note the row NOT used here: CRR section-1 row 0040 ("of which: Secured
-        by mortgages on immovable property - Residential") is null on this
-        sheet. It is declared in the template and wired to no predicate
-        (``corep/c07.py`` ``_terms_for_row`` falls through to ``return None``),
-        so it was null on the pre-merge ``retail_mortgage`` and
-        ``commercial_mortgage`` sheets too — measured, and filed separately.
+        by mortgages on immovable property - Residential"). It used to be null on
+        this sheet — declared in the template and wired to no predicate, so
+        ``_terms_for_row`` fell through to ``return None`` — which is what the
+        note here recorded, and what was filed and fixed as P2.53. It now reports
+        the same figure as row 0310 on this sheet, and nothing at all on the
+        sheets Annex II scopes it away from. Both halves of that, and the
+        supervisory rule behind them, belong to ``test_c07_row_scope.py``; this
+        file stays on the merge.
         """
         _results, corep = _run("crr")
 

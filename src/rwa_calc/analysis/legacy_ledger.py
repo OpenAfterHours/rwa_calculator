@@ -535,7 +535,10 @@ _C08_BLOCK_CAP: CellRequirement = _both(_ON_BS_GROSS, _OFF_BS_GROSS)
 # applied to. ``_sf_adjustment_cell`` prefers the factor's own dedicated flag and
 # falls back to the generic ``supporting_factor_applied`` ALONGSIDE the
 # is_sme / is_infrastructure discriminator — a conjunction the old shape had to
-# approximate and DNF states exactly.
+# approximate and DNF states exactly. The SME cell additionally EXCLUDES
+# infrastructure rows (``corep/supporting_factors.py``), but that term is not a
+# requirement: a mapping that supplies no ``is_infrastructure`` simply gets no
+# narrowing, so the cell is still producible.
 _SF_SME_ADJUSTMENT: CellRequirement = _both(
     _needs("rwa_pre_factor"),
     _either(

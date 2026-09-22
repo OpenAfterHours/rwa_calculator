@@ -58,7 +58,11 @@ docs/plans/phase7-declarative-reporting.md §6):
   ``reporting_approach`` (synthetic unit frames) degrades the post basis to
   the origin basis, so a book with no substitution reports identically under
   both and the split is number-neutral by construction.
-- The population is the standardised book plus BOTH counterparty-credit-risk
+- The population is the standardised book, SA-METHOD EQUITY (Art. 112(1)(p) —
+  see ``_equity_admission``: PS1/26 Annex II ¶48 excludes only securitisation
+  positions and own-funds deductions, ¶55C keeps IRB-transitional equity in
+  class (p), and COREP Annex II ¶50 is what puts Art. 155(2)/(3) IRB-method
+  equity outside the CRR template), plus BOTH counterparty-credit-risk
   populations (``risk_type in {"CCR_SFT", "CCR_DERIVATIVE"}`` — SA-risk-weighted
   but tagged ``standardised_ccr`` under the output floor, so they are admitted by
   ``risk_type``, never by the approach label; relabelling the approach back would
@@ -174,9 +178,14 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
+from rwa_calc.reporting.corep.supporting_factors import (
+    sf_adjustment_terms,
+    sf_infra_flag_exprs,
+)
 from rwa_calc.reporting.corep.templates import (
     C07_00_SA_SHEET_KEYS,
     C07_00_SA_SHEET_MAP,
+    EQUITY_IRB_METHODS,
     get_c07_columns,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
@@ -213,6 +222,34 @@ _BASIS: TwoBasis = TwoBasis("c07")
 _BASIS_ORIGIN_COL: str = _BASIS.basis_origin
 _BASIS_POST_COL: str = _BASIS.basis_post
 _ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
+
+# THE ROW-LEVEL SHEET SCOPE. Annex II scopes a few rows to ONE exposure class —
+# row 0040 is "of which: Secured by mortgages on immovable property -
+# Residential property. Article 125 CRR. Only reported in exposure class
+# 'Secured by mortgages on immovable property'" (COREP Annex II C 07.00, rows
+# table) — while rows are evaluated PER SHEET over that sheet's own population
+# and ``_terms_for_row`` is handed no sheet key. So the sheet key is
+# materialised as a CONSTANT column on each sheet frame and the scope is written
+# as an ordinary tolerant-equals term beside the row's data terms.
+#
+# Chosen over a per-sheet ``row_terms`` override or a per-sheet ``TemplateSpec``
+# because it adds NO mechanism: a scoped row's subset is empty on every other
+# sheet, so ``postpass.null_empty_rows`` renders it all-null exactly as it
+# already does for an unpopulated row; ONE spec still serves every sheet; and
+# the lineage drill-down runs the very same predicate, so the reported figure
+# and its explanation cannot disagree. The alternatives are both invisible at
+# the row's own definition, which is where a future editor looks. A frame
+# lacking the column compiles the term to match-nothing
+# (``cellspec.RowPredicate._compile``), so the fail-safe direction is "null",
+# never "reported on every sheet".
+#
+# The published rule set enforces the scope: ``v7477_m`` (live, WARNING) is
+# ``{r0040} = empty`` on every C 07.00 z-code except the Total and 0010.
+_SHEET_KEY_COL: str = "c07_sheet"
+
+# Article 112(1)(i) — read back from the sheet map so the scope cannot drift
+# from the z-axis it scopes against.
+_RE_SHEET_KEY: str = C07_00_SA_SHEET_MAP["residential_mortgage"]
 
 # The ``c07_bs`` labels rows 0070 / 0080 filter on, and the keys the col 0100
 # inflow is split by when it lands on them.
@@ -323,6 +360,13 @@ _GROSS_CARRIERS: tuple[str, ...] = (
 # template owns its own tuple — a shared risk-type constant is how one template's
 # basis leaks into CR4/CR5/OV1, which key their own recorded bases.
 _CCR_RISK_TYPES: tuple[str, ...] = ("CCR_SFT", "CCR_DERIVATIVE", "CCR_DEFAULT_FUND")
+
+# The sealed method tag the Art. 112(1)(p) admission reads — see
+# ``_equity_admission``. CONDITIONAL on the aggregator exit (``required=False,
+# inject=False``), so every read is presence-guarded.
+_EQUITY_METHOD_COL: str = "equity_method"
+# The ``reporting_approach_origin`` label the equity calculator seals.
+_EQUITY_APPROACH: str = "equity"
 
 # Section 1 "of which" maps (retired _C07_* constants, preserved verbatim).
 _SL_TYPE_MAP: dict[str, str] = {
@@ -511,7 +555,11 @@ def c07_plans(
         bands = inflows.by_rw_band.get(ec, {})
         plans[ec] = SheetPlan(
             spec=spec,
-            frame=sheet_frame(_BASIS, sa_df, ec),
+            # Tagged with its own sheet key so a row Annex II scopes to one
+            # exposure class can say so as a membership term (_SHEET_KEY_COL).
+            frame=sheet_frame(_BASIS, sa_df, ec).with_columns(
+                pl.lit(ec, dtype=pl.String).alias(_SHEET_KEY_COL)
+            ),
             ctx=ReportingContext(
                 substitution_inflow=inflows.total.get(ec, 0.0),
                 substitution_inflow_on_bs=sides.get(_ON_BS, 0.0),
@@ -564,7 +612,7 @@ def generate_c07(
 def c07_population(
     results: pl.LazyFrame, cols: set[str], *, both_bases: bool = False
 ) -> pl.LazyFrame:
-    """The C 07.00 population: the standardised book plus the CCR rows.
+    """The C 07.00 population: the standardised book, the CCR rows, SA-method equity.
 
     ``both_bases`` selects WHICH standardised book. The default is the
     ORIGIN-approach one — the obligor's own book, and the only thing C 09.01
@@ -587,6 +635,11 @@ def c07_population(
     route into the floor-eligible approaches, which is load-bearing and must NOT
     be undone here. CCR legs join BOTH bases: substitution does not move them.
 
+    The Art. 112(1)(p) limb is ``_equity_admission`` — equity is an SA exposure
+    class, not a third approach, and omitting it kept an entire published class off
+    the template. Equity legs join BOTH bases for the CCR reason: nothing
+    substitutes onto or off an equity holding, so the two labels agree on them.
+
     The dedupe keys the exposure reference, which the sealed ledger always
     carries. The ``subset=None`` fallback (synthetic unit frames only, where no
     reference column exists) dedupes on ALL columns — two genuinely distinct
@@ -598,7 +651,11 @@ def c07_population(
         if "risk_type" in cols
         else None
     )
-    tagged = results.with_columns(population_flags(_BASIS, cols, ("standardised",), admit=ccr))
+    admit: pl.Expr | None = None
+    for limb in (ccr, _equity_admission(cols)):
+        if limb is not None:
+            admit = limb if admit is None else admit | limb
+    tagged = results.with_columns(population_flags(_BASIS, cols, ("standardised",), admit=admit))
     admitted = (
         tagged.filter(pl.col(_BASIS.pop_origin) | pl.col(_BASIS.pop_post))
         if both_bases
@@ -608,6 +665,67 @@ def c07_population(
         subset=["exposure_reference"] if "exposure_reference" in cols else None,
         keep="first",
     )
+
+
+def _equity_admission(cols: set[str]) -> pl.Expr | None:
+    """The Art. 112(1)(p) limb of the C 07.00 population, or None when unaskable.
+
+    Admits a leg whose ORIGIN approach is ``equity`` and whose ``equity_method``
+    is not one of ``EQUITY_IRB_METHODS``, with a NULL method read as SA. Returns
+    None on a frame that seals no origin-approach label, mirroring
+    ``population_flags``' rule that a missing discriminator means an EMPTY
+    population rather than a silent pass-through.
+
+    WHY EQUITY BELONGS HERE AT ALL. PS1/26 Annex II ¶48 states the ONLY two
+    positions outside OF CR SA — "exposures assigned to the exposure class 'items
+    representing securitisation positions' as referred to in Article 112(1)(m)"
+    and "exposures deducted from own funds". Equity is neither, and ¶55C puts even
+    IRB-TRANSITIONAL equity inside class (p): the Art. 112(1)(p) figure "shall
+    include exposures subject to the IRB Transitional Approach". Omitting the class
+    left OF 07.00 with no equity sheet while OF 02.00 reported its RWEA, and left
+    the ¶55A memorandum rows 0371-0374 — defined for class (p) and nothing else —
+    with no sheet to sit on.
+
+    WHY THE IRB METHODS ARE EXCLUDED, and why that is not a regime branch. COREP
+    Annex II ¶50 scopes the CRR template to "all exposures for which the own funds
+    requirements are calculated in accordance with Chapter 2 of Title II of Part
+    Three CRR" — Chapter 2 IS the Standardised Approach — so Art. 155(2)/(3)
+    IRB-method equity is correctly OUT under CRR, and the live EBA ERROR rule
+    ``v4244_i`` (``{C 02.00, r0210, c0010} == {C 07.00.a, r0010, c0220, s0016}``)
+    pins exactly that boundary. ONE regime-blind expression serves both regimes,
+    with no pack Feature and no ``is_crr`` branch, because
+    ``engine/equity/calculator.py::_determine_approach`` returns
+    ``EquityApproach.SA`` unconditionally when the pack Feature
+    ``equity_irb_approaches_available`` is false: under Basel 3.1 every equity leg
+    is stamped ``equity_method == 'sa'`` (Art. 147A), so "all equity under B31" and
+    "SA-method equity" are the SAME SET and each regime's inclusion is right for
+    its own reason.
+
+    NULL IS SA, AND THAT IS LOAD-BEARING. A main-table equity-class row — one the
+    classifier routes to ``ApproachType.EQUITY`` (``engine/classify/approach.py``)
+    rather than to the separate equity input table — takes the SA branch via
+    ``engine/branch_split.py::is_sa_branch_approach``, is risk-weighted by
+    ``engine/sa/``, keeps ``approach_applied == "equity"``
+    (``engine/sa/calculator.py``) and carries NO ``equity_method`` at all. It is
+    genuinely standardised and must be admitted, so a null method cannot be
+    treated as unknown-and-excluded.
+
+    The presence guard is not defensive either: ``equity_method`` is a CONDITIONAL
+    aggregator-exit column (``required=False, inject=False``), so it is ABSENT —
+    not null — on every equity-free portfolio, and a bare ``pl.col`` would raise on
+    each of them. Same guard as ``corep/c02.py::_equity_method_expr``, over the
+    same shared tuple: ``c02.py`` has always split its rows 0210 / 0420 on this
+    predicate, so until it landed here C 07.00 sat on a different basis from the
+    very template ``v4244_i`` ties it to.
+    """
+    if _ORIGIN_APPROACH_SOURCE not in cols:
+        return None
+    method = (
+        pl.col(_EQUITY_METHOD_COL) if _EQUITY_METHOD_COL in cols else pl.lit(None, dtype=pl.String)
+    )
+    is_irb_method = method.is_in(list(EQUITY_IRB_METHODS)).fill_null(value=False)
+    is_equity = (pl.col(_ORIGIN_APPROACH_SOURCE) == _EQUITY_APPROACH).fill_null(value=False)
+    return is_equity & ~is_irb_method
 
 
 def _has_bs_side(cols: set[str]) -> bool:
@@ -691,8 +809,12 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
             .alias("c07_bs")
         )
     elif "exposure_type" in cols:
+        # ``equity`` joins the on-side with ``loan``: an Art. 112(1)(p) holding is
+        # wholly on-balance-sheet (CRR Art. 133(3)) and must reach row 0070, or
+        # ``boe_b0717`` / ``v0310_m`` (r0010 = Σ r0070;0080;0090;0110;0130 over
+        # cols 0200/0220) breaks by the holding's whole exposure value and RWEA.
         exprs.append(
-            pl.when(pl.col("exposure_type") == "loan")
+            pl.when(pl.col("exposure_type").is_in(["loan", "equity"]))
             .then(pl.lit("on"))
             .when(pl.col("exposure_type").is_in(["facility", "contingent", "facility_undrawn"]))
             .then(pl.lit("off"))
@@ -708,16 +830,17 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     # exposure too. Their EAD sits in drawn_amount (no CCF applies), so this is
     # the pre-fix SafeSum(reporting_gross_drawn, reporting_gross_undrawn) restored
     # for exactly those legs — null on a credit-risk leg, where the side carriers
-    # already carry the gross. The gate list is EXACTLY the four exposure_types the
-    # side carriers populate (loan / contingent / facility_undrawn + the "facility"
-    # legacy alias, Amendment 2), so col 0010's SafeSum(on_bs, off_bs, c07_ccr_gross)
-    # counts every leg once on exactly one carrier — a "facility" leg must be null
-    # here or its off-side gross would double-count.
+    # already carry the gross. The gate list is EXACTLY the exposure_types the
+    # side carriers populate (loan / contingent / facility_undrawn / equity + the
+    # "facility" legacy alias, Amendment 2), so col 0010's SafeSum(on_bs, off_bs,
+    # c07_ccr_gross) counts every leg once on exactly one carrier — a "facility"
+    # leg must be null here or its off-side gross would double-count, and so must
+    # an ``equity`` leg, whose on-side carrier the projection now populates.
     if {"exposure_type", "reporting_gross_drawn", "reporting_gross_undrawn"} <= cols:
         exprs.append(
             pl.when(
                 pl.col("exposure_type").is_in(
-                    ["loan", "contingent", "facility_undrawn", "facility"]
+                    ["loan", "contingent", "facility_undrawn", "facility", "equity"]
                 )
             )
             .then(pl.lit(None, dtype=pl.Float64))
@@ -826,6 +949,12 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         exprs.append(
             (pl.col("collateral_market_value").fill_null(0.0) - adjusted).alias("c07_vol_mat_adj")
         )
+
+    # The null-safe infrastructure discriminator col 0216 excludes on, so the two
+    # "(-)" columns stay disjoint. Derived on its own source-column gate rather
+    # than folded into the delta below, so it is present on exactly the frames
+    # ``sf_adjustment_terms`` asks for it (``corep/supporting_factors.py``).
+    exprs.extend(sf_infra_flag_exprs(cols))
 
     # Supporting-factor RWEA delta (cols 0216/0217 = pre - post per row).
     if "rwa_pre_factor" in cols:
@@ -1298,6 +1427,28 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
             return _supporting_factor_terms(cols, "sme")
         if ref == "0035":
             return _supporting_factor_terms(cols, "infrastructure")
+        if ref == "0040":
+            # "of which: Secured by mortgages on immovable property -
+            # Residential property. Article 125 CRR. Only reported in exposure
+            # class 'Secured by mortgages on immovable property'". The sheet
+            # term IS that instruction (see _SHEET_KEY_COL); the data term is
+            # ``property_type``, the same one memorandum row 0310 keys.
+            #
+            # NO QUALIFICATION TERM, deliberately. Art. 125 is headed
+            # "Exposures fully and completely secured by mortgages on
+            # residential property", so the row is in principle the qualifying
+            # subset — but under CRR this engine applies the Art. 125 treatment
+            # to EVERY residential-RE-class leg (the part above the
+            # Art. 125(2)(d) 80% limit is blended within the same branch, not
+            # reclassified: engine/sa/risk_weights.py::
+            # _crr_append_real_estate_branches), and ``is_qualifying_re`` is the
+            # Art. 124A Basel 3.1 flag, which no CRR risk-weight path reads. So
+            # the Art. 125 population and the residential population coincide
+            # here, and adding ``c07_qualifying_re`` would narrow on a flag with
+            # no CRR meaning — reproducing on this row the C 07.00-vs-C 09.01
+            # disagreement recorded as P1.353, which is blocked on acquiring the
+            # published row layout. Revisit with P1.353 / P1.292.
+            return _terms((_SHEET_KEY_COL, _RE_SHEET_KEY), ("property_type", "residential"))
         if ref == "0050":
             return _terms(("c07_ppu", True))
         if ref == "0060":
@@ -1356,8 +1507,32 @@ def _re_terms(
     is_adc: bool | None = None,
     is_qualifying: bool | None = None,
 ) -> _Terms | None:
-    """RE "of which" membership terms (retired _filter_re semantics)."""
-    terms: list[tuple[str, str | bool]] = []
+    """RE "of which" membership terms (retired _filter_re semantics).
+
+    SHEET-SCOPED, and this is the ONE place all fourteen of them are built.
+    PS1/26 Annex II closes every OF 07.00 row this builder serves — 0330, 0331,
+    0332, 0340, 0341, 0342, 0343, 0344, 0350 (and the 0351-0354 / 0360 variants
+    the repo declares) — with the identical sentence: "Only reported in exposure
+    class 'real estate exposures' (Article 112(1)(i) of the Credit Risk:
+    Standardised Approach (CRR) Part)". Rows are evaluated PER SHEET over that
+    sheet's own population, so without the scope an exposure carrying
+    ``property_type`` while classified OUTSIDE Art. 112(1)(i) publishes these
+    rows on its own class's sheet. Measured on the ``row-scope`` portfolio: an
+    income-producing corporate leg secured on residential property published
+    r0330 = r0332 = 2,000,000 on the Basel 3.1 ``corporate`` sheet.
+
+    The scope is the same ``_SHEET_KEY_COL`` term CRR row 0040 carries, so the
+    two cannot drift: both read ``_RE_SHEET_KEY`` back from
+    ``templates.C07_00_SA_SHEET_MAP``. Deliberately applied HERE rather than per
+    row — a row added to ``_RE_ROW_FILTERS`` is scoped by construction, which is
+    what stops the next RE row repeating this defect.
+
+    NOT applied to the memorandum rows 0290/0300/0310/0320, which are a
+    different question with a different answer (¶52/¶54-55 scope them to the
+    OBLIGOR classes, the two Annex IIs' lists differ, and ¶55 positively
+    REQUIRES 0300/0320 on the 'in default' sheet). See P1.377.
+    """
+    terms: list[tuple[str, str | bool]] = [(_SHEET_KEY_COL, _RE_SHEET_KEY)]
     if property_type is not None:
         terms.append(("property_type", property_type))
     else:
@@ -1573,7 +1748,7 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
             Sum("rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col), predicate=post_member
         )
         cells["0216"] = _sf_adjustment_cell(
-            post_terms, cols, "sme_supporting_factor_applied", "is_sme"
+            post_terms, cols, "sme_supporting_factor_applied", "is_sme", exclude_infra=True
         )
         cells["0217"] = _sf_adjustment_cell(
             post_terms, cols, "infrastructure_factor_applied", "is_infrastructure"
@@ -1627,23 +1802,15 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     return {ref: cell for ref, cell in cells.items() if ref in column_refs}
 
 
-def _sf_adjustment_cell(terms: _Terms, cols: set[str], dedicated: str, flag_col: str) -> CellSpec:
+def _sf_adjustment_cell(
+    terms: _Terms, cols: set[str], dedicated: str, flag_col: str, *, exclude_infra: bool = False
+) -> CellSpec:
     """Supporting-factor RWEA adjustment (retired _supporting_factor_adjustment):
-    Σ(rwa_pre_factor - rwa) over the applied rows; None when no carrier.
-    ``dedicated`` is the factor's own applied-flag column (note the retired
-    asymmetric names: sme_supporting_factor_applied vs
-    infrastructure_factor_applied)."""
-    if "rwa_pre_factor" not in cols:
+    Σ(rwa_pre_factor - rwa) over the rows the factor was applied to; None when no
+    carrier. The three-limb row selection — and why the SME column passes
+    ``exclude_infra`` while the infrastructure column does not — is
+    ``corep/supporting_factors.py::sf_adjustment_terms``."""
+    extra = sf_adjustment_terms(cols, dedicated, flag_col, exclude_infra=exclude_infra)
+    if extra is None:
         return CellSpec(Formula(refs=(), fn=_const(None)))
-    if dedicated in cols:
-        return CellSpec(
-            Sum("c07_sf_delta"), predicate=RowPredicate(equals=(*terms, (dedicated, True)))
-        )
-    if flag_col in cols and "supporting_factor_applied" in cols:
-        return CellSpec(
-            Sum("c07_sf_delta"),
-            predicate=RowPredicate(
-                equals=(*terms, (flag_col, True), ("supporting_factor_applied", True))
-            ),
-        )
-    return CellSpec(Formula(refs=(), fn=_const(None)))
+    return CellSpec(Sum("c07_sf_delta"), predicate=RowPredicate(equals=(*terms, *extra)))

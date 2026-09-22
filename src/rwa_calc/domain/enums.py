@@ -87,6 +87,19 @@ class ExposureClass(StrEnum):
     SPECIALISED_LENDING = "specialised_lending"
     """Specialised lending - slotting approach (CRE33)"""
 
+    CIU = "ciu"
+    """Units or shares in collective investment undertakings (CRR Art. 112(1)(o),
+    PRA PS1/26 Art. 112(1)(o), CRE60). Class (o) and class (p) are DISJOINT in
+    both regimes, distinguished by the article that supplies the risk weight:
+    Arts. 132-132C for (o), Art. 133 for (p). PS1/26 Art. 112(2) Table A2 ranks
+    (o) at row (2), above (p) at row (3) and above real estate at row (7); the
+    COREP Annex II decision tree answers its point-(p) gate ("see also Article
+    133 CRR") NO for a CIU and routes it to the rank-5 (l)+(o) gate, which
+    states those two classes are "disjoint among themselves". A CIU is
+    identified by ``equity_type == "ciu"`` on the equity input table, never by
+    the counterparty's ``entity_type`` — a CIU wrapper's counterparty is an
+    ordinary corporate or equity entity."""
+
     EQUITY = "equity"
     """Equity exposures (CRR Art. 112(p), CRE20.58-62)"""
 

@@ -293,9 +293,18 @@ def test_ccf_buckets_decompose_the_off_balance_sheet_row(regime_key: str) -> Non
     value, so they must foot to it exactly. This is the identity that breaks the
     moment the cells go back to summing post-conversion EAD.
 
+    A sheet with no off-balance-sheet item at all is a separate claim and is
+    asserted as one rather than skipped: row 0080 and every bucket column must be
+    NULL together, not 0.00 and not a mixture. That case arrived with the P2.54
+    ``ciu`` sheet — a CIU holding is wholly drawn, so it reaches no bucket — and
+    the null/0.00 mixture is exactly the shape that used to publish a silent zero
+    where the template's empty-subset contract says blank.
+
     Arrange: the off-balance-sheet portfolio under one regime.
     Act:     generate C 07.00 and sum the bucket columns of row 0080.
-    Assert:  the sum equals col 0150 of the same row, on every sheet.
+    Assert:  the sum equals col 0150 of the same row on every sheet that HAS an
+             off-balance-sheet row; both sides are null on every sheet that does
+             not; and at least one sheet is in the first group.
     """
     # Arrange + Act
     frames, _meta = _generate_frames(regime_key)
@@ -303,11 +312,23 @@ def test_ccf_buckets_decompose_the_off_balance_sheet_row(regime_key: str) -> Non
 
     # Assert
     assert sheets
+    footed: list[str] = []
     for key, sheet in sheets.items():
-        bucket_sum = sum(
-            _cell(sheet, "0080", col) or 0.0 for col in _CCF_COLUMNS if col in sheet.columns
-        )
-        assert bucket_sum == pytest.approx(_cell(sheet, "0080", "0150")), key
+        off_bs_total = _cell(sheet, "0080", "0150")
+        buckets = {col: _cell(sheet, "0080", col) for col in _CCF_COLUMNS if col in sheet.columns}
+        if off_bs_total is None:
+            assert all(value is None for value in buckets.values()), (
+                f"{regime_key} {key} row 0080 col 0150 is null (no off-balance-sheet item "
+                f"on this sheet) but a bucket column is populated: {buckets}. A bucket "
+                "cannot hold what the row it decomposes does not."
+            )
+            continue
+        footed.append(key)
+        assert sum(value or 0.0 for value in buckets.values()) == pytest.approx(off_bs_total), key
+    assert footed, (
+        f"{regime_key}: no C 07.00 sheet carries an off-balance-sheet row 0080 at all, so "
+        "this identity asserted nothing — the portfolio exists to exercise the CCF buckets"
+    )
 
 
 def test_boe_b0471_sa_exposure_value_derivation_closes() -> None:
@@ -405,16 +426,25 @@ def test_documentary_credit_resolves_its_risk_type_from_obs_product(regime_key: 
     assert row["ccf"][0] == pytest.approx(0.2), regime_key
 
 
-def test_all_eight_portfolio_exposures_reach_the_templates() -> None:
-    """The eight designed exposures survive the pipeline in both regimes.
+def test_every_off_balance_sheet_exposure_reaches_the_templates() -> None:
+    """The eight credit-risk exposures survive the pipeline in both regimes.
 
     A dropped facility_undrawn row (uncommitted facilities emit none) or a
     swallowed contingent would shrink the bucket axis without failing the golden
-    gate on its own, so the row count is pinned explicitly.
+    gate on its own, so the census is pinned explicitly.
+
+    **Scoped to the off-balance-sheet population rather than to the whole frame**,
+    which is what the test is actually about. It was ``df.height == 8`` plus a
+    whole-frame ``exposure_type`` census, and P2.54's ``EQ_CIU`` equity row broke
+    both — a row that has nothing to do with conversion factors. The CIU's own
+    survival is asserted where it belongs, in
+    ``test_p2_54_ciu_class_o.py``; here it is excluded by type so that the next
+    non-OBS row added to this portfolio does not break a CCF test again.
 
     Arrange: the off-balance-sheet portfolio.
     Act:     run the pipeline under each regime.
-    Assert:  one drawn loan + four contingents + three facility_undrawn rows.
+    Assert:  one drawn loan + four contingents + three facility_undrawn rows, and
+             every designed off-balance-sheet reference present.
     """
     expected_offbs = {
         CT_GUARANTEE,
@@ -424,15 +454,21 @@ def test_all_eight_portfolio_exposures_reach_the_templates() -> None:
         FAC_OC + UNDRAWN_SUFFIX,
         FAC_UCC + UNDRAWN_SUFFIX,
     }
+    credit_risk_types = {"loan", "contingent", "facility_undrawn"}
     for regime_key in _REGIMES:
         # Arrange + Act
         result = PipelineOrchestrator().run_with_data(
             build_reporting_offbs_bundle(), _config(regime_key)
         )
         df = result.results.collect()
+        credit_risk = df.filter(pl.col("exposure_type").is_in(list(credit_risk_types)))
 
         # Assert
-        assert df.height == 8, regime_key
-        assert expected_offbs <= set(df["exposure_reference"]), regime_key
-        counts = dict(df["exposure_type"].value_counts().iter_rows())
+        assert expected_offbs <= set(credit_risk["exposure_reference"]), regime_key
+        counts = dict(credit_risk["exposure_type"].value_counts().iter_rows())
         assert counts == {"loan": 1, "contingent": 4, "facility_undrawn": 3}, regime_key
+        assert credit_risk.height < df.height, (
+            f"[{regime_key}] every row in this portfolio is now an off-balance-sheet "
+            "credit-risk row, so the filter above is a no-op and this test has silently "
+            "gone back to asserting the whole frame — EQ_CIU has been lost"
+        )

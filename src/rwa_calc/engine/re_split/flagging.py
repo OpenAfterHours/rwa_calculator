@@ -190,7 +190,7 @@ def _re_split_candidate_gates(
     Already-classified RE rows are excluded because they're handled by the
     existing whole-loan path (CRR ``_apply_residential_mortgage_rw`` /
     B3.1 ``b31_residential_rw_expr``). Higher-priority Art. 112 classes
-    (defaulted, equity, covered bond, high-risk) are also excluded — they
+    (defaulted, CIU, equity, covered bond, high-risk) are also excluded — they
     must never be downgraded. ADC-flagged rows (PRA PS1/26 Art. 124(3)) are
     also excluded so the 150% Art. 124K(1) ADC RW applies to the whole
     exposure rather than a loan-split residential / corporate residual.
@@ -202,6 +202,9 @@ def _re_split_candidate_gates(
     ]
     excluded_classes = existing_re_classes + [
         ExposureClass.DEFAULTED.value,
+        # Art. 112(1)(o). CIU outranks real estate in both rankings (PS1/26
+        # Table A2 row (2) vs row (7); COREP Annex II ¶62 rank 5 vs rank 6).
+        ExposureClass.CIU.value,
         ExposureClass.EQUITY.value,
         ExposureClass.COVERED_BOND.value,
         ExposureClass.HIGH_RISK.value,

@@ -410,23 +410,44 @@ class TestCRRGroupF_ParameterizedValidation:
 # =============================================================================
 
 
-class TestP222SMEInfraOverlapSubstitution:
+class TestP222SMEInfraOverlapMinimumFactor:
     """
     P2.22 — Regression guard: when an exposure is eligible for BOTH the SME
     supporting factor (CRR Art. 501) AND the infrastructure supporting factor
-    (CRR Art. 501a), the engine must apply the LOWER of the two factors.
+    (CRR Art. 501a), the engine applies the LOWER of the two factors.
 
     Algebraic invariant:
         0.75 (infra) < 0.7619 (SME tier-1) <= SME_blended <= 0.85 (SME tier-2)
 
     Because the infra factor (0.75) is always strictly less than any admissible
-    SME blended factor (0.7619 to 0.85), the substitution rule mandates that the
+    SME blended factor (0.7619 to 0.85), taking the minimum means the
     infrastructure factor wins whenever both eligibility flags are set.
 
-    Regulatory references:
-    - CRR Art. 501(2) second subparagraph: when both factors are eligible, only
-      the lower of the two shall be applied.
-    - CRR Art. 501a(1): infrastructure supporting factor = 0.75 (flat, not tiered).
+    Taking the minimum is a FIRM POLICY CHOICE, not a regulatory requirement
+    ---------------------------------------------------------------------
+    **CRR states no cumulation rule, and this test does not claim one.** An
+    earlier version of this docstring cited "CRR Art. 501(2) second
+    subparagraph: when both factors are eligible, only the lower of the two
+    shall be applied". No such provision exists. Read from ``docs/assets/
+    crr.pdf`` (PAGE_INDEX 417-418): Art. 501 has two paragraphs and ends at
+    2(c) — (a) the eligible classes, (b) the Art. 4(1)(128D) SME definition,
+    (c) the reasonable-steps duty — with no subparagraph after them and no
+    mention of Art. 501a. Art. 501a runs 1 / 2 / 3 (4 and 5 omitted by
+    S.I. 2019/1232) and never mentions Art. 501. Neither article says whether
+    the two factors compound, substitute, or are mutually exclusive.
+
+    So what is under test here is the ENGINE's behaviour — the
+    ``pl.min_horizontal(sme_factor_expr, infra_factor_expr)`` in
+    ``engine/supporting_factors.py::apply_factors`` — and the firm's choice of
+    the conservative reading. Do NOT substitute another citation for the one
+    removed; there is not one to substitute. If the treatment is ever
+    challenged, the answer is a policy decision plus a supervisory
+    conversation, not an article.
+
+    What IS cited, and stays cited:
+    - CRR Art. 501a(1): infrastructure supporting factor = 0.75 (flat, not
+      tiered) — the value the engine applies.
+    - CRR Art. 501(1): the tiered SME formula the 0.7619 comes from.
 
     Test fixture:
     - Counterparty: CP_SME_INFRA_001 — SME Infrastructure Solutions Ltd,
@@ -466,16 +487,18 @@ class TestP222SMEInfraOverlapSubstitution:
             )
         return row
 
-    def test_p2_22_sme_infra_overlap_substitution_regression(
+    def test_p2_22_sme_infra_overlap_takes_the_lower_factor(
         self,
         p2_22_result: dict,
     ) -> None:
         """
-        P2.22 — SME-vs-infra overlap: infrastructure factor (0.75) must be applied.
+        P2.22 — SME-vs-infra overlap: the engine applies the infra factor (0.75).
 
         When LOAN_SME_INFRA_001 is eligible for both the SME supporting factor
         (CRR Art. 501) and the infrastructure supporting factor (CRR Art. 501a),
-        the engine must apply the LOWER factor.
+        the engine applies the LOWER factor. That is the firm's policy choice
+        and not a CRR requirement — see the class docstring for why no article
+        can be cited for it.
 
         Algebraic invariant (calibration guard):
             0.75 < 0.7619 <= SME_blended <= 0.85
@@ -484,8 +507,9 @@ class TestP222SMEInfraOverlapSubstitution:
         will break this test.
 
         Regulatory references:
-        - CRR Art. 501(2) second subparagraph: apply only the lower factor.
-        - CRR Art. 501a(1): infrastructure factor = 0.75.
+        - CRR Art. 501a(1): infrastructure factor = 0.75 — the value applied.
+        - CRR Art. 501(1): the tiered SME formula behind the 0.7619 alternative.
+        - Cumulation: none. CRR is silent; the min rule is firm policy.
 
         Arrange: LOAN_SME_INFRA_001, EAD=1,500,000 GBP, RW=1.00 (unrated corporate).
         Act:     CRR SA pipeline (reporting_date=2025-12-31, STANDARDISED permissions).
@@ -547,13 +571,14 @@ class TestP222SMEInfraOverlapSubstitution:
             f"got {row['is_infrastructure']}"
         )
 
-        # Assert 6 — factor value: infra must win, NOT SME tier-1
+        # Assert 6 — factor value: infra wins, NOT SME tier-1
         # Anti-assertion (regression probe): SME tier-1 (0.7619) must NOT be applied.
         # Algebraic invariant: 0.75 (infra) < 0.7619 (SME tier-1) <= SME_blended <= 0.85
         assert row["supporting_factor"] != pytest.approx(_SME_TIER1_FACTOR, abs=_FACTOR_TOL), (
             f"P2.22 LOAN_SME_INFRA_001: supporting_factor must NOT be {_SME_TIER1_FACTOR} "
-            f"(SME tier-1) — CRR Art. 501(2) second subparagraph requires the LOWER factor "
-            f"(infra=0.75) when both eligibility flags are set. "
+            f"(SME tier-1) — the engine takes the LOWER of the two factors (infra=0.75) "
+            f"when both eligibility flags are set. That is a firm policy choice; CRR "
+            f"states no cumulation rule (see the class docstring). "
             f"Algebraic invariant: 0.75 < 0.7619 <= SME_blended <= 0.85"
         )
         assert row["supporting_factor"] == pytest.approx(_INFRA_FACTOR, abs=_FACTOR_TOL), (
@@ -569,7 +594,7 @@ class TestP222SMEInfraOverlapSubstitution:
             f"got {row['supporting_factor_applied']}"
         )
 
-        # Assert 8 — final RWA confirms substitution outcome
+        # Assert 8 — final RWA confirms the min-factor outcome
         assert row["rwa_final"] == pytest.approx(_RWA_FINAL, abs=_MONEY_TOL), (
             f"P2.22 LOAN_SME_INFRA_001: expected rwa_final={_RWA_FINAL:,.0f} "
             f"(EAD 1,500,000 × RW 1.00 × infra_factor 0.75), "

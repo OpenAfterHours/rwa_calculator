@@ -81,30 +81,35 @@ class COREPTemplateBundle:
     errors: list[str] = field(default_factory=list)
 ```
 
-!!! note "Implementation status"
-    The generator is being reworked to match the actual EBA/PRA template structures.
-    See [COREP Reporting](../features/corep-reporting.md) for the correct template
-    structures and `IMPLEMENTATION_PLAN.md` for the phased rework plan. Key changes:
+!!! note "Template structure"
+    The templates follow the published EBA/PRA structures. Three consequences are
+    worth stating, because each is a shape a caller can get wrong:
 
-    - Templates are per-exposure-class submissions (not one-row-per-class)
-    - Column refs use 4-digit COREP numbering (0010-0240 for C 07.00, 0010-0310 for C 08.01)
-    - C 07.00 has 24 columns (CRR) / 22 columns (Basel 3.1), not 9
-    - C 08.01 has 33 columns (CRR) / 40+ columns (Basel 3.1), not 11
-    - Risk weight breakdown is Section 3 within C 07.00, not a separate template
+    - Templates are **per-exposure-class submissions** — the exposure class is a
+      sheet dimension, not a row (see *Exposure-class axis maps* below)
+    - Row and column references use the 4-digit COREP numbering, and both differ
+      between the CRR and Basel 3.1 variants of the same template
+    - The risk-weight breakdown is a row *section* within C 07.00, not a separate
+      template
+
+    See [COREP Reporting](../features/corep-reporting.md) for the template detail.
 
 ## Template Constants
 
-These constants define the regulatory template structure and are available from
-`rwa_calc.reporting.corep.templates`:
+These constants define the regulatory template structure. All of them are
+re-exported from the package `rwa_calc.reporting.corep`, which is the import path
+to prefer. Their module homes are `corep/templates.py` (rows, columns, bands and
+the exposure-class maps) and `corep/sheet_labels.py` (display names for the
+C 07.00 / OF 07.00 sheet axis).
 
 ### `COREPRow`
 
 ```python
 @dataclass(frozen=True)
 class COREPRow:
-    ref: str                            # Row reference (e.g., "0010")
-    name: str                           # Display name
-    exposure_class_value: str | None    # Maps to ExposureClass.value
+    ref: str                                  # Row reference, e.g. "0010"
+    name: str                                 # Display name
+    exposure_class_value: str | None = None   # Maps to ExposureClass.value
 ```
 
 ### `COREPColumn`
@@ -112,23 +117,47 @@ class COREPRow:
 ```python
 @dataclass(frozen=True)
 class COREPColumn:
-    ref: str   # Column reference (e.g., "0010")
-    name: str  # Display name
+    ref: str         # Column reference, e.g. "0010" (4-digit COREP refs)
+    name: str        # Display name
+    group: str = ""  # Logical group (e.g. "Exposure", "CRM Substitution")
 ```
 
-### Row and Column Mappings
+### Exposure-class axis maps
+
+The SA and IRB templates are submitted **once per exposure class**, so the class
+is a *sheet* dimension rather than a row: an `ExposureClass` value is folded onto
+a sheet key, and the sheet key is separately named for display. Those are two
+jobs and two maps — a map that carries both a row ref and a name for this axis is
+describing a template that does not exist.
 
 | Constant | Purpose |
 |----------|---------|
-| `SA_EXPOSURE_CLASS_ROWS` | Maps `ExposureClass.value` → `(row_ref, display_name)` — used as filter values for per-class template generation |
-| `IRB_EXPOSURE_CLASS_ROWS` | Maps `ExposureClass.value` → `(row_ref, display_name)` — filter values for C 08.01/C 08.02 |
-| `CRR_C07_COLUMNS` | 24 column definitions for CRR C 07.00 (refs 0010-0240) |
-| `B31_C07_COLUMNS` | 22 column definitions for Basel 3.1 OF 07.00 |
-| `CRR_C08_COLUMNS` | 33 column definitions for CRR C 08.01 (refs 0010-0310) |
-| `B31_C08_COLUMNS` | 40+ column definitions for Basel 3.1 OF 08.01 |
-| `SA_RISK_WEIGHT_BANDS` | 15 CRR risk weight bands (0%-1250% + Other) |
-| `B31_SA_RISK_WEIGHT_BANDS` | 29 Basel 3.1 risk weight bands |
-| `PD_BANDS` | 8 PD bands for C 08.02 aggregation (contiguous, 0%-100%) |
+| `C07_00_SA_SHEET_MAP` | `ExposureClass.value` → C 07.00 / OF 07.00 **sheet key**, i.e. the CRR Art. 112(1) class the exposure is reported under. Total over `ExposureClass`, and several members fan into one key: `corporate_sme` and `specialised_lending` → `corporate`; `retail_qrre` and `retail_other` → `retail`; `retail_mortgage`, `residential_mortgage` and `commercial_mortgage` → `real_estate`. Applied in `corep/c07.py` |
+| `C07_00_SA_SHEET_KEYS` | The sheet keys that map can produce. A key outside this set reached the axis through the pass-through limb — it is not an Art. 112(1) class |
+| `get_c07_sheet_labels(framework)` | Display name per C 07.00 sheet key, resolved **per regime**: PS1/26 renames four of the Art. 112(1) classes, so `"CRR"` and `"BASEL_3_1"` return different strings. Feeds the Excel tab name and the UI sheet picker. Callers fall back to the raw key for an unmapped sheet |
+| `IRB_EXPOSURE_CLASS_LABELS` | Display name per Art. 147(2) IRB class, for the C 08.01–C 08.05 tabs. Labels only, and one map for both regimes |
+| `C02_00_SA_CLASS_MAP` | `ExposureClass.value` → C 02.00 / OF 02.00 SA class **row ref** — C 02.00 carries the same Art. 112 fan-in on rows rather than on sheets |
+
+!!! warning "`SA_EXPOSURE_CLASS_ROWS` and `IRB_EXPOSURE_CLASS_ROWS` no longer exist"
+    Both mapped `ExposureClass.value` → `(row_ref, display_name)`, and neither set
+    of row refs addressed a live template — `SA_EXPOSURE_CLASS_ROWS` gave `equity`
+    ref 0110, which C 09.01 spends on high-risk exposures. `SA_EXPOSURE_CLASS_ROWS`
+    is deleted; `IRB_EXPOSURE_CLASS_ROWS` is narrowed to the label half above. See
+    the [changelog](../appendix/changelog.md).
+
+### Row and column definitions
+
+Prefer the framework accessors — `get_c07_columns(framework)`,
+`get_c08_columns(framework)` and their siblings — over the underlying constants,
+so a caller does not have to branch on the regime itself.
+
+| Constant | Purpose |
+|----------|---------|
+| `CRR_C07_COLUMNS` / `B31_C07_COLUMNS` | Column definitions for CRR C 07.00 and Basel 3.1 OF 07.00 (4-digit refs from 0010) |
+| `CRR_C08_COLUMNS` / `B31_C08_COLUMNS` | Column definitions for CRR C 08.01 and Basel 3.1 OF 08.01 |
+| `SA_RISK_WEIGHT_BANDS` | CRR SA risk weight bands as `(risk_weight_decimal, label)`, 0% through 1250% |
+| `B31_SA_RISK_WEIGHT_BANDS` | Basel 3.1 SA risk weight bands — a finer scale over the same 0%–1250% range |
+| `PD_BANDS` | Contiguous PD bands as `(lower, upper, label)`, 0% through default. Keys the C 08.02 rows only when the data carries no obligor grade; where a grade is present the grades themselves are the rows |
 
 ## Import Paths
 
@@ -136,13 +165,16 @@ class COREPColumn:
 # Core classes (recommended)
 from rwa_calc.reporting import COREPGenerator, COREPTemplateBundle
 
-# Template constants
-from rwa_calc.reporting.corep.templates import (
-    SA_EXPOSURE_CLASS_ROWS,
-    IRB_EXPOSURE_CLASS_ROWS,
-    CRR_C07_COLUMNS,
-    CRR_C08_COLUMNS,
+# Template constants — all re-exported from the package
+from rwa_calc.reporting.corep import (
+    C02_00_SA_CLASS_MAP,
+    C07_00_SA_SHEET_KEYS,
+    C07_00_SA_SHEET_MAP,
+    IRB_EXPOSURE_CLASS_LABELS,
     PD_BANDS,
     SA_RISK_WEIGHT_BANDS,
+    get_c07_columns,
+    get_c07_sheet_labels,
+    get_c08_columns,
 )
 ```

@@ -1990,10 +1990,10 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_on_balance_sheet": EdgeColumn(
             dtype=pl.Boolean,
             null_meaning=(
-                "exposure_type outside the loan/facility/contingent vocabulary — "
-                "the row belongs to neither the on- nor the off-balance-sheet "
-                "template cells (matches the reporting kernel's exposure_type "
-                "rule; must NOT be filled to a side)"
+                "exposure_type outside the loan/equity/facility/contingent "
+                "vocabulary — the row belongs to neither the on- nor the "
+                "off-balance-sheet template cells (matches the reporting kernel's "
+                "exposure_type rule; must NOT be filled to a side)"
             ),
         ),
         "reporting_rw": EdgeColumn(dtype=pl.Float64),
@@ -2178,6 +2178,26 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
             inject=False,
             citation="CRR Art. 155(2)",
             null_meaning="null = non-equity leg; absent = equity-free run; never a method",
+        ),
+        # The Art. 132/132A approach the equity calculator applied to a CIU
+        # wrapper (``look_through`` = Art. 132(3), ``mandate_based`` =
+        # Art. 132A(2), ``fallback`` = Art. 132(2) 1,250%). An INPUT column
+        # (``data/schemas.py`` EQUITY_EXPOSURE_SCHEMA, validated against
+        # VALID_CIU_APPROACHES) that the equity path carries through, so it is
+        # CONDITIONAL (inject=False) on exactly the ``equity_method`` terms: null
+        # on non-CIU legs via the diagonal concat, absent on an equity-free run,
+        # never injected — the eager-backed seal stays a shallow
+        # DataFrame.lazy() wrap. Without this declaration the seal's
+        # ``lf.select(emitted)`` strips it, and the rows it is the ONLY carrier
+        # for render permanently null with no error: C 07.00 / OF 07.00 rows
+        # 0281-0283 (``corep/c07.py::_CIU_ROW_APPROACH``) and Pillar 3 OV1 rows
+        # 12-14 (``pillar3/ov1.py::_EQUITY_SUBAPPROACH_REFS``).
+        "ciu_approach": EdgeColumn(
+            dtype=pl.String,
+            required=False,
+            inject=False,
+            citation="PS1/26 Art. 132",
+            null_meaning="null = non-CIU leg; absent = equity-free run; never an approach",
         ),
         "expected_loss": EdgeColumn(dtype=pl.Float64),
         # Applied reporting class: SA rows carry the SME-managed-as-retail /

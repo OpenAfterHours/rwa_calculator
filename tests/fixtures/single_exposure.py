@@ -22,6 +22,7 @@ from decimal import Decimal
 import polars as pl
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.irb.formulas import firb_supervisory_lgd_values
@@ -298,10 +299,18 @@ def calculate_single_slotting_exposure(
     # The slotting branch input is sealed in production (crm_exit edge) —
     # contract columns are read directly, so carry them explicitly with
     # production-realistic values.
+    #
+    # ``exposure_class`` is one of them and was missing until the CRR
+    # Art. 501a(1)(a) class gate started reading it: ``engine/classify/
+    # approach.py`` routes to slotting only when ``exposure_class ==
+    # specialised_lending``, so a slotting row cannot exist with any other
+    # value, and leaving it absent made every caller take the gate's
+    # permissive column-absent fallback rather than its real class limb.
     data: dict = {
         "exposure_reference": ["SINGLE"],
         "ead_final": [float(ead)],
         "approach": ["slotting"],
+        "exposure_class": [ExposureClass.SPECIALISED_LENDING.value],
         "slotting_category": [category],
         "is_hvcre": [is_hvcre],
         "sl_type": [sl_type],

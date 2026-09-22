@@ -25,6 +25,7 @@ References:
 from __future__ import annotations
 
 from rwa_calc.reporting.corep.templates import (
+    _LBL_ROW_CIU,
     _LBL_SA_CENTRAL_GOVT,
     _LBL_SA_CORPORATES,
     _LBL_SA_COVERED_BOND,
@@ -77,6 +78,12 @@ CRR_C07_00_SA_SHEET_LABELS: dict[str, str] = {
     "defaulted": _LBL_SA_DEFAULTED,
     "high_risk": _LBL_SA_HIGH_RISK,
     "covered_bond": _LBL_SA_COVERED_BOND,
+    # (o) is the one entry whose constant is named ``_LBL_ROW_*`` rather than
+    # ``_LBL_SA_*``: the same string serves C 09.01 / OF 09.01 row 0140 AND the
+    # C 02.00 row 0200 pair, so it was never SA-axis-only. It is still the
+    # geographical template's own label for this class, which is the rule the
+    # rest of this map follows. PS1/26 does NOT rename (o), so B31 inherits it.
+    "ciu": _LBL_ROW_CIU,
     "equity": _LBL_SA_EQUITY,
     "other": _LBL_SA_OTHER,
 }

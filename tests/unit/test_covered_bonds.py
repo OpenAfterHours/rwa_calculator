@@ -44,7 +44,8 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     get_all_risk_weight_tables,
     get_combined_cqs_risk_weights,
 )
-from rwa_calc.reporting.corep.templates import SA_EXPOSURE_CLASS_ROWS
+from rwa_calc.reporting.corep.sheet_labels import get_c07_sheet_labels
+from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_KEYS, C07_00_SA_SHEET_MAP
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 # =============================================================================
@@ -188,11 +189,45 @@ class TestCoveredBondPermissions:
 class TestCoveredBondCOREP:
     """Test covered bond COREP template integration."""
 
-    def test_sa_exposure_class_row_exists(self):
-        """Covered bond has a row in SA_EXPOSURE_CLASS_ROWS."""
-        assert "covered_bond" in SA_EXPOSURE_CLASS_ROWS
-        row_ref, name = SA_EXPOSURE_CLASS_ROWS["covered_bond"]
-        assert name == "Covered bonds"
+    def test_covered_bonds_key_their_own_art_112_1_l_sheet(self):
+        """Covered bonds are a C 07.00 / OF 07.00 sheet of their own.
+
+        Class (l) is one of the Art. 112(1) letters, so it is never merged into
+        a neighbour the way ``corporate_sme`` is merged into (g): the sheet key
+        is the class itself. Asserted off ``ExposureClass.COVERED_BOND`` rather
+        than the string, so the claim cannot drift from the vocabulary the
+        aggregator seals (``.claude/LESSONS.md`` B2 / B3).
+        """
+        covered_bond = ExposureClass.COVERED_BOND.value
+
+        assert C07_00_SA_SHEET_MAP[covered_bond] == covered_bond, (
+            "covered bonds no longer key their own Art. 112(1)(l) sheet — they "
+            f"are merged into {C07_00_SA_SHEET_MAP[covered_bond]!r}, which leaves "
+            "letter (l) with no total anywhere in the template"
+        )
+        assert covered_bond in C07_00_SA_SHEET_KEYS
+
+    @pytest.mark.parametrize(
+        ("framework", "expected"),
+        [("CRR", "Covered bonds"), ("BASEL_3_1", "Eligible covered bonds")],
+    )
+    def test_covered_bond_sheet_is_named_per_regime(self, framework: str, expected: str):
+        """The covered-bond sheet prints the published name for its regime.
+
+        CRR Art. 112(1)(l) is "exposures in the form of covered bonds"; PS1/26
+        Art. 112(1)(l) narrows it to "exposures in the form of eligible covered
+        bonds" (both read from the PDFs). Printing the CRR name on a Basel 3.1
+        submission is a defect in its own right, and an absent label is worse
+        than a wrong one — the tab falls back to the raw key.
+        """
+        labels = get_c07_sheet_labels(framework)
+
+        actual = labels[ExposureClass.COVERED_BOND.value]
+        assert actual == expected, (
+            f"{framework}: the Art. 112(1)(l) sheet is named {actual!r}, not "
+            f"{expected!r} — the workbook tab and the UI sheet picker both print "
+            "this string"
+        )
 
 
 # =============================================================================

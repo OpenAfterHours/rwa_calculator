@@ -77,8 +77,8 @@ Cell semantics (recorded decisions, this slice):
   template. C 09.02 is the IRB book INCLUDING slotting (the retired inline
   comment claiming exclusion was misleading).
 - The reverse-map row keying handles the plain class rows: a row whose key
-  is not a ``C09_01_SA_CLASS_MAP`` value AND not an RE/SL/SME sub-row key
-  renders ALL-NULL (the short-term and CIU sub-rows stay permanently null —
+  is not a ``C09_01_SA_CLASS_MAP`` value AND not an RE/SL/SME/CIU-approach
+  sub-row key renders ALL-NULL (the short-term sub-row stays permanently null —
   recorded dead code); the corporate rows fan in corporate + corporate_sme +
   specialised_lending; retail fans in retail_other (+ retail_qrre /
   retail_mortgage per template). The B31-only RE rows (0090-0095) and SA
@@ -138,7 +138,10 @@ Cell semantics (recorded decisions, this slice):
   factor's applied subset (the retired asymmetric dedicated flag names —
   sme_supporting_factor_applied / infrastructure_factor_applied — falling
   back to is_sme / is_infrastructure + supporting_factor_applied on the
-  sealed ledger, which never carries the dedicated names), so
+  sealed ledger, which never carries the dedicated names). The two
+  populations are DISJOINT — the SME column additionally excludes
+  infrastructure rows, because the engine applies min(sme, infra) and the
+  pack pins infra strictly lower (corep/supporting_factors.py) — so
   0080 + 0081 + 0082 = 0090 and 0110 + 0121 + 0122 = 0125 foot. Under B31
   none of these refs exist (supporting factors are CRR-only), so the change
   is scoped by column presence, not by regime branching.
@@ -199,6 +202,7 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.corep.c07 import c07_population
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
+from rwa_calc.reporting.corep.supporting_factors import sf_adjustment_terms, sf_infra_flag_exprs
 from rwa_calc.reporting.corep.templates import (
     C09_01_SA_CLASS_MAP,
     get_c09_01_columns,
@@ -511,8 +515,11 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     the RE sub-row predicates (a null there correctly excludes the row).
     ``c09_ccr_gross`` is C 07.00's ``c07_ccr_gross`` verbatim: the original exposure
     of the counterparty-credit-risk / settlement legs, whose per-side gross carriers
-    are null by design. Its gate list is EXACTLY the four exposure_types the side
-    carriers populate, so col 0010's SafeSum counts every leg on one carrier only.
+    are null by design. Its gate list is EXACTLY the exposure_types the side
+    carriers populate, so col 0010's SafeSum counts every leg on one carrier only —
+    including ``equity``, whose on-side carrier the reporting projection populates
+    now that C 07.00 (and so this template, which shares its population) admits the
+    Art. 112(1)(p) class. The two copies of that list must not drift.
     """
     exprs: list[pl.Expr] = [
         _defaulted_expr(cols).alias("c09_defaulted"),
@@ -534,7 +541,7 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
         exprs.append(
             pl.when(
                 pl.col("exposure_type").is_in(
-                    ["loan", "contingent", "facility_undrawn", "facility"]
+                    ["loan", "contingent", "facility_undrawn", "facility", "equity"]
                 )
             )
             .then(pl.lit(None, dtype=pl.Float64))
@@ -549,10 +556,24 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     return exprs
 
 
+#: Rows 0141-0143 — the Art. 132/132A approach decomposition of the CIU row
+#: 0140, declared in BOTH regimes. Keyed on the ``ciu_approach`` carrier, exactly
+#: as C 07.00 rows 0281-0283 are (``corep/c07.py::_CIU_ROW_APPROACH``), because an
+#: approach is not an exposure class and no ``C09_01_SA_CLASS_MAP`` value can
+#: reach these keys. Leaving them null while row 0140 carries a figure breaks
+#: ``boe_b0731`` / ``v09798_m`` (r0140 = r0141 + r0142 + r0143) and
+#: ``boe_b0996``-``boe_b1001`` (each row against its OF 07.00 r0282/r0283 twin).
+_C09_01_CIU_APPROACH: dict[str, str] = {
+    "ciu_look_through": "look_through",
+    "ciu_mandate": "mandate_based",
+    "ciu_fallback": "fallback",
+}
+
+
 def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     """The reverse-map keying over ``basis_col``: rows whose key is not a
-    class-map VALUE and not an RE/SL/SME sub-row key are permanently null
-    (the short-term and CIU sub-rows — recorded dead code).
+    class-map VALUE, not an RE/SL/SME sub-row key and not a CIU approach key are
+    permanently null (the short-term sub-row — recorded dead code).
 
     An "of which: SME" row (0075/0085/0095, ``_C09_01_SME_PARENT_KEYS``) keys its
     PARENT row's class union narrowed by ``c09_sme``: Annex II defines all three
@@ -573,6 +594,8 @@ def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     key = row_def.exposure_class_value
     if key is None:
         return None
+    if key in _C09_01_CIU_APPROACH:
+        return RowPredicate(equals=(("ciu_approach", _C09_01_CIU_APPROACH[key]),))
     re_sl = _c09_01_re_sl_pred(key, basis_col)
     if re_sl is not None:
         return re_sl
@@ -715,7 +738,7 @@ def _c09_01_spec(
         if "0080" in column_refs:
             cells[(ref, "0080")] = _sum_or_null(rwa_pre_col, post_pred)
             cells[(ref, "0081")] = _c09_sf_adjustment_cell(
-                post_pred, cols, "sme_supporting_factor_applied", "is_sme"
+                post_pred, cols, "sme_supporting_factor_applied", "is_sme", exclude_infra=True
             )
             cells[(ref, "0082")] = _c09_sf_adjustment_cell(
                 post_pred, cols, "infrastructure_factor_applied", "is_infrastructure"
@@ -1012,7 +1035,7 @@ def _c09_02_spec(
             cells[(ref, "0120")] = CellSpec(Sum(rwa_col), predicate=post_def_pred)
         if "0121" in column_refs:
             cells[(ref, "0121")] = _c09_sf_adjustment_cell(
-                post_pred, cols, "sme_supporting_factor_applied", "is_sme"
+                post_pred, cols, "sme_supporting_factor_applied", "is_sme", exclude_infra=True
             )
             cells[(ref, "0122")] = _c09_sf_adjustment_cell(
                 post_pred, cols, "infrastructure_factor_applied", "is_infrastructure"
@@ -1261,38 +1284,43 @@ def _c09_sf_delta_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     threaded from the generate call), so a row's 0080/0110 (pre) minus the delta
     over its applied subset foots to its 0090/0125 (post). Absent when there is
     no pre-factor snapshot (a synthetic frame or a B31 run), which leaves the
-    "(-)" adjustment cells structurally null."""
+    "(-)" adjustment cells structurally null.
+
+    The infrastructure discriminator the SME columns (0081/0121) exclude on is
+    derived here too, but on its OWN source-column gate — it must be present on
+    exactly the frames ``sf_adjustment_terms`` asks for it, and that question is
+    independent of whether a pre-factor snapshot exists."""
+    exprs = sf_infra_flag_exprs(cols)
     if "rwa_pre_factor" not in cols or rwa_col is None:
-        return []
-    return [
+        return exprs
+    exprs.append(
         (pl.col("rwa_pre_factor").fill_null(0.0) - pl.col(rwa_col).fill_null(0.0)).alias(
             "c09_sf_delta"
         )
-    ]
+    )
+    return exprs
 
 
 def _c09_sf_adjustment_cell(
-    pred: RowPredicate, cols: set[str], dedicated: str, flag_col: str
+    pred: RowPredicate,
+    cols: set[str],
+    dedicated: str,
+    flag_col: str,
+    *,
+    exclude_infra: bool = False,
 ) -> CellSpec:
     """A CRR "(-)" supporting-factor adjustment cell: Σ ``c09_sf_delta`` over the
     row's applied subset, negated post-execute. Mirrors C 07.00 / C 08.01's
-    ``_sf_adjustment_cell`` verbatim, including the retired asymmetric dedicated
-    flag names (``sme_supporting_factor_applied`` vs
-    ``infrastructure_factor_applied``). Those dedicated names are not on the
-    sealed ledger, so on a real run the fallback fires: the factor's own
-    ``is_sme`` / ``is_infrastructure`` flag conjoined with the generic
-    ``supporting_factor_applied``. Returns the structural-null Formula when no
-    pre-factor snapshot exists (the adjustment cannot be computed)."""
-    if "rwa_pre_factor" not in cols:
+    ``_sf_adjustment_cell``, sharing their row selection (and the
+    ``exclude_infra`` disjointness the SME columns set) through
+    ``corep/supporting_factors.py::sf_adjustment_terms``; only the predicate
+    combinator differs, because a geo row predicate may carry ``any_of`` limbs
+    that ``_narrow`` has to preserve. Returns the structural-null Formula when
+    no pre-factor snapshot exists (the adjustment cannot be computed)."""
+    extra = sf_adjustment_terms(cols, dedicated, flag_col, exclude_infra=exclude_infra)
+    if extra is None:
         return CellSpec(Formula(refs=(), fn=_const(None)))
-    if dedicated in cols:
-        return CellSpec(Sum("c09_sf_delta"), predicate=_conjoin(pred, (dedicated, True)))
-    if flag_col in cols and "supporting_factor_applied" in cols:
-        return CellSpec(
-            Sum("c09_sf_delta"),
-            predicate=_narrow(pred, (flag_col, True), ("supporting_factor_applied", True)),
-        )
-    return CellSpec(Formula(refs=(), fn=_const(None)))
+    return CellSpec(Sum("c09_sf_delta"), predicate=_narrow(pred, *extra))
 
 
 def _pre_ccf_gross_binding(cols: set[str], *, with_ccr: bool) -> ValueBinding | None:

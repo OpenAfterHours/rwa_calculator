@@ -1067,18 +1067,6 @@ SLOTTING_BLEND_DESIGN: dict[str, object] = {
 }
 
 
-def guaranteed_leg_ref(loan_reference: str, guarantor_reference: str) -> str:
-    """The physical ``__G_`` guaranteed-leg exposure reference the CRM splitter
-    emits (``engine/crm/guarantees.py::_build_guarantor_sub_rows``)."""
-    return f"{loan_reference}__G_{guarantor_reference}"
-
-
-def remainder_leg_ref(loan_reference: str) -> str:
-    """The physical ``__REM`` retained-leg exposure reference the CRM splitter
-    emits (``engine/crm/guarantees.py::_retained_tranche_rows``)."""
-    return f"{loan_reference}__REM"
-
-
 # ---------------------------------------------------------------------------
 # Main public entry point
 # ---------------------------------------------------------------------------

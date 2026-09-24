@@ -467,14 +467,6 @@ def irb_only_results_df(irb_pipeline_results) -> pl.DataFrame:
     return irb_pipeline_results.irb_results.collect()
 
 
-def get_slotting_result_for_exposure(
-    slotting_results_df: pl.DataFrame,
-    exposure_reference: str,
-) -> dict | None:
-    """Look up Slotting result for a specific exposure."""
-    return get_result_for_exposure(slotting_results_df, exposure_reference)
-
-
 # =============================================================================
 # Single-Guarantee SA Pipeline Helpers (shared by P1.109 / P1.124)
 # =============================================================================

@@ -316,11 +316,6 @@ def base_portfolios(max_size: int = 4) -> st.SearchStrategy[Portfolio]:
     return st.one_of(corpus_portfolios(), portfolios(min_size=1, max_size=max_size))
 
 
-def injectable_tables() -> st.SearchStrategy[str]:
-    """One of the input tables this suite knows how to corrupt."""
-    return st.sampled_from(sorted(TABLE_SCHEMAS))
-
-
 def enum_garbage() -> st.SearchStrategy[str]:
     """One of the garbage strings a categorical column receives from a real feed."""
     return st.sampled_from(ENUM_GARBAGE)

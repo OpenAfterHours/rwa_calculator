@@ -355,16 +355,6 @@ class TestComponentBenchmarks100K:
 # =============================================================================
 
 
-def irb_permission_mode() -> PermissionMode:
-    """Return IRB permission mode (replaces create_irb_with_slotting_permissions)."""
-    return PermissionMode.IRB
-
-
-def corporate_only_irb_permission_mode() -> PermissionMode:
-    """Return IRB permission mode (replaces create_corporate_only_irb_permissions)."""
-    return PermissionMode.IRB
-
-
 @pytest.mark.benchmark
 @pytest.mark.scale_100k
 class TestApproachBenchmarks100K:

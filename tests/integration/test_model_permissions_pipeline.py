@@ -151,19 +151,6 @@ def _run_pipeline(
     return crm_processor.get_crm_unified_bundle(classified, config)
 
 
-def _run_to_classified(
-    resolver: HierarchyResolver,
-    classifier: ExposureClassifier,
-    config: CalculationConfig,
-    bundle: RawDataBundle,
-) -> pl.DataFrame:
-    """Run hierarchy + classifier and collect all_exposures."""
-    resolved = resolver.resolve(bundle, config)
-    classified = classifier.classify(resolved, config)
-    result: pl.DataFrame = classified.all_exposures.collect()
-    return result
-
-
 # =============================================================================
 # Basic model resolution (4 tests)
 # =============================================================================

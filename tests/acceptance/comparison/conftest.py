@@ -233,19 +233,3 @@ def firb_impact_waterfall_df(firb_capital_impact) -> pl.DataFrame:
 def firb_impact_class_summary_df(firb_capital_impact) -> pl.DataFrame:
     """Collected attribution summary by class for F-IRB comparison."""
     return firb_capital_impact.summary_by_class.collect()
-
-
-# =============================================================================
-# Assertion Helpers
-# =============================================================================
-
-
-def get_delta_for_exposure(
-    deltas_df: pl.DataFrame,
-    exposure_reference: str,
-) -> dict | None:
-    """Look up comparison delta for a specific exposure."""
-    filtered = deltas_df.filter(pl.col("exposure_reference") == exposure_reference)
-    if filtered.height == 0:
-        return None
-    return filtered.row(0, named=True)

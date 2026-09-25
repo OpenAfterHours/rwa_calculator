@@ -861,7 +861,6 @@ class TemplateComparePage:
     movers: MigrationMovers | None = None
     explanation: CellExplanation | None = None
     limits: tuple[str, ...] = COMPARE_LIMITS
-    absent_row_ref: str = ABSENT_ROW
     undecidable_row_ref: str = UNDECIDABLE_ROW
 
 

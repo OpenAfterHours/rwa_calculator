@@ -638,11 +638,6 @@ def class_allocation_method_sections(response: ReconciliationResponse) -> list[d
     )
 
 
-def breaks_table(response: ReconciliationResponse) -> pl.DataFrame:
-    """Tier 3 — the long-format break worklist, already ranked by materiality."""
-    return response.collect_breaks_detail()
-
-
 def forensic_table(
     response: ReconciliationResponse, bucket: str, *, limit: int = _FORENSIC_LIMIT
 ) -> tuple[list[str], list[dict], int]:

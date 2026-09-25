@@ -365,13 +365,6 @@ def _find_rows(results, loan_ref: str) -> list[dict]:
     return rows
 
 
-def _find_single(results, loan_ref: str) -> dict:
-    """Find exactly one exposure row matching *loan_ref*."""
-    rows = _find_rows(results, loan_ref)
-    assert len(rows) >= 1, f"Exposure {loan_ref!r} not found in any result set"
-    return rows[0]
-
-
 def _total_rwa(rows: list[dict]) -> float:
     """Sum rwa_final across all rows (handles guarantee sub-row splits)."""
     return sum(r.get("rwa_final", 0.0) or 0.0 for r in rows)

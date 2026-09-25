@@ -24,7 +24,6 @@ import pytest
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
-    CRMAdjustedBundle,
     ELPortfolioSummary,
     RawDataBundle,
 )
@@ -120,19 +119,6 @@ def _make_bundle_with_ratings(
         fx_rates=bundle.fx_rates,
         model_permissions=model_permissions,
     )
-
-
-def _run_through_crm(
-    resolver: HierarchyResolver,
-    classifier: ExposureClassifier,
-    crm_processor: CRMProcessor,
-    config: CalculationConfig,
-    bundle: RawDataBundle,
-) -> CRMAdjustedBundle:
-    """Run hierarchy + classifier + CRM."""
-    resolved = resolver.resolve(bundle, config)
-    classified = classifier.classify(resolved, config)
-    return crm_processor.get_crm_unified_bundle(classified, config)
 
 
 def _run_full_pipeline(

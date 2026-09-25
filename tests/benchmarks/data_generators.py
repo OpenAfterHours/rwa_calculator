@@ -1487,20 +1487,3 @@ def get_or_create_dataset(
     save_benchmark_dataset(dataset, scale, data_dir)
 
     return dataset
-
-
-def clear_cached_datasets(data_dir: Path | None = None) -> None:
-    """
-    Remove all cached benchmark datasets.
-
-    Args:
-        data_dir: Optional custom data directory
-    """
-    import shutil
-
-    base_dir = data_dir or BENCHMARK_DATA_DIR
-    if base_dir.exists():
-        shutil.rmtree(base_dir)
-        logger.info(f"Cleared cached datasets from {base_dir}")
-    else:
-        logger.debug(f"No cached datasets found at {base_dir}")

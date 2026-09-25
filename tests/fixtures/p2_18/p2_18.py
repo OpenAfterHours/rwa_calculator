@@ -100,7 +100,6 @@ from rwa_calc.data.schemas import (
     FACILITY_SCHEMA,
     GUARANTEE_SCHEMA,
     LOAN_SCHEMA,
-    MODEL_PERMISSIONS_SCHEMA,
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
 )
@@ -429,11 +428,6 @@ def create_p218_empty_provisions() -> pl.DataFrame:
 def create_p218_empty_ratings() -> pl.DataFrame:
     """Return an empty ratings DataFrame (unrated counterparty — no CQS row needed)."""
     return pl.DataFrame(schema=dtypes_of(RATINGS_SCHEMA))
-
-
-def create_p218_empty_model_permissions() -> pl.DataFrame:
-    """Return an empty model_permissions DataFrame (SA-only scenario)."""
-    return pl.DataFrame(schema=dtypes_of(MODEL_PERMISSIONS_SCHEMA))
 
 
 # ---------------------------------------------------------------------------

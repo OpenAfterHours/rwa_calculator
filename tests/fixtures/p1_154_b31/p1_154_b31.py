@@ -77,7 +77,6 @@ import polars as pl
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     COLLATERAL_SCHEMA,
-    CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
     FACILITY_SCHEMA,
     GUARANTEE_SCHEMA,
@@ -352,11 +351,6 @@ def create_p1154b31_ratings() -> pl.DataFrame:
 def create_p1154b31_loans() -> pl.DataFrame:
     """Return an empty loans DataFrame (no loans in this scenario)."""
     return pl.DataFrame(schema=dtypes_of(LOAN_SCHEMA))
-
-
-def create_p1154b31_contingents() -> pl.DataFrame:
-    """Return an empty contingents DataFrame (no contingents in this scenario)."""
-    return pl.DataFrame(schema=dtypes_of(CONTINGENTS_SCHEMA))
 
 
 def create_p1154b31_collateral() -> pl.DataFrame:

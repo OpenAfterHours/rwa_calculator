@@ -303,35 +303,6 @@ def _ft005() -> FailedTrade:
 # ---------------------------------------------------------------------------
 
 
-def make_failed_trade(**overrides: Any) -> FailedTrade:
-    """
-    Return a ``FailedTrade`` with FT001 defaults, optionally overridden.
-
-    Args:
-        **overrides: Any ``FailedTrade`` field keyword arguments.
-
-    Returns:
-        A frozen ``FailedTrade`` instance.
-    """
-    defaults: dict[str, Any] = {
-        "failed_trade_id": FT001_ID,
-        "counterparty_reference": COUNTERPARTY_REF,
-        "settlement_type": FT001_TYPE,
-        "working_days_past_due": FT001_DAYS,
-        "instrument_class": FT001_INSTRUMENT_CLASS,
-        "agreed_settlement_price": FT001_AGREED_PRICE,
-        "current_market_value": FT001_MV,
-        "value_transferred": None,
-        "current_positive_exposure": None,
-        "is_repo_or_sec_lending": IS_REPO_OR_SEC_LENDING,
-        "is_immaterial": IS_IMMATERIAL,
-        "elect_cet1_deduction": ELECT_CET1_DEDUCTION,
-        "system_wide_failure_waiver": SYSTEM_WIDE_FAILURE_WAIVER,
-    }
-    defaults.update(overrides)
-    return FailedTrade(**defaults)
-
-
 def create_failed_trades(trades: list[FailedTrade]) -> pl.DataFrame:
     """
     Convert a list of ``FailedTrade`` instances into a Polars DataFrame.

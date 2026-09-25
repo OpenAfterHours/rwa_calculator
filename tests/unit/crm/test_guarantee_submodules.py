@@ -37,57 +37,6 @@ from rwa_calc.engine.crm.guarantees import (
 )
 
 # =============================================================================
-# Helpers
-# =============================================================================
-
-
-def _fx_exposure(
-    *,
-    guaranteed_portion: float = 500_000.0,
-    ead_after_collateral: float = 1_000_000.0,
-    guarantee_currency: str | None = "EUR",
-    exposure_currency: str = "GBP",
-    currency_col: str = "currency",
-) -> pl.LazyFrame:
-    """Build minimal frame for FX haircut testing."""
-    data: dict = {
-        "exposure_reference": ["EXP001"],
-        "guaranteed_portion": [guaranteed_portion],
-        "ead_after_collateral": [ead_after_collateral],
-        "unguaranteed_portion": [ead_after_collateral - guaranteed_portion],
-    }
-    if guarantee_currency is not None:
-        data["guarantee_currency"] = [guarantee_currency]
-    else:
-        data["guarantee_currency"] = pl.Series("guarantee_currency", [None], dtype=pl.String)
-    data[currency_col] = [exposure_currency]
-    return pl.LazyFrame(data)
-
-
-def _restructuring_exposure(
-    *,
-    guaranteed_portion: float = 500_000.0,
-    ead_after_collateral: float = 1_000_000.0,
-    protection_type: str | None = "credit_derivative",
-    includes_restructuring: bool | None = False,
-    include_protection_type_col: bool = True,
-    include_restructuring_col: bool = True,
-) -> pl.LazyFrame:
-    """Build minimal frame for restructuring exclusion haircut testing."""
-    data: dict = {
-        "exposure_reference": ["EXP001"],
-        "guaranteed_portion": [guaranteed_portion],
-        "ead_after_collateral": [ead_after_collateral],
-        "unguaranteed_portion": [ead_after_collateral - guaranteed_portion],
-    }
-    if include_protection_type_col:
-        data["protection_type"] = [protection_type]
-    if include_restructuring_col:
-        data["includes_restructuring"] = [includes_restructuring]
-    return pl.LazyFrame(data)
-
-
-# =============================================================================
 # Multi-level guarantee resolution
 # =============================================================================
 

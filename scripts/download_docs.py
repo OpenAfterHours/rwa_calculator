@@ -129,12 +129,6 @@ MANIFEST: list[DocEntry] = [
         url="https://www.legislation.gov.uk/eur/2013/575/data.pdf",
         source=PRA_RULEBOOK,
     ),
-    # DocEntry(
-    #     filename="crr-pillar3-irb-credit-risk-instructions.pdf",
-    #     description="CRR Pillar 3 IRB credit risk instructions",
-    #     url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/annex-pillar3-irb-credit-risk-instructions.pdf",
-    #     source=PRA_RULEBOOK,
-    # ),
     DocEntry(
         filename="crr-pillar3-risk-weighted-exposure-instructions-leverage-ratio.pdf",
         description="CRR Pillar 3 risk-weighted exposure and leverage ratio instructions",

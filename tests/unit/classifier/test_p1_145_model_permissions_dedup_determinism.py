@@ -181,29 +181,6 @@ def _make_resolved_bundle(
     )
 
 
-def _classify_and_get_row(
-    ordering: str,
-    classifier: ExposureClassifier,
-    config: CalculationConfig,
-) -> pl.DataFrame:
-    """
-    Run the classifier for the given model_permissions ordering and return
-    the single row for EXPOSURE_REF from all_exposures.
-
-    ordering must be "airb_first" or "sa_first".
-    """
-    if ordering == "airb_first":
-        mp = build_model_permissions_airb_first()
-    else:
-        mp = build_model_permissions_sa_first()
-
-    bundle = _make_resolved_bundle(mp)
-    result: ClassifiedExposuresBundle = classifier.classify(bundle, config)
-    df = result.all_exposures.collect()
-    row = df.filter(pl.col("exposure_reference") == EXPOSURE_REF)
-    return row
-
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

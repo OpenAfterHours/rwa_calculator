@@ -152,12 +152,6 @@ def load_derivations() -> tuple[CellDerivation, ...]:
     return cells
 
 
-@lru_cache(maxsize=1)
-def derivation_meta() -> Mapping[str, object]:
-    """The data file's ``[meta]`` block, including its stated limits."""
-    return tomllib.loads(_DERIVATION_PATH.read_text(encoding="utf-8"))["meta"]
-
-
 def _cell(entry: Mapping[str, object]) -> CellDerivation:
     return CellDerivation(
         id=str(entry["id"]),

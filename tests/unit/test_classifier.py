@@ -132,29 +132,6 @@ def mixed_counterparties() -> pl.LazyFrame:
 
 
 @pytest.fixture
-def retail_counterparties() -> pl.LazyFrame:
-    """Counterparties for retail classification testing."""
-    return pl.DataFrame(
-        {
-            "counterparty_reference": [
-                "RTL_SMALL",  # Small retail exposure
-                "RTL_LARGE",  # Large retail (exceeds threshold)
-                "RTL_MTG",  # Mortgage customer
-            ],
-            "counterparty_name": ["Small Borrower", "Large Borrower", "Mortgage Customer"],
-            "entity_type": ["individual", "individual", "individual"],
-            "country_code": ["GB", "GB", "GB"],
-            "annual_revenue": [0.0, 0.0, 0.0],
-            "total_assets": [0.0, 0.0, 0.0],
-            "default_status": [False, False, False],
-            "sector_code": ["RETAIL", "RETAIL", "RETAIL"],
-            "apply_fi_scalar": [False, False, False],
-            "is_managed_as_retail": [False, False, False],
-        }
-    ).lazy()
-
-
-@pytest.fixture
 def defaulted_counterparties() -> pl.LazyFrame:
     """Counterparties in default status."""
     return pl.DataFrame(

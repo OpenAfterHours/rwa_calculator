@@ -89,19 +89,12 @@ from datetime import date
 from pathlib import Path
 
 import polars as pl
-from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     COLLATERAL_SCHEMA,
-    CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
-    FACILITY_SCHEMA,
-    GUARANTEE_SCHEMA,
     LOAN_SCHEMA,
-    PROVISION_SCHEMA,
-    RATINGS_SCHEMA,
 )
 
 # ---------------------------------------------------------------------------
@@ -403,91 +396,6 @@ def create_p218_collateral() -> pl.DataFrame:
         qualifies_for_zero_haircut=False,
     )
     return pl.DataFrame([row.to_dict()], schema=dtypes_of(COLLATERAL_SCHEMA))
-
-
-def create_p218_empty_facilities() -> pl.DataFrame:
-    """Return an empty facilities DataFrame (no facilities in this scenario)."""
-    return pl.DataFrame(schema=dtypes_of(FACILITY_SCHEMA))
-
-
-def create_p218_empty_contingents() -> pl.DataFrame:
-    """Return an empty contingents DataFrame (no contingents in this scenario)."""
-    return pl.DataFrame(schema=dtypes_of(CONTINGENTS_SCHEMA))
-
-
-def create_p218_empty_guarantees() -> pl.DataFrame:
-    """Return an empty guarantees DataFrame (no guarantees in this scenario)."""
-    return pl.DataFrame(schema=dtypes_of(GUARANTEE_SCHEMA))
-
-
-def create_p218_empty_provisions() -> pl.DataFrame:
-    """Return an empty provisions DataFrame (no provisions in this scenario)."""
-    return pl.DataFrame(schema=dtypes_of(PROVISION_SCHEMA))
-
-
-def create_p218_empty_ratings() -> pl.DataFrame:
-    """Return an empty ratings DataFrame (unrated counterparty — no CQS row needed)."""
-    return pl.DataFrame(schema=dtypes_of(RATINGS_SCHEMA))
-
-
-# ---------------------------------------------------------------------------
-# Bundle factory (matches test-writer expected API)
-# ---------------------------------------------------------------------------
-
-
-def build_p2_18_bundle(*, fixtures_dir: Path) -> RawDataBundle:
-    """
-    Build and return a RawDataBundle for the P2.18 scenario.
-
-    The bundle is constructed entirely in-memory from the scenario constants
-    defined in this module; the ``fixtures_dir`` argument is accepted for
-    interface symmetry with other bundle builders (it is not used here).
-
-    Returns:
-        RawDataBundle with:
-        - 1 counterparty (CP_B31_REVAL20)
-        - 1 loan (LOAN_B31_REVAL20, is_sft=False)
-        - 1 collateral (COLL_B31_REVAL20, USD, revaluation_frequency_days=5)
-        - All other LazyFrames: empty, schema-conformant
-
-    Args:
-        fixtures_dir: Path to the fixtures directory (unused; accepted for
-            interface compatibility with other bundle builders).
-    """
-    counterparty_lf = create_p218_counterparty().lazy()
-    loan_lf = create_p218_loan().lazy()
-    collateral_lf = create_p218_collateral().lazy()
-    facilities_lf = create_p218_empty_facilities().lazy()
-    contingents_lf = create_p218_empty_contingents().lazy()
-    guarantees_lf = create_p218_empty_guarantees().lazy()
-    provisions_lf = create_p218_empty_provisions().lazy()
-    ratings_lf = create_p218_empty_ratings().lazy()
-
-    return make_raw_bundle(
-        facilities=facilities_lf,
-        loans=loan_lf,
-        counterparties=counterparty_lf,
-        facility_mappings=pl.DataFrame(
-            schema={"parent_facility_reference": pl.String, "child_reference": pl.String}
-        ).lazy(),
-        lending_mappings=pl.DataFrame(
-            schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }
-        ).lazy(),
-        org_mappings=None,
-        contingents=contingents_lf,
-        collateral=collateral_lf,
-        guarantees=guarantees_lf,
-        provisions=provisions_lf,
-        ratings=ratings_lf,
-        specialised_lending=None,
-        equity_exposures=None,
-        ciu_holdings=None,
-        fx_rates=None,
-        model_permissions=None,
-    )
 
 
 # ---------------------------------------------------------------------------

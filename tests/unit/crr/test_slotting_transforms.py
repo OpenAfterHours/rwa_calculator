@@ -72,22 +72,6 @@ def basic_slotting_exposures() -> pl.LazyFrame:
     )
 
 
-@pytest.fixture
-def hvcre_exposures() -> pl.LazyFrame:
-    """Return HVCRE exposures."""
-    return _pad(
-        pl.LazyFrame(
-            {
-                "exposure_reference": ["HVCRE001", "HVCRE002", "HVCRE003"],
-                "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
-                "slotting_category": ["strong", "good", "satisfactory"],
-                "is_hvcre": [True, True, True],
-                "sl_type": ["hvcre", "hvcre", "hvcre"],
-            }
-        )
-    )
-
-
 # =============================================================================
 # Function Surface Tests
 # =============================================================================

@@ -228,8 +228,6 @@ P828_RWA_FINANCIAL: float = 2_740_008.759
 # Private helpers — scenario-specific counterparty / entity-type mapping.
 # ---------------------------------------------------------------------------
 
-_CARVE_OUT_TYPES: frozenset[str] = frozenset({P828_CP_TYPE_NON_FINANCIAL, P828_CP_TYPE_PENSION})
-
 _SCENARIO_MAP: dict[str, tuple[str, str, str, str, str]] = {
     # counterparty_type → (cp_ref, ns_id, trade_id, entity_type, name)
     P828_CP_TYPE_NON_FINANCIAL: (

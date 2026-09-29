@@ -34,8 +34,6 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
-
 import polars as pl
 import pytest
 
@@ -55,9 +53,6 @@ except (ImportError, ModuleNotFoundError):
 _NS_CR_01 = "NS_CR_01"
 _NS_EQ_01 = "NS_EQ_01"
 _NS_CO_01 = "NS_CO_01"
-
-_REFERENCE_DATE = date(2026, 5, 26)
-_MATURITY_DATE = date(2028, 5, 26)
 
 # Expected hedging_set_id values — single source of truth for all assertions.
 _EXPECTED_CREDIT_HSID = f"CR-{_NS_CR_01}"

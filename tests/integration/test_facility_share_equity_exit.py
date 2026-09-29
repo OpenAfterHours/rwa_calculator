@@ -77,12 +77,6 @@ from tests.fixtures.raw_bundle import seal_raw_table
 EQUITY_REFERENCE = "FS-EQ-LISTED"
 EQUITY_VALUE = 1_000_000.0
 
-#: The carriers under test, and the dtypes the aggregator exit declares.
-SHARE_CARRIERS: dict[str, pl.DataType] = {
-    "facility_share_group": pl.String,
-    "is_facility_share_candidate": pl.Boolean,
-}
-
 
 def _equity_exposures() -> pl.DataFrame:
     """The one equity row, typed against ``EQUITY_EXPOSURE_SCHEMA``."""

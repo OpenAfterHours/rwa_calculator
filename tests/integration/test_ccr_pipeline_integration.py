@@ -65,7 +65,6 @@ _REPORTING_DATE = date(2026, 1, 15)
 
 _CCR_EXPOSURE_REF = f"ccr__{CCR_A1_NETTING_SET_ID}"  # "ccr__NS_001"
 _CCR_STAGE_NAME = "ccr_sa_ccr"
-_PIPELINE_LOGGER = "rwa_calc.engine.pipeline"
 # stage_timer records are emitted by the fold orchestrator (migration
 # Phase 4); run-level records stay on the pipeline facade logger.
 _ORCHESTRATOR_LOGGER = "rwa_calc.engine.orchestrator"

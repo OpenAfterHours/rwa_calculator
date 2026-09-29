@@ -59,7 +59,6 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_130"
 # ---------------------------------------------------------------------------
 
 _REL_TOL = 1e-6  # tight relative tolerance for sum comparisons
-_ABS_TOL_FLOOR = 1.0  # ±£1 absolute tolerance on portfolio-level floor assertions
 
 # ---------------------------------------------------------------------------
 # Pipeline runner

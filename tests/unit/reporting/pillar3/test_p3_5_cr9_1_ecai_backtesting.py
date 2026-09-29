@@ -36,9 +36,6 @@ from rwa_calc.reporting.pillar3.generator import (
     Pillar3TemplateBundle,
 )
 from tests.fixtures.p3_5.p3_5 import (
-    EXPECTED_DICT_KEY as _FIXTURE_EXPECTED_DICT_KEY,
-)
-from tests.fixtures.p3_5.p3_5 import (
     EXPECTED_HEIGHT,
     EXPECTED_R1_C,
     EXPECTED_R1_D,
@@ -71,15 +68,12 @@ from tests.fixtures.recon_ledger import LedgerShimPillar3Generator
 # is_sme=False / cp_is_financial_sector_entity absent, which routes to
 # "advanced_irb - corporate_other_non_sme" under the new predicate logic.
 #
-# EXPECTED_DICT_KEY is redefined here (shadowing the imported fixture value
-# "advanced_irb - corporate") so that all test lookups use the correct
-# post-P2.49 key.  The fixture file itself is not modified — fixture-builder
-# owns tests/fixtures/.
+# EXPECTED_DICT_KEY is defined here rather than taken from the fixture module
+# (which still carries the pre-P2.49 value "advanced_irb - corporate") so that
+# all test lookups use the correct post-P2.49 key.  The fixture file itself is
+# not modified — fixture-builder owns tests/fixtures/.
 # ---------------------------------------------------------------------------
 EXPECTED_DICT_KEY: str = "advanced_irb - corporate_other_non_sme"
-
-# Keep reference to old fixture constant for diagnostic messages only
-_LEGACY_EXPECTED_DICT_KEY: str = _FIXTURE_EXPECTED_DICT_KEY
 
 
 # ---------------------------------------------------------------------------

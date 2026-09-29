@@ -306,12 +306,6 @@ def lending_group_loans() -> pl.LazyFrame:
 
 
 @pytest.fixture
-def empty_lazyframe() -> pl.LazyFrame:
-    """Empty LazyFrame for testing edge cases."""
-    return pl.LazyFrame()
-
-
-@pytest.fixture
 def simple_raw_data_bundle(
     simple_counterparties: pl.LazyFrame,
     simple_org_mappings: pl.LazyFrame,

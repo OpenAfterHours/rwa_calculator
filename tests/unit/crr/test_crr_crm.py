@@ -98,28 +98,6 @@ def basic_exposures() -> pl.LazyFrame:
     ).lazy()
 
 
-@pytest.fixture
-def basic_collateral() -> pl.LazyFrame:
-    """Basic collateral for haircut testing."""
-    return pl.DataFrame(
-        {
-            "collateral_reference": ["COLL001", "COLL002", "COLL003", "COLL004"],
-            "collateral_type": ["cash", "govt_bond", "equity", "corp_bond"],
-            "currency": ["GBP", "GBP", "GBP", "EUR"],  # EUR = FX mismatch
-            "maturity_date": [None, date(2026, 6, 30), None, date(2027, 12, 31)],
-            "market_value": [500000.0, 600000.0, 400000.0, 300000.0],
-            "nominal_value": [500000.0, 600000.0, 400000.0, 300000.0],
-            "beneficiary_type": ["loan", "loan", "loan", "loan"],
-            "beneficiary_reference": ["EXP001", "EXP001", "EXP002", "EXP003"],
-            "issuer_cqs": [None, 1, None, 2],
-            "issuer_type": [None, "sovereign", None, "corporate"],
-            "residual_maturity_years": [None, 2.5, None, 3.0],
-            "is_eligible_financial_collateral": [True, True, True, True],
-            "is_eligible_irb_collateral": [True, True, True, True],
-        }
-    ).lazy()
-
-
 def create_classified_bundle(
     exposures: pl.LazyFrame,
 ) -> ClassifiedExposuresBundle:

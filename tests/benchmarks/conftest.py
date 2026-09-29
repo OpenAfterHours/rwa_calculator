@@ -147,12 +147,6 @@ def dataset_10k(
     )
 
 
-@pytest.fixture(scope="session")
-def dataset_10k_stats(dataset_10k: dict[str, pl.LazyFrame]) -> dict:
-    """Statistics for 10K dataset."""
-    return get_dataset_statistics(dataset_10k)
-
-
 # =============================================================================
 # DATASET FIXTURES - 100K Scale
 # =============================================================================
@@ -201,12 +195,6 @@ def dataset_1m(
         seed=benchmark_config_1m.seed,
         force_regenerate=regenerate,
     )
-
-
-@pytest.fixture(scope="session")
-def dataset_1m_stats(dataset_1m: dict[str, pl.LazyFrame]) -> dict:
-    """Statistics for 1M dataset."""
-    return get_dataset_statistics(dataset_1m)
 
 
 # =============================================================================

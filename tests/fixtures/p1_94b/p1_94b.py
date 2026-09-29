@@ -395,12 +395,6 @@ def load_p1_94b_bundle(*, fixtures_dir: Path | None = None) -> RawDataBundle:
     )
 
 
-# Alias for interface compatibility with other bundle builders
-def build_p1_94b_bundle(*, fixtures_dir: Path | None = None) -> RawDataBundle:
-    """Alias for load_p1_94b_bundle — accepted for interface symmetry."""
-    return load_p1_94b_bundle(fixtures_dir=fixtures_dir)
-
-
 # ---------------------------------------------------------------------------
 # Save helpers
 # ---------------------------------------------------------------------------

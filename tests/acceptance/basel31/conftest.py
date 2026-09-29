@@ -167,12 +167,6 @@ def b31_e_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
-def b31_f_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
-    """Get B31-F (Output Floor) scenarios."""
-    return get_scenarios_by_group(expected_outputs_df, "B31-F")
-
-
-@pytest.fixture(scope="session")
 def b31_g_scenarios(expected_outputs_df: pl.DataFrame) -> list[dict[str, Any]]:
     """Get B31-G (Provisions & Impairments) scenarios."""
     return get_scenarios_by_group(expected_outputs_df, "B31-G")

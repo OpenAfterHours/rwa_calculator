@@ -344,12 +344,6 @@ def build_ccr_a9_bundle() -> RawDataBundle:
     )
 
 
-# Canonical alias — matches the build_raw_data_bundle_with_ccr_a* naming used by siblings.
-def build_raw_data_bundle_with_ccr_a9() -> RawDataBundle:
-    """Alias for ``build_ccr_a9_bundle()`` — canonical naming for sibling CCR scenarios."""
-    return build_ccr_a9_bundle()
-
-
 # ---------------------------------------------------------------------------
 # Save helper — entry point for generate_all.py.
 # ---------------------------------------------------------------------------

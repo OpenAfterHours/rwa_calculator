@@ -89,19 +89,11 @@ from pathlib import Path
 
 import polars as pl
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
-    COLLATERAL_SCHEMA,
-    CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
-    FACILITY_SCHEMA,
-    GUARANTEE_SCHEMA,
     LOAN_SCHEMA,
-    PROVISION_SCHEMA,
-    RATINGS_SCHEMA,
 )
-from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants — single source of truth for test-writer assertions
@@ -448,110 +440,6 @@ def create_p194d_loans() -> pl.DataFrame:
     )
 
     return df
-
-
-# ---------------------------------------------------------------------------
-# Empty helpers
-# ---------------------------------------------------------------------------
-
-
-def create_p194d_empty_facilities() -> pl.DataFrame:
-    """Return an empty facilities DataFrame (no standalone facilities in this scenario)."""
-    return pl.DataFrame(schema=dtypes_of(FACILITY_SCHEMA))
-
-
-def create_p194d_empty_contingents() -> pl.DataFrame:
-    """Return an empty contingents DataFrame."""
-    return pl.DataFrame(schema=dtypes_of(CONTINGENTS_SCHEMA))
-
-
-def create_p194d_empty_collateral() -> pl.DataFrame:
-    """Return an empty collateral DataFrame."""
-    return pl.DataFrame(schema=dtypes_of(COLLATERAL_SCHEMA))
-
-
-def create_p194d_empty_guarantees() -> pl.DataFrame:
-    """Return an empty guarantees DataFrame."""
-    return pl.DataFrame(schema=dtypes_of(GUARANTEE_SCHEMA))
-
-
-def create_p194d_empty_provisions() -> pl.DataFrame:
-    """Return an empty provisions DataFrame."""
-    return pl.DataFrame(schema=dtypes_of(PROVISION_SCHEMA))
-
-
-def create_p194d_empty_ratings() -> pl.DataFrame:
-    """Return an empty ratings DataFrame."""
-    return pl.DataFrame(schema=dtypes_of(RATINGS_SCHEMA))
-
-
-# ---------------------------------------------------------------------------
-# Bundle factory
-# ---------------------------------------------------------------------------
-
-
-def build_p1_94d_bundle(*, fixtures_dir: Path | None = None) -> RawDataBundle:
-    """
-    Build and return a RawDataBundle for the P1.94d scenario.
-
-    The bundle is constructed entirely in-memory from the scenario constants
-    defined in this module. The optional ``fixtures_dir`` argument is accepted
-    for interface symmetry with other bundle builders.
-
-    Returns:
-        RawDataBundle with:
-        - 1 counterparty (CP_P194D, natural person, GB, income EUR)
-        - 3 loans:
-            P194D_REVOLVING    (is_revolving=True,  hedge_coverage_ratio=0.95,
-                                facility_limit=400k, undrawn_amount=300k)
-            P194D_NON_REVOLVING (is_revolving=False, hedge_coverage_ratio=0.95,
-                                facility_limit=400k, undrawn_amount=300k)
-            P194D_FULLY_DRAWN  (is_revolving=True,  hedge_coverage_ratio=0.95,
-                                facility_limit=100k, undrawn_amount=0)
-        - All other LazyFrames: empty, schema-conformant
-
-    Args:
-        fixtures_dir: Optional path to fixtures directory. Unused; accepted for
-            interface compatibility.
-    """
-    if fixtures_dir is not None:
-        cp_path = fixtures_dir / "counterparty.parquet"
-        loans_path = fixtures_dir / "loans.parquet"
-        if cp_path.exists() and loans_path.exists():
-            counterparties_lf = pl.read_parquet(cp_path).lazy()
-            loans_lf = pl.read_parquet(loans_path).lazy()
-        else:
-            counterparties_lf = create_p194d_counterparty().lazy()
-            loans_lf = create_p194d_loans().lazy()
-    else:
-        counterparties_lf = create_p194d_counterparty().lazy()
-        loans_lf = create_p194d_loans().lazy()
-
-    return make_raw_bundle(
-        facilities=create_p194d_empty_facilities().lazy(),
-        loans=loans_lf,
-        counterparties=counterparties_lf,
-        facility_mappings=pl.DataFrame(
-            schema={"parent_facility_reference": pl.String, "child_reference": pl.String}
-        ).lazy(),
-        lending_mappings=pl.DataFrame(
-            schema={
-                "parent_counterparty_reference": pl.String,
-                "child_counterparty_reference": pl.String,
-            }
-        ).lazy(),
-        org_mappings=None,
-        contingents=create_p194d_empty_contingents().lazy(),
-        collateral=create_p194d_empty_collateral().lazy(),
-        guarantees=create_p194d_empty_guarantees().lazy(),
-        provisions=create_p194d_empty_provisions().lazy(),
-        ratings=create_p194d_empty_ratings().lazy(),
-        specialised_lending=None,
-        equity_exposures=None,
-        ciu_holdings=None,
-        fx_rates=None,
-        model_permissions=None,
-    )
 
 
 # ---------------------------------------------------------------------------

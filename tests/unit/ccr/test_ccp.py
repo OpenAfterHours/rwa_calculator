@@ -44,28 +44,6 @@ except (ImportError, ModuleNotFoundError):
     apply_ccp_risk_weight = None  # ty: ignore[invalid-assignment]
 
 
-# ---------------------------------------------------------------------------
-# Parametrised variants
-# ---------------------------------------------------------------------------
-
-_VARIANTS = [
-    pytest.param(
-        True,
-        False,
-        QCCP_RW_PROPRIETARY,
-        "risk_weight",
-        id="CCR-B1a-qccp-proprietary",
-    ),
-    pytest.param(
-        True,
-        True,
-        QCCP_RW_CLIENT_CLEARED,
-        "risk_weight",
-        id="CCR-B1b-qccp-client-cleared",
-    ),
-]
-
-
 # ===========================================================================
 # 1. Risk weight — QCCP proprietary (CCR-B1a, Art. 306(1))
 # ===========================================================================

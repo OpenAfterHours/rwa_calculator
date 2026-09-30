@@ -164,23 +164,8 @@ def _get_total_rwa(df: pl.DataFrame) -> float:
 
 
 # ---------------------------------------------------------------------------
-# P1.110 acceptance test class (parametrised over B31 and CRR)
+# P1.110 acceptance test class (covers B31 and CRR)
 # ---------------------------------------------------------------------------
-
-_PARAMS = [
-    pytest.param(
-        "b31",
-        _EXPECTED_RW_B31,
-        _EXPECTED_RWA_B31,
-        id="b31-corporate-cqs3-guaranteed-rw-75pct",
-    ),
-    pytest.param(
-        "crr",
-        _EXPECTED_RW_CRR,
-        _EXPECTED_RWA_CRR,
-        id="crr-corporate-cqs3-guaranteed-rw-100pct",
-    ),
-]
 
 
 class TestP1110Art122CorporateCQS3GuaranteeSubstitution:

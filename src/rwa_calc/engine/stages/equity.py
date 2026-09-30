@@ -12,8 +12,7 @@ Key responsibilities:
   verbatim (error-channel slice, P2.21). Those errors are plain
   ``CalculationError`` objects — the bundle field is declared
   ``list[CalculationError]`` and the calculator's accumulator is typed the
-  same (empty in practice today; the package-local ``EquityCalculationError``
-  dataclass is never instantiated) — so no shape mapping is needed and
+  same (empty in practice today) — so no shape mapping is needed and
   code/severity/category pass through untouched.
 - Swallow stage exceptions: equity is dropped (EQUITY_RESULT = None) and
   the run continues with a PIPELINE_EQUITY_CALCULATOR crash diagnostic

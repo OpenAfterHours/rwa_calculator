@@ -167,50 +167,6 @@ class SupportingFactorCalculator:
 
         return resolved_pack.formula("supporting_factors_values").params["infrastructure_factor"]
 
-    def get_effective_factor(
-        self,
-        is_sme: bool,
-        is_infrastructure: bool,
-        total_exposure: Decimal,
-        config: CalculationConfig,
-        *,
-        pack: ResolvedRulepack | None = None,
-    ) -> Decimal:
-        """
-        Get the most beneficial supporting factor.
-
-        If both SME and infrastructure apply, returns the lower factor
-        (more beneficial to the bank).
-
-        This scalar helper applies NO eligibility test of its own: unlike
-        ``apply_factors``, it does not check the Art. 501a(1)(a) class limb or
-        the default exclusion. Callers pass ``is_infrastructure`` already
-        eligibility-tested.
-
-        Args:
-            is_sme: Whether exposure qualifies for SME factor
-            is_infrastructure: Whether exposure qualifies for infrastructure
-            total_exposure: Total drawn (on-balance-sheet) amount for tier calc
-            config: Calculation configuration
-
-        Returns:
-            Most beneficial factor (lowest value)
-        """
-        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
-        if not resolved_pack.feature("supporting_factors"):
-            return Decimal("1.0")
-
-        factors = [Decimal("1.0")]
-
-        if is_sme:
-            factors.append(self.calculate_sme_factor(total_exposure, config, pack=resolved_pack))
-
-        if is_infrastructure:
-            factors.append(self.calculate_infrastructure_factor(config, pack=resolved_pack))
-
-        # Return lowest factor (most beneficial)
-        return min(factors)
-
     @cites("CRR Art. 501")
     @cites("CRR Art. 501a")
     def apply_factors(

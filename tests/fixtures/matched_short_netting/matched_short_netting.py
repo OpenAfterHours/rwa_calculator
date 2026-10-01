@@ -102,10 +102,6 @@ class Scenario:
         # Scoped per scenario so a multi-scenario bundle cannot pool across them.
         return f"MSN-AGR-{self.label}"
 
-    @property
-    def is_matched(self) -> bool:
-        return self.deposit_tenor_days == self.loan_tenor_days
-
     def deposit_maturity(self, reporting_date: date) -> date:
         return reporting_date + timedelta(days=self.deposit_tenor_days)
 

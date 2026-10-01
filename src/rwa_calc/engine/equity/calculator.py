@@ -35,7 +35,6 @@ References:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, cast
 
@@ -193,15 +192,6 @@ def _append_ciu_branches(chain: pl.Expr) -> ChainedThen:
         .when(_is_ciu)
         .then(pl.lit(CIU_FALLBACK_RW))
     )
-
-
-@dataclass
-class EquityCalculationError:
-    """Error during equity calculation."""
-
-    error_type: str
-    message: str
-    exposure_reference: str | None = None
 
 
 class EquityCalculator:

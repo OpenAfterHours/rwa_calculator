@@ -151,11 +151,6 @@ class ArticleEvidence:
         return bool(self.code_functions or self.pack_entries)
 
     @property
-    def is_implemented(self) -> bool:
-        """True when the article is cited or at least named in production source."""
-        return self.has_citable_anchor or bool(self.source_files)
-
-    @property
     def layer_count(self) -> int:
         """How many of the five evidence layers reference this article."""
         return sum(

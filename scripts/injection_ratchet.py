@@ -154,9 +154,6 @@ class Board:
     other_verdicts: dict[str, str]
     escaped_rows: tuple[tuple[str, str, str], ...]
 
-    def known_defect_detected(self) -> frozenset[str]:
-        return self.detected & _catalogue_ids_by_category("known_defect")
-
 
 def load_board(path: Path) -> Board:
     """Reduce one ``defect_injection.py`` scorecard JSON to a ``Board``."""

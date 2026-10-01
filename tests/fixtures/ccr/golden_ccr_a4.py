@@ -249,10 +249,6 @@ def build_ccr_a4_bundle() -> RawDataBundle:
     )
 
 
-# Alias matching the naming pattern of build_raw_data_bundle_with_ccr_a3.
-build_raw_data_bundle_with_ccr_a4 = build_ccr_a4_bundle
-
-
 # ---------------------------------------------------------------------------
 # Save helper — canonical entry point for generate_all.py and standalone use.
 # ---------------------------------------------------------------------------

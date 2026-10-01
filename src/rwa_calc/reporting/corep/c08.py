@@ -506,10 +506,6 @@ _C08_01_INFLOW_KEYS: dict[str, str] = {
     "0080": "substitution_inflow_slotting",
 }
 
-# Single-frame lineage key: C 08.07 has no sheet axis, so its one plan keys
-# under a canonical name (see reporting.plans / _resolve_sheet_key single_frame).
-_C08_07_SHEET_KEY = "c08_07"
-
 
 _Terms = tuple[tuple[str, str | bool], ...]
 type _EmptyCell = Literal["zero", "null"]

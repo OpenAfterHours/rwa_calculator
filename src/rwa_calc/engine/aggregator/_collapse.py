@@ -156,8 +156,3 @@ def _recompute_ratios(
         .otherwise(0.0)
     )
     return collapsed.with_columns([ratio_expr.alias(c) for c in recomputable_ratios])
-
-
-def _first_present(candidates: Sequence[str], present: set[str]) -> str | None:
-    """Return the first candidate column name present, else None."""
-    return next((c for c in candidates if c in present), None)

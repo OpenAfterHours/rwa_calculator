@@ -96,9 +96,6 @@ _B31_DATE: date = date(2027, 1, 15)
 #: Sentinel: distinct from None so we can tell "field missing" from "field present but None"
 _MISSING = object()
 
-#: QCCP discriminator constant (mirrors aggregator and scenario proposal)
-_CP_ENTITY_TYPE_CCP: str = "ccp"
-
 #: CCR exposure reference prefix emitted by the CCR adapter
 _CCR_PREFIX: str = "ccr__"
 

@@ -38,7 +38,6 @@ from rwa_calc.engine.loader import DataSourceConfig, ParquetLoader
 # HELPERS
 # =============================================================================
 
-_REPORTING_DATE = date(2024, 12, 31)
 _VALUE_DATE = date(2024, 1, 1)
 _MATURITY_DATE = date(2029, 12, 31)
 

@@ -493,11 +493,6 @@ CR6_PD_RANGES: list[tuple[float, float, str, str]] = [
     (1.0000, float("inf"), "17", "100.00 (Default)"),
 ]
 
-# The parent rows of CR6_PD_RANGES: each equals the sum of the sub-band rows that
-# follow it. Consumers that treat the scale as a partition (summing every row)
-# must exclude these, or they double-count.
-CR6_PD_PARENT_REFS: frozenset[str] = frozenset({"1", "7", "10", "13"})
-
 # ---------------------------------------------------------------------------
 # CR6-A — Scope of IRB and SA Use (Art. 452(b))
 # ---------------------------------------------------------------------------

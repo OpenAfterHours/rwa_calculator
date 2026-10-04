@@ -177,26 +177,6 @@ LN_AIRB_INFRA = "RP-LN-AIRB-INFRA"
 LN_AIRB_RET = "RP-LN-AIRB-RET"
 LN_SL = "RP-LN-SL"
 
-# Every loan reference, for smoke assertions
-ALL_LOAN_REFERENCES = (
-    LN_SOV,
-    LN_INST,
-    LN_CORP_RATED,
-    LN_CORP_UNRATED,
-    LN_SME,
-    LN_SME_INFRA,
-    LN_RETAIL,
-    LN_RRE,
-    LN_CRE,
-    LN_DEFAULT,
-    LN_OTHER,
-    LN_FIRB,
-    LN_AIRB,
-    LN_AIRB_INFRA,
-    LN_AIRB_RET,
-    LN_SL,
-)
-
 
 # ---------------------------------------------------------------------------
 # Main public entry point

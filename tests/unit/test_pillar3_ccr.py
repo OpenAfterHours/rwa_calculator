@@ -85,9 +85,6 @@ _MISSING = object()
 #: CCR exposure_reference prefix (rows emitted by the CCR adapter).
 _CCR_PREFIX: str = "ccr__"
 
-#: QCCP discriminator: cp_entity_type value for CCP counterparties.
-_CP_ENTITY_TYPE_CCP: str = "ccp"
-
 #: Synthetic CCR exposure reference for the CVA-A1 netting set.
 _CVA_CCR_EXPOSURE_REF: str = f"{_CCR_PREFIX}{CVA_A1_NETTING_SET_ID}"
 

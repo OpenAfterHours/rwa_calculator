@@ -78,7 +78,6 @@ References:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -110,7 +109,6 @@ from tests.fixtures.p1_94d.p1_94d import (
 # Shared constants
 # ---------------------------------------------------------------------------
 
-_EAD = Decimal("100_000")
 _REPORTING_DATE = date(2027, 1, 4)
 
 # Absolute tolerances

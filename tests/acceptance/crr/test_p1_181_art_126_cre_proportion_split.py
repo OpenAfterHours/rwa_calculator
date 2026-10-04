@@ -76,8 +76,6 @@ _LOAN_REF_A = "LN-CRE-A"  # LTV=0.40, unrated — regression anchor
 _LOAN_REF_B = "LN-CRE-B"  # LTV=0.80, unrated — split, 68.75%
 _LOAN_REF_C = "LN-CRE-C"  # LTV=0.80, CQS=1  — split, 38.75% (discriminating)
 
-_EAD = 1_000_000.0
-
 # Expected risk weights per Art. 126(2)(d) proportion split
 _EXPECTED_RW_A = 0.5000  # whole-loan 50% (LTV ≤ threshold)
 _EXPECTED_RW_B = 0.6875  # 0.625×50% + 0.375×100%

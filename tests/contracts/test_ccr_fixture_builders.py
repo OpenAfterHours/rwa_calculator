@@ -40,8 +40,6 @@ _FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "ccr"
 
 _TRADES_PARQUET = _FIXTURE_DIR / "trades.parquet"
 _NETTING_SETS_PARQUET = _FIXTURE_DIR / "netting_sets.parquet"
-_MARGIN_AGREEMENTS_PARQUET = _FIXTURE_DIR / "margin_agreements.parquet"
-_CCR_COLLATERAL_PARQUET = _FIXTURE_DIR / "ccr_collateral.parquet"
 
 
 # ===========================================================================

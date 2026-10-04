@@ -68,9 +68,6 @@ _CHECK_NAME = "check_no_nested_window_expressions"
 #: registration test has stopped measuring registration.
 _KNOWN_REGISTERED_CHECK = "check_no_polars_namespace_registrations"
 
-#: The engine module whose expression the check exists to flag.
-_DEFECT_MODULE = SRC_ROOT / "engine" / "classify" / "subtypes.py"
-
 #: A real engine module carrying a SINGLE, non-nested ``.over()`` that a naive
 #: name resolver mis-flags: the statement applying the window rebinds the frame
 #: name (``exposures = exposures.with_columns(... .over(...) ...)``), and the

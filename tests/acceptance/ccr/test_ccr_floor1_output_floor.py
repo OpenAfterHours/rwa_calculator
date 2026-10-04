@@ -53,7 +53,6 @@ from tests.fixtures.ccr.golden_ccr_floor1 import (
 # Tolerances
 # ---------------------------------------------------------------------------
 
-_REL_TOL = 1e-6  # tight relative tolerance for non-round floats
 _ABS_TOL = 1.0  # ±£1 absolute tolerance for portfolio-level floor values
 
 # ---------------------------------------------------------------------------

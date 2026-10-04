@@ -50,7 +50,6 @@ _SF_SN_NON_RATED: float = 0.06
 _SF_IDX_IG: float = 0.0038
 _SF_IDX_HY: float = 0.0106
 _RHO_SN: float = 0.50
-_RHO_IDX: float = 0.80
 
 
 def _enriched_credit_trade(

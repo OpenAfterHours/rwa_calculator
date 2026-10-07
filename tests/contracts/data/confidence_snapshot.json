@@ -6217,7 +6217,6 @@
       "source_files": [
         "contracts/validation.py",
         "data/schemas.py",
-        "domain/enums.py",
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/ratings.py",
         "engine/hierarchy/resolver.py",

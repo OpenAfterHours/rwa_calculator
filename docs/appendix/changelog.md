@@ -57,6 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0020; OF 02.01 U-TREA against OF 02.00 row 0010). In the fourth, OF 08.03
   column 0080 is an integer in the taxonomy and holds a fractional maturity.
   These are defects in the generated estate that no earlier gate could see.
+- **`export_filing_package` validates with the Bank's v4.1.1 rules, evaluated as
+  the Bank's gateway evaluates them** (`rwa-filer`'s new rule engine). It is
+  stricter than the supervisory register: a cell this calculator does not
+  report is zero to a rule that says so. The supervisory register
+  (`check_supervisory_validations`, the coverage ratchet) is unchanged and still
+  runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
 - (Next release changes will go here)

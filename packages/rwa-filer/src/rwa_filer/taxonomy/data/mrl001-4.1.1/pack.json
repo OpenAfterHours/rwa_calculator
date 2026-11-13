@@ -1,0 +1,566 @@
+{
+ "dimensions": {
+  "boe_dim:APA": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Type of amount",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:OFM": {
+   "default": "eba_OF:x0",
+   "domain": "eba_OF",
+   "kind": "explicit",
+   "label": "MREL eligibility w/o maturity criteria",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:TIZ": {
+   "default": "eba_TI:x0",
+   "domain": "eba_TI",
+   "kind": "explicit",
+   "label": "Time of anticipated instrument disposal",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:AFK": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Applicable framework",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:BAS": {
+   "default": "eba_BA:x0",
+   "domain": "eba_BA",
+   "kind": "explicit",
+   "label": "Base",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CAL": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Calculation method",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CLS": {
+   "default": "eba_CG:x0",
+   "domain": "eba_CG",
+   "kind": "explicit",
+   "label": "Collateral status",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:EXC": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Exposure class",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:INV": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Significant investments",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCY": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PRP": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Prudential portfolio",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PUR": {
+   "default": "eba_PU:x0",
+   "domain": "eba_PU",
+   "kind": "explicit",
+   "label": "Purpose",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RES": {
+   "default": "eba_TI:x0",
+   "domain": "eba_TI",
+   "kind": "explicit",
+   "label": "Residual maturity",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RPR": {
+   "default": "eba_RP:x0",
+   "domain": "eba_RP",
+   "kind": "explicit",
+   "label": "Related parties/Relationships",
+   "typed_element": null,
+   "typed_type": null
+  }
+ },
+ "enumerations": {
+  "eba_CU:boe_CU600": [
+   "eba_CU:GBP",
+   "eba_CU:EUR",
+   "eba_CU:CAD",
+   "eba_CU:USD",
+   "eba_CU:CHF",
+   "eba_CU:JPY",
+   "eba_CU:SEK"
+  ],
+  "eba_PI:boe_PI3": [
+   "boe_eba_PI:x1",
+   "boe_eba_PI:x2"
+  ],
+  "eba_SC:boe_SC1003": [
+   "boe_eba_SC:x6000",
+   "boe_eba_SC:x8002",
+   "boe_eba_SC:x6006",
+   "boe_eba_SC:x6003",
+   "boe_eba_SC:x6001"
+  ]
+ },
+ "format": 1,
+ "info": {
+  "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/mrel/2026-06-22/mod/mrl001.xsd",
+  "irregularities": [],
+  "module": "MRL001",
+  "sources": {
+   "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 MREL.xlsx",
+   "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
+   "taxonomy_package": "boe411.zip"
+  },
+  "taxonomy": "boe-banking",
+  "title": "MRL001",
+  "valid_from": "2026-06-22",
+  "valid_to": null,
+  "version": "4.1.1"
+ },
+ "metrics": {
+  "boe_met:di6003": {
+   "enumeration": null,
+   "label": "Reporting period start date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:di6004": {
+   "enumeration": null,
+   "label": "Reporting period end date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:ei11035": {
+   "enumeration": "eba_PI:boe_PI3",
+   "label": "Liabilities to resources in excess of 10%",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei11040": {
+   "enumeration": "eba_SC:boe_SC1003",
+   "label": "Basis of reporting (MRL001)",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei6006": {
+   "enumeration": "eba_CU:boe_CU600",
+   "label": "Reporting currency",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:mi11006": {
+   "enumeration": null,
+   "label": "Accounting value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi11043": {
+   "enumeration": null,
+   "label": "Nominal outstanding amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:ri11038": {
+   "enumeration": null,
+   "label": "Liabilities to resources exceeding 2.5%",
+   "period": "instant",
+   "type": "decimal"
+  },
+  "boe_met:si11039": {
+   "enumeration": null,
+   "label": "Basis of preparation (MREL)",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6002": {
+   "enumeration": null,
+   "label": "Entity code",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si8029": {
+   "enumeration": null,
+   "label": "Name of contact person",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si8030": {
+   "enumeration": null,
+   "label": "Position of contact person",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si8031": {
+   "enumeration": null,
+   "label": "Email of contact person",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si168": {
+   "enumeration": null,
+   "label": "Name of entity",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si288": {
+   "enumeration": null,
+   "label": "LEI code",
+   "period": "instant",
+   "type": "string"
+  }
+ },
+ "namespaces": {
+  "boe_dim": "http://www.bankofengland.co.uk/data/xbrl/dict/dim",
+  "boe_eba_AP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_AP",
+  "boe_eba_EC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_EC",
+  "boe_eba_MC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_MC",
+  "boe_eba_OF": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_OF",
+  "boe_eba_PI": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_PI",
+  "boe_eba_PU": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_PU",
+  "boe_eba_RP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_RP",
+  "boe_eba_SC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_SC",
+  "boe_eba_TI": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_TI",
+  "boe_met": "http://www.bankofengland.co.uk/data/xbrl/dict/met",
+  "eba_AP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AP",
+  "eba_BA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BA",
+  "eba_CG": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CG",
+  "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+  "eba_EC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/EC",
+  "eba_MC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/MC",
+  "eba_OF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/OF",
+  "eba_PL": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PL",
+  "eba_PU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PU",
+  "eba_RP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RP",
+  "eba_TI": "http://www.eba.europa.eu/xbrl/crr/dict/dom/TI",
+  "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
+  "eba_met": "http://www.eba.europa.eu/xbrl/crr/dict/met"
+ },
+ "tables": {
+  "MR02.01.01.01": {
+   "columns": [
+    [
+     "010",
+     "MATURITY PROFILE / Less than one year (nominal outstanding value)"
+    ],
+    [
+     "020",
+     "MATURITY PROFILE / One year and greater, less than two years (nominal outstanding value)"
+    ],
+    [
+     "030",
+     "MATURITY PROFILE / Two years and greater, less than five years (nominal outstanding value)"
+    ],
+    [
+     "040",
+     "MATURITY PROFILE / Five years and greater (nominal outstanding value)"
+    ],
+    [
+     "050",
+     "MATURITY PROFILE / Perpetual (nominal outstanding value)"
+    ],
+    [
+     "060",
+     "MATURITY PROFILE / Calculated amount that does not have maturity (nominal outstanding value)"
+    ],
+    [
+     "070",
+     "MATURITY PROFILE / Current reporting aggregate (nominal outstanding value)"
+    ]
+   ],
+   "filing_indicator": "MR02.01.01",
+   "group": "MR02.01.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "005",
+     "MREL items Own Funds and eligible liabilities AT1 capital instruments that qualify to count towards MREL"
+    ],
+    [
+     "030",
+     "Tier 2 capital instruments that qualify to count towards MREL"
+    ],
+    [
+     "050",
+     "MREL contractually or statutorily subordinated eligible liabilities (senior non-preferred)"
+    ],
+    [
+     "060",
+     "MREL senior unsecured eligible liabilities (holding company issued senior)"
+    ],
+    [
+     "070",
+     "Liabilities that do not qualify for MREL but which rank pari passu with any MREL resources"
+    ],
+    [
+     "073",
+     "Liabilities that do not qualify for external MREL, calculated as a proportion of external MREL resources where the ratio exceeds 2.5%"
+    ],
+    [
+     "075",
+     "Liabilities that do not qualify for internal MREL, calculated as a proportion of internal MREL resources where the ratio exceeds 2.5%"
+    ],
+    [
+     "077",
+     "For any creditor class, does the ratio of liabilities that do not qualify for external MREL, calculated as a proportion of external MREL resources in the same creditor class, exceed 10%?"
+    ],
+    [
+     "079",
+     "For any creditor class, does the ratio of liabilities that do not qualify for internal MREL, calculated as a proportion of internal MREL resources in the same creditor class, exceed 10%?"
+    ],
+    [
+     "080",
+     "Total MREL resources"
+    ],
+    [
+     "085",
+     "Shares that do not qualify for CET1"
+    ],
+    [
+     "160",
+     "AT1 capital instruments that do not qualify for MREL"
+    ],
+    [
+     "090",
+     "Deductions from MREL resources For multiple point of entry (MPE) resolution groups only: exposures to other resolution groups or entities or sub-groups, that correspond to MREL eligible liabilities instruments"
+    ],
+    [
+     "100",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments issued by the institution itself"
+    ],
+    [
+     "110",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments of other entities with reciprocal cross-holdings"
+    ],
+    [
+     "120",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments of G-SIB entities without significant investment in those entities"
+    ],
+    [
+     "130",
+     "Of which held in the trading book for no longer than 30 business days, without significant investment"
+    ],
+    [
+     "140",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments of G-SIB entities in which the institution has a significant investment"
+    ],
+    [
+     "143",
+     "Of which held in the trading book for no longer than 30 business days, with significant investment"
+    ]
+   ],
+   "title": "MREL Resources - nominal outstanding value",
+   "z": []
+  },
+  "MR02.01.01.02": {
+   "columns": [
+    [
+     "080",
+     "MATURITY PROFILE / Less than one year (accounting value)"
+    ],
+    [
+     "090",
+     "MATURITY PROFILE / One year and greater, less than two years (accounting value)"
+    ],
+    [
+     "100",
+     "MATURITY PROFILE / Two years and greater, less than five years (accounting value)"
+    ],
+    [
+     "110",
+     "MATURITY PROFILE / Five years and greater (accounting value)"
+    ],
+    [
+     "120",
+     "MATURITY PROFILE / Perpetual (accounting value)"
+    ],
+    [
+     "130",
+     "MATURITY PROFILE / Calculated amount that does not have maturity (accounting value)"
+    ],
+    [
+     "140",
+     "MATURITY PROFILE / Current reporting aggregate (accounting value)"
+    ]
+   ],
+   "filing_indicator": "MR02.01.01",
+   "group": "MR02.01.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "005",
+     "MREL items Own Funds and eligible liabilities AT1 capital instruments that qualify to count towards MREL"
+    ],
+    [
+     "030",
+     "Tier 2 capital instruments that qualify to count towards MREL"
+    ],
+    [
+     "050",
+     "MREL contractually or statutorily subordinated eligible liabilities (senior non-preferred)"
+    ],
+    [
+     "060",
+     "MREL senior unsecured eligible liabilities (holding company issued senior)"
+    ],
+    [
+     "070",
+     "Liabilities that do not qualify for MREL but which rank pari passu with any MREL resources"
+    ],
+    [
+     "073",
+     "Liabilities that do not qualify for external MREL, calculated as a proportion of external MREL resources where the ratio exceeds 2.5%"
+    ],
+    [
+     "075",
+     "Liabilities that do not qualify for internal MREL, calculated as a proportion of internal MREL resources where the ratio exceeds 2.5%"
+    ],
+    [
+     "077",
+     "For any creditor class, does the ratio of liabilities that do not qualify for external MREL, calculated as a proportion of external MREL resources in the same creditor class, exceed 10%?"
+    ],
+    [
+     "079",
+     "For any creditor class, does the ratio of liabilities that do not qualify for internal MREL, calculated as a proportion of internal MREL resources in the same creditor class, exceed 10%?"
+    ],
+    [
+     "080",
+     "Total MREL resources"
+    ],
+    [
+     "085",
+     "Shares that do not qualify for CET1"
+    ],
+    [
+     "160",
+     "AT1 capital instruments that do not qualify for MREL"
+    ],
+    [
+     "090",
+     "Deductions from MREL resources For multiple point of entry (MPE) resolution groups only: exposures to other resolution groups or entities or sub-groups, that correspond to MREL eligible liabilities instruments"
+    ],
+    [
+     "100",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments issued by the institution itself"
+    ],
+    [
+     "110",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments of other entities with reciprocal cross-holdings"
+    ],
+    [
+     "120",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments of G-SIB entities without significant investment in those entities"
+    ],
+    [
+     "130",
+     "Of which held in the trading book for no longer than 30 business days, without significant investment"
+    ],
+    [
+     "140",
+     "Institution\u2019s holdings of MREL eligible liabilities instruments of G-SIB entities in which the institution has a significant investment"
+    ],
+    [
+     "143",
+     "Of which held in the trading book for no longer than 30 business days, with significant investment"
+    ]
+   ],
+   "title": "MREL Resources - accounting value",
+   "z": []
+  },
+  "MR700.00.01.01": {
+   "columns": [
+    [
+     "010",
+     "Values"
+    ]
+   ],
+   "filing_indicator": "MR700.00.01",
+   "group": "MR700.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "010",
+     "Entity name"
+    ],
+    [
+     "020",
+     "Firm Reference Number"
+    ],
+    [
+     "030",
+     "LEI"
+    ],
+    [
+     "040",
+     "Reporting Basis"
+    ],
+    [
+     "050",
+     "Reporting Period Start Date"
+    ],
+    [
+     "060",
+     "Reporting Period End Date"
+    ],
+    [
+     "080",
+     "Reporting Currency"
+    ],
+    [
+     "091",
+     "WORKING LEVEL CONTACT Name"
+    ],
+    [
+     "092",
+     "Position"
+    ],
+    [
+     "093",
+     "Email"
+    ],
+    [
+     "100",
+     "Basis of preparation"
+    ]
+   ],
+   "title": "General information (MRL001)",
+   "z": []
+  }
+ }
+}

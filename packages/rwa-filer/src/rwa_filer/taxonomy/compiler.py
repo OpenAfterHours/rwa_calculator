@@ -278,7 +278,12 @@ def compile_pack(
         if not path.exists():
             raise FileNotFoundError(f"taxonomy compiler input not found: {path}")
     workbook = _workbook.read_annotated_workbook(annotated_workbook)
-    if module not in workbook.contents.modules:
+    # The module code is written as the workbook writes it: one workbook of the
+    # publication heads its column "pra110", the others use upper case.
+    listed = next(
+        (name for name in workbook.contents.modules if name.upper() == module.upper()), None
+    )
+    if listed is None:
         raise ValueError(
             f"module {module!r} is not a Table of Contents column of {workbook.file_name}; "
             f"it lists {sorted(workbook.contents.modules)}"
@@ -289,7 +294,7 @@ def compile_pack(
     try:
         listing = _linkbase.read_module(package, module)
         codes = sorted(
-            c for c, modules in workbook.contents.modules_of.items() if module in modules
+            c for c, modules in workbook.contents.modules_of.items() if listed in modules
         )
         tables = [
             table
@@ -307,7 +312,7 @@ def compile_pack(
     sections = _assemble(tables, dictionary, irregularities)
     info = {
         "module": module,
-        "title": workbook.contents.modules[module],
+        "title": workbook.contents.modules[listed],
         "taxonomy": TAXONOMY_NAME,
         "version": _version(workbook, irregularities),
         "entry_point": listing.entry_point,

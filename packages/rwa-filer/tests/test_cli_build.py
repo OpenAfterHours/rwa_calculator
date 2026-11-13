@@ -13,21 +13,21 @@ from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 HEADER_ARGS = ["--entity", VALID_LEI, "--reference-date", "2027-03-31", "--module", "PRA001"]
 BASE = f"{VALID_LEI}_PRA001_2027-03-31"
 
-#: Two facts in real PRA001 cells: OF 07.00 corporates, original exposure and
-#: value adjustments. Structurally sound, and the rules that can run on them pass.
-GOOD_CSV = (
+#: One reported zero in a real PRA001 cell (OF 07.00, corporates, original
+#: exposure). Every rule that reads the cell runs, and holds.
+GOOD_CSV = "table,sheet,row,column,value\nOF07.00.01.01,0008,0010,0010,0\n"
+
+#: An exposure and a value adjustment, and nothing else. Structurally sound, and
+#: a broken rule: the exposure net of adjustments (column 0040) is unreported,
+#: so zero to the regulator, and 995,000 is not zero.
+BROKEN_CSV = (
     "table,sheet,row,column,value\n"
     "OF07.00.01.01,0008,0010,0010,1000000\n"
     "OF07.00.01.01,0008,0010,0030,-5000\n"
 )
 
-#: The same, plus one cell of OF 02.00 on its own. Still structurally sound, but
-#: no published rule can run on a single cell of that template, so the return is
-#: not shown to be clean (VAL003) and the rule gate stops it.
-UNCOVERED_CSV = GOOD_CSV + "OF02.00.01.01,,0010,0010,1234567.89\n"
 
-
-def _csv(tmp_path: Path, text: str = UNCOVERED_CSV) -> Path:
+def _csv(tmp_path: Path, text: str = BROKEN_CSV) -> Path:
     path = tmp_path / "facts.csv"
     path.write_text(text)
     return path
@@ -68,7 +68,7 @@ def test_build_with_force_writes_the_package_and_still_reports_failure(
     # Assert — written, but the exit code still says "not submittable".
     out = capsys.readouterr().out
     assert code == EXIT_FAILED
-    assert f"{BASE}.xbrl: 3 fact(s) from 3 cell(s), 2 template(s) reported" in out
+    assert f"{BASE}.xbrl: 2 fact(s) from 2 cell(s), 1 template(s) reported" in out
     assert "this is the file to upload" in out
     assert sorted(path.name for path in (tmp_path / "out").iterdir()) == [
         f"{BASE}.manifest.json",
@@ -79,6 +79,7 @@ def test_build_with_force_writes_the_package_and_still_reports_failure(
     assert 'decimals="2" unitRef="uGBP">1000000<' in text and "creationdate" not in text
     manifest = json.loads((tmp_path / "out" / f"{BASE}.manifest.json").read_text())
     assert manifest["validation"]["submittable"] is False
+    assert "VAL001" in [finding["code"] for finding in manifest["validation"]["findings"]]
     assert manifest["instance"]["monetary_decimals"] == 2
 
 

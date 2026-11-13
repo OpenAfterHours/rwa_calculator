@@ -30,6 +30,7 @@ import pytest
 
 from pack_builders import VALID_LEI
 from rwa_filer.model import CanonicalReturn
+from rwa_filer.taxonomy.pack import available_packs
 from rwa_filer.validate.structure import FINDING_HEADER_INVALID, check_structure
 from rwa_filer.xbrl.reader import InstanceReading, _content, _distinct_facts, _parse, read_instance
 from rwa_filer.xbrl.writer import write_instance
@@ -100,3 +101,58 @@ def test_rewriting_the_sample_gives_the_same_facts(
     assert instance.facts == SAMPLE_FACTS
     assert len(instance.filing_indicators) == SAMPLE_INDICATORS
     assert fact_set(instance.content) == fact_set(_content(sample_path))
+
+
+# ---------------------------------------------------------------------------
+# Every packaged module's sample
+# ---------------------------------------------------------------------------
+
+
+def _samples() -> dict[str, Path]:
+    """The Bank's sample per packaged module, where present under RWA_FILER_BOE_DIR."""
+    found: dict[str, Path] = {}
+    for info in available_packs():
+        stem = info.module.replace("_", "")
+        paths = sorted(Path(BOE_DIR or "").rglob(f"*_{stem}_*.xbrl"))
+        if paths:
+            found[info.module] = paths[0]
+    return found
+
+
+def test_every_packaged_modules_sample_reads_and_rewrites_without_loss() -> None:
+    """For each module: no unmatched fact, and the rewritten file holds the same facts.
+
+    This is the test a module must pass to be packaged at all. The samples for
+    the modules that are NOT packaged fail it, which is why they are not.
+    """
+    # Arrange
+    samples = _samples()
+    if len(samples) < 2:
+        pytest.skip("the other modules' sample instances are not under RWA_FILER_BOE_DIR")
+    problems: dict[str, str] = {}
+
+    for module, path in samples.items():
+        # Act
+        reading = read_instance(path)
+        header = replace(
+            reading.ret.header,
+            entity_identifier=VALID_LEI,
+            reference_date=max(reading.pack.info.valid_from, reading.ret.header.reference_date),
+        )
+        ret = CanonicalReturn(header, reading.ret.facts, reading.ret.indicators)
+        unmatched = [finding for finding in reading.findings if finding.code != "XBR003"]
+        if unmatched or check_structure(ret, reading.pack):
+            problems[module] = f"{len(unmatched)} reader finding(s), or a structure finding"
+            continue
+        original, _ = _distinct_facts(_parse(_content(path)), reading.pack)
+        rewritten, _ = _distinct_facts(
+            _parse(write_instance(ret, reading.pack).content), reading.pack
+        )
+        if {(f.metric, f.members, f.value, f.text, f.decimals) for f in original} != {
+            (f.metric, f.members, f.value, f.text, f.decimals) for f in rewritten
+        }:
+            problems[module] = "the rewritten instance does not hold the same facts"
+
+    # Assert
+    assert problems == {}
+    assert set(samples) == {info.module for info in available_packs()}

@@ -71,8 +71,62 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - The canonical fact table gains an optional `decimals` column, and a return
   may declare its filing indicators. `STR010` reports a declared indicator the
   module lacks, or a fact in a template not declared as reported.
+- `rwa_filer.boe` — the Bank of England's validation rules, evaluated as the
+  taxonomy evaluates them.
+  - Rule books for taxonomy v4.1.1 as package data: all 3,813 rules of all 11
+    return families (24 modules), imported from the Bank's workbooks by header
+    name. `rwa-filer rulebook list | import | check`.
+  - A parser for the rule language as published (the raw `Expression`, `Scope`,
+    `Join` and `Where` cells): conditionals, `and` / `or` / `not`, interval and
+    exact operators, per-reference defaults, sequence references, filters,
+    enumeration and boolean cells, `isNull`, `count`, `matches`, `exp`, `log`.
+    Every one of the 3,810 complete expressions parses; the other three are
+    cells the publisher's export cut at the spreadsheet limit, none enforced.
+  - An engine with the taxonomy's semantics: a rule runs only when every
+    template it reads is reported; it runs once per combination of cells it
+    leaves open; an unreported cell is what its own reference says it is;
+    interval comparisons allow for rounding by each fact's `decimals`; a figure
+    shown in two cells is one fact. No enforced rule of a packaged module is
+    unsupported, and a register test keeps it so.
+  - Checked against Arelle on the Bank's own sample instances, counting
+    satisfied and unsatisfied evaluations per rule: exact on all 254 rules of
+    twelve modules (whole samples) and on all 456 PRA001 rules that the four
+    credit-risk template groups trigger. The counts are fixtures in the suite.
+- `rwa_filer.workflow` — the preparer's workflow.
+  - Adjustments: cell-level overrides read from a file with a `reason` per
+    row, applied whole or not at all, with the before and after of each cell
+    recorded in the manifest (`rwa-filer build --adjustments FILE --author NAME`).
+  - An append-only, hash-chained audit ledger (`<name>.ledger.jsonl`) of
+    adjustments, builds and sign-offs. Altering, removing or re-ordering an
+    entry is detected; a ledger that does not verify is never extended.
+  - `rwa-filer signoff`: an approval bound to the SHA-256 of the instance.
+    A package that is not submittable is signed only with
+    `--acknowledge-findings`.
+  - `rwa-filer verify`: the instance, zip, manifest, sign-off and ledger must
+    all describe the same bytes.
+  - `rwa-filer diff PREVIOUS CURRENT`: the cells added, removed and changed
+    between two versions of a return, across file formats.
+- Taxonomy packs for thirteen more modules: `PRA116`, `PRA112`–`PRA114`,
+  `PRA117`, `PRA118`, `LVR001`, `LVR002`, `MRL001`, `MRL003`, `PRA_IFRS`,
+  `PRA_GAAP`, `PRA_MEM`. For each, every fact of the Bank's sample instance is
+  a data point of the pack, and rewriting the sample reproduces it exactly.
+  `PRA110`, `PRA115` and `RFB001`–`RFB008` are not packaged: their compiled
+  packs do not yet account for every sample fact.
 
 ### Changed
 - (Next release changes will go here)
+- `validate_return` and `rwa-filer validate` / `build` now run the v4.1.1 rule
+  books through the new engine. Verdicts change, and are stricter: an
+  unreported cell is zero to a rule that says so, where the earlier engine
+  skipped the rule. The report lists `satisfied` and `unsatisfied` evaluation
+  counts per rule; the `VACUOUS` status is gone. `validate_return` takes
+  `rulebook=` (a `rwa_filer.boe.catalogue.RuleBook`) in place of `ruleset=`,
+  and `accuracy=` for the default `decimals`.
+- Row, column and sheet codes are matched as each table writes them: most
+  tables use four digits, the MREL and older tables three. A code that differs
+  from one of its table's only in leading zeros is taken as that code.
+- The template-level engine (`TemplateIndex`, `check_index`, the EBA and BoE
+  v4.0.0 extracts) is unchanged and remains what `rwa-calc` runs on its own
+  frames.
 
 ---

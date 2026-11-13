@@ -1,11 +1,11 @@
 """
 Return-level validation: a canonical return, read against a pack, run through the rules.
 
-What is pinned here is the bridge — that a return already in the publisher's
-coordinates reaches the rule engine through IDENTITY bindings, that its sheets
-are keyed the way the engine expects, and that the verdict combines structure
-and rule findings honestly. The rules themselves are injected, so nothing here
-moves when a publisher's rule set does.
+What is pinned here is the VERDICT — how structure findings and rule results
+combine into "may this be submitted", and what makes an empty result mean
+something. The rules themselves are injected, in the published syntax, so
+nothing here moves when the Bank's rule books do; how a rule is evaluated is
+pinned in ``tests/boe/test_engine.py``.
 """
 
 from __future__ import annotations
@@ -15,30 +15,33 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from filer_builders import build_rule
+from boe_builders import T01, T02, T03, book, ref, rule
 from pack_builders import SAMPLE_MODULE, build_pack, build_return
-from rwa_filer.rules.catalogue import (
-    FRAMEWORK_BASEL_3_1,
-    SCOPE_LIST,
-    SEVERITY_WARNING,
-    RuleScope,
-    RuleSet,
-    TableScope,
+from rwa_filer.boe.catalogue import RuleBookNotFoundError, rulebook_for_module
+from rwa_filer.boe.engine import (
+    REASON_NOT_REPORTED,
+    STATUS_FAIL,
+    STATUS_NOT_EVALUATED,
+    STATUS_PASS,
+    Accuracy,
 )
+from rwa_filer.model import DECIMALS_EXACT
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
+    COVERAGE_TEMPLATE_NOT_COVERED,
     FINDING_COVERAGE_INSUFFICIENT,
     FINDING_RULE_ERROR,
     FINDING_RULE_WARNING,
+    Finding,
 )
-from rwa_filer.validate.evaluate import GEOGRAPHY_TOTAL_SHEET, STATUS_FAIL, STATUS_PASS
-from rwa_filer.validate.index import SINGLE_SHEET
 from rwa_filer.validate.report import render_text, to_record
-from rwa_filer.validate.returns import MODULE_FRAMEWORKS, index_from_return, validate_return
+from rwa_filer.validate.returns import validate_return
 from rwa_filer.validate.structure import FINDING_CELL_NOT_REPORTABLE
 
-FRAMEWORK = FRAMEWORK_BASEL_3_1
+#: The figures here are small and the tests are about the verdict, not about
+#: rounding, so where a break must be a break the facts are taken as exact.
+EXACT = Accuracy(monetary_decimals=DECIMALS_EXACT, percentage_decimals=DECIMALS_EXACT)
 
 
 @pytest.fixture
@@ -62,198 +65,214 @@ def facts(*rows: tuple[object, ...]) -> pl.DataFrame:
     )
 
 
-def ruleset(*rules) -> RuleSet:
-    return RuleSet(framework=FRAMEWORK, publisher="BoE", source={}, rules=tuple(rules))
-
-
-#: T02: exposure (r0010) and RWEA (r0020) on two sheets; T01 total = parts.
+#: T01 total = parts; T02 exposure (r0010) and RWEA (r0020) on two sheets; T03 by country.
 RETURN = facts(
-    ("T01.00.01.01", None, None, "0010", "0010", 100.0, None),
-    ("T01.00.01.01", None, None, "0020", "0010", 60.0, None),
-    ("T01.00.01.01", None, None, "0030", "0010", 40.0, None),
-    ("T01.00.01.01", None, None, "0010", "0030", None, "a comment"),
-    ("T02.00.01.01", "0001", None, "0010", "0010", 60.0, None),
-    ("T02.00.01.01", "0001", None, "0020", "0010", 30.0, None),
-    ("T02.00.01.01", "0002", None, "0010", "0010", 40.0, None),
-    ("T02.00.01.01", "0002", None, "0020", "0010", 50.0, None),
-    ("T03.00.01.01", None, "x1", "0010", "0010", 100.0, None),
-    ("T03.00.01.01", None, "GB", "0010", "0010", 70.0, None),
+    (T01, None, None, "0010", "0010", 100.0, None),
+    (T01, None, None, "0020", "0010", 60.0, None),
+    (T01, None, None, "0030", "0010", 40.0, None),
+    (T01, None, None, "0010", "0030", None, "a comment"),
+    (T02, "0001", None, "0010", "0010", 60.0, None),
+    (T02, "0001", None, "0020", "0010", 30.0, None),
+    (T02, "0002", None, "0010", "0010", 40.0, None),
+    (T02, "0002", None, "0020", "0010", 50.0, None),
+    (T03, None, "x1", "0010", "0010", 100.0, None),
+    (T03, None, "GB", "0010", "0010", 70.0, None),
 )
 
 #: ``total = part one + part two`` on T01.
-FOOTING = build_rule(
-    rule_id="tst_0001",
-    publisher="BoE",
-    framework=FRAMEWORK,
-    tables=("T01.00.01.01",),
-    expression="{r: 0010} = {r: 0020} + {r: 0030}",
-    table_scopes=(TableScope("T01.00.01.01", columns=RuleScope(SCOPE_LIST, ("0010",))),),
+FOOTING = rule(
+    "tst_0001",
+    f"{ref(T01, '0010', '0010')} i= {ref(T01, '0020', '0010')} i+ {ref(T01, '0030', '0010')}",
+    tables=(T01,),
 )
 #: ``RWEA <= exposure`` on every sheet of T02 — breaks on sheet 0002 (50 > 40).
-RWEA_CAP = build_rule(
-    rule_id="tst_0002",
-    publisher="BoE",
-    framework=FRAMEWORK,
-    tables=("T02.00.01.01",),
-    expression="{r: 0020, c: 0010} <= {r: 0010, c: 0010}",
+RWEA_CAP = rule(
+    "tst_0002", f"{ref(T02, '0020', '0010')} i<= {ref(T02, '0010', '0010')}", tables=(T02,)
 )
+#: A rule that holds on T03, so that table is covered where a test needs it to be.
+GEOGRAPHY = rule("tst_0004", f"{ref(T03, '0010', '0010')} >= 0", tables=(T03,))
+
+
+def only(table: str) -> pl.DataFrame:
+    return RETURN.filter(pl.col("table") == table)
 
 
 # ---------------------------------------------------------------------------
-# The index
-# ---------------------------------------------------------------------------
-
-
-def test_each_table_answers_to_its_own_frames(pack: TaxonomyPack) -> None:
-    # Act
-    index = index_from_return(build_return(RETURN), pack, FRAMEWORK)
-
-    # Assert
-    assert sorted(index.frames) == ["T01.00.01.01", "T02.00.01.01", "T03.00.01.01"]
-    assert index.binding("T02.00.01.01").attribute == "T02.00.01.01"
-    assert index.is_emitted("T01.00.01.01") and not index.is_emitted("T04.00.01.01")
-
-
-def test_a_single_sheet_table_is_keyed_by_the_single_sheet_sentinel(pack: TaxonomyPack) -> None:
-    # Act
-    index = index_from_return(build_return(RETURN), pack, FRAMEWORK)
-
-    # Assert
-    assert index.sheet_keys("T01.00.01.01") == (SINGLE_SHEET,)
-    assert index.cell("T01.00.01.01", SINGLE_SHEET, "0010", "0010").value == 100.0
-
-
-def test_fixed_sheets_are_keyed_by_their_published_codes(pack: TaxonomyPack) -> None:
-    # Act
-    index = index_from_return(build_return(RETURN), pack, FRAMEWORK)
-
-    # Assert
-    assert index.sheet_keys("T02.00.01.01") == ("0001", "0002")
-    assert index.cell("T02.00.01.01", "0002", "0020", "0010").value == 50.0
-
-
-def test_the_sheet_map_is_the_identity_over_the_published_codes(pack: TaxonomyPack) -> None:
-    # Act
-    sheet_map = index_from_return(build_return(RETURN), pack, FRAMEWORK).sheet_maps["T02.00.01.01"]
-
-    # Assert — one key per code, each its own: closed by construction.
-    assert {code: entry.bundle_keys for code, entry in sheet_map.items()} == {
-        "0001": ("0001",),
-        "0002": ("0002",),
-    }
-
-
-def test_the_geography_total_is_keyed_as_the_engine_addresses_it(pack: TaxonomyPack) -> None:
-    # Act
-    index = index_from_return(build_return(RETURN), pack, FRAMEWORK)
-
-    # Assert
-    assert index.sheet_keys("T03.00.01.01") == ("GB", GEOGRAPHY_TOTAL_SHEET)
-    assert index.cell("T03.00.01.01", GEOGRAPHY_TOTAL_SHEET, "0010", "0010").value == 100.0
-
-
-def test_text_facts_are_not_presented_as_figures(pack: TaxonomyPack) -> None:
-    # Act
-    index = index_from_return(build_return(RETURN), pack, FRAMEWORK)
-
-    # Assert — column 0030 of T01 holds only a comment, so it is not a column.
-    assert "0030" not in index.column_refs("T01.00.01.01", SINGLE_SHEET)
-
-
-def test_an_unreported_cell_is_absent_not_zero(pack: TaxonomyPack) -> None:
-    # Act
-    cell = index_from_return(build_return(RETURN), pack, FRAMEWORK).cell(
-        "T01.00.01.01", SINGLE_SHEET, "0010", "0020"
-    )
-
-    # Assert
-    assert not cell.present
-
-
-# ---------------------------------------------------------------------------
-# validate_return
+# The verdict
 # ---------------------------------------------------------------------------
 
 
 def test_a_sound_return_that_satisfies_its_rules_is_submittable(pack: TaxonomyPack) -> None:
-    # Arrange — only the rule that holds, and only the table it covers.
-    ret = build_return(RETURN.filter(pl.col("table") == "T01.00.01.01"))
-
     # Act
-    validation = validate_return(ret, pack, ruleset=ruleset(FOOTING))
+    validation = validate_return(build_return(only(T01)), pack, rulebook=book(FOOTING))
 
     # Assert
     assert validation.findings == ()
     assert validation.is_submittable
+    assert validation.report is not None
     assert validation.report.status_counts()[STATUS_PASS] == 1
 
 
 def test_a_broken_error_rule_blocks_submission(pack: TaxonomyPack) -> None:
-    # Arrange
-    ret = build_return(RETURN.filter(pl.col("table") == "T02.00.01.01"))
-
     # Act
-    validation = validate_return(ret, pack, ruleset=ruleset(RWEA_CAP))
+    validation = validate_return(
+        build_return(only(T02)), pack, rulebook=book(RWEA_CAP), accuracy=EXACT
+    )
 
-    # Assert
-    assert [f.code for f in validation.rules] == [FINDING_RULE_ERROR]
+    # Assert — one finding for the rule, quoting where it first broke.
+    (finding,) = validation.rules
+    assert (finding.code, finding.subject) == (FINDING_RULE_ERROR, "tst_0002")
+    assert "1 of 2 evaluation(s)" in finding.message and "sheet 0002" in finding.message
     assert not validation.is_submittable
-    outcome = validation.report.by_status(STATUS_FAIL)[0]
-    assert outcome.coordinates == ("T02.00.01.01[0002]",)
 
 
 def test_a_broken_warning_rule_is_reported_but_does_not_block(pack: TaxonomyPack) -> None:
     # Arrange
-    ret = build_return(RETURN.filter(pl.col("table") == "T02.00.01.01"))
-    warning = build_rule(
-        rule_id="tst_0003",
-        publisher="BoE",
-        framework=FRAMEWORK,
-        severity=SEVERITY_WARNING,
-        tables=("T02.00.01.01",),
-        expression="{r: 0020, c: 0010} <= {r: 0010, c: 0010}",
+    warning = rule(
+        "tst_0003",
+        RWEA_CAP.expression,
+        tables=(T02,),
+        severities={SAMPLE_MODULE: "WARNING"},
     )
 
     # Act
-    validation = validate_return(ret, pack, ruleset=ruleset(warning))
+    validation = validate_return(
+        build_return(only(T02)), pack, rulebook=book(warning), accuracy=EXACT
+    )
 
     # Assert
-    assert [f.code for f in validation.rules] == [FINDING_RULE_WARNING]
+    assert [finding.code for finding in validation.rules] == [FINDING_RULE_WARNING]
     assert validation.is_submittable and validation.blocking == ()
 
 
 def test_structure_findings_come_first_and_block(pack: TaxonomyPack) -> None:
     # Arrange — a figure in the one greyed cell of T01, plus a rule that holds.
-    frame = pl.concat(
-        [
-            RETURN.filter(pl.col("table") == "T01.00.01.01"),
-            facts(("T01.00.01.01", None, None, "0030", "0020", 0.5, None)),
-        ]
+    frame = pl.concat([only(T01), facts((T01, None, None, "0030", "0020", 0.5, None))])
+
+    # Act
+    validation = validate_return(build_return(frame), pack, rulebook=book(FOOTING))
+
+    # Assert
+    assert [finding.code for finding in validation.findings] == [FINDING_CELL_NOT_REPORTABLE]
+    assert not validation.is_submittable
+
+
+def test_findings_from_reading_the_source_are_reported_with_the_structure(
+    pack: TaxonomyPack,
+) -> None:
+    # Arrange
+    stray = Finding("XBR001", "ERROR", "1 fact(s) are not data points", "ref", "TST001", "", "")
+
+    # Act
+    validation = validate_return(
+        build_return(only(T01)), pack, rulebook=book(FOOTING), source_findings=[stray]
+    )
+
+    # Assert
+    assert validation.structure == (stray,) and not validation.is_submittable
+
+
+def test_only_rules_the_module_enforces_are_run(pack: TaxonomyPack) -> None:
+    """Not in the taxonomy, deactivated, or another module's: the gateway does not run it."""
+    # Arrange — three copies of a rule that would break, none of them enforced.
+    broken = RWEA_CAP.expression
+    rulebook = book(
+        FOOTING,
+        rule("not_serialised", broken, tables=(T02,), in_xbrl=False),
+        rule("switched_off", broken, tables=(T02,), deactivated=True),
+        rule("other_module", broken, tables=(T02,), severities={"OTHER": "ERROR"}),
     )
 
     # Act
-    validation = validate_return(build_return(frame), pack, ruleset=ruleset(FOOTING))
+    validation = validate_return(build_return(RETURN), pack, rulebook=rulebook)
 
     # Assert
-    assert [f.code for f in validation.findings] == [FINDING_CELL_NOT_REPORTABLE]
-    assert not validation.is_submittable
+    assert validation.report is not None
+    assert [result.rule_id for result in validation.report.results] == ["tst_0001"]
+    assert validation.report.rules_loaded == 4
+    assert validation.is_submittable
 
 
-def test_a_reported_table_no_rule_reached_is_a_coverage_finding(pack: TaxonomyPack) -> None:
-    """T02 and T03 are reported but only T01 has a rule: that is not a clean result."""
+def test_the_stated_accuracy_decides_a_rounding_sized_difference(pack: TaxonomyPack) -> None:
+    """100,000 against 60,000 + 39,200: holds to thousands, breaks to the penny."""
+    # Arrange
+    frame = facts(
+        (T01, None, None, "0010", "0010", 100_000.0, None),
+        (T01, None, None, "0020", "0010", 60_000.0, None),
+        (T01, None, None, "0030", "0010", 39_200.0, None),
+    )
+
     # Act
-    validation = validate_return(build_return(RETURN), pack, ruleset=ruleset(FOOTING))
+    thousands = validate_return(build_return(frame), pack, rulebook=book(FOOTING))
+    exact = validate_return(build_return(frame), pack, rulebook=book(FOOTING), accuracy=EXACT)
 
-    # Assert
-    assert [f.code for f in validation.rules] == [FINDING_COVERAGE_INSUFFICIENT]
-    assert not validation.is_submittable
+    # Assert — the default is the writer's default: thousands.
+    assert thousands.is_submittable
+    assert not exact.is_submittable
 
 
-def test_a_module_with_no_packaged_rules_has_only_its_structure_checked(
+# ---------------------------------------------------------------------------
+# Coverage — when an empty result means nothing
+# ---------------------------------------------------------------------------
+
+
+def test_a_reported_template_none_of_whose_rules_ran_is_a_coverage_finding(
     pack: TaxonomyPack,
 ) -> None:
-    # Arrange — adequacy: the synthetic module really has no packaged rule set.
-    assert SAMPLE_MODULE not in MODULE_FRAMEWORKS
+    """T02 has a rule, T02 is reported, and the rule did not run: not a clean result."""
+    # Arrange — the T02 rule also reads T03, which this return does not report,
+    # so the gateway would not run it.
+    needs_both = rule(
+        "tst_0005",
+        f"{ref(T02, '0010', '0010', '0001')} i<= {ref(T03, '0010', '0010')}",
+        tables=(T02, T03),
+    )
+    frame = pl.concat([only(T01), only(T02)])
+
+    # Act
+    validation = validate_return(build_return(frame), pack, rulebook=book(FOOTING, needs_both))
+
+    # Assert
+    (finding,) = validation.rules
+    assert (finding.code, finding.subject) == (
+        FINDING_COVERAGE_INSUFFICIENT,
+        COVERAGE_TEMPLATE_NOT_COVERED,
+    )
+    assert "T02.00.01" in finding.message and REASON_NOT_REPORTED in finding.message
+    assert not validation.is_submittable
+
+
+def test_a_reported_template_the_rule_book_has_no_rule_for_is_not_a_shortfall(
+    pack: TaxonomyPack,
+) -> None:
+    """Nothing could have been run on T02 and T03, so nothing is missing."""
+    # Act
+    validation = validate_return(build_return(RETURN), pack, rulebook=book(FOOTING))
+
+    # Assert
+    assert validation.report is not None
+    assert validation.report.templates_reported == ("T01.00.01", "T02.00.01", "T03.00.01")
+    assert validation.report.templates_ruled == ("T01.00.01",)
+    assert validation.findings == () and validation.is_submittable
+
+
+def test_nothing_executed_is_reported_as_such(pack: TaxonomyPack) -> None:
+    # Arrange — a rule on a table the return does not report.
+    validation = validate_return(build_return(only(T01)), pack, rulebook=book(RWEA_CAP))
+
+    # Assert
+    assert [(finding.code, finding.subject) for finding in validation.rules] == [
+        (FINDING_COVERAGE_INSUFFICIENT, COVERAGE_NO_RULE_EXECUTED)
+    ]
+    assert not validation.is_submittable
+
+
+def test_a_module_with_no_packaged_rule_book_has_only_its_structure_checked(
+    pack: TaxonomyPack,
+) -> None:
+    # Arrange — adequacy: the synthetic module really has no packaged rule book.
+    with pytest.raises(RuleBookNotFoundError):
+        rulebook_for_module(SAMPLE_MODULE)
 
     # Act
     validation = validate_return(build_return(RETURN), pack)
@@ -263,19 +282,6 @@ def test_a_module_with_no_packaged_rules_has_only_its_structure_checked(
     assert validation.is_submittable
 
 
-def test_nothing_executed_is_reported_as_such(pack: TaxonomyPack) -> None:
-    # Arrange — a rule on a table the return does not carry.
-    ret = build_return(RETURN.filter(pl.col("table") == "T01.00.01.01"))
-
-    # Act
-    validation = validate_return(ret, pack, ruleset=ruleset(RWEA_CAP))
-
-    # Assert
-    assert [(f.code, f.subject) for f in validation.rules] == [
-        (FINDING_COVERAGE_INSUFFICIENT, COVERAGE_NO_RULE_EXECUTED)
-    ]
-
-
 # ---------------------------------------------------------------------------
 # The report
 # ---------------------------------------------------------------------------
@@ -283,27 +289,33 @@ def test_nothing_executed_is_reported_as_such(pack: TaxonomyPack) -> None:
 
 def test_the_record_is_self_contained_and_json_ready(pack: TaxonomyPack) -> None:
     # Arrange
-    ret = build_return(RETURN.filter(pl.col("table") == "T02.00.01.01"))
-    validation = validate_return(ret, pack, ruleset=ruleset(RWEA_CAP))
+    ret = build_return(pl.concat([only(T02), only(T03)]))
+    validation = validate_return(ret, pack, rulebook=book(RWEA_CAP, GEOGRAPHY), accuracy=EXACT)
 
     # Act
     record = to_record(ret, validation)
 
-    # Assert
+    # Assert — passed rules are counted; only the rest are listed.
     assert record["submittable"] is False
     assert record["header"]["Module"] == SAMPLE_MODULE
     assert record["taxonomy"]["version"] == "1.0.0"
-    assert record["summary"]["rules_executed"] == 1
-    assert record["summary"]["rule_status"][STATUS_FAIL] == 1
-    assert [f["code"] for f in record["findings"]] == [FINDING_RULE_ERROR]
-    assert record["rules"][0]["rule_id"] == "tst_0002"
-    assert record["rules"][0]["cells"] == ["T02.00.01.01[0002]"]
+    assert record["summary"]["rule_book"] == "test 1.0.0"
+    assert record["summary"]["rules_executed"] == 2
+    assert record["summary"]["rule_status"] == {
+        STATUS_PASS: 1,
+        STATUS_FAIL: 1,
+        STATUS_NOT_EVALUATED: 0,
+    }
+    assert [finding["code"] for finding in record["findings"]] == [FINDING_RULE_ERROR]
+    (listed,) = record["rules"]
+    assert (listed["rule_id"], listed["satisfied"], listed["unsatisfied"]) == ("tst_0002", 1, 1)
+    assert listed["failures"][0]["place"] == "sheet 0002"
 
 
 def test_the_text_report_leads_with_the_verdict_and_the_counts(pack: TaxonomyPack) -> None:
     # Arrange
-    ret = build_return(RETURN.filter(pl.col("table") == "T02.00.01.01"))
-    validation = validate_return(ret, pack, ruleset=ruleset(RWEA_CAP))
+    ret = build_return(only(T02))
+    validation = validate_return(ret, pack, rulebook=book(RWEA_CAP), accuracy=EXACT)
 
     # Act
     text = render_text(ret, validation)
@@ -315,12 +327,23 @@ def test_the_text_report_leads_with_the_verdict_and_the_counts(pack: TaxonomyPac
     assert "authoritative" in text.splitlines()[-1]
 
 
-def test_a_clean_text_report_says_submittable(pack: TaxonomyPack) -> None:
+def test_the_text_report_says_why_rules_were_not_evaluated(pack: TaxonomyPack) -> None:
     # Arrange
-    ret = build_return(RETURN.filter(pl.col("table") == "T01.00.01.01"))
+    ret = build_return(only(T01))
 
     # Act
-    text = render_text(ret, validate_return(ret, pack, ruleset=ruleset(FOOTING)))
+    text = render_text(ret, validate_return(ret, pack, rulebook=book(FOOTING, RWEA_CAP)))
+
+    # Assert
+    assert f"not evaluated because: {REASON_NOT_REPORTED} (1)" in text
+
+
+def test_a_clean_text_report_says_submittable(pack: TaxonomyPack) -> None:
+    # Arrange
+    ret = build_return(only(T01))
+
+    # Act
+    text = render_text(ret, validate_return(ret, pack, rulebook=book(FOOTING)))
 
     # Assert
     assert text.startswith("SUBMITTABLE: TST001")

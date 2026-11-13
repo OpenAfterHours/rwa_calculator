@@ -16,12 +16,26 @@ Commands:
     rwa-filer build FILE --out DIR [--monetary-decimals N] [--zip] [--force]
         Validate a return and write its filing package: the .xbrl instance, a
         .zip where required, and a manifest.
+        With --adjustments FILE --author NAME, apply cell overrides first and
+        record them in the manifest and the audit ledger.
+    rwa-filer signoff MANIFEST --approver NAME --role ROLE
+        Record an approval of a built package, bound to the file's checksum.
+    rwa-filer verify MANIFEST
+        Check that a package on disk is the one that was built and signed off.
+    rwa-filer diff PREVIOUS CURRENT
+        What changed between two versions of a return, cell by cell.
     rwa-filer template --module CODE --reference-date DATE --out FILE [--tables ...]
         Write a blank workbook to fill in and validate.
     rwa-filer taxonomy list
         The packaged taxonomy packs and the dates they apply to.
     rwa-filer taxonomy compile ... --out DIR
         Build a taxonomy pack from the publisher's DPM files.
+    rwa-filer rulebook list
+        The packaged Bank of England rule books: modules, rules, rules enforced.
+    rwa-filer rulebook import WORKBOOK --out DIR [--taxonomy-version V]
+        Build a rule book from one of the Bank's validation-rule workbooks.
+    rwa-filer rulebook check WORKBOOK [--taxonomy-version V]
+        Fail if the packaged rule book is not exactly what the workbook yields.
     rwa-filer rules list
         The packaged rule extracts: framework, publisher, version and counts.
     rwa-filer rules import --publisher {eba,boe} WORKBOOK --out FILE
@@ -40,14 +54,18 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 from rwa_filer import __version__
+from rwa_filer.boe import importer as boe_importer
+from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
 from rwa_filer.model import LEI_SCHEME, CanonicalReturn, ReturnHeader
 from rwa_filer.readers import INSTANCE_SUFFIXES, SUPPORTED_SUFFIXES, SourceReading, load_source
@@ -56,10 +74,17 @@ from rwa_filer.rules.catalogue import EXTRACT_FILES, extract_resource, load_rule
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs, resolve_pack, write_pack
 from rwa_filer.validate.report import render_text, to_record
 from rwa_filer.validate.returns import validate_return
+from rwa_filer.workflow import ledger as audit
+from rwa_filer.workflow.adjustments import apply_adjustments, read_adjustments
+from rwa_filer.workflow.diff import diff_returns
+from rwa_filer.workflow.signoff import SignOffError, read_signoff, sign_off, verify_package
 from rwa_filer.xbrl.writer import InstanceOptions
 
 EXIT_OK = 0
 EXIT_FAILED = 1
+
+#: Changed cells listed by ``diff`` in text form; the JSON form lists them all.
+_DIFF_ROWS_SHOWN = 40
 
 _SOURCE_DESCRIPTION = (
     "{verb} FILE is a long-format fact table (.parquet or .csv), a workbook in the "
@@ -100,8 +125,10 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", metavar="<command>")
     _add_validate_command(commands)
     _add_build_command(commands)
+    _add_workflow_commands(commands)
     _add_template_command(commands)
     _add_taxonomy_commands(commands)
+    _add_rulebook_commands(commands)
     _add_rules_commands(commands)
     return parser
 
@@ -274,21 +301,44 @@ def _add_build_command(commands: argparse._SubParsersAction[argparse.ArgumentPar
         action="store_true",
         help="omit the creation time, so the same return always gives the same bytes",
     )
+    build.add_argument(
+        "--adjustments",
+        type=Path,
+        metavar="FILE",
+        help="cell overrides to apply first (.csv or .parquet: the fact columns plus "
+        "`reason`, and optionally `remove`); needs --author",
+    )
+    build.add_argument("--author", metavar="NAME", help="who is preparing the filing")
+    build.add_argument(
+        "--ledger",
+        type=Path,
+        metavar="FILE",
+        help="the audit ledger to append to (default: <name>.ledger.jsonl beside the files, "
+        "when --author is given)",
+    )
     build.set_defaults(handler=_build)
 
 
 def _build(args: argparse.Namespace) -> int:
     """``rwa-filer build`` — read, validate, write the filing package."""
+    now = datetime.now(UTC)
+    if args.adjustments is not None and not args.author:
+        return _fail("--adjustments needs --author: an override is recorded against a name")
     try:
         source = _load(args)
+        ret, applied = source.ret, ()
+        if args.adjustments is not None:
+            if not args.adjustments.is_file():
+                return _fail(f"file not found: {args.adjustments}")
+            ret, applied = apply_adjustments(ret, read_adjustments(args.adjustments))
         options = InstanceOptions(
             monetary_decimals=args.monetary_decimals,
             percentage_decimals=args.percentage_decimals,
-            created_at=None if args.no_timestamp else datetime.now(UTC),
+            created_at=None if args.no_timestamp else now,
             declare_unreported=args.declare_unreported,
         )
         package = build_filing(
-            source.ret,
+            ret,
             args.out,
             pack=source.pack,
             options=options,
@@ -296,9 +346,11 @@ def _build(args: argparse.Namespace) -> int:
             allow_rule_breaks=args.force,
             always_zip=args.zip,
             source_findings=source.findings,
+            adjustments=applied,
         )
     except (ValueError, PackNotFoundError) as exc:
         return _fail(str(exc))
+    source = replace(source, ret=ret)
 
     _out(render_text(source.ret, package.validation))
     if not package.written:
@@ -320,7 +372,201 @@ def _build(args: argparse.Namespace) -> int:
     if package.zip_path is not None:
         _out(f"Wrote {package.zip_path} — this is the file to upload.")
     _out(f"Wrote {package.manifest_path}")
+    if applied:
+        _out(f"Applied {len(applied)} adjustment(s); each is recorded in the manifest.")
+    if args.author:
+        ledger = args.ledger or package.instance_path.with_name(
+            f"{package.instance_path.stem}{audit.LEDGER_SUFFIX}"
+        )
+        try:
+            if applied:
+                audit.append_entry(
+                    ledger,
+                    audit.EVENT_ADJUSTMENT,
+                    {"adjustments": [item.as_record() for item in applied]},
+                    author=args.author,
+                    at=now,
+                )
+            audit.append_entry(
+                ledger,
+                audit.EVENT_BUILD,
+                {
+                    "instance": package.instance_path.name,
+                    "sha256": hashlib.sha256(instance.content).hexdigest(),
+                    "facts": instance.facts,
+                    "submittable": package.validation.is_submittable,
+                    "forced": bool(args.force),
+                },
+                author=args.author,
+                at=now,
+            )
+        except ValueError as exc:
+            return _fail(str(exc))
+        _out(f"Recorded in {ledger}")
     return EXIT_OK if package.validation.is_submittable else EXIT_FAILED
+
+
+# =============================================================================
+# signoff / verify / diff
+# =============================================================================
+
+
+def _add_workflow_commands(
+    commands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Register ``rwa-filer signoff``, ``verify`` and ``diff``."""
+    signing = commands.add_parser(
+        "signoff",
+        help="record an approval of a built package, bound to the file's checksum",
+        description=(
+            "Record who approved a filing package, in what capacity and when, against the "
+            "SHA-256 of the instance. A file changed afterwards no longer verifies. A package "
+            "the validation found not submittable is signed only with --acknowledge-findings."
+        ),
+    )
+    signing.add_argument("manifest", type=Path, metavar="MANIFEST", help="<name>.manifest.json")
+    signing.add_argument("--approver", required=True, metavar="NAME", help="who approves")
+    signing.add_argument("--role", required=True, metavar="ROLE", help="in what capacity")
+    signing.add_argument("--statement", metavar="TEXT", help="the approver's own words")
+    signing.add_argument(
+        "--acknowledge-findings",
+        action="store_true",
+        help="sign although the validation found something that blocks submission",
+    )
+    signing.add_argument(
+        "--ledger", type=Path, metavar="FILE", help="the audit ledger (default: beside the files)"
+    )
+    signing.set_defaults(handler=_signoff)
+
+    verifying = commands.add_parser(
+        "verify",
+        help="check a package on disk is the one that was built and signed off",
+        description=(
+            "Check that the instance and zip are the files the manifest describes, that the "
+            "sign-off was given for exactly them, and that the audit ledger is intact."
+        ),
+    )
+    verifying.add_argument("manifest", type=Path, metavar="MANIFEST", help="<name>.manifest.json")
+    verifying.add_argument(
+        "--ledger", type=Path, metavar="FILE", help="the audit ledger (default: beside the files)"
+    )
+    verifying.add_argument(
+        "--unsigned", action="store_true", help="do not require a sign-off to be present"
+    )
+    verifying.set_defaults(handler=_verify)
+
+    diffing = commands.add_parser(
+        "diff",
+        help="what changed between two versions of a return",
+        description=(
+            "Compare two returns cell by cell. Each may be any file `validate` reads; the "
+            "header options apply to a fact table, which carries no header of its own."
+        ),
+    )
+    diffing.add_argument("previous", type=Path, metavar="PREVIOUS", help="the earlier version")
+    diffing.add_argument("current", type=Path, metavar="CURRENT", help="the later version")
+    _add_header_arguments(diffing)
+    diffing.add_argument(
+        "--format", choices=["text", "json"], default="text", help="how to print the result"
+    )
+    diffing.set_defaults(handler=_diff)
+
+
+def _ledger_beside(manifest: Path) -> Path:
+    """The default ledger of the package ``manifest`` describes."""
+    base = manifest.name.removesuffix(".manifest.json")
+    return manifest.with_name(f"{base}{audit.LEDGER_SUFFIX}")
+
+
+def _signoff(args: argparse.Namespace) -> int:
+    """``rwa-filer signoff`` — record an approval and note it in the ledger."""
+    manifest: Path = args.manifest
+    ledger = args.ledger or _ledger_beside(manifest)
+    now = datetime.now(UTC)
+    try:
+        if ledger.is_file() and (problems := audit.verify_ledger(ledger)):
+            return _fail(f"the audit ledger does not verify: {problems[0]}")
+        entry = None
+        if ledger.is_file():
+            approval_record = {
+                "manifest": manifest.name,
+                "approver": args.approver,
+                "role": args.role,
+            }
+            entry = audit.append_entry(
+                ledger, audit.EVENT_SIGNOFF, approval_record, author=args.approver, at=now
+            )
+        approval = sign_off(
+            manifest,
+            approver=args.approver,
+            role=args.role,
+            at=now,
+            statement=args.statement,
+            acknowledge_findings=args.acknowledge_findings,
+            ledger_head=entry.hash if entry is not None else None,
+        )
+    except (SignOffError, ValueError) as exc:
+        return _fail(str(exc))
+    noted = " although the validation found blocking findings" if not approval.submittable else ""
+    _out(
+        f"Signed off by {approval.approver} ({approval.role}) at {approval.at}{noted}.\n"
+        f"Instance SHA-256 {approval.instance_sha256}"
+    )
+    return EXIT_OK
+
+
+def _verify(args: argparse.Namespace) -> int:
+    """``rwa-filer verify`` — the package, its sign-off and its ledger."""
+    manifest: Path = args.manifest
+    problems = verify_package(manifest, require_signoff=not args.unsigned)
+    ledger = args.ledger or _ledger_beside(manifest)
+    if args.ledger is not None or ledger.is_file():
+        problems += audit.verify_ledger(ledger)
+        try:
+            approval = read_signoff(manifest)
+        except ValueError:
+            approval = None
+        if approval is not None and approval.ledger_head is not None and not problems:
+            hashes = {entry.hash for entry in audit.read_ledger(ledger)}
+            if approval.ledger_head not in hashes:
+                problems.append("the audit ledger is not the one the sign-off was recorded in")
+    if problems:
+        for problem in problems:
+            _out(f"FAILED  {problem}")
+        return EXIT_FAILED
+    _out(f"ok      {manifest.name}: the files, the sign-off and the ledger agree")
+    return EXIT_OK
+
+
+def _diff(args: argparse.Namespace) -> int:
+    """``rwa-filer diff`` — two versions of a return, cell by cell."""
+    try:
+        previous = _load(argparse.Namespace(**{**vars(args), "file": args.previous})).ret
+        current = _load(argparse.Namespace(**{**vars(args), "file": args.current})).ret
+    except (ValueError, PackNotFoundError) as exc:
+        return _fail(str(exc))
+    difference = diff_returns(previous, current)
+    if args.format == "json":
+        _out(json.dumps(difference.as_record(), indent=2))
+        return EXIT_OK if difference.is_identical else EXIT_FAILED
+
+    counts = difference.counts()
+    _out(
+        f"{'IDENTICAL' if difference.is_identical else 'DIFFERENT'}: {counts['changed']} changed, "
+        f"{counts['added']} added, {counts['removed']} removed, {difference.unchanged} unchanged"
+    )
+    for name, (before, after) in difference.header.items():
+        _out(f"  header  {name}: {before} -> {after}")
+    for row in difference.changes.head(_DIFF_ROWS_SHOWN).iter_rows(named=True):
+        sheet = f"[z{row['sheet']}]" if row["sheet"] else ""
+        key = f"[{row['open_key']}]" if row["open_key"] else ""
+        cell = f"{row['table']}{sheet}{key}[r{row['row']}][c{row['column']}]"
+        before = row["before"] if row["before"] is not None else row["before_text"]
+        after = row["after"] if row["after"] is not None else row["after_text"]
+        _out(f"  {row['change']:<8}{cell}: {before} -> {after}")
+    if difference.changes.height > _DIFF_ROWS_SHOWN:
+        _out(f"  ... and {difference.changes.height - _DIFF_ROWS_SHOWN} more (use --format json)")
+    return EXIT_OK if difference.is_identical else EXIT_FAILED
 
 
 # =============================================================================
@@ -443,6 +689,93 @@ def _taxonomy_compile(args: argparse.Namespace) -> int:
 # =============================================================================
 # rules
 # =============================================================================
+
+
+def _add_rulebook_commands(
+    commands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Register ``rwa-filer rulebook ...``."""
+    rulebook = commands.add_parser(
+        "rulebook", help="inspect and rebuild the packaged Bank of England rule books"
+    )
+    rulebook.set_defaults(handler=lambda _args: _print_help(rulebook))
+    actions = rulebook.add_subparsers(dest="rulebook_command", metavar="<action>")
+
+    listing = actions.add_parser("list", help="show the packaged rule books")
+    listing.set_defaults(handler=_rulebook_list)
+
+    for name, description, handler in (
+        ("import", "build a rule book from a validation-rule workbook", _rulebook_import),
+        (
+            "check",
+            "fail if the packaged rule book is not what the workbook yields",
+            _rulebook_check,
+        ),
+    ):
+        action = actions.add_parser(name, help=description)
+        action.add_argument("workbook", type=Path, metavar="WORKBOOK", help="the workbook (.xlsx)")
+        action.add_argument(
+            "--taxonomy-version",
+            metavar="V",
+            help="the taxonomy release, e.g. 4.1.1 (default: the version in the file name)",
+        )
+        if name == "import":
+            action.add_argument(
+                "--out", required=True, type=Path, metavar="DIR", help="where to write it"
+            )
+        action.set_defaults(handler=handler)
+
+
+def _rulebook_list(_args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook list`` — one line per packaged rule book and module."""
+    _out(f"{'framework version':<26}{'taxonomy':<10}{'rules':>7}  {'module':<10}{'enforced':>9}")
+    for name in available_rulebooks():
+        rulebook = load_rulebook(name)
+        for module in rulebook.modules:
+            _out(
+                f"{rulebook.framework_version:<26}{rulebook.taxonomy:<10}"
+                f"{len(rulebook.rules):>7}  {module:<10}{len(rulebook.enforced(module)):>9}"
+            )
+    return EXIT_OK
+
+
+def _read_rulebook(args: argparse.Namespace) -> dict[str, Any]:
+    """Import the command's WORKBOOK.
+
+    Raises:
+        ValueError: the workbook is missing or is not a rule workbook.
+    """
+    workbook: Path = args.workbook
+    if not workbook.is_file():
+        raise ValueError(f"workbook not found: {workbook}")
+    return boe_importer.import_workbook(workbook, taxonomy_version=args.taxonomy_version)
+
+
+def _rulebook_import(args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook import`` — write a rule book."""
+    try:
+        rulebook = _read_rulebook(args)
+    except ValueError as exc:
+        return _fail(str(exc))
+    path = args.out / boe_importer.rulebook_file_name(rulebook)
+    boe_importer.write_rulebook(rulebook, path)
+    _out(f"wrote {path} ({len(rulebook['rules'])} rules)")
+    return EXIT_OK
+
+
+def _rulebook_check(args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook check`` — compare the packaged rule book with its workbook."""
+    try:
+        rulebook = _read_rulebook(args)
+    except ValueError as exc:
+        return _fail(str(exc))
+    name = boe_importer.rulebook_file_name(rulebook)
+    packaged = Path(str(boe_importer.__file__)).parent / RULEBOOKS_DIRECTORY / name
+    if boe_importer.is_rulebook_current(rulebook, packaged):
+        _out(f"ok    packaged rule book {name}")
+        return EXIT_OK
+    state = "out of date" if packaged.is_file() else "missing"
+    return _fail(f"packaged rule book {name} is {state}: it does not match {args.workbook.name}")
 
 
 def _add_rules_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

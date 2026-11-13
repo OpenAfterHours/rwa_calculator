@@ -74,10 +74,13 @@ def pack() -> dict[str, Any]:
     annotated = _first(root, "*Annotated Templates*Banking Reporting.xlsx")
     dictionary = _first(root, "*DPM dictionary*.xlsx")
     taxonomy = _taxonomy_package(root)
-    assert annotated and dictionary and taxonomy, (
-        f"RWA_FILER_BOE_DIR={root} must hold the annotated workbook, the dictionary workbook "
-        f"and the taxonomy package; found {annotated}, {dictionary}, {taxonomy}"
-    )
+    if not (annotated and dictionary and taxonomy):
+        # Other opt-in tests share the variable and need only the sample
+        # instances, so a directory without the compiler's inputs is a skip.
+        pytest.skip(
+            f"RWA_FILER_BOE_DIR={root} does not hold the annotated workbook, the dictionary "
+            f"workbook and the taxonomy package (found {annotated}, {dictionary}, {taxonomy})"
+        )
     return compiler.compile_pack(annotated, dictionary, taxonomy, module="PRA001")
 
 

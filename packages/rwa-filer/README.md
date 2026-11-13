@@ -3,6 +3,10 @@
 Validate regulatory returns against the published supervisory rules and write
 them in the format the regulator accepts.
 
+It carries the Bank of England's validation rules for banking taxonomy v4.1.1
+and evaluates them as the Bank's gateway does, for 14 reporting modules
+(`PRA001`, `PRA116`, Capital+, leverage, MREL and financial statements).
+
 `rwa-filer` is a standalone package. It lives in the
 [rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator) repository as a
 uv workspace member and is released separately from `rwa-calc`: it depends on
@@ -22,6 +26,13 @@ rwa-filer validate return.parquet \
 # Validate it and write the XBRL submission file, with a manifest
 rwa-filer build return.parquet --out filing/ \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+
+# Record an approval against the file's checksum, and check it before upload
+rwa-filer signoff filing/<name>.manifest.json --approver "C. Approver" --role "Head of Reporting"
+rwa-filer verify filing/<name>.manifest.json
+
+# What changed since the version already filed
+rwa-filer diff filed.xbrl resubmission.xbrl
 
 # A blank workbook in the template layout, to fill in and validate
 rwa-filer template --module PRA001 --reference-date 2027-03-31 --out return.xlsx

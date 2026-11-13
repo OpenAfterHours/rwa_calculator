@@ -8,8 +8,9 @@ Pipeline position:
 What is pinned here is the one decision this calculator makes for itself: a
 return that is MISSING figures is not written unless the caller asks, and then
 says exactly what it left out. Whether the placed figures may be filed is
-``rwa-filer``'s decision and is tested there. Frames are synthetic; the two
-facts used throughout are a real, rule-clean pair of OF 07.00 cells.
+``rwa-filer``'s decision and is tested there. Frames are synthetic, in real
+OF 07.00 cells: one reported zero, which every rule that reads it accepts, and
+an exposure with a value adjustment, which breaks a published rule.
 
 References:
 - src/rwa_calc/reporting/filing/package.py — the adapter under test
@@ -34,9 +35,14 @@ FRAMEWORK = "BASEL_3_1"
 LEI = "5493001KJTIIGC8Y1R12"
 HEADER = ReturnHeader(LEI, date(2027, 3, 31), "PRA001")
 
-#: OF 07.00, corporates: original exposure and value adjustments. The published
-#: rules that can run on these two cells pass.
-CLEAN = {"0010": {"0010": 1_000_000.0, "0030": -5_000.0}}
+#: OF 07.00, corporates: original exposure, reported as zero. Every published
+#: rule that reads the cell runs, and holds.
+CLEAN = {"0010": {"0010": 0.0}}
+
+#: Original exposure and value adjustments, and nothing else. A broken rule: the
+#: exposure net of adjustments (column 0040) is unreported, so zero to the
+#: regulator, and 995,000 is not zero.
+FIGURES = {"0010": {"0010": 1_000_000.0, "0030": -5_000.0}}
 
 
 def build(tmp_path: Path, cells: dict[str, dict[str, float]], **options: Any) -> FilingOutcome:
@@ -57,8 +63,8 @@ def test_a_complete_clean_estate_is_written_and_is_submittable(tmp_path: Path) -
 
 def test_the_written_file_carries_the_generated_figures(tmp_path: Path) -> None:
     """Read back with the instance reader: the cells and the values that went in."""
-    # Act
-    outcome = build(tmp_path, CLEAN)
+    # Act — written whatever the rule verdict, to read it back.
+    outcome = build(tmp_path, FIGURES, allow_rule_breaks=True)
     assert outcome.package is not None and outcome.package.instance_path is not None
     back = read_instance(outcome.package.instance_path)
 
@@ -117,19 +123,13 @@ def test_a_zero_with_no_place_does_not_make_the_estate_incomplete(tmp_path: Path
     assert outcome.is_complete and outcome.written
 
 
-def test_rule_checks_that_do_not_pass_stop_the_file_unless_overridden(tmp_path: Path) -> None:
-    """One cell of OF 02.00 on its own: no published rule can run on it (VAL003)."""
-    # Arrange
-    corep = build_corep(
-        FRAMEWORK,
-        c07_00={"corporate": build_frame(CLEAN)},
-        c_02_00=build_frame({"0010": {"0010": 1_234_567.89}}),
-    )
-
+def test_a_broken_rule_stops_the_file_unless_overridden(tmp_path: Path) -> None:
     # Act
-    stopped = build_filing_package(corep, HEADER, tmp_path / "stopped")
-    forced = build_filing_package(corep, HEADER, tmp_path / "forced", allow_rule_breaks=True)
+    stopped = build(tmp_path / "stopped", FIGURES)
+    forced = build(tmp_path / "forced", FIGURES, allow_rule_breaks=True)
 
     # Assert
     assert not stopped.written and stopped.blocked_by == "rules"
+    assert stopped.package is not None
+    assert "VAL001" in [finding.code for finding in stopped.package.validation.rules]
     assert forced.written and not forced.is_submittable

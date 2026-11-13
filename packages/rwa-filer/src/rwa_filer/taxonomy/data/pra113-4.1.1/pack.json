@@ -1,0 +1,2087 @@
+{
+ "dimensions": {
+  "boe_dim:AEV": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Approach applied in equivalent exposure value calculation",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APE": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Effect of application of specific legal provisions",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APR": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Approach for prudential purposes",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:BAS": {
+   "default": "eba_BA:x0",
+   "domain": "eba_BA",
+   "kind": "explicit",
+   "label": "Base",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CNO": {
+   "default": "eba_BT:x0",
+   "domain": "eba_BT",
+   "kind": "explicit",
+   "label": "Controlling and non-controlling owners",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CPS": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Counterparty sector",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:EXC": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Exposure class",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:IMS": {
+   "default": "eba_IM:x0",
+   "domain": "eba_IM",
+   "kind": "explicit",
+   "label": "Impairment status",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:INV": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Significant investments",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCB": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Instrument",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCL": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category that generates the deferred tax liability",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCU": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category of the underlying",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCY": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MRW": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Methods to determine risk weights",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:OFS": {
+   "default": "eba_OF:x0",
+   "domain": "eba_OF",
+   "kind": "explicit",
+   "label": "Own funds",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PRP": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Prudential portfolio",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:REF": {
+   "default": "eba_RF:x0",
+   "domain": "eba_RF",
+   "kind": "explicit",
+   "label": "Reference date or period",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RPR": {
+   "default": "eba_RP:x0",
+   "domain": "eba_RP",
+   "kind": "explicit",
+   "label": "Related parties/Relationships",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RWS": {
+   "default": "eba_PC:x0",
+   "domain": "eba_PC",
+   "kind": "explicit",
+   "label": "Risk weights",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:SCO": {
+   "default": "eba_SC:x0",
+   "domain": "eba_SC",
+   "kind": "explicit",
+   "label": "Scope of consolidation",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TOF": {
+   "default": "eba_OF:x0",
+   "domain": "eba_OF",
+   "kind": "explicit",
+   "label": "Transitionally treated as in Own Funds",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TRI": {
+   "default": "eba_TR:x0",
+   "domain": "eba_TR",
+   "kind": "explicit",
+   "label": "Type of risk",
+   "typed_element": null,
+   "typed_type": null
+  }
+ },
+ "enumerations": {
+  "eba_CU:boe_CU600": [
+   "eba_CU:GBP",
+   "eba_CU:EUR",
+   "eba_CU:CAD",
+   "eba_CU:USD",
+   "eba_CU:CHF",
+   "eba_CU:JPY",
+   "eba_CU:SEK"
+  ],
+  "eba_SC:boe_SC600": [
+   "boe_eba_SC:x6000",
+   "boe_eba_SC:x6001",
+   "boe_eba_SC:x6002",
+   "boe_eba_SC:x6003",
+   "boe_eba_SC:x6006"
+  ]
+ },
+ "format": 1,
+ "info": {
+  "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/capital_plus/2026-02-27/mod/pra113.xsd",
+  "irregularities": [
+   "CP01.00.05.01: annotation states the default member eba_dim:OFS=eba_OF:x0 (dropped)",
+   "CP01.00.05.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)",
+   "CP02.00.05.01: annotation states the default member eba_dim:APR=eba_AP:x0 (dropped)",
+   "CP02.00.05.01: annotation states the default member eba_dim:MCY=eba_MC:x0 (dropped)",
+   "CP02.00.05.01: annotation states the default member eba_dim:PRP=eba_PL:x0 (dropped)",
+   "CP02.00.05.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)",
+   "CP02.00.05.01: annotation states the default member eba_dim:TRI=eba_TR:x0 (dropped)",
+   "CP02.00.05.01: 5 cells repeat the data point of another cell of this table",
+   "CP02.00.05.01: 5 cells greyed in the workbook are accepted by the definition linkbase and are emitted as 'linkbase' cells: r0060/c0030, r0060/c0050, r0060/c0070, r0060/c0090, r0060/c0100",
+   "CP04.00.05.01: annotation states the default member eba_dim:IMS=eba_IM:x0 (dropped)",
+   "CP04.00.05.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)",
+   "CP05.01.05.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)",
+   "CP701.00.05.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)"
+  ],
+  "module": "PRA113",
+  "sources": {
+   "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Capital Plus.xlsx",
+   "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
+   "taxonomy_package": "boe411.zip"
+  },
+  "taxonomy": "boe-banking",
+  "title": "PRA113 Capital+ forecast semi annual",
+  "valid_from": "2026-02-27",
+  "valid_to": null,
+  "version": "4.1.1"
+ },
+ "metrics": {
+  "boe_met:di6003": {
+   "enumeration": null,
+   "label": "Reporting period start date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:di6004": {
+   "enumeration": null,
+   "label": "Reporting period end date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:ei6006": {
+   "enumeration": "eba_CU:boe_CU600",
+   "label": "Reporting currency",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei6007": {
+   "enumeration": "eba_SC:boe_SC600",
+   "label": "Basis of reporting",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:mi10099": {
+   "enumeration": null,
+   "label": "Output floor adjustment (OF-ADJ)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi6000": {
+   "enumeration": null,
+   "label": "Amount applying only a deduction treatment of (100%) to holdings of own funds instruments",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi6001": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount applying only a deduction treatment of (100%) to holdings of own funds instruments",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:pi10061": {
+   "enumeration": null,
+   "label": "Output Floor multiplier",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "boe_met:si6002": {
+   "enumeration": null,
+   "label": "Entity code",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6005": {
+   "enumeration": null,
+   "label": "Additional notes",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:md103": {
+   "enumeration": null,
+   "label": "Current period (flow)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi1": {
+   "enumeration": null,
+   "label": "10% CET1 threshold",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi184": {
+   "enumeration": null,
+   "label": "Own funds requirements",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi2": {
+   "enumeration": null,
+   "label": "17.65% CET1 threshold",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi212": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi213": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount after CAP",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi235": {
+   "enumeration": null,
+   "label": "Total risk exposure amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi237": {
+   "enumeration": null,
+   "label": "Total risk exposure amount, Risk weighted exposure amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi243": {
+   "enumeration": null,
+   "label": "Transitional computable amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi284": {
+   "enumeration": null,
+   "label": "Threshold for holdings in relevant entities where an institution does not have a significant investment",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi53": {
+   "enumeration": null,
+   "label": "Carrying amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi76": {
+   "enumeration": null,
+   "label": "Computable amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi79": {
+   "enumeration": null,
+   "label": "Computable amount, net",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi81": {
+   "enumeration": null,
+   "label": "Amount including transitional provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:si168": {
+   "enumeration": null,
+   "label": "Name of entity",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si288": {
+   "enumeration": null,
+   "label": "LEI code",
+   "period": "instant",
+   "type": "string"
+  }
+ },
+ "namespaces": {
+  "boe_dim": "http://www.bankofengland.co.uk/data/xbrl/dict/dim",
+  "boe_eba_AP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_AP",
+  "boe_eba_MC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_MC",
+  "boe_eba_RF": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_RF",
+  "boe_eba_RP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_RP",
+  "boe_eba_SC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_SC",
+  "boe_eba_TR": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_TR",
+  "boe_met": "http://www.bankofengland.co.uk/data/xbrl/dict/met",
+  "eba_AP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AP",
+  "eba_BA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BA",
+  "eba_BT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BT",
+  "eba_CT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CT",
+  "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+  "eba_EC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/EC",
+  "eba_IM": "http://www.eba.europa.eu/xbrl/crr/dict/dom/IM",
+  "eba_MC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/MC",
+  "eba_OF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/OF",
+  "eba_PC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PC",
+  "eba_PL": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PL",
+  "eba_RF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RF",
+  "eba_RP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RP",
+  "eba_SC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/SC",
+  "eba_TR": "http://www.eba.europa.eu/xbrl/crr/dict/dom/TR",
+  "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
+  "eba_met": "http://www.eba.europa.eu/xbrl/crr/dict/met"
+ },
+ "tables": {
+  "CP01.00.05.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "CP01.00.05",
+   "group": "CP01.00.05",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "OWN FUNDS"
+    ],
+    [
+     "0015",
+     "TIER 1 CAPITAL"
+    ],
+    [
+     "0020",
+     "COMMON EQUITY TIER 1 (CET1) CAPITAL"
+    ],
+    [
+     "0030",
+     "Capital instruments eligible as CET1 Capital"
+    ],
+    [
+     "0040",
+     "Fully Paid up capital instruments"
+    ],
+    [
+     "0045",
+     "Of which: Capital instruments subscribed by public authorities in emergency situations"
+    ],
+    [
+     "0050",
+     "Memorandum item: Capital instruments not eligible"
+    ],
+    [
+     "0060",
+     "Share premium"
+    ],
+    [
+     "0070",
+     "(-) Own CET1 instruments"
+    ],
+    [
+     "0080",
+     "(-) Direct holdings of CET1 instruments"
+    ],
+    [
+     "0090",
+     "(-) Indirect holdings of CET1 instruments"
+    ],
+    [
+     "0091",
+     "(-) Synthetic holdings of CET1 instruments"
+    ],
+    [
+     "0092",
+     "(-) Actual or contingent obligations to purchase own CET1 instruments"
+    ],
+    [
+     "0130",
+     "Retained earnings"
+    ],
+    [
+     "0140",
+     "Previous years retained earnings"
+    ],
+    [
+     "0150",
+     "Profit or loss eligible"
+    ],
+    [
+     "0160",
+     "Profit or loss attributable to owners of the parent"
+    ],
+    [
+     "0170",
+     "(-) Part of interim or year-end profit not eligible"
+    ],
+    [
+     "0180",
+     "Accumulated other comprehensive income"
+    ],
+    [
+     "0200",
+     "Other reserves"
+    ],
+    [
+     "0210",
+     "Funds for general banking risk"
+    ],
+    [
+     "0220",
+     "Transitional adjustments due to grandfathered CET1 Capital instruments"
+    ],
+    [
+     "0230",
+     "Minority interest given recognition in CET1 capital"
+    ],
+    [
+     "0240",
+     "Transitional adjustments due to additional minority interests"
+    ],
+    [
+     "0250",
+     "Adjustments to CET1 due to prudential filters"
+    ],
+    [
+     "0260",
+     "(-) Increases in equity resulting from securitised assets"
+    ],
+    [
+     "0270",
+     "Cash flow hedge reserve"
+    ],
+    [
+     "0280",
+     "Cumulative gains and losses due to changes in own credit risk on fair valued liabilities"
+    ],
+    [
+     "0285",
+     "Fair value gains and losses arising from the institution's own credit risk related to derivative liabilities"
+    ],
+    [
+     "0290",
+     "(-) Value adjustments due to the requirements for prudent valuation"
+    ],
+    [
+     "0300",
+     "(-) Goodwill"
+    ],
+    [
+     "0310",
+     "(-) Goodwill accounted for as intangible asset"
+    ],
+    [
+     "0320",
+     "(-) Goodwill included in the valuation of significant investments"
+    ],
+    [
+     "0330",
+     "Deferred tax liabilities associated to goodwill"
+    ],
+    [
+     "0335",
+     "Accounting revaluation of subsidiaries' goodwill derived from the consolidation of subsidiaries attributable to third persons"
+    ],
+    [
+     "0340",
+     "(-) Other intangible assets"
+    ],
+    [
+     "0350",
+     "(-) Other intangible assets before deduction of deferred tax liabilities"
+    ],
+    [
+     "0360",
+     "Deferred tax liabilities associated to other intangible assets"
+    ],
+    [
+     "0365",
+     "Accounting revaluation of subsidiaries' other intangible assets derived from the consolidation of subsidiaries attributable to third persons"
+    ],
+    [
+     "0370",
+     "(-) Deferred tax assets that rely on future profitability and do not arise from temporary differences net of associated tax liabilities"
+    ],
+    [
+     "0380",
+     "(-) Internal Ratings Based (IRB) shortfall of credit risk adjustments to expected losses"
+    ],
+    [
+     "0390",
+     "(-) Defined benefit pension fund assets"
+    ],
+    [
+     "0400",
+     "(-) Defined benefit pension fund assets"
+    ],
+    [
+     "0410",
+     "Deferred tax liabilities associated to defined benefit pension fund assets"
+    ],
+    [
+     "0420",
+     "Defined benefit pension fund assets which the institution has an unrestricted ability to use"
+    ],
+    [
+     "0430",
+     "(-) Reciprocal cross holdings in CET1 Capital"
+    ],
+    [
+     "0440",
+     "(-) Excess of deduction from Additional Tier 1 (AT1) items over AT1 Capital"
+    ],
+    [
+     "0450",
+     "(-) Qualifying holdings outside the financial sector which can alternatively be subject to a 1250% risk weight"
+    ],
+    [
+     "0460",
+     "(-) Securitisation positions which can alternatively be subject to a 1250% risk weight"
+    ],
+    [
+     "0470",
+     "(-) Free deliveries which can alternatively be subject to a 1250% risk weight"
+    ],
+    [
+     "0471",
+     "(-) Positions in a basket for which an institution cannot determine the risk weight under the IRB approach, and can alternatively be subject to a 1250% risk weight"
+    ],
+    [
+     "0472",
+     "(-) Equity exposures under an internal models approach which can alternatively be subject to a 1250% risk weight"
+    ],
+    [
+     "0480",
+     "(-) CET1 instruments of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0490",
+     "(-) Deductible deferred tax assets that rely on future profitability and arise from temporary differences"
+    ],
+    [
+     "0500",
+     "(-) CET1 instruments of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0510",
+     "(-) Amount exceeding the 17.65% threshold"
+    ],
+    [
+     "0511",
+     "(-) Amount exceeding the 17.65% threshold related to CET1 instruments of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0512",
+     "(-) Amount exceeding the 17.65% threshold related to deferred tax assets arising from temporary differences"
+    ],
+    [
+     "0515",
+     "(-) Other foreseeable tax charges"
+    ],
+    [
+     "0520",
+     "Other transitional adjustments to CET1 Capital"
+    ],
+    [
+     "0524",
+     "(-) Additional deductions of CET1 Capital due to Article 3 CRR"
+    ],
+    [
+     "0529",
+     "CET1 capital elements or deductions - other"
+    ],
+    [
+     "0530",
+     "ADDITIONAL TIER 1 (AT1) CAPITAL"
+    ],
+    [
+     "0540",
+     "Capital instruments eligible as AT1 Capital"
+    ],
+    [
+     "0551",
+     "Fully Paid up, directly issued capital instruments"
+    ],
+    [
+     "0560",
+     "Memorandum item: Capital instruments not eligible"
+    ],
+    [
+     "0571",
+     "Share premium"
+    ],
+    [
+     "0580",
+     "(-) Own AT1 instruments"
+    ],
+    [
+     "0590",
+     "(-) Direct holdings of AT1 instruments"
+    ],
+    [
+     "0620",
+     "(-) Indirect holdings of AT1 instruments"
+    ],
+    [
+     "0621",
+     "(-) Synthetic holdings of AT1 instruments"
+    ],
+    [
+     "0622",
+     "(-) Actual or contingent obligations to purchase own AT1 instruments"
+    ],
+    [
+     "0660",
+     "Transitional adjustments due to grandfathered AT1 Capital instruments"
+    ],
+    [
+     "0670",
+     "Instruments issued by subsidiaries that are given recognition in AT1 Capital"
+    ],
+    [
+     "0680",
+     "Transitional adjustments due to additional recognition in AT1 Capital of instruments issued by subsidiaries"
+    ],
+    [
+     "0690",
+     "(-) Reciprocal cross holdings in AT1 Capital"
+    ],
+    [
+     "0700",
+     "(-) AT1 instruments of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0710",
+     "(-) AT1 instruments of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0720",
+     "(-) Excess of deduction from T2 items over T2 Capital"
+    ],
+    [
+     "0730",
+     "Other transitional adjustments to AT1 Capital"
+    ],
+    [
+     "0740",
+     "Excess of deduction from AT1 items over AT1 Capital (deducted in CET1)"
+    ],
+    [
+     "0744",
+     "(-) Additional deductions of AT1 Capital due to Article 3 CRR"
+    ],
+    [
+     "0748",
+     "AT1 capital elements or deductions - other"
+    ],
+    [
+     "0750",
+     "TIER 2 (T2) CAPITAL"
+    ],
+    [
+     "0760",
+     "Capital instruments eligible as T2 Capital"
+    ],
+    [
+     "0771",
+     "Fully Paid up, directly issued capital instruments"
+    ],
+    [
+     "0780",
+     "Memorandum item: Capital instruments not eligible"
+    ],
+    [
+     "0791",
+     "Share premium"
+    ],
+    [
+     "0800",
+     "(-) Own T2 instruments"
+    ],
+    [
+     "0810",
+     "(-) Direct holdings of T2 instruments"
+    ],
+    [
+     "0840",
+     "(-) Indirect holdings of T2 instruments"
+    ],
+    [
+     "0841",
+     "(-) Synthetic holdings of T2 instruments"
+    ],
+    [
+     "0842",
+     "(-) Actual or contingent obligations to purchase own T2 instruments"
+    ],
+    [
+     "0880",
+     "Transitional adjustments due to grandfathered T2 Capital instruments"
+    ],
+    [
+     "0890",
+     "Instruments issued by subsidiaries that are given recognition in T2 Capital"
+    ],
+    [
+     "0900",
+     "Transitional adjustments due to additional recognition in T2 Capital of instruments issued by subsidiaries"
+    ],
+    [
+     "0910",
+     "IRB Excess of provisions over expected losses eligible"
+    ],
+    [
+     "0920",
+     "SA General credit risk adjustments"
+    ],
+    [
+     "0930",
+     "(-) Reciprocal cross holdings in T2 Capital"
+    ],
+    [
+     "0940",
+     "(-) T2 instruments of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0950",
+     "(-) T2 instruments of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0955",
+     "(-) Excess of deductions from eligible liabilities over eligible liabilities"
+    ],
+    [
+     "0960",
+     "Other transitional adjustments to T2 Capital"
+    ],
+    [
+     "0970",
+     "Excess of deduction from T2 items over T2 Capital (deducted in AT1)"
+    ],
+    [
+     "0974",
+     "(-) Additional deductions of T2 Capital due to Article 3 CRR"
+    ],
+    [
+     "0978",
+     "T2 capital elements or deductions - other"
+    ]
+   ],
+   "title": "Own funds (CA1)",
+   "z": []
+  },
+  "CP02.00.05.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "CP02.00.05",
+   "group": "CP02.00.05",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "TOTAL RISK EXPOSURE AMOUNT"
+    ],
+    [
+     "0020",
+     "Of which: Investment firms under Article 95 paragraph 2 and Article 98 of CRR"
+    ],
+    [
+     "0030",
+     "Of which : Investment firms under Article 96 paragraph 2 and Article 97 of CRR"
+    ],
+    [
+     "0031",
+     "TOTAL RISK EXPOSURE AMOUNT - OUTPUT FLOOR (WITH MULTIPLIER AND ADJUSTMENT)"
+    ],
+    [
+     "0032",
+     "Relevant Multiplier"
+    ],
+    [
+     "0033",
+     "Total risk exposure amount using standardised approaches (output floor - pre-multiplier)"
+    ],
+    [
+     "0034",
+     "Of which: credit risk (excluding counterparty credit risk)"
+    ],
+    [
+     "0035",
+     "Of which: counterparty credit risk"
+    ],
+    [
+     "0039",
+     "Of which: credit valuation adjustment"
+    ],
+    [
+     "0036",
+     "Of which: securitisation exposures in the banking book"
+    ],
+    [
+     "0037",
+     "Of which: market risk (*calculated across whole portfolio)"
+    ],
+    [
+     "0800",
+     "Of which: residual RWA"
+    ],
+    [
+     "0038",
+     "Output Floor Adjustment (OF-ADJ)"
+    ],
+    [
+     "0040",
+     "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES"
+    ],
+    [
+     "0050",
+     "Standardised approach (SA)"
+    ],
+    [
+     "0051",
+     "Of which: Additional stricter prudential requirements based on Art. 124"
+    ],
+    [
+     "0060",
+     "SA exposure classes excluding securitisation positions"
+    ],
+    [
+     "0070",
+     "Central governments or central banks"
+    ],
+    [
+     "0080",
+     "Regional governments or local authorities"
+    ],
+    [
+     "0090",
+     "Public sector entities"
+    ],
+    [
+     "0100",
+     "Multilateral Development Banks"
+    ],
+    [
+     "0110",
+     "International Organisations"
+    ],
+    [
+     "0120",
+     "Institutions"
+    ],
+    [
+     "0130",
+     "Corporates"
+    ],
+    [
+     "0140",
+     "Retail"
+    ],
+    [
+     "0150",
+     "Real estate exposures"
+    ],
+    [
+     "0160",
+     "Exposures in default"
+    ],
+    [
+     "0170",
+     "Exposures associated with particular high risk"
+    ],
+    [
+     "0180",
+     "Eligible covered bonds"
+    ],
+    [
+     "0200",
+     "Collective investments undertakings (CIU)"
+    ],
+    [
+     "0210",
+     "Subordinated debt, equity and other own funds instruments"
+    ],
+    [
+     "0211",
+     "Other items"
+    ],
+    [
+     "0240",
+     "Internal ratings based Approach(IRB)"
+    ],
+    [
+     "0250",
+     "Exposures subject to FIRB"
+    ],
+    [
+     "0272",
+     "Institutions"
+    ],
+    [
+     "0290",
+     "Corporates - Specialised Lending exposures"
+    ],
+    [
+     "0295",
+     "Corporates - Financial and Large Corporates"
+    ],
+    [
+     "0296",
+     "Corporates - Other SME"
+    ],
+    [
+     "0297",
+     "Corporates - Other non-SME"
+    ],
+    [
+     "0310",
+     "Exposures subject to AIRB"
+    ],
+    [
+     "0350",
+     "Corporates - Specialised Lending exposures"
+    ],
+    [
+     "0355",
+     "Corporates - Other SME"
+    ],
+    [
+     "0356",
+     "Corporates - Other non-SME"
+    ],
+    [
+     "0382",
+     "Retail - Secured by residential immovable property SME"
+    ],
+    [
+     "0383",
+     "Retail - Secured by residential immovable property non-SME"
+    ],
+    [
+     "0384",
+     "Retail - Secured by commercial immovable property SME"
+    ],
+    [
+     "0385",
+     "Retail - Secured by commercial immovable property non-SME"
+    ],
+    [
+     "0390",
+     "Retail - Qualifying revolving"
+    ],
+    [
+     "0400",
+     "Retail - Other SME"
+    ],
+    [
+     "0410",
+     "Retail - Other non-SME"
+    ],
+    [
+     "0411",
+     "Exposures subject to slotting"
+    ],
+    [
+     "0412",
+     "Project Finance exposures"
+    ],
+    [
+     "0413",
+     "Object Finance exposures"
+    ],
+    [
+     "0414",
+     "Commodities Finance exposures"
+    ],
+    [
+     "0415",
+     "Income Producing Real Estate (IPRE) exposures"
+    ],
+    [
+     "0416",
+     "High-Volatility Commercial Real Estate (HVCRE) exposures"
+    ],
+    [
+     "0450",
+     "Other non credit-obligation assets"
+    ],
+    [
+     "0460",
+     "Risk exposure amount for contributions to the default fund of a CCP"
+    ],
+    [
+     "0470",
+     "Securitisation positions"
+    ],
+    [
+     "0490",
+     "TOTAL RISK EXPOSURE AMOUNT FOR SETTLEMENT/DELIVERY"
+    ],
+    [
+     "0500",
+     "Settlement/delivery risk in the non-Trading book"
+    ],
+    [
+     "0510",
+     "Settlement/delivery risk in the Trading book"
+    ],
+    [
+     "0520",
+     "TOTAL RISK EXPOSURE AMOUNT FOR POSITION, FOREIGN EXCHANGE AND COMMODITIES RISKS"
+    ],
+    [
+     "0530",
+     "Risk exposure amount for position, foreign exchange and commodities risks under standardised approaches (SA)"
+    ],
+    [
+     "0540",
+     "Traded debt instruments"
+    ],
+    [
+     "0550",
+     "Equity"
+    ],
+    [
+     "0555",
+     "Particular approach for position risk in CIUs"
+    ],
+    [
+     "0556",
+     "Memo item: CIUs exclusively invested in traded debt instruments"
+    ],
+    [
+     "0557",
+     "Memo item: CIUs invested exclusively in equity instruments or in mixed instruments"
+    ],
+    [
+     "0560",
+     "Foreign Exchange"
+    ],
+    [
+     "0570",
+     "Commodities"
+    ],
+    [
+     "0575",
+     "Risk exposure amount for position, foreign exchange and commodities risks under advanced standardised approaches (ASA) - for ASA desks"
+    ],
+    [
+     "0576",
+     "Sensitivity-based method (SBM)"
+    ],
+    [
+     "0577",
+     "Default risk capital (DRC)"
+    ],
+    [
+     "0578",
+     "Residual risk add-on (RRAO)"
+    ],
+    [
+     "0580",
+     "Risk exposure amount for position, foreign exchange and commodities risks under internal model approach (IMA) - for IMA desks"
+    ],
+    [
+     "0581",
+     "Expected Shortfall (ES)"
+    ],
+    [
+     "0582",
+     "Stress Scenario (SS)"
+    ],
+    [
+     "0583",
+     "Default risk charge (DRC)"
+    ],
+    [
+     "0584",
+     "Capital Surcharge"
+    ],
+    [
+     "0585",
+     "Risk-not-in-Model (RNIM)"
+    ],
+    [
+     "0586",
+     "TOTAL RISK EXPOSURE AMOUNT FOR CAPITAL CHARGE DUE TO SWITCHING POSITIONS BETWEEN TRADING AND NON-TRADING BOOK"
+    ],
+    [
+     "0590",
+     "TOTAL RISK EXPOSURE AMOUNT FOR OPERATIONAL RISK (OpR )"
+    ],
+    [
+     "0630",
+     "ADDITIONAL RISK EXPOSURE AMOUNT DUE TO FIXED OVERHEADS"
+    ],
+    [
+     "0640",
+     "TOTAL RISK EXPOSURE AMOUNT FOR CREDIT VALUATION ADJUSTMENT"
+    ],
+    [
+     "0651",
+     "Standardised Approach"
+    ],
+    [
+     "0661",
+     "Basic Approach"
+    ],
+    [
+     "0671",
+     "Alternative Approach"
+    ],
+    [
+     "0680",
+     "TOTAL RISK EXPOSURE AMOUNT RELATED TO LARGE EXPOSURES IN THE TRADING BOOK"
+    ],
+    [
+     "0690",
+     "OTHER RISK EXPOSURE AMOUNTS"
+    ],
+    [
+     "0710",
+     "Of which: Additional stricter prudential requirements based on Art 458"
+    ],
+    [
+     "0720",
+     "Of which: requirements for large exposures"
+    ],
+    [
+     "0730",
+     "Of which: due to modified risk weights for targeting asset bubbles in the residential and commercial property"
+    ],
+    [
+     "0740",
+     "Of which: due to intra financial sector exposures"
+    ],
+    [
+     "0750",
+     "Of which: Additional stricter prudential requirements based on Art 459"
+    ],
+    [
+     "0760",
+     "Of which: Additional risk exposure amount due to Article 3 CRR"
+    ]
+   ],
+   "title": "Own funds requirements (CA2)",
+   "z": []
+  },
+  "CP04.00.05.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "CP04.00.05",
+   "group": "CP04.00.05",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Deferred tax assets and liabilities Total deferred tax assets"
+    ],
+    [
+     "0020",
+     "Deferred tax assets that do not rely on future profitability"
+    ],
+    [
+     "0030",
+     "Deferred tax assets that rely on future profitability and do not arise from temporary differences"
+    ],
+    [
+     "0040",
+     "Deferred tax assets that rely on future profitability and arise from temporary differences"
+    ],
+    [
+     "0050",
+     "Total deferred tax liabilities"
+    ],
+    [
+     "0060",
+     "Deferred tax liabilities non deductible from deferred tax assets that rely on future profitability"
+    ],
+    [
+     "0070",
+     "Deferred tax liabilities deductible from deferred tax assets that rely on future profitability"
+    ],
+    [
+     "0080",
+     "Deductible deferred tax liabilities associated with deferred tax assets that rely on future profitability and do not arise from temporary differences"
+    ],
+    [
+     "0090",
+     "Deductible deferred tax liabilities associated with deferred tax assets that rely on future profitability and arise from temporary differences"
+    ],
+    [
+     "0901",
+     "Exception from deductions from CET1 Exception from deduction of intangible assets from CET1"
+    ],
+    [
+     "0905",
+     "Accounting classification of AT1 instruments Capital instruments and the related share premium accounts classified as equity under applicable accounting standards"
+    ],
+    [
+     "0906",
+     "Capital instruments and the related share premium accounts classified as liabilities under applicable accounting standards"
+    ],
+    [
+     "0100",
+     "Credit risk adjustments and expected losses IRB excess (+) or shortfall (-) of credit risk adjustments, additional value adjustments and other own funds reductions to expected losses for non defaulted exposures"
+    ],
+    [
+     "0110",
+     "Total credit risk adjustments, additional value adjustments and other own funds reductions eligible for inclusion in the calculation of the expected loss amount"
+    ],
+    [
+     "0120",
+     "General credit risk adjustments"
+    ],
+    [
+     "0130",
+     "Specific credit risk adjustments"
+    ],
+    [
+     "0131",
+     "Additional value adjustments and other own funds reductions"
+    ],
+    [
+     "0140",
+     "Total expected losses eligible"
+    ],
+    [
+     "0145",
+     "IRB excess (+) or shortfall (-) of specific credit risk adjustments to expected losses for defaulted exposures"
+    ],
+    [
+     "0150",
+     "Specific credit risk adjustments and positions treated similarly"
+    ],
+    [
+     "0155",
+     "Total expected losses eligible"
+    ],
+    [
+     "0160",
+     "Risk weighted exposure amounts for calculating the cap to the excess of provision eligible as T2"
+    ],
+    [
+     "0170",
+     "Total gross provisions eligible for inclusion in T2 capital"
+    ],
+    [
+     "0180",
+     "Risk weighted exposure amounts for calculating the cap to the provision eligible as T2"
+    ],
+    [
+     "0190",
+     "Thresholds for Common Equity Tier 1 deductions Threshold non deductible of holdings in financial sector entities where an institution does not have a significant investment"
+    ],
+    [
+     "0200",
+     "10% CET1 threshold"
+    ],
+    [
+     "0210",
+     "17.65% CET1 threshold"
+    ],
+    [
+     "0225",
+     "Eligible capital for the purposes of qualifying holdings outside the financial sector"
+    ],
+    [
+     "0230",
+     "Investments in the capital of financial sector entities where the institution does not have a significant investment Holdings of CET1 capital of financial sector entities where the institution does not have a significant investment, net of short positions"
+    ],
+    [
+     "0240",
+     "Direct holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0250",
+     "Gross direct holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0260",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0270",
+     "Indirect holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0280",
+     "Gross indirect holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0290",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0291",
+     "Synthetic holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0292",
+     "Gross synthetic holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0293",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0300",
+     "Holdings of AT1 capital of financial sector entities where the institution does not have a significant investment, net of short positions"
+    ],
+    [
+     "0310",
+     "Direct holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0320",
+     "Gross direct holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0330",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0340",
+     "Indirect holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0350",
+     "Gross indirect holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0360",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0361",
+     "Synthetic holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0362",
+     "Gross synthetic holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0363",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0370",
+     "Holdings of T2 capital of financial sector entities where the institution does not have a significant investment, net of short positions"
+    ],
+    [
+     "0380",
+     "Direct holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0390",
+     "Gross direct holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0400",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0410",
+     "Indirect holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0420",
+     "Gross indirect holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0430",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0431",
+     "Synthetic holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0432",
+     "Gross synthetic holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0433",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0440",
+     "Investments in the capital of financial sector entities where the institution has a significant investment Holdings of CET1 capital of financial sector entities where the institution has a significant investment, net of short positions"
+    ],
+    [
+     "0450",
+     "Direct holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0460",
+     "Gross direct holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0470",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0480",
+     "Indirect holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0490",
+     "Gross indirect holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0500",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0501",
+     "Synthetic holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0502",
+     "Gross synthetic holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0503",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0504",
+     "Investments in CET1 capital of financial sector entities where the institution has a significant investment - subject to a risk weight of 250%"
+    ],
+    [
+     "0510",
+     "Holdings of AT1 capital of financial sector entities where the institution has a significant investment, net of short positions"
+    ],
+    [
+     "0520",
+     "Direct holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0530",
+     "Gross direct holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0540",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0550",
+     "Indirect holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0560",
+     "Gross indirect holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0570",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0571",
+     "Synthetic holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0572",
+     "Gross synthetic holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0573",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0580",
+     "Holdings of T2 capital of financial sector entities where the institution has a significant investment, net of short positions"
+    ],
+    [
+     "0590",
+     "Direct holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0600",
+     "Gross direct holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0610",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0620",
+     "Indirect holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0630",
+     "Gross indirect holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0640",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0641",
+     "Synthetic holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0642",
+     "Gross synthetic holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0643",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0650",
+     "Total risk exposure amounts of holdings not deducted from the corresponding capital category: Risk weighted exposures of CET1 holdings in financial sector entities which are not deducted from the institution's CET1 capital"
+    ],
+    [
+     "0660",
+     "Risk weighted exposures of AT1 holdings in financial sector entities which are not deducted from the institution's AT1 capital"
+    ],
+    [
+     "0670",
+     "Risk weighted exposures of T2 holdings in financial sector entities which are not deducted from the institution's T2 capital"
+    ],
+    [
+     "0680",
+     "Temporary waiver from deduction from own funds Holdings on CET1 Capital Instruments of financial sector entities where the institution does not have a significant investment temporary waived"
+    ],
+    [
+     "0690",
+     "Holdings on CET1 Capital Instruments of financial sector entities where the institution has a significant investment temporary waived"
+    ],
+    [
+     "0700",
+     "Holdings on AT1 Capital Instruments of financial sector entities where the institution does not have a significant investment temporary waived"
+    ],
+    [
+     "0710",
+     "Holdings on AT1 Capital Instruments of financial sector entities where the institution has a significant investment temporary waived"
+    ],
+    [
+     "0720",
+     "Holdings on T2 Capital Instruments of financial sector entities where the institution does not have a significant investment temporary waived"
+    ],
+    [
+     "0730",
+     "Holdings on T2 Capital Instruments of financial sector entities where the institution has a significant investment temporary waived"
+    ],
+    [
+     "0740",
+     "Capital buffers Combined buffer requirement"
+    ],
+    [
+     "0750",
+     "Capital conservation buffer"
+    ],
+    [
+     "0760",
+     "Conservation buffer due to macro-prudential or systemic risk identified at the level of a Member State"
+    ],
+    [
+     "0770",
+     "Institution specific countercyclical capital buffer"
+    ],
+    [
+     "0780",
+     "Systemic risk buffer"
+    ],
+    [
+     "0800",
+     "Global Systemically Important Institution buffer"
+    ],
+    [
+     "0810",
+     "Other Systemically Important Institution buffer"
+    ],
+    [
+     "0820",
+     "Pillar II requirements Own funds requirements related to Pillar II adjustments"
+    ],
+    [
+     "0830",
+     "Additional information for investment firms Initial capital"
+    ],
+    [
+     "0840",
+     "Own funds based on Fixed Overheads"
+    ],
+    [
+     "0850",
+     "Additional information for calculation of reporting thresholds Non-domestic original exposures"
+    ],
+    [
+     "0860",
+     "Total original exposures"
+    ]
+   ],
+   "title": "Memorandum Items (CA4)",
+   "z": []
+  },
+  "CP05.01.05.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "CP05.01.05",
+   "group": "CP05.01.05",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Total transitional adjustments included in RWAs"
+    ]
+   ],
+   "title": "Transitional provisions (CA5.1)",
+   "z": []
+  },
+  "CP700.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Header info"
+    ]
+   ],
+   "filing_indicator": "CP700.00.01",
+   "group": "CP700.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Basis of reporting (select from list)"
+    ],
+    [
+     "0020",
+     "Firm reference number (FRN)"
+    ],
+    [
+     "0021",
+     "LEI code"
+    ],
+    [
+     "0030",
+     "Name of the firm"
+    ],
+    [
+     "0040",
+     "Reporting period start date"
+    ],
+    [
+     "0050",
+     "Reporting period end date"
+    ],
+    [
+     "0060",
+     "Reporting currency for this report"
+    ],
+    [
+     "0070",
+     "Notes from the firm, if any"
+    ]
+   ],
+   "title": "Header Info",
+   "z": []
+  },
+  "CP701.00.05.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "CP701.00.05",
+   "group": "CP701.00.05",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Additional information in relation to capital resources, adjustments to capital resources and capital requirements Dividends deducted in this period"
+    ],
+    [
+     "0020",
+     "Connected funding of a capital nature"
+    ],
+    [
+     "0030",
+     "Of which: Connected funding of CET1 nature"
+    ],
+    [
+     "0040",
+     "Of which: Connected funding of Tier 2 nature"
+    ],
+    [
+     "0050",
+     "Of which: Connected funding that is treated as a significant investment"
+    ],
+    [
+     "0060",
+     "Risk weighted exposure amount for counterparty credit risk"
+    ],
+    [
+     "0070",
+     "Of which: Relating to trading book"
+    ],
+    [
+     "0080",
+     "Additional information on investments in the capital of financial sector entities Amount exceeding the 17.65% threshold: proportion attributable to significant investments (+)"
+    ],
+    [
+     "0090",
+     "Total significant investments in the CET1 capital of financial sector entities"
+    ],
+    [
+     "0100",
+     "Of which: within the scope of consolidated supervision"
+    ],
+    [
+     "0110",
+     "Risk weighted exposure amount of significant investments in CET1 which are not deducted from the institution's CET1"
+    ],
+    [
+     "0120",
+     "Total significant investments in the AT1 capital of financial sector entities"
+    ],
+    [
+     "0130",
+     "Of which: within the scope of consolidated supervision"
+    ],
+    [
+     "0140",
+     "Total significant investments in the Tier 2 capital of financial sector entities"
+    ],
+    [
+     "0150",
+     "Of which: within the scope of consolidated supervision"
+    ],
+    [
+     "0160",
+     "Non-significant investments in the CET1 capital of financial sector entities within the scope of consolidated supervision"
+    ],
+    [
+     "0170",
+     "Non-significant investments in the AT1 capital of financial sector entities within the scope of consolidated supervision"
+    ],
+    [
+     "0180",
+     "Non-significant investments in the Tier 2 capital of financial sector entities within the scope of consolidated supervision"
+    ],
+    [
+     "0190",
+     "Memo: CET1 capital after applying full deduction treatment to financial sector investments"
+    ],
+    [
+     "0200",
+     "Memo: Total risk weighted exposure amount after applying full deduction treatment to financial sector investments"
+    ],
+    [
+     "0210",
+     "Additional information on capital issued out of subsidiaries that are institutions to third parties Total CET1 capital in the group's subsidiaries that are institutions that is held by third party investors"
+    ],
+    [
+     "0220",
+     "Total Tier 1 capital in the group's subsidiaries that are institutions that is held by third party investors"
+    ],
+    [
+     "0230",
+     "Total capital (all tiers) in the group's subsidiaries that are institutions that is held by third party investors"
+    ],
+    [
+     "0240",
+     "Additional information on risk exposures which can either be deducted or subject to a 1250% risk weight (only report if risk-weighted) Risk weighted exposure amount due to qualifying holdings outside the financial sector"
+    ],
+    [
+     "0250",
+     "Risk weighted exposure amount due to securitisation positions"
+    ],
+    [
+     "0260",
+     "Additional information on P&L, balance sheet and leverage data Profit (+) or loss (-) for the period"
+    ],
+    [
+     "0270",
+     "Total balance sheet assets"
+    ],
+    [
+     "0281",
+     "Total Leverage Ratio exposure measure - using a fully phased-in definition of Tier 1 capital"
+    ]
+   ],
+   "title": "PRA SUPPLEMENTARY DATA SECTION",
+   "z": []
+  }
+ }
+}

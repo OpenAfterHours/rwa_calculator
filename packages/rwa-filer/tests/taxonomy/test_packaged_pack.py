@@ -252,3 +252,79 @@ def test_several_tables_can_share_one_filing_indicator(pra001: TaxonomyPack) -> 
 
     # Assert
     assert len(sharing) == 5
+
+
+# ---------------------------------------------------------------------------
+# Every packaged module
+# ---------------------------------------------------------------------------
+
+#: module -> (tables, reportable cells, data points, filing indicators, applies from).
+#: Measured on the v4.1.1 publication. A module is packaged only if EVERY fact
+#: of the Bank's own sample instance for it is a data point of its pack; the
+#: ten modules for which that does not yet hold (PRA110, PRA115, RFB001-008) are
+#: deliberately absent — a pack that rejects valid facts is worse than none.
+PACKAGED = {
+    "LVR001": (8, 329, 329, 8, date(2026, 2, 27)),
+    "LVR002": (5, 159, 159, 5, date(2023, 5, 11)),
+    "MRL001": (3, 277, 277, 2, date(2026, 6, 22)),
+    "MRL003": (2, 59, 59, 2, date(2026, 6, 22)),
+    "PRA001": (104, 61_615, 61_428, 83, date(2027, 1, 1)),
+    "PRA112": (6, 1_681, 1_671, 6, date(2026, 2, 27)),
+    "PRA113": (6, 788, 783, 6, date(2026, 2, 27)),
+    "PRA114": (5, 62, 62, 5, date(2026, 2, 27)),
+    "PRA116": (26, 23_165, 23_146, 22, date(2027, 1, 1)),
+    "PRA117": (5, 539, 534, 5, date(2026, 2, 27)),
+    "PRA118": (5, 41, 41, 5, date(2026, 2, 27)),
+    "PRA_GAAP": (5, 182, 182, 5, date(2021, 7, 31)),
+    "PRA_IFRS": (5, 152, 152, 5, date(2021, 7, 31)),
+    "PRA_MEM": (3, 43, 43, 2, date(2021, 7, 31)),
+}
+
+
+def test_the_packaged_modules_and_their_measured_sizes() -> None:
+    # Act
+    measured = {}
+    for info in available_packs():
+        pack = resolve_pack(info.module, info.valid_from)
+        measured[info.module] = (
+            len(pack.tables),
+            pack.cells.height,
+            len(pack.datapoints),
+            len(pack.filing_indicators),
+            info.valid_from,
+        )
+
+    # Assert
+    assert measured == PACKAGED
+
+
+@pytest.mark.parametrize("module", sorted(PACKAGED))
+def test_every_packaged_pack_is_internally_consistent(module: str) -> None:
+    """Every cell names a table, a data point and a metric the pack defines."""
+    # Arrange
+    pack = resolve_pack(module, PACKAGED[module][4])
+
+    # Act
+    cell_tables = set(pack.cells["table"].unique().to_list())
+    used_points = pack.cells["datapoint"].unique().to_list()
+    prefixes = {
+        qname.split(":", 1)[0]
+        for point in pack.datapoints
+        for qname in (point.metric, *(dimension for dimension, _member in point.dimensions))
+    }
+
+    # Assert
+    assert cell_tables <= set(pack.tables)
+    assert max(used_points) < len(pack.datapoints) and min(used_points) >= 0
+    assert all(point.metric in pack.metrics for point in pack.datapoints)
+    assert prefixes <= set(pack.namespaces)
+    assert pack.info.entry_point.endswith(f"/mod/{module.lower()}.xsd")
+    assert all(table.filing_indicator for table in pack.tables.values())
+
+
+def test_a_module_resolves_only_from_the_date_its_framework_applies() -> None:
+    # Act / Assert — the day before each pack's first date has no pack.
+    for module, (*_counts, valid_from) in PACKAGED.items():
+        assert resolve_pack(module, valid_from).info.module == module
+        with pytest.raises(PackNotFoundError):
+            resolve_pack(module, date.fromordinal(valid_from.toordinal() - 1))

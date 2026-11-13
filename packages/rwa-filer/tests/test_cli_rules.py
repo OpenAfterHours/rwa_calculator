@@ -115,3 +115,35 @@ def test_a_missing_workbook_is_a_failure_not_a_traceback(
     # Assert
     assert code == EXIT_FAILED
     assert "workbook not found" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# rulebook — the Bank of England rule books
+# ---------------------------------------------------------------------------
+
+
+def test_rulebook_list_shows_every_module_and_what_it_enforces(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Act
+    code = main(["rulebook", "list"])
+
+    # Assert
+    lines = capsys.readouterr().out.splitlines()
+    assert code == EXIT_OK
+    assert any(
+        line.split() == ["banking_reporting", "4.1.1", "1486", "PRA001", "1441"] for line in lines
+    )
+    assert any(line.split() == ["leverage_ratio", "4.1.1", "61", "LVR001", "61"] for line in lines)
+
+
+def test_rulebook_import_and_check_report_a_missing_workbook_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act
+    imported = main(["rulebook", "import", str(tmp_path / "absent.xlsx"), "--out", str(tmp_path)])
+    checked = main(["rulebook", "check", str(tmp_path / "absent.xlsx")])
+
+    # Assert
+    assert (imported, checked) == (EXIT_FAILED, EXIT_FAILED)
+    assert capsys.readouterr().err.count("workbook not found") == 2

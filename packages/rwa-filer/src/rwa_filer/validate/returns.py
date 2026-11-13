@@ -5,61 +5,65 @@ Pipeline position:
     CanonicalReturn  ->  validate_return
         ->  taxonomy.resolve_pack(module, reference date)
         ->  structure.check_structure
-        ->  index_from_return  ->  checker.evaluate_index
+        ->  boe.catalogue.rulebook_for_module  ->  boe.engine.evaluate_rules
         ->  ReturnValidation
 
 Key responsibilities:
 - Be the one call that answers "is this return fit to submit?" for a return in
   canonical form, whatever file or system it came from.
-- Present a canonical return to the rule engine as a ``TemplateIndex``. A
-  canonical return is already in the publisher's coordinates, so the bindings
-  and sheet maps are the identity, built from the taxonomy pack: each table code
-  answers to its own frames, and each sheet is keyed by its own published code.
+- Run every rule the module ENFORCES, with the taxonomy's own semantics, and
+  report each as passed, failed or not evaluated — with the reason.
 - Keep the two kinds of finding apart in the result — structure (the taxonomy
   rejects it) and rules (the supervisor's arithmetic does not hold) — and say
   plainly whether anything blocks submission.
+- Never let an empty finding list stand for "clean" when little or nothing was
+  checked: ``VAL003`` reports a return on which no rule ran, or a reported
+  template none of whose rules ran.
 
 References:
 - BoE XBRL Filing Manual v1.0.1
-- Bank of England Banking Taxonomy; BoE banking validation rules
+- Bank of England Banking Taxonomy v4.1.1; validation rule workbooks
 """
 
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
-import polars as pl
-
-from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1
+from rwa_filer.boe.catalogue import SEVERITY_ERROR, RuleBookNotFoundError, rulebook_for_module
+from rwa_filer.boe.engine import (
+    STATUS_FAIL,
+    STATUS_NOT_EVALUATED,
+    STATUS_PASS,
+    Accuracy,
+    evaluate_rules,
+)
 from rwa_filer.taxonomy.pack import resolve_pack
-from rwa_filer.validate.checker import evaluate_index, findings_for
-from rwa_filer.validate.evaluate import GEOGRAPHY_TOTAL_SHEET
-from rwa_filer.validate.index import SINGLE_SHEET, SheetCode, TableBinding, TemplateIndex
-from rwa_filer.validate.structure import check_structure, local_name
+from rwa_filer.validate.checker import (
+    COVERAGE_NO_RULE_EXECUTED,
+    COVERAGE_TEMPLATE_NOT_COVERED,
+    FINDING_COVERAGE_INSUFFICIENT,
+    FINDING_RULE_ERROR,
+    FINDING_RULE_WARNING,
+    Finding,
+)
+from rwa_filer.validate.structure import check_structure, filing_indicators
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from rwa_filer.boe.catalogue import RuleBook
+    from rwa_filer.boe.engine import RuleResult
     from rwa_filer.model import CanonicalReturn
-    from rwa_filer.rules.catalogue import RuleSet
-    from rwa_filer.taxonomy.pack import Table, TaxonomyPack
-    from rwa_filer.validate.checker import Finding, ValidationReport
+    from rwa_filer.taxonomy.pack import TaxonomyPack
+    from rwa_filer.validate.checker import CoverageShortfall
 
 logger = logging.getLogger(__name__)
 
-#: The packaged rule extract each reporting module is validated against.
-MODULE_FRAMEWORKS: Final[dict[str, str]] = {
-    "PRA001": FRAMEWORK_BASEL_3_1,
-}
-
-#: The open-axis member that is the all-geographies total. The engine addresses
-#: that sheet by ``GEOGRAPHY_TOTAL_SHEET``; see ``evaluate._parse_filter``.
-_GEOGRAPHY_DIMENSION: Final = "eba_dim:CEG"
-_GEOGRAPHY_TOTAL_MEMBER: Final = "x1"
-
-_SHEET_MAP_SOURCE: Final = "taxonomy pack (identity)"
+#: Not-evaluated reasons quoted in a coverage finding (commonest first).
+_REASONS_QUOTED = 4
 
 
 # =============================================================================
@@ -68,20 +72,89 @@ _SHEET_MAP_SOURCE: Final = "taxonomy pack (identity)"
 
 
 @dataclass(frozen=True)
+class RuleReport:
+    """Every enforced rule's result for one return, with the coverage behind it.
+
+    Attributes:
+        module: The reporting module.
+        framework_version: The rule book the rules came from.
+        taxonomy: The taxonomy release of that rule book.
+        rules_loaded: Rules in the rule book.
+        results: One result per rule the module enforces.
+        templates_reported: The filing indicators the return reports.
+        templates_ruled: Those of them the rule book has an enforced rule for.
+        templates_covered: Those of them at least one rule was executed on.
+    """
+
+    module: str
+    framework_version: str
+    taxonomy: str
+    rules_loaded: int
+    results: tuple[RuleResult, ...]
+    templates_reported: tuple[str, ...] = ()
+    templates_ruled: tuple[str, ...] = ()
+    templates_covered: tuple[str, ...] = ()
+
+    @property
+    def rules_enforced(self) -> int:
+        return len(self.results)
+
+    @property
+    def rules_executed(self) -> int:
+        """Rules that reached a verdict: evaluated at least once."""
+        return sum(result.status != STATUS_NOT_EVALUATED for result in self.results)
+
+    @property
+    def templates_uncovered(self) -> tuple[str, ...]:
+        """Reported templates that have enforced rules, none of which was executed."""
+        covered = set(self.templates_covered)
+        return tuple(code for code in self.templates_ruled if code not in covered)
+
+    @property
+    def coverage_shortfall(self) -> CoverageShortfall | None:
+        """Why the return was not checked well enough, or ``None`` when it was.
+
+        THE one implementation of the coverage predicate: ``VAL003`` is built
+        from this, so the finding and the report cannot disagree.
+        """
+        if not self.rules_executed:
+            return COVERAGE_NO_RULE_EXECUTED
+        if self.templates_uncovered:
+            return COVERAGE_TEMPLATE_NOT_COVERED
+        return None
+
+    def status_counts(self) -> dict[str, int]:
+        """Rule counts per status, in a stable order."""
+        counts = Counter(result.status for result in self.results)
+        return {
+            status: counts.get(status, 0)
+            for status in (STATUS_PASS, STATUS_FAIL, STATUS_NOT_EVALUATED)
+        }
+
+    def not_evaluated_reasons(self) -> dict[str, int]:
+        """Not-evaluated rule counts per reason, commonest first."""
+        counts = Counter(
+            result.reason for result in self.results if result.status == STATUS_NOT_EVALUATED
+        )
+        return dict(counts.most_common())
+
+
+@dataclass(frozen=True)
 class ReturnValidation:
     """Everything validating one return established.
 
     Attributes:
         pack: The taxonomy the return was read against.
-        structure: Structure findings (``STR...``).
-        report: The rule engine's per-rule report, or ``None`` when the module
-            has no packaged rule set.
+        structure: Structure findings (``STR...``), and any finding from reading
+            the return's source (``XBR...``).
+        report: The per-rule report, or ``None`` when no rule book is packaged
+            for the module.
         rules: Rule findings (``VAL...``), from ``report``.
     """
 
     pack: TaxonomyPack
     structure: tuple[Finding, ...]
-    report: ValidationReport | None
+    report: RuleReport | None
     rules: tuple[Finding, ...]
 
     @property
@@ -108,7 +181,8 @@ def validate_return(
     ret: CanonicalReturn,
     pack: TaxonomyPack | None = None,
     *,
-    ruleset: RuleSet | None = None,
+    rulebook: RuleBook | None = None,
+    accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
 ) -> ReturnValidation:
     """Validate ``ret``: structure against the taxonomy, then the published rules.
@@ -117,8 +191,12 @@ def validate_return(
         ret: The return, in canonical form.
         pack: The taxonomy to read it against. Defaults to the packaged pack in
             force for the return's module on its reference date.
-        ruleset: The rules to run. Defaults to the packaged rule set for the
+        rulebook: The rules to run. Defaults to the packaged rule book for the
             module; a module with none packaged has only its structure checked.
+        accuracy: The accuracy facts are stated to where they do not state
+            their own (their ``decimals``). It sets the rounding allowance the
+            rules' comparisons use, and should be what the file will be written
+            with. Defaults to the XBRL writer's defaults.
         source_findings: What reading the return's source found — an XBRL
             instance holding a fact the module does not have, say. They are
             reported first, with the structure findings.
@@ -132,54 +210,35 @@ def validate_return(
     """
     pack = pack or resolve_pack(ret.header.module, ret.header.reference_date)
     structure = (*source_findings, *check_structure(ret, pack))
+    module = pack.info.module
+    if rulebook is None:
+        try:
+            rulebook = rulebook_for_module(module)
+        except RuleBookNotFoundError:
+            logger.warning("no packaged rule book for module %s; rules not run", module)
+            return ReturnValidation(pack=pack, structure=structure, report=None, rules=())
 
-    framework = ruleset.framework if ruleset else MODULE_FRAMEWORKS.get(pack.info.module.upper())
-    if framework is None:
-        logger.warning("no packaged rule set for module %s; rules not run", pack.info.module)
-        return ReturnValidation(pack=pack, structure=structure, report=None, rules=())
-
-    report = evaluate_index(index_from_return(ret, pack, framework), ruleset)
+    enforced = rulebook.enforced(module)
+    results = tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy))
+    report = _report(ret, pack, rulebook, results)
     return ReturnValidation(
         pack=pack, structure=structure, report=report, rules=tuple(findings_for(report))
     )
 
 
-def index_from_return(ret: CanonicalReturn, pack: TaxonomyPack, framework: str) -> TemplateIndex:
-    """Present a canonical return to the rule engine.
+def findings_for(report: RuleReport) -> list[Finding]:
+    """The findings a report yields: the coverage shortfall first, then each broken rule.
 
-    Each table's facts are pivoted into one frame per sheet — ``row_ref`` plus a
-    column per reported column code. Only numeric facts are pivoted: the rules
-    are arithmetic, and a text cell is not a figure.
-
-    The bindings and sheet maps are the IDENTITY: the return is already in the
-    publisher's coordinates, so table ``T`` answers to its own frames and sheet
-    code ``z`` to the sheet keyed ``z``. The identity map is closed by
-    construction, so no rule is skipped for a sheet-scope reason.
-
-    Facts in tables the module does not have are left out; ``check_structure``
-    reports them.
+    One finding per broken rule, however many times it was unsatisfied: the
+    rule code is on ``subject`` and the first unsatisfied evaluation is quoted.
     """
-    frames: dict[str, dict[str, pl.DataFrame]] = {}
-    bindings: dict[str, TableBinding] = {}
-    sheet_maps: dict[str, dict[str, SheetCode]] = {}
-
-    numeric = ret.facts.filter(pl.col("value").is_not_null())
-    for code, table in pack.tables.items():
-        per_sheet = bool(table.z_axes)
-        fixed = table.fixed_axis
-        bindings[code] = TableBinding(code, per_sheet=per_sheet, sheet_map=code if fixed else None)
-        if fixed is not None:
-            sheet_maps[code] = {
-                sheet.code: SheetCode(sheet.code, sheet.label, (sheet.code,), _SHEET_MAP_SOURCE)
-                for sheet in fixed.sheets
-            }
-        part = numeric.filter(pl.col("table") == code)
-        if part.is_empty():
-            continue
-        frames[code] = _table_frames(part, table)
-    return TemplateIndex(
-        framework=framework, frames=frames, bindings=bindings, sheet_maps=sheet_maps
-    )
+    findings = [
+        _rule_finding(result, report) for result in report.results if result.status == STATUS_FAIL
+    ]
+    shortfall = _coverage_finding(report)
+    if shortfall is not None:
+        findings.insert(0, shortfall)
+    return findings
 
 
 # =============================================================================
@@ -187,46 +246,92 @@ def index_from_return(ret: CanonicalReturn, pack: TaxonomyPack, framework: str) 
 # =============================================================================
 
 
-def _table_frames(facts: pl.DataFrame, table: Table) -> dict[str, pl.DataFrame]:
-    """One wide frame per sheet key for a table's numeric facts."""
-    if not table.z_axes:
-        return {SINGLE_SHEET: _pivot(facts)}
-    keyed = facts.with_columns(_sheet_key(table).alias("_sheet_key"))
-    return {
-        str(key): _pivot(part)
-        for (key,), part in keyed.sort("_sheet_key").group_by("_sheet_key", maintain_order=True)
-        if key is not None
-    }
+def _report(
+    ret: CanonicalReturn, pack: TaxonomyPack, rulebook: RuleBook, results: tuple[RuleResult, ...]
+) -> RuleReport:
+    """The results with which reported templates the rules reached."""
+    reported = tuple(code for code, filed in filing_indicators(ret, pack).items() if filed)
+
+    def indicators(result: RuleResult) -> set[str]:
+        return {
+            pack.tables[table].filing_indicator for table in result.tables if table in pack.tables
+        }
+
+    ruled: set[str] = set()
+    covered: set[str] = set()
+    for result in results:
+        ruled |= indicators(result)
+        if result.status != STATUS_NOT_EVALUATED:
+            covered |= indicators(result)
+    return RuleReport(
+        module=pack.info.module,
+        framework_version=rulebook.framework_version,
+        taxonomy=rulebook.taxonomy,
+        rules_loaded=len(rulebook.rules),
+        results=results,
+        templates_reported=reported,
+        templates_ruled=tuple(code for code in reported if code in ruled),
+        templates_covered=tuple(code for code in reported if code in covered),
+    )
 
 
-def _sheet_key(table: Table) -> pl.Expr:
-    """The engine's sheet key for a fact: the fixed code, else the open member.
+def _rule_finding(result: RuleResult, report: RuleReport) -> Finding:
+    blocking = result.severity == SEVERITY_ERROR
+    consequence = (
+        "an Error-severity break rejects the submission"
+        if blocking
+        else "a Warning-severity break must be explained"
+    )
+    first = result.failures[0] if result.failures else None
+    where = f" at {first.place}" if first is not None and first.place else ""
+    cells = f": {'; '.join(first.cells)}" if first is not None and first.cells else ""
+    return Finding(
+        code=FINDING_RULE_ERROR if blocking else FINDING_RULE_WARNING,
+        severity=result.severity,
+        message=(
+            f"Validation rule {result.rule_id} does not hold in {result.unsatisfied} of "
+            f"{result.evaluations} evaluation(s) — {consequence}. First{where}{cells}."
+        ),
+        reference=(
+            f"Bank of England Banking Taxonomy v{report.taxonomy}, validation rule "
+            f"{result.rule_id} ({report.framework_version})"
+        ),
+        subject=result.rule_id,
+        expected="the rule to hold in every evaluation",
+        actual=f"{result.unsatisfied} unsatisfied evaluation(s)",
+    )
 
-    The all-geographies total of a per-country table is keyed by the engine's
-    own ``GEOGRAPHY_TOTAL_SHEET``, which is how its geography filter finds it.
-    """
-    open_axis = table.open_axis
-    if table.fixed_axis is not None:
-        return pl.col("sheet")
-    key = pl.col("open_key").map_elements(local_name, pl.String)
-    if open_axis is not None and open_axis.dimension == _GEOGRAPHY_DIMENSION:
-        return (
-            pl.when(key == _GEOGRAPHY_TOTAL_MEMBER)
-            .then(pl.lit(GEOGRAPHY_TOTAL_SHEET))
-            .otherwise(key)
+
+def _coverage_finding(report: RuleReport) -> Finding | None:
+    """``VAL003`` for whatever ``report.coverage_shortfall`` says."""
+    shortfall = report.coverage_shortfall
+    if shortfall is None:
+        return None
+    reasons = ", ".join(
+        f"{reason}={count}"
+        for reason, count in list(report.not_evaluated_reasons().items())[:_REASONS_QUOTED]
+    )
+    if shortfall == COVERAGE_NO_RULE_EXECUTED:
+        cause = "no rule could be executed at all"
+    else:
+        cause = (
+            "reported template(s) none of whose rules was executed: "
+            f"{', '.join(report.templates_uncovered)}"
         )
-    return key
-
-
-def _pivot(facts: pl.DataFrame) -> pl.DataFrame:
-    """Long facts for one sheet -> ``row_ref`` + one Float64 column per column code.
-
-    A duplicated cell keeps its first value here; the duplicate itself is a
-    structure finding (``STR005``) and must not also become an arithmetic one.
-    """
-    return (
-        facts.select(pl.col("row").alias("row_ref"), "column", "value")
-        .filter(pl.col("row_ref").is_not_null())
-        .pivot(on="column", index="row_ref", values="value", aggregate_function="first")
-        .sort("row_ref")
+    return Finding(
+        code=FINDING_COVERAGE_INSUFFICIENT,
+        severity=SEVERITY_ERROR,
+        message=(
+            f"Validation coverage is insufficient for {report.module} [{shortfall}]: "
+            f"{report.rules_executed} of {report.rules_enforced} enforced rules executed "
+            f"({reasons or 'none not evaluated'}); {cause}. An absent break is not evidence "
+            "that the return holds."
+        ),
+        reference=(
+            f"Bank of England Banking Taxonomy v{report.taxonomy} validation rules "
+            f"({report.framework_version}) — rule coverage"
+        ),
+        subject=shortfall,
+        expected="at least one rule executed on every reported template that has rules",
+        actual=f"{report.rules_executed} rule(s) executed",
     )

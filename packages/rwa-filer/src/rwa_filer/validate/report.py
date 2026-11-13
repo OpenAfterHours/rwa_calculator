@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from rwa_filer import __version__
-from rwa_filer.validate.evaluate import STATUS_NOT_EVALUATED
+from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 
 if TYPE_CHECKING:
     from rwa_filer.model import CanonicalReturn
@@ -56,27 +56,31 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
             "structure_findings": len(validation.structure),
             "rule_findings": len(validation.rules),
             "blocking_findings": len(validation.blocking),
+            "rule_book": f"{report.framework_version} {report.taxonomy}" if report else None,
             "rules_enforced": report.rules_enforced if report else 0,
             "rules_executed": report.rules_executed if report else 0,
             "rule_status": report.status_counts() if report else {},
             "not_evaluated_reasons": report.not_evaluated_reasons() if report else {},
-            "templates_reported": list(report.templates_emitted) if report else [],
+            "templates_reported": list(report.templates_reported) if report else [],
             "templates_uncovered": list(report.templates_uncovered) if report else [],
         },
         "findings": [_finding_record(finding) for finding in validation.findings],
         "rules": [
             {
-                "rule_id": outcome.rule_id,
-                "severity": outcome.severity,
-                "status": outcome.status,
-                "reason": outcome.reason,
-                "detail": outcome.detail,
-                "evaluated": outcome.evaluated,
-                "failed": outcome.failed,
-                "cells": list(outcome.coordinates),
+                "rule_id": result.rule_id,
+                "severity": result.severity,
+                "status": result.status,
+                "reason": result.reason,
+                "detail": result.detail,
+                "satisfied": result.satisfied,
+                "unsatisfied": result.unsatisfied,
+                "failures": [
+                    {"place": failure.place, "cells": list(failure.cells)}
+                    for failure in result.failures
+                ],
             }
-            for outcome in (report.outcomes if report else ())
-            if outcome.status != "PASS"
+            for result in (report.results if report else ())
+            if result.status != STATUS_PASS
         ],
     }
 
@@ -99,7 +103,7 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
         counts = report.status_counts()
         lines.append(
             f"  rules: {report.rules_executed} of {report.rules_enforced} executed — "
-            f"{counts['PASS']} passed, {counts['FAIL']} failed, {counts['VACUOUS']} vacuous, "
+            f"{counts[STATUS_PASS]} passed, {counts[STATUS_FAIL]} failed, "
             f"{counts[STATUS_NOT_EVALUATED]} not evaluated"
         )
         reasons = list(report.not_evaluated_reasons().items())[:_REASONS_SHOWN]

@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING, Any, Final
 import polars as pl
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
     from importlib.resources.abc import Traversable
     from pathlib import Path
 
@@ -282,6 +282,18 @@ class Table:
         """The column codes, in the publisher's order."""
         return tuple(code for code, _label in self.columns)
 
+    def row_code(self, written: str) -> str:
+        """``written`` as this table writes that row code (see ``match_code``)."""
+        return match_code(self.row_codes, written)
+
+    def column_code(self, written: str) -> str:
+        """``written`` as this table writes that column code."""
+        return match_code((*self.key_codes, *self.column_codes), written)
+
+    def sheet_code(self, written: str) -> str:
+        """``written`` as this table writes that sheet code."""
+        return match_code(self.sheet_codes, written)
+
     @property
     def key_codes(self) -> tuple[str, ...]:
         """The key-column codes of an open-row table; empty for any other."""
@@ -344,6 +356,26 @@ class TaxonomyPack:
     def datapoint_frame(self) -> pl.DataFrame:
         """The data points as a frame (``DATAPOINT_SCHEMA``), for joins."""
         return _datapoint_frame(self.datapoints)
+
+
+def match_code(codes: Sequence[str], written: str) -> str:
+    """``written`` as one of ``codes`` writes it, where it differs only in leading zeros.
+
+    Row, column and sheet codes are numbers written at a fixed width, and the
+    width is not the same everywhere: most tables write four digits (``0010``),
+    some of the older ones three (``010``). A code that has lost or gained
+    leading zeros on the way — ``10`` from a spreadsheet, ``0010`` for a
+    three-digit table — still names exactly one row.
+
+    Returns ``written`` unchanged when it is already one of ``codes``, is not
+    a number, or matches none or more than one of them: an unknown code stays
+    as the source wrote it, for the structure check to report.
+    """
+    if written in codes or not written.isdigit():
+        return written
+    number = int(written)
+    matches = [code for code in codes if code.isdigit() and int(code) == number]
+    return matches[0] if len(matches) == 1 else written
 
 
 # =============================================================================

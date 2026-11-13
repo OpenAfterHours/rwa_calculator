@@ -126,7 +126,7 @@ def check_structure(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
         )
         return findings
 
-    known = facts.filter(pl.col("table").is_in(list(pack.tables)))
+    known = _align_codes(facts.filter(pl.col("table").is_in(list(pack.tables))), pack)
     findings.extend(_unknown_tables(facts, pack))
     findings.extend(_duplicates(known))
 
@@ -164,7 +164,7 @@ def resolve_datapoints(ret: CanonicalReturn, pack: TaxonomyPack) -> pl.DataFrame
     of its own — it is the member the row's other facts are reported under.
     The XBRL writer and the coverage ratchets both read this.
     """
-    known = ret.facts.filter(pl.col("table").is_in(list(pack.tables)))
+    known = _align_codes(ret.facts.filter(pl.col("table").is_in(list(pack.tables))), pack)
     return _resolve_cells(known, pack).select(*ret.facts.columns, "datapoint", IS_KEY)
 
 
@@ -220,6 +220,43 @@ def local_name(qname: str) -> str:
 # =============================================================================
 # Private helpers — resolution
 # =============================================================================
+
+
+def _align_codes(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
+    """Write each row, column and sheet code the way its own table writes it.
+
+    Most tables write codes at four digits and some at three, and a code often
+    loses its leading zeros in a spreadsheet or CSV. A code that differs from
+    one of its table's only in leading zeros names that row; anything else is
+    left exactly as given, for the checks below to report. The row identifier
+    of an open-row table is the filer's own and is never touched.
+    """
+    if facts.is_empty():
+        return facts
+    replacements: dict[str, dict[tuple[str, str], str]] = {"row": {}, "column": {}, "sheet": {}}
+    seen = facts.select("table", "row", "column", "sheet").unique()
+    for code, row, column, sheet in seen.iter_rows():
+        table = pack.tables[code]
+        if row is not None and not table.open_rows and (fixed := table.row_code(row)) != row:
+            replacements["row"][(code, row)] = fixed
+        if column is not None and (fixed := table.column_code(column)) != column:
+            replacements["column"][(code, column)] = fixed
+        if sheet is not None and (fixed := table.sheet_code(sheet)) != sheet:
+            replacements["sheet"][(code, sheet)] = fixed
+    for axis, mapping in replacements.items():
+        if not mapping:
+            continue
+        lookup = pl.DataFrame(
+            [(table, written, fixed) for (table, written), fixed in mapping.items()],
+            schema={"table": pl.String, axis: pl.String, "_fixed": pl.String},
+            orient="row",
+        )
+        facts = (
+            facts.join(lookup, on=["table", axis], how="left")
+            .with_columns(pl.coalesce("_fixed", axis).alias(axis))
+            .drop("_fixed")
+        )
+    return facts
 
 
 def _resolve_cells(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:

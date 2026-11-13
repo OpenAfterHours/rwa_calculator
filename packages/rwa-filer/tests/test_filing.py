@@ -1,9 +1,9 @@
 """
 The filing package: when a return is written, what is written, and what is recorded.
 
-The synthetic module has no packaged rule set, so on it only the structure
+The synthetic module has no packaged rule book, so on it only the structure
 checks can stop a return; the rule gate is exercised by handing ``build_filing``
-a small rule set of its own.
+a small rule book of its own.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from filer_builders import build_rule
+from boe_builders import T01, book, ref, rule
 from pack_builders import VALID_LEI, build_pack, build_return
 from rwa_filer import filing
 from rwa_filer.filing import (
@@ -27,7 +27,6 @@ from rwa_filer.filing import (
     default_name,
 )
 from rwa_filer.model import CanonicalReturn
-from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1, RuleSet
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.checker import Finding
 from rwa_filer.xbrl.reader import read_instance
@@ -210,19 +209,23 @@ def test_a_broken_rule_stops_the_file_unless_overridden(pack: TaxonomyPack, tmp_
         ("T01.00.01.01", None, None, "0020", "0010", 60.0),
         ("T01.00.01.01", None, None, "0030", "0010", 30.0),
     )
-    footing = build_rule(
-        rule_id="tst_b0001",
-        publisher="BoE",
-        framework=FRAMEWORK_BASEL_3_1,
-        tables=("T01.00.01.01",),
-        expression="{r0010} = {r0020} + {r0030}",
+    footing = rule(
+        "tst_b0001",
+        f"{ref(T01, '0010', '0010')} i= {ref(T01, '0020', '0010')} i+ {ref(T01, '0030', '0010')}",
+        tables=(T01,),
     )
-    rules = RuleSet(framework=FRAMEWORK_BASEL_3_1, publisher="BoE", source={}, rules=(footing,))
+    rules = book(footing)
 
     # Act
-    stopped = build_filing(wrong, tmp_path / "stopped", pack=pack, ruleset=rules)
+    exact = InstanceOptions(monetary_decimals=0)
+    stopped = build_filing(wrong, tmp_path / "stopped", pack=pack, rulebook=rules, options=exact)
     forced = build_filing(
-        wrong, tmp_path / "forced", pack=pack, ruleset=rules, allow_rule_breaks=True
+        wrong,
+        tmp_path / "forced",
+        pack=pack,
+        rulebook=rules,
+        options=exact,
+        allow_rule_breaks=True,
     )
 
     # Assert
@@ -268,3 +271,38 @@ def test_the_default_name_is_safe_as_a_file_name() -> None:
 
     # Act / Assert
     assert default_name(sample) == "123456_TST001_2027-03-31"
+
+
+def test_validation_uses_the_accuracy_the_file_is_written_with(
+    pack: TaxonomyPack, tmp_path: Path
+) -> None:
+    """A 10-unit gap: within rounding when stated to thousands, a break when stated to units.
+
+    The file's ``decimals`` are what the gateway's comparisons allow for, so the
+    validation that decides whether to write must use the same.
+    """
+    # Arrange — total 100 against parts of 60 + 30.
+    wrong = ret(
+        ("T01.00.01.01", None, None, "0010", "0010", 100.0),
+        ("T01.00.01.01", None, None, "0020", "0010", 60.0),
+        ("T01.00.01.01", None, None, "0030", "0010", 30.0),
+    )
+    footing = rule(
+        "tst_b0001",
+        f"{ref(T01, '0010', '0010')} i= {ref(T01, '0020', '0010')} i+ {ref(T01, '0030', '0010')}",
+        tables=(T01,),
+    )
+
+    # Act
+    thousands = build_filing(wrong, tmp_path / "a", pack=pack, rulebook=book(footing))
+    units = build_filing(
+        wrong,
+        tmp_path / "b",
+        pack=pack,
+        rulebook=book(footing),
+        options=InstanceOptions(monetary_decimals=0),
+    )
+
+    # Assert
+    assert thousands.written and thousands.validation.is_submittable
+    assert not units.written and units.blocked_by == BLOCKED_BY_RULES

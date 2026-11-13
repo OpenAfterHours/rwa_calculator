@@ -6,6 +6,10 @@ Pipeline position:
         -> <name>.xbrl (+ <name>.zip) + <name>.manifest.json
 
 Key responsibilities:
+- Validate with the accuracy the file will state. The rules' comparisons allow
+  for rounding according to each fact's ``decimals``, so the validation that
+  decides whether the file is written uses the ``decimals`` it will be written
+  with.
 - Decide whether a return may be written. A structure finding always stops it:
   such a return cannot be expressed in the taxonomy at all. A broken published
   rule stops it by default, because the regulator would reject the file — and
@@ -13,8 +17,9 @@ Key responsibilities:
 - Write the instance, and a zip beside it when the Filing Manual requires one
   (over 10 MB) or the caller asks for one.
 - Write a manifest: what was filed, against which taxonomy, with which checksum
-  and under which validation result. It is the evidence that the file a firm
-  uploaded is the file that was checked.
+  and under which validation result — and which cells a preparer overrode, with
+  what each held before. It is the evidence that the file a firm uploaded is
+  the file that was checked.
 - Be reproducible. Nothing in the three files depends on when or where they
   were built unless the caller passes a creation time.
 
@@ -34,6 +39,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer import __version__
+from rwa_filer.boe.engine import Accuracy
 from rwa_filer.validate.report import to_record
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.xbrl.writer import GENERATOR_ID, InstanceOptions, write_instance
@@ -42,11 +48,12 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+    from rwa_filer.boe.catalogue import RuleBook
     from rwa_filer.model import CanonicalReturn
-    from rwa_filer.rules.catalogue import RuleSet
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
     from rwa_filer.validate.returns import ReturnValidation
+    from rwa_filer.workflow.adjustments import AppliedAdjustment
     from rwa_filer.xbrl.writer import Instance
 
 logger = logging.getLogger(__name__)
@@ -114,12 +121,13 @@ def build_filing(
     directory: Path,
     *,
     pack: TaxonomyPack | None = None,
-    ruleset: RuleSet | None = None,
+    rulebook: RuleBook | None = None,
     options: InstanceOptions | None = None,
     name: str | None = None,
     allow_rule_breaks: bool = False,
     always_zip: bool = False,
     source_findings: Sequence[Finding] = (),
+    adjustments: Sequence[AppliedAdjustment] = (),
 ) -> FilingPackage:
     """Validate ``ret`` and, if it may be filed, write its filing package.
 
@@ -128,7 +136,7 @@ def build_filing(
         directory: Where the files go. Created if absent.
         pack: The taxonomy. Defaults to the packaged pack for the return's
             module and reference date.
-        ruleset: The rules to run. Defaults to the module's packaged rule set.
+        rulebook: The rules to run. Defaults to the module's packaged rule book.
         options: How numbers are stated in the instance.
         name: The files' base name. Defaults to
             ``<entity>_<module>_<reference date>``.
@@ -137,6 +145,10 @@ def build_filing(
         always_zip: Write a zip whatever the instance's size.
         source_findings: Findings from reading the return's source, e.g. an
             XBRL instance. They count as structure findings.
+        adjustments: The overrides already applied to ``ret``
+            (``workflow.adjustments.apply_adjustments``). They are recorded in
+            the manifest, with what each cell held before; they are not
+            applied again here.
 
     Returns:
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
@@ -145,7 +157,10 @@ def build_filing(
         PackNotFoundError: no ``pack`` was given and none is packaged.
     """
     options = options or InstanceOptions()
-    validation = validate_return(ret, pack, ruleset=ruleset, source_findings=source_findings)
+    accuracy = Accuracy(options.monetary_decimals, options.percentage_decimals)
+    validation = validate_return(
+        ret, pack, rulebook=rulebook, accuracy=accuracy, source_findings=source_findings
+    )
     if validation.structure:
         return FilingPackage(validation=validation, blocked_by=BLOCKED_BY_STRUCTURE)
     if validation.blocking and not allow_rule_breaks:
@@ -164,6 +179,7 @@ def build_filing(
 
     manifest_path = directory / f"{base}{MANIFEST_SUFFIX}"
     manifest = _manifest(ret, validation, instance, options, instance_path, zip_path)
+    manifest["adjustments"] = [applied.as_record() for applied in adjustments]
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     logger.info(
         "filing package written: %s (%d bytes, %d fact(s)); submittable=%s",

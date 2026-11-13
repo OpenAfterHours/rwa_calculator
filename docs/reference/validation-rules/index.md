@@ -26,6 +26,16 @@ CI, tooling) needs the raw spreadsheets.
     checkout. From Python, read them through the loader rather than by path:
     `from rwa_filer.rules import load_rules; load_rules("CRR")`.
 
+!!! info "The Bank of England's full v4.1.1 rule books are separate"
+    The two files above are credit-risk extracts for the template-level engine that
+    `rwa-calc` runs on its own frames. `rwa-filer` also packages the Bank's complete
+    rule books for taxonomy v4.1.1 — all 3,813 rules of all 11 return families, with
+    the raw expression, scope, join and where cells as published — under
+    `packages/rwa-filer/src/rwa_filer/boe/data/`. Those are what
+    `rwa-filer validate` and `ResultExporter.export_filing_package` run, through an
+    engine that evaluates each rule as the Bank's gateway does. See
+    [rwa-filer](../../rwa-filer/index.md#how-the-rules-are-evaluated).
+
 ## Looking up a rule
 
 Both files load with the standard library and no encoding argument (see

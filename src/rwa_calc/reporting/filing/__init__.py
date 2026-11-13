@@ -12,6 +12,9 @@ Key responsibilities:
 - Run the published supervisory validation rules through ``rwa-filer`` and bring
   the breaks back onto the error channel as ``VAL001`` (Error — blocks the
   submission) / ``VAL002`` (Warning) / ``VAL003`` (coverage) findings.
+- Re-address the generated estate to the taxonomy's own coordinates — the
+  canonical return ``rwa-filer`` validates and files — and account for every
+  cell that has no place there.
 
 The boundary this package draws: everything that knows about OUR bundles, sheet
 names and exposure classes is here; everything that knows how to load, parse and
@@ -24,6 +27,7 @@ Module map:
 - ``sheet_maps`` — the cited publisher-sheet-code -> our-sheet-key maps
 - ``bindings``   — publisher table codes -> bundle members; ``build_template_index``
 - ``checks``     — the public entry points
+- ``canonical``  — the estate as a canonical return; what has no place, and why
 
 References:
 - docs/reference/validation-rules/index.md — provenance, schema, formula grammar
@@ -34,6 +38,11 @@ References:
 from __future__ import annotations
 
 from rwa_calc.reporting.filing.bindings import build_template_index, derive_variant_columns
+from rwa_calc.reporting.filing.canonical import (
+    FILING_MODULE,
+    CanonicalMapping,
+    build_canonical_return,
+)
 from rwa_calc.reporting.filing.checks import (
     check_supervisory_validations,
     evaluate_all,
@@ -42,7 +51,10 @@ from rwa_calc.reporting.filing.checks import (
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 __all__ = [
+    "FILING_MODULE",
     "SHEET_INDEX_MAPS",
+    "CanonicalMapping",
+    "build_canonical_return",
     "build_template_index",
     "check_supervisory_validations",
     "derive_variant_columns",

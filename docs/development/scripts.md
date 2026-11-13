@@ -208,6 +208,26 @@ The set arithmetic and the owner grammar live in `scripts/tolerated_findings.py`
 
 ---
 
+### `scripts/filing_mapping_report.py` — The filing-mapping ratchet
+
+Measures how much of the generated Basel 3.1 COREP estate has a place in the
+PRA001 taxonomy. It runs every Basel 3.1 portfolio in the supervisory
+register's matrix, re-addresses each generated cell to the taxonomy's
+coordinates, and counts the cells that land on a data point and the non-zero
+figures that do not.
+
+```bash
+uv run python scripts/filing_mapping_report.py              # measure and print
+uv run python scripts/filing_mapping_report.py --check      # gate against the baseline
+uv run python scripts/filing_mapping_report.py --update-baseline
+```
+
+`--check` fails if `placed_cells` fell, if `unplaced_figures` rose, or if any
+(template, reason) cell of the breakdown rose. The baseline is
+`scripts/filing_mapping_baseline.json`. See
+[Workspace & Packages](workspace.md#the-filing-mapping-ratchet) for the counts
+and what each reason means.
+
 ## Test Data Scripts
 
 ### `tests/fixtures/generate_all.py` — Regenerate test fixture parquet files

@@ -23,6 +23,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`v*` → `rwa-calc`, `rwa-filer-v*` → `rwa-filer`). See
   [Workspace & Packages](../development/workspace.md). This release changes no
   calculation and no reported figure.
+- **The generated Basel 3.1 COREP estate can now be expressed as a canonical
+  return in the PRA taxonomy's own coordinates.**
+  `rwa_calc.reporting.filing.build_canonical_return(corep, header)` re-addresses
+  every generated cell to a published table, sheet, row and column of the
+  `PRA001` module (Bank of England banking taxonomy v4.1.1, in `rwa-filer`), and
+  returns the cells that have no place there with a reason for each. No cell is
+  dropped silently.
+- **New gate: the filing-mapping ratchet**
+  (`scripts/filing_mapping_report.py --check`, CI job `Filing Mapping Ratchet`).
+  Over the 13 Basel 3.1 portfolios of the supervisory register, 1,911 distinct
+  generated cells land on a taxonomy data point and 1,025 distinct non-zero
+  figures do not. The first may not fall; the second may not rise, in total or
+  for any (template, reason). 816 of the 1,025 are the IRB templates
+  (OF 08.01–08.05): our sheets are per exposure class, while the published sheet
+  axis also splits by approach and by SME / non-SME. The full breakdown is in
+  [Workspace & Packages](../development/workspace.md#the-filing-mapping-ratchet).
+  These figures cannot be filed until the layouts are aligned; no reported
+  number changes in this release.
 
 ### Changed
 - (Next release changes will go here)

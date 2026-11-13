@@ -61,9 +61,12 @@ ordinary `Requires-Dist: rwa-filer<0.2,>=0.1`, resolved from PyPI.
 |---------|---------|----------|
 | Published rule extracts, and the importer that builds them | `rwa-filer` | `rwa_filer.rules` |
 | Rule engine: parse, expand, evaluate, report | `rwa-filer` | `rwa_filer.validate` |
+| Taxonomy packs: the reportable cells and data points of a module | `rwa-filer` | `rwa_filer.taxonomy` |
+| The canonical return, its structure checks and its file readers | `rwa-filer` | `rwa_filer.model`, `rwa_filer.validate.structure`, `rwa_filer.readers` |
 | Which of our bundle members carries each published table code | `rwa-calc` | `rwa_calc.reporting.filing.bindings` |
 | Which of our per-class sheets each published sheet code addresses | `rwa-calc` | `rwa_calc.reporting.filing.sheet_maps` |
 | Mapping the engine's findings onto `CalculationError` (`VAL001`–`VAL003`) | `rwa-calc` | `rwa_calc.reporting.filing.checks` |
+| Re-addressing our generated cells to the taxonomy's coordinates, and accounting for those with no place | `rwa-calc` | `rwa_calc.reporting.filing.canonical` |
 | Computing the template figures | `rwa-calc` | `rwa_calc.reporting.corep`, `rwa_calc.reporting.pillar3` |
 
 `rwa_calc.reporting.filing` is the adapter. Everything that knows about the
@@ -71,6 +74,46 @@ calculator's bundles, sheet names or exposure classes is on its side of the
 boundary; everything that knows how to load, parse and evaluate a published rule
 is in `rwa-filer`. The adapter re-exports none of the engine's names — import
 those from `rwa_filer` directly.
+
+## The filing-mapping ratchet
+
+`rwa_calc.reporting.filing.canonical.build_canonical_return` turns a generated
+Basel 3.1 COREP bundle into a canonical return. Every generated cell is either
+placed on a taxonomy data point or returned as unplaced with a reason. None is
+dropped.
+
+`scripts/filing_mapping_report.py` runs that over every Basel 3.1 portfolio in
+the supervisory register's matrix and ratchets two counts against
+`scripts/filing_mapping_baseline.json`:
+
+| Count | Banked | Rule |
+|-------|-------:|------|
+| `placed_cells` — distinct cells that land on a taxonomy data point | 1,911 | May not fall |
+| `unplaced_figures` — distinct cells holding a non-zero figure with no place | 1,025 | May not rise, in total or for any (template, reason) |
+
+A zero in a cell the taxonomy lacks loses nothing and is not counted.
+
+The unplaced figures are the work list. The reasons, largest first:
+
+| Reason | Figures | What it means |
+|--------|--------:|---------------|
+| `sheet_coarser_than_published_axis` | 816 | Our IRB sheets (OF 08.01–08.05) are per exposure class. The published sheet axis also splits by approach and by SME / non-SME, so a figure on one of our sheets cannot be assigned to one published sheet. |
+| `cell_not_reportable` | 102 | The row and column both exist, but the taxonomy greys that cell. |
+| `open_rows_not_mapped` | 40 | OF 08.02 has open rows (obligor grades); the adapter does not yet map them. |
+| `open_key_not_a_member` | 32 | A sheet key that is not a member of the table's open axis (OF 08.06 specialised-lending types, OF 34.02 netting sets). |
+| `column_not_in_taxonomy` | 24 | A column the published table does not have. |
+| `row_not_in_taxonomy` | 11 | A row the published table does not have. |
+
+```bash
+uv run python scripts/filing_mapping_report.py              # measure and print
+uv run python scripts/filing_mapping_report.py --check      # gate against the baseline
+uv run python scripts/filing_mapping_report.py --update-baseline
+```
+
+The gate is its own CI job, `Filing Mapping Ratchet`. It is not part of
+`arch_check`, and its pytest mirror is `slow`-marked, so nothing in the dev loop
+runs the measurement. Bank a deliberate move with `--update-baseline` and say
+why in the baseline's `_note`.
 
 ## The one rule: the dependency points one way
 

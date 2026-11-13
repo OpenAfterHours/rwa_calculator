@@ -26,6 +26,30 @@ and released independently of `rwa-calc`; its release tags are prefixed
   commands — rebuild an extract from a publisher's rule workbook, or fail if
   the packaged one is not exactly what the workbook yields. Reading a workbook
   needs the new `rwa-filer[excel]` extra (openpyxl); validation does not.
+- `rwa_filer.taxonomy` — taxonomy packs: the tables, reportable cells and data
+  points of a reporting module, as package data. Ships `PRA001` for the Bank of
+  England banking taxonomy v4.1.1 (applies from 1 January 2027): 104 tables,
+  61,615 reportable cells, 61,428 data points, 83 filing indicators.
+  `resolve_pack(module, reference_date)` selects the version in force; a date
+  no pack covers raises `PackNotFoundError` and never falls back.
+  `rwa-filer taxonomy list | compile` — the compiler builds a pack from the
+  Bank's annotated templates, DPM dictionary and taxonomy package, and is
+  byte-reproducible.
+- `rwa_filer.model` — the canonical return: a `ReturnHeader` (entity, reference
+  date, module, currency) and one fact per reported cell (`table`, `sheet`,
+  `open_key`, `row`, `column`, `value`, `text_value`).
+- `rwa_filer.validate.structure` — structure checks `STR001`–`STR009`: every
+  fact sits in a table, sheet, open-axis member and cell the taxonomy accepts,
+  is of the cell's type, is reported once, and agrees with any other cell that
+  reports the same data point; every row of an open-row table has a key of the
+  right type that no other row repeats; the header carries a checksum-valid LEI.
+- `rwa_filer.validate.returns.validate_return` — structure, then the published
+  rules, in one pass over a canonical return.
+- `rwa_filer.readers` — read a return from Parquet, CSV or an Excel workbook in
+  the template layout.
+- `rwa-filer validate FILE` (text or JSON output, exit code `1` when anything
+  blocks submission) and `rwa-filer template` (a blank workbook for a module,
+  with the cells the taxonomy does not accept shaded grey).
 
 ### Changed
 - (Next release changes will go here)

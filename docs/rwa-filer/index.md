@@ -23,8 +23,119 @@ pip install rwa-filer
 | The published validation rules as package data (EBA DPM 3.0 for CRR, BoE banking v4.0.0 for Basel 3.1) | Available |
 | Rule engine: evaluate every enforced rule against a return's templates | Available |
 | `rwa-filer rules` — inspect, rebuild and check the rule extracts | Available |
-| Taxonomy pack, file readers (Parquet, CSV, Excel) and `rwa-filer validate` | Planned |
+| Taxonomy pack: the tables, cells and data points of a reporting module (PRA001, taxonomy v4.1.1) | Available |
+| Structure checks: every fact sits in a cell the taxonomy accepts | Available |
+| File readers (Parquet, CSV, Excel) and `rwa-filer validate` | Available |
 | XBRL submission file and the Arelle referee | Planned |
+
+## Validating a file
+
+```bash
+# A long-format fact table: one row per reported cell
+rwa-filer validate return.parquet \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+
+# A workbook in the template layout carries its own header
+rwa-filer validate return.xlsx --format json --report findings.json
+```
+
+The exit code is `0` when nothing blocks submission and `1` when something
+does. `--report` writes every finding as JSON whatever the outcome.
+
+A return is checked in two steps. **Structure** comes first: each fact is looked
+up in the taxonomy pack for the module and reference date. **Rules** follow: the
+published validation rules run over the same facts. A structure finding does not
+stop the rules from running, so one pass reports everything.
+
+### The fact table
+
+A Parquet or CSV return is a table with one row per reported cell.
+
+| Column | Required | Meaning |
+|--------|----------|---------|
+| `table` | Yes | The published table code, e.g. `OF07.00.01.01` |
+| `row` | Yes | Row code, e.g. `0010` (a bare `10` is padded) |
+| `column` | Yes | Column code, e.g. `0010` |
+| `value` | Yes | The figure. Leave empty for a text cell. |
+| `sheet` | For tables with a sheet axis | The published sheet code, e.g. `0008` |
+| `open_key` | For tables with an open axis | The open-axis member, e.g. a country code |
+| `text_value` | For text cells | The cell's text |
+
+A fact table carries no header, so the reporting entity, reference date and
+module are given on the command line.
+
+Some tables have open rows: the template lists no rows, and the filer adds one
+per obligor grade, counterparty or similar. For these, `row` is any identifier
+that is unique within the table and sheet, and each row also carries a fact in
+every key column (for example the obligor grade in column `0005` of
+`OF08.02.01.01`). The key is what the row's figures are reported under.
+
+### The workbook
+
+`rwa-filer template` writes a blank workbook for a module: one worksheet per
+table and sheet, laid out as the published template, with the cells the
+taxonomy does not accept shaded grey. Fill it in and pass it to `validate`.
+
+```bash
+rwa-filer template --module PRA001 --reference-date 2027-03-31 \
+    --tables OF02.00.01.01 OF07.00.01.01 --out return.xlsx
+```
+
+Reading and writing workbooks needs the `rwa-filer[excel]` extra.
+
+### From Python
+
+```python
+from datetime import date
+
+import polars as pl
+from rwa_filer.model import CanonicalReturn, ReturnHeader
+from rwa_filer.validate.returns import validate_return
+
+header = ReturnHeader("5493001KJTIIGC8Y1R12", date(2027, 3, 31), "PRA001")
+facts = pl.DataFrame(
+    {"table": ["OF02.00.01.01"], "row": ["0010"], "column": ["0010"], "value": [1_000.0]}
+)
+
+result = validate_return(CanonicalReturn.from_frame(header, facts))
+print(result.is_submittable)
+for finding in result.findings:
+    print(finding.code, finding.message)
+```
+
+This one-cell return prints `False` and a single `VAL003`: the cell is valid,
+but no published rule can run on one cell, and a return nothing was checked
+against is not reported as clean.
+
+## Taxonomy packs
+
+A taxonomy pack is the regulator's data point model for one reporting module,
+compiled into three small files: which tables the module has, which cells of
+each table are reportable, and which data point each cell reports. It ships
+inside the package, so validation needs no network access.
+
+```bash
+rwa-filer taxonomy list
+```
+
+| Module | Taxonomy | Applies from | Tables | Reportable cells |
+|--------|----------|--------------|--------|------------------|
+| `PRA001` | Bank of England banking v4.1.1 | 1 January 2027 | 104 | 61,615 |
+
+The pack is chosen by the return's module and reference date. A reference date
+before a pack applies has no pack, and validation says so and stops there:
+it does not fall back to a different version.
+
+A pack is compiled from three files the Bank of England publishes: the annotated
+templates, the DPM dictionary and the XBRL taxonomy package. The taxonomy is
+authoritative for which cells are reportable. The compile is reproducible: the
+same three files always give byte-identical output.
+
+```bash
+rwa-filer taxonomy compile --module PRA001 --valid-from 2027-01-01 \
+    --annotated "Annotated Templates.xlsx" --dictionary "DPM dictionary.xlsx" \
+    --taxonomy taxonomy-package.zip --out pra001-4.1.1/
+```
 
 ## How a return reaches the engine
 
@@ -55,6 +166,9 @@ Each frame has a `row_ref` column and one column per reported column reference.
 `rwa_calc.reporting.filing`, which is the one place that knows how the
 calculator's sheets map onto the published sheet codes.
 
+`validate_return` builds the index itself from a canonical return, so a caller
+holding a fact table does not need to.
+
 ## Findings
 
 `check_index` returns a list of `Finding` records. It never raises for a
@@ -69,6 +183,24 @@ condition in the data.
 `VAL003` is what makes an empty list safe to read as "checked and clean". Without
 it, a return on which no rule could run would produce no breaks and look
 identical to a clean one.
+
+`validate_return` adds the structure findings. All are Errors: the regulator
+rejects a file that has any of them.
+
+| Code | Meaning |
+|------|---------|
+| `STR001` | The return names a table the module does not have. |
+| `STR002` | A fact sits in a cell the taxonomy does not accept: an unknown row or column, or a greyed-out cell. |
+| `STR003` | A fact names a sheet the table does not have, or omits one it needs. |
+| `STR004` | A fact's open-axis member is not one the table accepts, or a row of an open-row table has a key that is missing or of the wrong type. |
+| `STR005` | The same cell is reported more than once, or two rows of an open-row table carry the same key. |
+| `STR006` | A value is not of the cell's type, for example a fraction in a whole-number cell. |
+| `STR007` | One data point is reported in two cells with different values. |
+| `STR008` | The header is invalid: the identifier is not a valid LEI, or the module is unknown. |
+| `STR009` | The return carries no facts. |
+
+Each fact is reported once, against its root cause. A fact in an unknown table
+is `STR001` only; it is not also reported as an unknown cell.
 
 `evaluate_index` returns the full `ValidationReport` behind the findings: one
 outcome per enforced rule, with four distinct statuses.

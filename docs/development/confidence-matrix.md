@@ -96,7 +96,7 @@ Package version `0.3.34`. Resolved packs:
 | 147 | 5 | 5 | 22 | 0 | 26 | MEDIUM |
 | 148 | 2 | 0 | 8 | 0 | 5 | MEDIUM |
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
-| 151 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
+| 151 | 1 | 0 | 2 | 0 | 5 | MEDIUM |
 | 153 | 13 | 11 | 29 | 15 | 70 | HIGH |
 | 154 | 5 | 0 | 6 | 4 | 22 | HIGH |
 | 155 | 7 | 4 | 10 | 3 | 22 | HIGH |
@@ -124,7 +124,7 @@ Package version `0.3.34`. Resolved packs:
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
 | 200 | 0 | 0 | 4 | 0 | 5 | UNCITED |
-| 201 | 1 | 0 | 3 | 9 | 4 | HIGH |
+| 201 | 1 | 0 | 4 | 9 | 4 | HIGH |
 | 203 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 205 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
 | 207 | 1 | 0 | 2 | 0 | 7 | MEDIUM |
@@ -205,7 +205,7 @@ Package version `0.3.34`. Resolved packs:
 
 | para. | Code fns | Pack | Src | Oracle | Tests | Confidence |
 |---|---|---|---|---|---|---|
-| 1 | 14 | 0 | 7 | 0 | 0 | LOW |
+| 1 | 16 | 0 | 8 | 0 | 0 | LOW |
 | 4 | 4 | 11 | 4 | 0 | 0 | LOW |
 | 36 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 62 | 0 | 0 | 2 | 0 | 0 | UNCITED |
@@ -252,8 +252,8 @@ Package version `0.3.34`. Resolved packs:
 | 138 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 139 | 1 | 1 | 6 | 0 | 3 | MEDIUM |
 | 140 | 2 | 0 | 3 | 0 | 5 | MEDIUM |
-| 147 | 14 | 3 | 15 | 0 | 26 | MEDIUM |
-| 147A | 2 | 2 | 16 | 0 | 29 | MEDIUM |
+| 147 | 14 | 3 | 16 | 0 | 26 | MEDIUM |
+| 147A | 2 | 2 | 18 | 0 | 31 | MEDIUM |
 | 147B | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 150 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 153 | 1 | 9 | 13 | 11 | 28 | HIGH |

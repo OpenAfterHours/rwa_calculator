@@ -33,6 +33,15 @@ from rwa_calc.reporting.corep.templates import (
 )
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_FIRB,
+    OF08_RETAIL_RESIDENTIAL_NON_SME,
+    OF08_SPECIALISED_LENDING_FIRB_SLOTTING,
+    irb_sheet,
+)
+
 #: The C 08.01 rows the slotting book reports on: the Total (0010), its
 #: on-balance-sheet split (0020) and the slotting total (0080). Row 0070
 #: (obligor grades) is deliberately NOT among them.
@@ -99,8 +108,11 @@ class TestC0802ExcludesSlotting:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_mixed_slotting_results(), framework=framework)
 
-        assert "corporate" in bundle.c08_02
-        assert "specialised_lending" not in bundle.c08_02
+        assert irb_sheet(framework, "corporate", OF08_CORPORATE_NON_SME_FIRB) in bundle.c08_02
+        assert (
+            irb_sheet(framework, "specialised_lending", OF08_SPECIALISED_LENDING_FIRB_SLOTTING)
+            not in bundle.c08_02
+        )
 
     def test_c0801_still_reports_slotting_on_row_0080(self) -> None:
         """OF 08.01 keeps the slotting book — it reports on row 0080, not 0070.
@@ -113,7 +125,7 @@ class TestC0802ExcludesSlotting:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_mixed_slotting_results(), framework="BASEL_3_1")
 
-        sheet = bundle.c08_01["specialised_lending"]
+        sheet = bundle.c08_01[OF08_SPECIALISED_LENDING_FIRB_SLOTTING]
         assert sheet.filter(pl.col("row_ref") == "0080")["0110"][0] == pytest.approx(10000.0)
         assert sheet.filter(pl.col("row_ref") == "0070")["0110"][0] is None
 
@@ -128,8 +140,12 @@ class TestC0802ExcludesSlotting:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_mixed_slotting_results(), framework="BASEL_3_1")
 
-        grades_total = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0070")["0110"][0]
-        assert grades_total == pytest.approx(bundle.c08_02["corporate"]["0110"].sum())
+        grades_total = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(
+            pl.col("row_ref") == "0070"
+        )["0110"][0]
+        assert grades_total == pytest.approx(
+            bundle.c08_02[OF08_CORPORATE_NON_SME_FIRB]["0110"].sum()
+        )
 
 
 class TestC0801RweaAdjustmentIdentity:
@@ -146,7 +162,7 @@ class TestC0801RweaAdjustmentIdentity:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_mixed_slotting_results(), framework="BASEL_3_1")
 
-        sheet = bundle.c08_01["specialised_lending"]
+        sheet = bundle.c08_01[OF08_SPECIALISED_LENDING_FIRB_SLOTTING]
         for ref in _SLOTTING_ROWS:
             row = sheet.filter(pl.col("row_ref") == ref)
             assert row["0251"][0] == pytest.approx(7800.0), ref
@@ -184,7 +200,7 @@ class TestC0801ExposureAfterAllCrm:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_mixed_slotting_results(), framework="BASEL_3_1")
 
-        total = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0010")
+        total = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0010")
         assert total["0104"][0] == pytest.approx(8000.0)
         assert total["0104"][0] == pytest.approx(total["0090"][0])
 
@@ -267,7 +283,7 @@ class TestC0801OtherFundedCreditProtection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_over_collateralised_results(), framework="BASEL_3_1")
 
-        row = bundle.c08_01["retail_mortgage"].filter(pl.col("row_ref") == "0010")
+        row = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME].filter(pl.col("row_ref") == "0010")
         assert row["0060"][0] == pytest.approx(0.0)
 
     def test_waterfall_closes_at_the_full_exposure(self) -> None:
@@ -281,7 +297,7 @@ class TestC0801OtherFundedCreditProtection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_over_collateralised_results(), framework="BASEL_3_1")
 
-        row = bundle.c08_01["retail_mortgage"].filter(pl.col("row_ref") == "0010")
+        row = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME].filter(pl.col("row_ref") == "0010")
         assert row["0090"][0] == pytest.approx(700000.0)
         assert row["0090"][0] == pytest.approx(row["0020"][0])
 
@@ -295,7 +311,9 @@ class TestC0801OtherFundedCreditProtection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_over_collateralised_results(), framework="BASEL_3_1")
 
-        populated = bundle.c08_01["retail_mortgage"].filter(pl.col("0090").is_not_null())
+        populated = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME].filter(
+            pl.col("0090").is_not_null()
+        )
         assert populated.height > 0
         assert (populated["0090"] >= -1e-9).all()
 
@@ -310,7 +328,7 @@ class TestC0801OtherFundedCreditProtection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_over_collateralised_results(), framework="BASEL_3_1")
 
-        row = bundle.c08_01["retail_mortgage"].filter(pl.col("row_ref") == "0010")
+        row = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME].filter(pl.col("row_ref") == "0010")
         assert row["0190"][0] == pytest.approx(600000.0)
 
     @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
@@ -324,7 +342,9 @@ class TestC0801OtherFundedCreditProtection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_over_collateralised_results(), framework=framework)
 
-        row = bundle.c08_01["retail_mortgage"].filter(pl.col("row_ref") == "0010")
+        row = bundle.c08_01[
+            irb_sheet(framework, "retail_mortgage", OF08_RETAIL_RESIDENTIAL_NON_SME)
+        ].filter(pl.col("row_ref") == "0010")
         assert row["0060"][0] == pytest.approx(0.0)
         assert row["0090"][0] == pytest.approx(700000.0)
 
@@ -338,7 +358,7 @@ class TestC0801OtherFundedCreditProtection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_over_collateralised_results(), framework="BASEL_3_1")
 
-        sheet = bundle.c08_02["retail_mortgage"]
+        sheet = bundle.c08_02[OF08_RETAIL_RESIDENTIAL_NON_SME]
         assert sheet.height > 0
         assert (sheet["0090"].fill_null(0.0) >= -1e-9).all()
         assert (sheet["0060"].fill_null(0.0) == 0.0).all()
@@ -387,7 +407,7 @@ class TestC0801SubstitutionBlockCap:
         )
         bundle = gen.generate_from_lazyframe(results, framework="BASEL_3_1")
 
-        row = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0010")
+        row = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0010")
         assert row["0060"][0] == pytest.approx(-300000.0)
         assert row["0090"][0] == pytest.approx(0.0)
         # v1663_m: the cap must land on col 0060 itself, not just on the col

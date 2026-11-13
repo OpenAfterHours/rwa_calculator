@@ -793,9 +793,51 @@ LOAN_EXPECTED_ORIGIN_SHEET_CRR: dict[str, tuple[str, str]] = {
     LN_S8_PLAIN: ("c08_01", "specialised_lending"),
     LN_S8_GTD: ("c08_01", "specialised_lending"),
 }
-#: No regime divergence is exercised in this portfolio (see module docstring)
-#: — identical to the CRR map.
-LOAN_EXPECTED_ORIGIN_SHEET_B31: dict[str, tuple[str, str]] = dict(LOAN_EXPECTED_ORIGIN_SHEET_CRR)
+#: The SAME legs under Basel 3.1. No regime divergence is exercised in the
+#: NUMBERS (see module docstring), but the OF 08.01 sheet is not the CRR one:
+#: Basel 3.1 publishes the IRB sheets per class AND approach (BoE Banking
+#: Taxonomy v4.1.1, ``OF08.01.01.01``), so each C 08.01 entry names the
+#: published sheet's key. RE-ANCHORED 2026-11-13: this was ``dict(..._CRR)``,
+#: i.e. the class sheets ``corporate`` / ``institution`` / ``specialised_lending``,
+#: which no published code names. Every modelled corporate obligor here is
+#: F-IRB and non-SME (sheet 0012), the institution is F-IRB (0006), and the
+#: slotting legs are on the one sheet that takes slotting (0010). C 07.00 keeps
+#: the Art. 112(1) class key under both regimes.
+LOAN_EXPECTED_ORIGIN_SHEET_B31: dict[str, tuple[str, str]] = {
+    LN_S1: ("c08_01", "corporate_non_sme_firb"),
+    LN_S1_GTOR_OWN: ("c08_01", "institution_firb"),
+    LN_S2: ("c08_01", "corporate_non_sme_firb"),
+    LN_S3: ("c08_01", "corporate_non_sme_firb"),
+    LN_S4: ("c07", "corporate"),
+    LN_S4_GTOR_OWN: ("c07", "institution"),
+    LN_S5: ("c08_01", "corporate_non_sme_firb"),
+    LN_S6: ("c08_01", "specialised_lending_firb_slotting"),
+    LN_S7: ("c08_01", "corporate_non_sme_firb"),
+    LN_S8_PLAIN: ("c08_01", "specialised_lending_firb_slotting"),
+    LN_S8_GTD: ("c08_01", "specialised_lending_firb_slotting"),
+}
+
+#: Where each IRB-destination guarantee's inflow lands on OF 08.01 under Basel
+#: 3.1, keyed by guarantee reference — the published sheet of the leg's
+#: POST-substitution (approach, class). ``SUBSTITUTION_INFLOW_DESIGN`` below
+#: records the regulatory destination CLASS and stays regime-independent; this
+#: is the sheet that class is reported on.
+#:
+#: GUAR_S2 IS THE ONE THAT DOES NOT FOLLOW ITS CLASS. Its guarantor is retail,
+#: but the engine keeps the OBLIGOR's F-IRB approach on the covered leg, and
+#: (F-IRB, retail) is a pair no Basel 3.1 sheet — and no OF 02.00 row — exists
+#: for: retail exposures are A-IRB only (CRR Art. 151(4)). OF 02.00 has always
+#: reported that RWEA with the obligor's class (``corep/irb_sheets.py::
+#: placeable_irb_class``), and OF 08.01 row 0010 col 0260 of each sheet is ONE
+#: data point with its OF 02.00 row, so the covered part stays on the obligor's
+#: sheet: an outflow and an inflow on the same sheet, as for a same-class
+#: guarantee. Under CRR the class-keyed ``retail_other`` sheet still takes it.
+B31_C08_01_DESTINATION_SHEET: dict[str, str] = {
+    GUAR_S1: "institution_firb",
+    GUAR_S2: "corporate_non_sme_firb",
+    GUAR_S5: "corporate_non_sme_firb",
+    GUAR_S7: "institution_firb",
+}
 
 #: Per-scenario substitution-inflow expectations, keyed by the guarantee
 #: reference. ``destination_class`` is ``post_crm_exposure_class_guaranteed``

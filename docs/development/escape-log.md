@@ -3070,3 +3070,111 @@ gate that shipped.
 - **Lesson**: an engine with two ways in has two definitions of its input
   unless something states that they are one. "The same return, before and after
   it is filed" is that statement, and it is cheap to assert.
+
+## 2026-11-13 — The Basel 3.1 IRB templates were laid out on a sheet axis coarser than the published one, and the filing ratchet banked every figure on them as unplaceable
+
+- **Defect**: PS1/26 publishes OF 08.01, 08.02, 08.03 and 08.05 on a 17-sheet
+  axis — fifteen exposure-class-and-approach sheets (F-IRB institutions, A-IRB
+  specialised lending, F-IRB other general corporates non-SME, retail secured
+  by residential property SME, …) and a Total per approach. We generated them
+  on one sheet per exposure class. A class sheet is coarser than the published
+  axis — `corporate` answers five published sheets, `retail_mortgage` four — so
+  no figure on it could be put on any one published sheet, and none was filed:
+  816 distinct non-zero figures over the 13 Basel 3.1 portfolios (OF 08.01 356,
+  08.02 203, 08.03 198, 08.05 55, 08.04 4). The two Total sheets were not
+  produced at all.
+- **Rules**: every Bank rule that reads an OF 08 sheet by code was NOT_EVALUATED
+  on every portfolio, and the cross-template rules that read OF 08.01 beside
+  OF 02.00 or OF 09.02 compared a figure with nothing.
+- **Escape class**: `caught-and-parked`. The filing-mapping ratchet measured the
+  gap from the day the canonical return was built
+  (`sheet_coarser_than_published_axis`) and its baseline recorded the count as
+  the state. `filing/sheet_maps.py::_OF08_SHEETS` stated the coarseness in its
+  own entries — two published codes per key, labelled "1st approach" and
+  "2nd approach" — and the template engine's sample sheet maps describe that as
+  "the case the closure logic exists for". The gap was measured, named and
+  accommodated; nothing owned closing it.
+- **Gate change**: `tests/contracts/test_of08_published_sheets.py` holds the
+  Basel 3.1 sheet axis to the PRA001 taxonomy in both directions — the declared
+  sheets are exactly the published codes of every OF 08 table, each carries
+  the published label and takes the approach, size and property its dimension
+  members name, no two codes share a key, each sheet total is one data point
+  with its OF 02.00 row, and a book with a leg for every sheet emits every
+  published sheet and nothing the taxonomy cannot place. The sheet definition
+  is one table (`reporting/corep/irb_sheets.py`) that OF 02.00 and OF 08 both
+  read, so the two templates cannot place a leg differently.
+- **Verified red**: the contract and unit tests against the unchanged
+  generator: `120 failed, 33 passed` (the 33 test the declaration alone);
+  representative failures `assert 975.0 == 255.0` (a sheet carrying the whole
+  class instead of its own approach and size) and `AssertionError: assert 2.0
+  == 1` (one class sheet answering two published codes). The declaration was
+  then mutated eight ways — a label, an approach, a dropped sheet, the SME,
+  commercial-property and financial-or-large flags, the OF 02.00 row, one code
+  mapped to two keys — and every mutation turned the contract test red.
+- **The fix**: `reporting/corep/irb_sheets.py` (the axis and the leg
+  classification, moved out of `c02.py`) and `reporting/corep/c08_sheets.py`
+  (sheet keys, the two Totals, `c08_class_sheets` for consumers that add up
+  class sheets). Every slotting leg is on sheet 0010 row 0080 and on the
+  F-IRB-and-slotting Total, and OF 08.02 / 08.03 / 08.05 exclude slotting
+  (Annex II row 0080, ¶75, ¶77, ¶77A). A pair the published axis has no sheet
+  for (an A-IRB institution, say) goes on an off-axis key, is counted in its
+  approach's Total as OF 02.00 counts it, and is recorded as an error — never
+  dropped and never put on a neighbouring sheet. A Total averages each
+  parameter only over the legs that carry it (Annex II c0250: maturity "shall
+  not be filled in … for exposures subject to the slotting approach"). CRR is
+  unchanged: no EBA taxonomy is held to lay its axis out against, and no CRR
+  output moved.
+- **What the fix moved**: no RWA, EAD or risk weight. The money columns of the
+  old class sheets and the new sheets agree exactly. Filing ratchet: placed
+  cells 2,349 → 4,106; unplaced figures 901 → 523 (`sheet_coarser` 816 → 0).
+  Coverage: Basel 3.1 binding rules 365 → 397, live cells 9,171 → 10,309.
+- **What it exposed — true before, visible now, each left open**:
+  - Maturity is reported as a fraction against integer-typed data points
+    (OF 08.01 c0250 in days, OF 08.03 c0080 in years): STR006, which now keeps
+    four more IRB portfolios out of the referee's golden set.
+  - OF 09.02 classifies "financial and large corporates" from
+    `cp_apply_fi_scalar` where OF 02.00 / OF 08 read `exposure_subclass`
+    (`boe_b1034`, `b1051`–`b1055` on irb-shapes).
+  - The retail-guarantor leg (crm-substitution S2) is on its obligor's sheet in
+    OF 08 and under retail in OF 09.02 — downstream of the missing CRR Art. 201
+    eligibility gate recorded in `c02.py`.
+  - OF 08.01 rows 0031–0035 (off-balance-sheet by conversion factor) are empty
+    while row 0030 carries the total (`boe_b0741`, `b0742`); column 0010 (PD)
+    is never emitted (`boe_b0356`, Warning); retail sheets report c0250, which
+    Annex II says they must not; and OF 08.01 has per-sheet greyed cells we
+    still fill (60 figures).
+  - On the binding-floor portfolio OF 02.00 r0297 (un-floored) and OF 08.01
+    sheet 0012 c0260 (post-floor) are one data point with two values (STR007,
+    `boe_b0621`) — plan item P1.369.
+  - The Bank's `boe_b0735`–`b0739` include the FIRB-and-slotting sheets on
+    OF 08.03, which ¶77 says excludes slotting; the gap is exactly row 0080.
+- **Lesson**: a ratchet that banks a gap as "the state" is a register, not a
+  gate. A breakdown reason in a filing measure needs an owner the way a known
+  break does.
+
+## 2026-11-13 — The template-level rule engine widened a same-sheet sum to every sheet when the sheet was absent
+
+- **Defect**: a rule evaluated on one sheet of OF 08.01 that sums a column of
+  OF 08.02 without naming a sheet reads OF 08.02 on the same sheet
+  (`boe_b0752_*`, `boe_b0814_*`: OF 08.01 row 0070 = the sum of OF 08.02 on
+  that sheet). `rwa_filer.validate.evaluate._reference_sheets` fell back to
+  EVERY OF 08.02 sheet when OF 08.02 did not carry the one in question, and so
+  compared one sheet's row 0070 with the whole template.
+- **Found by**: the supervisory register, on the day the OF 08 sheets took the
+  published axis. OF 08.02 excludes slotting, so the FIRB-and-slotting sheet is
+  absent there whenever it holds only slotting: 19 rules broke on irb-shapes.
+  Before, the coordinate was skipped by the luck of a missing row.
+- **Escape class**: `no-gate-exists`. Nothing tested a same-axis reference to
+  a sheet the referenced table does not carry; the only fallback test was the
+  one where there is no sheet to follow.
+- **Gate change**: `packages/rwa-filer/tests/validate/test_evaluation_semantics.py`
+  — `test_a_sum_over_a_sheet_the_summed_table_does_not_carry_is_skipped_not_widened`,
+  and beside it `test_a_sum_with_no_sheet_context_still_spans_every_sheet`, which
+  holds the fallback the fix keeps.
+- **Verified red**: `1 failed, 1 passed` before the fix —
+  `assert ('FAIL', '') == ('NOT_EVALUATED', 'sheet_not_emitted')` (it read the
+  corporate sheet's 99 against the institution sheet's 5). After: both pass, and
+  the 19 register breaks are gone. No CRR outcome moved.
+- **The fix**: a sheet of the table's own axis that the table does not carry is
+  `sheet_not_emitted` for that reference; the every-sheet fallback is kept for
+  a coordinate with no sheet on that axis.

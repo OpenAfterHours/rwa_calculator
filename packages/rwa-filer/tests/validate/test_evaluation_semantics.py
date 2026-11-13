@@ -39,6 +39,7 @@ from rwa_filer.rules.catalogue import (
     ARITHMETIC_INTERVAL,
     ARITHMETIC_NOT_APPLICABLE,
     ARITHMETIC_POINT,
+    FRAMEWORK_BASEL_3_1,
     MISSING_SKIP,
     MISSING_ZERO,
     load_rules,
@@ -269,6 +270,58 @@ def test_a_sheet_class_this_estate_does_not_produce_is_skipped_by_name() -> None
 
     # Assert
     assert (outcome.status, outcome.reason) == (STATUS_NOT_EVALUATED, SKIP_SHEET_NOT_EMITTED)
+
+
+def test_a_sum_over_a_sheet_the_summed_table_does_not_carry_is_skipped_not_widened() -> None:
+    """A sum with no sheet of its own reads the sheet the rule is evaluated on.
+
+    ``boe_b0752_*`` compare OF 08.01 row 0070 on one sheet with the sum of the
+    same column of OF 08.02 on THAT sheet. Where OF 08.02 does not carry the
+    sheet (it excludes slotting, so the FIRB-and-slotting sheet can be absent),
+    the sum has nothing to read. It used to fall back to every OF 08.02 sheet and
+    compare one sheet's total with the whole template's.
+    """
+    # Arrange — OF 08.01 has the institutions sheet; OF 08.02 only corporates.
+    index = build_index(
+        FRAMEWORK_BASEL_3_1,
+        c08_01={"institution": build_frame({"0070": {"0110": 5.0}})},
+        c08_02={"corporate": build_frame({"grade_1": {"0110": 99.0}})},
+    )
+
+    # Act
+    outcome = evaluate(
+        "{OF08.01.01.01, r0070, c0110} = sum({OF08.02.01.01, c0110})",
+        index,
+        table="OF08.01.01.01",
+        sheet="institution",
+    )
+
+    # Assert
+    assert (outcome.status, outcome.reason) == (STATUS_NOT_EVALUATED, SKIP_SHEET_NOT_EMITTED)
+
+
+def test_a_sum_with_no_sheet_context_still_spans_every_sheet() -> None:
+    """The fallback the fix keeps: a rule on a single-sheet template summing a
+    per-sheet one has no sheet to follow, so it reads them all."""
+    # Arrange
+    index = build_index(
+        FRAMEWORK_BASEL_3_1,
+        of_02_01=build_frame({"0010": {"0010": 104.0}}),
+        c08_02={
+            "corporate": build_frame({"grade_1": {"0110": 99.0}}),
+            "institution": build_frame({"grade_1": {"0110": 5.0}}),
+        },
+    )
+
+    # Act
+    outcome = evaluate(
+        "{OF02.01.01.01, r0010, c0010} = sum({OF08.02.01.01, c0110})",
+        index,
+        table="OF02.01.01.01",
+    )
+
+    # Assert
+    assert (outcome.status, outcome.rhs) == (STATUS_PASS, 104.0)
 
 
 def test_v0204_m_over_unproduced_risk_rows_is_skipped_not_broken() -> None:

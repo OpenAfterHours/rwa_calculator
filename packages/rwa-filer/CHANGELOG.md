@@ -158,6 +158,13 @@ and released independently of `rwa-calc`; its release tags are prefixed
   frames.
 
 ### Fixed
+- **A same-sheet reference to a sheet the referenced table does not carry is
+  skipped, not widened.** In the template-level engine (`rwa_filer.validate`), a
+  rule evaluated on one sheet that sums another table's column without naming a
+  sheet reads that table on the same sheet; where the table did not carry it,
+  the engine summed every one of its sheets instead. It now reports the
+  reference as `sheet_not_emitted`. A coordinate with no sheet on that axis
+  still spans every sheet.
 - **A fact is read in every reported table that shows its data point.** The
   taxonomy shows some data points in two tables (the A-IRB total is a row of
   OF 02.00 and the total of an OF 08.01 sheet), and such a figure is one fact

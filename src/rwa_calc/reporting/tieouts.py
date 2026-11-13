@@ -42,7 +42,9 @@ row code each regime's published template gives them:
 - ``irb_rwea_c08_01_vs_c02``   Σ C 08.01 sheets [0010][0260] == C 02.00 IRB net
                                of "Equity IRB" where the template has that row —
                                Art. 155 equity is IRB RWEA but reports in
-                               C 10.01 (``v4260_i``), not C 08.01.
+                               C 10.01 (``v4260_i``), not C 08.01. The CLASS
+                               sheets: OF 08.01 also carries two Total sheets,
+                               which are their sum (``c08_class_sheets``).
 - ``irb_rwea_c08_01_vs_ov1``   Σ C 08.01 sheets [0010][0260] == OV1 [3]+[4]+[5]
                                (F-IRB + slotting + A-IRB).
 
@@ -97,6 +99,7 @@ from rwa_calc.contracts.errors import ERROR_CROSS_TEMPLATE_INCONSISTENCY
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.reporting.corep import c02_rows as rows
 from rwa_calc.reporting.corep.c07 import c07_class_sheets
+from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -316,7 +319,7 @@ TIE_OUTS: list[TieOut] = [
         templates=(_TEMPLATE_C08_01, _TEMPLATE_C02),
         lhs_label="Σ C 08.01 [0010][0260] IRB RWEA",
         rhs_label="C 02.00 [0240][0010] IRB RWEA net of Equity IRB",
-        lhs=lambda c, _p: _sheet_total(c.c08_01, "0260"),
+        lhs=lambda c, _p: _sheet_total(c08_class_sheets(c.c08_01), "0260"),
         rhs=lambda c, _p: _c02_irb_excluding_equity(c),
     ),
     TieOut(
@@ -335,7 +338,7 @@ TIE_OUTS: list[TieOut] = [
         templates=(_TEMPLATE_C08_01, "OV1"),
         lhs_label="Σ C 08.01 [0010][0260] IRB RWEA",
         rhs_label="OV1 [3]+[4]+[5] IRB RWEA",
-        lhs=lambda c, _p: _sheet_total(c.c08_01, "0260"),
+        lhs=lambda c, _p: _sheet_total(c08_class_sheets(c.c08_01), "0260"),
         rhs=lambda _c, p: _rows_sum(p.ov1, ("3", "4", "5"), "a"),
     ),
 ]

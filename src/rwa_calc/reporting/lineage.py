@@ -90,6 +90,7 @@ from rwa_calc.reporting.corep.c34 import (
     c34_08_frames,
     c34_08_plans,
 )
+from rwa_calc.reporting.corep.irb_sheets import TOTAL_AIRB_KEY, TOTAL_FIRB_SLOTTING_KEY
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
 from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.kernel import available_columns
@@ -1133,6 +1134,16 @@ _SUMMED_SHEETS: dict[tuple[str, str], str] = {
         "The Total sheet is the sum of the exposure-class sheets. Open the same "
         "cell on a class sheet to see the exposures behind it."
     ),
+    **{
+        (template_id, total_key): (
+            "A Total sheet is built from the class sheets of its approach: amounts "
+            "and counts are their sum, and an average is the exposure-weighted "
+            "average over them. Open the same cell on a class sheet to see the "
+            "exposures behind it."
+        )
+        for template_id in ("c08_01", "c08_02", "c08_03", "c08_05")
+        for total_key in (TOTAL_AIRB_KEY, TOTAL_FIRB_SLOTTING_KEY)
+    },
 }
 
 
@@ -1150,10 +1161,12 @@ def summed_sheet_reason(template_id: str, sheet: str | None) -> str | None:
     """Why a sheet has no drill-down of its own, when it is a sum of other sheets.
 
     The C 07.00 / OF 07.00 Total sheet is the cell-by-cell sum of the
-    exposure-class sheets (``corep/c07.py::c07_total_sheet``). It has no
+    exposure-class sheets (``corep/c07.py::c07_total_sheet``), and the two
+    OF 08.01 / 08.02 / 08.03 / 08.05 Total sheets are built from their class
+    sheets likewise (``corep/c08_sheets.py::with_total_sheets``). None has an
     execution plan — there is no population to select — so ``sheet_lineage``
     returns ``None`` for it. That is a different answer from "no such cell", and
-    a reader who clicked a figure on the Total deserves to be told where its
+    a reader who clicked a figure on a Total deserves to be told where its
     exposures are. ``None`` for every other sheet.
     """
     if sheet is None:

@@ -28,6 +28,13 @@ from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import _get_total_row
 
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_FIRB,
+    OF08_SPECIALISED_LENDING_FIRB_SLOTTING,
+)
+
 # =============================================================================
 # Part (a) fixtures — formula-IRB + slotting EL coalesce
 # =============================================================================
@@ -75,18 +82,24 @@ def _formula_and_slotting_b31() -> pl.LazyFrame:
 
 
 def _single_class_mixed_b31() -> pl.LazyFrame:
-    """One class (corporate) with a formula-IRB leg AND a slotting leg (B31).
+    """One sheet with a formula-IRB leg AND a slotting leg (B31).
 
     Proves the per-ROW coalesce on a single sheet: the formula leg keeps its
     el_pre_adjustment (100 / el_after 112), the slotting leg (adjustment EL
     NULL) contributes its expected_loss (40).
+
+    Both legs are specialised lending. They were classed ``corporate`` while the
+    sheets were keyed by exposure class; the published Basel 3.1 axis puts every
+    slotting leg on sheet 0010 "Specialised Lending (FIRB approach or slotting
+    approach)" (PS1/26 Annex II §3.3.3 row 0080), and the only formula-IRB legs
+    that share a sheet with it are F-IRB specialised lending.
     """
     return pl.LazyFrame(
         {
             "exposure_reference": ["CORP_F", "CORP_S"],
             "counterparty_reference": ["CP_F", "CP_S"],
             "approach_applied": ["foundation_irb", "slotting"],
-            "exposure_class": ["corporate", "corporate"],
+            "exposure_class": ["specialised_lending", "specialised_lending"],
             "drawn_amount": [1000.0, 800.0],
             "undrawn_amount": [0.0, 0.0],
             "nominal_amount": [0.0, 0.0],
@@ -117,7 +130,7 @@ class TestC0801ExpectedLossSlottingCoalesce:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_formula_and_slotting_b31(), framework="BASEL_3_1")
 
-        sl_total = _get_total_row(bundle.c08_01["specialised_lending"])
+        sl_total = _get_total_row(bundle.c08_01[OF08_SPECIALISED_LENDING_FIRB_SLOTTING])
         # SL slotting expected_loss: 30 + 45 = 75 (retired code reported 0.0).
         assert sl_total["0280"][0] == pytest.approx(75.0)
 
@@ -127,7 +140,7 @@ class TestC0801ExpectedLossSlottingCoalesce:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_formula_and_slotting_b31(), framework="BASEL_3_1")
 
-        sl_total = _get_total_row(bundle.c08_01["specialised_lending"])
+        sl_total = _get_total_row(bundle.c08_01[OF08_SPECIALISED_LENDING_FIRB_SLOTTING])
         assert sl_total["0282"][0] == pytest.approx(75.0)
 
     def test_slotting_sheet_0280_cross_checks_c0806_0090(self) -> None:
@@ -136,7 +149,7 @@ class TestC0801ExpectedLossSlottingCoalesce:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_formula_and_slotting_b31(), framework="BASEL_3_1")
 
-        sl_0280 = _get_total_row(bundle.c08_01["specialised_lending"])["0280"][0]
+        sl_0280 = _get_total_row(bundle.c08_01[OF08_SPECIALISED_LENDING_FIRB_SLOTTING])["0280"][0]
         pf = bundle.c08_06["project_finance"]
         # Rows 0110 (short-maturity Total) + 0120 (long-maturity Total), col 0090.
         c0806_el = float(pf.filter(pl.col("row_ref").is_in(["0110", "0120"]))["0090"].sum())
@@ -149,7 +162,7 @@ class TestC0801ExpectedLossSlottingCoalesce:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_formula_and_slotting_b31(), framework="BASEL_3_1")
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         assert corp["0280"][0] == pytest.approx(300.0)  # 100 + 200
         assert corp["0282"][0] == pytest.approx(330.0)  # 110 + 220
 
@@ -160,7 +173,7 @@ class TestC0801ExpectedLossSlottingCoalesce:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_single_class_mixed_b31(), framework="BASEL_3_1")
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[OF08_SPECIALISED_LENDING_FIRB_SLOTTING])
         assert corp["0280"][0] == pytest.approx(140.0)  # 100 (el_pre) + 40 (expected_loss)
 
     def test_mixed_sheet_0282_coalesces_per_row(self) -> None:
@@ -169,7 +182,7 @@ class TestC0801ExpectedLossSlottingCoalesce:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_single_class_mixed_b31(), framework="BASEL_3_1")
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[OF08_SPECIALISED_LENDING_FIRB_SLOTTING])
         assert corp["0282"][0] == pytest.approx(152.0)  # 112 (el_after) + 40 (expected_loss)
 
 

@@ -56,6 +56,7 @@ from rwa_calc.reporting.corep.c34 import (
     generate_c34_04,
     generate_c34_08,
 )
+from rwa_calc.reporting.corep.irb_sheets import get_irb_sheet_tabs
 from rwa_calc.reporting.corep.of02 import generate_of_02_01
 from rwa_calc.reporting.corep.sheet_labels import get_c07_sheet_labels
 from rwa_calc.reporting.corep.templates import (
@@ -113,15 +114,20 @@ class COREPTemplateBundle:
     each value is a DataFrame with row sections and 4-digit COREP column refs.
 
     C 07.00 (SA): One DataFrame per SA exposure class, with 5 row sections.
-    C 08.01 (IRB): One DataFrame per IRB exposure class, with 3 row sections.
-    C 08.02 (IRB by PD grade): One DataFrame per IRB exposure class.
-    C 08.03 (IRB PD ranges): One DataFrame per IRB exposure class, 17 fixed
+    C 08.01 (IRB): One DataFrame per IRB sheet, with 3 row sections. The
+        sheets are the exposure classes under CRR; under Basel 3.1 they are
+        the published OF 08 axis — fifteen class-and-approach sheets and the
+        two Total sheets (``corep/irb_sheets.py``, ``corep/c08_sheets.py``).
+        A reader that adds the sheets up must add the CLASS sheets
+        (``c08_sheets.c08_class_sheets``).
+    C 08.02 (IRB by PD grade): One DataFrame per IRB sheet, as C 08.01.
+    C 08.03 (IRB PD ranges): One DataFrame per IRB sheet, as C 08.01; 17 fixed
         regulatory PD range buckets, 11 columns. Slotting excluded.
     C 08.04 (IRB RWEA flow): One DataFrame per IRB exposure class, 9 rows
         (opening RWEA, 7 movement drivers, closing RWEA), 1 column (RWEA).
         Closing RWEA populated from pipeline; opening and drivers require
         prior-period data. Slotting excluded.
-    C 08.05 (IRB PD backtesting): One DataFrame per IRB exposure class, 17
+    C 08.05 (IRB PD backtesting): One DataFrame per IRB sheet, as C 08.01; 17
         fixed PD range buckets, 5 columns. Validates PD model calibration by
         comparing assigned PDs against observed default rates. Slotting excluded.
     C 08.06 (IRB slotting): One DataFrame per SL type, rows by slotting
@@ -435,8 +441,11 @@ class COREPGenerator:
         is_b31 = framework == "BASEL_3_1"
         # Readable tab names. The C 07.00 axis is the Art. 112(1) class and its
         # labels are regime-dependent (PS1/26 renames four of them), so they are
-        # resolved per framework; the IRB axis is the raw Art. 147(2) class, and
-        # ``IRB_EXPOSURE_CLASS_LABELS`` names it identically under both.
+        # resolved per framework. The C 08.01 / 02 / 03 / 05 axis is too: the
+        # Art. 147(2) class under CRR, the published class-and-approach sheets
+        # under Basel 3.1, whose own labels differ only past the 31 characters a
+        # tab name keeps — hence the short names. C 08.04 keeps the raw class.
+        irb_tabs = get_irb_sheet_tabs(framework)
         total = 0
         total += self._write_template_sheets(
             workbook,
@@ -449,21 +458,21 @@ class COREPGenerator:
             workbook,
             bundle.c08_01,
             "C 08.01",
-            IRB_EXPOSURE_CLASS_LABELS,
+            irb_tabs,
             column_name_map(get_c08_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_02,
             "C 08.02",
-            IRB_EXPOSURE_CLASS_LABELS,
+            irb_tabs,
             column_name_map(get_c08_02_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_03,
             "C 08.03",
-            IRB_EXPOSURE_CLASS_LABELS,
+            irb_tabs,
             column_name_map(get_c08_03_columns(framework)),
         )
         total += self._write_template_sheets(
@@ -477,7 +486,7 @@ class COREPGenerator:
             workbook,
             bundle.c08_05,
             "OF 08.05" if is_b31 else "C 08.05",
-            IRB_EXPOSURE_CLASS_LABELS,
+            irb_tabs,
             column_name_map(get_c08_05_columns(framework)),
         )
         total += self._write_template_sheets(
@@ -677,16 +686,23 @@ class COREPGenerator:
         framework: str,
         errors: list[str],
     ) -> dict[str, pl.DataFrame]:
-        """Generate the per-class C 08.01 IRB templates.
+        """Generate the C 08.01 IRB template: the Total sheets, then one per class sheet.
 
         Dispatch-router entry (Phase 7 S8): C 08.01 is declarative — the
         cell semantics live in ``corep/c08.py::generate_c08_01`` and run
         through the one ``cellspec.execute`` executor.
 
+        The Basel 3.1 Total sheets (published codes 0001 / 0002) are asked for
+        HERE and not by the lineage path: they are built from the class sheets
+        and have no execution plan of their own, and the drill-down requires
+        ``c08_01_plans`` and ``generate_c08_01`` to key identically. The same
+        holds for C 08.02, C 08.03 and C 08.05 below. A reader that adds the
+        sheets up must add the CLASS sheets — ``c08_sheets.c08_class_sheets``.
+
         References:
             CRR Art. 142-191; Reg (EU) 2021/451 Annex I/II; PS1/26 Annex II.
         """
-        return generate_c08_01(results, cols, framework, errors)
+        return generate_c08_01(results, cols, framework, errors, totals=True)
 
     def _generate_all_c08_02(
         self,
@@ -701,7 +717,7 @@ class COREPGenerator:
         data-driven grade/PD-band rows and the String 0005 column live in
         ``corep/c08.py::generate_c08_02`` (the CR9.1 pattern).
         """
-        return generate_c08_02(results, cols, framework, errors)
+        return generate_c08_02(results, cols, framework, errors, totals=True)
 
     def _generate_all_c08_03(
         self,
@@ -715,7 +731,7 @@ class COREPGenerator:
         Dispatch-router entry (Phase 7 S8): declarative in
         ``corep/c08.py::generate_c08_03`` (sparse PD-range rows).
         """
-        return generate_c08_03(results, cols, framework, errors)
+        return generate_c08_03(results, cols, framework, errors, totals=True)
 
     def _generate_all_c08_04(
         self,
@@ -747,7 +763,7 @@ class COREPGenerator:
         ``corep/c08.py::generate_c08_05`` (sparse ranges, point-in-time
         proxies for the prior-year/historical carriers).
         """
-        return generate_c08_05(results, cols, framework, errors)
+        return generate_c08_05(results, cols, framework, errors, totals=True)
 
 
 # =============================================================================

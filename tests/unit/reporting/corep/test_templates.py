@@ -33,6 +33,7 @@ import math
 import pytest
 
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.reporting.corep.irb_sheets import get_irb_sheet_labels, get_irb_sheet_tabs
 from rwa_calc.reporting.corep.sheet_labels import get_c07_sheet_labels
 from rwa_calc.reporting.corep.templates import (
     B31_C07_COLUMNS,
@@ -49,7 +50,6 @@ from rwa_calc.reporting.corep.templates import (
     CRR_C08_COLUMNS,
     CRR_IRB_ROW_SECTIONS,
     CRR_SA_ROW_SECTIONS,
-    IRB_EXPOSURE_CLASS_LABELS,
     PD_BANDS,
     SA_RISK_WEIGHT_BANDS,
     get_c07_columns,
@@ -59,6 +59,7 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_row_sections,
 )
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
+from rwa_calc.reporting.kernel.excel import sanitise_sheet_name
 
 #: The frameworks ``get_c07_sheet_labels`` resolves. PS1/26 renames four of the
 #: fourteen Art. 112(1) classes, so a one-regime assertion covers half the estate.
@@ -134,38 +135,76 @@ class TestTemplateDefinitions:
             f"so the workbook holds two tabs a reader cannot tell apart: {duplicated}"
         )
 
-    @pytest.mark.parametrize("sheet_map_name", ["c08", "of08"])
-    def test_every_published_irb_sheet_is_named_for_the_reader(self, sheet_map_name: str) -> None:
+    @pytest.mark.parametrize(
+        ("sheet_map_name", "framework"), [("c08", "CRR"), ("of08", "BASEL_3_1")]
+    )
+    def test_every_published_irb_sheet_is_named_for_the_reader(
+        self, sheet_map_name: str, framework: str
+    ) -> None:
         """Every IRB sheet the published z-axis can address carries a name.
 
-        Anchored on ``filing/sheet_maps.py::SHEET_INDEX_MAPS`` — the Art. 147(2)
-        z-axis read off the live EBA/BoE rule sets, which cannot drift with
-        ``templates.py``. Containment, not equality: ``of08`` names no
-        ``central_govt_central_bank`` sheet because PS1/26 withdraws the IRB
-        sovereign class, and a label for a class only CRR emits is correct.
+        Anchored on ``filing/sheet_maps.py::SHEET_INDEX_MAPS`` — the z-axis read
+        off the live EBA/BoE rule sets, which cannot drift with ``templates.py``.
+
+        Re-anchored for ``of08``: both maps were held to the one class-label map,
+        because the Basel 3.1 sheets were keyed by class. They are now the
+        published class-and-approach sheets (taxonomy v4.1.1, ``OF08.01.01.01``),
+        so the names the workbook tab reads are ``get_irb_sheet_tabs(framework)``
+        — the map ``generator.py`` itself reads.
         """
         published = {
             key for entry in SHEET_INDEX_MAPS[sheet_map_name].values() for key in entry.bundle_keys
         }
         assert published, f"{sheet_map_name}: no SheetCode names a bundle key at all"
 
-        unlabelled = sorted(published - set(IRB_EXPOSURE_CLASS_LABELS))
+        unlabelled = sorted(published - set(get_irb_sheet_tabs(framework)))
         assert not unlabelled, (
             f"{sheet_map_name}: IRB sheet key(s) {unlabelled} are addressed by a "
             "published z-code but carry no label, so generator.py names their "
-            "C 08.0x tab by the raw class key"
+            "C 08.0x tab by the raw sheet key"
         )
 
-    def test_irb_sheet_labels_are_distinct(self) -> None:
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    def test_irb_sheet_labels_are_distinct(self, framework: str) -> None:
         """Two IRB sheets may not print the same name — the live form of the
         row-ref uniqueness this replaced, for the same reason as the SA side."""
-        assert IRB_EXPOSURE_CLASS_LABELS, "no IRB class label map declared"
+        tabs = get_irb_sheet_tabs(framework)
+        assert tabs, f"{framework}: no IRB sheet label map declared"
 
-        duplicated = _duplicated(IRB_EXPOSURE_CLASS_LABELS)
+        duplicated = _duplicated(tabs)
         assert not duplicated, (
-            "IRB label(s) carried by more than one class, so the workbook holds "
+            "IRB label(s) carried by more than one sheet, so the workbook holds "
             f"two C 08.0x tabs a reader cannot tell apart: {duplicated}"
         )
+
+    @pytest.mark.parametrize("prefix", ["C 08.01", "C 08.02", "C 08.03", "OF 08.05"])
+    def test_no_basel_3_1_irb_tab_is_cut_by_the_excel_tab_limit(self, prefix: str) -> None:
+        """A workbook tab keeps 31 characters, and the published labels differ later.
+
+        ``generator.py`` names a tab ``<prefix> - <name>`` and the writer cuts it
+        at 31, so two published labels that agree that far would claim one tab —
+        the reason the Basel 3.1 sheets carry a short tab name. Held to "not cut
+        at all", which is stronger than "still distinct once cut".
+        """
+        tabs = get_irb_sheet_tabs("BASEL_3_1")
+
+        cut = sorted(
+            name
+            for name in (f"{prefix} - {tab}" for tab in tabs.values())
+            if sanitise_sheet_name(name) != name
+        )
+
+        assert cut == []
+
+    def test_basel_3_1_irb_picker_labels_are_the_published_sheet_names(self) -> None:
+        """The UI picker names each Basel 3.1 sheet as the sheet map does."""
+        labels = get_irb_sheet_labels("BASEL_3_1")
+
+        published = {
+            entry.bundle_keys[0]: entry.label for entry in SHEET_INDEX_MAPS["of08"].values()
+        }
+
+        assert labels == published
 
     def test_sa_risk_weight_bands_in_ascending_order(self) -> None:
         """Risk weight bands must be in ascending order."""

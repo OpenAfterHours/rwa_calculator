@@ -109,7 +109,7 @@ The unplaced figures are the work list. The reasons, largest first:
 
 | Reason | Figures | What it means |
 |--------|--------:|---------------|
-| `sheet_coarser_than_published_axis` | 816 | Our IRB sheets (OF 08.01–08.05) are per exposure class. The published sheet axis also splits by approach and by SME / non-SME, so a figure on one of our sheets cannot be assigned to one published sheet. |
+| `sheet_coarser_than_published_axis` | 816 | Our IRB sheets (OF 08.01–08.05) were per exposure class. The published sheet axis also splits by approach and by SME / non-SME, so a figure on one of our sheets could not be assigned to one published sheet. Cleared 2026-11-13: OF 08.01, 08.02, 08.03 and 08.05 are generated on the published seventeen-sheet axis (see [COREP reporting](../features/corep-reporting.md)). C 08.04 stays keyed by exposure class, and its figures now report as `sheet_has_no_published_code`. |
 | `cell_not_reportable` | 102 | The row and column both exist, but the taxonomy greys that cell. |
 | `open_rows_not_mapped` | 40 | OF 08.02 has open rows (obligor grades); the adapter does not yet map them. |
 | `open_key_not_a_member` | 32 | A sheet key that is not a member of the table's open axis (OF 08.06 specialised-lending types, OF 34.02 netting sets). |

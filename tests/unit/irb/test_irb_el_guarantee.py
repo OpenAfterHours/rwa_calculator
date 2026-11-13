@@ -17,6 +17,7 @@ import polars as pl
 import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
+from tests.unit.reporting.corep._irb_sheet_frames import OF08_CORPORATE_NON_SME_FIRB
 
 from rwa_calc.contracts.config import CalculationConfig, PostModelAdjustmentConfig
 from rwa_calc.domain.enums import PermissionMode
@@ -296,7 +297,11 @@ class TestELGuaranteeAdjustment:
         bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
             calculated, framework="BASEL_3_1"
         )
-        total = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0010")
+        # RE-ANCHORED 2026-11-13 from the class sheet ``corporate``: Basel 3.1
+        # OF 08.01 is published per class and approach (taxonomy v4.1.1
+        # ``OF08.01.01.01``), and an F-IRB corporate that is neither SME nor
+        # financial / large reports on sheet 0012.
+        total = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0010")
         assert total["0280"][0] == pytest.approx(2_280.0)
         assert total["0281"][0] == pytest.approx(228.0)
         assert total["0282"][0] == pytest.approx(2_508.0)

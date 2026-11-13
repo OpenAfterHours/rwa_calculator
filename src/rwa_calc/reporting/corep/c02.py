@@ -104,6 +104,11 @@ Cell semantics (recorded decisions):
   financial/large -> F-IRB only, SME, other. A ``corporate_sme``-CLASS leg is
   SME under both (it used to match neither split and fell out of the
   breakdown: 16,063,845.09 of A-IRB RWEA on the rich Basel 3.1 portfolio).
+- UNDER BASEL 3.1 THAT IS ONE DEFINITION, NOT TWO THAT AGREE. Each OF 02.00 IRB
+  class row is one data point with the total of an OF 08.01 sheet, so the rows
+  are grouped by the very sheet key OF 08 keys its sheets by
+  (``corep/irb_sheets.py``): a leg cannot be counted in one row and reported on
+  another sheet. The leg classification this module used to hold lives there.
 - A-IRB folds a financial/large corporate into "other general corporates
   non-SME" while F-IRB reports it separately — asymmetric, preserved: Art. 147A
   permits no A-IRB for that sub-class, so the engine should emit none.
@@ -120,6 +125,8 @@ Cell semantics (recorded decisions):
 - A figure whose slot has NO row under the regime (an A-IRB institution under
   Basel 3.1, say) is neither dropped nor put in a neighbouring row: it stays in
   its approach total, and ``_warn_if_a_breakdown_strands`` reports the amount.
+  OF 08 reports the same legs on a sheet outside its published axis and in the
+  same approach's Total (``corep/c08_sheets.py``).
 - Rows this calculator computes zero-fill; the rows it does not (the other risk
   types, rows 0450 / 0460 / 0470) stay empty.
 
@@ -141,6 +148,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.reporting.corep import c02_rows as rows
+from rwa_calc.reporting.corep import irb_sheets
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
     C02_00_SA_CLASS_MAP,
@@ -180,23 +188,10 @@ type _SubKey = tuple[str, str, bool, bool, bool]
 # which correctly scope CCR out under Basel 3.1 (it has CCR1-CCR8).
 _SA_APPROACHES: tuple[str, ...] = ("standardised", "standardised_ccr")
 
-_FIRB: str = "foundation_irb"
-_AIRB: str = "advanced_irb"
-_SLOTTING: str = "slotting"
+_FIRB: str = irb_sheets.FIRB
+_AIRB: str = irb_sheets.AIRB
+_SLOTTING: str = irb_sheets.SLOTTING
 _EQUITY: str = "equity"
-
-# The IRB retail classes. CRR Art. 151(4) puts retail exposures under the
-# ADVANCED approach only (own LGD estimates are mandatory), which is why both
-# templates carry retail rows under A-IRB and NONE under F-IRB — see
-# ``_placeable_irb_class`` for the pair this makes impossible.
-_RETAIL_CLASSES: tuple[str, ...] = ("retail_mortgage", "retail_qrre", "retail_other")
-
-# The Art. 147(2)(c) general-corporate classes the sub-class split reads.
-_CORPORATE_CLASSES: tuple[str, ...] = ("corporate", "corporate_sme")
-
-# ``property_type`` values that make a retail real-estate leg COMMERCIAL; every
-# other value, and none, is residential.
-_COMMERCIAL_PROPERTY_TYPES: tuple[str, ...] = ("commercial", "cre")
 
 # OF 02.00's slotting rows by ``sl_type``.
 _SLOTTING_TYPE_SLOTS: dict[str, rows.Slot] = {
@@ -333,7 +328,8 @@ def generate_c02_00(
     irb_ec_col = pick(
         cols, "reporting_class" if "reporting_class" in cols else "reporting_class_origin"
     )
-    # The origin twin, kept for the Art. 151(4) revert in ``_placeable_irb_class``.
+    # The origin twin, kept for the Art. 151(4) revert in
+    # ``irb_sheets.placeable_irb_class``.
     origin_ec_col = pick(cols, "reporting_class_origin")
     approach_col = pick(
         cols, "reporting_approach" if "reporting_approach" in cols else "approach_applied"
@@ -421,6 +417,8 @@ class _Ledger:
     ``has_breakdown`` is False only on a frame with no approach / class key,
     where the totals are all that can be stated. ``modelled_legs`` counts the
     F-IRB / A-IRB / slotting legs — the ones column 0020 needs ``sa_rwa`` for.
+    ``irb_class`` / ``irb_sub`` are the CRR class rows' groupings; ``irb_sheet``
+    is the Basel 3.1 one, keyed ``(approach, OF 08 sheet key)``.
     """
 
     total: _Amount
@@ -432,6 +430,7 @@ class _Ledger:
     sa_class: dict[str, _Amount] = field(default_factory=dict)
     irb_class: dict[tuple[str, str], _Amount] = field(default_factory=dict)
     irb_sub: dict[_SubKey, _Amount] = field(default_factory=dict)
+    irb_sheet: dict[tuple[str, str], _Amount] = field(default_factory=dict)
     slotting_type: dict[str, _Amount] = field(default_factory=dict)
     equity_sa: _Amount = _NOTHING
     equity_irb: _Amount = _NOTHING
@@ -476,23 +475,27 @@ def _aggregate(
     for the one commit between C 07.00 moving and C 08.01 following.
 
     The IRB class and sub-class group-bys read the SAME placeable class
-    (``_placeable_irb_class``), so a leg reverted to its origin class is split
-    with the class it is counted in — before 2026-11-13 the sub-class split read
-    the un-reverted class and the reverted leg fell out of the corporate
-    sub-rows.
+    (``irb_sheets.placeable_irb_class``), so a leg reverted to its origin class
+    is split with the class it is counted in — before 2026-11-13 the sub-class
+    split read the un-reverted class and the reverted leg fell out of the
+    corporate sub-rows. The Basel 3.1 sheet key reads it too, and is the
+    expression OF 08 keys its post-substitution sheets by.
     """
-    placeable = _placeable_irb_class(irb_ec_col, origin_ec_col, approach_col)
+    placeable = irb_sheets.placeable_irb_class(irb_ec_col, origin_ec_col, approach_col)
     collected = results.select(
         pl.col(approach_col).alias("_approach"),
         pl.col(sa_ec_col).alias("_ec_sa"),
         placeable.alias("_ec_irb"),
+        irb_sheets.sheet_key_expr(cols, pl.col(approach_col), placeable).alias("_sheet"),
         pl.col(own_col).fill_null(0.0).alias("_own"),
         pl.col(final_col).fill_null(0.0).alias("_final"),
         (pl.col("sa_rwa").fill_null(0.0) if "sa_rwa" in cols else pl.lit(0.0)).alias("_sa"),
         _equity_method_expr(cols).alias("_eqm"),
-        (_is_sme_expr(cols) | (placeable == "corporate_sme").fill_null(value=False)).alias("_sme"),
-        _is_financial_large_expr(cols).alias("_fse"),
-        _is_commercial_expr(cols).alias("_comm"),
+        (
+            irb_sheets.is_sme_expr(cols) | (placeable == "corporate_sme").fill_null(value=False)
+        ).alias("_sme"),
+        irb_sheets.is_financial_large_expr(cols).alias("_fse"),
+        irb_sheets.is_commercial_expr(cols).alias("_comm"),
         (pl.col("sl_type") if "sl_type" in cols else pl.lit(None, dtype=pl.String)).alias("_sl"),
         (
             pl.col("output_floor_pct")
@@ -547,6 +550,10 @@ def _aggregate(
                 modelled, "_approach", "_ec_irb", "_sme", "_fse", "_comm"
             ).items()
         },
+        irb_sheet={
+            (str(key[0]), str(key[1])): amount
+            for key, amount in _grouped(modelled, "_approach", "_sheet").items()
+        },
         slotting_type={
             str(key[0]): amount
             for key, amount in _grouped(
@@ -588,41 +595,6 @@ def _grouped(frame: pl.DataFrame, *keys: str) -> dict[tuple[object, ...], _Amoun
     }
 
 
-def _placeable_irb_class(post_ec_col: str, origin_ec_col: str, approach_col: str) -> pl.Expr:
-    """The post-substitution IRB class, REVERTED where that class cannot exist
-    under the leg's approach.
-
-    THE IMPOSSIBLE-PAIR TRAP, AND WHY IT IS HANDLED HERE RATHER THAN IGNORED.
-    A post class key against the obligor's RETAINED approach can name a pair
-    neither template has a row for: the aggregator moves the class to the
-    guarantor's but keeps the obligor's approach whenever the guarantor is not
-    SA, so an F-IRB corporate loan covered by a RETAIL guarantor emits
-    ``(foundation_irb, retail_other)``. CRR Art. 151(4) makes that impossible —
-    retail exposures are A-IRB only, so both layouts have retail rows under A-IRB
-    and none under F-IRB. Its RWEA then fell out of the F-IRB class rows while the
-    F-IRB total still counted it: 2,028,365.78 (CRR) / 1,700,935.66 (B31) on the
-    CRM-substitution portfolio, INVISIBLE to every published rule, because the
-    rules only check rows that exist. Reverting the class keeps the "of which"
-    breakdown a true partition of the F-IRB total.
-
-    THIS IS A REPORTING GUARD, NOT THE FIX. The engine should never have
-    recognised the guarantee: CRR Art. 201(1) is an exhaustive list of eligible
-    unfunded-protection providers — central governments/banks, RGLAs, MDBs,
-    0%-RW international organisations, PSEs, institutions, other corporates,
-    QCCPs — and has NO retail limb. Closing that gap is a separate, capital-
-    affecting change with its own regulatory review. Until it lands, C 02.00
-    must not silently drop RWEA it is required to break down, and reverting to
-    the origin class puts the leg exactly where a declined guarantee would have
-    left it. Deliberately narrow: only the Art. 151(4) pair is reverted, so a
-    genuinely new impossible pair strands visibly rather than being absorbed —
-    ``_warn_if_a_breakdown_strands`` is the net that catches it.
-    """
-    retail_under_firb = (pl.col(approach_col) == _FIRB) & pl.col(post_ec_col).is_in(
-        list(_RETAIL_CLASSES)
-    )
-    return pl.when(retail_under_firb).then(pl.col(origin_ec_col)).otherwise(pl.col(post_ec_col))
-
-
 def _equity_method_expr(cols: set[str]) -> pl.Expr:
     """The sealed ``equity_method`` column, or a typed null when absent.
 
@@ -634,44 +606,6 @@ def _equity_method_expr(cols: set[str]) -> pl.Expr:
     if "equity_method" in cols:
         return pl.col("equity_method")
     return pl.lit(None, dtype=pl.String)
-
-
-def _is_sme_expr(cols: set[str]) -> pl.Expr:
-    """Whether a leg is SME, from the classifier's sub-class and the ``is_sme`` flag.
-
-    The classifier-derived ``exposure_subclass`` (PRA PS1/26 Art. 147A(1)(e)/(f))
-    is the canonical corporate split signal; ``is_sme`` also carries the retail
-    split. Unknown is False.
-    """
-    is_sme = pl.lit(value=False)
-    if "exposure_subclass" in cols:
-        is_sme = is_sme | (pl.col("exposure_subclass") == "corporate_sme").fill_null(value=False)
-    if "is_sme" in cols:
-        is_sme = is_sme | pl.col("is_sme").fill_null(value=False)
-    return is_sme
-
-
-def _is_financial_large_expr(cols: set[str]) -> pl.Expr:
-    """Whether a corporate leg is a "financial corporate or large corporate".
-
-    ``exposure_subclass == "corporate_financial_large"`` (FSE OR revenue above
-    the large-corporate threshold) where the classifier sealed it; otherwise the
-    financial-sector flag alone. Unknown is False.
-    """
-    if "exposure_subclass" in cols:
-        return (pl.col("exposure_subclass") == "corporate_financial_large").fill_null(value=False)
-    if "cp_apply_fi_scalar" in cols:
-        return pl.col("cp_apply_fi_scalar").fill_null(value=False)
-    if "cp_is_financial_sector_entity" in cols:
-        return pl.col("cp_is_financial_sector_entity").fill_null(value=False)
-    return pl.lit(value=False)
-
-
-def _is_commercial_expr(cols: set[str]) -> pl.Expr:
-    """Whether a retail real-estate leg is secured by COMMERCIAL property."""
-    if "property_type" not in cols:
-        return pl.lit(value=False)
-    return pl.col("property_type").is_in(list(_COMMERCIAL_PROPERTY_TYPES)).fill_null(value=False)
 
 
 # =============================================================================
@@ -721,85 +655,45 @@ def _amounts_by_slot(ledger: _Ledger, framework: str) -> dict[rows.Slot, _Amount
 
 def _irb_class_amounts(ledger: _Ledger, *, is_b31: bool) -> dict[rows.Slot, _Amount]:
     """The F-IRB and A-IRB class figures, read top to bottom of the templates."""
+    if is_b31:
+        # One definition with OF 08 (module docstring): each row is the legs of
+        # its sheet under the sheet's own approach — which, on the sheet F-IRB
+        # specialised lending shares with slotting, leaves the slotting legs to
+        # the slotting rows.
+        return {
+            sheet.slot: ledger.irb_sheet.get((sheet.approach, sheet.key), _NOTHING)
+            for sheet in irb_sheets.B31_CLASS_SHEETS
+        }
 
     def of_class(approach: str, exposure_class: str) -> _Amount:
         return ledger.irb_class.get((approach, exposure_class), _NOTHING)
 
-    def of_subclass(
-        approach: str,
-        classes: tuple[str, ...],
-        *,
-        sme: bool | None = None,
-        financial_large: bool | None = None,
-        commercial: bool | None = None,
-    ) -> _Amount:
+    def of_retail(exposure_class: str, *, sme: bool) -> _Amount:
         return _add(
             amount
-            for (leg_approach, leg_class, is_sme, is_fse, is_comm), amount in ledger.irb_sub.items()
-            if leg_approach == approach
-            and leg_class in classes
-            and sme in (None, is_sme)
-            and financial_large in (None, is_fse)
-            and commercial in (None, is_comm)
+            for (leg_approach, leg_class, is_sme, _fse, _comm), amount in ledger.irb_sub.items()
+            if leg_approach == _AIRB and leg_class == exposure_class and is_sme == sme
         )
 
-    retail_re = ("retail_mortgage",)
-    retail_other = ("retail_other",)
-    amounts: dict[rows.Slot, _Amount] = {
+    # CRR Art. 147(2)(c): corporates split on the class, as the C 08.01 sheets
+    # do; retail real estate and other retail split by SME only.
+    return {
         rows.FIRB_CENTRAL_GOVERNMENTS: of_class(_FIRB, "central_govt_central_bank"),
         rows.FIRB_INSTITUTIONS: of_class(_FIRB, "institution"),
+        rows.FIRB_CORPORATES_SME: of_class(_FIRB, "corporate_sme"),
         rows.FIRB_SPECIALISED_LENDING: of_class(_FIRB, "specialised_lending"),
+        rows.FIRB_CORPORATES_OTHER: of_class(_FIRB, "corporate"),
         rows.AIRB_CENTRAL_GOVERNMENTS: of_class(_AIRB, "central_govt_central_bank"),
         rows.AIRB_INSTITUTIONS: of_class(_AIRB, "institution"),
+        rows.AIRB_CORPORATES_SME: of_class(_AIRB, "corporate_sme"),
         rows.AIRB_SPECIALISED_LENDING: of_class(_AIRB, "specialised_lending"),
+        rows.AIRB_CORPORATES_OTHER: of_class(_AIRB, "corporate"),
+        rows.AIRB_RETAIL_REAL_ESTATE_SME: of_retail("retail_mortgage", sme=True),
+        rows.AIRB_RETAIL_REAL_ESTATE_NON_SME: of_retail("retail_mortgage", sme=False),
         rows.AIRB_RETAIL_QRRE: of_class(_AIRB, "retail_qrre"),
-        rows.AIRB_RETAIL_OTHER_SME: of_subclass(_AIRB, retail_other, sme=True),
-        rows.AIRB_RETAIL_OTHER_NON_SME: of_subclass(_AIRB, retail_other, sme=False),
+        rows.AIRB_RETAIL_OTHER_SME: of_retail("retail_other", sme=True),
+        rows.AIRB_RETAIL_OTHER_NON_SME: of_retail("retail_other", sme=False),
     }
-    if not is_b31:
-        # CRR Art. 147(2)(c): corporates split on the class, as the C 08.01
-        # sheets do; retail real estate splits by SME only.
-        amounts[rows.FIRB_CORPORATES_SME] = of_class(_FIRB, "corporate_sme")
-        amounts[rows.FIRB_CORPORATES_OTHER] = of_class(_FIRB, "corporate")
-        amounts[rows.AIRB_CORPORATES_SME] = of_class(_AIRB, "corporate_sme")
-        amounts[rows.AIRB_CORPORATES_OTHER] = of_class(_AIRB, "corporate")
-        amounts[rows.AIRB_RETAIL_REAL_ESTATE_SME] = of_subclass(_AIRB, retail_re, sme=True)
-        amounts[rows.AIRB_RETAIL_REAL_ESTATE_NON_SME] = of_subclass(_AIRB, retail_re, sme=False)
-        return amounts
-
-    # PS1/26 Art. 147A(1)(e)/(f): financial and large corporates first (F-IRB
-    # only), then SME, then the rest.
-    corporates = _CORPORATE_CLASSES
-    amounts[rows.FIRB_FINANCIAL_LARGE_CORPORATES] = of_subclass(
-        _FIRB, corporates, financial_large=True
-    )
-    amounts[rows.FIRB_CORPORATES_SME] = of_subclass(
-        _FIRB, corporates, financial_large=False, sme=True
-    )
-    amounts[rows.FIRB_CORPORATES_OTHER] = of_subclass(
-        _FIRB, corporates, financial_large=False, sme=False
-    )
-    amounts[rows.AIRB_CORPORATES_SME] = of_subclass(
-        _AIRB, corporates, financial_large=False, sme=True
-    )
-    # A-IRB folds financial/large into "other general corporates non-SME" —
-    # asymmetric with F-IRB, preserved (module docstring).
-    amounts[rows.AIRB_CORPORATES_OTHER] = of_subclass(
-        _AIRB, corporates, financial_large=False, sme=False
-    ) + of_subclass(_AIRB, corporates, financial_large=True)
-    amounts[rows.AIRB_RETAIL_RESIDENTIAL_SME] = of_subclass(
-        _AIRB, retail_re, sme=True, commercial=False
-    )
-    amounts[rows.AIRB_RETAIL_RESIDENTIAL_NON_SME] = of_subclass(
-        _AIRB, retail_re, sme=False, commercial=False
-    )
-    amounts[rows.AIRB_RETAIL_COMMERCIAL_SME] = of_subclass(
-        _AIRB, retail_re, sme=True, commercial=True
-    )
-    amounts[rows.AIRB_RETAIL_COMMERCIAL_NON_SME] = of_subclass(
-        _AIRB, retail_re, sme=False, commercial=True
-    )
-    return amounts
 
 
 def _sa_class_rows(sa_class: dict[str, _Amount]) -> dict[str, _Amount]:
@@ -891,8 +785,9 @@ def _warn_if_a_breakdown_strands(
 ) -> None:
     """WARN when a total exceeds the detail rows the template breaks it into.
 
-    The net for the impossible-pair trap ``_placeable_irb_class`` describes, and
-    for every figure whose slot has no row under this regime. That revert is
+    The net for the impossible-pair trap ``irb_sheets.placeable_irb_class``
+    describes, and for every figure whose slot has no row under this regime. That
+    revert is
     deliberately narrow — it fixes only the Art. 151(4) pair we have measured —
     so any OTHER (approach, class) combination the template has no row for
     strands its RWEA out of the breakdown while the total still counts it, and

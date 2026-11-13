@@ -360,6 +360,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **REPORTING: the Basel 3.1 IRB templates OF 08.01, 08.02, 08.03 and 08.05
+  are generated on the published 17-sheet axis.** They were generated one sheet
+  per exposure class, which the published axis splits further by approach, by
+  SME / non-SME and by residential / commercial property, so no figure on them
+  could be filed. Sheets now carry the published keys (`institution_firb`,
+  `corporate_non_sme_airb`, `retail_residential_re_non_sme_airb`, …) and the two
+  Totals (`total_airb`, `total_firb_slotting`) are produced. Code that adds up
+  every OF 08 sheet must use `c08_class_sheets(...)` or it counts the Totals
+  twice. Supervisory slotting is on the specialised-lending FIRB-or-slotting
+  sheet (row 0080) and its Total, and is excluded from OF 08.02 / 08.03 / 08.05.
+  OF 02.00 and OF 08 read one classification, so an IRB class row and its sheet
+  total — one data point in the taxonomy — always agree. No RWA or exposure
+  value changes, and CRR C 08 is unchanged.
 - **REPORTING: Basel 3.1 OF 07.00 deducts on-balance-sheet netting once.** A
   netted deposit was taken off in column 0035 and again inside column 0130
   (financial collateral), so column 0150 (fully adjusted exposure value) was

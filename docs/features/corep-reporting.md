@@ -23,15 +23,15 @@ flowchart TD
 
     SPLIT -->|SA exposures| C07["<b>C 07.00 / OF 07.00</b><br/>CR SA<br/><i>One submission per<br/>SA exposure class</i>"]
 
-    SPLIT -->|IRB exposures| C0801["<b>C 08.01 / OF 08.01</b><br/>CR IRB Totals<br/><i>One submission per<br/>IRB exposure class</i>"]
+    SPLIT -->|IRB exposures| C0801["<b>C 08.01 / OF 08.01</b><br/>CR IRB Totals<br/><i>Per IRB class (CRR);<br/>per class and approach + Totals (B3.1)</i>"]
 
-    SPLIT -->|IRB exposures| C0802["<b>C 08.02 / OF 08.02</b><br/>CR IRB by Obligor Grade<br/><i>One submission per<br/>IRB exposure class</i>"]
+    SPLIT -->|IRB exposures| C0802["<b>C 08.02 / OF 08.02</b><br/>CR IRB by Obligor Grade<br/><i>Same sheets as<br/>C 08.01 / OF 08.01</i>"]
 
     SPLIT -->|IRB exposures| C0803["<b>C 08.03 / OF 08.03</b><br/>CR IRB PD Ranges<br/><i>Fixed PD range buckets</i>"]
 
     SPLIT -->|IRB exposures| C0804["<b>C 08.04 / OF 08.04</b><br/>RWEA Flow Statements<br/><i>Period-over-period movements</i>"]
 
-    SPLIT -->|IRB exposures| C0805["<b>C 08.05 / OF 08.05</b><br/>PD Back-Testing<br/><i>One submission per<br/>IRB exposure class</i>"]
+    SPLIT -->|IRB exposures| C0805["<b>C 08.05 / OF 08.05</b><br/>PD Back-Testing<br/><i>Same sheets as<br/>C 08.01 / OF 08.01</i>"]
 
     SPLIT -->|Slotting exposures| C0806["<b>C 08.06 / OF 08.06</b><br/>Specialised Lending Slotting<br/><i>By SL type</i>"]
 
@@ -785,6 +785,100 @@ The IRB totals template is filtered by **IRB exposure class** and by **own estim
 LGD/CCF** (Foundation vs Advanced IRB). It covers the full IRB waterfall: original exposure,
 CRM substitution effects, CRM in LGD estimates (with detailed collateral breakdown), exposure
 value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obligor count).
+
+### Sheets
+
+The sheets differ by regime, and the difference applies to OF 08.01, OF 08.02, OF 08.03 and
+OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
+
+=== "CRR (C 08.01)"
+
+    One sheet per IRB exposure class the portfolio holds, keyed by the class
+    (`corporate`, `institution`, `retail_mortgage`, …). There is no Total sheet.
+
+=== "Basel 3.1 (OF 08.01)"
+
+    The published axis has seventeen sheets (PS1/26 Annex II §3.3.2 ¶76, and the Bank of
+    England taxonomy v4.1.1, table `OF08.01.01.01`): fifteen exposure sub-classes, each under
+    **one** approach, and two Totals. The bundle keys them as follows.
+
+    | Code | Published sheet | Bundle key |
+    |------|-----------------|------------|
+    | 0001 | Total (AIRB approach) | `total_airb` |
+    | 0002 | Total (FIRB approach and slotting approach) | `total_firb_slotting` |
+    | 0006 | Institutions (FIRB) | `institution_firb` |
+    | 0009 | Corporates – Specialised lending (AIRB) | `specialised_lending_airb` |
+    | 0010 | Corporates – Specialised lending (FIRB or slotting) | `specialised_lending_firb_slotting` |
+    | 0011 | Corporates – Other general corporates, non-SME (AIRB) | `corporate_non_sme_airb` |
+    | 0012 | Corporates – Other general corporates, non-SME (FIRB) | `corporate_non_sme_firb` |
+    | 0015 | Retail – Qualifying revolving (AIRB) | `retail_qrre_airb` |
+    | 0016 | Retail – Other SME (AIRB) | `retail_other_sme_airb` |
+    | 0017 | Retail – Other non-SME (AIRB) | `retail_other_non_sme_airb` |
+    | 0018 | Retail – Commercial immovable property, SME (AIRB) | `retail_commercial_re_sme_airb` |
+    | 0019 | Retail – Commercial immovable property, non-SME (AIRB) | `retail_commercial_re_non_sme_airb` |
+    | 0020 | Retail – Residential immovable property, SME (AIRB) | `retail_residential_re_sme_airb` |
+    | 0021 | Retail – Residential immovable property, non-SME (AIRB) | `retail_residential_re_non_sme_airb` |
+    | 0022 | Corporates – Financial corporates and large corporates (FIRB) | `corporate_financial_large_firb` |
+    | 0023 | Corporates – Other general corporates, SME (AIRB) | `corporate_sme_airb` |
+    | 0024 | Corporates – Other general corporates, SME (FIRB) | `corporate_sme_firb` |
+
+    Codes 0003–0005, 0007, 0008, 0013 and 0014 do not exist. The Excel export names each tab
+    with a short form of the published label.
+
+    **One classification with OF 02.00.** Each OF 02.00 IRB class row is the same data point
+    as the total (row 0010, column 0260; column 0020 is column 0276) of one of these sheets —
+    row 0297 is sheet 0012, row 0356 is sheet 0011, and so on. Both templates therefore place a
+    leg with one definition (`rwa_calc.reporting.corep.irb_sheets`): by approach, by exposure
+    class, by SME (the classifier's sub-class, or `is_sme`), by financial-or-large corporate
+    (the classifier's sub-class) and, for retail real estate, by property type
+    (`commercial` / `cre` is commercial, anything else residential). Two choices carried over
+    from OF 02.00:
+
+    - An A-IRB financial or large corporate is reported on sheet 0011 (other general
+      corporates, non-SME, AIRB). PS1/26 Art. 147A permits no A-IRB for that sub-class, and
+      the published axis has no sheet for it.
+    - A leg that moved to a retail guarantor's class while keeping its obligor's F-IRB
+      approach stays on its obligor's sheet (retail exposures are A-IRB only, CRR Art. 151(4)).
+
+    **Supervisory slotting** is reported on row 0080 of sheet 0010 and of Total 0002, and
+    nowhere else. On those two sheets row 0080 is reported as zero when the firm has no
+    slotting exposure. OF 08.02, 08.03 and 08.05 exclude slotting, so their sheet 0010 holds
+    F-IRB specialised lending only.
+
+    **The Totals.** Total 0001 is built from the AIRB sheets, Total 0002 from the FIRB and
+    slotting sheets, and a firm on one approach reports one Total. Amounts and counts are the
+    sum of the sheets (the Bank's rules `boe_b0748` and `boe_b0749`). An exposure-weighted
+    average (PD, LGD, maturity) is the average over the exposures the Total covers that carry
+    the parameter — a slotting exposure has no maturity and does not dilute it. The OF 08.05
+    observed default rate is re-derived from the Total's own counts. `boe_b0748` also lists
+    column 0250 (maturity) as a sum; the Total reports the average, so that rule breaks on
+    column 0250 wherever two AIRB sheets report a maturity. A Total has no drill-down of its
+    own: open the same cell on a class sheet.
+
+    **A pair with no sheet.** PS1/26 Art. 147A withdraws the IRB approaches for sovereigns
+    and A-IRB for institutions. A leg that still carries such a pair is reported on a sheet
+    outside the published axis, keyed by class and approach (`institution_airb`,
+    `central_govt_central_bank_firb`), counted in its approach's Total — as OF 02.00 counts it
+    in its approach row — and recorded in `bundle.errors`. It is never dropped and never added
+    to a neighbouring sheet. It cannot be filed: the filing package lists it as
+    `sheet_has_no_published_code`.
+
+    !!! warning "Adding the sheets up"
+        Because each Total is a sum of the others, anything that adds up **all** the sheets
+        counts every exposure twice. Add the class sheets:
+
+        ```python
+        from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
+
+        irb_rwea = sum(
+            sheet.filter(pl.col("row_ref") == "0010")["0260"][0]
+            for sheet in c08_class_sheets(bundle.c08_01).values()
+        )
+        ```
+
+        Before 2026-11-13 the Basel 3.1 sheets were keyed by exposure class alone, with no
+        Totals — a coarser partition than the published axis, so none of their figures could
+        be filed.
 
 ### Column Structure
 

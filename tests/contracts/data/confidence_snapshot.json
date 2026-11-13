@@ -1968,12 +1968,13 @@
       "pack_entries": [],
       "source_files": [
         "engine/irb/formulas.py",
-        "reporting/corep/c02.py"
+        "reporting/corep/irb_sheets.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_197_crr_slotting_obs_ead_firb_ccf.py",
         "tests/conformance/portfolios.py",
         "tests/fixtures/p1_197/p1_197.py",
+        "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/properties/test_template_row_axis.py"
       ],
       "watchfire_index_gap": false
@@ -3120,7 +3121,8 @@
       "source_files": [
         "engine/crm/guarantees.py",
         "engine/crm/processor.py",
-        "reporting/corep/c02.py"
+        "reporting/corep/c02.py",
+        "reporting/corep/irb_sheets.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_227_art_201_guarantor_eligibility.py",
@@ -5754,6 +5756,8 @@
         "rwa_calc.reporting.corep.c08::generate_c08_05",
         "rwa_calc.reporting.corep.c08::generate_c08_06",
         "rwa_calc.reporting.corep.c08_07::generate_c08_07",
+        "rwa_calc.reporting.corep.c08_sheets::sheet_keys",
+        "rwa_calc.reporting.corep.c08_sheets::with_total_sheets",
         "rwa_calc.reporting.corep.c09::generate_c09_01",
         "rwa_calc.reporting.corep.c09::generate_c09_02",
         "rwa_calc.reporting.corep.of02::generate_of_02_01"
@@ -5768,6 +5772,7 @@
         "reporting/corep/c07.py",
         "reporting/corep/c08.py",
         "reporting/corep/c08_07.py",
+        "reporting/corep/c08_sheets.py",
         "reporting/corep/c09.py",
         "reporting/corep/crm_substitution.py",
         "reporting/corep/of02.py"
@@ -7280,6 +7285,7 @@
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/thresholds.py",
+        "reporting/corep/irb_sheets.py",
         "reporting/pillar3/cr9.py",
         "reporting/pillar3/generator.py",
         "rulebook/packs/b31.py",
@@ -7344,7 +7350,9 @@
         "engine/securitisation/allocator.py",
         "reporting/corep/c02.py",
         "reporting/corep/c02_rows.py",
+        "reporting/corep/c08_sheets.py",
         "reporting/corep/crm_substitution.py",
+        "reporting/corep/irb_sheets.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
@@ -7357,6 +7365,7 @@
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_cell_rederivation.py",
+        "tests/contracts/test_of08_published_sheets.py",
         "tests/fixtures/p1_125/p1_125.py",
         "tests/fixtures/p1_126/p1_126.py",
         "tests/fixtures/p1_245/p1_245.py",
@@ -7375,6 +7384,7 @@
         "tests/unit/reporting/corep/_c02_frames.py",
         "tests/unit/reporting/corep/test_c02_00.py",
         "tests/unit/reporting/corep/test_c02_00_published_rows.py",
+        "tests/unit/reporting/corep/test_c08_sheet_axis.py",
         "tests/unit/rulebook/test_classifier_features.py",
         "tests/unit/test_b31_approach_restrictions.py",
         "tests/unit/test_classifier.py"

@@ -51,6 +51,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 from tests.fixtures.recon_ledger import with_reporting_ledger
+from tests.unit.reporting.corep._irb_sheet_frames import OF08_CORPORATE_NON_SME_FIRB, irb_sheet
 
 from rwa_calc.analysis.legacy_ledger import LedgerCoverage
 from rwa_calc.analysis.return_recon import (
@@ -77,7 +78,20 @@ if TYPE_CHECKING:
 
 FRAMEWORKS = ("CRR", "BASEL_3_1")
 TEMPLATE = "c08_03"
+#: The exposure class of every leg, and the CRR C 08.03 sheet it reports on.
 SHEET = "corporate"
+
+
+def _sheet(framework: str) -> str:
+    """The C 08.03 / OF 08.03 sheet the legs report on, per framework.
+
+    Re-anchored: the Basel 3.1 tests addressed the class sheet ``corporate``. OF 08
+    is published per class AND approach (taxonomy v4.1.1, ``OF08.03.01.01`` sheet
+    0012 — F-IRB, corporates other than SME / financial and large), and every leg
+    here is F-IRB non-SME, so that is its sheet. CRR stays keyed by exposure class.
+    """
+    return irb_sheet(framework, SHEET, OF08_CORPORATE_NON_SME_FIRB)
+
 
 # Two PD bands per parent, chosen to be distinct under BOTH row scales: CRR
 # splits 0.00-0.15 at 0.10 (rows 0020 / 0030) and Basel 3.1 at 0.05 (rows 0015 /
@@ -333,7 +347,7 @@ def _recon_with_coverage(framework: str) -> ReturnRecon:
 
 
 def _compare(framework: str = "CRR") -> rr.SheetCompare:
-    compare = rr.sheet_compare(_recon(framework), TEMPLATE, SHEET)
+    compare = rr.sheet_compare(_recon(framework), TEMPLATE, _sheet(framework))
     assert compare is not None
     return compare
 
@@ -355,18 +369,19 @@ def _row_of(
     hard-coded ref would silently pin one framework.
     """
     side = recon.ours if ours else recon.theirs
+    sheet = _sheet(recon.framework)
     served = side.membership.columns.filter(
         (pl.col("template_id") == TEMPLATE)
-        & (pl.col("sheet") == SHEET)
+        & (pl.col("sheet") == sheet)
         & (pl.col("col_ref") == col_ref)
     )["predicate_key"].unique()
     assert len(served) == 1, (
-        f"{TEMPLATE}/{SHEET}/{col_ref} has {len(served)} predicate groups, expected 1"
+        f"{TEMPLATE}/{sheet}/{col_ref} has {len(served)} predicate groups, expected 1"
     )
     predicate_key = str(served[0])
     rows = side.membership.legs.filter(
         (pl.col("template_id") == TEMPLATE)
-        & (pl.col("sheet") == SHEET)
+        & (pl.col("sheet") == sheet)
         & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == reference)
         & (pl.col("is_parent_row").eq(other=False))
@@ -425,7 +440,7 @@ def test_a_coverage_unavailable_column_renders_not_mapped_never_zero(framework: 
     # Arrange — the two sides hold the SAME legs, so any delta here is an
     # artefact of the mapping rather than of the book.
     compare = rr.sheet_compare(
-        _recon_with_coverage(framework), TEMPLATE, SHEET, coverage=_coverage()
+        _recon_with_coverage(framework), TEMPLATE, _sheet(framework), coverage=_coverage()
     )
     assert compare is not None
 
@@ -447,7 +462,7 @@ def test_a_coverage_unavailable_column_renders_not_mapped_never_zero(framework: 
 def test_unmeasurable_cells_are_listed_apart_from_the_ranked_differences(framework: str) -> None:
     # Arrange
     compare = rr.sheet_compare(
-        _recon_with_coverage(framework), TEMPLATE, SHEET, coverage=_coverage()
+        _recon_with_coverage(framework), TEMPLATE, _sheet(framework), coverage=_coverage()
     )
     assert compare is not None
 
@@ -571,7 +586,7 @@ def test_a_row_only_we_emit_shows_our_figure_against_an_explained_blank(framewor
     # Arrange — SOLO occupies a PD band nobody on their side reaches, so C 08.03
     # (whose rows are sparse) emits that row on our sheet and not on theirs.
     recon = _recon_one_sided(framework)
-    compare = rr.sheet_compare(recon, TEMPLATE, SHEET)
+    compare = rr.sheet_compare(recon, TEMPLATE, _sheet(framework))
     assert compare is not None
     ours_only = [cell for cell in _cells(compare) if cell.status == "ours_only"]
 
@@ -629,7 +644,7 @@ def test_a_weighted_average_cell_is_refused_with_a_reason_and_no_steps(framework
     row_ref = _row_of(recon, "MOVER", ours=True)
 
     # Act
-    explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0050")
+    explanation = rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0050")
 
     # Assert
     assert explanation.refused
@@ -644,7 +659,7 @@ def test_an_additive_money_cell_is_decomposed_and_reconciles(framework: str) -> 
     row_ref = _row_of(recon, "MOVER", ours=True)
 
     # Act
-    explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0090")
+    explanation = rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0090")
 
     # Assert — the terms exist, are labelled, and are scored against the report.
     assert not explanation.refused
@@ -666,16 +681,16 @@ def test_the_four_refusals_are_classified_apart(framework: str) -> None:
     )
 
     # Act
-    average = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0050")
+    average = rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0050")
     unmapped_row = next(
         cell.row_ref
-        for cell in _cells(rr.sheet_compare(blocked, TEMPLATE, SHEET) or ())  # type: ignore[arg-type]
+        for cell in _cells(rr.sheet_compare(blocked, TEMPLATE, _sheet(framework)) or ())  # type: ignore[arg-type]
         if cell.col_ref == GROSS_COL
     )
     unmapped = rr.explain_cell(
-        blocked, TEMPLATE, SHEET, unmapped_row, GROSS_COL, coverage=_thin_coverage()
+        blocked, TEMPLATE, _sheet(framework), unmapped_row, GROSS_COL, coverage=_thin_coverage()
     )
-    money = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0090")
+    money = rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0090")
     rr.clear_comparison_cache()
 
     # Assert — three different kinds, three different headlines, one of them
@@ -807,7 +822,7 @@ def test_the_view_pairs_a_split_exposure_against_the_legacy_whole_loan(framework
     row_ref = _row_of(recon, "L1", ours=False)
 
     # Act
-    explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, RWEA_COL)
+    explanation = rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, RWEA_COL)
     steps = {step.name: step for step in explanation.steps}
 
     # Assert — the cell is decomposed, both sides carry a figure, and they agree.
@@ -929,7 +944,9 @@ def _probe_row(framework: str = "CRR") -> str:
 def _probe_cell(framework: str = "CRR") -> CellDecomposition:
     """The probe's RWEA cell — an additive money cell, which is the precondition
     ``sheet_conservation`` takes the decomposition in order to check."""
-    return decompose_cell(_probe(framework), TEMPLATE, SHEET, _probe_row(framework), RWEA_COL)
+    return decompose_cell(
+        _probe(framework), TEMPLATE, _sheet(framework), _probe_row(framework), RWEA_COL
+    )
 
 
 class _ProbeResponse:
@@ -1326,11 +1343,11 @@ def test_a_moved_row_nets_across_the_sheet_and_a_one_sided_exposure_does_not(
 
     # Adequacy — the CELL must differ, or "the sheet nets" is trivially true of
     # a portfolio in which nothing differs anywhere.
-    cell = decompose_cell(moved, TEMPLATE, SHEET, row_ref, RWEA_COL)
+    cell = decompose_cell(moved, TEMPLATE, _sheet(framework), row_ref, RWEA_COL)
     assert cell.delta == pytest.approx(RWA_MOVER)
 
     # Act
-    conservation = rr.sheet_conservation(moved, TEMPLATE, SHEET, cell)
+    conservation = rr.sheet_conservation(moved, TEMPLATE, _sheet(framework), cell)
 
     # Assert — a move nets: it lands in two cells of one sheet with opposite signs.
     assert conservation is not None
@@ -1341,7 +1358,9 @@ def test_a_moved_row_nets_across_the_sheet_and_a_one_sided_exposure_does_not(
 
     # Assert — and a genuinely one-sided population does not net, by exactly the
     # money that is one-sided plus the values the two sides disagree about.
-    probe = rr.sheet_conservation(_probe(framework), TEMPLATE, SHEET, _probe_cell(framework))
+    probe = rr.sheet_conservation(
+        _probe(framework), TEMPLATE, _sheet(framework), _probe_cell(framework)
+    )
     assert probe is not None
     assert probe.decidable
     assert not probe.conserves
@@ -1352,7 +1371,9 @@ def test_a_moved_row_nets_across_the_sheet_and_a_one_sided_exposure_does_not(
 def test_the_sheet_total_excludes_the_rows_that_would_double_count(framework: str) -> None:
     """This row axis overlaps; summing every emitted row double-counts."""
     # Act
-    conservation = rr.sheet_conservation(_probe(framework), TEMPLATE, SHEET, _probe_cell(framework))
+    conservation = rr.sheet_conservation(
+        _probe(framework), TEMPLATE, _sheet(framework), _probe_cell(framework)
+    )
     assert conservation is not None
 
     # Adequacy — a sheet with nothing to exclude cannot exercise the guard.
@@ -1363,7 +1384,9 @@ def test_the_sheet_total_excludes_the_rows_that_would_double_count(framework: st
 
     # Assert — the naive sum over EVERY emitted row is a different number, so
     # the exclusion is doing work rather than being decorative.
-    naive = diff_cells(_probe(framework), TEMPLATE, SHEET).filter(pl.col("col_ref") == RWEA_COL)
+    naive = diff_cells(_probe(framework), TEMPLATE, _sheet(framework)).filter(
+        pl.col("col_ref") == RWEA_COL
+    )
     assert float(naive.get_column("delta").sum()) != pytest.approx(conservation.delta)
     assert conservation.leaf_rows + conservation.excluded_rows == naive.height
 
@@ -1381,18 +1404,21 @@ def test_a_non_additive_column_gets_no_sheet_total_at_all(framework: str) -> Non
     # Arrange
     recon = _probe(framework)
     row_ref = _probe_row(framework)
-    average = decompose_cell(recon, TEMPLATE, SHEET, row_ref, "0050")
+    average = decompose_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0050")
 
     # Adequacy — 0050 must really be the non-additive case, not merely absent.
     assert average.metric == "weighted_avg", average.metric
     assert average.kind == "rows"
 
     # Assert — refused outright, and the refusal reaches the explanation.
-    assert rr.sheet_conservation(recon, TEMPLATE, SHEET, average) is None
-    assert rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0050").conservation is None
+    assert rr.sheet_conservation(recon, TEMPLATE, _sheet(framework), average) is None
+    assert rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0050").conservation is None
     # ... while the additive column beside it still gets one, so "None" is a
     # statement about the metric rather than about this sheet.
-    assert rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, RWEA_COL).conservation is not None
+    assert (
+        rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, RWEA_COL).conservation
+        is not None
+    )
 
 
 def test_a_refused_cell_renders_no_sheet_total_it_cannot_state(client: TestClient) -> None:
@@ -1460,10 +1486,10 @@ def test_the_matrix_diagonal_is_agreement_and_the_off_diagonal_is_the_mover(
 ) -> None:
     # Arrange
     recon = _recon(framework)
-    groups = rr.migration_groups(recon, TEMPLATE, SHEET)
+    groups = rr.migration_groups(recon, TEMPLATE, _sheet(framework))
     post_groups = [group for group in groups if RWEA_COL in group.columns]
     assert len(post_groups) == 1, "C 08.03 RWEA must be served by one predicate group"
-    matrix = rr.migration_matrix(recon, TEMPLATE, SHEET, post_groups[0].predicate_key)
+    matrix = rr.migration_matrix(recon, TEMPLATE, _sheet(framework), post_groups[0].predicate_key)
     assert matrix is not None
     our_row = _row_of(recon, "MOVER", ours=True)
     their_row = _row_of(recon, "MOVER", ours=False)
@@ -1492,8 +1518,8 @@ def test_the_matrix_diagonal_is_agreement_and_the_off_diagonal_is_the_mover(
 def test_the_matrix_conserves_money_on_both_sides(framework: str) -> None:
     # Arrange
     recon = _recon(framework)
-    groups = rr.migration_groups(recon, TEMPLATE, SHEET)
-    matrix = rr.migration_matrix(recon, TEMPLATE, SHEET, groups[0].predicate_key)
+    groups = rr.migration_groups(recon, TEMPLATE, _sheet(framework))
+    matrix = rr.migration_matrix(recon, TEMPLATE, _sheet(framework), groups[0].predicate_key)
     assert matrix is not None
     cells = [cell for row in matrix.cells for cell in row if cell is not None]
 
@@ -1511,8 +1537,8 @@ def test_the_matrix_conserves_money_on_both_sides(framework: str) -> None:
 def test_the_movement_classes_partition_the_population(framework: str) -> None:
     # Arrange
     recon = _recon(framework)
-    groups = rr.migration_groups(recon, TEMPLATE, SHEET)
-    matrix = rr.migration_matrix(recon, TEMPLATE, SHEET, groups[0].predicate_key)
+    groups = rr.migration_groups(recon, TEMPLATE, _sheet(framework))
+    matrix = rr.migration_matrix(recon, TEMPLATE, _sheet(framework), groups[0].predicate_key)
     assert matrix is not None
 
     # Assert — each class is the fixture's own figure, and none is a row sum.
@@ -1529,8 +1555,8 @@ def test_the_matrix_carries_the_value_driven_attribution_verbatim(framework: str
     # Assert — a reader must not take an off-diagonal as evidence about their
     # BANDING RULE; that difference is structurally invisible on this path.
     recon = _recon(framework)
-    groups = rr.migration_groups(recon, TEMPLATE, SHEET)
-    matrix = rr.migration_matrix(recon, TEMPLATE, SHEET, groups[0].predicate_key)
+    groups = rr.migration_groups(recon, TEMPLATE, _sheet(framework))
+    matrix = rr.migration_matrix(recon, TEMPLATE, _sheet(framework), groups[0].predicate_key)
     assert matrix is not None
     assert matrix.attribution == PLACEMENT_ATTRIBUTION
 
@@ -1578,7 +1604,7 @@ def test_the_explanation_reports_the_parent_flag_as_measured(framework: str) -> 
     row_ref = _row_of(recon, "MOVER", ours=True)
 
     # Act
-    explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0090")
+    explanation = rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0090")
 
     # Assert — tri-state, never coerced to a boolean.
     assert explanation.row_is_parent in {True, False, None}
@@ -1593,12 +1619,12 @@ def test_a_cell_reads_the_one_group_that_serves_it(framework: str) -> None:
     row_ref = _row_of(recon, "MOVER", ours=True)
 
     # Act
-    explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0090")
+    explanation = rr.explain_cell(recon, TEMPLATE, _sheet(framework), row_ref, "0090")
 
     # Assert — the population is addressed through the column mapping, and the
     # exposures paired beneath it are that group's, not the row's several.
     assert explanation.predicate_key
-    served = rr._group_columns(recon.ours, TEMPLATE, SHEET).filter(
+    served = rr._group_columns(recon.ours, TEMPLATE, _sheet(framework)).filter(
         (pl.col("row_ref") == row_ref) & (pl.col("col_ref") == "0090")
     )
     assert served.height >= 1
@@ -1660,8 +1686,12 @@ def test_raising_the_floor_shrinks_the_worklist_without_losing_the_cells(
 ) -> None:
     # Arrange
     recon = _recon(framework)
-    loose = rr.sheet_compare(recon, TEMPLATE, SHEET, materiality=rr.Materiality(1.0, 0.0))
-    strict = rr.sheet_compare(recon, TEMPLATE, SHEET, materiality=rr.Materiality(10_000_000.0, 0.0))
+    loose = rr.sheet_compare(
+        recon, TEMPLATE, _sheet(framework), materiality=rr.Materiality(1.0, 0.0)
+    )
+    strict = rr.sheet_compare(
+        recon, TEMPLATE, _sheet(framework), materiality=rr.Materiality(10_000_000.0, 0.0)
+    )
     assert loose is not None
     assert strict is not None
 
@@ -1951,9 +1981,9 @@ def _migration_page(client: TestClient, recon_id: str, **extra: str) -> str:
 
 def _matrix_of(recon: ReturnRecon, money_column: str = "rwa_final") -> rr.MigrationMatrix:
     """The one migration matrix the C 08.03 corporate sheet has."""
-    groups = rr.migration_groups(recon, TEMPLATE, SHEET)
+    groups = rr.migration_groups(recon, TEMPLATE, _sheet(recon.framework))
     matrix = rr.migration_matrix(
-        recon, TEMPLATE, SHEET, groups[0].predicate_key, money_column=money_column
+        recon, TEMPLATE, _sheet(recon.framework), groups[0].predicate_key, money_column=money_column
     )
     assert matrix is not None
     return matrix
@@ -2080,7 +2110,13 @@ def test_the_drill_down_reads_the_matrix_it_is_drawn_under(
     # Act / Assert
     for cell in cells:
         movers = rr.migration_movers(
-            recon, TEMPLATE, SHEET, matrix, cell.our_row_ref, cell.their_row_ref, limit=None
+            recon,
+            TEMPLATE,
+            _sheet(framework),
+            matrix,
+            cell.our_row_ref,
+            cell.their_row_ref,
+            limit=None,
         )
         where = f"{cell.our_row_ref}/{cell.their_row_ref}"
         assert movers.total == cell.legs, where

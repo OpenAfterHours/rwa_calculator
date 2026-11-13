@@ -367,13 +367,18 @@ def test_c08_01_r0253_drops_the_defaulted_retail_mortgage_but_keeps_the_live_leg
     # Arrange / Act
     results, corep = _run("b31")
     sheets = corep.c08_01
-    assert "retail_mortgage" in sheets, (
-        "C 08.01 has no retail_mortgage sheet — every Art. 154(4A) rule scoped to "
+    # RE-ANCHORED 2026-11-13 from the class sheet ``retail_mortgage``: Basel 3.1
+    # OF 08.01 is published per class and approach, and all three mortgages are
+    # A-IRB, non-SME and residential — published sheet 0021
+    # (``IRB_CLASS_EXPECTED_SHEET_B31``).
+    mortgages = IRB_CLASS_EXPECTED_SHEET_B31[LN_RRE_DEF]
+    assert mortgages in sheets, (
+        f"OF 08.01 has no {mortgages} sheet — every Art. 154(4A) rule scoped to "
         "it reports NOT_EVALUATED, which reads exactly like a pass"
     )
-    sheet = sheets["retail_mortgage"]
+    sheet = sheets[mortgages]
     assert set(_C08_01_RWEA_COMPONENTS) | {"0260"} <= set(sheet.columns), (
-        f"C 08.01 retail_mortgage is missing RWEA columns; emitted: {sorted(sheet.columns)}"
+        f"OF 08.01 {mortgages} is missing RWEA columns; emitted: {sorted(sheet.columns)}"
     )
     row = sheet.filter(pl.col("row_ref") == "0010")
     cells = {ref: row[ref][0] for ref in (*_C08_01_RWEA_COMPONENTS, "0260")}

@@ -59,8 +59,7 @@ from rwa_calc.reporting.cellspec import (
     Sum,
     WeightedAvg,
 )
-
-_IRB_RETAIL_CLASSES: frozenset[str] = frozenset({"retail_mortgage", "retail_qrre", "retail_other"})
+from rwa_calc.reporting.corep.irb_sheets import place_of
 
 
 def _null(_cells: Mapping[str, float | None], _prior_available: bool) -> None:
@@ -74,7 +73,7 @@ def build_c08_03_cells(  # noqa: PLR0913 - the complete C 08.03 column surface
     rwa_col: str,
     pd_report_col: str,
     lgd_col: str | None,
-    exposure_class: str,
+    sheet_key: str,
     basis_origin: str,
     basis_post: str,
 ) -> dict[tuple[str, str], CellSpec]:
@@ -86,6 +85,11 @@ def build_c08_03_cells(  # noqa: PLR0913 - the complete C 08.03 column surface
     its basis, so a beneficial guarantee that changes only the PD — leaving the
     exposure class alone — still moves its exposure value and RWEA to the
     guarantor's band while the obligor's gross stays put.
+
+    ``sheet_key`` is the sheet being built — an exposure class under CRR, a
+    published class-and-approach sheet under Basel 3.1 (``corep/irb_sheets.py``).
+    A retail sheet reports no maturity (col 0080): Annex II, "this column shall
+    not be filled in for the exposure class 'retail'".
     """
     cells: dict[tuple[str, str], CellSpec] = {}
     for ref, label, origin_col, post_col in band_rows:
@@ -125,7 +129,7 @@ def build_c08_03_cells(  # noqa: PLR0913 - the complete C 08.03 column surface
         )
         cells[(ref, "0080")] = (
             CellSpec(Formula(refs=(), fn=_null))
-            if exposure_class in _IRB_RETAIL_CLASSES
+            if place_of(sheet_key).retail
             else CellSpec(
                 WeightedAvg("irb_maturity_m", weight=ead_col),
                 predicate=post_member,

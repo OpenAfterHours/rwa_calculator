@@ -695,6 +695,12 @@
     "CRR Art. 148",
     "PS1/26, paragraph 1.3"
   ],
+  "rwa_calc.reporting.corep.c08_sheets::sheet_keys": [
+    "PS1/26, paragraph 1.3"
+  ],
+  "rwa_calc.reporting.corep.c08_sheets::with_total_sheets": [
+    "PS1/26, paragraph 1.3"
+  ],
   "rwa_calc.reporting.corep.c09::generate_c09_01": [
     "PS1/26, paragraph 1.3"
   ],

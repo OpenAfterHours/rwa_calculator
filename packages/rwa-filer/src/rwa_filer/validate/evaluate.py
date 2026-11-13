@@ -54,9 +54,9 @@ from rwa_filer.validate.index import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
-    from rwa_filer.validate.index import Coordinate, TemplateIndex
+    from rwa_filer.validate.index import Coordinate, SheetCode, TemplateIndex
 
 logger = logging.getLogger(__name__)
 
@@ -777,9 +777,25 @@ def _reference_sheets(
 
     if context.coordinate.sheet in emitted:
         return (context.coordinate.sheet,)
+    if _on_the_same_axis(
+        context.coordinate.sheet, context.index.sheet_maps.get(sheet_map_name or "")
+    ):
+        # The rule is evaluated on a sheet of this table's own axis, and the table
+        # does not carry it: the reference has nothing there. Reading every other
+        # sheet instead would compare one sheet with the whole template.
+        raise SkipCoordinate(
+            SKIP_SHEET_NOT_EMITTED, f"{table} has no {context.coordinate.sheet} sheet"
+        )
     if aggregated:
         return emitted
     raise SkipCoordinate(SKIP_AMBIGUOUS_AXIS, f"{table} sheet not fixed by the rule's scope")
+
+
+def _on_the_same_axis(sheet: str, sheet_map: Mapping[str, SheetCode] | None) -> bool:
+    """Whether ``sheet`` is one of the sheets ``sheet_map`` lays a table out on."""
+    if sheet_map is None:
+        return False
+    return any(sheet in entry.bundle_keys for entry in sheet_map.values())
 
 
 def _reference_axis(

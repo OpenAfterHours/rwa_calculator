@@ -89,6 +89,13 @@ _REGIMES: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 #: the columns under test sit side by side and can be compared to each other.
 _SHEET: str = "corporate"
 
+#: The same obligors' C 08.01 / OF 08.01 sheet, per regime. RE-ANCHORED
+#: 2026-11-13: this read ``_SHEET`` under both regimes, but Basel 3.1 publishes
+#: the IRB sheets per class AND approach (BoE Banking Taxonomy v4.1.1,
+#: ``OF08.01.01.01``) and every Art. 199 obligor here is an F-IRB non-SME
+#: corporate — published sheet 0012. C 07.00 keeps the class key.
+_IRB_SHEET: dict[str, str] = {"crr": "corporate", "b31": "corporate_non_sme_firb"}
+
 #: The origin approach CR7-A keys its sheets on. Every Art. 199 leg is F-IRB.
 _FIRB: str = "foundation_irb"
 
@@ -299,8 +306,9 @@ class TestArticle199ReachesTheIrbCrmColumns:
     def test_sheet_is_emitted_with_every_crm_column_non_null(self, regime_key: str) -> None:
         _results, corep, _p3 = _run_art199(regime_key)
 
-        assert _SHEET in corep.c08_01, f"{regime_key}: no C 08.01 {_SHEET} sheet"
-        total = _total_row(corep.c08_01[_SHEET])
+        sheet = _IRB_SHEET[regime_key]
+        assert sheet in corep.c08_01, f"{regime_key}: no C 08.01 {sheet} sheet"
+        total = _total_row(corep.c08_01[sheet])
         for carrier, column in A199_CARRIER_TO_C08_COLUMN.items():
             assert total[column] is not None, f"{regime_key}: col {column} ({carrier}) is NULL"
 
@@ -311,7 +319,7 @@ class TestArticle199ReachesTheIrbCrmColumns:
         a non-null check and leave the family just as vacuous."""
         _results, corep, _p3 = _run_art199(regime_key)
 
-        total = _total_row(corep.c08_01[_SHEET])
+        total = _total_row(corep.c08_01[_IRB_SHEET[regime_key]])
         for carrier in A199_PREVIOUSLY_DEAD_CARRIERS:
             column = A199_CARRIER_TO_C08_COLUMN[carrier]
             assert float(total[column]) > 0.0, f"{regime_key}: col {column} ({carrier}) is dead"
@@ -324,7 +332,7 @@ class TestArticle199ReachesTheIrbCrmColumns:
         look identical."""
         _results, corep, _p3 = _run_art199(regime_key)
 
-        total = _total_row(corep.c08_01[_SHEET])
+        total = _total_row(corep.c08_01[_IRB_SHEET[regime_key]])
         column = A199_CARRIER_TO_C08_COLUMN[A199_LIVE_SIBLING_CARRIER]
         assert float(total[column]) > 0.0, f"{regime_key}: col {column} went dark"
 
@@ -335,7 +343,7 @@ class TestArticle199ReachesTheIrbCrmColumns:
         against a literal, so the tie holds whatever the LGD* maths produces."""
         results, corep, _p3 = _run_art199(regime_key)
 
-        total = _total_row(corep.c08_01[_SHEET])
+        total = _total_row(corep.c08_01[_IRB_SHEET[regime_key]])
         for carrier, column in A199_CARRIER_TO_C08_COLUMN.items():
             expected = float(results[carrier].fill_null(0.0).sum())
             assert float(total[column]) == pytest.approx(expected), (

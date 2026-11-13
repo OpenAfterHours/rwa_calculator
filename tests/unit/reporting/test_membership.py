@@ -49,6 +49,11 @@ from rwa_calc.reporting.membership import (
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 from tests.fixtures.recon_ledger import with_reporting_ledger
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_FIRB,
+    OF08_INSTITUTIONS_FIRB,
+    irb_sheet,
+)
 
 FRAMEWORKS = ("CRR", "BASEL_3_1")
 
@@ -692,15 +697,33 @@ def test_the_two_basis_groups_hold_different_populations(framework: str) -> None
         crossed = membership.legs.filter(
             (pl.col("template_id") == template_id) & (pl.col("exposure_reference") == reference)
         )
-        assert set(crossed["sheet"].to_list()) == {"corporate", "institution"}, template_id
+        obligor, guarantor = _crossing_sheets(framework, template_id)
+        assert set(crossed["sheet"].to_list()) == {obligor, guarantor}, template_id
         assert set(crossed["reporting_class_origin"].to_list()) == {"corporate"}
         assert crossed["rwa_final"][0] == pytest.approx(rwea)
         # ... and the two sheets reach it through DIFFERENT groups.
         by_sheet = {
             sheet: set(crossed.filter(pl.col("sheet") == sheet)["predicate_key"].to_list())
-            for sheet in ("corporate", "institution")
+            for sheet in (obligor, guarantor)
         }
-        assert by_sheet["corporate"].isdisjoint(by_sheet["institution"]), template_id
+        assert by_sheet[obligor].isdisjoint(by_sheet[guarantor]), template_id
+
+
+def _crossing_sheets(framework: str, template_id: str) -> tuple[str, str]:
+    """The obligor's and the guarantor's sheet for a guaranteed corporate leg.
+
+    Re-anchored: the Basel 3.1 IRB sheets were asserted as the class keys
+    ``corporate`` / ``institution``. OF 08 is published per class AND approach
+    (taxonomy v4.1.1, ``OF08.01.01.01``): the F-IRB corporate obligor is sheet
+    0012 and the F-IRB institution guarantor sheet 0006. C 07.00 and CRR C 08
+    stay keyed by class.
+    """
+    if template_id == "c07_00":
+        return "corporate", "institution"
+    return (
+        irb_sheet(framework, "corporate", OF08_CORPORATE_NON_SME_FIRB),
+        irb_sheet(framework, "institution", OF08_INSTITUTIONS_FIRB),
+    )
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -716,7 +739,7 @@ def test_c08_03_expected_loss_drilldown_follows_the_post_crm_sheet(framework: st
 
     guaranteed = behind_el.filter(pl.col("exposure_reference") == "IRB_CORP_GTD")
     assert guaranteed.height > 0
-    assert set(guaranteed["sheet"].to_list()) == {"institution"}
+    assert set(guaranteed["sheet"].to_list()) == {_crossing_sheets(framework, "c08_03")[1]}
     assert set(guaranteed["predicate_key"].to_list()) == {"0040"}
 
 

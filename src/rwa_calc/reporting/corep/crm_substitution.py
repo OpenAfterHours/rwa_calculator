@@ -89,7 +89,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 # The post-substitution approach labels whose inflow belongs on the IRB
 # templates. Everything else is the SA destination — the complement, so the two
@@ -279,6 +279,7 @@ def irb_origin_inflows(
     *,
     destination: Destination,
     band_expr: pl.Expr | None = None,
+    destination_key: Callable[[str], pl.Expr] | None = None,
 ) -> dict[str, InflowBreakdown]:
     """CRM substitution inflows arising from IRB-ORIGIN legs, per destination class.
 
@@ -323,6 +324,12 @@ def irb_origin_inflows(
     decision, so a declined guarantee cannot leave one template without arriving
     on the other.
 
+    ``destination_key`` re-keys the destination for a template whose sheets are
+    finer than the exposure class: given the guarantor's class column it returns
+    the destination SHEET key (Basel 3.1 OF 08 — ``c08_sheets.inflow_sheet_key``),
+    so the covered part lands on the sheet its exposure value and RWEA land on. A
+    leg it keys to null is dropped, as a leg with no destination class is.
+
     Returns ``{guarantor exposure class: covered amount}`` as POSITIVE magnitudes
     measured on the CAPPED carrier (see :data:`IRB_UNFUNDED_COL`), empty when the
     frame carries no substitution carriers. Legs with no destination class are
@@ -337,6 +344,10 @@ def irb_origin_inflows(
     migrated = results.with_columns(irb_protection_exprs(cols)).filter(
         (pl.col(IRB_UNFUNDED_COL) > 0) & pl.col(_DESTINATION_CLASS_COL).is_not_null()
     )
+    if destination_key is not None:
+        migrated = migrated.with_columns(
+            destination_key(_DESTINATION_CLASS_COL).alias(_DESTINATION_CLASS_COL)
+        ).filter(pl.col(_DESTINATION_CLASS_COL).is_not_null())
     if _ORIGIN_APPROACH_COL in cols:
         migrated = migrated.filter(_is_irb(_ORIGIN_APPROACH_COL))
     if _DESTINATION_APPROACH_COL in cols:

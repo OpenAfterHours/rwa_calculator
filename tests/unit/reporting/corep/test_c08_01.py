@@ -16,6 +16,16 @@ from tests.unit.reporting.corep._builders import (
     _irb_results_with_phase2_cols,
 )
 
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_AIRB,
+    OF08_CORPORATE_NON_SME_FIRB,
+    OF08_CORPORATE_SME_FIRB,
+    OF08_RETAIL_RESIDENTIAL_NON_SME,
+    irb_sheet,
+)
+
 
 def _irb_results_with_output_floor() -> pl.LazyFrame:
     """IRB results with output floor columns for Phase 2D testing."""
@@ -440,7 +450,7 @@ class TestOutputFloor:
             _irb_results_with_output_floor(), framework="BASEL_3_1"
         )
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         assert "0275" in corp.columns
         assert "0276" in corp.columns
 
@@ -451,7 +461,7 @@ class TestOutputFloor:
             _irb_results_with_output_floor(), framework="BASEL_3_1"
         )
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         # Corporate: EAD 5500+3000=8500
         assert corp["0275"][0] == pytest.approx(8500.0)
 
@@ -462,7 +472,7 @@ class TestOutputFloor:
             _irb_results_with_output_floor(), framework="BASEL_3_1"
         )
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         # Corporate: sa_equivalent_rwa 5500+3000=8500
         assert corp["0276"][0] == pytest.approx(8500.0)
 
@@ -480,7 +490,7 @@ class TestOutputFloor:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results(), framework="BASEL_3_1")
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         assert corp["0276"][0] is None
 
 
@@ -558,7 +568,7 @@ class TestPostModelAdjustments:
         """Col 0251: RWEA pre adjustments equals sum of rwa_pre_adjustments."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0251"][0] == pytest.approx(3850.0 + 1800.0)
 
@@ -566,7 +576,7 @@ class TestPostModelAdjustments:
         """Col 0252: General PMA equals sum of post_model_adjustment_rwa."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0252"][0] == pytest.approx(192.5 + 90.0)
 
@@ -574,7 +584,7 @@ class TestPostModelAdjustments:
         """Col 0253: Mortgage RW floor adjustment for mortgage class."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        mtg = bundle.c08_01.get("retail_mortgage")
+        mtg = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME]
         if mtg is not None:
             total = mtg.filter(pl.col("row_ref") == "0010")
             assert total["0253"][0] == pytest.approx(100.0)
@@ -583,7 +593,7 @@ class TestPostModelAdjustments:
         """Col 0254: Unrecognised exposure adjustment."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0254"][0] == pytest.approx(7.7 + 30.0)
 
@@ -591,7 +601,7 @@ class TestPostModelAdjustments:
         """Col 0280: EL pre-adjustment equals sum of el_pre_adjustment."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0280"][0] == pytest.approx(12.375 + 13.5)
 
@@ -599,7 +609,7 @@ class TestPostModelAdjustments:
         """Col 0281: EL PMA equals sum of post_model_adjustment_el."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0281"][0] == pytest.approx(0.62 + 0.675)
 
@@ -607,7 +617,7 @@ class TestPostModelAdjustments:
         """Col 0282: EL after adjustment equals sum of el_after_adjustment."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0282"][0] == pytest.approx(12.995 + 14.175)
 
@@ -626,7 +636,7 @@ class TestPostModelAdjustments:
         """Without PMA columns in pipeline data, COREP cols are None."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results(), framework="BASEL_3_1")
-        corp = bundle.c08_01.get("corporate")
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         if corp is not None:
             total = corp.filter(pl.col("row_ref") == "0010")
             if "0251" in total.columns:
@@ -636,7 +646,7 @@ class TestPostModelAdjustments:
         """Corporate class should have zero mortgage floor adjustment."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert total["0253"][0] == pytest.approx(0.0)
 
@@ -676,7 +686,7 @@ class TestDoubleDefaultCOREP:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_double_default(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         assert "0220" not in total.columns
 
@@ -898,7 +908,7 @@ class TestSection3CalculationApproaches:
         bundle = gen.generate_from_lazyframe(
             _irb_results_b31_unrated_corporates(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         row = _get_section3_row(corp, "0190")
         # Unrated corporates: EAD 2000 + 1000 = 3000
         assert row["0110"][0] == pytest.approx(3000.0)
@@ -909,7 +919,7 @@ class TestSection3CalculationApproaches:
         bundle = gen.generate_from_lazyframe(
             _irb_results_b31_unrated_corporates(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         total_ead = _get_total_row(corp)["0110"][0]
         row_0190_ead = _get_section3_row(corp, "0190")["0110"][0]
         # Total 11000, rated 8000, unrated 3000
@@ -932,7 +942,7 @@ class TestSection3CalculationApproaches:
         bundle = gen.generate_from_lazyframe(
             _irb_results_b31_unrated_corporates(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         row = _get_section3_row(corp, "0200")
         # Investment grade unrated: EAD 2000 only (the IG flagged one)
         assert row["0110"][0] == pytest.approx(2000.0)
@@ -943,7 +953,7 @@ class TestSection3CalculationApproaches:
         bundle = gen.generate_from_lazyframe(
             _irb_results_b31_unrated_corporates(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         ead_0190 = _get_section3_row(corp, "0190")["0110"][0] or 0.0
         ead_0200 = _get_section3_row(corp, "0200")["0110"][0] or 0.0
         assert ead_0200 <= ead_0190 + 0.01
@@ -989,7 +999,7 @@ class TestSection3CalculationApproaches:
         """B31 template includes row 0175 (Purchased receivables)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_slotting(), framework="BASEL_3_1")
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
         row_refs = corp["row_ref"].to_list()
         assert "0175" in row_refs
 
@@ -1101,7 +1111,7 @@ class TestC0801SignConvention:
         """B31 dropped supporting factors, so 0256/0257 are absent (nothing to negate)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_sme_factor(), framework="BASEL_3_1")
-        corp_sme = bundle.c08_01["corporate_sme"]
+        corp_sme = bundle.c08_01[OF08_CORPORATE_SME_FIRB]
         assert "0256" not in corp_sme.columns
         assert "0257" not in corp_sme.columns
 
@@ -1109,7 +1119,7 @@ class TestC0801SignConvention:
         """B31 col 0035 (on-BS netting adjustment) is reported negative when present."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_b31_netting(), framework="BASEL_3_1")
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         # Σ on_bs_netting_amount = 500 + 300 = 800; emitted as a negative deduction.
         assert total["0035"][0] == pytest.approx(-800.0)
         assert total["0035"][0] <= 0.0
@@ -1193,7 +1203,9 @@ class TestC0801OffBalanceSheetMemo:
         """Col 0120 = Sum(ead_final) over the off-BS legs (post-CCF)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework=framework)
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(
+            bundle.c08_01[irb_sheet(framework, "corporate", OF08_CORPORATE_NON_SME_FIRB)]
+        )
         assert total["0120"][0] == pytest.approx(1000.0)
 
     @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
@@ -1201,7 +1213,9 @@ class TestC0801OffBalanceSheetMemo:
         """Col 0100 = off-BS gross (2000) - off-BS guarantee (500) = 1500."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework=framework)
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(
+            bundle.c08_01[irb_sheet(framework, "corporate", OF08_CORPORATE_NON_SME_FIRB)]
+        )
         assert total["0100"][0] == pytest.approx(1500.0)
 
     def test_col_0100_pre_ccf_exceeds_0120_post_ccf(self) -> None:

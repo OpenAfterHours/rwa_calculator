@@ -188,6 +188,7 @@ import pytest
 
 from rwa_calc.data.schemas import COLLATERAL_TYPE_CATEGORY, VALID_COLLATERAL_TYPES
 from rwa_calc.reporting.corep.c07 import c07_class_sheets
+from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
 from rwa_calc.reporting.kernel.columns import ensure_gross_side_carriers
 from tests.properties.corpus import CORPUS, RE_SPLIT, RE_SPLIT_WITH_FINANCIAL
 from tests.properties.portfolios import (
@@ -730,7 +731,9 @@ def test_c08_crm_in_lgd_never_exceeds_the_pledged_market_value(
     column = C08_COLLATERAL_COLUMNS[family]
 
     # Act
-    sheets = corep_bundle(portfolio, regime).c08_01 or {}
+    # The CLASS sheets: the Basel 3.1 OF 08.01 Total sheets (codes 0001 / 0002)
+    # are their sum, and adding them in would count every exposure twice.
+    sheets = c08_class_sheets(corep_bundle(portfolio, regime).c08_01 or {})
     assert sheets, "C 08.01 emitted no sheet at all"
     published = sum(_template_cell(frame, C08_01_TOTAL_ROW, column) for frame in sheets.values())
 

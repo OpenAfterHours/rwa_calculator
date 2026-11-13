@@ -279,16 +279,37 @@ def test_generated_cell_matches_the_independent_rederivation(
 # ---------------------------------------------------------------------------
 
 
+#: The corporate sheet of each template, per regime. C 07.00 / OF 07.00 key it by
+#: class under both. Re-anchored for OF 08.01: both regimes read the class sheet
+#: ``corporate``, but Basel 3.1 publishes the IRB sheets per class AND approach
+#: (taxonomy v4.1.1, ``OF08.01.01.01``) and this portfolio's modelled corporate
+#: legs are all F-IRB non-SME — published sheet 0012. Typed here, not imported
+#: from the generator: this file is the second opinion.
+_SA_CORPORATE: dict[str, str] = dict.fromkeys(REGIMES, "corporate")
+_IRB_CORPORATE: dict[str, str] = {"CRR": "corporate", "B31": "corporate_non_sme_firb"}
+
+
 @pytest.mark.parametrize(
-    ("template", "member", "total", "parts", "column"),
+    ("template", "members", "total", "parts", "column"),
     [
-        ("C0700", "corporate", "0010", ("0070", "0080"), "0010"),
-        ("C0700", "corporate", "0010", ("0070", "0080"), "0200"),
-        ("C0801", "corporate", "0010", ("0020", "0030"), "0020"),
+        pytest.param(
+            "C0700", _SA_CORPORATE, "0010", ("0070", "0080"), "0010", id="C0700-corporate-0010"
+        ),
+        pytest.param(
+            "C0700", _SA_CORPORATE, "0010", ("0070", "0080"), "0200", id="C0700-corporate-0200"
+        ),
+        pytest.param(
+            "C0801", _IRB_CORPORATE, "0010", ("0020", "0030"), "0020", id="C0801-corporate-0020"
+        ),
     ],
 )
 def test_the_balance_sheet_sides_partition_their_total(
-    templates, template: str, member: str, total: str, parts: tuple[str, ...], column: str
+    templates,
+    template: str,
+    members: dict[str, str],
+    total: str,
+    parts: tuple[str, ...],
+    column: str,
 ) -> None:
     """On-balance-sheet plus off-balance-sheet equals the total exposures row.
 
@@ -303,6 +324,7 @@ def test_the_balance_sheet_sides_partition_their_total(
     """
     breaks: list[str] = []
     for regime in REGIMES:
+        member = members[regime]
         frame = templates[regime][f"{template}:{member}"]
         if column not in frame.columns:
             continue

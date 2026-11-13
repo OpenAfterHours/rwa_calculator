@@ -16,11 +16,12 @@ positional index into the regulation's exposure-class list, while OUR bundles
 key sheets by class NAME. The mapping between the two is a fact about this
 calculator's output, not about the published rules — so it stays with the
 calculator, and the rule engine receives it as data on the ``TemplateIndex``.
-Our sheets are also a COARSER partition than the DPM's in places — on
+Our CRR sheets are also a COARSER partition than the DPM's in places — on
 ``_C08_SHEETS``, one ``retail_mortgage`` sheet answers the DPM's SME (z0013) /
 non-SME (z0014) pair — so a scoped subset of z-codes is only safe to evaluate
 when the set is CLOSED under the mapping (``rwa_filer.validate.index
-.resolve_sheet_codes``).
+.resolve_sheet_codes``). The Basel 3.1 maps are one key per code and closed by
+construction.
 
 Every ``SheetCode`` here carries AT MOST ONE ``bundle_key`` (``arch_check``
 check 22): a second key makes the evaluator sum the publisher's reference across
@@ -385,111 +386,126 @@ _C08_SHEETS: Final[tuple[SheetCode, ...]] = (
     ),
 )
 
-# ── OF 08.01 / OF 08.02 / OF 08.03 (Basel 3.1 / BoE) ─────────────────────────
+# ── OF 08.01 / OF 08.02 / OF 08.03 / OF 08.05 (Basel 3.1 / BoE) ──────────────
 # A DIFFERENT axis from the CRR one: PS1/26 withdraws the IRB approach for
-# sovereigns (the PS1/26 Annex II OF 09.02 row list starts at 0020 Institutions,
-# and boe_b0786 states Total = Institutions + Corporates + Retail with no
-# sovereign term) and re-cuts corporates and retail. Read off the OF 09.02 <->
-# OF 08.01 rule family (boe_b0287 and siblings) against the PS1/26 Annex II
-# OF 09.02 row instructions.
+# sovereigns and A-IRB for institutions (Art. 147A), adds "financial corporates
+# and large corporates", and splits retail real estate by property type. The
+# seventeen sheets are the taxonomy's own (PRA001 v4.1.1, table
+# ``OF08.01.01.01``; the same seventeen on ``OF08.01.01.02``, ``OF08.02.01.01``,
+# ``OF08.03.01.01``, ``OF08.05.00.01`` and ``OF08.05.01.01``), with its labels:
+# fifteen exposure sub-classes each under ONE approach (PS1/26 Annex II §3.3.2)
+# and two Totals. Codes 0003-0005, 0007, 0008, 0013 and 0014 do not exist.
 #
-# Only 17 codes ever appear in the extract — 0001, 0002, 0006, 0009-0012 and
-# 0015-0024 — so 0003-0005, 0007, 0008, 0013 and 0014 are DELIBERATELY absent
-# here rather than mapped on a guess; a reference to one of them is reported as
-# ``sheet_index_map_unknown``.
+# EVERY CODE NAMES EXACTLY ONE KEY, and the keys are the sheets
+# ``corep/irb_sheets.py`` declares and ``corep/c08_sheets.py`` generates —
+# spelt out here because arch_check check 22 reads these tuples as literals;
+# tests/contracts/test_of08_published_sheets.py holds the two equal, and holds
+# both to the taxonomy. Until 2026-11-13 our sheets were keyed by exposure class
+# alone, so this map sent two to four codes to one sheet ("1st approach / 2nd
+# approach") and no figure on such a sheet could be filed
+# (``sheet_coarser_than_published_axis``).
 _OF08_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode(
-        "0001", "Total (IRB), first approach dimension", (), "PS1/26 Annex II OF 09.02 row 0150"
+        "0001",
+        "Total (AIRB approach)",
+        ("total_airb",),
+        "PS1/26 Annex II §3.3.2 item 1; boe_b0748",
     ),
     SheetCode(
-        "0002", "Total (IRB), second approach dimension", (), "PS1/26 Annex II OF 09.02 row 0150"
+        "0002",
+        "Total (FIRB approach and slotting approach)",
+        ("total_firb_slotting",),
+        "PS1/26 Annex II §3.3.2 item 1; boe_b0749",
     ),
     SheetCode(
-        "0006", "Art. 147(2)(b) institutions", ("institution",), "PS1/26 Annex II OF 09.02 row 0020"
+        "0006",
+        "Institutions (FIRB approach)",
+        ("institution_firb",),
+        "PS1/26 Annex II §3.3.2 item 2; boe_b0616",
     ),
     SheetCode(
         "0009",
-        "Art. 147(2)(c)(i) specialised lending (excl. slotting), 1st approach",
-        ("specialised_lending",),
-        "PS1/26 Annex II OF 09.02 row 0042; boe_b0287",
+        "Corporates - Specialised Lending (AIRB approach)",
+        ("specialised_lending_airb",),
+        "PS1/26 Annex II §3.3.2 item 3.1; boe_b0623",
     ),
     SheetCode(
         "0010",
-        "Art. 147(2)(c)(i) specialised lending (excl. slotting), 2nd approach",
-        ("specialised_lending",),
-        "PS1/26 Annex II OF 09.02 row 0042; boe_b0287",
+        "Corporates - Specialised Lending (FIRB approach or slotting approach)",
+        ("specialised_lending_firb_slotting",),
+        "PS1/26 Annex II §3.3.2 item 3.1, §3.3.3 row 0080; boe_b0618, boe_b1041",
     ),
     SheetCode(
         "0011",
-        "Art. 147(4E) other general corporates non-SME, 1st approach",
-        ("corporate",),
-        "PS1/26 Annex II OF 09.02 row 0055",
+        "Corporates - Other general corporates - non-SME (AIRB approach)",
+        ("corporate_non_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 3.4; boe_b0564",
     ),
     SheetCode(
         "0012",
-        "Art. 147(4E) other general corporates non-SME, 2nd approach",
-        ("corporate",),
-        "PS1/26 Annex II OF 09.02 row 0055",
+        "Corporates - Other general corporates - non-SME (FIRB approach)",
+        ("corporate_non_sme_firb",),
+        "PS1/26 Annex II §3.3.2 item 3.4; boe_b0621",
     ),
     SheetCode(
         "0015",
-        "Art. 147(2D) retail - qualifying revolving",
-        ("retail_qrre",),
-        "PS1/26 Annex II OF 09.02 row 0100",
+        "Retail - Qualifying revolving (AIRB approach)",
+        ("retail_qrre_airb",),
+        "PS1/26 Annex II §3.3.2 item 4.5; boe_b0628",
     ),
     SheetCode(
         "0016",
-        "Art. 147(5C) retail - other SME",
-        ("retail_other",),
-        "PS1/26 Annex II OF 09.02 row 0120",
+        "Retail - Other SME (AIRB approach)",
+        ("retail_other_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 4.6; boe_b0629",
     ),
     SheetCode(
         "0017",
-        "Art. 147(5C) retail - other non-SME",
-        ("retail_other",),
-        "PS1/26 Annex II OF 09.02 row 0130",
+        "Retail - Other non-SME (AIRB approach)",
+        ("retail_other_non_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 4.7; boe_b0630",
     ),
     SheetCode(
         "0018",
-        "Art. 147(2)(d)(ii) retail - secured by commercial immovable property, SME",
-        ("retail_mortgage",),
-        "PS1/26 Annex II OF 09.02 row 0073",
+        "Retail \u2013 Secured by commercial immovable property SME (AIRB approach)",
+        ("retail_commercial_re_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 4.3; boe_b0626",
     ),
     SheetCode(
         "0019",
-        "Art. 147(2)(d)(ii) retail - secured by commercial immovable property, non-SME",
-        ("retail_mortgage",),
-        "PS1/26 Annex II OF 09.02 row 0074",
+        "Retail \u2013 Secured by commercial immovable property non-SME (AIRB approach)",
+        ("retail_commercial_re_non_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 4.4; boe_b0627",
     ),
     SheetCode(
         "0020",
-        "Art. 147(2)(d)(ii) retail - secured by residential immovable property, SME",
-        ("retail_mortgage",),
-        "PS1/26 Annex II OF 09.02 row 0071",
+        "Retail \u2013 Secured by residential immovable property - SME (AIRB approach)",
+        ("retail_residential_re_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 4.1; boe_b0624",
     ),
     SheetCode(
         "0021",
-        "Art. 147(2)(d)(ii) retail - secured by residential immovable property, non-SME",
-        ("retail_mortgage",),
-        "PS1/26 Annex II OF 09.02 row 0072",
+        "Retail \u2013 Secured by residential immovable property non-SME (AIRB approach)",
+        ("retail_residential_re_non_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 4.2; boe_b0625",
     ),
     SheetCode(
         "0022",
-        "Art. 147(4C) financial corporates and large corporates",
-        ("corporate",),
-        "PS1/26 Annex II OF 09.02 row 0048",
+        "Corporates - Financial corporates and large corporates (FIRB approach)",
+        ("corporate_financial_large_firb",),
+        "PS1/26 Annex II §3.3.2 item 3.2; boe_b0619",
     ),
     SheetCode(
         "0023",
-        "Art. 147(4E)(c) other general corporates SME, 1st approach",
-        ("corporate_sme",),
-        "PS1/26 Annex II OF 09.02 row 0050",
+        "Corporates - Other general corporates - SME (AIRB approach)",
+        ("corporate_sme_airb",),
+        "PS1/26 Annex II §3.3.2 item 3.3; boe_b0563",
     ),
     SheetCode(
         "0024",
-        "Art. 147(4E)(c) other general corporates SME, 2nd approach",
-        ("corporate_sme",),
-        "PS1/26 Annex II OF 09.02 row 0050",
+        "Corporates - Other general corporates - SME (FIRB approach)",
+        ("corporate_sme_firb",),
+        "PS1/26 Annex II §3.3.2 item 3.3; boe_b0620",
     ),
 )
 

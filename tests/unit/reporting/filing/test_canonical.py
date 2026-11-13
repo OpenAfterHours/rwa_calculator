@@ -29,12 +29,15 @@ References:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from typing import Any
 
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.irb_sheets import B31_SHEET_KEYS
+from rwa_calc.reporting.filing import bindings
 from rwa_calc.reporting.filing.canonical import (
     FILING_MODULE,
     REASON_CELL,
@@ -47,9 +50,11 @@ from rwa_calc.reporting.filing.canonical import (
     UNPLACED_SCHEMA,
     build_canonical_return,
 )
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_filer.model import FACT_SCHEMA, ReturnHeader
 from rwa_filer.taxonomy.pack import PackNotFoundError, resolve_pack
 from rwa_filer.validate.structure import check_structure
+from tests.unit.reporting.corep._irb_sheet_frames import OF08_INSTITUTIONS_FIRB
 
 from ._builders import build_corep, build_frame
 
@@ -192,9 +197,23 @@ def test_a_number_that_is_not_yes_or_no_is_left_for_the_structure_check() -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_an_irb_sheet_spanning_several_published_sheets_cannot_be_placed() -> None:
-    """Our "corporate" IRB sheet answers several published codes (by approach)."""
-    # Arrange
+def test_a_sheet_spanning_several_published_sheets_cannot_be_placed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sheet of ours that answers several published codes is refused, never guessed.
+
+    Re-anchored: this ran on the real map, where our Basel 3.1 "corporate" IRB
+    sheet answered four published codes — the defect the published OF 08 axis
+    removed (taxonomy v4.1.1 ``OF08.01.01.01``: seventeen sheets, one key each).
+    No Basel 3.1 map pairs a sheet any more, so the guard is exercised on a map
+    that does: the two corporate "other" codes folded back onto one key.
+    """
+    # Arrange — published sheets 0011 (A-IRB) and 0012 (F-IRB) on one sheet of ours.
+    coarse = {
+        code: replace(SHEET_INDEX_MAPS["of08"][code], bundle_keys=("corporate",))
+        for code in ("0011", "0012")
+    }
+    monkeypatch.setattr(bindings, "SHEET_INDEX_MAPS", {**SHEET_INDEX_MAPS, "of08": coarse})
     result = mapping(c08_01={"corporate": build_frame({"0010": {"0010": 100.0}})})
 
     # Act / Assert
@@ -204,12 +223,40 @@ def test_an_irb_sheet_spanning_several_published_sheets_cannot_be_placed() -> No
     ]
 
 
-def test_an_irb_sheet_with_exactly_one_published_code_is_placed() -> None:
-    # Arrange — "institution" is published sheet 0006 alone.
-    result = mapping(c08_01={"institution": build_frame({"0010": {"0010": 100.0}})})
+def test_an_irb_sheet_the_axis_does_not_publish_is_kept_as_unplaced() -> None:
+    """A-IRB institutions have no Basel 3.1 sheet: the figure is listed, not filed.
+
+    The generator keys such a pair apart (``corep/irb_sheets.py``) rather than
+    onto a neighbouring sheet, and the taxonomy has no code for it.
+    """
+    # Arrange
+    result = mapping(c08_01={"institution_airb": build_frame({"0010": {"0010": 100.0}})})
+
+    # Act / Assert
+    assert placed(result) == []
+    assert unplaced(result) == [
+        ("c08_01", "institution_airb", "0010", "0010", 100.0, REASON_SHEET_UNPUBLISHED)
+    ]
+
+
+def test_an_irb_sheet_is_placed_on_its_one_published_code() -> None:
+    # Arrange — F-IRB institutions are published sheet 0006. Re-anchored: the sheet
+    # was keyed by the class ``institution``; it is now keyed class-and-approach.
+    result = mapping(c08_01={OF08_INSTITUTIONS_FIRB: build_frame({"0010": {"0010": 100.0}})})
 
     # Act / Assert
     assert placed(result) == [("OF08.01.01.01", "0006", None, "0010", "0010", 100.0)]
+
+
+@pytest.mark.parametrize(("code", "key"), sorted(B31_SHEET_KEYS.items()))
+def test_every_published_of08_sheet_is_placed_under_its_own_code(code: str, key: str) -> None:
+    """All seventeen sheets, Totals included, reach the code the taxonomy gives them."""
+    # Arrange
+    result = mapping(c08_01={key: build_frame({"0010": {"0020": 100.0}})})
+
+    # Act / Assert
+    assert placed(result) == [("OF08.01.01.01", code, None, "0010", "0020", 100.0)]
+    assert result.unplaced.is_empty()
 
 
 def test_a_sheet_no_published_code_names_cannot_be_placed() -> None:
@@ -256,8 +303,9 @@ def test_a_country_the_open_axis_does_not_accept_cannot_be_placed() -> None:
 
 
 def test_an_open_row_table_is_not_yet_mapped() -> None:
-    # Arrange — OF 08.02 has no fixed rows; "institution" has one published sheet.
-    result = mapping(c08_02={"institution": build_frame({"0.25% - 0.50%": {"0010": 1.0}})})
+    # Arrange — OF 08.02 has no fixed rows; F-IRB institutions is published sheet
+    # 0006 (re-anchored from the class key ``institution``).
+    result = mapping(c08_02={OF08_INSTITUTIONS_FIRB: build_frame({"0.25% - 0.50%": {"0010": 1.0}})})
 
     # Act / Assert
     assert [row[-1] for row in unplaced(result)] == [REASON_OPEN_ROWS]
@@ -270,7 +318,8 @@ def test_an_open_row_table_is_not_yet_mapped() -> None:
 
 def test_every_reported_cell_is_either_placed_or_accounted_for() -> None:
     """The conservation identity: nothing is dropped silently."""
-    # Arrange — a mix of placeable, greyed, unknown and coarse-sheet cells.
+    # Arrange — a mix of placeable, greyed, unknown and unpublished-sheet cells
+    # (a class-keyed IRB sheet names no Basel 3.1 code).
     templates = {
         "c07_00": {
             "corporate": build_frame({"0010": {"0010": 1.0, "0210": 2.0, "9998": 3.0}}),

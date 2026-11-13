@@ -15,6 +15,12 @@ from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from rwa_calc.reporting.membership import cell_membership
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_FIRB,
+)
+
 
 class _FrameSource:
     """Minimal reporting source for checking cell drilldown membership."""
@@ -674,7 +680,7 @@ class TestC0803B31Features:
         """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
-        corp = bundle.c08_03["corporate"]
+        corp = bundle.c08_03[OF08_CORPORATE_NON_SME_FIRB]
         refs = corp["row_ref"].to_list()
         assert "0030" in refs  # pre-input-floor band
         assert "0040" not in refs  # the post-floor band, not used for allocation
@@ -687,7 +693,7 @@ class TestC0803B31Features:
         """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
-        corp = bundle.c08_03["corporate"]
+        corp = bundle.c08_03[OF08_CORPORATE_NON_SME_FIRB]
         row = corp.filter(pl.col("row_ref") == "0030")
         # E1: post-floor PD=0.002
         assert row["0050"][0] == pytest.approx(0.002, rel=1e-6)
@@ -709,7 +715,7 @@ class TestC0803B31Features:
         """Basel 3.1 C 08.03 still produces 11 data columns + 2 metadata."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
-        corp = bundle.c08_03["corporate"]
+        corp = bundle.c08_03[OF08_CORPORATE_NON_SME_FIRB]
         assert len(corp.columns) == 13
 
 

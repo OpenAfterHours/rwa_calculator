@@ -27,12 +27,12 @@
       "templates_covered": 11
     },
     "b31/rich": {
-      "PASS": 235,
-      "FAIL": 6,
-      "VACUOUS": 216,
-      "NOT_EVALUATED": 351,
+      "PASS": 257,
+      "FAIL": 10,
+      "VACUOUS": 218,
+      "NOT_EVALUATED": 323,
       "rules_enforced": 808,
-      "rules_executed": 457,
+      "rules_executed": 485,
       "templates_emitted": 12,
       "templates_covered": 12
     },
@@ -107,12 +107,12 @@
       "templates_covered": 8
     },
     "b31/irb-classes": {
-      "PASS": 172,
+      "PASS": 189,
       "FAIL": 9,
-      "VACUOUS": 208,
-      "NOT_EVALUATED": 419,
+      "VACUOUS": 213,
+      "NOT_EVALUATED": 397,
       "rules_enforced": 808,
-      "rules_executed": 389,
+      "rules_executed": 411,
       "templates_emitted": 11,
       "templates_covered": 11
     },
@@ -127,12 +127,12 @@
       "templates_covered": 11
     },
     "b31/crm-substitution": {
-      "PASS": 193,
-      "FAIL": 12,
-      "VACUOUS": 198,
-      "NOT_EVALUATED": 405,
+      "PASS": 202,
+      "FAIL": 16,
+      "VACUOUS": 199,
+      "NOT_EVALUATED": 391,
       "rules_enforced": 808,
-      "rules_executed": 403,
+      "rules_executed": 417,
       "templates_emitted": 12,
       "templates_covered": 12
     },
@@ -167,12 +167,12 @@
       "templates_covered": 8
     },
     "b31/art199": {
-      "PASS": 107,
+      "PASS": 115,
       "FAIL": 2,
-      "VACUOUS": 74,
-      "NOT_EVALUATED": 625,
+      "VACUOUS": 79,
+      "NOT_EVALUATED": 612,
       "rules_enforced": 808,
-      "rules_executed": 183,
+      "rules_executed": 196,
       "templates_emitted": 9,
       "templates_covered": 9
     },
@@ -187,12 +187,12 @@
       "templates_covered": 9
     },
     "b31/irb-shapes": {
-      "PASS": 136,
-      "FAIL": 9,
-      "VACUOUS": 53,
-      "NOT_EVALUATED": 610,
+      "PASS": 156,
+      "FAIL": 12,
+      "VACUOUS": 55,
+      "NOT_EVALUATED": 585,
       "rules_enforced": 808,
-      "rules_executed": 198,
+      "rules_executed": 223,
       "templates_emitted": 10,
       "templates_covered": 10
     },
@@ -257,22 +257,22 @@
       "templates_covered": 10
     },
     "b31/facility-share-binding": {
-      "PASS": 147,
-      "FAIL": 10,
-      "VACUOUS": 221,
-      "NOT_EVALUATED": 430,
+      "PASS": 154,
+      "FAIL": 11,
+      "VACUOUS": 226,
+      "NOT_EVALUATED": 417,
       "rules_enforced": 808,
-      "rules_executed": 378,
+      "rules_executed": 391,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/facility-share-nonbinding": {
-      "PASS": 145,
+      "PASS": 153,
       "FAIL": 8,
-      "VACUOUS": 225,
-      "NOT_EVALUATED": 430,
+      "VACUOUS": 230,
+      "NOT_EVALUATED": 417,
       "rules_enforced": 808,
-      "rules_executed": 378,
+      "rules_executed": 391,
       "templates_emitted": 11,
       "templates_covered": 11
     },
@@ -298,6 +298,34 @@
     }
   },
   "known_broken_rules": [
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0283",
+      "severity": "ERROR",
+      "reason": "attributed - the S2 guarantee on the crm-substitution portfolio: an F-IRB corporate loan whose covered part is guaranteed by a RETAIL counterparty. OF 02.00 and OF 08 (one classification, reporting/corep/irb_sheets.py) revert that leg to its obligor's corporate class, because (F-IRB, retail) is a pair CRR Art. 151(4) makes impossible and the published OF 08 axis has no sheet for; OF 09.02 counts it under the guarantor's retail class. The two templates disagree by that leg. The root cause is upstream and recorded in reporting/corep/c02.py: CRR Art. 201(1) lists no retail provider of unfunded protection, so the guarantee should not have been recognised at all (a missing Art. 201 eligibility gate in engine/crm/, capital-affecting, not changed here). Visible since 2026-11-13, when the OF 08 sheets took the published axis and these rules could first read them.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0030, c: 0105, filter: [eba_dim:CEG] = [eba_GA:x1]} = sum({t: OF08.01.01.01, r: 0010, c: 0110, z: 0009; 0010; 0011; 0012; 0022; 0023; 0024})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0284",
+      "severity": "ERROR",
+      "reason": "attributed - the S2 guarantee on the crm-substitution portfolio: an F-IRB corporate loan whose covered part is guaranteed by a RETAIL counterparty. OF 02.00 and OF 08 (one classification, reporting/corep/irb_sheets.py) revert that leg to its obligor's corporate class, because (F-IRB, retail) is a pair CRR Art. 151(4) makes impossible and the published OF 08 axis has no sheet for; OF 09.02 counts it under the guarantor's retail class. The two templates disagree by that leg. The root cause is upstream and recorded in reporting/corep/c02.py: CRR Art. 201(1) lists no retail provider of unfunded protection, so the guarantee should not have been recognised at all (a missing Art. 201 eligibility gate in engine/crm/, capital-affecting, not changed here). Visible since 2026-11-13, when the OF 08 sheets took the published axis and these rules could first read them.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0030, c: 0110, filter: [eba_dim:CEG] = [eba_GA:x1]} = sum({t: OF08.01.01.01, r: 0010, c: 0260, z: 0009; 0010; 0011; 0012; 0022; 0023; 0024})"
+    },
     {
       "regime": "b31",
       "rule_id": "boe_b0303",
@@ -335,13 +363,13 @@
       "portfolios": [
         "crm-substitution"
       ],
-      "failing_coordinates": 5,
+      "failing_coordinates": 8,
       "coordinates": [
-        "OF08.01.01.01[specialised_lending][c0050]",
-        "OF08.01.01.01[specialised_lending][c0070]",
-        "OF08.01.01.01[corporate][c0040]",
-        "OF08.01.01.01[corporate][c0050]",
-        "OF08.01.01.01[corporate][c0070]"
+        "OF08.01.01.01[total_firb_slotting][c0040]",
+        "OF08.01.01.01[total_firb_slotting][c0050]",
+        "OF08.01.01.01[total_firb_slotting][c0070]",
+        "OF08.01.01.01[specialised_lending_firb_slotting][c0050]",
+        "OF08.01.01.01[specialised_lending_firb_slotting][c0070]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0017} <= {t: OF08.01.01.01, r: 0010}"
     },
@@ -353,11 +381,13 @@
       "portfolios": [
         "crm-substitution"
       ],
-      "failing_coordinates": 3,
+      "failing_coordinates": 6,
       "coordinates": [
-        "OF08.01.01.01[corporate][c0040]",
-        "OF08.01.01.01[corporate][c0050]",
-        "OF08.01.01.01[corporate][c0070]"
+        "OF08.01.01.01[total_firb_slotting][c0040]",
+        "OF08.01.01.01[total_firb_slotting][c0050]",
+        "OF08.01.01.01[total_firb_slotting][c0070]",
+        "OF08.01.01.01[corporate_non_sme_firb][c0040]",
+        "OF08.01.01.01[corporate_non_sme_firb][c0050]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0200} <= {t: OF08.01.01.01, r: 0190}"
     },
@@ -369,13 +399,9 @@
       "portfolios": [
         "crm-substitution"
       ],
-      "failing_coordinates": 5,
+      "failing_coordinates": 1,
       "coordinates": [
-        "OF08.01.01.01[institution][r0190]",
-        "OF08.01.01.01[retail_other][r0010]",
-        "OF08.01.01.01[retail_other][r0020]",
-        "OF08.01.01.01[retail_other][r0070]",
-        "OF08.01.01.01[retail_other][r0190]"
+        "OF08.01.01.01[institution_firb][r0190]"
       ],
       "expression": "abs({t: OF08.01.01.01, c: 0280}) <= abs({t: OF08.01.01.01, c: 0020})"
     },
@@ -389,10 +415,24 @@
       ],
       "failing_coordinates": 2,
       "coordinates": [
-        "OF08.02.01.01[institution][rUnassigned]",
-        "OF08.02.01.01[retail_other][rUnassigned]"
+        "OF08.02.01.01[total_firb_slotting][rUnassigned]",
+        "OF08.02.01.01[institution_firb][rUnassigned]"
       ],
       "expression": "{t: OF08.02.01.01, c: 0280} <= {t: OF08.02.01.01, c: 0020}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0621",
+      "severity": "ERROR",
+      "reason": "attributed - plan item P1.369 (OWNER: P1.369). On the one registered portfolio whose output floor binds, OF 02.00 r0297 c0010 is the UN-floored RWEA (that column is one data point with OF 02.01's U-TREA and is summed from rwa_pre_floor) while OF 08.01 sheet 0012 c0260 sums rwa_final, which carries the engine's pro-rata floor add-on. The taxonomy makes the two cells one data point, so the filed return also carries STR007. Measured 2026-11-13: 1,105,491.29 against 1,559,200.00 (the 453,708.71 add-on). Closing P1.369 (report un-floored RWEA in the IRB templates) removes this entry.",
+      "portfolios": [
+        "facility-share-binding"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF02.00.01.01"
+      ],
+      "expression": "{t: OF02.00.01.01, r: 0297, c: 0010} = {t: OF08.01.01.01, r: 0010, c: 0260, z: 0012}"
     },
     {
       "regime": "b31",
@@ -475,11 +515,13 @@
         "facility-share-binding",
         "irb-shapes"
       ],
-      "failing_coordinates": 3,
+      "failing_coordinates": 5,
       "coordinates": [
-        "OF08.01.01.01[specialised_lending][c0300]",
-        "OF08.01.01.01[corporate][c0250]",
-        "OF08.01.01.01[corporate][c0300]"
+        "OF08.01.01.01[total_firb_slotting][c0250]",
+        "OF08.01.01.01[total_firb_slotting][c0300]",
+        "OF08.01.01.01[specialised_lending_firb_slotting][c0300]",
+        "OF08.01.01.01[corporate_non_sme_firb][c0250]",
+        "OF08.01.01.01[corporate_non_sme_firb][c0300]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0010} = sum({t: OF08.01.01.01, r: 0020; 0030; 0040; 0050; 0060})"
     },
@@ -491,13 +533,13 @@
       "portfolios": [
         "facility-share-binding"
       ],
-      "failing_coordinates": 5,
+      "failing_coordinates": 10,
       "coordinates": [
-        "OF08.01.01.01[corporate][r0010]",
-        "OF08.01.01.01[corporate][r0020]",
-        "OF08.01.01.01[corporate][r0030]",
-        "OF08.01.01.01[corporate][r0070]",
-        "OF08.01.01.01[corporate][r0190]"
+        "OF08.01.01.01[total_firb_slotting][r0010]",
+        "OF08.01.01.01[total_firb_slotting][r0020]",
+        "OF08.01.01.01[total_firb_slotting][r0030]",
+        "OF08.01.01.01[total_firb_slotting][r0070]",
+        "OF08.01.01.01[total_firb_slotting][r0190]"
       ],
       "expression": "{t: OF08.01.01.01, c: 0260} = sum({t: OF08.01.01.01, c: 0251; 0252; 0253; 0254})"
     },
@@ -511,11 +553,12 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "irb-classes",
-        "irb-shapes"
+        "irb-shapes",
+        "rich"
       ],
-      "failing_coordinates": 1,
+      "failing_coordinates": 3,
       "coordinates": [
-        "OF08.01.01.01[corporate]"
+        "OF08.01.01.01[total_airb]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0230} = sum({t: OF08.02.01.01, c: 0230})"
     },
@@ -529,11 +572,12 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "irb-classes",
-        "irb-shapes"
+        "irb-shapes",
+        "rich"
       ],
-      "failing_coordinates": 1,
+      "failing_coordinates": 3,
       "coordinates": [
-        "OF08.01.01.01[corporate]"
+        "OF08.01.01.01[total_airb]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0250} = sum({t: OF08.02.01.01, c: 0250})"
     },
@@ -547,11 +591,12 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "irb-classes",
-        "irb-shapes"
+        "irb-shapes",
+        "rich"
       ],
-      "failing_coordinates": 1,
+      "failing_coordinates": 3,
       "coordinates": [
-        "OF08.01.01.01[corporate]"
+        "OF08.01.01.01[total_airb]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0230} * (sum({t: OF08.02.01.01, c: 0110}) - sum({t: OF08.02.01.01, c: 0140})) = sum({t: OF08.02.01.01, c: 0230}) * (sum({t: OF08.02.01.01, c: 0110}) - sum({t: OF08.02.01.01, c: 0140}))"
     },
@@ -565,11 +610,12 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "irb-classes",
-        "irb-shapes"
+        "irb-shapes",
+        "rich"
       ],
-      "failing_coordinates": 1,
+      "failing_coordinates": 3,
       "coordinates": [
-        "OF08.01.01.01[corporate]"
+        "OF08.01.01.01[total_airb]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0250} * sum({t: OF08.02.01.01, c: 0110}) = sum({t: OF08.02.01.01, c: 0250}) * sum({t: OF08.02.01.01, c: 0110})"
     },
@@ -581,10 +627,12 @@
       "portfolios": [
         "facility-share-binding"
       ],
-      "failing_coordinates": 2,
+      "failing_coordinates": 4,
       "coordinates": [
-        "OF08.02.01.01[corporate][r0.00% - 0.15%]",
-        "OF08.02.01.01[corporate][r0.25% - 0.50%]"
+        "OF08.02.01.01[total_firb_slotting][r0.00% - 0.15%]",
+        "OF08.02.01.01[total_firb_slotting][r0.25% - 0.50%]",
+        "OF08.02.01.01[corporate_non_sme_firb][r0.00% - 0.15%]",
+        "OF08.02.01.01[corporate_non_sme_firb][r0.25% - 0.50%]"
       ],
       "expression": "{t: OF08.02.01.01, c: 0260} = sum({t: OF08.02.01.01, c: 0251; 0252; 0253; 0254})"
     },
@@ -696,6 +744,50 @@
         "OF07.00.01.01"
       ],
       "expression": "{t: OF09.01.01.01, r: 0095, c: 0090, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0020, c: 0220, z: 0010}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b1053",
+      "severity": "ERROR",
+      "reason": "attributed - two templates classify 'financial and large corporates' differently. OF 02.00 and OF 08 read the classifier's exposure_subclass (reporting/corep/irb_sheets.py); OF 09.02 reads cp_apply_fi_scalar. On irb-shapes the leg IRS-LN-LFSE carries cp_apply_fi_scalar=True with exposure_subclass corporate_other, so OF 09.02 counts it outside row 0055 (other general corporates non-SME) while OF 08.01 puts it on sheet 0012. A defect of ours, hidden until 2026-11-13 because the OF 08 sheets could not be addressed; the fix is for OF 09.02 to read the same classification.",
+      "portfolios": [
+        "irb-shapes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0055, c: 0010, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF08.01.01.01, r: 0010, c: 0020, z: 0011; 0012}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b1054",
+      "severity": "ERROR",
+      "reason": "attributed - two causes, one per portfolio. irb-shapes: OF 09.02 classifies 'financial and large corporates' from cp_apply_fi_scalar where OF 02.00 / OF 08 read exposure_subclass (see boe_b1053). crm-substitution: the S2 retail-guarantor leg, kept on its obligor's corporate sheet by OF 08 and counted as retail by OF 09.02 (see boe_b0283). Both visible since the OF 08 sheets took the published axis on 2026-11-13.",
+      "portfolios": [
+        "crm-substitution",
+        "irb-shapes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0055, c: 0105, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF08.01.01.01, r: 0010, c: 0110, z: 0011; 0012}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b1055",
+      "severity": "ERROR",
+      "reason": "attributed - two causes, one per portfolio. irb-shapes: OF 09.02 classifies 'financial and large corporates' from cp_apply_fi_scalar where OF 02.00 / OF 08 read exposure_subclass (see boe_b1053). crm-substitution: the S2 retail-guarantor leg, kept on its obligor's corporate sheet by OF 08 and counted as retail by OF 09.02 (see boe_b0283). Both visible since the OF 08 sheets took the published axis on 2026-11-13.",
+      "portfolios": [
+        "crm-substitution",
+        "irb-shapes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0055, c: 0110, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF08.01.01.01, r: 0010, c: 0260, z: 0011; 0012}"
     },
     {
       "regime": "crr",
@@ -887,6 +979,26 @@
     },
     {
       "regime": "b31",
+      "rule_id": "boe_b0310",
+      "severity": "WARNING",
+      "reason": "attributed - OF 08.03 col 0110 (value adjustments and provisions) is never populated: it binds the scra_provision_amount / gcra_provision_amount pair, which the sealed aggregator exit does not carry (scripts/template_cell_coverage_baseline.json, corep/c08_03/0110, NO_FIXTURE). NOT_EVALUATED until 2026-11-13 because the OF 08.03 sheets could not be addressed; with the published sheet axis the cells are emitted and empty, so the rule runs and has nothing to test.",
+      "portfolios": [
+        "art199",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "irb-shapes",
+        "rich"
+      ],
+      "vacuous_coordinates": 41,
+      "tables": [
+        "OF08.03.01.01"
+      ],
+      "expression": "{t: OF08.03.01.01} <= 0"
+    },
+    {
+      "regime": "b31",
       "rule_id": "boe_b0311",
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 8 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: OF08.06.01.01[project_finance] r0015 c0031 = exact_zero, OF08.06.01.01[project_finance] r0015 c0100 = exact_zero, OF08.06.01.01[project_finance] r0025 c0031 = exact_zero.",
@@ -979,7 +1091,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 168,
+      "vacuous_coordinates": 252,
       "tables": [
         "OF08.01.01.01"
       ],
@@ -999,7 +1111,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -1020,7 +1132,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -1041,7 +1153,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -1062,7 +1174,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -1083,7 +1195,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -1104,7 +1216,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -2457,7 +2569,7 @@
       "portfolios": [
         "irb-classes"
       ],
-      "vacuous_coordinates": 1,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF08.01.01.02",
         "OF08.03.01.01"
@@ -2478,7 +2590,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2499,7 +2611,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2520,7 +2632,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2541,7 +2653,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2562,7 +2674,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2583,7 +2695,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2604,7 +2716,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2625,7 +2737,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2646,7 +2758,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2667,7 +2779,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2688,7 +2800,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2709,7 +2821,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2730,7 +2842,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -3654,6 +3766,26 @@
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0160, c: 0220} >= {t: OF07.00.01.01, r: 0160, c: 0200} * 0.04"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b1036",
+      "severity": "ERROR",
+      "reason": "attributed - OF 08.01 cols 0102 / 0103 (financial collateral adjusted value under slotting, and its volatility and maturity adjustment) are never populated: the FCCM-under-slotting carrier is not sealed (scripts/template_cell_coverage_baseline.json, corep/c08_01/0102 and /0103, ENGINE_CANNOT_PRODUCE). NOT_EVALUATED until 2026-11-13 because the OF 08.01 sheets could not be addressed; with the published sheet axis the cells are emitted and empty, so the rule runs and has nothing to test.",
+      "portfolios": [
+        "art199",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "irb-shapes",
+        "rich"
+      ],
+      "vacuous_coordinates": 24,
+      "tables": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF08.01.01.01, c: 0102} <= {t: OF08.01.01.01, c: 0103}"
     },
     {
       "regime": "b31",

@@ -1,10 +1,9 @@
 """Cross-template COREP behaviours (C 07 + C 08 asserted together: combined generation, Excel export, netting, collateral method split, credit derivatives, equity transitional, sign convention).
 
-Split from tests/unit/test_corep.py (Phase 7 Sn) — bodies verbatim. The CRM
-substitution-flow cases (``TestSubstitutionFlows``) later moved out to
-``test_c07_crm_substitution.py`` / ``test_c08_crm_substitution.py`` (the
-dedicated per-template files) to keep this file under the
-``max_reporting_test_file_loc`` ratchet.
+Split from tests/unit/test_corep.py (Phase 7 Sn) — bodies verbatim. The CRM substitution-flow
+cases (``TestSubstitutionFlows``) later moved out to ``test_c07_crm_substitution.py`` /
+``test_c08_crm_substitution.py`` (the dedicated per-template files) to keep this file under the
+``max_reporting_test_file_loc`` ratchet. RE-ANCHORED 2026-11-13: B3.1 OF 08 published sheets.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
+from tests.unit.reporting.corep import _irb_sheet_frames as of08
 from tests.unit.reporting.corep._builders import (
     _combined_results,
     _get_total_row,
@@ -612,7 +612,7 @@ class TestOfWhichDetailRows:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols(), framework="BASEL_3_1")
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB])
         # IRB_DEF_1: EAD=600, default_status=True
         assert corp["0125"][0] == pytest.approx(600.0)
 
@@ -621,7 +621,7 @@ class TestOfWhichDetailRows:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols(), framework="BASEL_3_1")
 
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB])
         # IRB_DEF_1: rwa_final=900, default_status=True
         assert corp["0265"][0] == pytest.approx(900.0)
 
@@ -630,7 +630,7 @@ class TestOfWhichDetailRows:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols(), framework="BASEL_3_1")
 
-        inst = _get_total_row(bundle.c08_01["institution"])
+        inst = _get_total_row(bundle.c08_01[of08.OF08_INSTITUTIONS_FIRB])
         assert inst["0125"][0] == pytest.approx(0.0)
         assert inst["0265"][0] == pytest.approx(0.0)
 
@@ -752,7 +752,7 @@ class TestOnBSNetting:
         """C 08.01 col 0035 sums on_bs_netting_amount for Basel 3.1 — negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_netting(), framework="BASEL_3_1")
-        corp = _get_total_row(bundle.c08_01["corporate"])
+        corp = _get_total_row(bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB])
         # IRB_CORP_1 has 300 netting, IRB_CORP_2 has 0 → total 300; stored negative.
         assert corp["0035"][0] == pytest.approx(-300.0)
 
@@ -887,7 +887,7 @@ class TestCollateralMethodSplit:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_collateral_split(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
 
         # 0180: Financial collateral = 200 + 0 = 200
@@ -905,7 +905,7 @@ class TestCollateralMethodSplit:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_collateral_split(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
 
         assert total["0170"][0] == pytest.approx(0.0)
@@ -927,7 +927,7 @@ class TestCollateralMethodSplit:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_collateral_split(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
 
         # guaranteed_portion = 0 + 500 = 500, reported as a "(-)" outflow
@@ -943,7 +943,7 @@ class TestCollateralMethodSplit:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_collateral_split(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
 
         assert total["0060"][0] == pytest.approx(0.0)
@@ -1026,7 +1026,7 @@ class TestCreditDerivativeTracking:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_credit_derivatives(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
 
         # Col 0040: guarantees only = 800.0 (IRB_CORP_1) -> -800.0
@@ -1045,7 +1045,7 @@ class TestCreditDerivativeTracking:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_credit_derivatives(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
 
         # Col 0040: unfunded guarantees = 800.0, as a "(-)" outflow
@@ -1062,7 +1062,7 @@ class TestCreditDerivativeTracking:
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_credit_derivatives(), framework="BASEL_3_1"
         )
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
 
         # Col 0310: total RWEA = 3850 + 1800 = 5650
@@ -1314,7 +1314,7 @@ class TestSignConvention:
         """C 08.01 col 0290 (-) value adjustments and provisions emits -40.0 (B3.1)."""
         # Arrange
         bundle = self._irb_bundle_b31()
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Act / Assert
         assert total["0290"][0] == pytest.approx(-40.0)
@@ -1364,7 +1364,7 @@ class TestSignConvention:
         """C 08.01 col 0090 (no (-) label) stays positive — not negated."""
         # Arrange
         bundle = self._irb_bundle_b31()
-        corp = bundle.c08_01["corporate"]
+        corp = bundle.c08_01[of08.OF08_CORPORATE_NON_SME_FIRB]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Act / Assert
         val = total["0090"][0]

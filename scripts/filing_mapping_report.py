@@ -33,9 +33,23 @@ cell to the taxonomy's coordinates, and counts:
   ``(finding code, table)``. Counted as the most offending facts any one
   portfolio produces, so it does not grow merely because a portfolio is added.
 
+- ``error_rule_breaks`` — Error-severity validation rules of the Bank's v4.1.1
+  rule book that the placed return breaks, counted as (rule, portfolio) pairs.
+  May not RISE, in total or for any one rule. An Error break rejects the whole
+  submission, so this is the count that stands between a return that can be
+  written and one that would be accepted. The rules are evaluated as the
+  Bank's gateway evaluates them (``rwa_filer.boe``), which the referee
+  differential holds to Arelle's verdicts.
+
 All are absolute counts of the thing that matters (LESSONS B8): a ratio would
 improve by deleting a template. A zero in a cell the taxonomy lacks loses
 nothing and is not counted.
+
+A rule in ``error_rules_by_rule`` is not thereby OUR defect (LESSONS C5): a few
+published rules cannot be satisfied by any return that follows the Bank's own
+instructions. The baseline's ``_note`` and
+``tests/expected_outputs/reporting/validation_known_breaks.json`` say which;
+the ratchet only guarantees that the list cannot grow unseen.
 
 The breakdown is the work list. Its largest entry today is the IRB templates'
 sheet axis: ours is per exposure class, the published one also splits by
@@ -83,10 +97,12 @@ from rwa_calc.reporting.filing.canonical import (  # noqa: E402
     FILING_MODULE,
     build_canonical_return,
 )
+from rwa_filer.boe.catalogue import SEVERITY_ERROR  # noqa: E402
+from rwa_filer.boe.engine import STATUS_FAIL  # noqa: E402
 from rwa_filer.model import ReturnHeader  # noqa: E402
 from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1  # noqa: E402
 from rwa_filer.taxonomy.pack import resolve_pack  # noqa: E402
-from rwa_filer.validate.structure import check_structure  # noqa: E402
+from rwa_filer.validate.returns import validate_return  # noqa: E402
 
 BASELINE_PATH = _REPO_ROOT / "scripts" / "filing_mapping_baseline.json"
 
@@ -99,18 +115,20 @@ ENTITY_IDENTIFIER = "5493001KJTIIGC8Y1R12"
 
 #: Ratcheted totals and the direction each may not move.
 RATCHET_MIN = ("placed_cells",)
-RATCHET_MAX = ("unplaced_figures", "structure_findings")
+RATCHET_MAX = ("unplaced_figures", "structure_findings", "error_rule_breaks")
 
 #: Each ratcheted-maximum total and the breakdown whose every cell is held too.
 BREAKDOWNS = {
     "unplaced_figures": "unplaced_by_reason",
     "structure_findings": "structure_by_table",
+    "error_rule_breaks": "error_rules_by_rule",
 }
 
 BASELINE_COMMENT = (
     "Filing-mapping ratchet baseline (scripts/filing_mapping_report.py --check). "
-    "placed_cells may not DECREASE; unplaced_figures and structure_findings, and every cell "
-    "of their breakdowns (unplaced_by_reason, structure_by_table), may not INCREASE. "
+    "placed_cells may not DECREASE; unplaced_figures, structure_findings and "
+    "error_rule_breaks, and every cell of their breakdowns (unplaced_by_reason, "
+    "structure_by_table, error_rules_by_rule), may not INCREASE. "
     "Re-measure with --update-baseline after a deliberate change and say why in _note; never "
     "type the numbers."
 )
@@ -172,6 +190,7 @@ def measure() -> dict[str, Any]:
     placed: set[tuple[str, str | None, str | None, str, str]] = set()
     unplaced: dict[tuple[str, str], set[tuple[str | None, str, str]]] = {}
     structure: dict[str, int] = {}
+    rule_breaks: dict[str, int] = {}
 
     for index, run in enumerate(runs, start=1):
         print(f"  [{index}/{len(runs)}] {run.regime}/{run.portfolio} ...", flush=True)
@@ -188,11 +207,17 @@ def measure() -> dict[str, Any]:
             "template", "sheet", "row", "column", "reason"
         ).iter_rows():
             unplaced.setdefault((template, reason), set()).add((sheet, row, column))
-        for finding in check_structure(mapping.canonical, pack):
+        validation = validate_return(mapping.canonical, pack)
+        for finding in validation.structure:
             key = f"{finding.code}|{finding.subject}"
             structure[key] = max(structure.get(key, 0), _offending_facts(finding.actual))
+        if validation.report is None:
+            raise SystemExit(f"no rule book is packaged for module {FILING_MODULE}")
+        for outcome in validation.report.results:
+            if outcome.status == STATUS_FAIL and outcome.severity == SEVERITY_ERROR:
+                rule_breaks[outcome.rule_id] = rule_breaks.get(outcome.rule_id, 0) + 1
 
-        del result, corep, mapping
+        del result, corep, mapping, validation
         gc.collect()
 
     breakdown = {
@@ -204,6 +229,8 @@ def measure() -> dict[str, Any]:
         "unplaced_by_reason": breakdown,
         "structure_findings": sum(structure.values()),
         "structure_by_table": dict(sorted(structure.items())),
+        "error_rule_breaks": sum(rule_breaks.values()),
+        "error_rules_by_rule": dict(sorted(rule_breaks.items())),
         "provenance": provenance(),
     }
 
@@ -304,6 +331,14 @@ def check_against_baseline(measured: dict[str, Any], baseline: dict[str, Any]) -
                 f"structure findings {code} in {table} rose: {before} -> {count} "
                 "(no cell of the breakdown may rise)"
             )
+    banked = baseline.get("error_rules_by_rule", {})
+    for rule, count in measured["error_rules_by_rule"].items():
+        before = banked.get(rule, 0)
+        if count > before:
+            problems.append(
+                f"Error-severity rule {rule} is broken on more portfolios: {before} -> {count} "
+                "(no rule's count may rise)"
+            )
     return problems
 
 
@@ -318,6 +353,7 @@ def print_report(measured: dict[str, Any], seconds: float) -> None:
     print(f"  {'placed_cells':<24}{measured['placed_cells']:>8}   may not fall")
     print(f"  {'unplaced_figures':<24}{measured['unplaced_figures']:>8}   may not rise")
     print(f"  {'structure_findings':<24}{measured['structure_findings']:>8}   may not rise")
+    print(f"  {'error_rule_breaks':<24}{measured['error_rule_breaks']:>8}   may not rise")
     breakdown = sorted(measured["unplaced_by_reason"].items(), key=lambda item: (-item[1], item[0]))
     if breakdown:
         print("\nNon-zero figures with no place in the taxonomy (template | reason):")
@@ -331,6 +367,12 @@ def print_report(measured: dict[str, Any], seconds: float) -> None:
         for key, count in sorted(measured["structure_by_table"].items()):
             code, table = key.split("|", 1)
             print(f"  {count:>6}  {code}  {table}")
+    if measured["error_rules_by_rule"]:
+        print("\nError-severity rules the placed return breaks (portfolios | rule):")
+        for rule, count in sorted(
+            measured["error_rules_by_rule"].items(), key=lambda item: (-item[1], item[0])
+        ):
+            print(f"  {count:>6}  {rule}")
     print(f"\nMeasured {measured['provenance']['runs']} runs in {seconds:.1f}s")
 
 

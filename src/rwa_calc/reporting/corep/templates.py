@@ -1909,7 +1909,10 @@ CRR_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0130", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
 ]
 
-# OF 09.02 (Basel 3.1): adds 0107 (defaulted EV), removes 0110/0121/0122
+# OF 09.02 (Basel 3.1): adds 0107 (defaulted EV) and removes the supporting-factor
+# columns 0121 / 0122 / 0125. The ONE RWEA column is 0110 - the codes on the PRA's
+# own template (PS1/26 Annex I, OF 09.02) run ... 0105, 0107, 0110, 0120, 0130.
+# The figure CRR reports in 0125 ("after supporting factors") is reported here.
 B31_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0030", "Of which: defaulted", "Exposure"),
@@ -1923,8 +1926,8 @@ B31_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
     COREPColumn("0105", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
     COREPColumn("0107", "Of which: defaulted (exposure value)", _GRP_EXPOSURE_VALUE),
+    COREPColumn("0110", _LBL_COL_RWEA_HYPHEN, "RWEA"),
     COREPColumn("0120", "Of which: defaulted (RWEA)", "RWEA"),
-    COREPColumn("0125", _LBL_COL_RWEA_HYPHEN, "RWEA"),
     COREPColumn("0130", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
 ]
 

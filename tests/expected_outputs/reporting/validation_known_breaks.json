@@ -12,7 +12,7 @@
     "caution_on_arithmetic_coincidence": "Do not read an arithmetic coincidence as evidence of a mechanism. boe_b0752_22/24 were once attributed to a class-level figure being 'broadcast' onto every PD-grade row, on the evidence that the grade sum was exactly 7x the total across 7 grades. That is equally consistent with a genuine per-grade average whose inputs coincide - which is what it was. The decisive evidence was float dust (1672.9999999999995 on one row of seven): a broadcast constant would be bit-identical.",
     "caution_on_plan_doc_definitions": "A plan document naming a column as the DEFINITION of a basis is not evidence the column implements it. Worked example: docs/plans/phase7-declarative-reporting.md's F3 decision (the Pillar 3 CR4/CR5 tranche) cites 'C 07.00 col 0200 basis' as what 'post-substitution' MEANS - it assumed col 0200 already carried that basis, not that it should. That assumption was false at the time and broke v0308_m/boe_b0471/v8726_m/boe_b0556: C 07.00's own col 0200 summed EAD over the ORIGIN population (the F4 build never extended substitution-awareness to it), while CR4/CR5 (reporting/pillar3/cr4.py, cr5.py) keyed the post-substitution `reporting_class` they cite the same definition for - so two parts of the estate that cite one shared basis were inconsistent. RESOLVED: C 07.00 col 0200/0220 (and the C 08.01 / C 09.02 cousins) were rebound to the post-substitution population, col 0200 now reads Sum(ead_col) over that basis, and the four rules were removed from this register. Retained as the lesson: verify a definition is IMPLEMENTED before citing it as evidence a related gap is a deliberate decision rather than a build shortfall.",
     "pattern_boe_summation_templates": "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. 'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, including exposure-weighted averages, where it cannot hold unless there is exactly one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's risk-weight column. Recognise it before re-deriving it a fourth time.",
-    "pattern_empty_subrow_vs_negated_column": "An inequality between an 'of which' sub-row and its parent inverts when the parent is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number reads false however correct that negative figure is. Same shape as the zero-exposure ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' — see the caution on unattributed entries above before assuming the parent's negative figure is itself the bug, as it genuinely was in the boe_b0378 worked example there).",
+    "pattern_empty_subrow_vs_negated_column": "An inequality between an 'of which' sub-row and its parent inverts when the parent is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number reads false however correct that negative figure is. Same shape as the zero-exposure ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' \u2014 see the caution on unattributed entries above before assuming the parent's negative figure is itself the bug, as it genuinely was in the boe_b0378 worked example there).",
     "pattern_non_additive_columns_in_summation_rules": "The BoE summation rules are COLUMN-AGNOSTIC: 'total row = sum(breakdown rows)' is applied across every column of the table, including columns that are not additive across those rows. This is the same family as notes.pattern_boe_summation_templates but a STRICTER form, because it cannot be satisfied by any portfolio rather than only by a single-row one. Two column kinds are affected on OF 08.01: c0300 = Count(counterparty_reference, distinct=True) and c0250 = WeightedAvg(irb_maturity_m, weight=ead). A DISTINCT COUNT counts an obligor once on the total row and once in EACH breakdown row it appears in, so the row sum exceeds the total whenever one obligor holds legs on both balance-sheet sides. Measured on reporting/irb-shapes/b31, C 08.01 corporate: c0300 total = 3 distinct obligors, on-BS row = 3, off-BS row = 1 -> row sum 4 vs total 3. c0250 total = 1673.0, on-BS = 1673.0, off-BS = 1673.0 -> row sum 3346 vs total 1673. Our figures are correct on their own definitions in both cases. This surfaced only when the irb-shapes portfolio arrived because it is the FIRST portfolio in the estate where a single obligor spans both the on- and off-balance-sheet rows, which is inherent to covering IRB off-balance-sheet exposure at all."
   },
   "summary": {
@@ -27,12 +27,12 @@
       "templates_covered": 11
     },
     "b31/rich": {
-      "PASS": 209,
-      "FAIL": 4,
+      "PASS": 215,
+      "FAIL": 5,
       "VACUOUS": 223,
-      "NOT_EVALUATED": 372,
+      "NOT_EVALUATED": 365,
       "rules_enforced": 808,
-      "rules_executed": 436,
+      "rules_executed": 443,
       "templates_emitted": 12,
       "templates_covered": 12
     },
@@ -107,12 +107,12 @@
       "templates_covered": 8
     },
     "b31/irb-classes": {
-      "PASS": 155,
-      "FAIL": 10,
+      "PASS": 160,
+      "FAIL": 11,
       "VACUOUS": 178,
-      "NOT_EVALUATED": 465,
+      "NOT_EVALUATED": 459,
       "rules_enforced": 808,
-      "rules_executed": 343,
+      "rules_executed": 349,
       "templates_emitted": 11,
       "templates_covered": 11
     },
@@ -127,12 +127,12 @@
       "templates_covered": 11
     },
     "b31/crm-substitution": {
-      "PASS": 173,
+      "PASS": 179,
       "FAIL": 13,
       "VACUOUS": 171,
-      "NOT_EVALUATED": 451,
+      "NOT_EVALUATED": 445,
       "rules_enforced": 808,
-      "rules_executed": 357,
+      "rules_executed": 363,
       "templates_emitted": 12,
       "templates_covered": 12
     },
@@ -167,12 +167,12 @@
       "templates_covered": 8
     },
     "b31/art199": {
-      "PASS": 101,
-      "FAIL": 1,
+      "PASS": 103,
+      "FAIL": 2,
       "VACUOUS": 74,
-      "NOT_EVALUATED": 632,
+      "NOT_EVALUATED": 629,
       "rules_enforced": 808,
-      "rules_executed": 176,
+      "rules_executed": 179,
       "templates_emitted": 9,
       "templates_covered": 9
     },
@@ -187,12 +187,12 @@
       "templates_covered": 9
     },
     "b31/irb-shapes": {
-      "PASS": 128,
-      "FAIL": 8,
+      "PASS": 132,
+      "FAIL": 9,
       "VACUOUS": 53,
-      "NOT_EVALUATED": 619,
+      "NOT_EVALUATED": 614,
       "rules_enforced": 808,
-      "rules_executed": 189,
+      "rules_executed": 194,
       "templates_emitted": 10,
       "templates_covered": 10
     },
@@ -237,22 +237,22 @@
       "templates_covered": 10
     },
     "b31/facility-share-binding": {
-      "PASS": 133,
+      "PASS": 136,
       "FAIL": 10,
       "VACUOUS": 192,
-      "NOT_EVALUATED": 473,
+      "NOT_EVALUATED": 470,
       "rules_enforced": 808,
-      "rules_executed": 335,
+      "rules_executed": 338,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/facility-share-nonbinding": {
-      "PASS": 132,
-      "FAIL": 7,
+      "PASS": 134,
+      "FAIL": 8,
       "VACUOUS": 196,
-      "NOT_EVALUATED": 473,
+      "NOT_EVALUATED": 470,
       "rules_enforced": 808,
-      "rules_executed": 335,
+      "rules_executed": 338,
       "templates_emitted": 11,
       "templates_covered": 11
     },
@@ -278,6 +278,20 @@
     }
   },
   "known_broken_rules": [
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0303",
+      "severity": "ERROR",
+      "reason": "limit of the published v4.0.0 rule, not of our output: the left-hand reference lists TWO columns, 'c: 0010; 0110' - original exposure AND risk-weighted exposure amount - against a sum of RWEA alone, and this engine totals a listed reference, so the left side is c0010 + c0110. Measured on b31/rich, OF 09.02 TOTAL row 0050: c0010 22,000,000.00 + c0110 16,063,845.09 = 38,063,845.09 against OF 08.01 c0260 (sheets 0023 + 0024) 16,063,845.09 - the RWEA leg alone ties to the penny, and the difference is exactly the original exposure. The Bank has WITHDRAWN the rule: boe_b0303 is absent from the v4.1.1 rule book (packages/rwa-filer/src/rwa_filer/boe/data/banking_reporting-4.1.1.json), so it is not evaluated on a filed return. Newly reachable 2026-11-13: the rule was NOT_EVALUATED while the Basel 3.1 layout wrongly carried the RWEA in column 0125 and had no 0110 at all (PS1/26 Annex I, OF 09.02: ... 0105, 0107, 0110, 0120, 0130). Leaves the register when the v4.0.0 extract is retired for v4.1.1",
+      "portfolios": [
+        "rich"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0050, c: 0010; 0110, filter: [eba_dim:CEG] = [eba_GA:x1]} = sum({t: OF08.01.01.01, r: 0010, c: 0260, z: 0023; 0024})"
+    },
     {
       "regime": "b31",
       "rule_id": "boe_b0346",
@@ -602,7 +616,7 @@
       "regime": "b31",
       "rule_id": "boe_b0778",
       "severity": "ERROR",
-      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
+      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty. UPDATE 2026-11-13: the three share cells on a zero-exposure row are now EMPTY rather than 0.0 (each is a quotient over the row's column 0020 - PS1/26 Annex II 3.3.10.2 - and there is none). This register still records the break because THIS engine reads an empty cell as zero. Under the semantics the Bank's gateway applies, an unreported cell is not evaluated: the v4.1.1 rule engine (rwa_filer.boe, pinned to Arelle) no longer finds boe_b0778 broken on any of the thirteen Basel 3.1 portfolios, where it had been broken on all thirteen (scripts/filing_mapping_baseline.json, error_rules_by_rule). So the entry is now an artefact of the zero-fill, not a filing break, and leaves with the template-level engine",
       "portfolios": [
         "art199",
         "ccr",
@@ -642,6 +656,27 @@
         "OF08.07.01.01[c0050]"
       ],
       "expression": "{t: OF08.07.01.01, r: 0260} = sum({t: OF08.07.01.01, r: 0180; 0190; 0200; 0210; 0220; 0230; 0240; 0250})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0908",
+      "severity": "WARNING",
+      "reason": "limit of the published rule, not of our output: 'exposure value should exceed risk-weighted exposure amount' is a plausibility check that holds only while a row's average risk weight is at or below 100%, and the IRB risk-weight function has no such ceiling. Measured, with the output floor NOT activated on any of the four portfolios (OF 02.00 row 0034 = No), so none of the excess is a floor add-on: b31/irb-classes corporates 64,677,088 RWEA on 51,100,000 exposure value (127%); art199 8,037,146 on 7,000,000 (115%); facility-share-nonbinding 2,756,566 on 2,400,000 (115%); irb-shapes financial and large corporates 5,056,290 on 3,300,000 (153%) and retail other non-SME 738,299 on 510,000 (145%). The same RWEA ties to OF 08.01 c0260 for the class. Warning severity: it must be explained on submission, and the explanation is the PD and LGD of the book. The rule is unchanged in v4.1.1. Newly reachable 2026-11-13 for the reason given under boe_b0303: the RWEA was in a column (0125) the published OF 09.02 does not have",
+      "portfolios": [
+        "art199",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "irb-shapes"
+      ],
+      "failing_coordinates": 8,
+      "coordinates": [
+        "OF09.02.01.01[TOTAL][r0030]",
+        "OF09.02.01.01[TOTAL][r0055]",
+        "OF09.02.01.01[TOTAL][r0150]",
+        "OF09.02.01.01[GB][r0030]",
+        "OF09.02.01.01[GB][r0055]"
+      ],
+      "expression": "{t: OF09.02.01.01, c: 0105} >= {t: OF09.02.01.01, c: 0110}"
     },
     {
       "regime": "b31",
@@ -721,7 +756,7 @@
       "regime": "crr",
       "rule_id": "v09796_m",
       "severity": "WARNING",
-      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
+      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty. UPDATE 2026-11-13: the three share cells on a zero-exposure row are now EMPTY rather than 0.0 (each is a quotient over the row's column 0020 - PS1/26 Annex II 3.3.10.2 - and there is none). This register still records the break because THIS engine reads an empty cell as zero. Under the semantics the Bank's gateway applies, an unreported cell is not evaluated: the v4.1.1 rule engine (rwa_filer.boe, pinned to Arelle) no longer finds boe_b0778 broken on any of the thirteen Basel 3.1 portfolios, where it had been broken on all thirteen (scripts/filing_mapping_baseline.json, error_rules_by_rule). So the entry is now an artefact of the zero-fill, not a filing break, and leaves with the template-level engine",
       "portfolios": [
         "art199",
         "ccr",
@@ -3147,7 +3182,7 @@
       "regime": "b31",
       "rule_id": "boe_b0993",
       "severity": "WARNING",
-      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap — the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null — the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
+      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap \u2014 the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null \u2014 the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
       "portfolios": [
         "off-bs",
         "rich"
@@ -3163,7 +3198,7 @@
       "regime": "b31",
       "rule_id": "boe_b0994",
       "severity": "WARNING",
-      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap — the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null — the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
+      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap \u2014 the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null \u2014 the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
       "portfolios": [
         "off-bs",
         "rich"
@@ -3179,7 +3214,7 @@
       "regime": "b31",
       "rule_id": "boe_b0995",
       "severity": "WARNING",
-      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap — the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null — the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
+      "reason": "P2.54 ADMISSION, not a defect, and NOT a wiring gap \u2014 the wiring is proven by this entry's six passing siblings. One of the three look-through cross-template ties (OF09.01 r0141 c0010/c0075/c0090 == OF07.00 r0281 c0010/c0200/c0220, z0015). All three were NOT_EVALUATED until P2.54 bound s0015 to ('ciu',) and wired both C 07.00 rows 0281-0283 and C 09.01 rows 0141-0143; they now evaluate and hold vacuously for exactly one reason: NO REGISTERED PORTFOLIO CARRIES A LOOK-THROUGH CIU. Measured on the b31 `rich` CIU sheet, r0281 is ALL NULL across every money column, and r0141 is correspondingly null \u2014 the estate's two CIU legs elect `fallback` (2,000,000 at the Art. 132(2) 1250% fall-back) and `mandate_based` (4,000,000 at an Art. 132A(2) 75% input), and the `off-bs` CRR leg elects `mandate_based` at 35%. The six siblings in the same family DO assert on real figures: boe_b0996/0997/0998 tie r0142<->r0282 and pass at 4,000,000 / 4,000,000 / 3,000,000, and boe_b0999/b1000/b1001 tie r0143<->r0283 and pass at 2,000,000 / 2,000,000 / 25,000,000. So the pairing mechanism is evidenced; only the look-through limb is unexercised. Adding one `ciu_approach=\"look_through\"` leg plus its `ciu_holdings` row (the tests/fixtures/p2_15 shape) converts all three to real passes. That leg was deliberately DEFERRED from P2.54 so the fixture's `r0010 = r0281 + r0282 + r0283` identity stayed a genuine two-term sum rather than a three-term one with a third term nobody had hand-calculated. NOTE the published labels in this family are unreliable - boe_b0996 reads 'Real Estate Exposures of which SME' and boe_b0999 reads 'Look-through' against an r0143/r0283 FALL-BACK expression - so the row pairing was derived from the cell references, never the labels.",
       "portfolios": [
         "off-bs",
         "rich"

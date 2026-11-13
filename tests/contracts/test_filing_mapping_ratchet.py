@@ -48,6 +48,7 @@ import pytest
 from tests.contracts._ci_workflow import WORKFLOW_REL, gate_wiring_problems
 
 from rwa_calc.reporting.filing import canonical
+from rwa_filer.boe.catalogue import SEVERITY_ERROR, rulebook_for_module
 from rwa_filer.taxonomy.pack import resolve_pack
 from rwa_filer.validate import structure
 
@@ -68,9 +69,12 @@ _INVOKES_CHECK = re.compile(re.escape(SCRIPT_REL) + r"[^\n]*?--check")
 
 BREAKDOWN_KEY = "unplaced_by_reason"
 STRUCTURE_KEY = "structure_by_table"
+RULES_KEY = "error_rules_by_rule"
 #: Keys the baseline carries beside its ratcheted totals. ``provenance`` and the
 #: breakdowns are each asserted in their own right below; the other two are prose.
-NON_METRIC_KEYS = frozenset({"_comment", "_note", "provenance", BREAKDOWN_KEY, STRUCTURE_KEY})
+NON_METRIC_KEYS = frozenset(
+    {"_comment", "_note", "provenance", BREAKDOWN_KEY, STRUCTURE_KEY, RULES_KEY}
+)
 
 
 def _load_script() -> Any:
@@ -226,6 +230,31 @@ def test_the_structure_breakdown_names_real_finding_codes_and_tables() -> None:
     )
 
 
+def test_the_rule_breakdown_names_error_rules_the_module_enforces() -> None:
+    """A banked rule the rule book does not enforce as an Error is an allowance for nothing."""
+    # Arrange
+    banked = _baseline()[RULES_KEY]
+    enforced = {
+        rule.rule_id: rule.severity(canonical.FILING_MODULE)
+        for rule in rulebook_for_module(canonical.FILING_MODULE).enforced(canonical.FILING_MODULE)
+    }
+    portfolios = _baseline()["provenance"]["runs"]
+
+    # Act
+    unknown = sorted(rule for rule in banked if enforced.get(rule) != SEVERITY_ERROR)
+    impossible = sorted(rule for rule, count in banked.items() if not 1 <= count <= portfolios)
+
+    # Assert
+    assert not unknown, (
+        f"the baseline banks rule breaks for rules that are not enforced Error rules of "
+        f"{canonical.FILING_MODULE}: {unknown}.\n{REBANK}"
+    )
+    assert not impossible, (
+        f"a rule cannot be broken on fewer than 1 or more than {portfolios} portfolios: "
+        f"{impossible}.\n{REBANK}"
+    )
+
+
 def test_the_baseline_says_why_it_was_banked() -> None:
     """A re-bank carries its reason; the script's placeholder is not one."""
     note = _baseline().get("_note", "")
@@ -319,6 +348,8 @@ def banked() -> dict[str, Any]:
         BREAKDOWN_KEY: {"c07_00|cell_not_reportable": 6, "c08_01|row_not_in_taxonomy": 4},
         "structure_findings": 3,
         STRUCTURE_KEY: {"STR007|OF02.00.01.01": 2, "STR006|OF08.03.01.01": 1},
+        "error_rule_breaks": 5,
+        RULES_KEY: {"boe_b0713": 3, "boe_b0904": 2},
         "provenance": {"runs": 1, "portfolios": [{"regime": "b31", "portfolio": "rich"}]},
     }
 
@@ -420,6 +451,48 @@ def test_a_new_structure_finding_fails_even_when_another_was_fixed(
 
     # Assert — the total is unchanged at 3; the new cell is what fails.
     assert len(problems) == 1 and "STR002 in OF07.00.01.01 rose: 0 -> 1" in problems[0]
+
+
+def test_a_rule_broken_on_more_portfolios_fails_in_total_and_for_the_rule(
+    banked: dict[str, Any],
+) -> None:
+    # Arrange — one more portfolio breaks the OF 07.00 total-sheet rule.
+    measured = copy.deepcopy(banked)
+    measured["error_rule_breaks"] = 6
+    measured[RULES_KEY]["boe_b0713"] = 4
+
+    # Act
+    problems = MAPPING.check_against_baseline(measured, banked)
+
+    # Assert
+    assert any("error_rule_breaks rose: 5 -> 6" in problem for problem in problems)
+    assert any("boe_b0713 is broken on more portfolios: 3 -> 4" in problem for problem in problems)
+
+
+def test_a_newly_broken_rule_fails_even_when_another_was_fixed(banked: dict[str, Any]) -> None:
+    """A fix must not be able to pay for a new break (LESSONS C4: read every rule that moved)."""
+    # Arrange — boe_b0904 is fixed on both portfolios; a rule that held now breaks on two.
+    measured = copy.deepcopy(banked)
+    measured[RULES_KEY] = {"boe_b0713": 3, "boe_b0471": 2}
+
+    # Act
+    problems = MAPPING.check_against_baseline(measured, banked)
+
+    # Assert — the total is unchanged at 5; the new rule is what fails.
+    assert len(problems) == 1
+    assert "boe_b0471 is broken on more portfolios: 0 -> 2" in problems[0]
+
+
+def test_a_fixed_rule_passes_and_leaves_the_baseline_to_be_re_banked(
+    banked: dict[str, Any],
+) -> None:
+    # Arrange
+    measured = copy.deepcopy(banked)
+    measured["error_rule_breaks"] = 3
+    measured[RULES_KEY] = {"boe_b0713": 3}
+
+    # Act / Assert
+    assert MAPPING.check_against_baseline(measured, banked) == []
 
 
 def test_a_baseline_that_does_not_bank_a_total_is_a_failure_not_a_crash(

@@ -868,8 +868,9 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "supporting-factor adjustment columns (0121/0122) carry "
             "Σ(rwa_pre_factor − rwa) over each factor's applied subset (0121 fires "
             "non-zero and negative on the TOTAL sheet), so 0110 + 0121 + 0122 = "
-            "0125 foots. B31 carries none of these refs (supporting factors are "
-            "CRR-only)",
+            "0125 foots. OF 09.02 (Basel 3.1) has no supporting factors and one "
+            "RWEA column, 0110, which there carries the reported RWEA; 0121 / "
+            "0122 / 0125 do not exist",
         ),
         sheet_label="country",
     ),

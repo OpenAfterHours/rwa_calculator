@@ -50,6 +50,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-zero figure the taxonomy has no cell for, a fact the taxonomy cannot
   express, or a rule check that does not pass. Each can be overridden
   explicitly; a file written that way is never reported as submittable.
+- **Fixed: Basel 3.1 OF 09.02 reported its RWEA in the wrong column.** The
+  risk-weighted exposure amount was in column 0125, which the published
+  OF 09.02 does not have, and column 0110 was missing. It is now in column 0110
+  (PS1/26 Annex I). CRR C 09.02 is unchanged. Anything that reads the Basel 3.1
+  OF 09.02 export by column code must read 0110.
+- **The filing-mapping ratchet now also holds `error_rule_breaks`**: the
+  Error-severity rules of the Bank's v4.1.1 rule book that a generated return
+  breaks, per rule and per portfolio. 34 rules break somewhere in the matrix
+  today. Not all are defects in the templates: a few published rules cannot be
+  satisfied by a return that follows the Bank's own instructions, and the
+  baseline's note says which.
+- **Fixed: OF 08.07 / C 08.07 reported a share of nothing as 0.0.** Columns
+  0030, 0040 and 0050 are shares of the row's total exposure value (column
+  0020). On a roll-out class with no exposure they were reported as 0.0; they
+  are now empty, because there is nothing to take a share of (PS1/26 Annex II
+  3.3.10.2). A return carrying the zeros broke the Bank's rule that the three
+  shares total 1 (`boe_b0778`) on every portfolio. Rows with exposure are
+  unchanged. Anything that reads these columns must accept an empty cell.
 - **New gate: the referee differential**
   (`scripts/referee_differential.py --check`, workflow `Referee Differential`).
   It files golden Basel 3.1 returns from the calculator, has the Arelle XBRL

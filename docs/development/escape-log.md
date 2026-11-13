@@ -2489,3 +2489,148 @@ gate that shipped.
   once one exists the tests written against it inherit its vocabulary — which is
   how `secured_by_re_property`, a string belonging to no enum in the repository,
   came to sit in a passing test asserting on a regulatory return.
+
+---
+
+## 2026-11-13 — Basel 3.1 OF 09.02 reported its RWEA in a column the template does not have, and three tests said that was right
+
+- **Defect**: the Basel 3.1 layout of OF 09.02 (geographical breakdown, IRB)
+  carried the risk-weighted exposure amount in column **0125** and had no column
+  **0110**. The published template is the reverse: its column codes run
+  `… 0105, 0107, 0110, 0120, 0130` — one RWEA column, 0110, and no 0125 (PS1/26
+  Annex I, "OF 09.02", header row of codes; the Bank of England taxonomy v4.1.1
+  agrees). 0125 is the CRR column "after supporting factors". So every IRB
+  return wrote its country RWEA where a filing has no cell for it, and left
+  empty the cell the Bank's rules read. Measured over the Basel 3.1 matrix: 24
+  non-zero figures with no place in the taxonomy, across seven portfolios.
+- **Rule**: `boe_b0278` and `boe_b0296` (ERROR — OF 09.02 country-total RWEA for
+  institutions and for qualifying revolving equals the matching OF 08.01 sheet's
+  column 0260). Both read OF 09.02 c0110 as unreported, so zero, against a real
+  figure. Nine v4.0.0 rules over c0110 were not evaluated at all.
+- **Origin**: `src/rwa_calc/reporting/corep/templates.py`,
+  `B31_C09_02_COLUMNS`, under the comment "adds 0107 (defaulted EV), removes
+  0110/0121/0122". The supporting factors do go; the surviving RWEA column was
+  taken to keep the CRR "post" code, as it does on OF 07.00, OF 08.01 and
+  OF 09.01. On OF 09.02 the Bank kept the "pre" code instead.
+- **Escape class**: `test-shared-the-assumption`. Five tests asserted the wrong
+  layout in so many words: `test_b31_column_refs` listed `…, "0120", "0125",
+  "0130"`; `test_b31_removes_supporting_factor_columns`,
+  `test_no_supporting_factor_columns` and
+  `test_b31_has_no_supporting_factor_columns` each asserted `"0110" not in`
+  the Basel 3.1 columns; and the acceptance test
+  `test_basel_31_declares_no_supporting_factor_columns` asserted the "pre"
+  column absent on every template. All five were written from the same
+  sentence as the layout.
+- **Why nothing else would have caught it**: the supervisory register runs the
+  published rules on our frames by column code, and a rule whose column does
+  not exist is `NOT_EVALUATED`, not broken — the nine rules were simply counted
+  in `never_evaluated_rules`. The goldens pin whatever layout is generated. The
+  only thing with an independent idea of the layout is the taxonomy pack, which
+  is compiled from the Bank's own files, and it was not in the repository
+  until the filing package was built.
+- **Gate change**: the filing-mapping ratchet
+  (`scripts/filing_mapping_report.py --check`) — the gate that found it — holds
+  the result two ways. `unplaced_by_reason` no longer carries
+  `c09_02|column_not_in_taxonomy`, and no cell of that breakdown may rise, so
+  the column cannot come back. And the ratchet gained **`error_rule_breaks`**
+  with a per-rule breakdown (`error_rules_by_rule`), added with this entry: the
+  Error-severity rules of the v4.1.1 rule book that a placed return breaks, as
+  (rule, portfolio) pairs, none of which may rise. The five tests are
+  re-anchored to the published template and cite it.
+- **Verified red**: `uv run pytest tests/unit/reporting/corep/test_c09_02.py -q -n 0`
+  with the tests re-anchored and the layout unchanged — `4 failed, 48 passed`,
+  the new value test failing with
+  `polars.exceptions.ColumnNotFoundError: "0110" not found`. And
+  `uv run python scripts/filing_mapping_report.py --check` with the new metric
+  and the old baseline:
+  `[FAIL] the baseline does not bank error_rule_breaks, so nothing holds it`.
+  After the fix the same script, against the baseline banked before it, reports
+  what moved and refuses it until read:
+  `[FAIL] Error-severity rule boe_b0284 is broken on more portfolios: 0 -> 2`
+  (and four more).
+- **What the fix moved, rule by rule** (LESSONS C4 — never a delta alone):
+  `boe_b0278` and `boe_b0296` now hold. `boe_b0284`, `boe_b0293`, `boe_b0302`,
+  `boe_b1055` and `boe_b1060` now break. Those five are the RWEA members of the
+  "OF 09.02 country total = OF 08.01 sheet" family, whose exposure members were
+  already breaking because the OF 08.01 corporate and retail sheets are not
+  placed; they went unevaluated only while the OF 09.02 side was empty too. On
+  the template-level register two rules became reachable and break:
+  `boe_b0303`, whose v4.0.0 text lists columns `0010; 0110` against a sum of
+  RWEA and which the Bank withdrew in v4.1.1, and `boe_b0908`, a
+  Warning-severity plausibility check that exposure value exceeds RWEA. Both
+  are in `validation_known_breaks.json` with measured reasons.
+- **Lesson**: a regime change that removes a pair of columns does not say which
+  code the survivor keeps, and the answer is not uniform across one family of
+  templates. Read the code row of the published template; do not infer it from
+  the sibling templates.
+
+## 2026-11-13 — OF 08.07 reported a share of nothing as 0.0, and the register's own reason for tolerating the broken rule said there was no answer to report
+
+- **Defect**: on OF 08.07 / C 08.07 (scope of use of the IRB and SA
+  approaches), columns 0030, 0040 and 0050 are the shares of a roll-out class's
+  exposure under permanent partial use, under a roll-out plan and under the IRB
+  approach. Each is defined as a quotient over the row's column 0020 (PS1/26
+  Annex II §3.3.10.2: "Institutions shall calculate this percentage by
+  dividing (1) by (2)", (2) being "the total exposure value for all exposures
+  in that roll-out class as disclosed in column 0020"). On a class the firm
+  has no exposure to, column 0020 is zero and there is no quotient — and the template reported `0.0` in all three cells. A return
+  holding those cells asserts three measured shares that total zero.
+- **Rule**: `boe_b0778` (ERROR, v4.1.1 PRA001 —
+  `sum({OF 08.07, c: 0030; 0040; 0050}) = 1` on each roll-out row) and its CRR
+  twin `v09796_m` (WARNING). Under the gateway's evaluation a reported 0.0 is
+  a fact, so the rule binds and fails; an unreported cell does not bind.
+  Measured with the taxonomy-faithful engine: broken on **all thirteen**
+  Basel 3.1 portfolios, SA-only ones included.
+- **Origin**: `src/rwa_calc/reporting/corep/c08_07.py` — `_pct_ppu`, `_pct_irb`
+  and `_c08_07_rollout_pct` each guarded the division with
+  `if total <= 0: return 0.0` (and the expression form with
+  `.otherwise(0.0)`). The guard was written to avoid a division by zero and
+  chose a number where the template has none.
+- **Escape class**: `caught-and-parked`. The supervisory register *did* fire:
+  `b31/boe_b0778` and `crr/v09796_m` sat in `known_broken_rules` on every
+  portfolio, under the reason "limit of the published rule, not of our output
+  … A row with no exposure admits no partition — 0/0 has no answer — and the
+  rule carries no emptiness guard". The reason states the fix (no answer) and
+  draws the opposite conclusion (so the rule is at fault). It could not have
+  drawn the right one from what it measured: the template-level engine
+  zero-fills an empty cell, so to it `0.0` and "not reported" are the same
+  number and the rule fails either way. Two unit tests
+  (`test_c0807_zero_ead_class`, `test_zero_denominator_row`) pinned `0.0` and
+  share the assumption, but they are not why it shipped — the register entry
+  is.
+- **Why nothing else would have caught it**: every other gate reads our frames
+  with the register's zero-fill, or pins the generated value. The difference
+  between an empty cell and a zero exists only in a filed instance, and only
+  an engine that evaluates rules over reported facts can see it.
+- **Gate change**: `error_rule_breaks` in the filing-mapping ratchet
+  (`scripts/filing_mapping_report.py --check`,
+  `scripts/filing_mapping_baseline.json`). It runs the Bank's v4.1.1 rules on
+  the canonical return with the gateway's semantics — the engine whose
+  verdicts are pinned to Arelle's — and no rule's portfolio count may rise;
+  `boe_b0778` is banked at zero. The two unit tests are re-anchored to the
+  instruction text, and `test_the_three_shares_total_one_wherever_they_are_reported`
+  holds the rule itself on the generated frame. The register entries stay, with
+  their reason rewritten to say what they now are: an artefact of the
+  zero-fill, owned by the retirement of the template-level engine.
+- **Verified red**: with `c08_07.py` restored to its committed text and
+  everything else in place,
+  `uv run python scripts/filing_mapping_report.py --check` reports
+  `[FAIL] error_rule_breaks rose: 119 -> 132 (may not rise)` and
+  `[FAIL] Error-severity rule boe_b0778 is broken on more portfolios: 0 -> 13 (no rule's count may rise)`;
+  `uv run pytest tests/unit/reporting/corep/test_c08_07.py -q -n 0` reports
+  `3 failed, 58 passed` (the two re-anchored tests and the new one). With the
+  fix: `[OK] no metric moved` and `61 passed`.
+- **What the fix moved, rule by rule**: `boe_b0778` 13 → 0 portfolios. No other
+  rule's count moved; `placed_cells`, `unplaced_figures` and
+  `structure_findings` are unchanged. `boe_b0779` (row 0260 equals the sum of
+  rows 0180–0250, read on column 0050) still breaks on four portfolios and is
+  **not** this defect: column 0050 is a ratio, the instruction text scopes the
+  row sum to "columns 0060-0150", and the two rules cannot both hold on that
+  column. It stays in the register as a limit of the published rules.
+- **Not fixed here**: Annex II §3.3.10.1 limits OF 08.07 to institutions with
+  permission to use the IRB approach; the template is still generated for an
+  SA-only run. That is a scope question, not a cell value, and is left open.
+- **Lesson**: a register reason that says "there is no answer here" is a
+  finding about our output until an engine that can tell "no answer" from
+  "zero" has agreed. Where the tolerated rule fails only on empty-denominator
+  rows, check what the cell holds before blaming the rule.

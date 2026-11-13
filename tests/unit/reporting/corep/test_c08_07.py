@@ -550,7 +550,15 @@ class TestC0807EdgeCases:
         assert bundle.c08_07 is not None
 
     def test_c0807_zero_ead_class(self) -> None:
-        """Class with zero total EAD has 0% for both SA and IRB."""
+        """A class with zero total exposure has NO share to report - not 0%.
+
+        Each share is defined as a quotient over the class's total exposure
+        value in column 0020 ("Institutions shall calculate this percentage by
+        dividing (1) by (2)", PS1/26 Annex II 3.3.10.2, columns 0030-0050). With
+        nothing in column 0020 there is no quotient. Reporting 0.0 in all three
+        is a made-up figure, and one the Bank's own rule rejects: boe_b0778
+        requires the three to total 1 wherever they are reported.
+        """
         gen = LedgerShimCorepGenerator()
         results = pl.LazyFrame(
             {
@@ -564,9 +572,11 @@ class TestC0807EdgeCases:
         bundle = gen.generate_from_lazyframe(results)
         assert bundle.c08_07 is not None
         row = bundle.c08_07.filter(pl.col("row_ref") == "0050")
-        # Zero EAD → 0% for everything
-        assert row["0030"][0] == pytest.approx(0.0)
-        assert row["0050"][0] == pytest.approx(0.0)
+        # Zero exposure -> no share at all; the amounts stay a reported zero.
+        assert row["0020"][0] == pytest.approx(0.0)
+        assert row["0030"][0] is None
+        assert row["0040"][0] is None
+        assert row["0050"][0] is None
 
     def test_c0807_preserves_row_order(self) -> None:
         """Rows are emitted in the order defined by the template."""
@@ -690,8 +700,8 @@ class TestC0807RolloutPlan:
         assert row["0030"][0] == pytest.approx(0.375, rel=1e-4)
 
     def test_zero_denominator_row(self) -> None:
-        """A class with zero total EAD (but a roll-out flag) reports 0% roll-out —
-        the zero-denominator guard holds."""
+        """A class with zero total EAD (but a roll-out flag) reports NO roll-out
+        share: the zero-denominator guard yields an empty cell, not 0%."""
         gen = LedgerShimCorepGenerator()
         results = pl.LazyFrame(
             {
@@ -706,8 +716,33 @@ class TestC0807RolloutPlan:
         df = gen.generate_from_lazyframe(results).c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")
-        assert row["0040"][0] == pytest.approx(0.0)
-        assert row["0030"][0] == pytest.approx(0.0)
+        assert row["0040"][0] is None
+        assert row["0030"][0] is None
+
+    def test_the_three_shares_total_one_wherever_they_are_reported(self) -> None:
+        """The published identity (boe_b0778 / EBA v09796_m), on every row of a real book.
+
+        A roll-out class with exposure reports three shares that total 1. A
+        class with none reports no share - and so gives the rule nothing to
+        evaluate, which is the only way that row can be right.
+        """
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        df = gen.generate_from_lazyframe(_rollout_results(), framework="BASEL_3_1").c08_07
+        assert df is not None
+        shares = df.select("row_ref", "0020", "0030", "0040", "0050")
+
+        # Assert
+        with_exposure = shares.filter(pl.col("0020") > 0)
+        without = shares.filter(pl.col("0020").is_null() | (pl.col("0020") == 0))
+        assert with_exposure.height > 0 and without.height > 0
+        for row in with_exposure.iter_rows(named=True):
+            total = row["0030"] + row["0040"] + row["0050"]
+            assert total == pytest.approx(1.0, abs=1e-12), row["row_ref"]
+        for row in without.iter_rows(named=True):
+            assert (row["0030"], row["0040"], row["0050"]) == (None, None, None), row["row_ref"]
 
     def test_b31_rollout_split(self) -> None:
         """The roll-out split applies identically under Basel 3.1 OF 08.07."""

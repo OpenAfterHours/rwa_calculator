@@ -143,6 +143,7 @@ def test_filing_indicators_are_distinct_and_sorted(tmp_path: Path) -> None:
         "T04.00.01",
         "T05.00.01",
         "T06.00.01",
+        "T07.00.01",
     )
 
 

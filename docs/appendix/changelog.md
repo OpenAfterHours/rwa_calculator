@@ -41,6 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Workspace & Packages](../development/workspace.md#the-filing-mapping-ratchet).
   These figures cannot be filed until the layouts are aligned; no reported
   number changes in this release.
+- **A Basel 3.1 run can be written as the XBRL file the PRA accepts.**
+  `ResultExporter.export_filing_package(response, output_dir,
+  entity_identifier=..., reference_date=...)` generates the COREP estate,
+  re-addresses it to the PRA001 taxonomy, validates it and has `rwa-filer` write
+  the instance, a zip where the Bank requires one, and a manifest. Nothing is
+  written while something stands in the way, and the outcome says what: a
+  non-zero figure the taxonomy has no cell for, a fact the taxonomy cannot
+  express, or a rule check that does not pass. Each can be overridden
+  explicitly; a file written that way is never reported as submittable.
+- **The filing-mapping ratchet now also holds `structure_findings`**: placed
+  facts that still cannot be filed. Eight exist today, in four tables. In three,
+  two cells that are one data point in the taxonomy hold different values
+  (OF 02.00 rows 0050 and 0060; OF 08.01 column 0276 against OF 02.00 column
+  0020; OF 02.01 U-TREA against OF 02.00 row 0010). In the fourth, OF 08.03
+  column 0080 is an integer in the taxonomy and holds a fractional maturity.
+  These are defects in the generated estate that no earlier gate could see.
 
 ### Changed
 - (Next release changes will go here)

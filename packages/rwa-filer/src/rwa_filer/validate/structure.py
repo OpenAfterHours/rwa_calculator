@@ -76,6 +76,9 @@ FINDING_INCONSISTENT_DATAPOINT: Final = "STR007"
 FINDING_HEADER_INVALID: Final = "STR008"
 #: The return carries no facts at all.
 FINDING_EMPTY_RETURN: Final = "STR009"
+#: A declared filing indicator the module does not have, or a fact in a template
+#: that is not declared as reported.
+FINDING_INDICATOR_INVALID: Final = "STR010"
 
 STRUCTURE_REFERENCE: Final = (
     "BoE XBRL Filing Manual; Bank of England Banking Taxonomy (reportable cells)"
@@ -105,7 +108,7 @@ def check_structure(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
     """Check ``ret`` against ``pack``'s tables, cells and types.
 
     Returns:
-        ``STR001``–``STR009`` findings, header problems first. Empty when the
+        ``STR001``–``STR010`` findings, header problems first. Empty when the
         return is structurally something the module accepts. Never raises for a
         condition in the data.
     """
@@ -141,6 +144,7 @@ def check_structure(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
     findings.extend(_row_key_findings(placed, pack))
     findings.extend(_type_findings(resolved, pack))
     findings.extend(_inconsistent_datapoints(resolved, pack))
+    findings.extend(_indicator_findings(ret, known, pack))
     logger.info(
         "structure check (%s %s): %d facts, %d finding(s)",
         pack.info.module,
@@ -162,6 +166,23 @@ def resolve_datapoints(ret: CanonicalReturn, pack: TaxonomyPack) -> pl.DataFrame
     """
     known = ret.facts.filter(pl.col("table").is_in(list(pack.tables)))
     return _resolve_cells(known, pack).select(*ret.facts.columns, "datapoint", IS_KEY)
+
+
+def filing_indicators(ret: CanonicalReturn, pack: TaxonomyPack) -> dict[str, bool]:
+    """Which templates the return reports: ``{filing indicator code: filed}``.
+
+    As declared on the return where it declares them. Otherwise every template
+    with a fact is reported and no other is mentioned — a template the return
+    says nothing about is "unknown" to the regulator, not zero.
+    """
+    if ret.indicators is not None:
+        return dict(sorted(ret.indicators.items()))
+    return dict.fromkeys(
+        sorted(
+            {pack.tables[table].filing_indicator for table in ret.tables if table in pack.tables}
+        ),
+        True,
+    )
 
 
 def key_text() -> pl.Expr:
@@ -593,6 +614,46 @@ def _inconsistent_datapoints(resolved: pl.DataFrame, pack: TaxonomyPack) -> list
         ),
         expected="one value per data point",
     )
+
+
+def _indicator_findings(
+    ret: CanonicalReturn, known: pl.DataFrame, pack: TaxonomyPack
+) -> list[Finding]:
+    """Declared filing indicators the module lacks; facts in a template not reported.
+
+    Only a return that DECLARES its indicators can get this wrong. A fact in a
+    template that is not declared as reported is rejected on upload (Filing
+    Manual rule 1.7.1): the regulator cannot tell whether the figure is meant.
+    """
+    if ret.indicators is None:
+        return []
+    findings: list[Finding] = []
+    unknown = sorted(set(ret.indicators) - set(pack.filing_indicators))
+    if unknown:
+        findings.append(
+            _finding(
+                FINDING_INDICATOR_INVALID,
+                f"{len(unknown)} declared filing indicator(s) are not templates of "
+                f"{pack.info.module}: {', '.join(unknown[:MAX_EXAMPLES])}.",
+                subject=pack.info.module,
+                expected="filing indicators of the module",
+                actual=", ".join(unknown[:MAX_EXAMPLES]),
+            )
+        )
+    reported = {code for code, filed in ret.indicators.items() if filed}
+    silent = [code for code, table in pack.tables.items() if table.filing_indicator not in reported]
+    findings.extend(
+        _roll_up(
+            known.filter(pl.col("table").is_in(silent)),
+            FINDING_INDICATOR_INVALID,
+            lambda table, count: (
+                f"{count} fact(s) of {table} are in a template the return does not declare as "
+                f"reported (filing indicator {pack.tables[table].filing_indicator})."
+            ),
+            expected="a positive filing indicator for every template with a fact",
+        )
+    )
+    return findings
 
 
 # =============================================================================

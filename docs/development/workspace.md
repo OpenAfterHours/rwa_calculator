@@ -63,10 +63,12 @@ ordinary `Requires-Dist: rwa-filer<0.2,>=0.1`, resolved from PyPI.
 | Rule engine: parse, expand, evaluate, report | `rwa-filer` | `rwa_filer.validate` |
 | Taxonomy packs: the reportable cells and data points of a module | `rwa-filer` | `rwa_filer.taxonomy` |
 | The canonical return, its structure checks and its file readers | `rwa-filer` | `rwa_filer.model`, `rwa_filer.validate.structure`, `rwa_filer.readers` |
+| The XBRL instance (writer and reader) and the filing package | `rwa-filer` | `rwa_filer.xbrl`, `rwa_filer.filing` |
 | Which of our bundle members carries each published table code | `rwa-calc` | `rwa_calc.reporting.filing.bindings` |
 | Which of our per-class sheets each published sheet code addresses | `rwa-calc` | `rwa_calc.reporting.filing.sheet_maps` |
 | Mapping the engine's findings onto `CalculationError` (`VAL001`–`VAL003`) | `rwa-calc` | `rwa_calc.reporting.filing.checks` |
 | Re-addressing our generated cells to the taxonomy's coordinates, and accounting for those with no place | `rwa-calc` | `rwa_calc.reporting.filing.canonical` |
+| The filing package for a generated estate; refusing an incomplete one | `rwa-calc` | `rwa_calc.reporting.filing.package` |
 | Computing the template figures | `rwa-calc` | `rwa_calc.reporting.corep`, `rwa_calc.reporting.pillar3` |
 
 `rwa_calc.reporting.filing` is the adapter. Everything that knows about the
@@ -90,8 +92,18 @@ the supervisory register's matrix and ratchets two counts against
 |-------|-------:|------|
 | `placed_cells` — distinct cells that land on a taxonomy data point | 1,911 | May not fall |
 | `unplaced_figures` — distinct cells holding a non-zero figure with no place | 1,025 | May not rise, in total or for any (template, reason) |
+| `structure_findings` — placed facts that still cannot be filed | 8 | May not rise, in total or for any (finding, table) |
 
 A zero in a cell the taxonomy lacks loses nothing and is not counted.
+
+The eight structure findings are defects in the generated estate:
+
+| Finding | Table | What is wrong |
+|---------|-------|---------------|
+| `STR007` | OF 02.00 | Rows 0050 and 0060, column 0010, are one data point in the taxonomy (with OF 07.00 total sheet, column 0220) and hold different values. |
+| `STR007` | OF 08.01 | Column 0276 (output-floor RWEA) disagrees with the OF 02.00 column 0020 cell that is the same data point. |
+| `STR007` | OF 02.01 | Row 0080, column 0030 (U-TREA) disagrees with OF 02.00 row 0010, column 0010. |
+| `STR006` | OF 08.03 | Column 0080 is an integer in the taxonomy and holds a fractional maturity. |
 
 The unplaced figures are the work list. The reasons, largest first:
 

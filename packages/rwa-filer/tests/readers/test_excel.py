@@ -21,7 +21,10 @@ def pack(tmp_path: Path) -> TaxonomyPack:
 
 
 def facts(*rows: tuple[object, ...]) -> pl.DataFrame:
-    return pl.DataFrame(list(rows), schema=FACT_SCHEMA, orient="row")
+    names = FACT_SCHEMA.names()[: len(rows[0])]
+    return pl.DataFrame(
+        list(rows), schema={name: FACT_SCHEMA[name] for name in names}, orient="row"
+    ).with_columns(pl.lit(None, dtype=FACT_SCHEMA["decimals"]).alias("decimals"))
 
 
 #: A return touching every kind of table: single sheet, fixed sheets, open

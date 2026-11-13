@@ -50,6 +50,27 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - `rwa-filer validate FILE` (text or JSON output, exit code `1` when anything
   blocks submission) and `rwa-filer template` (a blank workbook for a module,
   with the cells the taxonomy does not accept shaded grey).
+- `rwa_filer.xbrl.writer.write_instance` — a structurally clean return as an
+  XBRL 2.1 instance that follows the Bank of England XBRL Filing Manual: one
+  fact per data point, dimensions in the scenario, open-axis members and
+  open-row keys filled in, a dimension's default member never written, no
+  unused context, unit or namespace prefix, `decimals` on every number. The
+  output is deterministic. Monetary `decimals` defaults to `-3`, the convention
+  of the Bank's own samples.
+- `rwa_filer.xbrl.reader.read_instance` — an XBRL instance (or a zip holding
+  one) from any system back into the canonical return, by the taxonomy its own
+  `schemaRef` names. Findings `XBR001` (a fact that is no data point of the
+  module), `XBR002` (a fact only unreported templates show) and `XBR003` (a
+  Filing Manual breach visible without the taxonomy). A document type
+  declaration is refused.
+- `rwa_filer.filing.build_filing` and `rwa-filer build FILE --out DIR` —
+  validate, then write the instance, a zip where the Filing Manual requires one
+  (over 10 MB), and a manifest with checksums and the validation result.
+  Nothing is written while a structure finding stands, or — without `--force` —
+  while a rule check fails.
+- The canonical fact table gains an optional `decimals` column, and a return
+  may declare its filing indicators. `STR010` reports a declared indicator the
+  module lacks, or a fact in a template not declared as reported.
 
 ### Changed
 - (Next release changes will go here)

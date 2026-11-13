@@ -28,6 +28,7 @@ Module map:
 - ``bindings``   — publisher table codes -> bundle members; ``build_template_index``
 - ``checks``     — the public entry points
 - ``canonical``  — the estate as a canonical return; what has no place, and why
+- ``package``    — the estate as the files a firm uploads
 
 References:
 - docs/reference/validation-rules/index.md — provenance, schema, formula grammar
@@ -48,13 +49,16 @@ from rwa_calc.reporting.filing.checks import (
     evaluate_all,
     to_calculation_error,
 )
+from rwa_calc.reporting.filing.package import FilingOutcome, build_filing_package
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 __all__ = [
     "FILING_MODULE",
     "SHEET_INDEX_MAPS",
     "CanonicalMapping",
+    "FilingOutcome",
     "build_canonical_return",
+    "build_filing_package",
     "build_template_index",
     "check_supervisory_validations",
     "derive_variant_columns",

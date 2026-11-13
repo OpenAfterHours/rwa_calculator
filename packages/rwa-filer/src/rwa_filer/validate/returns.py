@@ -40,6 +40,8 @@ from rwa_filer.validate.index import SINGLE_SHEET, SheetCode, TableBinding, Temp
 from rwa_filer.validate.structure import check_structure, local_name
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.rules.catalogue import RuleSet
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
@@ -107,6 +109,7 @@ def validate_return(
     pack: TaxonomyPack | None = None,
     *,
     ruleset: RuleSet | None = None,
+    source_findings: Sequence[Finding] = (),
 ) -> ReturnValidation:
     """Validate ``ret``: structure against the taxonomy, then the published rules.
 
@@ -116,6 +119,9 @@ def validate_return(
             force for the return's module on its reference date.
         ruleset: The rules to run. Defaults to the packaged rule set for the
             module; a module with none packaged has only its structure checked.
+        source_findings: What reading the return's source found — an XBRL
+            instance holding a fact the module does not have, say. They are
+            reported first, with the structure findings.
 
     Returns:
         A ``ReturnValidation``. Never raises for a condition in the data.
@@ -125,7 +131,7 @@ def validate_return(
             module and reference date.
     """
     pack = pack or resolve_pack(ret.header.module, ret.header.reference_date)
-    structure = tuple(check_structure(ret, pack))
+    structure = (*source_findings, *check_structure(ret, pack))
 
     framework = ruleset.framework if ruleset else MODULE_FRAMEWORKS.get(pack.info.module.upper())
     if framework is None:

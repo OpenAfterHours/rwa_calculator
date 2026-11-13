@@ -48,6 +48,8 @@ import pytest
 from tests.contracts._ci_workflow import WORKFLOW_REL, gate_wiring_problems
 
 from rwa_calc.reporting.filing import canonical
+from rwa_filer.taxonomy.pack import resolve_pack
+from rwa_filer.validate import structure
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "filing_mapping_report.py"
@@ -65,9 +67,10 @@ CI_JOB = "filing-mapping"
 _INVOKES_CHECK = re.compile(re.escape(SCRIPT_REL) + r"[^\n]*?--check")
 
 BREAKDOWN_KEY = "unplaced_by_reason"
+STRUCTURE_KEY = "structure_by_table"
 #: Keys the baseline carries beside its ratcheted totals. ``provenance`` and the
-#: breakdown are each asserted in their own right below; the other two are prose.
-NON_METRIC_KEYS = frozenset({"_comment", "_note", "provenance", BREAKDOWN_KEY})
+#: breakdowns are each asserted in their own right below; the other two are prose.
+NON_METRIC_KEYS = frozenset({"_comment", "_note", "provenance", BREAKDOWN_KEY, STRUCTURE_KEY})
 
 
 def _load_script() -> Any:
@@ -173,6 +176,56 @@ def test_the_breakdown_foots_to_its_total_and_names_only_known_reasons() -> None
     )
 
 
+def test_every_ratcheted_maximum_has_a_breakdown_that_foots_to_it() -> None:
+    """Each may-not-rise total is held per cell too, and the cells are the total.
+
+    Arrange: the committed baseline and the script's breakdown declarations.
+    Act:     sum each breakdown.
+    Assert:  every may-not-rise total names a breakdown, and it foots.
+    """
+    # Arrange
+    baseline = _baseline()
+
+    # Act / Assert
+    assert set(MAPPING.BREAKDOWNS) == set(MAPPING.RATCHET_MAX), (
+        "a may-not-rise total has no per-cell breakdown, so a fix in one table could hide "
+        "a regression in another"
+    )
+    for total, breakdown in MAPPING.BREAKDOWNS.items():
+        assert breakdown in baseline, f"the baseline has no {breakdown}.\n{REBANK}"
+        assert sum(baseline[breakdown].values()) == baseline[total], (
+            f"{breakdown} sums to {sum(baseline[breakdown].values())} but {total} is "
+            f"{baseline[total]}: the baseline was edited by hand.\n{REBANK}"
+        )
+
+
+def test_the_structure_breakdown_names_real_finding_codes_and_tables() -> None:
+    """A key no structure check can produce is an allowance nobody is using."""
+    # Arrange
+    keys = _baseline()[STRUCTURE_KEY]
+    pack = resolve_pack(canonical.FILING_MODULE, MAPPING.REFERENCE_DATE)
+    codes = {
+        value
+        for name, value in vars(structure).items()
+        if name.startswith("FINDING_") and isinstance(value, str)
+    }
+
+    # Act
+    unknown = sorted(
+        key
+        for key in keys
+        if key.count("|") != 1
+        or key.split("|")[0] not in codes
+        or key.split("|")[1] not in {*pack.tables, pack.info.module}
+    )
+
+    # Assert
+    assert codes, "rwa_filer.validate.structure declares no FINDING_* codes"
+    assert not unknown, (
+        f"the baseline banks structure findings no check can produce: {unknown}.\n{REBANK}"
+    )
+
+
 def test_the_baseline_says_why_it_was_banked() -> None:
     """A re-bank carries its reason; the script's placeholder is not one."""
     note = _baseline().get("_note", "")
@@ -236,6 +289,11 @@ def test_the_baseline_is_not_weakened_against_the_committed_copy() -> None:
     if committed.get("provenance") != working.get("provenance"):
         pytest.skip("HEAD and the working tree were measured over different matrices")
 
+    # A total introduced since HEAD cannot have been weakened: HEAD never held it.
+    for total, breakdown in MAPPING.BREAKDOWNS.items():
+        committed.setdefault(total, working[total])
+        committed.setdefault(breakdown, working[breakdown])
+
     # Act — the working tree plays "measured": worse than HEAD means weakened.
     weakened = MAPPING.check_against_baseline(working, committed)
 
@@ -259,6 +317,8 @@ def banked() -> dict[str, Any]:
         "placed_cells": 100,
         "unplaced_figures": 10,
         BREAKDOWN_KEY: {"c07_00|cell_not_reportable": 6, "c08_01|row_not_in_taxonomy": 4},
+        "structure_findings": 3,
+        STRUCTURE_KEY: {"STR007|OF02.00.01.01": 2, "STR006|OF08.03.01.01": 1},
         "provenance": {"runs": 1, "portfolios": [{"regime": "b31", "portfolio": "rich"}]},
     }
 
@@ -332,6 +392,49 @@ def test_a_new_kind_of_unplaced_figure_fails_even_when_the_total_holds(
 
     # Assert
     assert len(problems) == 1 and "c09_01 (open_key_not_a_member) rose: 0 -> 1" in problems[0]
+
+
+def test_more_structure_findings_fail_in_total_and_per_table(banked: dict[str, Any]) -> None:
+    # Arrange — one more inconsistent data point in OF 02.00.
+    measured = copy.deepcopy(banked)
+    measured["structure_findings"] = 4
+    measured[STRUCTURE_KEY]["STR007|OF02.00.01.01"] = 3
+
+    # Act
+    problems = MAPPING.check_against_baseline(measured, banked)
+
+    # Assert
+    assert any("structure_findings rose: 3 -> 4" in problem for problem in problems)
+    assert any("STR007 in OF02.00.01.01 rose: 2 -> 3" in problem for problem in problems)
+
+
+def test_a_new_structure_finding_fails_even_when_another_was_fixed(
+    banked: dict[str, Any],
+) -> None:
+    # Arrange — the STR006 is fixed, and a table that was clean now has a finding.
+    measured = copy.deepcopy(banked)
+    measured[STRUCTURE_KEY] = {"STR007|OF02.00.01.01": 2, "STR002|OF07.00.01.01": 1}
+
+    # Act
+    problems = MAPPING.check_against_baseline(measured, banked)
+
+    # Assert — the total is unchanged at 3; the new cell is what fails.
+    assert len(problems) == 1 and "STR002 in OF07.00.01.01 rose: 0 -> 1" in problems[0]
+
+
+def test_a_baseline_that_does_not_bank_a_total_is_a_failure_not_a_crash(
+    banked: dict[str, Any],
+) -> None:
+    """A metric added to the script and not re-banked must read as red, in words."""
+    # Arrange
+    measured = copy.deepcopy(banked)
+    del banked["structure_findings"]
+
+    # Act
+    problems = MAPPING.check_against_baseline(measured, banked)
+
+    # Assert
+    assert len(problems) == 1 and "does not bank structure_findings" in problems[0]
 
 
 def test_a_moved_matrix_is_reported_as_incomparable_not_as_a_regression(

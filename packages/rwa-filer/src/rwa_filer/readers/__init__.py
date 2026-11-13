@@ -24,6 +24,7 @@ References:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rwa_filer.readers.tabular import read_csv, read_parquet
@@ -32,11 +33,63 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from rwa_filer.model import CanonicalReturn, ReturnHeader
+    from rwa_filer.taxonomy.pack import TaxonomyPack
+    from rwa_filer.validate.checker import Finding
 
-__all__ = ["SUPPORTED_SUFFIXES", "read_csv", "read_parquet", "read_return"]
+__all__ = [
+    "INSTANCE_SUFFIXES",
+    "SUPPORTED_SUFFIXES",
+    "SourceReading",
+    "load_source",
+    "read_csv",
+    "read_parquet",
+    "read_return",
+]
 
 #: File suffixes ``read_return`` understands.
 SUPPORTED_SUFFIXES: tuple[str, ...] = (".parquet", ".csv", ".xlsx")
+
+#: An XBRL instance, bare or zipped — read by ``load_source``.
+INSTANCE_SUFFIXES: tuple[str, ...] = (".xbrl", ".zip")
+
+
+@dataclass(frozen=True)
+class SourceReading:
+    """A return read from a file, with what the reading itself established.
+
+    Attributes:
+        ret: The return.
+        pack: The taxonomy the source names for itself — an XBRL instance does,
+            in its ``schemaRef`` — or ``None`` where the source names none and
+            the pack follows from the header.
+        findings: What the source holds that could not be read as part of the
+            module. Empty for a fact table or workbook, whose every cell is
+            checked by the structure checks instead.
+    """
+
+    ret: CanonicalReturn
+    pack: TaxonomyPack | None = None
+    findings: tuple[Finding, ...] = ()
+
+
+def load_source(path: Path, header: ReturnHeader | None = None) -> SourceReading:
+    """Read any supported file: a fact table, a workbook, or an XBRL instance.
+
+    Args:
+        path: ``.parquet`` / ``.csv`` / ``.xlsx`` (see ``read_return``), or a
+            ``.xbrl`` instance, or a ``.zip`` holding one.
+        header: Required for Parquet and CSV. An instance carries its own.
+
+    Raises:
+        ValueError: the suffix is not supported, a tabular file was given
+            without a header, or an instance is not readable as one.
+    """
+    if path.suffix.lower() not in INSTANCE_SUFFIXES:
+        return SourceReading(ret=read_return(path, header))
+    from rwa_filer.xbrl.reader import read_instance
+
+    reading = read_instance(path)
+    return SourceReading(ret=reading.ret, pack=reading.pack, findings=reading.findings)
 
 
 def read_return(path: Path, header: ReturnHeader | None = None) -> CanonicalReturn:

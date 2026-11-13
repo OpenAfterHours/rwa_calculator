@@ -19,6 +19,9 @@ Tables
   column 0020 (integer).
 - ``T05.00.01.01`` / ``T05.00.01.02`` — both show one data point at (0010, 0010).
 - ``T06.00.01.01`` — typed cells: 0010 boolean, 0020 date, 0030 enumeration.
+- ``T07.00.01.01`` — OPTIONAL open sheet axis over ``tst_dim:TSL`` (default
+  ``tst_TA:x0``): a fact with no open key is the "all" sheet, reported with
+  the dimension absent.
 """
 
 from __future__ import annotations
@@ -60,6 +63,7 @@ _DATAPOINTS: list[list[Any]] = [
     ["tst_met:bi1", []],  # 17 T06 c0010
     ["tst_met:di1", []],  # 18 T06 c0020
     ["tst_met:ei1", []],  # 19 T06 c0030
+    ["tst_met:mi8", ["tst_dim:TSL", "*open?"]],  # 20 T07 r0010
 ]
 
 SAMPLE_COMPILED: dict[str, Any] = {
@@ -76,6 +80,11 @@ SAMPLE_COMPILED: dict[str, Any] = {
     "namespaces": {
         "tst_met": "http://example.test/xbrl/dict/met",
         "tst_dim": "http://example.test/xbrl/dict/dim",
+        "tst_typ": "http://example.test/xbrl/dict/typ",
+        "tst_BA": "http://example.test/xbrl/dict/dom/BA",
+        "tst_EC": "http://example.test/xbrl/dict/dom/EC",
+        "tst_TA": "http://example.test/xbrl/dict/dom/TA",
+        "tst_ZZ": "http://example.test/xbrl/dict/dom/ZZ",
         "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
         "eba_GA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/GA",
     },
@@ -87,6 +96,7 @@ SAMPLE_COMPILED: dict[str, Any] = {
         "tst_met:mi5": {"type": "monetary", "period": "instant", "label": "Geo RWEA"},
         "tst_met:mi6": {"type": "monetary", "period": "instant", "label": "Grade exposure"},
         "tst_met:mi7": {"type": "monetary", "period": "instant", "label": "Shared amount"},
+        "tst_met:mi8": {"type": "monetary", "period": "instant", "label": "Lending amount"},
         "tst_met:pi1": {"type": "percentage", "period": "instant", "label": "Ratio"},
         "tst_met:ii1": {"type": "integer", "period": "instant", "label": "Obligors"},
         "tst_met:si1": {"type": "string", "period": "instant", "label": "Comment"},
@@ -107,6 +117,12 @@ SAMPLE_COMPILED: dict[str, Any] = {
             "domain": "eba_GA",
             "kind": "explicit",
             "default": None,
+        },
+        "tst_dim:TSL": {
+            "label": "Lending type",
+            "domain": "tst_TA",
+            "kind": "explicit",
+            "default": "tst_TA:x0",
         },
         "tst_dim:OGR": {
             "label": "Obligor grade",
@@ -252,6 +268,26 @@ SAMPLE_COMPILED: dict[str, Any] = {
                 ["0010", "0020", None, 18, "workbook"],
                 ["0010", "0030", None, 19, "workbook"],
             ],
+        },
+        "T07.00.01.01": {
+            "title": "Optional open sheets",
+            "group": "T07.00.01",
+            "filing_indicator": "T07.00.01",
+            "rows": [["0010", "Lending"]],
+            "columns": [["0010", "Amount"]],
+            "open_rows": False,
+            "open_keys": [],
+            "z": [
+                {
+                    "kind": "open",
+                    "code": "0001",
+                    "label": "Lending type",
+                    "dimension": "tst_dim:TSL",
+                    "members": ["tst_TA:x1", "tst_TA:x2"],
+                    "default_allowed": True,
+                }
+            ],
+            "cells": [["0010", "0010", None, 20, "workbook"]],
         },
     },
     "datapoints": _DATAPOINTS,

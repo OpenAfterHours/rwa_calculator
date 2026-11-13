@@ -27,9 +27,15 @@ cell to the taxonomy's coordinates, and counts:
   ``(template, reason)``, and no cell of that breakdown may rise either, so a
   fix in one template cannot hide a regression in another.
 
-Both are absolute counts of the thing that matters (LESSONS B8): a ratio of the
-two would improve by deleting a template. A zero in a cell the taxonomy lacks
-loses nothing and is not counted.
+- ``structure_findings`` — facts that ARE placed and still cannot be filed: a
+  value of the wrong type for its cell, or two cells the taxonomy treats as one
+  data point holding different values. May not RISE, in total or for any
+  ``(finding code, table)``. Counted as the most offending facts any one
+  portfolio produces, so it does not grow merely because a portfolio is added.
+
+All are absolute counts of the thing that matters (LESSONS B8): a ratio would
+improve by deleting a template. A zero in a cell the taxonomy lacks loses
+nothing and is not counted.
 
 The breakdown is the work list. Its largest entry today is the IRB templates'
 sheet axis: ours is per exposure class, the published one also splits by
@@ -79,6 +85,8 @@ from rwa_calc.reporting.filing.canonical import (  # noqa: E402
 )
 from rwa_filer.model import ReturnHeader  # noqa: E402
 from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1  # noqa: E402
+from rwa_filer.taxonomy.pack import resolve_pack  # noqa: E402
+from rwa_filer.validate.structure import check_structure  # noqa: E402
 
 BASELINE_PATH = _REPO_ROOT / "scripts" / "filing_mapping_baseline.json"
 
@@ -91,13 +99,20 @@ ENTITY_IDENTIFIER = "5493001KJTIIGC8Y1R12"
 
 #: Ratcheted totals and the direction each may not move.
 RATCHET_MIN = ("placed_cells",)
-RATCHET_MAX = ("unplaced_figures",)
+RATCHET_MAX = ("unplaced_figures", "structure_findings")
+
+#: Each ratcheted-maximum total and the breakdown whose every cell is held too.
+BREAKDOWNS = {
+    "unplaced_figures": "unplaced_by_reason",
+    "structure_findings": "structure_by_table",
+}
 
 BASELINE_COMMENT = (
     "Filing-mapping ratchet baseline (scripts/filing_mapping_report.py --check). "
-    "placed_cells may not DECREASE; unplaced_figures, and every (template, reason) cell of "
-    "unplaced_by_reason, may not INCREASE. Re-measure with --update-baseline after a "
-    "deliberate change and say why in _note; never type the numbers."
+    "placed_cells may not DECREASE; unplaced_figures and structure_findings, and every cell "
+    "of their breakdowns (unplaced_by_reason, structure_by_table), may not INCREASE. "
+    "Re-measure with --update-baseline after a deliberate change and say why in _note; never "
+    "type the numbers."
 )
 UNEXPLAINED_NOTE = "unexplained — say why this baseline was re-banked"
 
@@ -152,15 +167,17 @@ def measure() -> dict[str, Any]:
     of how many portfolios happen to exercise it.
     """
     header = ReturnHeader(ENTITY_IDENTIFIER, REFERENCE_DATE, FILING_MODULE)
+    pack = resolve_pack(FILING_MODULE, REFERENCE_DATE)
     runs = filed_runs()
     placed: set[tuple[str, str | None, str | None, str, str]] = set()
     unplaced: dict[tuple[str, str], set[tuple[str | None, str, str]]] = {}
+    structure: dict[str, int] = {}
 
     for index, run in enumerate(runs, start=1):
         print(f"  [{index}/{len(runs)}] {run.regime}/{run.portfolio} ...", flush=True)
         result = PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_config())
         corep = COREPGenerator().generate_from_lazyframe(result.results, framework=run.framework)
-        mapping = build_canonical_return(corep, header)
+        mapping = build_canonical_return(corep, header, pack=pack)
 
         placed.update(
             mapping.canonical.facts.select(
@@ -171,6 +188,9 @@ def measure() -> dict[str, Any]:
             "template", "sheet", "row", "column", "reason"
         ).iter_rows():
             unplaced.setdefault((template, reason), set()).add((sheet, row, column))
+        for finding in check_structure(mapping.canonical, pack):
+            key = f"{finding.code}|{finding.subject}"
+            structure[key] = max(structure.get(key, 0), _offending_facts(finding.actual))
 
         del result, corep, mapping
         gc.collect()
@@ -182,8 +202,16 @@ def measure() -> dict[str, Any]:
         "placed_cells": len(placed),
         "unplaced_figures": sum(breakdown.values()),
         "unplaced_by_reason": breakdown,
+        "structure_findings": sum(structure.values()),
+        "structure_by_table": dict(sorted(structure.items())),
         "provenance": provenance(),
     }
+
+
+def _offending_facts(actual: str) -> int:
+    """The fact count a structure finding reports (``"3 fact(s)"``); 1 if it reports none."""
+    head = actual.split(" ", 1)[0]
+    return int(head) if head.isdigit() else 1
 
 
 def filed_runs() -> list[Any]:
@@ -243,6 +271,14 @@ def check_against_baseline(measured: dict[str, Any], baseline: dict[str, Any]) -
         )
         return problems
 
+    unbanked = [name for name in (*RATCHET_MIN, *RATCHET_MAX) if name not in baseline]
+    if unbanked:
+        problems.append(
+            f"the baseline does not bank {', '.join(unbanked)}, so nothing holds it. "
+            "Re-measure and bank with --update-baseline."
+        )
+        return problems
+
     for name in RATCHET_MIN:
         if measured[name] < baseline[name]:
             problems.append(f"{name} fell: {baseline[name]} -> {measured[name]} (may not fall)")
@@ -259,6 +295,15 @@ def check_against_baseline(measured: dict[str, Any], baseline: dict[str, Any]) -
                 f"unplaced figures in {template} ({reason}) rose: {before} -> {count} "
                 "(no cell of the breakdown may rise)"
             )
+    banked = baseline.get("structure_by_table", {})
+    for key, count in measured["structure_by_table"].items():
+        before = banked.get(key, 0)
+        if count > before:
+            code, table = key.split("|", 1)
+            problems.append(
+                f"structure findings {code} in {table} rose: {before} -> {count} "
+                "(no cell of the breakdown may rise)"
+            )
     return problems
 
 
@@ -272,6 +317,7 @@ def print_report(measured: dict[str, Any], seconds: float) -> None:
     print("\nRatcheted metrics:")
     print(f"  {'placed_cells':<24}{measured['placed_cells']:>8}   may not fall")
     print(f"  {'unplaced_figures':<24}{measured['unplaced_figures']:>8}   may not rise")
+    print(f"  {'structure_findings':<24}{measured['structure_findings']:>8}   may not rise")
     breakdown = sorted(measured["unplaced_by_reason"].items(), key=lambda item: (-item[1], item[0]))
     if breakdown:
         print("\nNon-zero figures with no place in the taxonomy (template | reason):")
@@ -280,6 +326,11 @@ def print_report(measured: dict[str, Any], seconds: float) -> None:
             print(f"  {count:>6}  {template:<10} {reason}")
         if len(breakdown) > PRINTED_ROWS:
             print(f"  ... and {len(breakdown) - PRINTED_ROWS} more (all are in the baseline)")
+    if measured["structure_by_table"]:
+        print("\nPlaced facts that cannot be filed (finding | table | most in one portfolio):")
+        for key, count in sorted(measured["structure_by_table"].items()):
+            code, table = key.split("|", 1)
+            print(f"  {count:>6}  {code}  {table}")
     print(f"\nMeasured {measured['provenance']['runs']} runs in {seconds:.1f}s")
 
 

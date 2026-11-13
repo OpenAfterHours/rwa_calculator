@@ -23,7 +23,7 @@ def test_csv_codes_keep_their_leading_zeros(tmp_path: Path) -> None:
 
     # Assert
     assert facts.schema == FACT_SCHEMA
-    assert facts.row(0) == ("T02.00.01.01", "0001", None, "0010", "0010", 60.0, None)
+    assert facts.row(0) == ("T02.00.01.01", "0001", None, "0010", "0010", 60.0, None, None)
 
 
 def test_csv_column_names_are_matched_case_insensitively(tmp_path: Path) -> None:
@@ -93,6 +93,7 @@ def test_parquet_round_trips_the_canonical_frame(tmp_path: Path) -> None:
             "column": ["0010", "0030"],
             "value": [60.0, None],
             "text_value": [None, "a comment"],
+            "decimals": [-3, None],
         },
         schema=FACT_SCHEMA,
     )

@@ -1,6 +1,6 @@
 {
-  "_comment": "Filing-mapping ratchet baseline (scripts/filing_mapping_report.py --check). placed_cells may not DECREASE; unplaced_figures, and every (template, reason) cell of unplaced_by_reason, may not INCREASE. Re-measure with --update-baseline after a deliberate change and say why in _note; never type the numbers.",
-  "_note": "First bank, 2026-11-13, with the introduction of the ratchet (rwa-filer Phase 2). Measured over the 13 Basel 3.1 portfolios of RUNS against the packaged PRA001 taxonomy pack v4.1.1 (104 tables, 61,615 reportable cells). 1,911 distinct generated cells land on a taxonomy data point; 1,025 distinct cells carry a NON-ZERO figure the taxonomy has no place for. This is a measurement of where the estate stands, not a target: the gap is real and pre-dates the ratchet. Its largest part (816 cells across OF 08.01/02/03/04/05) is one cause - our IRB sheets are per exposure class, while the published z-axis also splits by approach (AIRB / FIRB / slotting) and SME / non-SME, so a figure on one of our sheets cannot be assigned to a single published sheet. The remainder are row, column or cell differences between the PS1/26 templates the generators were built from and the v4.1.1 DPM (OF 02.00 rows 0220/0260/0300/0370 and its Output Floor column; OF 07.00 CRM columns on rows the taxonomy greys; OF 09.02 column 0125; OF 08.06 specialised-lending types; C 34.02 netting-set sheets), and OF 08.02's open rows, which are keyed by obligor grade and not yet mapped. Closing any of these is generator work in rwa-calc; bank the lower number when it lands.",
+  "_comment": "Filing-mapping ratchet baseline (scripts/filing_mapping_report.py --check). placed_cells may not DECREASE; unplaced_figures and structure_findings, and every cell of their breakdowns (unplaced_by_reason, structure_by_table), may not INCREASE. Re-measure with --update-baseline after a deliberate change and say why in _note; never type the numbers.",
+  "_note": "First bank (rwa-filer Phase 2), extended in Phase 3 with structure_findings. placed/unplaced are unchanged from the first bank: 1911 distinct cells land on a PRA001 v4.1.1 data point; 1025 distinct non-zero figures do not, 816 of them because our IRB sheets (OF 08.01-08.05) are per exposure class while the published sheet axis also splits by approach and SME / non-SME. structure_findings is new: 8 placed facts cannot be filed as generated. STR007 OF02.00.01.01 - rows 0050 and 0060 (and OF 07.00 total sheet c0220) are one data point in the taxonomy and hold different values. STR007 OF08.01.01.01 - c0276 (output-floor RWEA) disagrees with the OF 02.00 c0020 cell that is the same data point. STR007 OF02.01.01.03 - r0080 c0030 (U-TREA) disagrees with OF 02.00 r0010 c0010. STR006 OF08.03.01.01 - c0080 is an integer metric and we report a fractional maturity. The adapter now writes the yes/no cell OF 02.00 r0034 c0030 as true/false, which removed the STR006 it produced in all 13 portfolios before this bank.",
   "placed_cells": 1911,
   "unplaced_figures": 1025,
   "unplaced_by_reason": {
@@ -19,6 +19,13 @@
     "c34_02|open_key_not_a_member": 2,
     "c_02_00|cell_not_reportable": 42,
     "c_02_00|row_not_in_taxonomy": 11
+  },
+  "structure_findings": 8,
+  "structure_by_table": {
+    "STR006|OF08.03.01.01": 1,
+    "STR007|OF02.00.01.01": 4,
+    "STR007|OF02.01.01.03": 1,
+    "STR007|OF08.01.01.01": 2
   },
   "provenance": {
     "runs": 13,

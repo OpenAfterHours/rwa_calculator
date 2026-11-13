@@ -33,6 +33,8 @@ import polars as pl
 from rwa_calc.contracts.results import ExportResult
 
 if TYPE_CHECKING:
+    from datetime import date
+
     from polars._typing import PolarsDataType
 
     from rwa_calc.api.models import (
@@ -45,6 +47,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.facts import FilingMetadata
+    from rwa_calc.reporting.filing import FilingOutcome
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
     from rwa_filer.validate import CoverageShortfall, RuleOutcome
 
@@ -476,6 +479,99 @@ class ResultExporter:
             previous_period_results=previous_period_results,
         )
         return summarise_validation(corep, pillar3, response.framework)
+
+    def export_filing_package(
+        self,
+        response: CalculationResponse,
+        output_dir: Path,
+        *,
+        entity_identifier: str,
+        reference_date: date,
+        currency: str = "GBP",
+        entity_scheme: str | None = None,
+        output_floor_config: OutputFloorConfig | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
+        monetary_decimals: int = -3,
+        allow_incomplete: bool = False,
+        allow_rule_breaks: bool = False,
+        always_zip: bool = False,
+    ) -> FilingOutcome:
+        """Write this run's COREP return as the file the PRA accepts.
+
+        Generates the COREP bundle exactly as ``export_to_corep`` does,
+        re-addresses every cell to the PRA001 taxonomy, validates the result —
+        its structure against the taxonomy, then the published rules — and
+        writes an XBRL instance, a zip where the Filing Manual requires one,
+        and a manifest recording what was filed under which validation result.
+
+        Nothing is written while something stands in the way, and the outcome
+        says what: a non-zero figure the taxonomy has no cell for
+        (``"unplaced_figures"``), a fact the taxonomy cannot express
+        (``"structure"``), or a rule check that does not pass (``"rules"``).
+        None of these raises: each is an expected business outcome.
+
+        Args:
+            response: CalculationResponse with cached results. Must be a
+                Basel 3.1 run: PRA001 is the Basel 3.1 return.
+            output_dir: Directory the files are written into.
+            entity_identifier: The reporting entity's LEI.
+            reference_date: The date the return reports as at. It selects the
+                taxonomy version; PRA001 v4.1.1 applies from 1 January 2027.
+            currency: The reporting currency.
+            entity_scheme: The identifier scheme; the LEI scheme by default.
+            output_floor_config: As ``export_to_corep``.
+            previous_period_results: As ``export_to_corep``.
+            monetary_decimals: The accuracy monetary figures are stated to in
+                the instance: -3 thousands, 0 units, 2 pence.
+            allow_incomplete: Write the file even though figures have no place
+                in the taxonomy; they are left out and listed on the outcome.
+            allow_rule_breaks: Write the file even though a rule check fails.
+            always_zip: Write a zip whatever the instance's size.
+
+        Returns:
+            A ``FilingOutcome``: the mapping (placed and unplaced cells) and
+            ``rwa-filer``'s filing package (validation, and the written files).
+
+        Raises:
+            ValueError: the run is not a Basel 3.1 run.
+            PackNotFoundError: no taxonomy is packaged for ``reference_date``.
+
+        References:
+            - Bank of England Banking Taxonomy v4.1.1 (PRA001)
+            - BoE XBRL Filing Manual v1.0.1
+        """
+        from rwa_calc.reporting.corep.generator import COREPGenerator
+        from rwa_calc.reporting.filing import FILING_MODULE, build_filing_package
+        from rwa_filer.model import LEI_SCHEME, ReturnHeader
+        from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1
+        from rwa_filer.xbrl.writer import InstanceOptions
+
+        if response.framework != FRAMEWORK_BASEL_3_1:
+            raise ValueError(
+                f"A filing package is written for a Basel 3.1 run ({FILING_MODULE}); this run "
+                f"is {response.framework}"
+            )
+        corep = COREPGenerator().generate(
+            response,
+            output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
+        )
+        header = ReturnHeader(
+            entity_identifier=entity_identifier,
+            reference_date=reference_date,
+            module=FILING_MODULE,
+            currency=currency,
+            entity_scheme=entity_scheme or LEI_SCHEME,
+        )
+        return build_filing_package(
+            corep,
+            header,
+            output_dir,
+            options=InstanceOptions(monetary_decimals=monetary_decimals),
+            allow_incomplete=allow_incomplete,
+            allow_rule_breaks=allow_rule_breaks,
+            always_zip=always_zip,
+        )
 
     def export_validation_report(
         self,

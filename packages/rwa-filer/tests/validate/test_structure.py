@@ -15,6 +15,7 @@ import polars as pl
 import pytest
 
 from pack_builders import build_pack, build_return
+from rwa_filer.model import CanonicalReturn
 from rwa_filer.rules.catalogue import SEVERITY_ERROR
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.structure import (
@@ -23,6 +24,7 @@ from rwa_filer.validate.structure import (
     FINDING_EMPTY_RETURN,
     FINDING_HEADER_INVALID,
     FINDING_INCONSISTENT_DATAPOINT,
+    FINDING_INDICATOR_INVALID,
     FINDING_OPEN_KEY_INVALID,
     FINDING_SHEET_INVALID,
     FINDING_UNKNOWN_TABLE,
@@ -30,6 +32,7 @@ from rwa_filer.validate.structure import (
     IS_KEY,
     MAX_EXAMPLES,
     check_structure,
+    filing_indicators,
     is_valid_lei,
     resolve_datapoints,
 )
@@ -540,3 +543,71 @@ def test_resolve_datapoints_adds_the_data_point_and_keeps_every_fact(pack: Taxon
 
     # Assert
     assert resolved["datapoint"].to_list() == [0, None]
+
+
+# ---------------------------------------------------------------------------
+# Filing indicators
+# ---------------------------------------------------------------------------
+
+
+def test_undeclared_indicators_follow_the_facts(pack: TaxonomyPack) -> None:
+    """Every template with a fact is reported; the rest are not mentioned."""
+    # Arrange — T05's two tables share one indicator.
+    frame = facts(
+        ("T01.00.01.01", None, None, "0010", "0010", 5.0, None),
+        ("T05.00.01.01", None, None, "0010", "0010", 9.0, None),
+        ("T05.00.01.02", None, None, "0010", "0010", 9.0, None),
+    )
+
+    # Act / Assert
+    assert filing_indicators(build_return(frame), pack) == {"T01.00.01": True, "T05.00.01": True}
+
+
+def test_declared_indicators_are_taken_as_given(pack: TaxonomyPack) -> None:
+    """A template may be reported with no facts, or declared not reported."""
+    # Arrange
+    base = build_return(facts(("T01.00.01.01", None, None, "0010", "0010", 5.0, None)))
+    declared = {"T02.00.01": True, "T01.00.01": True, "T03.00.01": False}
+    ret = CanonicalReturn(base.header, base.facts, declared)
+
+    # Act / Assert
+    assert check_structure(ret, pack) == []
+    assert filing_indicators(ret, pack) == {
+        "T01.00.01": True,
+        "T02.00.01": True,
+        "T03.00.01": False,
+    }
+
+
+def test_a_fact_in_a_template_not_declared_as_reported_is_an_error(pack: TaxonomyPack) -> None:
+    """Filing Manual rule 1.7.1 — whether the indicator is negative or simply absent."""
+    # Arrange
+    base = build_return(
+        facts(
+            ("T01.00.01.01", None, None, "0010", "0010", 5.0, None),
+            ("T02.00.01.01", "0001", None, "0010", "0010", 6.0, None),
+            ("T06.00.01.01", None, None, "0010", "0010", None, "true"),
+        )
+    )
+    ret = CanonicalReturn(base.header, base.facts, {"T01.00.01": True, "T02.00.01": False})
+
+    # Act
+    findings = check_structure(ret, pack)
+
+    # Assert — one finding per offending table, naming its indicator.
+    assert codes(findings) == [FINDING_INDICATOR_INVALID, FINDING_INDICATOR_INVALID]
+    assert [finding.subject for finding in findings] == ["T02.00.01.01", "T06.00.01.01"]
+    assert "filing indicator T02.00.01" in findings[0].message
+
+
+def test_a_declared_indicator_the_module_does_not_have_is_an_error(pack: TaxonomyPack) -> None:
+    # Arrange
+    base = build_return(facts(("T01.00.01.01", None, None, "0010", "0010", 5.0, None)))
+    ret = CanonicalReturn(base.header, base.facts, {"T01.00.01": True, "T99.00.01": True})
+
+    # Act
+    findings = check_structure(ret, pack)
+
+    # Assert
+    assert codes(findings) == [FINDING_INDICATOR_INVALID]
+    assert "T99.00.01" in findings[0].message

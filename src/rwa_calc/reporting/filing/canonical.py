@@ -93,6 +93,9 @@ REASON_CELL: Final = "cell_not_reportable"
 #: ``GEOGRAPHY_TOTAL_SHEET`` in our per-country bundles.
 _GEOGRAPHY_TOTAL_MEMBER: Final = "x1"
 
+#: The DPM data type of a yes/no metric.
+_TYPE_BOOLEAN: Final = "boolean"
+
 #: Frame columns that are labels, not reportable cells.
 _LABEL_COLUMNS: Final[frozenset[str]] = frozenset({"row_ref", "row_name", "row_label", "label"})
 
@@ -110,6 +113,13 @@ UNPLACED_SCHEMA: Final = pl.Schema(
 )
 
 _LONG_SCHEMA: Final = pl.Schema({"row": pl.String, "column": pl.String, "value": pl.Float64})
+
+#: The columns this adapter fills. ``decimals`` is left to the canonical model's
+#: default: the figures are computed, and are stated to the accuracy the filing
+#: options choose.
+_PLACED_SCHEMA: Final = pl.Schema(
+    {name: FACT_SCHEMA[name] for name in FACT_SCHEMA.names() if name != "decimals"}
+)
 
 
 # =============================================================================
@@ -178,6 +188,11 @@ def build_canonical_return(
         )
     pack = pack or resolve_pack(header.module, header.reference_date)
     index = build_template_index(corep, None, FRAMEWORK_BASEL_3_1)
+    flags = [
+        number
+        for number, point in enumerate(pack.datapoints)
+        if point.metric in pack.metrics and pack.metrics[point.metric].data_type == _TYPE_BOOLEAN
+    ]
 
     tables_of: dict[str, list[str]] = {}
     for table, binding in index.bindings.items():
@@ -201,6 +216,7 @@ def build_canonical_return(
                 binding=binding,
                 sheet_map=index.sheet_maps.get(binding.sheet_map or ""),
                 pack=pack,
+                flags=flags,
             )
             placed.append(facts)
             unplaced.append(leftover)
@@ -261,8 +277,15 @@ def _place_sheet(
     binding: TableBinding,
     sheet_map: Mapping[str, SheetCode] | None,
     pack: TaxonomyPack,
+    flags: list[int],
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Place one of our sheets' figures; return ``(facts, unplaced)``."""
+    """Place one of our sheets' figures; return ``(facts, unplaced)``.
+
+    ``flags`` are the data points whose metric is a boolean. Our frames are
+    numeric throughout and carry a yes/no cell as 1 / 0; the taxonomy takes it
+    as ``true`` / ``false``. Any other number in such a cell is left as it is,
+    for the structure check to report.
+    """
 
     def none_placed(reason: str) -> tuple[pl.DataFrame, pl.DataFrame]:
         return _empty_facts(), _unplaced(figures, template, sheet_key, pl.lit(reason))
@@ -291,19 +314,24 @@ def _place_sheet(
 
     closed = [table.code for table in candidates if not table.open_rows]
     cells = pack.cells.filter(pl.col("table").is_in(closed)).select(
-        "table", "row", "column", "sheet"
+        "table", "row", "column", "sheet", "datapoint"
     )
     joined = figures.with_columns(pl.lit(sheet_code, pl.String).alias("sheet")).join(
         cells, on=["row", "column", "sheet"], how="left", nulls_equal=True
     )
+    is_flag = pl.col("datapoint").is_in(flags) & pl.col("value").is_in([0.0, 1.0])
     facts = joined.filter(pl.col("table").is_not_null()).select(
         "table",
         "sheet",
         pl.lit(open_key, pl.String).alias("open_key"),
         "row",
         "column",
-        "value",
-        pl.lit(None, pl.String).alias("text_value"),
+        pl.when(is_flag).then(None).otherwise(pl.col("value")).alias("value"),
+        pl.when(is_flag)
+        .then(pl.when(pl.col("value") == 1.0).then(pl.lit("true")).otherwise(pl.lit("false")))
+        .otherwise(None)
+        .cast(pl.String)
+        .alias("text_value"),
     )
     known_rows = cells["row"].unique().to_list()
     known_columns = cells["column"].unique().to_list()
@@ -339,5 +367,5 @@ def _unplaced(
 
 
 def _empty_facts() -> pl.DataFrame:
-    """An empty fact frame, in the canonical schema."""
-    return pl.DataFrame(schema=FACT_SCHEMA)
+    """An empty fact frame, in the columns this adapter fills."""
+    return pl.DataFrame(schema=_PLACED_SCHEMA)

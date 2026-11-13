@@ -25,8 +25,9 @@ pip install rwa-filer
 | `rwa-filer rules` — inspect, rebuild and check the rule extracts | Available |
 | Taxonomy pack: the tables, cells and data points of a reporting module (PRA001, taxonomy v4.1.1) | Available |
 | Structure checks: every fact sits in a cell the taxonomy accepts | Available |
-| File readers (Parquet, CSV, Excel) and `rwa-filer validate` | Available |
-| XBRL submission file and the Arelle referee | Planned |
+| File readers (Parquet, CSV, Excel, XBRL) and `rwa-filer validate` | Available |
+| XBRL submission file: `rwa-filer build` writes the instance, a zip where required, and a manifest | Available |
+| Arelle referee: an independent XBRL processor's verdict on a written file | Available (needs Arelle and the Bank's taxonomy package) |
 
 ## Validating a file
 
@@ -37,6 +38,9 @@ rwa-filer validate return.parquet \
 
 # A workbook in the template layout carries its own header
 rwa-filer validate return.xlsx --format json --report findings.json
+
+# An XBRL instance from any system, bare or zipped
+rwa-filer validate return.xbrl
 ```
 
 The exit code is `0` when nothing blocks submission and `1` when something
@@ -60,6 +64,10 @@ A Parquet or CSV return is a table with one row per reported cell.
 | `sheet` | For tables with a sheet axis | The published sheet code, e.g. `0008` |
 | `open_key` | For tables with an open axis | The open-axis member, e.g. a country code |
 | `text_value` | For text cells | The cell's text |
+| `decimals` | No | The accuracy a number is stated to: `-3` is thousands, `2` is pence. Empty means the default for the cell's type. |
+
+A monetary value is in units of the reporting currency, never thousands or
+millions. A percentage or ratio is a decimal fraction: 9.31% is `0.0931`.
 
 A fact table carries no header, so the reporting entity, reference date and
 module are given on the command line.
@@ -106,6 +114,67 @@ for finding in result.findings:
 This one-cell return prints `False` and a single `VAL003`: the cell is valid,
 but no published rule can run on one cell, and a return nothing was checked
 against is not reported as clean.
+
+## Writing the submission file
+
+```bash
+rwa-filer build return.parquet --out filing/ \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+```
+
+`build` validates the return and, if nothing stands in the way, writes three
+files into the output directory:
+
+| File | What it is |
+|------|------------|
+| `<entity>_<module>_<date>.xbrl` | The XBRL instance. |
+| `<entity>_<module>_<date>.zip` | The instance, zipped. Written when the instance is over 10 MB, which the Bank requires, or when `--zip` is given. This is then the file to upload. |
+| `<entity>_<module>_<date>.manifest.json` | What was filed: the taxonomy, the fact and template counts, the SHA-256 of each file, and the full validation result. |
+
+Nothing is written while a structure finding stands: such a return cannot be
+expressed in the taxonomy. Nothing is written while a rule check fails either,
+unless `--force` is given. A forced file is still reported as not submittable,
+in the exit code and in the manifest.
+
+| Option | Effect |
+|--------|--------|
+| `--monetary-decimals N` | The accuracy monetary figures are stated to. The default is `-3` (thousands), the convention of the Bank's own sample files. Use `0` for units or `2` for pence. |
+| `--percentage-decimals N` | The accuracy of percentages and ratios. The default, and the minimum the Bank accepts, is `4`. |
+| `--declare-unreported` | Also declare every template the return does not report as not reported. |
+| `--zip` | Write a zip whatever the size. |
+| `--force` | Write the instance even though a rule check fails. |
+| `--no-timestamp` | Leave out the creation time, so the same return always gives byte-identical files. |
+
+The file follows the Bank of England XBRL Filing Manual. Each data point is
+written once, even where the templates show it in two tables. Values are
+written as known, in units, with `decimals` stating their accuracy; the unit is
+the reporting currency for money and `pure` for everything else. A positive
+filing indicator is written for every template that has a fact.
+
+!!! note "How the writer is checked"
+    The Bank publishes a sample PRA001 file holding one fact for every data
+    point of the module: 61,428 facts across all 104 tables. Reading that file
+    and writing it back through `rwa-filer` reproduces every fact exactly, with
+    the same metric, dimension members, value and decimals. That test runs
+    locally against the Bank's file, which is not redistributed.
+
+### Reading an XBRL file
+
+`rwa-filer validate` accepts an `.xbrl` file, or a `.zip` holding one, written
+by any system. Each fact is put back in the cell the taxonomy shows it in, and
+the same structure checks and rules then run. The taxonomy version comes from
+the file's own `schemaRef`.
+
+Three findings are specific to a file. All are Errors.
+
+| Code | Meaning |
+|------|---------|
+| `XBR001` | A fact is not a data point of the module: no reportable cell has that metric with those dimension members. |
+| `XBR002` | A fact appears only in templates the file does not declare as reported. |
+| `XBR003` | The file breaks a Filing Manual rule the reader can see without loading the taxonomy: more than one entity or date, a `segment`, `precision` instead of `decimals`, a `nil` or empty fact, an unused context, an undefined unit, or one fact reported twice with different values. |
+
+The reader does not load the taxonomy's own schemas, so it cannot say that a
+file is valid XBRL against them. That is what the referee is for.
 
 ## Taxonomy packs
 
@@ -198,6 +267,7 @@ rejects a file that has any of them.
 | `STR007` | One data point is reported in two cells with different values. |
 | `STR008` | The header is invalid: the identifier is not a valid LEI, or the module is unknown. |
 | `STR009` | The return carries no facts. |
+| `STR010` | The return declares its filing indicators, and one of them is not a template of the module, or a fact sits in a template not declared as reported. |
 
 Each fact is reported once, against its root cause. A fact in an unknown table
 is `STR001` only; it is not also reported as an unknown cell.

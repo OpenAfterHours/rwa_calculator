@@ -29,6 +29,18 @@ The coordinates
 - ``value`` carries a number; ``text_value`` carries anything else (a string,
   an enumeration member, an ISO date, ``true`` / ``false``). Exactly one of the
   two is set on every fact.
+- ``decimals`` is the accuracy a NUMBER is stated to, as XBRL writes it: ``-3``
+  is accurate to thousands, ``2`` to pence. Optional — null means "the default
+  for the value's type" — and it is what the regulator's interval arithmetic
+  reads, so a source that knows its figures are rounded should say so.
+
+Units: a monetary value is in units of the reporting currency, never thousands
+or millions. A percentage or ratio is a decimal fraction — 9.31% is ``0.0931``.
+
+Filing indicators say which templates the return reports. Left unset, every
+template with a fact is reported and no other is. Set, they are taken as given:
+a template may be reported with no facts at all (every cell is then zero to the
+regulator's checks), or declared not reported.
 
 What a fact is NOT: a cell that is not reported has NO row here. There is no
 "null fact" — an unreported figure and a reported zero are different things,
@@ -69,11 +81,13 @@ FACT_SCHEMA: Final = pl.Schema(
         "column": pl.String,
         "value": pl.Float64,
         "text_value": pl.String,
+        "decimals": pl.Int32,
     }
 )
 
 #: Columns a source MUST supply. ``sheet``, ``open_key`` and ``text_value`` are
-#: optional: a return with single-sheet numeric tables has none of them.
+#: optional: a return with single-sheet numeric tables has none of them. So is
+#: ``decimals``.
 REQUIRED_FACT_COLUMNS: Final[tuple[str, ...]] = ("table", "row", "column", "value")
 
 #: The coordinate columns — what identifies a cell.
@@ -81,6 +95,9 @@ COORDINATE_COLUMNS: Final[tuple[str, ...]] = ("table", "sheet", "open_key", "row
 
 #: Width the publisher writes row, column and sheet codes at.
 CODE_WIDTH: Final = 4
+
+#: The ``decimals`` of a figure stated to be exact — XBRL's ``decimals="INF"``.
+DECIMALS_EXACT: Final = 99
 
 # Header field labels, as written to and read from a metadata sheet or file.
 _FIELD_ENTITY: Final = "Entity identifier"
@@ -183,9 +200,17 @@ class CanonicalReturn:
 
     header: ReturnHeader
     facts: pl.DataFrame
+    indicators: Mapping[str, bool] | None = None
+    """Filing indicators as declared — ``{code: filed}`` — or ``None`` to have
+    every template with a fact reported and no other."""
 
     @classmethod
-    def from_frame(cls, header: ReturnHeader, frame: pl.DataFrame) -> CanonicalReturn:
+    def from_frame(
+        cls,
+        header: ReturnHeader,
+        frame: pl.DataFrame,
+        indicators: Mapping[str, bool] | None = None,
+    ) -> CanonicalReturn:
         """Normalise ``frame`` onto ``FACT_SCHEMA`` and wrap it with ``header``.
 
         What is normalised:
@@ -226,12 +251,13 @@ class CanonicalReturn:
                 _code(pl.col("column"), frame.schema.get("column")).alias("column"),
                 _finite(pl.col("value")).alias("value"),
                 _text(pl.col("text_value")).alias("text_value"),
+                pl.col("decimals").cast(pl.Int32, strict=False).alias("decimals"),
             )
             .select(FACT_SCHEMA.names())
             .cast(FACT_SCHEMA)
             .filter(pl.col("value").is_not_null() | pl.col("text_value").is_not_null())
         )
-        return cls(header=header, facts=facts)
+        return cls(header=header, facts=facts, indicators=indicators)
 
     @property
     def tables(self) -> tuple[str, ...]:

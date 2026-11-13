@@ -86,7 +86,7 @@ def test_from_frame_yields_exactly_the_fact_schema() -> None:
 
     # Assert
     assert ret.facts.schema == FACT_SCHEMA
-    assert ret.facts.row(0) == ("T01", None, None, "0010", "0010", 1.0, None)
+    assert ret.facts.row(0) == ("T01", None, None, "0010", "0010", 1.0, None, None)
 
 
 def test_codes_read_as_numbers_get_their_leading_zeros_back() -> None:
@@ -179,3 +179,36 @@ def test_tables_lists_the_distinct_table_codes_sorted() -> None:
     # Assert
     assert ret.tables == ("T01", "T02")
     assert ret.table_facts("T02").height == 2
+
+
+def test_decimals_is_optional_and_kept_as_given() -> None:
+    # Arrange
+    frame = pl.DataFrame(
+        {
+            "table": ["T01", "T01"],
+            "row": ["0010", "0020"],
+            "column": ["0010", "0010"],
+            "value": [1000.0, 2.5],
+            "decimals": [-3, None],
+        }
+    )
+
+    # Act
+    ret = CanonicalReturn.from_frame(build_header(), frame)
+
+    # Assert
+    assert ret.facts["decimals"].to_list() == [-3, None]
+    assert ret.facts.schema["decimals"] == pl.Int32
+
+
+def test_filing_indicators_default_to_unset_and_are_kept_when_declared() -> None:
+    # Arrange
+    frame = pl.DataFrame({"table": ["T01"], "row": ["0010"], "column": ["0010"], "value": [1.0]})
+
+    # Act
+    derived = CanonicalReturn.from_frame(build_header(), frame)
+    declared = CanonicalReturn.from_frame(build_header(), frame, {"T01.00": True, "T02.00": False})
+
+    # Assert
+    assert derived.indicators is None
+    assert declared.indicators == {"T01.00": True, "T02.00": False}

@@ -49,6 +49,7 @@ from rwa_calc.reporting.filing.canonical import (
 )
 from rwa_filer.model import FACT_SCHEMA, ReturnHeader
 from rwa_filer.taxonomy.pack import PackNotFoundError, resolve_pack
+from rwa_filer.validate.structure import check_structure
 
 from ._builders import build_corep, build_frame
 
@@ -156,6 +157,34 @@ def test_null_cells_and_label_columns_are_not_facts() -> None:
     # Assert
     assert placed(result) == [("OF07.00.01.01", "0008", None, "0010", "0010", 100.0)]
     assert result.unplaced.is_empty()
+
+
+def test_a_yes_no_cell_is_reported_as_true_or_false() -> None:
+    """OF 02.00 row 0034, "output floor activated", is a boolean in the taxonomy."""
+    # Arrange — our frames are numeric throughout: 1 is yes, 0 is no.
+    activated = mapping(c_02_00=build_frame({"0034": {"0030": 1.0}}))
+    inactive = mapping(c_02_00=build_frame({"0034": {"0030": 0.0}}))
+
+    # Act
+    rows = [
+        result.canonical.facts.select("row", "column", "value", "text_value").row(0)
+        for result in (activated, inactive)
+    ]
+
+    # Assert
+    assert rows == [("0034", "0030", None, "true"), ("0034", "0030", None, "false")]
+
+
+def test_a_number_that_is_not_yes_or_no_is_left_for_the_structure_check() -> None:
+    # Arrange
+    result = mapping(c_02_00=build_frame({"0034": {"0030": 0.5}}))
+
+    # Act
+    findings = check_structure(result.canonical, resolve_pack(FILING_MODULE, REFERENCE_DATE))
+
+    # Assert — not silently coerced: reported as a value of the wrong type.
+    assert result.canonical.facts["value"].to_list() == [0.5]
+    assert [finding.code for finding in findings] == ["STR006"]
 
 
 # ---------------------------------------------------------------------------

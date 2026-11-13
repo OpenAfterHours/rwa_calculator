@@ -28,7 +28,8 @@ Distinctions that are load-bearing here:
   evidence of correctness and is counted separately.
 
 References:
-- docs/reference/validation-rules/index.md — the formula grammar for both sources
+- EBA DPM validation rules; BoE Banking Taxonomy validation rules (the two
+  formula grammars)
 - COREP Annex II; PRA PS1/26 Annex II (the templates the coordinates address)
 """
 
@@ -40,12 +41,11 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from rwa_calc.reporting.validations.rules import (
+from rwa_filer.rules.catalogue import (
     ARITHMETIC_POINT,
     MISSING_ZERO,
 )
-from rwa_calc.reporting.validations.scope import (
-    SHEET_INDEX_MAPS,
+from rwa_filer.validate.index import (
     SINGLE_SHEET,
     SKIP_COLUMN_NOT_EMITTED,
     SKIP_ROW_NOT_EMITTED,
@@ -56,7 +56,7 @@ from rwa_calc.reporting.validations.scope import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from rwa_calc.reporting.validations.scope import Coordinate, TemplateIndex
+    from rwa_filer.validate.index import Coordinate, TemplateIndex
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ STATUS_FAIL: Final = "FAIL"
 STATUS_VACUOUS: Final = "VACUOUS"
 STATUS_NOT_EVALUATED: Final = "NOT_EVALUATED"
 
-#: Golden convention, shared with reporting/tieouts.py: relative 1e-9 with a
+#: The rounding tolerance for a tolerant comparison: relative 1e-9 with a
 #: small absolute floor for near-zero sums. Used for every ``Interval``
 #: (rounding-tolerant) comparison; a ``Point`` rule compares exactly.
 DEFAULT_RTOL: Final = 1e-9
@@ -103,7 +103,7 @@ _UNSUPPORTED_MARKERS: Final[tuple[tuple[str, str], ...]] = (
 # ── Dimensional filters ──────────────────────────────────────────────────────
 # Only ONE dimensional filter is understood: the counterparty-geography
 # dimension restricted to the all-geographies member, which selects the total
-# sheet of our per-country C 09.0x dicts. Every other dimension / member is
+# sheet of a per-country C 09.0x template. Every other dimension / member is
 # refused by name.
 #
 # ``eba_GA:x1`` is the TOTAL across all geographies, not "domestic". Three
@@ -125,9 +125,10 @@ _UNSUPPORTED_MARKERS: Final[tuple[tuple[str, str], ...]] = (
 _GEOGRAPHY_DIMENSION: Final = "CEG"
 _GEOGRAPHY_TOTAL_MEMBER: Final = "eba_GA:x1"
 
-#: Our per-country C 09.01 / C 09.02 dicts key the whole population under this
-#: sheet name (``reporting/corep/c09.py`` emits ``("TOTAL", data)`` first, then
-#: one frame per counterparty country).
+#: The sheet key a ``TemplateIndex`` uses for the all-geographies total of a
+#: per-country template (C 09.01 / C 09.02): the whole population under this
+#: name, then one frame per counterparty country. Part of the index contract —
+#: a source that builds an index keys its total sheet with this constant.
 GEOGRAPHY_TOTAL_SHEET: Final = "TOTAL"
 
 #: BoE ``filter: [eba_dim:CEG] = [eba_GA:x1]`` / EBA ``[CEG=eba_GA:x1]``.
@@ -668,13 +669,12 @@ def _sum_cells(ref: Ref, context: _Context, *, aggregated: bool) -> float:
     sheets. Summation is the publisher's own reading in the first two cases and
     the only additive reading in the third.
 
-    The third case is not an endorsement, and our maps may no longer produce it:
-    ``arch_check`` check 22 forbids a ``SheetCode`` carrying more than one
-    ``bundle_key``, because summing two of our sheets under one z-code asserts
-    against a figure that appears in no submitted workbook — which is how PR
-    #497's wrong C 07.00 class axis read as a PASSING rule rather than a break.
-    The branch stays, because summation IS the publisher's semantics for a
-    genuinely multi-cell reference; it is not licence to widen a ``bundle_keys``.
+    The third case is not an endorsement. A ``SheetCode`` should carry at most
+    one ``bundle_key``: summing two of a source's sheets under one z-code
+    asserts against a figure that appears in no submitted workbook, which turns
+    a wrong sheet axis into a PASSING rule rather than a break. The branch
+    stays, because summation IS the publisher's semantics for a genuinely
+    multi-cell reference; it is not licence to widen a ``bundle_keys``.
     """
     return sum(_resolve_cells(ref, context, aggregated=aggregated))
 
@@ -765,7 +765,7 @@ def _reference_sheets(
         return (ref.geography,)
 
     if ref.sheets is not None:
-        sheet_map = SHEET_INDEX_MAPS.get(sheet_map_name or "")
+        sheet_map = context.index.sheet_maps.get(sheet_map_name or "")
         if sheet_map is None:
             raise SkipCoordinate(
                 SKIP_AMBIGUOUS_AXIS, f"{table} sheets are not indexed positionally"

@@ -31,7 +31,7 @@ So every assertion here is anchored on something that CANNOT drift with
   identity against the C 07.00 sheet for the same Art. 112(1) letter, so the two
   axes are in 1:1 correspondence by construction and a collision on the C 07.00
   side is exactly the defect;
-- ``validations/scope.py::SHEET_INDEX_MAPS`` — the published z-axis, read off
+- ``filing/sheet_maps.py::SHEET_INDEX_MAPS`` — the published z-axis, read off
   the live EBA/BoE rule sets. A sheet key absent from it is unaddressable, and
   ``resolve_sheet_codes`` then skips every rule scoped to that code as
   ``sheet_not_emitted`` — the supervisory gate FAILS OPEN, so this is a silent
@@ -64,7 +64,7 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep import templates
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import C02_00_SA_CLASS_MAP, get_sa_row_sections
-from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

@@ -27,15 +27,10 @@ from __future__ import annotations
 
 import pytest
 
-from rwa_calc.reporting.validations.rules import (
-    SCOPE_ALL,
-    SCOPE_LIST,
-    RuleScope,
-    TableScope,
-    load_rules,
-)
-from rwa_calc.reporting.validations.scope import (
-    SHEET_INDEX_MAPS,
+from rwa_calc.reporting.filing.bindings import build_template_index
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
+from rwa_filer.rules.catalogue import SCOPE_ALL, SCOPE_LIST, RuleScope, TableScope, load_rules
+from rwa_filer.validate.index import (
     SINGLE_SHEET,
     SKIP_COLUMN_NOT_EMITTED,
     SKIP_PREREQUISITE_TABLE_ABSENT,
@@ -44,11 +39,10 @@ from rwa_calc.reporting.validations.scope import (
     SKIP_SHEET_NOT_EMITTED,
     SKIP_SHEET_SCOPE_NOT_CLOSED,
     SKIP_TABLE_NOT_EMITTED,
-    build_template_index,
     expand_rule,
     resolve_sheet_codes,
 )
-from tests.unit.reporting.validations._builders import (
+from tests.unit.reporting.filing._builders import (
     build_corep,
     build_frame,
     build_index,

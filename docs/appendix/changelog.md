@@ -26,6 +26,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - (Next release changes will go here)
+- **BREAKING (import paths only): the supervisory validation engine moved out of
+  `rwa_calc.reporting.validations` into the separately released `rwa-filer`
+  package.** The rule extracts, the expression evaluator, scope expansion and the
+  checker are generic — they know nothing about this calculator — so they now
+  live in `rwa_filer.rules` and `rwa_filer.validate`, where any other source of
+  template-level figures can use them. `rwa_calc.reporting.validations` is gone,
+  with no alias left behind. What remains in `rwa-calc` is the thin adapter
+  `rwa_calc.reporting.filing`: the cited sheet-index maps
+  (`filing/sheet_maps.py`), the table bindings and `build_template_index`
+  (`filing/bindings.py`), and `check_supervisory_validations` / `evaluate_all`
+  (`filing/checks.py`), which map the engine's findings onto `CalculationError`
+  `VAL001`–`VAL003` exactly as before. **No behaviour changed**: the public
+  entry points (`validate_submission`, `summarise_validation`, the REST
+  `/validations` route) are untouched, the reporting coverage ratchet reports
+  the same 272 / 331 binding rules, 8,754 live cells and 757 never-evaluated
+  rules, the supervisory register is unmoved, and the relocated importer
+  reproduces both committed extracts byte for byte from the publishers'
+  workbooks. If you imported the old package directly, repoint: rule shapes and
+  `load_rules` to `rwa_filer.rules`; statuses, `TemplateIndex`, `SheetCode`,
+  `ValidationReport` and `RuleOutcome` to `rwa_filer.validate`;
+  `SHEET_INDEX_MAPS`, `build_template_index`, `check_supervisory_validations`
+  and `evaluate_all` to `rwa_calc.reporting.filing`.
+  `scripts/extract_validation_rules.py` keeps its flags and now writes to
+  `packages/rwa-filer/src/rwa_filer/rules/data/`; the same extraction ships as
+  `rwa-filer rules import` / `rwa-filer rules check`. `arch_check` check 22 is
+  re-pointed at `reporting/filing/`.
+- **`scripts/deploy.py` refuses an `rwa-calc` publish until the `rwa-filer`
+  version it depends on is on PyPI.** Inside the workspace `rwa-filer` always
+  resolves from the checkout, so no gate here can see an `rwa-calc` release
+  whose requirement nothing published satisfies — a release nobody could
+  install. The script now reads the range from the root `pyproject.toml`, asks
+  PyPI, and stops before the tests when no published version satisfies it or
+  PyPI cannot be reached. `--skip-filer-check` bypasses it.
 - **BREAKING (reporting surface): COREP C 07.00 / OF 07.00 now keys its
   exposure-class dimension on the Article 112(1) classes, not on the engine's
   internal exposure classes.** The template's class dimension is the Art. 112(1)

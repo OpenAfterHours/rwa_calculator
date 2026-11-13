@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     )
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
-    from rwa_calc.reporting.validations import RuleOutcome
+    from rwa_filer.validate import RuleOutcome
 
 logger = logging.getLogger(__name__)
 

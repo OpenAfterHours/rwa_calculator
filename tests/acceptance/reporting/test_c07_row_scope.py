@@ -83,7 +83,7 @@ References:
 - CRR Art. 124(1), Art. 125(1)(a), Art. 125(2)(b), Art. 125(2)(d)
 - PS1/26 Art. 124F / 124G / 124I; Art. 126(2) (the commercial mirror image)
 - EBA v7477_m (C 07.00.a) / v7478_m (C 07.00.b): ``{r0040} = empty``, live WARNING
-- reporting/validations/scope.py::SHEET_INDEX_MAPS — the published z-axis
+- reporting/filing/sheet_maps.py::SHEET_INDEX_MAPS — the published z-axis
 """
 
 from __future__ import annotations
@@ -111,11 +111,9 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
 )
 from rwa_calc.engine.sa.crr_risk_weight_tables import RESIDENTIAL_MORTGAGE_PARAMS
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
-from rwa_calc.reporting.validations import (
-    SHEET_INDEX_MAPS,
-    STATUS_FAIL,
-    evaluate_all,
-)
+from rwa_calc.reporting.filing.checks import evaluate_all
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
+from rwa_filer.validate.evaluate import STATUS_FAIL
 
 _REGIMES: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 

@@ -104,7 +104,7 @@ Checks machine-verifiable invariants from CLAUDE.md:
     binding that ENDS STRICTLY BEFORE the outer ``.over()``'s own line so a
     self-rebinding statement cannot make a window find itself. No allowlist.
 22. One bundle key per publisher sheet code: every ``SheetCode`` in
-    ``reporting/validations/scope.py`` maps to AT MOST ONE of our bundle
+    ``reporting/filing/sheet_maps.py`` maps to AT MOST ONE of our bundle
     keys. ``resolve_sheet_codes`` returns every key a scoped code addresses,
     so a second key makes the supervisory rule evaluator aggregate the
     publisher's reference across two of our sheets and assert against a
@@ -2451,15 +2451,15 @@ def _resolve_binding(
 # ---------------------------------------------------------------------------
 
 #: Where the publisher z-axis (sheet) index maps live. Scanned as a DIRECTORY
-#: rather than as one named module, so moving ``scope.py`` WITHIN that package
+#: rather than as one named module, so moving ``sheet_maps.py`` WITHIN that package
 #: keeps it measured.
 #:
 #: What the population pin below catches is the maps being emptied, or
-#: ``SheetCode`` being renamed. It does NOT catch the ``validations/`` PACKAGE
+#: ``SheetCode`` being renamed. It does NOT catch the ``filing/`` PACKAGE
 #: moving: ``root.is_dir()`` is then False and the scan has nothing to walk. So
 #: a run against the package root treats a missing directory as a violation
 #: rather than a skip, and only a genuine subpath run may skip.
-_SHEET_MAP_SUBPACKAGE = ("reporting", "validations")
+_SHEET_MAP_SUBPACKAGE = ("reporting", "filing")
 #: The package root, so a full run cannot silently take the subpath skip branch.
 _PACKAGE_ROOT_NAME = "rwa_calc"
 _SHEET_CODE_CTOR = "SheetCode"
@@ -2530,7 +2530,7 @@ def check_sheet_code_single_bundle_key(path: Path) -> list[str]:
         if path.name == _PACKAGE_ROOT_NAME:
             return [
                 f"  {root} does not exist -- check 22 has lost its population. The "
-                "sheet-index maps moved out of reporting/validations/; re-point "
+                "sheet-index maps moved out of reporting/filing/; re-point "
                 "_SHEET_MAP_SUBPACKAGE at them. A full-package run may not take the "
                 "subpath skip: an unmeasured invariant reads exactly like a satisfied one."
             ]
@@ -2975,7 +2975,7 @@ def main() -> int:
             check_no_nested_window_expressions,
         ),
         (
-            "One bundle key per publisher sheet code (reporting/validations)",
+            "One bundle key per publisher sheet code (reporting/filing)",
             check_sheet_code_single_bundle_key,
         ),
         (

@@ -28,20 +28,20 @@ from __future__ import annotations
 
 import pytest
 
-from rwa_calc.reporting.validations.evaluate import (
+from filer_builders import (
+    build_frame,
+    build_index,
+    evaluate,
+    evaluate_c02,
+)
+from rwa_filer.rules.catalogue import ARITHMETIC_POINT
+from rwa_filer.validate.evaluate import (
     SKIP_UNSUPPORTED_GRAMMAR,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
     UnsupportedExpression,
     parse_expression,
-)
-from rwa_calc.reporting.validations.rules import ARITHMETIC_POINT
-from tests.unit.reporting.validations._builders import (
-    build_frame,
-    build_index,
-    evaluate,
-    evaluate_c02,
 )
 
 # ---------------------------------------------------------------------------

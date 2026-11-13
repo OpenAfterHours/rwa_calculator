@@ -2,39 +2,40 @@
 Supervisory validation checker — the public entry point over the rule estate.
 
 Pipeline position:
-    COREPGenerator + Pillar3Generator
-        ->  evaluate_all           ->  ValidationReport (per-rule outcomes)
-        ->  check_supervisory_validations  ->  list[CalculationError]
+    TemplateIndex
+        ->  evaluate_index  ->  ValidationReport (per-rule outcomes)
+        ->  findings_for    ->  list[Finding]
 
 Key responsibilities:
 - Run every currently-enforced published validation rule for a framework against
-  the templates this run generated, and return one outcome per rule.
-- Adapt the Error / Warning outcomes onto the project's error channel as
-  ``VAL001`` / ``VAL002`` findings — accumulated, never raised, following the
-  same contract as ``reporting/tieouts.py``.
+  the templates a return carries, and return one outcome per rule.
+- Turn the Error / Warning outcomes into ``Finding`` records — ``VAL001`` /
+  ``VAL002`` — returned, never raised.
 - Guarantee that an EMPTY finding list is meaningful, by reporting insufficient
   coverage as ``VAL003``. Without it the obvious gate —
-  ``if not check_supervisory_validations(...): submit()`` — fails OPEN: an estate
-  on which every rule was NOT_EVALUATED produces no breaks and is indistinguishable
-  from a clean one. The guard belongs here rather than in each caller.
+  ``if not check_index(...): submit()`` — fails OPEN: a return on which every
+  rule was NOT_EVALUATED produces no breaks and is indistinguishable from a
+  clean one. The guard belongs here rather than in each caller.
 
 Why this is critical path: these are the supervisor's own checks, run at
 submission. An Error-severity break REJECTS the whole return, so a ``VAL001``
-finding is a blocking defect in the filing, not a quality nit. ``tieouts.py``
-is the hand-curated in-house ancestor of this module — five cross-template
-identities we derived ourselves; this is the published, exhaustive form.
+finding is a blocking defect in the filing, not a quality nit.
 
 What is deliberately NOT reported:
-- A rule whose template, sheet, row or column this run never emitted is
-  NOT_EVALUATED with that reason. "Row not emitted" is not "row emitted as
+- A rule whose template, sheet, row or column the return does not carry is
+  NOT_EVALUATED with that reason. "Row not reported" is not "row reported as
   zero", and treating it as zero produces false breaks on rules that sum market,
-  operational and settlement risk rows a credit-risk calculator does not produce.
+  operational and settlement risk rows a credit-risk return does not carry.
 - A rule whose operands are all null or zero is VACUOUS. It is not counted as a
   pass, because a vacuous pass is no evidence of correctness.
 
+``Finding`` is this package's own record. A host application maps it onto its
+own error channel (``rwa-calc`` maps it to ``CalculationError`` in
+``rwa_calc.reporting.filing``).
+
 References:
-- docs/reference/validation-rules/index.md — the rule grammar and provenance
 - COREP Annex II; PRA PS1/26 Annex II — the templates the rules address
+- EBA DPM validation rules; BoE Banking Taxonomy validation rules
 """
 
 from __future__ import annotations
@@ -44,13 +45,13 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from rwa_calc.contracts.errors import (
-    ERROR_VALIDATION_COVERAGE_INSUFFICIENT,
-    ERROR_VALIDATION_RULE_ERROR,
-    ERROR_VALIDATION_RULE_WARNING,
+from rwa_filer.rules.catalogue import (
+    SEVERITY_ERROR,
+    SEVERITY_WARNING,
+    build_rule_reference,
+    load_rules,
 )
-from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
-from rwa_calc.reporting.validations.evaluate import (
+from rwa_filer.validate.evaluate import (
     SKIP_PRECONDITION_UNSUPPORTED,
     SKIP_WHERE_UNSUPPORTED,
     STATUS_FAIL,
@@ -61,25 +62,14 @@ from rwa_calc.reporting.validations.evaluate import (
     evaluate_at,
     parse_expression,
 )
-from rwa_calc.reporting.validations.rules import (
-    SEVERITY_ERROR,
-    build_rule_reference,
-    load_rules,
-)
-from rwa_calc.reporting.validations.scope import (
-    build_template_index,
-    expand_rule,
-)
+from rwa_filer.validate.index import expand_rule
 
 if TYPE_CHECKING:
     from typing import Literal
 
-    from rwa_calc.contracts.errors import CalculationError
-    from rwa_calc.reporting.corep.generator import COREPTemplateBundle
-    from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
-    from rwa_calc.reporting.validations.evaluate import CoordinateOutcome
-    from rwa_calc.reporting.validations.rules import ValidationRule
-    from rwa_calc.reporting.validations.scope import TemplateIndex
+    from rwa_filer.rules.catalogue import RuleSet, ValidationRule
+    from rwa_filer.validate.evaluate import CoordinateOutcome
+    from rwa_filer.validate.index import TemplateIndex
 
 logger = logging.getLogger(__name__)
 
@@ -105,78 +95,67 @@ COVERAGE_NO_RULE_EXECUTED: Final[CoverageShortfall] = "no_rule_executed"
 #: against them and would go into the submission unexamined.
 COVERAGE_TEMPLATE_NOT_COVERED: Final[CoverageShortfall] = "template_not_covered"
 
+#: Finding codes. An Error-severity published rule is broken — the regulator
+#: rejects the return.
+FINDING_RULE_ERROR: Final = "VAL001"
+#: A Warning-severity published rule is broken — it must be explained.
+FINDING_RULE_WARNING: Final = "VAL002"
+#: The return was not checked well enough for an empty result to mean anything.
+FINDING_COVERAGE_INSUFFICIENT: Final = "VAL003"
+
+#: The reference quoted on a coverage finding, which no single rule owns.
+COVERAGE_REFERENCE: Final = (
+    "COREP Annex II / PRA PS1/26 Annex II — supervisory validation rule coverage"
+)
+
 
 # =============================================================================
-# Public entry point
+# Public entry points
 # =============================================================================
 
 
-def check_supervisory_validations(
-    corep: COREPTemplateBundle,
-    pillar3: Pillar3TemplateBundle | None,
-    framework: str,
-) -> list[CalculationError]:
-    """Run the published validation rules and return the breaks as findings.
+def check_index(index: TemplateIndex, ruleset: RuleSet | None = None) -> list[Finding]:
+    """Run the published validation rules over ``index`` and return the findings.
 
-    A thin ``CalculationError`` adapter over ``evaluate_all``. Only FAIL
-    outcomes yield findings — one per broken rule, following the roll-up pattern
-    (a single code per failure mode, the rule id on ``field_name``, both figures
-    in the message), so a rule that breaks on 40 sheets is one finding, not 40.
+    ``findings_for(evaluate_index(index))`` in one call.
 
-    An EMPTY result means "the estate was checked and holds" — and nothing else.
-    The naive gate ``if not check_supervisory_validations(...): submit()`` would
-    otherwise pass an estate on which NOTHING ran: every rule NOT_EVALUATED
-    yields no FAIL and therefore no finding. A ``VAL003`` coverage finding closes
-    that, so an empty list is safe to read as a green light.
-
-    Args:
-        corep: The generated COREP template bundle.
-        pillar3: The generated Pillar 3 bundle (carried for contract symmetry;
-            no published rule addresses a Pillar 3 template — see
-            ``scope.build_template_index``).
-        framework: ``"CRR"`` or ``"BASEL_3_1"``.
+    An EMPTY result means "the return was checked and holds" — and nothing else.
+    The naive gate ``if not check_index(...): submit()`` would otherwise pass a
+    return on which NOTHING ran: every rule NOT_EVALUATED yields no FAIL and
+    therefore no finding. A ``VAL003`` coverage finding closes that, so an empty
+    list is safe to read as a green light.
 
     Returns:
         ``VAL001`` (Error-severity rule broken — blocks the submission),
-        ``VAL002`` (Warning-severity rule broken) and ``VAL003`` (the estate was
+        ``VAL002`` (Warning-severity rule broken) and ``VAL003`` (the return was
         not checked well enough for an empty result to mean anything) findings;
         empty only when every enforced rule that could run did run and holds.
-        Never raises.
+        Never raises for a data condition.
     """
-    report = evaluate_all(corep, pillar3, framework)
-    findings = [_finding(outcome) for outcome in report.outcomes if outcome.status == STATUS_FAIL]
-    shortfall = _coverage_finding(report)
-    if shortfall is not None:
-        findings.insert(0, shortfall)
-    return findings
+    return findings_for(evaluate_index(index, ruleset))
 
 
-def evaluate_all(
-    corep: COREPTemplateBundle,
-    pillar3: Pillar3TemplateBundle | None,
-    framework: str,
-) -> ValidationReport:
-    """Evaluate every currently-enforced rule for ``framework`` and report.
+def evaluate_index(index: TemplateIndex, ruleset: RuleSet | None = None) -> ValidationReport:
+    """Evaluate every currently-enforced rule for ``index.framework`` and report.
 
     Args:
-        corep: The generated COREP template bundle.
-        pillar3: The generated Pillar 3 bundle (see above).
-        framework: ``"CRR"`` or ``"BASEL_3_1"``.
+        index: The return's frames, bound to publisher table codes.
+        ruleset: The rules to run. Defaults to the packaged extract for
+            ``index.framework``.
 
     Returns:
         A ``ValidationReport`` carrying one ``RuleOutcome`` per enforced rule —
         status, both figures, the coordinates and, for anything not evaluated,
-        the reason — plus the per-template coverage the run achieved. Never
-        raises for a data condition.
+        the reason — plus the per-template coverage achieved. Never raises for a
+        data condition.
     """
-    ruleset = load_rules(framework)
-    index = build_template_index(corep, pillar3, framework)
+    ruleset = ruleset if ruleset is not None else load_rules(index.framework)
     enforced = ruleset.enforced
     outcomes = tuple(_evaluate_rule(rule, index) for rule in enforced)
     emitted, covered = _template_coverage(outcomes, index)
     logger.info(
         "supervisory validations (%s): %d enforced, %d executed, %d failed, %d/%d templates covered",
-        framework,
+        index.framework,
         len(enforced),
         sum(1 for outcome in outcomes if outcome.status != STATUS_NOT_EVALUATED),
         sum(1 for outcome in outcomes if outcome.status == STATUS_FAIL),
@@ -184,7 +163,7 @@ def evaluate_all(
         len(emitted),
     )
     return ValidationReport(
-        framework=framework,
+        framework=index.framework,
         publisher=ruleset.publisher,
         rules_loaded=len(ruleset.rules),
         rules_enforced=len(enforced),
@@ -194,9 +173,53 @@ def evaluate_all(
     )
 
 
+def findings_for(report: ValidationReport) -> list[Finding]:
+    """The findings a report yields: the coverage shortfall first, then each break.
+
+    Only FAIL outcomes yield rule findings — one per broken rule, following the
+    roll-up pattern (a single code per failure mode, the rule id on ``subject``,
+    both figures in the message), so a rule that breaks on 40 sheets is one
+    finding, not 40.
+    """
+    findings = [_finding(outcome) for outcome in report.outcomes if outcome.status == STATUS_FAIL]
+    shortfall = _coverage_finding(report)
+    if shortfall is not None:
+        findings.insert(0, shortfall)
+    return findings
+
+
 # =============================================================================
 # Report shapes
 # =============================================================================
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One reportable result of validating a return.
+
+    Attributes:
+        code: ``VAL001`` / ``VAL002`` / ``VAL003``.
+        severity: ``"ERROR"`` (blocks the submission) or ``"WARNING"``.
+        message: The full human-readable finding.
+        reference: The regulatory source the finding rests on.
+        subject: What the finding is about, machine-readable — the rule id for a
+            broken rule, the ``CoverageShortfall`` reason for ``VAL003``.
+        expected: The figure or state the rule requires.
+        actual: The figure or state the return carries.
+    """
+
+    code: str
+    severity: str
+    message: str
+    reference: str
+    subject: str
+    expected: str
+    actual: str
+
+    @property
+    def is_blocking(self) -> bool:
+        """Whether this finding stops the return being submitted."""
+        return self.severity == SEVERITY_ERROR
 
 
 @dataclass(frozen=True)
@@ -418,16 +441,16 @@ def _template_coverage(
     return emitted, tuple(sorted(covered))
 
 
-def _coverage_finding(report: ValidationReport) -> CalculationError | None:
+def _coverage_finding(report: ValidationReport) -> Finding | None:
     """Build the VAL003 finding for whatever ``report.coverage_shortfall`` says.
 
     The predicate lives on ``ValidationReport.coverage_shortfall`` and is read —
     never re-derived — here. That is the whole point: the finding, an API
     submission gate and an exported report all consume ONE implementation, so a
     third limb added later cannot reach some consumers and miss others. The
-    machine reason travels on the finding's ``field_name``, so a caller holding
-    only the error channel still gets the structured verdict rather than having
-    to parse this message.
+    machine reason travels on the finding's ``subject``, so a caller holding
+    only the findings still gets the structured verdict rather than having to
+    parse this message.
 
     Why the shortfall is defined the way it is:
 
@@ -447,8 +470,6 @@ def _coverage_finding(report: ValidationReport) -> CalculationError | None:
     from what the run emitted, so it stays honest as both the estate and the
     rule set change.
     """
-    from rwa_calc.contracts.errors import CalculationError
-
     shortfall = report.coverage_shortfall
     if shortfall is None:
         return None
@@ -465,8 +486,8 @@ def _coverage_finding(report: ValidationReport) -> CalculationError | None:
         cause = (
             f"emitted template(s) with no executed rule: {', '.join(report.templates_uncovered)}"
         )
-    return CalculationError(
-        code=ERROR_VALIDATION_COVERAGE_INSUFFICIENT,
+    return Finding(
+        code=FINDING_COVERAGE_INSUFFICIENT,
         message=(
             f"Supervisory validation coverage is insufficient for {report.framework} "
             f"({report.publisher}) [{shortfall}]: {report.rules_executed} of "
@@ -475,16 +496,11 @@ def _coverage_finding(report: ValidationReport) -> CalculationError | None:
             f"({reasons}); {cause}. An absent finding is therefore NOT evidence the return is "
             "valid — do not treat an empty validation result as a pass."
         ),
-        severity=ErrorSeverity.ERROR,
-        category=ErrorCategory.BUSINESS_RULE,
-        regulatory_reference=(
-            "COREP Annex II / PRA PS1/26 Annex II — supervisory validation rule coverage"
-        ),
-        field_name=shortfall,
-        expected_value=f"every one of {len(report.templates_emitted)} emitted template(s) covered",
-        actual_value=(
-            f"{len(report.templates_covered)} covered, {report.rules_executed} rules executed"
-        ),
+        severity=SEVERITY_ERROR,
+        reference=COVERAGE_REFERENCE,
+        subject=shortfall,
+        expected=f"every one of {len(report.templates_emitted)} emitted template(s) covered",
+        actual=f"{len(report.templates_covered)} covered, {report.rules_executed} rules executed",
     )
 
 
@@ -505,13 +521,11 @@ def _not_evaluated(rule: ValidationRule, reason: str, detail: str) -> RuleOutcom
     )
 
 
-def _finding(outcome: RuleOutcome) -> CalculationError:
-    """Build the VAL001 / VAL002 CalculationError for one broken rule."""
-    from rwa_calc.contracts.errors import CalculationError
-
+def _finding(outcome: RuleOutcome) -> Finding:
+    """Build the VAL001 / VAL002 finding for one broken rule."""
     first = outcome.failures[0]
     blocking = outcome.severity == SEVERITY_ERROR
-    code = ERROR_VALIDATION_RULE_ERROR if blocking else ERROR_VALIDATION_RULE_WARNING
+    code = FINDING_RULE_ERROR if blocking else FINDING_RULE_WARNING
     consequence = (
         "an Error-severity break rejects the submission"
         if blocking
@@ -524,7 +538,7 @@ def _finding(outcome: RuleOutcome) -> CalculationError:
     # curly quotes; fold it to ASCII so a cp1252 log handler or console can never
     # mangle (or raise on) a finding message.
     label = f" {outcome.label.encode('ascii', 'replace').decode()}" if outcome.label else ""
-    return CalculationError(
+    return Finding(
         code=code,
         message=(
             f"Supervisory validation rule '{outcome.rule_id}' "
@@ -532,10 +546,9 @@ def _finding(outcome: RuleOutcome) -> CalculationError:
             f"{outcome.evaluated} evaluated cell(s): {outcome.expression}; "
             f"left = {lhs} vs right = {rhs} at {where}; {consequence}.{label}"
         ),
-        severity=ErrorSeverity.ERROR if blocking else ErrorSeverity.WARNING,
-        category=ErrorCategory.BUSINESS_RULE,
-        regulatory_reference=build_rule_reference(outcome.publisher, outcome.tables),
-        field_name=outcome.rule_id,
-        expected_value=rhs,
-        actual_value=lhs,
+        severity=SEVERITY_ERROR if blocking else SEVERITY_WARNING,
+        reference=build_rule_reference(outcome.publisher, outcome.tables),
+        subject=outcome.rule_id,
+        expected=rhs,
+        actual=lhs,
     )

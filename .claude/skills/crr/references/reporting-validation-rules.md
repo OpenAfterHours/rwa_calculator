@@ -16,7 +16,7 @@ specific than anything we assert in-house.
 |------|----------------|
 | Raw workbook (gitignored) | `docs/assets/eba-validation-rules.xlsx` |
 | Refresh the raw workbook | `uv run python scripts/download_docs.py` |
-| Committed extract (credit risk only) | `src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json` (package data — ships in the wheel) |
+| Committed extract (credit risk only) | `packages/rwa-filer/src/rwa_filer/rules/data/crr-eba-v3.0-credit-risk.json` (package data of `rwa-filer` — ships in its wheel) |
 | Regenerate the extract | `uv run python scripts/extract_validation_rules.py` (`--check` to verify it is current) |
 | Extract provenance / schema | `docs/reference/validation-rules/index.md` |
 | Source URL | https://www.eba.europa.eu/sites/default/files/2026-06/12d2a6ae-9f58-47ab-a684-cdc9924ed4aa/%28up%20to%203.5%29%20EBA_validation_rules_2026-06-10.xlsx |

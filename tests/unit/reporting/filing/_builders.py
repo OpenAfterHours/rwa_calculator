@@ -1,10 +1,12 @@
 """
-Shared builders for the supervisory validation-rule evaluator tests.
+Shared builders for the filing-adapter tests.
 
-These tests exercise the EVALUATOR, not the regulatory findings: every frame
-here is a hand-built synthetic template, never real pipeline output. A rule
-misread by one cell is a false negative on a submission gate, so the machinery
-is pinned against figures a reader can verify by eye.
+These tests exercise the ADAPTER — our table bindings and sheet maps, and the
+rule engine reached through them — not the regulatory findings: every frame here
+is a hand-built synthetic template, never real pipeline output. The rule engine
+itself (grammar, evaluation semantics, the checker and its coverage guard) is
+tested in ``packages/rwa-filer/tests`` against a sample source; what is pinned
+here is that OUR bundles reach it correctly.
 
 Key responsibilities:
 - ``build_frame`` — one template frame from a ``{row_ref: {column_ref: value}}``
@@ -13,76 +15,36 @@ Key responsibilities:
   templates a test names, indexed through the production binding path.
 - ``build_rule`` — a ``ValidationRule`` with neutral defaults, so each test
   overrides only the one field it is about.
-- ``evaluate`` — parse one expression and evaluate it at one coordinate.
-- ``raw_extract`` — the packaged JSON as shipped, for tests that pin the
-  normalisation of a publisher field against its raw value.
 
 References:
-- src/rwa_calc/reporting/validations/ — the module under test
+- src/rwa_calc/reporting/filing/ — the adapter under test
+- packages/rwa-filer/src/rwa_filer/validate/ — the engine it drives
 """
 
 from __future__ import annotations
 
-import json
-from importlib import resources
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
-from rwa_calc.reporting.validations.evaluate import evaluate_at, parse_expression
-from rwa_calc.reporting.validations.rules import (
+from rwa_calc.reporting.filing.bindings import build_template_index
+from rwa_filer.rules.catalogue import (
     ARITHMETIC_INTERVAL,
     FRAMEWORK_CRR,
     MISSING_ZERO,
     SEVERITY_ERROR,
     ValidationRule,
 )
-from rwa_calc.reporting.validations.scope import (
-    SINGLE_SHEET,
-    Coordinate,
-    build_template_index,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from rwa_calc.reporting.validations.evaluate import CoordinateOutcome
-    from rwa_calc.reporting.validations.scope import TemplateIndex
+    from rwa_filer.validate.index import TemplateIndex
 
 #: A cell map: ``{row_ref: {column_ref: value}}``. ``None`` means "reported the
 #: row but left the cell blank" — which is NOT the same as omitting the column.
 type Cells = Mapping[str, Mapping[str, float | None]]
-
-
-#: Packaged extract filenames, mirrored from ``rules._EXTRACT_FILES`` so a
-#: renamed extract fails the integrity test rather than silently reading nothing.
-EXTRACT_FILES: dict[str, str] = {
-    FRAMEWORK_CRR: "crr-eba-v3.0-credit-risk.json",
-    "BASEL_3_1": "basel31-boe-v4.0.0-credit-risk.json",
-}
-
-
-def _extract_file(framework: str):
-    """The packaged extract for ``framework``, as a traversable resource."""
-    return resources.files("rwa_calc.reporting.validations").joinpath(
-        "rules", EXTRACT_FILES[framework]
-    )
-
-
-def extract_bytes(framework: str) -> bytes:
-    """Read the packaged rule extract as raw bytes, exactly as it ships."""
-    return _extract_file(framework).read_bytes()
-
-
-def raw_extract(framework: str) -> dict[str, Any]:
-    """Parse the packaged extract, reading it with NO ``encoding=`` kwarg.
-
-    The extracts are deliberately pure ASCII, so the platform default encoding
-    (cp1252 on a Windows CI runner) can never mangle them. Omitting the kwarg
-    here is the assertion, not an oversight.
-    """
-    return json.loads(_extract_file(framework).read_text())
 
 
 def build_frame(cells: Cells) -> pl.DataFrame:
@@ -151,44 +113,3 @@ def build_rule(**overrides: Any) -> ValidationRule:
     }
     fields.update(overrides)
     return ValidationRule(**fields)
-
-
-def evaluate(
-    expression: str | None,
-    index: TemplateIndex,
-    *,
-    table: str = "C 02.00",
-    sheet: str = SINGLE_SHEET,
-    row: str | None = None,
-    column: str | None = None,
-    missing_value: str = MISSING_ZERO,
-    arithmetic: str = ARITHMETIC_INTERVAL,
-) -> CoordinateOutcome:
-    """Parse one expression and evaluate it at one coordinate."""
-    return evaluate_at(
-        parse_expression(expression),
-        Coordinate(table, sheet, row, column),
-        index,
-        missing_value=missing_value,
-        arithmetic=arithmetic,
-    )
-
-
-def evaluate_c02(
-    expression: str,
-    cells: Cells,
-    *,
-    row: str | None = None,
-    column: str | None = None,
-    missing_value: str = MISSING_ZERO,
-    arithmetic: str = ARITHMETIC_INTERVAL,
-) -> CoordinateOutcome:
-    """Evaluate an expression against a single-sheet ``C 02.00`` frame."""
-    return evaluate(
-        expression,
-        build_index(c_02_00=build_frame(cells)),
-        row=row,
-        column=column,
-        missing_value=missing_value,
-        arithmetic=arithmetic,
-    )

@@ -19,7 +19,7 @@ they are generated.
 | Extracted workbook (gitignored) | `docs/assets/boe-validation-rules-banking-reporting-v4.0.0.xlsx` |
 | Member extracted from the zip | `Bank of England Banking Taxonomy Validations Banking reporting v4.0.0.xlsx` |
 | Refresh both | `uv run python scripts/download_docs.py` |
-| Committed extract (credit risk only) | `src/rwa_calc/reporting/validations/rules/basel31-boe-v4.0.0-credit-risk.json` (package data — ships in the wheel) |
+| Committed extract (credit risk only) | `packages/rwa-filer/src/rwa_filer/rules/data/basel31-boe-v4.0.0-credit-risk.json` (package data of `rwa-filer` — ships in its wheel) |
 | Regenerate the extract | `uv run python scripts/extract_validation_rules.py` (`--check` to verify it is current) |
 | Extract provenance / schema | `docs/reference/validation-rules/index.md` |
 | Source URL | https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/february/boebankingtaxonomyvalidationsv400.zip |

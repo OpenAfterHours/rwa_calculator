@@ -86,7 +86,7 @@ ALLOWANCES: tuple[Allowance, ...] = (
         (ALL,),
         "Transcribes published EBA validation-rule expressions verbatim (e.g. "
         "`{r0270, c0215} = {r0270, c0200} * 1250%`). Their authority is the "
-        "rules JSON under src/rwa_calc/reporting/validations/rules/, not the "
+        "rules JSON under packages/rwa-filer/src/rwa_filer/rules/data/, not the "
         "rulepack, and a rule expression is meaningless with its factor "
         "removed.",
     ),

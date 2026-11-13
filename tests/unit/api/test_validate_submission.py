@@ -17,7 +17,8 @@ placed on a *named* rule for the test to assert anything about it, which a real
 portfolio cannot be steered into doing.
 
 References:
-- src/rwa_calc/reporting/validations/checker.py — the rule evaluator
+- src/rwa_calc/reporting/filing/checks.py — the adapter onto the rule evaluator
+- packages/rwa-filer/src/rwa_filer/validate/checker.py — the rule evaluator
 - COREP Annex II C 07.00; PRA PS1/26 Annex II OF 07.00
 """
 
@@ -37,11 +38,8 @@ from rwa_calc.api.export import ResultExporter, SubmissionValidationResult, summ
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
 from rwa_calc.api.results_cache import ResultsCache
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
-from rwa_calc.reporting.validations import (
-    COVERAGE_NO_RULE_EXECUTED,
-    COVERAGE_TEMPLATE_NOT_COVERED,
-    evaluate_all,
-)
+from rwa_calc.reporting.filing.checks import evaluate_all
+from rwa_filer.validate.checker import COVERAGE_NO_RULE_EXECUTED, COVERAGE_TEMPLATE_NOT_COVERED
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

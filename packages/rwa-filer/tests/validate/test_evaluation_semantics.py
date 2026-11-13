@@ -29,7 +29,21 @@ from __future__ import annotations
 
 import math
 
-from rwa_calc.reporting.validations.evaluate import (
+from filer_builders import (
+    build_frame,
+    build_index,
+    evaluate,
+    evaluate_c02,
+)
+from rwa_filer.rules.catalogue import (
+    ARITHMETIC_INTERVAL,
+    ARITHMETIC_NOT_APPLICABLE,
+    ARITHMETIC_POINT,
+    MISSING_SKIP,
+    MISSING_ZERO,
+    load_rules,
+)
+from rwa_filer.validate.evaluate import (
     SKIP_CELL_NOT_EMITTED,
     SKIP_COLUMN_NOT_EMITTED,
     SKIP_MISSING_VALUE_DO_NOT_RUN,
@@ -41,24 +55,10 @@ from rwa_calc.reporting.validations.evaluate import (
     STATUS_VACUOUS,
     parse_expression,
 )
-from rwa_calc.reporting.validations.rules import (
-    ARITHMETIC_INTERVAL,
-    ARITHMETIC_NOT_APPLICABLE,
-    ARITHMETIC_POINT,
-    MISSING_SKIP,
-    MISSING_ZERO,
-    load_rules,
-)
-from rwa_calc.reporting.validations.scope import (
+from rwa_filer.validate.index import (
     SKIP_SHEET_NOT_EMITTED,
     Coordinate,
     expand_rule,
-)
-from tests.unit.reporting.validations._builders import (
-    build_frame,
-    build_index,
-    evaluate,
-    evaluate_c02,
 )
 
 # A cell reported as blank, against two cells that foot without it.

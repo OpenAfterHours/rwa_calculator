@@ -4,7 +4,7 @@ The Art. 112(1)(k) high-risk sheet is emitted under Basel 3.1 — and is address
 Pipeline position:
     high-risk obligor -> PipelineOrchestrator -> sealed ledger
         -> COREPGenerator -> COREPTemplateBundle.c07_00["high_risk"]
-        -> validations/scope.py::resolve_sheet_codes("0012") -> the rules' coordinates
+        -> rwa_filer/validate/index.py::resolve_sheet_codes("0012") -> the rules' coordinates
 
 Why this file exists — the mechanism
 ------------------------------------
@@ -36,7 +36,7 @@ What each section proves, and which one would have caught the defect
    ``scope.py`` — so it cannot be satisfied by a test written from the same
    sentence as the code under test (``LESSONS`` B3). The sibling direction
    (``bundle_keys`` ⊆ emittable) is already covered by
-   ``tests/unit/reporting/validations/test_sheet_index_map.py``; the cardinality
+   ``tests/unit/reporting/filing/test_sheet_index_map.py``; the cardinality
    direction (at most one key per code) by
    ``tests/contracts/test_sheet_index_bundle_key_cardinality.py``. This file owns
    the COMPLETENESS direction, which neither checks.
@@ -101,21 +101,17 @@ from tests.properties.portfolios import ExposureSpec, corep_bundle, pillar3_bund
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_KEYS, C07_00_SA_SHEET_MAP
-from rwa_calc.reporting.validations.evaluate import UnsupportedExpression, parse_expression
-from rwa_calc.reporting.validations.rules import SCOPE_LIST, load_rules
-from rwa_calc.reporting.validations.scope import (
-    SHEET_INDEX_MAPS,
-    SKIP_SHEET_NOT_EMITTED,
-    build_template_index,
-    expand_rule,
-    resolve_sheet_codes,
-)
+from rwa_calc.reporting.filing.bindings import build_template_index
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_calc.rulebook.resolve import resolve
+from rwa_filer.rules.catalogue import SCOPE_LIST, load_rules
+from rwa_filer.validate.evaluate import UnsupportedExpression, parse_expression
+from rwa_filer.validate.index import SKIP_SHEET_NOT_EMITTED, expand_rule, resolve_sheet_codes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from rwa_calc.reporting.validations.scope import SheetCode
+    from rwa_filer.validate.index import SheetCode
 
 # =============================================================================
 # Subjects, all read from the module or pack that owns them

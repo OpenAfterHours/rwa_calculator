@@ -435,7 +435,7 @@
         "reporting/corep/c09.py",
         "reporting/corep/sheet_labels.py",
         "reporting/corep/templates.py",
-        "reporting/validations/scope.py",
+        "reporting/filing/sheet_maps.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
@@ -470,8 +470,8 @@
         "tests/integration/test_pre_post_crm_reporting.py",
         "tests/unit/crr/test_crr_sa.py",
         "tests/unit/reporting/corep/test_cross.py",
-        "tests/unit/reporting/validations/test_scope_expansion.py",
-        "tests/unit/reporting/validations/test_sheet_index_map.py",
+        "tests/unit/reporting/filing/test_scope_expansion.py",
+        "tests/unit/reporting/filing/test_sheet_index_map.py",
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_aggregator.py",
         "tests/unit/test_classifier.py",
@@ -1864,8 +1864,8 @@
         "engine/slotting/calculator.py",
         "engine/stages/classify.py",
         "reporting/corep/templates.py",
+        "reporting/filing/sheet_maps.py",
         "reporting/tieouts.py",
-        "reporting/validations/scope.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -1888,7 +1888,7 @@
         "tests/unit/classifier/test_p1_243_natural_person_irb_retail_cap.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
         "tests/unit/irb/test_p1_277_art_160_1_cgcb_pd_floor.py",
-        "tests/unit/reporting/validations/test_sheet_index_map.py",
+        "tests/unit/reporting/filing/test_sheet_index_map.py",
         "tests/unit/rulebook/test_classifier_features.py",
         "tests/unit/test_b31_approach_restrictions.py",
         "tests/unit/test_classifier_qrre_warnings.py",
@@ -5989,7 +5989,7 @@
         "engine/aggregator/_equity_prep.py",
         "engine/aggregator/aggregator.py",
         "reporting/corep/sheet_labels.py",
-        "reporting/validations/scope.py"
+        "reporting/filing/sheet_maps.py"
       ],
       "test_files": [
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",

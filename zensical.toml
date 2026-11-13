@@ -135,6 +135,9 @@ nav = [
       { "Glossary" = "specifications/glossary.md" },
     ]},
   ]},
+  { "rwa-filer" = [
+    "rwa-filer/index.md",
+  ]},
   { "Development" = [
     "development/index.md",
     { "Testing Guide" = "development/testing.md" },

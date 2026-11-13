@@ -23,7 +23,7 @@ from rwa_calc.reporting.corep.templates import (
     get_c02_00_columns,
     get_c02_00_row_sections,
 )
-from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import (
     _sa_results_with_currency_mismatch,

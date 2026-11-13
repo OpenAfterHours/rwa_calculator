@@ -1,12 +1,12 @@
 """
 Unit tests for the VAL003 validation-coverage guard.
 
-The guard exists so that an EMPTY result from ``check_supervisory_validations``
+The guard exists so that an EMPTY result from ``check_index``
 means "the estate was checked and holds" and nothing else. Without it the
 obvious production gate fails OPEN:
 
-    if not check_supervisory_validations(corep, pillar3, framework):
-        submit()        # <-- an estate on which NOTHING ran looks identical
+    if not check_index(index):
+        submit()        # <-- a return on which NOTHING ran looks identical
 
 Every rule NOT_EVALUATED yields no FAIL, therefore no finding, therefore a green
 light on a return nobody checked. These tests pin both limbs of the guard —
@@ -15,28 +15,25 @@ that matters most: the guard is silent when coverage is genuinely adequate, so
 it never becomes noise a reader learns to ignore.
 
 References:
-- src/rwa_calc/reporting/validations/checker.py — the guard under test
+- rwa_filer.validate.checker — the guard under test
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
 
-from rwa_calc.contracts.errors import ERROR_VALIDATION_COVERAGE_INSUFFICIENT
-from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
-from rwa_calc.reporting.validations import (
+from filer_builders import build_frame, build_index
+from rwa_filer.rules.catalogue import SEVERITY_ERROR
+from rwa_filer.validate import (
     COVERAGE_NO_RULE_EXECUTED,
     COVERAGE_TEMPLATE_NOT_COVERED,
-    check_supervisory_validations,
-    evaluate_all,
+    FINDING_COVERAGE_INSUFFICIENT,
+    Finding,
+    check_index,
+    evaluate_index,
 )
-
-from ._builders import build_corep, build_frame
-
-if TYPE_CHECKING:
-    from rwa_calc.contracts.errors import CalculationError
 
 # A C 07.00 sheet that satisfies the CRM-outflow identity v0305_m
 # (``{c0090} = {c0050} + {c0060} + {c0070} + {c0080}``) on the total row, so the
@@ -50,11 +47,11 @@ _COVERED_C07 = {
 _UNREACHED = {"0010": {"0010": 1.0}}
 
 
-def _coverage_findings(**templates: Any) -> list[CalculationError]:
-    """Every VAL003 finding raised for a bundle carrying only ``templates``."""
-    corep = build_corep(**templates)
-    findings = check_supervisory_validations(corep, None, "CRR")
-    return [f for f in findings if f.code == ERROR_VALIDATION_COVERAGE_INSUFFICIENT]
+def _coverage_findings(**templates: Any) -> list[Finding]:
+    """Every VAL003 finding raised for a return carrying only ``templates``."""
+    index = build_index(**templates)
+    findings = check_index(index)
+    return [f for f in findings if f.code == FINDING_COVERAGE_INSUFFICIENT]
 
 
 def test_empty_bundle_reports_insufficient_coverage() -> None:
@@ -69,10 +66,10 @@ def test_empty_bundle_reports_insufficient_coverage() -> None:
 def test_empty_bundle_would_otherwise_produce_no_findings_at_all() -> None:
     """The hole the guard closes: no rule executes, so no rule can fail."""
     # Arrange
-    corep = build_corep()
+    index = build_index()
 
     # Act
-    report = evaluate_all(corep, None, "CRR")
+    report = evaluate_index(index)
 
     # Assert — every enforced rule skipped, so FAIL-derived findings are empty
     assert report.rules_executed == 0
@@ -85,8 +82,8 @@ def test_coverage_finding_blocks_the_submission_decision() -> None:
     finding = _coverage_findings()[0]
 
     # Assert
-    assert finding.severity is ErrorSeverity.ERROR
-    assert finding.category is ErrorCategory.BUSINESS_RULE
+    assert finding.severity == SEVERITY_ERROR
+    assert finding.is_blocking
 
 
 def test_coverage_finding_quotes_the_actual_figures() -> None:
@@ -130,13 +127,13 @@ def test_emitted_template_with_no_executed_rule_is_reported() -> None:
 def test_report_names_the_uncovered_templates() -> None:
     """``templates_uncovered`` is reported, not left for a caller to infer."""
     # Arrange
-    corep = build_corep(
+    index = build_index(
         c07_00={"corporate": build_frame(_COVERED_C07)},
         c34_02={"NS1": build_frame(_UNREACHED)},
     )
 
     # Act
-    report = evaluate_all(corep, None, "CRR")
+    report = evaluate_index(index)
 
     # Assert
     assert report.templates_uncovered == ("c34_02",)
@@ -182,7 +179,7 @@ def test_shortfall_reason_names_which_of_the_two_causes_applies(
     healthy estate went out unexamined.
     """
     # Arrange / Act
-    report = evaluate_all(build_corep(**templates), None, "CRR")
+    report = evaluate_index(build_index(**templates))
 
     # Assert
     assert report.coverage_shortfall == expected
@@ -206,15 +203,15 @@ def test_shortfall_reason_names_which_of_the_two_causes_applies(
 def test_the_property_and_the_val003_finding_never_disagree(templates: dict[str, Any]) -> None:
     """A VAL003 finding is raised exactly when the property reports a shortfall."""
     # Arrange
-    corep = build_corep(**templates)
+    index = build_index(**templates)
 
     # Act
-    shortfall = evaluate_all(corep, None, "CRR").coverage_shortfall
+    shortfall = evaluate_index(index).coverage_shortfall
     findings = _coverage_findings(**templates)
 
     # Assert — presence agrees, and the finding carries the same machine reason
     assert bool(findings) is (shortfall is not None)
-    assert [f.field_name for f in findings] == ([shortfall] if shortfall else [])
+    assert [f.subject for f in findings] == ([shortfall] if shortfall else [])
 
 
 def test_limb_one_is_addressable_from_the_error_channel_alone() -> None:
@@ -227,7 +224,7 @@ def test_limb_one_is_addressable_from_the_error_channel_alone() -> None:
     finding = _coverage_findings()[0]
 
     # Assert
-    assert finding.field_name == COVERAGE_NO_RULE_EXECUTED
+    assert finding.subject == COVERAGE_NO_RULE_EXECUTED
 
 
 def test_limb_two_is_addressable_from_the_error_channel_alone() -> None:
@@ -239,7 +236,7 @@ def test_limb_two_is_addressable_from_the_error_channel_alone() -> None:
     )
 
     # Assert
-    assert findings[0].field_name == COVERAGE_TEMPLATE_NOT_COVERED
+    assert findings[0].subject == COVERAGE_TEMPLATE_NOT_COVERED
 
 
 def test_both_limbs_share_one_code_because_they_are_one_failure_mode() -> None:
@@ -257,8 +254,8 @@ def test_both_limbs_share_one_code_because_they_are_one_failure_mode() -> None:
     )[0]
 
     # Assert
-    assert none_executed.code == uncovered.code == ERROR_VALIDATION_COVERAGE_INSUFFICIENT
-    assert none_executed.field_name != uncovered.field_name
+    assert none_executed.code == uncovered.code == FINDING_COVERAGE_INSUFFICIENT
+    assert none_executed.subject != uncovered.subject
 
 
 def test_limb_two_message_still_names_the_uncovered_templates() -> None:

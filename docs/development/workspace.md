@@ -55,6 +55,23 @@ Inside this repository `rwa-filer` resolves from the workspace (an editable
 install of `packages/rwa-filer`). In a built `rwa-calc` wheel the same line is an
 ordinary `Requires-Dist: rwa-filer<0.2,>=0.1`, resolved from PyPI.
 
+## What lives where
+
+| Concern | Package | Location |
+|---------|---------|----------|
+| Published rule extracts, and the importer that builds them | `rwa-filer` | `rwa_filer.rules` |
+| Rule engine: parse, expand, evaluate, report | `rwa-filer` | `rwa_filer.validate` |
+| Which of our bundle members carries each published table code | `rwa-calc` | `rwa_calc.reporting.filing.bindings` |
+| Which of our per-class sheets each published sheet code addresses | `rwa-calc` | `rwa_calc.reporting.filing.sheet_maps` |
+| Mapping the engine's findings onto `CalculationError` (`VAL001`–`VAL003`) | `rwa-calc` | `rwa_calc.reporting.filing.checks` |
+| Computing the template figures | `rwa-calc` | `rwa_calc.reporting.corep`, `rwa_calc.reporting.pillar3` |
+
+`rwa_calc.reporting.filing` is the adapter. Everything that knows about the
+calculator's bundles, sheet names or exposure classes is on its side of the
+boundary; everything that knows how to load, parse and evaluate a published rule
+is in `rwa-filer`. The adapter re-exports none of the engine's names — import
+those from `rwa_filer` directly.
+
 ## The one rule: the dependency points one way
 
 `rwa-calc` may import `rwa_filer`. **`rwa_filer` may never import `rwa_calc`.**
@@ -138,6 +155,15 @@ can never check or upload the other's artefacts.
 **Release `rwa-filer` first.** An installed `rwa-calc` resolves `rwa-filer` from
 PyPI, so an `rwa-calc` release that needs a new `rwa-filer` version only installs
 once that version is published.
+
+`scripts/deploy.py` enforces this. Before an `rwa-calc` run that publishes, it
+reads the `rwa-filer` range from the root `pyproject.toml`, asks PyPI which
+versions exist, and refuses the release — before the tests, before anything is
+bumped — unless one satisfies the range. "PyPI could not be reached" also
+refuses: unknown is not published. Nothing inside the workspace could catch
+this, because here `rwa-filer` always resolves from the checkout.
+`--skip-filer-check` bypasses it for the case where the version has been
+confirmed by hand.
 
 While `rwa-filer` is `0.x`, `rwa-calc` pins its minor version
 (`>=0.1,<0.2`). A breaking `rwa-filer` change is a minor bump, so `rwa-calc`

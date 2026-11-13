@@ -31,11 +31,8 @@ import pytest
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP
-from rwa_calc.reporting.validations.scope import (
-    SHEET_INDEX_MAPS,
-    SKIP_SHEET_SCOPE_NOT_CLOSED,
-    resolve_sheet_codes,
-)
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
+from rwa_filer.validate.index import SKIP_SHEET_SCOPE_NOT_CLOSED, resolve_sheet_codes
 
 MAP_NAMES = sorted(SHEET_INDEX_MAPS)
 

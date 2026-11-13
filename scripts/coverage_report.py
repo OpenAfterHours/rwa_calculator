@@ -124,17 +124,17 @@ from tests.acceptance.reporting.test_supervisory_validations import RUNS  # noqa
 
 from rwa_calc.engine.pipeline import PipelineOrchestrator  # noqa: E402
 from rwa_calc.reporting.corep.generator import COREPGenerator  # noqa: E402
+from rwa_calc.reporting.filing import build_template_index, evaluate_all  # noqa: E402
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator  # noqa: E402
-from rwa_calc.reporting.validations import (  # noqa: E402
+from rwa_filer.validate import (  # noqa: E402
+    SINGLE_SHEET,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
-    evaluate_all,
 )
-from rwa_calc.reporting.validations.scope import SINGLE_SHEET, build_template_index  # noqa: E402
 
 if TYPE_CHECKING:
-    from rwa_calc.reporting.validations.checker import ValidationReport
+    from rwa_filer.validate import ValidationReport
 
 DEFAULT_OUT = _REPO_ROOT / "scripts" / "coverage_metrics.json"
 FIXTURES_DIR = _REPO_ROOT / "tests" / "fixtures"

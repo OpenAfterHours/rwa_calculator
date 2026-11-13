@@ -116,6 +116,8 @@ from rwa_calc.reporting.corep.templates import (
     C07_00_SA_SHEET_MAP,
     C09_01_SA_CLASS_MAP,
 )
+from rwa_calc.reporting.filing.checks import evaluate_all
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 # ``ov1`` as a MODULE, not ``from ... import _EQUITY_SUBAPPROACH_REFS``: the module
 # attribute is what production reads, and a name bound here at import time keeps
@@ -128,14 +130,12 @@ from rwa_calc.reporting.pillar3.templates import (
     CMS2_TOTAL_CLASSES,
     SA_DISCLOSURE_CLASSES,
 )
-from rwa_calc.reporting.validations.checker import evaluate_all
-from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rwa_calc.contracts.bundles import RawDataBundle
-    from rwa_calc.reporting.validations.checker import ValidationReport
+    from rwa_filer.validate.checker import ValidationReport
 
 # Group-by float sums are not bit-reproducible (Phase 2 parity convention).
 _REL = 1e-9
@@ -331,7 +331,7 @@ def _outcome(portfolio: str, regime: str, rule_id: str) -> object:
 
 
 def _sheet_key(regime: str, z_code: str) -> str:
-    """The single bundle key a published z-code names, from ``validations/scope.py``."""
+    """The single bundle key a published z-code names, from ``filing/sheet_maps.py``."""
     index = SHEET_INDEX_MAPS["c07" if regime == "crr" else "of07"]
     keys = index[z_code].bundle_keys
     assert len(keys) == 1, (

@@ -1361,16 +1361,29 @@ dependencies = [
     { name = "polars" },
 ]
 
+[package.optional-dependencies]
+excel = [
+    { name = "openpyxl" },
+]
+
 [package.dev-dependencies]
 dev = [
+    { name = "openpyxl" },
     { name = "pytest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "polars", specifier = ">=1.0.0" }]
+requires-dist = [
+    { name = "openpyxl", marker = "extra == 'excel'", specifier = ">=3.1.5" },
+    { name = "polars", specifier = ">=1.0.0" },
+]
+provides-extras = ["excel"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.0.0" }]
+dev = [
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "pytest", specifier = ">=8.0.0" },
+]
 
 [[package]]
 name = "shellingham"

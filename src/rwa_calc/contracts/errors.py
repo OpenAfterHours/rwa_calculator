@@ -408,7 +408,7 @@ ERROR_RECON_LEDGER_UNAVAILABLE = "REC008"
 # specific tie is carried on the finding's field_name.
 ERROR_CROSS_TEMPLATE_INCONSISTENCY = "TIE001"
 
-# Published supervisory validation-rule codes (reporting.validations). These are
+# Published supervisory validation-rule codes (reporting.filing). These are
 # the SUPERVISOR's own arithmetic checks on the submitted return, not in-house
 # ones: the EBA DPM rules for COREP under CRR and the BoE banking taxonomy rules
 # under PS1/26. As with TIE001 the broken rule id is carried on the finding's

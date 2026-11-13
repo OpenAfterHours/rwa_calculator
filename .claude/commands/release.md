@@ -29,7 +29,10 @@ member instead, the operator names it — `/release rwa-filer 0.1.0` or
 **Order matters.** An installed `rwa-calc` resolves `rwa-filer` from PyPI, so if
 the `rwa-calc` release needs a new `rwa-filer` version, release `rwa-filer`
 first and confirm it is on PyPI before starting the `rwa-calc` release. Never
-release both from one invocation.
+release both from one invocation. `scripts/deploy.py` checks this itself and
+refuses an `rwa-calc` publish when no published `rwa-filer` satisfies the range
+in the root `pyproject.toml`; if it refuses, release `rwa-filer` rather than
+reaching for `--skip-filer-check`.
 
 ## Step 0 — pre-flight
 

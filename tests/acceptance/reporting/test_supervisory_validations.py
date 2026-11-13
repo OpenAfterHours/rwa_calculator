@@ -50,7 +50,7 @@ rather than letting unevaluable rules flatter a headline figure.
 Why (f)/(g) exist — the third way this gate used to fail open:
     A rule whose every operand is null or exactly zero is scored ``VACUOUS``:
     it reached a verdict, the verdict held, and it asserted NOTHING (see
-    ``reporting/validations/evaluate.py::_Context.observe`` and
+    ``rwa_filer/validate/evaluate.py::_Context.observe`` and
     ``checker.py::_roll_up``). Vacuity is 21%–70% of executed rules depending on
     the run — 23 of 109 on ``crr/irb-classes`` at the low end, 219 of 415 on
     ``b31/rich``, 123 of 177 on ``b31/off-bs`` at the high end. Union it across
@@ -230,7 +230,7 @@ Regenerating the baseline:
 
 References:
 - tests/acceptance/reporting/test_reporting_golden.py — the run-and-generate pattern
-- src/rwa_calc/reporting/validations/ — the evaluator
+- src/rwa_calc/reporting/filing/ — the adapter; packages/rwa-filer/src/rwa_filer/validate/ — the evaluator
 - COREP Annex II (CRR); PRA PS1/26 Annex II (Basel 3.1)
 """
 
@@ -271,13 +271,13 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator
+from rwa_calc.reporting.filing.checks import evaluate_all
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
-from rwa_calc.reporting.validations import (
+from rwa_filer.validate.evaluate import (
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
     STATUS_VACUOUS,
-    evaluate_all,
 )
 
 if TYPE_CHECKING:
@@ -388,7 +388,7 @@ REGISTER_NOTES: dict[str, str] = {
     ),
     "structural_vacuity_of_prohibition_rules": (
         "A rule of the form '{ref} = empty' asks whether a cell was REPORTED, and holds precisely "
-        "by our reporting nothing there. reporting/validations/evaluate.py::_evaluate_emptiness "
+        "by our reporting nothing there. rwa_filer/validate/evaluate.py::_evaluate_emptiness "
         "returns VACUOUS for the holding case, so PASS is UNREACHABLE for this family and vacuity "
         "is the passing verdict, not a lost check. Those entries are prefixed 'structural' and "
         "need no investigation. Their only other outcome is FAIL (we reported a figure the "

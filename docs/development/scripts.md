@@ -78,7 +78,7 @@ Extraction is idempotent and independent of the download outcome, which matters 
 
 ### `scripts/extract_validation_rules.py` — Extract the committed validation-rule JSON
 
-Reads the two validation-rule workbooks fetched above and emits a filtered, machine-readable JSON extract to [Reporting Validation Rules](../reference/validation-rules/index.md), covering only the templates this project produces:
+Reads the two validation-rule workbooks fetched above and emits a filtered, machine-readable JSON extract (see [Reporting Validation Rules](../reference/validation-rules/index.md)), covering only the templates this project produces. The extraction itself lives in `rwa-filer` (`rwa_filer.rules.importer`, also exposed as `rwa-filer rules import`); this script binds it to the repository's paths — the workbooks in `docs/assets/`, the committed extracts in `packages/rwa-filer/src/rwa_filer/rules/data/`:
 
 | Output | Framework | Scope |
 |--------|-----------|-------|

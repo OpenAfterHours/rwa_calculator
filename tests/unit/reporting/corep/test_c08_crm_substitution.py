@@ -16,7 +16,7 @@ the C 08.01 twin of the C 07.00 fix already pinned in
 ``_net_after_substitution``).
 
 Published identities pinned here (all four rules already shipped in this repo
-at ``src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json``):
+at ``packages/rwa-filer/src/rwa_filer/rules/data/crr-eba-v3.0-credit-risk.json``):
 - ``v1663_m`` (live, C 08.01.a): ``{c0070} = {c0040} + {c0050} + {c0060}``.
 - ``v1662_m`` (C 08.01.a): ``{c0090} = {c0020} + {c0070} + {c0080}`` — on the
   REPORTED (negative-outflow) signs, so the money is removed exactly once.
@@ -24,7 +24,7 @@ at ``src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json``):
   exposure classes ... shall also be considered" (the D4 same-class fix).
 
 A further Basel 3.1-only gap (``TestB31OnBalanceSheetNettingInWaterfall``,
-found via the published BoE rules — ``src/rwa_calc/reporting/validations/rules/basel31-boe-v4.0.0-credit-risk.json``):
+found via the published BoE rules — ``packages/rwa-filer/src/rwa_filer/rules/data/basel31-boe-v4.0.0-credit-risk.json``):
 col 0035 (the "(-)" on-balance-sheet netting adjustment, B31-only) is never
 folded into the col 0090 waterfall at all today, on ANY row. The BoE rules are
 ROW-SCOPED and disagree deliberately: ``boe_b0746`` / ``boe_b0746_1`` (C 08.01)

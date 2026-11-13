@@ -46,9 +46,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -306,6 +309,124 @@ def check_release_preflight(branch: str, tag: str, *, github_release: bool = Fal
     return True
 
 
+# ── Release ordering: rwa-calc may not outrun the rwa-filer it depends on ────
+#
+# Inside this repository rwa-calc resolves rwa-filer from the workspace, so
+# every gate passes whatever is on PyPI. An INSTALLED rwa-calc resolves the
+# same requirement from PyPI — and if no published rwa-filer satisfies it, the
+# release is uninstallable for everyone, with nothing in this repo to show for
+# it. The only place that gap is visible is here, before the publish.
+
+#: The workspace member rwa-calc depends on at runtime.
+FILER_DISTRIBUTION = "rwa-filer"
+#: PyPI's JSON API for a project: the authoritative list of published versions.
+PYPI_JSON_URL = "https://pypi.org/pypi/{name}/json"
+_REQUIREMENT_RE = re.compile(r'"(?P<name>[A-Za-z0-9_.-]+)\s*(?P<spec>[<>=!~][^";]*)"')
+_CLAUSE_RE = re.compile(r"^(?P<op>>=|<=|==|>|<)\s*(?P<version>\d+(?:\.\d+)*)$")
+
+
+def required_range(distribution: str) -> str | None:
+    """The version range the root project declares for ``distribution``, if any."""
+    content = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    for match in _REQUIREMENT_RE.finditer(content):
+        if match.group("name").lower().replace("_", "-") == distribution:
+            return match.group("spec").strip()
+    return None
+
+
+def version_satisfies(version: str, spec: str) -> bool:
+    """Whether a plain ``X.Y.Z`` version satisfies a comma-separated range.
+
+    Supports the comparison operators this project's own requirement uses
+    (``>=``, ``>``, ``<=``, ``<``, ``==``). A pre-release or otherwise
+    non-numeric version never satisfies, and an operator outside that set makes
+    the whole range unsatisfiable — failing closed, so an unreadable requirement
+    blocks the release rather than waving it through.
+    """
+    if not re.fullmatch(r"\d+(?:\.\d+)*", version):
+        return False
+    candidate = _version_key(version)
+    for clause in (part.strip() for part in spec.split(",") if part.strip()):
+        match = _CLAUSE_RE.match(clause)
+        if match is None:
+            return False
+        bound = _version_key(match.group("version"))
+        op = match.group("op")
+        holds = {
+            ">=": candidate >= bound,
+            ">": candidate > bound,
+            "<=": candidate <= bound,
+            "<": candidate < bound,
+            "==": candidate == bound,
+        }[op]
+        if not holds:
+            return False
+    return True
+
+
+def published_versions(distribution: str) -> list[str] | None:
+    """Versions of ``distribution`` on PyPI; ``[]`` if the project does not exist.
+
+    Returns None when PyPI could not be asked at all — which the caller must
+    treat as "unknown", never as "published".
+    """
+    return _pypi_versions(distribution)
+
+
+def check_filer_dependency_published() -> bool:
+    """Refuse an rwa-calc publish until a satisfying rwa-filer is on PyPI."""
+    spec = required_range(FILER_DISTRIBUTION)
+    if spec is None:
+        return True  # rwa-calc declares no such dependency: nothing to order
+
+    print(f"\nChecking PyPI for a published {FILER_DISTRIBUTION} satisfying '{spec}'...")
+    versions = published_versions(FILER_DISTRIBUTION)
+    if versions is None:
+        print(f"  ERROR: could not reach PyPI to confirm {FILER_DISTRIBUTION} is published.")
+        print("  An rwa-calc release that names an unpublished rwa-filer cannot be installed.")
+        print("  Re-run when PyPI is reachable, or pass --skip-filer-check if you have")
+        print("  confirmed it by hand.")
+        return False
+
+    satisfying = sorted((v for v in versions if version_satisfies(v, spec)), key=_version_key)
+    if satisfying:
+        print(f"  {FILER_DISTRIBUTION} {satisfying[-1]} is published and satisfies '{spec}'")
+        return True
+
+    print(f"  ERROR: no published {FILER_DISTRIBUTION} satisfies '{spec}'.")
+    print(
+        f"  Published: {', '.join(versions) if versions else '(none - the project is not on PyPI)'}"
+    )
+    print("  Release rwa-filer first, wait for it to appear on PyPI, then re-run:")
+    print("    python scripts/deploy.py --package rwa-filer <version>")
+    return False
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """A numeric sort/compare key for a plain dotted version.
+
+    Trailing zeros are dropped so ``0.9`` and ``0.9.0`` compare EQUAL — as they
+    are — rather than the longer tuple reading as the greater version.
+    """
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
+def _pypi_versions(distribution: str) -> list[str] | None:
+    """Ask PyPI's JSON API for a project's versions. The single network seam."""
+    url = PYPI_JSON_URL.format(name=distribution)
+    try:
+        with urllib.request.urlopen(url, timeout=20) as response:  # noqa: S310 - fixed https URL
+            payload = json.load(response)
+    except urllib.error.HTTPError as exc:
+        return [] if exc.code == 404 else None
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    return sorted(payload.get("releases", {}))
+
+
 def commit_and_tag(new_version: str) -> bool:
     """Stage release files, commit, and create an annotated tag."""
     tag = f"v{new_version}"
@@ -517,6 +638,14 @@ Examples:
         action="store_true",
         help="Skip the interactive confirmation of the irreversible steps (for /release)",
     )
+    parser.add_argument(
+        "--skip-filer-check",
+        action="store_true",
+        help=(
+            "Publish rwa-calc without confirming that an rwa-filer version satisfying "
+            "its requirement is on PyPI (only when confirmed by hand)"
+        ),
+    )
     return parser
 
 
@@ -704,6 +833,18 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
     # before the test run.
     if push_target is not None and not check_release_preflight(
         push_target, tag, github_release=github_release
+    ):
+        return 1
+
+    # A publish that names an unpublished rwa-filer is uninstallable, and nothing
+    # inside this workspace can see that — so it is checked here, with the other
+    # fail-fast remote checks, before the test run. Only a run that PUBLISHES is
+    # gated: a local commit-and-tag publishes nothing.
+    publishes = github_release or args.publish
+    if (
+        publishes
+        and not getattr(args, "skip_filer_check", False)
+        and not check_filer_dependency_published()
     ):
         return 1
 

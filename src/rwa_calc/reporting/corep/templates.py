@@ -1658,7 +1658,7 @@ B31_C02_00_COLUMN_REFS: list[str] = [c.ref for c in B31_C02_00_COLUMNS]
 # aggregator actually seals. They MUST be, because rows 0070-0211 are "See CR SA
 # template" (COREP Annex II §1.3.1; PS1/26 Annex II §1.3.1), i.e. each row is an
 # identity against the C 07.00 sheet for the same Art. 112(1) letter. The
-# groupings below therefore mirror ``validations/scope.py::_C07_SHEETS`` /
+# groupings below therefore mirror ``filing/sheet_maps.py::_C07_SHEETS`` /
 # ``_OF07_SHEETS`` letter for letter:
 #   0130 (g) corporates  <- corporate + corporate_sme + specialised_lending
 #                           (PS1/26 Art. 122A/122B assign SA SL to (g); it also

@@ -2,13 +2,13 @@
 Supervisory validation-rule catalogue — load and normalise the packaged extracts.
 
 Pipeline position:
-    rules/*.json (package data)  ->  load_rules(framework)  ->  RuleSet
-        ->  scope.expand_rule  ->  evaluate.evaluate_rule
+    rules/data/*.json (package data)  ->  load_rules(framework)  ->  RuleSet
+        ->  validate.index.expand_rule  ->  validate.evaluate.evaluate_at
 
 Key responsibilities:
-- Read the two committed rule extracts that ship INSIDE the wheel
-  (``rwa_calc/reporting/validations/rules/*.json``) via ``importlib.resources``,
-  so a production install carries them without needing the repo checkout.
+- Read the committed rule extracts that ship INSIDE the wheel
+  (``rwa_filer/rules/data/*.json``) via ``importlib.resources``, so an install
+  carries them without needing a repository checkout.
 - Normalise the two very different publisher schemas (EBA row/column/sheet scope
   columns; BoE ``scope(...)`` expressions) onto ONE ``ValidationRule`` shape, so
   scope expansion and evaluation are written once.
@@ -28,14 +28,14 @@ is therefore the direct analogue of the EBA "treat as zero".
 
 Why: the published validation rules are the supervisor's own arithmetic checks
 on a submitted return. An Error-severity break rejects the whole submission, so
-they are the most precise available oracle for the COREP estate this project
-produces — but only if the catalogue is read with the publisher's own
-liveness, missing-value and tolerance semantics intact.
+they are the most precise available oracle for a return — but only if the
+catalogue is read with the publisher's own liveness, missing-value and
+tolerance semantics intact.
 
 References:
-- docs/reference/validation-rules/index.md — provenance, schema, formula grammar
 - EBA DPM 3.0(3.0.1) validation rules (CRR framework)
 - BoE banking_reporting v4.0.0 validation rules (PS1/26 / Basel 3.1 framework)
+- rwa_filer.rules.importer — how the extracts are produced from the workbooks
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from importlib.resources.abc import Traversable
 
 logger = logging.getLogger(__name__)
 
@@ -60,18 +61,14 @@ logger = logging.getLogger(__name__)
 FRAMEWORK_CRR: Final = "CRR"
 FRAMEWORK_BASEL_3_1: Final = "BASEL_3_1"
 
-#: Packaged extract per framework. These live under this package (NOT under
-#: docs/) because ``pyproject.toml`` ships only ``src/rwa_calc`` — an extract in
-#: docs/ would never reach an installed wheel.
-_RULES_PACKAGE: Final = "rwa_calc.reporting.validations"
-#: The extracts sit in a plain DATA directory beside this module, anchored on the
-#: parent package. It must stay free of an ``__init__.py``: this module is
-#: ``validations.rules`` and the directory is ``validations/rules/``, and a real
-#: module only outranks a same-named namespace-package directory — adding an
-#: ``__init__.py`` there would turn the directory into a regular package and
-#: shadow this module. Verified against a built wheel, not just the source tree.
-_RULES_DIRECTORY: Final = "rules"
-_EXTRACT_FILES: Final[dict[str, str]] = {
+#: Packaged extract per framework. They are PACKAGE DATA, shipped inside the
+#: wheel beside this module, so an installed ``rwa-filer`` carries the
+#: supervisor's checks with no repository checkout.
+RULES_PACKAGE: Final = "rwa_filer.rules"
+#: The plain data directory under ``RULES_PACKAGE`` (no ``__init__.py`` — it is
+#: read through ``importlib.resources``, never imported).
+RULES_DIRECTORY: Final = "data"
+EXTRACT_FILES: Final[dict[str, str]] = {
     FRAMEWORK_CRR: "crr-eba-v3.0-credit-risk.json",
     FRAMEWORK_BASEL_3_1: "basel31-boe-v4.0.0-credit-risk.json",
 }
@@ -249,21 +246,29 @@ def load_rules(framework: str) -> RuleSet:
         ValueError: ``framework`` is not one of the two supported frameworks.
             (A programming error, not a data-quality issue, so it raises.)
     """
-    filename = _EXTRACT_FILES.get(framework)
-    if filename is None:
-        supported = ", ".join(sorted(_EXTRACT_FILES))
-        raise ValueError(
-            f"Unknown validation-rule framework {framework!r}; expected one of {supported}"
-        )
-
-    extract = resources.files(_RULES_PACKAGE).joinpath(_RULES_DIRECTORY, filename)
+    extract = extract_resource(framework)
     payload = json.loads(extract.read_text(encoding="utf-8"))
     source = payload["source"]
     publisher = source["publisher"]
     parse = _parse_eba_rule if publisher == "EBA" else _parse_boe_rule
     rules = tuple(parse(raw, framework) for raw in payload["rules"])
-    logger.debug("loaded %d %s validation rules from %s", len(rules), publisher, filename)
+    logger.debug("loaded %d %s validation rules from %s", len(rules), publisher, extract.name)
     return RuleSet(framework=framework, publisher=publisher, source=source, rules=rules)
+
+
+def extract_resource(framework: str) -> Traversable:
+    """The packaged extract for ``framework``, as a readable package resource.
+
+    Raises:
+        ValueError: ``framework`` has no packaged extract.
+    """
+    filename = EXTRACT_FILES.get(framework)
+    if filename is None:
+        supported = ", ".join(sorted(EXTRACT_FILES))
+        raise ValueError(
+            f"Unknown validation-rule framework {framework!r}; expected one of {supported}"
+        )
+    return resources.files(RULES_PACKAGE).joinpath(RULES_DIRECTORY, filename)
 
 
 def is_currently_enforced(rule: ValidationRule) -> bool:

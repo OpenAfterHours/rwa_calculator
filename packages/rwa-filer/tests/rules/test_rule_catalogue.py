@@ -28,7 +28,8 @@ from __future__ import annotations
 
 import pytest
 
-from rwa_calc.reporting.validations.rules import (
+from filer_builders import build_rule, raw_extract
+from rwa_filer.rules.catalogue import (
     ARITHMETIC_INTERVAL,
     ARITHMETIC_NOT_APPLICABLE,
     ARITHMETIC_POINT,
@@ -42,7 +43,6 @@ from rwa_calc.reporting.validations.rules import (
     load_rules,
     rules_for_tables,
 )
-from tests.unit.reporting.validations._builders import build_rule, raw_extract
 
 # ---------------------------------------------------------------------------
 # Liveness

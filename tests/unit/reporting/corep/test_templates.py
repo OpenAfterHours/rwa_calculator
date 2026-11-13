@@ -57,7 +57,7 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
-from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 #: The frameworks ``get_c07_sheet_labels`` resolves. PS1/26 renames four of the
 #: fourteen Art. 112(1) classes, so a one-regime assertion covers half the estate.
@@ -133,7 +133,7 @@ class TestTemplateDefinitions:
     def test_every_published_irb_sheet_is_named_for_the_reader(self, sheet_map_name: str) -> None:
         """Every IRB sheet the published z-axis can address carries a name.
 
-        Anchored on ``validations/scope.py::SHEET_INDEX_MAPS`` — the Art. 147(2)
+        Anchored on ``filing/sheet_maps.py::SHEET_INDEX_MAPS`` — the Art. 147(2)
         z-axis read off the live EBA/BoE rule sets, which cannot drift with
         ``templates.py``. Containment, not equality: ``of08`` names no
         ``central_govt_central_bank`` sheet because PS1/26 withdraws the IRB

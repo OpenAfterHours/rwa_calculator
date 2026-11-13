@@ -159,21 +159,35 @@ jobs:
         run: uv run --no-sync rwa-filer --version
 
       # The wheel a user installs is built from this member alone; prove it
-      # builds and that its metadata does not name rwa-calc.
-      - name: Build the wheel and check its requirements
+      # builds, that its metadata does not name rwa-calc, and that the rule
+      # extracts ride inside it. The suite above runs against an EDITABLE
+      # install, where package data is read straight from the source tree — so
+      # a packaging change that dropped the JSON from the wheel would pass
+      # every test and ship a rule engine with no rules.
+      - name: Build the wheel and check its contents
         run: |
           uv build --package rwa-filer -o dist/rwa-filer
           python - <<'PY'
           import glob, sys, zipfile
           (wheel,) = glob.glob("dist/rwa-filer/rwa_filer-*.whl")
           with zipfile.ZipFile(wheel) as archive:
-              (name,) = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
+              names = archive.namelist()
+              (metadata,) = [n for n in names if n.endswith(".dist-info/METADATA")]
               requires = [
-                  line for line in archive.read(name).decode().splitlines()
+                  line for line in archive.read(metadata).decode().splitlines()
                   if line.startswith("Requires-Dist:")
               ]
+          extracts = sorted(n for n in names if n.startswith("rwa_filer/rules/data/") and n.endswith(".json"))
           print("\n".join(requires))
-          sys.exit(1 if any("rwa-calc" in line.lower() for line in requires) else 0)
+          print("\n".join(extracts))
+          problems = []
+          if any("rwa-calc" in line.lower() for line in requires):
+              problems.append("the rwa-filer wheel declares a dependency on rwa-calc")
+          if len(extracts) < 2:
+              problems.append(f"expected the packaged rule extracts in the wheel, found {extracts}")
+          for problem in problems:
+              print(f"::error::{problem}")
+          sys.exit(1 if problems else 0)
           PY
 
   benchmarks:

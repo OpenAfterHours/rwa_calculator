@@ -2,13 +2,13 @@
 Offline integrity of the two packaged validation-rule extracts.
 
 Pipeline position:
-    rules/*.json (package data)  ->  load_rules  ->  everything downstream
+    rules/data/*.json (package data)  ->  load_rules  ->  everything downstream
 
-Why this exists: ``scripts/extract_validation_rules.py --check`` re-derives the
-extracts from the publishers' workbooks, but those workbooks are gitignored
-(and behind a download), so the regeneration path cannot run in CI. This file is
-the offline substitute — it catches a corrupted, truncated or half-regenerated
-extract with no network and no source spreadsheet.
+Why this exists: ``rwa-filer rules check`` re-derives the extracts from the
+publishers' workbooks, but those workbooks are not redistributed with the
+package (and sit behind a download), so the regeneration path cannot run in CI.
+This file is the offline substitute — it catches a corrupted, truncated or
+half-regenerated extract with no network and no source spreadsheet.
 
 Key responsibilities:
 - The files parse with NO ``encoding=`` kwarg. They are deliberately pure ASCII,
@@ -19,13 +19,11 @@ Key responsibilities:
 - The loaded and enforced counts are exactly what was extracted, checked BOTH
   against the pinned figures and against the extractor's own recorded tallies in
   the ``filter`` block — so a half-written file fails even if it parses.
-- The ``rules/`` directory stays a plain data directory with no ``__init__.py``:
-  adding one would turn it into a regular package and shadow the
-  ``validations.rules`` MODULE, breaking the loader inside a built wheel.
+- The ``rules/data/`` directory stays a plain data directory with no
+  ``__init__.py``: it is read through ``importlib.resources``, never imported.
 
 References:
-- scripts/extract_validation_rules.py — the (offline-only) regeneration path
-- docs/reference/validation-rules/index.md — provenance and schema
+- rwa_filer.rules.importer — the (offline-only) regeneration path
 """
 
 from __future__ import annotations
@@ -34,15 +32,17 @@ from importlib import resources
 
 import pytest
 
-from rwa_calc.reporting.validations.rules import (
-    FRAMEWORK_BASEL_3_1,
-    FRAMEWORK_CRR,
-    load_rules,
-)
-from tests.unit.reporting.validations._builders import (
+from filer_builders import (
     EXTRACT_FILES,
     extract_bytes,
     raw_extract,
+)
+from rwa_filer.rules.catalogue import (
+    FRAMEWORK_BASEL_3_1,
+    FRAMEWORK_CRR,
+    RULES_DIRECTORY,
+    RULES_PACKAGE,
+    load_rules,
 )
 
 #: The pinned population per framework: (rules loaded, rules currently enforced).
@@ -232,27 +232,22 @@ def test_the_boe_enforced_count_matches_the_recorded_xbrl_tally() -> None:
 def test_the_extract_is_reachable_as_package_data(framework: str) -> None:
     """The loader reads through ``importlib.resources``, so must a wheel install."""
     # Arrange
-    package = resources.files("rwa_calc.reporting.validations")
+    package = resources.files(RULES_PACKAGE)
 
     # Act
-    extract = package.joinpath("rules", EXTRACT_FILES[framework])
+    extract = package.joinpath(RULES_DIRECTORY, EXTRACT_FILES[framework])
 
     # Assert
     assert extract.is_file()
 
 
 def test_the_rules_data_directory_is_not_a_package() -> None:
-    """An ``__init__.py`` here would shadow the ``validations.rules`` MODULE.
-
-    The directory and the module share a name; a real module only outranks a
-    same-named NAMESPACE package, so making this a regular package would break
-    the loader inside a built wheel.
-    """
+    """The extracts are data: read through ``importlib.resources``, never imported."""
     # Arrange
-    package = resources.files("rwa_calc.reporting.validations")
+    package = resources.files(RULES_PACKAGE)
 
     # Act
-    marker = package.joinpath("rules", "__init__.py")
+    marker = package.joinpath(RULES_DIRECTORY, "__init__.py")
 
     # Assert
     assert not marker.is_file()

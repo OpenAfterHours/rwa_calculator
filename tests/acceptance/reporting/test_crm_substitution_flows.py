@@ -27,7 +27,7 @@ No CRR/Basel 3.1 regime divergence is exercised (see the fixture module
 docstring), so every assertion below is parametrized over both regimes purely
 for parity, not because the numbers are expected to differ.
 
-Published identities pinned (``src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json``):
+Published identities pinned (``packages/rwa-filer/src/rwa_filer/rules/data/crr-eba-v3.0-credit-risk.json``):
 - ``v1663_m`` (C 08.01.a, live): ``{c0070} = {c0040} + {c0050} + {c0060}``.
 - ``v1662_m`` (C 08.01.a): ``{c0090} = {c0020} + {c0070} + {c0080}``.
 - ``v0305_m`` (C 07.00.a, live): ``{c0090} = {c0050} + {c0060} + {c0070} + {c0080}``.

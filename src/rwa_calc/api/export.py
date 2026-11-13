@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.facts import FilingMetadata
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
-    from rwa_calc.reporting.validations import CoverageShortfall, RuleOutcome
+    from rwa_filer.validate import CoverageShortfall, RuleOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -784,7 +784,7 @@ class SubmissionValidationResult:
         False only for ``no_rule_executed``: the estate could not be reached by
         the rule set at all, so an absent break asserts nothing whatsoever.
         """
-        from rwa_calc.reporting.validations import COVERAGE_NO_RULE_EXECUTED
+        from rwa_filer.validate import COVERAGE_NO_RULE_EXECUTED
 
         return self.coverage_shortfall != COVERAGE_NO_RULE_EXECUTED
 
@@ -836,7 +836,7 @@ class SubmissionValidationResult:
         the number that misleads; "0 blocking of 224 executed, 484 not
         evaluable" is the one a filer can judge.
         """
-        from rwa_calc.reporting.validations import COVERAGE_NO_RULE_EXECUTED
+        from rwa_filer.validate import COVERAGE_NO_RULE_EXECUTED
 
         verdict = "SUBMITTABLE" if self.is_submittable else "BLOCKED"
         if self.coverage_shortfall == COVERAGE_NO_RULE_EXECUTED:
@@ -879,7 +879,7 @@ def summarise_validation(
         corep: The generated COREP template bundle.
         pillar3: The generated Pillar III bundle, or ``None``. Carried for the
             checker's contract; no published rule addresses a Pillar III
-            template today (see ``validations.scope.build_template_index``).
+            template today (see ``reporting.filing.build_template_index``).
         framework: ``"CRR"`` or ``"BASEL_3_1"``.
 
     Returns:
@@ -892,14 +892,13 @@ def summarise_validation(
         ValueError: ``framework`` is not a supported framework (a programming
             error, raised by ``load_rules`` — not a data-quality outcome).
     """
-    from rwa_calc.reporting.validations import (
-        SEVERITY_ERROR,
+    from rwa_calc.reporting.filing import check_supervisory_validations, evaluate_all
+    from rwa_filer.rules import SEVERITY_ERROR
+    from rwa_filer.validate import (
         STATUS_FAIL,
         STATUS_NOT_EVALUATED,
         STATUS_PASS,
         STATUS_VACUOUS,
-        check_supervisory_validations,
-        evaluate_all,
     )
 
     report = evaluate_all(corep, pillar3, framework)
@@ -1015,7 +1014,8 @@ def _validation_report_frame(result: SubmissionValidationResult) -> pl.DataFrame
     recorded anywhere) reloads as its true dtype, and an estate with no enforced
     rules still writes a readable, correctly-typed empty file.
     """
-    from rwa_calc.reporting.validations import SEVERITY_ERROR, SINGLE_SHEET, STATUS_FAIL
+    from rwa_filer.rules import SEVERITY_ERROR
+    from rwa_filer.validate import SINGLE_SHEET, STATUS_FAIL
 
     # Run-level context, stamped on every row so the file is self-contained: a
     # reviewer sorting or filtering it can never end up looking at rule outcomes

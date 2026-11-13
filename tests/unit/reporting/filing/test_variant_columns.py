@@ -17,7 +17,8 @@ and the REFUSAL where it does not, because the refusal is the half a future
 maintainer is likely to "complete" by hand.
 
 References:
-- src/rwa_calc/reporting/validations/scope.py — ``derive_variant_columns``
+- src/rwa_calc/reporting/filing/bindings.py — ``derive_variant_columns``
+- packages/rwa-filer/src/rwa_filer/validate/index.py — the derivation itself
 """
 
 from __future__ import annotations
@@ -26,11 +27,8 @@ import itertools
 
 import pytest
 
-from rwa_calc.reporting.validations.scope import (
-    ABSENT_CELL,
-    SINGLE_SHEET,
-    derive_variant_columns,
-)
+from rwa_calc.reporting.filing.bindings import derive_variant_columns
+from rwa_filer.validate.index import ABSENT_CELL, SINGLE_SHEET
 
 from ._builders import build_frame, build_index
 

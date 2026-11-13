@@ -76,9 +76,22 @@ def generate_netting_collateral(
     (cash-on-cash). Synthetic cash collateral is allocated pro-rata by the drawn
     portion (`on_bs_for_ead`) to positive-drawn LOAN siblings carrying the same
     reference — contingents and synthetic facility_undrawn rows are
-    off-balance-sheet and excluded from the beneficiary set. Netting pools also
-    keep currency so the haircut pipeline can apply FX haircuts when the pool
-    currency differs from the sibling's currency.
+    off-balance-sheet and excluded from the beneficiary set.
+
+    Currency: pools key on each deposit's DENOMINATION, and every synthetic row
+    carries it as ``original_currency`` beside a ``currency`` that matches its
+    already-converted ``market_value``. By the time CRM runs, ``FXConverter`` has
+    rebased ``currency`` to the reporting currency on every row; the denomination
+    survives only in ``original_currency`` (``currency`` itself for a direct caller
+    that never ran conversion). That denomination is what the Art. 224 Table 4
+    currency-mismatch test in ``HaircutCalculator.apply_haircuts`` compares with
+    the loan's own (``exposure_currency``), so deposits in two currencies under one
+    agreement stay two pools, and a synthetic row diagonal-concatenated onto an
+    FX-converted user collateral frame does not arrive with a null there. Pooling
+    on the rebased ``currency`` compared the REPORTING currency with the loan's
+    denomination instead: a EUR deposit against a GBP loan took no haircut, a EUR
+    deposit against a EUR loan took one, and with any collateral file present no
+    netted deposit was haircut at all (escape log 2026-11-13).
 
     Art. 219 treats the netted deposit as cash collateral, so the funded-
     protection maturity-mismatch rules (Art. 237-239) apply exactly as for any
@@ -155,6 +168,15 @@ def generate_netting_collateral(
         # counterparty, so the disabled perimeter is a no-op for legacy callers.
         exposures = exposures.with_columns(pl.lit("_UNKNOWN_CP").alias("counterparty_reference"))
 
+    # Each leg's DENOMINATION (see the docstring): the pre-conversion currency,
+    # falling back to ``currency`` per row where no conversion audit exists.
+    denomination = (
+        pl.coalesce("original_currency", "currency")
+        if "original_currency" in schema_names
+        else pl.col("currency")
+    )
+    exposures = exposures.with_columns(denomination.alias("_denomination"))
+
     # The Art. 195 set-off perimeter, from the cited pack Feature: the agreement
     # reference alone (enabled), or (reference, counterparty) when disabled.
     # Derived once so the two states differ in exactly one place — every pool,
@@ -163,7 +185,7 @@ def generate_netting_collateral(
     perimeter_keys = ["netting_agreement_reference"]
     if not perimeter_is_agreement:
         perimeter_keys.append("counterparty_reference")
-    allocation_keys = [*perimeter_keys, "_pool_currency"]
+    allocation_keys = [*perimeter_keys, "_pool_original_currency", "_pool_currency"]
 
     # Negative-drawn loans carrying a netting agreement reference provide the pool
     negative_loans = exposures.filter(
@@ -175,9 +197,11 @@ def generate_netting_collateral(
     if errors is not None:
         _record_cross_counterparty_netting(exposures, errors, perimeter_is_agreement)
 
-    # Sum abs(drawn_amount) per (perimeter keys, currency) → netting pool.
-    # Currency is kept so the synthetic collateral carries the source currency
-    # (FX haircut when currencies differ). Art. 219/238 (P1.241): the earliest
+    # Sum abs(drawn_amount) per (perimeter keys, denomination) → netting pool.
+    # The rebased ``currency`` is a function of the denomination (one rate per
+    # currency), so keying on it as well never splits a pool; it is kept so the
+    # synthetic row's ``currency`` matches its converted market_value, exactly as
+    # FXConverter leaves user collateral. Art. 219/238 (P1.241): the earliest
     # (min) deposit maturity per pool drives the mismatch t; the minimum deposit
     # ORIGINAL maturity rides alongside for the Art. 237(2)(a) >=1y gate (from
     # maturity_date - value_date, /365 as in engine/sa/risk_weights.py and
@@ -186,13 +210,13 @@ def generate_netting_collateral(
         pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)
     ).cast(pl.Float64) / 365.0
     netting_pool = (
-        negative_loans.group_by([*perimeter_keys, "currency"])
+        negative_loans.group_by([*perimeter_keys, "_denomination", "currency"])
         .agg(
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
             pl.col("maturity_date").min().alias("_pool_deposit_maturity_date"),
             deposit_original_years.min().alias("_pool_deposit_orig_maturity"),
         )
-        .rename({"currency": "_pool_currency"})
+        .rename({"_denomination": "_pool_original_currency", "currency": "_pool_currency"})
     )
 
     # CRR Art. 219: drawn-on-drawn cash netting. Synthetic cash collateral may
@@ -257,13 +281,15 @@ def generate_netting_collateral(
     # deposit with original maturity < 1y and a mismatch is zeroed downstream.
     original_expr = pl.col("_pool_deposit_orig_maturity")
 
-    # Build synthetic collateral rows — currency from the pool (source of funds).
-    # maturity_date / residual_maturity_years / original_maturity_years are the
-    # DEPOSIT's (Art. 219/237-238), not the beneficiary loan's.
+    # Build synthetic collateral rows — currency and denomination from the pool
+    # (source of funds). maturity_date / residual_maturity_years /
+    # original_maturity_years are the DEPOSIT's (Art. 219/237-238), not the
+    # beneficiary loan's.
     synthetic = allocated.select(
         (pl.lit("NETTING_") + pl.col("exposure_reference")).alias("collateral_reference"),
         pl.lit("cash").alias("collateral_type"),
         pl.col("_pool_currency").alias("currency"),
+        pl.col("_pool_original_currency").alias("original_currency"),
         pl.col("_pool_deposit_maturity_date").alias("maturity_date"),
         pl.col("market_value"),
         pl.lit(None).cast(pl.Float64).alias("nominal_value"),

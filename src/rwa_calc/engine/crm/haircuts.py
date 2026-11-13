@@ -244,13 +244,21 @@ class HaircutCalculator:
         fx_base = scalar_value(resolved_pack.scalar_param("fx_haircut"))
         schema_names = collateral.collect_schema().names()
         has_zero_flag = "_is_zero_haircut" in schema_names
-        coll_ccy_col = "original_currency" if "original_currency" in schema_names else "currency"
+        # Per-row fallback, not per-frame: frames are diagonal-concatenated (user
+        # collateral + synthetic netting rows), so a row can lack the audit value
+        # while the column exists — and ``null != x`` is null, which would switch
+        # H_fx off silently rather than fall back (escape log 2026-11-13).
+        coll_ccy = (
+            pl.coalesce("original_currency", "currency")
+            if "original_currency" in schema_names
+            else pl.col("currency")
+        )
         # Art. 226(1) symmetry: FX haircut is also subject to the non-daily-
         # revaluation scaling — apply ``reval_factor`` after the Art. 226(2)
         # liquidation-period factor, mirroring the collateral haircut path.
         is_financial = ~pl.col("collateral_type").is_in(NON_FINANCIAL_COLLATERAL_TYPES)
         fx_expr = (
-            pl.when((pl.col(coll_ccy_col) != pl.col("exposure_currency")) & is_financial)
+            pl.when((coll_ccy != pl.col("exposure_currency")) & is_financial)
             .then(pl.lit(fx_base) * scaling_factor * reval_factor)
             .otherwise(pl.lit(0.0))
         )

@@ -218,6 +218,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **A netted deposit's currency-mismatch haircut compared the wrong currencies
+  (CRR / PS1/26 Art. 219, Art. 224 Table 4).** On-balance-sheet netting turns a
+  deposit into synthetic `NETTING_<loan>` cash collateral. The generator pooled
+  deposits on `currency`, but by the CRM stage `FXConverter` has rewritten
+  `currency` to the reporting currency on every row. The currency each leg is
+  actually denominated in survives only in `original_currency`. The H_fx test
+  therefore compared the reporting currency with the loan's own currency.
+  Measured through the full pipeline (base GBP, 300 deposit against a 1,000 loan,
+  every rate 1.0), with the same result in both regimes:
+  - A EUR deposit netting a GBP loan took **no** haircut (EAD 700), which
+    understates capital.
+  - A EUR deposit netting a EUR loan took one it should not have (EAD 733.94),
+    which overstates capital.
+  - When the bundle also carried any collateral file, the synthetic rows
+    arrived with a null `original_currency`. Every netted deposit then went
+    un-haircut, whatever its currency.
+
+  Pools now key on each deposit's denomination, and the synthetic row carries it
+  as `original_currency` beside a `currency` that still matches its converted
+  value. Deposits in two currencies under one agreement now stay two pools.
+  `HaircutCalculator.apply_haircuts` and the life-insurance Art. 233(3) test now
+  fall back from `original_currency` to `currency` per row, not per frame.
+
+  **Direction: mostly RWA-increasing, but not only.** Currency-mismatched pairs
+  now take the haircut. A same-currency pair in a non-base currency with no
+  collateral file loses the spurious one, which **reduces** RWA (EUR/EUR: EAD
+  733.94 → 700).
+
+  The generator now lives in `engine/crm/netting.py`, moved out of
+  `engine/crm/collateral.py`, which had no room left under the module-size
+  ratchet. Pinned by `tests/acceptance/{crr,basel31}/test_art219_netting_currency_mismatch.py`.
+  Recorded in `docs/development/escape-log.md` (2026-11-13).
 - **A parallel batch (`rwa_calc.api.run_batch`) could hang forever on Linux
   under Python 3.13.** `api/batch.py` built its `ProcessPoolExecutor` on
   `multiprocessing`'s *default* start method, and that default depends on both

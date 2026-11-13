@@ -892,7 +892,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:43"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:288"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
     ```
 
 
@@ -947,7 +947,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:44"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:288"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
     ```
 
 
@@ -1005,7 +1005,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:45"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:288"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
     ```
 
 
@@ -1044,7 +1044,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:46"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:288"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
@@ -1067,7 +1067,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:126"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:126:331"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:126:339"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
@@ -1219,22 +1219,22 @@ Last generated: 2026-11-13.
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:1507:1699"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:676"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:684"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:676:813"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:684:821"
     ```
 
 
 ### CRR Art. 238 — Maturity of credit protection
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:677"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:685"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:676:813"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:684:821"
     ```
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:47"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:288"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
     ```
 
 

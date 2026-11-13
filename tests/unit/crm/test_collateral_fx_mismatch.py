@@ -167,6 +167,36 @@ class TestApplyHaircutsHonoursOriginalCurrency:
         assert result["fx_haircut"][0] == pytest.approx(0.08)
         assert result["value_after_haircut"][0] == pytest.approx(92_000.0)
 
+    def test_null_original_currency_falls_back_to_currency_per_row(
+        self,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """The column existing is not the row having a value. A synthetic or
+        hand-built row diagonal-concatenated onto an FX-converted frame carries a
+        null ``original_currency``; ``null != exposure_currency`` is null, which
+        silently switched H_fx off instead of falling back to the row's own
+        ``currency`` (escape log 2026-11-13). The fallback must be per row."""
+        converted = _cash_collateral_lf(
+            collateral_currency="GBP",
+            exposure_currency="GBP",
+            original_currency="GBP",
+        )
+        unconverted = _cash_collateral_lf(
+            collateral_currency="USD",
+            exposure_currency="GBP",
+            original_currency=None,
+        ).with_columns(pl.lit("COLL_002").alias("collateral_reference"))
+        collateral = pl.concat([converted, unconverted], how="diagonal")
+        assert collateral.collect()["original_currency"].null_count() == 1, (
+            "the frame must hold the column with a null on one row, or this test "
+            "exercises the absent-column branch instead"
+        )
+
+        result = HaircutCalculator().apply_haircuts(collateral, crr_config).collect()
+
+        by_ref = dict(zip(result["collateral_reference"], result["fx_haircut"], strict=True))
+        assert by_ref == {"COLL_001": pytest.approx(0.0), "COLL_002": pytest.approx(0.08)}
+
 
 def _cash_collateral_lf_no_period(
     *,

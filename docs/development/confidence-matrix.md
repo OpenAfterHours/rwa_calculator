@@ -70,7 +70,7 @@ Package version `0.3.34`. Resolved packs:
 | 119 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 120 | 1 | 2 | 13 | 6 | 94 | HIGH |
 | 121 | 4 | 3 | 8 | 9 | 20 | HIGH |
-| 122 | 2 | 4 | 6 | 11 | 73 | HIGH |
+| 122 | 2 | 4 | 6 | 11 | 74 | HIGH |
 | 123 | 3 | 7 | 13 | 2 | 27 | HIGH |
 | 124 | 1 | 2 | 8 | 2 | 13 | HIGH |
 | 125 | 1 | 3 | 17 | 2 | 22 | HIGH |
@@ -119,7 +119,7 @@ Package version `0.3.34`. Resolved packs:
 | 192 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 193 | 1 | 0 | 12 | 1 | 6 | HIGH |
 | 194 | 2 | 0 | 1 | 0 | 4 | MEDIUM |
-| 195 | 1 | 1 | 8 | 0 | 15 | MEDIUM |
+| 195 | 1 | 1 | 8 | 0 | 16 | MEDIUM |
 | 197 | 4 | 0 | 7 | 19 | 19 | HIGH |
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
@@ -135,7 +135,7 @@ Package version `0.3.34`. Resolved packs:
 | 216 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
-| 219 | 1 | 0 | 4 | 0 | 9 | MEDIUM |
+| 219 | 1 | 0 | 4 | 0 | 11 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
@@ -222,7 +222,7 @@ Package version `0.3.34`. Resolved packs:
 | 120 | 0 | 6 | 12 | 2 | 36 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 121 | 1 | 1 | 7 | 4 | 17 | HIGH |
-| 122 | 2 | 7 | 7 | 5 | 47 | HIGH |
+| 122 | 2 | 7 | 7 | 5 | 49 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 123 | 1 | 4 | 3 | 5 | 15 | HIGH |
@@ -286,11 +286,11 @@ Package version `0.3.34`. Resolved packs:
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 219 | 0 | 0 | 0 | 0 | 4 | GAP |
+| 219 | 0 | 0 | 0 | 0 | 8 | GAP |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
 | 223 | 0 | 0 | 4 | 0 | 2 | UNCITED |
-| 224 | 0 | 2 | 3 | 0 | 11 | MEDIUM |
+| 224 | 0 | 2 | 3 | 0 | 13 | MEDIUM |
 | 226 | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 227 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 228 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -394,9 +394,9 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 
 | Article | Oracle cases | Test refs | Anchored as |
 |---|---|---|---|
+| PS1/26 219 | 0 | 8 | CRR Art. 219 |
 | PS1/26 197 | 0 | 5 | CRR Art. 197 |
 | PS1/26 124A | 0 | 4 | — |
-| PS1/26 219 | 0 | 4 | CRR Art. 219 |
 | CRR 236 | 0 | 4 | — |
 | CRR 36 | 0 | 3 | — |
 | PS1/26 132a | 0 | 3 | — |

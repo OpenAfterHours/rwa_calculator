@@ -38,6 +38,11 @@ from rwa_calc.rulebook import RulepackV0
 # of the frames below sets ``counterparty_reference``, so both perimeter states
 # put every row in one group and the results here are perimeter-independent.
 _PACK = RulepackV0.from_config(CalculationConfig.crr(reporting_date=date(2024, 12, 31))).pack
+# Basel 3.1 pack for the currency-pool tests: only it recognises a deposit in a
+# different currency from the loan it offsets (PS1/26 Art. 219(2)).
+_B31_PACK = RulepackV0.from_config(
+    CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+).pack
 
 # =============================================================================
 # generate_netting_collateral
@@ -127,8 +132,11 @@ class TestGenerateNettingCollateral:
         assert df["collateral_type"][0] == "cash"
         assert df["market_value"][0] > 0
 
-    def test_netting_pool_grouped_by_currency(self) -> None:
-        """Netting pools group by (netting_group, currency)."""
+    def test_netting_pools_split_by_deposit_currency(self) -> None:
+        """Deposits in two currencies under one agreement stay two pools, each
+        carrying its own denomination. Basel 3.1 pack: it recognises a deposit in
+        another currency from the loan (PS1/26 Art. 219(2)), so both pools reach
+        the GBP loan."""
         lf = self._netting_frame(
             {
                 "exposure_reference": ["DEP_GBP", "DEP_EUR", "LOAN_A"],
@@ -139,13 +147,44 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP", "EUR", "GBP"],
             }
         )
-        result = generate_netting_collateral(lf, pack=_PACK)
+        result = generate_netting_collateral(lf, pack=_B31_PACK)
         assert result is not None
 
         df = result.collect()
-        if len(df) > 0:
-            currencies = set(df["currency"].to_list())
-            assert "GBP" in currencies
+        pools = {
+            (row["original_currency"], row["market_value"])
+            for row in df.select("original_currency", "market_value").iter_rows(named=True)
+        }
+        assert pools == {("GBP", 100_000.0), ("EUR", 200_000.0)}
+
+    def test_netting_pools_key_on_denomination_after_fx_rebase(self) -> None:
+        """After FXConverter, ``currency`` is the reporting currency on every row and
+        the denomination survives only in ``original_currency``. Pools must key on
+        the denomination and carry it, while ``currency`` keeps matching the
+        converted market value — keying on the rebased ``currency`` merged both
+        deposits into one GBP pool and lost the EUR one (escape log 2026-11-13)."""
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEP_GBP", "DEP_EUR", "LOAN_A"],
+                "drawn_amount": [-100_000.0, -200_000.0, 500_000.0],
+                "netting_agreement_reference": ["AGR01", "AGR01", "AGR01"],
+                "parent_facility_reference": ["FAC001", "FAC001", "FAC001"],
+                "ead_gross": [0.0, 0.0, 500_000.0],
+                "currency": ["GBP", "GBP", "GBP"],
+                "original_currency": ["GBP", "EUR", "GBP"],
+            }
+        )
+        result = generate_netting_collateral(lf, pack=_B31_PACK)
+        assert result is not None
+
+        df = result.collect()
+        rows = {
+            (row["currency"], row["original_currency"], row["market_value"])
+            for row in df.select("currency", "original_currency", "market_value").iter_rows(
+                named=True
+            )
+        }
+        assert rows == {("GBP", "GBP", 100_000.0), ("GBP", "EUR", 200_000.0)}
 
     def test_netting_eligible_requires_reference(self) -> None:
         """Only loans with a netting_agreement_reference provide a netting pool."""

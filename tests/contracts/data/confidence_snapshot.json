@@ -1058,6 +1058,7 @@
         "tests/acceptance/basel31/test_p1_110_art_122_corporate_cqs3_guarantee_substitution.py",
         "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/crr/test_art_222_fcsm_unified_pipeline.py",
         "tests/acceptance/crr/test_p1_101_art_226_1_non_daily_revaluation.py",
         "tests/acceptance/crr/test_p1_104_art_239_1_fcsm_maturity_eligibility.py",
@@ -2934,6 +2935,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/reporting/test_r1_negative_gross_carriers.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
@@ -3352,11 +3354,13 @@
         "engine/crm/processor.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p1_238/p1_238.py",
         "tests/fixtures/p1_241/p1_241.py",
         "tests/fixtures/reporting_netting_portfolio.py",
@@ -6374,6 +6378,7 @@
       ],
       "test_files": [
         "tests/acceptance/_fs1_expectations.py",
+        "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/basel31/test_p1_103_art_122_3_short_term_corporate_ecai.py",
         "tests/acceptance/basel31/test_p1_107_fcsm_b31_corporate_cqs3.py",
         "tests/acceptance/basel31/test_p1_110_art_122_corporate_cqs3_guarantee_substitution.py",
@@ -6399,6 +6404,7 @@
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/generate_all.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p1_103/p1_103.py",
         "tests/fixtures/p1_110/p1_110.py",
         "tests/fixtures/p1_122a/p1_122a.py",
@@ -8169,10 +8175,14 @@
       "pack_entries": [],
       "source_files": [],
       "test_files": [
+        "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/basel31/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py",
-        "tests/fixtures/matched_short_netting/matched_short_netting.py"
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
+        "tests/unit/crm/test_collateral_submodules.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8253,9 +8263,11 @@
         "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/basel31/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
         "tests/acceptance/basel31/test_scenario_b31_d_crm.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p2_18/p2_18.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_crm_basel31.py",

@@ -407,6 +407,21 @@ flowchart LR
         the population is keyed by `risk_type`: before the 2026-07 fix that relabel dropped
         SA-CCR derivatives out of OF 07.00 **entirely**, understating SA exposure value and RWEA.
 
+    !!! info "Not every row carries every column"
+        The published OF 07.00 greys out much of its grid, and a greyed cell is left empty:
+
+        - the **risk-weight rows** (0140–0280) carry no CRM substitution block (cols
+          0050–0140) — the inflow in col 0100 is still counted in their col 0150;
+        - the **counterparty-credit-risk rows** (0090–0130) carry the exposure value and the
+          RWEA only (cols 0200, 0210, 0220, and 0211 on the netting-set rows);
+        - **col 0211** appears on the netting-set rows and the risk-weight rows only;
+        - the on-balance-sheet row 0070 has no conversion-factor breakdown, and most
+          "of which" rows no ECAI breakdown of the RWEA.
+
+        The list is held to the Bank of England's taxonomy cell by cell
+        (`corep/of07_published_cells.py`). OF 07.00 has no column 0020. The CRR layout is
+        unchanged.
+
     | ~~0215~~ | ~~RWEA pre supporting factors~~ | | **Removed** |
     | ~~0216~~ | ~~(-) SME supporting factor adjustment~~ | | **Removed** |
     | ~~0217~~ | ~~(-) Infrastructure supporting factor adjustment~~ | | **Removed** |

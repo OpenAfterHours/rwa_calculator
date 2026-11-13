@@ -677,13 +677,16 @@ class TestECAIUnratedSplit:
 
 
 class TestC0700Col0020:
-    """P2.12: COREP C 07.00 col 0020 — Exposures deducted from own funds.
+    """C 07.00 col 0020 — "Exposures deducted from own funds" — is CRR-only here.
 
-    Why: CRR Art. 111(1)(b) and Basel 3.1 SA rules require that exposures
-    deducted from own funds are reported separately in the C 07.00 waterfall
-    (between col 0010 Original exposure and col 0030 Provisions). Without col
-    0020, the deduction is invisible in COREP reporting and auditors cannot
-    reconcile the EAD waterfall.
+    Plan item P2.12 added the column to BOTH layouts. The Basel 3.1 half was a
+    wrong premise: the published OF 07.00 has no column 0020 (PS1/26 Annex I),
+    and Annex II §3.2.2 ¶48(b) puts "exposures deducted from own funds" outside
+    the scope of the template altogether. Three tests here asserted the column
+    present under Basel 3.1 until 2026-11-13; they now assert it absent.
+
+    The CRR half is left as P2.12 built it — no EBA template is held to check it
+    against, which is a statement about the evidence, not about the column.
     """
 
     def test_crr_c0700_has_col_0020_with_value(self) -> None:
@@ -705,8 +708,8 @@ class TestC0700Col0020:
         assert idx_0010 < idx_0020 < idx_0030
         assert corp["0020"][0] == pytest.approx(200.0)
 
-    def test_b31_of0700_has_col_0020_with_value(self) -> None:
-        """Basel 3.1 OF 07.00 corporate row reports own_funds_deduction_amount in col 0020."""
+    def test_b31_of0700_has_no_col_0020(self) -> None:
+        """OF 07.00 has no column 0020, whatever the ledger carries."""
         # Arrange
         gen = LedgerShimCorepGenerator()
         lf = _sa_results_with_own_funds_deduction()
@@ -715,54 +718,34 @@ class TestC0700Col0020:
         bundle = gen.generate_from_lazyframe(lf, framework="BASEL_3_1")
         corp = _get_total_row(bundle.c07_00["corporate"])
 
-        # Assert: col 0020 present and carries the expected deduction value
-        cols = corp.columns
-        assert "0020" in cols, f"Col 0020 missing from B3.1 OF 07.00 output; got: {cols}"
-        idx_0020 = cols.index("0020")
-        idx_0010 = cols.index("0010")
-        idx_0030 = cols.index("0030")
-        assert idx_0010 < idx_0020 < idx_0030
-        assert corp["0020"][0] == pytest.approx(200.0)
+        # Assert
+        assert "0020" not in corp.columns
 
-    def test_c0700_col_0020_is_none_when_field_absent(self) -> None:
-        """Without own_funds_deduction_amount in data, col 0020 is None."""
+    def test_crr_col_0020_is_none_when_field_absent(self) -> None:
+        """Without own_funds_deduction_amount in data, CRR col 0020 is None."""
         # Arrange
         gen = LedgerShimCorepGenerator()
         lf = _sa_results_without_own_funds_deduction()
 
         # Act
-        bundle = gen.generate_from_lazyframe(lf, framework="BASEL_3_1")
+        bundle = gen.generate_from_lazyframe(lf, framework="CRR")
         corp = _get_total_row(bundle.c07_00["corporate"])
 
-        # Assert: column is present but value is None (same pattern as col 0035 test)
-        assert "0020" in corp.columns, (
-            f"Col 0020 missing from B3.1 OF 07.00 output; got: {corp.columns}"
-        )
+        # Assert
+        assert "0020" in corp.columns
         assert corp["0020"][0] is None
 
-    def test_col_0020_in_template_definition_between_0010_and_0030(self) -> None:
-        """CRR_C07_COLUMNS and B31_C07_COLUMNS both contain a col 0020 between 0010 and 0030."""
-        # Arrange / Act — use the imported column definitions directly
-        for col_list in (CRR_C07_COLUMNS, B31_C07_COLUMNS):
-            refs = [c.ref for c in col_list]
+    def test_col_0020_is_declared_for_crr_only(self) -> None:
+        """CRR_C07_COLUMNS carries col 0020 between 0010 and 0030; B31_C07_COLUMNS does not."""
+        # Arrange / Act
+        crr_refs = [c.ref for c in CRR_C07_COLUMNS]
+        b31_refs = [c.ref for c in B31_C07_COLUMNS]
 
-            # Assert presence
-            assert "0020" in refs, f"Column 0020 missing from {col_list!r}"
-
-            # Assert ordering
-            idx_0020 = refs.index("0020")
-            idx_0010 = refs.index("0010")
-            idx_0030 = refs.index("0030")
-            assert idx_0010 < idx_0020 < idx_0030, (
-                f"Col 0020 not between 0010 and 0030 in column list: "
-                f"0010@{idx_0010}, 0020@{idx_0020}, 0030@{idx_0030}"
-            )
-
-            # Assert name
-            col_0020 = next(c for c in col_list if c.ref == "0020")
-            assert col_0020.name == "Exposures deducted from own funds", (
-                f"Expected 'Exposures deducted from own funds', got {col_0020.name!r}"
-            )
+        # Assert
+        assert crr_refs.index("0010") < crr_refs.index("0020") < crr_refs.index("0030")
+        col_0020 = next(c for c in CRR_C07_COLUMNS if c.ref == "0020")
+        assert col_0020.name == "Exposures deducted from own funds"
+        assert "0020" not in b31_refs
 
 
 class TestSpecialisedLendingRows:

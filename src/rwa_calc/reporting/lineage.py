@@ -148,7 +148,13 @@ _ROW_COLUMNS: tuple[str, ...] = (
     "guarantee_rwa_benefit",
 )
 
-type CellKind = Literal["rows", "formula", "side_context", "prior_period", "constant", "unbound"]
+# ``unreported`` is a cell the PUBLISHED template has no data point for
+# (``SheetPlan.unreported``). The spec binds it — a reported cell may be a
+# formula over it — but it is not a cell of the sheet, so it has no population
+# to explain and nothing to tie out, whatever its binding is.
+type CellKind = Literal[
+    "rows", "formula", "side_context", "prior_period", "constant", "unbound", "unreported"
+]
 
 
 @dataclass(frozen=True)
@@ -1285,6 +1291,8 @@ def describe_cell(  # noqa: PLR0913 - the cell's full identity plus its two sour
     cell = plan.spec.cells.get((row_ref, col_ref))
     binding = cell.binding if cell is not None else None
     kind, metric, metric_columns, refs = _binding_facts(binding)
+    if col_ref in plan.unreported.get(row_ref, ()):
+        kind, metric, metric_columns, refs = "unreported", None, (), ()
 
     terms: list[FilterTerm] = []
     if kind == "rows":

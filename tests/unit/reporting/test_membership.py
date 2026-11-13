@@ -621,6 +621,10 @@ def test_every_summable_cell_ties_out_without_the_gross_carriers(
     assert census.tied > 0
 
 
+#: OF 07.00 rows with no origin-basis cell in the published template.
+_OF07_CCR_ROWS = ("0090", "0100", "0110", "0120", "0130")
+
+
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_a_row_carries_one_group_per_distinct_predicate(framework: str) -> None:
     """The measured fact the grain exists for: a row is not one population.
@@ -629,6 +633,12 @@ def test_a_row_carries_one_group_per_distinct_predicate(framework: str) -> None:
     C 07.00 and C 08.01 split every row across the recorded two-basis boundary
     and its per-column narrowings. A single-population grain reproduced 80% of
     C 08.01's summable cells.
+
+    One exception, and it is the published template's: the Basel 3.1 OF 07.00
+    counterparty-credit-risk rows 0090-0130 report an exposure value and an
+    RWEA and nothing before them (PS1/26 Annex I greys the rest out), so they
+    have no origin-basis cell and are ONE population. Before 2026-11-13 the
+    generator reported their gross as well, in cells the template does not have.
     """
     # Arrange / Act
     membership = _membership(framework)
@@ -643,6 +653,10 @@ def test_a_row_carries_one_group_per_distinct_predicate(framework: str) -> None:
     assert c0803["groups"].max() == 2
     for template_id in ("c07_00", "c08_01"):
         split = groups.filter(pl.col("template_id") == template_id)
+        if template_id == "c07_00" and framework == "BASEL_3_1":
+            post_only = split.filter(pl.col("row_ref").is_in(_OF07_CCR_ROWS))
+            assert post_only["groups"].unique().to_list() == [1]
+            split = split.filter(~pl.col("row_ref").is_in(_OF07_CCR_ROWS))
         assert split.height > 0
         assert split["groups"].min() > 1, template_id
 

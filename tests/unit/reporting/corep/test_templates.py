@@ -241,8 +241,13 @@ class TestB31C07ColumnDefinitions:
     """Tests for Basel 3.1 OF 07.00 column definitions."""
 
     def test_b31_c07_has_correct_column_count(self) -> None:
-        """B3.1 OF 07.00 has 28 columns (adds 4, removes 3 vs CRR)."""
-        assert len(B31_C07_COLUMNS) == 28
+        """OF 07.00 has the 27 columns of the published template (PS1/26 Annex I):
+        against CRR it adds 0035, 0171 and 0235 and removes 0215-0217 and 0020.
+
+        This asserted 28 until 2026-11-13, counting a column 0020 the template
+        does not have. ``tests/contracts/test_of07_published_cells.py`` holds the
+        list to the Bank's taxonomy, column by column."""
+        assert len(B31_C07_COLUMNS) == 27
 
     def test_b31_c07_uses_4_digit_refs(self) -> None:
         """All B3.1 OF 07.00 column refs are 4 digits."""

@@ -132,6 +132,22 @@ docs/plans/phase7-declarative-reporting.md §6):
   carrier is sealed; the CCF buckets and supporting-factor adjustments
   when their carriers are absent), preserving the recorded structural-null
   cells.
+- ONLY THE CELLS THE TEMPLATE HAS (Basel 3.1; recorded fix 2026-11-13). Every
+  cell of a row is COMPUTED — col 0150 on a risk-weight row is a formula
+  reached through that row's col 0100 inflow and col 0110 — but PS1/26 Annex I
+  greys out much of the grid, and a greyed cell is not reported:
+  the CRM substitution block (cols 0050-0140) on the risk-weight rows, every
+  column before the exposure value on the CCR rows 0090-0130, col 0211 away
+  from the netting-set and risk-weight rows, and the ECAI breakdown on most
+  "of which" rows. The grey cells are declared in
+  ``corep/of07_published_cells.py``, carried on every ``SheetPlan``
+  (``unreported``) and blanked as the last pass
+  (``postpass.blank_unreported_cells``); the declaration is held exactly to the
+  Bank's taxonomy by ``tests/contracts/test_of07_published_cells.py``. Until
+  then the risk-weight rows published the col 0100 inflow and col 0110, and the
+  CCR rows their gross, in cells a return cannot carry. OF 07.00 also has no
+  col 0020 (``templates.B31_C07_COLUMNS``). CRR is untouched: no EBA template is
+  held to read its grey cells from.
 - The CCF buckets (0160-0190) are a breakdown of the **fully adjusted
   exposure value of off-balance-sheet items** — Annex II heads that block
   "BREAKDOWN OF THE FULLY ADJUSTED EXPOSURE VALUE OF OFF-BALANCE SHEET
@@ -177,7 +193,12 @@ from rwa_calc.reporting.cellspec import (
     execute,
 )
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
-from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
+from rwa_calc.reporting.corep.of07_published_cells import get_c07_unreported_cells
+from rwa_calc.reporting.corep.postpass import (
+    blank_unreported_cells,
+    negate_deduction_cols,
+    null_empty_rows,
+)
 from rwa_calc.reporting.corep.supporting_factors import (
     sf_adjustment_terms,
     sf_infra_flag_exprs,
@@ -528,6 +549,7 @@ def c07_plans(
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
+    unreported = get_c07_unreported_cells(framework)
 
     plans: dict[str, SheetPlan] = {}
     # Sealed-ledger rule: the class columns always exist; a null key (no source
@@ -569,6 +591,7 @@ def c07_plans(
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
             inflow_rows=_inflow_rows(row_terms, sides, bands),
+            unreported=unreported,
         )
     return plans
 
@@ -593,7 +616,12 @@ def generate_c07(
     framework: str,
     errors: list[str],
 ) -> dict[str, pl.DataFrame]:
-    """Execute C 07.00 per obligor-class sheet over the sealed ledger."""
+    """Execute C 07.00 per obligor-class sheet over the sealed ledger.
+
+    The last pass leaves out the cells the published template greys out (module
+    docstring, "ONLY THE CELLS THE TEMPLATE HAS") — after the waterfall, the
+    empty-row rule and the sign convention have all read them.
+    """
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c07_plans(results, cols, framework, errors).items():
         frame = execute(plan.spec, plan.frame, plan.ctx)
@@ -604,7 +632,8 @@ def generate_c07(
             for ref, terms in plan.row_terms.items()
         }
         frame = null_empty_rows(frame, plan.frame, preds, plan.inflow_rows)
-        result[ec] = negate_deduction_cols(frame, _NEGATIVE_COLS)
+        frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
+        result[ec] = blank_unreported_cells(frame, plan.unreported)
     return result
 
 

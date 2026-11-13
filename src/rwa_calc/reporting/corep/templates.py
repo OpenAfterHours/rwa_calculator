@@ -239,11 +239,10 @@ CRR_C07_COLUMNS: list[COREPColumn] = [
     COREPColumn("0240", "Of which: credit assessment derived from central govt", "RWEA"),
 ]
 
-# Basel 3.1 OF 07.00: 22 columns — adds 0035, 0171, 0235; removes 0215-0217;
-# changes 0160 from 0% CCF to 10% CCF.
+# Basel 3.1 OF 07.00: the 27 published columns (PS1/26 Annex I) — adds 0035, 0171,
+# 0235; removes 0215-0217 and 0020 (see corep/of07_published_cells.py); 0160 = 10% CCF.
 B31_C07_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
-    COREPColumn("0020", "Exposures deducted from own funds", "Exposure"),
     COREPColumn("0030", _LBL_COL_VALUE_ADJUSTMENTS, "Exposure"),
     COREPColumn(
         "0035", "(-) Adjustment due to on-balance sheet netting", "Exposure"

@@ -61,6 +61,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   today. Not all are defects in the templates: a few published rules cannot be
   satisfied by a return that follows the Bank's own instructions, and the
   baseline's note says which.
+- **Fixed: Basel 3.1 OF 07.00 reported figures in cells the template does not
+  have.** The published template greys out much of its grid: the CRM
+  substitution block on the risk-weight rows, everything before the exposure
+  value on the counterparty-credit-risk rows, column 0211 outside the
+  netting-set and risk-weight rows, and the ECAI breakdown on most "of which"
+  rows. Those cells are now empty, and column 0020 ("Exposures deducted from
+  own funds"), which OF 07.00 does not have, is gone from the Basel 3.1 layout.
+  No reported total changes: the blanked cells were intermediates, and column
+  0150 on a risk-weight row still includes the substitution inflow. CRR C 07.00
+  is unchanged. Anything that reads those cells from the Basel 3.1 export must
+  accept an empty cell; anything that reads column 0020 there must stop.
 - **Fixed: OF 08.07 / C 08.07 reported a share of nothing as 0.0.** Columns
   0030, 0040 and 0050 are shares of the row's total exposure value (column
   0020). On a roll-out class with no exposure they were reported as 0.0; they

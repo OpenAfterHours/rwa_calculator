@@ -2634,3 +2634,78 @@ gate that shipped.
   finding about our output until an engine that can tell "no answer" from
   "zero" has agreed. Where the tolerated rule fails only on empty-denominator
   rows, check what the cell holds before blaming the rule.
+
+## 2026-11-13 — Basel 3.1 OF 07.00 reported figures in cells the published template greys out, and a column it does not have
+
+- **Defect**: the Basel 3.1 layout of OF 07.00 (credit risk, standardised
+  approach) carried a value in every cell of every row it computed. The
+  published template does not: PS1/26 Annex I greys out a large part of the
+  grid, and the Bank of England taxonomy (v4.1.1, tables `OF07.00.01.01` ..
+  `.05`) holds no data point for a greyed cell. Four families were being
+  reported where there is no cell —
+  the CRM substitution block (cols 0050–0140) on the risk-weight rows
+  0140–0280, visibly the col 0100 inflow and col 0110; every column before the
+  exposure value on the counterparty-credit-risk rows 0090–0130; col 0211 on
+  rows that are neither a netting-set row nor a risk-weight row; and the ECAI
+  breakdown (0230/0235/0240) on most "of which" rows. Separately the layout
+  declared a **column 0020**, "Exposures deducted from own funds", which
+  OF 07.00 does not have; Annex II §3.2.2 ¶48(b) puts such exposures outside
+  the scope of the template. Measured over the Basel 3.1 matrix: 64 non-zero
+  figures with no place in a return, on 47 distinct cells, across eleven
+  portfolios; over the reference outputs, 447 cells held a value (403 a zero,
+  44 a figure) where the template is grey.
+- **Rule**: none fires, which is the point. A rule is written over cells the
+  template has; a figure in a cell it does not have is not broken, it is
+  unfileable. The filing package refuses to write a return that leaves figures
+  out, so every SA return was blocked on these.
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py::_row_cells` builds "the
+  full 24-column surface of one row" for every row, and nothing downstream
+  removed any of it. The intermediates are needed — col 0150 on a risk-weight
+  row is a formula reached through that row's col 0100 and col 0110, and
+  `boe_b0719` decomposes the Total row's col 0150 over those rows — so they
+  were computed, and being computed, reported. Column 0020 came from plan item
+  P2.12, which added it to both regimes' layouts.
+- **Escape class**: `no-gate-exists` for the grey cells, `wrong-premise` for
+  column 0020. No gate compared the layout with the template's cell list: the
+  supervisory register evaluates rules by row and column code and never asks
+  whether a populated cell exists; the goldens pin what is generated. For
+  column 0020 the plan bullet was wrong and was faithfully implemented, with
+  four tests asserting the column present under Basel 3.1.
+- **Gate change**: `tests/contracts/test_of07_published_cells.py` — the layout's
+  columns and rows must be the published ones, and the declared grey cells
+  (`src/rwa_calc/reporting/corep/of07_published_cells.py`) must equal the cells
+  the taxonomy lacks **exactly, in both directions**: a declaration that blanks
+  a cell the template has fails as loudly as one that leaves a grey cell
+  reported. The declaration rides on every `SheetPlan` (`unreported`) and is
+  applied as the last pass (`postpass.blank_unreported_cells`);
+  `lineage.describe_cell` describes such a cell as kind `unreported`, so the
+  drill-down and the membership and return-reconciliation tie-outs do not
+  treat it as a cell of the sheet. `tests/unit/reporting/corep/test_c07_published_cells.py`
+  holds that the generator honours the declaration and that the arithmetic
+  through the blanked cells is intact. The filing-mapping ratchet banks
+  `c07_00|cell_not_reportable` at 5, and no cell of that breakdown may rise.
+- **Verified red**: with an empty declaration and the layout unchanged,
+  `uv run pytest tests/contracts/test_of07_published_cells.py -q -n 0` —
+  `2 failed, 3 passed`: `Left contains one more item: '0020'` and
+  `cells the template lacks that are still reported … Left contains 674 more
+  items, first extra item: ('0010', '0020')`. The generator tests before the
+  pass existed: `6 failed, 5 passed`, e.g.
+  `Left contains 34 more items, first extra item: ('corporate', '0230', '0060')`.
+- **What the fix moved**: every difference in the regenerated reference outputs
+  was classified cell by cell — column 0020 removed (always null), and 447
+  cells blanked, all at declared positions; nothing else. `unplaced_figures`
+  1001 → 954. No rule's verdict moved on either engine, and the supervisory
+  register is unchanged. The coverage ratchet's floor **fell deliberately**:
+  `cells_live` 8754 → 8336, because 418 addresses that used to hold a value
+  were never cells of the template; the baseline note says so.
+- **Not fixed here**, each stated so it is not mistaken for done:
+  the five figures still unplaced are memorandum row 0320 on the 'in default'
+  sheet — Annex II ¶55 asks for the row there while the taxonomy publishes rows
+  0300/0320 on sheets 0001–0004 and 0007–0009 only, the open question recorded
+  as P1.377. The **CRR** C 07.00 layout is untouched, column 0020 included: no
+  EBA template or taxonomy is held to check it against. And the template still
+  has no **Total sheet** (0001), which Annex II ¶47 requires.
+- **Lesson**: a generator that computes a row cell by cell will report every
+  cell it computes unless something says which are cells. "Which cells exist"
+  is a fact about the published template, separate from "what does each cell
+  mean", and it needs its own source and its own gate.

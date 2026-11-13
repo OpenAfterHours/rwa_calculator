@@ -61,6 +61,16 @@ _C07_SECTION_2_ADDENDS: tuple[str, ...] = ("0070", "0080", "0090", "0110", "0130
 # fact, not a general "CCF is always null for CCR" rule.
 _CCF_COLS: tuple[str, ...] = ("0160", "0170", "0171", "0180", "0190")
 
+# The Basel 3.1 template has NO col 0010 cell on the CCR rows 0090-0130 and no
+# col 0211 cell on the Total row: PS1/26 Annex I greys both out, and the Bank's
+# taxonomy holds no data point for either (tables OF07.00.01.01 / .02). The
+# netting-set rows report cols 0200, 0210, 0211 and 0220 and nothing before
+# them. Until 2026-11-13 this file asserted a figure in both cells under both
+# regimes; the CRR layout is unchanged because no EBA template is held to check
+# it against. tests/contracts/test_of07_published_cells.py holds the cell list.
+_REGIMES_REPORTING_CCR_ROW_GROSS: frozenset[str] = frozenset({"crr"})
+_ROWS_WITH_COL_0211: dict[str, tuple[str, ...]] = {"crr": ("0010", "0110"), "b31": ("0110",)}
+
 
 @dataclass(frozen=True)
 class _Expected:
@@ -124,18 +134,22 @@ def test_c07_row_0110_carries_every_derivative_netting_set(
 
     Arrange: the CCR portfolio (one bilateral swap, one QCCP-cleared swap).
     Act:     run the pipeline -> COREP C 07.00 institution sheet.
-    Assert:  row 0110 cols 0010/0200 == both netting sets' EAD, 0220 == both RWEA.
+    Assert:  row 0110 col 0200 == both netting sets' EAD, 0220 == both RWEA; col
+             0010 the same under CRR and not a cell under Basel 3.1.
     """
     # Arrange + Act
     expected = _EXPECTED[regime_key]
     row = _row(_institution_sheet(ccr_frames[regime_key], regime_key), "0110")
 
     # Assert
-    assert row["0010"] == pytest.approx(expected.total_ead, rel=_REL), (
-        "C 07.00 row 0110 col 0010 (original exposure pre-CCF) must be the SA-CCR "
-        "exposure value of BOTH derivative netting sets (Annex II col 0010, "
-        f"Art. 111(2)) — expected {expected.total_ead:,.6f}, got {row['0010']}."
-    )
+    if regime_key in _REGIMES_REPORTING_CCR_ROW_GROSS:
+        assert row["0010"] == pytest.approx(expected.total_ead, rel=_REL), (
+            "C 07.00 row 0110 col 0010 (original exposure pre-CCF) must be the SA-CCR "
+            "exposure value of BOTH derivative netting sets (Annex II col 0010, "
+            f"Art. 111(2)) — expected {expected.total_ead:,.6f}, got {row['0010']}."
+        )
+    else:
+        assert row["0010"] is None, "OF 07.00 has no col 0010 cell on a CCR row"
     assert row["0200"] == pytest.approx(expected.total_ead, rel=_REL), (
         "C 07.00 row 0110 col 0200 (exposure value) must be the SA-CCR exposure "
         f"value of BOTH derivative netting sets — expected {expected.total_ead:,.6f}, "
@@ -162,7 +176,10 @@ def test_c07_row_0120_is_the_qccp_cleared_subset(
     row = _row(_institution_sheet(ccr_frames[regime_key], regime_key), "0120")
 
     # Assert
-    assert row["0010"] == pytest.approx(expected.netting_set_ead, rel=_REL)
+    if regime_key in _REGIMES_REPORTING_CCR_ROW_GROSS:
+        assert row["0010"] == pytest.approx(expected.netting_set_ead, rel=_REL)
+    else:
+        assert row["0010"] is None, "OF 07.00 has no col 0010 cell on a CCR row"
     assert row["0200"] == pytest.approx(expected.netting_set_ead, rel=_REL), (
         "C 07.00 row 0120 col 0200 must be the QCCP-cleared netting set's SA-CCR "
         f"exposure value — expected {expected.netting_set_ead:,.6f}, got {row['0200']}."
@@ -384,14 +401,17 @@ def test_c07_col_0211_excludes_ccp_cleared_exposures(
 
     Arrange: the CCR portfolio (one bilateral set, one QCCP-cleared set).
     Act:     run the pipeline -> COREP C 07.00 institution sheet.
-    Assert:  col 0211 == the bilateral netting set's EAD on the total row and 0110.
+    Assert:  col 0211 == the bilateral netting set's EAD on row 0110 — and on the
+             total row under CRR; OF 07.00 has no col 0211 cell there.
     """
     # Arrange + Act
     expected = _EXPECTED[regime_key]
     sheet = _institution_sheet(ccr_frames[regime_key], regime_key)
 
     # Assert
-    for ref in ("0010", "0110"):
+    if "0010" not in _ROWS_WITH_COL_0211[regime_key]:
+        assert _row(sheet, "0010")["0211"] is None
+    for ref in _ROWS_WITH_COL_0211[regime_key]:
         assert _row(sheet, ref)["0211"] == pytest.approx(expected.netting_set_ead, rel=_REL), (
             f"C 07.00 row {ref} col 0211 must exclude the QCCP-cleared netting set "
             f"(Art. 301(1)) — expected the bilateral EAD "

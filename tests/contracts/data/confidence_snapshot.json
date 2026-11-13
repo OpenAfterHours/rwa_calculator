@@ -390,7 +390,6 @@
         "tests/unit/crm/test_ead_for_crm.py",
         "tests/unit/crm/test_provision_submodules.py",
         "tests/unit/crm/test_provisions.py",
-        "tests/unit/reporting/corep/test_c07.py",
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",

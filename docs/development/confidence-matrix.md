@@ -59,7 +59,7 @@ Package version `0.3.34`. Resolved packs:
 | 107 | 1 | 0 | 11 | 0 | 9 | MEDIUM |
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
-| 111 | 6 | 8 | 20 | 0 | 40 | MEDIUM |
+| 111 | 6 | 8 | 20 | 0 | 39 | MEDIUM |
 | 112 | 4 | 3 | 19 | 0 | 41 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 14 | 14 | 33 | HIGH |

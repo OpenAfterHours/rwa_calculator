@@ -30,7 +30,7 @@ from __future__ import annotations
 import pytest
 
 from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP
+from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP, C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_filer.validate.index import SKIP_SHEET_SCOPE_NOT_CLOSED, resolve_sheet_codes
 
@@ -43,8 +43,10 @@ MAP_NAMES = sorted(SHEET_INDEX_MAPS)
 #: engine classes share one letter (``corporate_sme`` -> (g), ``retail_qrre`` ->
 #: (h), the three mortgage classes -> (i)), so its sheet keys are the values of
 #: ``C07_00_SA_SHEET_MAP``. Both vocabularies are read from the module that
-#: OWNS them rather than restated here.
-_SA_SHEET_KEYS = frozenset(C07_00_SA_SHEET_MAP.values())
+#: OWNS them rather than restated here. The generator also emits the Total sheet
+#: (published z-code 0001) beside them — the sum of the class sheets, and no
+#: exposure class itself.
+_SA_SHEET_KEYS = frozenset(C07_00_SA_SHEET_MAP.values()) | {C07_00_TOTAL_SHEET_KEY}
 _ENGINE_CLASSES = frozenset(member.value for member in ExposureClass)
 
 EMITTABLE_BY_MAP: dict[str, frozenset[str]] = {

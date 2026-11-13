@@ -40,6 +40,7 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 from tests.fixtures.raw_bundle import make_raw_bundle
@@ -372,14 +373,15 @@ def test_cr4_gross_never_below_post_crm_ead(regime: str, request: pytest.Fixture
 def test_c07_original_exposure_equals_portfolio_input(
     regime: str, request: pytest.FixtureRequest
 ) -> None:
-    """COREP C 07.00 col 0010 summed over every sheet == the portfolio input.
+    """COREP C 07.00 col 0010 summed over every class sheet == the portfolio input.
 
     The splitter reclassifies the secured leg to ``residential_mortgage``, so
-    the duplication shows up as the SAME amount on two different sheets.
+    the duplication shows up as the SAME amount on two different sheets. The
+    Total sheet is the sum of the class sheets, so it is not added to them.
     """
     run: _Run = request.getfixturevalue(regime)
     total = 0.0
-    for frame in run.corep.c07_00.values():
+    for frame in c07_class_sheets(run.corep.c07_00).values():
         if "0010" not in frame.columns or not frame.height:
             continue
         rows = frame.filter(pl.col("row_ref") == "0010")

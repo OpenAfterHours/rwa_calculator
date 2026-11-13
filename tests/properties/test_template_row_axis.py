@@ -36,6 +36,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.pillar3.templates import get_cr4_rows, get_cr5_rows
 from tests.properties.corpus import CORPUS, EVERYTHING
 from tests.properties.portfolios import ExposureSpec, corep_bundle, pillar3_bundle, results_df
@@ -475,8 +476,9 @@ def test_every_standardised_leg_reaches_a_c07_sheet(regime: str):
         df.filter(pl.col("reporting_approach") == "standardised")["ead_final"].fill_null(0.0).sum()
     )
 
-    # Act
-    sheets = corep_bundle(portfolio, regime).c07_00 or {}
+    # Act — over the CLASS sheets: the Total sheet is their sum, so a leg that
+    # reached no class sheet is missing from it too, and adding it double-counts.
+    sheets = c07_class_sheets(corep_bundle(portfolio, regime).c07_00 or {})
     published = sum(_c07_total_exposure_value(frame) for frame in sheets.values())
 
     # Assert

@@ -65,8 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the template "for the total exposure across all exposure classes and
   individually for each of the exposure classes"; only the class sheets were
   produced. The Total (published sheet code 0001) is the cell-by-cell sum of
-  the class sheets and is `bundle.c07_00["total"]`, the first entry of the
-  dictionary, and the first tab of the Excel export. **This changes what
+  the class sheets and is `bundle.c07_00["total"]`; it has its own tab in the
+  Excel export and its own entry in the template index. **This changes what
   iterating `bundle.c07_00` yields**: code that adds up every sheet now counts
   each exposure twice and must add the class sheets instead
   (`rwa_calc.reporting.corep.c07.c07_class_sheets`).

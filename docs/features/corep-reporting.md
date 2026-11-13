@@ -307,8 +307,9 @@ once more as a **Total** sheet (published sheet code 0001) — the instructions 
 total exposure across all exposure classes and individually for each of the exposure classes".
 
 The Total is the cell-by-cell sum of the class sheets: a cell no class reports is empty on it
-rather than zero. In the bundle it is `c07_00["total"]`, first in the dictionary, ahead of the
-class sheets.
+rather than zero. In the bundle it is `c07_00["total"]`. The Excel export and the template
+index list sheets alphabetically by key, so it appears among the class sheets, not first. A
+cell on the Total has no drill-down of its own — open the same cell on a class sheet.
 
 !!! warning "Adding the sheets up"
     Because the Total is the sum of the others, anything that adds up **all** the sheets

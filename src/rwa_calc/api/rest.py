@@ -464,6 +464,11 @@ def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
             status_code=404,
             detail=f"template {template!r} is not instrumented for lineage",
         )
+    summed = lineage.summed_sheet_reason(template, sheet or None)
+    if summed is not None:
+        # A distinct refusal: the sheet exists and the cell has a value, but it
+        # is a sum of other sheets and has no population of its own.
+        raise HTTPException(status_code=404, detail=summed)
     resolver = lineage.sheet_lineage(response, template, sheet or None)
     query = resolver.query(row, col) if resolver is not None else None
     if resolver is None or query is None:

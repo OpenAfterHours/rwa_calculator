@@ -199,8 +199,13 @@ def test_basel31_reports_derivatives_in_c07() -> None:
     frames, _meta = _generate_frames("b31")
 
     # Assert
+    # The class sheets, and beside them the Total sheet (the sum of the classes).
     c07_sheets = sorted(key for key in frames if key.startswith("corep__c07_00__"))
-    assert c07_sheets == ["corep__c07_00__corporate", "corep__c07_00__institution"], (
+    assert c07_sheets == [
+        "corep__c07_00__corporate",
+        "corep__c07_00__institution",
+        "corep__c07_00__total",
+    ], (
         "the SA-CCR derivative netting sets must reach C 07.00 under Basel 3.1 "
         f"(sheets produced: {c07_sheets})"
     )

@@ -100,6 +100,7 @@ import pytest
 from tests.properties.portfolios import ExposureSpec, corep_bundle, pillar3_bundle, results_df
 
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_KEYS, C07_00_SA_SHEET_MAP
 from rwa_calc.reporting.filing.bindings import build_template_index
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
@@ -561,9 +562,11 @@ class TestBasel31HighRiskLegIsAddressable:
         )
         assert expected == pytest.approx(HIGH_RISK_EAD + CORPORATE_EAD, abs=MONEY_TOLERANCE)
 
-        # Act
+        # Act — over the CLASS sheets: the Total sheet is their sum, so adding it as
+        # well would count every exposure twice.
+        class_sheets = c07_class_sheets(corep_bundle(HIGH_RISK_OBLIGOR, "B31").c07_00)
         published = sum(
-            _total_row_cell("B31", key, COL_EXPOSURE_VALUE) or 0.0 for key in _sheet_keys("B31")
+            _total_row_cell("B31", key, COL_EXPOSURE_VALUE) or 0.0 for key in class_sheets
         )
 
         # Assert

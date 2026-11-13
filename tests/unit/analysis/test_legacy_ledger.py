@@ -47,7 +47,9 @@ from rwa_calc.data.schemas import (
     VALID_SLOTTING_CATEGORIES,
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.kernel.columns import _CREDIT_BS_TYPES
 
 if TYPE_CHECKING:
@@ -1000,7 +1002,9 @@ def test_categorical_component_labels_are_canonicalised_by_the_projection(
     # ...and the canonical labels are what the sheet axes actually key on.
     # C 07.00 keys the Art. 112(1) LETTER, so the canonical ``retail_other``
     # label is what routes the row and ``retail`` is the sheet it routes to.
-    assert set(sheets.c07_00) == {"corporate", "retail"}
+    # (The class sheets: the Total sheet beside them is their sum, not a label.)
+    assert set(c07_class_sheets(sheets.c07_00)) == {"corporate", "retail"}
+    assert C07_00_TOTAL_SHEET_KEY in sheets.c07_00
     assert set(sheets.c08_01) == {"corporate", "institution"}
 
 

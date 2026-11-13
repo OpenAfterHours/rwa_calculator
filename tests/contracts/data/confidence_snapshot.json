@@ -5729,6 +5729,7 @@
       "code_functions": [
         "rwa_calc.reporting.corep.c02::generate_c02_00",
         "rwa_calc.reporting.corep.c07::c07_plans",
+        "rwa_calc.reporting.corep.c07::c07_total_sheet",
         "rwa_calc.reporting.corep.c07::generate_c07",
         "rwa_calc.reporting.corep.c08::generate_c08_01",
         "rwa_calc.reporting.corep.c08::generate_c08_02",

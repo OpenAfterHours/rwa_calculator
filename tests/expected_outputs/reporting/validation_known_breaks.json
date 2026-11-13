@@ -17,82 +17,82 @@
   },
   "summary": {
     "crr/rich": {
-      "PASS": 172,
+      "PASS": 182,
       "FAIL": 4,
-      "VACUOUS": 80,
-      "NOT_EVALUATED": 485,
+      "VACUOUS": 78,
+      "NOT_EVALUATED": 477,
       "rules_enforced": 741,
-      "rules_executed": 256,
+      "rules_executed": 264,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/rich": {
-      "PASS": 215,
-      "FAIL": 5,
-      "VACUOUS": 223,
-      "NOT_EVALUATED": 365,
+      "PASS": 231,
+      "FAIL": 6,
+      "VACUOUS": 216,
+      "NOT_EVALUATED": 355,
       "rules_enforced": 808,
-      "rules_executed": 443,
+      "rules_executed": 453,
       "templates_emitted": 12,
       "templates_covered": 12
     },
     "crr/off-bs": {
-      "PASS": 56,
+      "PASS": 62,
       "FAIL": 1,
       "VACUOUS": 67,
-      "NOT_EVALUATED": 617,
+      "NOT_EVALUATED": 611,
       "rules_enforced": 741,
-      "rules_executed": 124,
+      "rules_executed": 130,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/off-bs": {
-      "PASS": 61,
+      "PASS": 68,
       "FAIL": 3,
-      "VACUOUS": 129,
-      "NOT_EVALUATED": 615,
+      "VACUOUS": 156,
+      "NOT_EVALUATED": 581,
       "rules_enforced": 808,
-      "rules_executed": 193,
+      "rules_executed": 227,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/ccr": {
-      "PASS": 57,
+      "PASS": 65,
       "FAIL": 1,
       "VACUOUS": 63,
-      "NOT_EVALUATED": 620,
+      "NOT_EVALUATED": 612,
       "rules_enforced": 741,
-      "rules_executed": 121,
+      "rules_executed": 129,
       "templates_emitted": 7,
       "templates_covered": 6
     },
     "b31/ccr": {
-      "PASS": 65,
+      "PASS": 73,
       "FAIL": 3,
-      "VACUOUS": 108,
-      "NOT_EVALUATED": 632,
+      "VACUOUS": 136,
+      "NOT_EVALUATED": 596,
       "rules_enforced": 808,
-      "rules_executed": 176,
+      "rules_executed": 212,
       "templates_emitted": 8,
       "templates_covered": 5
     },
     "crr/sa-classes": {
-      "PASS": 65,
+      "PASS": 71,
       "FAIL": 1,
       "VACUOUS": 78,
-      "NOT_EVALUATED": 597,
+      "NOT_EVALUATED": 591,
       "rules_enforced": 741,
-      "rules_executed": 144,
+      "rules_executed": 150,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/sa-classes": {
-      "PASS": 64,
+      "PASS": 75,
       "FAIL": 3,
-      "VACUOUS": 122,
-      "NOT_EVALUATED": 619,
+      "VACUOUS": 147,
+      "NOT_EVALUATED": 583,
       "rules_enforced": 808,
-      "rules_executed": 189,
+      "rules_executed": 225,
       "templates_emitted": 5,
       "templates_covered": 5
     },
@@ -107,52 +107,52 @@
       "templates_covered": 8
     },
     "b31/irb-classes": {
-      "PASS": 160,
+      "PASS": 166,
       "FAIL": 11,
-      "VACUOUS": 178,
-      "NOT_EVALUATED": 459,
+      "VACUOUS": 208,
+      "NOT_EVALUATED": 423,
       "rules_enforced": 808,
-      "rules_executed": 349,
+      "rules_executed": 385,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "crr/crm-substitution": {
-      "PASS": 135,
+      "PASS": 141,
       "FAIL": 3,
       "VACUOUS": 83,
-      "NOT_EVALUATED": 520,
+      "NOT_EVALUATED": 514,
       "rules_enforced": 741,
-      "rules_executed": 221,
+      "rules_executed": 227,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/crm-substitution": {
-      "PASS": 179,
+      "PASS": 188,
       "FAIL": 13,
-      "VACUOUS": 171,
-      "NOT_EVALUATED": 445,
+      "VACUOUS": 198,
+      "NOT_EVALUATED": 409,
       "rules_enforced": 808,
-      "rules_executed": 363,
+      "rules_executed": 399,
       "templates_emitted": 12,
       "templates_covered": 12
     },
     "crr/re-split": {
-      "PASS": 57,
+      "PASS": 65,
       "FAIL": 1,
-      "VACUOUS": 62,
-      "NOT_EVALUATED": 621,
+      "VACUOUS": 61,
+      "NOT_EVALUATED": 614,
       "rules_enforced": 741,
-      "rules_executed": 120,
+      "rules_executed": 127,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/re-split": {
-      "PASS": 69,
+      "PASS": 75,
       "FAIL": 6,
       "VACUOUS": 146,
-      "NOT_EVALUATED": 587,
+      "NOT_EVALUATED": 581,
       "rules_enforced": 808,
-      "rules_executed": 221,
+      "rules_executed": 227,
       "templates_emitted": 5,
       "templates_covered": 5
     },
@@ -197,82 +197,82 @@
       "templates_covered": 10
     },
     "crr/netting": {
-      "PASS": 48,
+      "PASS": 54,
       "FAIL": 1,
       "VACUOUS": 61,
-      "NOT_EVALUATED": 631,
+      "NOT_EVALUATED": 625,
       "rules_enforced": 741,
-      "rules_executed": 110,
+      "rules_executed": 116,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/netting": {
-      "PASS": 56,
+      "PASS": 63,
       "FAIL": 5,
-      "VACUOUS": 112,
-      "NOT_EVALUATED": 635,
+      "VACUOUS": 141,
+      "NOT_EVALUATED": 599,
       "rules_enforced": 808,
-      "rules_executed": 173,
+      "rules_executed": 209,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/facility-share-binding": {
-      "PASS": 94,
+      "PASS": 100,
       "FAIL": 1,
       "VACUOUS": 94,
-      "NOT_EVALUATED": 552,
+      "NOT_EVALUATED": 546,
       "rules_enforced": 741,
-      "rules_executed": 189,
+      "rules_executed": 195,
       "templates_emitted": 10,
       "templates_covered": 10
     },
     "crr/facility-share-nonbinding": {
-      "PASS": 94,
+      "PASS": 100,
       "FAIL": 1,
       "VACUOUS": 94,
-      "NOT_EVALUATED": 552,
+      "NOT_EVALUATED": 546,
       "rules_enforced": 741,
-      "rules_executed": 189,
+      "rules_executed": 195,
       "templates_emitted": 10,
       "templates_covered": 10
     },
     "b31/facility-share-binding": {
-      "PASS": 136,
+      "PASS": 143,
       "FAIL": 10,
-      "VACUOUS": 192,
-      "NOT_EVALUATED": 470,
+      "VACUOUS": 221,
+      "NOT_EVALUATED": 434,
       "rules_enforced": 808,
-      "rules_executed": 338,
+      "rules_executed": 374,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/facility-share-nonbinding": {
-      "PASS": 134,
+      "PASS": 141,
       "FAIL": 8,
-      "VACUOUS": 196,
-      "NOT_EVALUATED": 470,
+      "VACUOUS": 225,
+      "NOT_EVALUATED": 434,
       "rules_enforced": 808,
-      "rules_executed": 338,
+      "rules_executed": 374,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "crr/row-scope": {
-      "PASS": 51,
+      "PASS": 57,
       "FAIL": 1,
       "VACUOUS": 69,
-      "NOT_EVALUATED": 620,
+      "NOT_EVALUATED": 614,
       "rules_enforced": 741,
-      "rules_executed": 121,
+      "rules_executed": 127,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/row-scope": {
-      "PASS": 58,
+      "PASS": 64,
       "FAIL": 3,
       "VACUOUS": 160,
-      "NOT_EVALUATED": 587,
+      "NOT_EVALUATED": 581,
       "rules_enforced": 808,
-      "rules_executed": 221,
+      "rules_executed": 227,
       "templates_emitted": 5,
       "templates_covered": 5
     }
@@ -382,8 +382,10 @@
       "portfolios": [
         "netting"
       ],
-      "failing_coordinates": 2,
+      "failing_coordinates": 4,
       "coordinates": [
+        "OF07.00.01.01[total][r0010]",
+        "OF07.00.01.01[total][r0230]",
         "OF07.00.01.01[corporate][r0010]",
         "OF07.00.01.01[corporate][r0230]"
       ],
@@ -397,11 +399,13 @@
       "portfolios": [
         "netting"
       ],
-      "failing_coordinates": 3,
+      "failing_coordinates": 6,
       "coordinates": [
+        "OF07.00.01.01[total][r0010]",
+        "OF07.00.01.01[total][r0070]",
+        "OF07.00.01.01[total][r0230]",
         "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0070]",
-        "OF07.00.01.01[corporate][r0230]"
+        "OF07.00.01.01[corporate][r0070]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0200} <= {t: OF07.00.01.01, c: 0150}"
     },
@@ -452,13 +456,13 @@
         "row-scope",
         "sa-classes"
       ],
-      "failing_coordinates": 23,
+      "failing_coordinates": 36,
       "coordinates": [
-        "OF07.00.01.01[institution][r0010]",
-        "OF07.00.01.01[institution][r0182]",
-        "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0020]",
-        "OF07.00.01.01[corporate][r0220]"
+        "OF07.00.01.01[total][r0010]",
+        "OF07.00.01.01[total][r0020]",
+        "OF07.00.01.01[total][r0180]",
+        "OF07.00.01.01[total][r0182]",
+        "OF07.00.01.01[total][r0220]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0220} = {t: OF07.00.01.01, c: 0230} + {t: OF07.00.01.01, c: 0235}"
     },
@@ -480,15 +484,29 @@
         "row-scope",
         "sa-classes"
       ],
-      "failing_coordinates": 15,
+      "failing_coordinates": 22,
       "coordinates": [
-        "OF07.00.01.01[central_govt_central_bank][r0010]",
-        "OF07.00.01.01[institution][r0010]",
-        "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0020]",
-        "OF07.00.01.01[retail][r0010]"
+        "OF07.00.01.01[total][r0010]",
+        "OF07.00.01.01[total][r0015]",
+        "OF07.00.01.01[total][r0020]",
+        "OF07.00.01.01[total][r0330]",
+        "OF07.00.01.01[total][r0331]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0150} = {t: OF07.00.01.01, c: 0160} + {t: OF07.00.01.01, c: 0170} + {t: OF07.00.01.01, c: 0180} + {t: OF07.00.01.01, c: 0190} + {t: OF07.00.01.01, c: 0171}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0710_1",
+      "severity": "ERROR",
+      "reason": "the SAME open question as boe_b0710, on the memorandum table OF07.00.01.03 rather than the main one - read that entry for both sides of it; it needs a regulatory reading, not a code change. Measured: row 0320 (exposures in default subject to a 150% risk weight) of the TOTAL sheet carries a fully adjusted exposure value (c0150) of 1,000,000 from one on-balance-sheet defaulted exposure, against conversion-factor columns 0160-0190 that are empty because there is nothing to convert. REACHABLE SINCE 2026-11-13, which is why it is new here: the table publishes rows 0300/0320 on sheets 0001-0004 and 0007-0009 only, the figure sits on our 'in default' class sheet (0011, which the table does not publish - the open question P1.377), and until the Total sheet (0001) was generated no published sheet carried it. Status moved VACUOUS -> FAIL on portfolio rich; it was in known_vacuous_rules as a suffixed sheet variant asserting nothing. The Total row is the sum of the class sheets and equals the 'in default' sheet's row cell for cell, so this is not a summation defect",
+      "portfolios": [
+        "rich"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF07.00.01.03[total][r0320]"
+      ],
+      "expression": "{t: OF07.00.01.03, c: 0150} = {t: OF07.00.01.03, c: 0160} + {t: OF07.00.01.03, c: 0170} + {t: OF07.00.01.03, c: 0171} + {t: OF07.00.01.03, c: 0180} + {t: OF07.00.01.03, c: 0190}"
     },
     {
       "regime": "b31",
@@ -807,28 +825,28 @@
       "portfolio": "ccr",
       "template": "c34_01",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 176
+      "rules_executed_on_this_run": 212
     },
     {
       "regime": "b31",
       "portfolio": "ccr",
       "template": "c34_02",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 176
+      "rules_executed_on_this_run": 212
     },
     {
       "regime": "b31",
       "portfolio": "ccr",
       "template": "c34_08",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 176
+      "rules_executed_on_this_run": 212
     },
     {
       "regime": "crr",
       "portfolio": "ccr",
       "template": "c34_02",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 121
+      "rules_executed_on_this_run": 129
     }
   ],
   "known_vacuous_rules": [
@@ -1135,9 +1153,9 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0471_2",
+      "rule_id": "boe_b0471_3",
       "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 216 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0200 = null, OF07.00.01.03[institution] r0300 c0150 = null, OF07.00.01.03[institution] r0300 c0160 = null.",
+      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 30 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0200 = null, OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[residential_mortgage] r0380 c0160 = null.",
       "portfolios": [
         "ccr",
         "crm-substitution",
@@ -1151,23 +1169,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
-      "tables": [
-        "OF07.00.01.03"
-      ],
-      "expression": "{t: OF07.00.01.03, c: 0200} = {t: OF07.00.01.03, c: 0150} - (0.9 * {t: OF07.00.01.03, c: 0160}) - (0.8 * {t: OF07.00.01.03, c: 0170}) - (0.6 * {t: OF07.00.01.03, c: 0171}) - (0.5 * {t: OF07.00.01.03, c: 0180})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0471_3",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 30 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0200 = null, OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[residential_mortgage] r0380 c0160 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -1519,7 +1521,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 4,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1543,7 +1545,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 18,
+      "vacuous_coordinates": 20,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1567,7 +1569,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -1578,22 +1580,6 @@
       "rule_id": "boe_b0556_1",
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0200 = null, OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[commercial_mortgage] r0380 c0200 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.05"
-      ],
-      "expression": "{t: OF07.00.01.05, r: 0380, c: 0200} <= {t: OF07.00.01.05, r: 0380, c: 0150}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0556_2",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 72 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0200 = null, OF07.00.01.03[institution] r0300 c0150 = null, OF07.00.01.03[institution] r0320 c0200 = null.",
       "portfolios": [
         "ccr",
         "crm-substitution",
@@ -1607,11 +1593,11 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 3,
       "tables": [
-        "OF07.00.01.03"
+        "OF07.00.01.05"
       ],
-      "expression": "{t: OF07.00.01.03, c: 0200} <= {t: OF07.00.01.03, c: 0150}"
+      "expression": "{t: OF07.00.01.05, r: 0380, c: 0200} <= {t: OF07.00.01.05, r: 0380, c: 0150}"
     },
     {
       "regime": "b31",
@@ -1631,11 +1617,39 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 252,
+      "vacuous_coordinates": 280,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, c: 0240} <= {t: OF07.00.01.01, c: 0235}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0672_1",
+      "severity": "ERROR",
+      "reason": "NOT_EVALUATED -> VACUOUS, an improvement and not a regression - established by evaluating the estate with and without the C 07.00 Total sheet (2026-11-13): without it this rule reaches no cell on any portfolio. The rule is a sign check on rows 0300/0320 of the memorandum table OF07.00.01.03, scoped to c0210 (exposure value arising from counterparty credit risk), on sheets 0001-0004 and 0007-0009. Those rows are populated only on our 'in default' class sheet (0011), which the table does not publish (P1.377), so the rule had nothing to read until the Total sheet (0001) carried row 0320 on portfolio rich. The cells it reads there are zero or empty - correct for the one defaulted exposure behind that row, an on-balance-sheet loan with no counterparty credit risk, no value adjustment and no netting - so it holds at 0 and asserts nothing. A defaulted exposure carrying a provision, or a defaulted derivative, would give it a figure to check",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.03"
+      ],
+      "expression": "{t: OF07.00.01.03} >= 0"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0673",
+      "severity": "ERROR",
+      "reason": "NOT_EVALUATED -> VACUOUS, an improvement and not a regression - established by evaluating the estate with and without the C 07.00 Total sheet (2026-11-13): without it this rule reaches no cell on any portfolio. The rule is a sign check on rows 0300/0320 of the memorandum table OF07.00.01.03, scoped to c0210 (exposure value arising from counterparty credit risk), on sheets 0001-0004 and 0007-0009. Those rows are populated only on our 'in default' class sheet (0011), which the table does not publish (P1.377), so the rule had nothing to read until the Total sheet (0001) carried row 0320 on portfolio rich. The cells it reads there are zero or empty - correct for the one defaulted exposure behind that row, an on-balance-sheet loan with no counterparty credit risk, no value adjustment and no netting - so it holds at 0 and asserts nothing. A defaulted exposure carrying a provision, or a defaulted derivative, would give it a figure to check",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.03"
+      ],
+      "expression": "{t: OF07.00.01.03} >= 0"
     },
     {
       "regime": "b31",
@@ -1655,7 +1669,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1679,7 +1693,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1703,7 +1717,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1727,7 +1741,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1751,7 +1765,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1775,7 +1789,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1799,7 +1813,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1823,7 +1837,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1847,7 +1861,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1871,7 +1885,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1895,7 +1909,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1919,7 +1933,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1943,7 +1957,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1967,7 +1981,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1991,7 +2005,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2015,7 +2029,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2039,7 +2053,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2063,7 +2077,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2087,7 +2101,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2111,7 +2125,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2135,7 +2149,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2159,7 +2173,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2183,7 +2197,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2191,50 +2205,10 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0708_1",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 144 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0040 = null, OF07.00.01.03[institution] r0300 c0010 = null, OF07.00.01.03[institution] r0300 c0030 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "irb-classes",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 8,
-      "tables": [
-        "OF07.00.01.03"
-      ],
-      "expression": "{t: OF07.00.01.03, c: 0040} = {t: OF07.00.01.03, c: 0010} + {t: OF07.00.01.03, c: 0030} + {t: OF07.00.01.03, c: 0035}"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0708_2",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 20 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0040 = null, OF07.00.01.05[residential_mortgage] r0380 c0010 = null, OF07.00.01.05[residential_mortgage] r0380 c0030 = null.",
       "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.05"
-      ],
-      "expression": "{t: OF07.00.01.05, r: 0380, c: 0040} = {t: OF07.00.01.05, r: 0380, c: 0010} + {t: OF07.00.01.05, r: 0380, c: 0030} + {t: OF07.00.01.05, r: 0380, c: 0035}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0710_1",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 216 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0150 = null, OF07.00.01.03[institution] r0300 c0160 = null, OF07.00.01.03[institution] r0300 c0170 = null.",
-      "portfolios": [
         "ccr",
         "crm-substitution",
         "facility-share-binding",
@@ -2247,11 +2221,11 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 3,
       "tables": [
-        "OF07.00.01.03"
+        "OF07.00.01.05"
       ],
-      "expression": "{t: OF07.00.01.03, c: 0150} = {t: OF07.00.01.03, c: 0160} + {t: OF07.00.01.03, c: 0170} + {t: OF07.00.01.03, c: 0171} + {t: OF07.00.01.03, c: 0180} + {t: OF07.00.01.03, c: 0190}"
+      "expression": "{t: OF07.00.01.05, r: 0380, c: 0040} = {t: OF07.00.01.05, r: 0380, c: 0010} + {t: OF07.00.01.05, r: 0380, c: 0030} + {t: OF07.00.01.05, r: 0380, c: 0035}"
     },
     {
       "regime": "b31",
@@ -2273,11 +2247,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 30 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[residential_mortgage] r0380 c0160 = null, OF07.00.01.05[residential_mortgage] r0380 c0170 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -2301,7 +2283,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2437,11 +2419,25 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
       "expression": "{t: OF07.00.01.02, r: 0340} = sum({t: OF07.00.01.02, r: 0341; 0342})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0733_1",
+      "severity": "WARNING",
+      "reason": "NOT_EVALUATED -> VACUOUS, an improvement and not a regression - established by evaluating the estate with and without the C 07.00 Total sheet (2026-11-13): without it this rule reaches no cell on any portfolio. The rule is a sign check on rows 0300/0320 of the memorandum table OF07.00.01.03, scoped to c0030 and c0035 (the '(-)' value-adjustment and netting columns), on sheets 0001-0004 and 0007-0009. Those rows are populated only on our 'in default' class sheet (0011), which the table does not publish (P1.377), so the rule had nothing to read until the Total sheet (0001) carried row 0320 on portfolio rich. The cells it reads there are zero or empty - correct for the one defaulted exposure behind that row, an on-balance-sheet loan with no counterparty credit risk, no value adjustment and no netting - so it holds at 0 and asserts nothing. A defaulted exposure carrying a provision, or a defaulted derivative, would give it a figure to check",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 2,
+      "tables": [
+        "OF07.00.01.03"
+      ],
+      "expression": "{t: OF07.00.01.03} <= 0"
     },
     {
       "regime": "b31",
@@ -2749,7 +2745,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2774,7 +2770,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2799,26 +2795,11 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 216,
+      "vacuous_coordinates": 240,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0023} = sum({t: OF07.00.01.01, r: 0024; 0025; 0026})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0959",
-      "severity": "ERROR",
-      "reason": "A PUBLISHED-RULE DEFECT, banked deliberately: do NOT engineer output toward a PASS. The expression is {r0015} >= {r0010} - r0015 is 'of which: Defaulted exposures' and r0010 is the class total, so as published it asserts defaulted >= total, which no correct report can satisfy on any sheet with a performing portion. IGNORE ITS SHORT_LABEL, which describes a different check entirely ('the three of which rows r0024, r0025 and r0026 should add up to the total row r0023' - the project-finance phase rows); label and expression disagree in the published ruleset, so the label must not be read as describing what this entry covers. It was NOT_EVALUATED until P1.371: the scope is z 0001;0012;0015;0016, and of those four only z0016 resolves to an emitted sheet - z0001 (Total) and z0015 (CIU) carry empty bundle_keys by design (no ExposureClass analogue), and z0012 is empty here too (P2.55 declares it as ('high_risk',), after which it still resolves to no emitted sheet because no registered portfolio produces the class). The 9 coordinates are the equity sheet across the 9 scoped columns 0030/0035/0050/0060/0070/0080/0090/0130/0140, every one a CRM-substitution or CCF column: measured 0.0 on r0010 and null on r0015, which is correct for a plain on-balance-sheet equity holding with no protection and no undrawn component. That zero is the only thing keeping an ERROR-severity rule off the break list - an equity fixture with guarantees or an off-balance-sheet commitment would make it FAIL on a right answer. Treat it then as a published-rule limit (the boe_b0471 precedent), never as an output defect.",
-      "portfolios": [
-        "off-bs",
-        "rich"
-      ],
-      "vacuous_coordinates": 18,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0015} >= {t: OF07.00.01.01, r: 0010}"
     },
     {
       "regime": "b31",
@@ -2838,7 +2819,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3244,7 +3225,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3268,7 +3249,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3292,7 +3273,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3316,7 +3297,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3324,79 +3305,23 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1007",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0150 c0220 = null, OF07.00.01.01[residential_mortgage] r0150 c0200 = null, OF07.00.01.01[commercial_mortgage] r0150 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0150, c: 0220} >= {t: OF07.00.01.01, r: 0150, c: 0200} * 0.02"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1008",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0170 c0220 = null, OF07.00.01.01[residential_mortgage] r0170 c0200 = null, OF07.00.01.01[commercial_mortgage] r0170 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0170, c: 0220} >= {t: OF07.00.01.01, r: 0170, c: 0200} * 0.1"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1010",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0190 c0220 = null, OF07.00.01.01[residential_mortgage] r0190 c0200 = null, OF07.00.01.01[commercial_mortgage] r0190 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0190, c: 0220} >= {t: OF07.00.01.01, r: 0190, c: 0200} * 0.35"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1011",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0200 c0220 = null, OF07.00.01.01[residential_mortgage] r0200 c0200 = null, OF07.00.01.01[commercial_mortgage] r0200 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0200, c: 0220} >= {t: OF07.00.01.01, r: 0200, c: 0200} * 0.50"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1012",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0210 c0220 = null, OF07.00.01.01[residential_mortgage] r0210 c0200 = null, OF07.00.01.01[commercial_mortgage] r0210 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3404,63 +3329,23 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1015",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0240 c0220 = null, OF07.00.01.01[residential_mortgage] r0240 c0200 = null, OF07.00.01.01[commercial_mortgage] r0240 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0240, c: 0220} >= {t: OF07.00.01.01, r: 0240, c: 0200} * 1.5"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1016",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0250 c0220 = null, OF07.00.01.01[residential_mortgage] r0250 c0200 = null, OF07.00.01.01[commercial_mortgage] r0250 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0250, c: 0220} >= {t: OF07.00.01.01, r: 0250, c: 0200} * 2.5"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1017",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0270 c0220 = null, OF07.00.01.01[residential_mortgage] r0270 c0200 = null, OF07.00.01.01[commercial_mortgage] r0270 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0270, c: 0220} >= {t: OF07.00.01.01, r: 0270, c: 0200} * 12.5"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1018",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0171 c0220 = null, OF07.00.01.01[residential_mortgage] r0171 c0200 = null, OF07.00.01.01[commercial_mortgage] r0171 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3472,11 +3357,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0181 c0220 = null, OF07.00.01.01[residential_mortgage] r0181 c0200 = null, OF07.00.01.01[commercial_mortgage] r0181 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3484,31 +3377,23 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1020",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0182 c0220 = null, OF07.00.01.01[residential_mortgage] r0182 c0200 = null, OF07.00.01.01[commercial_mortgage] r0182 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0182, c: 0220} >= {t: OF07.00.01.01, r: 0182, c: 0200} * 0.3"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1021",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0191 c0220 = null, OF07.00.01.01[residential_mortgage] r0191 c0200 = null, OF07.00.01.01[commercial_mortgage] r0191 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3520,11 +3405,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0192 c0220 = null, OF07.00.01.01[residential_mortgage] r0192 c0200 = null, OF07.00.01.01[commercial_mortgage] r0192 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3536,11 +3429,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0202 c0220 = null, OF07.00.01.01[residential_mortgage] r0202 c0200 = null, OF07.00.01.01[commercial_mortgage] r0202 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3552,11 +3453,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0221 c0220 = null, OF07.00.01.01[residential_mortgage] r0221 c0200 = null, OF07.00.01.01[commercial_mortgage] r0221 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3564,31 +3473,23 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1026",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0222 c0220 = null, OF07.00.01.01[residential_mortgage] r0222 c0200 = null, OF07.00.01.01[commercial_mortgage] r0222 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0222, c: 0220} >= {t: OF07.00.01.01, r: 0222, c: 0200} * 0.85"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1027",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0231 c0220 = null, OF07.00.01.01[residential_mortgage] r0231 c0200 = null, OF07.00.01.01[commercial_mortgage] r0231 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3600,11 +3501,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0232 c0220 = null, OF07.00.01.01[residential_mortgage] r0232 c0200 = null, OF07.00.01.01[commercial_mortgage] r0232 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3616,11 +3525,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0233 c0220 = null, OF07.00.01.01[residential_mortgage] r0233 c0200 = null, OF07.00.01.01[commercial_mortgage] r0233 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3632,11 +3549,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0234 c0220 = null, OF07.00.01.01[residential_mortgage] r0234 c0200 = null, OF07.00.01.01[commercial_mortgage] r0234 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3648,11 +3573,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0261 c0220 = null, OF07.00.01.01[residential_mortgage] r0261 c0200 = null, OF07.00.01.01[commercial_mortgage] r0261 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3664,11 +3597,19 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0160 c0220 = null, OF07.00.01.01[residential_mortgage] r0160 c0200 = null, OF07.00.01.01[commercial_mortgage] r0160 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3724,7 +3665,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -3874,29 +3815,6 @@
     },
     {
       "regime": "crr",
-      "rule_id": "v0012_h",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a C 07.00 Annex II hierarchy identity on the .c / .d SHEET VARIANTS (rows 0290-0330), whose cells the estate emits and never populates - the same identity is live on sheet .a; every operand is EMITTED BUT UNREPORTED (null) - 96 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: C 07.00.d[institution] r0300 c0040 = null, C 07.00.d[institution] r0300 c0010 = null, C 07.00.d[institution] r0300 c0030 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 8,
-      "tables": [
-        "C 07.00.d"
-      ],
-      "expression": "{c0040} = +{c0010} + {c0030}"
-    },
-    {
-      "regime": "crr",
       "rule_id": "v0314_m",
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: a C 07.00.a/.b risk-weight-row or memo-column identity (cols 0200/0215/0220 on the 0090-0270 row band), on rows this estate emits and never populates; every operand is EMITTED BUT UNREPORTED (null) - 250 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: C 07.00.a[corporate] r0090 c0200 = null, C 07.00.a[corporate] r0100 c0200 = null, C 07.00.a[corporate] r0090 c0215 = null.",
@@ -3912,7 +3830,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 35,
+      "vacuous_coordinates": 40,
       "tables": [
         "C 07.00.a"
       ],
@@ -3935,7 +3853,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -3958,7 +3876,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -3981,7 +3899,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -4004,7 +3922,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -4027,7 +3945,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -4178,7 +4096,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 24,
+      "vacuous_coordinates": 30,
       "tables": [
         "C 07.00.d"
       ],
@@ -4217,7 +4135,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 27,
+      "vacuous_coordinates": 41,
       "tables": [
         "C 07.00.a"
       ],
@@ -4298,7 +4216,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -4321,7 +4239,7 @@
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],

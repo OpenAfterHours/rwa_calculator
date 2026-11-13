@@ -8,6 +8,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 
@@ -1045,7 +1046,8 @@ class TestC0901SupportingFactorColumns:
 
         def c07_sum(ref: str) -> float:
             total = 0.0
-            for sheet in bundle.c07_00.values():
+            # The class sheets only: C 07.00's Total sheet is already their sum.
+            for sheet in c07_class_sheets(bundle.c07_00).values():
                 cell = sheet.filter(pl.col("row_ref") == "0010")[ref][0]
                 total += cell if cell is not None else 0.0
             return total

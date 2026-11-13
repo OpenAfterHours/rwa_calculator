@@ -205,7 +205,7 @@ Package version `0.3.34`. Resolved packs:
 
 | para. | Code fns | Pack | Src | Oracle | Tests | Confidence |
 |---|---|---|---|---|---|---|
-| 1 | 13 | 0 | 7 | 0 | 0 | LOW |
+| 1 | 14 | 0 | 7 | 0 | 0 | LOW |
 | 4 | 4 | 11 | 4 | 0 | 0 | LOW |
 | 36 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 62 | 0 | 0 | 2 | 0 | 0 | UNCITED |

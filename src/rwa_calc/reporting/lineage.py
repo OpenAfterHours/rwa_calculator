@@ -91,6 +91,7 @@ from rwa_calc.reporting.corep.c34 import (
     c34_08_plans,
 )
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.kernel import available_columns
 from rwa_calc.reporting.pillar3.ccr import (
     ccr1_frames,
@@ -1125,6 +1126,16 @@ LINEAGE_PLANS: dict[str, _Provider] = {
 }
 
 
+# Sheets that are the sum of their template's other sheets, and what to tell a
+# reader who asks for the exposures behind one of their cells.
+_SUMMED_SHEETS: dict[tuple[str, str], str] = {
+    ("c07_00", C07_00_TOTAL_SHEET_KEY): (
+        "The Total sheet is the sum of the exposure-class sheets. Open the same "
+        "cell on a class sheet to see the exposures behind it."
+    ),
+}
+
+
 def is_instrumented(template_id: str) -> bool:
     """Whether this template's cells can be explained.
 
@@ -1133,6 +1144,21 @@ def is_instrumented(template_id: str) -> bool:
     drill-down only where there is a truthful answer to give.
     """
     return template_id in LINEAGE_PLANS
+
+
+def summed_sheet_reason(template_id: str, sheet: str | None) -> str | None:
+    """Why a sheet has no drill-down of its own, when it is a sum of other sheets.
+
+    The C 07.00 / OF 07.00 Total sheet is the cell-by-cell sum of the
+    exposure-class sheets (``corep/c07.py::c07_total_sheet``). It has no
+    execution plan — there is no population to select — so ``sheet_lineage``
+    returns ``None`` for it. That is a different answer from "no such cell", and
+    a reader who clicked a figure on the Total deserves to be told where its
+    exposures are. ``None`` for every other sheet.
+    """
+    if sheet is None:
+        return None
+    return _SUMMED_SHEETS.get((template_id, sheet))
 
 
 @dataclass(frozen=True)

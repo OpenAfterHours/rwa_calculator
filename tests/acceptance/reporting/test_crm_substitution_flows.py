@@ -59,6 +59,7 @@ from tests.fixtures.reporting_crm_substitution_portfolio import (
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     C08_03_PD_PARENT_REFS,
@@ -248,9 +249,11 @@ class TestCrossTemplateConservation:
         results, corep = _run(regime_key)
 
         total_gross = float(results["drawn_amount"].sum())
+        # C 07.00 is added up over its CLASS sheets: its Total sheet is their sum,
+        # so including it would count the SA side twice.
         total_after_substitution = sum(
             _total_row(frame)["0090"][0] for frame in corep.c08_01.values()
-        ) + sum(_total_row(frame)["0110"][0] for frame in corep.c07_00.values())
+        ) + sum(_total_row(frame)["0110"][0] for frame in c07_class_sheets(corep.c07_00).values())
 
         assert total_after_substitution == pytest.approx(total_gross)
 

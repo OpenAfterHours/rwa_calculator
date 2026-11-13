@@ -16,7 +16,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import (
     _combined_results,
@@ -373,8 +375,10 @@ class TestCombinedGeneration:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_combined_results())
 
-        # Sum EAD across all SA classes
-        sa_total_ead = sum(_get_total_row(df)["0200"][0] for df in bundle.c07_00.values())
+        # Sum EAD across all SA classes (the Total sheet is their sum, not an addend)
+        sa_total_ead = sum(
+            _get_total_row(df)["0200"][0] for df in c07_class_sheets(bundle.c07_00).values()
+        )
         expected_sa_ead = _sa_results().select(pl.col("ead_final").sum()).collect()[0, 0]
         assert sa_total_ead == pytest.approx(expected_sa_ead)
 
@@ -673,8 +677,9 @@ class TestEdgeCases:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(minimal)
 
-        # Should produce C 07.00 per-class output
-        assert len(bundle.c07_00) == 2
+        # Should produce C 07.00 per-class output, beside the Total sheet (their sum)
+        assert len(c07_class_sheets(bundle.c07_00)) == 2
+        assert C07_00_TOTAL_SHEET_KEY in bundle.c07_00
         assert "corporate" in bundle.c07_00
 
     def test_canonical_column_names(self) -> None:
@@ -695,7 +700,9 @@ class TestEdgeCases:
         )
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(canonical)
-        assert len(bundle.c07_00) == 1
+        # One class sheet, beside the Total sheet (the sum of the class sheets).
+        assert len(c07_class_sheets(bundle.c07_00)) == 1
+        assert C07_00_TOTAL_SHEET_KEY in bundle.c07_00
 
     def test_sa_only_data(self) -> None:
         """SA-only data produces C 07.00 but empty C 08.01/C 08.02."""

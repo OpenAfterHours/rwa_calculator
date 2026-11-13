@@ -110,7 +110,9 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
     B31_RESIDENTIAL_GENERAL_SECURED_RW,
 )
 from rwa_calc.engine.sa.crr_risk_weight_tables import RESIDENTIAL_MORTGAGE_PARAMS
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.filing.checks import evaluate_all
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_filer.validate.evaluate import STATUS_FAIL
@@ -260,8 +262,9 @@ class TestTheScopeHasSomethingToScope:
         _results, corep = _run("crr")
         real_estate = _real_estate_sheet()
 
-        # Assert
-        other_sheets = [sheet for sheet in corep.c07_00 if sheet != real_estate]
+        # Assert — the CLASS sheets only: the Total sheet is their sum, so it carries
+        # row 0310 whenever any sheet does and would satisfy this check on its own.
+        other_sheets = [sheet for sheet in c07_class_sheets(corep.c07_00) if sheet != real_estate]
         assert other_sheets, (
             "every sheet this portfolio opens is the Art. 112(1)(i) sheet, so row "
             "0040 is in scope everywhere and the scope term is unexercised"
@@ -318,8 +321,9 @@ class TestRowScopeUnderCRR:
         _results, corep = _run("crr")
         real_estate = _real_estate_sheet()
 
-        # Assert
-        for sheet in corep.c07_00:
+        # Assert — over the CLASS sheets: the Total sheet is their sum, so it
+        # carries this row from the in-scope sheet and is not an out-of-scope class.
+        for sheet in c07_class_sheets(corep.c07_00):
             if sheet == real_estate:
                 continue
             for column in _MONEY_COLS:
@@ -329,6 +333,10 @@ class TestRowScopeUnderCRR:
                     "reports it only in exposure class 'Secured by mortgages on "
                     "immovable property'"
                 )
+        for column in _MONEY_COLS:
+            assert _cell(corep, C07_00_TOTAL_SHEET_KEY, _ROW_SCOPED, column) == pytest.approx(
+                _cell(corep, real_estate, _ROW_SCOPED, column)
+            ), f"Total sheet row {_ROW_SCOPED} col {column} is not the in-scope sheet's figure"
 
     def test_row_0040_is_non_null_on_the_in_scope_sheet(self) -> None:
         """The survivor. A null and a legitimate zero are different claims and
@@ -545,8 +553,9 @@ class TestBasel31RowScope:
         _results, corep = _run("b31")
         real_estate = _real_estate_sheet()
 
-        # Assert
-        for sheet in corep.c07_00:
+        # Assert — over the CLASS sheets: the Total sheet is their sum, so it
+        # carries these rows from the in-scope sheet and is not an out-of-scope class.
+        for sheet in c07_class_sheets(corep.c07_00):
             if sheet == real_estate:
                 continue
             for row_ref in _B31_SCOPED_ROWS:
@@ -557,6 +566,11 @@ class TestBasel31RowScope:
                         "Annex II reports it only in exposure class 'real estate "
                         "exposures' (Article 112(1)(i))"
                     )
+        for row_ref in _B31_SCOPED_ROWS:
+            for column in _MONEY_COLS:
+                assert _cell(corep, C07_00_TOTAL_SHEET_KEY, row_ref, column) == pytest.approx(
+                    _cell(corep, real_estate, row_ref, column)
+                ), f"Total sheet row {row_ref} col {column} is not the in-scope sheet's figure"
 
     def test_the_residential_rows_survive_on_the_real_estate_sheet(self) -> None:
         """The survivor half — what distinguishes a scope from a deletion.

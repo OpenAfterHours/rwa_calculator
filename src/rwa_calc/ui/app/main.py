@@ -556,6 +556,9 @@ def _register_pages(app: FastAPI) -> None:
             return _not_found(request, "That result has expired or does not exist.")
         if not reporting_lineage.is_instrumented(template):
             return _not_found(request, "That template is not instrumented for lineage.")
+        summed = reporting_lineage.summed_sheet_reason(template, sheet or None)
+        if summed is not None:
+            return _not_found(request, summed)
 
         resolver = reporting_lineage.sheet_lineage(response, template, sheet or None)
         view = catalog.template_sheet(bundles.corep, bundles.pillar3, template, sheet or None)

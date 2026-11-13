@@ -26,7 +26,9 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.c07 import c07_class_sheets, c07_total_sheet
 from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
+from rwa_calc.reporting.lineage import summed_sheet_reason
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import _sa_results
 from tests.unit.reporting.corep.test_c07_crm_substitution import _sa_results_with_substitution
@@ -130,3 +132,82 @@ def test_a_template_with_no_sheets_has_no_total() -> None:
 
     # Assert
     assert sheets == {}
+
+
+def _two_class_sheets() -> dict[str, pl.DataFrame]:
+    """Two hand-built class sheets: an ordinary row, and an equity-transitional
+    memorandum row (0371) that only the equity sheet carries."""
+    schema = {"row_ref": pl.String, "row_name": pl.String, "0010": pl.Float64, "0220": pl.Float64}
+    corporate = pl.DataFrame(
+        {
+            "row_ref": ["0010", "0371"],
+            "row_name": ["TOTAL EXPOSURES", "Equity transitional: SA higher risk"],
+            "0010": [100.0, None],
+            "0220": [80.0, None],
+        },
+        schema=schema,
+    )
+    equity = pl.DataFrame(
+        {
+            "row_ref": ["0010", "0371"],
+            "row_name": ["TOTAL EXPOSURES", "Equity transitional: SA higher risk"],
+            "0010": [40.0, 40.0],
+            "0220": [100.0, 100.0],
+        },
+        schema=schema,
+    )
+    return {"corporate": corporate, "equity": equity}
+
+
+def test_the_basel_31_total_leaves_out_the_rows_published_for_the_equity_class_alone() -> None:
+    """Annex II ¶55A publishes rows 0371-0374 for the equity exposure class only;
+    the Total sheet has no cell for them, so the sum is not reported there. No
+    registered portfolio fills these rows, which is why this is a hand-built frame."""
+    # Arrange
+    sheets = _two_class_sheets()
+
+    # Act
+    total = c07_total_sheet(sheets, "BASEL_3_1")
+
+    # Assert
+    assert total is not None
+    assert _cell(total, "0010", "0010") == pytest.approx(140.0)
+    assert _cell(total, "0371", "0010") is None
+    assert _cell(total, "0371", "0220") is None
+
+
+def test_the_crr_total_carries_every_row_a_class_sheet_carries() -> None:
+    """Nothing is left off the CRR Total: no EBA template is held to say what is."""
+    # Arrange
+    sheets = _two_class_sheets()
+
+    # Act
+    total = c07_total_sheet(sheets, "CRR")
+
+    # Assert
+    assert total is not None
+    assert _cell(total, "0371", "0010") == pytest.approx(40.0)
+
+
+def test_the_class_view_is_everything_but_the_total() -> None:
+    # Arrange
+    sheets = _sheets(_sa_results(), "BASEL_3_1")
+
+    # Act
+    classes = c07_class_sheets(sheets)
+
+    # Assert
+    assert C07_00_TOTAL_SHEET_KEY not in classes
+    assert set(classes) == set(sheets) - {C07_00_TOTAL_SHEET_KEY}
+
+
+def test_a_cell_on_the_total_sheet_is_explained_as_a_sum_not_as_missing() -> None:
+    # Arrange / Act
+    reason = summed_sheet_reason("c07_00", C07_00_TOTAL_SHEET_KEY)
+
+    # Assert
+    assert reason is not None
+    assert "sum of the exposure-class sheets" in reason
+    assert summed_sheet_reason("c07_00", "corporate") is None
+    assert summed_sheet_reason("c07_00", None) is None
+    assert summed_sheet_reason("c08_01", C07_00_TOTAL_SHEET_KEY) is None

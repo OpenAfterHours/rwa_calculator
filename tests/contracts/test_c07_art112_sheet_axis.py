@@ -62,8 +62,13 @@ from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep import templates
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
-from rwa_calc.reporting.corep.templates import C02_00_SA_CLASS_MAP, get_sa_row_sections
+from rwa_calc.reporting.corep.templates import (
+    C02_00_SA_CLASS_MAP,
+    C07_00_TOTAL_SHEET_KEY,
+    get_sa_row_sections,
+)
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 if TYPE_CHECKING:
@@ -217,8 +222,13 @@ class TestEmittedAxis:
         _results, corep = _run(portfolio, regime_key)
         sheet_map = _declared_sheet_map()
 
-        emitted = sorted(corep.c07_00)
+        # The Total sheet is the sum of the class sheets and no Art. 112(1) class
+        # itself: the letters are keyed on the class sheets, the Total is present.
+        emitted = sorted(c07_class_sheets(corep.c07_00))
         assert emitted, f"{portfolio}/{regime_key}: C 07.00 emitted NO sheet at all"
+        assert C07_00_TOTAL_SHEET_KEY in corep.c07_00, (
+            f"{portfolio}/{regime_key}: C 07.00 emitted no Total sheet beside {emitted}"
+        )
 
         by_row: dict[str, list[str]] = {}
         outside: list[str] = []
@@ -392,7 +402,7 @@ class TestUnmappedClassAlarm:
     def test_the_unmapped_exposure_is_reported_not_dropped(self) -> None:
         """The half that protects the numbers: a wrong sheet is visible, a
         vanished exposure is not. Asserted as the portfolio total across every
-        emitted sheet AND as the offending class's own cell, so a total that
+        emitted class sheet AND as the offending class's own cell, so a total that
         happened to foot for another reason cannot cover a lost leg."""
         frame = _sa_frame({_UNMAPPED_CLASS: 700.0, "corporate": 1_000.0, _MERGED_CLASS: 400.0})
 
@@ -402,9 +412,11 @@ class TestUnmappedClassAlarm:
             f"{_UNMAPPED_CLASS!r} opened no sheet — 700.0 of exposure value left "
             "the template silently, which is worse than the wrong sheet"
         )
+        # Added up over the CLASS sheets: the Total sheet is their sum, so
+        # including it would count the book twice.
         totals = {
             key: sheet.filter(pl.col("row_ref") == "0010")["0200"][0] or 0.0
-            for key, sheet in bundle.c07_00.items()
+            for key, sheet in c07_class_sheets(bundle.c07_00).items()
         }
         assert totals[_UNMAPPED_CLASS] == pytest.approx(700.0)
         assert sum(totals.values()) == pytest.approx(2_100.0)
@@ -647,14 +659,18 @@ class TestSubstitutionInflowKeysTheMergedSheet:
 
     def test_every_inflow_the_book_generates_is_reported_on_some_sheet(self) -> None:
         """The breakdown foots its parent: col 0100 summed over the emitted
-        sheets is the whole covered amount. Keying the merge correctly while
-        losing an amount would leave this short — it is deliberately blind to
-        WHICH sheet, which is what the two tests above pin."""
+        class sheets is the whole covered amount (the Total sheet is their sum,
+        so it is not an addend). Keying the merge correctly while losing an
+        amount would leave this short — it is deliberately blind to WHICH
+        sheet, which is what the two tests above pin."""
         bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
             _sa_frame_with_substitution_inflows()
         )
 
-        inflows = {key: _total_row(sheet)["0100"][0] for key, sheet in bundle.c07_00.items()}
+        inflows = {
+            key: _total_row(sheet)["0100"][0]
+            for key, sheet in c07_class_sheets(bundle.c07_00).items()
+        }
         assert all(value is not None for value in inflows.values()), (
             f"col 0100 is NULL on the total row of some sheet: {inflows}"
         )

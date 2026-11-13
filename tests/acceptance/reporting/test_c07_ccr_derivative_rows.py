@@ -45,10 +45,13 @@ import polars as pl
 import pytest
 from tests.acceptance.reporting.test_reporting_ccr_golden import _REGIMES, _generate_frames
 
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
+
 _REL = 1e-9
 
 _INSTITUTION_SHEET = "corep__c07_00__institution"
 _CORPORATE_SHEET = "corep__c07_00__corporate"
+_TOTAL_SHEET = f"corep__c07_00__{C07_00_TOTAL_SHEET_KEY}"
 _C02_FRAME = "corep__c_02_00"
 
 # Section 2 partitions the sheet by exposure type. Rows 0100 / 0120 are "of which"
@@ -613,8 +616,16 @@ def test_tieout_c07_section_2_foots_to_the_total_row(
 
 
 def _c07_sheets(frames: dict[str, pl.DataFrame]) -> list[pl.DataFrame]:
-    """Every C 07.00 exposure-class sheet (the SA template, in full)."""
-    return [sheet for key, sheet in sorted(frames.items()) if key.startswith("corep__c07_00__")]
+    """Every C 07.00 exposure-class sheet (the SA template, in full).
+
+    The Total sheet is the sum of these, so it is left out: a tie-out that added
+    it to them would count every exposure twice.
+    """
+    return [
+        sheet
+        for key, sheet in sorted(frames.items())
+        if key.startswith("corep__c07_00__") and key != _TOTAL_SHEET
+    ]
 
 
 def _institution_sheet(frames: dict[str, pl.DataFrame], regime_key: str) -> pl.DataFrame:

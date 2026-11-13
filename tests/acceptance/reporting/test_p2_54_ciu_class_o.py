@@ -110,10 +110,12 @@ from rwa_calc.data.schemas import (
 )
 from rwa_calc.domain.enums import ExposureClass, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     C02_00_SA_CLASS_MAP,
     C07_00_SA_SHEET_MAP,
+    C07_00_TOTAL_SHEET_KEY,
     C09_01_SA_CLASS_MAP,
 )
 from rwa_calc.reporting.filing.checks import evaluate_all
@@ -1606,7 +1608,12 @@ class TestTheCrrArmOnABookThisFileOwns:
         _results, corep, _errors = _control_run()
 
         sheet = _sheet_key("crr", _Z_CODE_112_O)
-        assert set(corep.c07_00) == {sheet, ExposureClass.CORPORATE.value}, (
+        # The Total sheet is the sum of the class sheets, not a class of its own:
+        # it is on the axis, and the two sheets counted here are the class sheets.
+        assert C07_00_TOTAL_SHEET_KEY in corep.c07_00, (
+            f"C 07.00 opened {sorted(corep.c07_00)} with no Total sheet"
+        )
+        assert set(c07_class_sheets(corep.c07_00)) == {sheet, ExposureClass.CORPORATE.value}, (
             f"C 07.00 opened {sorted(corep.c07_00)} under a CRR SA config; expected the "
             f"Article 112(1)(o) sheet beside the corporate one"
         )

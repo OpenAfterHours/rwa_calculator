@@ -30,6 +30,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from tests.properties.corpus import CORPUS
 from tests.properties.portfolios import corep_bundle, pillar3_bundle, results_df, run
 
@@ -135,13 +136,14 @@ def test_summaries_partition_the_portfolio_total(portfolio_name: str, regime: st
 
 @pytest.mark.parametrize(("portfolio_name", "regime"), _TEMPLATE_CASES)
 def test_c07_exposure_value_equals_the_standardised_population(portfolio_name: str, regime: str):
-    """C 07.00's exposure-value column, summed over its sheets, is the SA book.
+    """C 07.00's exposure-value column, summed over its class sheets, is the SA book.
 
     COREP Annex II makes C 07.00 the standardised template and publishes it per
-    Art. 112(1) obligor class (one sheet per class), so the union of its sheets
-    is exactly the standardised population and column 0200 is that population's
-    exposure value. Summing row 0010 across every emitted sheet must therefore
-    reproduce the ledger's standardised EAD — no more, and no less.
+    Art. 112(1) obligor class (one sheet per class), so the union of its class
+    sheets is exactly the standardised population and column 0200 is that
+    population's exposure value. Summing row 0010 across every emitted class
+    sheet must therefore reproduce the ledger's standardised EAD — no more, and
+    no less.
     """
     # Arrange
     portfolio = CORPUS[portfolio_name]
@@ -150,8 +152,9 @@ def test_c07_exposure_value_equals_the_standardised_population(portfolio_name: s
         df.filter(pl.col("reporting_approach") == "standardised")["ead_final"].fill_null(0.0).sum()
     )
 
-    # Act
-    sheets = corep_bundle(portfolio, regime).c07_00 or {}
+    # Act — over the CLASS sheets: the Total sheet is their sum, so adding it as
+    # well would count every exposure twice.
+    sheets = c07_class_sheets(corep_bundle(portfolio, regime).c07_00 or {})
     published = sum(_c07_total_exposure_value(frame) for frame in sheets.values())
 
     # Assert

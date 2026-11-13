@@ -2709,3 +2709,98 @@ gate that shipped.
   cell it computes unless something says which are cells. "Which cells exist"
   is a fact about the published template, separate from "what does each cell
   mean", and it needs its own source and its own gate.
+
+## 2026-11-13 — C 07.00 / OF 07.00 was produced without its Total sheet, and the map that names the published sheet codes recorded the gap as design
+
+- **Defect**: the standardised-approach template is required twice over — "The
+  information in OF CR SA is required for the total exposure across all
+  exposure classes and individually for each of the exposure classes under the
+  Standardised Approach. The total figures as well as the information of each
+  exposure class shall be reported in a separate dimension" (PS1/26 Annex II
+  §3.2.2 ¶47; the C 07.00 instructions say the same). The generator produced
+  the class sheets only. The published sheet code 0001 was empty in every
+  return under both regimes.
+- **Rule**: `boe_b0713` (ERROR, v4.1.1 PRA001 — row 0010 of sheet 0001 equals
+  the sum of row 0010 over sheets 0002–0017, on columns 0010, 0030, 0035, 0200
+  and 0220). Broken on **eleven** of the thirteen Basel 3.1 portfolios: a sum
+  of class sheets against a total that was not reported. On the template-level
+  engine the rules scoped to sheet 0001 were not broken — they were not
+  evaluated at all.
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py` keys its sheets on the
+  Art. 112(1) exposure class and nothing else. The gap was known and written
+  down: `src/rwa_calc/reporting/filing/sheet_maps.py` declared
+  `SheetCode("0001", "Total (all SA exposure classes)", (), …)` — the published
+  code, correctly named, with an empty tuple of our sheets — and a register
+  reason described it as "z0001 (Total) … carry empty bundle_keys by design (no
+  ExposureClass analogue)".
+- **Escape class**: `no-assertion-of-presence`. Nothing was wrong on any sheet
+  that existed; one sheet was absent, and absence produces no failing rule on
+  an engine that evaluates the cells it is given. The empty tuple made every
+  rule on the sheet "not evaluated", which every count reported as a property
+  of the estate rather than as a hole.
+- **Gate change**: presence is now asserted three ways.
+  `tests/unit/reporting/corep/test_c07_total_sheet.py` requires the sheet, its
+  layout, and every cell to be the sum of the class sheets (empty where no
+  class reports — a sum over nothing is not a measured zero).
+  `tests/contracts/test_of07_published_cells.py` requires the published code
+  0001 to address the generated sheet in both sheet maps, and the rows kept off
+  the Total to be exactly those the taxonomy has no cell for on it. And the
+  filing-mapping ratchet banks `boe_b0713` at zero portfolios, where no rule's
+  count may rise.
+- **Verified red**: with the sheet removed from
+  `COREPGenerator._generate_all_c07` and everything else in place,
+  `uv run pytest tests/unit/reporting/corep/test_c07_total_sheet.py -q -n 0`
+  fails on `AssertionError: assert 'total' in {'central_govt_central_bank': …}`
+  and `KeyError: 'total'`, and the template index test on
+  `assert ['corporate'] == ['corporate', 'total']`. Before the change the
+  banked breakdown held `boe_b0713` at 11.
+- **How the sheet is built, and why**: `c07_total_sheet` adds the reported class
+  sheets cell by cell; it is not a second execution over the whole population.
+  Every row is evaluated per sheet over that sheet's own population — the
+  real-estate rows exist on the real-estate sheet alone, a substitution inflow
+  lands on the protection provider's sheet, each cell reads its own basis — so
+  the sum of the sheets is the only total consistent with them, and it is what
+  `boe_b0713` states. It has no execution plan, so a cell on it has no
+  drill-down; the API and the UI say it is a sum and point at the class sheets
+  (`lineage.summed_sheet_reason`).
+- **What it cost the readers**: `bundle.c07_00` now holds one sheet that is the
+  sum of the others, so anything that adds up every sheet counts each exposure
+  twice. One production tie-out and 48 tests did; they read
+  `c07_class_sheets(...)` now. The vocabulary guard
+  `tests/conformance/test_reporting_class_keys.py` needed more than admitting
+  the new key: counting it put the sheet-key maps at 13 class values in 16
+  keys, a hair above the discovery floor, where one stray key would have taken
+  them out of the check altogether. The key is left out of the ratio, and the
+  test plants that typo.
+- **What the fix moved, rule by rule** (LESSONS C4):
+  on the v4.1.1 engine two rules moved — `boe_b0713` 11 → 0 portfolios, and
+  `boe_b0710_1` 0 → 1. On the template-level engine 58 rules changed state and
+  none regressed: no rule that passed now fails or goes unevaluated. 36 now
+  pass on at least one portfolio where they had asserted nothing or were not
+  evaluated, among them `boe_b0713` and the EBA's `v4728_m`; 21 moved from not
+  evaluated to holding only at zero. One rule that was vacuous now fails —
+  `boe_b0710_1` again.
+  `boe_b0710_1` is the `boe_b0710` question (column 0150 against a
+  conversion-factor breakdown the instructions define for off-balance-sheet
+  items) on memorandum row 0320 of the Total. It is reachable only now: the
+  taxonomy publishes rows 0300/0320 on sheets 0001–0004 and 0007–0009, our
+  figure sits on the 'in default' class sheet (P1.377), and the Total is the
+  first published sheet to carry it. It needs a regulatory reading, not a code
+  change; the register records both sides.
+- **A reading this corrected**: the register held `boe_b0959`
+  (`{r0015} >= {r0010}`) as "a published-rule defect … asserts defaulted >=
+  total, which no correct report can satisfy". Its scope is the nine "(-)"
+  columns, which are reported as negatives — so it says the defaulted part of a
+  deduction is no larger than the whole, and it now **passes** on real
+  provisions on the Total sheet of two portfolios. The entry has left the
+  vacuous register; the rule was right.
+- **A finding it exposed, not fixed here**: `structure_findings` rose 8 → 9 and
+  is banked deliberately. The taxonomy makes the Total's RWEA (row 0010, column
+  0220) one data point with OF 02.00 rows 0050 and 0060. The Total's figure is
+  the SA RWEA; our OF 02.00 row 0050 holds the credit-risk total, because the
+  C 02.00 / OF 02.00 row codes are offset from the published ones. That defect
+  has its own entry to come; this is it showing on one more cell.
+- **Lesson**: an empty tuple with a good comment is a defect with a
+  description. Where a published code names something we do not produce, the
+  record should be a failing or ratcheted check on its absence, not a sentence
+  saying the absence is intended.

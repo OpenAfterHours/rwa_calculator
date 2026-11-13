@@ -42,6 +42,7 @@ from rwa_calc.reporting.corep.templates import (
     B31_SA_ROW_SECTIONS,
     C07_00_SA_SHEET_KEYS,
     C07_00_SA_SHEET_MAP,
+    C07_00_TOTAL_SHEET_KEY,
     C07_COLUMNS,
     C08_01_COLUMNS,
     CRR_C07_COLUMNS,
@@ -105,11 +106,15 @@ class TestTemplateDefinitions:
         """
         labels = get_c07_sheet_labels(framework)
 
-        assert set(labels) == set(C07_00_SA_SHEET_KEYS), (
+        # The Total sheet is the sum of the class sheets, not a sheet the class map
+        # opens: it is named for the reader as well, beside the class labels.
+        assert C07_00_TOTAL_SHEET_KEY in labels, f"{framework}: the Total sheet has no label"
+        class_labels = set(labels) - {C07_00_TOTAL_SHEET_KEY}
+        assert class_labels == set(C07_00_SA_SHEET_KEYS), (
             f"{framework}: the C 07.00 label vocabulary and the sheet keys "
             "C07_00_SA_SHEET_MAP produces disagree — unlabelled "
-            f"{sorted(set(C07_00_SA_SHEET_KEYS) - set(labels))}, labelled but "
-            f"unreachable {sorted(set(labels) - set(C07_00_SA_SHEET_KEYS))}"
+            f"{sorted(set(C07_00_SA_SHEET_KEYS) - class_labels)}, labelled but "
+            f"unreachable {sorted(class_labels - set(C07_00_SA_SHEET_KEYS))}"
         )
         blank = sorted(key for key, name in labels.items() if not name.strip())
         assert not blank, f"{framework}: sheet key(s) {blank} carry an empty label"

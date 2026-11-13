@@ -187,6 +187,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.data.schemas import COLLATERAL_TYPE_CATEGORY, VALID_COLLATERAL_TYPES
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.kernel.columns import ensure_gross_side_carriers
 from tests.properties.corpus import CORPUS, RE_SPLIT, RE_SPLIT_WITH_FINANCIAL
 from tests.properties.portfolios import (
@@ -612,7 +613,7 @@ def test_cr4_off_balance_sheet_gross_equals_the_input_nominal_amounts(
 def test_c07_gross_exposure_equals_the_input_on_and_off_balance_sheet_amounts(
     portfolio_name: str, regime: str
 ):
-    """COREP C 07.00 column 0010, summed over its sheets, is the whole input book.
+    """COREP C 07.00 column 0010, summed over its class sheets, is the whole input book.
 
     An INDEPENDENT surface from CR4 reading the SAME two sealed carriers: C 07.00
     is published one sheet per Art. 112(1) class and its column 0010 is a SafeSum
@@ -626,8 +627,9 @@ def test_c07_gross_exposure_equals_the_input_on_and_off_balance_sheet_amounts(
     expected = _input_on_balance_sheet(portfolio) + _input_off_balance_sheet(portfolio)
     _require_wholly_standardised(portfolio, regime, portfolio_name)
 
-    # Act
-    sheets = corep_bundle(portfolio, regime).c07_00 or {}
+    # Act — over the CLASS sheets: the Total sheet is their sum, so adding it as
+    # well would count the whole book twice.
+    sheets = c07_class_sheets(corep_bundle(portfolio, regime).c07_00 or {})
     assert sheets, "C 07.00 emitted no sheet at all"
     published = sum(
         _template_cell(frame, C07_TOTAL_ROW, C07_GROSS_COLUMN) for frame in sheets.values()

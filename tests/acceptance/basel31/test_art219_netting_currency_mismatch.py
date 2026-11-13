@@ -24,6 +24,7 @@ scenario shapes and the hand-calc.
     eur_eur        EUR 300  EUR    300             700
     mixed_pool     GBP 200  GBP    200 + 100x0.92  708
                  + EUR 100
+    eur_gbp_sft    EUR 300  GBP    300 x 0.92      724   (SFT loan: 10 days, not 5)
 
 References:
     - PS1/26 Art. 219(1)-(2): on-B/S netting, currency mismatch at 10 days.
@@ -57,23 +58,6 @@ from tests.fixtures.netting_currency.netting_currency import (
 
 REGIME = "b31"
 REPORTING_DATE = date(2027, 1, 1)
-
-# Rows whose correct figure needs the 10-day liquidation period of Art. 219(2).
-# Strict, so each flips to a hard failure the moment it starts passing early.
-_PENDING_10_DAY = pytest.mark.xfail(
-    strict=True,
-    reason="PS1/26 Art. 219(2) 10-day liquidation period not yet applied to netted deposits",
-)
-_NEEDS_10_DAY: frozenset[str] = frozenset(
-    {"eur_gbp", "gbp_eur", "mixed_pool", "eur_gbp_coll", "gbp_eur_coll"}
-)
-
-
-def _params(labels: tuple[str, ...]) -> list:
-    return [
-        pytest.param(label, marks=_PENDING_10_DAY) if label in _NEEDS_10_DAY else label
-        for label in labels
-    ]
 
 
 def _run(labels: tuple[str, ...]) -> pl.DataFrame:
@@ -131,7 +115,7 @@ class TestB31NettingCurrencyAdequacy:
 class TestB31NettingCurrencyMismatch:
     """Art. 219(2): a mismatched netted deposit is recognised net of Table 4 at 10 days."""
 
-    @pytest.mark.parametrize("label", _params(PLAIN_LABELS + WITH_COLLATERAL_LABELS))
+    @pytest.mark.parametrize("label", PLAIN_LABELS + WITH_COLLATERAL_LABELS)
     def test_loan_ead_reflects_the_deposit_denomination(
         self, request: pytest.FixtureRequest, label: str
     ) -> None:
@@ -139,7 +123,7 @@ class TestB31NettingCurrencyMismatch:
         row = _row(_frame(request, label), s.loan_ref)
         assert row["ead_final"] == pytest.approx(s.expected_ead(REGIME), rel=1e-9)
 
-    @pytest.mark.parametrize("label", _params(PLAIN_LABELS + WITH_COLLATERAL_LABELS))
+    @pytest.mark.parametrize("label", PLAIN_LABELS + WITH_COLLATERAL_LABELS)
     def test_loan_rwa_is_ead_at_the_unrated_corporate_weight(
         self, request: pytest.FixtureRequest, label: str
     ) -> None:

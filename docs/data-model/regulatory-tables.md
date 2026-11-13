@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 204 entries, content hash `9c63304e801e3a38`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 236 entries, content hash `be501c3fe5513117`
+- **CRR** (`crr` @ 2026-01-01) — 205 entries, content hash `e6294a6aa2f47757`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 237 entries, content hash `cae257b83cf5f6ae`
 
 ## Regime features
 
@@ -227,6 +227,7 @@ Integer counts — day floors, thresholds, band bounds (`IntParam`).
 | `mf_margined_large_netting_set_trade_count` | `5000` | `5000` | CRR Art. 285 |
 | `mf_unmargined_floor_days` | `10` | `10` | CRR Art. 279c |
 | `oc_short_maturity_threshold_days` | `365` | `365` | CRR Art. 111 |
+| `on_bs_netting_liquidation_period` | `20` | `10` | CRR Art. 224 / PS1/26, paragraph 219 |
 | `sa_ccr_business_days_per_year` | `250` | `250` | CRR Art. 279c |
 | `zero_haircut_max_sovereign_cqs` | `1` | `1` | CRR Art. 227 |
 

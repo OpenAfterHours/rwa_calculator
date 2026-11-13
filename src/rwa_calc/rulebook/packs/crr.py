@@ -27,6 +27,7 @@ from rwa_calc.rulebook.model import (
     DecisionTable,
     Feature,
     FormulaParams,
+    IntParam,
     LookupTable,
     ReportingTemplateSet,
     RuleEntry,
@@ -974,6 +975,25 @@ ENTRIES: dict[str, RuleEntry] = {
             "SA-equivalent is computed on the unreduced EAD; only U-TREA falls, "
             "so the floor becomes MORE likely to bind. Flip enabled=False to "
             "restore the single-counterparty (P1.238) keying",
+        ),
+    ),
+    # Liquidation period (business days) carried by every synthetic NETTING_ cash
+    # row built in engine/crm/netting.py::generate_netting_collateral, feeding the
+    # Art. 226(2) sqrt(T_m/10) scaling of its Table 4 currency-mismatch H_fx. CRR
+    # Art. 219 prescribes no netting-specific period, so this is the Art. 224(2)(a)
+    # secured-lending period. Before the row carried one, the haircut stage defaulted
+    # to 20 days, or to the 5-day repo period when the beneficiary loan was flagged
+    # is_sft; this entry replaces both. It scales only a currency-mismatch H_fx (a
+    # netted deposit is cash, Table 3 0%), and CRR Art. 219 recognises netting only
+    # between loans and deposits "denominated in the same currency".
+    "on_bs_netting_liquidation_period": IntParam(
+        name="on_bs_netting_liquidation_period",
+        value=20,
+        citation=Citation(
+            "CRR",
+            "224",
+            "(2)(a) secured-lending liquidation period = 20 BD; CRR Art. 219 sets no "
+            "netting-specific period",
         ),
     ),
     # FCCM collateral-haircut maturity-band structure (CRR Art. 224 Table 1): CRR

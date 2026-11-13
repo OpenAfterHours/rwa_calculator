@@ -877,6 +877,26 @@ class CRMProcessor:
         ):
             user_schema = dict(collateral.collect_schema())
             synth_schema = dict(netting_collateral.collect_schema())
+            # An integer-WIDTH difference is not the malformed-table condition
+            # below: a direct caller's unsealed Int64 ``liquidation_period_days``
+            # against the synthetic rows' canonical Int32 (the loader seals user
+            # collateral to Int32, so production never presents it). Align the
+            # synthetic side to the user's width rather than drop the user's table.
+            # It applies to every integer column the two share — ``issuer_cqs``
+            # (always null on synthetic rows) included — and is lossless: the
+            # synthetic integers are a null CQS and a 10/20-day period.
+            widths = {
+                name: user_schema[name]
+                for name in user_schema.keys() & synth_schema.keys()
+                if user_schema[name] != synth_schema[name]
+                and user_schema[name].is_integer()
+                and synth_schema[name].is_integer()
+            }
+            if widths:
+                netting_collateral = netting_collateral.with_columns(
+                    pl.col(name).cast(dtype) for name, dtype in widths.items()
+                )
+                synth_schema.update(widths)
             mismatches = {
                 name: (user_schema[name], synth_schema[name])
                 for name in user_schema.keys() & synth_schema.keys()

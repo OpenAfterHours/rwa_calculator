@@ -30,6 +30,7 @@ from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.collateral import apply_firb_supervisory_lgd_no_collateral
 from rwa_calc.engine.crm.netting import generate_netting_collateral
 from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 # ``generate_netting_collateral`` takes a REQUIRED pack: the netting perimeter is
 # a cited pack Feature (``on_bs_netting_perimeter_is_agreement``) and there is no
@@ -185,6 +186,40 @@ class TestGenerateNettingCollateral:
             )
         }
         assert rows == {("GBP", "GBP", 100_000.0), ("GBP", "EUR", 200_000.0)}
+
+    @pytest.mark.parametrize(
+        ("pack", "expected_days"),
+        [
+            # PS1/26 Art. 219(2): "The institution shall apply a 10 business day
+            # liquidation period." (ps126app1.pdf page 191 of 492)
+            pytest.param(_B31_PACK, 10, id="b31-art219-2-ten-days"),
+            # CRR Art. 219 sets no period: the Art. 224(2)(a) secured-lending 20 BD.
+            pytest.param(_PACK, 20, id="crr-art224-2a-twenty-days"),
+        ],
+    )
+    def test_netting_rows_carry_the_regime_liquidation_period(
+        self, pack: ResolvedRulepack, expected_days: int
+    ) -> None:
+        """The period the haircut stage scales the Table 4 H_fx by. Absent, every
+        netted deposit fell to the 20-day secured-lending default — 11.314% under
+        Basel 3.1 where Art. 219(2) gives 8%. Int32 is load-bearing: the processor
+        drops a user collateral table whose dtypes disagree with these rows."""
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEP_EUR", "LOAN_A"],
+                "drawn_amount": [-200_000.0, 500_000.0],
+                "netting_agreement_reference": ["AGR01", "AGR01"],
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "ead_gross": [0.0, 500_000.0],
+                "currency": ["EUR", "EUR"],
+            }
+        )
+        result = generate_netting_collateral(lf, pack=pack)
+        assert result is not None
+
+        df = result.collect()
+        assert df.schema["liquidation_period_days"] == pl.Int32
+        assert df["liquidation_period_days"].to_list() == [expected_days]
 
     def test_netting_eligible_requires_reference(self) -> None:
         """Only loans with a netting_agreement_reference provide a netting pool."""

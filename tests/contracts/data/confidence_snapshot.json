@@ -3351,7 +3351,8 @@
         "contracts/edges.py",
         "engine/crm/haircuts.py",
         "engine/crm/netting.py",
-        "engine/crm/processor.py"
+        "engine/crm/processor.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
@@ -3364,6 +3365,7 @@
         "tests/fixtures/p1_238/p1_238.py",
         "tests/fixtures/p1_241/p1_241.py",
         "tests/fixtures/reporting_netting_portfolio.py",
+        "tests/unit/crm/test_collateral_submodules.py",
         "tests/unit/crm/test_netting.py"
       ],
       "watchfire_index_gap": false
@@ -3641,7 +3643,8 @@
         "liquidation_period_repo@b31",
         "liquidation_period_repo@crr",
         "liquidation_period_secured_lending@b31",
-        "liquidation_period_secured_lending@crr"
+        "liquidation_period_secured_lending@crr",
+        "on_bs_netting_liquidation_period@crr"
       ],
       "source_files": [
         "contracts/bundles.py",
@@ -8168,12 +8171,16 @@
     {
       "article": "219",
       "code_functions": [],
-      "confidence": "GAP",
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
-      "pack_entries": [],
-      "source_files": [],
+      "pack_entries": [
+        "on_bs_netting_liquidation_period@b31"
+      ],
+      "source_files": [
+        "engine/crm/netting.py"
+      ],
       "test_files": [
         "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/basel31/test_art237_matched_short_dated_netting_firb.py",
@@ -8182,7 +8189,8 @@
         "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/netting_currency/netting_currency.py",
-        "tests/unit/crm/test_collateral_submodules.py"
+        "tests/unit/crm/test_collateral_submodules.py",
+        "tests/unit/test_engine_utils_silent_skip.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8710,8 +8718,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "be501c3fe55131179e4da131f4be37dd8ab2f6fc69f11cacac2d60074c9b19e8",
-    "crr": "9c63304e801e3a38dbcbb03e55130676fd230352e80de778f335dc455b77b26a"
+    "b31": "cae257b83cf5f6aee337713b02643c7e5a2df4535dabd78664c0d7f66b7b13f7",
+    "crr": "e6294a6aa2f47757ddafd118b96cb1e1c88f2b46a4f5e76857e9db02dd8b9fee"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

@@ -65,7 +65,7 @@ _PENDING_SAME_CURRENCY = pytest.mark.xfail(
     reason="CRR Art. 219 same-currency restriction not yet applied to netted deposits",
 )
 _NEEDS_SAME_CURRENCY: frozenset[str] = frozenset(
-    {"eur_gbp", "gbp_eur", "mixed_pool", "eur_gbp_coll", "gbp_eur_coll"}
+    {"eur_gbp", "gbp_eur", "mixed_pool", "eur_gbp_sft", "eur_gbp_coll", "gbp_eur_coll"}
 )
 
 

@@ -32,15 +32,15 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `9c63304e801e3a38`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `be501c3fe5513117`
+- **CRR** (`crr` @ 2026-01-01) — content hash `e6294a6aa2f47757`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `cae257b83cf5f6ae`
 
 ## Summary
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
 | CRR (Capital Requirements Regulation) | 35 | 58 | 10 | 37 | 14 | 154 |
-| PS1/26 (PRA Policy Statement) | 27 | 27 | 7 | 29 | 17 | 107 |
+| PS1/26 (PRA Policy Statement) | 27 | 28 | 7 | 29 | 16 | 107 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -135,12 +135,12 @@ Package version `0.3.34`. Resolved packs:
 | 216 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
-| 219 | 1 | 0 | 4 | 0 | 11 | MEDIUM |
+| 219 | 1 | 0 | 5 | 0 | 12 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
 | 223 | 4 | 0 | 19 | 30 | 29 | HIGH |
-| 224 | 4 | 10 | 11 | 33 | 44 | HIGH |
+| 224 | 4 | 11 | 11 | 33 | 44 | HIGH |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
 | 227 | 0 | 2 | 3 | 0 | 1 | MEDIUM |
 | 228 | 0 | 0 | 1 | 25 | 2 | UNCITED |
@@ -286,7 +286,7 @@ Package version `0.3.34`. Resolved packs:
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 219 | 0 | 0 | 0 | 0 | 8 | GAP |
+| 219 | 0 | 1 | 1 | 0 | 9 | MEDIUM |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
 | 223 | 0 | 0 | 4 | 0 | 2 | UNCITED |
@@ -394,7 +394,6 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 
 | Article | Oracle cases | Test refs | Anchored as |
 |---|---|---|---|
-| PS1/26 219 | 0 | 8 | CRR Art. 219 |
 | PS1/26 197 | 0 | 5 | CRR Art. 197 |
 | PS1/26 124A | 0 | 4 | — |
 | CRR 236 | 0 | 4 | — |

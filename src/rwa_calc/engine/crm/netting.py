@@ -93,6 +93,18 @@ def generate_netting_collateral(
     deposit against a EUR loan took one, and with any collateral file present no
     netted deposit was haircut at all (escape log 2026-11-13).
 
+    Every synthetic row also carries ``liquidation_period_days`` from the pack
+    entry ``on_bs_netting_liquidation_period``, the period the haircut stage
+    scales the Table 4 H_fx by (Art. 226(2)). PS1/26 Art. 219(2) fixes it at 10
+    business days for a netted deposit (8%), whatever the beneficiary — including
+    an SFT-flagged loan, which the haircut stage would otherwise give the 5-day
+    repo period. CRR Art. 219 sets none, so CRR uses the Art. 224(2)(a)
+    secured-lending 20 days. Without the column, a Basel 3.1 netted deposit took
+    the haircut stage's default: 20 days (11.314%), or 5 for an SFT loan (5.657%).
+    Art. 219(2)'s non-daily mark-to-market scale-up (Art. 226(1)) does not reach
+    these rows — no input carries a revaluation frequency for loans or deposits
+    (P1.384).
+
     Art. 219 treats the netted deposit as cash collateral, so the funded-
     protection maturity-mismatch rules (Art. 237-239) apply exactly as for any
     other funded protection (P1.241). The synthetic row therefore carries the
@@ -281,6 +293,13 @@ def generate_netting_collateral(
     # deposit with original maturity < 1y and a mismatch is zeroed downstream.
     original_expr = pl.col("_pool_deposit_orig_maturity")
 
+    # Liquidation period for the Table 4 currency-mismatch H_fx (Art. 226(2)
+    # scaling), from the pack: PS1/26 Art. 219(2) fixes 10 business days for a
+    # netted deposit; CRR sets none and keeps the Art. 224(2)(a) secured-lending
+    # period. Int32 to match COLLATERAL_SCHEMA — the processor drops a user
+    # collateral table whose dtypes disagree with these synthetic rows.
+    liquidation_days = pack.int_param("on_bs_netting_liquidation_period").value
+
     # Build synthetic collateral rows — currency and denomination from the pool
     # (source of funds). maturity_date / residual_maturity_years /
     # original_maturity_years are the DEPOSIT's (Art. 219/237-238), not the
@@ -300,6 +319,7 @@ def generate_netting_collateral(
         pl.lit(None).cast(pl.String).alias("issuer_type"),
         residual_expr.alias("residual_maturity_years"),
         original_expr.alias("original_maturity_years"),
+        pl.lit(liquidation_days, dtype=pl.Int32).alias("liquidation_period_days"),
         pl.lit(True).alias("is_eligible_financial_collateral"),
         pl.lit(True).alias("is_eligible_irb_collateral"),
         pl.lit(None).cast(pl.Date).alias("valuation_date"),

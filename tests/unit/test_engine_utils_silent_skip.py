@@ -96,3 +96,50 @@ class TestMalformedCollateralBoundary:
         assert "market_value" in dtype_warnings[0].message
         # The run still completes with the malformed table dropped.
         assert result.exposures.collect().height == 1
+
+    def test_integer_width_difference_keeps_the_user_table(self):
+        """The synthetic netting rows carry ``liquidation_period_days`` as the
+        canonical Int32 (PS1/26 Art. 219(2) 10-day period). A direct caller's
+        unsealed Int64 for the same column is a width difference, not the
+        malformed-table condition above: the user's table must survive the merge
+        rather than be dropped with a CRM dtype warning."""
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["DEP", "LN", "OTHER"],
+                "counterparty_reference": ["CP1", "CP1", "CP2"],
+                "exposure_class": ["corporate"] * 3,
+                "approach": ["standardised"] * 3,
+                "exposure_type": ["loan"] * 3,
+                "drawn_amount": [-300.0, 1000.0, 500.0],
+                "currency": ["GBP"] * 3,
+                "original_currency": ["GBP"] * 3,
+                "netting_agreement_reference": ["AGR", "AGR", None],
+            }
+        )
+        user_collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["C1"],
+                "beneficiary_reference": ["OTHER"],
+                "beneficiary_type": ["loan"],
+                "market_value": [100.0],
+                "collateral_type": ["cash"],
+                "currency": ["GBP"],
+                "is_eligible_financial_collateral": [True],
+                "liquidation_period_days": [10],  # Int64, as a dict literal builds it
+            }
+        )
+        assert user_collateral.collect_schema()["liquidation_period_days"] == pl.Int64
+        bundle = make_classified_bundle(all_exposures=exposures, collateral=user_collateral)
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+
+        result = CRMProcessor().get_crm_unified_bundle(bundle, config)
+
+        assert not [e for e in result.crm_errors if "incompatible column dtypes" in e.message]
+        # The user's cash still secures OTHER (table kept) and the deposit still nets
+        # LN: the adjusted collateral value is the carrier both effects land on.
+        adjusted = dict(
+            result.exposures.select("exposure_reference", "collateral_adjusted_value")
+            .collect()
+            .iter_rows()
+        )
+        assert (adjusted["LN"], adjusted["OTHER"]) == (pytest.approx(300.0), pytest.approx(100.0))

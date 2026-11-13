@@ -36,6 +36,9 @@ so RWA == EAD) and its own netting agreement, so scenarios assembled into one
 bundle never pool together. A 1,000 loan is offset by a 300 deposit (a
 negative-drawn loan) under that agreement; ``mixed_pool`` offsets the GBP loan
 with a GBP 200 deposit AND a EUR 100 deposit, which must stay two pools.
+``eur_gbp_sft`` is ``eur_gbp`` with the netted loan flagged ``is_sft``: the
+haircut stage defaults an SFT beneficiary's collateral to the 5-day repo period
+(Art. 224(2)), and Art. 219(2)'s 10 days must still win for the netted deposit.
 
 The ``*_coll`` scenarios are the same pairs built into a bundle that ALSO carries
 an ordinary collateral file (cash pledged to an unrelated loan). That is the
@@ -101,6 +104,7 @@ class Scenario:
     label: str
     loan_currency: str
     deposits: tuple[tuple[str, float], ...]
+    loan_is_sft: bool = False
 
     @property
     def counterparty(self) -> str:
@@ -154,6 +158,7 @@ SCENARIOS: dict[str, Scenario] = {
         _pair("gbp_eur", "GBP", "EUR"),
         _pair("eur_eur", "EUR", "EUR"),
         Scenario("mixed_pool", "GBP", (("GBP", 200.00), ("EUR", 100.00))),
+        Scenario("eur_gbp_sft", "GBP", (("EUR", DEPOSIT_ABS),), loan_is_sft=True),
         _pair("gbp_gbp_coll", "GBP", "GBP"),
         _pair("eur_gbp_coll", "EUR", "GBP"),
         _pair("gbp_eur_coll", "GBP", "EUR"),
@@ -163,7 +168,14 @@ SCENARIOS: dict[str, Scenario] = {
 
 # The two bundles: the collateral-file variants must not share a bundle with the
 # plain ones, because the presence of ANY collateral file is the condition.
-PLAIN_LABELS: tuple[str, ...] = ("gbp_gbp", "eur_gbp", "gbp_eur", "eur_eur", "mixed_pool")
+PLAIN_LABELS: tuple[str, ...] = (
+    "gbp_gbp",
+    "eur_gbp",
+    "gbp_eur",
+    "eur_eur",
+    "mixed_pool",
+    "eur_gbp_sft",
+)
 WITH_COLLATERAL_LABELS: tuple[str, ...] = (
     "gbp_gbp_coll",
     "eur_gbp_coll",
@@ -196,7 +208,14 @@ def build_netting_currency_bundle(labels: tuple[str, ...], reporting_date: date)
                 _loan(s.deposit_ref(index), s.counterparty, currency, -balance, s.agreement_ref)
             )
         loan_rows.append(
-            _loan(s.loan_ref, s.counterparty, s.loan_currency, LOAN_DRAWN, s.agreement_ref)
+            _loan(
+                s.loan_ref,
+                s.counterparty,
+                s.loan_currency,
+                LOAN_DRAWN,
+                s.agreement_ref,
+                is_sft=s.loan_is_sft,
+            )
         )
     if with_collateral:
         loan_rows.append(
@@ -258,6 +277,8 @@ def _loan(
     currency: str,
     drawn: float,
     agreement_ref: str | None,
+    *,
+    is_sft: bool = False,
 ) -> dict:
     # Deposit and loan share one six-year maturity, so no Art. 237-239 maturity
     # mismatch can arise and the currency treatment is the only adjustment.
@@ -271,4 +292,5 @@ def _loan(
         "interest": 0.0,
         "seniority": "senior",
         "netting_agreement_reference": agreement_ref,
+        "is_sft": is_sft,
     }

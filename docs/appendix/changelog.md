@@ -250,6 +250,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `engine/crm/collateral.py`, which had no room left under the module-size
   ratchet. Pinned by `tests/acceptance/{crr,basel31}/test_art219_netting_currency_mismatch.py`.
   Recorded in `docs/development/escape-log.md` (2026-11-13).
+- **Basel 3.1: a currency-mismatched netted deposit is now haircut at the PS1/26
+  Art. 219(2) 10-business-day liquidation period (8%).** Art. 219(2), read from
+  ps126app1.pdf (page 191 of 492):
+
+  > *"Where there is a currency mismatch between the exposure referred to in
+  > point (b)(i) of paragraph 1 and the loans and deposits referred to in point
+  > (b)(ii) of paragraph 1, the institution shall reflect the mismatch by
+  > applying the appropriate volatility adjustment specified in Table 4 in
+  > paragraph 1 of Article 224 to the value of the protection. The institution
+  > shall apply a 10 business day liquidation period. Where marking to market is
+  > not conducted daily, the institution shall scale up the volatility
+  > adjustment using the formula in paragraph 1 of Article 226."*
+
+  The synthetic `NETTING_` row carried no `liquidation_period_days`, so the
+  haircut stage applied its general Art. 224(2) default: 20 days (√2 × 8% =
+  11.314%), or 5 days (5.657%) when the netted loan was flagged `is_sft`. Every
+  netting row now carries the period from the new pack entry
+  `on_bs_netting_liquidation_period`:
+  - **Basel 3.1:** 10 days, citing PS1/26 Art. 219(2), whatever the loan.
+  - **CRR:** 20 days, citing Art. 224(2)(a). CRR Art. 219 sets no
+    netting-specific period.
+
+  **Direction, for a 300 EUR deposit netting a GBP loan:**
+  - **Basel 3.1, ordinary loan: RWA-REDUCING.** Relief rises from 266.06 to
+    276 (EAD 733.94 → 724).
+  - **Basel 3.1, SFT-flagged loan: RWA-increasing.** Relief falls from 283.03
+    to 276 (EAD 716.97 → 724).
+  - **CRR, SFT-flagged loan:** moves from 5 days to 20 days.
+  - **CRR, any other loan:** unchanged.
+
+  Art. 219(2)'s last sentence, the Art. 226(1) scale-up for non-daily marking
+  to market, is **not** applied to netting rows, because no input carries a
+  revaluation frequency for loans or deposits. That is filed as P1.384.
+
+  `CRMProcessor` no longer drops a user collateral table whose only dtype
+  difference from the synthetic rows is integer width, for example an unsealed
+  Int64 `liquidation_period_days` or `issuer_cqs`. It casts the synthetic side
+  to match instead. A table with a malformed column, such as a String
+  `market_value`, is still dropped with its warning.
 - **A parallel batch (`rwa_calc.api.run_batch`) could hang forever on Linux
   under Python 3.13.** `api/batch.py` built its `ProcessPoolExecutor` on
   `multiprocessing`'s *default* start method, and that default depends on both

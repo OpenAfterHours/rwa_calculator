@@ -912,6 +912,34 @@ ENTRIES: dict[str, RuleEntry] = {
             "restore the single-counterparty (P1.238) keying",
         ),
     ),
+    # Liquidation period (business days) carried by every synthetic NETTING_ cash
+    # row built in engine/crm/netting.py::generate_netting_collateral, feeding the
+    # Art. 226(2) sqrt(T_m/10) scaling of its Table 4 currency-mismatch H_fx.
+    # ps126app1.pdf page 191 of 492, Art. 219(2), read verbatim: "Where there is a
+    # currency mismatch between the exposure referred to in point (b)(i) of
+    # paragraph 1 and the loans and deposits referred to in point (b)(ii) of
+    # paragraph 1, the institution shall reflect the mismatch by applying the
+    # appropriate volatility adjustment specified in Table 4 in paragraph 1 of
+    # Article 224 to the value of the protection. The institution shall apply a 10
+    # business day liquidation period. Where marking to market is not conducted
+    # daily, the institution shall scale up the volatility adjustment using the
+    # formula in paragraph 1 of Article 226." This specific rule governs the netted
+    # deposit over the haircut stage's general default (Art. 224(2): 20 days, or 5
+    # for an SFT-flagged beneficiary). Direction on a currency-mismatched netted
+    # deposit of 300: RWA-REDUCING against the 20-day default (nets 276 instead of
+    # 266.06), RWA-increasing against the 5-day SFT default (276 instead of 283.03).
+    # The third sentence's Art. 226(1) scale-up is NOT applied to netting rows: no
+    # input carries a revaluation frequency for loans or deposits (P1.384).
+    "on_bs_netting_liquidation_period": IntParam(
+        name="on_bs_netting_liquidation_period",
+        value=10,
+        citation=Citation(
+            "PS1/26",
+            "219",
+            "(2) on-B/S netting currency mismatch: Table 4 volatility adjustment at a "
+            "10 business day liquidation period",
+        ),
+    ),
     # FCCM collateral-haircut maturity-band structure: Basel 3.1 uses 5 bands
     # (0_1y / 1_3y / 3_5y / 5_10y / 10y_plus) vs the CRR 3 bands. Overrides the CRR
     # Feature; gates _maturity_band_expression in engine/crm/haircuts.py. The

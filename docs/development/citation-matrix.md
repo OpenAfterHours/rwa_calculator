@@ -882,9 +882,9 @@ Last generated: 2026-11-13.
     --8<-- "src/rwa_calc/engine/crm/processor.py:575:808"
     ```
 
-??? quote "`_apply_own_issue_collateral_gate` — src/rwa_calc/engine/crm/processor.py:906"
+??? quote "`_apply_own_issue_collateral_gate` — src/rwa_calc/engine/crm/processor.py:926"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:906:1009"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:926:1029"
     ```
 
 
@@ -892,7 +892,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:43"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
     ```
 
 
@@ -947,7 +947,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:44"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
     ```
 
 
@@ -1005,7 +1005,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:45"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
     ```
 
 
@@ -1044,7 +1044,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:46"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
@@ -1234,7 +1234,7 @@ Last generated: 2026-11-13.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:47"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:314"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
     ```
 
 

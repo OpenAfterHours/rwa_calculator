@@ -2819,8 +2819,11 @@ gate that shipped.
     final figure needs the two regime fixes, and each is strict.
 - **Related, fixed separately** (each with its own commit and review):
   - PS1/26 Art. 219(2) prescribes a **10 business day** liquidation period for
-    a netted deposit. The engine gave the synthetic row the 20-day
-    secured-lending default (11.314%, not 8%). Correcting it is RWA-REDUCING.
+    a netted deposit. The engine gave the synthetic row the haircut stage's
+    default instead: 20 days (11.314%, not 8%), or 5 days for an SFT-flagged
+    loan. Correcting it is RWA-REDUCING, except on an SFT loan, where it
+    increases RWA. Art. 219(2)'s Art. 226(1) non-daily scale-up still does not
+    reach netting rows (P1.384).
   - CRR Art. 219 recognises same-currency netting only. The engine haircut a
     cross-currency deposit instead of excluding it. Correcting it is
     RWA-increasing under CRR.

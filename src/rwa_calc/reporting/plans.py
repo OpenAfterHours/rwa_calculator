@@ -71,7 +71,8 @@ class SheetPlan:
     on this sheet (C 08.01 cols 0080/0090). Those rows are exempt from the
     all-null empty-row pass: their content comes from legs in OTHER sheets, so an
     empty own-subset does not make them empty, and nulling them would delete the
-    component the published row sums (``boe_b0744`` / ``boe_b0745``) require.
+    component the template's row sums (EBA ``v0338_m``; BoE v4.0.0 ``boe_b0744`` /
+    ``boe_b0745``) require.
     """
 
     spec: TemplateSpec

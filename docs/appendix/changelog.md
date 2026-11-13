@@ -12,6 +12,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - (Next release changes will go here)
+- **Basel 3.1 supervisory validation rules now come from BoE Banking Taxonomy v4.1.1
+  (27 Aug 2026), replacing v4.0.0.** v4.1.1 supersedes v4.0.0 for entry point PRA001
+  (Own Funds). The v4.0.0 PRA001 SchemaRef is retired for live reporting from 1 Jan 2027, the
+  date PS1/26 takes effect. The packaged extract is renamed from
+  `basel31-boe-v4.0.0-credit-risk.json` to `basel31-boe-v4.1.1-credit-risk.json`. Code that
+  reads it through `rwa_calc.reporting.validations.load_rules` needs no change; a path
+  hard-coded to the old filename will break. The credit-risk subset goes from 820 rules
+  (808 enforced) to 816 (800).
+  - **Withdrawn by the BoE:** `boe_b0303`, `boe_b0744`, `boe_b0745` and `boe_b0752_1/22/23/24`.
+  - **Split:** `boe_b0378` and `boe_b0379` each become a `_1` and a `_2` rule, and the `_2` rule
+    reverses the inequality on the "(-)" deduction columns.
+  - **New:** `boe_b0751_1` (WARNING).
+  - **No longer enforced:** `boe_b0755`–`boe_b0758` were rewritten and taken out of XBRL.
+  - **Edited:** expressions on `boe_b0263`, `boe_b0718`, `boe_b0735` and `boe_b0739`; scopes on
+    `boe_b0751` and `boe_b0767`.
+
+  Seven supervisory-register breaks we had recorded against those rules are gone, five of them
+  previously filed as limits of the published rule. **One consequence for users:** v4.1.1 drops
+  every `DESCRIPTION` label, so the extract's `eba_equivalent` / `eba_equivalents` fields (the
+  BoE→EBA rule cross-reference) are now empty. The 85 BoE rules that reuse an EBA rule id are
+  unaffected. The downloader also fetches the v4.1.1 release note and the BoE known-issues log;
+  the August 2026 log changes nothing in the credit-risk extract.
 - **BREAKING (reporting surface): COREP C 07.00 / OF 07.00 now keys its
   exposure-class dimension on the Article 112(1) classes, not on the engine's
   internal exposure classes.** The template's class dimension is the Art. 112(1)

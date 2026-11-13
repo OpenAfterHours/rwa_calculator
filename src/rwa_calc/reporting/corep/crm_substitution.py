@@ -199,8 +199,8 @@ class InflowBreakdown:
     """One destination class's substitution inflow, on the axes C 08.01 publishes.
 
     ``total`` lands on the Total row 0010; ``on_bs`` / ``off_bs`` on rows 0020 /
-    0030 (``boe_b0744``); ``graded`` / ``slotting`` on rows 0070 / 0080
-    (``boe_b0745``, EBA ``v0338_m``). Each PAIR sums to ``total`` — they are the
+    0030 (BoE v4.0.0 ``boe_b0744``); ``graded`` / ``slotting`` on rows 0070 / 0080
+    (EBA ``v0338_m``; BoE v4.0.0 ``boe_b0745``). Each PAIR sums to ``total`` — they are the
     same money counted along two axes, exactly as a native exposure appears once
     in each decomposition. C 07.00 reads ``total`` only: its own row
     decomposition ``boe_b0717`` is scoped to cols 0200/0220, neither of which the
@@ -423,8 +423,8 @@ def _off_bs(cols: set[str]) -> pl.Expr:
     does not change it, so the inflow inherits the side of the leg it came from.
     The kernel ladder is ``bs_type`` then ``exposure_type``; a leg the frame
     cannot place falls to the ON-balance-sheet side rather than vanishing, which
-    is what keeps ``on_bs + off_bs == total`` and therefore keeps ``boe_b0744``
-    footing on a frame with a thin schema.
+    is what keeps ``on_bs + off_bs == total`` and therefore keeps the balance-sheet
+    decomposition footing on a frame with a thin schema.
     """
     if "bs_type" in cols:
         return pl.col("bs_type") == "OFB"

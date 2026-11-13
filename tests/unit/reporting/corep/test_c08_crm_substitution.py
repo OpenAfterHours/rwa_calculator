@@ -24,7 +24,7 @@ at ``src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json``):
   exposure classes ... shall also be considered" (the D4 same-class fix).
 
 A further Basel 3.1-only gap (``TestB31OnBalanceSheetNettingInWaterfall``,
-found via the published BoE rules — ``src/rwa_calc/reporting/validations/rules/basel31-boe-v4.0.0-credit-risk.json``):
+found via the published BoE rules — ``src/rwa_calc/reporting/validations/rules/basel31-boe-v4.1.1-credit-risk.json``):
 col 0035 (the "(-)" on-balance-sheet netting adjustment, B31-only) is never
 folded into the col 0090 waterfall at all today, on ANY row. The BoE rules are
 ROW-SCOPED and disagree deliberately: ``boe_b0746`` / ``boe_b0746_1`` (C 08.01)

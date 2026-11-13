@@ -21,10 +21,12 @@ on one publisher value cannot hide behind a passing sample.
 
 References:
 - EBA DPM 3.0(3.0.1) validation rules (CRR)
-- BoE banking_reporting v4.0.0 validation rules (Basel 3.1)
+- BoE banking_reporting v4.1.1 validation rules (Basel 3.1)
 """
 
 from __future__ import annotations
+
+import re
 
 import pytest
 
@@ -43,6 +45,9 @@ from rwa_calc.reporting.validations.rules import (
     rules_for_tables,
 )
 from tests.unit.reporting.validations._builders import build_rule, raw_extract
+
+#: A bare ``=`` comparison: not part of ``>=`` / ``<=`` / ``!=`` / ``==`` / ``i=``.
+_BARE_EQUALS = re.compile(r"(?<![<>!=i])=(?!=)")
 
 # ---------------------------------------------------------------------------
 # Liveness
@@ -260,14 +265,15 @@ def test_every_boe_rule_without_a_default_value_normalises_to_skip() -> None:
 def test_the_boe_interval_operator_is_recovered_from_the_raw_expression() -> None:
     """``i=`` survives only in the raw form — the simplified one drops it.
 
-    Reading tolerance off the simplified expression would type 654 of the 820
+    Reading tolerance off the simplified expression would type 650 of the 816
     rules as exact comparisons and manufacture breaks over float dust.
     """
-    # Arrange: a rule whose simplified expression shows a bare ``=``.
+    # Arrange: a rule whose simplified expression shows a bare ``=`` — not ``>=`` /
+    # ``<=``, whose raw twins are ``i>=`` / ``i<=`` and would not carry ``i=``.
     rule = next(
         r
         for r in load_rules(FRAMEWORK_BASEL_3_1).rules
-        if r.arithmetic == ARITHMETIC_INTERVAL and "i=" not in (r.expression or "")
+        if r.arithmetic == ARITHMETIC_INTERVAL and _BARE_EQUALS.search(r.expression or "")
     )
 
     # Act / Assert

@@ -1820,6 +1820,47 @@ gate that shipped.
   The transferable rule is already in the file: a `NO_FIXTURE` classification
   in the template-cell baseline is a list of gates that are not running, and
   the change that lights one should expect the register to move.
+- **Fix landed (2026-11-13)**: the deferred design, as recorded. The CRM stage
+  seals `on_bs_netting_adjusted_value` — the netted deposit's value after the
+  Art. 224 currency and Art. 237–239 maturity adjustments, the netting part of
+  `collateral_adjusted_value` (`engine/crm/collateral.py`, flagged by
+  `engine/crm/expressions.py::flag_netting_rows`) — through `contracts/edges.py`,
+  the schemas and the re-split carriers. Under Basel 3.1, OF 07.00 col 0035
+  reports it (capped per row at the exposure net of provisions, since
+  Art. 219(1) floors the netted value at zero) and cols 0130 / 0140 leave the
+  deposit out. CRR is unchanged. No RWA, EAD or risk weight moved in any of the
+  registered runs. Two things the record did not foresee: `on_bs_netting_amount`
+  was missing from the guarantee row-split carriers, so a partly guaranteed
+  netted loan carried the whole netting on both legs (300 became 600); and under
+  the Simple Method the new carrier is zeroed for SA with the collateral value it
+  is part of.
+- **Gate change (fix)**: the rule itself is now an assertion —
+  `tests/acceptance/reporting/test_of07_netting_single_deduction.py` holds
+  col 0200 = col 0150 − (0.9·0160 + 0.8·0170 + 0.6·0171 + 0.5·0180) and
+  col 0200 ≤ col 0150 on every reported row, non-vacuously (col 0035 must carry
+  a figure). The registered netting portfolio is same-currency and
+  maturity-matched, so it cannot tell the adjusted value from the allocation;
+  `tests/fixtures/reporting_netting_mismatch_portfolio.py` can, and is
+  registered in `RUNS`. Without it the fix would have left `boe_b0555`
+  (col 0130 ≤ col 0140) vacuous on every run — col 0130 was non-zero under
+  Basel 3.1 only through the double count — and the coverage ratchet measured
+  that as Basel 3.1 binding rules 365 → 364.
+- **Verified red (fix)**: against the unchanged reporting code,
+  `uv run pytest tests/acceptance/reporting/test_of07_netting_single_deduction.py -q -n 0`
+  — `10 failed, 4 passed` (the four passing are the CRR controls, which must
+  pass on both sides): `b31 corporate r0010: c0200 19,000,000.00 != c0150
+  16,000,000.00` and `assert -300000.0 == -173626.57156237616` (col 0035
+  carried the allocation, not the adjusted value). The carrier's unit tests:
+  `23 failed` (`KeyError: 'on_bs_netting_adjusted_value'`; the split leg
+  `assert 600.0 == 300.0`). After: all pass. `boe_b0471` and `boe_b0556` leave
+  the register's known breaks; `boe_b0471` 1 → 0 portfolios on the filing
+  ratchet.
+- **Found while fixing, not fixed (capital-affecting; for the firm to sequence)**:
+  the netting FX haircut is keyed on the wrong currency once FX conversion has
+  run (a EUR deposit against a GBP loan gets no haircut — EAD 700 where 733.94 is
+  due on a 300 / 1,000 pair, understating capital); and the engine scales the
+  haircut to a 20-day liquidation period where PS1/26 Art. 219(2) says "The
+  institution shall apply a 10 business day liquidation period" (overstating it).
 
 ## 2026-09-05 — A window nested inside a window made the classifier eleven times slower, and the one instrument that measured it asserted nothing
 

@@ -360,6 +360,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **REPORTING: Basel 3.1 OF 07.00 deducts on-balance-sheet netting once.** A
+  netted deposit was taken off in column 0035 and again inside column 0130
+  (financial collateral), so column 0150 (fully adjusted exposure value) was
+  understated by the deposit while column 0200 was right — on the netting
+  reporting portfolio 16,000,000 against 19,000,000. Column 0035 now reports the
+  deposit's adjusted value (after currency and maturity mismatch adjustments,
+  PS1/26 Art. 219), capped at the exposure it reduces, and columns 0130 / 0140
+  report only the genuine financial collateral. The Bank's `boe_b0471` and
+  `boe_b0556` now hold. CRR C 07.00 is unchanged, and no RWA or exposure value
+  moves. The result ledger gains one column, `on_bs_netting_adjusted_value`.
+- **ENGINE: the on-balance-sheet netting amount is divided between the legs of
+  a partly guaranteed loan.** Each leg carried the whole amount, so the
+  C 08.01 column 0035 total for such a loan was doubled. Capital was not
+  affected.
 - **REPORTING: C 02.00 / OF 02.00 now uses the published row codes and cells,
   in both regimes — every row of the template moves.** The layout had been
   written from row headings and its codes were not the publishers'. What a

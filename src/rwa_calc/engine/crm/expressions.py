@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
     COVERED_BOND_COLLATERAL_TYPES,
     FINANCIAL_COLLATERAL_TYPES,
@@ -44,6 +45,8 @@ from rwa_calc.engine.kernels.allocation import (
 from rwa_calc.rulebook.compile import lookup_float_map
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 # ---------------------------------------------------------------------------
@@ -298,9 +301,19 @@ CRM_ALLOC_COLUMNS: dict[str, str] = {
 # waterfall allocations (``CRM_ALLOC_COLUMNS``) and ``total_collateral_for_lgd``:
 # those feed the blended LGD input floor, a rate over the unsplit
 # ``ead_for_crm``, so splitting them would move capital.
+#
+# The two ``on_bs_netting_*`` members are the on-balance-sheet netting PART of
+# the first two (CRR Art. 219 makes the netted deposit synthetic cash
+# collateral): the pre-haircut allocation inside ``collateral_market_value`` and
+# its adjusted value inside ``collateral_adjusted_value``. A reader takes one
+# from the other to separate the deposit from genuine pledges, so each pair has
+# to be divided by the same share. ``on_bs_netting_amount`` was not on this list
+# and stayed whole on every leg of a partly guaranteed netted loan.
 COLLATERAL_VALUE_CARRIERS: tuple[str, ...] = (
     "collateral_adjusted_value",
     "collateral_market_value",
+    "on_bs_netting_adjusted_value",
+    "on_bs_netting_amount",
     "collateral_financial_value",
     "collateral_cash_value",
     "collateral_re_value",
@@ -315,6 +328,11 @@ COLLATERAL_VALUE_CARRIERS: tuple[str, ...] = (
 )
 
 
+# Reference prefix of the synthetic cash-collateral rows on-balance-sheet netting
+# generates (CRR Art. 219): one row per netted loan, named prefix + that loan.
+_ON_BS_NETTING_REFERENCE_PREFIX = "NETTING_"
+
+
 def beneficiary_level_expr(bt_col: str = "beneficiary_type") -> pl.Expr:
     """Build expression classifying beneficiary_type into direct/facility/counterparty.
 
@@ -322,3 +340,47 @@ def beneficiary_level_expr(bt_col: str = "beneficiary_type") -> pl.Expr:
     fallback (null / unknown beneficiary types -> direct).
     """
     return kernel_beneficiary_level_expr(bt_col, unknown="direct")
+
+
+def on_bs_netting_reference_expr(loan_col: str) -> pl.Expr:
+    """The ``collateral_reference`` of the synthetic netting row for a loan.
+
+    One definition, read twice: ``generate_netting_collateral`` names each row
+    it emits with it, and ``flag_netting_rows`` recognises those rows by it.
+    """
+    return pl.lit(_ON_BS_NETTING_REFERENCE_PREFIX) + pl.col(loan_col)
+
+
+@cites("CRR Art. 219")
+@cites("PS1/26 Art. 219")
+def flag_netting_rows(collateral: pl.LazyFrame, present: Collection[str]) -> pl.LazyFrame:
+    """Flag the collateral rows that are netted deposits (``_is_on_bs_netting``).
+
+    CRR Art. 219 turns a netted deposit into synthetic cash collateral, which is
+    merged into the ordinary collateral frame and haircut with it (Art. 224
+    currency mismatch, Art. 237-239 maturity mismatch). PS1/26 Art. 219(1)
+    deducts exactly that — the deposit "adjusted for any currency and maturity
+    mismatches" — so the netting part of the collateral value has to stay
+    separable after the haircuts: OF 07.00 reports it in column 0035, apart from
+    the financial collateral in column 0130.
+
+    A row is a netted deposit when its reference is the netting prefix followed
+    by the loan it secures — the whole shape the generator gives it, not the
+    prefix alone, so a firm's own collateral reference that merely begins the
+    same way is not mistaken for one. (A supplied row carrying exactly that
+    reference for that loan cannot be told apart from a generated one.) A null
+    reference is never a match.
+
+    Args:
+        collateral: The haircut-adjusted collateral frame.
+        present: Its column names, as already resolved by the caller.
+            ``collateral_reference`` is not among the columns the CRM stage
+            requires of a collateral frame, so a direct caller may omit it; it
+            is then injected as a typed null.
+    """
+    reference = {"collateral_reference": ColumnSpec(pl.String, required=False)}
+    return ensure_columns(collateral, reference, present=present).with_columns(
+        (
+            pl.col("collateral_reference") == on_bs_netting_reference_expr("beneficiary_reference")
+        ).alias("_is_on_bs_netting")
+    )

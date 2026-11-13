@@ -55,35 +55,6 @@ def _sa_results_with_bs_split() -> pl.LazyFrame:
     )
 
 
-def _sa_results_with_netting() -> pl.LazyFrame:
-    """SA results with on_bs_netting_amount for Task 3D testing."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [
-                "SA_CORP_1",
-                "SA_CORP_2",
-                "SA_INST_1",
-                "SA_RETAIL_1",
-            ],
-            "approach_applied": ["standardised"] * 4,
-            "exposure_class": ["corporate", "corporate", "institution", "retail_other"],
-            "drawn_amount": [1000.0, 2000.0, 3000.0, 500.0],
-            "undrawn_amount": [500.0, 0.0, 0.0, 100.0],
-            "ead_final": [1200.0, 2000.0, 3000.0, 550.0],
-            "rwa_final": [1200.0, 2000.0, 600.0, 412.5],
-            "risk_weight": [1.00, 1.00, 0.20, 0.75],
-            "scra_provision_amount": [10.0, 20.0, 0.0, 5.0],
-            "gcra_provision_amount": [5.0, 10.0, 15.0, 2.0],
-            "collateral_adjusted_value": [0.0, 0.0, 0.0, 0.0],
-            "guaranteed_portion": [0.0, 0.0, 0.0, 0.0],
-            "sa_cqs": [3, None, 2, None],
-            "counterparty_reference": ["CP_A", "CP_B", "CP_D", "CP_E"],
-            # Netting amounts: CORP_1 has 150 netting, INST_1 has 200
-            "on_bs_netting_amount": [150.0, 0.0, 200.0, 0.0],
-        }
-    )
-
-
 def _irb_results_with_netting() -> pl.LazyFrame:
     """IRB results with on_bs_netting_amount for Task 3D testing."""
     return pl.LazyFrame(
@@ -306,8 +277,9 @@ def _sa_results_with_sign_convention_cols() -> pl.LazyFrame:
             # 0030: scra_provision_amount + gcra_provision_amount = 100 + 0
             "scra_provision_amount": [100.0],
             "gcra_provision_amount": [0.0],
-            # 0035 (B3.1): on_bs_netting_amount = 50
+            # 0035 (B3.1): the netted deposit — allocation 50, adjusted value 50.
             "on_bs_netting_amount": [50.0],
+            "on_bs_netting_adjusted_value": [50.0],
             # 0050: guaranteed_portion where protection_type="guarantee"
             "guaranteed_portion": [200.0],
             "protection_type": ["guarantee"],
@@ -320,9 +292,11 @@ def _sa_results_with_sign_convention_cols() -> pl.LazyFrame:
             # NEGATIVE CONTROL — Art. 199 collateral is IRB-only (0080 stays 120, not 240).
             "life_ins_collateral_value": [120.0],
             "collateral_re_value": [120.0],
-            # 0130 / 0140: Cvam and market value
-            "collateral_adjusted_value": [60.0],
-            "collateral_market_value": [70.0],
+            # 0130 / 0140: a pledge of Cvam 60, market value 70. RE-ANCHORED: the
+            # ledger's collateral columns INCLUDE the netted deposit (were 60 / 70,
+            # the pledge alone — a row it cannot produce); the cells are unchanged.
+            "collateral_adjusted_value": [110.0],
+            "collateral_market_value": [120.0],
         }
     )
 
@@ -765,44 +739,14 @@ class TestEdgeCases:
 
 
 class TestOnBSNetting:
-    """Task 3D: On-balance-sheet netting (COREP col 0035).
+    """Task 3D: On-balance-sheet netting (COREP col 0035) — the C 08.01 cases.
 
     Why: Basel 3.1 introduces col 0035 to separately report on-BS netting
     within the EAD waterfall: Original (0010) - Provisions (0030) - Netting
     (0035) = Net exposure (0040). Without this, the netting benefit is
-    invisible in COREP reporting.
+    invisible in COREP reporting. The C 07.00 cases live in
+    ``test_c07_netting.py``.
     """
-
-    def test_c07_col_0035_populated_b31(self) -> None:
-        """Col 0035 shows summed on_bs_netting_amount for Basel 3.1 — negative per Annex II §1.3."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_netting(), framework="BASEL_3_1")
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        # SA_CORP_1 has 150 netting, SA_CORP_2 has 0 → total 150; stored as negative deduction
-        assert corp["0035"][0] == pytest.approx(-150.0)
-
-    def test_c07_col_0035_absent_crr(self) -> None:
-        """Col 0035 doesn't exist under CRR (no on-BS netting column)."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_netting(), framework="CRR")
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        assert "0035" not in corp.columns
-
-    def test_c07_col_0040_includes_netting_b31(self) -> None:
-        """Col 0040 is net exposure after provisions and netting deductions."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_netting(), framework="BASEL_3_1")
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        v_0040 = corp["0040"][0]
-        # Engine: 0010=3500, 0030=-45, 0035=-150 → 0040=3305 (3500 - 45 - 150)
-        assert v_0040 == pytest.approx(3305.0)
-
-    def test_c07_zero_netting_class(self) -> None:
-        """Class with no netting exposures reports 0 for col 0035."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_netting(), framework="BASEL_3_1")
-        retail = _get_total_row(bundle.c07_00["retail"])
-        assert retail["0035"][0] == pytest.approx(0.0)
 
     def test_c08_col_0035_populated_b31(self) -> None:
         """C 08.01 col 0035 sums on_bs_netting_amount for Basel 3.1 — negative per Annex II §1.3."""
@@ -818,14 +762,6 @@ class TestOnBSNetting:
         bundle = gen.generate_from_lazyframe(_irb_results_with_netting(), framework="CRR")
         corp = _get_total_row(bundle.c08_01["corporate"])
         assert "0035" not in corp.columns
-
-    def test_c07_netting_without_column(self) -> None:
-        """Without on_bs_netting_amount in data, col 0035 is None."""
-        gen = LedgerShimCorepGenerator()
-        # _sa_results() does not have on_bs_netting_amount
-        bundle = gen.generate_from_lazyframe(_sa_results(), framework="BASEL_3_1")
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        assert corp["0035"][0] is None
 
 
 class TestEquityTransitionalRows:

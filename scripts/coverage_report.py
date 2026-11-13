@@ -509,7 +509,9 @@ def check_portfolios_registered() -> dict[str, Any]:
     allowlist that outlives its reason is a hole in the gate that reads as a pass,
     and this check exists precisely to stop a hole reading as a pass.
     """
-    registered = {run.build_bundle.__name__ for run in RUNS}
+    # A builder parameterised by the reporting date is registered as a
+    # ``functools.partial`` over it; the builder is the function it wraps.
+    registered = {getattr(run.build_bundle, "func", run.build_bundle).__name__ for run in RUNS}
     declared: dict[str, list[str]] = {}
     for path in sorted(FIXTURES_DIR.glob("reporting_*.py")):
         builders = _bundle_builders(path)

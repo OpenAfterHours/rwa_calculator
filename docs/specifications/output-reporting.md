@@ -125,7 +125,7 @@ breakdown, risk weight breakdown, memorandum items).
 ### Basel 3.1 Reporting Field Additions
 
 **OF 07.00 (SA)** — new columns vs CRR C 07.00:
-- Col 0035: (-) Adjustment for on-balance sheet netting (Art. 219)
+- Col 0035: (-) Adjustment for on-balance sheet netting (Art. 219) — the netted deposit's **adjusted** value (after the Art. 224 currency-mismatch haircut and the Art. 237-239 maturity scaling), capped at the exposure it reduces. The deposit is reported here and **excluded** from cols 0130 / 0140, so col 0150 is reduced by it once (`boe_b0471`). CRR C 07.00 has no col 0035 and keeps the deposit in col 0130.
 - Col 0160-0190: Off-balance sheet breakdown now uses 5 CCF bands (10%, 20%, 40%, 50%, 100%) instead of 4
 - Col 0235: Of which: where a credit assessment by a nominated ECAI is not available (new)
 - Rows 0021-0026: Specialised lending sub-types (object, commodities, project finance phases)

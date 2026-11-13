@@ -56,11 +56,12 @@ differences. For complete column and row definitions, see the
 
 | Change | Ref(s) | Description |
 |--------|--------|-------------|
-| **Added** | 0035 | On-balance sheet netting — separated from original exposure |
+| **Added** | 0035 | On-balance sheet netting — the deposit's adjusted value (Art. 219), reported here instead of in col 0130 |
 | **Added** | 0171 | 40% CCF bucket — new Basel 3.1 conversion factor |
 | **Added** | 0235 | Unrated RWEA — separate reporting of exposures without ECAI |
 | **Changed** | 0160 | CCF 0% bucket becomes **10%** (minimum 10% for unconditionally cancellable) |
 | **Changed** | 0040 | Now also nets on-balance sheet netting (col 0035) |
+| **Changed** | 0130, 0140 | Exclude the netted deposit, which CRR reports there as financial collateral — the deposit is deducted once, in col 0035 |
 | **Changed** | 0220 | No longer "after supporting factors" — factors removed |
 | **Removed** | 0215 | RWEA pre supporting factors |
 | **Removed** | 0216 | SME supporting factor adjustment |

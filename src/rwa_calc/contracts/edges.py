@@ -1257,6 +1257,11 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         "effective_ccf": EdgeColumn(dtype=pl.Float64),
         "on_bs_for_ead": EdgeColumn(dtype=pl.Float64),
         "on_bs_netting_amount": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 219"),
+        # The ADJUSTED value of the netted deposit: the allocation above after
+        # the Art. 224 currency-mismatch haircut and the Art. 237-239 maturity
+        # scaling — the amount Art. 219 actually takes off the exposure value,
+        # and the netting part of ``collateral_adjusted_value`` below.
+        "on_bs_netting_adjusted_value": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 219"),
         "ead_from_ccf": EdgeColumn(dtype=pl.Float64),
         "ead_gross": EdgeColumn(dtype=pl.Float64),
         "ead_pre_crm": EdgeColumn(dtype=pl.Float64),
@@ -1660,6 +1665,7 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
             dtype=pl.Float64, required=False, citation="CRR Art. 232"
         ),
         "on_bs_for_ead": EdgeColumn(dtype=pl.Float64),
+        "on_bs_netting_adjusted_value": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 219"),
         "on_bs_netting_amount": EdgeColumn(dtype=pl.Float64),
         "original_amount": EdgeColumn(dtype=pl.Float64),
         "original_counterparty_reference": EdgeColumn(dtype=pl.String),

@@ -471,6 +471,34 @@ flowchart LR
         the population is keyed by `risk_type`: before the 2026-07 fix that relabel dropped
         SA-CCR derivatives out of OF 07.00 **entirely**, understating SA exposure value and RWEA.
 
+    !!! info "Columns 0035 / 0130 / 0140 — on-balance-sheet netting is deducted once"
+        A netted deposit (CRR / PS1/26 Art. 219) is reported in **column 0035** and nowhere
+        else. PS1/26 Annex II defines column 0035 as *"the reduction in exposure value due to
+        on-balance sheet netting determined in accordance with Article 219"* and column 0040
+        as the *"sum of columns 0010, 0030, and 0035"*, so:
+
+        - **0035** is the deposit's **adjusted** value — after the Art. 224 currency-mismatch
+          haircut and the Art. 237–239 maturity-mismatch scaling that Art. 219(2)–(3) apply —
+          and never more than the exposure it reduces (Art. 219(1) floors the netted exposure
+          value at zero). It is *not* the deposit's face amount: a deposit shorter than its
+          loan, or in another currency, reduces the exposure value by less than its balance.
+        - **0130** (financial collateral adjusted value) and **0140** (its volatility and
+          maturity adjustments) are the collateral that is **not** the deposit. Art. 223(3)
+          starts the Financial Collateral Comprehensive Method from the exposure value *after*
+          Art. 219, so the deposit cannot appear there as well.
+        - **0150 = 0040 − 0090 + 0100 − 0130**, and for a fully drawn book it equals column
+          0200 (the published identity `boe_b0471`).
+
+        Internally the engine carries the deposit as synthetic cash collateral, so the ledger's
+        `collateral_adjusted_value` includes it; `on_bs_netting_adjusted_value` is the part of
+        that column that is the deposit. Until the 2026-11 fix column 0035 reported the
+        pre-haircut allocation (`on_bs_netting_amount`) and column 0130 the whole collateral
+        column, deducting the deposit twice and leaving column 0150 below column 0200.
+
+        **CRR C 07.00 has no column 0035**: there the deposit is financial collateral and stays
+        in columns 0130 / 0140. Under the Financial Collateral **Simple** Method the deposit
+        is recognised as Simple-Method cash (column 0070) and column 0035 is zero.
+
     !!! info "Not every row carries every column"
         The published OF 07.00 greys out much of its grid, and a greyed cell is left empty:
 
@@ -498,11 +526,12 @@ flowchart LR
 
     | Change | Ref(s) | Description |
     |--------|--------|-------------|
-    | **Added** | 0035 | On-balance sheet netting — separated from original exposure |
+    | **Added** | 0035 | On-balance sheet netting — the deposit's adjusted value (Art. 219), reported here instead of in col 0130 |
     | **Added** | 0171 | 40% CCF bucket — new Basel 3.1 conversion factor |
     | **Added** | 0235 | Unrated RWEA — separate reporting of exposures without ECAI |
     | **Changed** | 0160 | CCF 0% bucket becomes **10%** (minimum 10% CCF for unconditionally cancellable) |
     | **Changed** | 0040 | Now also nets on-balance sheet netting (col 0035) |
+    | **Changed** | 0130, 0140 | Exclude the netted deposit, which CRR reports there as financial collateral |
     | **Changed** | 0220 | No longer "after supporting factors" — factors removed |
     | **Removed** | 0215 | RWEA pre supporting factors |
     | **Removed** | 0216 | SME supporting factor adjustment |

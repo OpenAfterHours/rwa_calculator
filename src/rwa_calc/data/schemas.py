@@ -3432,6 +3432,8 @@ CALCULATION_OUTPUT_SCHEMA = {
     "maturity_mismatch_adjustment": pl.Float64,  # Adjustment for maturity mismatch
     "collateral_adjusted_value": pl.Float64,  # Net collateral value after haircuts
     "on_bs_netting_amount": pl.Float64,  # On-balance sheet netting benefit (CRR Art. 195)
+    # The same after the Art. 224 / 237-239 mismatch adjustments (CRR Art. 219)
+    "on_bs_netting_adjusted_value": pl.Float64,
     # Per-type collateral tracking for COREP C 08.01 (cols 0170-0210)
     "collateral_financial_value": pl.Float64,  # Eligible financial collateral adj value
     "collateral_re_value": pl.Float64,  # Real estate collateral adj value
@@ -3695,6 +3697,11 @@ ADDITIVE_OUTPUT_FIELDS: frozenset[str] = frozenset(
         # 40,000.00 parent (-23.1% CRR, -47% B31).
         "collateral_adjusted_value",
         "interest",
+        # The on-balance-sheet netting PART of ``collateral_adjusted_value`` (CRR
+        # Art. 219), allocated across split legs with it. It has to collapse the
+        # way the column it is part of does: ``.first()`` beside a summed total
+        # would leave one leg's netting against the whole parent's collateral.
+        "on_bs_netting_adjusted_value",
         # Read off the COLLAPSED frame by analysis/reconciliation.py, which takes
         # ``*spec.explain_columns, *spec.input_columns`` and not only
         # ``our_columns``. All five are pro-rata allocated across split legs, so

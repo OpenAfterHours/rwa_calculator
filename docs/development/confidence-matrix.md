@@ -40,7 +40,7 @@ Package version `0.3.34`. Resolved packs:
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
 | CRR (Capital Requirements Regulation) | 35 | 58 | 10 | 37 | 14 | 154 |
-| PS1/26 (PRA Policy Statement) | 27 | 27 | 7 | 29 | 17 | 107 |
+| PS1/26 (PRA Policy Statement) | 27 | 29 | 7 | 28 | 16 | 107 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -135,10 +135,10 @@ Package version `0.3.34`. Resolved packs:
 | 216 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
-| 219 | 1 | 0 | 4 | 0 | 9 | MEDIUM |
+| 219 | 2 | 0 | 9 | 0 | 13 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
-| 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
+| 222 | 2 | 9 | 5 | 22 | 13 | HIGH |
 | 223 | 4 | 0 | 18 | 30 | 29 | HIGH |
 | 224 | 4 | 10 | 11 | 33 | 44 | HIGH |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
@@ -153,7 +153,7 @@ Package version `0.3.34`. Resolved packs:
 | 234 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
 | 235 | 10 | 1 | 15 | 7 | 18 | HIGH |
 | 236 | 0 | 0 | 0 | 0 | 4 | GAP |
-| 237 | 2 | 0 | 4 | 0 | 27 | MEDIUM |
+| 237 | 2 | 0 | 4 | 0 | 29 | MEDIUM |
 | 238 | 2 | 0 | 3 | 0 | 12 | MEDIUM |
 | 239 | 0 | 0 | 2 | 0 | 13 | UNCITED |
 | 244 | 1 | 0 | 5 | 0 | 0 | LOW |
@@ -286,11 +286,11 @@ Package version `0.3.34`. Resolved packs:
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 219 | 0 | 0 | 0 | 0 | 4 | GAP |
+| 219 | 2 | 0 | 3 | 0 | 8 | MEDIUM |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
-| 223 | 0 | 0 | 4 | 0 | 2 | UNCITED |
-| 224 | 0 | 2 | 3 | 0 | 11 | MEDIUM |
+| 223 | 1 | 0 | 5 | 0 | 3 | MEDIUM |
+| 224 | 0 | 2 | 3 | 0 | 12 | MEDIUM |
 | 226 | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 227 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 228 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -355,7 +355,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | PS1/26 166E | 4 | 0 | 2 | — | — |
 | PS1/26 181 | 4 | 0 | 2 | — | CRR Art. 181 |
 | CRR 215 | 2 | 0 | 2 | — | — |
-| PS1/26 223 | 4 | 0 | 2 | — | CRR Art. 223 |
 | PS1/26 226 | 1 | 0 | 2 | — | CRR Art. 226 |
 | CRR 307 | 1 | 0 | 2 | — | — |
 | CRR 380 | 2 | 0 | 2 | — | — |
@@ -396,7 +395,6 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 |---|---|---|---|
 | PS1/26 197 | 0 | 5 | CRR Art. 197 |
 | PS1/26 124A | 0 | 4 | — |
-| PS1/26 219 | 0 | 4 | CRR Art. 219 |
 | CRR 236 | 0 | 4 | — |
 | CRR 36 | 0 | 3 | — |
 | PS1/26 132a | 0 | 3 | — |

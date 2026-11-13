@@ -3504,7 +3504,8 @@
         "rwa_calc.engine.crm.collateral::apply_collateral",
         "rwa_calc.engine.crm.collateral::generate_netting_collateral",
         "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr",
-        "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
+        "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures",
+        "rwa_calc.reporting.corep.c07::_collateral_cap_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -3560,7 +3561,8 @@
         "engine/kernels/allocation.py",
         "engine/sft/__init__.py",
         "engine/sft/fccm.py",
-        "engine/stages/sft.py"
+        "engine/stages/sft.py",
+        "reporting/corep/c07.py"
       ],
       "test_files": [
         "tests/acceptance/ccr/test_ccr_a11_a12_sft_fccm_ead.py",
@@ -8211,6 +8213,7 @@
         "tests/acceptance/reporting/test_of07_netting_single_deduction.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/reporting_netting_mismatch_portfolio.py",
+        "tests/fixtures/reporting_over_collateralised_portfolio.py",
         "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
         "tests/unit/reporting/corep/test_c07_netting.py"
       ],
@@ -8250,15 +8253,18 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_161_art_191a_two_layer_protection.py",
         "tests/acceptance/basel31/test_p1_93_art_222_4_fcsm_sft_carveout.py",
+        "tests/acceptance/reporting/test_c07_collateral_columns.py",
         "tests/fixtures/p1_161/p1_161.py",
         "tests/fixtures/p1_93/p1_93.py",
-        "tests/unit/crm/test_simple_method.py"
+        "tests/unit/crm/test_simple_method.py",
+        "tests/unit/reporting/corep/test_c07_collateral_cap.py"
       ],
       "watchfire_index_gap": false
     },
     {
       "article": "223",
       "code_functions": [
+        "rwa_calc.reporting.corep.c07::_collateral_cap_expr",
         "rwa_calc.reporting.corep.c07::_financial_collateral_exprs"
       ],
       "confidence": "MEDIUM",
@@ -8276,7 +8282,9 @@
       "test_files": [
         "tests/acceptance/reporting/test_of07_netting_single_deduction.py",
         "tests/fixtures/p1_161/p1_161.py",
-        "tests/unit/crm/test_ead_for_crm.py"
+        "tests/fixtures/reporting_over_collateralised_portfolio.py",
+        "tests/unit/crm/test_ead_for_crm.py",
+        "tests/unit/reporting/corep/test_c07_collateral_cap.py"
       ],
       "watchfire_index_gap": false
     },

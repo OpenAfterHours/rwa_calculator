@@ -383,6 +383,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   report only the genuine financial collateral. The Bank's `boe_b0471` and
   `boe_b0556` now hold. CRR C 07.00 is unchanged, and no RWA or exposure value
   moves. The result ledger gains one column, `on_bs_netting_adjusted_value`.
+- **REPORTING: C 07.00 / OF 07.00 column 0130 is capped at the exposure each
+  pledge secures, in both regimes.** A loan secured by more collateral than it
+  owes has an exposure value of zero and the excess is unused, but column 0130
+  summed the whole collateral and only the column 0150 cell was floored, so the
+  excess came off every other loan on the sheet: one corporate with a 100 loan
+  secured by 300 of cash and an unsecured 1,000 loan reported column 0150 800
+  against column 0200 1,000 (`boe_b0471` / `boe_b0556`; `v0308_m` / `v8726_m`
+  under CRR). Under CRR the same happened with a netted deposit larger than its
+  loan. Column 0130 is now each exposure's adjusted collateral value no larger
+  than what is left of that exposure after provisions, netting (Basel 3.1) and
+  the substitution columns; column 0140 keeps the volatility and maturity
+  adjustment as calculated (EBA Q&A 2015_2010). No RWA or exposure value moves.
+- **REPORTING: under the Financial Collateral Simple Method, C 07.00 / OF 07.00
+  columns 0130 and 0140 report nothing.** Column 0140 reported the collateral's
+  whole market value as a "volatility and maturity adjustment" under a column
+  0130 of zero (`boe_b0555`), although Simple-Method collateral is reported in
+  column 0070 and columns 0120-0140 are for the Comprehensive Method only. No
+  RWA or exposure value moves.
 - **ENGINE: the on-balance-sheet netting amount is divided between the legs of
   a partly guaranteed loan.** Each leg carried the whole amount, so the
   C 08.01 column 0035 total for such a loan was doubled. Capital was not

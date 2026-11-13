@@ -1197,6 +1197,22 @@ class TestSignConvention:
             _sa_results_with_sign_convention_cols(), framework="BASEL_3_1"
         )
 
+    def _sa_bundle_b31_comprehensive(self) -> COREPTemplateBundle:
+        """The OF 07.00 bundle with the frame's Simple-Method carrier null.
+
+        The sign-convention row holds Simple-Method collateral (col 0070) and a
+        Comprehensive-Method Cvam (cols 0130 / 0140) at once, which no ledger can:
+        the Art. 191A election is firm-wide, and cols 0120-0140 report only
+        Comprehensive-Method exposures, so on the row as built they are zero.
+        Cols 0130 / 0140 are asserted on the variant a Comprehensive-method run
+        seals — ``fcsm_collateral_value`` a typed null.
+        """
+        gen = LedgerShimCorepGenerator()
+        frame = _sa_results_with_sign_convention_cols().with_columns(
+            pl.lit(None, dtype=pl.Float64).alias("fcsm_collateral_value")
+        )
+        return gen.generate_from_lazyframe(frame, framework="BASEL_3_1")
+
     def _sa_bundle_crr(self) -> COREPTemplateBundle:
         """Generate the C 07.00 bundle (CRR framework)."""
         gen = LedgerShimCorepGenerator()
@@ -1289,9 +1305,13 @@ class TestSignConvention:
         assert total["0090"][0] == pytest.approx(-395.0)
 
     def test_c07_col_0130_negative_b31(self) -> None:
-        """C 07.00 col 0130 (-) Cvam collateral adjusted value emits -60.0 (B3.1)."""
+        """C 07.00 col 0130 (-) Cvam collateral adjusted value emits -60.0 (B3.1).
+
+        On the Comprehensive-method variant of the frame (see
+        ``_sa_bundle_b31_comprehensive``).
+        """
         # Arrange
-        bundle = self._sa_bundle_b31()
+        bundle = self._sa_bundle_b31_comprehensive()
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Act / Assert
@@ -1300,7 +1320,7 @@ class TestSignConvention:
     def test_c07_col_0140_negative_b31(self) -> None:
         """C 07.00 col 0140 (-) vol/maturity adjustments emits -10.0 (B3.1)."""
         # Arrange — market_value=70, adjusted_value=60 → difference=10 → signed=-10
-        bundle = self._sa_bundle_b31()
+        bundle = self._sa_bundle_b31_comprehensive()
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Act / Assert

@@ -264,6 +264,9 @@ from tests.fixtures.reporting_irb_shapes_portfolio import build_reporting_irb_sh
 from tests.fixtures.reporting_netting_mismatch_portfolio import build_netting_mismatch_bundle
 from tests.fixtures.reporting_netting_portfolio import build_reporting_netting_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
+from tests.fixtures.reporting_over_collateralised_portfolio import (
+    build_over_collateralised_bundle,
+)
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
 from tests.fixtures.reporting_row_scope_portfolio import build_reporting_row_scope_bundle
@@ -669,6 +672,15 @@ RUNS: tuple[GateInput, ...] = (
     # them to 3 and 2 cells and clears v1659_m outright. It improves them
     # substantially and does not resolve them.
     #
+    # One of the six was a REPORTING defect, fixed 2026-11-13: boe_b0555 (Basel
+    # 3.1, {c0130} <= {c0140}) — C 07.00 col 0140 reported the Simple-Method
+    # collateral's whole market value as a "volatility and maturity adjustment"
+    # under a col 0130 of zero. Re-measured after that fix it exposes FIVE beyond
+    # the estate-wide register entries: v0308_m (ERROR), v8726_m and e4895_n under
+    # CRR, boe_b0471 (ERROR) and boe_b0556 under Basel 3.1. The col 0130 / 0140
+    # behaviour of this book is asserted directly, without registration, by
+    # tests/acceptance/reporting/test_c07_collateral_columns.py.
+    #
     # Banking two submission-rejecting breaks is a regulatory-posture decision
     # that deserves its own review rather than riding on a carrier fix, so this
     # registration and the residual Art. 222 defect are filed together as one
@@ -780,6 +792,30 @@ RUNS: tuple[GateInput, ...] = (
         "BASEL_3_1",
         "netting-mismatch",
         partial(build_netting_mismatch_bundle, _SA_REPORTING_DATE["BASEL_3_1"]),
+        lambda: _sa_config("BASEL_3_1"),
+    ),
+    # Over-collateralised SA loans beside ordinary ones — LESSONS B5. No other
+    # portfolio holds an SA exposure whose collateral EXCEEDS it, so C 07.00 /
+    # OF 07.00 col 0130 summed every pledge whole and floored only the cell, and
+    # one loan's unused collateral came off every other loan on the sheet: col
+    # 0150 below col 0200 by the excess, in BOTH regimes (``boe_b0471`` /
+    # ``boe_b0556``; the CRR form also through a deposit netted against a smaller
+    # loan). The portfolio holds a leg the per-row cap must leave alone beside
+    # the legs it moves, and an over-collateralised pledge with a maturity
+    # mismatch, so col 0140 is live. Dates relative to the reporting date, so
+    # ``functools.partial`` as above. SA-only, no prior frame.
+    GateInput(
+        "crr",
+        "CRR",
+        "over-collateralised",
+        partial(build_over_collateralised_bundle, _SA_REPORTING_DATE["CRR"]),
+        lambda: _sa_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "over-collateralised",
+        partial(build_over_collateralised_bundle, _SA_REPORTING_DATE["BASEL_3_1"]),
         lambda: _sa_config("BASEL_3_1"),
     ),
     # Facility share — a shared facility whose undrawn headroom is allocated to

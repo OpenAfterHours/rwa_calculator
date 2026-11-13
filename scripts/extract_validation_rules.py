@@ -8,7 +8,7 @@ covering only the templates this project produces:
 
 - EBA DPM 3.0(3.0.1) validation rules  -> COREP C 02.00 / C 07.00 / C 08.0x /
   C 09.0x / C 34.xx  (the CRR framework)
-- BoE banking_reporting v4.0.0 rules   -> OF02 / OF07 / OF08 / OF09 / C08.04 /
+- BoE banking_reporting v4.1.1 rules   -> OF02 / OF07 / OF08 / OF09 / C08.04 /
   C09.04 / C34.xx    (the Basel 3.1 framework)
 
 The workbooks are xlsx (gitignored); the JSON extracts are the committed
@@ -49,7 +49,6 @@ ASSETS_DIR = PROJECT_ROOT / "docs" / "assets"
 # so they must ship inside the wheel (pyproject packages only src/rwa_calc).
 OUTPUT_DIR = PROJECT_ROOT / "src" / "rwa_calc" / "reporting" / "validations" / "rules"
 
-RETRIEVED = "2026-08-01"
 
 # ── EBA source (CRR framework) ───────────────────────────────────────────────
 
@@ -63,6 +62,7 @@ EBA_URL = (
 )
 EBA_LANDING = "https://www.eba.europa.eu/risk-and-data-analysis/reporting/reporting-frameworks"
 EBA_OUTPUT = OUTPUT_DIR / "crr-eba-v3.0-credit-risk.json"
+EBA_RETRIEVED = "2026-08-01"
 
 # Table codes carry a space after "C" in this workbook (e.g. "C 07.00.a").
 EBA_TABLE_PREFIXES = ("C 02.00", "C 07.00", "C 08.0", "C 09.0", "C 34.")
@@ -90,20 +90,23 @@ EBA_COL_NARRATIVE = 24
 
 # ── BoE source (Basel 3.1 framework) ─────────────────────────────────────────
 
-BOE_FILE = ASSETS_DIR / "boe-validation-rules-banking-reporting-v4.0.0.xlsx"
+# v4.1.1 (published 27 Aug 2026) supersedes v4.0.0 for entry point PRA001 (Own
+# Funds): the v4.0.0 PRA001 SchemaRef is retired for live reporting from 1 Jan 2027.
+BOE_FILE = ASSETS_DIR / "boe-validation-rules-banking-reporting-v4.1.1.xlsx"
 BOE_SHEET = "banking_reporting"
-BOE_VERSION = "4.0.0"
+BOE_VERSION = "4.1.1"
 BOE_URL = (
     "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/"
-    "regulatory-reporting/banking/2026/february/boebankingtaxonomyvalidationsv400.zip"
+    "regulatory-reporting/banking/boe-banking-taxonomy-validations-v411.zip"
 )
 BOE_LANDING = (
     "https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/"
-    "regulatory-reporting-banking-sector"
+    "regulatory-reporting-banking-sector/banks-building-societies-and-investment-firms"
 )
 # The BoE workbook ships inside the taxonomy zip; download_docs.py extracts this member.
-BOE_ARCHIVE_MEMBER = "Bank of England Banking Taxonomy Validations Banking reporting v4.0.0.xlsx"
-BOE_OUTPUT = OUTPUT_DIR / "basel31-boe-v4.0.0-credit-risk.json"
+BOE_ARCHIVE_MEMBER = "Bank of England Banking Taxonomy Validations Banking Reporting v4.1.1.xlsx"
+BOE_OUTPUT = OUTPUT_DIR / "basel31-boe-v4.1.1-credit-risk.json"
+BOE_RETRIEVED = "2026-11-13"
 
 # BoE table codes carry NO space after "C" (e.g. "C34.02.01.01", "OF07.00.01.01").
 BOE_TABLE_PREFIXES = ("OF02", "OF07", "OF08", "OF09", "C08.04", "C09.04", "C34.")
@@ -304,7 +307,7 @@ def extract_eba() -> dict[str, Any]:
             "sheet": EBA_SHEET,
             "url": EBA_URL,
             "landing_page": EBA_LANDING,
-            "retrieved": RETRIEVED,
+            "retrieved": EBA_RETRIEVED,
             "framework_version": EBA_VERSION,
         },
         "filter": {
@@ -331,7 +334,7 @@ def extract_boe() -> dict[str, Any]:
             "url": BOE_URL,
             "archive_member": BOE_ARCHIVE_MEMBER,
             "landing_page": BOE_LANDING,
-            "retrieved": RETRIEVED,
+            "retrieved": BOE_RETRIEVED,
             "framework_version": BOE_VERSION,
         },
         "filter": {

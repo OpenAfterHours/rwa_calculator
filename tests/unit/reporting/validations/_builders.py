@@ -59,7 +59,7 @@ type Cells = Mapping[str, Mapping[str, float | None]]
 #: renamed extract fails the integrity test rather than silently reading nothing.
 EXTRACT_FILES: dict[str, str] = {
     FRAMEWORK_CRR: "crr-eba-v3.0-credit-risk.json",
-    "BASEL_3_1": "basel31-boe-v4.0.0-credit-risk.json",
+    "BASEL_3_1": "basel31-boe-v4.1.1-credit-risk.json",
 }
 
 

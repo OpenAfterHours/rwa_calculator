@@ -43,12 +43,14 @@ uv run python scripts/download_docs.py --dry-run
 
 #### Validation-rule sources
 
-Two manifest entries carry the published supervisory validation rules — the checks the regulators run against submitted COREP/OF returns:
+Two manifest entries carry the published supervisory validation rules — the checks the regulators run against submitted COREP/OF returns — and two more carry the BoE provenance that goes with them:
 
 | File | Framework | Contents |
 |------|-----------|----------|
 | `eba-validation-rules.xlsx` | CRR | EBA validation rules for COREP/FINREP, all framework versions. Sheet `v3.0(3.0.1)` is the current CRR one. |
-| `boe-banking-taxonomy-validations-v4.0.0.zip` | Basel 3.1 | BoE banking XBRL taxonomy validation rules v4.0.0. The Banking reporting module holds the OF credit-risk tables. |
+| `boe-banking-taxonomy-validations-v4.1.1.zip` | Basel 3.1 | BoE banking XBRL taxonomy validation rules v4.1.1 (27 Aug 2026; supersedes v4.0.0 for entry point PRA001 from 1 Jan 2027). The Banking Reporting module holds the OF credit-risk tables. |
+| `boe-banking-taxonomy-release-note-v4.1.1.pdf` | Basel 3.1 | The v4.1.1 release note: entry points, SchemaRefs and what each release changed. |
+| `boe-banking-known-issues-august-2026.xlsx` | Basel 3.1 | The BoE known-issues log — rules downgraded or deactivated between taxonomy releases. Not yet applied by the extractor (plan item P2.59). |
 
 These are the raw inputs to [`scripts/extract_validation_rules.py`](#scriptsextract_validation_rulespy-extract-the-committed-validation-rule-json) below.
 
@@ -59,16 +61,16 @@ A manifest entry may name a member to pull out of a downloaded archive, via two 
 - `extract_member` — the member path inside the zip. Setting it marks the entry as an archive.
 - `extract_as` — the filename to write it as, defaulting to the member's own basename.
 
-The BoE zip uses both: it extracts the Banking reporting workbook to `docs/assets/boe-validation-rules-banking-reporting-v4.0.0.xlsx`. Archive entries therefore produce two lines in the run summary — one for the archive, one for the extracted member — and a successful extraction reports the status `extracted`:
+The BoE zip uses both: it extracts the Banking Reporting workbook to `docs/assets/boe-validation-rules-banking-reporting-v4.1.1.xlsx`. Archive entries therefore produce two lines in the run summary — one for the archive, one for the extracted member — and a successful extraction reports the status `extracted`:
 
 ```text
-  skip     boe-banking-taxonomy-validations-v4.0.0.zip (already exists, 1.5 MB)
-  extract  boe-validation-rules-banking-reporting-v4.0.0.xlsx ... done (375.6 KB)
+  skip     boe-banking-taxonomy-validations-v4.1.1.zip (already exists, 1.5 MB)
+  extract  boe-validation-rules-banking-reporting-v4.1.1.xlsx ... done (434.5 KB)
 
 Download Summary
 ==================================================
-  Extracted:   1 files (375.6 KB)
-  Skipped:     14 files (already present)
+  Extracted:   1 files (434.5 KB)
+  Skipped:     16 files (already present)
 ```
 
 Extraction is idempotent and independent of the download outcome, which matters in practice: if the zip is already on disk but the workbook has been deleted, the script re-extracts it **without** re-downloading the archive. `--force` redoes both; `--dry-run` reports `would extract` and writes nothing. A missing archive member is reported as a failure in the summary and sets a non-zero exit code, rather than raising.
@@ -83,7 +85,7 @@ Reads the two validation-rule workbooks fetched above and emits a filtered, mach
 | Output | Framework | Scope |
 |--------|-----------|-------|
 | `crr-eba-v3.0-credit-risk.json` | CRR | COREP C 02.00 / C 07.00 / C 08.0x / C 09.0x / C 34.xx |
-| `basel31-boe-v4.0.0-credit-risk.json` | Basel 3.1 | OF02 / OF07 / OF08 / OF09 / C08.04 / C09.04 / C34.xx |
+| `basel31-boe-v4.1.1-credit-risk.json` | Basel 3.1 | OF02 / OF07 / OF08 / OF09 / C08.04 / C09.04 / C34.xx |
 
 The source workbooks are gitignored; **the JSON extracts are the committed artefact**, so downstream consumers and CI never need the raw xlsx. Re-run this only when the workbooks are refreshed — and commit the regenerated JSON with it.
 

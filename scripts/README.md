@@ -160,7 +160,7 @@ uv run python scripts/download_docs.py --dry-run
 
 A manifest entry may set `extract_member` / `extract_as` to pull one member out of a
 downloaded archive. The BoE validation-rules zip uses this to extract
-`boe-validation-rules-banking-reporting-v4.0.0.xlsx` alongside itself; such entries
+`boe-validation-rules-banking-reporting-v4.1.1.xlsx` alongside itself; such entries
 add a second line to the run summary under a new `extracted` status.
 
 Extraction honours the flags above: skipped when the target already exists, redone under
@@ -174,11 +174,12 @@ See [Scripts & Automation](../docs/development/scripts.md) for the narrative ver
 ## extract_validation_rules.py
 
 Extracts the credit-risk supervisory validation rules from the two workbooks fetched by
-`download_docs.py` into committed JSON under `docs/reference/validation-rules/`:
+`download_docs.py` into committed JSON under `src/rwa_calc/reporting/validations/rules/`
+(package data — it ships in the wheel):
 
 - `crr-eba-v3.0-credit-risk.json` — EBA rules for COREP C 02.00 / C 07.00 / C 08.0x /
   C 09.0x / C 34.xx (CRR)
-- `basel31-boe-v4.0.0-credit-risk.json` — BoE rules for OF02 / OF07 / OF08 / OF09 /
+- `basel31-boe-v4.1.1-credit-risk.json` — BoE rules for OF02 / OF07 / OF08 / OF09 /
   C08.04 / C09.04 / C34.xx (Basel 3.1)
 
 The source workbooks are gitignored; the JSON extracts are the committed artefact, so

@@ -91,8 +91,9 @@ class ReportingContext:
             C 08.01 rows 0070 and 0080.
 
     WHY THE INFLOW NEEDS FOUR SPLITS AS WELL AS A TOTAL. C 08.01 decomposes its
-    total row TWICE over the same columns, and both decompositions are published
-    as live ERROR-severity rules: ``boe_b0744`` is
+    total row TWICE over the same columns, and both decompositions were published
+    as ERROR-severity rules in BoE taxonomy v4.0.0 (withdrawn in v4.1.1; EBA
+    ``v0338_m`` still states the second): ``boe_b0744`` is
     ``{r0010} = sum({r: 0020; 0030; 0040; 0050; 0060})`` (the balance-sheet axis)
     and ``boe_b0745`` is ``{r0010} = sum({r: 0070; 0080; 0170; 0180})`` (the IRB
     treatment axis); the EBA twin ``v0338_m`` restates the second. Landing the

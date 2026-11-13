@@ -36,6 +36,12 @@ dependencies = [
     "jinja2>=3.1.0",  # server-rendered read-only UI (rwa-ui)
     "python-multipart>=0.0.9",  # FastAPI form parsing for the calculator
     "marimo>=0.19.6",
+    # The filing half of the workspace (packages/rwa-filer). Pinned to the MINOR
+    # while it is 0.x: a breaking rwa-filer change is a minor bump there, so
+    # rwa-calc never picks one up unannounced. Resolved from the workspace in
+    # this repo ([tool.uv.sources]) and from PyPI in an installed wheel — which
+    # is why an rwa-calc release needs that rwa-filer version published first.
+    "rwa-filer>=0.1,<0.2",
 ]
 
 [project.scripts]
@@ -107,7 +113,7 @@ include = [
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "packages/rwa-filer/src", "packages/rwa-filer/tests"]
 exclude = ["workbooks"]
 
 [tool.ruff.lint]
@@ -130,11 +136,12 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20", "G"]                  # test debugging prints / f-string logs are OK
+"packages/*/tests/**" = ["T20", "G"]       # same allowance for a workspace member's tests
 "scripts/**" = ["T20", "G"]                # CLI scripts print user-facing output
 "scratch_barrier/**" = ["T20"]             # scratch diagnostic scripts print tab-separated traces
 
 [tool.ruff.lint.isort]
-known-first-party = ["rwa_calc"]
+known-first-party = ["rwa_calc", "rwa_filer"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -162,7 +169,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src/rwa_calc"]
+source = ["src/rwa_calc", "packages/rwa-filer/src/rwa_filer"]
 branch = true
 
 [tool.coverage.report]
@@ -208,3 +215,14 @@ dev = [
     "openpyxl>=3.1.5",  # scripts/extract_validation_rules.py reads the EBA/BoE rule workbooks
     "hypothesis>=6.100.0",  # tests/properties/ runs in the default gate; must be default-synced
 ]
+
+# One repository, two separately released packages. The root stays the rwa-calc
+# project AND is the workspace root, so src/rwa_calc, tests/ and scripts/ did not
+# move and no gate path changed. Members lock together in the single uv.lock and
+# build on their own: `uv build --package rwa-filer`. See
+# docs/development/workspace.md.
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+rwa-filer = { workspace = true }

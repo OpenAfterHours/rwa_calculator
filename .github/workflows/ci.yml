@@ -59,11 +59,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      # `packages/` is the uv workspace member tree (packages/rwa-filer). It is
+      # linted under the ROOT ruff configuration: a member pyproject.toml carries
+      # no [tool.ruff] table, so ruff resolves upward to this one.
       - name: Ruff check
-        run: uv run ruff check src/ tests/
+        run: uv run ruff check src/ tests/ packages/
 
       - name: Ruff format check
-        run: uv run ruff format --check src/ tests/
+        run: uv run ruff format --check src/ tests/ packages/
 
       - name: Architectural invariants
         run: uv run python scripts/arch_check.py
@@ -82,6 +85,9 @@ jobs:
 
       - name: ty
         run: uv run ty check src/rwa_calc/
+
+      - name: ty (rwa-filer)
+        run: uv run ty check packages/rwa-filer/src/
 
   test:
     name: Tests
@@ -110,6 +116,65 @@ jobs:
       # per-commit signal — nightly-robustness.yml owns it.
       - name: Run tests
         run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark and not robustness' -n auto
+
+  rwa-filer:
+    name: rwa-filer (isolated)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      # The whole point of this job is what it does NOT install. `uv sync
+      # --package rwa-filer` builds an environment holding rwa-filer, its declared
+      # dependencies and its own dev group — and nothing from rwa-calc. Every
+      # other job shares one workspace environment in which rwa_calc and all of
+      # its dependencies are importable, so a dependency rwa-filer forgot to
+      # declare (or an import that reached back into rwa_calc) would pass there
+      # and fail only for a user who installed the wheel on its own.
+      - name: Install rwa-filer alone
+        run: uv sync --package rwa-filer
+
+      # Asserted outright rather than inferred from a green suite: if this ever
+      # prints True the job is no longer measuring independence at all.
+      - name: rwa_calc is absent from this environment
+        run: |
+          uv run --no-sync python -c "
+          import importlib.util, sys
+          found = importlib.util.find_spec('rwa_calc') is not None
+          print('rwa_calc importable:', found)
+          sys.exit(1 if found else 0)
+          "
+
+      # `--no-sync` so `uv run` cannot quietly re-sync the ROOT project and put
+      # rwa-calc back. RWA_FILER_ISOLATED arms the environment limb of
+      # packages/rwa-filer/tests/test_independence.py.
+      - name: Run rwa-filer tests
+        env:
+          RWA_FILER_ISOLATED: "1"
+        run: uv run --no-sync pytest packages/rwa-filer
+
+      - name: Console script runs
+        run: uv run --no-sync rwa-filer --version
+
+      # The wheel a user installs is built from this member alone; prove it
+      # builds and that its metadata does not name rwa-calc.
+      - name: Build the wheel and check its requirements
+        run: |
+          uv build --package rwa-filer -o dist/rwa-filer
+          python - <<'PY'
+          import glob, sys, zipfile
+          (wheel,) = glob.glob("dist/rwa-filer/rwa_filer-*.whl")
+          with zipfile.ZipFile(wheel) as archive:
+              (name,) = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
+              requires = [
+                  line for line in archive.read(name).decode().splitlines()
+                  if line.startswith("Requires-Dist:")
+              ]
+          print("\n".join(requires))
+          sys.exit(1 if any("rwa-calc" in line.lower() for line in requires) else 0)
+          PY
 
   benchmarks:
     name: Benchmarks

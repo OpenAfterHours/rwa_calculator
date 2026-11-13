@@ -122,7 +122,14 @@ uv run python scripts/deploy.py 0.1.4 --publish
 
 # Dry run
 uv run python scripts/deploy.py --bump patch --dry-run
+
+# Release the workspace member instead (its own version, changelog and tag)
+uv run python scripts/deploy.py --package rwa-filer 0.1.0
 ```
+
+The repository releases two packages; `--package rwa-filer` releases the member
+with its own version files, changelog and `rwa-filer-v*` tag. See
+[Workspace & Packages](workspace.md) for the release order.
 
 !!! info "See also"
     Full details (Windows batch wrapper, PyPI token setup, post-deployment git workflow) in [`scripts/README.md`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/scripts/README.md).

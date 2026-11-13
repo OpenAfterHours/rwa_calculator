@@ -9,6 +9,12 @@ Key responsibilities:
 - Read the pinned ``pypa/gh-action-pypi-publish`` version from the publish workflow
 - Fail when the build emits core metadata the pinned publisher cannot accept
 
+The repository is a uv workspace with two separately released packages, and
+each builds into its OWN directory so that one release can never check — or
+upload — the other's stale artefacts: ``rwa-calc`` into ``dist/`` (unchanged) and
+``rwa-filer`` into ``dist/rwa-filer/``. ``--package`` picks which, from a fixed
+literal map; see ``DIST_DIRS``.
+
 Why this exists
 ---------------
 Two components here float independently of each other:
@@ -51,6 +57,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish.yml"
 DEFAULT_DIST_DIR = REPO_ROOT / "dist"
 
+#: Where each workspace package's distributions are built. Selected by NAME via
+#: ``--package``'s ``choices=`` and never constructed from an operator string —
+#: see ``main`` for why this script takes no path argument. The globs in
+#: ``check_distributions`` are not recursive, so ``dist/`` and
+#: ``dist/rwa-filer/`` never see each other's files.
+DIST_DIRS: dict[str, Path] = {
+    "rwa-calc": DEFAULT_DIST_DIR,
+    "rwa-filer": DEFAULT_DIST_DIR / "rwa-filer",
+}
+
 # Highest core-metadata version each publisher release accepts, newest first.
 # The publisher vendors Twine; Twine's `check` refuses any metadata version its
 # bundled `packaging` predates. Add a row when bumping the action, not when a
@@ -81,15 +97,22 @@ def main() -> int:
     the taint finding in place (see commit a5d34c0d), and removing the source is
     what actually closed it.
     """
-    argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=(
             "Fail when a built distribution declares core metadata that the pinned "
-            "pypa/gh-action-pypi-publish release cannot accept. Checks dist/ against "
-            ".github/workflows/publish.yml; takes no arguments."
+            "pypa/gh-action-pypi-publish release cannot accept. Checks a package's "
+            "dist directory against .github/workflows/publish.yml; takes no paths."
         )
-    ).parse_args()
+    )
+    parser.add_argument(
+        "--package",
+        choices=sorted(DIST_DIRS),
+        default="rwa-calc",
+        help="Which workspace package's distributions to check (default: rwa-calc -> dist/)",
+    )
+    args = parser.parse_args()
 
-    return check_distributions(DEFAULT_DIST_DIR, WORKFLOW_PATH)
+    return check_distributions(DIST_DIRS[args.package], WORKFLOW_PATH)
 
 
 def check_distributions(dist_dir: Path, workflow: Path) -> int:

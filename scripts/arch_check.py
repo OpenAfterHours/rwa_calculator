@@ -121,6 +121,20 @@ Checks machine-verifiable invariants from CLAUDE.md:
     ``tests/contracts/test_sheet_index_bundle_key_cardinality.py``, which
     reads ``SHEET_INDEX_MAPS`` itself and holds whatever syntax built it. No
     allowlist.
+23. The workspace member is standalone: nothing under
+    ``packages/rwa-filer/src/rwa_filer`` imports ``rwa_calc`` — not as an
+    ``import`` / ``from`` statement, and not through
+    ``importlib.import_module("rwa_calc...")`` / ``__import__("rwa_calc...")``.
+    rwa-filer is released on its own and must install and run with rwa-calc
+    absent; the dependency points one way only (rwa-calc depends on rwa-filer,
+    through one adapter). The shared workspace environment makes ``rwa_calc``
+    importable from everywhere, so an inverted import would pass every test
+    in this repo and break only for a user who installed the wheel alone —
+    which is why this reads the SOURCE, and why CI additionally runs the
+    member's tests in an environment that holds it alone. The member also
+    meets the package-wide source rules that are not specific to rwa-calc's
+    layering: checks 1, 2 and 14. A missing or empty member directory is a
+    violation, not a skip. No allowlist.
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
 observability contract (see docs/specifications/observability.md). Check 9
@@ -133,6 +147,7 @@ migration by banning the back-compat shells the earlier slices left behind.
 Check 20 is Phase 0 of docs/plans/test-space-correctness-proposal.md.
 Checks 21 and 22 are graduated LESSONS: a trap that reached production and
 was mechanically checkable from the source is now a check rather than prose.
+Check 23 is the workspace guard (docs/development/workspace.md).
 Rare intentional exceptions are listed in the ALLOWLIST dicts below; adding
 a new entry there should be a deliberate, reviewed decision.
 
@@ -2654,6 +2669,102 @@ def _literal_bundle_keys(node: ast.AST | None) -> tuple[str, ...] | None:
     return tuple(value)
 
 
+# ── Check 23: the workspace member is standalone ───────────────────────────────
+#: The uv workspace member that is released on its own (``rwa-filer`` on PyPI).
+#: Anchored on this file rather than the working directory so the check reads
+#: the same tree however it is invoked.
+FILER_PACKAGE_ROOT = (
+    Path(__file__).resolve().parent.parent / "packages" / "rwa-filer" / "src" / "rwa_filer"
+)
+#: The one import the member may never make. The dependency arrow points from
+#: rwa-calc to rwa-filer; the reverse would make the "standalone" package
+#: unusable without the calculator installed beside it.
+_FILER_FORBIDDEN_IMPORT = "rwa_calc"
+#: Call names that import a module from a STRING, so a dynamic import cannot
+#: route around the statement scan.
+_DYNAMIC_IMPORT_CALLS = frozenset({"import_module", "__import__"})
+
+
+def check_filer_is_standalone(path: Path) -> list[str]:
+    """Nothing under the rwa-filer member imports ``rwa_calc``.
+
+    The shape of the failure this prevents: every job in this repo but one runs
+    in the shared workspace environment, where ``rwa_calc`` is importable from
+    anywhere. An ``rwa_filer`` module that reached back into the calculator
+    would therefore pass lint, types and the whole test suite here, ship in the
+    rwa-filer wheel, and raise ``ModuleNotFoundError`` for the first user who
+    installed that wheel without rwa-calc. Reading the source is the only gate
+    that does not depend on which environment happens to be active.
+
+    The member is also held to the package-wide source rules that are not
+    specific to rwa-calc's layering — ``from __future__ import annotations``
+    (check 1), no ABC imports (check 2) and no Polars namespace registrations
+    (check 14). The layering checks (3-8, 10-13, 15-22) describe rwa-calc's
+    pipeline and have no meaning there.
+
+    A missing or empty member directory is a violation rather than a skip, for
+    the reason check 22 gives: an unmeasured invariant reads exactly like a
+    satisfied one. Only a genuine subpath run (``arch_check.py
+    src/rwa_calc/engine``) skips.
+    """
+    if path.name != _PACKAGE_ROOT_NAME:
+        return []  # a genuine subpath run — the member is not what was asked about
+
+    root = FILER_PACKAGE_ROOT
+    modules = sorted(root.rglob("*.py")) if root.is_dir() else []
+    if not modules:
+        return [
+            f"  {root} holds no Python module -- check 23 has lost its population. "
+            "The rwa-filer workspace member moved or was emptied; re-point "
+            "FILER_PACKAGE_ROOT at it."
+        ]
+
+    violations: list[str] = []
+    for py_file in modules:
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            violations.append(
+                f"  {py_file}: unreadable ({exc.__class__.__name__}) -- cannot be gated"
+            )
+            continue
+        violations.extend(
+            f"  {py_file}:{line}: imports {name!r} -- rwa-filer is standalone and must "
+            "never import rwa_calc (the dependency points from rwa-calc to rwa-filer)"
+            for line, name in _forbidden_filer_imports(tree)
+        )
+
+    violations.extend(check_future_annotations(root))
+    violations.extend(check_no_abc(root))
+    violations.extend(check_no_polars_namespace_registrations(root))
+    return violations
+
+
+def _forbidden_filer_imports(tree: ast.Module) -> Iterator[tuple[int, str]]:
+    """Yield ``(line, module)`` for every way a module names ``rwa_calc`` to import it."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if _is_forbidden_module(alias.name):
+                    yield node.lineno, alias.name
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0 and node.module and _is_forbidden_module(node.module):
+                yield node.lineno, node.module
+        elif isinstance(node, ast.Call) and _callee_name(node) in _DYNAMIC_IMPORT_CALLS:
+            for arg in node.args[:1]:
+                if (
+                    isinstance(arg, ast.Constant)
+                    and isinstance(arg.value, str)
+                    and _is_forbidden_module(arg.value)
+                ):
+                    yield node.lineno, arg.value
+
+
+def _is_forbidden_module(dotted: str) -> bool:
+    """Whether a dotted module path is ``rwa_calc`` or anything beneath it."""
+    return dotted == _FILER_FORBIDDEN_IMPORT or dotted.startswith(f"{_FILER_FORBIDDEN_IMPORT}.")
+
+
 def check_watchfire_citations() -> tuple[list[str], list[str]]:
     """Run `watchfire check` via its Python API.
 
@@ -2866,6 +2977,10 @@ def main() -> int:
         (
             "One bundle key per publisher sheet code (reporting/validations)",
             check_sheet_code_single_bundle_key,
+        ),
+        (
+            "rwa-filer is standalone (never imports rwa_calc)",
+            check_filer_is_standalone,
         ),
     ]
 

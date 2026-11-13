@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **The repository is now a uv workspace with a second, separately released
+  package: `rwa-filer`.** The root is still the `rwa-calc` project and is also
+  the workspace root, so `src/rwa_calc`, `tests/` and `scripts/` did not move;
+  `packages/rwa-filer` (import name `rwa_filer`) is the one member — the
+  standalone filing package, which will validate regulatory returns against the
+  published supervisory rules and write them for submission. `rwa-calc` now
+  declares `rwa-filer>=0.1,<0.2`; the dependency points one way only, enforced
+  by the new `arch_check` check 23 (nothing under `rwa_filer` may import
+  `rwa_calc`) and by a new CI job that runs the member's tests in an environment
+  holding it alone. `scripts/deploy.py` gains `--package rwa-filer` and
+  `.github/workflows/publish.yml` selects the package from the release tag
+  (`v*` → `rwa-calc`, `rwa-filer-v*` → `rwa-filer`). See
+  [Workspace & Packages](../development/workspace.md). This release changes no
+  calculation and no reported figure.
 
 ### Changed
 - (Next release changes will go here)

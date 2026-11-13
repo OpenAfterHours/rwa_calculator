@@ -20,6 +20,15 @@ The stages are wired as a fold (migration Phase 4): `engine/registry.py` is the 
 
 What the move did **not** change: each package is still the **single home** of its component — there is no top-level alias module. When an implementation moves, delete the old module and repoint its importers; never leave a back-compat shell behind (arch_check check 18). The four shells the Phase 4 slices left behind were deleted once one of them was found silently disarming a regression guard that read `module.__file__`.
 
+### Workspace: two packages, one repository
+
+The repo is a **uv workspace**. The root is still the `rwa-calc` project *and* the workspace root, so `src/rwa_calc`, `tests/` and `scripts/` are where they always were. `packages/rwa-filer` (import name `rwa_filer`) is the one member: the standalone filing package, versioned, tagged (`rwa-filer-v*`) and published on its own. Both lock into the single `uv.lock`. Full detail: `docs/development/workspace.md`.
+
+- **The dependency points one way.** `rwa-calc` depends on `rwa-filer`. **Nothing under `packages/rwa-filer/src/rwa_filer` may import `rwa_calc`** — `arch_check` check 23, no allowlist. The shared environment makes `rwa_calc` importable from everywhere, so an inverted import passes every test here and breaks only for someone who installs the `rwa-filer` wheel alone; that is why the gate reads the source, and why CI's `rwa-filer (isolated)` job runs the member's suite in an environment that holds it alone.
+- **A new `rwa-filer` runtime dependency goes in `packages/rwa-filer/pyproject.toml`**, never only in the root one — the shared environment would hide the omission until that isolated job.
+- **`uv sync --package rwa-filer` rebuilds `.venv` to hold the member alone** and removes everything else. Useful for reproducing the isolated job; run `uv sync --all-extras` afterwards to get the dev environment back (or point `UV_PROJECT_ENVIRONMENT` at a scratch directory first).
+- **Release rwa-filer first.** An installed `rwa-calc` resolves `rwa-filer` from PyPI, so an `rwa-calc` release that needs a new `rwa-filer` version must follow it: `python scripts/deploy.py --package rwa-filer <version>`, then the ordinary `rwa-calc` release.
+
 ### Key Design Patterns
 - **Protocols** (`contracts/protocols.py`): All components implement structural `Protocol` interfaces — not abstract base classes. New components must define and implement a protocol.
 - **Frozen dataclass bundles** (`contracts/bundles.py`): All inter-stage data transfer uses `@dataclass(frozen=True)`. Never use plain dicts for stage outputs.
@@ -62,10 +71,11 @@ Key topics: SA risk weights (CRE20-22), IRB approach (CRE30-36), Credit risk mit
 
 Run these after implementing, before handing work back. The **static** gates below mirror `.pre-commit-config.yaml` and the `lint` / `typecheck` jobs in `.github/workflows/ci.yml`, so green here is green there. The **test** line does not — it is weaker than CI, and its own bullet says how.
 
-- **Architecture**: `uv run python scripts/arch_check.py` — the 22 numbered invariants, plus `watchfire check` as its final step.
-- **Lint**: `uv run ruff check src tests scripts`. Fix with `uv run ruff check --fix src tests scripts`.
-- **Format**: `uv run ruff format --check src tests scripts`. Fix with `uv run ruff format src tests scripts`.
-- **Types**: `uv run ty check src/rwa_calc/`. `ty` dispatches on a subcommand — a bare `uv run ty src/` is not a valid invocation.
+- **Architecture**: `uv run python scripts/arch_check.py` — the 23 numbered invariants, plus `watchfire check` as its final step.
+- **Lint**: `uv run ruff check src tests scripts packages`. Fix with `uv run ruff check --fix src tests scripts packages`.
+- **Format**: `uv run ruff format --check src tests scripts packages`. Fix with `uv run ruff format src tests scripts packages`.
+- **Types**: `uv run ty check src/rwa_calc/` and `uv run ty check packages/rwa-filer/src/`. `ty` dispatches on a subcommand — a bare `uv run ty src/` is not a valid invocation.
+- **rwa-filer tests**: `uv run pytest packages/rwa-filer` — the workspace member's own suite. **`uv run pytest tests/` does not collect it** (the root `testpaths` is `tests`, and the member carries its own pytest config so it stays off the root `addopts`), so a change under `packages/` needs this line as well. See Workspace below.
 - **Generated agent context**: `uv run python scripts/sync_agent_instructions.py --check` and `uv run python scripts/sync_agent_skills.py --check`. Both are pre-commit hooks (`sync-agent-instructions`, `sync-agent-skills`); drop `--check` to regenerate.
 - **Reporting coverage ratchet**: `uv run python scripts/coverage_report.py --check` (~40s, 18 pipeline runs). A four-way ratchet on how much of the estate the gates can SEE — binding rules per regime and template-cell liveness may not fall, dead cells and never-evaluated rules may not rise. **Nothing else runs it.** It is its own CI job (`Reporting Coverage Ratchet`), it is not in `arch_check`, and its local mirror `tests/contracts/test_coverage_ratchet.py` is `slow`-marked, so the dev-loop `pytest` line below AND CI's own `test` job both deselect it. A change that moves a reported row or column can therefore be green everywhere else and red in CI. Bank a deliberate move with `--update-baseline` — re-measure it, never type the numbers — and say why in `_note` and the commit message.
 - **Tests**: `uv run pytest tests/` — the dev-loop default, and the one line here that is **weaker than CI**. Its marker filter also deselects `stress` and `scale_1m`, which CI's test job runs, so a green local run leaves the stress suite unrun; top up before a PR with `uv run pytest tests/ -m stress`. See Testing Standards below for the full filter. Benchmarks are already off via `--benchmark-disable` in the `pyproject.toml` `addopts`; do not add `--benchmark-skip`.
@@ -275,7 +285,7 @@ fix-commit-closes-it convention produces.
 
 A lesson that reaches production **twice** has proven it cannot survive as
 prose — graduate it to an executable check, or file the graduation as a Tier 1
-plan item. `scripts/arch_check.py`'s 22 numbered checks and the supervisory
+plan item. `scripts/arch_check.py`'s 23 numbered checks and the supervisory
 validation register are what graduated lessons look like.
 
 The clearest worked example is the **skill-value graduation (2026-08-08)**. The

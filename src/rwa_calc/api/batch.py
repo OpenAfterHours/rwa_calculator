@@ -43,8 +43,24 @@ What crosses the process boundary:
     *paths* to parquet, never a frame, so the results themselves stay on disk
     and are scanned lazily by whichever process wants them.
     Every one of those types is a module-level frozen dataclass or a builtin,
-    which is what Windows ``spawn`` requires; ``_run_scope`` is a module-level
-    function for the same reason.
+    which is what ``spawn`` requires; ``_run_scope`` is a module-level function
+    for the same reason.
+
+Start method — ``spawn``, on every platform:
+    The pool is built on an explicit ``spawn`` context (``WORKER_START_METHOD``,
+    applied in ``_make_executor``) and never on ``multiprocessing``'s default,
+    because that default is a function of platform AND interpreter: ``spawn``
+    on Windows and macOS, ``forkserver`` on Linux from Python 3.14, ``fork`` on
+    Linux up to 3.13. ``fork`` is the one that does not work here. A forked
+    worker is a copy of this process in which Polars is already imported and,
+    once this process has run any query, already has a thread pool — but the
+    copy holds none of that pool's threads, so the worker's first ``collect()``
+    queues work nobody will ever pick up and the batch hangs in
+    ``as_completed`` without an error. The same inheritance voids the Polars
+    cap below: the pool it is meant to size was sized in the parent.
+    (docs/development/escape-log.md, 2026-11-13.) ``spawn`` rather than
+    ``forkserver`` because it is the only start method every platform has —
+    one worker behaviour everywhere, instead of one per default.
 
 Capping Polars inside the workers:
     Each worker is capped to one Polars thread by a ``ProcessPoolExecutor``
@@ -56,7 +72,7 @@ Capping Polars inside the workers:
     genuinely too late — Polars would already have sized its pool. It therefore
     lives in ``rwa_calc.worker_bootstrap``, whose whole import budget is ``os``.
 
-Caller requirement on Windows:
+Caller requirement (every platform, now that every platform spawns):
     ``spawn`` re-imports the parent's ``__main__`` module in every child, so a
     *script* that calls ``run_batch`` at module scope re-runs its own batch in
     each worker. Put the call behind ``if __name__ == "__main__":``. Long-lived
@@ -81,6 +97,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import multiprocessing
 import os
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -122,6 +139,15 @@ DEFAULT_MAX_WORKERS = 4
 # afford to lose. NEVER 0 — Polars accepts 0 at import and panics at compute
 # time with "Worker threads cannot be set to 0".
 DEFAULT_WORKER_POLARS_THREADS = 1
+
+# The multiprocessing start method of every batch worker, on every platform and
+# interpreter. Named — never left to ``multiprocessing``'s default, which is
+# ``fork`` on Linux up to Python 3.13: a forked worker inherits this process's
+# already-initialised Polars without its threads and hangs on its first
+# ``collect()`` (see the module docstring). ``spawn`` is the one start method
+# every platform has, so it is also the only choice that gives one behaviour
+# everywhere. Pinned by tests/unit/api/test_batch.py::TestWorkerStartMethod.
+WORKER_START_METHOD = "spawn"
 
 # Deployment kill-switch for environments that cannot spawn at all. Set to any
 # of ``_TRUTHY`` to force the serial path regardless of ``max_workers``.
@@ -416,7 +442,7 @@ def resolve_max_workers(requested: int | None, run_count: int) -> int:
 
 
 # =============================================================================
-# Worker entry point — module-level and picklable (Windows spawn)
+# Worker entry point — module-level and picklable (spawn imports it by name)
 # =============================================================================
 
 
@@ -706,7 +732,15 @@ def _recover_lost_scopes(
 
 
 def _make_executor(max_workers: int, polars_threads: int | None) -> ProcessPoolExecutor:
-    """The pool, with each worker's Polars thread pool capped on the way up.
+    """The pool, spawned, with each worker's Polars thread pool capped on the way up.
+
+    The context is explicit so that the workers are spawned on every platform
+    and interpreter rather than started however ``multiprocessing`` defaults to
+    there — see ``WORKER_START_METHOD``. Everything below about *when* the cap
+    lands is a statement about a spawned child, which begins as a fresh
+    interpreter. It does not hold for a forked one, which starts life with this
+    process's Polars already imported — and, once this process has run a query,
+    already sized.
 
     ``concurrent.futures.process._process_worker`` calls ``initializer(*initargs)``
     *before* its first ``call_queue.get()``, and the work item is what drags
@@ -728,10 +762,12 @@ def _make_executor(max_workers: int, polars_threads: int | None) -> ProcessPoolE
         polars_threads: Per-worker Polars threads, or None to leave the
             workers uncapped (they then size to the child's core count).
     """
+    context = multiprocessing.get_context(WORKER_START_METHOD)
     if polars_threads is None:
-        return ProcessPoolExecutor(max_workers=max_workers)
+        return ProcessPoolExecutor(max_workers=max_workers, mp_context=context)
     return ProcessPoolExecutor(
         max_workers=max_workers,
+        mp_context=context,
         initializer=configure_worker_process,
         initargs=(polars_threads,),
     )

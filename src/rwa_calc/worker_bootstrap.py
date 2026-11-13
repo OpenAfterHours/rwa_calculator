@@ -25,6 +25,12 @@ Why this is a top-level module and not part of ``api/``:
     Polars.** ``os`` is the whole budget. Adding an ``rwa_calc`` import here
     silently uncaps every batch worker.
 
+    All of the above is an argument about a *spawned* child, which starts as a
+    fresh interpreter. A forked child starts with its parent's Polars already
+    imported, so nothing run inside it can be early enough —
+    ``api/batch.py::WORKER_START_METHOD`` pins the pool to ``spawn`` on every
+    platform, and this module's guarantee depends on that pin.
+
 References:
 - docs/plans/architecture-review-2026-08-29.md section 4.3 (P1)
 - tests/conftest.py — the same Polars-threads-versus-memory trade, for xdist

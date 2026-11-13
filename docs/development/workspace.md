@@ -127,6 +127,39 @@ The gate is its own CI job, `Filing Mapping Ratchet`. It is not part of
 runs the measurement. Bank a deliberate move with `--update-baseline` and say
 why in the baseline's `_note`.
 
+## The referee differential
+
+Every other check on the filing package is this repository checking its own
+work. The referee differential asks someone else. For each Basel 3.1 portfolio
+whose generated estate has no structure finding, it writes the XBRL instance,
+runs [Arelle](https://arelle.org) on it against the Bank of England's taxonomy
+package, and requires two things: Arelle raises no error, and Arelle's verdict
+on every rule is the verdict of `rwa-filer`'s own rule engine.
+
+```bash
+# The Bank's package at .taxonomy/boe-banking-v411.zip; Arelle in its own environment
+RWA_FILER_ARELLE_PYTHON=/path/to/arelle-venv/bin/python \
+    uv run python scripts/referee_differential.py --check
+```
+
+Five of the thirteen Basel 3.1 portfolios qualify today. The other eight carry
+structure findings, which is the filing-mapping ratchet's business, and are not
+filed. A portfolio that joins or leaves the five must be re-banked and
+explained.
+
+The gate needs Arelle and the Bank's package, neither of which is in the
+repository, and takes several minutes and about 3 GB per return. It therefore
+runs in its own workflow, `Referee Differential`, and not in `ci.yml`: on a pull
+request or push that touches the code it referees, weekly, and on demand. A pull
+request that touches none of those paths does not run it. Its baseline logic
+and its workflow wiring are pinned by the fast tests in
+`tests/contracts/test_referee_differential.py`.
+
+A disagreement is never re-banked as a number. It means the engine or Arelle
+has misread a rule, or the taxonomy's formula differs from the workbook text,
+and each of those has happened: see
+[How the rules are evaluated](../rwa-filer/index.md#how-the-rules-are-evaluated).
+
 ## The one rule: the dependency points one way
 
 `rwa-calc` may import `rwa_filer`. **`rwa_filer` may never import `rwa_calc`.**

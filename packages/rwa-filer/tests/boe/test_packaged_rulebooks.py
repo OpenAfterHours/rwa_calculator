@@ -9,6 +9,9 @@ and an entry that no longer applies must be removed.
 - ``UNSUPPORTED`` — enforced rules of a module whose taxonomy pack is packaged
   that the engine refuses. This is the never-evaluated register: a rule in it
   is one the Bank's gateway runs and this package does not.
+- ``CLOSED_BY_FORMULA`` — enforced rules the taxonomy's OWN formula cannot fire
+  on any cell the rule names, so neither the gateway nor the engine evaluates
+  them. A rule in it is a rule nobody runs, by the publisher's doing.
 
 A rule in a register is a known gap. A rule missing from one, that should be in
 it, is a gap nobody knows about — which is the state these tests exist to make
@@ -31,8 +34,10 @@ from rwa_filer.boe.catalogue import (
     rulebook_for_module,
 )
 from rwa_filer.boe.engine import REASON_UNKNOWN_TABLE, REASON_UNSUPPORTED, evaluate_rules
+from rwa_filer.boe.formulas import DEFAULT_MEMBER
+from rwa_filer.boe.grammar import references
 from rwa_filer.model import FACT_SCHEMA, CanonicalReturn, ReturnHeader
-from rwa_filer.taxonomy.pack import available_packs, load_packaged
+from rwa_filer.taxonomy.pack import TaxonomyPack, available_packs, load_packaged
 
 TAXONOMY = "4.1.1"
 
@@ -76,6 +81,37 @@ UNREADABLE = {
 #: (module, rule) the gateway runs and the engine refuses. Empty: for every
 #: module with a packaged taxonomy pack, every enforced rule is evaluated.
 UNSUPPORTED: dict[tuple[str, str], str] = {}
+
+#: Rule book file -> the folder of the taxonomy package its formulas were read
+#: from. Not derivable from the name: "leverage_ratio" is ``leverage/2026-02-27``.
+FORMULA_FOLDERS = {
+    "banking_reporting-4.1.1.json": "banking/banking_reporting/2026-08-17",
+    "banking_reporting_sddt-4.1.1.json": "banking/banking_reporting_sddt/2026-08-17",
+    "capital_plus-4.1.1.json": "banking/capital_plus/2026-02-27",
+    "capital_plus_sddt-4.1.1.json": "banking/capital_plus_sddt/2026-02-27",
+    "financialstatements-4.1.1.json": "banking/financialstatements/2021-07-31",
+    "leverage_2023_05_11-4.1.1.json": "banking/leverage/2023-05-11",
+    "leverage_ratio-4.1.1.json": "banking/leverage/2026-02-27",
+    "liquidity_pillarii-4.1.1.json": "banking/liquidity_pillarii/2019-08-14",
+    "mrel-4.1.1.json": "banking/mrel/2026-06-22",
+    "step_in_risk-4.1.1.json": "banking/step-in-risk/2025-09-08",
+    "structural_reform-4.1.1.json": "banking/structural_reform/2021-07-31",
+}
+
+#: (module, rule) -> the dimension its formula closes that every cell it names
+#: carries. Table OF 91.01 is filed on two sheets, each a member of
+#: ``eba_dim:PRP``; the v4.1.1 formulas for its rules fix PRP to its default
+#: member, so no reported fact binds. Arelle never fires any of the seven on the
+#: Bank's sample (``pra001_sample_all_tables_oracle.json``).
+CLOSED_BY_FORMULA = {
+    ("PRA001", "boe_b0281"): "eba_dim:PRP",
+    ("PRA001", "boe_b0408"): "eba_dim:PRP",
+    ("PRA001", "boe_b0527"): "eba_dim:PRP",
+    ("PRA001", "boe_b0528"): "eba_dim:PRP",
+    ("PRA001", "boe_b0539"): "eba_dim:PRP",
+    ("PRA001", "boe_b0540"): "eba_dim:PRP",
+    ("PRA001", "boe_b0541"): "eba_dim:PRP",
+}
 
 
 def test_every_family_of_the_publication_is_packaged() -> None:
@@ -169,3 +205,79 @@ def test_every_enforced_rule_of_a_packaged_module_is_supported_by_the_engine() -
         f"unregistered: {sorted(refused.keys() - UNSUPPORTED.keys())[:10]}; "
         f"stale: {sorted(UNSUPPORTED.keys() - refused.keys())[:10]}"
     )
+
+
+def test_every_packaged_rule_book_records_what_its_formulas_close() -> None:
+    """Built with the taxonomy package, each from its own framework's folder."""
+    # Act
+    folders = {
+        name: load_rulebook(name).source.get("formulas", {}).get("folder")
+        for name in available_rulebooks()
+    }
+    without = [
+        (name, rule.rule_id)
+        for name in available_rulebooks()
+        for rule in load_rulebook(name).rules
+        if rule.in_xbrl and not rule.closed and not rule.closed_by_variable
+    ]
+
+    # Assert — nearly every formula closes something; a rule book where none
+    # does was built without the package.
+    assert folders == FORMULA_FOLDERS
+    assert len(without) < 100, f"{len(without)} XBRL rules record no closed dimension"
+
+
+def _closing_dimensions(pack: TaxonomyPack, rule: Rule) -> set[str] | None:
+    """The closed dimensions that shut out EVERY cell some reference of ``rule`` names.
+
+    ``None`` when each reference keeps at least one cell its formula admits.
+    A static reading of the pack, with no return: which cells the rule text
+    names, and whether the formula closes a dimension each of them carries.
+    """
+    shut: set[str] = set()
+    for reference in references(rule.tree):
+        table = pack.tables.get(reference.table or "")
+        if table is None:
+            continue
+        rows = {table.row_code(code) for code in reference.rows}
+        columns = {table.column_code(code) for code in reference.columns}
+        sheets = {table.sheet_code(code) for code in reference.sheets}
+        named = pack.cells.filter(pl.col("table") == table.code)
+        for column, accepted in (("row", rows), ("column", columns), ("sheet", sheets)):
+            if accepted:
+                named = named.filter(pl.col(column).is_in(sorted(accepted)))
+        closed = rule.closed | rule.closed_by_variable.get(reference.variable or "", frozenset())
+        hits = [
+            closed
+            & {
+                dimension
+                for dimension, member in pack.datapoints[point].dimensions
+                if member.rpartition(":")[2] != DEFAULT_MEMBER
+            }
+            for point in named["datapoint"].unique().to_list()
+        ]
+        if hits and all(hits):
+            shut |= set().union(*hits)
+    return shut or None
+
+
+def test_the_rules_their_own_formulas_cannot_fire_are_exactly_the_registered_ones() -> None:
+    """For each module whose pack ships: which enforced rules nobody can run.
+
+    A rule joins this register when a new taxonomy closes a dimension its
+    table reports on, and leaves it when the publisher repairs the formula.
+    Either is a change in what a return is checked against, and must be seen.
+    """
+    # Act
+    found: dict[tuple[str, str], str] = {}
+    for info in available_packs():
+        pack = load_packaged(info.key)
+        for rule in rulebook_for_module(info.module).enforced(info.module):
+            if rule.parse_error is not None or not (rule.closed or rule.closed_by_variable):
+                continue
+            shut = _closing_dimensions(pack, rule)
+            if shut is not None:
+                found[(info.module, rule.rule_id)] = ", ".join(sorted(shut))
+
+    # Assert — two-way against the register.
+    assert found == CLOSED_BY_FORMULA

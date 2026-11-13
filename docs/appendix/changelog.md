@@ -50,6 +50,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-zero figure the taxonomy has no cell for, a fact the taxonomy cannot
   express, or a rule check that does not pass. Each can be overridden
   explicitly; a file written that way is never reported as submittable.
+- **New gate: the referee differential**
+  (`scripts/referee_differential.py --check`, workflow `Referee Differential`).
+  It files golden Basel 3.1 returns from the calculator, has the Arelle XBRL
+  processor load each against the Bank of England's taxonomy package, and
+  requires that Arelle raises no error and that its verdict on every rule is
+  the native rule engine's. Five of the thirteen Basel 3.1 portfolios have an
+  estate that can be written as valid XBRL today and are refereed; the other
+  eight carry structure findings and are not. The gate runs in its own
+  workflow, on a change to the code it referees, weekly and on demand, because
+  it needs Arelle and a download from the Bank's site.
+- **The filing package is on the REST API.** `GET /api/filing/status` says
+  whether a completed Basel 3.1 run can be filed and, if not, what stands in
+  the way; `GET /api/filing/package` downloads the XBRL instance and its
+  manifest as a zip, and answers `409` with the same verdict when there is no
+  file to give. File names come from the run's framework and reporting date,
+  never from the caller's identifier.
+- **The UI has a Filing page** (`/results/{run_id}/filing`, linked from the
+  results page). For the LEI entered it shows the same verdict, the figures the
+  taxonomy has no cell for, and the validation findings. It offers the filing
+  package only for a return nothing blocks; a blocked return is offered, at
+  most, as a file for review that is labelled as not submittable.
 - **The filing-mapping ratchet now also holds `structure_findings`**: placed
   facts that still cannot be filed. Eight exist today, in four tables. In three,
   two cells that are one data point in the taxonomy hold different values

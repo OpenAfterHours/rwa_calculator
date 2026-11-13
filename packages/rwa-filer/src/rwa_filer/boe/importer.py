@@ -33,6 +33,14 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Final
 
+from rwa_filer.boe.formulas import (
+    KEY_CLOSED,
+    KEY_DIMENSIONS,
+    KEY_FORMULAS,
+    KEY_OPEN,
+    read_formula_reach,
+)
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -88,18 +96,28 @@ _SHORT_LABEL: Final = re.compile(
 # =============================================================================
 
 
-def import_workbook(workbook: Path, *, taxonomy_version: str | None = None) -> dict[str, Any]:
+def import_workbook(
+    workbook: Path,
+    *,
+    taxonomy_version: str | None = None,
+    taxonomy_package: Path | None = None,
+) -> dict[str, Any]:
     """Read every rule of a validation workbook into a rule-book dict.
 
     Args:
         workbook: The ``.xlsx`` file.
         taxonomy_version: The taxonomy release the workbook belongs to, e.g.
             ``"4.1.1"``. Defaults to the version in the file name.
+        taxonomy_package: The publisher's taxonomy package zip. When given,
+            each rule also records which dimensions its XBRL formula closes
+            (``boe.formulas``), so that a rule the formula cannot fire is not
+            evaluated from its text. The packaged rule books are built with it.
 
     Raises:
         ModuleNotFoundError: ``openpyxl`` is not installed (``rwa-filer[excel]``).
         ValueError: the file is not a rule workbook — it has no single data
-            sheet, lacks a required column, or mixes framework versions.
+            sheet, lacks a required column, or mixes framework versions; or
+            ``taxonomy_package`` holds no formula for any of its rules.
     """
     from openpyxl import load_workbook
 
@@ -137,7 +155,7 @@ def import_workbook(workbook: Path, *, taxonomy_version: str | None = None) -> d
     version = taxonomy_version or _version_of(workbook.name)
     rules.sort(key=lambda rule: rule["id"])
     logger.info("imported %d rule(s) from %s", len(rules), workbook.name)
-    return {
+    rulebook = {
         "format": RULEBOOK_FORMAT,
         "source": {
             "publisher": "Bank of England",
@@ -150,6 +168,9 @@ def import_workbook(workbook: Path, *, taxonomy_version: str | None = None) -> d
         "modules": sorted({module for rule in rules for module in rule["severity"]}),
         "rules": rules,
     }
+    if taxonomy_package is not None:
+        _record_formula_reach(rulebook, taxonomy_package)
+    return rulebook
 
 
 def dump_rulebook(rulebook: dict[str, Any]) -> str:
@@ -167,8 +188,39 @@ def write_rulebook(rulebook: dict[str, Any], path: Path) -> None:
 
 
 def is_rulebook_current(rulebook: dict[str, Any], path: Path) -> bool:
-    """Whether ``path`` holds exactly what ``rulebook`` would be written as."""
-    return path.is_file() and path.read_text(encoding="utf-8") == dump_rulebook(rulebook)
+    """Whether ``path`` holds exactly what ``rulebook`` would be written as.
+
+    A ``rulebook`` imported WITHOUT a taxonomy package says nothing about
+    formula reach, so it is compared with the file's workbook content only —
+    the file's reach is neither confirmed nor contradicted. ``has_formula_reach``
+    tells the two cases apart.
+    """
+    if not path.is_file():
+        return False
+    text = path.read_text(encoding="utf-8")
+    if text == dump_rulebook(rulebook):
+        return True
+    if has_formula_reach(rulebook):
+        return False
+    return dump_rulebook(without_formula_reach(json.loads(text))) == dump_rulebook(rulebook)
+
+
+def has_formula_reach(rulebook: dict[str, Any]) -> bool:
+    """Whether ``rulebook`` was built with a taxonomy package."""
+    return KEY_FORMULAS in rulebook["source"]
+
+
+def without_formula_reach(rulebook: dict[str, Any]) -> dict[str, Any]:
+    """``rulebook`` as its workbook alone yields it: no formula reach recorded."""
+    stripped = {key: value for key, value in rulebook.items() if key != KEY_DIMENSIONS}
+    stripped["source"] = {
+        key: value for key, value in rulebook["source"].items() if key != KEY_FORMULAS
+    }
+    stripped["rules"] = [
+        {key: value for key, value in rule.items() if key not in (KEY_OPEN, KEY_CLOSED)}
+        for rule in rulebook["rules"]
+    ]
+    return stripped
 
 
 def rulebook_file_name(rulebook: dict[str, Any]) -> str:
@@ -180,6 +232,36 @@ def rulebook_file_name(rulebook: dict[str, Any]) -> str:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _record_formula_reach(rulebook: dict[str, Any], package: Path) -> None:
+    """Add to ``rulebook`` what each rule's formula closes, read from ``package``.
+
+    Nearly every formula closes the same hundred-odd dimensions and leaves a
+    handful open, so the file states the whole set once (``formula_dimensions``)
+    and, per rule, only the ones that rule leaves OPEN.
+    """
+    reach = read_formula_reach(
+        package, [rule["id"] for rule in rulebook["rules"] if rule["in_xbrl"]]
+    )
+    dimensions = set(reach.dimensions)
+    # The package by what it holds, not by what the file is called: the same
+    # publication under another name yields the same rule book.
+    rulebook["source"][KEY_FORMULAS] = {
+        "package_sha256": hashlib.sha256(package.read_bytes()).hexdigest(),
+        "folder": reach.folder,
+    }
+    rulebook[KEY_DIMENSIONS] = sorted(dimensions)
+    for rule in rulebook["rules"]:
+        found = reach.rules.get(rule["id"])
+        if found is None:
+            continue
+        if found.closed:
+            rule[KEY_OPEN] = sorted(dimensions - found.closed)
+        if found.closed_by_variable:
+            rule[KEY_CLOSED] = {
+                variable: sorted(closed) for variable, closed in found.closed_by_variable.items()
+            }
 
 
 def _rule(row: tuple[Any, ...], index: dict[str, int], table_columns: list[int]) -> dict[str, Any]:

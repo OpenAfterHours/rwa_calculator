@@ -495,6 +495,7 @@ class ResultExporter:
         allow_incomplete: bool = False,
         allow_rule_breaks: bool = False,
         always_zip: bool = False,
+        name: str | None = None,
     ) -> FilingOutcome:
         """Write this run's COREP return as the file the PRA accepts.
 
@@ -527,6 +528,8 @@ class ResultExporter:
                 in the taxonomy; they are left out and listed on the outcome.
             allow_rule_breaks: Write the file even though a rule check fails.
             always_zip: Write a zip whatever the instance's size.
+            name: The files' base name. Defaults to
+                ``<entity>_PRA001_<reference date>``.
 
         Returns:
             A ``FilingOutcome``: the mapping (placed and unplaced cells) and
@@ -568,6 +571,7 @@ class ResultExporter:
             header,
             output_dir,
             options=InstanceOptions(monetary_decimals=monetary_decimals),
+            name=name,
             allow_incomplete=allow_incomplete,
             allow_rule_breaks=allow_rule_breaks,
             always_zip=always_zip,

@@ -272,6 +272,8 @@ def test_a_workbook_that_is_not_a_rule_workbook_is_refused(tmp_path: Path) -> No
 # ---------------------------------------------------------------------------
 
 BOE_DIR = os.environ.get("RWA_FILER_BOE_DIR")
+#: The Bank's taxonomy package zip. With it the check covers formula reach too.
+BOE_TAXONOMY = os.environ.get("RWA_FILER_BOE_TAXONOMY")
 
 
 @pytest.mark.skipif(
@@ -282,6 +284,10 @@ def test_the_packaged_rule_books_are_exactly_what_the_banks_workbooks_yield() ->
 
     The Financial Statements workbook is NAMED v4.1.0; its Note sheet and its
     place in the publication say v4.1.1, which is why the version is given.
+
+    With ``RWA_FILER_BOE_TAXONOMY`` naming the taxonomy package the comparison
+    is of the whole file, formula reach included (a few minutes: every formula
+    is read). Without it, of the workbook content only.
     """
     # Arrange
     workbooks = sorted(Path(BOE_DIR or "").rglob("*Taxonomy Validations*.xlsx"))
@@ -292,7 +298,11 @@ def test_the_packaged_rule_books_are_exactly_what_the_banks_workbooks_yield() ->
     # Act
     produced = {}
     for path in workbooks:
-        rulebook = import_workbook(path, taxonomy_version="4.1.1")
+        rulebook = import_workbook(
+            path,
+            taxonomy_version="4.1.1",
+            taxonomy_package=Path(BOE_TAXONOMY) if BOE_TAXONOMY else None,
+        )
         produced[rulebook_file_name(rulebook)] = is_rulebook_current(
             rulebook, packaged / rulebook_file_name(rulebook)
         )

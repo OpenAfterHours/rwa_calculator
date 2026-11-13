@@ -255,6 +255,74 @@ def test_several_codes_in_a_reference_are_separate_evaluations_not_a_sum(
     assert result.failures[0].place == "row 0020"
 
 
+#: Two variables, each listing the same two rows — the shape of ``boe_b0405``.
+_PARTS_V1 = ref(T01, "0020; 0030", "0010", var="v1")
+_PARTS_V2 = ref(T01, "0020; 0030", "0010", dv="emptySequence()", var="v2")
+_SWITCH = ref(T01, "0010", "0010", var="v0")
+PAIRED = rule(
+    "paired",
+    f"if {_SWITCH} = 1 then (({_PARTS_V1} >= 0) and (not(isNull({_PARTS_V2})))) else true()",
+    tables=(T01,),
+)
+
+
+def test_codes_listed_in_two_variables_are_read_in_every_pair(pack: TaxonomyPack) -> None:
+    """Each variable ranges over its own list: two rows in each is four evaluations.
+
+    The formula filters a reference's own codes on that variable, so nothing
+    lines one variable's row up with the other's. Arelle evaluates the Bank's
+    ``boe_b0405`` — four columns in each of two variables — sixteen times.
+    """
+    # Act
+    result = run(
+        pack, PAIRED, t01("0010", "0010", 1), t01("0020", "0010", 5), t01("0030", "0010", 7)
+    )
+
+    # Assert
+    assert counts(result) == (4, 0)
+
+
+def test_a_variable_with_some_of_its_listed_cells_reported_does_not_fall_back(
+    pack: TaxonomyPack,
+) -> None:
+    """A listed cell that is not reported is simply not one of the variable's values.
+
+    There is no evaluation in which the missing row stands in as its default:
+    the variable has a value, so it does not fall back.
+    """
+    # Act — row 0030 is not reported.
+    result = run(pack, PAIRED, t01("0010", "0010", 1), t01("0020", "0010", 5))
+
+    # Assert
+    assert counts(result) == (1, 0)
+
+
+def test_a_variable_with_none_of_its_listed_cells_reported_falls_back(
+    pack: TaxonomyPack,
+) -> None:
+    # Act — neither part is reported; the switch is on.
+    result = run(pack, PAIRED, t01("0010", "0010", 1))
+
+    # Assert — ``v2`` is the empty sequence its reference says, and the rule breaks.
+    assert counts(result) == (0, 1)
+
+
+def test_a_failure_names_which_variables_row_it_is(pack: TaxonomyPack) -> None:
+    # Arrange — the same two rows in two variables; one pair breaks.
+    ordered = rule(
+        "ordered",
+        f"{ref(T01, '0020; 0030', '0010', var='v1')} <= {ref(T01, '0020; 0030', '0010', var='v2')}",
+        tables=(T01,),
+    )
+
+    # Act
+    result = run(pack, ordered, t01("0020", "0010", 60), t01("0030", "0010", 20))
+
+    # Assert — 60 <= 20 is the one pair of the four that does not hold.
+    assert counts(result) == (3, 1)
+    assert result.failures[0].place == "row of v1 0020, row of v2 0030"
+
+
 def test_a_sequence_reference_takes_all_its_cells_at_once(pack: TaxonomyPack) -> None:
     # Arrange
     total = rule(
@@ -350,6 +418,66 @@ def test_an_open_axis_is_run_once_per_reported_member(pack: TaxonomyPack) -> Non
     # Assert
     assert counts(result) == (1, 1)
     assert result.failures[0].place == "CEG FR"
+
+
+#: The all-countries total, and every country's figure summed with it — the
+#: shape of the Bank's ``boe_b0904``: "the sum over all sheets, less the total,
+#: equals the total".
+_TOTAL = ref(T03, "0010", "0010", flt="dim(this(), [eba_dim:CEG]) = [eba_GA:x1]", var="v1")
+_ALL_SHEETS = ref(T03, "0010", "0010", dv="emptySequence()", seq=True, var="v0")
+COUNTRIES_FOOT = rule(
+    "countries-foot", f"isum({_ALL_SHEETS}) i- {_TOTAL} i= {_TOTAL}", tables=(T03,)
+)
+
+
+def test_a_sum_beside_a_named_member_runs_over_every_member_at_once(
+    pack: TaxonomyPack,
+) -> None:
+    """Naming one member makes the dimension part of the rule, for every reference.
+
+    The formula then filters it on each variable — by the whole member list
+    where the text names none — so the sum is over all the sheets together,
+    and the rule is run once. Read one member at a time it would be run three
+    times here, and broken in two of them.
+    """
+    # Act — 70 + 30 = 100: the countries foot to the total.
+    result = run(
+        pack, COUNTRIES_FOOT, geo("GB", "0010", 70), geo("FR", "0010", 30), geo("x1", "0010", 100)
+    )
+
+    # Assert
+    assert counts(result) == (1, 0)
+
+
+def test_a_sum_over_every_member_breaks_when_the_members_do_not_foot(
+    pack: TaxonomyPack,
+) -> None:
+    # Act — 70 + 20 is not 100.
+    result = run(
+        pack, COUNTRIES_FOOT, geo("GB", "0010", 70), geo("FR", "0010", 20), geo("x1", "0010", 100)
+    )
+
+    # Assert — one evaluation, over all three cells; no country is named.
+    assert counts(result) == (0, 1)
+    assert result.failures[0].place == ""
+    assert "3 cell(s), sum 190" in result.failures[0].cells[0]
+
+
+def test_a_single_cell_beside_a_named_member_is_still_read_member_by_member(
+    pack: TaxonomyPack,
+) -> None:
+    """Not a sequence: each country's figure is compared with the total on its own."""
+    # Arrange — no country may exceed the total.
+    capped = rule("capped", f"{ref(T03, '0010', '0010', var='v0')} i<= {_TOTAL}", tables=(T03,))
+
+    # Act
+    result = run(
+        pack, capped, geo("GB", "0010", 70), geo("FR", "0010", 130), geo("x1", "0010", 100)
+    )
+
+    # Assert — GB, FR and the total itself: three evaluations, FR breaks.
+    assert counts(result) == (2, 1)
+    assert result.failures[0].place == "CEG of v0 FR"
 
 
 def test_a_filter_names_one_member_of_an_open_axis(pack: TaxonomyPack) -> None:

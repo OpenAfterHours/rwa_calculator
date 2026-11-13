@@ -58,6 +58,7 @@ from typing import TYPE_CHECKING, Final
 
 import polars as pl
 
+from rwa_filer.boe.formulas import DEFAULT_MEMBER
 from rwa_filer.boe.grammar import (
     DEFAULT_EMPTY,
     DEFAULT_FALSE,
@@ -107,6 +108,10 @@ STATUS_NOT_EVALUATED: Final = "NOT_EVALUATED"
 REASON_NOT_REPORTED: Final = "template_not_reported"
 #: The rule was run and no evaluation took place: none of its cells is reported.
 REASON_NO_DATA: Final = "no_data"
+#: The rule's cells are reported, but the taxonomy's own formula for the rule
+#: cannot bind them: it closes a dimension they carry. The gateway never
+#: evaluates such a rule, so neither does the engine.
+REASON_CLOSED_BY_FORMULA: Final = "closed_by_formula"
 #: The rule reads a table the module's taxonomy pack does not have.
 REASON_UNKNOWN_TABLE: Final = "table_not_in_taxonomy"
 #: The rule does not parse, or uses something the engine does not implement.
@@ -120,6 +125,8 @@ AXIS_COLUMN: Final = "c"
 AXIS_SHEET: Final = "z"
 _AXIS_OPEN: Final = "open:"
 _AXIS_KEY: Final = "key:"
+#: Joins an axis to the variable that ranges over it alone (``c@v1``).
+_AXIS_OWN: Final = "@"
 
 #: Every function the engine implements, by lower-cased name and accepted arity.
 #: A rule calling anything else is reported as unsupported before it is run.
@@ -269,6 +276,9 @@ class _TableData:
     rows_by_key: dict[tuple[str | None, str | None, tuple[tuple[str, str], ...]], str] = field(
         default_factory=dict
     )
+    #: The dimensions each data point carries with a member other than the
+    #: default — what a formula that closes a dimension turns away.
+    carried: dict[int, frozenset[str]] = field(default_factory=dict)
 
     def add(self, key: _CellKey, value: object, point: int) -> None:
         self.cells[key] = value
@@ -323,7 +333,14 @@ class _Store:
             if value is None:
                 continue
             key = (row["sheet"], self._member(table, row["open_key"]), row["row"], row["column"])
-            self._data(table).add(key, value, number)
+            holder = self._data(table)
+            holder.add(key, value, number)
+            if number not in holder.carried:
+                holder.carried[number] = frozenset(
+                    dimension
+                    for dimension, member in pack.datapoints[number].dimensions
+                    if member.rpartition(":")[2] != DEFAULT_MEMBER
+                )
 
     def data(self, table: str) -> _TableData | None:
         """The table's cells; an empty holder for a table with no reported cell."""
@@ -416,10 +433,16 @@ class _Selector:
     value_member: str | None
     free: frozenset[str]
     key_axes: Mapping[str, str]
+    own_axes: Mapping[str, str]
+    closed: frozenset[str]
 
     @property
     def table(self) -> Table:
         return self.data.table
+
+    def axis(self, kind: str) -> str:
+        """The name this selector's ``kind`` axis goes by in an evaluation's place."""
+        return self.own_axes.get(kind, kind)
 
 
 def _evaluate_rule(rule: Rule, store: _Store, module: str) -> RuleResult:
@@ -447,10 +470,17 @@ def _evaluate_rule(rule: Rule, store: _Store, module: str) -> RuleResult:
     except GrammarError as error:
         return not_evaluated(REASON_UNSUPPORTED, str(error))
 
+    detail = ""
     if unsatisfied:
         status, reason = STATUS_FAIL, ""
     elif satisfied:
         status, reason = STATUS_PASS, ""
+    elif shut := evaluation.shut_out():
+        status, reason = STATUS_NOT_EVALUATED, REASON_CLOSED_BY_FORMULA
+        detail = (
+            "the taxonomy's formula for this rule does not admit the reported cells: "
+            f"it closes {', '.join(shut)}, which they carry"
+        )
     else:
         status, reason = STATUS_NOT_EVALUATED, REASON_NO_DATA
     return RuleResult(
@@ -458,6 +488,7 @@ def _evaluate_rule(rule: Rule, store: _Store, module: str) -> RuleResult:
         severity=severity,
         status=status,
         reason=reason,
+        detail=detail,
         satisfied=satisfied,
         unsatisfied=unsatisfied,
         failures=tuple(failures),
@@ -479,6 +510,15 @@ class _Evaluation:
         for item in rule.joins:
             joined = [item.reference] if isinstance(item, JoinKey) else [item.left, item.right]
             self._references.extend(joined)
+        # Open-axis dimensions a reference of the rule names a member of. Naming
+        # one makes the dimension part of the rule: the formula then filters it
+        # on EVERY variable, by the whole member list where the text gives none.
+        self._named_dimensions = frozenset(
+            reference.dimension_filter.dimension
+            for reference in self._references
+            if reference.dimension_filter is not None
+            and reference.dimension_filter.dimension is not None
+        )
         for reference in self._references:
             self._selectors[id(reference)] = self._select(reference, scope)
         for tree in trees:
@@ -602,11 +642,11 @@ class _Evaluation:
         sheet, member, row, column = key
         place: dict[str, str] = {}
         for axis in selector.free:
-            if axis == AXIS_ROW:
+            if axis == selector.axis(AXIS_ROW):
                 place[axis] = row
-            elif axis == AXIS_COLUMN:
+            elif axis == selector.axis(AXIS_COLUMN):
                 place[axis] = column
-            elif axis == AXIS_SHEET:
+            elif axis == selector.axis(AXIS_SHEET):
                 if sheet is None:
                     return None
                 place[axis] = sheet
@@ -633,6 +673,7 @@ class _Evaluation:
         table = data.table
         group = scope.get(table.code)
         free: set[str] = set()
+        own_axes: dict[str, str] = {}
 
         def axis(
             given: tuple[str, ...],
@@ -647,7 +688,15 @@ class _Evaluation:
             """
             if given:
                 if len(given) > 1 and not reference.sequence:
-                    free.add(name)
+                    # Codes listed in the reference itself are that VARIABLE's
+                    # own range: the formula filters them on the variable, so
+                    # nothing lines them up with another variable's. Two
+                    # variables listing the same four columns are read in all
+                    # sixteen pairs, and one falls back only where none of its
+                    # cells is reported. (Codes listed in the SCOPE are shared.)
+                    own = f"{name}{_AXIS_OWN}{reference.variable}" if reference.variable else name
+                    own_axes[name] = own
+                    free.add(own)
                 return tuple(written(code) for code in given)
             # An axis the reference leaves to the scope, or leaves open
             # altogether, is run one value at a time.
@@ -678,7 +727,20 @@ class _Evaluation:
                 )
             member, excluded = filtered.member, filtered.negated
         if open_axis is not None and (member is None or excluded):
-            free.add(f"{_AXIS_OPEN}{open_axis.dimension}")
+            shared = f"{_AXIS_OPEN}{open_axis.dimension}"
+            if open_axis.dimension not in self._named_dimensions:
+                # The rule never mentions the dimension: every reference is read
+                # at the same member, one member at a time.
+                free.add(shared)
+            elif not reference.sequence:
+                # The rule names a member elsewhere, so this reference ranges
+                # over the members by itself, lined up with no other's.
+                own = f"{shared}{_AXIS_OWN}{reference.variable}" if reference.variable else shared
+                own_axes[shared] = own
+                free.add(own)
+            # ... and a sequence reference takes every member at once: the
+            # axis is not iterated at all. ("The sum over all countries less
+            # the total equals the total" — the Bank's ``boe_b0904``.)
 
         key_axes: dict[str, str] = {}
         if table.open_rows and not reference.sequence:
@@ -697,30 +759,39 @@ class _Evaluation:
             value_member=value_member,
             free=frozenset(free),
             key_axes=key_axes,
+            own_axes=own_axes,
+            closed=self._rule.closed
+            | self._rule.closed_by_variable.get(reference.variable or "", frozenset()),
         )
 
     def _matching(self, selector: _Selector) -> list[_CellKey]:
         """The reported cells ``selector`` accepts, whatever the place."""
+        return [key for key in self._candidates(selector) if self._accepts(selector, key)]
+
+    @staticmethod
+    def _candidates(selector: _Selector) -> list[_CellKey]:
+        """The reported cells on the rows and columns ``selector`` names."""
         data = selector.data
         if selector.rows is not None and selector.columns is not None:
-            candidates = [
+            return [
                 key
                 for row in selector.rows
                 for column in selector.columns
                 for key in data.by_row_column.get((row, column), ())
             ]
-        elif selector.columns is not None:
-            candidates = [
-                key for column in selector.columns for key in data.by_column.get(column, ())
-            ]
-        elif selector.rows is not None:
-            candidates = [key for row in selector.rows for key in data.by_row.get(row, ())]
-        else:
-            candidates = list(data.cells)
-        return [key for key in candidates if self._accepts(selector, key)]
+        if selector.columns is not None:
+            return [key for column in selector.columns for key in data.by_column.get(column, ())]
+        if selector.rows is not None:
+            return [key for row in selector.rows for key in data.by_row.get(row, ())]
+        return list(data.cells)
 
     @staticmethod
     def _accepts(selector: _Selector, key: _CellKey) -> bool:
+        return _Evaluation._names(selector, key) and not _Evaluation._shut_out(selector, key)
+
+    @staticmethod
+    def _names(selector: _Selector, key: _CellKey) -> bool:
+        """Whether the rule TEXT names the cell: its sheet, member and value."""
         sheet, member, _row, _column = key
         if selector.sheets is not None and sheet not in selector.sheets:
             return False
@@ -729,6 +800,32 @@ class _Evaluation:
         if selector.value_member is not None:
             return selector.data.cells.get(key) == selector.value_member
         return True
+
+    @staticmethod
+    def _shut_out(selector: _Selector, key: _CellKey) -> frozenset[str]:
+        """The dimensions on which the rule's FORMULA turns the cell's fact away.
+
+        The formula is what the gateway runs. Where it closes a dimension the
+        cell's data point carries, the fact cannot bind there, and the cell is
+        not reported as far as this reference is concerned.
+        """
+        if not selector.closed:
+            return frozenset()
+        point = selector.data.points.get(key)
+        if point is None:
+            return frozenset()
+        return selector.closed & selector.data.carried.get(point, frozenset())
+
+    def shut_out(self) -> tuple[str, ...]:
+        """Every dimension on which the formula turned away a cell the text names, sorted."""
+        dimensions: set[str] = set()
+        for selector in self._selectors.values():
+            if not selector.closed:
+                continue
+            for key in self._candidates(selector):
+                if self._names(selector, key):
+                    dimensions |= self._shut_out(selector, key)
+        return tuple(sorted(dimensions))
 
     # -- reading references --------------------------------------------------
 
@@ -762,7 +859,8 @@ class _Evaluation:
         """The one cell a non-sequence reference reads at ``env``; ``None`` if it has none."""
         table = selector.table
 
-        def coordinate(axis: str, accepted: tuple[str, ...] | None) -> str | None:
+        def coordinate(kind: str, accepted: tuple[str, ...] | None) -> str | None:
+            axis = selector.axis(kind)
             if axis in selector.free:
                 value = env.get(axis)
                 return value if accepted is None or value in accepted else None
@@ -779,7 +877,7 @@ class _Evaluation:
         member = selector.member if not selector.member_excluded else None
         open_axis = table.open_axis
         if open_axis is not None and (selector.member is None or selector.member_excluded):
-            member = env.get(f"{_AXIS_OPEN}{open_axis.dimension}")
+            member = env.get(selector.axis(f"{_AXIS_OPEN}{open_axis.dimension}"))
         if not table.open_rows:
             row = coordinate(AXIS_ROW, selector.rows)
             return None if row is None else (sheet, member, row, column)
@@ -1103,13 +1201,10 @@ def _describe(reference: Reference) -> str:
 
 
 def _axis_label(axis: str) -> str:
-    if axis == AXIS_ROW:
-        return "row"
-    if axis == AXIS_COLUMN:
-        return "column"
-    if axis == AXIS_SHEET:
-        return "sheet"
-    return local_name(axis.split(":", 1)[1])
+    kind, _, variable = axis.partition(_AXIS_OWN)
+    names = {AXIS_ROW: "row", AXIS_COLUMN: "column", AXIS_SHEET: "sheet"}
+    name = names.get(kind) or local_name(kind.split(":", 1)[1])
+    return f"{name} of {variable}" if variable else name
 
 
 def _show(value: object) -> str:

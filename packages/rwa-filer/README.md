@@ -34,6 +34,11 @@ rwa-filer verify filing/<name>.manifest.json
 # What changed since the version already filed
 rwa-filer diff filed.xbrl resubmission.xbrl
 
+# A second opinion: have the Arelle XBRL processor check the written file
+# against the Bank's taxonomy package, and compare its verdict on every rule
+# with this package's own (needs rwa-filer[arelle] and the Bank's package)
+rwa-filer referee filing/<name>.xbrl --taxonomy-package boe-banking-v411.zip
+
 # A blank workbook in the template layout, to fill in and validate
 rwa-filer template --module PRA001 --reference-date 2027-03-31 --out return.xlsx
 

@@ -228,6 +228,40 @@ uv run python scripts/filing_mapping_report.py --update-baseline
 [Workspace & Packages](workspace.md#the-filing-mapping-ratchet) for the counts
 and what each reason means.
 
+
+### `scripts/referee_differential.py` — The referee differential
+
+Files golden returns from the calculator and asks an independent XBRL processor
+about them. For every Basel 3.1 portfolio whose estate has no structure finding
+it writes the XBRL instance, runs Arelle on it against the Bank of England's
+taxonomy package, and compares Arelle's verdict on every rule with the native
+rule engine's.
+
+```bash
+# Once: put the Bank's package where the script looks for it
+mkdir -p .taxonomy && cp /path/to/boe-banking-v411.zip .taxonomy/
+
+export RWA_FILER_ARELLE_PYTHON=/path/to/arelle-venv/bin/python
+uv run python scripts/referee_differential.py --check
+uv run python scripts/referee_differential.py --portfolio off-bs   # one return, a quick look
+uv run python scripts/referee_differential.py --update-baseline
+```
+
+The package and the interpreter are found at fixed places and are not
+arguments: `.taxonomy/boe-banking-v411.zip`, and the interpreter
+`RWA_FILER_ARELLE_PYTHON` names (or the current one, if it has Arelle). Each run
+leaves its instances, Arelle's per-worker files and `measured.json` in
+`.referee-run/`. Both folders are git-ignored.
+
+Held two-way against `scripts/referee_differential_baseline.json`: the
+disagreements, Arelle's error codes and the count differences of each golden
+return must be exactly the banked lists, the number of rules compared may not
+fall, and the set of golden returns may not change unrecorded. A run that did
+not finish fails. It needs Arelle and the taxonomy package, takes several
+minutes and about 3 GB per return, and so runs in its own workflow
+(`.github/workflows/referee-differential.yml`) and not in `ci.yml`. Its fast
+contract tests are in `tests/contracts/test_referee_differential.py`.
+
 ## Test Data Scripts
 
 ### `tests/fixtures/generate_all.py` — Regenerate test fixture parquet files

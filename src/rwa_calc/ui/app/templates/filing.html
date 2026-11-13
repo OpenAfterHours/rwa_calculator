@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Filing — RWA Calculator{% endblock %}
+
+{% block content %}
+<div class="page-intro">
+  <p class="muted"><a href="/results/{{ page.run_id }}">← Back to results</a></p>
+  <h1>Filing <span class="muted mono">· {{ page.framework }}</span></h1>
+  <p class="muted">Whether this run can be written as the XBRL return the Bank of England's gateway
+  accepts (PRA001), and what stands in the way if it cannot. The return is validated against the
+  taxonomy and the Bank's published rules before any file is offered.</p>
+</div>
+
+<form class="grid-toolbar" method="get" action="/results/{{ page.run_id }}/filing">
+  <div class="field">
+    <label for="entity_identifier">Reporting entity (LEI)</label>
+    <input id="entity_identifier" name="entity_identifier" type="text" maxlength="40" required
+           value="{{ page.entity_identifier }}" placeholder="20-character LEI">
+  </div>
+  <button class="btn" type="submit">Check this run</button>
+</form>
+
+{% if page.problem %}
+<div class="callout error" id="filing-problem">{{ page.problem }}</div>
+{% endif %}
+
+{% if page.status %}
+{% set status = page.status %}
+<div class="callout {{ page.tone }}" id="filing-verdict" data-blocked-by="{{ status.blocked_by or '' }}">
+  {{ page.headline }}
+</div>
+
+<div class="panel">
+  <h3>What was placed</h3>
+  <table>
+    <tbody>
+      <tr><th scope="row">Reporting module</th><td class="mono">{{ status.module }}</td></tr>
+      <tr><th scope="row">Cells placed in the taxonomy</th><td class="num">{{ status.placed_cells }}</td></tr>
+      <tr><th scope="row">Figures with no cell in the taxonomy</th><td class="num" id="filing-unplaced">{{ status.unplaced_figures }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+{% if status.unplaced_by_reason %}
+<div class="panel">
+  <h3>Figures the taxonomy has no cell for</h3>
+  <p class="muted">Each is a non-zero figure this run reports in a row, column or sheet the published
+  template does not have. They cannot be filed until the template layout is aligned.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Template</th><th>Reason</th><th class="num">Figures</th></tr></thead>
+      <tbody>
+        {% for item in status.unplaced_by_reason %}
+        <tr><td class="mono">{{ item.template }}</td><td class="mono">{{ item.reason }}</td><td class="num">{{ item.figures }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if page.findings %}
+<div class="panel">
+  <h3>Validation findings</h3>
+  <div class="table-wrap">
+    <table id="filing-findings">
+      <thead><tr><th>Code</th><th>Severity</th><th>Finding</th></tr></thead>
+      <tbody>
+        {% for finding in page.findings %}
+        <tr>
+          <td class="mono">{{ finding.code }}</td>
+          <td>{{ finding.severity }}</td>
+          <td>{{ finding.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.findings_hidden %}
+  <p class="muted">… and {{ page.findings_hidden }} more. The full list is in the
+  <a href="/api/filing/status?run_id={{ page.run_id }}&amp;entity_identifier={{ page.entity_identifier | urlencode }}">JSON verdict</a>.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<h2>Download</h2>
+{% if page.downloads %}
+<div class="btn-row">
+  {% for download in page.downloads %}
+  <a class="btn{% if download.caution %} btn-ghost{% endif %}" href="{{ download.url }}">{{ download.label }}</a>
+  {% endfor %}
+</div>
+{% for download in page.downloads if download.caution %}
+<p class="muted">{{ download.caution }}</p>
+{% endfor %}
+{% else %}
+<p class="muted" id="filing-no-download">There is no file to download: no valid XBRL return can be written
+from this run as it stands.</p>
+{% endif %}
+<p class="muted">The package is a zip holding the <span class="mono">.xbrl</span> instance and a manifest
+recording its checksum and what was validated. The regulator's own validation on upload remains the
+authority.</p>
+{% endif %}
+{% endblock %}

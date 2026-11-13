@@ -1,0 +1,151 @@
+name: Referee Differential
+
+# Asks an independent XBRL processor whether what this repository would FILE is
+# right. Every other gate on the filing package is the project checking its own
+# work — our writer against our reader, our rule engine against our reading of
+# the rules. This one files golden Basel 3.1 returns from the calculator, runs
+# Arelle (the reference open-source XBRL processor) on each against the Bank of
+# England's published taxonomy package, and requires two things:
+#
+#   1. Arelle loads the instance with no error-level message — valid XBRL 2.1,
+#      dimensionally valid, no filing-rule breach.
+#   2. Arelle's verdict on every rule the return triggers is the verdict of
+#      rwa-filer's native rule engine. The taxonomy package holds the same rules
+#      as XBRL formulas, which is what the Bank's gateway runs; a disagreement
+#      means one of the two has misread a rule.
+#
+# See scripts/referee_differential.py for what is held and how, and
+# scripts/referee_differential_baseline.json for the banked state.
+#
+# WHY IT IS NOT IN ci.yml: each golden return is several minutes and about 3 GB
+# of Arelle, the taxonomy package is a 60 MB download from the Bank's site, and
+# Arelle is a tool this project does not otherwise install. So it runs where it
+# can find something: on a change to the code it referees (the path filter
+# below), weekly, and on demand. A pull request that touches none of those paths
+# does not run it, and does not need to.
+#
+# WHAT A RED RUN MEANS, in the order to check:
+#   * "new disagreements" — the engine and Arelle differ on a rule. Read both
+#     standings in the log; `rwa-filer referee` reproduces one instance locally.
+#   * "arelle_errors" — the writer produced something Arelle rejects.
+#   * "did not finish" — a worker was killed (memory, time) or Arelle evaluated
+#     nothing in a session. Not evidence about the return either way.
+#   * "the golden returns changed" — a portfolio gained or lost a structure
+#     finding, so it left or joined this gate. Re-bank with --update-baseline
+#     and say why in `_note`.
+#   * the download or its checksum — the Bank moved or replaced the package.
+#     A changed checksum is a NEW PUBLICATION: re-measure, do not edit the hash.
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'packages/rwa-filer/src/rwa_filer/boe/**'
+      - 'packages/rwa-filer/src/rwa_filer/xbrl/**'
+      - 'packages/rwa-filer/src/rwa_filer/referee/**'
+      - 'packages/rwa-filer/src/rwa_filer/taxonomy/**'
+      - 'packages/rwa-filer/src/rwa_filer/validate/**'
+      - 'src/rwa_calc/reporting/filing/**'
+      - 'src/rwa_calc/reporting/corep/**'
+      - 'scripts/referee_differential.py'
+      - 'scripts/referee_differential_baseline.json'
+      - '.github/workflows/referee-differential.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'packages/rwa-filer/src/rwa_filer/boe/**'
+      - 'packages/rwa-filer/src/rwa_filer/xbrl/**'
+      - 'packages/rwa-filer/src/rwa_filer/referee/**'
+      - 'packages/rwa-filer/src/rwa_filer/taxonomy/**'
+      - 'packages/rwa-filer/src/rwa_filer/validate/**'
+      - 'src/rwa_calc/reporting/filing/**'
+      - 'src/rwa_calc/reporting/corep/**'
+      - 'scripts/referee_differential.py'
+      - 'scripts/referee_differential_baseline.json'
+      - '.github/workflows/referee-differential.yml'
+  # 04:23 UTC on Mondays, on an odd minute: GitHub queues scheduled workflows
+  # in bulk on the hour. `schedule` fires only on the default branch.
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: referee-differential-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The Bank of England Banking Taxonomy v4.1.1 package, as published. The
+  # checksum is of the file the banked verdicts were measured against.
+  TAXONOMY_URL: https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-v411.zip
+  TAXONOMY_SHA256: b414cf871ad2986f83fdf7495655bab88de38679e8ff6eced61f1033cdac41d0
+  # The Arelle release the banked verdicts were measured with. The referee
+  # works around two of its behaviours (see rwa_filer/referee/runner.py); a new
+  # release is a re-measurement, not a version bump.
+  ARELLE_VERSION: 2.47.5
+
+jobs:
+  referee-differential:
+    name: Referee Differential (Arelle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
+      # Arelle in an environment of its own: the referee runs it as a
+      # subprocess and nothing in the workspace imports it.
+      - name: Install Arelle
+        run: |
+          uv venv .arelle-venv
+          uv pip install --python .arelle-venv/bin/python "arelle-release==${ARELLE_VERSION}"
+
+      - name: Cache the taxonomy package
+        id: taxonomy-cache
+        uses: actions/cache@v4
+        with:
+          path: .taxonomy/boe-banking-v411.zip
+          key: boe-banking-taxonomy-${{ env.TAXONOMY_SHA256 }}
+
+      - name: Download the taxonomy package
+        if: steps.taxonomy-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .taxonomy
+          curl --fail --location --silent --show-error --retry 3 \
+            --output .taxonomy/boe-banking-v411.zip "${TAXONOMY_URL}"
+
+      - name: Verify the taxonomy package
+        run: echo "${TAXONOMY_SHA256}  .taxonomy/boe-banking-v411.zip" | sha256sum --check -
+
+      # The script finds the package at .taxonomy/ and leaves its files in
+      # .referee-run/ - fixed places, not arguments (arch_check check 19). The
+      # interpreter that has Arelle is named for rwa_filer.referee, which reads it.
+      - name: Referee differential
+        env:
+          RWA_FILER_ARELLE_PYTHON: ${{ github.workspace }}/.arelle-venv/bin/python
+        run: uv run python scripts/referee_differential.py --max-rss-gb 10 --check
+
+      # Uploaded whether the gate passed or not: on a red run the per-worker
+      # files are what say why.
+      - name: Upload the measurement
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: referee-differential
+          include-hidden-files: true
+          path: |
+            .referee-run/measured.json
+            .referee-run/**/progress.json
+            .referee-run/**/*.stderr.txt
+          if-no-files-found: ignore
+          retention-days: 30

@@ -27,11 +27,12 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache, cached_property
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
+from rwa_filer.boe.formulas import KEY_CLOSED, KEY_DIMENSIONS, KEY_OPEN
 from rwa_filer.boe.grammar import (
     GrammarError,
     JoinEquality,
@@ -89,6 +90,11 @@ class Rule:
         label: The publisher's short description.
         truncated: The workbook cell was cut at the spreadsheet cell limit, so
             the expression is incomplete.
+        closed: Dimensions the rule's XBRL formula closes for every variable —
+            fixes to the default member, or requires absent. A cell whose data
+            point carries one cannot bind in the formula, whatever the text
+            above says. Empty for a rule book built without a taxonomy package.
+        closed_by_variable: The same, for one variable (``v0``) only.
     """
 
     rule_id: str
@@ -104,6 +110,8 @@ class Rule:
     always_execute: bool = False
     label: str | None = None
     truncated: bool = False
+    closed: frozenset[str] = frozenset()
+    closed_by_variable: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
     def is_enforced(self, module: str) -> bool:
         """Whether the gateway runs this rule on a return of ``module``."""
@@ -200,6 +208,7 @@ def rulebook_from(payload: Mapping[str, Any]) -> RuleBook:
             f"(expected {RULEBOOK_FORMAT})"
         )
     framework_version = str(payload["framework_version"])
+    dimensions = frozenset(payload.get(KEY_DIMENSIONS, ()))
     rules = tuple(
         Rule(
             rule_id=entry["id"],
@@ -215,6 +224,12 @@ def rulebook_from(payload: Mapping[str, Any]) -> RuleBook:
             always_execute=bool(entry.get("always_execute", False)),
             label=entry.get("label"),
             truncated=bool(entry.get("truncated", False)),
+            # The file lists what a formula leaves OPEN; the rest it closes.
+            closed=dimensions - frozenset(entry[KEY_OPEN]) if KEY_OPEN in entry else frozenset(),
+            closed_by_variable={
+                variable: frozenset(closed)
+                for variable, closed in entry.get(KEY_CLOSED, {}).items()
+            },
         )
         for entry in payload["rules"]
     )

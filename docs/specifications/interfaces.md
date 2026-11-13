@@ -36,6 +36,20 @@ serves the read-only surface and mounts the REST API in the same process
   framework/date, failed run or vanished results → 422 — never a silent
   recompute)
 - `GET /api/export/{parquet|csv|excel|corep}` — download an export
+- `GET /api/filing/status?run_id=…&entity_identifier=…` — whether a Basel 3.1
+  run can be written as the PRA001 XBRL return, and if not what stands in the
+  way (figures the taxonomy has no cell for, structure findings, rule breaks).
+  Always a 200 for a run that exists: a return that cannot be filed is data,
+  not a fault in the request. Writes nothing that is kept. With
+  `allow_incomplete` / `allow_rule_breaks` it reports what would STILL stand in
+  the way under those overrides; a return written with one is never reported as
+  submittable
+- `GET /api/filing/package?run_id=…&entity_identifier=…` — download the return
+  as a zip of the `.xbrl` instance and its manifest (plus
+  `unplaced_figures.csv` when the return is incomplete). `409` with the status
+  payload when nothing was written; `allow_incomplete` and `allow_rule_breaks`
+  override the first and third blockers, never a structure finding. `422` for
+  a CRR run or a reference date no packaged taxonomy covers
 
 ### Calculation reuse for reconciliation (FR-6.7)
 

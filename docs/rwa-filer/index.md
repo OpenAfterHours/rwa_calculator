@@ -28,7 +28,7 @@ pip install rwa-filer
 | File readers (Parquet, CSV, Excel, XBRL) and `rwa-filer validate` | Available |
 | XBRL submission file: `rwa-filer build` writes the instance, a zip where required, and a manifest | Available |
 | Preparer workflow: cell adjustments with reasons, an audit ledger, sign-off, and a diff between two versions | Available |
-| Arelle referee: run an independent XBRL processor on a written file from the command line | Planned |
+| Arelle referee: `rwa-filer referee` runs an independent XBRL processor on a written file and compares its verdict on every rule with this package's own | Available (needs Arelle and the Bank's taxonomy package) |
 
 ## Validating a file
 
@@ -80,7 +80,7 @@ compactly. `rwa-filer` reads the workbook and evaluates the rule the way the
 taxonomy's formula is evaluated, so that a rule passes or fails here when it
 would pass or fail on upload.
 
-Four things follow from that, and each changes verdicts.
+Seven things follow from that, and each changes verdicts.
 
 - **A rule runs only when every template it reads is reported.** If one is not,
   the gateway does not run the rule. It is reported as not evaluated, with the
@@ -96,20 +96,55 @@ Four things follow from that, and each changes verdicts.
   figure stated to thousands may be off by up to 500, and a rule comparing two
   such figures allows for both. A figure stated to the penny gets no such
   allowance. The accuracy is the fact's `decimals`, or the default for its type.
+- **Codes listed inside one reference belong to that reference alone.** A rule
+  may name the same four columns in two references. The taxonomy's formula then
+  reads every pair of them, sixteen runs, and not four runs column by column.
+  Codes listed in the rule's scope are different: those are shared, and the
+  rule runs once per code.
+- **Naming one sheet of an open axis changes how the others are read.** Some
+  tables are filed once per country, or per currency. A rule that never
+  mentions the country runs once per country. A rule that names one, usually
+  the all-countries total, makes the country part of the rule: a sum in the
+  same rule is then taken over every country at once, and the rule runs once.
+  "The sum over all countries, less the total, equals the total" is such a
+  rule.
+- **A rule the taxonomy's own formula cannot fire is not run.** The formula
+  fixes most dimensions to "not applicable". If it does that to a dimension the
+  rule's own cells carry, no reported fact can ever match, and the gateway never
+  evaluates the rule. In taxonomy 4.1.1 this is the case for seven PRA001 rules
+  on table OF 91.01, whose formulas fix the table's sheet dimension. They are
+  reported as not evaluated, with the reason `closed_by_formula`. Evaluated from
+  the workbook text alone, they could block a return the gateway accepts.
 
-The last point means the verdict depends on the accuracy the file will state.
+The fourth point means the verdict depends on the accuracy the file will state.
 `rwa-filer build --monetary-decimals` sets it, and the validation that decides
 whether the file is written uses the same value.
+
+The last point needs the taxonomy package as well as the workbook, because the
+workbook does not say what a formula fixes. The packaged rule books are built
+with both.
 
 !!! note "How the engine is checked"
     Arelle is an independent XBRL processor that executes the Bank's own formula
     files. On the Bank's sample files, `rwa-filer` and Arelle were compared rule
-    by rule, counting satisfied and unsatisfied runs. They agree exactly on all
-    254 rules of twelve modules, each run on the Bank's whole sample for it, and
-    on all 456 PRA001 rules triggered by the four credit-risk template groups.
-    Those counts are kept in the test suite and re-checked wherever the Bank's
-    files are available. The engine needs about 20 seconds for all 1,441 PRA001
-    rules over the Bank's 61,428-fact sample.
+    by rule, counting satisfied and unsatisfied runs. They agree on every rule
+    PRA001 enforces, all 1,441, on a carve of all 104 tables of the Bank's
+    sample, and exactly on all 254 rules of twelve further modules, each run on
+    the Bank's whole sample for it. Those counts are kept in the test suite and
+    re-checked wherever the Bank's files are available. The engine needs about
+    20 seconds for all 1,441 PRA001 rules over the Bank's 61,428-fact sample.
+
+    Two qualifications are recorded with the counts. For six rules Arelle
+    reports more unsatisfied runs when it evaluates many rules in one session
+    than when it evaluates each alone; the verdict is the same, and the counts
+    kept are the ones from running each alone. For twelve rules that join two
+    tables on a desk number, stock Arelle matches nothing and reports a break
+    whatever is filed; the referee corrects that, as described under
+    [The referee](#the-referee), and with the correction Arelle and the engine
+    agree.
+
+    Arelle has not completed the Bank's whole 61,428-fact PRA001 sample within
+    ordinary memory, which is why that module is checked on a carve.
 
 ### The fact table
 
@@ -311,6 +346,68 @@ Three findings are specific to a file. All are Errors.
 The reader does not load the taxonomy's own schemas, so it cannot say that a
 file is valid XBRL against them. That is what the referee is for.
 
+## The referee
+
+`rwa-filer referee` gives a written file a second opinion. It runs
+[Arelle](https://arelle.org), the reference open-source XBRL processor, on the
+file against the Bank's published taxonomy package, and reports three things.
+
+- Whether the file is valid: XBRL 2.1, the taxonomy's dimensions, and the
+  filing rules.
+- Arelle's verdict on every published rule the file's templates trigger.
+- Where that verdict differs from this package's own, rule by rule.
+
+```bash
+rwa-filer referee 5493001KJTIIGC8Y1R12_PRA001_2027-03-31.xbrl \
+    --taxonomy-package boe-banking-v411.zip \
+    --arelle-python /opt/arelle/bin/python
+```
+
+```text
+Referee: Arelle on 5493001KJTIIGC8Y1R12_PRA001_2027-03-31.xbrl — complete
+  rules         356 evaluated (56 held, 2 broken, 298 never fired), 1085 skipped (template not filed), 0 lost
+  messages      0 (0 at an error level)
+Differential: the native engine beside Arelle
+  compared      1441 rule(s): 1441 agree, 0 same verdict over a different count, 0 DISAGREE
+Verdict: Arelle accepts the instance and the two engines agree on every rule compared.
+```
+
+The exit code is zero only when the run finished, Arelle raised nothing at an
+error level, and the two engines agree. A rule that is broken is a finding
+about the figures, not about the file, and does not change the exit code.
+`--no-compare` reports Arelle alone. `--rules REGEX` runs a subset.
+
+Arelle is optional and is never imported: it is run as a separate process.
+Install it with `pip install "rwa-filer[arelle]"`, or keep it in an environment
+of its own and name that interpreter with `--arelle-python` or the
+`RWA_FILER_ARELLE_PYTHON` variable. The taxonomy package is the zip the Bank
+publishes; it is not redistributed with `rwa-filer`.
+
+A large module is slow and heavy. PRA001 is 741 MB of taxonomy XML, so the
+referee trims the entry point to the rules the file can trigger and runs them
+in several workers, each held to a memory limit. Expect a few minutes and about
+3 GB for a credit-risk return. A worker that is killed, or that returns no
+verdict for a rule, makes the run incomplete, and an incomplete run never
+counts as agreement.
+
+The referee changes Arelle's behaviour in two places, both measured on
+arelle-release 2.47.5 and both stated in every result.
+
+- It loads Arelle's math-functions plug-in. Two PRA001 rules call a logarithm
+  function that is off by default, and without it Arelle evaluates none of the
+  rules that share a session with them.
+- It hands a match filter marked `matchAny` its single matched fact as a list of
+  one. Without that, Arelle matches nothing, and twelve PRA001 rules that join
+  two tables on a desk number are reported broken whatever is filed.
+
+It also drops one filing-rule message, `EBA.3.1` ("only one currency"), which
+Arelle raises on the Bank's own multi-currency MREL sample.
+
+!!! warning "What agreement does and does not show"
+    Arelle is not the Bank's gateway. Agreement shows that two independent
+    readings of the published rules reach the same verdicts on this file. The
+    regulator's own validation on upload remains the authority.
+
 ## Taxonomy packs
 
 A taxonomy pack is the regulator's data point model for one reporting module,
@@ -428,7 +525,7 @@ The report behind the findings has one result per enforced rule.
 |--------|---------|
 | `PASS` | The rule ran at least once and every run was satisfied. |
 | `FAIL` | At least one run was unsatisfied. The result lists the first few, with the cells involved. |
-| `NOT_EVALUATED` | The rule did not run. The reason is `template_not_reported` (a template it reads is not reported), `no_data` (none of its cells is reported), or `unsupported`. |
+| `NOT_EVALUATED` | The rule did not run. The reason is `template_not_reported` (a template it reads is not reported), `no_data` (none of its cells is reported), `closed_by_formula` (the taxonomy's own formula cannot match the cells the rule names, so the gateway does not run it either), or `unsupported`. |
 
 No enforced rule of a supported module is `unsupported` today. That is held by a
 test: a rule the engine cannot evaluate must be entered in a register by name,
@@ -440,11 +537,18 @@ and the register is empty.
 # The packaged Bank of England rule books: modules, rules, rules enforced
 rwa-filer rulebook list
 
-# Rebuild a rule book from one of the Bank's validation workbooks
-rwa-filer rulebook import "Validations Banking Reporting v4.1.1.xlsx" --out rulebooks/
+# Rebuild a rule book from one of the Bank's validation workbooks. With the
+# taxonomy package it also records what each rule's formula fixes
+rwa-filer rulebook import "Validations Banking Reporting v4.1.1.xlsx" --out rulebooks/ \
+    --taxonomy-package boe-banking-v411.zip
 
-# Fail if the packaged rule book is not exactly what the workbook yields
-rwa-filer rulebook check "Validations Banking Reporting v4.1.1.xlsx"
+# Fail if the packaged rule book is not exactly what the workbook yields.
+# Without --taxonomy-package only the workbook content is compared
+rwa-filer rulebook check "Validations Banking Reporting v4.1.1.xlsx" \
+    --taxonomy-package boe-banking-v411.zip
+
+# Have Arelle check a written file and compare its verdicts with this package's
+rwa-filer referee return.xbrl --taxonomy-package boe-banking-v411.zip
 
 # The packaged rule extracts used by the template-level engine
 rwa-filer rules list

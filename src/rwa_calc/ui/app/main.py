@@ -43,6 +43,7 @@ from rwa_calc.api import run_index
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.rest import (
     ReconWorkspace,
+    filing_status,
     get_recon_workspace,
     get_reconciliation,
     get_run,
@@ -93,6 +94,7 @@ from rwa_calc.ui.app.recon_state import (
 )
 from rwa_calc.ui.views import charts, method_split
 from rwa_calc.ui.views import comparison as comparison_view
+from rwa_calc.ui.views import filing as filing_view
 from rwa_calc.ui.views import hierarchy as hierarchy_view
 from rwa_calc.ui.views import lineage as lineage_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
@@ -488,6 +490,54 @@ def _register_pages(app: FastAPI) -> None:
             request=request,
             name="report_templates.html",
             context=_nav({"page": page}),
+        )
+
+    @app.get("/results/{run_id}/filing", response_class=HTMLResponse)
+    def filing(
+        request: Request,
+        run_id: str,
+        entity_identifier: str | None = None,
+        prior_run_id: str | None = None,
+    ) -> HTMLResponse:
+        """Show whether a completed run can be filed as the PRA's XBRL return.
+
+        Asks ``/api/filing/status`` twice for the identifier entered: as it
+        stands, for the verdict, and with every override, to learn whether a
+        file for review can be written at all and to show the validation
+        findings even where unplaced figures stop the return being validated.
+        Before an identifier is entered only the form is shown. A run there is
+        no such return for (CRR, or a date no packaged taxonomy covers) is the
+        same page with the reason, not an error page.
+        """
+        response = get_run(run_id)
+        if response is None:
+            return _not_found(request, "That result has expired or does not exist.")
+        identifier = (entity_identifier or "").strip()
+        status = review = None
+        problem = ""
+        if identifier:
+            try:
+                status = filing_status(run_id, identifier, prior_run_id=prior_run_id)
+                review = filing_status(
+                    run_id,
+                    identifier,
+                    prior_run_id=prior_run_id,
+                    allow_incomplete=True,
+                    allow_rule_breaks=True,
+                )
+            except HTTPException as exc:
+                status = review = None
+                problem = str(exc.detail)
+        page = filing_view.filing_page(
+            run_id,
+            response.framework,
+            entity_identifier=identifier,
+            status=status,
+            review=review,
+            problem=problem,
+        )
+        return templates.TemplateResponse(
+            request=request, name="filing.html", context=_nav({"page": page})
         )
 
     @app.get("/results/{run_id}/lineage", response_class=HTMLResponse)

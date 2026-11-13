@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import shutil
 import tempfile
 import uuid
 import zipfile
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
         ValidationResponse,
     )
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+    from rwa_calc.reporting.filing import FilingOutcome
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
     from rwa_filer.validate import RuleOutcome
 
@@ -128,6 +130,11 @@ _MAX_PAGE = 10_000
 # Documents the 404 raised when a run_id (or its summary) is unknown, so it
 # appears in the generated OpenAPI schema for the affected endpoints.
 _RESP_404: dict[int | str, dict[str, str]] = {404: {"description": "Run or summary not found"}}
+_RESP_FILING: dict[int | str, dict[str, str]] = {
+    **_RESP_404,
+    409: {"description": "The run cannot be filed as it stands; the detail says why"},
+    422: {"description": "There is no such return to file for this run"},
+}
 
 router = APIRouter(prefix="/api", tags=["rwa"])
 
@@ -729,6 +736,106 @@ def export(
     return _export_pillar3(fmt, response, tmp, metadata, exporter, previous_period_results)
 
 
+@router.get("/filing/status", responses=_RESP_FILING)
+def filing_status(  # noqa: PLR0913 - one query parameter each, mirroring /filing/package
+    run_id: str,
+    entity_identifier: str,
+    prior_run_id: str | None = None,
+    monetary_decimals: int = -3,
+    allow_incomplete: bool = False,
+    allow_rule_breaks: bool = False,
+) -> dict:
+    """Answer "can this run be filed as an XBRL return, and if not, why not?".
+
+    Generates the run's COREP estate, re-addresses it to the PRA001 taxonomy,
+    validates it with the Bank of England's rules, and returns the verdict
+    without keeping any file.
+
+    Three things can stand in the way, reported in ``blocked_by``:
+    ``unplaced_figures`` (the run computes figures the taxonomy has no cell
+    for — listed per template and reason), ``structure`` (a placed fact the
+    taxonomy cannot express) and ``rules`` (a rule check does not pass). None
+    is an error status: a run that cannot be filed is a 200 with
+    ``is_submittable`` false, exactly as ``/validations`` reports a blocked
+    submission.
+
+    ``allow_incomplete`` and ``allow_rule_breaks`` are the overrides
+    ``/filing/package`` takes: with them the answer is what would STILL stand
+    in the way, which is how a caller learns whether a file for review can be
+    written at all. The validation findings are reported only once the return
+    gets as far as being validated — that is, not while unplaced figures block
+    it. ``is_submittable`` is never true for a return written with an override.
+
+    A run that is not a Basel 3.1 run, or a reporting date the packaged
+    taxonomy does not cover, is a 422: there is no such return to file.
+    """
+    response = _require_run(run_id)
+    with tempfile.TemporaryDirectory(prefix="rwa_filing_") as tmp:
+        outcome = _filing_outcome(
+            response,
+            Path(tmp),
+            entity_identifier,
+            prior_run_id,
+            monetary_decimals,
+            allow_incomplete,
+            allow_rule_breaks,
+        )
+        return _filing_payload(outcome)
+
+
+@router.get("/filing/package", responses=_RESP_FILING)
+def filing_package(
+    run_id: str,
+    entity_identifier: str,
+    prior_run_id: str | None = None,
+    monetary_decimals: int = -3,
+    allow_incomplete: bool = False,
+    allow_rule_breaks: bool = False,
+) -> FileResponse:
+    """Download the run's XBRL filing package: the instance and its manifest, zipped.
+
+    The package is written only when nothing stands in the way, or when what
+    does is explicitly allowed (``allow_incomplete`` for figures the taxonomy
+    has no cell for, ``allow_rule_breaks`` for a failing rule check). A
+    structure finding can never be allowed. Where the package is not written
+    the answer is a 409 whose detail is the ``/filing/status`` payload — the
+    caller asked for a file, and there is none to give.
+
+    When figures are left out, the zip also holds ``unplaced_figures.csv``
+    listing each one, so an incomplete file is never mistaken for a whole one.
+
+    File names are built from server-validated run data only; the entity
+    identifier is caller input and is written inside the instance, never into
+    a path.
+    """
+    response = _require_run(run_id)
+    tmp = Path(tempfile.mkdtemp(prefix="rwa_filing_"))
+    try:
+        outcome = _filing_outcome(
+            response,
+            tmp,
+            entity_identifier,
+            prior_run_id,
+            monetary_decimals,
+            allow_incomplete,
+            allow_rule_breaks,
+        )
+        package = outcome.package
+        if package is None or package.instance_path is None or package.manifest_path is None:
+            raise HTTPException(status_code=409, detail=_filing_payload(outcome))
+    except HTTPException:
+        # No file to serve: nothing may be left behind for a refused request.
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    zip_path = tmp / f"{package.instance_path.stem}_package.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(package.instance_path, package.instance_path.name)
+        zf.write(package.manifest_path, package.manifest_path.name)
+        if not outcome.is_complete:
+            zf.writestr("unplaced_figures.csv", outcome.unplaced_figures.write_csv())
+    return _file(zip_path)
+
+
 @router.get("/comparison/export/{fmt}", responses=_RESP_404)
 def comparison_export(fmt: Literal["csv", "excel", "parquet"], comparison_id: str) -> FileResponse:
     """Export a registered CRR vs Basel 3.1 comparison and stream it for download.
@@ -1223,6 +1330,70 @@ def _require_comparison(comparison_id: str) -> ComparisonExportResponse:
     if response is None:
         raise HTTPException(status_code=404, detail=f"unknown comparison_id: {comparison_id}")
     return response
+
+
+def _filing_outcome(  # noqa: PLR0913 - the endpoint's own parameters, passed through
+    response: CalculationResponse,
+    directory: Path,
+    entity_identifier: str,
+    prior_run_id: str | None,
+    monetary_decimals: int,
+    allow_incomplete: bool,
+    allow_rule_breaks: bool,
+) -> FilingOutcome:
+    """Build (or try to build) the run's filing package in ``directory``.
+
+    Raises:
+        HTTPException: 422 where there is no such return — the run is not
+            Basel 3.1, or no taxonomy is packaged for its reporting date.
+    """
+    from rwa_filer.taxonomy.pack import PackNotFoundError
+
+    previous_period_results = _resolve_export_inputs("corep", response, prior_run_id)
+    try:
+        return ResultExporter().export_filing_package(
+            response,
+            directory,
+            entity_identifier=entity_identifier,
+            reference_date=response.reporting_date,
+            previous_period_results=previous_period_results,
+            monetary_decimals=monetary_decimals,
+            allow_incomplete=allow_incomplete,
+            allow_rule_breaks=allow_rule_breaks,
+            name=f"rwa_filing_{response.framework}_{response.reporting_date.isoformat()}",
+        )
+    except (ValueError, PackNotFoundError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _filing_payload(outcome: FilingOutcome) -> dict:
+    """The filing verdict as a JSON-friendly dict."""
+    from rwa_filer.validate.report import to_record
+
+    mapping = outcome.mapping
+    package = outcome.package
+    payload: dict = {
+        "is_submittable": outcome.is_submittable,
+        "is_complete": outcome.is_complete,
+        "written": outcome.written,
+        "blocked_by": outcome.blocked_by,
+        "module": mapping.canonical.header.module,
+        "placed_cells": mapping.placed_cells,
+        "unplaced_figures": outcome.unplaced_figures.height,
+        "unplaced_by_reason": [
+            {"template": template, "reason": reason, "figures": count}
+            for (template, reason), count in sorted(mapping.unplaced_by_reason().items())
+        ],
+        "validation": None,
+    }
+    if package is not None:
+        record = to_record(mapping.canonical, package.validation)
+        payload["validation"] = {
+            "taxonomy": record["taxonomy"],
+            "summary": record["summary"],
+            "findings": record["findings"],
+        }
+    return payload
 
 
 def _df(df: pl.DataFrame) -> dict:

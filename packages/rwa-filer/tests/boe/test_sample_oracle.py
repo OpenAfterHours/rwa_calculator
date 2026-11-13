@@ -33,7 +33,12 @@ from typing import Any
 import pytest
 
 from rwa_filer.boe.catalogue import rulebook_for_module
-from rwa_filer.boe.engine import REASON_NOT_REPORTED, RuleResult, evaluate_rules
+from rwa_filer.boe.engine import (
+    REASON_CLOSED_BY_FORMULA,
+    REASON_NOT_REPORTED,
+    RuleResult,
+    evaluate_rules,
+)
 from rwa_filer.validate.structure import check_structure
 from rwa_filer.xbrl.reader import read_instance
 from rwa_filer.xbrl.writer import write_instance
@@ -121,6 +126,92 @@ def test_the_engine_blocks_exactly_the_rules_arelle_did_not_run(
     assert len(results) == 1441
     assert len(blocked) == oracle["rules_skipped_precondition_false"] == 985
     assert blocked == set(results) - set(oracle["rules"])
+
+
+# ---------------------------------------------------------------------------
+# Every PRA001 rule, on a carve of every table
+# ---------------------------------------------------------------------------
+
+ALL_TABLES_ORACLE_PATH = Path(__file__).parent / "data" / "pra001_sample_all_tables_oracle.json"
+
+
+@pytest.fixture(scope="module")
+def all_tables_oracle() -> dict[str, Any]:
+    return json.loads(ALL_TABLES_ORACLE_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def all_tables_results(all_tables_oracle: dict[str, Any]) -> dict[str, RuleResult]:
+    found = sorted(Path(BOE_DIR or "").rglob("*_PRA001_*.xbrl"))
+    if not found:
+        pytest.skip("no *_PRA001_*.xbrl sample instance under RWA_FILER_BOE_DIR")
+    sample = read_instance(found[0])
+    carve = all_tables_oracle["carve"]
+    carved = thin_carve(
+        sample,
+        None,
+        sheets_per_table=carve["sheets_per_table"],
+        open_rows_per_sheet=carve["open_rows_per_sheet"],
+    )
+    instance = write_instance(carved, sample.pack)
+    assert instance.facts == carve["facts"], "the carve is not the one Arelle saw"
+    filed = read_instance(instance.content, pack=sample.pack)
+    rules = rulebook_for_module("PRA001").enforced("PRA001")
+    return {result.rule_id: result for result in evaluate_rules(filed.ret, filed.pack, rules)}
+
+
+def test_every_rule_pra001_enforces_is_counted_as_arelle_counts_it(
+    all_tables_oracle: dict[str, Any], all_tables_results: dict[str, RuleResult]
+) -> None:
+    """All 1,441 rules, all 104 tables: the same evaluations held and broken.
+
+    Two families are recorded with the oracle rather than taken from the raw
+    run, each for a measured reason the fixture states: six rules whose count
+    a batched Arelle run inflates, and twelve join rules stock Arelle cannot
+    match at all.
+    """
+    # Act
+    expected = all_tables_oracle["rules"]
+    differences = {
+        rule_id: (tuple(counts), (result.satisfied, result.unsatisfied))
+        for rule_id, counts in expected.items()
+        if (result := all_tables_results[rule_id]) is not None
+        and (result.satisfied, result.unsatisfied) != tuple(counts)
+    }
+
+    # Assert
+    assert set(all_tables_results) == set(expected)
+    assert len(expected) == 1441
+    assert differences == {}, f"{len(differences)} rule(s) are counted differently from Arelle"
+    assert len(all_tables_oracle["batching_artefact"]["rules"]) == 6
+    assert len(all_tables_oracle["match_any"]["rules"]) == 12
+
+
+def test_the_rules_the_taxonomys_own_formulas_cannot_fire_are_not_evaluated(
+    all_tables_oracle: dict[str, Any], all_tables_results: dict[str, RuleResult]
+) -> None:
+    """Seven rules on OF 91.01: Arelle never fires them, and the engine says why."""
+    # Act
+    closed = sorted(
+        rule_id
+        for rule_id, result in all_tables_results.items()
+        if result.reason == REASON_CLOSED_BY_FORMULA
+    )
+
+    # Assert
+    assert closed == all_tables_oracle["closed_by_formula"]["rules"]
+    assert len(closed) == 7
+    assert all(all_tables_oracle["rules"][rule_id] == [0, 0] for rule_id in closed)
+
+
+def test_the_join_rules_hold_where_both_tables_report_the_same_desk(
+    all_tables_oracle: dict[str, Any], all_tables_results: dict[str, RuleResult]
+) -> None:
+    """The twelve rules stock Arelle gets wrong, pinned to what the repaired run found."""
+    for rule_id, measured in all_tables_oracle["match_any"]["rules"].items():
+        result = all_tables_results[rule_id]
+        assert (result.satisfied, result.unsatisfied) == tuple(measured["repaired"]), rule_id
+        assert tuple(measured["stock"]) == (0, 1)
 
 
 # ---------------------------------------------------------------------------

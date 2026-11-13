@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 from rwa_filer.boe.catalogue import SEVERITY_ERROR, RuleBookNotFoundError, rulebook_for_module
 from rwa_filer.boe.engine import (
+    REASON_CLOSED_BY_FORMULA,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
@@ -82,7 +83,8 @@ class RuleReport:
         rules_loaded: Rules in the rule book.
         results: One result per rule the module enforces.
         templates_reported: The filing indicators the return reports.
-        templates_ruled: Those of them the rule book has an enforced rule for.
+        templates_ruled: Those of them the rule book has an enforced rule for
+            that the taxonomy's formula can fire on this return.
         templates_covered: Those of them at least one rule was executed on.
     """
 
@@ -260,6 +262,10 @@ def _report(
     ruled: set[str] = set()
     covered: set[str] = set()
     for result in results:
+        # A rule its own formula cannot fire is not one the gateway runs on
+        # the template either: it is not a rule this check failed to reach.
+        if result.reason == REASON_CLOSED_BY_FORMULA:
+            continue
         ruled |= indicators(result)
         if result.status != STATUS_NOT_EVALUATED:
             covered |= indicators(result)

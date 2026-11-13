@@ -19,14 +19,18 @@ References:
 from __future__ import annotations
 
 import json
+import zipfile
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
+from fastapi import HTTPException
 from tests.fixtures.recon_ledger import with_reporting_ledger
 
+from rwa_calc.api import rest
 from rwa_calc.api.export import ResultExporter
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
 from rwa_calc.api.results_cache import ResultsCache
@@ -34,7 +38,7 @@ from rwa_filer.taxonomy.pack import PackNotFoundError
 from rwa_filer.xbrl.reader import read_instance
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Iterator
 
 LEI = "5493001KJTIIGC8Y1R12"
 REFERENCE_DATE = date(2027, 3, 31)
@@ -137,3 +141,134 @@ def test_a_reference_date_before_the_taxonomy_applies_has_no_pack(
         ResultExporter().export_filing_package(
             basel_run, tmp_path / "filing", entity_identifier=LEI, reference_date=date(2026, 12, 31)
         )
+
+
+# =============================================================================
+# GET /api/filing/status and /api/filing/package
+# =============================================================================
+
+
+@pytest.fixture
+def registered(basel_run: CalculationResponse) -> Iterator[str]:
+    """The Basel 3.1 run in the REST in-process registry, cleaned up after."""
+    run_id = rest.register_run(basel_run)
+    yield run_id
+    rest._RUNS.pop(run_id, None)
+    rest._TEMPLATE_BUNDLES.pop((run_id, None), None)
+
+
+class TestFilingStatusEndpoint:
+    """The route answering whether a run can be filed, and if not, why not."""
+
+    def test_a_run_that_cannot_be_filed_is_a_200_that_says_why(self, registered: str) -> None:
+        """Whatever stands in the way is data about the filing, not a fault in the request."""
+        # Act
+        payload = rest.filing_status(registered, entity_identifier=LEI)
+
+        # Assert
+        assert payload["module"] == "PRA001"
+        assert payload["placed_cells"] > 0
+        assert isinstance(payload["is_submittable"], bool)
+        assert payload["blocked_by"] in (None, "unplaced_figures", "structure", "rules")
+        assert payload["written"] is (payload["blocked_by"] is None)
+        assert payload["unplaced_figures"] == sum(
+            item["figures"] for item in payload["unplaced_by_reason"]
+        )
+
+    def test_the_verdict_keeps_no_file(self, registered: str, tmp_path: Path) -> None:
+        # Act
+        rest.filing_status(registered, entity_identifier=LEI)
+
+        # Assert — nothing was written where the caller could find it later.
+        assert list(tmp_path.glob("**/*.xbrl")) == []
+
+    def test_with_the_overrides_the_answer_is_what_would_still_stand_in_the_way(
+        self, registered: str
+    ) -> None:
+        """How a caller learns whether a file for review can be written at all."""
+        # Act
+        strict = rest.filing_status(registered, entity_identifier=LEI)
+        overridden = rest.filing_status(
+            registered, entity_identifier=LEI, allow_incomplete=True, allow_rule_breaks=True
+        )
+
+        # Assert — the minimal run is stopped by unplaced figures and nothing else
+        # an override cannot lift; overridden, it is validated and written.
+        assert strict["blocked_by"] == "unplaced_figures"
+        assert strict["validation"] is None
+        assert overridden["blocked_by"] is None and overridden["written"] is True
+        assert overridden["validation"] is not None
+        # ... and a return written with an override is never called submittable.
+        assert overridden["is_submittable"] is False
+
+    def test_unknown_run_id_is_a_404(self) -> None:
+        with pytest.raises(HTTPException) as raised:
+            rest.filing_status("no-such-run", entity_identifier=LEI)
+        assert raised.value.status_code == 404
+
+    def test_a_crr_run_is_a_422(self, tmp_path: Path) -> None:
+        """PRA001 is the Basel 3.1 return: there is no such return to file."""
+        # Arrange
+        run_id = rest.register_run(_response(tmp_path, "CRR"))
+
+        # Act / Assert
+        try:
+            with pytest.raises(HTTPException) as raised:
+                rest.filing_status(run_id, entity_identifier=LEI)
+            assert raised.value.status_code == 422
+        finally:
+            rest._RUNS.pop(run_id, None)
+
+
+class TestFilingPackageEndpoint:
+    """The route that downloads the instance and its manifest."""
+
+    def test_the_package_holds_the_instance_and_its_manifest(self, registered: str) -> None:
+        # Act — everything that may be allowed is allowed, so there is a file.
+        download = rest.filing_package(
+            registered, entity_identifier=LEI, allow_incomplete=True, allow_rule_breaks=True
+        )
+
+        # Assert — names come from run data, never from the caller's identifier.
+        with zipfile.ZipFile(download.path) as archive:
+            names = sorted(archive.namelist())
+            instance = archive.read(next(name for name in names if name.endswith(".xbrl")))
+        assert "rwa_filing_BASEL_3_1_2027-03-31.xbrl" in names
+        assert "rwa_filing_BASEL_3_1_2027-03-31.manifest.json" in names
+        assert LEI not in "".join(names) and LEI.encode() in instance
+        assert read_instance(instance).findings == ()
+
+    def test_a_blocked_run_is_a_409_carrying_the_verdict(self, registered: str) -> None:
+        """The caller asked for a file and there is none to give."""
+        # Arrange — is the run blocked at all without the allowances?
+        status = rest.filing_status(registered, entity_identifier=LEI)
+        if status["blocked_by"] is None:
+            pytest.skip("the minimal run is fileable as it stands")
+
+        # Act
+        with pytest.raises(HTTPException) as raised:
+            rest.filing_package(registered, entity_identifier=LEI)
+
+        # Assert
+        assert raised.value.status_code == 409
+        assert raised.value.detail["blocked_by"] == status["blocked_by"]  # type: ignore[index]
+
+    def test_an_identifier_that_is_not_an_lei_is_refused_not_used_as_a_path(
+        self, registered: str
+    ) -> None:
+        """The identifier goes into the instance, never into a file name."""
+        # Act
+        with pytest.raises(HTTPException) as raised:
+            rest.filing_package(
+                registered,
+                entity_identifier="../../etc/passwd",
+                allow_incomplete=True,
+                allow_rule_breaks=True,
+            )
+
+        # Assert — a structure finding about the identifier; nothing was written.
+        assert raised.value.status_code == 409
+        detail = raised.value.detail
+        assert isinstance(detail, dict)
+        assert detail["blocked_by"] == "structure"
+        assert detail["written"] is False

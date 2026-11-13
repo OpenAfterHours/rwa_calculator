@@ -37,6 +37,14 @@ dependencies = [
 excel = [
     "openpyxl>=3.1.5",
 ]
+# The Arelle XBRL processor, for `rwa-filer referee`: an independent second
+# opinion on a written instance. rwa-filer never imports it — the referee runs
+# it as a subprocess — so it may equally live in an environment of its own,
+# named by RWA_FILER_ARELLE_PYTHON. Heavy (lxml, a GUI toolkit's worth of
+# transitive packages); nothing on the validate / build path needs it.
+arelle = [
+    "arelle-release>=2.37",
+]
 
 [project.scripts]
 rwa-filer = "rwa_filer.cli:main"

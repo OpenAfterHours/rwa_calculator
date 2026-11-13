@@ -24,6 +24,10 @@ Commands:
         Check that a package on disk is the one that was built and signed off.
     rwa-filer diff PREVIOUS CURRENT
         What changed between two versions of a return, cell by cell.
+    rwa-filer referee INSTANCE --taxonomy-package ZIP [--arelle-python PYTHON]
+        A second opinion on a written instance: run the Arelle XBRL processor
+        on it against the publisher's taxonomy package, and set its verdict on
+        every rule beside this package's own. Needs Arelle (rwa-filer[arelle]).
     rwa-filer template --module CODE --reference-date DATE --out FILE [--tables ...]
         Write a blank workbook to fill in and validate.
     rwa-filer taxonomy list
@@ -32,9 +36,9 @@ Commands:
         Build a taxonomy pack from the publisher's DPM files.
     rwa-filer rulebook list
         The packaged Bank of England rule books: modules, rules, rules enforced.
-    rwa-filer rulebook import WORKBOOK --out DIR [--taxonomy-version V]
+    rwa-filer rulebook import WORKBOOK --out DIR [--taxonomy-version V] [--taxonomy-package ZIP]
         Build a rule book from one of the Bank's validation-rule workbooks.
-    rwa-filer rulebook check WORKBOOK [--taxonomy-version V]
+    rwa-filer rulebook check WORKBOOK [--taxonomy-version V] [--taxonomy-package ZIP]
         Fail if the packaged rule book is not exactly what the workbook yields.
     rwa-filer rules list
         The packaged rule extracts: framework, publisher, version and counts.
@@ -45,7 +49,8 @@ Commands:
         the workbook yields.
 
 Exit codes:
-    0  success — for ``validate`` and ``build``, nothing blocks submission
+    0  success — for ``validate`` and ``build``, nothing blocks submission;
+       for ``referee``, Arelle accepts the instance and the engines agree
     1  the command ran and the answer is "no" (a blocking finding, a stale
        extract, a missing file)
     2  usage error (argparse's own convention)
@@ -69,6 +74,9 @@ from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, lo
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
 from rwa_filer.model import LEI_SCHEME, CanonicalReturn, ReturnHeader
 from rwa_filer.readers import INSTANCE_SUFFIXES, SUPPORTED_SUFFIXES, SourceReading, load_source
+from rwa_filer.referee import RefereePlanError, RefereeUnavailableError, run_referee
+from rwa_filer.referee import report as referee_report
+from rwa_filer.referee.differential import compare
 from rwa_filer.rules import importer
 from rwa_filer.rules.catalogue import EXTRACT_FILES, extract_resource, load_rules
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs, resolve_pack, write_pack
@@ -126,6 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_validate_command(commands)
     _add_build_command(commands)
     _add_workflow_commands(commands)
+    _add_referee_command(commands)
     _add_template_command(commands)
     _add_taxonomy_commands(commands)
     _add_rulebook_commands(commands)
@@ -691,6 +700,95 @@ def _taxonomy_compile(args: argparse.Namespace) -> int:
 # =============================================================================
 
 
+def _add_referee_command(
+    commands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Register ``rwa-filer referee``."""
+    referee = commands.add_parser(
+        "referee",
+        help="have the Arelle XBRL processor check a written instance, rule by rule",
+        description=(
+            "Run Arelle on INSTANCE against the publisher's taxonomy package and report what "
+            "it finds: XBRL validity, the filing rules, and a verdict on every published rule "
+            "the instance's templates trigger. Unless --no-compare is given, this package's "
+            "own rule engine is run on the same instance and the two are set side by side; a "
+            "disagreement means one of them has misread a rule. Arelle is run as a "
+            "subprocess, under --arelle-python, the RWA_FILER_ARELLE_PYTHON interpreter, or "
+            "this one if it has arelle-release. A large module takes minutes and several GB."
+        ),
+    )
+    referee.add_argument("instance", type=Path, metavar="INSTANCE", help="the .xbrl instance")
+    referee.add_argument(
+        "--taxonomy-package",
+        required=True,
+        type=Path,
+        metavar="ZIP",
+        help="the publisher's taxonomy package holding the instance's entry point",
+    )
+    referee.add_argument(
+        "--arelle-python", type=Path, metavar="PYTHON", help="an interpreter that has Arelle"
+    )
+    referee.add_argument("--rules", metavar="REGEX", help="run only the rules whose id matches")
+    referee.add_argument(
+        "--workdir", type=Path, metavar="DIR", help="keep each worker's files here"
+    )
+    referee.add_argument("--chunk-mb", type=float, default=120.0, metavar="MB")
+    referee.add_argument("--max-rss-gb", type=float, default=9.0, metavar="GB")
+    referee.add_argument("--timeout", type=float, default=3600.0, metavar="SECONDS")
+    referee.add_argument(
+        "--no-filing-rules", action="store_true", help="skip the filing-rule plug-in"
+    )
+    referee.add_argument(
+        "--no-compare", action="store_true", help="report Arelle alone, not the differential"
+    )
+    referee.add_argument("--format", choices=("text", "json"), default="text")
+    referee.add_argument("--report", type=Path, metavar="FILE", help="also write the JSON here")
+    referee.set_defaults(handler=_referee)
+
+
+def _referee(args: argparse.Namespace) -> int:
+    """``rwa-filer referee`` — Arelle's verdict, beside the native engine's."""
+    instance: Path = args.instance
+    package: Path = args.taxonomy_package
+    for path, what in ((instance, "instance"), (package, "taxonomy package")):
+        if not path.is_file():
+            return _fail(f"{what} not found: {path}")
+    if instance.suffix.lower() != ".xbrl":
+        return _fail(f"the referee reads an .xbrl instance, not {instance.suffix!r}: {instance}")
+    try:
+        result = run_referee(
+            instance,
+            package,
+            python=args.arelle_python,
+            chunk_mb=args.chunk_mb,
+            max_rss_gb=args.max_rss_gb,
+            timeout=args.timeout,
+            workdir=args.workdir,
+            filing_rules=not args.no_filing_rules,
+            rules=args.rules,
+        )
+        differential = None
+        if not args.no_compare:
+            source = load_source(instance)
+            validation = validate_return(source.ret, source.pack, source_findings=source.findings)
+            if validation.report is None:
+                return _fail(f"no rule book is packaged for module {source.ret.header.module}")
+            differential = compare(validation.report.results, result)
+    except (RefereeUnavailableError, RefereePlanError, ValueError, PackNotFoundError) as exc:
+        return _fail(str(exc))
+
+    record = referee_report.to_record(result, differential)
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    _out(
+        json.dumps(record, indent=2)
+        if args.format == "json"
+        else referee_report.render_text(instance.name, result, differential)
+    )
+    return EXIT_OK if referee_report.is_supported(result, differential) else EXIT_FAILED
+
+
 def _add_rulebook_commands(
     commands: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
@@ -718,6 +816,13 @@ def _add_rulebook_commands(
             "--taxonomy-version",
             metavar="V",
             help="the taxonomy release, e.g. 4.1.1 (default: the version in the file name)",
+        )
+        action.add_argument(
+            "--taxonomy-package",
+            type=Path,
+            metavar="ZIP",
+            help="the publisher's taxonomy package: also record which dimensions each "
+            "rule's XBRL formula closes (the packaged rule books are built with it)",
         )
         if name == "import":
             action.add_argument(
@@ -748,7 +853,12 @@ def _read_rulebook(args: argparse.Namespace) -> dict[str, Any]:
     workbook: Path = args.workbook
     if not workbook.is_file():
         raise ValueError(f"workbook not found: {workbook}")
-    return boe_importer.import_workbook(workbook, taxonomy_version=args.taxonomy_version)
+    package: Path | None = args.taxonomy_package
+    if package is not None and not package.is_file():
+        raise ValueError(f"taxonomy package not found: {package}")
+    return boe_importer.import_workbook(
+        workbook, taxonomy_version=args.taxonomy_version, taxonomy_package=package
+    )
 
 
 def _rulebook_import(args: argparse.Namespace) -> int:
@@ -759,7 +869,12 @@ def _rulebook_import(args: argparse.Namespace) -> int:
         return _fail(str(exc))
     path = args.out / boe_importer.rulebook_file_name(rulebook)
     boe_importer.write_rulebook(rulebook, path)
-    _out(f"wrote {path} ({len(rulebook['rules'])} rules)")
+    reach = (
+        "with formula reach"
+        if boe_importer.has_formula_reach(rulebook)
+        else "WITHOUT formula reach: no --taxonomy-package"
+    )
+    _out(f"wrote {path} ({len(rulebook['rules'])} rules, {reach})")
     return EXIT_OK
 
 
@@ -772,7 +887,12 @@ def _rulebook_check(args: argparse.Namespace) -> int:
     name = boe_importer.rulebook_file_name(rulebook)
     packaged = Path(str(boe_importer.__file__)).parent / RULEBOOKS_DIRECTORY / name
     if boe_importer.is_rulebook_current(rulebook, packaged):
-        _out(f"ok    packaged rule book {name}")
+        checked = (
+            ""
+            if boe_importer.has_formula_reach(rulebook)
+            else " (workbook content only; formula reach not checked: no --taxonomy-package)"
+        )
+        _out(f"ok    packaged rule book {name}{checked}")
         return EXIT_OK
     state = "out of date" if packaged.is_file() else "missing"
     return _fail(f"packaged rule book {name} is {state}: it does not match {args.workbook.name}")

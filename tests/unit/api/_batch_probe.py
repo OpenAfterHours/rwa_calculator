@@ -16,6 +16,7 @@ actually tested rather than true by coincidence.
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 import time
 from datetime import datetime
@@ -50,6 +51,20 @@ CRASH_ENTITY = "E-CRASH"
 # How long the healthy scopes dawdle, so the crash lands while at least one of
 # them is genuinely in flight rather than after they have all finished.
 HEALTHY_SECONDS = 0.5
+
+
+def worker_process_class() -> str:
+    """The ``multiprocessing`` process class this worker is running as.
+
+    ``SpawnProcess``, ``ForkProcess`` or ``ForkServerProcess``. The class is
+    fixed by the context the pool was built on, and the worker is that very
+    object — unpickled under spawn and forkserver, inherited under fork — so
+    this is the start method as the worker experienced it, not as the parent
+    believes it asked for. ``multiprocessing.get_start_method()`` would NOT do:
+    a spawned child is told its parent's *default* method, whatever context
+    actually started it.
+    """
+    return type(multiprocessing.current_process()).__name__
 
 
 def crashing_run(job: _ScopeJob) -> _JobOutcome:

@@ -218,6 +218,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **A parallel batch (`rwa_calc.api.run_batch`) could hang forever on Linux
+  under Python 3.13.** `api/batch.py` built its `ProcessPoolExecutor` on
+  `multiprocessing`'s *default* start method, and that default depends on both
+  platform and interpreter: `spawn` on Windows and macOS, `forkserver` on Linux
+  from Python 3.14, `fork` on Linux up to 3.13. A forked worker is a copy of the
+  calling process with Polars already initialised but none of its threads, so
+  once the caller had run any Polars query the worker's first
+  `LazyFrame.collect()` (in `ParquetLoader.load`) waited forever and `run_batch`
+  never returned — no error, no timeout, no `BATCH00x` code. **Affected:** every
+  release from 0.3.29, on Linux with Python 3.13, for a batch of two or more
+  runs started from a process that had already used Polars — a long-lived host,
+  or any caller that ran a calculation or read a result frame first. Measured:
+  the same two-scope batch completes in 0.7s from a fresh process and hangs
+  after a single warm-up query in the parent. **No result was ever wrong; the
+  batch did not return.** The same inheritance left the per-worker Polars thread
+  cap unapplied there, because the pool it sizes had been sized in the parent.
+  The pool is now built on an explicit `spawn` context
+  (`batch.WORKER_START_METHOD`) on every platform and interpreter, so worker
+  behaviour no longer follows the default. **Two consequences on Linux:** a
+  *script* that calls `run_batch` must do so behind
+  `if __name__ == "__main__":` (already the rule on Windows, on macOS and under
+  Python 3.14 — a spawned worker re-imports `__main__`), and each worker now
+  starts as a fresh interpreter rather than a copy (measured on that two-scope
+  batch: 1.2s spawned against 0.7s forked). `max_workers=1` and
+  `RWA_BATCH_SERIAL=1` remain the in-process path and are unaffected. Pinned by
+  `tests/unit/api/test_batch.py::TestWorkerStartMethod`, on the pool's
+  construction arguments and on what a real worker reports. CI did not see it
+  because every CI job runs the runner's CPython 3.14; see the 2026-11-13 entry
+  in `docs/development/escape-log.md`.
 - **CAPITAL: the Art. 501a infrastructure supporting factor was granted with no
   eligibility gate at all, understating own funds.** `is_infrastructure` is
   derived as a bare substring match on `product_type`

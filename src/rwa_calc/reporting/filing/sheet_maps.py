@@ -78,7 +78,18 @@ if TYPE_CHECKING:
 # sheet of ours for them to address. ``high_risk`` was the only key the estate
 # can emit that no code named.
 _C07_SHEETS: Final[tuple[SheetCode, ...]] = (
-    SheetCode("0001", "Total (all SA exposure classes)", (), "COREP Annex II C 07.00; v4728_m"),
+    # The Total sheet is the generator's ``total`` key
+    # (``templates.C07_00_TOTAL_SHEET_KEY`` — spelt out here because arch_check
+    # check 22 reads these tuples as literals; the two are held equal by
+    # tests/contracts/test_of07_published_cells.py). Its tuple was EMPTY until
+    # 2026-11-13 because no such sheet was generated, which left every rule
+    # scoped to s0001 unaddressable.
+    SheetCode(
+        "0001",
+        "Total (all SA exposure classes)",
+        ("total",),
+        "COREP Annex II C 07.00; v4728_m",
+    ),
     SheetCode(
         "0002",
         "Art. 112(1)(a) central governments or central banks",
@@ -165,7 +176,12 @@ _C07_SHEETS: Final[tuple[SheetCode, ...]] = (
 # OF07.00 z:0006; boe_b0985/b0987: OF09.01 r0093/r0094 real-estate of-whiches =
 # OF07.00 z:0010).
 _OF07_SHEETS: Final[tuple[SheetCode, ...]] = (
-    SheetCode("0001", "Total (all SA exposure classes)", (), "PS1/26 Annex II OF 09.01 row 0170"),
+    SheetCode(
+        "0001",
+        "Total (all SA exposure classes)",
+        ("total",),
+        "PS1/26 Annex II §3.2.2 ¶47; OF 09.01 row 0170; boe_b0713",
+    ),
     SheetCode(
         "0002",
         "Art. 112(1)(a) central governments or central banks",

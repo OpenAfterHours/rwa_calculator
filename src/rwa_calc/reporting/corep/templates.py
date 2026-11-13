@@ -528,6 +528,10 @@ C07_00_SA_SHEET_MAP: dict[str, str] = {
 # an Art. 112(1) class. Consumed by ``corep/c07.py::c07_plans``.
 C07_00_SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
 
+# The Total sheet (published z-code 0001, Annex II ¶47): the sum of the class
+# sheets, built by ``corep/c07.py::c07_total_sheet``. Never an exposure class.
+C07_00_TOTAL_SHEET_KEY: str = "total"
+
 # The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
 # report under the IRB umbrella: Art. 155(2) simple-RW and Art. 155(3) PD/LGD.
 # Under Basel 3.1 no equity leg carries these (Art. 147A removes IRB equity —

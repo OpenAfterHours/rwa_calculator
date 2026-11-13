@@ -61,6 +61,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   today. Not all are defects in the templates: a few published rules cannot be
   satisfied by a return that follows the Bank's own instructions, and the
   baseline's note says which.
+- **C 07.00 / OF 07.00 now carries its Total sheet.** The instructions require
+  the template "for the total exposure across all exposure classes and
+  individually for each of the exposure classes"; only the class sheets were
+  produced. The Total (published sheet code 0001) is the cell-by-cell sum of
+  the class sheets and is `bundle.c07_00["total"]`, the first entry of the
+  dictionary, and the first tab of the Excel export. **This changes what
+  iterating `bundle.c07_00` yields**: code that adds up every sheet now counts
+  each exposure twice and must add the class sheets instead
+  (`rwa_calc.reporting.corep.c07.c07_class_sheets`).
 - **Fixed: Basel 3.1 OF 07.00 reported figures in cells the template does not
   have.** The published template greys out much of its grid: the CRM
   substitution block on the risk-weight rows, everything before the exposure

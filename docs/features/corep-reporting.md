@@ -300,6 +300,32 @@ consumed by [C 02.00 / OF 02.00](#c-0200-of-0200-own-funds-requirements) to appl
 
 ## C 07.00 / OF 07.00 — CR SA
 
+### Sheets
+
+The template is produced once for each standardised exposure class the portfolio holds, and
+once more as a **Total** sheet (published sheet code 0001) — the instructions ask for "the
+total exposure across all exposure classes and individually for each of the exposure classes".
+
+The Total is the cell-by-cell sum of the class sheets: a cell no class reports is empty on it
+rather than zero. In the bundle it is `c07_00["total"]`, first in the dictionary, ahead of the
+class sheets.
+
+!!! warning "Adding the sheets up"
+    Because the Total is the sum of the others, anything that adds up **all** the sheets
+    counts every exposure twice. Add the class sheets:
+
+    ```python
+    from rwa_calc.reporting.corep.c07 import c07_class_sheets
+
+    sa_rwea = sum(
+        sheet.filter(pl.col("row_ref") == "0010")["0220"][0]
+        for sheet in c07_class_sheets(bundle.c07_00).values()
+    )
+    ```
+
+    or read the figure straight off `bundle.c07_00["total"]`. Before 2026-11-13 the bundle
+    held the class sheets only.
+
 ### Column Structure
 
 The SA template has a wide column layout covering the full credit risk waterfall from original

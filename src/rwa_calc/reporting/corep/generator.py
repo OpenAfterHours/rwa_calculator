@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.reporting.corep.c02 import generate_c02_00
-from rwa_calc.reporting.corep.c07 import generate_c07
+from rwa_calc.reporting.corep.c07 import c07_total_sheet, generate_c07
 from rwa_calc.reporting.corep.c08 import (
     generate_c08_01,
     generate_c08_02,
@@ -59,6 +59,7 @@ from rwa_calc.reporting.corep.c34 import (
 from rwa_calc.reporting.corep.of02 import generate_of_02_01
 from rwa_calc.reporting.corep.sheet_labels import get_c07_sheet_labels
 from rwa_calc.reporting.corep.templates import (
+    C07_00_TOTAL_SHEET_KEY,
     IRB_EXPOSURE_CLASS_LABELS,
     OF_02_01_COLUMNS,
     get_c02_00_columns,
@@ -649,17 +650,25 @@ class COREPGenerator:
         framework: str,
         errors: list[str],
     ) -> dict[str, pl.DataFrame]:
-        """Generate the per-class C 07.00 SA templates.
+        """Generate the C 07.00 SA template: the Total sheet, then one per class.
 
         Dispatch-router entry (Phase 7 S8): C 07.00 is declarative — the
         cell semantics live in ``corep/c07.py::generate_c07`` (obligor-class
         sheets, substitution outflow/inflow, Annex II sign convention) and
         run through the one ``cellspec.execute`` executor.
 
+        The Total sheet (Annex II ¶47, published z-code 0001) is added HERE and
+        not in ``generate_c07``: it is the sum of the class sheets and has no
+        execution plan of its own, and the lineage drill-down requires
+        ``c07_plans`` and ``generate_c07`` to key identically. A reader that
+        adds the sheets up must add the CLASS sheets — ``c07_class_sheets``.
+
         References:
             CRR Art. 111-113; COREP Annex II C 07.00; PRA PS1/26 App. 17.
         """
-        return generate_c07(results, cols, framework, errors)
+        sheets = generate_c07(results, cols, framework, errors)
+        total = c07_total_sheet(sheets, framework)
+        return sheets if total is None else {C07_00_TOTAL_SHEET_KEY: total, **sheets}
 
     def _generate_all_c08_01(
         self,

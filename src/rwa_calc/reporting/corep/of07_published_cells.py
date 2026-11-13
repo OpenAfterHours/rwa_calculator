@@ -33,8 +33,9 @@ the template altogether.
 
 Scope: Basel 3.1 only. The CRR layout declares nothing: no EBA template or
 taxonomy is held to read its grey cells from, and a guess would blank real
-figures. Sheet scope is not declared either — the memorandum rows are published
-on some sheets only, which is the open question recorded as P1.377.
+figures. Sheet scope is declared for the Total sheet alone
+(``get_c07_rows_not_on_total``): which CLASS sheets carry the memorandum rows
+is the open question recorded as P1.377.
 
 References:
 - PRA PS1/26 Annex I (OF 07.00 template); Annex II §3.2.2 ¶48, §3.2.5
@@ -96,7 +97,21 @@ _RW_SECTION: int = 2
 _CIU_SECTION: int = 3
 _MEMORANDUM_SECTION: int = 4
 
+_ROWS_NOT_ON_TOTAL: frozenset[str] = frozenset({"0371", "0372", "0373", "0374"})
+
 _NOTHING: Mapping[str, frozenset[str]] = {}
+
+
+def get_c07_rows_not_on_total(framework: str = "CRR") -> frozenset[str]:
+    """Row refs the published template does not carry on its Total sheet.
+
+    The four equity-transitional memorandum rows are published for the equity
+    exposure class alone (Annex II ¶55A: "Firms shall only report the memorandum
+    items in rows 0371-0374 for the following exposure class: (a) subordinated
+    debt, equity and other own funds instruments"), so the Total sheet has no
+    cell for them. Empty for CRR (module docstring, "Scope").
+    """
+    return _ROWS_NOT_ON_TOTAL if framework == "BASEL_3_1" else frozenset()
 
 
 def get_c07_unreported_cells(framework: str = "CRR") -> Mapping[str, frozenset[str]]:

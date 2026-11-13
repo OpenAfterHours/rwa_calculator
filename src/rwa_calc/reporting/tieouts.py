@@ -74,6 +74,7 @@ import polars as pl
 
 from rwa_calc.contracts.errors import ERROR_CROSS_TEMPLATE_INCONSISTENCY
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -269,7 +270,7 @@ TIE_OUTS: list[TieOut] = [
         templates=(_TEMPLATE_C07, _TEMPLATE_C02),
         lhs_label="Σ C 07.00 [0010][0220] SA RWEA",
         rhs_label="C 02.00 [0060]-[0420] (SA of-which net of equity)",
-        lhs=lambda c, _p: _sheet_total(c.c07_00, "0220"),
+        lhs=lambda c, _p: _sheet_total(c07_class_sheets(c.c07_00), "0220"),
         rhs=lambda c, _p: _cell_diff(c.c_02_00, "0060", "0420", "0010"),
     ),
     TieOut(

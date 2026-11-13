@@ -32,14 +32,23 @@ import datetime as dt
 import polars as pl
 import pytest
 
-from rwa_calc.reporting.corep.of07_published_cells import get_c07_unreported_cells
-from rwa_calc.reporting.corep.templates import get_c07_columns, get_sa_row_sections
+from rwa_calc.reporting.corep.of07_published_cells import (
+    get_c07_rows_not_on_total,
+    get_c07_unreported_cells,
+)
+from rwa_calc.reporting.corep.templates import (
+    C07_00_TOTAL_SHEET_KEY,
+    get_c07_columns,
+    get_sa_row_sections,
+)
 from rwa_calc.reporting.filing.canonical import FILING_MODULE
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_filer.taxonomy.pack import resolve_pack
 
 REFERENCE_DATE = dt.date(2027, 3, 31)
 FRAMEWORK = "BASEL_3_1"
 TABLE_PREFIX = "OF07.00.01."
+TOTAL_SHEET_CODE = "0001"
 
 
 @pytest.fixture(scope="module")
@@ -128,3 +137,32 @@ def test_nothing_is_declared_blank_under_crr() -> None:
 
     # Assert
     assert dict(declared) == {}
+
+
+def test_the_rows_kept_off_the_total_sheet_are_exactly_those_it_has_no_cell_for() -> None:
+    """The Total sheet is the sum of the class sheets, so it would carry every
+    row a class sheet carries — but the template publishes the equity
+    transitional memorandum rows for the equity class alone (Annex II ¶55A)."""
+    # Arrange
+    cells = resolve_pack(FILING_MODULE, REFERENCE_DATE).cells.filter(
+        pl.col("table").str.starts_with(TABLE_PREFIX)
+    )
+    on_total = set(cells.filter(pl.col("sheet") == TOTAL_SHEET_CODE)["row"].to_list())
+
+    # Act
+    absent = {row for row in _layout_rows() if row not in on_total}
+
+    # Assert
+    assert get_c07_rows_not_on_total(FRAMEWORK) == absent
+    assert get_c07_rows_not_on_total("CRR") == frozenset()
+
+
+@pytest.mark.parametrize("sheet_map", ["c07", "of07"])
+def test_the_published_total_sheet_code_addresses_the_generated_total(sheet_map: str) -> None:
+    """``sheet_maps.py`` spells the key as a literal (arch_check check 22 reads
+    it off the source); this is what keeps the literal and the constant equal."""
+    # Arrange / Act
+    entry = SHEET_INDEX_MAPS[sheet_map][TOTAL_SHEET_CODE]
+
+    # Assert
+    assert entry.bundle_keys == (C07_00_TOTAL_SHEET_KEY,)

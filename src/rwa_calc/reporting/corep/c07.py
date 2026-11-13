@@ -193,7 +193,10 @@ from rwa_calc.reporting.cellspec import (
     execute,
 )
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
-from rwa_calc.reporting.corep.of07_published_cells import get_c07_unreported_cells
+from rwa_calc.reporting.corep.of07_published_cells import (
+    get_c07_rows_not_on_total,
+    get_c07_unreported_cells,
+)
 from rwa_calc.reporting.corep.postpass import (
     blank_unreported_cells,
     negate_deduction_cols,
@@ -206,6 +209,7 @@ from rwa_calc.reporting.corep.supporting_factors import (
 from rwa_calc.reporting.corep.templates import (
     C07_00_SA_SHEET_KEYS,
     C07_00_SA_SHEET_MAP,
+    C07_00_TOTAL_SHEET_KEY,
     EQUITY_IRB_METHODS,
     get_c07_columns,
     get_sa_risk_weight_bands,
@@ -231,6 +235,7 @@ logger = logging.getLogger(__name__)
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute.
 # 0216/0217 are the CRR-only "(-) SME/Infrastructure supporting factor adjustment"
 # columns (Art. 501/501a) — reported negative so 0215 + 0216 + 0217 = 0220 foots.
+_LABEL_COLS: tuple[str, str] = ("row_ref", "row_name")
 _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
@@ -635,6 +640,55 @@ def generate_c07(
         frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
         result[ec] = blank_unreported_cells(frame, plan.unreported)
     return result
+
+
+def c07_class_sheets(sheets: Mapping[str, pl.DataFrame]) -> dict[str, pl.DataFrame]:
+    """The exposure-class sheets of a C 07.00 template — everything but the Total.
+
+    The Total sheet is the sum of these, so anything that ADDS THE SHEETS UP (a
+    tie-out against C 02.00, a conservation check against the population) must
+    read this view; adding the whole template counts every exposure twice.
+    """
+    return {key: sheet for key, sheet in sheets.items() if key != C07_00_TOTAL_SHEET_KEY}
+
+
+@cites("PS1/26, paragraph 1.3")
+def c07_total_sheet(sheets: Mapping[str, pl.DataFrame], framework: str) -> pl.DataFrame | None:
+    """The Total sheet (published z-code 0001): the class sheets, added up.
+
+    Annex II §3.2.2 ¶47: "The information in OF CR SA is required for the total
+    exposure across all exposure classes and individually for each of the
+    exposure classes ... The total figures as well as the information of each
+    exposure class shall be reported in a separate dimension." ``sheets`` is
+    ``generate_c07``'s output; ``None`` when it is empty.
+
+    A CELL-BY-CELL SUM OF THE REPORTED SHEETS, not a second execution over the
+    whole population. Every row is evaluated per sheet over that sheet's own
+    population — the real-estate rows exist on the real-estate sheet alone, an
+    inflow lands on the protection provider's sheet, each cell reads its own
+    basis — so the sum of the sheets is the only total consistent with them, and
+    it is what the published rule states (``boe_b0713``: sheet 0001 equals the
+    sum of sheets 0002-0017). A cell no sheet reports is EMPTY on the Total, not
+    zero: a sum over nothing is not a measured figure, and a grey cell stays
+    grey. A sheet outside the published axis (``c07_plans`` records it as an
+    error) is still part of the total exposure and is included.
+
+    The rows the published Total does not carry are blanked
+    (``get_c07_rows_not_on_total``).
+    """
+    if not sheets:
+        return None
+    stacked = pl.concat(list(sheets.values()), how="vertical_relaxed")
+    value_cols = [col for col in stacked.columns if col not in _LABEL_COLS]
+    total = stacked.group_by("row_ref", maintain_order=True).agg(
+        pl.col("row_name").first(),
+        *(
+            pl.when(pl.col(col).count() > 0).then(pl.col(col).sum()).alias(col)
+            for col in value_cols
+        ),
+    )
+    not_on_total = {ref: frozenset(value_cols) for ref in get_c07_rows_not_on_total(framework)}
+    return blank_unreported_cells(total.select(stacked.columns), not_on_total)
 
 
 @cites("PS1/26")

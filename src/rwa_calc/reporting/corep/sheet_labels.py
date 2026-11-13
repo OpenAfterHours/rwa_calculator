@@ -44,6 +44,7 @@ from rwa_calc.reporting.corep.templates import (
     _LBL_SA_REAL_ESTATE,
     _LBL_SA_RETAIL,
     _LBL_SA_RGLA,
+    C07_00_TOTAL_SHEET_KEY,
 )
 
 # Readable name per sheet key, for the Excel tab and the UI sheet picker — both
@@ -66,6 +67,8 @@ from rwa_calc.reporting.corep.templates import (
 #     but Art. 112(1)(q) itself says "other items" and B31 agrees, so
 #     ``_LBL_SA_OTHER`` is used here and the two legitimately differ.
 CRR_C07_00_SA_SHEET_LABELS: dict[str, str] = {
+    # The Total sheet (Annex II ¶47) — not an exposure class; first, as published.
+    C07_00_TOTAL_SHEET_KEY: "Total",
     "central_govt_central_bank": _LBL_SA_CENTRAL_GOVT,
     "rgla": _LBL_SA_RGLA,
     "pse": _LBL_SA_PSE,

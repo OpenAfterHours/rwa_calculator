@@ -952,7 +952,7 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # On-balance-sheet netting perimeter (CRR Art. 195/205(a)/219). Selects the
     # pool / sibling-join / pro-rata-denominator keying in
-    # engine/crm/collateral.py::generate_netting_collateral.
+    # engine/crm/netting.py::generate_netting_collateral.
     "on_bs_netting_perimeter_is_agreement": Feature(
         name="on_bs_netting_perimeter_is_agreement",
         enabled=True,

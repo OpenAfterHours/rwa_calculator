@@ -68,6 +68,7 @@ from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.min_collateralisation import record_below_min_collateralisation
+from rwa_calc.engine.crm.netting import generate_netting_collateral
 from rwa_calc.engine.crm.ofcp_routing import route_other_funded_protection
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.crm.third_party_deposit import (
@@ -862,7 +863,7 @@ class CRMProcessor:
         that ``has_required_columns``' bare except misreported as "missing
         required columns" (silent-skip layer, migration Phase 3).
         """
-        netting_collateral = collateral_mod.generate_netting_collateral(
+        netting_collateral = generate_netting_collateral(
             exposures, errors, reporting_date=reporting_date, pack=pack
         )
         collateral: pl.LazyFrame | None = collateral_lf
@@ -1308,7 +1309,7 @@ class CRMProcessor:
         ``pack`` is required: the Art. 195 set-off perimeter Feature has no
         engine-side default, since one would fail open to the wider perimeter.
         """
-        return collateral_mod.generate_netting_collateral(exposures, pack=pack)
+        return generate_netting_collateral(exposures, pack=pack)
 
     def apply_collateral(
         self,

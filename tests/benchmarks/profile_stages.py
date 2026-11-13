@@ -33,6 +33,7 @@ from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.netting import generate_netting_collateral
 from rwa_calc.engine.crm.processor import (
     CRMProcessor,
     _build_exposure_lookups,
@@ -166,7 +167,7 @@ def profile_pipeline_stages(
     # so the profile must resolve the run's own pack to measure the real perimeter.
     netting_pack = RulepackV0.from_config(config).pack
     netting_collateral = _time(
-        lambda: collateral_mod.generate_netting_collateral(exposures, pack=netting_pack),
+        lambda: generate_netting_collateral(exposures, pack=netting_pack),
         "CRM: netting collateral gen",
         results,
     )

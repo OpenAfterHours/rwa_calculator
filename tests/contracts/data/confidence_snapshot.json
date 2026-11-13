@@ -2913,7 +2913,7 @@
     {
       "article": "195",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral"
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -2926,7 +2926,7 @@
         "contracts/errors.py",
         "contracts/validation.py",
         "data/schemas.py",
-        "engine/crm/collateral.py",
+        "engine/crm/netting.py",
         "engine/crm/processor.py",
         "engine/hierarchy/facility_undrawn.py",
         "reporting/kernel/columns.py",
@@ -3145,7 +3145,7 @@
     {
       "article": "205",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral"
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -3153,7 +3153,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/collateral.py"
+        "engine/crm/netting.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
@@ -3338,7 +3338,7 @@
     {
       "article": "219",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral"
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -3347,8 +3347,8 @@
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
-        "engine/crm/collateral.py",
         "engine/crm/haircuts.py",
+        "engine/crm/netting.py",
         "engine/crm/processor.py"
       ],
       "test_files": [
@@ -3487,8 +3487,8 @@
       "article": "223",
       "code_functions": [
         "rwa_calc.engine.crm.collateral::apply_collateral",
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral",
         "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr",
+        "rwa_calc.engine.crm.netting::generate_netting_collateral",
         "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
       ],
       "confidence": "HIGH",
@@ -3539,6 +3539,7 @@
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
         "engine/crm/min_collateralisation.py",
+        "engine/crm/netting.py",
         "engine/crm/processor.py",
         "engine/hierarchy/unify.py",
         "engine/irb/formulas.py",
@@ -4116,7 +4117,8 @@
         "data/schemas.py",
         "engine/crm/guarantees.py",
         "engine/crm/haircut_tables.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/haircuts.py",
+        "engine/crm/netting.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_122_short_term_institution_guarantor_substitution.py",
@@ -4152,8 +4154,8 @@
     {
       "article": "238",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral",
-        "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch"
+        "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch",
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -4161,9 +4163,9 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/collateral.py",
         "engine/crm/guarantees.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/haircuts.py",
+        "engine/crm/netting.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",

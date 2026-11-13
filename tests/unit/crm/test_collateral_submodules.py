@@ -27,10 +27,8 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
-from rwa_calc.engine.crm.collateral import (
-    apply_firb_supervisory_lgd_no_collateral,
-    generate_netting_collateral,
-)
+from rwa_calc.engine.crm.collateral import apply_firb_supervisory_lgd_no_collateral
+from rwa_calc.engine.crm.netting import generate_netting_collateral
 from rwa_calc.rulebook import RulepackV0
 
 # ``generate_netting_collateral`` takes a REQUIRED pack: the netting perimeter is

@@ -947,7 +947,9 @@ class TestC0200ReportsTheCiuUnderItsOwnRow:
 
     C 02.00's parent totals are keyed on the APPROACH, not the class, so they do
     not move when a class loses its row — measured: 28,000,000 left the breakdown
-    and landed nowhere while r0010, r0050 and r0060 were bit-identical. The
+    and landed nowhere while the total, credit-risk and SA rows were bit-identical
+    (r0010, r0040 and r0060 by their published codes; this file read the
+    credit-risk row at 0050 until 2026-11-13). The
     breakdown footing is therefore the only assertion here that could have caught
     it, and it is stated over every SA class row rather than over the two that
     moved.
@@ -1003,7 +1005,9 @@ class TestC0200ReportsTheCiuUnderItsOwnRow:
 
         ledger_total = float(results["rwa_final"].sum())
         assert ledger_total == pytest.approx(_RICH_B31_TREA, rel=_REL, abs=_ABS)
-        for ref in ("0010", "0050"):
+        # Was ("0010", "0050"): the credit-risk total is published row 0040
+        # (boe_b1093: r0040 = r0050 + r0240 + r0460 + r0470), and 0050 is the SA total.
+        for ref in ("0010", "0040"):
             value = _cell(corep.c_02_00, ref, "0010")
             assert value == pytest.approx(_RICH_B31_TREA, rel=_REL, abs=_ABS), (
                 f"C 02.00 r{ref} reports {value} against a ledger carrying {ledger_total}"

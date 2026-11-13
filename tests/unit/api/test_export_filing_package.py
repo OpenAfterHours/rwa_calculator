@@ -192,10 +192,14 @@ class TestFilingStatusEndpoint:
             registered, entity_identifier=LEI, allow_incomplete=True, allow_rule_breaks=True
         )
 
-        # Assert — the minimal run is stopped by unplaced figures and nothing else
-        # an override cannot lift; overridden, it is validated and written.
-        assert strict["blocked_by"] == "unplaced_figures"
-        assert strict["validation"] is None
+        # Assert — the minimal run is stopped by rule breaks and nothing else an
+        # override cannot lift; overridden, it is validated and written.
+        # Was "unplaced_figures" with no validation: every unplaced figure of this run
+        # was an OF 02.00 cell the published template lacks (taxonomy OF02.00.01.01).
+        # With none left, the return is validated and the Error rules stand in the way.
+        assert strict["blocked_by"] == "rules"
+        assert strict["unplaced_figures"] == 0
+        assert strict["validation"] is not None
         assert overridden["blocked_by"] is None and overridden["written"] is True
         assert overridden["validation"] is not None
         # ... and a return written with an override is never called submittable.

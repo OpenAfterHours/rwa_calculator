@@ -130,6 +130,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **REPORTING — behaviour to expect where the Basel 3.1 output floor binds.**
+  OF 02.00 column 0010 is now un-floored, as its data points require, while
+  OF 08.01 still sums the post-floor RWEA (which carries the engine's pro-rata
+  floor add-on), and the engine still floors the modelled exposures alone.
+  Two cross-template findings therefore appear on a run whose floor binds:
+  `irb_rwea_c08_01_vs_c02`, by the size of the add-on, and
+  `total_rwea_c02_vs_ov1`, by `(1 − x)` times the standardised book. Both are
+  true statements about open items (plan P1.369 and P1.367), not regressions
+  in the figures: no RWA moved.
+- **REPORTING: `boe_b0793` is reported as broken where OF-ADJ is not zero.**
+  The rule computes `x · (S-TREA + OF-ADJ)`; PS1/26 Art. 92(2A) and Annex II
+  §1.3.1 give `x · S-TREA + OF-ADJ`, and that is what OF 02.00 reports.
 - (Next release changes will go here)
 - **BREAKING (import paths only): the supervisory validation engine moved out of
   `rwa_calc.reporting.validations` into the separately released `rwa-filer`
@@ -348,6 +360,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **REPORTING: C 02.00 / OF 02.00 now uses the published row codes and cells,
+  in both regimes — every row of the template moves.** The layout had been
+  written from row headings and its codes were not the publishers'. What a
+  consumer of the template will see:
+    - **Credit-risk RWEA is row 0040** (was 0050). There is no "own funds
+      requirement (8%)" row: the figure that was reported in row 0040 is gone,
+      because neither template has such a row.
+    - **Standardised approach is rows 0050 and 0060** (one figure in two rows,
+      as published); **IRB is row 0240** (was 0220); **F-IRB is row 0250** (was
+      0240) and **A-IRB row 0310** (was 0300). The class rows follow each
+      regime's own template: under Basel 3.1 F-IRB institutions is 0271 and the
+      corporate rows 0295 / 0296 / 0297; A-IRB corporates 0355 / 0356 and retail
+      real estate 0382–0385; slotting 0411–0416. Under CRR the F-IRB rows are
+      0260–0300 and the A-IRB rows 0320–0410, with Equity IRB at 0420.
+    - **CRR supervisory slotting is reported at row 0290**, "Corporates —
+      Specialised Lending" without own estimates, inside row 0250. It had been
+      written to row 0410, which is "Retail — Other non-SME".
+    - **Basel 3.1 column 0010 is the un-floored RWEA.** Row 0010 column 0010 is
+      U-TREA; the output floor, `x · S-TREA + OF-ADJ`, is row 0010 column 0030;
+      total risk exposure is the greater of the two. Column 0010 used to carry
+      the post-floor figure and column 0030 repeated it.
+    - **Column 0020 is reported on row 0040 and the modelled rows only, column
+      0030 on rows 0010 and 0034–0036 only** — the cells the template has.
+    - **Row 0035 is the multiplier as a rate** (0.6, not 60.0); row 0034 is the
+      yes/no indicator; row 0036 is OF-ADJ, taken from the run's floor summary.
+      Without that summary OF-ADJ is unknown, and then it, the floor and the
+      indicator are left empty rather than reported as zero.
+    - **The Basel 3.1 currency-mismatch memorandum row 0500 is removed.**
+      Published row 0500 is settlement/delivery risk in the non-trading book.
+      The figure still reports at OF 07.00 memorandum row 0380.
+    - The other risk types (settlement, market, operational, CVA, large
+      exposures, …) are laid out at their published codes and left empty.
+  No RWA, EAD or risk weight changes. Held to the Bank of England taxonomy by
+  `tests/contracts/test_of02_published_cells.py`; the row table is
+  `reporting/corep/c02_rows.py`. Four Error rules of the Bank's rule book that
+  broke on every Basel 3.1 return (`boe_b0359`, `boe_b0716`, `boe_b0793`,
+  `boe_b1093`) now hold, the third except where OF-ADJ is not zero (below).
+- **REPORTING: the export, validation and filing paths pass the run's own
+  output-floor summary to the COREP generator.** None of them did, so unless
+  a caller supplied one OF 02.00 reported no multiplier and no OF-ADJ.
+  `export_to_corep`, `export_corep_facts`, `validate_submission`,
+  `export_filing_package` and the REST template-bundle endpoint are affected.
+- **REPORTING: an A-IRB exposure whose class is `corporate_sme` is counted in
+  the corporate SME row of C 02.00 / OF 02.00.** It matched neither side of the
+  corporate split and fell out of the breakdown while the A-IRB total still
+  counted it (16,063,845.09 on the Basel 3.1 reporting portfolio).
+- **REPORTING: two false cross-template findings (`TIE001`) on a CRR book with
+  IRB equity are gone.** The equity term sat on the wrong tie-out, so the SA
+  and the IRB tie were each reported as off by exactly the IRB equity RWEA.
+- **FILING (`rwa-filer`): a figure reported through one template is read in
+  every reported template that shows the same data point.** The rule engine
+  read it only in the cell that named it, so a rule comparing the two cells
+  failed against a default of zero — on a return whose XBRL file the same
+  engine, and Arelle, pass. Seven Error rules were failing for this reason
+  alone.
+- **FILING: two cells of one data point that differ only in the last digits of
+  a floating-point sum are filed as one value.** The standardised-approach
+  total is shown in OF 02.00 and on the OF 07.00 Total sheet, each adding the
+  same exposures in its own order; the return was being refused over the
+  difference. Cells that disagree by more than rounding are still refused.
 - **CAPITAL: the Art. 501a infrastructure supporting factor was granted with no
   eligibility gate at all, understating own funds.** `is_infrastructure` is
   derived as a bare substring match on `product_type`

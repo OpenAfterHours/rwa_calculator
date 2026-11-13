@@ -27,6 +27,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.contracts.config import OutputFloorConfig
 from rwa_calc.domain.enums import InstitutionType, ReportingBasis
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
@@ -50,6 +51,19 @@ def _b31_irb_results() -> pl.LazyFrame:
             "rwa_pre_floor": [50_000.0],
             "sa_rwa": [100_000.0],
         }
+    )
+
+
+def _floor_summary() -> OutputFloorSummary:
+    """A 72.5% floor with no OF-ADJ: 0.725 x S-TREA 100k = 72.5k >= U-TREA 50k."""
+    return OutputFloorSummary(
+        u_trea=50_000.0,
+        s_trea=100_000.0,
+        floor_pct=0.725,
+        floor_threshold=72_500.0,
+        shortfall=22_500.0,
+        portfolio_floor_binding=True,
+        floored_modelled_rwa=72_500.0,
     )
 
 
@@ -266,56 +280,72 @@ def _get_c02_row(bundle: COREPTemplateBundle, row_ref: str) -> dict[str, object]
 
 
 class TestOF0200FloorIndicatorRows:
-    """Test that OF 02.00 rows 0034-0036 are gated on is_floor_applicable()."""
+    """Test that OF 02.00 rows 0034-0036 are gated on is_floor_applicable().
+
+    RE-ANCHORED 2026-11-13 to the published template (taxonomy OF02.00.01.01;
+    PS1/26 Annex II s1.3). These tests read column 0010 and expected an exempt
+    entity to report 0.0. Rows 0034-0036 have a cell in column 0030 ONLY, and an
+    entity outside the floor's scope reports no output-floor figure at all — a
+    0.0 multiplier is one boe_b0359 rejects, and "not activated" is a claim about
+    a floor the entity does not have. Activation is the template's own test: row
+    0010 column 0030 >= column 0010, which needs the summary's OF-ADJ.
+    """
 
     def test_exempt_entity_floor_not_activated(self) -> None:
-        """Exempt entity: row 0034 (floor activated) = 0.0."""
+        """Exempt entity: row 0034 (floor activated) is empty. Was: col 0010 == 0.0."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
             framework="BASEL_3_1",
+            output_floor_summary=_floor_summary(),
             output_floor_config=_exempt_floor_config(),
         )
         row = _get_c02_row(bundle, "0034")
         assert row is not None
-        assert row["0010"] == pytest.approx(0.0, abs=1e-10)
+        assert row["0010"] is None
+        assert row["0030"] is None
 
     def test_exempt_entity_multiplier_zero(self) -> None:
-        """Exempt entity: row 0035 (multiplier) = 0.0."""
+        """Exempt entity: row 0035 (multiplier) is empty. Was: col 0010 == 0.0."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
             framework="BASEL_3_1",
+            output_floor_summary=_floor_summary(),
             output_floor_config=_exempt_floor_config(),
         )
         row = _get_c02_row(bundle, "0035")
         assert row is not None
-        assert row["0010"] == pytest.approx(0.0, abs=1e-10)
+        assert row["0010"] is None
+        assert row["0030"] is None
 
     def test_exempt_entity_of_adj_zero(self) -> None:
-        """Exempt entity: row 0036 (OF-ADJ) = 0.0."""
+        """Exempt entity: row 0036 (OF-ADJ) is empty. Was: col 0010 == 0.0."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
             framework="BASEL_3_1",
+            output_floor_summary=_floor_summary(),
             output_floor_config=_exempt_floor_config(),
         )
         row = _get_c02_row(bundle, "0036")
         assert row is not None
-        assert row["0010"] == pytest.approx(0.0, abs=1e-10)
+        assert row["0010"] is None
+        assert row["0030"] is None
 
     def test_applicable_entity_floor_activated(self) -> None:
-        """Applicable entity with binding floor: row 0034 = 1.0."""
+        """Applicable entity with binding floor: row 0034 col 0030 = 1.0."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
             framework="BASEL_3_1",
+            output_floor_summary=_floor_summary(),
             output_floor_config=_applicable_floor_config(),
         )
         row = _get_c02_row(bundle, "0034")
         assert row is not None
-        # rwa_final (60k) > rwa_pre_floor (50k) → floor activated
-        assert row["0010"] == pytest.approx(1.0, abs=1e-10)
+        # floor 0.725 x 100k = 72.5k >= un-floored 50k -> activated (was: col 0010)
+        assert row["0030"] == pytest.approx(1.0, abs=1e-10)
 
     def test_no_config_backward_compat(self) -> None:
         """No config → floor is assumed applicable (backward compat)."""
@@ -323,11 +353,12 @@ class TestOF0200FloorIndicatorRows:
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
             framework="BASEL_3_1",
+            output_floor_summary=_floor_summary(),
         )
         row = _get_c02_row(bundle, "0034")
         assert row is not None
-        # rwa_final (60k) > rwa_pre_floor (50k) → floor activated
-        assert row["0010"] == pytest.approx(1.0, abs=1e-10)
+        # floor 0.725 x 100k = 72.5k >= un-floored 50k -> activated (was: col 0010)
+        assert row["0030"] == pytest.approx(1.0, abs=1e-10)
 
     def test_crr_no_floor_indicator_rows(self) -> None:
         """CRR: rows 0034-0036 not present in C 02.00."""
@@ -341,7 +372,7 @@ class TestOF0200FloorIndicatorRows:
             assert row is None, f"Row {ref} should not exist under CRR"
 
     def test_exempt_all_three_indicator_rows_zero(self) -> None:
-        """Exempt entity: all three indicator rows consistently zero."""
+        """Exempt entity: all three indicator rows consistently empty (was: 0.0)."""
         gen = LedgerShimCorepGenerator()
         config = OutputFloorConfig.basel_3_1(
             institution_type=InstitutionType.NON_RING_FENCED,
@@ -350,14 +381,13 @@ class TestOF0200FloorIndicatorRows:
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
             framework="BASEL_3_1",
+            output_floor_summary=_floor_summary(),
             output_floor_config=config,
         )
         for ref in ("0034", "0035", "0036"):
             row = _get_c02_row(bundle, ref)
             assert row is not None
-            assert row["0010"] == pytest.approx(0.0, abs=1e-10), (
-                f"Row {ref} should be 0.0 for exempt entity"
-            )
+            assert row["0030"] is None, f"Row {ref} should be empty for exempt entity"
 
 
 # =============================================================================
@@ -538,15 +568,17 @@ class TestEntityTypeCombinations:
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
             framework="BASEL_3_1",
+            output_floor_summary=_floor_summary(),
             output_floor_config=config,
         )
         row = _get_c02_row(bundle, "0034")
         assert row is not None
         if expect_applicable:
-            # Floor binds: rwa_final (60k) > rwa_pre_floor (50k)
-            assert row["0010"] == pytest.approx(1.0, abs=1e-10)
+            # Floor 72.5k >= un-floored 50k. Was read at col 0010; the cell is col 0030.
+            assert row["0030"] == pytest.approx(1.0, abs=1e-10)
         else:
-            assert row["0010"] == pytest.approx(0.0, abs=1e-10)
+            # Was: col 0010 == 0.0. An exempt entity reports no floor figure.
+            assert row["0030"] is None
 
 
 # =============================================================================

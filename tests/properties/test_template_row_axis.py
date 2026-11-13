@@ -15,14 +15,19 @@ its own warning is heeded here: none of these tests verifies by reading the row
 list, because the missing pair is by definition not in it. Every test computes
 the RESIDUAL — parent minus the sum of its parts — and requires `0.00`.
 
-The row groups below are taken from the PUBLISHED template layout (the row
-sections in ``reporting/corep/templates.py`` and the CR4 row names), never from
-the class-to-row maps the generators use. A test written from the same sentence
-as the code under test proves nothing (`LESSONS.md` B3).
+The row groups below are taken from the PUBLISHED templates (C 02.00: EBA
+``v0207_m`` / ``v0210_m`` / ``v0211_m``; OF 02.00: the PRA001 taxonomy table
+``OF02.00.01.01``; and the CR4 row names), never from the class-to-row maps the
+generators use. A test written from the same sentence as the code under test
+proves nothing (`LESSONS.md` B3).
 
 Findings recorded here as strict xfails are candidate defects, not accepted
 behaviour: ``strict=True`` means a fix turns them red and forces this file to be
-updated rather than letting a finding quietly evaporate.
+updated rather than letting a finding quietly evaporate. Three C 02.00 findings
+were recorded that way and were FIXED on 2026-11-13, when the template was
+re-keyed to its published rows — an F-IRB ``corporate_sme`` obligor reaching no
+class row, the A-IRB sovereign row keyed on a class value that does not exist,
+and the missing F-IRB sovereign row. Their tests remain, without the marker.
 
 References:
 - COREP Annex II, C 02.00 / PS1/26 Annex II, OF 02.00: own funds requirements
@@ -49,10 +54,11 @@ REGIME_NAMES: tuple[str, ...] = ("CRR", "B31")
 # Row groups, read off the published layout
 # ---------------------------------------------------------------------------
 
-#: C 02.00 row 0060 "Of which: Standardised Approach" and its class breakdown.
-#: Rows 0070-0211 are the Art. 112(1)(a)-(q) classes in publication order. Under
-#: Basel 3.1 row 0131 is an "Of which: specialised lending" SUB-row of 0130, so it
-#: is excluded — a partition sums leaves, never a parent and its child.
+#: C 02.00 row 0060 "SA exposure classes excluding securitisation positions" and
+#: its class breakdown (EBA v0207_m). Rows 0070-0211 are the Art. 112(1)(a)-(q)
+#: classes in publication order. Under Basel 3.1 row 0131 is an "of which:
+#: specialised lending" SUB-row of 0130, so it is excluded — a partition sums
+#: leaves, never a parent and its child — and row 0190 does not exist (read as 0).
 C02_SA_TOTAL_ROW = "0060"
 C02_SA_CLASS_ROWS: tuple[str, ...] = (
     "0070",  # (a) central governments and central banks
@@ -73,13 +79,30 @@ C02_SA_CLASS_ROWS: tuple[str, ...] = (
     "0211",  # (q) other items
 )
 
-#: C 02.00 approach totals and the class rows that break each of them down.
-#: Only leaves: 0271/0290/0295-0297 are Basel 3.1 sub-rows of 0250/0260, and
-#: 0350/0355/0356/0380-0410 are sub-rows of 0340/0370.
-C02_FIRB_TOTAL_ROW = "0240"
-C02_FIRB_CLASS_ROWS: tuple[str, ...] = ("0250", "0260")
-C02_AIRB_TOTAL_ROW = "0300"
-C02_AIRB_CLASS_ROWS: tuple[str, ...] = ("0310", "0330", "0340", "0370")
+#: The approach totals and the class rows that break each of them down, per
+#: regime. RE-ANCHORED 2026-11-13 to the published codes: this file read the
+#: F-IRB total at 0240 with class rows 0250/0260, and the A-IRB total at 0300
+#: with 0310/0330/0340/0370 — none of which is what those rows are.
+#:   C 02.00  — v0210_m: 0250 = 0260 + 0270 + 0280 + 0290 + 0300;
+#:              v0211_m: 0310 = 0320 + ... + 0410.
+#:   OF 02.00 — taxonomy OF02.00.01.01: 0250 over 0271/0290/0295-0297 and 0310
+#:              over 0350/0355/0356/0382-0385/0390/0400/0410 (Art. 147A leaves
+#:              no row for IRB sovereigns or A-IRB institutions).
+C02_FIRB_TOTAL_ROW = "0250"
+C02_FIRB_CLASS_ROWS: dict[str, tuple[str, ...]] = {
+    "CRR": ("0260", "0270", "0280", "0290", "0300"),
+    "B31": ("0271", "0290", "0295", "0296", "0297"),
+}
+C02_AIRB_TOTAL_ROW = "0310"
+C02_AIRB_CLASS_ROWS: dict[str, tuple[str, ...]] = {
+    "CRR": ("0320", "0330", "0340", "0350", "0360", "0370", "0380", "0390", "0400", "0410"),
+    "B31": ("0350", "0355", "0356", "0382", "0383", "0384", "0385", "0390", "0400", "0410"),
+}
+#: The row named for each reproducer below, so a test can require the RWEA to be
+#: IN that row rather than merely somewhere in the breakdown.
+C02_FIRB_SME_ROW: dict[str, str] = {"CRR": "0280", "B31": "0296"}
+C02_FIRB_SOVEREIGN_ROW = "0260"
+C02_AIRB_SOVEREIGN_ROW = "0320"
 
 #: CR4's footing row. Every other row is a class row.
 CR4_TOTAL_ROW = "17"
@@ -197,107 +220,101 @@ def test_c02_sa_class_rows_partition_the_standardised_total(portfolio_name: str,
 
 @pytest.mark.parametrize("regime", REGIME_NAMES)
 def test_c02_firb_class_rows_partition_the_firb_total_for_a_large_corporate(regime: str):
-    """The control case: an F-IRB large corporate reaches row 0260."""
+    """The control case: an F-IRB large corporate reaches an F-IRB class row."""
     # Arrange
     c02 = corep_bundle(FIRB_LARGE_CORPORATE, regime).c_02_00
     assert c02 is not None
+    class_rows = C02_FIRB_CLASS_ROWS[regime]
+    assert _cell(c02, C02_FIRB_TOTAL_ROW) > 0.0, "no F-IRB RWEA: the residual would be vacuous"
 
     # Act
-    residual = _cell(c02, C02_FIRB_TOTAL_ROW) - sum(_cell(c02, ref) for ref in C02_FIRB_CLASS_ROWS)
+    residual = _cell(c02, C02_FIRB_TOTAL_ROW) - sum(_cell(c02, ref) for ref in class_rows)
 
     # Assert
     assert abs(residual) <= MONEY_TOLERANCE, (
-        f"{residual:,.2f} of F-IRB RWEA stranded outside rows {C02_FIRB_CLASS_ROWS} under {regime}"
+        f"{residual:,.2f} of F-IRB RWEA stranded outside rows {class_rows} under {regime}"
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: an F-IRB obligor sealed as exposure class 'corporate_sme' reaches no C 02.00 "
-        "class row. reporting/corep/c02.py::_firb_rows looks up ('foundation_irb', 'corporate') "
-        "and ('foundation_irb', 'specialised_lending') only, so row 0260 omits every SME "
-        "corporate while row 0240 counts it. Same shape on the A-IRB side (row 0340). The "
-        "module docstring records the 2026-08-01 fix that re-keyed the SA map onto real "
-        "ExposureClass values and says it was 'identical for IRB rows' — it was not; the IRB "
-        "half is still keyed on a hand-written tuple list. LESSONS.md B6 / B2."
-    ),
-)
 @pytest.mark.parametrize("regime", REGIME_NAMES)
 def test_c02_firb_sme_corporate_reaches_a_class_row(regime: str):
-    """An F-IRB SME corporate's RWEA appears in the F-IRB class breakdown."""
+    """An F-IRB SME corporate's RWEA is in the row named for it.
+
+    FIXED 2026-11-13 (was a strict xfail). The finding: an F-IRB obligor sealed as
+    exposure class ``corporate_sme`` reached no C 02.00 class row, because the
+    generator looked up ``('foundation_irb', 'corporate')`` only. It now reports
+    at "Corporates - SME" (C 02.00 row 0280, v4247_i) / "Other general corporates
+    SME" (OF 02.00 row 0296).
+    """
     # Arrange
     c02 = corep_bundle(FIRB_SME_CORPORATE, regime).c_02_00
     assert c02 is not None
+    class_rows = C02_FIRB_CLASS_ROWS[regime]
+    firb = _cell(c02, C02_FIRB_TOTAL_ROW)
+    assert firb > 0.0, "no F-IRB RWEA: the residual would be vacuous"
 
     # Act
-    residual = _cell(c02, C02_FIRB_TOTAL_ROW) - sum(_cell(c02, ref) for ref in C02_FIRB_CLASS_ROWS)
+    residual = firb - sum(_cell(c02, ref) for ref in class_rows)
 
     # Assert
     assert abs(residual) <= MONEY_TOLERANCE, (
-        f"{residual:,.2f} of F-IRB SME RWEA stranded outside rows {C02_FIRB_CLASS_ROWS} "
-        f"under {regime}"
+        f"{residual:,.2f} of F-IRB SME RWEA stranded outside rows {class_rows} under {regime}"
     )
+    assert _cell(c02, C02_FIRB_SME_ROW[regime]) == pytest.approx(firb, abs=MONEY_TOLERANCE)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: reporting/corep/c02.py:822 reads ('advanced_irb', 'central_government') from "
-        "the sealed class map, but no ExposureClass member has the value 'central_government' — "
-        "the sovereign class is 'central_govt_central_bank'. Row 0310 'A-IRB - Central "
-        "governments and central banks' is therefore ALWAYS zero, and the RWEA strands out of "
-        "the A-IRB breakdown while row 0300 counts it. A phantom map key that zero-fills, "
-        "exactly LESSONS.md B2. CRR only: PS1/26 removes IRB for sovereigns."
-    ),
-)
 def test_c02_airb_sovereign_reaches_its_class_row():
-    """An A-IRB sovereign's RWEA appears in row 0310, the row named for it."""
+    """An A-IRB sovereign's RWEA appears in row 0320, the row named for it.
+
+    FIXED 2026-11-13 (was a strict xfail). The finding: the generator read
+    ``('advanced_irb', 'central_government')``, a class value no ``ExposureClass``
+    member has, so the row was always zero — and the row it wrote, 0310, is the
+    A-IRB TOTAL. The published row is 0320 (v4250_i). CRR only: PS1/26 removes
+    IRB for sovereigns.
+    """
     # Arrange
     c02 = corep_bundle(AIRB_SOVEREIGN, "CRR").c_02_00
     assert c02 is not None
+    class_rows = C02_AIRB_CLASS_ROWS["CRR"]
+    airb = _cell(c02, C02_AIRB_TOTAL_ROW)
+    assert airb > 0.0, "no A-IRB RWEA: the residual would be vacuous"
 
     # Act
-    residual = _cell(c02, C02_AIRB_TOTAL_ROW) - sum(_cell(c02, ref) for ref in C02_AIRB_CLASS_ROWS)
+    residual = airb - sum(_cell(c02, ref) for ref in class_rows)
 
     # Assert
     assert abs(residual) <= MONEY_TOLERANCE, (
-        f"{residual:,.2f} of A-IRB sovereign RWEA stranded outside rows {C02_AIRB_CLASS_ROWS}; "
-        f"row 0310 carries {_cell(c02, '0310'):,.2f}"
+        f"{residual:,.2f} of A-IRB sovereign RWEA stranded outside rows {class_rows}; "
+        f"row {C02_AIRB_SOVEREIGN_ROW} carries {_cell(c02, C02_AIRB_SOVEREIGN_ROW):,.2f}"
     )
+    assert _cell(c02, C02_AIRB_SOVEREIGN_ROW) == pytest.approx(airb, abs=MONEY_TOLERANCE)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: this repository's C 02.00 F-IRB row list has NO central-government row in "
-        "either regime (CRR_C02_00_ROW_SECTIONS / B31_C02_00_ROW_SECTIONS give 0250 institutions "
-        "and 0260 corporates only), so an F-IRB sovereign's RWEA is counted in row 0240 and "
-        "appears in no breakdown row. The pair is legitimate under CRR Art. 147 — a firm may hold "
-        "IRB permission for sovereign exposures — so this is a MISSING ROW rather than the "
-        "mis-keying the sibling findings describe. "
-        "CAVEAT RESOLVED 2026-08-15 (P1.327), AGAINST US: the published layout DOES have the "
-        "row. Extracted with pymupdf from docs/assets/crr-annex-ii-reporting-instructins.pdf "
-        "PAGE_INDEX 29-30 — F-IRB row 0260 is '1.1.2.1.01 Central governments and central "
-        "banks' and A-IRB row 0320 is its own-estimates twin. So this IS our defect and the "
-        "fix is additive, owned by P1.318. The earlier 'nobody here can read docs/assets/*.pdf' "
-        "reasoning was itself the misreading LESSONS.md A2 was amended to kill: pymupdf works, "
-        "and reconstructing an article from memory is what A2 actually bans."
-    ),
-)
 def test_c02_firb_sovereign_reaches_a_class_row():
-    """An F-IRB sovereign's RWEA appears in the F-IRB class breakdown."""
+    """An F-IRB sovereign's RWEA appears in row 0260, the row named for it.
+
+    FIXED 2026-11-13 (was a strict xfail, owned by P1.318). The finding: the
+    C 02.00 F-IRB row list had NO central-government row, so an F-IRB sovereign's
+    RWEA was counted in the F-IRB total and appeared in no breakdown row. The
+    published layout has it — F-IRB row 0260 "Central governments and central
+    banks" (COREP Annex II; EBA v0210_m / v4245_i), with A-IRB row 0320 its
+    own-estimates twin.
+    """
     # Arrange
     c02 = corep_bundle(FIRB_SOVEREIGN, "CRR").c_02_00
     assert c02 is not None
+    class_rows = C02_FIRB_CLASS_ROWS["CRR"]
+    firb = _cell(c02, C02_FIRB_TOTAL_ROW)
+    assert firb > 0.0, "no F-IRB RWEA: the residual would be vacuous"
 
     # Act
-    residual = _cell(c02, C02_FIRB_TOTAL_ROW) - sum(_cell(c02, ref) for ref in C02_FIRB_CLASS_ROWS)
+    residual = firb - sum(_cell(c02, ref) for ref in class_rows)
 
     # Assert
     assert abs(residual) <= MONEY_TOLERANCE, (
-        f"{residual:,.2f} of F-IRB sovereign RWEA stranded outside rows {C02_FIRB_CLASS_ROWS}"
+        f"{residual:,.2f} of F-IRB sovereign RWEA stranded outside rows {class_rows}"
     )
+    assert _cell(c02, C02_FIRB_SOVEREIGN_ROW) == pytest.approx(firb, abs=MONEY_TOLERANCE)
 
 
 # ---------------------------------------------------------------------------

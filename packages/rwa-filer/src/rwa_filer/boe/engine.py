@@ -308,7 +308,11 @@ class _Store:
         ]
         resolved = resolve_datapoints(ret, pack).with_columns(key_text().alias("_key"))
         keys = resolved.filter(pl.col(IS_KEY))
-        data = resolved.filter(~pl.col(IS_KEY) & pl.col("datapoint").is_not_null())
+        data = _shown_in_every_reported_table(
+            resolved.filter(~pl.col(IS_KEY) & pl.col("datapoint").is_not_null()),
+            pack,
+            self.reported,
+        )
 
         for row in keys.iter_rows(named=True):
             table = pack.tables[row["table"]]
@@ -367,6 +371,61 @@ class _Store:
         if open_key in axis.members:
             return open_key
         return next((m for m in axis.members if local_name(m) == open_key), open_key)
+
+
+def _shown_in_every_reported_table(
+    data: pl.DataFrame, pack: TaxonomyPack, reported: set[str]
+) -> pl.DataFrame:
+    """``data`` with each fact also in every other reported cell of its data point.
+
+    The taxonomy shows some data points in two tables — the A-IRB total is a row
+    of OF 02.00 and the total of an OF 08.01 sheet — and the fact is ONE fact
+    wherever it is shown: the gateway's formulas bind to the fact, not to a
+    cell. A return read back from its file already names every cell
+    (``xbrl.reader``); one built cell by cell may name only the cell its source
+    happened to fill, and a rule that reads the other would see nothing there.
+    (Measured 2026-11-13: ``boe_b0622`` failed 80,755.66 against a default 0 on
+    a return whose file the same engine passed.)
+
+    A cell the return names itself is left as it is — two values for one data
+    point is the structure check's finding (``STR007``), not settled here. A
+    table that is not reported gains nothing: showing a data point does not
+    file a template. Open-row tables are left out, as the structure check
+    leaves them out: their rows share a cell and are told apart by their key.
+    """
+    if data.is_empty():
+        return data
+    closed = {code: table for code, table in pack.tables.items() if not table.open_rows}
+    keyed_by_member = [code for code, table in closed.items() if table.open_axis is not None]
+    targets = pack.cells.filter(
+        pl.col("table").is_in(
+            [code for code, table in closed.items() if table.filing_indicator in reported]
+        )
+    ).select(
+        pl.col("table").alias("_table"),
+        pl.col("sheet").alias("_sheet"),
+        pl.col("row").alias("_row"),
+        pl.col("column").alias("_column"),
+        "datapoint",
+    )
+    address = ["table", "sheet", "open_key", "row", "column"]
+    twins = (
+        data.filter(pl.col("table").is_in(list(closed)))
+        .sort(address, nulls_last=False)
+        .unique(subset=["datapoint", "open_key"], keep="first", maintain_order=True)
+        .join(targets, on="datapoint", how="inner")
+        # An open-axis member places a fact only in a table that has the axis.
+        .filter(pl.col("open_key").is_not_null() == pl.col("_table").is_in(keyed_by_member))
+        .with_columns(
+            pl.col("_table").alias("table"),
+            pl.col("_sheet").alias("sheet"),
+            pl.col("_row").alias("row"),
+            pl.col("_column").alias("column"),
+        )
+        .select(data.columns)
+        .join(data.select(address), on=address, how="anti", nulls_equal=True)
+    )
+    return pl.concat([data, twins], how="vertical") if twins.height else data
 
 
 def _typed(

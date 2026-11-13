@@ -18,6 +18,13 @@ Key responsibilities:
 - Account for EVERY cell that has no place. Nothing is dropped silently: each
   unplaced cell is returned with the reason, so a figure we compute and the
   regulator has no cell for is a visible finding, not a quiet omission.
+- File ONE value for a data point that several of our cells show. The taxonomy
+  makes some cells of different templates one data point (the SA total is
+  OF 02.00 rows 0050 and 0060 and the OF 07.00 Total sheet); each template adds
+  the same exposures up in its own order, and two orders of addition are not
+  reliably the same float. Where the cells agree to rounding the return carries
+  one value; where they do not, both are kept and the structure check refuses
+  the return (``STR007``) — a real disagreement is never smoothed over.
 
 Why a cell can have no place
 - ``sheet_coarser_than_published_axis``: several published sheet codes map onto
@@ -95,6 +102,15 @@ _GEOGRAPHY_TOTAL_MEMBER: Final = "x1"
 
 #: The DPM data type of a yes/no metric.
 _TYPE_BOOLEAN: Final = "boolean"
+
+#: Two cells of one data point are the SAME figure when they agree to eleven
+#: significant figures — summation-order rounding is of the order of 1e-13 of a
+#: total even over a million exposures, and a penny on a 50m figure is 2e-10,
+#: so a penny is a disagreement and rounding is not — or when they differ by a
+#: millionth of a unit, for a sum that cancels to zero in one order and leaves
+#: a residue in another. Anything larger is the two templates disagreeing.
+_SAME_FIGURE_RELATIVE: Final = 1e-11
+_SAME_FIGURE_ABSOLUTE: Final = 1e-6
 
 #: Frame columns that are labels, not reportable cells.
 _LABEL_COLUMNS: Final[frozenset[str]] = frozenset({"row_ref", "row_name", "row_label", "label"})
@@ -222,6 +238,7 @@ def build_canonical_return(
             unplaced.append(leftover)
 
     facts = pl.concat(placed, how="vertical") if placed else _empty_facts()
+    facts = _one_value_per_data_point(facts, pack)
     leftover = (
         pl.concat(unplaced, how="vertical") if unplaced else pl.DataFrame(schema=UNPLACED_SCHEMA)
     )
@@ -344,6 +361,77 @@ def _place_sheet(
     )
     leftover = _unplaced(joined.filter(pl.col("table").is_null()), template, sheet_key, reason)
     return facts, leftover
+
+
+def _one_value_per_data_point(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
+    """Give the cells of one data point one value, where they agree to rounding.
+
+    One data point shown in several cells is one fact in the submission. Each
+    cell is its own template's sum, so the values can differ in the last binary
+    place; the fact takes the value of the first cell in table, sheet, row,
+    column order, and every cell of the data point then carries it.
+
+    ONLY rounding is reconciled (``_SAME_FIGURE_RELATIVE`` /
+    ``_SAME_FIGURE_ABSOLUTE``). Cells further apart than that are left exactly
+    as generated, so ``rwa_filer``'s structure check still sees two values and
+    refuses the return.
+
+    Open-row tables are left alone, as the structure check leaves them: their
+    rows share a template cell and are told apart by their key.
+    """
+    open_tables = [code for code, table in pack.tables.items() if table.open_rows]
+    keyed = facts.join(
+        pack.cells.select("table", "sheet", "row", "column", "datapoint"),
+        on=["table", "sheet", "row", "column"],
+        how="left",
+        nulls_equal=True,
+        maintain_order="left",
+    )
+    shown_twice = (
+        pl.col("datapoint").is_not_null()
+        & pl.col("value").is_not_null()
+        & ~pl.col("table").is_in(open_tables)
+    )
+    spread = pl.col("_high") - pl.col("_low")
+    allowed = pl.max_horizontal(
+        pl.lit(_SAME_FIGURE_ABSOLUTE),
+        _SAME_FIGURE_RELATIVE * pl.max_horizontal(pl.col("_low").abs(), pl.col("_high").abs()),
+    )
+    agreeing = (
+        keyed.filter(shown_twice)
+        .sort("table", "sheet", "row", "column", nulls_last=False)
+        .group_by("datapoint", "open_key", maintain_order=True)
+        .agg(
+            pl.col("value").first().alias("_filed"),
+            pl.col("value").min().alias("_low"),
+            pl.col("value").max().alias("_high"),
+        )
+        .filter((spread > 0) & (spread <= allowed))
+        .select("datapoint", "open_key", "_filed")
+    )
+    if agreeing.is_empty():
+        return facts
+    logger.info(
+        "canonical return: %d data point(s) shown in more than one cell agreed to rounding "
+        "and are filed with one value",
+        agreeing.height,
+    )
+    return (
+        keyed.join(
+            agreeing,
+            on=["datapoint", "open_key"],
+            how="left",
+            nulls_equal=True,
+            maintain_order="left",
+        )
+        .with_columns(
+            pl.when(shown_twice & pl.col("_filed").is_not_null())
+            .then(pl.col("_filed"))
+            .otherwise(pl.col("value"))
+            .alias("value")
+        )
+        .select(facts.columns)
+    )
 
 
 def _accepts(table: Table, open_key: str) -> bool:

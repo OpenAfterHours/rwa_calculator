@@ -195,7 +195,14 @@ def measure() -> dict[str, Any]:
     for index, run in enumerate(runs, start=1):
         print(f"  [{index}/{len(runs)}] {run.regime}/{run.portfolio} ...", flush=True)
         result = PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_config())
-        corep = COREPGenerator().generate_from_lazyframe(result.results, framework=run.framework)
+        # With the run's own floor summary, as ``export_filing_package`` files it:
+        # without one OF 02.00 cannot state the output floor (OF-ADJ is not on the
+        # ledger), and the measured return would not be the filed one.
+        corep = COREPGenerator().generate_from_lazyframe(
+            result.results,
+            framework=run.framework,
+            output_floor_summary=result.output_floor_summary,
+        )
         mapping = build_canonical_return(corep, header, pack=pack)
 
         placed.update(

@@ -923,8 +923,9 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
     usable as *run_id*'s comparative prior period — see ``_require_prior_run``
     for the exact 404/422 contract (never a silent guess). Its results
     populate the Pillar 3 CR8 / COREP C 08.04 RWEA flow rows; the run's own
-    ``output_floor_summary`` is always threaded through to Pillar 3 (it is the
-    run's own data, not a caller input).
+    ``output_floor_summary`` is always threaded through to both generators (it
+    is the run's own data, not a caller input) — Pillar 3 OV1 and COREP
+    OF 02.00 both take OF-ADJ from it.
     """
     response = _RUNS.get(run_id)
     if response is None:
@@ -966,6 +967,7 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
         corep=COREPGenerator().generate_from_lazyframe(
             results,
             framework=response.framework,
+            output_floor_summary=response.output_floor_summary,
             previous_period_results=previous_period_results,
         ),
         pillar3=Pillar3Generator().generate_from_lazyframe(

@@ -37,6 +37,8 @@ from rwa_filer.boe.engine import (
 )
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
 from rwa_filer.taxonomy.pack import TaxonomyPack
+from rwa_filer.xbrl.reader import read_instance
+from rwa_filer.xbrl.writer import write_instance
 
 COLUMNS = ["table", "sheet", "open_key", "row", "column", "value", "text_value", "decimals"]
 
@@ -77,6 +79,86 @@ TOTAL = f"{ref(T01, '0010', '0010')} i= {ref(T01, '0020', '0010')} i+ {ref(T01, 
 FOOTING = rule("footing", TOTAL, tables=(T01,))
 #: RWEA (row 0020) may not exceed exposure (row 0010) — on every sheet of T02.
 CAP = rule("cap", f"{ref(T02, '0020', '0010')} i<= {ref(T02, '0010', '0010')}", tables=(T02,))
+
+
+# ---------------------------------------------------------------------------
+# One fact shown in two tables
+# ---------------------------------------------------------------------------
+
+#: The second table that shows T05's one data point.
+T05B = "T05.00.01.02"
+#: "The figure is the same in both tables" — the shape of the Bank's own
+#: cross-template rules (``boe_b0622``: OF 02.00 r0310 = OF 08.01 r0010 z0001).
+SAME_IN_BOTH = rule(
+    "same-in-both",
+    f"{ref(T05A, '0010', '0010')} i= {ref(T05B, '0010', '0010')}",
+    tables=(T05A, T05B),
+)
+
+
+def test_a_fact_is_read_in_every_reported_table_that_shows_its_data_point(
+    pack: TaxonomyPack,
+) -> None:
+    """A data point is ONE fact wherever the taxonomy shows it. A return built
+    cell by cell may name only one of the cells; the gateway — and this engine
+    on the same return read back from its file — reads the fact in both.
+    (It used to read the unnamed cell as unreported: 750 against a default 0.)"""
+    # Act — the figure is given through the first table only.
+    result = run(pack, SAME_IN_BOTH, (T05A, None, None, "0010", "0010", 750.0))
+
+    # Assert
+    assert (result.status, counts(result)) == (STATUS_PASS, (1, 0))
+
+
+def test_the_verdict_is_the_same_before_and_after_the_return_is_filed(
+    pack: TaxonomyPack,
+) -> None:
+    """The invariant the defect broke: a return and the same return read back
+    from its own file are one return, and a rule cannot hold on one and break on
+    the other."""
+    # Arrange
+    built = ret((T05A, None, None, "0010", "0010", 750.0))
+    filed = read_instance(write_instance(built, pack).content, pack=pack).ret
+
+    # Act
+    (before,) = evaluate_rules(built, pack, [SAME_IN_BOTH], accuracy=EXACT)
+    (after,) = evaluate_rules(filed, pack, [SAME_IN_BOTH], accuracy=EXACT)
+
+    # Assert
+    assert (before.status, counts(before)) == (after.status, counts(after))
+    assert after.status == STATUS_PASS
+
+
+def test_a_cell_the_return_names_itself_is_not_overwritten_by_its_twin(
+    pack: TaxonomyPack,
+) -> None:
+    """Two cells of one data point with different values is a structure finding
+    (``STR007``), not something the engine settles by picking one."""
+    # Act
+    result = run(
+        pack,
+        SAME_IN_BOTH,
+        (T05A, None, None, "0010", "0010", 750.0),
+        (T05B, None, None, "0010", "0010", 700.0),
+    )
+
+    # Assert
+    assert (result.status, counts(result)) == (STATUS_FAIL, (0, 1))
+
+
+def test_a_fact_is_not_read_in_a_table_the_return_does_not_report(pack: TaxonomyPack) -> None:
+    """Showing a data point does not make a template reported: its filing
+    indicator does, and the gateway blocks a rule over an unreported one."""
+    # Arrange — both T05 tables share one filing indicator; declare it negative
+    # and report the figure nowhere the return declares.
+    base = ret(t01("0010", "0010", 100))
+    declared = CanonicalReturn(base.header, base.facts, {"T01.00.01": True, "T05.00.01": False})
+
+    # Act
+    (result,) = evaluate_rules(declared, pack, [SAME_IN_BOTH], accuracy=EXACT)
+
+    # Assert
+    assert (result.status, result.reason) == (STATUS_NOT_EVALUATED, REASON_NOT_REPORTED)
 
 
 # ---------------------------------------------------------------------------

@@ -2869,3 +2869,163 @@ gate that shipped.
   unexamined" has examined it and then filed it. A tripwire for a known defect
   needs an owner — a plan item or a ratcheted count — or it is a passing test
   for the defect.
+
+## 2026-11-13 — C 02.00 / OF 02.00 addressed its rows by codes that were not the published ones, and 87 tests read the rows by the same codes
+
+- **Defect**: the own-funds-requirements template was laid out from row
+  headings, and its row **codes** were not the publishers' in either regime.
+  The credit-risk RWEA was reported at row 0050 where both templates have it at
+  0040; the approach totals at 0220 / 0240 / 0300 against the published 0240 /
+  0250 / 0310; the other risk types at other codes again (settlement at 0430
+  against 0490, operational risk at 0640 against 0590, CVA at 0590 against
+  0640). Three figures were in **another figure's cell**, which is worse than
+  having no cell: an "own funds requirement (8%)" in row 0040, which both
+  templates define as the credit-risk RWEA; CRR supervisory slotting in row
+  0410, "Retail - Other non-SME"; and, under Basel 3.1, the Art. 123B
+  currency-mismatch memorandum figure in row 0500, "Settlement/delivery risk in
+  the non-Trading book". Under Basel 3.1 columns 0020 and 0030 were filled on
+  every row, where the template has column 0030 on four rows and column 0020 on
+  the modelled rows only; row 0010 column 0030 repeated the total instead of
+  stating the floor; and the multiplier was reported in column 0010 as a
+  percentage (60.0) — or as 0.0 when no floor summary was passed, which no
+  production path did — never as the rate 0.6 in column 0030.
+- **Rules**: four ERROR rules of the Bank's v4.1.1 rule book broke on **13 of
+  13** registered Basel 3.1 portfolios — `boe_b0359` (the multiplier is one of
+  0.55 … 0.725), `boe_b0716` (row 0040 column 0020 = SA + the modelled book on
+  SA), `boe_b0793` (the floor) and `boe_b1093` (row 0040 = rows 0050 + 0240 +
+  0460 + 0470). The structure check refused the return on eight of them
+  (`STR007`), and 53 distinct C 02.00 addresses carried a figure the taxonomy
+  has no cell for. On the EBA side `v0204_m`, `v0205_m`, `v0210_m` and
+  `v0211_m` — the footing rules of C 02.00 — had never been evaluated: they
+  could resolve no row.
+- **Origin**: there was no template to compare with when the layout was
+  written, and it was never compared afterwards. PS1/26 Annex I's OF 02.00
+  workbook was listed in `IMPLEMENTATION_PLAN.md` (P1.349) as an artefact still
+  to acquire; the Bank's taxonomy, which states every row, label and cell, was
+  packaged only when `rwa-filer` was built.
+- **Escape class**: `test-shared-the-assumption`.
+  `tests/unit/reporting/corep/test_c02_00.py` held 87 tests, every one reading
+  a row by the code the generator wrote it to. They pinned the arithmetic of
+  each figure exactly and could say nothing about where the figure was. The
+  filing-mapping ratchet then recorded the consequences — four rules at 13
+  portfolios each, the `STR007`, the unplaced cells — as the measured state.
+- **Gate change**: `tests/contracts/test_of02_published_cells.py` holds the
+  Basel 3.1 layout to the taxonomy — every row and column is a published one,
+  every row carries the published **label** (a code can be right and its
+  meaning wrong), the cells each row reports are exactly the cells the template
+  has, in both directions, and the generated template files with nothing left
+  over. `tests/unit/reporting/corep/test_c02_00_published_rows.py` states the
+  EBA footing rules as assertions for CRR, with a guard that each is not
+  vacuous on its frame. Where a figure is reported is now one table
+  (`reporting/corep/c02_rows.py`: a figure, its CRR row, its Basel 3.1 row, or
+  the statement that the template has no such row), and the generator addresses
+  no row by code.
+- **Verified red**: the two new files against the unchanged generator:
+  `117 failed, 13 passed in 5.45s` — among them `OF 02.00 has no row ['0190',
+  '0220', '0260', '0300', '0330', '0340', '0370', '0380', '0420', '0430',
+  '0440']`, `figures reported where OF 02.00 has no cell: [('0010', '0020'),
+  ('0034', '0010'), …]` (97 cells) and `assert 'Supervisory slotting' ==
+  'Retail - Other non-SME'`. The declaration was written before its own tests,
+  so it was mutated instead — an extra column on row 0050 and F-IRB
+  institutions moved to row 0270: `5 failed, 5 passed`.
+- **What the fix moved**: no RWA, EAD or risk weight. The twelve C 02.00
+  reference outputs, and nothing else among the goldens. On the filing ratchet:
+  unplaced figures 954 → 901, structure findings 9 → 1, Error-rule breaks
+  107 → 52. `boe_b0359`, `boe_b0716` and `boe_b1093` hold on 13 of 13;
+  `boe_b0793` on 8. The supervisory register loses two known breaks
+  (`boe_b0638`, `boe_b0652`) and gains none. Two false cross-template findings
+  on the CRR reporting portfolio are gone — the equity term sat on the wrong
+  tie, so each was off by exactly the IRB equity, 25,100,000. Seven recorded
+  "RWEA with no detail row" caveats are gone, the largest 16,063,845.09 of
+  A-IRB RWEA whose class the corporate split did not recognise.
+- **What it exposed, and is left open with an owner**:
+  - **Column 0010 is un-floored, and OF 08.01 is not.** The taxonomy makes
+    OF 02.00 row 0010 column 0010 one data point with OF 02.01's U-TREA, and
+    each IRB class row one data point with an OF 08.01 sheet total. So the
+    floor's add-on belongs in neither — but OF 08.01 still sums `rwa_final`,
+    which carries the engine's pro-rata add-on. On the one registered portfolio
+    whose floor binds, the tie-out `irb_rwea_c08_01_vs_c02` now reports
+    1,559,200.00 against 1,105,491.29: the 453,708.71 is the add-on. This is
+    **P1.369**, and the data-point identity is new evidence for its option (a).
+  - **The engine's floor is not the template's.** On the same portfolio
+    `total_rwea_c02_vs_ov1` reports 1,643,200 against 1,699,200: the engine
+    floors the modelled subset only (**P1.367**). The template reports
+    `x · S-TREA + OF-ADJ` and logs the difference; the log line is banked as a
+    recorded caveat in `scripts/template_cell_coverage_baseline.json`.
+  - **`boe_b0793` computes `x · (S-TREA + OF-ADJ)`.** Art. 92(2A) and Annex II
+    §1.3.1 both give `x · S-TREA + OF-ADJ`, which is what is reported, so the
+    rule breaks on the five portfolios whose OF-ADJ is not zero (on the main
+    reporting portfolio by 2,580,750 = (1 − x) · |OF-ADJ|). A reading for the
+    firm to take to the Bank; not changed to suit the rule.
+- **Lesson**: a test that reads a cell by the address the generator wrote it to
+  tests the arithmetic and assumes the address. The address needs its own
+  source: here the taxonomy, compared row by row, label by label, cell by cell.
+
+## 2026-11-13 — The rule engine read a figure only in the cell that named it, and failed rules the gateway passes
+
+- **Defect**: the taxonomy shows some data points in two tables. The A-IRB total
+  is OF 02.00 row 0310 and the total of OF 08.01's sheet 0001; each IRB class
+  row of OF 02.00 is the total of an OF 08.01 sheet; the SA total is OF 02.00
+  rows 0050 and 0060 and the OF 07.00 Total sheet. Such a figure is **one fact**
+  in a submission, wherever it is shown. `rwa_filer.boe` indexed a return by the
+  cells its facts named, so a figure given through one table was "not reported"
+  in the other, and a rule comparing the two read it against the reference's
+  default of zero. The same engine on the same return **read back from its own
+  file** passed the rule, because the reader places a fact in every reported
+  table that shows it.
+- **Rules**: the cross-template family "the figure is the same in both
+  templates" — `boe_b0621`, `boe_b0622`, `boe_b0625`, `boe_b0643`, `boe_b0644`,
+  `boe_b0649`, `boe_b1060` among them, all ERROR. Measured on the IRB-classes
+  portfolio once OF 02.00 row 0310 held the A-IRB total: `boe_b0622` failed
+  80,755.66 against 0.
+- **Origin**: two paths into the engine, with different closure. A return read
+  from a file is placed by `xbrl/reader.py::_place` — "a fact is placed in every
+  reported template that shows its data point". A return built cell by cell by
+  the reporting adapter names only the cells our generators fill.
+- **Escape class**: `no-gate-exists`. The engine's verdicts are pinned to
+  Arelle's on returns read from files, and the referee differential compares
+  the two engines on returns where our generators happened to fill both cells.
+  Nothing evaluated a return that named one cell of a shared data point; and
+  until OF 02.00's rows held the right figures, the two sides of these rules
+  were a mis-keyed zero and a default zero, which agree.
+- **Gate change**: `packages/rwa-filer/tests/boe/test_engine.py` —
+  `test_a_fact_is_read_in_every_reported_table_that_shows_its_data_point`,
+  and the invariant the defect broke,
+  `test_the_verdict_is_the_same_before_and_after_the_return_is_filed`: a return
+  and the same return read back from its file get the same verdict. Two guards
+  hold the edges: a cell the return names itself is not overwritten by its twin
+  (two values for one data point is `STR007`, the structure check's finding),
+  and a table that is not reported gains nothing.
+- **Verified red**: with the engine step disabled, `2 failed, 54 passed` —
+  `assert ('FAIL', (0, 1)) == ('PASS', (1, 0))`. Which of the two verdicts is
+  the gateway's was settled with Arelle, not by argument: a synthetic instance
+  carrying the A-IRB total through OF 02.00 alone was loaded by Arelle 2.47.5
+  with the Bank's v4.1.1 package — 135 rules evaluated — and Arelle agrees with
+  the engine's read-back path on 1,441 of 1,441. So PASS is the gateway's
+  verdict, and the cell-by-cell path now gives it too.
+- **The fix**: `rwa_filer/boe/engine.py::_shown_in_every_reported_table` gives
+  the engine's store each fact in every other reported cell of its data point,
+  before any rule is evaluated. Open-row tables are left out, as the structure
+  check leaves them out.
+- **What the fix moved**: on the filing ratchet, seven rules that were failing
+  for this reason alone now pass. Two that could not be evaluated now are, and
+  break: `boe_b0738` and `boe_b0751` on the two IRB portfolios, on OF 08.01's
+  Total A-IRB sheet — the gateway sees the one cell of that sheet OF 02.00
+  shares, and nothing else of a sheet we do not produce. That is the true state,
+  and its owner is the OF 08 sheet split. `boe_b0284` and `boe_b0293` now pass
+  on one portfolio and fail on the other **with real figures on both sides**
+  (37,918,294.87 of corporate RWEA on OF 09.02 against 22,989,230.53 across the
+  OF 08.01 corporate sheet totals, known through OF 02.00's rows), where before
+  they compared a figure with nothing.
+- **A second, smaller thing in the same place**: two templates add the same
+  exposures up in different orders, and the sums differ in the last binary
+  digit (51,355,833.33333333 against …336 for the SA total). The structure
+  check compares the cells of a data point exactly, rightly, so the return was
+  refused over rounding. `reporting/filing/canonical.py` now files one value
+  where the cells agree to eleven significant figures and leaves them as
+  generated where they do not — a penny on a 50m figure is still refused
+  (`tests/unit/reporting/filing/test_canonical.py`, observed red: `2 failed`
+  before, and `3 failed` with the step disabled).
+- **Lesson**: an engine with two ways in has two definitions of its input
+  unless something states that they are one. "The same return, before and after
+  it is filed" is that statement, and it is cheap to assert.

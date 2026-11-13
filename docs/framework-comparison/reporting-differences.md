@@ -362,12 +362,13 @@ actually applied at the total capital level.
 
 | Change | Ref(s) | Description |
 |--------|--------|-------------|
-| **Unchanged** | 0010 | All approaches — RWEA using actual modelled/SA mix |
-| **Added** | 0020 | Standardised approaches only — SA-equivalent RWEA per row (for floor comparison) |
-| **Added** | 0030 | Output floor — RWEA after applying floor multiplier and OF-ADJ per Art. 92 |
+| **Unchanged** | 0010 | All approaches — the **un-floored** RWEA using the actual modelled/SA mix; row 0010 is U-TREA |
+| **Added** | 0020 | Standardised approaches only — the standardised-approach RWEA of the same exposures, on row 0040 (S-TREA) and the modelled rows only. A standardised row has no such cell: its column 0010 already is that figure |
+| **Added** | 0030 | Output floor — `x × S-TREA + OF-ADJ` per Art. 92(2A), on row 0010 only, with the indicator rows 0034 (activated), 0035 (the rate `x`) and 0036 (OF-ADJ) |
 
 Under CRR, C 02.00 had only column 0010. The two new columns enable the supervisory
-comparison between modelled and standardised RWEA at each row level.
+comparison between modelled and standardised RWEA for each modelled exposure class, and
+state the floor beside the un-floored total rather than in place of it.
 
 ### Row Changes — Credit Risk
 
@@ -390,13 +391,13 @@ comparison between modelled and standardised RWEA at each row level.
 ### How the Output Floor Flows Through
 
 ```
-OF 08.01 / 08.02 cols 0275–0276     →  SA-equivalent RWEA per IRB exposure class
-  ↓ aggregated into
-OF 02.00 col 0020 (SA-only RWEA)    →  S-TREA components by risk type
+OF 08.01 col 0276                    →  SA-equivalent RWEA per IRB exposure class
+  ↓ the same data points as
+OF 02.00 col 0020, modelled rows     →  row 0040 col 0020 = S-TREA (SA row 0050 + IRB row 0240 on SA)
+  ↓ multiplied and adjusted
+OF 02.00 row 0010 col 0030 (floor)   →  x × S-TREA + OF-ADJ
   ↓ compared against
-OF 02.00 col 0010 (all approaches)  →  U-TREA components by risk type
-  ↓ floor applied
-OF 02.00 col 0030 (output floor)    →  TREA = max(U-TREA, x × S-TREA + OF-ADJ)
+OF 02.00 row 0010 col 0010 (U-TREA)  →  TREA = max(U-TREA, x × S-TREA + OF-ADJ)
 ```
 
 ---
@@ -405,8 +406,8 @@ OF 02.00 col 0030 (output floor)    →  TREA = max(U-TREA, x × S-TREA + OF-ADJ
 
 A **new** template with no CRR equivalent. Provides the output floor comparison at the
 total risk type level for firms using internal models. This template does NOT apply the
-floor multiplier — it provides the raw comparison data. The actual floor application
-happens in OF 02.00 column 0030.
+floor multiplier — it provides the raw comparison data. The floor itself is stated in
+OF 02.00 row 0010 column 0030.
 
 **Scope:** OF 02.01 is required for IM firms in scope of the output floor, applied on:
 
@@ -444,7 +445,7 @@ transitional floor percentage (60% in 2027 → 72.5% in 2030+).
 
 | COREP (Supervisory) | Pillar III (Public) | Relationship |
 |---------------------|---------------------|-------------|
-| OF 02.00 col 0030 (output floor RWEA) | UKB OV1 row 29 (total RWEA) | Final floored RWEA |
+| OF 02.00 row 0010: max(col 0010, col 0030) | UKB OV1 row 29 (total RWEA) | Final floored RWEA |
 | OF 02.01 row 0080 col 0030 (U-TREA) | UKB KM1 row 4a (pre-floor RWEA) | Un-floored total |
 | Floor multiplier (Art. 92(5)) | UKB OV1 row 26 | Output floor % |
 | Floor adjustment (OF-ADJ) | UKB OV1 row 27 | Provision reconciliation |

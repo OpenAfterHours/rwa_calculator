@@ -2,34 +2,80 @@
 COREP C 02.00 / OF 02.00 — own funds requirements (the master roll-up).
 
 Pipeline position:
-    sealed aggregator-exit ledger -> typed pre-pass aggregation kernels
-    (approach / SA-class / IRB-class / SL-type / B31 sub-row group-bys)
-    -> thin row-assembly shell -> DataFrame | None
+    sealed aggregator-exit ledger -> ONE typed pre-pass aggregation
+    (approach / SA-class / IRB-class / sub-class / SL-type group-bys)
+    -> figures by ``c02_rows.Slot`` -> the published layout -> DataFrame | None
 
 This template is the recorded Kind-9 exception (plan §8.2): a portfolio-
-total cross-approach roll-up whose row values are ratios of PRE-COMPUTED
+total cross-approach roll-up whose row values are sums of PRE-COMPUTED
 aggregates with value-dependent fallbacks — it deliberately does NOT run
-through the cellspec executor. The retired instance-state dicts
-(``self._irb_class_rwa`` / ``_slotting_type_rwa`` / ``_irb_sub_rwa``)
-become pure-function returns; everything else is relocated verbatim.
+through the cellspec executor.
 
-Cell semantics (recorded decisions, this slice):
+WHERE a figure is reported is not decided here. Every figure is computed
+against a ``c02_rows.Slot`` — named for what it means — and the slot carries
+the row code each regime's published template gives it. This module addresses
+no row by code (recorded fix 2026-11-13: it used to, and its codes were not
+the published ones in either regime — see ``c02_rows``).
 
-- ``rwa_final`` is ALREADY post-floor: col 0030 (output floor) = the same
-  total — never re-floored, never plus ``floor_impact_rwa``.
-  ``rwa_pre_floor`` is read ONLY for the row-0034 activation boolean
-  (total > pre-floor + 0.01).
+Cell semantics (recorded decisions):
+
+- COLUMN 0010 IS UN-FLOORED UNDER BASEL 3.1. Every figure in it sums
+  ``rwa_pre_floor``, not ``rwa_final``. Row 0010 column 0010 is ONE data point
+  with OF 02.01's U-TREA total (taxonomy: OF02.00.01.01 r0010 c0010 ==
+  OF02.01.01.03 r0080 c0030), ``boe_b1092`` sums it from the rows beneath it,
+  and ``boe_b0383`` compares it with the floor — so a binding floor's add-on,
+  which the engine spreads over ``rwa_final``, belongs in none of those rows.
+  Under CRR there is no floor and the column sums ``rwa_final``. (Until
+  2026-11-13 the column summed ``rwa_final`` and row 0010 column 0030 repeated
+  the same total, which reported the floor as its own result.) This template
+  and OF 02.01 each add the legs up in their own order, so the two cells can
+  differ in the last binary place; the filing adapter gives a data point shown
+  in several cells one value (``filing/canonical.py``).
+- COLUMN 0020 (Basel 3.1) is the standardised-approach RWEA (``sa_rwa``) of the
+  SAME legs a modelled row counts in column 0010 — "risk exposure amounts
+  calculated under standardised approaches per exposure class" (PS1/26 Annex II
+  §1.3). The taxonomy has the cell on the modelled rows only: a standardised
+  row's column 0010 already IS that figure. Row 0040 is their S-TREA,
+  ``boe_b0716``: SA (row 0050, column 0010) + the modelled book on SA (row
+  0240, column 0020). Each class cell is one data point with OF 08.01 col 0276
+  on the class's sheet (``boe_b0638``-``boe_b0654``), which sums the same
+  carrier over the same key.
+- COLUMN 0020 IS REPORTED WHENEVER IT IS KNOWN, and it is NOT gated on the
+  output floor's entity scope. Two published facts decide that, against the
+  reading of Annex II's "Scope" paragraph as "an exempt entity leaves the
+  column empty": ``boe_b0716`` is an Error rule with no precondition, so a
+  return carrying SA RWEA in row 0050 and nothing in row 0040 column 0020 is
+  rejected (measured on an SA-only run: 0 against 1,375,000); and the class
+  cells are OF 08.01 col 0276's data points, which that template reports
+  whenever the ledger seals ``sa_rwa``. "Known" is: the ledger seals
+  ``sa_rwa``, or it holds no modelled leg whose standardised figure would be
+  needed. A modelled leg with no ``sa_rwa`` leaves the column empty and says so.
+- COLUMN 0030 (Basel 3.1) exists on four rows. Row 0010 is the floor itself,
+  "x * S-TREA + OF-ADJ" (Annex II §1.3, Art. 92(2A)); rows 0035 / 0036 are x and
+  OF-ADJ; row 0034 is "Yes" when the floor is "equal to or greater than" row
+  0010 column 0010. x is a RATE (``boe_b0359`` admits 0.55 ... 0.725), read off
+  the ``OutputFloorSummary`` or, without one, the sealed ``output_floor_pct``.
+  OF-ADJ is a portfolio figure the ledger does not carry: with no summary it is
+  unknown, and then neither it, the floor nor the indicator is reported —
+  empty, never 0.0, which ``boe_b0359`` and Art. 92 would both make a
+  misstatement. An entity outside the floor's scope
+  (``OutputFloorConfig.is_floor_applicable()``, Art. 92(2A)) has no output
+  floor and reports nothing in column 0030.
+- THE ENGINE'S FLOOR IS NOT THE TEMPLATE'S. The engine floors the modelled
+  subset in isolation (recorded defect, docs/plans/c07-ccr-derivatives.md §4
+  D6), so when its floor binds on a book that also holds SA exposures its
+  post-floor total exceeds max(row 0010 col 0010, col 0030). Nothing here
+  hides that: the difference is logged.
 - Equity RWA routes by the sealed ``equity_method`` discriminator (R6):
   IRB-method equity (Art. 155(2) simple / Art. 155(3) PD-LGD — CRR only)
-  reports at row 0420 "Equity IRB" and folds into the IRB total (row 0220);
-  SA-method equity (Art. 133 — the whole book under Basel 3.1, where
-  Art. 147A removes IRB equity) reports in the SA breakdown (row 0060 total
-  + class row 0210). No leg is booked in both an SA row and 0420, and the
-  flat TREA total counts it once regardless of routing. Equity whose method
-  the ledger did not seal is treated as SA (never disclosed as IRB equity
-  without an explicit method).
-- The SA row 0060 and the SA class rows cover ``_SA_APPROACHES`` — SA
-  *and* SA-CCR — so the template foots against rows 0010/0050, which
+  reports at ``EQUITY_IRB`` and counts in the IRB total; SA-method equity
+  (Art. 133 — the whole book under Basel 3.1, where Art. 147A removes IRB
+  equity and OF 02.00 has no such row) reports in the SA breakdown (the SA
+  total + its class row). No leg is booked in both, and the flat total counts
+  it once regardless of routing. Equity whose method the ledger did not seal
+  is treated as SA (never disclosed as IRB equity without an explicit method).
+- The SA total and the SA class rows cover ``_SA_APPROACHES`` — SA *and*
+  SA-CCR — so the template foots against the total and credit-risk rows, which
   are flat ledger sums and always carried the CCR RWEA (recorded fix
   2026-07-12; see the constant for why it is not shared).
 - THREE keys, one per tied template, and all three now POST-SUBSTITUTION
@@ -41,77 +87,84 @@ Cell semantics (recorded decisions, this slice):
   reversing it, why the IRB half followed one commit later, why Art. 92 is
   unaffected, and — recorded there rather than fixed here — the
   ``(foundation_irb, retail_other)`` pair that has no row, which is
-  downstream evidence of a missing CRR Art. 201 eligibility gate. Rows
-  0070-0211 route through the many-to-one ACCUMULATING
-  ``C02_00_SA_CLASS_MAP``. Rows 0070-0211 are "See CR SA template", so
-  the map's groupings ARE the C 07.00 sheet groupings (recorded fix
-  2026-08-01: the map had been keyed on a vocabulary ``ExposureClass``
-  never emitted, so corporate_sme / other dropped out of the roll-up and
-  retail_mortgage reported as retail (h) instead of immovable-property
-  (i) — EBA v0207_m / v3334_i / v3338_i / v4240_i / v4241_i). Identical
-  for IRB rows.
-- The ``_irb_*_split`` fallbacks are NOT filters: with no sub-row data the
-  whole total lands in one bucket (corporate -> non-SME 0297/0356; RE ->
-  residential-non-SME 0383; retail-other -> SME 0400 for CRR heritage).
-- ``exposure_subclass`` is the canonical corporate split signal
-  (financial/large -> 0295, SME -> 0296/0355, other -> 0297/0356); the
-  is_sme / FSE-flag heuristic is the fallback. A-IRB folds FSE into the
-  non-SME row 0356 while F-IRB keeps it separate in 0295 — asymmetric,
-  preserved.
-- B31 column policy: only the three approach parents (0220/0240/0300)
-  zero out cols 0020/0030; every IRB sub-row mirrors col 0010; the
-  totals take the portfolio SA-equivalent / floor values; 0040 takes
-  x0.08 of each.
-- The 0500 currency-mismatch memo is populated AFTER the B31 column pass,
-  so its 0020/0030 render null (memo-only, excluded from the TREA total).
-- Rows in ``C02_00_CREDIT_RISK_ROWS`` with no value zero-fill; the six
-  other-risk-type rows null-fill.
-- The floor indicator rows 0034/0035/0036 are gated on
-  ``OutputFloorConfig.is_floor_applicable()`` (None config => applicable)
-  and read ``OutputFloorSummary.floor_pct``/``of_adj`` (absent => 0.0,
-  not null).
+  downstream evidence of a missing CRR Art. 201 eligibility gate. The SA class
+  rows route through the many-to-one ACCUMULATING ``C02_00_SA_CLASS_MAP``; they
+  are "See CR SA template", so the map's groupings ARE the C 07.00 sheet
+  groupings (recorded fix 2026-08-01: the map had been keyed on a vocabulary
+  ``ExposureClass`` never emitted, so corporate_sme / other dropped out of the
+  roll-up and retail_mortgage reported as retail (h) instead of
+  immovable-property (i) — EBA v0207_m / v3334_i / v3338_i / v4240_i /
+  v4241_i).
+- THE IRB CLASS ROWS FOLLOW THE TIED TEMPLATE'S SHEETS. C 02.00 rows 0260-0410
+  each equal a C 08.01 sheet (EBA ``v4245_i``-``v4259_i``), and those sheets are
+  the Art. 147(2) classes, so CRR corporates split on the CLASS
+  (``corporate_sme`` -> SME, ``corporate`` -> Other; Art. 147(2)(c) has no
+  "financial and large" sub-class). OF 02.00 splits them three ways on the
+  classifier's ``exposure_subclass`` (PS1/26 Art. 147A(1)(e)/(f)):
+  financial/large -> F-IRB only, SME, other. A ``corporate_sme``-CLASS leg is
+  SME under both (it used to match neither split and fell out of the
+  breakdown: 16,063,845.09 of A-IRB RWEA on the rich Basel 3.1 portfolio).
+- A-IRB folds a financial/large corporate into "other general corporates
+  non-SME" while F-IRB reports it separately — asymmetric, preserved: Art. 147A
+  permits no A-IRB for that sub-class, so the engine should emit none.
+- An unknown SME / financial-sector / property-type flag is NOT a filter: the
+  leg reports as non-SME, non-financial, residential.
+- UNDER CRR SLOTTING IS SPECIALISED LENDING WITHOUT OWN ESTIMATES. C 02.00 has
+  no slotting row. EBA ``v10673_m`` lets the C 08.01 slotting row carry a figure
+  on the specialised-lending sheets only, ``v0338_m`` puts that row in the
+  sheet's total, and ``v4248_i`` / ``v4253_i`` tie the totals to rows 0290 /
+  0350; of those two parents, "neither own estimates of LGD nor Conversion
+  Factors" (row 0250) is what Art. 153(5) slotting is. So slotting counts in
+  ``FIRB_SPECIALISED_LENDING`` and ``FIRB``. (It was written to row 0410, which
+  is "Retail - Other non-SME".) OF 02.00 gives slotting rows of its own.
+- A figure whose slot has NO row under the regime (an A-IRB institution under
+  Basel 3.1, say) is neither dropped nor put in a neighbouring row: it stays in
+  its approach total, and ``_warn_if_a_breakdown_strands`` reports the amount.
+- Rows this calculator computes zero-fill; the rows it does not (the other risk
+  types, rows 0450 / 0460 / 0470) stay empty.
 
 References:
 - CRR Art. 92 (own funds requirements)
-- CRR Art. 155 (IRB equity — row 0420 population under CRR)
-- PRA PS1/26 Art. 92 para 2A/3A/5 (output floor); Art. 123B (currency
-  mismatch memo); Art. 147A (IRB equity removed — row 0420 empties under B31)
+- CRR Art. 155 (IRB equity — ``EQUITY_IRB`` under CRR)
+- PRA PS1/26 Art. 92 para 2A/3A/5 (output floor); Art. 147A (IRB equity,
+  IRB sovereigns and A-IRB institutions removed); Annex II §1.3
 - docs/plans/phase7-declarative-reporting.md §8.2 (Kind-9 pre-pass)
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, cast
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.reporting.corep import c02_rows as rows
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
-    C02_00_CREDIT_RISK_ROWS,
     C02_00_SA_CLASS_MAP,
     CRR_C02_00_COLUMN_REFS,
     EQUITY_IRB_METHODS,
-    get_c02_00_row_sections,
 )
-from rwa_calc.reporting.kernel import null_row, pick
+from rwa_calc.reporting.kernel import pick
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import OutputFloorConfig
-    from rwa_calc.reporting.corep.templates import COREPRow, RowSection
 
-# The finer-grained B31 sub-row aggregation key:
-# (approach, exposure_class, is_sme, is_fse, property_type).
-type _SubKey = tuple[str, str, bool | None, bool | None, str | None]
+# The sub-class aggregation key: (approach, class, is_sme, is_financial_large,
+# is_commercial_property). Every flag is a definite boolean — unknown is False.
+type _SubKey = tuple[str, str, bool, bool, bool]
 
-# The approach labels that make up C 02.00's "Of which: Standardised Approach"
-# (row 0060) and its Art. 112 class rows (0070-0211).
+# The approach labels that make up C 02.00's "Standardised approach" (rows
+# 0050 / 0060) and its Art. 112 class rows (0070-0211).
 #
-# Annex II defines row 0050 as "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT,
+# Annex II defines row 0040 as "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT,
 # COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES" (Art. 92(3)(a),(f))
 # and its SA child as the "CR SA and SEC SA templates at the level of total
 # exposures" — the SA row IS the C 07.00 total, and C 07.00 reports CCR business
@@ -127,26 +180,43 @@ type _SubKey = tuple[str, str, bool | None, bool | None, str | None]
 # which correctly scope CCR out under Basel 3.1 (it has CCR1-CCR8).
 _SA_APPROACHES: tuple[str, ...] = ("standardised", "standardised_ccr")
 
+_FIRB: str = "foundation_irb"
+_AIRB: str = "advanced_irb"
+_SLOTTING: str = "slotting"
+_EQUITY: str = "equity"
+
 # The IRB retail classes. CRR Art. 151(4) puts retail exposures under the
-# ADVANCED approach only (own LGD estimates are mandatory), which is why the
-# layout carries retail rows at 0370-0400 under A-IRB and NONE under F-IRB —
-# see ``_placeable_irb_class`` for the pair this makes impossible.
+# ADVANCED approach only (own LGD estimates are mandatory), which is why both
+# templates carry retail rows under A-IRB and NONE under F-IRB — see
+# ``_placeable_irb_class`` for the pair this makes impossible.
 _RETAIL_CLASSES: tuple[str, ...] = ("retail_mortgage", "retail_qrre", "retail_other")
 
-# The F-IRB / A-IRB detail rows each approach's "of which" breakdown must foot
-# against, for the stranding net (``_warn_if_irb_detail_strands``).
-_IRB_DETAIL_ROWS: dict[str, tuple[str, ...]] = {
-    "0240": ("0250", "0260"),
-    "0300": ("0310", "0330", "0340", "0370"),
+# The Art. 147(2)(c) general-corporate classes the sub-class split reads.
+_CORPORATE_CLASSES: tuple[str, ...] = ("corporate", "corporate_sme")
+
+# ``property_type`` values that make a retail real-estate leg COMMERCIAL; every
+# other value, and none, is residential.
+_COMMERCIAL_PROPERTY_TYPES: tuple[str, ...] = ("commercial", "cre")
+
+# OF 02.00's slotting rows by ``sl_type``.
+_SLOTTING_TYPE_SLOTS: dict[str, rows.Slot] = {
+    "project_finance": rows.SLOTTING_PROJECT_FINANCE,
+    "object_finance": rows.SLOTTING_OBJECT_FINANCE,
+    "commodities_finance": rows.SLOTTING_COMMODITIES_FINANCE,
+    "ipre": rows.SLOTTING_IPRE,
+    "hvcre": rows.SLOTTING_HVCRE,
 }
 
-# This module's handle on the shared ``equity_method`` IRB partition — row 0420
-# "Equity IRB" plus the IRB total (row 0220). A RE-EXPORT of the one definition in
+# This module's handle on the shared ``equity_method`` IRB partition —
+# ``EQUITY_IRB`` plus the IRB total. A RE-EXPORT of the one definition in
 # ``templates``, not a second copy: C 07.00 admits its Art. 112(1)(p) population on
 # the same tuple and the live EBA ERROR rule ``v4244_i`` ties row 0210 here to that
 # template's equity sheet, so the two reading different values would straddle a
 # published identity with nothing to catch it.
 _EQUITY_IRB_METHODS: tuple[str, ...] = EQUITY_IRB_METHODS
+
+# A residual below this is float dust, not a missing row.
+_TOLERANCE: float = 0.01
 
 
 @cites("PS1/26, paragraph 1.3")
@@ -162,28 +232,31 @@ def generate_c02_00(
     """Generate C 02.00 (CRR) / OF 02.00 (Basel 3.1) Own Funds Requirements.
 
     The master capital template aggregating RWEA across all risk types.
-    This calculator only populates credit risk rows (SA, F-IRB, A-IRB,
-    slotting, equity); all other risk-type rows (CCR, market, op risk)
-    are null.
+    This calculator populates the credit risk rows (SA, F-IRB, A-IRB,
+    slotting, equity); the other risk types are laid out and left empty.
     """
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
-    if ead_col is None or rwa_col is None:
+    final_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    if ead_col is None or final_col is None:
         errors.append("C 02.00 skipped: missing EAD or RWA columns in results")
         return None
 
-    is_b31 = framework == "BASEL_3_1"
+    is_b31 = framework == rows.FRAMEWORK_BASEL_3_1
     column_refs = B31_C02_00_COLUMN_REFS if is_b31 else CRR_C02_00_COLUMN_REFS
-    row_sections = get_c02_00_row_sections(framework)
+    # Column 0010's carrier: the UN-floored RWEA under Basel 3.1 (module
+    # docstring). A frame the floor never ran on seals no ``rwa_pre_floor``, and
+    # there ``rwa_final`` IS the un-floored figure.
+    own_col = "rwa_pre_floor" if is_b31 and "rwa_pre_floor" in cols else final_col
 
     # THREE keys, because C 02.00's breakdowns tie to THREE different templates
     # and each must key the basis of the one it ties to (the two-basis discipline
     # C 07.00 established in f94be554, applied within one template):
     #
-    #   approach_col   POST  (``reporting_approach``)      rows 0060 / 0220 / 0240 …
-    #   sa_ec_col      POST  (``reporting_class``)         rows 0070-0211, "See CR SA
-    #                                                      template" -> C 07.00
-    #   irb_ec_col     POST  (``reporting_class``)         rows 0250-0420 -> C 08.01
+    #   approach_col   POST  (``reporting_approach``)      the approach totals
+    #   sa_ec_col      POST  (``reporting_class``)         the SA class rows, "See CR
+    #                                                      SA template" -> C 07.00
+    #   irb_ec_col     POST  (``reporting_class``)         the IRB class rows
+    #                                                      -> C 08.01
     #
     # This PRESERVES the 2026-07-12 fix rather than reversing it. That fix moved
     # the class rows off the origination class onto the applied Art. 112 class for
@@ -213,9 +286,10 @@ def generate_c02_00(
     # row — the aggregator moves the class but keeps the obligor's approach for a
     # non-SA guarantor. Here that is ``(foundation_irb, retail_other)``, which
     # Art. 151(4) makes impossible (retail is A-IRB only), and its RWEA would fall
-    # out of rows 0250/0260 while row 0240 still counted it — invisible to every
-    # published rule, because the rules only check rows that DO exist. Measured on
-    # the CRM-substitution portfolio: 2,028,365.78 (CRR) / 1,700,935.66 (B31).
+    # out of the F-IRB class rows while the F-IRB total still counted it —
+    # invisible to every published rule, because the rules only check rows that DO
+    # exist. Measured on the CRM-substitution portfolio: 2,028,365.78 (CRR) /
+    # 1,700,935.66 (B31).
     #
     # THE CAUSE IS NOT THIS KEY, AND MUST NOT BE PAPERED OVER HERE. The single leg
     # producing it is an F-IRB corporate loan whose covered part is guaranteed by a
@@ -237,13 +311,14 @@ def generate_c02_00(
     # this fixes: an IRB-origin leg whose guarantee the engine applied under
     # Art. 235 carries ``reporting_approach == "standardised"`` against
     # ``approach_applied == "foundation_irb"``/``"slotting"``, so its RWEA was
-    # disclosed under "Of which: IRB Approach" / "Supervisory slotting" for an
-    # exposure that is a direct SA exposure to the guarantor.
+    # disclosed under the IRB approach / slotting for an exposure that is a direct
+    # SA exposure to the guarantor.
     #
-    # ART. 92 IS UNTOUCHED: rows 0010/0050 are FLAT ledger sums, and the approach
-    # labels partition the ledger either way (``approach_post_crm`` is
-    # ``approach_applied`` or the SA literal, never a new label), so RWEA moves
-    # BETWEEN rows 0060 and 0220 and their sum still foots to row 0050.
+    # ART. 92 IS UNTOUCHED: the total and credit-risk rows are FLAT ledger sums,
+    # and the approach labels partition the ledger either way
+    # (``approach_post_crm`` is ``approach_applied`` or the SA literal, never a new
+    # label), so RWEA moves BETWEEN the SA and IRB totals and their sum still
+    # foots to the credit-risk row.
     #
     # Each key degrades to its origin twin on a frame that seals no
     # post-substitution column, so the split is number-neutral wherever nothing
@@ -264,149 +339,134 @@ def generate_c02_00(
         cols, "reporting_approach" if "reporting_approach" in cols else "approach_applied"
     )
 
-    approach_rwa: dict[str, float] = {}
-    sa_class_rwa: dict[str, float] = {}
-    irb_class_rwa: dict[tuple[str, str], float] = {}
-    slotting_type_rwa: dict[str, float] = {}
-    irb_sub_rwa: dict[_SubKey, float] = {}
-    equity_sa_rwa = 0.0
-    equity_irb_rwa = 0.0
-
     if approach_col and sa_ec_col and irb_ec_col:
-        (
-            total_rwa,
-            irb_class_rwa,
-            slotting_type_rwa,
-            irb_sub_rwa,
-            equity_sa_rwa,
-            equity_irb_rwa,
-        ) = _aggregate_by_approach(
+        ledger = _aggregate(
             results,
-            approach_col,
-            sa_ec_col,
-            irb_ec_col,
-            origin_ec_col or irb_ec_col,
-            rwa_col,
             cols,
-            is_b31,
-            approach_rwa,
-            sa_class_rwa,
+            approach_col=approach_col,
+            sa_ec_col=sa_ec_col,
+            irb_ec_col=irb_ec_col,
+            origin_ec_col=origin_ec_col or irb_ec_col,
+            own_col=own_col,
+            final_col=final_col,
         )
     else:
-        # Fallback: just compute total RWA (no per-approach breakdowns).
-        total_stats = results.select(
-            pl.col(rwa_col).fill_null(0.0).sum().alias("total_rwa"),
-        ).collect()
-        total_rwa = float(total_stats["total_rwa"][0])
+        # No approach / class key: the totals are all that can be stated.
+        ledger = _totals_only(results, own_col=own_col, final_col=final_col)
 
-    # SA-equivalent RWA for floor comparison (B31 col 0020)
-    sa_equiv_rwa = 0.0
-    if is_b31 and "sa_rwa" in cols:
-        sa_equiv_stats = results.select(
-            pl.col("sa_rwa").fill_null(0.0).sum().alias("sa_equiv"),
-        ).collect()
-        sa_equiv_rwa = float(sa_equiv_stats["sa_equiv"][0])
+    amounts = _amounts_by_slot(ledger, framework)
+    class_rows = _sa_class_rows(ledger.sa_class)
+    if ledger.has_breakdown:
+        _warn_if_a_breakdown_strands(amounts, class_rows, framework)
 
-    # Output floor RWEA (B31 col 0030) — rwa_final is ALREADY post-floor;
-    # rwa_pre_floor feeds only the activation boolean.
-    floor_rwa = total_rwa
-    floor_activated = False
-    if is_b31 and "rwa_pre_floor" in cols:
-        pre_floor_stats = results.select(
-            pl.col("rwa_pre_floor").fill_null(0.0).sum().alias("pre_floor"),
-        ).collect()
-        pre_floor_total = float(pre_floor_stats["pre_floor"][0])
-        floor_rwa = total_rwa
-        floor_activated = total_rwa > pre_floor_total + 0.01
-
-    sa_rwa_total = sum(approach_rwa.get(approach, 0.0) for approach in _SA_APPROACHES)
-    firb_rwa = approach_rwa.get("foundation_irb", 0.0)
-    airb_rwa = approach_rwa.get("advanced_irb", 0.0)
-    slotting_rwa = approach_rwa.get("slotting", 0.0)
-    # Row 0220 "Of which: IRB Approach" carries IRB-method equity (Art. 155),
-    # which discloses separately at row 0420; SA-method equity stays in the SA
-    # total (row 0060). This keeps the 0060 + 0220 = 0050 footing under either
-    # routing (Basel 3.1: all equity SA, so equity_irb_rwa is 0).
-    irb_total_rwa = firb_rwa + airb_rwa + slotting_rwa + equity_irb_rwa
-
-    # Own funds requirement = 8% x TREA (Art. 92(1))
-    own_funds_req = total_rwa * 0.08
-
-    row_values: dict[str, dict[str, object]] = {}
-    row_values["0010"] = {"0010": total_rwa}
-    row_values["0040"] = {"0010": own_funds_req}
-    row_values["0050"] = {"0010": total_rwa}  # Credit risk = total (only CR in scope)
-    row_values["0060"] = {"0010": sa_rwa_total + equity_sa_rwa}
-
-    _sa_rows(row_values, sa_class_rwa, is_b31=is_b31)
-    row_values["0220"] = {"0010": irb_total_rwa}
-    _firb_rows(row_values, firb_rwa, irb_class_rwa, irb_sub_rwa, is_b31=is_b31)
-    _airb_corp_rows(row_values, airb_rwa, irb_class_rwa, irb_sub_rwa, is_b31=is_b31)
-    _airb_retail_rows(row_values, irb_class_rwa, irb_sub_rwa, is_b31=is_b31)
-    _slotting_rows(row_values, slotting_rwa, slotting_type_rwa, is_b31=is_b31)
-    # Row 0420 "Equity IRB" — Art. 155 IRB-method equity only (empty under
-    # Basel 3.1, Art. 147A). SA-method equity reports at rows 0060/0210.
-    row_values["0420"] = {"0010": equity_irb_rwa}
-
-    _warn_if_irb_detail_strands(row_values)
-    _floor_indicator_rows(
-        row_values,
-        output_floor_summary,
-        output_floor_config,
-        floor_activated=floor_activated,
-        is_b31=is_b31,
+    # Column 0020 is known when the ledger seals the standardised figure, or when
+    # it holds no modelled leg that would need one (module docstring).
+    standardised_known = (
+        is_b31 and ledger.has_breakdown and ("sa_rwa" in cols or ledger.modelled_legs == 0)
     )
-    if is_b31:
-        _apply_b31_cols(row_values, sa_equiv_rwa, floor_rwa)
-
-    # B31 memo row 0500 (PRA PS1/26 Art. 123B): portfolio-total RWEA of all
-    # rows that fired the 1.5x currency-mismatch multiplier. Memo-only — only
-    # col 0010 is populated (0020/0030 stay None via the build .get()), and
-    # the row is excluded from the TREA total. Absent under CRR (the row is
-    # not in CRR_C02_00_ROW_SECTIONS, so the build step never emits it).
-    if is_b31 and "currency_mismatch_multiplier_applied" in cols:
-        mismatch_rwea = float(
-            results.filter(pl.col("currency_mismatch_multiplier_applied").fill_null(False))
-            .select(pl.col(rwa_col).fill_null(0.0).sum().alias("rwea"))
-            .collect()["rwea"][0]
+    if is_b31 and ledger.modelled_legs and "sa_rwa" not in cols:
+        logger.warning(
+            "OF 02.00: %d modelled leg(s) carry no sa_rwa, so column 0020 and the output "
+            "floor cannot be stated and are left empty",
+            ledger.modelled_legs,
         )
-        row_values["0500"] = {"0010": mismatch_rwea}
+    floor = _Floor()
+    if is_b31 and (output_floor_config is None or output_floor_config.is_floor_applicable()):
+        floor = _output_floor(
+            ledger,
+            s_trea=amounts[rows.CREDIT_RISK].standardised if standardised_known else None,
+            summary=output_floor_summary,
+        )
+        _warn_if_the_engine_floor_differs(ledger, floor)
 
-    rows = _build_rows(row_values, row_sections, list(column_refs))
+    cells = _cells(amounts, class_rows, floor, framework, report_standardised=standardised_known)
     schema: dict[str, pl.DataType | type[pl.DataType]] = {
         "row_ref": pl.String,
         "row_name": pl.String,
     }
     for ref in column_refs:
         schema[ref] = pl.Float64
-    return pl.DataFrame(rows, schema=schema)
+    return pl.DataFrame(_build_rows(cells, framework, list(column_refs)), schema=schema)
 
 
 # =============================================================================
-# Pre-pass aggregation kernels (pure functions — the retired self-state)
+# Typed pre-pass results
 # =============================================================================
 
 
-def _aggregate_by_approach(  # noqa: PLR0913 - two class keys, one per tied template
+@dataclass(frozen=True)
+class _Amount:
+    """One population's RWEA under its own approach and under the standardised one.
+
+    ``own`` is what column 0010 reports. ``standardised`` (``sa_rwa``) is what
+    Basel 3.1 column 0020 reports for the same legs, and is 0.0 throughout on a
+    frame that seals no ``sa_rwa`` — where the column is reported only if the
+    frame holds no modelled leg.
+    """
+
+    own: float = 0.0
+    standardised: float = 0.0
+
+    def __add__(self, other: _Amount) -> _Amount:
+        return _Amount(self.own + other.own, self.standardised + other.standardised)
+
+
+_NOTHING = _Amount()
+
+
+@dataclass(frozen=True)
+class _Ledger:
+    """The pre-pass aggregates every row is assembled from.
+
+    ``has_breakdown`` is False only on a frame with no approach / class key,
+    where the totals are all that can be stated. ``modelled_legs`` counts the
+    F-IRB / A-IRB / slotting legs — the ones column 0020 needs ``sa_rwa`` for.
+    """
+
+    total: _Amount
+    final_total: float
+    multiplier: float | None = None
+    has_breakdown: bool = True
+    modelled_legs: int = 0
+    by_approach: dict[str, _Amount] = field(default_factory=dict)
+    sa_class: dict[str, _Amount] = field(default_factory=dict)
+    irb_class: dict[tuple[str, str], _Amount] = field(default_factory=dict)
+    irb_sub: dict[_SubKey, _Amount] = field(default_factory=dict)
+    slotting_type: dict[str, _Amount] = field(default_factory=dict)
+    equity_sa: _Amount = _NOTHING
+    equity_irb: _Amount = _NOTHING
+
+
+@dataclass(frozen=True)
+class _Floor:
+    """The output-floor block: Basel 3.1 rows 0010 (col 0030), 0034, 0035, 0036.
+
+    ``None`` is "not known", and an unknown figure is not reported.
+    """
+
+    multiplier: float | None = None
+    adjustment: float | None = None
+    amount: float | None = None
+    activated: bool | None = None
+
+
+# =============================================================================
+# Pre-pass aggregation
+# =============================================================================
+
+
+def _aggregate(
     results: pl.LazyFrame,
+    cols: set[str],
+    *,
     approach_col: str,
     sa_ec_col: str,
     irb_ec_col: str,
     origin_ec_col: str,
-    rwa_col: str,
-    cols: set[str],
-    is_b31: bool,  # noqa: FBT001 - retired positional signature preserved
-    approach_rwa: dict[str, float],
-    sa_class_rwa: dict[str, float],
-) -> tuple[
-    float, dict[tuple[str, str], float], dict[str, float], dict[_SubKey, float], float, float
-]:
-    """The retired instance-state aggregation as a pure function.
-
-    Mutates ``approach_rwa`` / ``sa_class_rwa`` in place (the retired
-    contract) and RETURNS what used to live on ``self``: the total, the
-    IRB (approach, class) map, the slotting SL-type map, the B31 sub-row
-    map, and the equity RWA split into (SA-method, IRB-method) sub-totals.
+    own_col: str,
+    final_col: str,
+) -> _Ledger:
+    """Collect the ledger ONCE and group it every way the template needs.
 
     TWO CLASS KEYS, one per tied template — see the caller's note.
     ``sa_ec_col`` keys the SA class rows, which tie to C 07.00; ``irb_ec_col``
@@ -414,105 +474,118 @@ def _aggregate_by_approach(  # noqa: PLR0913 - two class keys, one per tied temp
     post-substitution class, because both tied templates have moved; they stay
     two parameters because they are two questions, and they answered differently
     for the one commit between C 07.00 moving and C 08.01 following.
+
+    The IRB class and sub-class group-bys read the SAME placeable class
+    (``_placeable_irb_class``), so a leg reverted to its origin class is split
+    with the class it is counted in — before 2026-11-13 the sub-class split read
+    the un-reverted class and the reverted leg fell out of the corporate
+    sub-rows.
     """
+    placeable = _placeable_irb_class(irb_ec_col, origin_ec_col, approach_col)
     collected = results.select(
         pl.col(approach_col).alias("_approach"),
         pl.col(sa_ec_col).alias("_ec_sa"),
-        _placeable_irb_class(irb_ec_col, origin_ec_col, approach_col).alias("_ec_irb"),
-        pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
+        placeable.alias("_ec_irb"),
+        pl.col(own_col).fill_null(0.0).alias("_own"),
+        pl.col(final_col).fill_null(0.0).alias("_final"),
+        (pl.col("sa_rwa").fill_null(0.0) if "sa_rwa" in cols else pl.lit(0.0)).alias("_sa"),
         _equity_method_expr(cols).alias("_eqm"),
+        (_is_sme_expr(cols) | (placeable == "corporate_sme").fill_null(value=False)).alias("_sme"),
+        _is_financial_large_expr(cols).alias("_fse"),
+        _is_commercial_expr(cols).alias("_comm"),
+        (pl.col("sl_type") if "sl_type" in cols else pl.lit(None, dtype=pl.String)).alias("_sl"),
+        (
+            pl.col("output_floor_pct")
+            if "output_floor_pct" in cols
+            else pl.lit(None, dtype=pl.Float64)
+        ).alias("_pct"),
     ).collect()
 
-    total_rwa = float(collected["_rwa"].sum())
-
-    by_approach = collected.group_by("_approach").agg(pl.col("_rwa").sum().alias("rwa"))
-    for row in by_approach.iter_rows(named=True):
-        approach_rwa[row["_approach"]] = float(row["rwa"])
-
     # Equity method partition (PS1/26 Art. 147A / CRR Art. 155). Only PROVEN
-    # IRB-method equity (irb_simple / pd_lgd) folds into the IRB total (row 0220)
-    # and the "Equity IRB" disclosure (row 0420); SA-method equity — and any
-    # equity leg whose method the ledger did not seal (null) — stays in the SA
-    # breakdown (row 0060 total + class row 0210). Under Basel 3.1 every equity
-    # leg is stamped ``sa`` (Art. 147A), so the IRB partition is empty.
-    equity_mask = collected["_approach"] == "equity"
+    # IRB-method equity (irb_simple / pd_lgd) counts in the IRB total and the
+    # "Equity IRB" disclosure; SA-method equity — and any equity leg whose method
+    # the ledger did not seal (null) — stays in the SA breakdown. Under Basel 3.1
+    # every equity leg is stamped ``sa`` (Art. 147A), so the IRB partition is
+    # empty.
+    equity_mask = collected["_approach"] == _EQUITY
     equity_irb_mask = equity_mask & collected["_eqm"].is_in(_EQUITY_IRB_METHODS).fill_null(
         value=False
     )
     equity_sa_mask = equity_mask & ~equity_irb_mask
-    equity_sa_rwa = float(collected.filter(equity_sa_mask)["_rwa"].sum())
-    equity_irb_rwa = float(collected.filter(equity_irb_mask)["_rwa"].sum())
 
-    # SA class breakdown: SA approaches plus SA-method equity (row 0210).
-    # IRB-method equity is excluded here — it reports at row 0420, not a SA class
-    # row. The SA-CCR legs join via ``_SA_APPROACHES``, so a derivative reports
-    # under its counterparty's Art. 112 class (an institution -> row 0120) — and,
-    # being SA, they are not swept into the IRB residual below.
+    # SA class breakdown: SA approaches plus SA-method equity. IRB-method equity
+    # is excluded here — it is not a SA class. The SA-CCR legs join via
+    # ``_SA_APPROACHES``, so a derivative reports under its counterparty's
+    # Art. 112 class — and, being SA, they are not swept into the IRB group-by
+    # below.
     sa_mask = collected["_approach"].is_in(_SA_APPROACHES)
-    sa_rows = collected.filter(sa_mask | equity_sa_mask)
-    by_class = sa_rows.group_by("_ec_sa").agg(pl.col("_rwa").sum().alias("rwa"))
-    for row in by_class.iter_rows(named=True):
-        sa_class_rwa[row["_ec_sa"]] = float(row["rwa"])
-
-    # IRB per-approach-and-class breakdown (the equity approach is excluded
-    # entirely — its RWA reports at row 0420 / the IRB total, never a per-class
-    # IRB row, since there is no equity IRB exposure-class row in the layout).
-    irb_rows = collected.filter(~sa_mask & ~equity_mask)
-    irb_class_approach = irb_rows.group_by(["_approach", "_ec_irb"]).agg(
-        pl.col("_rwa").sum().alias("rwa")
+    # The equity approach is excluded from the IRB class group-bys entirely: it
+    # reports at ``EQUITY_IRB`` and the IRB total, never a per-class IRB row.
+    modelled = collected.filter(~sa_mask & ~equity_mask)
+    multipliers = collected["_pct"].drop_nulls()
+    return _Ledger(
+        total=_sum(collected),
+        final_total=float(collected["_final"].sum()),
+        multiplier=float(multipliers[0]) if multipliers.len() else None,
+        modelled_legs=modelled.height,
+        by_approach={
+            str(key[0]): amount for key, amount in _grouped(collected, "_approach").items()
+        },
+        sa_class={
+            str(key[0]): amount
+            for key, amount in _grouped(
+                collected.filter(sa_mask | equity_sa_mask), "_ec_sa"
+            ).items()
+        },
+        irb_class={
+            (str(key[0]), str(key[1])): amount
+            for key, amount in _grouped(modelled, "_approach", "_ec_irb").items()
+        },
+        irb_sub={
+            (str(key[0]), str(key[1]), bool(key[2]), bool(key[3]), bool(key[4])): amount
+            for key, amount in _grouped(
+                modelled, "_approach", "_ec_irb", "_sme", "_fse", "_comm"
+            ).items()
+        },
+        slotting_type={
+            str(key[0]): amount
+            for key, amount in _grouped(
+                modelled.filter(pl.col("_approach") == _SLOTTING), "_sl"
+            ).items()
+            if key[0] is not None
+        },
+        equity_sa=_sum(collected.filter(equity_sa_mask)),
+        equity_irb=_sum(collected.filter(equity_irb_mask)),
     )
-    irb_class_rwa = {
-        (row["_approach"], row["_ec_irb"]): float(row["rwa"])
-        for row in irb_class_approach.iter_rows(named=True)
+
+
+def _totals_only(results: pl.LazyFrame, *, own_col: str, final_col: str) -> _Ledger:
+    """The ledger of a frame with no approach / class key: its totals."""
+    totals = results.select(
+        pl.col(own_col).fill_null(0.0).sum().alias("_own"),
+        pl.col(final_col).fill_null(0.0).sum().alias("_final"),
+    ).collect()
+    return _Ledger(
+        total=_Amount(own=float(totals["_own"][0])),
+        final_total=float(totals["_final"][0]),
+        has_breakdown=False,
+    )
+
+
+def _sum(frame: pl.DataFrame) -> _Amount:
+    """Both measures of a collected population."""
+    return _Amount(own=float(frame["_own"].sum()), standardised=float(frame["_sa"].sum()))
+
+
+def _grouped(frame: pl.DataFrame, *keys: str) -> dict[tuple[object, ...], _Amount]:
+    """Both measures of ``frame`` per distinct ``keys`` tuple."""
+    grouped = frame.group_by(list(keys)).agg(
+        pl.col("_own").sum().alias("_own"), pl.col("_sa").sum().alias("_sa")
+    )
+    return {
+        tuple(row[key] for key in keys): _Amount(float(row["_own"]), float(row["_sa"]))
+        for row in grouped.iter_rows(named=True)
     }
-
-    slotting_type_rwa = _slotting_type_agg(results, approach_col, rwa_col, cols)
-    irb_sub_rwa = _irb_sub_agg(results, approach_col, irb_ec_col, rwa_col, cols) if is_b31 else {}
-    return (
-        total_rwa,
-        irb_class_rwa,
-        slotting_type_rwa,
-        irb_sub_rwa,
-        equity_sa_rwa,
-        equity_irb_rwa,
-    )
-
-
-def _warn_if_irb_detail_strands(row_values: dict[str, dict[str, object]]) -> None:
-    """WARN when an approach's "of which" class rows do not foot to its total.
-
-    The net for the impossible-pair trap ``_placeable_irb_class`` describes. That
-    revert is deliberately narrow — it fixes only the Art. 151(4) pair we have
-    measured — so any OTHER (approach, class) combination the layout has no row
-    for would strand its RWEA out of the breakdown while the approach total still
-    counted it, and NO published rule would notice: the rules only check rows
-    that exist. This turns that silence into a log line naming the amount.
-
-    Not an error channel: the figures published are still correct at the approach
-    and Art. 92 totals, and a residual is a disclosure-granularity defect
-    upstream of this template, not a miscalculation in it.
-    """
-    for total_ref, detail_refs in _IRB_DETAIL_ROWS.items():
-        total = row_values.get(total_ref, {}).get("0010")
-        if not isinstance(total, (int, float)):
-            continue
-        detail = sum(
-            value
-            for ref in detail_refs
-            if isinstance(value := row_values.get(ref, {}).get("0010"), (int, float))
-        )
-        residual = float(total) - float(detail)
-        if abs(residual) > 0.01:
-            logger.warning(
-                "C 02.00: row %s (%.2f) exceeds its class breakdown %s (%.2f) by %.2f — "
-                "an (approach, class) pair with no row in the layout; the RWEA is counted "
-                "in the approach total but absent from the of-which rows",
-                total_ref,
-                float(total),
-                "+".join(detail_refs),
-                float(detail),
-                residual,
-            )
 
 
 def _placeable_irb_class(post_ec_col: str, origin_ec_col: str, approach_col: str) -> pl.Expr:
@@ -520,18 +593,17 @@ def _placeable_irb_class(post_ec_col: str, origin_ec_col: str, approach_col: str
     under the leg's approach.
 
     THE IMPOSSIBLE-PAIR TRAP, AND WHY IT IS HANDLED HERE RATHER THAN IGNORED.
-    A post class key against the obligor's RETAINED approach can name a pair the
-    C 02.00 layout has no row for: the aggregator moves the class to the
+    A post class key against the obligor's RETAINED approach can name a pair
+    neither template has a row for: the aggregator moves the class to the
     guarantor's but keeps the obligor's approach whenever the guarantor is not
     SA, so an F-IRB corporate loan covered by a RETAIL guarantor emits
     ``(foundation_irb, retail_other)``. CRR Art. 151(4) makes that impossible —
-    retail exposures are A-IRB only, so the layout has retail rows under A-IRB
-    (0370-0400) and none under F-IRB (0250/0260 are institutions and corporates).
-    Its RWEA then fell out of rows 0250/0260 while row 0240 still counted it:
-    2,028,365.78 (CRR) / 1,700,935.66 (B31) on the CRM-substitution portfolio,
-    INVISIBLE to every published rule, because the rules only check rows that
-    exist. Reverting the class keeps the "of which" breakdown a true partition of
-    row 0240.
+    retail exposures are A-IRB only, so both layouts have retail rows under A-IRB
+    and none under F-IRB. Its RWEA then fell out of the F-IRB class rows while the
+    F-IRB total still counted it: 2,028,365.78 (CRR) / 1,700,935.66 (B31) on the
+    CRM-substitution portfolio, INVISIBLE to every published rule, because the
+    rules only check rows that exist. Reverting the class keeps the "of which"
+    breakdown a true partition of the F-IRB total.
 
     THIS IS A REPORTING GUARD, NOT THE FIX. The engine should never have
     recognised the guarantee: CRR Art. 201(1) is an exhaustive list of eligible
@@ -543,9 +615,9 @@ def _placeable_irb_class(post_ec_col: str, origin_ec_col: str, approach_col: str
     the origin class puts the leg exactly where a declined guarantee would have
     left it. Deliberately narrow: only the Art. 151(4) pair is reverted, so a
     genuinely new impossible pair strands visibly rather than being absorbed —
-    ``_warn_if_irb_detail_strands`` is the net that catches it.
+    ``_warn_if_a_breakdown_strands`` is the net that catches it.
     """
-    retail_under_firb = (pl.col(approach_col) == "foundation_irb") & pl.col(post_ec_col).is_in(
+    retail_under_firb = (pl.col(approach_col) == _FIRB) & pl.col(post_ec_col).is_in(
         list(_RETAIL_CLASSES)
     )
     return pl.when(retail_under_firb).then(pl.col(origin_ec_col)).otherwise(pl.col(post_ec_col))
@@ -564,435 +636,378 @@ def _equity_method_expr(cols: set[str]) -> pl.Expr:
     return pl.lit(None, dtype=pl.String)
 
 
-def _slotting_type_agg(
-    results: pl.LazyFrame, approach_col: str, rwa_col: str, cols: set[str]
-) -> dict[str, float]:
-    """Aggregate slotting RWA by ``sl_type``. Returns empty dict if absent."""
-    if "sl_type" not in cols:
-        return {}
-    sl_collected = (
-        results.filter(pl.col(approach_col) == "slotting")
-        .select(
-            pl.col("sl_type").alias("_sl"),
-            pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
-        )
-        .collect()
-    )
-    by_sl = sl_collected.group_by("_sl").agg(pl.col("_rwa").sum().alias("rwa"))
-    return {
-        row["_sl"]: float(row["rwa"])
-        for row in by_sl.iter_rows(named=True)
-        if row["_sl"] is not None
-    }
+def _is_sme_expr(cols: set[str]) -> pl.Expr:
+    """Whether a leg is SME, from the classifier's sub-class and the ``is_sme`` flag.
 
-
-def _irb_sub_agg(
-    results: pl.LazyFrame,
-    approach_col: str,
-    ec_col: str,
-    rwa_col: str,
-    cols: set[str],
-) -> dict[_SubKey, float]:
-    """Finer-grained IRB aggregation for B3.1 corporate/retail sub-rows."""
-    sub_select: list[pl.Expr] = [
-        pl.col(approach_col).alias("_approach"),
-        pl.col(ec_col).alias("_ec"),
-        pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
-    ]
-    # The classifier-derived ``exposure_subclass`` (PRA PS1/26 Art. 147A(1)(e)/(f))
-    # is the canonical corporate split signal: ``corporate_financial_large``
-    # (FSE OR revenue > GBP 440m) -> row 0295, ``corporate_sme`` -> 0296/0355,
-    # ``corporate_other`` -> 0297/0356. When it is absent (e.g. CRR frames or
-    # pre-classifier inputs) fall back to the is_sme / FSE-flag heuristic.
-    has_subclass = "exposure_subclass" in cols
-    has_sme = "is_sme" in cols
-    has_fse = (
-        has_subclass or "cp_apply_fi_scalar" in cols or "cp_is_financial_sector_entity" in cols
-    )
-    has_pt = "property_type" in cols
-    if has_sme or has_subclass:
-        has_sme = True
-        if has_subclass:
-            sme_expr = pl.col("exposure_subclass") == "corporate_sme"
-            if "is_sme" in cols:
-                sme_expr = sme_expr | pl.col("is_sme").fill_null(value=False)
-        else:
-            sme_expr = pl.col("is_sme").fill_null(value=False)
-        sub_select.append(sme_expr.alias("_sme"))
-    if has_fse:
-        if has_subclass:
-            fse_expr = pl.col("exposure_subclass") == "corporate_financial_large"
-        else:
-            fse_col = (
-                "cp_apply_fi_scalar"
-                if "cp_apply_fi_scalar" in cols
-                else "cp_is_financial_sector_entity"
-            )
-            fse_expr = pl.col(fse_col).fill_null(value=False)
-        sub_select.append(fse_expr.alias("_fse"))
-    if has_pt:
-        sub_select.append(pl.col("property_type").alias("_pt"))
-
-    irb_approaches = {"foundation_irb", "advanced_irb"}
-    sub_collected = (
-        results.filter(pl.col(approach_col).is_in(irb_approaches)).select(sub_select).collect()
-    )
-    gb_cols = ["_approach", "_ec"]
-    if has_sme:
-        gb_cols.append("_sme")
-    if has_fse:
-        gb_cols.append("_fse")
-    if has_pt:
-        gb_cols.append("_pt")
-    sub_agg = sub_collected.group_by(gb_cols).agg(pl.col("_rwa").sum().alias("rwa"))
-    return {
-        (
-            row["_approach"],
-            row["_ec"],
-            row.get("_sme"),
-            row.get("_fse"),
-            row.get("_pt"),
-        ): float(row["rwa"])
-        for row in sub_agg.iter_rows(named=True)
-    }
-
-
-def _irb_sub_split(
-    sub_rwa: dict[_SubKey, float],
-    approach: str,
-    ec: str,
-    total: float,
-) -> tuple[float, float, float]:
-    """Split IRB corporate RWA into (FSE/large, SME, non-SME) using sub_rwa.
-
-    When sub_rwa has no data for the given approach/ec, falls back to
-    (0.0, 0.0, total) — all RWA reported as non-SME.
+    The classifier-derived ``exposure_subclass`` (PRA PS1/26 Art. 147A(1)(e)/(f))
+    is the canonical corporate split signal; ``is_sme`` also carries the retail
+    split. Unknown is False.
     """
-    fse = 0.0
-    sme = 0.0
-    nonsme = 0.0
-    matched = False
-    for key, rwa in sub_rwa.items():
-        a, e, is_sme, is_fse, _pt = key
-        if a != approach or e != ec:
-            continue
-        matched = True
-        if is_fse:
-            fse += rwa
-        elif is_sme:
-            sme += rwa
-        else:
-            nonsme += rwa
-    if not matched:
-        return 0.0, 0.0, total
-    return fse, sme, nonsme
+    is_sme = pl.lit(value=False)
+    if "exposure_subclass" in cols:
+        is_sme = is_sme | (pl.col("exposure_subclass") == "corporate_sme").fill_null(value=False)
+    if "is_sme" in cols:
+        is_sme = is_sme | pl.col("is_sme").fill_null(value=False)
+    return is_sme
 
 
-def _classify_re_bucket(is_comm: bool, is_sme: bool | None) -> tuple[int, int, int, int]:  # noqa: FBT001
-    """Return a 4-tuple selector ``(resi_sme, resi_nonsme, comm_sme, comm_nonsme)``.
+def _is_financial_large_expr(cols: set[str]) -> pl.Expr:
+    """Whether a corporate leg is a "financial corporate or large corporate".
 
-    Exactly one element is 1 (the bucket to credit), the rest are 0.
-    Lets ``_irb_re_sub_split`` add RWA to the right bucket without a branch
-    cascade.
+    ``exposure_subclass == "corporate_financial_large"`` (FSE OR revenue above
+    the large-corporate threshold) where the classifier sealed it; otherwise the
+    financial-sector flag alone. Unknown is False.
     """
-    if is_comm:
-        return (0, 0, 1, 0) if is_sme else (0, 0, 0, 1)
-    # residential / rre / null -> default to residential
-    return (1, 0, 0, 0) if is_sme else (0, 1, 0, 0)
+    if "exposure_subclass" in cols:
+        return (pl.col("exposure_subclass") == "corporate_financial_large").fill_null(value=False)
+    if "cp_apply_fi_scalar" in cols:
+        return pl.col("cp_apply_fi_scalar").fill_null(value=False)
+    if "cp_is_financial_sector_entity" in cols:
+        return pl.col("cp_is_financial_sector_entity").fill_null(value=False)
+    return pl.lit(value=False)
 
 
-def _irb_re_sub_split(
-    sub_rwa: dict[_SubKey, float],
-    approach: str,
-    ec: str,
-    total: float,
-) -> tuple[float, float, float, float]:
-    """Split IRB retail mortgage into (resi_sme, resi_nonsme, comm_sme, comm_nonsme).
-
-    Uses property_type ('residential'/'rre' vs 'commercial'/'cre') and is_sme
-    from the sub_rwa dict. Falls back to (0, total, 0, 0) when no sub data.
-    """
-    buckets = [0.0, 0.0, 0.0, 0.0]
-    matched = False
-    for key, rwa in sub_rwa.items():
-        a, e, is_sme, _fse, pt = key
-        if a != approach or e != ec:
-            continue
-        matched = True
-        is_comm = pt in ("commercial", "cre")
-        for idx, weight in enumerate(_classify_re_bucket(is_comm, is_sme)):
-            buckets[idx] += weight * rwa
-    if not matched:
-        return 0.0, total, 0.0, 0.0
-    return buckets[0], buckets[1], buckets[2], buckets[3]
-
-
-def _irb_other_sme_split(
-    sub_rwa: dict[_SubKey, float],
-    approach: str,
-    ec: str,
-    total: float,
-) -> tuple[float, float]:
-    """Split IRB retail_other into (SME, non-SME).
-
-    Falls back to (total, 0.0) when no sub data (all reported as SME for
-    backward compatibility with CRR row 0400).
-    """
-    sme = 0.0
-    nonsme = 0.0
-    matched = False
-    for key, rwa in sub_rwa.items():
-        a, e, is_sme, _fse, _pt = key
-        if a != approach or e != ec:
-            continue
-        matched = True
-        if is_sme:
-            sme += rwa
-        else:
-            nonsme += rwa
-    if not matched:
-        return total, 0.0
-    return sme, nonsme
+def _is_commercial_expr(cols: set[str]) -> pl.Expr:
+    """Whether a retail real-estate leg is secured by COMMERCIAL property."""
+    if "property_type" not in cols:
+        return pl.lit(value=False)
+    return pl.col("property_type").is_in(list(_COMMERCIAL_PROPERTY_TYPES)).fill_null(value=False)
 
 
 # =============================================================================
-# Row-assembly shell (relocated verbatim)
+# Figures by slot
 # =============================================================================
 
 
-def _sa_rows(
-    row_values: dict[str, dict[str, object]],
-    sa_class_rwa: dict[str, float],
-    *,
-    is_b31: bool,
-) -> None:
-    """Populate SA per-class rows + B31 specialised-lending sub-row (0131)."""
-    for ec_value, row_ref in C02_00_SA_CLASS_MAP.items():
-        if ec_value in sa_class_rwa:
-            if row_ref not in row_values:
-                row_values[row_ref] = {"0010": 0.0}
-            existing = float(cast("float", row_values[row_ref].get("0010", 0.0) or 0.0))
-            row_values[row_ref]["0010"] = existing + sa_class_rwa[ec_value]
+def _amounts_by_slot(ledger: _Ledger, framework: str) -> dict[rows.Slot, _Amount]:
+    """Every figure of the template, keyed by what it is — not by where it goes."""
+    by_approach = ledger.by_approach
+    sa = _add(by_approach.get(approach, _NOTHING) for approach in _SA_APPROACHES)
+    sa = sa + ledger.equity_sa
+    firb = by_approach.get(_FIRB, _NOTHING)
+    airb = by_approach.get(_AIRB, _NOTHING)
+    slotting = by_approach.get(_SLOTTING, _NOTHING)
+    # The IRB total carries IRB-method equity (Art. 155); SA-method equity stays
+    # in the SA total. This keeps SA + IRB = credit risk under either routing.
+    irb = firb + airb + slotting + ledger.equity_irb
 
-    if is_b31 and "specialised_lending" in sa_class_rwa:
-        row_values["0131"] = {"0010": sa_class_rwa["specialised_lending"]}
+    amounts = _irb_class_amounts(ledger, is_b31=framework == rows.FRAMEWORK_BASEL_3_1)
+    amounts[rows.TOTAL] = ledger.total
+    # Credit risk is the whole ledger (the only risk type in scope) in column
+    # 0010. Its column 0020 is S-TREA as ``boe_b0716`` states it — the SA total
+    # as reported plus the modelled book on SA — and not a second flat sum.
+    amounts[rows.CREDIT_RISK] = _Amount(ledger.total.own, sa.own + irb.standardised)
+    amounts[rows.SA] = sa
+    amounts[rows.SA_CLASSES] = sa
+    amounts[rows.SA_SPECIALISED_LENDING] = ledger.sa_class.get("specialised_lending", _NOTHING)
+    amounts[rows.SA_SHORT_TERM_ASSESSMENT] = _NOTHING
+    amounts[rows.IRB] = irb
+    amounts[rows.AIRB] = airb
+    amounts[rows.EQUITY_IRB] = ledger.equity_irb
+
+    if rows.SLOTTING.ref(framework) is None:
+        # C 02.00: slotting is specialised lending without own estimates
+        # (module docstring).
+        amounts[rows.FIRB] = firb + slotting
+        amounts[rows.FIRB_SPECIALISED_LENDING] += slotting
+        return amounts
+
+    amounts[rows.FIRB] = firb
+    amounts[rows.SLOTTING] = slotting
+    for sl_type, slot in _SLOTTING_TYPE_SLOTS.items():
+        amounts[slot] = ledger.slotting_type.get(sl_type, _NOTHING)
+    return amounts
 
 
-def _firb_rows(
-    row_values: dict[str, dict[str, object]],
-    firb_rwa: float,
-    irb_class_rwa: dict[tuple[str, str], float],
-    irb_sub_rwa: dict[_SubKey, float],
-    *,
-    is_b31: bool,
-) -> None:
-    """Populate F-IRB rows (0240, 0250, 0260, 0271, 0290, 0295-0297)."""
-    row_values["0240"] = {"0010": firb_rwa}
+def _irb_class_amounts(ledger: _Ledger, *, is_b31: bool) -> dict[rows.Slot, _Amount]:
+    """The F-IRB and A-IRB class figures, read top to bottom of the templates."""
 
-    firb_inst = irb_class_rwa.get(("foundation_irb", "institution"), 0.0)
-    row_values["0250"] = {"0010": firb_inst}
-    if is_b31:
-        row_values["0271"] = {"0010": firb_inst}
+    def of_class(approach: str, exposure_class: str) -> _Amount:
+        return ledger.irb_class.get((approach, exposure_class), _NOTHING)
 
-    firb_corp = irb_class_rwa.get(("foundation_irb", "corporate"), 0.0)
-    firb_sl = irb_class_rwa.get(("foundation_irb", "specialised_lending"), 0.0)
-    row_values["0260"] = {"0010": firb_corp + firb_sl}
-
-    if is_b31:
-        row_values["0290"] = {"0010": firb_sl}
-        firb_fse, firb_sme, firb_nonsme = _irb_sub_split(
-            irb_sub_rwa, "foundation_irb", "corporate", firb_corp
+    def of_subclass(
+        approach: str,
+        classes: tuple[str, ...],
+        *,
+        sme: bool | None = None,
+        financial_large: bool | None = None,
+        commercial: bool | None = None,
+    ) -> _Amount:
+        return _add(
+            amount
+            for (leg_approach, leg_class, is_sme, is_fse, is_comm), amount in ledger.irb_sub.items()
+            if leg_approach == approach
+            and leg_class in classes
+            and sme in (None, is_sme)
+            and financial_large in (None, is_fse)
+            and commercial in (None, is_comm)
         )
-        row_values["0295"] = {"0010": firb_fse}  # Financial/large corporates
-        row_values["0296"] = {"0010": firb_sme}  # Other general corporates SME
-        row_values["0297"] = {"0010": firb_nonsme}  # Other general corporates non-SME
 
-
-def _airb_corp_rows(
-    row_values: dict[str, dict[str, object]],
-    airb_rwa: float,
-    irb_class_rwa: dict[tuple[str, str], float],
-    irb_sub_rwa: dict[_SubKey, float],
-    *,
-    is_b31: bool,
-) -> None:
-    """Populate A-IRB sovereign / institution / corporate rows (0300-0356)."""
-    row_values["0300"] = {"0010": airb_rwa}
-
-    airb_sovereign = irb_class_rwa.get(("advanced_irb", "central_government"), 0.0)
-    row_values["0310"] = {"0010": airb_sovereign}
-
-    airb_inst = irb_class_rwa.get(("advanced_irb", "institution"), 0.0)
-    row_values["0330"] = {"0010": airb_inst}
-
-    airb_corp = irb_class_rwa.get(("advanced_irb", "corporate"), 0.0)
-    airb_sl_excl = irb_class_rwa.get(("advanced_irb", "specialised_lending"), 0.0)
-    row_values["0340"] = {"0010": airb_corp + airb_sl_excl}
-
-    if is_b31:
-        row_values["0350"] = {"0010": airb_sl_excl}
-        airb_fse, airb_sme, airb_nonsme = _irb_sub_split(
-            irb_sub_rwa, "advanced_irb", "corporate", airb_corp
-        )
-        # A-IRB folds FSE into the non-SME row (0356) — F-IRB keeps 0295.
-        row_values["0355"] = {"0010": airb_sme}
-        row_values["0356"] = {"0010": airb_nonsme + airb_fse}
-
-
-def _airb_retail_rows(
-    row_values: dict[str, dict[str, object]],
-    irb_class_rwa: dict[tuple[str, str], float],
-    irb_sub_rwa: dict[_SubKey, float],
-    *,
-    is_b31: bool,
-) -> None:
-    """Populate A-IRB retail rows (0370, 0380-0385, 0390, 0400, 0410-CRR)."""
-    airb_retail_mort = irb_class_rwa.get(("advanced_irb", "retail_mortgage"), 0.0)
-    airb_retail_qrre = irb_class_rwa.get(("advanced_irb", "retail_qrre"), 0.0)
-    airb_retail_other = irb_class_rwa.get(("advanced_irb", "retail_other"), 0.0)
-
-    row_values["0370"] = {"0010": airb_retail_mort + airb_retail_qrre + airb_retail_other}
-    row_values["0380"] = {"0010": airb_retail_mort}
-
-    if is_b31:
-        resi_sme, resi_nonsme, comm_sme, comm_nonsme = _irb_re_sub_split(
-            irb_sub_rwa, "advanced_irb", "retail_mortgage", airb_retail_mort
-        )
-        row_values["0382"] = {"0010": resi_sme}
-        row_values["0383"] = {"0010": resi_nonsme}
-        row_values["0384"] = {"0010": comm_sme}
-        row_values["0385"] = {"0010": comm_nonsme}
-
-    row_values["0390"] = {"0010": airb_retail_qrre}
-
-    if is_b31:
-        other_sme, other_nonsme = _irb_other_sme_split(
-            irb_sub_rwa, "advanced_irb", "retail_other", airb_retail_other
-        )
-        row_values["0400"] = {"0010": other_sme}
-        row_values["0410"] = {"0010": other_nonsme}
-    else:
-        row_values["0400"] = {"0010": airb_retail_other}
-
-
-def _slotting_rows(
-    row_values: dict[str, dict[str, object]],
-    slotting_rwa: float,
-    slotting_type_rwa: dict[str, float],
-    *,
-    is_b31: bool,
-) -> None:
-    """Populate slotting rows: CRR single 0410 vs B31 per-SL-type 0411-0416."""
-    if is_b31:
-        row_values["0411"] = {"0010": slotting_rwa}
-        row_values["0412"] = {"0010": slotting_type_rwa.get("project_finance", 0.0)}
-        row_values["0413"] = {"0010": slotting_type_rwa.get("object_finance", 0.0)}
-        row_values["0414"] = {"0010": slotting_type_rwa.get("commodities_finance", 0.0)}
-        row_values["0415"] = {"0010": slotting_type_rwa.get("ipre", 0.0)}
-        row_values["0416"] = {"0010": slotting_type_rwa.get("hvcre", 0.0)}
-    else:
-        row_values["0410"] = {"0010": slotting_rwa}
-
-
-def _floor_indicator_rows(
-    row_values: dict[str, dict[str, object]],
-    output_floor_summary: OutputFloorSummary | None,
-    output_floor_config: OutputFloorConfig | None,
-    *,
-    floor_activated: bool,
-    is_b31: bool,
-) -> None:
-    """Populate B31 output floor indicator rows 0034/0035/0036.
-
-    Art. 92 para 2A: floor applies only to certain entity-type/basis combos.
-    When ``output_floor_config`` provides ``is_floor_applicable() == False``,
-    the indicator rows are still emitted but with zero values.
-    """
+    retail_re = ("retail_mortgage",)
+    retail_other = ("retail_other",)
+    amounts: dict[rows.Slot, _Amount] = {
+        rows.FIRB_CENTRAL_GOVERNMENTS: of_class(_FIRB, "central_govt_central_bank"),
+        rows.FIRB_INSTITUTIONS: of_class(_FIRB, "institution"),
+        rows.FIRB_SPECIALISED_LENDING: of_class(_FIRB, "specialised_lending"),
+        rows.AIRB_CENTRAL_GOVERNMENTS: of_class(_AIRB, "central_govt_central_bank"),
+        rows.AIRB_INSTITUTIONS: of_class(_AIRB, "institution"),
+        rows.AIRB_SPECIALISED_LENDING: of_class(_AIRB, "specialised_lending"),
+        rows.AIRB_RETAIL_QRRE: of_class(_AIRB, "retail_qrre"),
+        rows.AIRB_RETAIL_OTHER_SME: of_subclass(_AIRB, retail_other, sme=True),
+        rows.AIRB_RETAIL_OTHER_NON_SME: of_subclass(_AIRB, retail_other, sme=False),
+    }
     if not is_b31:
+        # CRR Art. 147(2)(c): corporates split on the class, as the C 08.01
+        # sheets do; retail real estate splits by SME only.
+        amounts[rows.FIRB_CORPORATES_SME] = of_class(_FIRB, "corporate_sme")
+        amounts[rows.FIRB_CORPORATES_OTHER] = of_class(_FIRB, "corporate")
+        amounts[rows.AIRB_CORPORATES_SME] = of_class(_AIRB, "corporate_sme")
+        amounts[rows.AIRB_CORPORATES_OTHER] = of_class(_AIRB, "corporate")
+        amounts[rows.AIRB_RETAIL_REAL_ESTATE_SME] = of_subclass(_AIRB, retail_re, sme=True)
+        amounts[rows.AIRB_RETAIL_REAL_ESTATE_NON_SME] = of_subclass(_AIRB, retail_re, sme=False)
+        return amounts
+
+    # PS1/26 Art. 147A(1)(e)/(f): financial and large corporates first (F-IRB
+    # only), then SME, then the rest.
+    corporates = _CORPORATE_CLASSES
+    amounts[rows.FIRB_FINANCIAL_LARGE_CORPORATES] = of_subclass(
+        _FIRB, corporates, financial_large=True
+    )
+    amounts[rows.FIRB_CORPORATES_SME] = of_subclass(
+        _FIRB, corporates, financial_large=False, sme=True
+    )
+    amounts[rows.FIRB_CORPORATES_OTHER] = of_subclass(
+        _FIRB, corporates, financial_large=False, sme=False
+    )
+    amounts[rows.AIRB_CORPORATES_SME] = of_subclass(
+        _AIRB, corporates, financial_large=False, sme=True
+    )
+    # A-IRB folds financial/large into "other general corporates non-SME" —
+    # asymmetric with F-IRB, preserved (module docstring).
+    amounts[rows.AIRB_CORPORATES_OTHER] = of_subclass(
+        _AIRB, corporates, financial_large=False, sme=False
+    ) + of_subclass(_AIRB, corporates, financial_large=True)
+    amounts[rows.AIRB_RETAIL_RESIDENTIAL_SME] = of_subclass(
+        _AIRB, retail_re, sme=True, commercial=False
+    )
+    amounts[rows.AIRB_RETAIL_RESIDENTIAL_NON_SME] = of_subclass(
+        _AIRB, retail_re, sme=False, commercial=False
+    )
+    amounts[rows.AIRB_RETAIL_COMMERCIAL_SME] = of_subclass(
+        _AIRB, retail_re, sme=True, commercial=True
+    )
+    amounts[rows.AIRB_RETAIL_COMMERCIAL_NON_SME] = of_subclass(
+        _AIRB, retail_re, sme=False, commercial=True
+    )
+    return amounts
+
+
+def _sa_class_rows(sa_class: dict[str, _Amount]) -> dict[str, _Amount]:
+    """The Art. 112(1) class rows, by row code: every mapped row, zero if empty.
+
+    Several classes share a row (``C02_00_SA_CLASS_MAP``) and ACCUMULATE.
+    """
+    class_rows: dict[str, _Amount] = dict.fromkeys(C02_00_SA_CLASS_MAP.values(), _NOTHING)
+    for exposure_class, row_ref in C02_00_SA_CLASS_MAP.items():
+        class_rows[row_ref] += sa_class.get(exposure_class, _NOTHING)
+    return class_rows
+
+
+def _add(amounts: Iterable[_Amount]) -> _Amount:
+    """Sum of ``amounts``; nothing sums to nothing."""
+    total = _NOTHING
+    for amount in amounts:
+        total = total + amount
+    return total
+
+
+# =============================================================================
+# The output floor
+# =============================================================================
+
+
+def _output_floor(
+    ledger: _Ledger, *, s_trea: float | None, summary: OutputFloorSummary | None
+) -> _Floor:
+    """The floor block, from what is actually known.
+
+    x comes from the summary or, without one, the ledger's sealed
+    ``output_floor_pct``. OF-ADJ comes from the summary alone. The floor needs
+    both and S-TREA; the indicator needs the floor (Annex II row 0034: column
+    0030 "equal to or greater than" column 0010, both on row 0010).
+    """
+    multiplier = summary.floor_pct if summary is not None else ledger.multiplier
+    adjustment = summary.of_adj if summary is not None else None
+    if multiplier is None or adjustment is None or s_trea is None:
+        return _Floor(multiplier=multiplier, adjustment=adjustment)
+    amount = multiplier * s_trea + adjustment
+    return _Floor(
+        multiplier=multiplier,
+        adjustment=adjustment,
+        amount=amount,
+        activated=amount >= ledger.total.own,
+    )
+
+
+def _warn_if_the_engine_floor_differs(ledger: _Ledger, floor: _Floor) -> None:
+    """WARN when the engine's post-floor total is not the template's TREA.
+
+    The template's TREA is max(U-TREA, floor) — row 0010, columns 0010 and 0030;
+    ``boe_b0560`` and its siblings take exactly that maximum. The engine floors
+    the modelled subset alone (docs/plans/c07-ccr-derivatives.md §4 D6), so its
+    total is higher whenever its floor binds on a book with SA exposures, and
+    Pillar 3 OV1 discloses the engine's figure. Not an error channel: neither
+    figure is this template's to correct, and silence would hide the gap.
+    """
+    add_on = ledger.final_total - ledger.total.own
+    if floor.amount is None:
+        if add_on > _TOLERANCE:
+            logger.warning(
+                "OF 02.00: the engine applied an output-floor add-on of %.2f, but the floor "
+                "(row 0010 column 0030) cannot be stated without the OutputFloorSummary — "
+                "OF-ADJ is not on the ledger",
+                add_on,
+            )
         return
-
-    floor_applicable = output_floor_config is None or output_floor_config.is_floor_applicable()
-    if floor_applicable:
-        row_values["0034"] = {"0010": 1.0 if floor_activated else 0.0}
-        if output_floor_summary is not None:
-            row_values["0035"] = {"0010": output_floor_summary.floor_pct * 100.0}
-            row_values["0036"] = {"0010": output_floor_summary.of_adj}
-        else:
-            row_values["0035"] = {"0010": 0.0}
-            row_values["0036"] = {"0010": 0.0}
-    else:
-        row_values["0034"] = {"0010": 0.0}
-        row_values["0035"] = {"0010": 0.0}
-        row_values["0036"] = {"0010": 0.0}
+    template_trea = max(ledger.total.own, floor.amount)
+    if abs(ledger.final_total - template_trea) > _TOLERANCE:
+        logger.warning(
+            "OF 02.00: the engine's post-floor total (%.2f) differs from max(U-TREA %.2f, "
+            "floor %.2f) by %.2f — the engine floors the modelled subset only",
+            ledger.final_total,
+            ledger.total.own,
+            floor.amount,
+            ledger.final_total - template_trea,
+        )
 
 
-def _apply_b31_cols(
-    row_values: dict[str, dict[str, object]],
-    sa_equiv_rwa: float,
-    floor_rwa: float,
+# =============================================================================
+# The stranding net
+# =============================================================================
+
+
+def _warn_if_a_breakdown_strands(
+    amounts: dict[rows.Slot, _Amount], class_rows: dict[str, _Amount], framework: str
 ) -> None:
-    """Fill B3.1 cols 0020 (SA-equivalent) and 0030 (output floor) for each row.
+    """WARN when a total exceeds the detail rows the template breaks it into.
 
-    Each row's policy follows row-ref membership: totals take the portfolio
-    SA-equiv / floor values, indicator rows mirror col 0010, IRB rows zero out,
-    and SA rows default to col 0010.
+    The net for the impossible-pair trap ``_placeable_irb_class`` describes, and
+    for every figure whose slot has no row under this regime. That revert is
+    deliberately narrow — it fixes only the Art. 151(4) pair we have measured —
+    so any OTHER (approach, class) combination the template has no row for
+    strands its RWEA out of the breakdown while the total still counts it, and
+    NO published rule would notice: the rules only check rows that exist. This
+    turns that silence into a log line naming the amount.
+
+    Not an error channel: the figures published are still correct at the approach
+    and Art. 92 totals, and a residual is a disclosure-granularity defect
+    upstream of this template, not a miscalculation in it.
     """
-    for ref, vals in row_values.items():
-        col_0010 = vals.get("0010")
-        if ref in {"0010", "0050"}:
-            vals["0020"] = sa_equiv_rwa
-            vals["0030"] = floor_rwa
-        elif ref == "0040":
-            vals["0020"] = sa_equiv_rwa * 0.08
-            vals["0030"] = floor_rwa * 0.08
-        elif ref in {"0034", "0035", "0036"}:
-            vals["0020"] = col_0010
-            vals["0030"] = col_0010
-        elif ref == "0060":
-            vals["0020"] = vals["0010"]
-            vals["0030"] = vals["0010"]
-        elif ref in {"0220", "0240", "0300"}:
-            vals["0020"] = 0.0
-            vals["0030"] = 0.0
-        else:
-            vals["0020"] = col_0010 if col_0010 is not None else None
-            vals["0030"] = col_0010 if col_0010 is not None else None
+    for total, details in rows.BREAKDOWNS:
+        total_ref = total.ref(framework)
+        if total_ref is None:
+            continue
+        placed = [detail for detail in details if detail.ref(framework) is not None]
+        _warn_on_residual(
+            total_ref,
+            amounts.get(total, _NOTHING).own,
+            [str(detail.ref(framework)) for detail in placed],
+            sum(amounts.get(detail, _NOTHING).own for detail in placed),
+        )
+    layout_rows = rows.get_c02_00_cells(framework)
+    reported = {ref: amount for ref, amount in class_rows.items() if ref in layout_rows}
+    _warn_on_residual(
+        str(rows.SA_CLASSES.ref(framework)),
+        amounts[rows.SA_CLASSES].own,
+        sorted(reported),
+        sum(amount.own for amount in reported.values()),
+    )
 
 
-def _row_dict(
-    row_def: COREPRow,
-    row_values: dict[str, dict[str, object]],
-    column_refs: list[str],
-) -> dict[str, object]:
-    """Build a single C 02.00 DataFrame row dict.
+def _warn_on_residual(total_ref: str, total: float, detail_refs: list[str], detail: float) -> None:
+    """Log one total that its detail rows do not account for."""
+    residual = total - detail
+    if abs(residual) <= _TOLERANCE:
+        return
+    logger.warning(
+        "C 02.00: row %s (%.2f) exceeds its breakdown %s (%.2f) by %.2f — RWEA the "
+        "template has no detail row for; it is counted in the total but absent from the "
+        "of-which rows",
+        total_ref,
+        total,
+        "+".join(detail_refs),
+        detail,
+        residual,
+    )
 
-    Three regimes: populated (ref in row_values), zero-fill (credit-risk row
-    without data), or null-fill (out-of-scope row).
+
+# =============================================================================
+# Row assembly
+# =============================================================================
+
+
+def _cells(
+    amounts: dict[rows.Slot, _Amount],
+    class_rows: dict[str, _Amount],
+    floor: _Floor,
+    framework: str,
+    *,
+    report_standardised: bool,
+) -> dict[str, dict[str, float | None]]:
+    """Row code -> column -> value, for every row this calculator computes.
+
+    A slot with no row under ``framework`` is not placed anywhere. Which of a
+    row's columns the published template actually has is applied last, in
+    ``_build_rows`` — so a value prepared here for a cell the template lacks
+    cannot be reported.
     """
-    if row_def.ref in row_values:
-        vals = row_values[row_def.ref]
+
+    def values(amount: _Amount) -> dict[str, float | None]:
         return {
-            "row_ref": row_def.ref,
-            "row_name": row_def.name,
-            **{ref: vals.get(ref) for ref in column_refs},
+            rows.COL_ALL_APPROACHES: amount.own,
+            rows.COL_STANDARDISED: amount.standardised if report_standardised else None,
         }
-    if row_def.ref in C02_00_CREDIT_RISK_ROWS:
-        return {
-            "row_ref": row_def.ref,
-            "row_name": row_def.name,
-            **dict.fromkeys(column_refs, 0.0),
-        }
-    return null_row(row_def.ref, row_def.name, column_refs)
+
+    cells: dict[str, dict[str, float | None]] = {
+        row_ref: values(amount) for row_ref, amount in class_rows.items()
+    }
+    for slot, amount in amounts.items():
+        row_ref = slot.ref(framework)
+        if row_ref is not None:
+            cells[row_ref] = values(amount)
+
+    total_ref = rows.TOTAL.ref(framework)
+    if total_ref is not None:
+        cells[total_ref][rows.COL_OUTPUT_FLOOR] = floor.amount
+    for slot, value in (
+        (rows.FLOOR_ACTIVATED, None if floor.activated is None else float(floor.activated)),
+        (rows.FLOOR_MULTIPLIER, floor.multiplier),
+        (rows.FLOOR_ADJUSTMENT, floor.adjustment),
+    ):
+        row_ref = slot.ref(framework)
+        if row_ref is not None:
+            cells[row_ref] = {rows.COL_OUTPUT_FLOOR: value}
+    return cells
 
 
 def _build_rows(
-    row_values: dict[str, dict[str, object]],
-    row_sections: list[RowSection],
-    column_refs: list[str],
+    cells: dict[str, dict[str, float | None]], framework: str, column_refs: list[str]
 ) -> list[dict[str, object]]:
-    """Assemble C 02.00 DataFrame rows from ``row_values`` + section templates."""
+    """Lay ``cells`` out on the published template, row by row.
+
+    A row not in ``cells`` is one this calculator computes nothing for and is
+    empty. A column the published row has no cell in is empty whatever was
+    prepared for it.
+    """
     return [
-        _row_dict(row_def, row_values, column_refs)
-        for section in row_sections
-        for row_def in section.rows
+        {
+            "row_ref": row.ref,
+            "row_name": row.label,
+            **{
+                ref: cells.get(row.ref, {}).get(ref) if ref in row.columns else None
+                for ref in column_refs
+            },
+        }
+        for _section, published in rows.get_c02_00_layout(framework)
+        for row in published
     ]

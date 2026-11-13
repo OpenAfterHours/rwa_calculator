@@ -311,10 +311,14 @@ def corep_bundle(portfolio: Portfolio, regime: str) -> COREPTemplateBundle:
 
     Generation costs an order of magnitude more than a pipeline run, so the cache
     is what makes the template properties affordable in the dev loop.
+
+    Generated with the run's own output-floor summary, as the API export paths
+    do: OF 02.00 takes OF-ADJ from it and cannot state the floor without it.
     """
     framework, _reporting_date = REGIMES[regime]
+    result = run(portfolio, regime)
     return COREPGenerator().generate_from_lazyframe(
-        run(portfolio, regime).results, framework=framework
+        result.results, framework=framework, output_floor_summary=result.output_floor_summary
     )
 
 

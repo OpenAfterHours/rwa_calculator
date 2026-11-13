@@ -202,14 +202,23 @@ def test_the_floor_shortfall_lands_only_on_floor_eligible_legs(portfolio_name: s
 
 
 def test_the_published_trea_is_not_floored_a_second_time():
-    """C 02.00 row 0010 equals the ledger sum — no floor add-on is applied twice.
+    """OF 02.00 row 0010 states the floored total ONCE — no add-on is applied twice.
 
     The portfolio is built so the floor definitely BINDS (very low PD and LGD
     against a 100%-weighted standardised equivalent), because the identity is
     trivially true when it does not — a vacuous pass here would look exactly like
-    a real one. Row 0010 is the published total risk exposure amount; ``rwa_final``
-    already carries the distributed shortfall, so a template that added
-    ``floor_impact_rwa`` on top would report the same capital twice.
+    a real one. ``rwa_final`` already carries the distributed shortfall, so a
+    template that added ``floor_impact_rwa`` on top would report the same capital
+    twice.
+
+    RE-ANCHORED 2026-11-13. This asserted row 0010 column 0010 == the post-floor
+    ledger total. Column 0010 is the UN-floored total — one data point with
+    OF 02.01 row 0080 column 0030 (U-TREA) in the PRA001 taxonomy, summed from
+    the rows beneath it by boe_b1092 — and the floor is column 0030 of the same
+    row. The total is the greater of the two (PS1/26 Art. 92(2A)), so the
+    shortfall is counted exactly once when that maximum is the ledger total, and
+    not at all in column 0010. The book is all-modelled, so the engine's
+    modelled-subset floor and the template's are the same number here.
     """
     # Arrange
     portfolio = tuple(
@@ -230,20 +239,28 @@ def test_the_published_trea_is_not_floored_a_second_time():
         "the floor no longer binds on this portfolio, so the test would pass vacuously — "
         f"u_trea {summary.u_trea:,.2f} vs threshold {summary.floor_threshold:,.2f}"
     )
-    ledger_total = float(
-        results_df(portfolio, FULLY_PHASED_IN_REGIME)["rwa_final"].fill_null(0.0).sum()
-    )
+    ledger = results_df(portfolio, FULLY_PHASED_IN_REGIME)
+    ledger_total = float(ledger["rwa_final"].fill_null(0.0).sum())
+    unfloored_total = float(ledger["rwa_pre_floor"].fill_null(0.0).sum())
 
     # Act
     c02 = corep_bundle(portfolio, FULLY_PHASED_IN_REGIME).c_02_00
     assert c02 is not None, "C 02.00 was not emitted at all"
-    published = c02.filter(pl.col("row_ref") == "0010")["0010"][0]
+    total_row = c02.filter(pl.col("row_ref") == "0010")
+    unfloored, floor = total_row["0010"][0], total_row["0030"][0]
 
     # Assert
-    assert float(published) == pytest.approx(ledger_total, rel=1e-9, abs=0.005), (
-        f"C 02.00 row 0010 publishes {float(published):,.2f} against a post-floor ledger total "
-        f"of {ledger_total:,.2f}; the floor shortfall of {summary.shortfall:,.2f} has been "
-        f"counted twice"
+    assert floor is not None, "OF 02.00 did not state the output floor (row 0010 column 0030)"
+    assert float(unfloored) == pytest.approx(unfloored_total, rel=1e-9, abs=0.005), (
+        f"OF 02.00 row 0010 column 0010 publishes {float(unfloored):,.2f} against an "
+        f"un-floored ledger total of {unfloored_total:,.2f}; the floor shortfall of "
+        f"{summary.shortfall:,.2f} belongs in column 0030, not here"
+    )
+    published = max(float(unfloored), float(floor))
+    assert published == pytest.approx(ledger_total, rel=1e-9, abs=0.005), (
+        f"OF 02.00 row 0010 publishes max({float(unfloored):,.2f}, {float(floor):,.2f}) against "
+        f"a post-floor ledger total of {ledger_total:,.2f}; the floor shortfall of "
+        f"{summary.shortfall:,.2f} is not counted exactly once"
     )
 
 

@@ -315,6 +315,90 @@ def test_an_empty_bundle_yields_an_empty_return_and_nothing_unplaced() -> None:
 
 
 # ---------------------------------------------------------------------------
+# One data point shown in several cells
+# ---------------------------------------------------------------------------
+#
+# The standardised-approach total is ONE data point in the PRA001 taxonomy shown
+# in three cells: OF 02.00 rows 0050 and 0060 column 0010, and OF 07.00 Total
+# sheet row 0010 column 0220. Each template adds up the same exposures in its own
+# order, and two orders of addition are not reliably the same float (measured
+# 2026-11-13 on the rich portfolio: 51,355,833.33333333 against ...336). A
+# submission holds one fact for the data point, so the adapter files one value.
+
+_SA_TOTAL_OF02 = 51_355_833.33333333
+_SA_TOTAL_OF07 = 51_355_833.333333336
+
+
+def _sa_total_in_three_cells(of02: float, of07: float):
+    return mapping(
+        c_02_00=build_frame({"0050": {"0010": of02}, "0060": {"0010": of02}}),
+        c07_00={"total": build_frame({"0010": {"0220": of07}})},
+    )
+
+
+def _inconsistent_data_points(result) -> list[str]:
+    pack = resolve_pack(FILING_MODULE, REFERENCE_DATE)
+    return [
+        finding.subject
+        for finding in check_structure(result.canonical, pack)
+        if finding.code == "STR007"
+    ]
+
+
+def test_cells_of_one_data_point_that_agree_to_rounding_are_filed_as_one_value() -> None:
+    # Arrange
+    assert _SA_TOTAL_OF02 != _SA_TOTAL_OF07, "the two sums must differ for this to test anything"
+
+    # Act
+    result = _sa_total_in_three_cells(_SA_TOTAL_OF02, _SA_TOTAL_OF07)
+
+    # Assert
+    values = result.canonical.facts["value"].to_list()
+    assert len(values) == 3
+    assert len(set(values)) == 1
+    assert values[0] in (_SA_TOTAL_OF02, _SA_TOTAL_OF07)
+    assert _inconsistent_data_points(result) == []
+
+
+def test_cells_of_one_data_point_that_disagree_are_left_for_the_structure_check() -> None:
+    """Only rounding is reconciled. A penny between two templates is the two
+    disagreeing about the book: both values are kept and the return is refused."""
+    # Arrange / Act
+    result = _sa_total_in_three_cells(_SA_TOTAL_OF02, _SA_TOTAL_OF02 + 0.01)
+
+    # Assert
+    assert sorted(set(result.canonical.facts["value"].to_list())) == [
+        _SA_TOTAL_OF02,
+        _SA_TOTAL_OF02 + 0.01,
+    ]
+    assert _inconsistent_data_points(result) == ["OF02.00.01.01", "OF07.00.01.01"]
+
+
+def test_a_zero_and_a_residue_of_cancellation_are_one_value() -> None:
+    """A sum that cancels to zero in one order can leave a residue in another."""
+    # Arrange / Act
+    result = _sa_total_in_three_cells(0.0, 3.7e-9)
+
+    # Assert
+    assert len(set(result.canonical.facts["value"].to_list())) == 1
+    assert _inconsistent_data_points(result) == []
+
+
+def test_cells_of_different_data_points_keep_their_own_values() -> None:
+    """Two close figures that are NOT one data point are not touched."""
+    # Arrange — row 0070 (central governments) is its own data point.
+    result = mapping(
+        c_02_00=build_frame({"0050": {"0010": _SA_TOTAL_OF02}, "0070": {"0010": _SA_TOTAL_OF07}})
+    )
+
+    # Act
+    values = dict(result.canonical.facts.select("row", "value").rows())
+
+    # Assert
+    assert values == {"0050": _SA_TOTAL_OF02, "0070": _SA_TOTAL_OF07}
+
+
+# ---------------------------------------------------------------------------
 # Usage errors
 # ---------------------------------------------------------------------------
 

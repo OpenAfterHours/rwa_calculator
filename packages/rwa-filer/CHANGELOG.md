@@ -157,4 +157,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
   v4.0.0 extracts) is unchanged and remains what `rwa-calc` runs on its own
   frames.
 
+### Fixed
+- **A fact is read in every reported table that shows its data point.** The
+  taxonomy shows some data points in two tables (the A-IRB total is a row of
+  OF 02.00 and the total of an OF 08.01 sheet), and such a figure is one fact
+  wherever it is shown. `rwa_filer.boe` read it only in the cell the return
+  named, so on a return built cell by cell a rule comparing the two cells
+  failed against the reference's default of zero — while the same return read
+  back from its XBRL file passed, as it does in Arelle. A return and the same
+  return read back from its file now get the same verdict. A cell the return
+  names itself is never overwritten (two values for one data point remains
+  `STR007`), and a table that is not reported gains nothing.
+
 ---

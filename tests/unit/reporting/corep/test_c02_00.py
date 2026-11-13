@@ -10,6 +10,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
@@ -145,6 +146,21 @@ def _c02_b31_results_with_floor() -> pl.LazyFrame:
             "sa_rwa": [1000.0, 1500.0, 400.0, 500.0],
             "sl_type": [None, None, None, "project_finance"],
         }
+    )
+
+
+def _summary(of_adj: float = 0.0) -> OutputFloorSummary:
+    """A 72.5% floor summary carrying ``of_adj`` — the only source of OF-ADJ."""
+    return OutputFloorSummary(
+        u_trea=1000.0,
+        s_trea=800.0,
+        floor_pct=0.725,
+        floor_threshold=580.0,
+        shortfall=0.0,
+        portfolio_floor_binding=False,
+        # P2.20: modelled-only post-floor scope (IRB-only summary fixture).
+        floored_modelled_rwa=1000.0,
+        of_adj=of_adj,
     )
 
 
@@ -332,12 +348,15 @@ def _irb_results_with_sme_fse() -> pl.LazyFrame:
 
 
 class TestC0200CurrencyMismatchMemoRow:
-    """P1.94g DELIV2: OF 02.00 memo row 0500 for retail/RE currency mismatch RWEA.
+    """P1.94g DELIV2: where the Art. 123B currency-mismatch RWEA is reported.
 
-    Why: Basel 3.1 requires a memo row in OF 02.00 (Own Funds Requirements)
-    reporting the total RWEA for retail and RE exposures subject to the 1.5×
-    Art. 123B currency mismatch multiplier. Row 0500 is B31-only, memo-only
-    (col 0010 populated; cols 0020/0030 None).
+    RE-ANCHORED 2026-11-13. These tests asserted an OF 02.00 "memo row 0500"
+    carrying the RWEA of retail / RE exposures subject to the 1.5x multiplier.
+    The published template has no such memo: its row 0500 is "Settlement/
+    delivery risk in the non-Trading book" (PS1/26 Annex II s1.3.1; taxonomy
+    OF02.00.01.01). The figure's published home is OF 07.00 memorandum row
+    0380, "Retail and real estate exposures - subject to the currency mismatch
+    multiplier" (Annex II s3.2.5), on the retail and real estate sheets.
 
     Expected values from _sa_results_with_currency_mismatch():
         SA_RET_1:  currency_mismatch_multiplier_applied=True,  rwa_final=112.5
@@ -345,24 +364,11 @@ class TestC0200CurrencyMismatchMemoRow:
         SA_MORT_1: currency_mismatch_multiplier_applied=True,  rwa_final=375.0
         SA_CORP_1: currency_mismatch_multiplier_applied=False, rwa_final=3000.0
 
-    Memo row 0500 = sum rwa_final where mismatch=True = 112.5 + 375.0 = 487.5
-
-    Total (row 0010) = sum all rwa_final = 112.5 + 150.0 + 375.0 + 3000.0 = 3637.5
-    The memo row must NOT change the total.
-
-    Pre-fix failure: row_ref "0500" does not exist in OF 02.00 → empty filter
-    → IndexError or assertion on length.
+    Mismatch RWEA = 112.5 + 375.0 = 487.5; total (row 0010) = 3637.5.
     """
 
-    def test_p1_94g_of_0200_row_0500_exists_b31(self) -> None:
-        """Row 0500 must appear in B31 OF 02.00.
-
-        Arrange: SA results with mismatch flag and risk_weight_pre_currency_mismatch.
-        Act:     COREPGenerator.generate_from_lazyframe(..., framework='BASEL_3_1').
-        Assert:  bundle.c_02_00 filtered to row_ref=='0500' has exactly 1 row.
-
-        Pre-fix failure: row 0500 not defined in B31_C02_00_ROW_SECTIONS → 0 rows.
-        """
+    def test_p1_94g_of_0200_has_no_currency_mismatch_row(self) -> None:
+        """Was: row 0500 exists in B31 OF 02.00. Published 0500 is settlement risk."""
         # Arrange
         gen = LedgerShimCorepGenerator()
 
@@ -373,21 +379,31 @@ class TestC0200CurrencyMismatchMemoRow:
         assert bundle.c_02_00 is not None
 
         # Assert
-        row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
-        assert len(row) == 1, (
-            f"Expected OF 02.00 row 0500 to exist in B31 framework, "
-            f"but got {len(row)} rows. Row 0500 is not yet defined in "
-            f"B31_C02_00_ROW_SECTIONS (engine-implementer must add it)."
+        assert len(bundle.c_02_00.filter(pl.col("row_ref") == "0500")) == 0
+
+    def test_p1_94g_mismatch_rwea_reports_at_of_0700_row_0380(self) -> None:
+        """Was: OF 02.00 row 0500 col 0010 == 487.5. Its published home is OF 07.00
+        row 0380 col 0220, on the retail (112.5) and real estate (375.0) sheets."""
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
         )
+        reported = {
+            sheet: frame.filter(pl.col("row_ref") == "0380")["0220"][0]
+            for sheet, frame in c07_class_sheets(bundle.c07_00).items()
+        }
 
-    def test_p1_94g_of_0200_row_0500_rwea_col_0010(self) -> None:
-        """Row 0500 col 0010 equals total RWEA of mismatch exposures (112.5 + 375.0 = 487.5).
+        # Assert
+        assert reported["retail"] == pytest.approx(112.5)
+        assert reported["real_estate"] == pytest.approx(375.0)
+        assert sum(value or 0.0 for value in reported.values()) == pytest.approx(487.5)
 
-        Arrange/Act: as above.
-        Assert: row_0500["0010"] == pytest.approx(487.5).
-
-        Pre-fix failure: row does not exist (IndexError or empty frame).
-        """
+    def test_p1_94g_of_0200_names_no_row_for_the_multiplier(self) -> None:
+        """Was: row 0500 cols 0020/0030 are None (memo-only). No OF 02.00 row is the
+        memo, so no cell of it — in any column — is named for the multiplier."""
         # Arrange
         gen = LedgerShimCorepGenerator()
 
@@ -397,58 +413,12 @@ class TestC0200CurrencyMismatchMemoRow:
         )
         assert bundle.c_02_00 is not None
 
-        row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
-        assert len(row) == 1, "Row 0500 absent — generator has not been updated yet"
-
-        # SA_RET_1 (rwa=112.5, mismatch=True) + SA_MORT_1 (rwa=375.0, mismatch=True)
-        expected_memo_rwa = 112.5 + 375.0  # = 487.5
-        assert row["0010"][0] == pytest.approx(expected_memo_rwa), (
-            f"OF 02.00 row 0500 col 0010 should be {expected_memo_rwa} "
-            f"(sum rwa_final where currency_mismatch_multiplier_applied), "
-            f"got {row['0010'][0]}."
-        )
-
-    def test_p1_94g_of_0200_row_0500_cols_0020_0030_none(self) -> None:
-        """Row 0500 is memo-only: cols 0020 and 0030 must be None (B31-only SA memo).
-
-        Arrange/Act: as above.
-        Assert: row_0500["0020"] is None and row_0500["0030"] is None.
-
-        Pre-fix failure: row does not exist.
-        """
-        # Arrange
-        gen = LedgerShimCorepGenerator()
-
-        # Act
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
-        )
-        assert bundle.c_02_00 is not None
-
-        row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
-        assert len(row) == 1, "Row 0500 absent — generator has not been updated yet"
-
-        # Memo-only: SA-equivalent (0020) and floor-adjusted (0030) must both be None
-        assert row["0020"][0] is None, (
-            f"OF 02.00 row 0500 col 0020 should be None (memo-only), got {row['0020'][0]}"
-        )
-        assert row["0030"][0] is None, (
-            f"OF 02.00 row 0500 col 0030 should be None (memo-only), got {row['0030'][0]}"
-        )
+        # Assert
+        names = bundle.c_02_00["row_name"].str.to_lowercase().to_list()
+        assert not any("mismatch" in name for name in names)
 
     def test_p1_94g_of_0200_total_row_unchanged_by_memo(self) -> None:
-        """Adding row 0500 must NOT change the TREA total (row 0010).
-
-        The memo row is purely informational — it must not inflate total RWEA.
-        Total = 112.5 + 150.0 + 375.0 + 3000.0 = 3637.5.
-
-        Arrange/Act: as above.
-        Assert: row_0010["0010"] == pytest.approx(3637.5).
-
-        Pre-fix: the total row already works; this confirms memo-row addition
-        is non-destructive. This assertion passes pre-fix ONLY IF the total
-        already computes correctly — include it to guard against regressions.
-        """
+        """The TREA total (row 0010) is the sum of all rwa_final: 3637.5."""
         # Arrange
         gen = LedgerShimCorepGenerator()
 
@@ -465,19 +435,11 @@ class TestC0200CurrencyMismatchMemoRow:
         expected_total = 112.5 + 150.0 + 375.0 + 3000.0  # = 3637.5
         assert total_row["0010"][0] == pytest.approx(expected_total), (
             f"OF 02.00 total TREA (row 0010) should be {expected_total}, "
-            f"got {total_row['0010'][0]}. "
-            f"The memo row 0500 must not be included in the total."
+            f"got {total_row['0010'][0]}."
         )
 
     def test_p1_94g_of_0200_row_0500_absent_under_crr(self) -> None:
-        """Row 0500 is B31-only — must not appear under CRR framework.
-
-        Arrange/Act: same fixture, framework='CRR'.
-        Assert: c_02_00 filtered to row_ref=='0500' has 0 rows.
-
-        Pre-fix: this assertion already passes (row doesn't exist at all);
-        it ensures row 0500 is not accidentally added to CRR too.
-        """
+        """No row 0500 under CRR either (this layout lists no settlement sub-rows)."""
         # Arrange
         gen = LedgerShimCorepGenerator()
 
@@ -486,9 +448,7 @@ class TestC0200CurrencyMismatchMemoRow:
         assert bundle.c_02_00 is not None
 
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
-        assert len(row) == 0, (
-            f"OF 02.00 row 0500 must not appear under CRR (B31-only), but got {len(row)} rows."
-        )
+        assert len(row) == 0
 
 
 class TestC0200TemplateDefinitions:
@@ -515,8 +475,9 @@ class TestC0200TemplateDefinitions:
         assert len(CRR_C02_00_ROW_SECTIONS) == 3
 
     def test_b31_section_count(self) -> None:
-        """Basel 3.1 has 7 sections (SA, F-IRB, A-IRB, slotting, other, plus Memorandum Items added in P1.94g for the Art. 123B currency-mismatch RWEA memo row 0500)."""
-        assert len(B31_C02_00_ROW_SECTIONS) == 7
+        """Basel 3.1 has 6 sections. Was 7: the seventh held the "memo row 0500",
+        which is not a row of the published OF 02.00 (see the class above)."""
+        assert len(B31_C02_00_ROW_SECTIONS) == 6
 
     def test_crr_total_row_exists(self) -> None:
         """CRR has a TOTAL RISK EXPOSURE AMOUNT row."""
@@ -711,25 +672,29 @@ class TestC0200TotalRow:
         # S1=1000, S2=100, I1=1000, I2=240, SL1=420 → 2760
         assert row["0010"][0] == pytest.approx(2760.0)
 
-    def test_own_funds_requirement(self) -> None:
-        """Own funds requirement (row 0040) = 8% × TREA."""
+    def test_row_0040_is_the_credit_risk_rwea(self) -> None:
+        """Was: row 0040 == 8% x TREA ("own funds requirement"). Row 0040 is the
+        credit-risk RWEA (EBA v0205_m) — here the whole TREA; C 02.00 has no 8% row."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_sa_results(), framework="CRR")
         df = bundle.c_02_00
         assert df is not None
         trea = df.filter(pl.col("row_ref") == "0010")["0010"][0]
-        own_funds = df.filter(pl.col("row_ref") == "0040")["0010"][0]
-        assert own_funds == pytest.approx(trea * 0.08)
+        credit_risk = df.filter(pl.col("row_ref") == "0040")["0010"][0]
+        assert credit_risk == pytest.approx(trea)
 
-    def test_b31_total_row_three_columns(self) -> None:
-        """B31 total row has all 3 columns populated."""
+    def test_b31_total_row_columns(self) -> None:
+        """Was: all 3 columns populated. Row 0010 has cells in columns 0010 and
+        0030 only (taxonomy OF02.00.01.01), and 0030 needs the summary's OF-ADJ."""
         gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1", output_floor_summary=_summary()
+        )
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0010")
         assert row["0010"][0] is not None
-        assert row["0020"][0] is not None
+        assert row["0020"][0] is None
         assert row["0030"][0] is not None
 
     def test_b31_total_rwa_matches(self) -> None:
@@ -807,31 +772,33 @@ class TestC0200IRBBreakdown:
     """IRB approach breakdown rows."""
 
     def test_irb_total(self) -> None:
-        """IRB total (row 0220) = F-IRB + A-IRB + slotting."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
-        df = bundle.c_02_00
-        assert df is not None
-        row = df.filter(pl.col("row_ref") == "0220")
-        # I1=1000 (FIRB) + I2=240 (AIRB) + SL1=420 (slotting) = 1660
-        assert row["0010"][0] == pytest.approx(1660.0)
-
-    def test_firb_total(self) -> None:
-        """F-IRB total (row 0240) = F-IRB RWA."""
+        """IRB total = F-IRB + A-IRB + slotting. Was row 0220; published row 0240."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0240")
-        assert row["0010"][0] == pytest.approx(1000.0)
+        # I1=1000 (FIRB) + I2=240 (AIRB) + SL1=420 (slotting) = 1660
+        assert row["0010"][0] == pytest.approx(1660.0)
 
-    def test_airb_total(self) -> None:
-        """A-IRB total (row 0300) = A-IRB RWA."""
+    def test_firb_total(self) -> None:
+        """Was: row 0240 == 1000. The F-IRB total is row 0250 (EBA v0210_m), and under
+        CRR it counts slotting — specialised lending without own estimates."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
         df = bundle.c_02_00
         assert df is not None
-        row = df.filter(pl.col("row_ref") == "0300")
+        row = df.filter(pl.col("row_ref") == "0250")
+        # I1=1000 (FIRB) + SL1=420 (slotting)
+        assert row["0010"][0] == pytest.approx(1420.0)
+
+    def test_airb_total(self) -> None:
+        """A-IRB total = A-IRB RWA. Was row 0300; published row 0310 (EBA v0211_m)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        df = bundle.c_02_00
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0310")
         assert row["0010"][0] == pytest.approx(240.0)
 
     def test_airb_retail_mortgage(self) -> None:
@@ -844,12 +811,13 @@ class TestC0200IRBBreakdown:
         assert row["0010"][0] == pytest.approx(240.0)
 
     def test_slotting_total(self) -> None:
-        """Slotting total in CRR row 0410."""
+        """Was: CRR row 0410 == 420. Row 0410 is "Retail - Other non-SME"; slotting is
+        "Corporates - Specialised Lending" without own estimates, row 0290 (v4248_i)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
         df = bundle.c_02_00
         assert df is not None
-        row = df.filter(pl.col("row_ref") == "0410")
+        row = df.filter(pl.col("row_ref") == "0290")
         assert row["0010"][0] == pytest.approx(420.0)
 
     def test_b31_slotting_by_type(self) -> None:
@@ -865,24 +833,24 @@ class TestC0200IRBBreakdown:
         assert pf_row["0010"][0] == pytest.approx(420.0)
 
     def test_credit_risk_equals_total(self) -> None:
-        """Credit risk row (0050) = total (0010) since only CR in scope."""
+        """Credit risk = total since only CR in scope. Was row 0050; published 0040."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
         df = bundle.c_02_00
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0010")["0010"][0]
-        cr = df.filter(pl.col("row_ref") == "0050")["0010"][0]
+        cr = df.filter(pl.col("row_ref") == "0040")["0010"][0]
         assert cr == pytest.approx(total)
 
     def test_sa_plus_irb_equals_credit_risk(self) -> None:
-        """SA total + IRB total = credit risk total."""
+        """SA + IRB = credit risk. Was 0060 + 0220 = 0050; published 0050 + 0240 = 0040."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
         df = bundle.c_02_00
         assert df is not None
-        cr = df.filter(pl.col("row_ref") == "0050")["0010"][0]
-        sa = df.filter(pl.col("row_ref") == "0060")["0010"][0]
-        irb = df.filter(pl.col("row_ref") == "0220")["0010"][0]
+        cr = df.filter(pl.col("row_ref") == "0040")["0010"][0]
+        sa = df.filter(pl.col("row_ref") == "0050")["0010"][0]
+        irb = df.filter(pl.col("row_ref") == "0240")["0010"][0]
         assert sa + irb == pytest.approx(cr)
 
 
@@ -890,34 +858,40 @@ class TestC0200B31Features:
     """Basel 3.1 specific features: 3 columns, floor rows, sub-breakdowns."""
 
     def test_sa_equivalent_column(self) -> None:
-        """Col 0020 (SA-equivalent) is populated from sa_rwa."""
+        """Was: row 0010 col 0020 == 3400. Row 0010 has no column 0020; S-TREA is row
+        0040 col 0020 = SA (row 0050) + the modelled book's sa_rwa (boe_b0716)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
-        row = df.filter(pl.col("row_ref") == "0010")
-        # sa_rwa: 1000+1500+400+500 = 3400
+        row = df.filter(pl.col("row_ref") == "0040")
+        # SA rwa 1000 + modelled sa_rwa 1500+400+500 = 3400
         assert row["0020"][0] == pytest.approx(3400.0)
 
     def test_floor_indicator_row(self) -> None:
-        """Row 0034 indicates whether floor is activated."""
+        """Was: row 0034 col 0010 == 0.0. The row has a cell in column 0030 only, set
+        by comparing the floor with U-TREA: 0.725 * 3400 = 2465 < 2660 -> No."""
         gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_results_with_floor(), framework="BASEL_3_1", output_floor_summary=_summary()
+        )
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0034")
         assert len(row) == 1
-        # Floor not binding in this dataset (rwa_final == rwa_pre_floor)
-        assert row["0010"][0] == pytest.approx(0.0)
+        assert row["0030"][0] == pytest.approx(0.0)
 
     def test_floor_binding_indicator(self) -> None:
-        """Row 0034 = 1 when floor is binding."""
+        """Was: row 0034 col 0010 == 1.0. Column 0030: 0.725 * 1900 = 1377.5 >= the
+        un-floored 380 -> Yes (Annex II row 0034: "equal to or greater than")."""
         gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_c02_b31_floor_binding(), framework="BASEL_3_1")
+        bundle = gen.generate_from_lazyframe(
+            _c02_b31_floor_binding(), framework="BASEL_3_1", output_floor_summary=_summary()
+        )
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0034")
-        assert row["0010"][0] == pytest.approx(1.0)
+        assert row["0030"][0] == pytest.approx(1.0)
 
     def test_b31_firb_institution_row(self) -> None:
         """B31 has F-IRB institution detail row 0271."""
@@ -950,17 +924,25 @@ class TestC0200B31Features:
 
 
 class TestC0200NullRows:
-    """Non-credit-risk rows should be null (out of scope)."""
+    """Non-credit-risk rows should be null (out of scope).
+
+    Codes and labels re-anchored 2026-11-13 to the published C 02.00 (EBA v0204_m /
+    v0205_m; PRA "C 02.00 (CA2)" sheet). Was: settlement 0430, securitisation
+    0440, market 0460, CVA 0590, operational 0640, fixed overheads 0680.
+    """
 
     @pytest.mark.parametrize(
         "row_ref,row_name",
         [
-            ("0430", "Settlement risk"),
-            ("0440", "Securitisation positions in non-trading book"),
-            ("0460", "Position, foreign exchange and commodities risk"),
-            ("0590", "Credit valuation adjustment (CVA)"),
-            ("0640", "Operational risk"),
-            ("0680", "Additional risk exposure: fixed overheads"),
+            ("0490", "TOTAL RISK EXPOSURE AMOUNT FOR SETTLEMENT/DELIVERY"),
+            ("0470", "Securitisation positions"),
+            (
+                "0520",
+                "TOTAL RISK EXPOSURE AMOUNT FOR POSITION, FOREIGN EXCHANGE AND COMMODITIES RISKS",
+            ),
+            ("0640", "TOTAL RISK EXPOSURE AMOUNT FOR CREDIT VALUATION ADJUSTMENT"),
+            ("0590", "TOTAL RISK EXPOSURE AMOUNT FOR OPERATIONAL RISK (OpR)"),
+            ("0630", "ADDITIONAL RISK EXPOSURE AMOUNT DUE TO FIXED OVERHEADS"),
         ],
     )
     def test_out_of_scope_row_is_null(self, row_ref: str, row_name: str) -> None:
@@ -1092,18 +1074,20 @@ class TestOF0200IRBSubRowSplits:
         assert row["0010"][0] == pytest.approx(1600.0)
 
     def test_firb_corp_sub_rows_sum_to_total(self) -> None:
-        """Rows 0295+0296+0297 should sum to total F-IRB corporates (row 0260)."""
+        """Was: 0290+0295+0296+0297 == row 0260 "F-IRB corporates". OF 02.00 has no
+        corporate subtotal; the rows foot to the F-IRB total, row 0250, with 0271."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         assert bundle.c_02_00 is not None
         df = bundle.c_02_00
-        r0260 = float(df.filter(pl.col("row_ref") == "0260")["0010"][0])
+        r0250 = float(df.filter(pl.col("row_ref") == "0250")["0010"][0])
+        r0271 = float(df.filter(pl.col("row_ref") == "0271")["0010"][0])
         r0290 = float(df.filter(pl.col("row_ref") == "0290")["0010"][0])
         r0295 = float(df.filter(pl.col("row_ref") == "0295")["0010"][0])
         r0296 = float(df.filter(pl.col("row_ref") == "0296")["0010"][0])
         r0297 = float(df.filter(pl.col("row_ref") == "0297")["0010"][0])
-        # 0260 = SL (0290) + FSE (0295) + SME (0296) + non-SME (0297)
-        assert r0260 == pytest.approx(r0290 + r0295 + r0296 + r0297)
+        assert r0250 == pytest.approx(800.0 + 300.0 + 1600.0)
+        assert r0250 == pytest.approx(r0271 + r0290 + r0295 + r0296 + r0297)
 
     def test_airb_sme_row_0355(self) -> None:
         """Row 0355: A-IRB other general corporates SME."""
@@ -1166,17 +1150,17 @@ class TestOF0200IRBSubRowSplits:
         assert row["0010"][0] == pytest.approx(350.0)
 
     def test_airb_retail_re_sub_rows_sum_to_total(self) -> None:
-        """Rows 0382+0383+0384+0385 sum to total A-IRB retail RE (row 0380)."""
+        """Was: 0382+0383+0384+0385 == row 0380. OF 02.00 has no retail-RE subtotal;
+        the four rows carry the whole A-IRB retail mortgage book (120+180+150+350)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         assert bundle.c_02_00 is not None
         df = bundle.c_02_00
-        r0380 = float(df.filter(pl.col("row_ref") == "0380")["0010"][0])
         r0382 = float(df.filter(pl.col("row_ref") == "0382")["0010"][0])
         r0383 = float(df.filter(pl.col("row_ref") == "0383")["0010"][0])
         r0384 = float(df.filter(pl.col("row_ref") == "0384")["0010"][0])
         r0385 = float(df.filter(pl.col("row_ref") == "0385")["0010"][0])
-        assert r0380 == pytest.approx(r0382 + r0383 + r0384 + r0385)
+        assert r0382 + r0383 + r0384 + r0385 == pytest.approx(800.0)
 
     def test_airb_other_sme_row_0400(self) -> None:
         """Row 0400: A-IRB retail other SME."""
@@ -1229,7 +1213,7 @@ def _c02_crr_equity_irb_results() -> pl.LazyFrame:
 
     One SA corporate, one F-IRB corporate, and one equity leg tagged
     ``irb_simple`` (1,000 EAD x 290% = 2,900 RWA). The equity leg must report
-    at row 0420 and the IRB total (0220), never the SA rows (0060/0210).
+    at row 0420 and the IRB total (0240), never the SA rows (0050/0060/0210).
     """
     return pl.LazyFrame(
         {
@@ -1288,22 +1272,27 @@ class TestC0200EquityMethodRouting:
     """R8: C 02.00 row 0420 "Equity IRB" holds only Art. 155 IRB-method equity.
 
     Why: Under Basel 3.1 (PS1/26 Art. 147A) IRB equity is removed — every equity
-    leg is SA, so row 0420 must be empty and the book stays in the SA breakdown.
+    leg is SA, OF 02.00 has no row 0420 and the book stays in the SA breakdown.
     Under CRR, only equity actually treated under Art. 155 (irb_simple/pd_lgd)
     belongs in 0420; SA-treated equity belongs in the SA rows. The fix routes by
     the sealed ``equity_method`` discriminator and must never change the totals
-    (rows 0010/0040/0050) — it moves RWA between breakdown rows only.
+    (rows 0010/0040) — it moves RWA between breakdown rows only.
+
+    Row codes re-anchored 2026-11-13: credit risk 0050 -> 0040, IRB 0220 -> 0240;
+    the SA total is 0050 = 0060 (EBA v0205_m; taxonomy OF02.00.01.01).
     """
 
     def _row(self, df: pl.DataFrame, ref: str) -> float:
         return float(df.filter(pl.col("row_ref") == ref)["0010"][0])
 
     def test_b31_equity_irb_row_empty(self) -> None:
-        """B31: row 0420 "Equity IRB" is zero (Art. 147A — no IRB equity)."""
+        """Was: B31 row 0420 == 0.0. OF 02.00 has no "Equity IRB" row (Art. 147A), and
+        the IRB total carries no equity: F-IRB 1000 only."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_b31_equity_results(), framework="BASEL_3_1")
         assert bundle.c_02_00 is not None
-        assert self._row(bundle.c_02_00, "0420") == pytest.approx(0.0)
+        assert len(bundle.c_02_00.filter(pl.col("row_ref") == "0420")) == 0
+        assert self._row(bundle.c_02_00, "0240") == pytest.approx(1000.0)
 
     def test_b31_equity_stays_in_sa_rows(self) -> None:
         """B31: the equity book (2,500) reports in SA total (0060) and class (0210)."""
@@ -1317,17 +1306,17 @@ class TestC0200EquityMethodRouting:
         assert self._row(df, "0210") == pytest.approx(2500.0)
 
     def test_b31_totals_unchanged_and_footing_holds(self) -> None:
-        """B31: totals count equity once and 0060 + 0220 == 0050."""
+        """B31: totals count equity once and 0050 + 0240 == 0040 (boe_b1093)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_b31_equity_results(), framework="BASEL_3_1")
         assert bundle.c_02_00 is not None
         df = bundle.c_02_00
         # Total = 1000 + 1000 + 2500 = 4500 (equity once)
         assert self._row(df, "0010") == pytest.approx(4500.0)
-        assert self._row(df, "0050") == pytest.approx(4500.0)
-        assert self._row(df, "0040") == pytest.approx(4500.0 * 0.08)
+        # Row 0040 is the credit-risk RWEA (was asserted as 8% of it, at 0040).
+        assert self._row(df, "0040") == pytest.approx(4500.0)
         # Footing: SA total + IRB total = credit risk total
-        assert self._row(df, "0060") + self._row(df, "0220") == pytest.approx(self._row(df, "0050"))
+        assert self._row(df, "0050") + self._row(df, "0240") == pytest.approx(self._row(df, "0040"))
 
     def test_crr_irb_equity_in_row_0420(self) -> None:
         """CRR irb_simple: row 0420 holds the equity book (2,900)."""
@@ -1348,16 +1337,16 @@ class TestC0200EquityMethodRouting:
         assert self._row(df, "0210") == pytest.approx(0.0)
 
     def test_crr_irb_equity_folds_into_irb_total(self) -> None:
-        """CRR irb_simple: IRB total (0220) includes the equity, footing holds."""
+        """CRR irb_simple: IRB total (0240) includes the equity, footing holds."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_c02_crr_equity_irb_results(), framework="CRR")
         assert bundle.c_02_00 is not None
         df = bundle.c_02_00
         # IRB total = F-IRB (1000) + IRB equity (2900) = 3900
-        assert self._row(df, "0220") == pytest.approx(3900.0)
+        assert self._row(df, "0240") == pytest.approx(3900.0)
         # Totals unchanged; footing holds
         assert self._row(df, "0010") == pytest.approx(4900.0)
-        assert self._row(df, "0060") + self._row(df, "0220") == pytest.approx(self._row(df, "0050"))
+        assert self._row(df, "0050") + self._row(df, "0240") == pytest.approx(self._row(df, "0040"))
 
     def test_crr_sa_equity_in_sa_rows_only(self) -> None:
         """CRR sa-method equity: reports in SA rows only, row 0420 empties."""
@@ -1369,10 +1358,10 @@ class TestC0200EquityMethodRouting:
         assert self._row(df, "0060") == pytest.approx(3500.0)
         assert self._row(df, "0210") == pytest.approx(2500.0)
         # IRB total = F-IRB only (1000); row 0420 empty
-        assert self._row(df, "0220") == pytest.approx(1000.0)
+        assert self._row(df, "0240") == pytest.approx(1000.0)
         assert self._row(df, "0420") == pytest.approx(0.0)
         # Footing holds
-        assert self._row(df, "0060") + self._row(df, "0220") == pytest.approx(self._row(df, "0050"))
+        assert self._row(df, "0050") + self._row(df, "0240") == pytest.approx(self._row(df, "0040"))
 
     def test_equity_free_run_row_0420_empty(self) -> None:
         """Equity-free run (no equity_method column): 0420 zero-fills, no crash."""
@@ -1386,68 +1375,50 @@ class TestOF0200FloorIndicatorRows:
     """Tests for OF 02.00 output floor indicator rows 0034-0036.
 
     Why: These rows tell regulators whether the output floor is active
-    (row 0034), what multiplier % applies (row 0035), and the OF-ADJ
+    (row 0034), what multiplier applies (row 0035), and the OF-ADJ
     monetary value (row 0036). Previously rows 0035/0036 were always zero.
+
+    Re-anchored 2026-11-13: each row has a cell in column 0030 ONLY (taxonomy
+    OF02.00.01.01) — these tests read column 0010 — and the multiplier is a rate.
     """
 
     def test_floor_multiplier_from_summary(self) -> None:
-        """Row 0035 shows floor_pct * 100 from OutputFloorSummary."""
-        summary = OutputFloorSummary(
-            u_trea=1000.0,
-            s_trea=800.0,
-            floor_pct=0.725,
-            floor_threshold=580.0,
-            shortfall=0.0,
-            portfolio_floor_binding=False,
-            # P2.20: modelled-only post-floor scope (IRB-only summary fixture).
-            floored_modelled_rwa=1000.0,
-            of_adj=50.0,
-        )
+        """Was: row 0035 == 72.5 (floor_pct * 100). boe_b0359 admits 0.55 ... 0.725."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_sme_fse(),
             framework="BASEL_3_1",
-            output_floor_summary=summary,
+            output_floor_summary=_summary(of_adj=50.0),
         )
         assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
         assert len(row) == 1
-        # 72.5% → 72.5
-        assert row["0010"][0] == pytest.approx(72.5)
+        assert row["0030"][0] == pytest.approx(0.725)
 
     def test_of_adj_from_summary(self) -> None:
         """Row 0036 shows of_adj monetary value from OutputFloorSummary."""
-        summary = OutputFloorSummary(
-            u_trea=1000.0,
-            s_trea=800.0,
-            floor_pct=0.725,
-            floor_threshold=580.0,
-            shortfall=0.0,
-            portfolio_floor_binding=False,
-            # P2.20: modelled-only post-floor scope (IRB-only summary fixture).
-            floored_modelled_rwa=1000.0,
-            of_adj=123.45,
-        )
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_sme_fse(),
             framework="BASEL_3_1",
-            output_floor_summary=summary,
+            output_floor_summary=_summary(of_adj=123.45),
         )
         assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
         assert len(row) == 1
-        assert row["0010"][0] == pytest.approx(123.45)
+        assert row["0030"][0] == pytest.approx(123.45)
 
-    def test_floor_rows_zero_without_summary(self) -> None:
-        """Rows 0035/0036 are zero when no OutputFloorSummary is provided."""
+    def test_floor_rows_empty_without_summary(self) -> None:
+        """Was: rows 0035/0036 == 0.0 with no summary. Neither is KNOWN to be zero —
+        this frame seals no multiplier and OF-ADJ is not on the ledger — and
+        boe_b0359 rejects a 0.0 multiplier. Unknown is empty."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         assert bundle.c_02_00 is not None
         r0035 = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
         r0036 = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
-        assert r0035["0010"][0] == pytest.approx(0.0)
-        assert r0036["0010"][0] == pytest.approx(0.0)
+        assert r0035["0030"][0] is None
+        assert r0036["0030"][0] is None
 
     def test_floor_rows_absent_crr(self) -> None:
         """CRR does not have floor indicator rows 0034-0036."""

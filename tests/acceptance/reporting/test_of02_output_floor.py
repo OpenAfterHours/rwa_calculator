@@ -111,7 +111,7 @@ class _Run:
 #
 # rich: 16 loans + 1 equity + 2 CIUs, NO CCR. Modelled = F-IRB 48,244,060.92 +
 #   A-IRB 16,085,419.21 + slotting 52,500,000.00 = 116,829,480.13 (== C 02.00 row
-#   0220); standardised = the SA book + equity + CIU = 51,355,833.33 (== C 02.00
+#   0240); standardised = the SA book + equity + CIU = 51,355,833.33 (== C 02.00
 #   row 0060). They sum to the whole portfolio, 168,185,313.47 (== C 02.00 row
 #   0010). S-TREA (column 0040) = whole-book sa_rwa = 195,130,833.33.
 #
@@ -377,61 +377,64 @@ def test_of02_standardised_only_book_reports_no_modelled_rwa(runs: dict[str, _Ru
 
 @pytest.mark.parametrize("portfolio", _PORTFOLIOS)
 def test_of02_strea_ties_to_c02_sa_equivalent_total(portfolio: str, runs: dict[str, _Run]) -> None:
-    """Row 0080 column 0040 == C 02.00 row 0010 column 0020 — both are sum(``sa_rwa``).
+    """Row 0080 column 0040 == OF 02.00 row 0040 column 0020 — both are S-TREA.
 
     S-TREA is a single number and the two templates must agree on it, unconditionally:
     neither side reads the post-floor carrier.
 
+    RE-ANCHORED 2026-11-13. This read OF 02.00 row 0010 column 0020, a cell the
+    PRA001 taxonomy does not have. S-TREA is row 0040 column 0020 — boe_b0720
+    states this tie (OF 02.01 r0080 c0040 against OF 02.00 r0040 c0020 and the
+    other risk types) and boe_b0716 states how the cell is built.
+
     Arrange: a Basel 3.1 reporting portfolio.
-    Act:     run the pipeline -> COREP OF 02.01 + C 02.00.
-    Assert:  OF 02.01 row 0080 col 0040 == C 02.00 row 0010 col 0020.
+    Act:     run the pipeline -> COREP OF 02.01 + OF 02.00.
+    Assert:  OF 02.01 row 0080 col 0040 == OF 02.00 row 0040 col 0020.
     """
     # Arrange + Act
     run = runs[portfolio]
     of02_strea = run.of02_row("0080")["0040"]
-    c02_strea = run.c02_row("0010")["0020"]
+    c02_strea = run.c02_row("0040")["0020"]
 
     # Assert
     assert of02_strea == pytest.approx(c02_strea, rel=_REL, abs=_ABS), (
         f"[{portfolio}] S-TREA disagrees across templates: OF 02.01 row 0080 column "
-        f"0040 reports {of02_strea}, C 02.00 row 0010 column 0020 (SA-equivalent TREA) "
-        f"reports {c02_strea}. Both are the sum of sa_rwa over the whole book."
+        f"0040 reports {of02_strea}, OF 02.00 row 0040 column 0020 (standardised "
+        f"credit-risk RWEA) reports {c02_strea}. Both are S-TREA over the whole book."
     )
 
 
 # =============================================================================
-# The floor-dependent tie-outs — guarded on a non-binding floor
+# The approach and total tie-outs — both templates are un-floored
 # =============================================================================
 #
-# C 02.00 reads ``rwa_final`` (POST-floor) while OF 02.01 reads ``rwa_pre_floor``.
-# The two agree only while the floor is not activated (C 02.00 row 0034 == 0.0),
-# which is true of both goldens. Asserting them unconditionally would fail
-# spuriously the first time someone builds a binding-floor fixture — so the guard
-# is explicit, and skips rather than lying.
+# OF 02.00 column 0010 and OF 02.01 both read ``rwa_pre_floor``, so these ties hold
+# whether or not the floor binds. (Until 2026-11-13 C 02.00 read the post-floor
+# ``rwa_final`` and the three tests below skipped on a binding floor, through a
+# guard that read row 0034 column 0010 — a cell the template does not have.)
 
 
 @pytest.mark.parametrize("portfolio", _PORTFOLIOS)
 def test_of02_modelled_total_ties_to_c02_irb_row(portfolio: str, runs: dict[str, _Run]) -> None:
-    """Row 0080 column 0010 == C 02.00 row 0220 ("Of which: IRB Approach").
+    """Row 0080 column 0010 == OF 02.00 row 0240 ("Internal ratings based Approach").
 
-    The modelled partition IS the IRB estate as C 02.00 already defines it —
+    The modelled partition IS the IRB estate as OF 02.00 already defines it —
     F-IRB + A-IRB + supervisory slotting (Art. 153(5)). If the two disagree, one
-    of them has mis-scoped "modelled".
+    of them has mis-scoped "modelled". (Was row 0220; the IRB total is row 0240.)
 
-    Arrange: a Basel 3.1 reporting portfolio with a non-binding output floor.
-    Act:     run the pipeline -> COREP OF 02.01 + C 02.00.
-    Assert:  OF 02.01 row 0080 col 0010 == C 02.00 row 0220 col 0010.
+    Arrange: a Basel 3.1 reporting portfolio.
+    Act:     run the pipeline -> COREP OF 02.01 + OF 02.00.
+    Assert:  OF 02.01 row 0080 col 0010 == OF 02.00 row 0240 col 0010.
     """
     # Arrange + Act
     run = runs[portfolio]
-    _require_non_binding_floor(run, portfolio)
     modelled = run.of02_row("0080")["0010"]
-    c02_irb = run.c02_row("0220")["0010"]
+    c02_irb = run.c02_row("0240")["0010"]
 
     # Assert
     assert modelled == pytest.approx(c02_irb, rel=_REL, abs=_ABS), (
         f"[{portfolio}] OF 02.01 row 0080 column 0010 (modelled approaches only) "
-        f"reports {modelled}, but C 02.00 row 0220 ('Of which: IRB Approach', which "
+        f"reports {modelled}, but OF 02.00 row 0240 (the IRB approach, which "
         f"includes supervisory slotting) reports {c02_irb}. The modelled column must "
         "cover exactly {foundation_irb, advanced_irb, slotting}."
     )
@@ -447,13 +450,12 @@ def test_of02_standardised_total_ties_to_c02_sa_row(portfolio: str, runs: dict[s
     calculator, so the aggregator now populates equity's ``sa_rwa`` as its own
     pre-floor RWA (R4) — column 0020 still reports the actual RWA here.
 
-    Arrange: a Basel 3.1 reporting portfolio with a non-binding output floor.
+    Arrange: a Basel 3.1 reporting portfolio.
     Act:     run the pipeline -> COREP OF 02.01 + C 02.00.
     Assert:  OF 02.01 row 0080 col 0020 == C 02.00 row 0060 col 0010.
     """
     # Arrange + Act
     run = runs[portfolio]
-    _require_non_binding_floor(run, portfolio)
     standardised = run.of02_row("0080")["0020"]
     c02_sa = run.c02_row("0060")["0010"]
 
@@ -467,28 +469,25 @@ def test_of02_standardised_total_ties_to_c02_sa_row(portfolio: str, runs: dict[s
 
 @pytest.mark.parametrize("portfolio", _PORTFOLIOS)
 def test_of02_utrea_ties_to_c02_trea(portfolio: str, runs: dict[str, _Run]) -> None:
-    """Row 0080 column 0030 == C 02.00 row 0010 ("TOTAL RISK EXPOSURE AMOUNT").
+    """Row 0080 column 0030 == OF 02.00 row 0010 column 0010 — both are U-TREA.
 
-    With a non-binding floor, ``rwa_final == rwa_pre_floor``, so the complete
-    portfolio reported by OF 02.01 and the TREA reported by C 02.00 are the same
-    number. Today OF 02.01 reports 2.18x it on the rich book.
+    The two cells are ONE data point in the PRA001 taxonomy, so they are the same
+    number whether or not the floor binds: the complete portfolio, un-floored.
 
-    Arrange: a Basel 3.1 reporting portfolio with a non-binding output floor.
-    Act:     run the pipeline -> COREP OF 02.01 + C 02.00.
-    Assert:  OF 02.01 row 0080 col 0030 == C 02.00 row 0010 col 0010.
+    Arrange: a Basel 3.1 reporting portfolio.
+    Act:     run the pipeline -> COREP OF 02.01 + OF 02.00.
+    Assert:  OF 02.01 row 0080 col 0030 == OF 02.00 row 0010 col 0010.
     """
     # Arrange + Act
     run = runs[portfolio]
-    _require_non_binding_floor(run, portfolio)
     u_trea = run.of02_row("0080")["0030"]
     c02_trea = run.c02_row("0010")["0010"]
 
     # Assert
     assert u_trea == pytest.approx(c02_trea, rel=_REL, abs=_ABS), (
         f"[{portfolio}] OF 02.01 row 0080 column 0030 (U-TREA, 'the complete current "
-        f"portfolio') reports {u_trea}, but C 02.00 row 0010 (TOTAL RISK EXPOSURE "
-        f"AMOUNT) reports {c02_trea} — and the floor is not binding, so the two must "
-        "agree."
+        f"portfolio') reports {u_trea}, but OF 02.00 row 0010 column 0010 reports "
+        f"{c02_trea} — the two are one data point and must agree."
     )
 
 
@@ -524,18 +523,3 @@ def _num(row: dict[str, float | str | None], col: str) -> float:
     value = row[col]
     assert isinstance(value, int | float), f"cell {col} must be numeric, got {value!r}"
     return float(value)
-
-
-def _require_non_binding_floor(run: _Run, portfolio: str) -> None:
-    """Skip when the output floor binds — C 02.00 is post-floor, OF 02.01 is pre-floor.
-
-    Both reporting portfolios are non-binding today, so this never skips; it exists so
-    that a future binding-floor fixture does not make these tie-outs fail spuriously.
-    """
-    activated = run.c02_row("0034")["0010"]
-    if activated not in (0.0, None):
-        pytest.skip(
-            f"[{portfolio}] output floor is activated (C 02.00 row 0034 = {activated}); "
-            "C 02.00 reports post-floor RWA while OF 02.01 reports pre-floor, so the "
-            "cross-template tie-outs do not hold by construction."
-        )

@@ -308,6 +308,9 @@ class ResultExporter:
         generator = COREPGenerator()
         bundle = generator.generate(
             response,
+            # The run's own floor summary: OF 02.00 takes OF-ADJ from it, and
+            # without OF-ADJ cannot state the output floor at all.
+            output_floor_summary=response.output_floor_summary,
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )
@@ -380,6 +383,9 @@ class ResultExporter:
         generator = COREPGenerator()
         bundle = generator.generate(
             response,
+            # The run's own floor summary: OF 02.00 takes OF-ADJ from it, and
+            # without OF-ADJ cannot state the output floor at all.
+            output_floor_summary=response.output_floor_summary,
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )
@@ -469,6 +475,13 @@ class ResultExporter:
         corep = COREPGenerator().generate_from_lazyframe(
             results,
             framework=response.framework,
+            # OF 02.00 takes OF-ADJ from the floor summary: the caller's if one
+            # was supplied, otherwise the run's own.
+            output_floor_summary=(
+                output_floor_summary
+                if output_floor_summary is not None
+                else response.output_floor_summary
+            ),
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )
@@ -556,6 +569,9 @@ class ResultExporter:
             )
         corep = COREPGenerator().generate(
             response,
+            # The run's own floor summary: OF 02.00 takes OF-ADJ from it, and
+            # without OF-ADJ cannot state the output floor at all.
+            output_floor_summary=response.output_floor_summary,
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )

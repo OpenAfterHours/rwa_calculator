@@ -17,262 +17,262 @@
   },
   "summary": {
     "crr/rich": {
-      "PASS": 182,
+      "PASS": 186,
       "FAIL": 4,
       "VACUOUS": 78,
-      "NOT_EVALUATED": 477,
+      "NOT_EVALUATED": 473,
       "rules_enforced": 741,
-      "rules_executed": 264,
+      "rules_executed": 268,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/rich": {
-      "PASS": 231,
+      "PASS": 235,
       "FAIL": 6,
       "VACUOUS": 216,
-      "NOT_EVALUATED": 355,
+      "NOT_EVALUATED": 351,
       "rules_enforced": 808,
-      "rules_executed": 453,
+      "rules_executed": 457,
       "templates_emitted": 12,
       "templates_covered": 12
     },
     "crr/off-bs": {
-      "PASS": 62,
+      "PASS": 64,
       "FAIL": 1,
-      "VACUOUS": 67,
-      "NOT_EVALUATED": 611,
+      "VACUOUS": 69,
+      "NOT_EVALUATED": 607,
       "rules_enforced": 741,
-      "rules_executed": 130,
+      "rules_executed": 134,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/off-bs": {
-      "PASS": 68,
+      "PASS": 72,
       "FAIL": 3,
       "VACUOUS": 156,
-      "NOT_EVALUATED": 581,
+      "NOT_EVALUATED": 577,
       "rules_enforced": 808,
-      "rules_executed": 227,
+      "rules_executed": 231,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/ccr": {
-      "PASS": 65,
+      "PASS": 67,
       "FAIL": 1,
-      "VACUOUS": 63,
-      "NOT_EVALUATED": 612,
+      "VACUOUS": 65,
+      "NOT_EVALUATED": 608,
       "rules_enforced": 741,
-      "rules_executed": 129,
+      "rules_executed": 133,
       "templates_emitted": 7,
       "templates_covered": 6
     },
     "b31/ccr": {
-      "PASS": 73,
+      "PASS": 77,
       "FAIL": 3,
       "VACUOUS": 136,
-      "NOT_EVALUATED": 596,
+      "NOT_EVALUATED": 592,
       "rules_enforced": 808,
-      "rules_executed": 212,
+      "rules_executed": 216,
       "templates_emitted": 8,
       "templates_covered": 5
     },
     "crr/sa-classes": {
-      "PASS": 71,
+      "PASS": 73,
       "FAIL": 1,
-      "VACUOUS": 78,
-      "NOT_EVALUATED": 591,
+      "VACUOUS": 80,
+      "NOT_EVALUATED": 587,
       "rules_enforced": 741,
-      "rules_executed": 150,
+      "rules_executed": 154,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/sa-classes": {
-      "PASS": 75,
+      "PASS": 79,
       "FAIL": 3,
       "VACUOUS": 147,
-      "NOT_EVALUATED": 583,
+      "NOT_EVALUATED": 579,
       "rules_enforced": 808,
-      "rules_executed": 225,
+      "rules_executed": 229,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/irb-classes": {
-      "PASS": 85,
+      "PASS": 89,
       "FAIL": 1,
       "VACUOUS": 23,
-      "NOT_EVALUATED": 632,
+      "NOT_EVALUATED": 628,
       "rules_enforced": 741,
-      "rules_executed": 109,
+      "rules_executed": 113,
       "templates_emitted": 8,
       "templates_covered": 8
     },
     "b31/irb-classes": {
-      "PASS": 166,
-      "FAIL": 11,
+      "PASS": 172,
+      "FAIL": 9,
       "VACUOUS": 208,
-      "NOT_EVALUATED": 423,
+      "NOT_EVALUATED": 419,
       "rules_enforced": 808,
-      "rules_executed": 385,
+      "rules_executed": 389,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "crr/crm-substitution": {
-      "PASS": 141,
+      "PASS": 144,
       "FAIL": 3,
-      "VACUOUS": 83,
-      "NOT_EVALUATED": 514,
+      "VACUOUS": 84,
+      "NOT_EVALUATED": 510,
       "rules_enforced": 741,
-      "rules_executed": 227,
+      "rules_executed": 231,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/crm-substitution": {
-      "PASS": 188,
-      "FAIL": 13,
+      "PASS": 193,
+      "FAIL": 12,
       "VACUOUS": 198,
-      "NOT_EVALUATED": 409,
+      "NOT_EVALUATED": 405,
       "rules_enforced": 808,
-      "rules_executed": 399,
+      "rules_executed": 403,
       "templates_emitted": 12,
       "templates_covered": 12
     },
     "crr/re-split": {
-      "PASS": 65,
+      "PASS": 67,
       "FAIL": 1,
-      "VACUOUS": 61,
-      "NOT_EVALUATED": 614,
+      "VACUOUS": 63,
+      "NOT_EVALUATED": 610,
       "rules_enforced": 741,
-      "rules_executed": 127,
+      "rules_executed": 131,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/re-split": {
-      "PASS": 75,
+      "PASS": 79,
       "FAIL": 6,
       "VACUOUS": 146,
-      "NOT_EVALUATED": 581,
+      "NOT_EVALUATED": 577,
       "rules_enforced": 808,
-      "rules_executed": 227,
+      "rules_executed": 231,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/art199": {
-      "PASS": 53,
+      "PASS": 56,
       "FAIL": 1,
-      "VACUOUS": 31,
-      "NOT_EVALUATED": 656,
+      "VACUOUS": 32,
+      "NOT_EVALUATED": 652,
       "rules_enforced": 741,
-      "rules_executed": 85,
+      "rules_executed": 89,
       "templates_emitted": 8,
       "templates_covered": 8
     },
     "b31/art199": {
-      "PASS": 103,
+      "PASS": 107,
       "FAIL": 2,
       "VACUOUS": 74,
-      "NOT_EVALUATED": 629,
+      "NOT_EVALUATED": 625,
       "rules_enforced": 808,
-      "rules_executed": 179,
+      "rules_executed": 183,
       "templates_emitted": 9,
       "templates_covered": 9
     },
     "crr/irb-shapes": {
-      "PASS": 88,
+      "PASS": 92,
       "FAIL": 3,
       "VACUOUS": 12,
-      "NOT_EVALUATED": 638,
+      "NOT_EVALUATED": 634,
       "rules_enforced": 741,
-      "rules_executed": 103,
+      "rules_executed": 107,
       "templates_emitted": 9,
       "templates_covered": 9
     },
     "b31/irb-shapes": {
-      "PASS": 132,
+      "PASS": 136,
       "FAIL": 9,
       "VACUOUS": 53,
-      "NOT_EVALUATED": 614,
+      "NOT_EVALUATED": 610,
       "rules_enforced": 808,
-      "rules_executed": 194,
+      "rules_executed": 198,
       "templates_emitted": 10,
       "templates_covered": 10
     },
     "crr/netting": {
-      "PASS": 54,
+      "PASS": 56,
       "FAIL": 1,
-      "VACUOUS": 61,
-      "NOT_EVALUATED": 625,
+      "VACUOUS": 63,
+      "NOT_EVALUATED": 621,
       "rules_enforced": 741,
-      "rules_executed": 116,
+      "rules_executed": 120,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/netting": {
-      "PASS": 63,
+      "PASS": 67,
       "FAIL": 5,
       "VACUOUS": 141,
-      "NOT_EVALUATED": 599,
+      "NOT_EVALUATED": 595,
       "rules_enforced": 808,
-      "rules_executed": 209,
+      "rules_executed": 213,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/facility-share-binding": {
-      "PASS": 100,
+      "PASS": 103,
       "FAIL": 1,
-      "VACUOUS": 94,
-      "NOT_EVALUATED": 546,
+      "VACUOUS": 95,
+      "NOT_EVALUATED": 542,
       "rules_enforced": 741,
-      "rules_executed": 195,
+      "rules_executed": 199,
       "templates_emitted": 10,
       "templates_covered": 10
     },
     "crr/facility-share-nonbinding": {
-      "PASS": 100,
+      "PASS": 103,
       "FAIL": 1,
-      "VACUOUS": 94,
-      "NOT_EVALUATED": 546,
+      "VACUOUS": 95,
+      "NOT_EVALUATED": 542,
       "rules_enforced": 741,
-      "rules_executed": 195,
+      "rules_executed": 199,
       "templates_emitted": 10,
       "templates_covered": 10
     },
     "b31/facility-share-binding": {
-      "PASS": 143,
+      "PASS": 147,
       "FAIL": 10,
       "VACUOUS": 221,
-      "NOT_EVALUATED": 434,
+      "NOT_EVALUATED": 430,
       "rules_enforced": 808,
-      "rules_executed": 374,
+      "rules_executed": 378,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/facility-share-nonbinding": {
-      "PASS": 141,
+      "PASS": 145,
       "FAIL": 8,
       "VACUOUS": 225,
-      "NOT_EVALUATED": 434,
+      "NOT_EVALUATED": 430,
       "rules_enforced": 808,
-      "rules_executed": 374,
+      "rules_executed": 378,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "crr/row-scope": {
-      "PASS": 57,
+      "PASS": 59,
       "FAIL": 1,
-      "VACUOUS": 69,
-      "NOT_EVALUATED": 614,
+      "VACUOUS": 71,
+      "NOT_EVALUATED": 610,
       "rules_enforced": 741,
-      "rules_executed": 127,
+      "rules_executed": 131,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/row-scope": {
-      "PASS": 64,
+      "PASS": 68,
       "FAIL": 3,
       "VACUOUS": 160,
-      "NOT_EVALUATED": 581,
+      "NOT_EVALUATED": 577,
       "rules_enforced": 808,
-      "rules_executed": 227,
+      "rules_executed": 231,
       "templates_emitted": 5,
       "templates_covered": 5
     }
@@ -408,35 +408,6 @@
         "OF07.00.01.01[corporate][r0070]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0200} <= {t: OF07.00.01.01, c: 0150}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0638",
-      "severity": "ERROR",
-      "reason": "OF 02.00 c0020 is populated with the SA-equivalent recomputation - our own column definition is 'Standardised approaches only (S-TREA components)', filled from sa_equiv_rwa - where this rule requires the NON-MODELLED RWEA that OF 08.01 c0276 carries. Two different quantities, ~2x apart (4,198,446 against 8,250,000 for institutions; 15,908 against 33,750 for QRRE). Which side moves is a mapping decision: either these OF 02.00 rows take a different source column, or c0276 is wrong",
-      "portfolios": [
-        "crm-substitution",
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "OF02.00.01.01"
-      ],
-      "expression": "{t: OF02.00.01.01, r: 0271, c: 0020} = {t: OF08.01.01.01, r: 0010, c: 0276, z: 0006}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0652",
-      "severity": "ERROR",
-      "reason": "OF 02.00 c0020 is populated with the SA-equivalent recomputation - our own column definition is 'Standardised approaches only (S-TREA components)', filled from sa_equiv_rwa - where this rule requires the NON-MODELLED RWEA that OF 08.01 c0276 carries. Two different quantities, ~2x apart (4,198,446 against 8,250,000 for institutions; 15,908 against 33,750 for QRRE). Which side moves is a mapping decision: either these OF 02.00 rows take a different source column, or c0276 is wrong",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "OF02.00.01.01"
-      ],
-      "expression": "{t: OF02.00.01.01, r: 0390, c: 0020} = {t: OF08.01.01.01, r: 0010, c: 0276, z: 0015}"
     },
     {
       "regime": "b31",
@@ -825,28 +796,28 @@
       "portfolio": "ccr",
       "template": "c34_01",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 212
+      "rules_executed_on_this_run": 216
     },
     {
       "regime": "b31",
       "portfolio": "ccr",
       "template": "c34_02",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 212
+      "rules_executed_on_this_run": 216
     },
     {
       "regime": "b31",
       "portfolio": "ccr",
       "template": "c34_08",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 212
+      "rules_executed_on_this_run": 216
     },
     {
       "regime": "crr",
       "portfolio": "ccr",
       "template": "c34_02",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 129
+      "rules_executed_on_this_run": 133
     }
   ],
   "known_vacuous_rules": [

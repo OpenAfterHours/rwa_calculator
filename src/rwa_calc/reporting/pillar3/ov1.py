@@ -152,7 +152,9 @@ _SHEET_KEY = "ov1"
 # disclosed the whole RWEA under "Supervisory slotting" for an exposure that is
 # no longer slotted. Row 1 (their parent) is a flat non-CCR sum and is basis-
 # independent, so the split moves between rows without changing their total.
-# Moved with COREP C 02.00 rows 0060/0220, which make the same disclosure
+# Moved with COREP C 02.00 rows 0050/0240 (the SA and IRB totals — written as
+# 0060/0220 until 2026-11-13, when that template took its published row codes),
+# which make the same disclosure
 # (f94be554 put C 07.00's exposure-value and RWEA columns on this basis first).
 _APPROACH_REFS: dict[str, tuple[str, ...]] = {
     "2": ("standardised", "equity"),

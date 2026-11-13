@@ -1726,19 +1726,11 @@ basis = """
 Equals r0010 on a credit-risk-only book, so this cell does not settle the
 credit/market/operational split. It DOES settle whether the row carries an RWEA
 or an own funds requirement, which is the 12.5x question.
-"""
-known_difference = """
-The engine labels this row "TOTAL OWN FUNDS REQUIREMENTS" and publishes 8% of the
-TREA in it: 2,407,878.18 (CRR) / 2,036,887.99 (B31) against a re-derived
-30,098,477.21 / 25,461,099.93. The engine is believed WRONG. Every row of C 02.00
-is a risk exposure amount — r0010 is "TOTAL RISK EXPOSURE AMOUNT", and the EBA
-rule v0204_m shipped in this repo sums r0040 into r0010 with the other risk
-types, which is arithmetically impossible if r0040 is one-twelve-and-a-halfth of
-its own parent. Own funds requirements are C 03.00's subject, not CA2's. Direction
-of the error: the credit-risk RWEA line of the return understates by
-27,690,599.04 (CRR) / 23,424,211.93 (B31). Logged rather than fixed: the operator
-instruction for this run is that new defects are registered now and actioned in a
-later run.
+
+RESOLVED 2026-11-13 (was a registered difference, strict xfail): the engine labelled this row "TOTAL OWN FUNDS REQUIREMENTS" and
+published 8% of the TREA in it — 2,407,878.18 (CRR) / 2,036,887.99 (B31) against
+this re-derivation's 30,098,477.21 / 25,461,099.93. The generator now reports the
+credit-risk RWEA here (reporting/corep/c02_rows.py, slot CREDIT_RISK).
 """
 
 [[cell]]
@@ -1758,16 +1750,13 @@ total exposures." The equity legs are inside it for the same reason as OV1 row 2
 this calculator risk-weights equity through the SA equity weights, and CRR
 Annex II gives equity its own SA class row (0210) under this parent.
 """
-basis = "Post-substitution basis untested (limits 1). Securitisation is out of scope."
-known_difference = """
-The engine publishes the WHOLE credit-risk RWEA in r0050 — 30,098,477.21 (CRR) /
-25,461,099.93 (B31) — against a re-derived standardised total of 9,850,000.00 /
-6,187,500.00. Same root cause as c0200-0040-0010: the approach parents sit one
-level up from where the published template puts them, so r0050 holds r0040's
-content. The engine's own r0060 ("SA exposure classes excluding securitisation
-positions") already carries the correct standardised figure and ties to the class
-rows, which is what makes the misplacement visible rather than ambiguous.
-Direction: the standardised line overstates by 20,248,477.21 / 19,273,599.93.
+basis = """
+Post-substitution basis untested (limits 1). Securitisation is out of scope.
+
+RESOLVED 2026-11-13 (was a registered difference, strict xfail): the engine published the WHOLE credit-risk RWEA in r0050 —
+30,098,477.21 (CRR) / 25,461,099.93 (B31) — because its approach parents sat one
+level up from where the published template puts them. r0050 now carries the
+standardised total, the same figure as r0060.
 """
 
 [[cell]]
@@ -1882,14 +1871,10 @@ basis = """
 No IRB-method equity leg exists here (Basel 3.1 Art. 147A removes it and the CRR
 run routes equity through the SA weights), so the clause's silence about
 `equity` is untested.
-"""
-known_difference = """
-The engine publishes the F-IRB total in r0240 — 9,117,934.37 (CRR) /
-14,164,293.72 (B31) — against a re-derived IRB total of 20,248,477.21 /
-19,273,599.93. It carries the correct IRB total in r0220, a row the published
-CRR and PS1/26 templates do not contain (both go 0211 -> 0240). Same single root
-cause as c0200-0040-0010 and c0200-0050-0010: the approach parents are shifted
-one level. Direction: the IRB line understates by 11,130,542.84 / 5,109,306.20.
+
+RESOLVED 2026-11-13 (was a registered difference, strict xfail): the engine published the F-IRB total in r0240 — 9,117,934.37 (CRR) /
+14,164,293.72 (B31) — and carried the IRB total in r0220, a row neither published
+template contains. r0240 is now the IRB total.
 """
 
 [[cell]]
@@ -1911,12 +1896,26 @@ and r0290-r0297.
 """
 basis = "Post-substitution basis untested (limits 1)."
 known_difference = """
-The engine publishes F-IRB INSTITUTIONS in r0250 — 1,726,857.86 (CRR) /
-1,448,098.83 (B31) — against a re-derived F-IRB total of 9,117,934.37 /
-14,164,293.72. Under B31 the frame proves it internally: r0271 ("F-IRB —
-Institutions (detail)", which IS the PS1/26 institutions child) carries the same
-1,448,098.83, so one figure is published twice and the parent total is nowhere.
-Direction: the F-IRB line understates by 7,391,076.51 (CRR) / 12,716,194.89 (B31).
+REWRITTEN 2026-11-13. The difference first registered here — the engine published
+F-IRB INSTITUTIONS in r0250 — is resolved: r0250 is now the F-IRB total, and under
+Basel 3.1 the two sides agree at 14,164,293.72.
+
+What remains is CRR only, and it is a disagreement about where SUPERVISORY
+SLOTTING is reported, not an addressing slip: generated 14,017,934.37 against this
+re-derivation's 9,117,934.37, a delta of exactly the slotting leg's 4,900,000.00.
+The clause above counts `foundation_irb` legs alone. The generator also counts
+slotting, reasoning from the rules shipped in this repo: v10673_m lets the C 08.01
+slotting row (r0080) carry a figure on the specialised-lending sheets only;
+v0338_m puts r0080 inside that sheet's total; v4248_i / v4253_i tie those totals
+to C 02.00 r0290 / r0350 — so slotting RWEA is in one of those two rows — and of
+their parents, "IRB approaches when neither own estimates of LGD nor Conversion
+Factors are used" (r0250) is the one Art. 153(5) slotting fits. That agrees with
+this file's own c0200-0411-0010 note ("Annex II puts slotting inside the F-IRB and
+A-IRB branches as the Corporates - Specialised Lending children"), which the
+clause above does not implement. Which branch a slotting exposure belongs to is
+NOT settled by a rule in the extract; the generator's reading rests on the row
+label. Left registered, not re-authored to match the generator, so that the
+question stays visible until it is settled against the CRR Annex II text.
 """
 
 [[cell]]
@@ -1935,15 +1934,13 @@ CRR: "1.1.2.2 IRB Approaches when own estimates of LGD and/or Conversion Factor
 are used", decomposed by v0211_m into r0320-r0410. PS1/26: "1.1.2.2 Exposures
 subject to the AIRB approach".
 """
-basis = "Post-substitution basis untested (limits 1)."
-known_difference = """
-The engine publishes 0.00 in r0310 against a re-derived A-IRB total of
-6,230,542.84 (CRR) / 209,306.20 (B31): its r0310 is labelled "A-IRB — Central
-governments and central banks", the row the published template numbers 0320. The
-A-IRB total sits in the engine's r0300 (measured: exactly 6,230,542.84 /
-209,306.20), which the published templates do not contain. Same root cause.
-Direction: the A-IRB line understates by its whole amount — a return in which the
-A-IRB parent is empty while its children are populated.
+basis = """
+Post-substitution basis untested (limits 1).
+
+RESOLVED 2026-11-13 (was a registered difference, strict xfail): the engine published 0.00 in r0310, which it labelled "A-IRB — Central
+governments and central banks" (the row the published template numbers 0320), and
+carried the A-IRB total in r0300, a row the published templates do not contain.
+r0310 is now the A-IRB total: 6,230,542.84 (CRR) / 209,306.20 (B31).
 """
 
 [[cell]]
@@ -1990,27 +1987,36 @@ ADDRESS rather than the partition. A second SL type would be needed to make the
 """
 
 [[cell]]
-id = "c0200-0010-0020"
+id = "c0200-0040-0020"
 template = "C0200"
-row = "0010"
+row = "0040"
 column = "0020"
 regimes = ["B31"]
 metric = "sum"
 carrier = "sa_rwa"
 scale = 1.0
 where = []
-citation = "PS1/26 Annex II OF 02.00 c0020 (p.39), r0010 (p.28); PS1/26 Art. 92(2a), Art. 92(3a)"
+citation = "PS1/26 Annex II OF 02.00 c0020 (p.39), r0040 (p.29); PS1/26 Art. 92(2a), Art. 92(3a)"
 note = """
 "0020 Standardised approaches only (output floor). Captures risk exposure amounts
 calculated under standardised approaches per exposure class, where relevant. Rows
 containing totals by risk type should reflect entire current portfolios using
-standardised approaches only." Row 0010 is a total by risk type, so the cell is
-S-TREA over the WHOLE book — the SA legs at their own weights and the modelled
-legs at their SA-equivalent — which is the `sa_rwa` carrier, unfiltered.
+standardised approaches only." Row 0040 is the total for the credit risk type, so
+the cell is S-TREA over the WHOLE credit book — the SA legs at their own weights
+and the modelled legs at their SA-equivalent — which is the `sa_rwa` carrier,
+unfiltered.
+
+RE-ANCHORED 2026-11-13 from r0010 c0020. The Bank of England PRA001 taxonomy
+(table OF02.00.01.01) has NO data point at row 0010 column 0020 — row 0010 has
+cells in columns 0010 and 0030 only — so the figure cannot be reported there.
+boe_b0716 states the cell this re-derivation is about: r0040 c0020 = r0050 c0010
++ r0240 c0020 + r0460 c0020 + r0470 c0020. The predicate and carrier are
+unchanged; only the address moved.
 """
 basis = """
 This is the number the whole output floor rests on (PS1/26 Art. 92(2a):
-TREA = max(U-TREA, x * S-TREA + OF-ADJ)). It includes the equity leg's 3,750,000
-SA-equivalent even though that leg's `rwa_final` is null, so S-TREA and the
-c0010 total are not comparable leg-for-leg on this portfolio.
+TREA = max(U-TREA, x * S-TREA + OF-ADJ)). The generator builds it as boe_b0716
+does — the SA total as reported plus the modelled book's `sa_rwa` — and this
+clause sums `sa_rwa` over every leg, so the two agree only while an SA leg's
+`sa_rwa` is its own RWEA. A leg that broke that would show here.
 """

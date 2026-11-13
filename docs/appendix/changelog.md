@@ -61,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   today. Not all are defects in the templates: a few published rules cannot be
   satisfied by a return that follows the Bank's own instructions, and the
   baseline's note says which.
+- **Fixed: equity and CIU holdings were missing from the country sheets of
+  C 09.01 / OF 09.01.** They were reported on the all-countries sheet only,
+  although their counterparty has a country, so the country sheets did not add
+  up to the total (the Bank's rule `boe_b0904`). Equity exposures now carry
+  their counterparty's country (`cp_country_code`) through the pipeline and
+  report on its sheet. No RWA, EAD or risk weight changes.
 - **C 07.00 / OF 07.00 now carries its Total sheet.** The instructions require
   the template "for the total exposure across all exposure classes and
   individually for each of the exposure classes"; only the class sheets were

@@ -357,14 +357,14 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 131 — Exposures to institutions and corporates with a short-term credit assessment
 
-??? quote "`apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy/enrich.py:164"
+??? quote "`apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy/enrich.py:166"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:164:306"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:166:308"
     ```
 
-??? quote "`_apply_obligor_short_term_spillover` — src/rwa_calc/engine/hierarchy/enrich.py:913"
+??? quote "`_apply_obligor_short_term_spillover` — src/rwa_calc/engine/hierarchy/enrich.py:949"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:913:1005"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:949:1041"
     ```
 
 
@@ -406,17 +406,17 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 135 — Use of credit assessments by ECAIs
 
-??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:107"
+??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:109"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:107:161"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:109:163"
     ```
 
 
 ### CRR Art. 136 — Mapping of ECAI's credit assessments
 
-??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:108"
+??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:110"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:107:161"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:109:163"
     ```
 
 
@@ -440,30 +440,30 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 138 — General requirements
 
-??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:109"
+??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:111"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:107:161"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:109:163"
     ```
 
 
 ### CRR Art. 139 — Issuer and issue credit assessment
 
-??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:110"
+??? quote "`attach_counterparty_rating` — src/rwa_calc/engine/hierarchy/enrich.py:112"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:107:161"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:109:163"
     ```
 
 
 ### CRR Art. 140 — Long-term and short-term credit assessments
 
-??? quote "`apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy/enrich.py:165"
+??? quote "`apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy/enrich.py:167"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:164:306"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:166:308"
     ```
 
-??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1008"
+??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1044"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1008:1063"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1044:1099"
     ```
 
 ??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:424"
@@ -1652,9 +1652,9 @@ Last generated: 2026-11-13.
 
 ### PS1/26, paragraph 140 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1009"
+??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1045"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1008:1063"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1044:1099"
     ```
 
 ??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:425"

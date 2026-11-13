@@ -14,6 +14,8 @@ Key responsibilities:
 - Apply the per-exposure short-term ECAI rating override.
 - Add property-collateral coverage, LTV metadata, and lending-group totals
   to the unified frame via ``.over()`` window allocation.
+- Carry the counterparty's country onto the equity exposures, which travel
+  beside the unified frame and miss the classifier's attribute join.
 
 References:
 - CRR Art. 131: Short-term rating override for institutional exposures
@@ -552,6 +554,40 @@ def enrich_with_lending_group(
     )
 
     return exposures
+
+
+def attach_obligor_country_to_equity(
+    equity_exposures: pl.LazyFrame | None,
+    counterparties: pl.LazyFrame,
+) -> pl.LazyFrame | None:
+    """Carry each equity holding's counterparty country onto it as ``cp_country_code``.
+
+    Equity exposures travel beside the unified frame and never pass through the
+    classifier, which is where every other exposure picks up its counterparty's
+    attributes. So an equity or CIU holding reached the results ledger with NO
+    country even though the input names one — and the geographical breakdown
+    (C 09.01 / OF 09.01, by "residence of the obligor", PS1/26 Annex II §3.4
+    ¶86) counted it on the all-countries sheet and on no country sheet.
+    Measured on the off-balance-sheet reporting portfolio: country sheets
+    25,000,000 against a total of 33,000,000, the difference one CIU holding
+    whose counterparty is in GB (``boe_b0904``, ERROR).
+
+    Only the country is carried. The other counterparty attributes
+    (``cp_entity_type`` and the rest) are deliberately NOT joined here: several
+    reporting predicates read them, and an equity holding acquiring an entity
+    type is a behaviour change with its own evidence to bring.
+
+    ``counterparties`` is the sealed counterparty lookup, so ``country_code`` is
+    guaranteed present (``CP_LOOKUP_COUNTERPARTIES_EDGE``) — the same guarantee
+    the classifier's attribute join relies on. The lookup is reduced to one row
+    per counterparty so the join cannot fan a holding out.
+    """
+    if equity_exposures is None:
+        return None
+    countries = counterparties.select(
+        "counterparty_reference", pl.col("country_code").alias("cp_country_code")
+    ).unique(subset=["counterparty_reference"], keep="first")
+    return equity_exposures.join(countries, on="counterparty_reference", how="left")
 
 
 def add_collateral_ltv(

@@ -43,6 +43,7 @@ from rwa_calc.engine.fx import convert_resolved_frames
 from rwa_calc.engine.hierarchy.enrich import (
     add_collateral_ltv,
     apply_short_term_rating_override,
+    attach_obligor_country_to_equity,
     enrich_with_lending_group,
     enrich_with_property_coverage,
 )
@@ -137,6 +138,10 @@ class HierarchyResolver:
             data.equity_exposures,
             data.fx_rates,
             config,
+        )
+
+        equity_exposures = attach_obligor_country_to_equity(
+            equity_exposures, counterparty_lookup.counterparties
         )
 
         exposures = self._add_collateral_ltv(exposures, collateral)

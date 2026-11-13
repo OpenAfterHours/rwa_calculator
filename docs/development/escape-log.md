@@ -2804,3 +2804,68 @@ gate that shipped.
   description. Where a published code names something we do not produce, the
   record should be a failing or ratcheted check on its absence, not a sentence
   saying the absence is intended.
+
+## 2026-11-13 — Equity and CIU holdings reached the geographical breakdown with no country, and a test recorded that as the state of things
+
+- **Defect**: C 09.01 / OF 09.01 breaks exposures down by "residence of the
+  obligor", "the country of incorporation of the obligor" (PS1/26 Annex II §3.4
+  ¶86). An equity or CIU holding was reported on the all-countries sheet and on
+  **no country sheet**, although its counterparty has a country in the input.
+  The country sheets therefore did not add up to the total. Measured on the
+  off-balance-sheet reporting portfolio: country sheets 25,000,000 of original
+  exposure against a total of 33,000,000 — the difference one CIU holding whose
+  counterparty is in GB; on the main reporting portfolio the gap was the whole
+  equity table, 7,000,000.
+- **Rule**: `boe_b0904` (ERROR, v4.1.1 PRA001 — on OF 09.01 row 0170, the sum of
+  the country sheets equals the all-countries sheet). Broken on both portfolios
+  that hold equity or CIU units.
+- **Origin**: equity exposures travel beside the unified exposure frame — the
+  hierarchy stage converts their currency and passes them on, the equity
+  calculator risk-weights them, and they rejoin the main flow only in the
+  aggregator. They never pass through the classifier, which is where every
+  other exposure acquires its counterparty's attributes
+  (`engine/classify/attributes.py`: `country_code` → `cp_country_code`). The
+  aggregator derives the reported country from `cp_country_code`; for an equity
+  leg there was none.
+- **Escape class**: `caught-and-parked`. It was seen, measured and written down
+  — in a test. `tests/acceptance/reporting/test_p2_54_ciu_class_o.py` carried
+  `test_the_country_sheet_carries_no_equity_table_leg`, whose class docstring
+  read "Measured: the equity-table legs reach no country sheet at all … despite
+  the obligor carrying `country_code="GB"`", and which asserted both the null
+  rows and that the gap between the two sheets "is exactly the equity table".
+  It was written honestly, as a tripwire so that assertions aimed at the
+  country sheet could not pass vacuously — and it made the defect a passing
+  test. No plan item owned it.
+- **Gate change**: `tests/acceptance/reporting/test_c09_01_country_total.py`
+  asserts the rule itself — the country sheets add up to the all-countries
+  sheet on the three money columns, under both regimes — and that the equity
+  leg carries its counterparty's country on the ledger. The tripwire is
+  inverted into `test_the_country_sheet_carries_the_equity_table_legs`, which
+  holds the country sheet to the all-countries one on every equity-table row.
+  The filing-mapping ratchet banks `boe_b0904` at zero portfolios.
+- **Verified red**: before the fix,
+  `uv run pytest tests/acceptance/reporting/test_c09_01_country_total.py -q -n 0`
+  failed on `assert [None] == ['GB']` and on
+  `assert 25000000.0 == 33000000.0 ± 33` (original exposure),
+  `14800000.0 == 22800000.0` (exposure value) and
+  `13550000.0 == 16350000.0` (RWEA), under both regimes. After it: `8 passed`.
+  The old tripwire, run against the fix, failed as it was written to:
+  `C 09.01 [GB] r0140 now publishes [6000000.0, 6000000.0, 28000000.0]. An
+  equity-table leg has reached a country sheet`.
+- **The fix, and what it deliberately does not do**:
+  `engine/hierarchy/enrich.py::attach_obligor_country_to_equity` joins the
+  counterparty's country onto the equity exposures in the hierarchy stage. Only
+  the country: the other counterparty attributes are not joined, because
+  several reporting predicates read them and an equity holding acquiring an
+  entity type is a change with its own evidence to bring. And such a leg is
+  **not** routed to the "other countries" area, which would also have made the
+  rule pass: the instructions reserve that area for supranational organisations
+  (¶85–86), and a leg whose country is known is not one.
+- **What the fix moved**: no RWA, EAD or risk weight — the acceptance and oracle
+  suites are unchanged. Three reference sheets, all C 09.01 `[GB]`: rows 0140,
+  0142/0143, 0150 and the total now carry the equity table. `boe_b0904` 2 → 0
+  portfolios; no other rule on either engine.
+- **Lesson**: a test that asserts a wrong state "so that it cannot go
+  unexamined" has examined it and then filed it. A tripwire for a known defect
+  needs an owner — a plan item or a ratcheted count — or it is a passing test
+  for the defect.

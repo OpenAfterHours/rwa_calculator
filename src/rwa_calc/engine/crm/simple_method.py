@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
 from rwa_calc.engine.crm.eligibility import financial_collateral_ineligible_expr
 from rwa_calc.engine.sa.b31_risk_weight_tables import B31_CORPORATE_RISK_WEIGHTS
@@ -395,6 +396,13 @@ def undo_sa_ead_reduction(exposures: pl.LazyFrame) -> pl.LazyFrame:
     IRB exposures are unaffected (they already keep ead_gross in the
     Comprehensive pipeline because LGD adjustment handles collateral).
 
+    ``on_bs_netting_adjusted_value`` is undone in the same step. It is the
+    on-balance-sheet netting PART of ``collateral_adjusted_value`` (CRR Art. 219
+    makes the netted deposit cash collateral), and under the Simple Method that
+    deposit is recognised as Simple-Method cash instead (``fcsm_collateral_value``).
+    Left standing beside a zeroed collateral value it would have a reader that
+    takes one from the other report a negative collateral amount.
+
     Args:
         exposures: Exposure frame after Comprehensive Method processing.
 
@@ -406,8 +414,15 @@ def undo_sa_ead_reduction(exposures: pl.LazyFrame) -> pl.LazyFrame:
         return exposures
 
     is_sa = pl.col("approach") == ApproachType.SA.value
+    # Production always carries the netting column (``_initialize_ead``); a
+    # direct caller's thinner frame gets a typed null, never a fabricated zero.
+    netting = "on_bs_netting_adjusted_value"
+    exposures = ensure_columns(
+        exposures, {netting: ColumnSpec(pl.Float64, required=False)}, present=schema.names()
+    )
 
     return exposures.with_columns(
+        pl.when(is_sa).then(pl.lit(0.0)).otherwise(pl.col(netting)).alias(netting),
         pl.when(is_sa)
         .then(pl.col("ead_gross"))
         .otherwise(pl.col("ead_after_collateral"))

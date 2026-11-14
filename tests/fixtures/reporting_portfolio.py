@@ -54,7 +54,7 @@ non-zero once the attribution is corrected and a golden over them can tell "the
 fix worked" from "the fix zeroed the cell" (LESSONS B5).
 
 Published backing (all six currently enforced — note that ``is_currently_enforced``
-in ``reporting/validations/rules.py`` counts a ``deactivated`` rule carrying a
+in ``rwa_filer/rules/catalogue.py`` counts a ``deactivated`` rule carrying a
 ``reactivated_on`` date as in force):
     {c0215}+{c0216}+{c0217}={c0220}   v09747_m (C 07.00.c), v0329_m (C 07.00.a)
     {c0260}={c0255}+{c0256}+{c0257}   v0348_m  (C 08.02),   v0341_m (C 08.01.a)

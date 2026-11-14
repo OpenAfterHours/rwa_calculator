@@ -135,6 +135,9 @@ nav = [
       { "Glossary" = "specifications/glossary.md" },
     ]},
   ]},
+  { "rwa-filer" = [
+    "rwa-filer/index.md",
+  ]},
   { "Development" = [
     "development/index.md",
     { "Testing Guide" = "development/testing.md" },
@@ -148,6 +151,7 @@ nav = [
     { "Citation Coverage Matrix" = "development/citation-matrix.md" },
     { "Confidence & Evidence Matrix" = "development/confidence-matrix.md" },
     { "Module Dependencies" = "development/module-dependencies.md" },
+    { "Workspace & Packages" = "development/workspace.md" },
     { "Change-Impact Report" = "development/impact-report.md" },
     { "Escape Log" = "development/escape-log.md" },
   ]},

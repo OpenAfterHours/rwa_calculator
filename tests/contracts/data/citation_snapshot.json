@@ -202,6 +202,10 @@
   "rwa_calc.engine.crm.eligibility::financial_collateral_ineligible_expr": [
     "CRR Art. 197"
   ],
+  "rwa_calc.engine.crm.expressions::flag_netting_rows": [
+    "CRR Art. 219",
+    "PS1/26 Art. 219"
+  ],
   "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr": [
     "CRR Art. 223(4)",
     "PS1/26 Art. 230(1)"
@@ -651,11 +655,20 @@
   "rwa_calc.reporting.corep.c02::generate_c02_00": [
     "PS1/26, paragraph 1.3"
   ],
+  "rwa_calc.reporting.corep.c07::_financial_collateral_exprs": [
+    "PS1/26 Art. 223"
+  ],
+  "rwa_calc.reporting.corep.c07::_netting_reduction_expr": [
+    "PS1/26 Art. 219"
+  ],
   "rwa_calc.reporting.corep.c07::c07_plans": [
     "PS1/26, paragraph 1.3"
   ],
   "rwa_calc.reporting.corep.c07::c07_population": [
     "PS1/26"
+  ],
+  "rwa_calc.reporting.corep.c07::c07_total_sheet": [
+    "PS1/26, paragraph 1.3"
   ],
   "rwa_calc.reporting.corep.c07::generate_c07": [
     "PS1/26, paragraph 1.3"
@@ -680,6 +693,12 @@
   ],
   "rwa_calc.reporting.corep.c08_07::generate_c08_07": [
     "CRR Art. 148",
+    "PS1/26, paragraph 1.3"
+  ],
+  "rwa_calc.reporting.corep.c08_sheets::sheet_keys": [
+    "PS1/26, paragraph 1.3"
+  ],
+  "rwa_calc.reporting.corep.c08_sheets::with_total_sheets": [
     "PS1/26, paragraph 1.3"
   ],
   "rwa_calc.reporting.corep.c09::generate_c09_01": [

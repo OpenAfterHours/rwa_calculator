@@ -145,6 +145,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.contracts._ci_workflow import (
+    JOB_CONDITIONAL,
+    job_block,
+    push_to_master_triggers_ci,
+    run_commands,
+    without_comments,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "coverage_report.py"
@@ -166,15 +173,10 @@ REBANK = f"  uv run python {SCRIPT_REL} --update-baseline"
 CI_JOB = "coverage-ratchet"
 
 #: A folded ``run:`` command that invokes the gate. Applied to a command already
-#: normalised to one line by ``_run_commands``, so any amount of whitespace, a
+#: normalised to one line by ``run_commands``, so any amount of whitespace, a
 #: block scalar and a shell continuation all reduce to the same subject — the three
 #: working reformats that reddened the old substring form.
 _INVOKES_CHECK = re.compile(re.escape(SCRIPT_REL) + r"[^\n]*?--check")
-
-#: A job-level or step-level ``if:``. Anchored per line under ``re.MULTILINE`` so it
-#: cannot match the word inside a command or a comment (comments are stripped before
-#: this is applied). ``if: false`` is a one-word disable, so its absence is asserted.
-_JOB_CONDITIONAL = re.compile(r"^[ \t]*(?:-[ \t]+)?if:", re.MULTILINE)
 
 #: Non-metric keys the baseline is allowed to carry alongside its metrics. Anything
 #: else in the file must be a metric with a declared direction, so a number cannot
@@ -435,7 +437,7 @@ def test_the_coverage_ratchet_is_invoked_by_ci() -> None:
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     # Act
-    job = _job_block(workflow, CI_JOB)
+    job = job_block(workflow, CI_JOB)
     assert job is not None, (
         f"{WORKFLOW_REL} has no `{CI_JOB}` job. The coverage ratchet is implemented but "
         "unrun, which is how it spent its whole life before P5.21: a change can kill a "
@@ -444,8 +446,8 @@ def test_the_coverage_ratchet_is_invoked_by_ci() -> None:
     )
     # Comments are stripped ONCE, here: every assertion below must read the job as
     # CI will execute it, and a commented-out line executes nothing.
-    live = _without_comments(job)
-    commands = _run_commands(live)
+    live = without_comments(job)
+    commands = run_commands(live)
 
     # Assert — a real, uncommented step invokes the gate
     assert any(_INVOKES_CHECK.search(command) for command in commands), (
@@ -463,116 +465,18 @@ def test_the_coverage_ratchet_is_invoked_by_ci() -> None:
         "running it — and it is the cheapest way to silence a red gate, which is exactly "
         "why it is asserted here."
     )
-    assert not _JOB_CONDITIONAL.search(live), (
+    assert not JOB_CONDITIONAL.search(live), (
         f"the `{CI_JOB}` job in {WORKFLOW_REL} carries an `if:` condition. This gate has no "
         "legitimate reason to be conditional, and `if: false` is a one-word disable that "
         "leaves every other assertion in this test green."
     )
 
     # Assert — the workflow still fires on the branch the gate has to protect
-    assert _push_to_master_triggers_ci(workflow), (
+    assert push_to_master_triggers_ci(workflow), (
         f"{WORKFLOW_REL} no longer runs on a push to master, so every job in it — this "
         "ratchet included — is dead regardless of how it is written. Restore the "
         "`on: push: branches:` filter (`'**'` covers master)."
     )
-
-
-def _without_comments(text: str) -> str:
-    """``text`` with whole-line YAML comments removed.
-
-    Whole-line only. A trailing ``# ...`` on a live line leaves that line live, and
-    stripping it properly would need to know about quoting. Whole-line removal is
-    what matters here: it is what stops a commented-out step, or a command left
-    behind in a note, from satisfying an assertion about what CI executes.
-    """
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-
-
-def _job_block(workflow: str, job: str) -> str | None:
-    """One job's lines, from its key to the next key at the same indentation.
-
-    Extracted rather than searched for across the whole file so that ``if:`` and
-    ``continue-on-error`` are attributed to THIS job — a neighbouring job legitimately
-    carrying either must not make this test red, and must not excuse this job either.
-    """
-    lines = workflow.splitlines()
-    opener = re.compile(rf"^  {re.escape(job)}:[ \t]*$")
-    start = next((index for index, line in enumerate(lines) if opener.match(line)), None)
-    if start is None:
-        return None
-    for index in range(start + 1, len(lines)):
-        # The next key at job indentation, or any top-level key, ends this block.
-        if re.match(r"^  \S", lines[index]) or re.match(r"^\S", lines[index]):
-            return "\n".join(lines[start:index])
-    return "\n".join(lines[start:])
-
-
-def _run_commands(job: str) -> list[str]:
-    """Every ``run:`` command in a job, each folded onto a single line.
-
-    Folding is what makes formatting irrelevant, in both directions. A ``run: |``
-    block scalar owns every following line indented deeper than its own ``run:``; a
-    same-line command owns any line the shell continued with a trailing ``\\``. Both
-    fold to the string a reader would call "the command", so ``run: |`` + newline,
-    a ``\\`` continuation and a double space all become the same subject — the three
-    working reformats that reddened the old substring assertion.
-
-    Anchored per line (equivalent to ``re.MULTILINE``) so ``run:`` must be the first
-    token after its indentation; ``job`` is expected to be comment-stripped already,
-    which is what excludes a leading ``#``.
-    """
-    lines = job.splitlines()
-    opener = re.compile(r"^([ \t]*)run:[ \t]*(\|[-+]?)?[ \t]*(.*)$")
-    commands: list[str] = []
-    index = 0
-    while index < len(lines):
-        match = opener.match(lines[index])
-        if match is None:
-            index += 1
-            continue
-        indent, block, inline = match.group(1), match.group(2), match.group(3)
-        parts = [inline] if inline.strip() else []
-        index += 1
-        while index < len(lines):
-            following = lines[index]
-            deeper = bool(following.strip()) and len(following) - len(following.lstrip()) > len(
-                indent
-            )
-            continued = bool(parts) and parts[-1].rstrip().endswith("\\")
-            if not (block and deeper) and not continued:
-                break
-            parts.append(following.strip())
-            index += 1
-        commands.append(" ".join(part.rstrip("\\").strip() for part in parts).strip())
-    return commands
-
-
-def _push_to_master_triggers_ci(workflow: str) -> bool:
-    """Whether pushing ``master`` still starts this workflow.
-
-    Asserted because every other check in the CI test is vacuous if the workflow
-    never fires — removing ``on:`` was one of the five disarms that left the old
-    substring assertion green. A ``push:`` with no ``branches`` filter fires on every
-    branch, so it covers master; ``'**'`` does too.
-    """
-    live = _without_comments(workflow)
-    lines = live.splitlines()
-    start = next((index for index, line in enumerate(lines) if re.match(r"^on:", line)), None)
-    if start is None:
-        return False
-    end = next(
-        (index for index in range(start + 1, len(lines)) if re.match(r"^\S", lines[index])),
-        len(lines),
-    )
-    triggers = "\n".join(lines[start:end])
-
-    push = re.search(r"^[ \t]+push:[ \t]*$((?:\n[ \t]{3,}.*)*)", triggers, re.MULTILINE)
-    if push is None:
-        return False
-    branches = re.search(r"branches:[ \t]*(.*)", push.group(1))
-    if branches is None:
-        return True  # `push:` with no branches filter fires on every branch
-    return "**" in branches.group(1) or "master" in branches.group(1)
 
 
 def test_baseline_is_not_weakened_against_the_committed_copy() -> None:

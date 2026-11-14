@@ -21,7 +21,7 @@ they are generated.
 | Member extracted from the zip | `Bank of England Banking Taxonomy Validations Banking Reporting v4.1.1.xlsx` |
 | Known-issues log (gitignored) | `docs/assets/boe-banking-known-issues-august-2026.xlsx`. Between releases the BoE downgrades or deactivates rules here, and the extractor does **not** apply it yet (P2.59). The 27 Aug 2026 log changes nothing in this extract |
 | Refresh both | `uv run python scripts/download_docs.py` |
-| Committed extract (credit risk only) | `src/rwa_calc/reporting/validations/rules/basel31-boe-v4.1.1-credit-risk.json` (package data — ships in the wheel) |
+| Committed extract (credit risk only) | `packages/rwa-filer/src/rwa_filer/rules/data/basel31-boe-v4.1.1-credit-risk.json` (package data of `rwa-filer` — ships in its wheel) |
 | Regenerate the extract | `uv run python scripts/extract_validation_rules.py` (`--check` to verify it is current) |
 | Extract provenance / schema | `docs/reference/validation-rules/index.md` |
 | Source URL | https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-taxonomy-validations-v411.zip |

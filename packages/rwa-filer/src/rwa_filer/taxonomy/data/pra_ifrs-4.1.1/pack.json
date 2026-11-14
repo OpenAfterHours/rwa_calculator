@@ -1,0 +1,1060 @@
+{
+ "dimensions": {
+  "boe_dim:FRS": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Financial reporting standard",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:MCB": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Instrument",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:MCF": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Hedged or hedging instrument",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:TYH": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Type of hedge",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APL": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Accounting portfolio",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:BAS": {
+   "default": "eba_BA:x0",
+   "domain": "eba_BA",
+   "kind": "explicit",
+   "label": "Base",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CNO": {
+   "default": "eba_BT:x0",
+   "domain": "eba_BT",
+   "kind": "explicit",
+   "label": "Controlling and non-controlling owners",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCE": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category that generates income or expenses",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCY": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:REF": {
+   "default": "eba_RF:x0",
+   "domain": "eba_RF",
+   "kind": "explicit",
+   "label": "Reference date or period",
+   "typed_element": null,
+   "typed_type": null
+  }
+ },
+ "enumerations": {
+  "eba_CU:boe_CU600": [
+   "eba_CU:GBP",
+   "eba_CU:EUR",
+   "eba_CU:CAD",
+   "eba_CU:USD",
+   "eba_CU:CHF",
+   "eba_CU:JPY",
+   "eba_CU:SEK"
+  ],
+  "eba_SC:boe_SC600": [
+   "boe_eba_SC:x6000",
+   "boe_eba_SC:x6001",
+   "boe_eba_SC:x6002",
+   "boe_eba_SC:x6003",
+   "boe_eba_SC:x6006"
+  ]
+ },
+ "format": 1,
+ "info": {
+  "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/financialstatements/2021-07-31/mod/pra_ifrs.xsd",
+  "irregularities": [],
+  "module": "PRA_IFRS",
+  "sources": {
+   "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Financial statements.xlsx",
+   "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
+   "taxonomy_package": "boe411.zip"
+  },
+  "taxonomy": "boe-banking",
+  "title": "PRA 104, 105, 106, 107 IFRS based Balance Sheet and Profit & Loss forecasts",
+  "valid_from": "2021-07-31",
+  "valid_to": null,
+  "version": "4.1.1"
+ },
+ "metrics": {
+  "boe_met:di6003": {
+   "enumeration": null,
+   "label": "Reporting period start date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:di6004": {
+   "enumeration": null,
+   "label": "Reporting period end date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:ei6006": {
+   "enumeration": "eba_CU:boe_CU600",
+   "label": "Reporting currency",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei6007": {
+   "enumeration": "eba_SC:boe_SC600",
+   "label": "Basis of reporting",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:si6002": {
+   "enumeration": null,
+   "label": "Entity code",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6005": {
+   "enumeration": null,
+   "label": "Additional notes",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:md103": {
+   "enumeration": null,
+   "label": "Current period (flow)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi53": {
+   "enumeration": null,
+   "label": "Carrying amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:si168": {
+   "enumeration": null,
+   "label": "Name of entity",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si288": {
+   "enumeration": null,
+   "label": "LEI code",
+   "period": "instant",
+   "type": "string"
+  }
+ },
+ "namespaces": {
+  "boe_dim": "http://www.bankofengland.co.uk/data/xbrl/dict/dim",
+  "boe_eba_AP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_AP",
+  "boe_eba_MC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_MC",
+  "boe_eba_PL": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_PL",
+  "boe_eba_RF": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_RF",
+  "boe_eba_SC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_SC",
+  "boe_met": "http://www.bankofengland.co.uk/data/xbrl/dict/met",
+  "eba_AP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AP",
+  "eba_BA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BA",
+  "eba_BT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BT",
+  "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+  "eba_MC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/MC",
+  "eba_PL": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PL",
+  "eba_RF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RF",
+  "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
+  "eba_met": "http://www.eba.europa.eu/xbrl/crr/dict/met"
+ },
+ "tables": {
+  "FF01.01.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Forecast - end current year"
+    ],
+    [
+     "0020",
+     "Forecast - end next year"
+    ]
+   ],
+   "filing_indicator": "FF01.01.01",
+   "group": "FF01.01.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0380",
+     "TOTAL ASSETS"
+    ],
+    [
+     "0010",
+     "Cash, cash balances at central banks and other demand deposits"
+    ],
+    [
+     "0020",
+     "Cash on hand"
+    ],
+    [
+     "0030",
+     "Cash balances at central banks"
+    ],
+    [
+     "0040",
+     "Other demand deposits"
+    ],
+    [
+     "0050",
+     "Financial assets held for trading"
+    ],
+    [
+     "0060",
+     "Derivatives"
+    ],
+    [
+     "0070",
+     "Equity instruments"
+    ],
+    [
+     "0080",
+     "Debt securities"
+    ],
+    [
+     "0090",
+     "Loans and advances"
+    ],
+    [
+     "0096",
+     "Non-trading financial assets mandatorily at fair value through profit or loss"
+    ],
+    [
+     "0097",
+     "Equity instruments"
+    ],
+    [
+     "0098",
+     "Debt securities"
+    ],
+    [
+     "0099",
+     "Loans and advances"
+    ],
+    [
+     "0100",
+     "Financial assets designated at fair value through profit or loss"
+    ],
+    [
+     "0120",
+     "Debt securities"
+    ],
+    [
+     "0130",
+     "Loans and advances"
+    ],
+    [
+     "0141",
+     "Financial assets at fair value through other comprehensive income"
+    ],
+    [
+     "0142",
+     "Equity instruments"
+    ],
+    [
+     "0143",
+     "Debt securities"
+    ],
+    [
+     "0144",
+     "Loans and advances"
+    ],
+    [
+     "0181",
+     "Financial assets at amortised cost"
+    ],
+    [
+     "0182",
+     "Debt securities"
+    ],
+    [
+     "0183",
+     "Loans and advances"
+    ],
+    [
+     "0240",
+     "Derivatives \u2013 Hedge accounting"
+    ],
+    [
+     "0250",
+     "Fair value changes of the hedged items in portfolio hedge of interest rate risk"
+    ],
+    [
+     "0260",
+     "Investments in subsidiaries, joint ventures and associates"
+    ],
+    [
+     "0270",
+     "Tangible assets"
+    ],
+    [
+     "0280",
+     "Property, Plant and Equipment"
+    ],
+    [
+     "0290",
+     "Investment property"
+    ],
+    [
+     "0300",
+     "Intangible assets"
+    ],
+    [
+     "0310",
+     "Goodwill"
+    ],
+    [
+     "0320",
+     "Other intangible assets"
+    ],
+    [
+     "0330",
+     "Tax assets"
+    ],
+    [
+     "0340",
+     "Current tax assets"
+    ],
+    [
+     "0350",
+     "Deferred tax assets"
+    ],
+    [
+     "0360",
+     "Other assets"
+    ],
+    [
+     "0370",
+     "Non-current assets and disposal groups classified as held for sale"
+    ]
+   ],
+   "title": "Balance Sheet: Forecast data [Assets]",
+   "z": []
+  },
+  "FF01.02.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Forecast - end current year"
+    ],
+    [
+     "0020",
+     "Forecast - end next year"
+    ]
+   ],
+   "filing_indicator": "FF01.02.01",
+   "group": "FF01.02.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0300",
+     "TOTAL LIABILITIES"
+    ],
+    [
+     "0010",
+     "Financial liabilities held for trading"
+    ],
+    [
+     "0020",
+     "Derivatives"
+    ],
+    [
+     "0030",
+     "Short positions"
+    ],
+    [
+     "0040",
+     "Deposits"
+    ],
+    [
+     "0050",
+     "Debt securities issued"
+    ],
+    [
+     "0060",
+     "Other financial liabilities"
+    ],
+    [
+     "0070",
+     "Financial liabilities designated at fair value through profit or loss"
+    ],
+    [
+     "0080",
+     "Deposits"
+    ],
+    [
+     "0090",
+     "Debt securities issued"
+    ],
+    [
+     "0100",
+     "Other financial liabilities"
+    ],
+    [
+     "0110",
+     "Financial liabilities measured at amortised cost"
+    ],
+    [
+     "0120",
+     "Deposits"
+    ],
+    [
+     "0130",
+     "Debt securities issued"
+    ],
+    [
+     "0140",
+     "Other financial liabilities"
+    ],
+    [
+     "0150",
+     "Derivatives \u2013 Hedge accounting"
+    ],
+    [
+     "0160",
+     "Fair value changes of the hedged items in portfolio hedge of interest rate risk"
+    ],
+    [
+     "0170",
+     "Provisions"
+    ],
+    [
+     "0180",
+     "Pension and other post employment defined benefit obligations"
+    ],
+    [
+     "0190",
+     "Other long term employee benefits"
+    ],
+    [
+     "0200",
+     "Restructuring"
+    ],
+    [
+     "0210",
+     "Pending legal issues and tax litigation"
+    ],
+    [
+     "0220",
+     "Commitments and guarantees given"
+    ],
+    [
+     "0230",
+     "Other provisions"
+    ],
+    [
+     "0240",
+     "Tax liabilities"
+    ],
+    [
+     "0250",
+     "Current tax liabilities"
+    ],
+    [
+     "0260",
+     "Deferred tax liabilities"
+    ],
+    [
+     "0270",
+     "Share capital repayable on demand"
+    ],
+    [
+     "0280",
+     "Other liabilities"
+    ],
+    [
+     "0290",
+     "Liabilities included in disposal groups classified as held for sale"
+    ]
+   ],
+   "title": "Balance Sheet: Forecast data [Liabilities]",
+   "z": []
+  },
+  "FF01.03.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Forecast - end current year"
+    ],
+    [
+     "0020",
+     "Forecast - end next year"
+    ]
+   ],
+   "filing_indicator": "FF01.03.01",
+   "group": "FF01.03.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0300",
+     "TOTAL EQUITY"
+    ],
+    [
+     "0010",
+     "Capital"
+    ],
+    [
+     "0020",
+     "Paid up capital"
+    ],
+    [
+     "0030",
+     "Unpaid capital which has been called up"
+    ],
+    [
+     "0040",
+     "Share premium"
+    ],
+    [
+     "0050",
+     "Equity instruments issued other than capital"
+    ],
+    [
+     "0060",
+     "Equity component of compound financial instruments"
+    ],
+    [
+     "0070",
+     "Other equity instruments issued"
+    ],
+    [
+     "0080",
+     "Other equity"
+    ],
+    [
+     "0090",
+     "Accumulated other comprehensive income"
+    ],
+    [
+     "0095",
+     "Items that will not be reclassified to profit and loss"
+    ],
+    [
+     "0100",
+     "Tangible assets"
+    ],
+    [
+     "0110",
+     "Intangible assets"
+    ],
+    [
+     "0120",
+     "Actuarial gains or (-) losses on defined benefit pension plans"
+    ],
+    [
+     "0122",
+     "Non-current assets and disposal groups classified as held for sale"
+    ],
+    [
+     "0124",
+     "Share of other recognised income and expense of investments in subsidiaries, joint ventures and associates"
+    ],
+    [
+     "0320",
+     "Fair value changes of equity instruments measured at fair value through other comprehensive income"
+    ],
+    [
+     "0330",
+     "Hedge ineffectiveness of fair value hedges for equity instruments measured at fair value through other comprehensive income"
+    ],
+    [
+     "0340",
+     "Fair value changes of equity instruments measured at fair value through other comprehensive income [hedged item]"
+    ],
+    [
+     "0350",
+     "Fair value changes of equity instruments measured at fair value through other comprehensive income [hedging instrument]"
+    ],
+    [
+     "0360",
+     "Fair value changes of financial liabilities at fair value through profit or loss attributable to changes in their credit risk"
+    ],
+    [
+     "0128",
+     "Items that may be reclassified to profit and loss"
+    ],
+    [
+     "0130",
+     "Hedge of net investments in foreign operations [effective portion]"
+    ],
+    [
+     "0140",
+     "Foreign currency translation"
+    ],
+    [
+     "0150",
+     "Hedging derivatives. Cash flow hedges reserve [effective portion]"
+    ],
+    [
+     "0155",
+     "Fair value changes of debt instruments measured at fair value through other comprehensive income"
+    ],
+    [
+     "0165",
+     "Hedging instruments [not designated elements]"
+    ],
+    [
+     "0170",
+     "Non-current assets and disposal groups classified as held for sale"
+    ],
+    [
+     "0180",
+     "Share of other recognised income and expense of investments in subsidiaries, joint ventures and associates"
+    ],
+    [
+     "0190",
+     "Retained earnings"
+    ],
+    [
+     "0200",
+     "Revaluation reserves"
+    ],
+    [
+     "0210",
+     "Other reserves"
+    ],
+    [
+     "0220",
+     "Reserves or accumulated losses of investments in subsidiaries, joint ventures and associates accounted for using the equity method"
+    ],
+    [
+     "0230",
+     "Other"
+    ],
+    [
+     "0240",
+     "(-) Treasury shares"
+    ],
+    [
+     "0250",
+     "Profit or loss attributable to owners of the parent"
+    ],
+    [
+     "0260",
+     "(-) Interim dividends"
+    ],
+    [
+     "0270",
+     "Minority interests [Non-controlling interests]"
+    ],
+    [
+     "0280",
+     "Accumulated Other Comprehensive Income"
+    ],
+    [
+     "0290",
+     "Other items"
+    ],
+    [
+     "0310",
+     "TOTAL EQUITY AND TOTAL LIABILITIES"
+    ]
+   ],
+   "title": "Balance Sheet: Forecast data [Equity]",
+   "z": []
+  },
+  "FF02.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Forecast - end current year"
+    ],
+    [
+     "0020",
+     "Forecast - end next year"
+    ]
+   ],
+   "filing_indicator": "FF02.00.01",
+   "group": "FF02.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0670",
+     "PROFIT OR (-) LOSS FOR THE YEAR"
+    ],
+    [
+     "0630",
+     "PROFIT OR (-) LOSS AFTER TAX FROM CONTINUING OPERATIONS"
+    ],
+    [
+     "0610",
+     "PROFIT OR (-) LOSS BEFORE TAX FROM CONTINUING OPERATIONS"
+    ],
+    [
+     "0355",
+     "TOTAL OPERATING INCOME, NET"
+    ],
+    [
+     "0010",
+     "Interest income"
+    ],
+    [
+     "0020",
+     "Financial assets held for trading"
+    ],
+    [
+     "0025",
+     "Non-trading financial assets mandatorily at fair value through profit or loss"
+    ],
+    [
+     "0030",
+     "Financial assets designated at fair value through profit or loss"
+    ],
+    [
+     "0041",
+     "Financial assets at fair value through other comprehensive income"
+    ],
+    [
+     "0051",
+     "Financial assets at amortised cost"
+    ],
+    [
+     "0070",
+     "Derivatives - Hedge accounting, interest rate risk"
+    ],
+    [
+     "0080",
+     "Other assets"
+    ],
+    [
+     "0085",
+     "Interest income on liabilities"
+    ],
+    [
+     "0090",
+     "(Interest expenses)"
+    ],
+    [
+     "0100",
+     "(Financial liabilities held for trading)"
+    ],
+    [
+     "0110",
+     "(Financial liabilities designated at fair value through profit or loss)"
+    ],
+    [
+     "0120",
+     "(Financial liabilities measured at amortised cost)"
+    ],
+    [
+     "0130",
+     "(Derivatives - Hedge accounting, interest rate risk)"
+    ],
+    [
+     "0140",
+     "(Other liabilities)"
+    ],
+    [
+     "0145",
+     "(Interest expense on assets)"
+    ],
+    [
+     "0150",
+     "(Expenses on share capital repayable on demand)"
+    ],
+    [
+     "0160",
+     "Dividend income"
+    ],
+    [
+     "0170",
+     "Financial assets held for trading"
+    ],
+    [
+     "0175",
+     "Non-trading financial assets mandatorily at fair value through profit or loss"
+    ],
+    [
+     "0191",
+     "Financial assets at fair value through other comprehensive income"
+    ],
+    [
+     "0192",
+     "Investments in subsidiaries, joint ventures and associates accounted for using other than equity method"
+    ],
+    [
+     "0200",
+     "Fee and commission income"
+    ],
+    [
+     "0210",
+     "(Fee and commission expenses)"
+    ],
+    [
+     "0220",
+     "Gains or (-) losses on derecognition of financial assets and liabilities not measured at fair value through profit or loss, net"
+    ],
+    [
+     "0231",
+     "Financial assets at fair value through other comprehensive income"
+    ],
+    [
+     "0241",
+     "Financial assets at amortised cost"
+    ],
+    [
+     "0260",
+     "Financial liabilities measured at amortised cost"
+    ],
+    [
+     "0270",
+     "Other"
+    ],
+    [
+     "0280",
+     "Gains or (-) losses on financial assets and liabilities held for trading, net"
+    ],
+    [
+     "0287",
+     "Gains or (-) losses on non-trading financial assets mandatorily at fair value through profit or loss, net"
+    ],
+    [
+     "0290",
+     "Gains or (-) losses on financial assets and liabilities designated at fair value through profit or loss, net"
+    ],
+    [
+     "0300",
+     "Gains or (-) losses from hedge accounting, net"
+    ],
+    [
+     "0310",
+     "Exchange differences [gain or (-) loss], net"
+    ],
+    [
+     "0320",
+     "Gains or (-) losses on derecognition of investments in subsidiaries, joint ventures and associates, net"
+    ],
+    [
+     "0330",
+     "Gains or (-) losses on derecognition of non-financial assets, net"
+    ],
+    [
+     "0340",
+     "Other operating income"
+    ],
+    [
+     "0350",
+     "(Other operating expenses)"
+    ],
+    [
+     "0360",
+     "(Administrative expenses)"
+    ],
+    [
+     "0370",
+     "(Staff expenses)"
+    ],
+    [
+     "0380",
+     "(Other administrative expenses)"
+    ],
+    [
+     "0390",
+     "(Depreciation)"
+    ],
+    [
+     "0400",
+     "(Property, Plant and Equipment)"
+    ],
+    [
+     "0410",
+     "(Investment Properties)"
+    ],
+    [
+     "0420",
+     "(Other intangible assets)"
+    ],
+    [
+     "0425",
+     "Modification gains or (-) losses, net"
+    ],
+    [
+     "0426",
+     "Financial assets at fair value through other comprehensive income"
+    ],
+    [
+     "0427",
+     "Financial assets at amortised cost"
+    ],
+    [
+     "0430",
+     "(Provisions or (-) reversal of provisions)"
+    ],
+    [
+     "0440",
+     "(Commitments and guarantees given)"
+    ],
+    [
+     "0450",
+     "(Other provisions)"
+    ],
+    [
+     "0460",
+     "(Impairment or (-) reversal of impairment on financial assets not measured at fair value through profit or loss)"
+    ],
+    [
+     "0481",
+     "(Financial assets at fair value through other comprehensive income)"
+    ],
+    [
+     "0491",
+     "(Financial assets at amortised cost)"
+    ],
+    [
+     "0510",
+     "(Impairment or (-) reversal of impairment of investments in subsidiaries, joint ventures and associates)"
+    ],
+    [
+     "0520",
+     "(Impairment or (-) reversal of impairment on non-financial assets)"
+    ],
+    [
+     "0530",
+     "(Property, plant and equipment)"
+    ],
+    [
+     "0540",
+     "(Investment properties)"
+    ],
+    [
+     "0550",
+     "(Goodwill)"
+    ],
+    [
+     "0560",
+     "(Other intangible assets)"
+    ],
+    [
+     "0570",
+     "(Other)"
+    ],
+    [
+     "0580",
+     "Negative goodwill recognised in profit or loss"
+    ],
+    [
+     "0590",
+     "Share of the profit or (-) loss of investments in subsidiaries, joint ventures and associates"
+    ],
+    [
+     "0600",
+     "Profit or (-) loss from non-current assets and disposal groups classified as held for sale not qualifying as discontinued operations"
+    ],
+    [
+     "0620",
+     "(Tax expenses or (-) income related to profit or loss from continuing operations)"
+    ],
+    [
+     "0640",
+     "Profit or (-) loss after tax from discontinued operations"
+    ],
+    [
+     "0650",
+     "Profit or (-) loss before tax from discontinued operations"
+    ],
+    [
+     "0660",
+     "(Tax expenses or (-) income related to discontinued operations)"
+    ],
+    [
+     "0680",
+     "Attributable to minority interest [non-controlling interests]"
+    ],
+    [
+     "0690",
+     "Attributable to owners of the parent"
+    ]
+   ],
+   "title": "Statement of profit or loss: Forecast data",
+   "z": []
+  },
+  "FF700.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     ""
+    ]
+   ],
+   "filing_indicator": "FF700.00.01",
+   "group": "FF700.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Basis of reporting (select from list)"
+    ],
+    [
+     "0020",
+     "Firm reference number (FRN)"
+    ],
+    [
+     "0021",
+     "LEI code"
+    ],
+    [
+     "0030",
+     "Name of the firm"
+    ],
+    [
+     "0040",
+     "Reporting period start date"
+    ],
+    [
+     "0050",
+     "Reporting period end date"
+    ],
+    [
+     "0060",
+     "Reporting currency for this report"
+    ],
+    [
+     "0070",
+     "Notes from the firm, if any"
+    ]
+   ],
+   "title": "Header Info",
+   "z": []
+  }
+ }
+}

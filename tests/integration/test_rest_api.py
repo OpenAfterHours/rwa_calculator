@@ -37,6 +37,7 @@ from rwa_calc.api import create_api_app, run_index
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
 from rwa_calc.api.rest import register_run_with_id
 from rwa_calc.api.service import CreditRiskCalc
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.ui.views.reconciliation import DEFAULT_MAPPING_TOML
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 from tests.fixtures.recon_ledger import with_reporting_ledger
@@ -270,14 +271,16 @@ def test_templates_index_lists_the_generated_templates(
     # Act
     resp = client.get("/api/templates", params={"run_id": run_id})
 
-    # Assert — the SA corporate loan produces C 07.00, keyed by exposure class.
+    # Assert — the SA corporate loan produces C 07.00, keyed by exposure class,
+    # plus the Total sheet (the sum of the class sheets). The index lists the
+    # sheet keys in alphabetical order.
     assert resp.status_code == 200
     body = resp.json()
     assert body["framework"] == "CRR"
     c07 = next(t for t in body["templates"] if t["id"] == "c07_00")
     assert c07["title"].startswith("C 07.00")
     assert c07["family"] == "corep"
-    assert c07["sheets"] == ["corporate"]
+    assert c07["sheets"] == ["corporate", C07_00_TOTAL_SHEET_KEY]
 
 
 def test_template_sheet_returns_headers_and_the_generated_cells(
@@ -310,6 +313,27 @@ def test_template_sheet_defaults_to_the_first_sheet(client: TestClient, warm_run
     # Assert
     assert resp.status_code == 200
     assert resp.json()["sheet"] == "corporate"
+
+
+def test_lineage_says_a_total_sheet_cell_is_a_sum_of_the_class_sheets(
+    client: TestClient, warm_run_id: str
+) -> None:
+    """The C 07.00 Total sheet is the sum of the class sheets and has no population
+    of its own. Asking for the exposures behind one of its cells is answered with
+    where they are — not with "unknown cell", which the sheet plainly is not."""
+    # Arrange
+    cell = {"template": "c07_00", "sheet": C07_00_TOTAL_SHEET_KEY, "row": "0010", "col": "0220"}
+
+    # Act
+    total = client.get("/api/lineage", params={"run_id": warm_run_id, **cell})
+    same_cell_on_a_class = client.get(
+        "/api/lineage", params={"run_id": warm_run_id, **cell, "sheet": "corporate"}
+    )
+
+    # Assert
+    assert total.status_code == 404
+    assert "sum of the exposure-class sheets" in total.json()["detail"]
+    assert same_cell_on_a_class.status_code == 200
 
 
 def test_lineage_explains_a_reported_cell_and_lists_its_contributors(

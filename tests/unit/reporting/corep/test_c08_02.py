@@ -14,6 +14,14 @@ from tests.unit.reporting.corep._builders import (
     _irb_results,
 )
 
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_FIRB,
+    OF08_INSTITUTIONS_FIRB,
+    irb_sheet,
+)
+
 
 class TestC0802:
     """Tests for C 08.02 IRB PD grade breakdown template."""
@@ -171,7 +179,7 @@ class TestC0802OffBalanceSheetMemo:
         0120 = 1000 (post-CCF off-BS ead)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework=framework)
-        corp = bundle.c08_02["corporate"]
+        corp = bundle.c08_02[irb_sheet(framework, "corporate", OF08_CORPORATE_NON_SME_FIRB)]
         # Both legs (PD 1%) fall in one band -> a single populated row.
         assert corp.height == 1
         band = corp.row(0, named=True)
@@ -260,7 +268,9 @@ class TestC0802InflowLandsOnUnassignedRow:
         bundle = gen.generate_from_lazyframe(
             _irb_results_cross_class_substitution(), framework=framework
         )
-        unassigned = bundle.c08_02["institution"].filter(pl.col("row_ref") == "Unassigned")
+        unassigned = bundle.c08_02[
+            irb_sheet(framework, "institution", OF08_INSTITUTIONS_FIRB)
+        ].filter(pl.col("row_ref") == "Unassigned")
         assert unassigned.height == 1
         assert unassigned["0020"][0] == pytest.approx(0.0)
         assert unassigned["0080"][0] == pytest.approx(self._INFLOW)

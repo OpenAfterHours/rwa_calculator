@@ -638,9 +638,16 @@ class TestTheAttributedAmounts:
         assert post == pytest.approx(1_505_950.0, rel=_REL, abs=_ABS)
 
     def test_basel_31_declares_no_supporting_factor_columns(self) -> None:
-        """Both factors are withdrawn under Basel 3.1, so the whole block is
-        absent rather than zero — which is why every assertion above is
-        CRR-only, and why a fix here cannot move a Basel 3.1 figure."""
+        """Both factors are withdrawn under Basel 3.1, so the two adjustment
+        columns are absent rather than zero, and the pre / post pair collapses
+        to ONE RWEA column — which is why every assertion above is CRR-only,
+        and why a fix here cannot move a Basel 3.1 figure.
+
+        Which code the surviving RWEA column keeps is the published template's
+        choice and is not uniform: OF 07.00, OF 08.01, OF 08.02 and OF 09.01
+        keep the CRR "post" code, while OF 09.02 keeps 0110 — the CRR "pre"
+        code — and has no 0125 (PS1/26 Annex I, OF 09.02 column header).
+        """
         # Arrange
         _ledger, corep = _run("b31")
 
@@ -649,10 +656,15 @@ class TestTheAttributedAmounts:
             label = spec.label
             block = _blocks()[label]
             for sheet, frame in spec.sheets(corep).items():
-                for ref in (block.pre, block.sme, block.infra):
+                for ref in (block.sme, block.infra):
                     assert ref not in frame.columns, (
                         f"{label}/{sheet} still declares column {ref} under Basel 3.1"
                     )
+                surviving = [ref for ref in (block.pre, block.post) if ref in frame.columns]
+                assert len(surviving) == 1, (
+                    f"{label}/{sheet} declares {surviving} under Basel 3.1; with no "
+                    "supporting factor there is exactly one RWEA column"
+                )
 
 
 # =============================================================================

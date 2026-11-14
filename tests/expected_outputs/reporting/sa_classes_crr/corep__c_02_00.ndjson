@@ -1,40 +1,49 @@
 {"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":21500000.0}
-{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":1720000.0}
-{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":21500000.0}
-{"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":21500000.0}
-{"row_ref":"0070","row_name":"Central governments and central banks","0010":0.0}
-{"row_ref":"0080","row_name":"Regional governments and local authorities","0010":1750000.0}
+{"row_ref":"0040","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":21500000.0}
+{"row_ref":"0050","row_name":"Standardised approach (SA)","0010":21500000.0}
+{"row_ref":"0060","row_name":"SA exposure classes excluding securitisation positions","0010":21500000.0}
+{"row_ref":"0070","row_name":"Central governments or central banks","0010":0.0}
+{"row_ref":"0080","row_name":"Regional governments or local authorities","0010":1750000.0}
 {"row_ref":"0090","row_name":"Public sector entities","0010":2750000.0}
-{"row_ref":"0100","row_name":"Multilateral development banks","0010":3000000.0}
-{"row_ref":"0110","row_name":"International organisations","0010":0.0}
+{"row_ref":"0100","row_name":"Multilateral Development Banks","0010":3000000.0}
+{"row_ref":"0110","row_name":"International Organisations","0010":0.0}
 {"row_ref":"0120","row_name":"Institutions","0010":0.0}
 {"row_ref":"0130","row_name":"Corporates","0010":12000000.0}
 {"row_ref":"0140","row_name":"Retail","0010":0.0}
 {"row_ref":"0150","row_name":"Secured by mortgages on immovable property","0010":0.0}
 {"row_ref":"0160","row_name":"Exposures in default","0010":0.0}
-{"row_ref":"0170","row_name":"Higher-risk items","0010":0.0}
+{"row_ref":"0170","row_name":"Items associated with particular high risk","0010":0.0}
 {"row_ref":"0180","row_name":"Covered bonds","0010":2000000.0}
-{"row_ref":"0190","row_name":"Short-term credit assessment","0010":0.0}
-{"row_ref":"0200","row_name":"Collective investment undertakings (CIU)","0010":0.0}
+{"row_ref":"0190","row_name":"Claims on institutions and corporates with a short-term credit assessment","0010":0.0}
+{"row_ref":"0200","row_name":"Collective investments undertakings (CIU)","0010":0.0}
 {"row_ref":"0210","row_name":"Equity","0010":0.0}
 {"row_ref":"0211","row_name":"Other items","0010":0.0}
-{"row_ref":"0220","row_name":"Of which: IRB Approach","0010":0.0}
-{"row_ref":"0240","row_name":"Of which: Foundation IRB (F-IRB)","0010":0.0}
-{"row_ref":"0250","row_name":"F-IRB — Institutions","0010":0.0}
-{"row_ref":"0260","row_name":"F-IRB — Corporates","0010":0.0}
-{"row_ref":"0300","row_name":"Of which: Advanced IRB (A-IRB)","0010":0.0}
-{"row_ref":"0310","row_name":"A-IRB — Central governments and central banks","0010":0.0}
-{"row_ref":"0330","row_name":"A-IRB — Institutions","0010":0.0}
-{"row_ref":"0340","row_name":"A-IRB — Corporates","0010":0.0}
-{"row_ref":"0370","row_name":"A-IRB — Retail","0010":0.0}
-{"row_ref":"0380","row_name":"A-IRB — Retail, secured by immovable property","0010":0.0}
-{"row_ref":"0390","row_name":"A-IRB — Retail, qualifying revolving (QRRE)","0010":0.0}
-{"row_ref":"0400","row_name":"A-IRB — Retail, other SME","0010":0.0}
-{"row_ref":"0410","row_name":"Supervisory slotting","0010":0.0}
+{"row_ref":"0240","row_name":"Internal ratings based Approach (IRB)","0010":0.0}
+{"row_ref":"0250","row_name":"IRB approaches when neither own estimates of LGD nor Conversion Factors are used","0010":0.0}
+{"row_ref":"0260","row_name":"Central governments and central banks","0010":0.0}
+{"row_ref":"0270","row_name":"Institutions","0010":0.0}
+{"row_ref":"0280","row_name":"Corporates - SME","0010":0.0}
+{"row_ref":"0290","row_name":"Corporates - Specialised Lending","0010":0.0}
+{"row_ref":"0300","row_name":"Corporates - Other","0010":0.0}
+{"row_ref":"0310","row_name":"IRB approaches when own estimates of LGD and/or Conversion Factors are used","0010":0.0}
+{"row_ref":"0320","row_name":"Central governments and central banks","0010":0.0}
+{"row_ref":"0330","row_name":"Institutions","0010":0.0}
+{"row_ref":"0340","row_name":"Corporates - SME","0010":0.0}
+{"row_ref":"0350","row_name":"Corporates - Specialised Lending","0010":0.0}
+{"row_ref":"0360","row_name":"Corporates - Other","0010":0.0}
+{"row_ref":"0370","row_name":"Retail - Secured by real estate SME","0010":0.0}
+{"row_ref":"0380","row_name":"Retail - Secured by real estate non-SME","0010":0.0}
+{"row_ref":"0390","row_name":"Retail - Qualifying revolving","0010":0.0}
+{"row_ref":"0400","row_name":"Retail - Other SME","0010":0.0}
+{"row_ref":"0410","row_name":"Retail - Other non-SME","0010":0.0}
 {"row_ref":"0420","row_name":"Equity IRB","0010":0.0}
-{"row_ref":"0430","row_name":"Settlement risk","0010":null}
-{"row_ref":"0440","row_name":"Securitisation positions in non-trading book","0010":null}
-{"row_ref":"0460","row_name":"Position, foreign exchange and commodities risk","0010":null}
-{"row_ref":"0590","row_name":"Credit valuation adjustment (CVA)","0010":null}
-{"row_ref":"0640","row_name":"Operational risk","0010":null}
-{"row_ref":"0680","row_name":"Additional risk exposure: fixed overheads","0010":null}
+{"row_ref":"0450","row_name":"Other non credit-obligation assets","0010":null}
+{"row_ref":"0460","row_name":"Risk exposure amount for contributions to the default fund of a CCP","0010":null}
+{"row_ref":"0470","row_name":"Securitisation positions","0010":null}
+{"row_ref":"0490","row_name":"TOTAL RISK EXPOSURE AMOUNT FOR SETTLEMENT/DELIVERY","0010":null}
+{"row_ref":"0520","row_name":"TOTAL RISK EXPOSURE AMOUNT FOR POSITION, FOREIGN EXCHANGE AND COMMODITIES RISKS","0010":null}
+{"row_ref":"0590","row_name":"TOTAL RISK EXPOSURE AMOUNT FOR OPERATIONAL RISK (OpR)","0010":null}
+{"row_ref":"0630","row_name":"ADDITIONAL RISK EXPOSURE AMOUNT DUE TO FIXED OVERHEADS","0010":null}
+{"row_ref":"0640","row_name":"TOTAL RISK EXPOSURE AMOUNT FOR CREDIT VALUATION ADJUSTMENT","0010":null}
+{"row_ref":"0680","row_name":"TOTAL RISK EXPOSURE AMOUNT RELATED TO LARGE EXPOSURES IN THE TRADING BOOK","0010":null}
+{"row_ref":"0690","row_name":"OTHER RISK EXPOSURE AMOUNTS","0010":null}

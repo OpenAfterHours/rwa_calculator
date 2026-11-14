@@ -143,8 +143,13 @@ Cell semantics (recorded decisions, this slice):
   infrastructure rows, because the engine applies min(sme, infra) and the
   pack pins infra strictly lower (corep/supporting_factors.py) — so
   0080 + 0081 + 0082 = 0090 and 0110 + 0121 + 0122 = 0125 foot. Under B31
-  none of these refs exist (supporting factors are CRR-only), so the change
-  is scoped by column presence, not by regime branching.
+  the adjustment and post-factor refs do not exist (supporting factors are
+  CRR-only), so the change is scoped by column presence, not by regime
+  branching. OF 09.02 keeps ONE RWEA column, 0110 (PS1/26 Annex I: ... 0105,
+  0107, 0110, 0120, 0130), and it carries the reported RWEA - the figure CRR
+  puts in 0125. (Recorded fix 2026-11-13: the B31 layout had kept 0125 and
+  dropped 0110, the reverse of the published template, so the RWEA had no
+  cell in the taxonomy and boe_b0278 / b0293 / b0296 read 0110 as empty.)
 - The Annex II §1.3 "(-)" negation covers ONLY the CRR supporting-factor
   adjustment columns (0081/0082, 0121/0122), applied by a module post-step
   AFTER execution (a zero deduction normalised to +0.0, null kept null).
@@ -1029,8 +1034,16 @@ def _c09_02_spec(
         cells[(ref, "0105")] = _sum_or_null(ead_col, post_pred)
         if "0107" in column_refs and ead_col is not None:
             cells[(ref, "0107")] = CellSpec(Sum(ead_col), predicate=post_def_pred)
-        if "0110" in column_refs:
-            cells[(ref, "0110")] = _sum_or_null(rwa_pre_col, post_pred)
+        # CRR discloses the RWEA twice: before supporting factors (0110) and
+        # after them (0125). OF 09.02 has no supporting factors and ONE RWEA
+        # column, 0110, which carries the reported RWEA. Scoped by which
+        # columns the layout has, not by regime.
+        if "0125" in column_refs:
+            if "0110" in column_refs:
+                cells[(ref, "0110")] = _sum_or_null(rwa_pre_col, post_pred)
+            cells[(ref, "0125")] = _sum_or_null(rwa_col, post_pred)
+        elif "0110" in column_refs:
+            cells[(ref, "0110")] = _sum_or_null(rwa_col, post_pred)
         if rwa_col is not None:
             cells[(ref, "0120")] = CellSpec(Sum(rwa_col), predicate=post_def_pred)
         if "0121" in column_refs:
@@ -1040,7 +1053,6 @@ def _c09_02_spec(
             cells[(ref, "0122")] = _c09_sf_adjustment_cell(
                 post_pred, cols, "infrastructure_factor_applied", "is_infrastructure"
             )
-        cells[(ref, "0125")] = _sum_or_null(rwa_col, post_pred)
         cells[(ref, "0130")] = CellSpec(Sum("expected_loss"), predicate=pred)
     spec = TemplateSpec(
         name="c09_02", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"

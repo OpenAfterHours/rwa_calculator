@@ -769,7 +769,11 @@ _C07_00_CELLS: Mapping[str, CellRequirement] = {
     # Sum(c07_provision): the per-row SCRA+GCRA pick with the sealed Art. 111(2)
     # deducted provision as its fallback rung.
     "0030": _PROVISIONS_C07,
-    "0035": _needs("on_bs_netting_amount"),  # Basel 3.1 only
+    # Basel 3.1 only. Sum(c07_netting): the ADJUSTED value of the netted deposit
+    # (PS1/26 Art. 219(1)), capped per row at the same gross-net-of-provisions
+    # basis as the substitution block — NOT the pre-haircut allocation
+    # ``on_bs_netting_amount``, which C 08.01 col 0035 still sums.
+    "0035": _both(_needs("on_bs_netting_adjusted_value"), _C07_BLOCK_CAP),
     "0040": (),  # Formula 0010 - 0030 (- 0035)
     "0050": _both(_needs("guaranteed_portion", "protection_type"), _C07_BLOCK_CAP),
     # The 0050/0060 split is made by _protection_exprs off protection_type; with
@@ -786,6 +790,13 @@ _C07_00_CELLS: Mapping[str, CellRequirement] = {
     "0100": _needs("post_crm_exposure_class_guaranteed", "guaranteed_portion"),
     "0110": (),  # Formula 0040 - 0090 + 0100
     "0120": (),  # constant 0.0
+    # 0130 / 0140 need only the two collateral carriers. Under Basel 3.1 each is
+    # reported LESS its netting part (``on_bs_netting_adjusted_value`` /
+    # ``on_bs_netting_amount``) when the frame carries the adjusted-value carrier,
+    # because col 0035 then reports the deposit; without it there is nothing to
+    # take out and the cells are the carriers as supplied. No mapping can supply
+    # either netting column today, so a legacy side reports col 0035 as
+    # unavailable and its whole collateral value here.
     "0130": _needs("collateral_adjusted_value"),
     "0140": _needs("collateral_market_value"),  # market - collateral_adjusted_value
     "0150": (),  # Formula max(0, 0110 - 0130)

@@ -38,11 +38,18 @@ all and shows the netting only through the col 0200 exposure value. A test that
 merely skipped the cell under CRR would look identical to one written against a
 template that had lost the column.
 
-Sign note: the reported col 0035 cell is the NEGATION of
-``Sum("on_bs_netting_amount")``. ``reporting/corep/postpass.py::negate_deduction_cols``
-applies the COREP Annex II §1.3 "(-)"-label convention to it after execution, so
-the assertions below expect ``-TOTAL_NETTING_*``. The fixture constants stay
-positive magnitudes, which is what the engine carrier holds.
+Sign note: the reported col 0035 cell is the NEGATION of the summed netting
+reduction. ``reporting/corep/postpass.py::negate_deduction_cols`` applies the
+COREP Annex II §1.3 "(-)"-label convention to it after execution, so the
+assertions below expect ``-TOTAL_NETTING_*``. The fixture constants stay positive
+magnitudes, which is what the engine carrier holds.
+
+Carrier note: col 0035 sums the deposit's ADJUSTED value
+(``on_bs_netting_adjusted_value``), not the allocation ``on_bs_netting_amount``
+the per-leg test below reads. On THIS portfolio the two are equal — one
+currency, one maturity date — so its col 0035 figures did not move when the
+carrier changed; the portfolio that tells them apart, and the columns that DID
+move here (0130, 0150), are in ``test_of07_netting_single_deduction.py``.
 
 Regenerate with REGEN_REPORTING_GOLDENS=1 only alongside a recorded decision —
 never to make a red suite green.
@@ -190,7 +197,12 @@ def _generate_frames(
     framework = _REGIMES[regime_key][1]
     result = _run(regime_key, netting_enabled=netting_enabled)
 
-    corep = COREPGenerator().generate_from_lazyframe(result.results, framework=framework)
+    corep = COREPGenerator().generate_from_lazyframe(
+        result.results,
+        framework=framework,
+        # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+        output_floor_summary=result.output_floor_summary,
+    )
     pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)
 
     corep_frames, corep_meta = _flatten_bundle("corep", corep)
@@ -378,7 +390,7 @@ def test_c07_reports_the_netted_corporate_book(regime_key: str) -> None:
         for row_ref in ("0010", "0070"):
             assert _cell(sheet, row_ref, _NETTING_COL) == pytest.approx(-TOTAL_NETTING_ENABLED), (
                 f"row {row_ref}: col 0035 carries the Annex II §1.3 '(-)' sign, so it "
-                "is the negation of Sum(on_bs_netting_amount)"
+                "is the negation of the summed netting reduction"
             )
         assert _cell(sheet, "0080", _NETTING_COL) is None, (
             "the off-balance-sheet row has no on-balance-sheet netting to adjust"

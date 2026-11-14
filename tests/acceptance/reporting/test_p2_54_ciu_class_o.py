@@ -110,12 +110,16 @@ from rwa_calc.data.schemas import (
 )
 from rwa_calc.domain.enums import ExposureClass, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     C02_00_SA_CLASS_MAP,
     C07_00_SA_SHEET_MAP,
+    C07_00_TOTAL_SHEET_KEY,
     C09_01_SA_CLASS_MAP,
 )
+from rwa_calc.reporting.filing.checks import evaluate_all
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 # ``ov1`` as a MODULE, not ``from ... import _EQUITY_SUBAPPROACH_REFS``: the module
 # attribute is what production reads, and a name bound here at import time keeps
@@ -128,14 +132,12 @@ from rwa_calc.reporting.pillar3.templates import (
     CMS2_TOTAL_CLASSES,
     SA_DISCLOSURE_CLASSES,
 )
-from rwa_calc.reporting.validations.checker import evaluate_all
-from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rwa_calc.contracts.bundles import RawDataBundle
-    from rwa_calc.reporting.validations.checker import ValidationReport
+    from rwa_filer.validate.checker import ValidationReport
 
 # Group-by float sums are not bit-reproducible (Phase 2 parity convention).
 _REL = 1e-9
@@ -331,7 +333,7 @@ def _outcome(portfolio: str, regime: str, rule_id: str) -> object:
 
 
 def _sheet_key(regime: str, z_code: str) -> str:
-    """The single bundle key a published z-code names, from ``validations/scope.py``."""
+    """The single bundle key a published z-code names, from ``filing/sheet_maps.py``."""
     index = SHEET_INDEX_MAPS["c07" if regime == "crr" else "of07"]
     keys = index[z_code].bundle_keys
     assert len(keys) == 1, (
@@ -945,7 +947,9 @@ class TestC0200ReportsTheCiuUnderItsOwnRow:
 
     C 02.00's parent totals are keyed on the APPROACH, not the class, so they do
     not move when a class loses its row — measured: 28,000,000 left the breakdown
-    and landed nowhere while r0010, r0050 and r0060 were bit-identical. The
+    and landed nowhere while the total, credit-risk and SA rows were bit-identical
+    (r0010, r0040 and r0060 by their published codes; this file read the
+    credit-risk row at 0050 until 2026-11-13). The
     breakdown footing is therefore the only assertion here that could have caught
     it, and it is stated over every SA class row rather than over the two that
     moved.
@@ -1001,7 +1005,9 @@ class TestC0200ReportsTheCiuUnderItsOwnRow:
 
         ledger_total = float(results["rwa_final"].sum())
         assert ledger_total == pytest.approx(_RICH_B31_TREA, rel=_REL, abs=_ABS)
-        for ref in ("0010", "0050"):
+        # Was ("0010", "0050"): the credit-risk total is published row 0040
+        # (boe_b1093: r0040 = r0050 + r0240 + r0460 + r0470), and 0050 is the SA total.
+        for ref in ("0010", "0040"):
             value = _cell(corep.c_02_00, ref, "0010")
             assert value == pytest.approx(_RICH_B31_TREA, rel=_REL, abs=_ABS), (
                 f"C 02.00 r{ref} reports {value} against a ledger carrying {ledger_total}"
@@ -1016,12 +1022,11 @@ class TestC0200ReportsTheCiuUnderItsOwnRow:
 class TestC0901ReportsTheCiuOnTheTotalSheet:
     """Row 0140 takes the CIU, row 0150 falls, and row 0170 still foots.
 
-    ⚠ Every assertion here is on the ``TOTAL`` sheet. **Measured: the equity-table
-    legs reach no country sheet at all** — on ``[GB]`` rows 0140-0143 and 0150 are
-    null in every regime and on both portfolios, despite the obligor carrying
-    ``country_code="GB"``. A ``[GB]`` assertion would therefore pass VACUOUSLY
-    against a null, which is why ``test_the_country_sheet_carries_no_equity_table_leg``
-    asserts that state explicitly instead of leaving it unexamined.
+    The row-level assertions are on the ``TOTAL`` sheet. They were put there
+    because the equity-table legs once reached no country sheet at all, so a
+    ``[GB]`` assertion compared a null with a null. That was a defect, fixed on
+    2026-11-13; ``test_the_country_sheet_carries_the_equity_table_legs`` now holds
+    the country sheet to the all-countries one on every equity-table row.
     """
 
     def test_row_0140_reports_the_ciu_and_row_0150_falls_to_the_listed_leg(self) -> None:
@@ -1110,38 +1115,44 @@ class TestC0901ReportsTheCiuOnTheTotalSheet:
                 )
 
     @pytest.mark.parametrize(("portfolio", "regime"), [("rich", "b31"), ("off-bs", "crr")])
-    def test_the_country_sheet_carries_no_equity_table_leg(
+    def test_the_country_sheet_carries_the_equity_table_legs(
         self, portfolio: str, regime: str
     ) -> None:
-        """The trap, asserted rather than avoided.
+        """The equity table reaches its obligors' country sheet.
 
-        The equity table never reaches a country sheet, so a CIU assertion aimed
-        at ``[GB]`` would compare ``None`` against ``None`` and pass while the
-        class was still unbound. This states the absence AND quantifies it: the
-        whole gap between the two sheets' row 0170 is exactly the equity table, so
-        if a leg ever does reach ``[GB]`` both halves move and this goes red.
+        Until 2026-11-13 this test asserted the OPPOSITE, as a tripwire: the
+        equity table reached no country sheet at all — ``[GB]`` rows 0140-0143 and
+        0150 were null although every obligor carries ``country_code="GB"`` — and
+        the whole gap between the two sheets' row 0170 was exactly the equity
+        table. It was written to go red when a leg reached ``[GB]``, and it did:
+        the hierarchy stage now carries the counterparty's country onto the
+        equity exposures (``enrich.attach_obligor_country_to_equity``).
+
+        Every obligor in both books is in GB, so the country sheet now equals the
+        all-countries sheet on every equity-table row and the two row-0170 totals
+        agree — which is ``boe_b0904``, the rule the gap was breaking.
         """
         results, corep, _pillar3 = _run(portfolio, regime)
         gb, total = corep.c09_01["GB"], corep.c09_01["TOTAL"]
 
-        for ref in ("0140", "0141", "0142", "0143", "0150"):
-            cells = [_cell(gb, ref, column) for column in ("0010", "0075", "0090")]
-            assert all(value is None for value in cells), (
-                f"[{portfolio}/{regime}] C 09.01 [GB] r{ref} now publishes {cells}. An "
-                "equity-table leg has reached a country sheet — re-point the TOTAL-sheet "
-                "assertions in this class, which were written because it could not"
-            )
-
         equity_table = results.filter(pl.col("reporting_approach_origin") == "equity")
-        for column, ledger_column in (("0010", "ead_final"), ("0090", "rwa_final")):
-            gap = (_cell(total, "0170", column) or 0.0) - (_cell(gb, "0170", column) or 0.0)
-            assert gap == pytest.approx(
-                float(equity_table[ledger_column].sum()), rel=_REL, abs=_ABS
-            ), (
-                f"[{portfolio}/{regime}] C 09.01 TOTAL - GB on r0170 c{column} is {gap}, "
-                f"which is not the equity table's {ledger_column}. The geographies differ "
-                "by something other than the equity book"
-            )
+        assert equity_table.height > 0
+        assert equity_table["cp_country_code"].to_list() == ["GB"] * equity_table.height
+
+        populated = 0
+        for ref in ("0140", "0141", "0142", "0143", "0150"):
+            for column in ("0010", "0075", "0090"):
+                on_total = _cell(total, ref, column)
+                assert _cell(gb, ref, column) == (
+                    None if on_total is None else pytest.approx(on_total, rel=_REL, abs=_ABS)
+                ), f"[{portfolio}/{regime}] C 09.01 [GB] r{ref} c{column} is not the TOTAL's"
+                populated += on_total not in (None, 0.0)
+        assert populated > 0, "the equity-table rows are empty on both sheets — vacuous"
+
+        for column in ("0010", "0090"):
+            assert _cell(gb, "0170", column) == pytest.approx(
+                _cell(total, "0170", column), rel=_REL, abs=_ABS
+            ), f"[{portfolio}/{regime}] C 09.01 GB and TOTAL disagree on r0170 c{column}"
 
 
 # ---------------------------------------------------------------------------
@@ -1606,7 +1617,12 @@ class TestTheCrrArmOnABookThisFileOwns:
         _results, corep, _errors = _control_run()
 
         sheet = _sheet_key("crr", _Z_CODE_112_O)
-        assert set(corep.c07_00) == {sheet, ExposureClass.CORPORATE.value}, (
+        # The Total sheet is the sum of the class sheets, not a class of its own:
+        # it is on the axis, and the two sheets counted here are the class sheets.
+        assert C07_00_TOTAL_SHEET_KEY in corep.c07_00, (
+            f"C 07.00 opened {sorted(corep.c07_00)} with no Total sheet"
+        )
+        assert set(c07_class_sheets(corep.c07_00)) == {sheet, ExposureClass.CORPORATE.value}, (
             f"C 07.00 opened {sorted(corep.c07_00)} under a CRR SA config; expected the "
             f"Article 112(1)(o) sheet beside the corporate one"
         )

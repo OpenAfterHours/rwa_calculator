@@ -812,8 +812,8 @@ snapshot **before** running anything:
 
 ```
 uv run python scripts/arch_check.py
-uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/
-uv run ty check src/rwa_calc/
+uv run ruff check src/ tests/ packages/ && uv run ruff format --check src/ tests/ packages/
+uv run ty check src/rwa_calc/ && uv run ty check packages/rwa-filer/src/
 ```
 
 **Tier 1 — contracts and the batch's own tests**
@@ -943,7 +943,7 @@ file that concurrent agents would race on.
    | 5 (last) | prose | an entry in `.claude/LESSONS.md` |
 
    Prose is the **fallback**, not the default. `arch_check.py` already
-   carries 22 numbered checks and the validation register carries
+   carries 23 numbered checks and the validation register carries
    hundreds of entries — every one of them is a lesson that graduated.
    That is what "learning" looks like here; a paragraph nobody rereads
    is not.

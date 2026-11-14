@@ -5,7 +5,7 @@ COREP and Pillar 3 template changes from CRR to Basel 3.1.
 > **Once a template is generated, see [reporting-validation-rules.md](reporting-validation-rules.md)**
 > for the published BoE validation rules it must satisfy. Do not quote rule counts from
 > memory — they move as rules are reactivated. Read the count from
-> `src/rwa_calc/reporting/validations/rules/`.
+> `packages/rwa-filer/src/rwa_filer/rules/data/`.
 
 ---
 

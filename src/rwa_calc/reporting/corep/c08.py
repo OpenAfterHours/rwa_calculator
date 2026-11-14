@@ -100,7 +100,7 @@ Cell semantics (recorded decisions, this slice):
   THE ROW AXIS. Cols 0010/0020/0030/0060/0110 read the obligor/origin
   population; cols 0040/0050/0070/0080/0090/0100 read the post-substitution
   population, sheet class AND PD band (EBA Q&A 2023_6718 for the expected-loss
-  limb). The seam is the ``both_bases`` opt-in on ``_irb_population`` plus
+  limb). The seam is the ``both_bases`` opt-in on ``irb_population`` plus
   ``pd_scale.banded_rows_by_basis``; C 08.04/05 keep the origin-only default and
   the single-basis ``banded_rows``. THE ROW AXIS DELIBERATELY DEPARTS FROM THE
   PUBLISHED ROW INSTRUCTION AND MUST NOT BE "FIXED" BACK — the election, the
@@ -142,7 +142,7 @@ Cell semantics (recorded decisions, this slice):
   construction (Art. 153(5)), so the retired behaviour banded the whole slotting
   book onto C 08.02's "Unassigned" residual row and broke the published
   cross-template identity ``{OF08.01 r0070} = sum({OF08.02})`` on every shared
-  column (boe_b0752_*/boe_b0814_*). C 08.02 therefore reads ``_non_slotting``,
+  column (boe_b0752_*/boe_b0814_*). C 08.02 therefore reads ``non_slotting``,
   exactly as C 08.03/05 already did — a slotting-only class emits NO C 08.02
   sheet at all.
 - Col 0060 ("OTHER FUNDED CREDIT PROTECTION") reads the Art. 232(1) / Art. 200(1)
@@ -284,11 +284,10 @@ Cell semantics (recorded decisions, this slice):
   ``boe_b0752_8`` / ``boe_b0814_07`` (col 0080) and ``boe_b0752_9`` /
   ``boe_b0814_08`` (col 0090), two distinct identities each stated twice in the
   pack — require ``{OF08.01 r0070} = sum({OF08.02})`` on those columns. Together
-  with ``v0338_m`` (which put the inflow on row 0070; its BoE twin ``boe_b0745`` was
-  withdrawn in taxonomy v4.1.1) that is a published statement that C 08.02 MUST
-  carry the inflow, so "excluded entirely"
-  was never available and the MONITORED divergence R12 recorded here was in fact
-  a standing breach of four ERROR-severity rules. What survives is the reason
+  with ``v0338_m`` (which put the inflow on row 0070; BoE ``boe_b0745``, withdrawn
+  in v4.1.1) that is a published statement that C 08.02 MUST carry the inflow, so
+  "excluded entirely" was never available and the MONITORED divergence R12 here
+  was a standing breach of four ERROR-severity rules. What survives is the reason
   per-GRADE attribution is unsound — the ledger carries the obligor's grade,
   never the guarantor's — and that is precisely why the inflow lands on the
   residual "Unassigned" row (``_C08_02_INFLOW_ROW``) rather than on any grade:
@@ -384,6 +383,15 @@ from rwa_calc.reporting.corep.c08_06_cells import (
     c08_06_empty_row_override,
     c08_06_sl_type_sheet,
 )
+from rwa_calc.reporting.corep.c08_sheets import (
+    BASIS,
+    REPORTED_ROWS,
+    inflow_sheet_key,
+    irb_population,
+    non_slotting,
+    sheet_keys,
+    with_total_sheets,
+)
 from rwa_calc.reporting.corep.crm_substitution import (
     C08_01_NETTING_EXEMPT_ROWS,
     IRB_BLOCK_COL,
@@ -424,20 +432,14 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_columns,
     get_irb_row_sections,
 )
-from rwa_calc.reporting.kernel import (
-    TwoBasis,
-    available_columns,
-    class_keys,
-    pick,
-    population_flags,
-    sheet_axis,
-    sheet_frame,
-)
+from rwa_calc.reporting.kernel import available_columns, pick, sheet_axis, sheet_frame
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+    from rwa_calc.reporting.kernel import TwoBasis
 
 # Annex II §1.3 "(-)"-labelled deduction columns on the C 08.01/02 surface,
 # negated post-execute (AFTER the CRM waterfall consumes positive magnitudes):
@@ -453,24 +455,15 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0035", "0040", "0050", "0060", "0070", "0102", "0103", "0256", "0257", "0290"}
 )
 
-_IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
-# The C 08.01 two-basis discriminators (see the module docstring). The mechanism
-# — derived boolean columns rather than ``RowPredicate`` fields, and why that is
-# the only shape the post basis can DEGRADE in — lives in
-# ``reporting/kernel/bases.py``, shared with C 07.00. C 08.01-03 opt into the
-# two-basis population; C 08.04/05 keep ``_irb_population``'s origin-only
-# default.
-_BASIS: TwoBasis = TwoBasis("c08")
-
 # Which ``ReportingContext`` inflow component each C 08.01 row's col 0080 takes.
 # The Total row 0010 takes the whole inflow; rows 0020/0030 take its balance-sheet
 # split. Both are needed: row 0010 is decomposed TWICE over the same columns — the
 # balance-sheet axis (r0020+r0030+r0040+r0050+r0060, BoE ``boe_b0744``) and the IRB
-# treatment axis (r0070+r0080+r0170+r0180, BoE ``boe_b0745`` / EBA ``v0338_m``; the
-# BoE pair was withdrawn in taxonomy v4.1.1, ``v0338_m`` is live ERROR) — and a
-# Total-row-only inflow breached BOTH by exactly the inflow on cols 0080/0090/0104
-# (measured on the CRM-substitution portfolio, not inferred). The balance-sheet split is unambiguous: the side is a property of
-# the underlying asset and substitution does not change it.
+# treatment axis (r0070+r0080+r0170+r0180, EBA ``v0338_m``, live ERROR; BoE
+# ``boe_b0745``, both BoE rules withdrawn in v4.1.1) — and a Total-row-only inflow
+# breached BOTH by exactly the inflow on cols 0080/0090/0104 (measured on the
+# CRM-substitution portfolio). The balance-sheet split is unambiguous: the side is
+# a property of the asset, not of substitution.
 #
 # ROWS 0070/0080 CARRY THE TREATMENT SPLIT, and binding them is only coherent
 # BECAUSE C 08.02 now carries the inflow too. Four live ERROR rules —
@@ -559,32 +552,6 @@ def _c08_04_other_flow(cells: Mapping[str, float | None], prior_available: bool)
 # =============================================================================
 # Shared population + derived discriminators
 # =============================================================================
-
-
-def _irb_population(
-    results: pl.LazyFrame, cols: set[str], *, both_bases: bool = False
-) -> pl.LazyFrame:
-    """The IRB book (retired _filter_by_irb_approach): F-IRB/A-IRB/slotting.
-
-    ``both_bases`` selects WHICH IRB book. The default is the ORIGIN-approach one
-    — the obligor's own book, which is what C 08.04/05 read. C 08.01/02/03
-    take the UNION of it and the POST-substitution book, tagged with
-    ``c08_pop_origin`` / ``c08_pop_post`` so each cell reads its own basis (see
-    the module docstring). A leg with no substitution is in both, which is why
-    the split is number-neutral on a book that never substitutes.
-
-    The post book is a SUBSET of the origin one here, unlike C 07.00's:
-    ``aggregator._post_crm_approach_expr`` maps an SA guarantor to the SA literal
-    and everything else to the obligor's own approach, so an IRB-origin leg can
-    only LEAVE the IRB population post-substitution (to an SA guarantor) and an
-    SA-origin leg can never enter it. No dedupe is needed, and the row-0070/0080
-    approach-partition terms — which key ``reporting_approach_origin`` — stay a
-    valid partition of the post population.
-    """
-    tagged = results.with_columns(population_flags(_BASIS, cols, _IRB_APPROACHES))
-    if both_bases:
-        return tagged.filter(pl.col(_BASIS.pop_origin) | pl.col(_BASIS.pop_post))
-    return tagged.filter(pl.col(_BASIS.pop_origin)).drop(_BASIS.pop_origin, _BASIS.pop_post)
 
 
 def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
@@ -820,9 +787,8 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         # 0080 (the substitution INFLOW) lands on the Total row AND on one row of
         # each published decomposition of it — ``boe_b0744`` (balance-sheet axis,
         # rows 0020/0030) and ``boe_b0745`` / ``v0338_m`` (IRB treatment axis, rows
-        # 0070/0080). Both span the same columns (``v0338_m`` is live ERROR; the BoE
-        # pair was withdrawn in taxonomy v4.1.1), so a Total-row-only inflow breaks
-        # each by exactly the inflow.
+        # 0070/0080). Both span the same columns (``v0338_m`` live ERROR; the BoE pair
+        # withdrawn in v4.1.1), so a Total-row-only inflow breaks each by the inflow.
         # ``inflow_key`` names which component this row takes; None = a row outside
         # both decompositions, which reports the recorded constant 0.0.
         "0080": (
@@ -1024,7 +990,7 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
                 column_refs,
                 inflow_key=_C08_01_INFLOW_KEYS.get("0070"),
                 netting_in_waterfall=True,
-                basis=_BASIS,
+                basis=BASIS,
             ).items():
                 merged = (
                     CellSpec(cell.binding, predicate=pred, empty_cell=cell.empty_cell)
@@ -1047,7 +1013,7 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
             column_refs,
             inflow_key=_C08_01_INFLOW_KEYS.get(row.ref),
             netting_in_waterfall=netting,
-            basis=_BASIS,
+            basis=BASIS,
         ).items():
             cells[(row.ref, col_ref)] = cell
     return TemplateSpec(
@@ -1114,28 +1080,28 @@ def c08_01_plans(
         if ec_col is None:
             errors.append("C08.01: Missing exposure_class column")
         return {}
-    irb_df = _irb_population(results, cols, both_bases=True).collect()
+    irb_df = irb_population(results, cols, both_bases=True).collect()
     # Resolved BEFORE the empty-population guard: a book whose IRB-destined
     # inflow comes entirely from legs outside this template would lose it to the
     # early exit, which is the same dropped-inflow defect one level up.
-    inflow_map = irb_origin_inflows(results, cols, destination="irb")
+    inflow_map = irb_origin_inflows(
+        results, cols, destination="irb", destination_key=inflow_sheet_key(cols, ec_col, framework)
+    )
     if len(irb_df) == 0 and not inflow_map:
         return {}
-    # The two sheet keys. C 08 applies NO key transform (no specialised-lending
-    # merge, unlike C 07.00), and the post key degrades to the origin key on a
-    # frame that seals no ``reporting_class``.
-    irb_df = irb_df.with_columns(class_keys(_BASIS, set(irb_df.columns), ec_col))
+    # The two sheet keys — the published class-and-approach sheet under Basel
+    # 3.1, the exposure class under CRR (``c08_sheets.sheet_keys``).
+    irb_df = irb_df.with_columns(sheet_keys(set(irb_df.columns), ec_col, framework))
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     spec = _c08_01_spec(framework, data_cols, ead_col, rwa_col)
     row_terms = _c08_01_row_terms(framework, data_cols)
     plans: dict[str, SheetPlan] = {}
-    sheet_keys = sheet_axis(_BASIS, irb_df) | set(inflow_map)
-    for ec in sorted(sheet_keys):
+    for ec in sorted(sheet_axis(BASIS, irb_df) | set(inflow_map)):
         inflow = inflow_map.get(ec)
         plans[ec] = SheetPlan(
             spec=spec,
-            frame=sheet_frame(_BASIS, irb_df, ec),
+            frame=sheet_frame(BASIS, irb_df, ec),
             ctx=ReportingContext(
                 substitution_inflow=inflow.total if inflow else 0.0,
                 substitution_inflow_on_bs=inflow.on_bs if inflow else 0.0,
@@ -1145,7 +1111,7 @@ def c08_01_plans(
             ),
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
-            inflow_rows=_inflow_rows(inflow),
+            inflow_rows=_inflow_rows(inflow) | REPORTED_ROWS.get(ec, frozenset()),
         )
     return plans
 
@@ -1180,17 +1146,21 @@ def generate_c08_01(
     cols: set[str],
     framework: str,
     errors: list[str],
+    *,
+    totals: bool = False,
 ) -> dict[str, pl.DataFrame]:
-    """Execute C 08.01 per obligor-class sheet over the sealed ledger.
+    """Execute C 08.01 per sheet over the sealed ledger.
 
     Iterates ``c08_01_plans`` and applies the five post-execute passes on the
     reported frame (the off-BS pre-CCF memo 0100, the after-all-CRM total 0104,
     the all-null inert rows, the provisions ladder 0290, the Annex II §1.3 "(-)"
     negation) — the drill-down reads a cell's value from HERE, so it honours every
     pass. The per-row predicates the passes need are rebuilt from the plan's
-    ``row_terms``."""
+    ``row_terms``. ``totals`` adds the published Total sheets, which have no plan
+    (``c08_sheets.with_total_sheets``); lineage reads the plan-keyed default."""
     result: dict[str, pl.DataFrame] = {}
-    for ec, plan in c08_01_plans(results, cols, framework, errors).items():
+    plans = c08_01_plans(results, cols, framework, errors)
+    for ec, plan in plans.items():
         row_preds = _c08_01_row_preds(plan.row_terms)
         origin_preds = _origin_preds(row_preds)
         data_cols = set(plan.frame.columns)
@@ -1200,7 +1170,7 @@ def generate_c08_01(
         frame = null_empty_rows(frame, plan.frame, row_preds, plan.inflow_rows)
         frame = provisions_postfix(frame, plan.frame, origin_preds, data_cols, ref="0290")
         result[ec] = negate_deduction_cols(frame, _NEGATIVE_COLS)
-    return result
+    return with_total_sheets("C08.01", result, plans, framework, errors) if totals else result
 
 
 def _origin_preds(
@@ -1215,7 +1185,7 @@ def _origin_preds(
     ``null_empty_rows`` deliberately keeps the BASIS-FREE predicates instead, so
     its emptiness count is over the union of both bases (see that function).
     """
-    flag: tuple[str, str | bool] = (_BASIS.basis_origin, True)
+    flag: tuple[str, str | bool] = (BASIS.basis_origin, True)
     return {
         ref: None if pred is None else RowPredicate(equals=(flag, *pred.equals), any_of=pred.any_of)
         for ref, pred in preds.items()
@@ -1258,7 +1228,7 @@ def _c08_02_spec(
             value_refs,
             inflow_key=("substitution_inflow_graded" if label == _C08_02_INFLOW_ROW else None),
             netting_in_waterfall=True,
-            basis=_BASIS,
+            basis=BASIS,
             post_terms=(("c08_02_key_post", label),),
         ).items():
             cells[(label, col_ref)] = cell
@@ -1296,24 +1266,25 @@ def c08_02_plans(
     if pd_col is None:
         errors.append("C08.02: No PD column available — skipping PD grade breakdown")
         return {}
-    irb_df = _non_slotting(results, cols, both_bases=True).collect()
+    irb_df = non_slotting(results, cols, both_bases=True).collect()
     # The GRADED component only: C 08.02 excludes slotting, and the tie-out it must
     # satisfy is against C 08.01 row 0070, which is the F-IRB/A-IRB union.
-    inflow_map = irb_origin_inflows(results, cols, destination="irb")
+    inflow_map = irb_origin_inflows(
+        results, cols, destination="irb", destination_key=inflow_sheet_key(cols, ec_col, framework)
+    )
     graded = {ec: flow.graded for ec, flow in inflow_map.items() if flow.graded}
     if len(irb_df) == 0 and not graded:
         return {}
-    irb_df = irb_df.with_columns(class_keys(_BASIS, set(irb_df.columns), ec_col))
+    irb_df = irb_df.with_columns(sheet_keys(set(irb_df.columns), ec_col, framework))
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     value_refs = tuple(col.ref for col in get_c08_02_columns(framework) if col.ref != "0005")
     plans: dict[str, SheetPlan] = {}
-    sheet_keys = sheet_axis(_BASIS, irb_df) | set(graded)
-    for ec in sorted(sheet_keys):
-        class_df = sheet_frame(_BASIS, irb_df, ec)
+    for ec in sorted(sheet_axis(BASIS, irb_df) | set(graded)):
+        class_df = sheet_frame(BASIS, irb_df, ec)
         labels, keyed = _c08_02_keyed(class_df, pd_col, grade_col)
         arrived = bool(
-            len(keyed.filter(pl.col(_BASIS.basis_post) & pl.col(_BASIS.basis_origin).not_()))
+            len(keyed.filter(pl.col(BASIS.basis_post) & pl.col(BASIS.basis_origin).not_()))
         )
         if (graded.get(ec) or arrived) and _C08_02_INFLOW_ROW not in labels:
             # A destination class whose own book has no unassigned-grade legs (or no
@@ -1337,6 +1308,8 @@ def generate_c08_02(
     cols: set[str],
     framework: str,
     errors: list[str],
+    *,
+    totals: bool = False,
 ) -> dict[str, pl.DataFrame]:
     """Execute C 08.02 per class sheet with data-driven grade/PD-band rows.
 
@@ -1349,7 +1322,8 @@ def generate_c08_02(
     label)."""
     column_refs = tuple(col.ref for col in get_c08_02_columns(framework))
     result: dict[str, pl.DataFrame] = {}
-    for ec, plan in c08_02_plans(results, cols, framework, errors).items():
+    plans = c08_02_plans(results, cols, framework, errors)
+    for ec, plan in plans.items():
         if not plan.spec.rows:
             result[ec] = _empty_frame(column_refs, string_refs=("0005",))
             continue
@@ -1364,7 +1338,7 @@ def generate_c08_02(
         frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
         frame = frame.with_columns(pl.col("row_name").alias("0005"))
         result[ec] = frame.select(["row_ref", "row_name", *column_refs])
-    return result
+    return with_total_sheets("C08.02", result, plans, framework, errors) if totals else result
 
 
 def _c08_02_keyed(
@@ -1394,8 +1368,8 @@ def _c08_02_keyed(
     spurious grade row on the guarantor's sheet, empty on every origin column.
     """
     native = (
-        class_df.filter(pl.col(_BASIS.basis_origin))
-        if _BASIS.basis_origin in class_df.columns
+        class_df.filter(pl.col(BASIS.basis_origin))
+        if BASIS.basis_origin in class_df.columns
         else class_df
     )
     if grade_col is not None and grade_col in class_df.columns:
@@ -1417,8 +1391,8 @@ def _c08_02_keyed(
         )
     keyed = class_df.with_columns(band_expr.alias("c08_02_key"))
     present = set(
-        keyed.filter(pl.col(_BASIS.basis_origin))["c08_02_key"].to_list()
-        if _BASIS.basis_origin in keyed.columns
+        keyed.filter(pl.col(BASIS.basis_origin))["c08_02_key"].to_list()
+        if BASIS.basis_origin in keyed.columns
         else keyed["c08_02_key"].to_list()
     )
     labels = [label for _lo, _hi, label in PD_BANDS if label in present]
@@ -1430,10 +1404,10 @@ def _c08_02_keyed(
 def _c08_02_post_key(keyed: pl.DataFrame) -> pl.DataFrame:
     """Add ``c08_02_key_post`` — the origin key, except "Unassigned" on a leg
     that arrived here by substitution (see :func:`_c08_02_keyed`)."""
-    if _BASIS.basis_origin not in keyed.columns:
+    if BASIS.basis_origin not in keyed.columns:
         return keyed.with_columns(pl.col("c08_02_key").alias("c08_02_key_post"))
     return keyed.with_columns(
-        pl.when(pl.col(_BASIS.basis_post) & pl.col(_BASIS.basis_origin).not_())
+        pl.when(pl.col(BASIS.basis_post) & pl.col(BASIS.basis_origin).not_())
         .then(pl.lit(_C08_02_INFLOW_ROW))
         .otherwise(pl.col("c08_02_key"))
         .alias("c08_02_key_post")
@@ -1483,25 +1457,25 @@ def c08_03_plans(
         errors.append("C08.03: No PD column available — skipping PD range breakdown")
         return {}
     post_alloc_pd_col = pd_band_col_post(cols, framework) or alloc_pd_col
-    irb_df = _non_slotting(results, cols, both_bases=True).collect()
+    irb_df = non_slotting(results, cols, both_bases=True).collect()
     if len(irb_df) == 0:
         return {}
-    irb_df = irb_df.with_columns(class_keys(_BASIS, set(irb_df.columns), ec_col))
+    irb_df = irb_df.with_columns(sheet_keys(set(irb_df.columns), ec_col, framework))
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
     lgd_col = pick(data_cols, "reporting_lgd_post_crm", "lgd_floored", "lgd_input")
     pd_report_col = report_pd_col or alloc_pd_col
     plans: dict[str, SheetPlan] = {}
-    for ec in sorted(sheet_axis(_BASIS, irb_df)):
-        class_df = sheet_frame(_BASIS, irb_df, ec)
+    for ec in sorted(sheet_axis(BASIS, irb_df)):
+        class_df = sheet_frame(BASIS, irb_df, ec)
         band_rows, banded = banded_rows_by_basis(
             class_df,
             alloc_pd_col,
             post_alloc_pd_col,
             framework,
-            origin_flag=_BASIS.basis_origin,
-            post_flag=_BASIS.basis_post,
+            origin_flag=BASIS.basis_origin,
+            post_flag=BASIS.basis_post,
         )
         cells = build_c08_03_cells(
             band_rows,
@@ -1511,8 +1485,8 @@ def c08_03_plans(
             pd_report_col,
             lgd_col,
             ec,
-            _BASIS.basis_origin,
-            _BASIS.basis_post,
+            BASIS.basis_origin,
+            BASIS.basis_post,
         )
         rows = tuple(_Row(ref, label) for ref, label, _origin, _post in band_rows)
         plans[ec] = SheetPlan(
@@ -1535,6 +1509,8 @@ def generate_c08_03(
     cols: set[str],
     framework: str,
     errors: list[str],
+    *,
+    totals: bool = False,
 ) -> dict[str, pl.DataFrame]:
     """Execute C 08.03 per class sheet over sparse PD-range rows.
 
@@ -1546,7 +1522,8 @@ def generate_c08_03(
     parent band) — the ORIGIN pair, because col 0110 is an origin-basis column."""
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
     result: dict[str, pl.DataFrame] = {}
-    for ec, plan in c08_03_plans(results, cols, framework, errors).items():
+    plans = c08_03_plans(results, cols, framework, errors)
+    for ec, plan in plans.items():
         if not plan.spec.rows:
             result[ec] = _empty_frame(column_refs)
             continue
@@ -1558,7 +1535,7 @@ def generate_c08_03(
         frame = execute(plan.spec, banded)
         frame = provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
         result[ec] = frame
-    return result
+    return with_total_sheets("C08.03", result, plans, framework, errors) if totals else result
 
 
 def _c08_05_cells(  # noqa: PLR0913 - the full C 08.05 PD-backtesting column surface
@@ -1633,18 +1610,20 @@ def c08_05_plans(
     if alloc_pd_col is None:
         errors.append("C08.05: No PD column available — skipping PD backtesting")
         return {}
-    irb_df = _non_slotting(results, cols).collect()
+    irb_df = non_slotting(results, cols).collect()
     if len(irb_df) == 0:
         return {}
     data_cols = set(irb_df.columns)
     pd_report_col = report_pd_col or alloc_pd_col
     irb_df = _c08_05_prepare(_prepare(irb_df, data_cols), data_cols, pd_report_col)
+    # The origin sheet key: C 08.05 has no post-CRM column, so no post basis.
+    irb_df = irb_df.with_columns(sheet_keys(data_cols, ec_col, framework)[0])
     column_refs = tuple(col.ref for col in get_c08_05_columns(framework))
     prior_present = "prior_year_obligor_count" in data_cols
     hist_present = "historical_annual_default_rate" in data_cols
     plans: dict[str, SheetPlan] = {}
-    for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
-        class_df = irb_df.filter(pl.col(ec_col) == ec)
+    for ec in irb_df[BASIS.class_origin].drop_nulls().unique().sort().to_list():
+        class_df = irb_df.filter(pl.col(BASIS.class_origin) == ec)
         band_rows, banded = banded_rows(class_df, alloc_pd_col, framework)
         cells = _c08_05_cells(
             band_rows,
@@ -1672,6 +1651,8 @@ def generate_c08_05(
     cols: set[str],
     framework: str,
     errors: list[str],
+    *,
+    totals: bool = False,
 ) -> dict[str, pl.DataFrame]:
     """Execute C 08.05 per class sheet (PD back-testing over sparse ranges).
 
@@ -1680,11 +1661,12 @@ def generate_c08_05(
     against."""
     column_refs = tuple(col.ref for col in get_c08_05_columns(framework))
     result: dict[str, pl.DataFrame] = {}
-    for ec, plan in c08_05_plans(results, cols, framework, errors).items():
+    plans = c08_05_plans(results, cols, framework, errors)
+    for ec, plan in plans.items():
         result[ec] = (
             _empty_frame(column_refs) if not plan.spec.rows else execute(plan.spec, plan.frame)
         )
-    return result
+    return with_total_sheets("C08.05", result, plans, framework, errors) if totals else result
 
 
 def _c08_05_prepare(data: pl.DataFrame, cols: set[str], report_pd_col: str) -> pl.DataFrame:
@@ -1747,7 +1729,7 @@ def c08_04_plans(
     if ec_col is None:
         errors.append("C08.04: Missing required column (exposure_class)")
         return {}
-    irb_df = _non_slotting(results, cols).collect()
+    irb_df = non_slotting(results, cols).collect()
     if len(irb_df) == 0:
         return {}
     data_cols = set(irb_df.columns)
@@ -1821,7 +1803,7 @@ def generate_c08_04(
     if ec_col is None:
         errors.append("C08.04: Missing required column (exposure_class)")
         return {}
-    irb_df = _non_slotting(results, cols).collect()
+    irb_df = non_slotting(results, cols).collect()
     if len(irb_df) == 0:
         return {}
     data_cols = set(irb_df.columns)
@@ -1855,7 +1837,7 @@ def _c08_04_prior(
     prior_ec_col = pick(prior_cols, "reporting_class_origin")
     if prior_ec_col is None:
         return None, None
-    return _non_slotting(prior_results, prior_cols).collect(), prior_ec_col
+    return non_slotting(prior_results, prior_cols).collect(), prior_ec_col
 
 
 # =============================================================================
@@ -2193,16 +2175,6 @@ def _c08_06_sheet(
 # =============================================================================
 # Shared post-steps + small helpers
 # =============================================================================
-
-
-def _non_slotting(
-    results: pl.LazyFrame, cols: set[str], *, both_bases: bool = False
-) -> pl.LazyFrame:
-    irb = _irb_population(results, cols, both_bases=both_bases)
-    approach_col = pick(cols, "reporting_approach_origin", "approach")
-    if approach_col is not None:
-        return irb.filter(pl.col(approach_col) != "slotting")
-    return irb
 
 
 def _empty_frame(column_refs: tuple[str, ...], string_refs: tuple[str, ...] = ()) -> pl.DataFrame:

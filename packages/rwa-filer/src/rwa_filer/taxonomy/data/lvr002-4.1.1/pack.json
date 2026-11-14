@@ -1,0 +1,634 @@
+{
+ "dimensions": {
+  "boe_dim:APA": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Type of amount",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:GRS": {
+   "default": "eba_CG:x0",
+   "domain": "eba_CG",
+   "kind": "explicit",
+   "label": "Guarantee status",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:LQB": {
+   "default": "eba_LQ:x0",
+   "domain": "eba_LQ",
+   "kind": "explicit",
+   "label": "Liquidity quality of collateral given or received",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:LQU": {
+   "default": "eba_LQ:x0",
+   "domain": "eba_LQ",
+   "kind": "explicit",
+   "label": "Liquidity quality of underlying assets",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APR": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Approach for prudential purposes",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:BAS": {
+   "default": "eba_BA:x0",
+   "domain": "eba_BA",
+   "kind": "explicit",
+   "label": "Base",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CPY": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Counterparty nature",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:LQC": {
+   "default": "eba_LQ:x0",
+   "domain": "eba_LQ",
+   "kind": "explicit",
+   "label": "Liquidity quality of collateral received",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:LQG": {
+   "default": "eba_LQ:x0",
+   "domain": "eba_LQ",
+   "kind": "explicit",
+   "label": "Liquidity quality of collateral given",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCC": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category of collateral or guarantee given",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCY": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PUR": {
+   "default": "eba_PU:x0",
+   "domain": "eba_PU",
+   "kind": "explicit",
+   "label": "Purpose",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RPR": {
+   "default": "eba_RP:x0",
+   "domain": "eba_RP",
+   "kind": "explicit",
+   "label": "Related parties/Relationships",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:SLQ": {
+   "default": "eba_LQ:x0",
+   "domain": "eba_LQ",
+   "kind": "explicit",
+   "label": "Specific liquidity requirements",
+   "typed_element": null,
+   "typed_type": null
+  }
+ },
+ "enumerations": {
+  "eba_AS:eba_AS1": [
+   "eba_AS:x1",
+   "eba_AS:x2"
+  ],
+  "eba_CU:boe_CU600": [
+   "eba_CU:GBP",
+   "eba_CU:EUR",
+   "eba_CU:CAD",
+   "eba_CU:USD",
+   "eba_CU:CHF",
+   "eba_CU:JPY",
+   "eba_CU:SEK"
+  ],
+  "eba_SC:boe_SC600": [
+   "boe_eba_SC:x6000",
+   "boe_eba_SC:x6001",
+   "boe_eba_SC:x6002",
+   "boe_eba_SC:x6003",
+   "boe_eba_SC:x6006"
+  ]
+ },
+ "format": 1,
+ "info": {
+  "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/leverage/2023-05-11/mod/lvr002.xsd",
+  "irregularities": [],
+  "module": "LVR002",
+  "sources": {
+   "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Leverage.xlsx",
+   "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
+   "taxonomy_package": "boe411.zip"
+  },
+  "taxonomy": "boe-banking",
+  "title": "Contingent Leverage",
+  "valid_from": "2023-05-11",
+  "valid_to": null,
+  "version": "4.1.1"
+ },
+ "metrics": {
+  "boe_met:di6003": {
+   "enumeration": null,
+   "label": "Reporting period start date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:di6004": {
+   "enumeration": null,
+   "label": "Reporting period end date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:ei6006": {
+   "enumeration": "eba_CU:boe_CU600",
+   "label": "Reporting currency",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei6007": {
+   "enumeration": "eba_SC:boe_SC600",
+   "label": "Basis of reporting",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:mi10001": {
+   "enumeration": null,
+   "label": "Total gross value (with no recognition of netting)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10002": {
+   "enumeration": null,
+   "label": "Netted amount for the purpose of calculating the leverage ratio total exposure measure",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10003": {
+   "enumeration": null,
+   "label": "Leverage ratio total exposure measure (net)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10004": {
+   "enumeration": null,
+   "label": "Value of internalised amounts",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10005": {
+   "enumeration": null,
+   "label": "Total amount lent",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10067": {
+   "enumeration": null,
+   "label": "Value of repurchase transactions, with recognition of netting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:si6002": {
+   "enumeration": null,
+   "label": "Entity code",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6005": {
+   "enumeration": null,
+   "label": "Additional notes",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:ei4": {
+   "enumeration": "eba_AS:eba_AS1",
+   "label": "Accounting standard",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:mi420": {
+   "enumeration": null,
+   "label": "Market value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi425": {
+   "enumeration": null,
+   "label": "Add-on amount for difference between transaction legs",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:si168": {
+   "enumeration": null,
+   "label": "Name of entity",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si288": {
+   "enumeration": null,
+   "label": "LEI code",
+   "period": "instant",
+   "type": "string"
+  }
+ },
+ "namespaces": {
+  "boe_dim": "http://www.bankofengland.co.uk/data/xbrl/dict/dim",
+  "boe_eba_AP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_AP",
+  "boe_eba_CG": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_CG",
+  "boe_eba_CT": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_CT",
+  "boe_eba_MC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_MC",
+  "boe_eba_PU": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_PU",
+  "boe_eba_SC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_SC",
+  "boe_met": "http://www.bankofengland.co.uk/data/xbrl/dict/met",
+  "eba_AP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AP",
+  "eba_AS": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AS",
+  "eba_BA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BA",
+  "eba_CG": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CG",
+  "eba_CT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CT",
+  "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+  "eba_LQ": "http://www.eba.europa.eu/xbrl/crr/dict/dom/LQ",
+  "eba_MC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/MC",
+  "eba_PU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PU",
+  "eba_RP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RP",
+  "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
+  "eba_met": "http://www.eba.europa.eu/xbrl/crr/dict/met"
+ },
+ "tables": {
+  "LV49.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Market value of collateral lent (period end)"
+    ],
+    [
+     "0020",
+     "Market value of collateral borrowed (period end)"
+    ],
+    [
+     "0030",
+     "Market value of collateral lent (period average)"
+    ],
+    [
+     "0040",
+     "Market value of collateral borrowed (period average)"
+    ]
+   ],
+   "filing_indicator": "LV49.00.00",
+   "group": "LV49.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "TOTAL COLLATERAL SWAPS"
+    ],
+    [
+     "0020",
+     "of which client financing"
+    ],
+    [
+     "0030",
+     "of which activity for franchise clients"
+    ],
+    [
+     "0040",
+     "of which intra-group activity"
+    ],
+    [
+     "0050",
+     "of which: Totals for transactions in which Level 1 HQLAs are lent and the following collateral is borrowed"
+    ],
+    [
+     "0060",
+     "Level 1 assets"
+    ],
+    [
+     "0070",
+     "Level 2A assets"
+    ],
+    [
+     "0080",
+     "Level 2B assets"
+    ],
+    [
+     "0090",
+     "Non-liquid assets"
+    ],
+    [
+     "0100",
+     "of which: Totals for transactions in which Level 2A HQLAs are lent and the following collateral is borrowed"
+    ],
+    [
+     "0110",
+     "Level 1 assets"
+    ],
+    [
+     "0120",
+     "Level 2A assets"
+    ],
+    [
+     "0130",
+     "Level 2B assets"
+    ],
+    [
+     "0140",
+     "Non-liquid assets"
+    ],
+    [
+     "0150",
+     "of which: Totals for transactions in which Level 2B HQLAs are lent and the following collateral is borrowed"
+    ],
+    [
+     "0160",
+     "Level 1 assets"
+    ],
+    [
+     "0170",
+     "Level 2A assets"
+    ],
+    [
+     "0180",
+     "Level 2B assets"
+    ],
+    [
+     "0190",
+     "Non-liquid assets"
+    ],
+    [
+     "0200",
+     "of which: Totals for transactions in which non-liquid assets are lent and the following collateral is borrowed"
+    ],
+    [
+     "0210",
+     "Level 1 assets"
+    ],
+    [
+     "0220",
+     "Level 2A assets"
+    ],
+    [
+     "0230",
+     "Level 2B assets"
+    ],
+    [
+     "0240",
+     "Non-liquid assets"
+    ]
+   ],
+   "title": "(LR6) Treatment of collateral swaps",
+   "z": []
+  },
+  "LV50.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Gross repo (period end)"
+    ],
+    [
+     "0020",
+     "Netted amounts (period end)"
+    ],
+    [
+     "0030",
+     "Net repo (period end)"
+    ],
+    [
+     "0040",
+     "Gross repo (period average)"
+    ],
+    [
+     "0050",
+     "Netted amounts (period average)"
+    ],
+    [
+     "0060",
+     "Net repo (period average)"
+    ]
+   ],
+   "filing_indicator": "LV50.00.00",
+   "group": "LV50.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Total repo activity"
+    ],
+    [
+     "0020",
+     "of which activity for franchise clients"
+    ],
+    [
+     "0030",
+     "of which level 1 HQLA"
+    ],
+    [
+     "0040",
+     "of which intra-group activity"
+    ]
+   ],
+   "title": "(LR7) Treatment of repurchase transactions",
+   "z": []
+  },
+  "LV51.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Total loan from lender to borrower (period end)"
+    ],
+    [
+     "0020",
+     "Collateral provided to lender by borrower (period end)"
+    ],
+    [
+     "0030",
+     "Contribution to Leverage Exposure Measure (period end)"
+    ],
+    [
+     "0040",
+     "Total loan from lender to borrower (period average)"
+    ],
+    [
+     "0050",
+     "Collateral provided to lender by borrower (period average)"
+    ],
+    [
+     "0060",
+     "Contribution to Leverage Exposure Measure (period average)"
+    ]
+   ],
+   "filing_indicator": "LV51.00.00",
+   "group": "LV51.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Agency repo activity in which agent provides a limited guarantee"
+    ],
+    [
+     "0020",
+     "Agency repo activity in which agent provides no guarantee"
+    ]
+   ],
+   "title": "(LR8) Treatment of agency repurchase transactions",
+   "z": []
+  },
+  "LV52.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Gross market value (period end)"
+    ],
+    [
+     "0020",
+     "Internalised (period end)"
+    ],
+    [
+     "0030",
+     "Contribution to leverage exposures (period end)"
+    ],
+    [
+     "0040",
+     "Gross market value (period average)"
+    ],
+    [
+     "0050",
+     "Internalised (period average)"
+    ],
+    [
+     "0060",
+     "Contribution to leverage exposures (period average)"
+    ]
+   ],
+   "filing_indicator": "LV52.00.00",
+   "group": "LV52.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Cash prime brokerage"
+    ],
+    [
+     "0020",
+     "of which activity for franchise clients"
+    ],
+    [
+     "0030",
+     "of which level 1 HQLA"
+    ],
+    [
+     "0040",
+     "of which intra-group activity"
+    ],
+    [
+     "0050",
+     "Synthetic prime brokerage"
+    ],
+    [
+     "0060",
+     "of which activity for franchise clients"
+    ],
+    [
+     "0070",
+     "of which level 1 HQLA"
+    ],
+    [
+     "0080",
+     "of which intra-group activity"
+    ],
+    [
+     "0090",
+     "Written credit derivatives"
+    ],
+    [
+     "0100",
+     "of which activity for franchise clients"
+    ],
+    [
+     "0110",
+     "of which intra-group activity"
+    ]
+   ],
+   "title": "(LR9) Treatment of internalised trades",
+   "z": []
+  },
+  "LV700.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Header info"
+    ]
+   ],
+   "filing_indicator": "LV700.00.00",
+   "group": "LV700.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Basis of reporting (select from list)"
+    ],
+    [
+     "0020",
+     "Accounting framework"
+    ],
+    [
+     "0030",
+     "Firm reference number (FRN)"
+    ],
+    [
+     "0040",
+     "Legal entity identifier (LEI)"
+    ],
+    [
+     "0050",
+     "Name of the firm"
+    ],
+    [
+     "0060",
+     "Reporting period start date"
+    ],
+    [
+     "0070",
+     "Reporting period end date"
+    ],
+    [
+     "0080",
+     "Reporting currency for this report"
+    ],
+    [
+     "0090",
+     "Notes from the firm, if any"
+    ]
+   ],
+   "title": "Header info (LR0)",
+   "z": []
+  }
+ }
+}

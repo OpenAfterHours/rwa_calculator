@@ -86,6 +86,17 @@ _EXPECTED_DEF_RWEA: float = DRAWN_RET_DEF * (LGD_RETAIL - BEEL_RET_DEF) * 12.5
 
 _TOTAL_ROW: str = "0010"
 
+#: The IRB sheet each class this portfolio populates reports on, per regime. CRR
+#: C 08 is keyed by exposure class. RE-ANCHORED 2026-11-13 for Basel 3.1, which
+#: was read off the same class keys: OF 08 is published per class AND approach
+#: (BoE Banking Taxonomy v4.1.1, ``OF08.01.01.01``). This portfolio's corporates
+#: are F-IRB and non-SME, the LFSE obligor among them (published sheet 0012),
+#: and its retail legs are A-IRB other retail, non-SME (sheet 0017).
+_IRB_SHEET: dict[str, dict[str, str]] = {
+    "crr": {"corporate": "corporate", "retail_other": "retail_other"},
+    "b31": {"corporate": "corporate_non_sme_firb", "retail_other": "retail_other_non_sme_airb"},
+}
+
 
 def _config(regime_key: str) -> CalculationConfig:
     """IRB configuration at the same reference dates as the registered runs.
@@ -246,7 +257,7 @@ class TestOffBalanceSheetColumnsArePopulated:
         """
         _results, corep, _p3 = _run(regime_key)
 
-        sheet = corep.c08_01["corporate"]
+        sheet = corep.c08_01[_IRB_SHEET[regime_key]["corporate"]]
         pre_ccf = _cell(sheet, "0100")
         post_ccf = _cell(sheet, "0120")
 
@@ -273,7 +284,7 @@ class TestOffBalanceSheetColumnsArePopulated:
         a real assertion rather than a non-null check."""
         _results, corep, _p3 = _run(regime_key)
 
-        sheet = corep.c08_03["corporate"]
+        sheet = corep.c08_03[_IRB_SHEET[regime_key]["corporate"]]
         populated = sheet.filter(pl.col("0020") > 0.0)
         assert populated.height > 0, (
             "no PD band carries an off-BS pre-conversion nominal — col 0020 is dark"
@@ -355,7 +366,7 @@ class TestOfWhichSubSplitsAreTwoSided:
     def test_the_lfse_sub_split_excludes_the_non_lfse_corporate(self, regime_key: str) -> None:
         _results, corep, _p3 = _run(regime_key)
 
-        sheet = corep.c08_01["corporate"]
+        sheet = corep.c08_01[_IRB_SHEET[regime_key]["corporate"]]
 
         # The original-exposure sub-split is exact: one obligor, one drawn leg.
         assert _cell(sheet, "0030") == pytest.approx(DRAWN_LFSE), (
@@ -382,8 +393,12 @@ class TestOfWhichSubSplitsAreTwoSided:
         non-defaulted control's RWEA must be in the sheet total but not in it."""
         _results, corep, _p3 = _run(regime_key)
 
-        sheet = corep.c08_01.get("retail_other")
-        if sheet is None or "0265" not in sheet.columns:
+        # Indexed, not ``.get``: a missing sheet is a failure, never a skip.
+        # RE-ANCHORED 2026-11-13 — this read ``.get("retail_other")``, which
+        # under Basel 3.1 found no sheet and skipped the one regime the column
+        # exists in.
+        sheet = corep.c08_01[_IRB_SHEET[regime_key]["retail_other"]]
+        if "0265" not in sheet.columns:
             pytest.skip("C 08.01 col 0265 is a Basel 3.1 column; absent under CRR")
 
         defaulted_rwea = _cell(sheet, "0265")

@@ -174,7 +174,7 @@ See [Scripts & Automation](../docs/development/scripts.md) for the narrative ver
 ## extract_validation_rules.py
 
 Extracts the credit-risk supervisory validation rules from the two workbooks fetched by
-`download_docs.py` into committed JSON under `src/rwa_calc/reporting/validations/rules/`
+`download_docs.py` into committed JSON under `packages/rwa-filer/src/rwa_filer/rules/data/`
 (package data — it ships in the wheel):
 
 - `crr-eba-v3.0-credit-risk.json` — EBA rules for COREP C 02.00 / C 07.00 / C 08.0x /

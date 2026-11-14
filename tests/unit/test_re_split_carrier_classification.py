@@ -233,9 +233,15 @@ _RETURN_CRITICAL_PROVISIONS: tuple[str, ...] = ("provision_deducted",)
 #: engine/aggregator/_el_summary.py:117-120 and :221-246.
 _RETURN_CRITICAL_OWN_FUNDS: tuple[str, ...] = ("ava_amount", "other_own_funds_reductions")
 
-#: Bound by a literal ``Sum(...)`` cell spec at COREP C 07.00 / C 08.01
-#: col 0035 (reporting/corep/c07.py:1530, c08.py:763).
-_RETURN_CRITICAL_NETTING: tuple[str, ...] = ("on_bs_netting_amount",)
+#: The on-balance-sheet netting pair (CRR Art. 219). OF 07.00 reports the
+#: ADJUSTED value at col 0035 and takes each member out of its collateral twin
+#: for cols 0130 / 0140 (reporting/corep/c07.py); C 08.01 col 0035 sums the
+#: allocation (c08.py). Left unallocated, a split loan reports the deposit once
+#: per leg and a negative collateral value beside it.
+_RETURN_CRITICAL_NETTING: tuple[str, ...] = (
+    "on_bs_netting_amount",
+    "on_bs_netting_adjusted_value",
+)
 
 #: The EAD waterfall. Pinned for UNIFORMITY, not because a consumer is known to
 #: break: ``ead_gross`` feeds the Art. 127(1) coverage test, which split legs

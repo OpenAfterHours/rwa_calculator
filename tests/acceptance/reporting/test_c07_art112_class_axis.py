@@ -52,7 +52,9 @@ from tests.acceptance.reporting.test_reporting_golden import _b31_config, _crr_c
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 
 _REGIMES: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 
@@ -181,8 +183,14 @@ class TestSheetAxis:
         _results, corep = _run(regime_key)
 
         expected = _EXPECTED_SHEETS | _EXPECTED_EXTRA_SHEETS[regime_key]
-        assert set(corep.c07_00) == expected, (
-            f"[{regime_key}] the C 07.00 sheet axis is {sorted(corep.c07_00)}, expected "
+        # The Total sheet is the sum of the class sheets, not an Art. 112(1) letter:
+        # it is on the axis, and the exact set below is the class sheets beside it.
+        assert C07_00_TOTAL_SHEET_KEY in corep.c07_00, (
+            f"[{regime_key}] the C 07.00 sheet axis {sorted(corep.c07_00)} has no Total sheet"
+        )
+        class_sheets = set(c07_class_sheets(corep.c07_00))
+        assert class_sheets == expected, (
+            f"[{regime_key}] the C 07.00 class-sheet axis is {sorted(class_sheets)}, expected "
             f"{sorted(expected)}. An EXTRA sheet means a class is reported under a letter "
             "the estate does not intend (or a merged letter has been re-split); a MISSING "
             "one means a population has silently left the template"

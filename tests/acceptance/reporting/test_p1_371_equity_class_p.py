@@ -82,17 +82,17 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.c02 import _EQUITY_IRB_METHODS
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import EQUITY_IRB_METHODS
+from rwa_calc.reporting.filing.checks import evaluate_all
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
-from rwa_calc.reporting.validations.checker import evaluate_all
-from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
 
 if TYPE_CHECKING:
-    from rwa_calc.reporting.validations.checker import ValidationReport
+    from rwa_filer.validate.checker import ValidationReport
 
 #: regime key -> (framework string, the ``SHEET_INDEX_MAPS`` entry for its C 07.00)
 _REGIMES: dict[str, tuple[str, str]] = {"crr": ("CRR", "c07"), "b31": ("BASEL_3_1", "of07")}
 
-#: The published z-code for Article 112(1)(p). Read off ``validations/scope.py``
+#: The published z-code for Article 112(1)(p). Read off ``filing/sheet_maps.py``
 #: below rather than hard-coded as a sheet NAME: the bundle key is whatever
 #: ``SheetCode.bundle_keys`` says it is, and a test that spelled ``"equity"``
 #: itself would share ``corep/c07.py``'s assumption instead of checking it

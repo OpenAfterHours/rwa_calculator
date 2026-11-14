@@ -104,6 +104,16 @@
       },
       {
         "source": "reporting",
+        "portfolio": "netting-mismatch",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "netting-mismatch",
+        "regime": "b31"
+      },
+      {
+        "source": "reporting",
         "portfolio": "facility-share-binding",
         "regime": "crr"
       },
@@ -197,13 +207,13 @@
       "BASEL_3_1",
       "CRR"
     ],
-    "runs": 38,
+    "runs": 40,
     "prior_period_runs": 14,
     "config_source": "each portfolio runs under its OWN canonical config - RUNS in tests/acceptance/reporting/test_supervisory_validations.py for the reporting fixtures, tests/properties/portfolios.py::config_for for the corpus. One uniform config would strand six portfolios in the missing-model_permissions SA fallback and record their IRB columns dead.",
     "excludes": {
       "tests/fixtures/reporting_funded_protection_portfolio.py": "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a config electing the Art. 222 SIMPLE Method (_fcsm_config); registered against _sa_config, which defaults to comprehensive, the fixture sits in the gate with its own feature silenced - C 07.00 col 0070 reads 0.00 under comprehensive and non-zero under SIMPLE on the identical bundle, and dropping its two runs left this census at 210 live / 129 dead unchanged, so it contributed no liveness. Registered CORRECTLY it exposes two ERROR-severity supervisory breaks (boe_b0471, v0308_m) that predate the carrier fix, so the registration is filed as a Tier 1 item with the Art. 222 defect rather than banked here. Its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Registering it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 57.4
+    "seconds": 43.4
   },
   "counts": {
     "template_column_pairs": 339,
@@ -212,29 +222,17 @@
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
-    "frames": 887,
-    "numeric_cells": 262716,
-    "non_null_cells": 53841,
-    "non_zero_cells": 14510,
-    "cell_fill_pct": 5.52
+    "frames": 950,
+    "numeric_cells": 324130,
+    "non_null_cells": 57353,
+    "non_zero_cells": 16097,
+    "cell_fill_pct": 4.97
   },
   "caveats": [
-    "reporting/rich/crr: C 02.00: row 0300 (14836366.31) exceeds its class breakdown 0310+0330+0340+0370 (15245.72) by 14821120.60 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "reporting/rich/b31: C 02.00: row 0300 (16085419.21) exceeds its class breakdown 0310+0330+0340+0370 (21574.13) by 16063845.09 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "reporting/irb-classes/crr: C 02.00: row 0240 (90836481.76) exceeds its class breakdown 0250+0260 (84278464.09) by 6558017.67 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "corpus/irb_mix/crr: C 02.00: row 0240 (76971222.15) exceeds its class breakdown 0250+0260 (66967860.77) by 10003361.38 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "corpus/irb_mix/crr: C 02.00: row 0300 (28799112.25) exceeds its class breakdown 0310+0330+0340+0370 (22582055.29) by 6217056.96 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "corpus/irb_mix/b31: C 02.00: row 0240 (84402633.98) exceeds its class breakdown 0250+0260 (82897267.99) by 1505365.98 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "corpus/irb_mix/b31: C 02.00: row 0300 (1345355.11) exceeds its class breakdown 0310+0330+0340+0370 (115972.89) by 1229382.22 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows"
+    "reporting/facility-share-binding/b31: OF 02.00: the engine's post-floor total (1699200.00) differs from max(U-TREA 1245491.29, floor 1643200.00) by 56000.00 \u2014 the engine floors the modelled subset only"
   ],
   "caveat_identities": [
-    "corpus/irb_mix/b31: C 02.00: row 0240 (<amount>) exceeds its class breakdown 0250+0260 (<amount>) by <amount> \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "corpus/irb_mix/b31: C 02.00: row 0300 (<amount>) exceeds its class breakdown 0310+0330+0340+0370 (<amount>) by <amount> \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "corpus/irb_mix/crr: C 02.00: row 0240 (<amount>) exceeds its class breakdown 0250+0260 (<amount>) by <amount> \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "corpus/irb_mix/crr: C 02.00: row 0300 (<amount>) exceeds its class breakdown 0310+0330+0340+0370 (<amount>) by <amount> \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "reporting/irb-classes/crr: C 02.00: row 0240 (<amount>) exceeds its class breakdown 0250+0260 (<amount>) by <amount> \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "reporting/rich/b31: C 02.00: row 0300 (<amount>) exceeds its class breakdown 0310+0330+0340+0370 (<amount>) by <amount> \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "reporting/rich/crr: C 02.00: row 0300 (<amount>) exceeds its class breakdown 0310+0330+0340+0370 (<amount>) by <amount> \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows"
+    "reporting/facility-share-binding/b31: OF <amount>: the engine's post-floor total (<amount>) differs from max(U-TREA <amount>, floor <amount>) by <amount> \u2014 the engine floors the modelled subset only"
   ],
   "dead_columns": [
     {

@@ -50,7 +50,7 @@ rather than letting unevaluable rules flatter a headline figure.
 Why (f)/(g) exist — the third way this gate used to fail open:
     A rule whose every operand is null or exactly zero is scored ``VACUOUS``:
     it reached a verdict, the verdict held, and it asserted NOTHING (see
-    ``reporting/validations/evaluate.py::_Context.observe`` and
+    ``rwa_filer/validate/evaluate.py::_Context.observe`` and
     ``checker.py::_roll_up``). Vacuity is 21%–70% of executed rules depending on
     the run — 23 of 109 on ``crr/irb-classes`` at the low end, 219 of 415 on
     ``b31/rich``, 123 of 177 on ``b31/off-bs`` at the high end. Union it across
@@ -230,7 +230,7 @@ Regenerating the baseline:
 
 References:
 - tests/acceptance/reporting/test_reporting_golden.py — the run-and-generate pattern
-- src/rwa_calc/reporting/validations/ — the evaluator
+- src/rwa_calc/reporting/filing/ — the adapter; packages/rwa-filer/src/rwa_filer/validate/ — the evaluator
 - COREP Annex II (CRR); PRA PS1/26 Annex II (Basel 3.1)
 """
 
@@ -240,6 +240,7 @@ import json
 import os
 from collections.abc import Callable, Sequence
 from datetime import date
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -260,6 +261,7 @@ from tests.fixtures.reporting_funded_protection_portfolio import (
 )
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
 from tests.fixtures.reporting_irb_shapes_portfolio import build_reporting_irb_shapes_bundle
+from tests.fixtures.reporting_netting_mismatch_portfolio import build_netting_mismatch_bundle
 from tests.fixtures.reporting_netting_portfolio import build_reporting_netting_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
@@ -271,13 +273,13 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator
+from rwa_calc.reporting.filing.checks import evaluate_all
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
-from rwa_calc.reporting.validations import (
+from rwa_filer.validate.evaluate import (
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
     STATUS_VACUOUS,
-    evaluate_all,
 )
 
 if TYPE_CHECKING:
@@ -388,7 +390,7 @@ REGISTER_NOTES: dict[str, str] = {
     ),
     "structural_vacuity_of_prohibition_rules": (
         "A rule of the form '{ref} = empty' asks whether a cell was REPORTED, and holds precisely "
-        "by our reporting nothing there. reporting/validations/evaluate.py::_evaluate_emptiness "
+        "by our reporting nothing there. rwa_filer/validate/evaluate.py::_evaluate_emptiness "
         "returns VACUOUS for the holding case, so PASS is UNREACHABLE for this family and vacuity "
         "is the passing verdict, not a lost check. Those entries are prefixed 'structural' and "
         "need no investigation. Their only other outcome is FAIL (we reported a figure the "
@@ -481,6 +483,11 @@ REGISTER_NOTES: dict[str, str] = {
 }
 
 
+#: The reporting date of every STANDARDISED run, per framework. A portfolio whose
+#: maturities are stated relative to the reporting date is built with the same one.
+_SA_REPORTING_DATE: dict[str, date] = {"CRR": date(2025, 12, 31), "BASEL_3_1": date(2027, 6, 1)}
+
+
 def _sa_config(framework: str) -> CalculationConfig:
     """STANDARDISED config, matching the off-BS and CCR goldens.
 
@@ -490,10 +497,11 @@ def _sa_config(framework: str) -> CalculationConfig:
     """
     if framework == "CRR":
         return CalculationConfig.crr(
-            reporting_date=date(2025, 12, 31), permission_mode=PermissionMode.STANDARDISED
+            reporting_date=_SA_REPORTING_DATE[framework],
+            permission_mode=PermissionMode.STANDARDISED,
         )
     return CalculationConfig.basel_3_1(
-        reporting_date=date(2027, 6, 1), permission_mode=PermissionMode.STANDARDISED
+        reporting_date=_SA_REPORTING_DATE[framework], permission_mode=PermissionMode.STANDARDISED
     )
 
 
@@ -751,6 +759,39 @@ RUNS: tuple[GateInput, ...] = (
         build_reporting_netting_bundle,
         lambda: _sa_config("BASEL_3_1"),
     ),
+    # Netting WITH a mismatch, beside genuine collateral — LESSONS B5 again, for
+    # the cells the ``netting`` pair above cannot tell apart. Every leg there is in
+    # one currency and matures on one date and the portfolio has no collateral
+    # table, so a netted deposit's ADJUSTED value equals its allocation and
+    # "financial collateral" and "netting" are the same money on every row. Until
+    # 2026-11-13 OF 07.00 col 0130 was non-zero under Basel 3.1 on that portfolio
+    # alone — and only because the deposit was deducted twice (escape log,
+    # 2026-09-05). With the double count removed col 0130 is zero there, and
+    # ``boe_b0555`` ({c0130} <= {c0140}) would be vacuous on every run. Here a
+    # Basel 3.1 SA exposure carries GENUINE financial collateral in col 0130 and a
+    # live col 0140, a deposit whose maturity mismatch makes col 0035 differ from
+    # the allocation, and a loan with collateral and no netting.
+    #
+    # The builder takes the reporting date because its maturities are stated
+    # relative to it, so each run binds its own with ``functools.partial`` (which
+    # keeps the builder's name for the registration check). SA-only, no prior
+    # frame. It introduces NO new supervisory break — measured, every rule it
+    # breaks (``v09796_m`` under CRR; ``boe_b0703`` / ``boe_b0710`` /
+    # ``boe_b0778`` under Basel 3.1) is already an estate-wide register entry.
+    GateInput(
+        "crr",
+        "CRR",
+        "netting-mismatch",
+        partial(build_netting_mismatch_bundle, _SA_REPORTING_DATE["CRR"]),
+        lambda: _sa_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "netting-mismatch",
+        partial(build_netting_mismatch_bundle, _SA_REPORTING_DATE["BASEL_3_1"]),
+        lambda: _sa_config("BASEL_3_1"),
+    ),
     # Facility share — a shared facility whose undrawn headroom is allocated to
     # one of three members by the firm-policy riskiest-member rule (FS-1). This
     # is the FIRST portfolio in the estate with a facility share at all: the
@@ -985,6 +1026,8 @@ def _run_gate() -> GateRun:
         corep = COREPGenerator().generate_from_lazyframe(
             result.results,
             framework=framework,
+            # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+            output_floor_summary=result.output_floor_summary,
             previous_period_results=None if prior is None else prior.results,
         )
         pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)

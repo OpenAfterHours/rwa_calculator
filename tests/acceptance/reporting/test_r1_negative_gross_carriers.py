@@ -39,6 +39,7 @@ from tests.fixtures.r1_negative_gross.r1_negative_gross import (
 )
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
@@ -120,7 +121,9 @@ class TestR1NegativeGrossCarriers:
     def test_c08_03_col_0010_floored_not_raw(self, corep) -> None:
         """C 08.03 IRB on-balance gross (col 0010) equals the floored hand-calc."""
         total = 0.0
-        for frame in corep.c08_03.values():
+        # The CLASS sheets: OF 08.03's two Total sheets (taxonomy v4.1.1 codes
+        # 0001 / 0002) are their sum. Re-anchored 2026-11-13, when they appeared.
+        for frame in c08_class_sheets(corep.c08_03).values():
             if "0010" in frame.columns:
                 # Single PD band populated → the max is the class total.
                 total += _col_max(frame, "0010")

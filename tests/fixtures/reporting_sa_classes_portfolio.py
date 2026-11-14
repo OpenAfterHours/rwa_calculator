@@ -110,7 +110,7 @@ book is 0%-weighted makes every one of those identities trivially true.
 Deliberately OUT of scope:
 - Art. 112(1)(k) items associated with particularly high risk, Art. 112(1)(n)
   short-term credit assessments, Art. 112(1)(o) collective investment
-  undertakings. Their z-codes bind NO bundle key in ``validations/scope.py``
+  undertakings. Their z-codes bind NO bundle key in ``filing/sheet_maps.py``
   (z0012 / z0014 / z0015, each ``bundle_keys=()``), so ``resolve_sheet_codes``
   returns ``sheet_not_emitted`` for every rule scoped to them and no fixture row
   anywhere — here or elsewhere — can make one of those rules EVALUATE. That, not

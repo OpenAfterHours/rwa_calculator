@@ -99,7 +99,12 @@ def _generate_frames(regime_key: str) -> tuple[dict[str, pl.DataFrame], dict]:
         build_reporting_sa_classes_bundle(), _config(regime_key)
     )
 
-    corep = COREPGenerator().generate_from_lazyframe(result.results, framework=framework)
+    corep = COREPGenerator().generate_from_lazyframe(
+        result.results,
+        framework=framework,
+        # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+        output_floor_summary=result.output_floor_summary,
+    )
     pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)
 
     corep_frames, corep_meta = _flatten_bundle("corep", corep)
@@ -183,7 +188,12 @@ def test_every_sa_exposure_class_sheet_is_emitted(regime_key: str) -> None:
         build_reporting_sa_classes_bundle(), _config(regime_key)
     )
     results = result.results.collect()
-    corep = COREPGenerator().generate_from_lazyframe(result.results, framework=framework)
+    corep = COREPGenerator().generate_from_lazyframe(
+        result.results,
+        framework=framework,
+        # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+        output_floor_summary=result.output_floor_summary,
+    )
 
     # Assert — the sealed class on each row...
     actual = dict(

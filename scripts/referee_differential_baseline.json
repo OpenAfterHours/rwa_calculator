@@ -1,0 +1,138 @@
+{
+  "_comment": "Referee differential baseline (scripts/referee_differential.py --check). For each golden return: disagreements, arelle_errors and count_differences are held EXACTLY (a new entry fails, and so does one that went away unrecorded); rules_compared may not DECREASE. Re-measure with --update-baseline after a deliberate change and say why in _note; never type the entries.",
+  "_note": "Re-banked 2026-11-13 (fourth bank), for the Basel 3.1 OF 08 sheets on the published 17-sheet axis. The golden set falls from thirteen returns to nine, DELIBERATELY: rich, irb-shapes, facility-share-binding and facility-share-nonbinding now carry structure findings and are not filed. Each is the same finding - exposure-weighted maturity reported as a fraction against an integer-typed data point (OF 08.01 c0250 days, OF 08.03 c0080 years; STR006) - plus, on facility-share-binding, the P1.369 STR007. Those cells had no place in the return before, so the returns were golden only because the figures were missing. They rejoin when the rounding of maturity is decided. irb-classes stays out for the same STR006. The two IRB returns that remain, crm-substitution (768 -> 1,333 facts) and art199 (227 -> 611), carry the re-keyed OF 08 sheets and their Totals, and Arelle 2.47.5 agrees with rwa_filer.boe on all 1,441 rules on each, as on the other seven (1,565 s). No verdict was re-banked against a disagreement; there were none. PREVIOUS BANK: Re-banked 2026-11-13 (third bank): the golden set grew to thirteen returns with netting-mismatch, registered with the Basel 3.1 OF 07.00 on-balance-sheet netting fix (column 0035 carries the deposit's adjusted value; columns 0130 / 0140 only genuine financial collateral). The netting return changed in that fix (col 0130 -3,000,000 -> 0, col 0150 16,000,000 -> 19,000,000). Arelle 2.47.5 accepts all thirteen with no error-level message and agrees with rwa_filer.boe on all 1,441 rules on each, including boe_b0471 / boe_b0556 now holding on the two netting returns (2,074 s). No verdict was re-banked against a disagreement; there were none. PREVIOUS BANK: Re-banked 2026-11-13 (second bank): the golden set grew from five returns to twelve. Every Basel 3.1 portfolio but one now has an estate with no structure finding, because C 02.00 / OF 02.00 took its published row codes and cells and the adapter files one value for a data point two templates show (commit c3e5d70); b31/irb-classes is the one not filed, for STR006 on OF 08.03 column 0080 (average maturity in years against an integer-typed data point). Arelle 2.47.5 accepts all twelve with no message at an error level, and on each its verdict on all 1,441 PRA001 rules is the native engine's, with no difference in evaluation counts. This run is also the referee's verdict on the engine change in the same commit - rwa_filer.boe now reads a fact in every reported table that shows its data point - on real returns: six of the twelve carry OF 02.00 IRB class rows beside OF 08.01 sheets that are not yet placed (rich, crm-substitution, art199, irb-shapes and the two facility-share returns), which is the case the change is about. The returns are generated with each run's own output-floor summary, as export_filing_package files them. No engine verdict was re-banked against a disagreement: there were none. PREVIOUS BANK: Banked 2026-11-13, when the gate was introduced. Five of the thirteen Basel 3.1 portfolios have an estate with no structure finding and are refereed; the other eight are not filed (they are the filing-mapping ratchet's structure_findings). Arelle accepts all five with no message at an error level, and its verdict on each of the 1,441 PRA001 rules is the native engine's, with no difference in evaluation counts. Reaching that took three changes to rwa_filer.boe, each found by this gate or by the all-tables oracle built alongside it: codes listed inside a reference are that variable's own range (boe_b0405); a rule that names one member of an open axis reads its other references across every member (boe_b0904, found on b31/off-bs); and a rule whose XBRL formula closes a dimension its cells carry is not evaluated (seven OF 91.01 rules).",
+  "measured_with": {
+    "arelle": "2.47.5",
+    "taxonomy_package_sha256": "b414cf871ad2986f83fdf7495655bab88de38679e8ff6eced61f1033cdac41d0"
+  },
+  "portfolios": {
+    "b31/off-bs": {
+      "facts": 510,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 355,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/ccr": {
+      "facts": 357,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 367,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/sa-classes": {
+      "facts": 646,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 355,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/crm-substitution": {
+      "facts": 1333,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 566,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/re-split": {
+      "facts": 592,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 355,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/art199": {
+      "facts": 611,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 245,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/netting": {
+      "facts": 275,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 355,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/netting-mismatch": {
+      "facts": 275,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 355,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    },
+    "b31/row-scope": {
+      "facts": 418,
+      "referee_complete": true,
+      "rules_evaluated_by_arelle": 355,
+      "rules_compared": 1441,
+      "agree": 1441,
+      "disagreements": [],
+      "count_differences": [],
+      "arelle_errors": [],
+      "arelle_messages": [],
+      "lost": []
+    }
+  },
+  "provenance": {
+    "golden": [
+      "b31/art199",
+      "b31/ccr",
+      "b31/crm-substitution",
+      "b31/netting",
+      "b31/netting-mismatch",
+      "b31/off-bs",
+      "b31/re-split",
+      "b31/row-scope",
+      "b31/sa-classes"
+    ],
+    "not_golden": {
+      "b31/facility-share-binding": 4,
+      "b31/facility-share-nonbinding": 2,
+      "b31/irb-classes": 1,
+      "b31/irb-shapes": 2,
+      "b31/rich": 1
+    }
+  }
+}

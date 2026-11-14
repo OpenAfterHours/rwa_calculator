@@ -77,13 +77,15 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="known-c02-phantom-class-key",
         category="known_defect",
         target=TARGET_C02,
-        old='irb_class_rwa.get(("advanced_irb", "institution"), 0.0)',
-        new='irb_class_rwa.get(("advanced_irb", "institutions"), 0.0)',
+        old='rows.AIRB_INSTITUTIONS: of_class(_AIRB, "institution"),',
+        new='rows.AIRB_INSTITUTIONS: of_class(_AIRB, "institutions"),',
         summary="C 02.00 row 0330 keyed on a class string no enum member produces",
         rationale=(
-            "The live defect at the sibling line asks for 'central_government' "
-            "where the enum says 'central_govt_central_bank', which pins row 0310 "
-            "to zero for the template's whole life. This is the same shape on the "
+            "The defect at the sibling line asked for 'central_government' where "
+            "the enum says 'central_govt_central_bank', which pinned the A-IRB "
+            "central-governments row to zero for the template's whole life (fixed "
+            "2026-11-13, when the template took its published row codes; the "
+            "sibling now reads the enum value). This is the same shape on the "
             "correct institution lookup: the row silently zeroes while the "
             "independently-computed approach total still counts the RWEA, so the "
             "template stays internally plausible. LESSONS B2."
@@ -93,15 +95,16 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="known-c02-stranded-subclass",
         category="known_defect",
         target=TARGET_C02,
-        old='row_values["0340"] = {"0010": airb_corp + airb_sl_excl}',
-        new='row_values["0340"] = {"0010": airb_corp}',
-        summary="C 02.00 row 0340 drops the specialised-lending limb",
+        old="amounts[rows.FIRB_SPECIALISED_LENDING] += slotting",
+        new="amounts[rows.FIRB_SPECIALISED_LENDING] += _NOTHING",
+        summary="C 02.00 row 0290 drops the supervisory-slotting limb",
         rationale=(
-            "Mirrors the live defect where the A-IRB corporate lookups never ask "
-            "for corporate_sme, stranding 13,606,784.12 on the rich portfolio. "
-            "RWEA falls out of the breakdown while the parent total still counts "
-            "it. LESSONS B6 -- and note the missing pair is by definition not in "
-            "the row list, so reading the list cannot find it."
+            "Mirrors the defect where the A-IRB corporate lookups never asked "
+            "for corporate_sme, stranding 13,606,784.12 on the rich portfolio "
+            "(fixed 2026-11-13). RWEA falls out of the breakdown while the parent "
+            "total (row 0250) still counts it. LESSONS B6 -- and note the missing "
+            "pair is by definition not in the row list, so reading the list "
+            "cannot find it."
         ),
     ),
     Mutant(
@@ -330,8 +333,8 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="generic-firb-institution-key",
         category="generic",
         target=TARGET_C02,
-        old='firb_inst = irb_class_rwa.get(("foundation_irb", "institution"), 0.0)',
-        new='firb_inst = irb_class_rwa.get(("foundation_irb", "institutions"), 0.0)',
+        old='rows.FIRB_INSTITUTIONS: of_class(_FIRB, "institution"),',
+        new='rows.FIRB_INSTITUTIONS: of_class(_FIRB, "institutions"),',
         summary="C 02.00 F-IRB institution row keyed on a non-enum string",
         rationale=(
             "The F-IRB twin of known-c02-phantom-class-key. Both limbs of the "
@@ -344,8 +347,8 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="generic-firb-corporate-stranded",
         category="generic",
         target=TARGET_C02,
-        old='firb_sl = irb_class_rwa.get(("foundation_irb", "specialised_lending"), 0.0)',
-        new="firb_sl = 0.0",
+        old='rows.FIRB_SPECIALISED_LENDING: of_class(_FIRB, "specialised_lending"),',
+        new="rows.FIRB_SPECIALISED_LENDING: _NOTHING,",
         summary="C 02.00 F-IRB specialised-lending RWEA stranded at zero",
         rationale=(
             "LESSONS B6 on the F-IRB limb: the approach total still counts the "

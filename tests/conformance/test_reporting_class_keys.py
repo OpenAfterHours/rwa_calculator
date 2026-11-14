@@ -67,7 +67,7 @@ from typing import TYPE_CHECKING, Any
 
 import rwa_calc.reporting
 from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP
+from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP, C07_00_TOTAL_SHEET_KEY
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -80,6 +80,17 @@ CLASS_VALUES: frozenset[str] = frozenset(m.value for m in ExposureClass)
 #: The one source of truth for the C 07.00 / OF 07.00 PRESENTATION vocabulary —
 #: read off the map the generator's sheet axis is built from, never retyped.
 SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
+
+#: The C 07.00 sheet AXIS: the class sheets and the Total sheet (published code
+#: 0001, the sum of the others). The Total key is on the axis and is no exposure
+#: class, so it is legal wherever a sheet key is — and it is left OUT of the
+#: discovery ratio (``_is_class_group``). Counting it would put the label and
+#: z-code maps at 13 class values in 16 keys, a hair above ``_MIN_RATIO``, where
+#: ONE further stray key drops them below the floor and out of the check
+#: altogether: a typo would then pass by not being looked at.
+#: ``test_the_sheet_vocabulary_does_not_launder_an_engine_class_map`` plants
+#: exactly that.
+SA_SHEET_AXIS_KEYS: frozenset[str] = SA_SHEET_KEYS | {C07_00_TOTAL_SHEET_KEY}
 
 #: A SLOT (a dict's keys, a dict's values, a tuple position, a dataclass field)
 #: is a candidate exposure-class axis when it holds at least this many real
@@ -212,6 +223,10 @@ def test_the_sheet_vocabulary_does_not_launder_an_engine_class_map() -> None:
     clean = {"SHEET_KEYS": frozenset(SA_SHEET_KEYS)}
     typo = {"SHEET_KEYS": frozenset(SA_SHEET_KEYS | {"real_state"})}
     borrowed = {"CLASS_MAP": frozenset(SA_SHEET_KEYS | {"corporate_sme"})}
+    # The sheet AXIS — the class sheets plus the Total. Admitting the Total key
+    # must not cost the check its reach: the same typo, beside it, is still caught.
+    axis = {"SHEET_KEYS": frozenset(SA_SHEET_AXIS_KEYS)}
+    axis_typo = {"SHEET_KEYS": frozenset(SA_SHEET_AXIS_KEYS | {"real_state"})}
 
     def offenders(namespace: Mapping[str, Any], origin: str) -> dict[str, list[str]]:
         return {
@@ -221,6 +236,10 @@ def test_the_sheet_vocabulary_does_not_launder_an_engine_class_map() -> None:
         }
 
     assert offenders(clean, "clean") == {}
+    assert offenders(axis, "axis") == {}
+    assert offenders(axis_typo, "axis_typo") == {
+        "axis_typo::SHEET_KEYS": ["real_estate", "real_state", "retail", C07_00_TOTAL_SHEET_KEY]
+    }
     assert offenders(typo, "typo") == {"typo::SHEET_KEYS": ["real_estate", "real_state", "retail"]}
     assert offenders(borrowed, "borrowed") == {"borrowed::CLASS_MAP": ["real_estate", "retail"]}
 
@@ -347,8 +366,9 @@ def _is_class_group(members: frozenset[str]) -> bool:
     at least :data:`_MIN_RATIO` of the group. A group that fails the ratio test
     is a row-key or label axis that merely reuses some class names.
     """
-    hits = len(members & CLASS_VALUES)
-    return hits >= _MIN_HITS and hits >= _MIN_RATIO * len(members)
+    classes = members - {C07_00_TOTAL_SHEET_KEY}  # on the sheet axis, never a class
+    hits = len(classes & CLASS_VALUES)
+    return hits >= _MIN_HITS and hits >= _MIN_RATIO * len(classes)
 
 
 def _is_keyed_legally(members: frozenset[str]) -> bool:
@@ -367,4 +387,4 @@ def _is_keyed_legally(members: frozenset[str]) -> bool:
     Membership-of-the-union would have laundered it, which is why the union is
     never formed.
     """
-    return members <= CLASS_VALUES or members <= SA_SHEET_KEYS
+    return members <= CLASS_VALUES or members <= SA_SHEET_AXIS_KEYS

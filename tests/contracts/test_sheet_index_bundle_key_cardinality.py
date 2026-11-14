@@ -3,7 +3,7 @@ One published sheet code addresses AT MOST ONE of our sheets — an invariant.
 
 Pipeline position:
     published rule (scoped ``sheets: s0008``)
-        -> validations/scope.py::resolve_sheet_codes
+        -> rwa_filer/validate/index.py::resolve_sheet_codes
         -> our per-exposure-class sheet key(s)
         -> the evaluator aggregates the rule's reference ACROSS every key returned
 
@@ -64,7 +64,7 @@ function over fixed source and reads its findings. The must-flag input is the
 real pre-fix ``scope.py``, vendored beside this file, whose correct verdict is
 human-judged (six violations). Two must-not-flag inputs run through the
 identical harness, so the file's CONTENT is the only thing that differs: the
-current ``scope.py``, and a small sample carrying all three legal cardinalities
+current ``filing/sheet_maps.py``, and a small sample carrying all three legal cardinalities
 — one key, no keys, and two z-codes sharing one key — so a check that banned
 the finer Art. 147(2)(d) IRB axis fails on the case it broke rather than
 somewhere downstream. It also asserts the check is dispatched by ``main()``,
@@ -72,7 +72,7 @@ because a guard built and never called is this estate's dominant meta-pattern
 — it is why ``arch_check`` grew check 20.
 
 The behavioural closure guard lives next door in
-``tests/unit/reporting/validations/test_sheet_index_map.py``; this file owns the
+``tests/unit/reporting/filing/test_sheet_index_map.py``; this file owns the
 CARDINALITY direction, which that file does not check.
 
 References:
@@ -94,12 +94,8 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from rwa_calc.reporting.validations.scope import (
-    SHEET_INDEX_MAPS,
-    SKIP_SHEET_SCOPE_NOT_CLOSED,
-    SheetCode,
-    resolve_sheet_codes,
-)
+from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
+from rwa_filer.validate.index import SKIP_SHEET_SCOPE_NOT_CLOSED, SheetCode, resolve_sheet_codes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -448,7 +444,7 @@ def test_a_multi_key_code_makes_the_evaluator_sum_two_of_our_sheets() -> None:
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 ARCH_CHECK_PATH: Final = REPO_ROOT / "scripts" / "arch_check.py"
 SRC_ROOT: Final = REPO_ROOT / "src" / "rwa_calc"
-LIVE_SCOPE_PATH: Final = SRC_ROOT / "reporting" / "validations" / "scope.py"
+LIVE_SCOPE_PATH: Final = SRC_ROOT / "reporting" / "filing" / "sheet_maps.py"
 
 #: ``git show eb546935^:src/rwa_calc/reporting/validations/scope.py``, verbatim.
 PRE_FIX_SAMPLE_PATH: Final = (
@@ -469,7 +465,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from rwa_calc.reporting.validations.scope import SheetCode
+from rwa_filer.validate.index import SheetCode
 
 _SAMPLE_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode("0001", "Total", (), "sample: understood, not modelled"),
@@ -564,9 +560,9 @@ def _run_check_over(source: str, tmp_path: Path) -> list[str]:
     not silently empty: it reports its own lost population, which every
     assertion below would fail on.
     """
-    target = tmp_path / "reporting" / "validations"
+    target = tmp_path / "reporting" / "filing"
     target.mkdir(parents=True, exist_ok=True)
-    (target / "scope.py").write_text(source, encoding="utf-8")
+    (target / "sheet_maps.py").write_text(source, encoding="utf-8")
     findings = _cardinality_check()(tmp_path)
     assert isinstance(findings, list), (
         f"{_CHECK_NAME} must return a list of finding strings, got {type(findings)!r}"

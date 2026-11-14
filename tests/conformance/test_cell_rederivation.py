@@ -279,16 +279,37 @@ def test_generated_cell_matches_the_independent_rederivation(
 # ---------------------------------------------------------------------------
 
 
+#: The corporate sheet of each template, per regime. C 07.00 / OF 07.00 key it by
+#: class under both. Re-anchored for OF 08.01: both regimes read the class sheet
+#: ``corporate``, but Basel 3.1 publishes the IRB sheets per class AND approach
+#: (taxonomy v4.1.1, ``OF08.01.01.01``) and this portfolio's modelled corporate
+#: legs are all F-IRB non-SME — published sheet 0012. Typed here, not imported
+#: from the generator: this file is the second opinion.
+_SA_CORPORATE: dict[str, str] = dict.fromkeys(REGIMES, "corporate")
+_IRB_CORPORATE: dict[str, str] = {"CRR": "corporate", "B31": "corporate_non_sme_firb"}
+
+
 @pytest.mark.parametrize(
-    ("template", "member", "total", "parts", "column"),
+    ("template", "members", "total", "parts", "column"),
     [
-        ("C0700", "corporate", "0010", ("0070", "0080"), "0010"),
-        ("C0700", "corporate", "0010", ("0070", "0080"), "0200"),
-        ("C0801", "corporate", "0010", ("0020", "0030"), "0020"),
+        pytest.param(
+            "C0700", _SA_CORPORATE, "0010", ("0070", "0080"), "0010", id="C0700-corporate-0010"
+        ),
+        pytest.param(
+            "C0700", _SA_CORPORATE, "0010", ("0070", "0080"), "0200", id="C0700-corporate-0200"
+        ),
+        pytest.param(
+            "C0801", _IRB_CORPORATE, "0010", ("0020", "0030"), "0020", id="C0801-corporate-0020"
+        ),
     ],
 )
 def test_the_balance_sheet_sides_partition_their_total(
-    templates, template: str, member: str, total: str, parts: tuple[str, ...], column: str
+    templates,
+    template: str,
+    members: dict[str, str],
+    total: str,
+    parts: tuple[str, ...],
+    column: str,
 ) -> None:
     """On-balance-sheet plus off-balance-sheet equals the total exposures row.
 
@@ -303,6 +324,7 @@ def test_the_balance_sheet_sides_partition_their_total(
     """
     breaks: list[str] = []
     for regime in REGIMES:
+        member = members[regime]
         frame = templates[regime][f"{template}:{member}"]
         if column not in frame.columns:
             continue
@@ -409,24 +431,21 @@ def test_own_funds_columns_are_exactly_eight_percent_of_their_rwea(templates) ->
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "OF 02.00 r0010 c0030 publishes the post-floor TREA, not the floor amount. Measured on "
-        "the portfolio below: published 25,461,099.93, which is exactly c0010; the sealed "
-        "OutputFloorSummary on the same run holds floor_pct 0.6, s_trea 20,825,000.00, of_adj "
-        "-1,263,500.00 and floor_threshold 11,231,500.00. Delta 14,229,599.93. PS1/26 Annex II "
-        "(printed p.29) states the cell directly: 'The output floor (reported in row 0010 column "
-        "0030) should reflect the formula provided in Article 92 (2a) ... x * S-TREA + OF-ADJ', "
-        "and row 0034 is defined as activated 'when, in row 0010, the value in column 0030 is "
-        "equal to or greater than the value in column 0010'. Setting c0030 equal to c0010 is "
-        "deliberate in reporting/corep/c02.py ('col 0030 (output floor) = the same total'), and "
-        "it makes that comparison degenerate: c0030 can never be LESS than c0010, so the "
-        "activation test can never come out negative on its own terms, and the engine computes "
-        "r0034 from rwa_pre_floor instead. The correct figure already exists on the bundle and "
-        "is simply not the one published. The engine is believed wrong. One caveat recorded "
-        "honestly: PS1/26 p.29 defines S-TREA as 'the total of all SA exposures provided in "
-        "columns 0010 and 0020', which is arguably the whole-portfolio 30,762,500.00 that c0020 "
-        "carries rather than the floor-eligible 20,825,000.00 the summary uses — that is a "
-        "separate question about the floor's own scope, and this test deliberately compares "
-        "against the engine's OWN threshold so it cannot be confused with it."
+        "REWRITTEN 2026-11-13. The difference first registered here is resolved: OF 02.00 r0010 "
+        "c0030 no longer repeats c0010 (it published the post-floor TREA, 25,461,099.93). It is "
+        "now the Annex II formula, 'x * S-TREA + OF-ADJ' (PS1/26 Annex II printed p.29), and "
+        "row 0034 follows from comparing it with c0010. "
+        "What remains is the caveat this entry recorded from the start, now the WHOLE of the "
+        "difference: published 17,194,000.00 = 0.6 * 30,762,500.00 - 1,263,500.00, against the "
+        "sealed OutputFloorSummary.floor_threshold of 11,231,500.00 = 0.6 * 20,825,000.00 - "
+        "1,263,500.00. Delta 5,962,500.00 = 0.6 * the 9,937,500.00 standardised book. Annex II "
+        "defines S-TREA as 'the total of all SA exposures provided in columns 0010 and 0020' — "
+        "the whole portfolio, which is also what boe_b0716 / boe_b0793 compute — while the "
+        "engine's summary holds the floor-ELIGIBLE (modelled) subset only. That is the recorded "
+        "engine defect D6 (docs/plans/c07-ccr-derivatives.md s4): the engine floors the modelled "
+        "subset in isolation. The template is believed right and the summary's threshold wrong. "
+        "The test still compares against the engine's OWN threshold, so it stays red until the "
+        "floor's scope is fixed in the engine — at which point the two agree and this entry goes."
     ),
 )
 def test_output_floor_column_is_the_floor_amount(templates, floor_summaries) -> None:

@@ -27,7 +27,7 @@ No CRR/Basel 3.1 regime divergence is exercised (see the fixture module
 docstring), so every assertion below is parametrized over both regimes purely
 for parity, not because the numbers are expected to differ.
 
-Published identities pinned (``src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json``):
+Published identities pinned (``packages/rwa-filer/src/rwa_filer/rules/data/crr-eba-v3.0-credit-risk.json``):
 - ``v1663_m`` (C 08.01.a, live): ``{c0070} = {c0040} + {c0050} + {c0060}``.
 - ``v1662_m`` (C 08.01.a): ``{c0090} = {c0020} + {c0070} + {c0080}``.
 - ``v0305_m`` (C 07.00.a, live): ``{c0090} = {c0050} + {c0060} + {c0070} + {c0080}``.
@@ -51,6 +51,7 @@ from datetime import date
 import polars as pl
 import pytest
 from tests.fixtures.reporting_crm_substitution_portfolio import (
+    B31_C08_01_DESTINATION_SHEET,
     LOAN_EXPECTED_ORIGIN_SHEET_B31,
     LOAN_EXPECTED_ORIGIN_SHEET_CRR,
     SUBSTITUTION_INFLOW_DESIGN,
@@ -59,6 +60,8 @@ from tests.fixtures.reporting_crm_substitution_portfolio import (
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
+from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     C08_03_PD_PARENT_REFS,
@@ -69,6 +72,34 @@ _REGIMES: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 _ORIGIN_SHEETS: dict[str, dict[str, tuple[str, str]]] = {
     "crr": LOAN_EXPECTED_ORIGIN_SHEET_CRR,
     "b31": LOAN_EXPECTED_ORIGIN_SHEET_B31,
+}
+
+#: The IRB sheet of each class this portfolio populates, per regime. CRR C 08 is
+#: keyed by exposure class. RE-ANCHORED 2026-11-13 for Basel 3.1, which was read
+#: off the same class keys: OF 08 is published per class AND approach (BoE
+#: Banking Taxonomy v4.1.1, ``OF08.01.01.01``), every modelled obligor here is
+#: F-IRB, and the corporates are non-SME — published sheets 0012 and 0006.
+_IRB_SHEET: dict[str, dict[str, str]] = {
+    "crr": {"corporate": "corporate", "institution": "institution"},
+    "b31": {"corporate": "corporate_non_sme_firb", "institution": "institution_firb"},
+}
+
+#: The post-substitution classes each IRB sheet reports, per regime — stated
+#: here, not read from the generator. Under Basel 3.1 the S2 leg (retail
+#: guarantor, obligor's F-IRB approach kept) is a pair no sheet exists for and
+#: stays with its obligor (``B31_C08_01_DESTINATION_SHEET``), and the F-IRB /
+#: slotting Total takes every modelled leg.
+_SHEET_POST_CLASSES: dict[str, dict[str, tuple[str, ...]]] = {
+    "crr": {
+        "corporate": ("corporate",),
+        "institution": ("institution",),
+        "retail_other": ("retail_other",),
+    },
+    "b31": {
+        "corporate_non_sme_firb": ("corporate", "retail_other"),
+        "institution_firb": ("institution",),
+        "total_firb_slotting": ("corporate", "retail_other", "institution"),
+    },
 }
 
 # Per-template column layout: (gross, outflow, inflow, net-after-substitution).
@@ -119,6 +150,18 @@ def _total_row(frame: pl.DataFrame) -> pl.DataFrame:
     return frame.filter(pl.col("row_ref") == "0010")
 
 
+def _destination_sheet(regime_key: str, guarantee: str) -> str:
+    """The sheet one scenario's inflow lands on.
+
+    The regulatory destination CLASS — except on Basel 3.1 OF 08.01, whose
+    sheets are published per class and approach (``B31_C08_01_DESTINATION_SHEET``).
+    """
+    design = SUBSTITUTION_INFLOW_DESIGN[guarantee]
+    if regime_key == "b31" and design["destination_template"] == "c08_01":
+        return B31_C08_01_DESTINATION_SHEET[guarantee]
+    return str(design["destination_class"])
+
+
 class TestPublishedIdentitiesEndToEnd:
     """The outflow subtotal and the single-subtraction waterfall hold on
     every ORIGIN sheet a real guarantee split produces."""
@@ -128,7 +171,7 @@ class TestPublishedIdentitiesEndToEnd:
         """``v1663_m``: C 08.01 corporate col 0070 = 0040 + 0050 + 0060."""
         _results, corep = _run(regime_key)
 
-        corp = _total_row(corep.c08_01["corporate"])
+        corp = _total_row(corep.c08_01[_IRB_SHEET[regime_key]["corporate"]])
         assert corp["0070"][0] == pytest.approx(corp["0040"][0] + corp["0050"][0] + corp["0060"][0])
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
@@ -136,7 +179,7 @@ class TestPublishedIdentitiesEndToEnd:
         """``v1662_m``: C 08.01 corporate col 0090 = 0020 + 0070 + 0080."""
         _results, corep = _run(regime_key)
 
-        corp = _total_row(corep.c08_01["corporate"])
+        corp = _total_row(corep.c08_01[_IRB_SHEET[regime_key]["corporate"]])
         expected = corp["0020"][0] + corp["0070"][0] + corp["0080"][0]
         assert corp["0090"][0] == pytest.approx(expected)
 
@@ -185,8 +228,8 @@ class TestPerScenarioInflowLandsOnce:
         _results, corep = _run(regime_key)
 
         destination_totals: dict[tuple[str, str], float] = {}
-        for design in SUBSTITUTION_INFLOW_DESIGN.values():
-            key = (design["destination_template"], design["destination_class"])
+        for guarantee, design in SUBSTITUTION_INFLOW_DESIGN.items():
+            key = (design["destination_template"], _destination_sheet(regime_key, guarantee))
             destination_totals[key] = destination_totals.get(key, 0.0) + design["guaranteed_amount"]
 
         for (template, dest_class), expected_amount in destination_totals.items():
@@ -194,7 +237,7 @@ class TestPerScenarioInflowLandsOnce:
 
             sheets = _sheets(corep, template)
             assert dest_class in sheets, (
-                f"{regime_key}: no {template} sheet for destination class "
+                f"{regime_key}: no {template} sheet for destination "
                 f"{dest_class!r} — the inflow has nowhere to land"
             )
             total = _total_row(sheets[dest_class])
@@ -210,10 +253,14 @@ class TestDestinationSheetCreatedWithoutNativeExposure:
     exposure of its own must still get a sheet (D5) — S2 within C 08.01, S3
     across the SA/IRB template boundary onto C 07.00."""
 
-    @pytest.mark.parametrize("regime_key", list(_REGIMES))
-    def test_c0801_retail_other_sheet_created_for_s2(self, regime_key: str) -> None:
-        """S2's guarantor (retail_other) has no IRB exposure of its own."""
-        _results, corep = _run(regime_key)
+    def test_c0801_retail_other_sheet_created_for_s2(self) -> None:
+        """S2's guarantor (retail_other) has no IRB exposure of its own.
+
+        CRR only: C 08.01 is keyed by exposure class, so the guarantor's class is
+        a sheet. RE-ANCHORED 2026-11-13 — this ran under Basel 3.1 too, on a class
+        sheet no published code names; the Basel 3.1 case is the test below.
+        """
+        _results, corep = _run("crr")
 
         design = SUBSTITUTION_INFLOW_DESIGN["CSUB-GUAR-S2"]
         assert design["destination_has_native_population"] is False
@@ -221,6 +268,27 @@ class TestDestinationSheetCreatedWithoutNativeExposure:
         total = _total_row(corep.c08_01["retail_other"])
         assert total["0020"][0] == pytest.approx(0.0)  # no native exposure
         assert total["0080"][0] == pytest.approx(design["guaranteed_amount"])
+
+    def test_of0801_s2_stays_on_the_obligors_sheet_and_is_not_lost(self) -> None:
+        """Basel 3.1: an (F-IRB, retail) leg has no sheet, and is not dropped.
+
+        S2's covered part takes a retail guarantor's class while keeping its
+        obligor's F-IRB approach. No published OF 08.01 sheet and no OF 02.00 row
+        is F-IRB retail, so it is reported where OF 02.00 reports its RWEA — the
+        obligor's sheet 0012 — as an outflow and an inflow on that one sheet.
+        No retail sheet is invented for it, and its 3,300,000 is still there.
+        """
+        _results, corep = _run("b31")
+        design = SUBSTITUTION_INFLOW_DESIGN["CSUB-GUAR-S2"]
+        same_class = SUBSTITUTION_INFLOW_DESIGN["CSUB-GUAR-S5"]
+
+        retail_sheets = sorted(key for key in corep.c08_01 if key.startswith("retail"))
+        total = _total_row(corep.c08_01[_IRB_SHEET["b31"]["corporate"]])
+
+        assert retail_sheets == []
+        assert total["0080"][0] == pytest.approx(
+            design["guaranteed_amount"] + same_class["guaranteed_amount"]
+        )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_c07_central_govt_sheet_created_for_s3(self, regime_key: str) -> None:
@@ -248,9 +316,13 @@ class TestCrossTemplateConservation:
         results, corep = _run(regime_key)
 
         total_gross = float(results["drawn_amount"].sum())
+        # Both templates are added up over their CLASS sheets: each Total sheet is
+        # their sum, so including it would count that side twice. Re-anchored
+        # 2026-11-13: OF 08.01 gained its two Total sheets (taxonomy v4.1.1
+        # ``OF08.01.01.01`` codes 0001 / 0002), as C 07.00 gained its one.
         total_after_substitution = sum(
-            _total_row(frame)["0090"][0] for frame in corep.c08_01.values()
-        ) + sum(_total_row(frame)["0110"][0] for frame in corep.c07_00.values())
+            _total_row(frame)["0090"][0] for frame in c08_class_sheets(corep.c08_01).values()
+        ) + sum(_total_row(frame)["0110"][0] for frame in c07_class_sheets(corep.c07_00).values())
 
         assert total_after_substitution == pytest.approx(total_gross)
 
@@ -263,14 +335,15 @@ class TestC0803PostCrmBasis:
         """C 08.03 post-CRM measures equal C 08.01's non-slotting row per sheet."""
         results, corep = _run(regime_key)
 
-        assert set(corep.c08_03) == {"corporate", "institution", "retail_other"}
-        for exposure_class, c08_03 in corep.c08_03.items():
+        post_classes = _SHEET_POST_CLASSES[regime_key]
+        assert set(corep.c08_03) == set(post_classes)
+        for sheet_key, c08_03 in corep.c08_03.items():
             leaves = c08_03.filter(~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS)))
-            c08_01 = corep.c08_01[exposure_class].filter(pl.col("row_ref") == "0070")
-            c08_02 = corep.c08_02[exposure_class]
+            c08_01 = corep.c08_01[sheet_key].filter(pl.col("row_ref") == "0070")
+            c08_02 = corep.c08_02[sheet_key]
             post_legs = results.filter(
                 pl.col("reporting_approach").is_in(["foundation_irb", "advanced_irb"])
-                & (pl.col("reporting_class") == exposure_class)
+                & pl.col("reporting_class").is_in(list(post_classes[sheet_key]))
             )
 
             assert leaves["0040"].sum() == pytest.approx(c08_01["0110"][0])
@@ -281,12 +354,13 @@ class TestC0803PostCrmBasis:
                 post_legs["expected_loss"].fill_null(0.0).sum()
             )
 
-    @pytest.mark.parametrize("regime_key", list(_REGIMES))
-    def test_destination_only_retail_sheet_has_post_values_but_no_origin_gross(
-        self, regime_key: str
-    ) -> None:
-        """S2's 3.3m covered leg creates a retail guarantor sheet, not retail gross."""
-        _results, corep = _run(regime_key)
+    def test_destination_only_retail_sheet_has_post_values_but_no_origin_gross(self) -> None:
+        """S2's 3.3m covered leg creates a retail guarantor sheet, not retail gross.
+
+        CRR only (RE-ANCHORED 2026-11-13): under Basel 3.1 the leg has no retail
+        sheet to create — see ``test_of0803_s2_band_has_post_values_but_no_gross``.
+        """
+        _results, corep = _run("crr")
         leaves = corep.c08_03["retail_other"].filter(
             ~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS))
         )
@@ -294,6 +368,21 @@ class TestC0803PostCrmBasis:
         assert leaves["0010"].sum() + leaves["0020"].sum() == pytest.approx(0.0)
         assert leaves["0040"].sum() == pytest.approx(3_300_000.0)
         assert leaves["0100"].sum() > 0.0
+
+    def test_of0803_s2_band_has_post_values_but_no_gross(self) -> None:
+        """Basel 3.1: S2's 3.3m arrives in a band of its obligor's sheet, gross-free.
+
+        The covered leg stays on sheet 0012 (no F-IRB retail sheet exists) but
+        still bands on the guarantor's 2.00% PD — row 0090, which no native leg
+        of that sheet reaches, so the row carries post-substitution value and no
+        original exposure, exactly as the CRR destination sheet does.
+        """
+        _results, corep = _run("b31")
+        band = corep.c08_03[_IRB_SHEET["b31"]["corporate"]].filter(pl.col("row_ref") == "0090")
+
+        assert band["0010"][0] + band["0020"][0] == pytest.approx(0.0)
+        assert band["0040"][0] == pytest.approx(3_300_000.0)
+        assert band["0100"][0] > 0.0
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_el_shortfall_and_excess_are_recomputed_from_post_crm_el(self, regime_key: str) -> None:
@@ -331,8 +420,13 @@ class TestC0803PostCrmBasis:
         """
         _results, corep = _run(regime_key)
 
-        s1_band = corep.c08_03["institution"].filter(pl.col("row_ref") == "0050")
-        s2_band = corep.c08_03["retail_other"].filter(pl.col("row_ref") == "0090")
+        # RE-ANCHORED 2026-11-13: both sheets were read by class key. Basel 3.1
+        # reports S1 on published sheet 0006 and S2 on its obligor's sheet 0012
+        # (no F-IRB retail sheet exists); the BAND is what this test is about.
+        s1_sheet = _IRB_SHEET[regime_key]["institution"]
+        s2_sheet = "retail_other" if regime_key == "crr" else _IRB_SHEET[regime_key]["corporate"]
+        s1_band = corep.c08_03[s1_sheet].filter(pl.col("row_ref") == "0050")
+        s2_band = corep.c08_03[s2_sheet].filter(pl.col("row_ref") == "0090")
         assert s1_band["0040"][0] == pytest.approx(6_000_000.0)
         assert s1_band["0050"][0] == pytest.approx(0.003)
         assert s2_band["0040"][0] == pytest.approx(3_300_000.0)
@@ -351,7 +445,7 @@ class TestC0803PostCrmBasis:
         blended PD, and a 0.69% average reported against a "0.75 to <1.75" band.
         """
         _results, corep = _run(regime_key)
-        corporate = corep.c08_03["corporate"]
+        corporate = corep.c08_03[_IRB_SHEET[regime_key]["corporate"]]
         moved = corporate.filter(pl.col("row_ref") == "0050")
         origin = corporate.filter(pl.col("row_ref") == "0080")
 
@@ -381,10 +475,15 @@ class TestC0803PostCrmBasis:
                 lower, upper = bands[row["row_ref"]]
                 assert lower <= row["0050"] < upper, (exposure_class, row["row_ref"])
 
-    @pytest.mark.parametrize("regime_key", list(_REGIMES))
-    def test_retail_maturity_is_not_reported(self, regime_key: str) -> None:
-        """Annex II excludes maturity from every retail exposure-class sheet."""
-        _results, corep = _run(regime_key)
+    def test_retail_maturity_is_not_reported(self) -> None:
+        """Annex II excludes maturity from every retail exposure-class sheet.
+
+        CRR only (RE-ANCHORED 2026-11-13): this portfolio reaches no Basel 3.1
+        retail sheet, so the Basel 3.1 parametrisation had nothing to assert on.
+        ``tests/unit/reporting/corep/test_c08_03.py`` holds column 0080 empty on a
+        published Basel 3.1 retail sheet.
+        """
+        _results, corep = _run("crr")
         assert corep.c08_03["retail_other"]["0080"].null_count() == len(
             corep.c08_03["retail_other"]
         )

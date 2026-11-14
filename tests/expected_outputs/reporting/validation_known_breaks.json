@@ -6,7 +6,7 @@
     "binding_output_floor_add_on_has_no_home_in_the_ir_templates": "boe_b0751 (OF08.01.01.01) and boe_b0763 (OF08.02.01.01) are ONE published identity restated per template (LESSONS C6): RWEA after adjustments (col 0260) must equal the sum of RWEA before adjustments, PMAs, unrecognised-exposure adjustments and the mortgage RW-floor adjustment (cols 0251-0254). They FAIL on b31/facility-share-binding by exactly OutputFloorSummary.shortfall, because the pro-rata output-floor add-on lives inside rwa_final and the reporting projection mirrors it into col 0260 while cols 0251-0254 have no column for it. Every portfolio registered before 2026-09-05 had a NON-binding floor, so the pair had never been evaluated in the binding state (LESSONS B5, a portfolio STATE no fixture reached). Pre-existing: the values are byte-identical at the commit before the facility-share fan-out landed. The reporting-basis decision - un-floored RWEA in the IRB templates with the floor at the total level (OF 02.01 / C 02.00), or an adjustment column - is OWNER: P1.369 and is NOT made here. Banked as an ERROR-severity liability, not a waiver.",
     "how_to_discharge_a_vacuity_entry": "Make one cell the rule addresses carry a real figure on a registered portfolio, then DELETE the entry - the gate will fail until you do, which is the design. The worked example is the 2026-08-08 B5 recurrence (.claude/LESSONS.md): C 08.01 r0253 read 0.00 in all six goldens, so Tier 2 was structurally incapable of seeing a change to it. Closing it needed a TWO-LEG fixture - a live cell that SURVIVES the change plus one that MOVES, because a single moving row leaves the cell at 0.00 afterwards - and activated five previously-VACUOUS rules to PASS, boe_b0752_27 (the r0253 tie-out) among them. Do NOT discharge an entry by deleting the rule, narrowing a portfolio, or making the cell structurally absent: absence is NOT_EVALUATED, which is worse than vacuity, not better - and per what_the_vacuity_ratchet_does_NOT_catch, that route may not even redden a leg, so nothing here will stop you doing it.",
     "reading_a_vacuity_reason": "The mechanism sentence names WHICH limb the measured evidence supports. 'emitted but unreported (null)' means the cells exist in the layout and carry no figure, so the rule's treat-missing-as-zero policy coalesces them to 0.0 - the LESSONS B1/B5 dead-cell signature, and the limb most likely to be hiding a defect. 'emitted and exactly 0.00' means the cells ARE populated and the figure is genuinely zero - usually a portfolio artefact (no exposure of the kind the column measures) but equally consistent with a column nothing ever writes to. Neither limb settles the root cause, which is why most entries are prefixed 'unattributed - needs investigation'. The exception is the 'structural' prefix: see the next note.",
-    "structural_vacuity_of_prohibition_rules": "A rule of the form '{ref} = empty' asks whether a cell was REPORTED, and holds precisely by our reporting nothing there. reporting/validations/evaluate.py::_evaluate_emptiness returns VACUOUS for the holding case, so PASS is UNREACHABLE for this family and vacuity is the passing verdict, not a lost check. Those entries are prefixed 'structural' and need no investigation. Their only other outcome is FAIL (we reported a figure the publisher forbids), which lands in known_broken_rules - so removing them from here on activation is coherent, not a loophole.",
+    "structural_vacuity_of_prohibition_rules": "A rule of the form '{ref} = empty' asks whether a cell was REPORTED, and holds precisely by our reporting nothing there. rwa_filer/validate/evaluate.py::_evaluate_emptiness returns VACUOUS for the holding case, so PASS is UNREACHABLE for this family and vacuity is the passing verdict, not a lost check. Those entries are prefixed 'structural' and need no investigation. Their only other outcome is FAIL (we reported a figure the publisher forbids), which lands in known_broken_rules - so removing them from here on activation is coherent, not a loophole.",
     "how_to_read_a_reason": "Each entry names the DEFECT, not the symptom. A reason beginning 'unattributed - needs investigation' means the mechanism is written out but the cause is not established - it is a lead, not a shrug.",
     "caution_on_unattributed": "'Unattributed' can mean the question was framed too narrowly, not only that the evidence is thin. Worked example: boe_b0378 was recorded as 'c0060 is a signed outflow column, so of-which <= total inverts' - a real-looking question whose answer was neither limb offered, because the total should never have been negative at all (the carrier was uncapped, upstream of the sign question). Re-derive the framing before trusting an unattributed entry's framing.",
     "caution_on_arithmetic_coincidence": "Do not read an arithmetic coincidence as evidence of a mechanism. boe_b0752_22/24 were once attributed to a class-level figure being 'broadcast' onto every PD-grade row, on the evidence that the grade sum was exactly 7x the total across 7 grades. That is equally consistent with a genuine per-grade average whose inputs coincide - which is what it was. The decisive evidence was float dust (1672.9999999999995 on one row of seven): a broadcast constant would be bit-identical.",
@@ -17,267 +17,315 @@
   },
   "summary": {
     "crr/rich": {
-      "PASS": 172,
+      "PASS": 186,
       "FAIL": 4,
-      "VACUOUS": 80,
-      "NOT_EVALUATED": 485,
+      "VACUOUS": 78,
+      "NOT_EVALUATED": 473,
       "rules_enforced": 741,
-      "rules_executed": 256,
+      "rules_executed": 268,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/rich": {
-      "PASS": 203,
-      "FAIL": 4,
-      "VACUOUS": 223,
-      "NOT_EVALUATED": 370,
+      "PASS": 255,
+      "FAIL": 5,
+      "VACUOUS": 219,
+      "NOT_EVALUATED": 321,
       "rules_enforced": 800,
-      "rules_executed": 430,
+      "rules_executed": 479,
       "templates_emitted": 12,
       "templates_covered": 12
     },
     "crr/off-bs": {
-      "PASS": 56,
+      "PASS": 64,
       "FAIL": 1,
-      "VACUOUS": 67,
-      "NOT_EVALUATED": 617,
+      "VACUOUS": 69,
+      "NOT_EVALUATED": 607,
       "rules_enforced": 741,
-      "rules_executed": 124,
+      "rules_executed": 134,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/off-bs": {
-      "PASS": 61,
+      "PASS": 72,
       "FAIL": 3,
-      "VACUOUS": 129,
-      "NOT_EVALUATED": 607,
+      "VACUOUS": 156,
+      "NOT_EVALUATED": 569,
       "rules_enforced": 800,
-      "rules_executed": 193,
+      "rules_executed": 231,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/ccr": {
-      "PASS": 57,
+      "PASS": 67,
       "FAIL": 1,
-      "VACUOUS": 63,
-      "NOT_EVALUATED": 620,
+      "VACUOUS": 65,
+      "NOT_EVALUATED": 608,
       "rules_enforced": 741,
-      "rules_executed": 121,
+      "rules_executed": 133,
       "templates_emitted": 7,
       "templates_covered": 6
     },
     "b31/ccr": {
-      "PASS": 65,
+      "PASS": 77,
       "FAIL": 3,
-      "VACUOUS": 108,
-      "NOT_EVALUATED": 624,
+      "VACUOUS": 136,
+      "NOT_EVALUATED": 584,
       "rules_enforced": 800,
-      "rules_executed": 176,
+      "rules_executed": 216,
       "templates_emitted": 8,
       "templates_covered": 5
     },
     "crr/sa-classes": {
-      "PASS": 65,
+      "PASS": 73,
       "FAIL": 1,
-      "VACUOUS": 78,
-      "NOT_EVALUATED": 597,
+      "VACUOUS": 80,
+      "NOT_EVALUATED": 587,
       "rules_enforced": 741,
-      "rules_executed": 144,
+      "rules_executed": 154,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/sa-classes": {
-      "PASS": 64,
+      "PASS": 79,
       "FAIL": 3,
-      "VACUOUS": 122,
-      "NOT_EVALUATED": 611,
+      "VACUOUS": 147,
+      "NOT_EVALUATED": 571,
       "rules_enforced": 800,
-      "rules_executed": 189,
+      "rules_executed": 229,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/irb-classes": {
-      "PASS": 85,
+      "PASS": 89,
       "FAIL": 1,
       "VACUOUS": 23,
-      "NOT_EVALUATED": 632,
+      "NOT_EVALUATED": 628,
       "rules_enforced": 741,
-      "rules_executed": 109,
+      "rules_executed": 113,
       "templates_emitted": 8,
       "templates_covered": 8
     },
     "b31/irb-classes": {
-      "PASS": 153,
-      "FAIL": 6,
-      "VACUOUS": 177,
-      "NOT_EVALUATED": 464,
+      "PASS": 187,
+      "FAIL": 5,
+      "VACUOUS": 213,
+      "NOT_EVALUATED": 395,
       "rules_enforced": 800,
-      "rules_executed": 336,
+      "rules_executed": 405,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "crr/crm-substitution": {
-      "PASS": 135,
+      "PASS": 144,
       "FAIL": 3,
-      "VACUOUS": 83,
-      "NOT_EVALUATED": 520,
+      "VACUOUS": 84,
+      "NOT_EVALUATED": 510,
       "rules_enforced": 741,
-      "rules_executed": 221,
+      "rules_executed": 231,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/crm-substitution": {
-      "PASS": 175,
-      "FAIL": 7,
-      "VACUOUS": 169,
-      "NOT_EVALUATED": 449,
+      "PASS": 204,
+      "FAIL": 10,
+      "VACUOUS": 198,
+      "NOT_EVALUATED": 388,
       "rules_enforced": 800,
-      "rules_executed": 351,
+      "rules_executed": 412,
       "templates_emitted": 12,
       "templates_covered": 12
     },
     "crr/re-split": {
-      "PASS": 57,
+      "PASS": 67,
       "FAIL": 1,
-      "VACUOUS": 62,
+      "VACUOUS": 63,
+      "NOT_EVALUATED": 610,
+      "rules_enforced": 741,
+      "rules_executed": 131,
+      "templates_emitted": 4,
+      "templates_covered": 4
+    },
+    "b31/re-split": {
+      "PASS": 79,
+      "FAIL": 6,
+      "VACUOUS": 146,
+      "NOT_EVALUATED": 569,
+      "rules_enforced": 800,
+      "rules_executed": 231,
+      "templates_emitted": 5,
+      "templates_covered": 5
+    },
+    "crr/art199": {
+      "PASS": 56,
+      "FAIL": 1,
+      "VACUOUS": 32,
+      "NOT_EVALUATED": 652,
+      "rules_enforced": 741,
+      "rules_executed": 89,
+      "templates_emitted": 8,
+      "templates_covered": 8
+    },
+    "b31/art199": {
+      "PASS": 109,
+      "FAIL": 2,
+      "VACUOUS": 80,
+      "NOT_EVALUATED": 609,
+      "rules_enforced": 800,
+      "rules_executed": 191,
+      "templates_emitted": 9,
+      "templates_covered": 9
+    },
+    "crr/irb-shapes": {
+      "PASS": 92,
+      "FAIL": 3,
+      "VACUOUS": 12,
+      "NOT_EVALUATED": 634,
+      "rules_enforced": 741,
+      "rules_executed": 107,
+      "templates_emitted": 9,
+      "templates_covered": 9
+    },
+    "b31/irb-shapes": {
+      "PASS": 153,
+      "FAIL": 7,
+      "VACUOUS": 58,
+      "NOT_EVALUATED": 582,
+      "rules_enforced": 800,
+      "rules_executed": 218,
+      "templates_emitted": 10,
+      "templates_covered": 10
+    },
+    "crr/netting": {
+      "PASS": 56,
+      "FAIL": 1,
+      "VACUOUS": 63,
       "NOT_EVALUATED": 621,
       "rules_enforced": 741,
       "rules_executed": 120,
       "templates_emitted": 4,
       "templates_covered": 4
     },
-    "b31/re-split": {
-      "PASS": 69,
-      "FAIL": 6,
-      "VACUOUS": 146,
-      "NOT_EVALUATED": 579,
+    "b31/netting": {
+      "PASS": 67,
+      "FAIL": 3,
+      "VACUOUS": 143,
+      "NOT_EVALUATED": 587,
       "rules_enforced": 800,
-      "rules_executed": 221,
+      "rules_executed": 213,
       "templates_emitted": 5,
       "templates_covered": 5
     },
-    "crr/art199": {
-      "PASS": 53,
+    "crr/netting-mismatch": {
+      "PASS": 56,
       "FAIL": 1,
-      "VACUOUS": 31,
-      "NOT_EVALUATED": 656,
+      "VACUOUS": 63,
+      "NOT_EVALUATED": 621,
       "rules_enforced": 741,
-      "rules_executed": 85,
-      "templates_emitted": 8,
-      "templates_covered": 8
-    },
-    "b31/art199": {
-      "PASS": 95,
-      "FAIL": 1,
-      "VACUOUS": 74,
-      "NOT_EVALUATED": 630,
-      "rules_enforced": 800,
-      "rules_executed": 170,
-      "templates_emitted": 9,
-      "templates_covered": 9
-    },
-    "crr/irb-shapes": {
-      "PASS": 88,
-      "FAIL": 3,
-      "VACUOUS": 12,
-      "NOT_EVALUATED": 638,
-      "rules_enforced": 741,
-      "rules_executed": 103,
-      "templates_emitted": 9,
-      "templates_covered": 9
-    },
-    "b31/irb-shapes": {
-      "PASS": 125,
-      "FAIL": 3,
-      "VACUOUS": 55,
-      "NOT_EVALUATED": 617,
-      "rules_enforced": 800,
-      "rules_executed": 183,
-      "templates_emitted": 10,
-      "templates_covered": 10
-    },
-    "crr/netting": {
-      "PASS": 48,
-      "FAIL": 1,
-      "VACUOUS": 61,
-      "NOT_EVALUATED": 631,
-      "rules_enforced": 741,
-      "rules_executed": 110,
+      "rules_executed": 120,
       "templates_emitted": 4,
       "templates_covered": 4
     },
-    "b31/netting": {
-      "PASS": 56,
-      "FAIL": 5,
-      "VACUOUS": 112,
-      "NOT_EVALUATED": 627,
+    "b31/netting-mismatch": {
+      "PASS": 69,
+      "FAIL": 3,
+      "VACUOUS": 141,
+      "NOT_EVALUATED": 587,
       "rules_enforced": 800,
-      "rules_executed": 173,
+      "rules_executed": 213,
       "templates_emitted": 5,
       "templates_covered": 5
     },
     "crr/facility-share-binding": {
-      "PASS": 94,
+      "PASS": 103,
       "FAIL": 1,
-      "VACUOUS": 94,
-      "NOT_EVALUATED": 552,
+      "VACUOUS": 95,
+      "NOT_EVALUATED": 542,
       "rules_enforced": 741,
-      "rules_executed": 189,
+      "rules_executed": 199,
       "templates_emitted": 10,
       "templates_covered": 10
     },
     "crr/facility-share-nonbinding": {
-      "PASS": 94,
+      "PASS": 103,
       "FAIL": 1,
-      "VACUOUS": 94,
-      "NOT_EVALUATED": 552,
+      "VACUOUS": 95,
+      "NOT_EVALUATED": 542,
       "rules_enforced": 741,
-      "rules_executed": 189,
+      "rules_executed": 199,
       "templates_emitted": 10,
       "templates_covered": 10
     },
     "b31/facility-share-binding": {
-      "PASS": 132,
-      "FAIL": 5,
-      "VACUOUS": 192,
-      "NOT_EVALUATED": 471,
+      "PASS": 153,
+      "FAIL": 6,
+      "VACUOUS": 227,
+      "NOT_EVALUATED": 414,
       "rules_enforced": 800,
-      "rules_executed": 329,
+      "rules_executed": 386,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "b31/facility-share-nonbinding": {
-      "PASS": 130,
-      "FAIL": 3,
-      "VACUOUS": 196,
-      "NOT_EVALUATED": 471,
+      "PASS": 151,
+      "FAIL": 4,
+      "VACUOUS": 231,
+      "NOT_EVALUATED": 414,
       "rules_enforced": 800,
-      "rules_executed": 329,
+      "rules_executed": 386,
       "templates_emitted": 11,
       "templates_covered": 11
     },
     "crr/row-scope": {
-      "PASS": 51,
+      "PASS": 59,
       "FAIL": 1,
-      "VACUOUS": 69,
-      "NOT_EVALUATED": 620,
+      "VACUOUS": 71,
+      "NOT_EVALUATED": 610,
       "rules_enforced": 741,
-      "rules_executed": 121,
+      "rules_executed": 131,
       "templates_emitted": 4,
       "templates_covered": 4
     },
     "b31/row-scope": {
-      "PASS": 58,
+      "PASS": 68,
       "FAIL": 3,
       "VACUOUS": 160,
-      "NOT_EVALUATED": 579,
+      "NOT_EVALUATED": 569,
       "rules_enforced": 800,
-      "rules_executed": 221,
+      "rules_executed": 231,
       "templates_emitted": 5,
       "templates_covered": 5
     }
   },
   "known_broken_rules": [
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0283",
+      "severity": "ERROR",
+      "reason": "attributed - the S2 guarantee on the crm-substitution portfolio: an F-IRB corporate loan whose covered part is guaranteed by a RETAIL counterparty. OF 02.00 and OF 08 (one classification, reporting/corep/irb_sheets.py) revert that leg to its obligor's corporate class, because (F-IRB, retail) is a pair CRR Art. 151(4) makes impossible and the published OF 08 axis has no sheet for; OF 09.02 counts it under the guarantor's retail class. The two templates disagree by that leg. The root cause is upstream and recorded in reporting/corep/c02.py: CRR Art. 201(1) lists no retail provider of unfunded protection, so the guarantee should not have been recognised at all (a missing Art. 201 eligibility gate in engine/crm/, capital-affecting, not changed here). Visible since 2026-11-13, when the OF 08 sheets took the published axis and these rules could first read them.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0030, c: 0105, filter: [eba_dim:CEG] = [eba_GA:x1]} = sum({t: OF08.01.01.01, r: 0010, c: 0110, z: 0009; 0010; 0011; 0012; 0022; 0023; 0024})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0284",
+      "severity": "ERROR",
+      "reason": "attributed - the S2 guarantee on the crm-substitution portfolio: an F-IRB corporate loan whose covered part is guaranteed by a RETAIL counterparty. OF 02.00 and OF 08 (one classification, reporting/corep/irb_sheets.py) revert that leg to its obligor's corporate class, because (F-IRB, retail) is a pair CRR Art. 151(4) makes impossible and the published OF 08 axis has no sheet for; OF 09.02 counts it under the guarantor's retail class. The two templates disagree by that leg. The root cause is upstream and recorded in reporting/corep/c02.py: CRR Art. 201(1) lists no retail provider of unfunded protection, so the guarantee should not have been recognised at all (a missing Art. 201 eligibility gate in engine/crm/, capital-affecting, not changed here). Visible since 2026-11-13, when the OF 08 sheets took the published axis and these rules could first read them.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0030, c: 0110, filter: [eba_dim:CEG] = [eba_GA:x1]} = sum({t: OF08.01.01.01, r: 0010, c: 0260, z: 0009; 0010; 0011; 0012; 0022; 0023; 0024})"
+    },
     {
       "regime": "b31",
       "rule_id": "boe_b0346",
@@ -301,13 +349,9 @@
       "portfolios": [
         "crm-substitution"
       ],
-      "failing_coordinates": 5,
+      "failing_coordinates": 1,
       "coordinates": [
-        "OF08.01.01.01[institution][r0190]",
-        "OF08.01.01.01[retail_other][r0010]",
-        "OF08.01.01.01[retail_other][r0020]",
-        "OF08.01.01.01[retail_other][r0070]",
-        "OF08.01.01.01[retail_other][r0190]"
+        "OF08.01.01.01[institution_firb][r0190]"
       ],
       "expression": "abs({t: OF08.01.01.01, c: 0280}) <= abs({t: OF08.01.01.01, c: 0020})"
     },
@@ -321,70 +365,24 @@
       ],
       "failing_coordinates": 2,
       "coordinates": [
-        "OF08.02.01.01[institution][rUnassigned]",
-        "OF08.02.01.01[retail_other][rUnassigned]"
+        "OF08.02.01.01[total_firb_slotting][rUnassigned]",
+        "OF08.02.01.01[institution_firb][rUnassigned]"
       ],
       "expression": "{t: OF08.02.01.01, c: 0280} <= {t: OF08.02.01.01, c: 0020}"
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0471",
+      "rule_id": "boe_b0621",
       "severity": "ERROR",
-      "reason": "attributed - Basel 3.1 C 07.00 double-deducts on-balance-sheet netting (docs/development/escape-log.md 2026-09-05; found by the netting portfolio the day it was registered): col 0035 '(-) Adjustment due to on-balance sheet netting' removes the netted deposit at col 0040, and col 0130 '(-) Financial collateral: adjusted value' removes it AGAIN because CRR Art. 219 turns the netted deposit into synthetic cash collateral that the CRM stage merges into the ordinary collateral frame and reporting/corep/c07.py sums the undifferentiated collateral_adjusted_value carrier into 0130. Measured on OF07.00.01.01[corporate]: c0040 19,000,000 -> c0130 -3,000,000 -> c0150 16,000,000, while c0200 (ead_final, netted once) is 19,000,000 - so the exposure value is RIGHT and the intermediate column is WRONG. PRE-EXISTING and independent of the agreement-perimeter change (PR #487): with Feature on_bs_netting_perimeter_is_agreement disabled the same sheet reads c0150 20,000,000 vs c0200 21,000,000. CRR is unaffected (no col 0035). Fix design (deferred, OWNER: PR #487 follow-up): seal a per-exposure on_bs_netting_adjusted_value (adjusted value of the NETTING_ synthetic collateral after Art. 223 haircuts and Art. 237-239 mismatch scaling), report it in col 0035 and subtract it from col 0130 under Basel 3.1; this entry then leaves the register. The rule is the end-exposure-value derivation c0200 = c0150 - CCF-weighted off-BS buckets; the portfolio is all-drawn so it reduces to c0200 = c0150 and fails by exactly the 3,000,000 netted (rows 0010 and 0230).",
+      "reason": "attributed - plan item P1.369 (OWNER: P1.369). On the one registered portfolio whose output floor binds, OF 02.00 r0297 c0010 is the UN-floored RWEA (that column is one data point with OF 02.01's U-TREA and is summed from rwa_pre_floor) while OF 08.01 sheet 0012 c0260 sums rwa_final, which carries the engine's pro-rata floor add-on. The taxonomy makes the two cells one data point, so the filed return also carries STR007. Measured 2026-11-13: 1,105,491.29 against 1,559,200.00 (the 453,708.71 add-on). Closing P1.369 (report un-floored RWEA in the IRB templates) removes this entry.",
       "portfolios": [
-        "netting"
-      ],
-      "failing_coordinates": 2,
-      "coordinates": [
-        "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0230]"
-      ],
-      "expression": "{t: OF07.00.01.01, c: 0200} = {t: OF07.00.01.01, c: 0150} - (0.9 * {t: OF07.00.01.01, c: 0160}) - (0.8 * {t: OF07.00.01.01, c: 0170}) - (0.6 * {t: OF07.00.01.01, c: 0171}) - (0.5 * {t: OF07.00.01.01, c: 0180})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0556",
-      "severity": "WARNING",
-      "reason": "attributed - Basel 3.1 C 07.00 double-deducts on-balance-sheet netting (docs/development/escape-log.md 2026-09-05; found by the netting portfolio the day it was registered): col 0035 '(-) Adjustment due to on-balance sheet netting' removes the netted deposit at col 0040, and col 0130 '(-) Financial collateral: adjusted value' removes it AGAIN because CRR Art. 219 turns the netted deposit into synthetic cash collateral that the CRM stage merges into the ordinary collateral frame and reporting/corep/c07.py sums the undifferentiated collateral_adjusted_value carrier into 0130. Measured on OF07.00.01.01[corporate]: c0040 19,000,000 -> c0130 -3,000,000 -> c0150 16,000,000, while c0200 (ead_final, netted once) is 19,000,000 - so the exposure value is RIGHT and the intermediate column is WRONG. PRE-EXISTING and independent of the agreement-perimeter change (PR #487): with Feature on_bs_netting_perimeter_is_agreement disabled the same sheet reads c0150 20,000,000 vs c0200 21,000,000. CRR is unaffected (no col 0035). Fix design (deferred, OWNER: PR #487 follow-up): seal a per-exposure on_bs_netting_adjusted_value (adjusted value of the NETTING_ synthetic collateral after Art. 223 haircuts and Art. 237-239 mismatch scaling), report it in col 0035 and subtract it from col 0130 under Basel 3.1; this entry then leaves the register. The rule is c0200 <= c0150; the double deduction pushes c0150 below c0200 by exactly the 3,000,000 netted (rows 0010, 0070 and 0230).",
-      "portfolios": [
-        "netting"
-      ],
-      "failing_coordinates": 3,
-      "coordinates": [
-        "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0070]",
-        "OF07.00.01.01[corporate][r0230]"
-      ],
-      "expression": "{t: OF07.00.01.01, c: 0200} <= {t: OF07.00.01.01, c: 0150}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0638",
-      "severity": "ERROR",
-      "reason": "OF 02.00 c0020 is populated with the SA-equivalent recomputation - our own column definition is 'Standardised approaches only (S-TREA components)', filled from sa_equiv_rwa - where this rule requires the NON-MODELLED RWEA that OF 08.01 c0276 carries. Two different quantities, ~2x apart (4,198,446 against 8,250,000 for institutions; 15,908 against 33,750 for QRRE). Which side moves is a mapping decision: either these OF 02.00 rows take a different source column, or c0276 is wrong",
-      "portfolios": [
-        "crm-substitution",
-        "irb-classes"
+        "facility-share-binding"
       ],
       "failing_coordinates": 1,
       "coordinates": [
         "OF02.00.01.01"
       ],
-      "expression": "{t: OF02.00.01.01, r: 0271, c: 0020} = {t: OF08.01.01.01, r: 0010, c: 0276, z: 0006}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0652",
-      "severity": "ERROR",
-      "reason": "OF 02.00 c0020 is populated with the SA-equivalent recomputation - our own column definition is 'Standardised approaches only (S-TREA components)', filled from sa_equiv_rwa - where this rule requires the NON-MODELLED RWEA that OF 08.01 c0276 carries. Two different quantities, ~2x apart (4,198,446 against 8,250,000 for institutions; 15,908 against 33,750 for QRRE). Which side moves is a mapping decision: either these OF 02.00 rows take a different source column, or c0276 is wrong",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "OF02.00.01.01"
-      ],
-      "expression": "{t: OF02.00.01.01, r: 0390, c: 0020} = {t: OF08.01.01.01, r: 0010, c: 0276, z: 0015}"
+      "expression": "{t: OF02.00.01.01, r: 0297, c: 0010} = {t: OF08.01.01.01, r: 0010, c: 0260, z: 0012}"
     },
     {
       "regime": "b31",
@@ -398,19 +396,20 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "failing_coordinates": 23,
+      "failing_coordinates": 36,
       "coordinates": [
-        "OF07.00.01.01[institution][r0010]",
-        "OF07.00.01.01[institution][r0182]",
-        "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0020]",
-        "OF07.00.01.01[corporate][r0220]"
+        "OF07.00.01.01[total][r0010]",
+        "OF07.00.01.01[total][r0020]",
+        "OF07.00.01.01[total][r0180]",
+        "OF07.00.01.01[total][r0182]",
+        "OF07.00.01.01[total][r0220]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0220} = {t: OF07.00.01.01, c: 0230} + {t: OF07.00.01.01, c: 0235}"
     },
@@ -426,21 +425,36 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "failing_coordinates": 15,
+      "failing_coordinates": 22,
       "coordinates": [
-        "OF07.00.01.01[central_govt_central_bank][r0010]",
-        "OF07.00.01.01[institution][r0010]",
-        "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0020]",
-        "OF07.00.01.01[retail][r0010]"
+        "OF07.00.01.01[total][r0010]",
+        "OF07.00.01.01[total][r0015]",
+        "OF07.00.01.01[total][r0020]",
+        "OF07.00.01.01[total][r0330]",
+        "OF07.00.01.01[total][r0331]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0150} = {t: OF07.00.01.01, c: 0160} + {t: OF07.00.01.01, c: 0170} + {t: OF07.00.01.01, c: 0180} + {t: OF07.00.01.01, c: 0190} + {t: OF07.00.01.01, c: 0171}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0710_1",
+      "severity": "ERROR",
+      "reason": "the SAME open question as boe_b0710, on the memorandum table OF07.00.01.03 rather than the main one - read that entry for both sides of it; it needs a regulatory reading, not a code change. Measured: row 0320 (exposures in default subject to a 150% risk weight) of the TOTAL sheet carries a fully adjusted exposure value (c0150) of 1,000,000 from one on-balance-sheet defaulted exposure, against conversion-factor columns 0160-0190 that are empty because there is nothing to convert. REACHABLE SINCE 2026-11-13, which is why it is new here: the table publishes rows 0300/0320 on sheets 0001-0004 and 0007-0009 only, the figure sits on our 'in default' class sheet (0011, which the table does not publish - the open question P1.377), and until the Total sheet (0001) was generated no published sheet carried it. Status moved VACUOUS -> FAIL on portfolio rich; it was in known_vacuous_rules as a suffixed sheet variant asserting nothing. The Total row is the sum of the class sheets and equals the 'in default' sheet's row cell for cell, so this is not a summation defect",
+      "portfolios": [
+        "rich"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF07.00.01.03[total][r0320]"
+      ],
+      "expression": "{t: OF07.00.01.03, c: 0150} = {t: OF07.00.01.03, c: 0160} + {t: OF07.00.01.03, c: 0170} + {t: OF07.00.01.03, c: 0171} + {t: OF07.00.01.03, c: 0180} + {t: OF07.00.01.03, c: 0190}"
     },
     {
       "regime": "b31",
@@ -450,13 +464,13 @@
       "portfolios": [
         "facility-share-binding"
       ],
-      "failing_coordinates": 5,
+      "failing_coordinates": 10,
       "coordinates": [
-        "OF08.01.01.01[corporate][r0010]",
-        "OF08.01.01.01[corporate][r0020]",
-        "OF08.01.01.01[corporate][r0030]",
-        "OF08.01.01.01[corporate][r0070]",
-        "OF08.01.01.01[corporate][r0190]"
+        "OF08.01.01.01[total_firb_slotting][r0010]",
+        "OF08.01.01.01[total_firb_slotting][r0020]",
+        "OF08.01.01.01[total_firb_slotting][r0030]",
+        "OF08.01.01.01[total_firb_slotting][r0070]",
+        "OF08.01.01.01[total_firb_slotting][r0190]"
       ],
       "expression": "{t: OF08.01.01.01, c: 0260} = sum({t: OF08.01.01.01, c: 0251; 0252; 0253; 0254})"
     },
@@ -468,10 +482,12 @@
       "portfolios": [
         "facility-share-binding"
       ],
-      "failing_coordinates": 2,
+      "failing_coordinates": 4,
       "coordinates": [
-        "OF08.02.01.01[corporate][r0.00% - 0.15%]",
-        "OF08.02.01.01[corporate][r0.25% - 0.50%]"
+        "OF08.02.01.01[total_firb_slotting][r0.00% - 0.15%]",
+        "OF08.02.01.01[total_firb_slotting][r0.25% - 0.50%]",
+        "OF08.02.01.01[corporate_non_sme_firb][r0.00% - 0.15%]",
+        "OF08.02.01.01[corporate_non_sme_firb][r0.25% - 0.50%]"
       ],
       "expression": "{t: OF08.02.01.01, c: 0260} = sum({t: OF08.02.01.01, c: 0251; 0252; 0253; 0254})"
     },
@@ -479,7 +495,7 @@
       "regime": "b31",
       "rule_id": "boe_b0778",
       "severity": "ERROR",
-      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
+      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty. UPDATE 2026-11-13: the three share cells on a zero-exposure row are now EMPTY rather than 0.0 (each is a quotient over the row's column 0020 - PS1/26 Annex II 3.3.10.2 - and there is none). This register still records the break because THIS engine reads an empty cell as zero. Under the semantics the Bank's gateway applies, an unreported cell is not evaluated: the v4.1.1 rule engine (rwa_filer.boe, pinned to Arelle) no longer finds boe_b0778 broken on any of the thirteen Basel 3.1 portfolios, where it had been broken on all thirteen (scripts/filing_mapping_baseline.json, error_rules_by_rule). So the entry is now an artefact of the zero-fill, not a filing break, and leaves with the template-level engine",
       "portfolios": [
         "art199",
         "ccr",
@@ -489,6 +505,7 @@
         "irb-classes",
         "irb-shapes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -519,6 +536,27 @@
         "OF08.07.01.01[c0050]"
       ],
       "expression": "{t: OF08.07.01.01, r: 0260} = sum({t: OF08.07.01.01, r: 0180; 0190; 0200; 0210; 0220; 0230; 0240; 0250})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0908",
+      "severity": "WARNING",
+      "reason": "limit of the published rule, not of our output: 'exposure value should exceed risk-weighted exposure amount' is a plausibility check that holds only while a row's average risk weight is at or below 100%, and the IRB risk-weight function has no such ceiling. Measured, with the output floor NOT activated on any of the four portfolios (OF 02.00 row 0034 = No), so none of the excess is a floor add-on: b31/irb-classes corporates 64,677,088 RWEA on 51,100,000 exposure value (127%); art199 8,037,146 on 7,000,000 (115%); facility-share-nonbinding 2,756,566 on 2,400,000 (115%); irb-shapes financial and large corporates 5,056,290 on 3,300,000 (153%) and retail other non-SME 738,299 on 510,000 (145%). The same RWEA ties to OF 08.01 c0260 for the class. Warning severity: it must be explained on submission, and the explanation is the PD and LGD of the book. The rule is unchanged in v4.1.1. Newly reachable 2026-11-13 for the reason given under boe_b0303: the RWEA was in a column (0125) the published OF 09.02 does not have",
+      "portfolios": [
+        "art199",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "irb-shapes"
+      ],
+      "failing_coordinates": 8,
+      "coordinates": [
+        "OF09.02.01.01[TOTAL][r0030]",
+        "OF09.02.01.01[TOTAL][r0055]",
+        "OF09.02.01.01[TOTAL][r0150]",
+        "OF09.02.01.01[GB][r0030]",
+        "OF09.02.01.01[GB][r0055]"
+      ],
+      "expression": "{t: OF09.02.01.01, c: 0105} >= {t: OF09.02.01.01, c: 0110}"
     },
     {
       "regime": "b31",
@@ -563,6 +601,50 @@
       "expression": "{t: OF09.01.01.01, r: 0095, c: 0090, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0020, c: 0220, z: 0010}"
     },
     {
+      "regime": "b31",
+      "rule_id": "boe_b1053",
+      "severity": "ERROR",
+      "reason": "attributed - two templates classify 'financial and large corporates' differently. OF 02.00 and OF 08 read the classifier's exposure_subclass (reporting/corep/irb_sheets.py); OF 09.02 reads cp_apply_fi_scalar. On irb-shapes the leg IRS-LN-LFSE carries cp_apply_fi_scalar=True with exposure_subclass corporate_other, so OF 09.02 counts it outside row 0055 (other general corporates non-SME) while OF 08.01 puts it on sheet 0012. A defect of ours, hidden until 2026-11-13 because the OF 08 sheets could not be addressed; the fix is for OF 09.02 to read the same classification.",
+      "portfolios": [
+        "irb-shapes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0055, c: 0010, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF08.01.01.01, r: 0010, c: 0020, z: 0011; 0012}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b1054",
+      "severity": "ERROR",
+      "reason": "attributed - two causes, one per portfolio. irb-shapes: OF 09.02 classifies 'financial and large corporates' from cp_apply_fi_scalar where OF 02.00 / OF 08 read exposure_subclass (see boe_b1053). crm-substitution: the S2 retail-guarantor leg, kept on its obligor's corporate sheet by OF 08 and counted as retail by OF 09.02 (see boe_b0283). Both visible since the OF 08 sheets took the published axis on 2026-11-13.",
+      "portfolios": [
+        "crm-substitution",
+        "irb-shapes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0055, c: 0105, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF08.01.01.01, r: 0010, c: 0110, z: 0011; 0012}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b1055",
+      "severity": "ERROR",
+      "reason": "attributed - two causes, one per portfolio. irb-shapes: OF 09.02 classifies 'financial and large corporates' from cp_apply_fi_scalar where OF 02.00 / OF 08 read exposure_subclass (see boe_b1053). crm-substitution: the S2 retail-guarantor leg, kept on its obligor's corporate sheet by OF 08 and counted as retail by OF 09.02 (see boe_b0283). Both visible since the OF 08 sheets took the published axis on 2026-11-13.",
+      "portfolios": [
+        "crm-substitution",
+        "irb-shapes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF09.02.01.01, r: 0055, c: 0110, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF08.01.01.01, r: 0010, c: 0260, z: 0011; 0012}"
+    },
+    {
       "regime": "crr",
       "rule_id": "v09782_m",
       "severity": "WARNING",
@@ -598,7 +680,7 @@
       "regime": "crr",
       "rule_id": "v09796_m",
       "severity": "WARNING",
-      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
+      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty. UPDATE 2026-11-13: the three share cells on a zero-exposure row are now EMPTY rather than 0.0 (each is a quotient over the row's column 0020 - PS1/26 Annex II 3.3.10.2 - and there is none). This register still records the break because THIS engine reads an empty cell as zero. Under the semantics the Bank's gateway applies, an unreported cell is not evaluated: the v4.1.1 rule engine (rwa_filer.boe, pinned to Arelle) no longer finds boe_b0778 broken on any of the thirteen Basel 3.1 portfolios, where it had been broken on all thirteen (scripts/filing_mapping_baseline.json, error_rules_by_rule). So the entry is now an artefact of the zero-fill, not a filing break, and leaves with the template-level engine",
       "portfolios": [
         "art199",
         "ccr",
@@ -608,6 +690,7 @@
         "irb-classes",
         "irb-shapes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -649,28 +732,28 @@
       "portfolio": "ccr",
       "template": "c34_01",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 176
+      "rules_executed_on_this_run": 216
     },
     {
       "regime": "b31",
       "portfolio": "ccr",
       "template": "c34_02",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 176
+      "rules_executed_on_this_run": 216
     },
     {
       "regime": "b31",
       "portfolio": "ccr",
       "template": "c34_08",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 176
+      "rules_executed_on_this_run": 216
     },
     {
       "regime": "crr",
       "portfolio": "ccr",
       "template": "c34_02",
       "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
-      "rules_executed_on_this_run": 121
+      "rules_executed_on_this_run": 133
     }
   ],
   "known_vacuous_rules": [
@@ -748,6 +831,26 @@
         "OF09.01.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0015, c: 0010, z: 0016} = {t: OF09.01.01.01, r: 0150, c: 0020, filter: [eba_dim:CEG] = [eba_GA:x1]}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0310",
+      "severity": "WARNING",
+      "reason": "attributed - OF 08.03 col 0110 (value adjustments and provisions) is never populated: it binds the scra_provision_amount / gcra_provision_amount pair, which the sealed aggregator exit does not carry (scripts/template_cell_coverage_baseline.json, corep/c08_03/0110, NO_FIXTURE). NOT_EVALUATED until 2026-11-13 because the OF 08.03 sheets could not be addressed; with the published sheet axis the cells are emitted and empty, so the rule runs and has nothing to test.",
+      "portfolios": [
+        "art199",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "irb-shapes",
+        "rich"
+      ],
+      "vacuous_coordinates": 41,
+      "tables": [
+        "OF08.03.01.01"
+      ],
+      "expression": "{t: OF08.03.01.01} <= 0"
     },
     {
       "regime": "b31",
@@ -843,7 +946,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 168,
+      "vacuous_coordinates": 252,
       "tables": [
         "OF08.01.01.01"
       ],
@@ -863,7 +966,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -884,7 +987,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -905,7 +1008,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -926,7 +1029,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -947,7 +1050,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -968,7 +1071,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.01.01.02"
@@ -977,9 +1080,9 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0471_2",
+      "rule_id": "boe_b0471_3",
       "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 216 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0200 = null, OF07.00.01.03[institution] r0300 c0150 = null, OF07.00.01.03[institution] r0300 c0160 = null.",
+      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 30 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0200 = null, OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[residential_mortgage] r0380 c0160 = null.",
       "portfolios": [
         "ccr",
         "crm-substitution",
@@ -987,29 +1090,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
-      "tables": [
-        "OF07.00.01.03"
-      ],
-      "expression": "{t: OF07.00.01.03, c: 0200} = {t: OF07.00.01.03, c: 0150} - (0.9 * {t: OF07.00.01.03, c: 0160}) - (0.8 * {t: OF07.00.01.03, c: 0170}) - (0.6 * {t: OF07.00.01.03, c: 0171}) - (0.5 * {t: OF07.00.01.03, c: 0180})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0471_3",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 30 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0200 = null, OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[residential_mortgage] r0380 c0160 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -1027,6 +1115,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1051,6 +1140,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1075,6 +1165,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1099,6 +1190,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1123,6 +1215,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1147,6 +1240,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1171,6 +1265,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1195,6 +1290,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1219,6 +1315,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1243,6 +1340,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1267,6 +1365,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1291,6 +1390,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1315,6 +1415,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1339,6 +1440,7 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -1361,7 +1463,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 4,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1379,13 +1481,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 18,
+      "vacuous_coordinates": 20,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1403,13 +1506,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -1421,39 +1525,24 @@
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0200 = null, OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[commercial_mortgage] r0380 c0200 = null.",
       "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.05"
-      ],
-      "expression": "{t: OF07.00.01.05, r: 0380, c: 0200} <= {t: OF07.00.01.05, r: 0380, c: 0150}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0556_2",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 72 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0200 = null, OF07.00.01.03[institution] r0300 c0150 = null, OF07.00.01.03[institution] r0320 c0200 = null.",
-      "portfolios": [
         "ccr",
         "crm-substitution",
         "facility-share-binding",
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 3,
       "tables": [
-        "OF07.00.01.03"
+        "OF07.00.01.05"
       ],
-      "expression": "{t: OF07.00.01.03, c: 0200} <= {t: OF07.00.01.03, c: 0150}"
+      "expression": "{t: OF07.00.01.05, r: 0380, c: 0200} <= {t: OF07.00.01.05, r: 0380, c: 0150}"
     },
     {
       "regime": "b31",
@@ -1467,17 +1556,46 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 252,
+      "vacuous_coordinates": 280,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, c: 0240} <= {t: OF07.00.01.01, c: 0235}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0672_1",
+      "severity": "ERROR",
+      "reason": "NOT_EVALUATED -> VACUOUS, an improvement and not a regression - established by evaluating the estate with and without the C 07.00 Total sheet (2026-11-13): without it this rule reaches no cell on any portfolio. The rule is a sign check on rows 0300/0320 of the memorandum table OF07.00.01.03, scoped to c0210 (exposure value arising from counterparty credit risk), on sheets 0001-0004 and 0007-0009. Those rows are populated only on our 'in default' class sheet (0011), which the table does not publish (P1.377), so the rule had nothing to read until the Total sheet (0001) carried row 0320 on portfolio rich. The cells it reads there are zero or empty - correct for the one defaulted exposure behind that row, an on-balance-sheet loan with no counterparty credit risk, no value adjustment and no netting - so it holds at 0 and asserts nothing. A defaulted exposure carrying a provision, or a defaulted derivative, would give it a figure to check",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.03"
+      ],
+      "expression": "{t: OF07.00.01.03} >= 0"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0673",
+      "severity": "ERROR",
+      "reason": "NOT_EVALUATED -> VACUOUS, an improvement and not a regression - established by evaluating the estate with and without the C 07.00 Total sheet (2026-11-13): without it this rule reaches no cell on any portfolio. The rule is a sign check on rows 0300/0320 of the memorandum table OF07.00.01.03, scoped to c0210 (exposure value arising from counterparty credit risk), on sheets 0001-0004 and 0007-0009. Those rows are populated only on our 'in default' class sheet (0011), which the table does not publish (P1.377), so the rule had nothing to read until the Total sheet (0001) carried row 0320 on portfolio rich. The cells it reads there are zero or empty - correct for the one defaulted exposure behind that row, an on-balance-sheet loan with no counterparty credit risk, no value adjustment and no netting - so it holds at 0 and asserts nothing. A defaulted exposure carrying a provision, or a defaulted derivative, would give it a figure to check",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.03"
+      ],
+      "expression": "{t: OF07.00.01.03} >= 0"
     },
     {
       "regime": "b31",
@@ -1491,13 +1609,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1515,13 +1634,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1539,13 +1659,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1563,13 +1684,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1587,13 +1709,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1611,13 +1734,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1635,13 +1759,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1659,13 +1784,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1683,13 +1809,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1707,13 +1834,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1731,13 +1859,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1755,13 +1884,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1779,13 +1909,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1803,13 +1934,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1827,13 +1959,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -1851,13 +1984,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1875,13 +2009,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1899,13 +2034,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1923,13 +2059,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1947,13 +2084,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1971,13 +2109,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1995,13 +2134,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2019,13 +2159,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2033,67 +2174,28 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0708_1",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 144 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0040 = null, OF07.00.01.03[institution] r0300 c0010 = null, OF07.00.01.03[institution] r0300 c0030 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "irb-classes",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 8,
-      "tables": [
-        "OF07.00.01.03"
-      ],
-      "expression": "{t: OF07.00.01.03, c: 0040} = {t: OF07.00.01.03, c: 0010} + {t: OF07.00.01.03, c: 0030} + {t: OF07.00.01.03, c: 0035}"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0708_2",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 20 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0040 = null, OF07.00.01.05[residential_mortgage] r0380 c0010 = null, OF07.00.01.05[residential_mortgage] r0380 c0030 = null.",
       "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.05"
-      ],
-      "expression": "{t: OF07.00.01.05, r: 0380, c: 0040} = {t: OF07.00.01.05, r: 0380, c: 0010} + {t: OF07.00.01.05, r: 0380, c: 0030} + {t: OF07.00.01.05, r: 0380, c: 0035}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0710_1",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 216 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.03[institution] r0300 c0150 = null, OF07.00.01.03[institution] r0300 c0160 = null, OF07.00.01.03[institution] r0300 c0170 = null.",
-      "portfolios": [
         "ccr",
         "crm-substitution",
         "facility-share-binding",
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 8,
+      "vacuous_coordinates": 3,
       "tables": [
-        "OF07.00.01.03"
+        "OF07.00.01.05"
       ],
-      "expression": "{t: OF07.00.01.03, c: 0150} = {t: OF07.00.01.03, c: 0160} + {t: OF07.00.01.03, c: 0170} + {t: OF07.00.01.03, c: 0171} + {t: OF07.00.01.03, c: 0180} + {t: OF07.00.01.03, c: 0190}"
+      "expression": "{t: OF07.00.01.05, r: 0380, c: 0040} = {t: OF07.00.01.05, r: 0380, c: 0010} + {t: OF07.00.01.05, r: 0380, c: 0030} + {t: OF07.00.01.05, r: 0380, c: 0035}"
     },
     {
       "regime": "b31",
@@ -2115,11 +2217,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a SUFFIXED SHEET VARIANT of an identity that is live elsewhere in this same run: unsuffixed boe_b0471 / boe_b0556 / boe_b0708 PASS and boe_b0710 FAILs on OF 07.00 sheet .01, while the _N variants addressing sheets .02/.03/.05 assert nothing. The CCF and exposure-value identities are therefore verified on one sheet of the family and unverified on the rest - LESSONS C5 ('.a/.b variants are column partitions bound to one frame') read in the vacuity direction; every operand is EMITTED BUT UNREPORTED (null) - 30 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.05[residential_mortgage] r0380 c0150 = null, OF07.00.01.05[residential_mortgage] r0380 c0160 = null, OF07.00.01.05[residential_mortgage] r0380 c0170 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -2137,13 +2248,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2163,6 +2275,7 @@
         "irb-classes",
         "irb-shapes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2191,6 +2304,7 @@
         "irb-classes",
         "irb-shapes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2219,6 +2333,7 @@
         "irb-classes",
         "irb-shapes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2247,6 +2362,7 @@
         "irb-classes",
         "irb-shapes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2273,17 +2389,52 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
       "expression": "{t: OF07.00.01.02, r: 0340} = sum({t: OF07.00.01.02, r: 0341; 0342})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0733_1",
+      "severity": "WARNING",
+      "reason": "NOT_EVALUATED -> VACUOUS, an improvement and not a regression - established by evaluating the estate with and without the C 07.00 Total sheet (2026-11-13): without it this rule reaches no cell on any portfolio. The rule is a sign check on rows 0300/0320 of the memorandum table OF07.00.01.03, scoped to c0030 and c0035 (the '(-)' value-adjustment and netting columns), on sheets 0001-0004 and 0007-0009. Those rows are populated only on our 'in default' class sheet (0011), which the table does not publish (P1.377), so the rule had nothing to read until the Total sheet (0001) carried row 0320 on portfolio rich. The cells it reads there are zero or empty - correct for the one defaulted exposure behind that row, an on-balance-sheet loan with no counterparty credit risk, no value adjustment and no netting - so it holds at 0 and asserts nothing. A defaulted exposure carrying a provision, or a defaulted derivative, would give it a figure to check",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 2,
+      "tables": [
+        "OF07.00.01.03"
+      ],
+      "expression": "{t: OF07.00.01.03} <= 0"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0751_1",
+      "severity": "WARNING",
+      "reason": "attributed - new in BoE taxonomy v4.1.1 (merged from master 2026-11-14). It compares OF 08.01 row 0170 ('Exposures from free deliveries applying risk weights under the alternative treatment or 100% and other exposures subject to risk weights') across cols 0260 and 0251; the row is emitted and empty on every IRB sheet of every registered portfolio (measured: both operands null at every coordinate). It was NOT_EVALUATED until the OF 08 sheets took the published axis; there is nothing to test until a portfolio carries such an exposure.",
+      "portfolios": [
+        "art199",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "irb-shapes",
+        "rich"
+      ],
+      "vacuous_coordinates": 2,
+      "tables": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0170, c: 0260} = {t: OF08.01.01.01, r: 0170, c: 0251}"
     },
     {
       "regime": "b31",
@@ -2299,7 +2450,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2320,7 +2471,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2341,7 +2492,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2362,7 +2513,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2383,7 +2534,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2404,7 +2555,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2425,7 +2576,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2446,7 +2597,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2467,7 +2618,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2488,7 +2639,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2509,7 +2660,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2530,7 +2681,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2551,7 +2702,7 @@
         "irb-shapes",
         "rich"
       ],
-      "vacuous_coordinates": 4,
+      "vacuous_coordinates": 6,
       "tables": [
         "OF08.01.01.01",
         "OF08.02.01.01"
@@ -2570,13 +2721,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2595,13 +2747,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2620,32 +2773,18 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 216,
+      "vacuous_coordinates": 240,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0023} = sum({t: OF07.00.01.01, r: 0024; 0025; 0026})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0959",
-      "severity": "ERROR",
-      "reason": "A PUBLISHED-RULE DEFECT, banked deliberately: do NOT engineer output toward a PASS. The expression is {r0015} >= {r0010} - r0015 is 'of which: Defaulted exposures' and r0010 is the class total, so as published it asserts defaulted >= total, which no correct report can satisfy on any sheet with a performing portion. IGNORE ITS SHORT_LABEL, which describes a different check entirely ('the three of which rows r0024, r0025 and r0026 should add up to the total row r0023' - the project-finance phase rows); label and expression disagree in the published ruleset, so the label must not be read as describing what this entry covers. It was NOT_EVALUATED until P1.371: the scope is z 0001;0012;0015;0016, and of those four only z0016 resolves to an emitted sheet - z0001 (Total) and z0015 (CIU) carry empty bundle_keys by design (no ExposureClass analogue), and z0012 is empty here too (P2.55 declares it as ('high_risk',), after which it still resolves to no emitted sheet because no registered portfolio produces the class). The 9 coordinates are the equity sheet across the 9 scoped columns 0030/0035/0050/0060/0070/0080/0090/0130/0140, every one a CRM-substitution or CCF column: measured 0.0 on r0010 and null on r0015, which is correct for a plain on-balance-sheet equity holding with no protection and no undrawn component. That zero is the only thing keeping an ERROR-severity rule off the break list - an equity fixture with guarantees or an off-balance-sheet commitment would make it FAIL on a right answer. Treat it then as a published-rule limit (the boe_b0471 precedent), never as an output defect.",
-      "portfolios": [
-        "off-bs",
-        "rich"
-      ],
-      "vacuous_coordinates": 18,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0015} >= {t: OF07.00.01.01, r: 0010}"
     },
     {
       "regime": "b31",
@@ -2659,13 +2798,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2698,6 +2838,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2722,6 +2863,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2746,6 +2888,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2770,6 +2913,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2794,6 +2938,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2818,6 +2963,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2842,6 +2988,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2866,6 +3013,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -2890,6 +3038,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -3065,13 +3214,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3089,13 +3239,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3113,13 +3264,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3137,13 +3289,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 90,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3151,79 +3304,24 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1007",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0150 c0220 = null, OF07.00.01.01[residential_mortgage] r0150 c0200 = null, OF07.00.01.01[commercial_mortgage] r0150 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0150, c: 0220} >= {t: OF07.00.01.01, r: 0150, c: 0200} * 0.02"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1008",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0170 c0220 = null, OF07.00.01.01[residential_mortgage] r0170 c0200 = null, OF07.00.01.01[commercial_mortgage] r0170 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0170, c: 0220} >= {t: OF07.00.01.01, r: 0170, c: 0200} * 0.1"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1010",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0190 c0220 = null, OF07.00.01.01[residential_mortgage] r0190 c0200 = null, OF07.00.01.01[commercial_mortgage] r0190 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0190, c: 0220} >= {t: OF07.00.01.01, r: 0190, c: 0200} * 0.35"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1011",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0200 c0220 = null, OF07.00.01.01[residential_mortgage] r0200 c0200 = null, OF07.00.01.01[commercial_mortgage] r0200 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0200, c: 0220} >= {t: OF07.00.01.01, r: 0200, c: 0200} * 0.50"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1012",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0210 c0220 = null, OF07.00.01.01[residential_mortgage] r0210 c0200 = null, OF07.00.01.01[commercial_mortgage] r0210 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3231,63 +3329,24 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1015",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0240 c0220 = null, OF07.00.01.01[residential_mortgage] r0240 c0200 = null, OF07.00.01.01[commercial_mortgage] r0240 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0240, c: 0220} >= {t: OF07.00.01.01, r: 0240, c: 0200} * 1.5"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1016",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0250 c0220 = null, OF07.00.01.01[residential_mortgage] r0250 c0200 = null, OF07.00.01.01[commercial_mortgage] r0250 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0250, c: 0220} >= {t: OF07.00.01.01, r: 0250, c: 0200} * 2.5"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b1017",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0270 c0220 = null, OF07.00.01.01[residential_mortgage] r0270 c0200 = null, OF07.00.01.01[commercial_mortgage] r0270 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0270, c: 0220} >= {t: OF07.00.01.01, r: 0270, c: 0200} * 12.5"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1018",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0171 c0220 = null, OF07.00.01.01[residential_mortgage] r0171 c0200 = null, OF07.00.01.01[commercial_mortgage] r0171 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3299,11 +3358,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0181 c0220 = null, OF07.00.01.01[residential_mortgage] r0181 c0200 = null, OF07.00.01.01[commercial_mortgage] r0181 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3311,31 +3379,24 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1020",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0182 c0220 = null, OF07.00.01.01[residential_mortgage] r0182 c0200 = null, OF07.00.01.01[commercial_mortgage] r0182 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0182, c: 0220} >= {t: OF07.00.01.01, r: 0182, c: 0200} * 0.3"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1021",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0191 c0220 = null, OF07.00.01.01[residential_mortgage] r0191 c0200 = null, OF07.00.01.01[commercial_mortgage] r0191 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3347,11 +3408,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0192 c0220 = null, OF07.00.01.01[residential_mortgage] r0192 c0200 = null, OF07.00.01.01[commercial_mortgage] r0192 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3363,11 +3433,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0202 c0220 = null, OF07.00.01.01[residential_mortgage] r0202 c0200 = null, OF07.00.01.01[commercial_mortgage] r0202 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3379,11 +3458,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0221 c0220 = null, OF07.00.01.01[residential_mortgage] r0221 c0200 = null, OF07.00.01.01[commercial_mortgage] r0221 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3391,31 +3479,24 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b1026",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0222 c0220 = null, OF07.00.01.01[residential_mortgage] r0222 c0200 = null, OF07.00.01.01[commercial_mortgage] r0222 c0220 = null.",
-      "portfolios": [
-        "re-split",
-        "rich",
-        "row-scope"
-      ],
-      "vacuous_coordinates": 2,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0222, c: 0220} >= {t: OF07.00.01.01, r: 0222, c: 0200} * 0.85"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b1027",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0231 c0220 = null, OF07.00.01.01[residential_mortgage] r0231 c0200 = null, OF07.00.01.01[commercial_mortgage] r0231 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3427,11 +3508,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0232 c0220 = null, OF07.00.01.01[residential_mortgage] r0232 c0200 = null, OF07.00.01.01[commercial_mortgage] r0232 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3443,11 +3533,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0233 c0220 = null, OF07.00.01.01[residential_mortgage] r0233 c0200 = null, OF07.00.01.01[commercial_mortgage] r0233 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3459,11 +3558,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0234 c0220 = null, OF07.00.01.01[residential_mortgage] r0234 c0200 = null, OF07.00.01.01[commercial_mortgage] r0234 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3475,11 +3583,20 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0261 c0220 = null, OF07.00.01.01[residential_mortgage] r0261 c0200 = null, OF07.00.01.01[commercial_mortgage] r0261 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3491,15 +3608,44 @@
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 10 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[residential_mortgage] r0160 c0220 = null, OF07.00.01.01[residential_mortgage] r0160 c0200 = null, OF07.00.01.01[commercial_mortgage] r0160 c0220 = null.",
       "portfolios": [
+        "ccr",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "netting",
+        "netting-mismatch",
+        "off-bs",
         "re-split",
         "rich",
-        "row-scope"
+        "row-scope",
+        "sa-classes"
       ],
-      "vacuous_coordinates": 2,
+      "vacuous_coordinates": 3,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0160, c: 0220} >= {t: OF07.00.01.01, r: 0160, c: 0200} * 0.04"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b1036",
+      "severity": "ERROR",
+      "reason": "attributed - OF 08.01 cols 0102 / 0103 (financial collateral adjusted value under slotting, and its volatility and maturity adjustment) are never populated: the FCCM-under-slotting carrier is not sealed (scripts/template_cell_coverage_baseline.json, corep/c08_01/0102 and /0103, ENGINE_CANNOT_PRODUCE). NOT_EVALUATED until 2026-11-13 because the OF 08.01 sheets could not be addressed; with the published sheet axis the cells are emitted and empty, so the rule runs and has nothing to test.",
+      "portfolios": [
+        "art199",
+        "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
+        "irb-classes",
+        "irb-shapes",
+        "rich"
+      ],
+      "vacuous_coordinates": 24,
+      "tables": [
+        "OF08.01.01.01"
+      ],
+      "expression": "{t: OF08.01.01.01, c: 0102} <= {t: OF08.01.01.01, c: 0103}"
     },
     {
       "regime": "b31",
@@ -3545,13 +3691,14 @@
         "facility-share-nonbinding",
         "irb-classes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 10,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -3629,6 +3776,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -3701,29 +3849,6 @@
     },
     {
       "regime": "crr",
-      "rule_id": "v0012_h",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a C 07.00 Annex II hierarchy identity on the .c / .d SHEET VARIANTS (rows 0290-0330), whose cells the estate emits and never populates - the same identity is live on sheet .a; every operand is EMITTED BUT UNREPORTED (null) - 96 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: C 07.00.d[institution] r0300 c0040 = null, C 07.00.d[institution] r0300 c0010 = null, C 07.00.d[institution] r0300 c0030 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "row-scope",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 8,
-      "tables": [
-        "C 07.00.d"
-      ],
-      "expression": "{c0040} = +{c0010} + {c0030}"
-    },
-    {
-      "regime": "crr",
       "rule_id": "v0314_m",
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: a C 07.00.a/.b risk-weight-row or memo-column identity (cols 0200/0215/0220 on the 0090-0270 row band), on rows this estate emits and never populates; every operand is EMITTED BUT UNREPORTED (null) - 250 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: C 07.00.a[corporate] r0090 c0200 = null, C 07.00.a[corporate] r0100 c0200 = null, C 07.00.a[corporate] r0090 c0215 = null.",
@@ -3733,13 +3858,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 35,
+      "vacuous_coordinates": 40,
       "tables": [
         "C 07.00.a"
       ],
@@ -3756,13 +3882,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -3779,13 +3906,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -3802,13 +3930,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -3825,13 +3954,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -3848,13 +3978,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -3871,6 +4002,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -3894,6 +4026,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -3920,6 +4053,7 @@
         "irb-classes",
         "irb-shapes",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -3999,13 +4133,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 24,
+      "vacuous_coordinates": 30,
       "tables": [
         "C 07.00.d"
       ],
@@ -4038,13 +4173,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 27,
+      "vacuous_coordinates": 41,
       "tables": [
         "C 07.00.a"
       ],
@@ -4096,6 +4232,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -4119,13 +4256,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -4142,13 +4280,14 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
         "row-scope",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.a"
       ],
@@ -4287,6 +4426,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -4310,6 +4450,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -4361,6 +4502,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",
@@ -4384,6 +4526,7 @@
         "facility-share-binding",
         "facility-share-nonbinding",
         "netting",
+        "netting-mismatch",
         "off-bs",
         "re-split",
         "rich",

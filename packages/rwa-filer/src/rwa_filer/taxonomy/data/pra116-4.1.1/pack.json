@@ -1,0 +1,6945 @@
+{
+ "dimensions": {
+  "boe_dim:AES": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Approach applied in equivalent exposure value calculation (subtype)",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:APA": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Type of amount",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:BMC": {
+   "default": "eba_PC:x0",
+   "domain": "eba_PC",
+   "kind": "explicit",
+   "label": "BI marginal coefficients",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:CCT": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Type of clearing counterparty",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:ORC": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Components considered in the operational risk capital (ORC) calculation",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:TCE": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Type of corporates exposures",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "boe_dim:TEE": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Material dependence on cashflows from the property",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:AGG": {
+   "default": "eba_BT:x0",
+   "domain": "eba_BT",
+   "kind": "explicit",
+   "label": "Aggregation level",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APE": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Effect of application of specific legal provisions",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APL": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Accounting portfolio",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APR": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Approach for prudential purposes",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:ARQ": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Applicable requirement",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:BAS": {
+   "default": "eba_BA:x0",
+   "domain": "eba_BA",
+   "kind": "explicit",
+   "label": "Base",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CEG": {
+   "default": "eba_GA:x0",
+   "domain": "eba_GA",
+   "kind": "explicit",
+   "label": "Country where the exposure is generated",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CFO": {
+   "default": "eba_PC:x0",
+   "domain": "eba_PC",
+   "kind": "explicit",
+   "label": "Conversion factors for off-balance sheet items",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CLS": {
+   "default": "eba_CG:x0",
+   "domain": "eba_CG",
+   "kind": "explicit",
+   "label": "Collateral status",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CNO": {
+   "default": "eba_BT:x0",
+   "domain": "eba_BT",
+   "kind": "explicit",
+   "label": "Controlling and non-controlling owners",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CPS": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Counterparty sector",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CPY": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Counterparty nature",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CPZ": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Size of the counterparty",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CQI": {
+   "default": "eba_CQ:x0",
+   "domain": "eba_CQ",
+   "kind": "explicit",
+   "label": "Exposures by Credit Quality steps at inception",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CQS": {
+   "default": "eba_CQ:x0",
+   "domain": "eba_CQ",
+   "kind": "explicit",
+   "label": "Exposures by Credit Quality steps at reporting date",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CRM": {
+   "default": "eba_CP:x0",
+   "domain": "eba_CP",
+   "kind": "explicit",
+   "label": "CRM Effects/Collateral",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CUE": {
+   "default": "eba_CU:x0",
+   "domain": "eba_CU",
+   "kind": "explicit",
+   "label": "Currency of the exposure",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:ECB": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Exposure class before reassignment",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:EXC": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Exposure class",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:EXT": {
+   "default": "eba_ER:x0",
+   "domain": "eba_ER",
+   "kind": "explicit",
+   "label": "Use of external ratings",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:IGS": {
+   "default": "eba_BT:x0",
+   "domain": "eba_BT",
+   "kind": "explicit",
+   "label": "Is LEI Code/National Code of Entity in Group Solvency",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:IMS": {
+   "default": "eba_IM:x0",
+   "domain": "eba_IM",
+   "kind": "explicit",
+   "label": "Impairment status",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:INV": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Significant investments",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:LAC": {
+   "default": "eba_BT:x0",
+   "domain": "eba_BT",
+   "kind": "explicit",
+   "label": "Location of the activities",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:LGS": {
+   "default": null,
+   "domain": "eba_LE",
+   "kind": "typed",
+   "label": "Entity in Group Solvency",
+   "typed_element": "eba_typ:LE",
+   "typed_type": "string"
+  },
+  "eba_dim:MCB": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Instrument",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCE": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category that generates income or expenses",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCG": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category of collateral or guarantee received",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCL": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category that generates the deferred tax liability",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCU": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category of the underlying",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCY": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MRW": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Methods to determine risk weights",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:OFS": {
+   "default": "eba_OF:x0",
+   "domain": "eba_OF",
+   "kind": "explicit",
+   "label": "Own funds",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PIN": {
+   "default": "eba_PI:x0",
+   "domain": "eba_PI",
+   "kind": "explicit",
+   "label": "Positions in the instrument",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PRP": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Prudential portfolio",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PUR": {
+   "default": "eba_PU:x0",
+   "domain": "eba_PU",
+   "kind": "explicit",
+   "label": "Purpose",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:REF": {
+   "default": "eba_RF:x0",
+   "domain": "eba_RF",
+   "kind": "explicit",
+   "label": "Reference date or period",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RIO": {
+   "default": "eba_GA:x0",
+   "domain": "eba_GA",
+   "kind": "explicit",
+   "label": "Residence of the immediate obligor",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RMC": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Reference measure for ratio calculation",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RPR": {
+   "default": "eba_RP:x0",
+   "domain": "eba_RP",
+   "kind": "explicit",
+   "label": "Related parties/Relationships",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RSP": {
+   "default": "eba_RS:x0",
+   "domain": "eba_RS",
+   "kind": "explicit",
+   "label": "Role in the securitisation process",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RWS": {
+   "default": "eba_PC:x0",
+   "domain": "eba_PC",
+   "kind": "explicit",
+   "label": "Risk weights",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:SIC": {
+   "default": null,
+   "domain": "eba_IS",
+   "kind": "typed",
+   "label": "Securitisation internal code",
+   "typed_element": "eba_typ:IS",
+   "typed_type": "string"
+  },
+  "eba_dim:SLO": {
+   "default": "eba_IA:x0",
+   "domain": "eba_IA",
+   "kind": "explicit",
+   "label": "Size of loss",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:SOL": {
+   "default": "eba_BT:x0",
+   "domain": "eba_BT",
+   "kind": "explicit",
+   "label": "Subject to operating lease (reporting entity lessor)",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:SST": {
+   "default": "eba_ST:x0",
+   "domain": "eba_ST",
+   "kind": "explicit",
+   "label": "Securitisation structure",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TPP": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Applicable threshold for prudential purposes",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TRI": {
+   "default": "eba_TR:x0",
+   "domain": "eba_TR",
+   "kind": "explicit",
+   "label": "Type of risk",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TRT": {
+   "default": "eba_RT:x0",
+   "domain": "eba_RT",
+   "kind": "explicit",
+   "label": "Type of risk transfer",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TSE": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Type of securitisation",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TSL": {
+   "default": "eba_TA:x0",
+   "domain": "eba_TA",
+   "kind": "explicit",
+   "label": "Type of specialised lending exposure",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:UES": {
+   "default": "eba_UE:x0",
+   "domain": "eba_UE",
+   "kind": "explicit",
+   "label": "Type of underlying",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:VPO": {
+   "default": "eba_PI:x0",
+   "domain": "eba_PI",
+   "kind": "explicit",
+   "label": "Valuation positions",
+   "typed_element": null,
+   "typed_type": null
+  }
+ },
+ "enumerations": {
+  "eba_CQ:eba_CQ4": [
+   "eba_CQ:x63",
+   "eba_CQ:x64",
+   "eba_CQ:x65",
+   "eba_CQ:x66",
+   "eba_CQ:x67",
+   "eba_CQ:x68",
+   "eba_CQ:x69",
+   "eba_CQ:x70",
+   "eba_CQ:x71",
+   "eba_CQ:x73",
+   "eba_CQ:x72",
+   "eba_CQ:x75",
+   "eba_CQ:x76",
+   "eba_CQ:x77",
+   "eba_CQ:x78",
+   "eba_CQ:x79",
+   "eba_CQ:x80",
+   "eba_CQ:x81",
+   "eba_CQ:x82",
+   "eba_CQ:x83",
+   "eba_CQ:x84",
+   "eba_CQ:x85",
+   "eba_CQ:x86",
+   "eba_CQ:x87",
+   "eba_CQ:x88",
+   "eba_CQ:x89",
+   "eba_CQ:x90",
+   "eba_CQ:x91",
+   "eba_CQ:x92",
+   "eba_CQ:x74",
+   "eba_CQ:x94",
+   "eba_CQ:x95",
+   "eba_CQ:x96",
+   "eba_CQ:x97",
+   "eba_CQ:x98",
+   "eba_CQ:x93"
+  ],
+  "eba_CU:boe_CU600": [
+   "eba_CU:GBP",
+   "eba_CU:EUR",
+   "eba_CU:CAD",
+   "eba_CU:USD",
+   "eba_CU:CHF",
+   "eba_CU:JPY",
+   "eba_CU:SEK"
+  ],
+  "eba_GA:eba_GA4": [
+   "eba_GA:AL",
+   "eba_GA:AT",
+   "eba_GA:BE",
+   "eba_GA:BG",
+   "eba_GA:CY",
+   "eba_GA:CZ",
+   "eba_GA:DK",
+   "eba_GA:EE",
+   "eba_GA:FI",
+   "eba_GA:FR",
+   "eba_GA:DE",
+   "eba_GA:GR",
+   "eba_GA:HU",
+   "eba_GA:IE",
+   "eba_GA:IT",
+   "eba_GA:JP",
+   "eba_GA:LV",
+   "eba_GA:LT",
+   "eba_GA:LU",
+   "eba_GA:MK",
+   "eba_GA:MT",
+   "eba_GA:NL",
+   "eba_GA:NO",
+   "eba_GA:PL",
+   "eba_GA:PT",
+   "eba_GA:RO",
+   "eba_GA:RU",
+   "eba_GA:RS",
+   "eba_GA:SK",
+   "eba_GA:SI",
+   "eba_GA:ES",
+   "eba_GA:SE",
+   "eba_GA:CH",
+   "eba_GA:TR",
+   "eba_GA:UA",
+   "eba_GA:GB",
+   "eba_GA:US",
+   "eba_GA:AF",
+   "eba_GA:AX",
+   "eba_GA:DZ",
+   "eba_GA:AS",
+   "eba_GA:AD",
+   "eba_GA:AO",
+   "eba_GA:AI",
+   "eba_GA:AQ",
+   "eba_GA:AG",
+   "eba_GA:AR",
+   "eba_GA:AM",
+   "eba_GA:AW",
+   "eba_GA:AU",
+   "eba_GA:AZ",
+   "eba_GA:BS",
+   "eba_GA:BH",
+   "eba_GA:BD",
+   "eba_GA:BB",
+   "eba_GA:BY",
+   "eba_GA:BZ",
+   "eba_GA:BJ",
+   "eba_GA:BM",
+   "eba_GA:BT",
+   "eba_GA:BO",
+   "eba_GA:BQ",
+   "eba_GA:BA",
+   "eba_GA:BW",
+   "eba_GA:BV",
+   "eba_GA:BR",
+   "eba_GA:IO",
+   "eba_GA:BN",
+   "eba_GA:BF",
+   "eba_GA:BI",
+   "eba_GA:KH",
+   "eba_GA:CM",
+   "eba_GA:CA",
+   "eba_GA:CV",
+   "eba_GA:KY",
+   "eba_GA:CF",
+   "eba_GA:TD",
+   "eba_GA:CL",
+   "eba_GA:CN",
+   "eba_GA:CX",
+   "eba_GA:CC",
+   "eba_GA:CO",
+   "eba_GA:KM",
+   "eba_GA:CG",
+   "eba_GA:CD",
+   "eba_GA:CK",
+   "eba_GA:CR",
+   "eba_GA:CI",
+   "eba_GA:HR",
+   "eba_GA:CU",
+   "eba_GA:CW",
+   "eba_GA:DJ",
+   "eba_GA:DM",
+   "eba_GA:DO",
+   "eba_GA:EC",
+   "eba_GA:EG",
+   "eba_GA:SV",
+   "eba_GA:GQ",
+   "eba_GA:ER",
+   "eba_GA:ET",
+   "eba_GA:FK",
+   "eba_GA:FO",
+   "eba_GA:FJ",
+   "eba_GA:GF",
+   "eba_GA:PF",
+   "eba_GA:TF",
+   "eba_GA:GA",
+   "eba_GA:GM",
+   "eba_GA:GE",
+   "eba_GA:GH",
+   "eba_GA:GI",
+   "eba_GA:GL",
+   "eba_GA:GD",
+   "eba_GA:GP",
+   "eba_GA:GU",
+   "eba_GA:GT",
+   "eba_GA:GG",
+   "eba_GA:GN",
+   "eba_GA:GW",
+   "eba_GA:GY",
+   "eba_GA:HT",
+   "eba_GA:HM",
+   "eba_GA:VA",
+   "eba_GA:HN",
+   "eba_GA:HK",
+   "eba_GA:IS",
+   "eba_GA:IN",
+   "eba_GA:ID",
+   "eba_GA:IR",
+   "eba_GA:IQ",
+   "eba_GA:IM",
+   "eba_GA:IL",
+   "eba_GA:JM",
+   "eba_GA:JE",
+   "eba_GA:JO",
+   "eba_GA:KZ",
+   "eba_GA:KE",
+   "eba_GA:KI",
+   "eba_GA:KP",
+   "eba_GA:KR",
+   "eba_GA:KW",
+   "eba_GA:KG",
+   "eba_GA:LA",
+   "eba_GA:LB",
+   "eba_GA:LS",
+   "eba_GA:LR",
+   "eba_GA:LY",
+   "eba_GA:LI",
+   "eba_GA:MO",
+   "eba_GA:MG",
+   "eba_GA:MW",
+   "eba_GA:MY",
+   "eba_GA:MV",
+   "eba_GA:ML",
+   "eba_GA:MH",
+   "eba_GA:MQ",
+   "eba_GA:MR",
+   "eba_GA:MU",
+   "eba_GA:YT",
+   "eba_GA:MX",
+   "eba_GA:FM",
+   "eba_GA:MD",
+   "eba_GA:MC",
+   "eba_GA:MN",
+   "eba_GA:ME",
+   "eba_GA:MS",
+   "eba_GA:MA",
+   "eba_GA:MZ",
+   "eba_GA:MM",
+   "eba_GA:NA",
+   "eba_GA:NR",
+   "eba_GA:NP",
+   "eba_GA:NC",
+   "eba_GA:NZ",
+   "eba_GA:NI",
+   "eba_GA:NE",
+   "eba_GA:NG",
+   "eba_GA:NU",
+   "eba_GA:NF",
+   "eba_GA:MP",
+   "eba_GA:OM",
+   "eba_GA:PK",
+   "eba_GA:PW",
+   "eba_GA:PS",
+   "eba_GA:PA",
+   "eba_GA:PG",
+   "eba_GA:PY",
+   "eba_GA:PE",
+   "eba_GA:PH",
+   "eba_GA:PN",
+   "eba_GA:PR",
+   "eba_GA:QA",
+   "eba_GA:RE",
+   "eba_GA:RW",
+   "eba_GA:BL",
+   "eba_GA:SH",
+   "eba_GA:KN",
+   "eba_GA:LC",
+   "eba_GA:MF",
+   "eba_GA:PM",
+   "eba_GA:VC",
+   "eba_GA:WS",
+   "eba_GA:SM",
+   "eba_GA:ST",
+   "eba_GA:SA",
+   "eba_GA:SN",
+   "eba_GA:SC",
+   "eba_GA:SL",
+   "eba_GA:SG",
+   "eba_GA:SX",
+   "eba_GA:SB",
+   "eba_GA:SO",
+   "eba_GA:ZA",
+   "eba_GA:GS",
+   "eba_GA:SS",
+   "eba_GA:LK",
+   "eba_GA:SD",
+   "eba_GA:SR",
+   "eba_GA:SJ",
+   "eba_GA:SZ",
+   "eba_GA:SY",
+   "eba_GA:TW",
+   "eba_GA:TJ",
+   "eba_GA:TZ",
+   "eba_GA:TH",
+   "eba_GA:TL",
+   "eba_GA:TG",
+   "eba_GA:TK",
+   "eba_GA:TO",
+   "eba_GA:TT",
+   "eba_GA:TN",
+   "eba_GA:TM",
+   "eba_GA:TC",
+   "eba_GA:TV",
+   "eba_GA:UG",
+   "eba_GA:AE",
+   "eba_GA:UM",
+   "eba_GA:UY",
+   "eba_GA:UZ",
+   "eba_GA:VU",
+   "eba_GA:VE",
+   "eba_GA:VN",
+   "eba_GA:VG",
+   "eba_GA:VI",
+   "eba_GA:WF",
+   "eba_GA:EH",
+   "eba_GA:YE",
+   "eba_GA:ZM",
+   "eba_GA:ZW",
+   "eba_GA:x28",
+   "eba_GA:_1A",
+   "eba_GA:_1B",
+   "eba_GA:_1C",
+   "eba_GA:_1D",
+   "eba_GA:_1E",
+   "eba_GA:_1F",
+   "eba_GA:_1G",
+   "eba_GA:_1H",
+   "eba_GA:_1J",
+   "eba_GA:_1K",
+   "eba_GA:_1L",
+   "eba_GA:_1M",
+   "eba_GA:_1N",
+   "eba_GA:_1O",
+   "eba_GA:_1P",
+   "eba_GA:_1Q",
+   "eba_GA:_1R",
+   "eba_GA:_1S",
+   "eba_GA:_1T",
+   "eba_GA:_1Z",
+   "eba_GA:_4A",
+   "eba_GA:_4B",
+   "eba_GA:_4C",
+   "eba_GA:_4D",
+   "eba_GA:_4E",
+   "eba_GA:_4F",
+   "eba_GA:_4G",
+   "eba_GA:_4H",
+   "eba_GA:_4I",
+   "eba_GA:_4V",
+   "eba_GA:_4J",
+   "eba_GA:_4K",
+   "eba_GA:_4L",
+   "eba_GA:_4M",
+   "eba_GA:_4N",
+   "eba_GA:_4O",
+   "eba_GA:_4P",
+   "eba_GA:_4Q",
+   "eba_GA:_4R",
+   "eba_GA:_4S",
+   "eba_GA:_4T",
+   "eba_GA:_4W",
+   "eba_GA:_4X",
+   "eba_GA:_4Y",
+   "eba_GA:_4Z",
+   "eba_GA:_5A",
+   "eba_GA:_5B",
+   "eba_GA:_5C",
+   "eba_GA:_5D",
+   "eba_GA:_5E",
+   "eba_GA:_5F",
+   "eba_GA:_5G",
+   "eba_GA:_5H",
+   "eba_GA:_5I",
+   "eba_GA:_5J",
+   "eba_GA:_5K",
+   "eba_GA:_5L",
+   "eba_GA:_5M",
+   "eba_GA:_5N",
+   "eba_GA:_5O",
+   "eba_GA:_5P",
+   "eba_GA:_5Q",
+   "eba_GA:_5R",
+   "eba_GA:_5S",
+   "eba_GA:_5T",
+   "eba_GA:_5U",
+   "eba_GA:_5V",
+   "eba_GA:_5W",
+   "eba_GA:_5X",
+   "eba_GA:_5Y",
+   "eba_GA:_5Z",
+   "eba_GA:_6A",
+   "eba_GA:_6B",
+   "eba_GA:_6C",
+   "eba_GA:_6D",
+   "eba_GA:_6E",
+   "eba_GA:_6F",
+   "eba_GA:_6G",
+   "eba_GA:_6H",
+   "eba_GA:_6I",
+   "eba_GA:_6J",
+   "eba_GA:_6K",
+   "eba_GA:_6L",
+   "eba_GA:_6M",
+   "eba_GA:_6N",
+   "eba_GA:_6O",
+   "eba_GA:_6P",
+   "eba_GA:_6Q",
+   "eba_GA:_6R",
+   "eba_GA:_6S",
+   "eba_GA:_6T",
+   "eba_GA:_6U",
+   "eba_GA:_6Z",
+   "eba_GA:_7Z",
+   "eba_GA:_8A",
+   "eba_GA:_7Y",
+   "eba_GA:_9B",
+   "eba_GA:IMF.CL_AREA.1G",
+   "eba_GA:IMF.CL_AREA.1W",
+   "eba_GA:IMF.CL_AREA.4U",
+   "eba_GA:IMF.CL_AREA.7G",
+   "eba_GA:IMF.CL_AREA.7H",
+   "eba_GA:IMF.CL_AREA.7I",
+   "eba_GA:IMF.CL_AREA.7J",
+   "eba_GA:IMF.CL_AREA.7K",
+   "eba_GA:IMF.CL_AREA.7L",
+   "eba_GA:IMF.CL_AREA.7M",
+   "eba_GA:IMF.CL_AREA.9B"
+  ],
+  "eba_GA:eba_GA4_1": [
+   "eba_GA:AL",
+   "eba_GA:AT",
+   "eba_GA:BE",
+   "eba_GA:BG",
+   "eba_GA:CY",
+   "eba_GA:CZ",
+   "eba_GA:DK",
+   "eba_GA:EE",
+   "eba_GA:FI",
+   "eba_GA:FR",
+   "eba_GA:DE",
+   "eba_GA:GR",
+   "eba_GA:HU",
+   "eba_GA:IE",
+   "eba_GA:IT",
+   "eba_GA:JP",
+   "eba_GA:LV",
+   "eba_GA:LT",
+   "eba_GA:LU",
+   "eba_GA:MK",
+   "eba_GA:MT",
+   "eba_GA:NL",
+   "eba_GA:NO",
+   "eba_GA:PL",
+   "eba_GA:PT",
+   "eba_GA:RO",
+   "eba_GA:RU",
+   "eba_GA:RS",
+   "eba_GA:SK",
+   "eba_GA:SI",
+   "eba_GA:ES",
+   "eba_GA:SE",
+   "eba_GA:CH",
+   "eba_GA:TR",
+   "eba_GA:UA",
+   "eba_GA:GB",
+   "eba_GA:US",
+   "eba_GA:AF",
+   "eba_GA:AX",
+   "eba_GA:DZ",
+   "eba_GA:AS",
+   "eba_GA:AD",
+   "eba_GA:AO",
+   "eba_GA:AI",
+   "eba_GA:AQ",
+   "eba_GA:AG",
+   "eba_GA:AR",
+   "eba_GA:AM",
+   "eba_GA:AW",
+   "eba_GA:AU",
+   "eba_GA:AZ",
+   "eba_GA:BS",
+   "eba_GA:BH",
+   "eba_GA:BD",
+   "eba_GA:BB",
+   "eba_GA:BY",
+   "eba_GA:BZ",
+   "eba_GA:BJ",
+   "eba_GA:BM",
+   "eba_GA:BT",
+   "eba_GA:BO",
+   "eba_GA:BQ",
+   "eba_GA:BA",
+   "eba_GA:BW",
+   "eba_GA:BV",
+   "eba_GA:BR",
+   "eba_GA:IO",
+   "eba_GA:BN",
+   "eba_GA:BF",
+   "eba_GA:BI",
+   "eba_GA:KH",
+   "eba_GA:CM",
+   "eba_GA:CA",
+   "eba_GA:CV",
+   "eba_GA:KY",
+   "eba_GA:CF",
+   "eba_GA:TD",
+   "eba_GA:CL",
+   "eba_GA:CN",
+   "eba_GA:CX",
+   "eba_GA:CC",
+   "eba_GA:CO",
+   "eba_GA:KM",
+   "eba_GA:CG",
+   "eba_GA:CD",
+   "eba_GA:CK",
+   "eba_GA:CR",
+   "eba_GA:CI",
+   "eba_GA:HR",
+   "eba_GA:CU",
+   "eba_GA:CW",
+   "eba_GA:DJ",
+   "eba_GA:DM",
+   "eba_GA:DO",
+   "eba_GA:EC",
+   "eba_GA:EG",
+   "eba_GA:SV",
+   "eba_GA:GQ",
+   "eba_GA:ER",
+   "eba_GA:ET",
+   "eba_GA:FK",
+   "eba_GA:FO",
+   "eba_GA:FJ",
+   "eba_GA:GF",
+   "eba_GA:PF",
+   "eba_GA:TF",
+   "eba_GA:GA",
+   "eba_GA:GM",
+   "eba_GA:GE",
+   "eba_GA:GH",
+   "eba_GA:GI",
+   "eba_GA:GL",
+   "eba_GA:GD",
+   "eba_GA:GP",
+   "eba_GA:GU",
+   "eba_GA:GT",
+   "eba_GA:GG",
+   "eba_GA:GN",
+   "eba_GA:GW",
+   "eba_GA:GY",
+   "eba_GA:HT",
+   "eba_GA:HM",
+   "eba_GA:VA",
+   "eba_GA:HN",
+   "eba_GA:HK",
+   "eba_GA:IS",
+   "eba_GA:IN",
+   "eba_GA:ID",
+   "eba_GA:IR",
+   "eba_GA:IQ",
+   "eba_GA:IM",
+   "eba_GA:IL",
+   "eba_GA:JM",
+   "eba_GA:JE",
+   "eba_GA:JO",
+   "eba_GA:KZ",
+   "eba_GA:KE",
+   "eba_GA:KI",
+   "eba_GA:KP",
+   "eba_GA:KR",
+   "eba_GA:XK",
+   "eba_GA:KW",
+   "eba_GA:KG",
+   "eba_GA:LA",
+   "eba_GA:LB",
+   "eba_GA:LS",
+   "eba_GA:LR",
+   "eba_GA:LY",
+   "eba_GA:LI",
+   "eba_GA:MO",
+   "eba_GA:MG",
+   "eba_GA:MW",
+   "eba_GA:MY",
+   "eba_GA:MV",
+   "eba_GA:ML",
+   "eba_GA:MH",
+   "eba_GA:MQ",
+   "eba_GA:MR",
+   "eba_GA:MU",
+   "eba_GA:YT",
+   "eba_GA:MX",
+   "eba_GA:FM",
+   "eba_GA:MD",
+   "eba_GA:MC",
+   "eba_GA:MN",
+   "eba_GA:ME",
+   "eba_GA:MS",
+   "eba_GA:MA",
+   "eba_GA:MZ",
+   "eba_GA:MM",
+   "eba_GA:NA",
+   "eba_GA:NR",
+   "eba_GA:NP",
+   "eba_GA:NC",
+   "eba_GA:NZ",
+   "eba_GA:NI",
+   "eba_GA:NE",
+   "eba_GA:NG",
+   "eba_GA:NU",
+   "eba_GA:NF",
+   "eba_GA:MP",
+   "eba_GA:OM",
+   "eba_GA:PK",
+   "eba_GA:PW",
+   "eba_GA:PS",
+   "eba_GA:PA",
+   "eba_GA:PG",
+   "eba_GA:PY",
+   "eba_GA:PE",
+   "eba_GA:PH",
+   "eba_GA:PN",
+   "eba_GA:PR",
+   "eba_GA:QA",
+   "eba_GA:RE",
+   "eba_GA:RW",
+   "eba_GA:BL",
+   "eba_GA:SH",
+   "eba_GA:KN",
+   "eba_GA:LC",
+   "eba_GA:MF",
+   "eba_GA:PM",
+   "eba_GA:VC",
+   "eba_GA:WS",
+   "eba_GA:SM",
+   "eba_GA:ST",
+   "eba_GA:SA",
+   "eba_GA:SN",
+   "eba_GA:SC",
+   "eba_GA:SL",
+   "eba_GA:SG",
+   "eba_GA:SX",
+   "eba_GA:SB",
+   "eba_GA:SO",
+   "eba_GA:ZA",
+   "eba_GA:GS",
+   "eba_GA:SS",
+   "eba_GA:LK",
+   "eba_GA:SD",
+   "eba_GA:SR",
+   "eba_GA:SJ",
+   "eba_GA:SZ",
+   "eba_GA:SY",
+   "eba_GA:TW",
+   "eba_GA:TJ",
+   "eba_GA:TZ",
+   "eba_GA:TH",
+   "eba_GA:TL",
+   "eba_GA:TG",
+   "eba_GA:TK",
+   "eba_GA:TO",
+   "eba_GA:TT",
+   "eba_GA:TN",
+   "eba_GA:TM",
+   "eba_GA:TC",
+   "eba_GA:TV",
+   "eba_GA:UG",
+   "eba_GA:AE",
+   "eba_GA:UM",
+   "eba_GA:UY",
+   "eba_GA:UZ",
+   "eba_GA:VU",
+   "eba_GA:VE",
+   "eba_GA:VN",
+   "eba_GA:VG",
+   "eba_GA:VI",
+   "eba_GA:WF",
+   "eba_GA:EH",
+   "eba_GA:YE",
+   "eba_GA:ZM",
+   "eba_GA:ZW",
+   "eba_GA:x28",
+   "eba_GA:_1A",
+   "eba_GA:_1B",
+   "eba_GA:_1C",
+   "eba_GA:_1D",
+   "eba_GA:_1E",
+   "eba_GA:_1F",
+   "eba_GA:_1G",
+   "eba_GA:_1H",
+   "eba_GA:_1J",
+   "eba_GA:_1K",
+   "eba_GA:_1L",
+   "eba_GA:_1M",
+   "eba_GA:_1N",
+   "eba_GA:_1O",
+   "eba_GA:_1P",
+   "eba_GA:_1Q",
+   "eba_GA:_1R",
+   "eba_GA:_1S",
+   "eba_GA:_1T",
+   "eba_GA:_1Z",
+   "eba_GA:_4A",
+   "eba_GA:_4B",
+   "eba_GA:_4C",
+   "eba_GA:_4D",
+   "eba_GA:_4E",
+   "eba_GA:_4F",
+   "eba_GA:_4G",
+   "eba_GA:_4H",
+   "eba_GA:_4I",
+   "eba_GA:_4V",
+   "eba_GA:_4J",
+   "eba_GA:_4K",
+   "eba_GA:_4L",
+   "eba_GA:_4M",
+   "eba_GA:_4N",
+   "eba_GA:_4O",
+   "eba_GA:_4P",
+   "eba_GA:_4Q",
+   "eba_GA:_4R",
+   "eba_GA:_4S",
+   "eba_GA:_4T",
+   "eba_GA:_4W",
+   "eba_GA:_4X",
+   "eba_GA:_4Y",
+   "eba_GA:_4Z",
+   "eba_GA:_5A",
+   "eba_GA:_5B",
+   "eba_GA:_5C",
+   "eba_GA:_5D",
+   "eba_GA:_5E",
+   "eba_GA:_5F",
+   "eba_GA:_5G",
+   "eba_GA:_5H",
+   "eba_GA:_5I",
+   "eba_GA:_5J",
+   "eba_GA:_5K",
+   "eba_GA:_5L",
+   "eba_GA:_5M",
+   "eba_GA:_5N",
+   "eba_GA:_5O",
+   "eba_GA:_5P",
+   "eba_GA:_5Q",
+   "eba_GA:_5R",
+   "eba_GA:_5S",
+   "eba_GA:_5T",
+   "eba_GA:_5U",
+   "eba_GA:_5V",
+   "eba_GA:_5W",
+   "eba_GA:_5X",
+   "eba_GA:_5Y",
+   "eba_GA:_5Z",
+   "eba_GA:_6A",
+   "eba_GA:_6B",
+   "eba_GA:_6C",
+   "eba_GA:_6D",
+   "eba_GA:_6E",
+   "eba_GA:_6F",
+   "eba_GA:_6G",
+   "eba_GA:_6H",
+   "eba_GA:_6I",
+   "eba_GA:_6J",
+   "eba_GA:_6K",
+   "eba_GA:_6L",
+   "eba_GA:_6M",
+   "eba_GA:_6N",
+   "eba_GA:_6O",
+   "eba_GA:_6P",
+   "eba_GA:_6Q",
+   "eba_GA:_6R",
+   "eba_GA:_6S",
+   "eba_GA:_6T",
+   "eba_GA:_6U",
+   "eba_GA:_6Z",
+   "eba_GA:_7Z",
+   "eba_GA:_8A",
+   "eba_GA:_7Y",
+   "eba_GA:_9B",
+   "eba_GA:IMF.CL_AREA.1G",
+   "eba_GA:IMF.CL_AREA.1W",
+   "eba_GA:IMF.CL_AREA.4U",
+   "eba_GA:IMF.CL_AREA.7G",
+   "eba_GA:IMF.CL_AREA.7H",
+   "eba_GA:IMF.CL_AREA.7I",
+   "eba_GA:IMF.CL_AREA.7J",
+   "eba_GA:IMF.CL_AREA.7K",
+   "eba_GA:IMF.CL_AREA.7L",
+   "eba_GA:IMF.CL_AREA.7M",
+   "eba_GA:IMF.CL_AREA.9B"
+  ],
+  "eba_PL:eba_PL99": [
+   "eba_PL:x11",
+   "eba_PL:x51",
+   "eba_PL:x78",
+   "eba_PL:x72",
+   "eba_PL:x71"
+  ],
+  "eba_RS:eba_RS1": [
+   "eba_RS:x1",
+   "eba_RS:x2",
+   "eba_RS:x5",
+   "eba_RS:x6"
+  ],
+  "eba_RT:eba_RT4": [
+   "eba_RT:x12",
+   "eba_RT:x13",
+   "eba_RT:x11",
+   "eba_RT:x10"
+  ],
+  "eba_RT:eba_RT5": [
+   "eba_RT:x14",
+   "eba_RT:x15",
+   "eba_RT:x16",
+   "eba_RT:x17",
+   "eba_RT:x18"
+  ],
+  "eba_SC:boe_SC600": [
+   "boe_eba_SC:x6000",
+   "boe_eba_SC:x6001",
+   "boe_eba_SC:x6002",
+   "boe_eba_SC:x6003",
+   "boe_eba_SC:x6006"
+  ],
+  "eba_TP:eba_TP2": [
+   "eba_TP:x1",
+   "eba_TP:x2"
+  ],
+  "eba_UE:eba_UE3": [
+   "eba_UE:x14",
+   "eba_UE:x15"
+  ],
+  "eba_UE:eba_UE4_1": [
+   "eba_UE:x17",
+   "eba_UE:x10",
+   "eba_UE:x4",
+   "eba_UE:x2",
+   "eba_UE:x20",
+   "eba_UE:x21",
+   "eba_UE:x18",
+   "eba_UE:x1",
+   "eba_UE:x5",
+   "eba_UE:x22",
+   "eba_UE:x23",
+   "eba_UE:x12",
+   "eba_UE:x24",
+   "eba_UE:x19",
+   "eba_UE:x3",
+   "eba_UE:x9",
+   "eba_UE:x6",
+   "eba_UE:x8"
+  ],
+  "eba_ZZ:eba_ZZ1": [
+   "eba_ZZ:x3",
+   "eba_ZZ:x4",
+   "eba_ZZ:x5",
+   "eba_ZZ:x6"
+  ],
+  "eba_ZZ:eba_ZZ14": [
+   "eba_ZZ:x44",
+   "eba_ZZ:x45",
+   "eba_ZZ:x230",
+   "eba_ZZ:x231",
+   "eba_ZZ:x232",
+   "eba_ZZ:x48",
+   "eba_ZZ:x49",
+   "eba_ZZ:x50",
+   "eba_ZZ:x46",
+   "eba_ZZ:x47",
+   "eba_ZZ:x51",
+   "eba_ZZ:x326",
+   "eba_ZZ:x233"
+  ],
+  "eba_ZZ:eba_ZZ2": [
+   "eba_ZZ:x8",
+   "eba_ZZ:x9",
+   "eba_ZZ:x10",
+   "eba_ZZ:x11",
+   "eba_ZZ:x12",
+   "eba_ZZ:x6",
+   "eba_ZZ:x13",
+   "eba_ZZ:x7"
+  ],
+  "eba_ZZ:eba_ZZ38": [
+   "eba_ZZ:x306",
+   "eba_ZZ:x328",
+   "eba_ZZ:x305"
+  ],
+  "eba_ZZ:eba_ZZ39": [
+   "eba_ZZ:x329",
+   "eba_ZZ:x330",
+   "eba_ZZ:x331"
+  ]
+ },
+ "format": 1,
+ "info": {
+  "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/banking_reporting_sddt/2026-08-17/mod/pra116.xsd",
+  "irregularities": [
+   "SC02.00.01.01: annotation states the default member eba_dim:MCY=eba_MC:x0 (dropped)",
+   "SC02.00.01.01: annotation states the default member eba_dim:PRP=eba_PL:x0 (dropped)",
+   "SC02.00.01.01: annotation states the default member eba_dim:TRI=eba_TR:x0 (dropped)",
+   "SC02.00.01.01: 1 cells repeat the data point of another cell of this table",
+   "SC06.01.01.01: annotation states the default member eba_dim:OFS=eba_OF:x0 (dropped)",
+   "SC06.02.01.01: annotation states the default member eba_dim:OFS=eba_OF:x0 (dropped)",
+   "SC16.00.01.04: annotation states the default member eba_dim:APL=eba_PL:x0 (dropped)",
+   "SC22.00.01.01: annotation states the default member eba_dim:CUE=eba_CU:x0 (dropped)",
+   "SC90.00.01.01: title contains a zero-width non-joiner (U+200C); stripped"
+  ],
+  "module": "PRA116",
+  "sources": {
+   "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Banking Reporting for SDDTs.xlsx",
+   "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
+   "taxonomy_package": "boe411.zip"
+  },
+  "taxonomy": "boe-banking",
+  "title": "PRA116 Own Funds for SDDTs",
+  "valid_from": "2027-01-01",
+  "valid_to": null,
+  "version": "4.1.1"
+ },
+ "metrics": {
+  "boe_met:bi10066": {
+   "enumeration": null,
+   "label": "BI greater than \u00a3880 million? (Y/N)",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "boe_met:bi11001": {
+   "enumeration": null,
+   "label": "Use of the adjustment in SDDT - General Application 2.6 of the PRA Rulebook",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "boe_met:bi11002": {
+   "enumeration": null,
+   "label": "The % of relevant credit exposures located in the UK has been between 75% and 85% during the last quarter",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "boe_met:di6003": {
+   "enumeration": null,
+   "label": "Reporting period start date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:di6004": {
+   "enumeration": null,
+   "label": "Reporting period end date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:ei6006": {
+   "enumeration": "eba_CU:boe_CU600",
+   "label": "Reporting currency",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei6007": {
+   "enumeration": "eba_SC:boe_SC600",
+   "label": "Basis of reporting",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ii10043": {
+   "enumeration": null,
+   "label": "Number of operational risk losses",
+   "period": "instant",
+   "type": "integer"
+  },
+  "boe_met:ii10045": {
+   "enumeration": null,
+   "label": "Number of exclusions",
+   "period": "instant",
+   "type": "integer"
+  },
+  "boe_met:mi10042": {
+   "enumeration": null,
+   "label": "Amount of operational losses net of recoveries (no exclusions)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10044": {
+   "enumeration": null,
+   "label": "Amount of excluded operational risk losses",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10046": {
+   "enumeration": null,
+   "label": "Amount of operational losses net of recoveries and net of excluded losses",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10047": {
+   "enumeration": null,
+   "label": "Adjustment to exposure value due to on-balance sheet netting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi10064": {
+   "enumeration": null,
+   "label": "Exposure net of value adjustments, provisions and on-balance sheet netting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi11004": {
+   "enumeration": null,
+   "label": "25% CET1 threshold applicable to SDDTs",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:mi11005": {
+   "enumeration": null,
+   "label": "Market value (net)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "boe_met:ri10063": {
+   "enumeration": null,
+   "label": "Internal loss multiplier value",
+   "period": "instant",
+   "type": "decimal"
+  },
+  "boe_met:si10093": {
+   "enumeration": null,
+   "label": "Dates of all previous PRA approvals - excluded divested activities from BI",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6002": {
+   "enumeration": null,
+   "label": "Entity code",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6005": {
+   "enumeration": null,
+   "label": "Additional notes",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:bi146": {
+   "enumeration": null,
+   "label": "Institution or equivalent",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "eba_met:bi456": {
+   "enumeration": null,
+   "label": "Use of 2% threshold",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "eba_met:bi594": {
+   "enumeration": null,
+   "label": "STS securitisation",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "eba_met:bi596": {
+   "enumeration": null,
+   "label": "STS securitisation qualifying for differentiated capital treatment",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "eba_met:bi75": {
+   "enumeration": null,
+   "label": "Compliance with the retention requirement",
+   "period": "instant",
+   "type": "boolean"
+  },
+  "eba_met:di130": {
+   "enumeration": null,
+   "label": "First foreseeable termination date",
+   "period": "instant",
+   "type": "date"
+  },
+  "eba_met:di157": {
+   "enumeration": null,
+   "label": "Legal final maturity date",
+   "period": "instant",
+   "type": "date"
+  },
+  "eba_met:di181": {
+   "enumeration": null,
+   "label": "Origination date of the securitisation",
+   "period": "instant",
+   "type": "date"
+  },
+  "eba_met:di655": {
+   "enumeration": null,
+   "label": "Date of latest issuance",
+   "period": "instant",
+   "type": "date"
+  },
+  "eba_met:ei152": {
+   "enumeration": "eba_GA:eba_GA4_1",
+   "label": "Jurisdiction of incorporation",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei215": {
+   "enumeration": "eba_RS:eba_RS1",
+   "label": "Role in the securitisation process",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei224": {
+   "enumeration": "eba_PL:eba_PL99",
+   "label": "Solvency treatment of the securitisation",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei245": {
+   "enumeration": "eba_ZZ:eba_ZZ2",
+   "label": "Type of retention applied",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei247": {
+   "enumeration": "eba_UE:eba_UE4_1",
+   "label": "Type of underlying",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei248": {
+   "enumeration": "eba_UE:eba_UE3",
+   "label": "Type of securitisation",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei276": {
+   "enumeration": "eba_TP:eba_TP2",
+   "label": "Correlation Trading Portfolio",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei5": {
+   "enumeration": "eba_ZZ:eba_ZZ1",
+   "label": "Accounting treatment of the securitisation",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei555": {
+   "enumeration": "eba_ZZ:eba_ZZ14",
+   "label": "Type of entity",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei654": {
+   "enumeration": "eba_ZZ:eba_ZZ38",
+   "label": "Scope of issuance",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei664": {
+   "enumeration": "eba_CQ:eba_CQ4",
+   "label": "CQS",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei671": {
+   "enumeration": "eba_ZZ:eba_ZZ39",
+   "label": "Originator's call option included in transaction",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei749": {
+   "enumeration": "eba_RT:eba_RT4",
+   "label": "Type of issuance",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei750": {
+   "enumeration": "eba_RT:eba_RT5",
+   "label": "Type of SRT (significant risk transfer)",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei86": {
+   "enumeration": "eba_GA:eba_GA4",
+   "label": "Country of origin of the ultimate underlying of the transaction",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ii175": {
+   "enumeration": null,
+   "label": "Number of exposures",
+   "period": "instant",
+   "type": "integer"
+  },
+  "eba_met:ii668": {
+   "enumeration": null,
+   "label": "Number of tranches",
+   "period": "instant",
+   "type": "integer"
+  },
+  "eba_met:md179": {
+   "enumeration": null,
+   "label": "Observed new defaults for the period (flow)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi100": {
+   "enumeration": null,
+   "label": "CRM substitution effects Outflows, net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi101": {
+   "enumeration": null,
+   "label": "CRM Volatility adjustment to the exposure",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi102": {
+   "enumeration": null,
+   "label": "CRM Volatility and maturity adjustments",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi117": {
+   "enumeration": null,
+   "label": "Exposure after CRM substitution effects pre conversion factors, net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi118": {
+   "enumeration": null,
+   "label": "Exposure net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi119": {
+   "enumeration": null,
+   "label": "Exposure value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi120": {
+   "enumeration": null,
+   "label": "Exposure value - all exposures",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi121": {
+   "enumeration": null,
+   "label": "Exposure Value deducted from own funds",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi122": {
+   "enumeration": null,
+   "label": "Exposure value, including value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi123": {
+   "enumeration": null,
+   "label": "Exposure value, including value adjustments and provisions, deducted from own funds",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi124": {
+   "enumeration": null,
+   "label": "Exposure value, including value adjustments and provisions, subject to risk weights",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi125": {
+   "enumeration": null,
+   "label": "Exposure value, net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi132": {
+   "enumeration": null,
+   "label": "Fully adjusted exposure value (E*), net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi133": {
+   "enumeration": null,
+   "label": "Fully adjusted exposure value E* including value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi17": {
+   "enumeration": null,
+   "label": "Adjustment to the risk-weighted exposure amount due to maturity mismatches",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi170": {
+   "enumeration": null,
+   "label": "Notional amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi171": {
+   "enumeration": null,
+   "label": "Notional amount retained or repurchased of credit protection",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi180": {
+   "enumeration": null,
+   "label": "Original exposure pre conversion factors",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi182": {
+   "enumeration": null,
+   "label": "Overall effect (adjustment) due to infringement of the due diligence provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi184": {
+   "enumeration": null,
+   "label": "Own funds requirements",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi198": {
+   "enumeration": null,
+   "label": "Qualifying amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi212": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi213": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount after CAP",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi214": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount before CAP",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi230": {
+   "enumeration": null,
+   "label": "Total amount of securitisation exposures originated",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi231": {
+   "enumeration": null,
+   "label": "Total amount of underlying securitised exposures of every originator",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi232": {
+   "enumeration": null,
+   "label": "Total amount of underlying securitised exposures of every originator at origination date",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi235": {
+   "enumeration": null,
+   "label": "Total risk exposure amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi236": {
+   "enumeration": null,
+   "label": "Total risk exposure amount contribution to the group",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi237": {
+   "enumeration": null,
+   "label": "Total risk exposure amount, Risk weighted exposure amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi253": {
+   "enumeration": null,
+   "label": "Value adjustments and provision associated with the original exposure",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi255": {
+   "enumeration": null,
+   "label": "Value used for market risk, gross",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi256": {
+   "enumeration": null,
+   "label": "Value used for market risk, net",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi285": {
+   "enumeration": null,
+   "label": "CRM unfunded credit protection adjusted values (G*) - Outflows",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi30": {
+   "enumeration": null,
+   "label": "Amount assigned to direct credit substitutes",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi31": {
+   "enumeration": null,
+   "label": "Amount assigned to eligible liquidity facilities",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi32": {
+   "enumeration": null,
+   "label": "Amount assigned to IRS / CRS",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi33": {
+   "enumeration": null,
+   "label": "Amount assigned to other off-balance sheet items",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi420": {
+   "enumeration": null,
+   "label": "Market value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi479": {
+   "enumeration": null,
+   "label": "Market value, fair value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi53": {
+   "enumeration": null,
+   "label": "Carrying amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi636": {
+   "enumeration": null,
+   "label": "Non refundable price purchase discount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi637": {
+   "enumeration": null,
+   "label": "Specific credit risk adjustments on underlying exposures",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi638": {
+   "enumeration": null,
+   "label": "Reduction due to risk weight cap",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi639": {
+   "enumeration": null,
+   "label": "Reduction due to overall cap",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi640": {
+   "enumeration": null,
+   "label": "RW corresponding to the protection provider/instrument",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi642": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount under SEC-ERBA",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi643": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount under SEC-SA",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi658": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount corresponding to the outflow from securitisations toother exposure classes",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi663": {
+   "enumeration": null,
+   "label": "Exposure-weighted average maturity of assets",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi667": {
+   "enumeration": null,
+   "label": "Credit risk adjustments during the current period",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi76": {
+   "enumeration": null,
+   "label": "Computable amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi77": {
+   "enumeration": null,
+   "label": "Computable amount - Individual basis",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi78": {
+   "enumeration": null,
+   "label": "Computable amount, gross",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi79": {
+   "enumeration": null,
+   "label": "Computable amount, net",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi80": {
+   "enumeration": null,
+   "label": "Computable amount, offsetting position",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi807": {
+   "enumeration": null,
+   "label": "Revaluation difference",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi81": {
+   "enumeration": null,
+   "label": "Amount including transitional provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi87": {
+   "enumeration": null,
+   "label": "CRM substitution effects Inflows including value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi88": {
+   "enumeration": null,
+   "label": "CRM substitution effects Inflows, net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi89": {
+   "enumeration": null,
+   "label": "CRM substitution effects Outflows including value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi90": {
+   "enumeration": null,
+   "label": "CRM Financial collateral: adjusted value (Cvam)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi91": {
+   "enumeration": null,
+   "label": "CRM Funded credit protection (Cva)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi92": {
+   "enumeration": null,
+   "label": "CRM substitution effects - Funded credit protection",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi93": {
+   "enumeration": null,
+   "label": "CRM substitution effects - Unfunded credit protection: adjusted values (GA)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi94": {
+   "enumeration": null,
+   "label": "CRM substitution effects - Value of Credit derivatives",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi95": {
+   "enumeration": null,
+   "label": "CRM substitution effects - Value of Financial collateral: simple method",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi96": {
+   "enumeration": null,
+   "label": "CRM substitution effects - Value of Guarantees",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi97": {
+   "enumeration": null,
+   "label": "CRM substitution effects - Value of Other funded credit protection",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:pi189": {
+   "enumeration": null,
+   "label": "Percentage of participation of the reporting institution in the securitisation",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi190": {
+   "enumeration": null,
+   "label": "Percentage of retention of securitisations at reporting date",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi221": {
+   "enumeration": null,
+   "label": "Share of equity interest",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi317": {
+   "enumeration": null,
+   "label": "Percentage of capital ratio",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi480": {
+   "enumeration": null,
+   "label": "Percentage of trading book business",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi659": {
+   "enumeration": null,
+   "label": "Exposures in default",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi660": {
+   "enumeration": null,
+   "label": "Attachment point",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi666": {
+   "enumeration": null,
+   "label": "Own funds requirements before securitisations (Ksa)",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi670": {
+   "enumeration": null,
+   "label": "Detachment point",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi672": {
+   "enumeration": null,
+   "label": "Attachment point of risk sold",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi673": {
+   "enumeration": null,
+   "label": "Detachment point of risk sold",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi674": {
+   "enumeration": null,
+   "label": "Risk transfer claimed by originator institution",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi708": {
+   "enumeration": null,
+   "label": "Share of the size of the derivative business",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:si168": {
+   "enumeration": null,
+   "label": "Name of entity",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si217": {
+   "enumeration": null,
+   "label": "Scope of data (levels of consolidation code)",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si288": {
+   "enumeration": null,
+   "label": "LEI code",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si329": {
+   "enumeration": null,
+   "label": "Identifier of the securitisation",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si74": {
+   "enumeration": null,
+   "label": "Code of the originator of the securitisation",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si809": {
+   "enumeration": null,
+   "label": "National code of Entity in Solvency Group",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si810": {
+   "enumeration": null,
+   "label": "Name of Entity in Solvency Group",
+   "period": "instant",
+   "type": "string"
+  }
+ },
+ "namespaces": {
+  "boe_dim": "http://www.bankofengland.co.uk/data/xbrl/dict/dim",
+  "boe_eba_AP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_AP",
+  "boe_eba_CT": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_CT",
+  "boe_eba_EC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_EC",
+  "boe_eba_IA": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_IA",
+  "boe_eba_MC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_MC",
+  "boe_eba_PC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_PC",
+  "boe_eba_RF": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_RF",
+  "boe_eba_SC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_SC",
+  "boe_eba_TA": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_TA",
+  "boe_eba_TR": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_TR",
+  "boe_met": "http://www.bankofengland.co.uk/data/xbrl/dict/met",
+  "eba_AP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AP",
+  "eba_BA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BA",
+  "eba_BT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BT",
+  "eba_CG": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CG",
+  "eba_CP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CP",
+  "eba_CQ": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CQ",
+  "eba_CT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CT",
+  "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+  "eba_EC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/EC",
+  "eba_ER": "http://www.eba.europa.eu/xbrl/crr/dict/dom/ER",
+  "eba_GA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/GA",
+  "eba_IA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/IA",
+  "eba_IM": "http://www.eba.europa.eu/xbrl/crr/dict/dom/IM",
+  "eba_MC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/MC",
+  "eba_OF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/OF",
+  "eba_PC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PC",
+  "eba_PI": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PI",
+  "eba_PL": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PL",
+  "eba_PU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PU",
+  "eba_RF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RF",
+  "eba_RP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RP",
+  "eba_RS": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RS",
+  "eba_RT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RT",
+  "eba_ST": "http://www.eba.europa.eu/xbrl/crr/dict/dom/ST",
+  "eba_TA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/TA",
+  "eba_TP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/TP",
+  "eba_TR": "http://www.eba.europa.eu/xbrl/crr/dict/dom/TR",
+  "eba_UE": "http://www.eba.europa.eu/xbrl/crr/dict/dom/UE",
+  "eba_ZZ": "http://www.eba.europa.eu/xbrl/crr/dict/dom/ZZ",
+  "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
+  "eba_met": "http://www.eba.europa.eu/xbrl/crr/dict/met",
+  "eba_typ": "http://www.eba.europa.eu/xbrl/crr/dict/typ"
+ },
+ "tables": {
+  "SC01.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Amount"
+    ]
+   ],
+   "filing_indicator": "SC01.00.01",
+   "group": "SC01.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "OWN FUNDS"
+    ],
+    [
+     "0015",
+     "TIER 1 CAPITAL"
+    ],
+    [
+     "0020",
+     "COMMON EQUITY TIER 1 CAPITAL"
+    ],
+    [
+     "0030",
+     "Capital instruments eligible as CET1 Capital"
+    ],
+    [
+     "0040",
+     "Fully paid up capital instruments"
+    ],
+    [
+     "0045",
+     "Of which: Capital instruments subscribed by public authorities in emergency situations"
+    ],
+    [
+     "0050",
+     "Memorandum item: Capital instruments not eligible"
+    ],
+    [
+     "0060",
+     "Share premium"
+    ],
+    [
+     "0070",
+     "(-) Own CET1 instruments"
+    ],
+    [
+     "0080",
+     "(-) Direct holdings of CET1 instruments"
+    ],
+    [
+     "0090",
+     "(-) Indirect holdings of CET1 instruments"
+    ],
+    [
+     "0091",
+     "(-) Synthetic holdings of CET1 instruments"
+    ],
+    [
+     "0092",
+     "(-) Actual or contingent obligations to purchase own CET1 instruments"
+    ],
+    [
+     "0130",
+     "Retained earnings"
+    ],
+    [
+     "0140",
+     "Previous years retained earnings"
+    ],
+    [
+     "0150",
+     "Profit or loss eligible"
+    ],
+    [
+     "0160",
+     "Profit or loss attributable to owners of the parent"
+    ],
+    [
+     "0170",
+     "(-) Part of interim or year-end profit not eligible"
+    ],
+    [
+     "0180",
+     "Accumulated other comprehensive income"
+    ],
+    [
+     "0200",
+     "Other reserves"
+    ],
+    [
+     "0210",
+     "Funds for general banking risk"
+    ],
+    [
+     "0230",
+     "Minority interest given recognition in CET1 capital"
+    ],
+    [
+     "0250",
+     "Adjustments to CET1 due to prudential filters"
+    ],
+    [
+     "0260",
+     "(-) Increases in equity resulting from securitised assets"
+    ],
+    [
+     "0270",
+     "Cash flow hedge reserve"
+    ],
+    [
+     "0280",
+     "Cumulative gains and losses due to changes in own credit risk on fair valued liabilities"
+    ],
+    [
+     "0285",
+     "Fair value gains and losses arising from the institution's own credit risk related to derivative liabilities"
+    ],
+    [
+     "0290",
+     "(-) Value adjustments due to the requirements for prudent valuation"
+    ],
+    [
+     "0300",
+     "(-) Goodwill"
+    ],
+    [
+     "0310",
+     "(-) Goodwill accounted for as intangible asset"
+    ],
+    [
+     "0320",
+     "(-) Goodwill included in the valuation of significant investments"
+    ],
+    [
+     "0330",
+     "Deferred tax liabilities associated to goodwill"
+    ],
+    [
+     "0335",
+     "Accounting revaluation of subsidiaries' goodwill derived from the consolidation of subsidiaries attributable to third persons"
+    ],
+    [
+     "0340",
+     "(-) Other intangible assets"
+    ],
+    [
+     "0350",
+     "(-) Other intangible assets before deduction of deferred tax liabilities"
+    ],
+    [
+     "0360",
+     "Deferred tax liabilities associated to other intangible assets"
+    ],
+    [
+     "0365",
+     "Accounting revaluation of subsidiaries' other intangible assets derived from the consolidation of subsidiaries attributable to third persons"
+    ],
+    [
+     "0370",
+     "(-) Deferred tax assets that rely on future profitability and do not arise from temporary differences net of associated tax liabilities"
+    ],
+    [
+     "0390",
+     "(-)Defined benefit pension fund assets"
+    ],
+    [
+     "0400",
+     "(-)Defined benefit pension fund assets"
+    ],
+    [
+     "0410",
+     "Deferred tax liabilities associated to defined benefit pension fund assets"
+    ],
+    [
+     "0420",
+     "Defined benefit pension fund assets which the institution has an unrestricted ability to use"
+    ],
+    [
+     "0430",
+     "(-) Reciprocal cross holdings in CET1 Capital"
+    ],
+    [
+     "0440",
+     "(-) Excess of deduction from AT1 items over AT1 Capital"
+    ],
+    [
+     "0450",
+     "(-) Qualifying holdings outside the financial sector"
+    ],
+    [
+     "0460",
+     "(-) Securitisation positions"
+    ],
+    [
+     "0470",
+     "(-) Free deliveries"
+    ],
+    [
+     "0480",
+     "(-) CET1 instruments of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0481",
+     "(-) AT1 instruments of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0482",
+     "(-) T2 instruments of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0490",
+     "(-) Deductible deferred tax assets that rely on future profitability and arise from temporary differences"
+    ],
+    [
+     "0500",
+     "(-) CET1 instruments of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0501",
+     "(-) AT1 instruments of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0502",
+     "(-) T2 instruments of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0515",
+     "(-) Other foreseeable tax charges"
+    ],
+    [
+     "0524",
+     "(-) Additional deductions of CET1 Capital due to Article 3 CRR"
+    ],
+    [
+     "0529",
+     "CET1 capital elements or deductions - other"
+    ],
+    [
+     "0530",
+     "ADDITIONAL TIER 1 CAPITAL"
+    ],
+    [
+     "0540",
+     "Capital instruments eligible as AT1 Capital"
+    ],
+    [
+     "0551",
+     "Fully paid up, directly issued capital instruments"
+    ],
+    [
+     "0560",
+     "Memorandum item: Capital instruments not eligible"
+    ],
+    [
+     "0571",
+     "Share premium"
+    ],
+    [
+     "0580",
+     "(-) Own AT1 instruments"
+    ],
+    [
+     "0590",
+     "(-) Direct holdings of AT1 instruments"
+    ],
+    [
+     "0620",
+     "(-) Indirect holdings of AT1 instruments"
+    ],
+    [
+     "0621",
+     "(-) Synthetic holdings of AT1 instruments"
+    ],
+    [
+     "0622",
+     "(-) Actual or contingent obligations to purchase own AT1 instruments"
+    ],
+    [
+     "0670",
+     "Instruments issued by subsidiaries that are given recognition in AT1 Capital"
+    ],
+    [
+     "0690",
+     "(-) Reciprocal cross holdings in AT1 Capital"
+    ],
+    [
+     "0720",
+     "(-) Excess of deduction from T2 items over T2 Capital"
+    ],
+    [
+     "0740",
+     "Excess of deduction from AT1 items over AT1 Capital (deducted in CET1)"
+    ],
+    [
+     "0744",
+     "(-) Additional deductions of AT1 Capital due to Article 3 CRR"
+    ],
+    [
+     "0748",
+     "AT1 capital elements or deductions - other"
+    ],
+    [
+     "0750",
+     "TIER 2 CAPITAL"
+    ],
+    [
+     "0760",
+     "Capital instruments eligible as T2 Capital"
+    ],
+    [
+     "0771",
+     "Fully paid up, directly issued capital instruments"
+    ],
+    [
+     "0780",
+     "Memorandum item: Capital instruments not eligible"
+    ],
+    [
+     "0791",
+     "Share premium"
+    ],
+    [
+     "0800",
+     "(-) Own T2 instruments"
+    ],
+    [
+     "0810",
+     "(-) Direct holdings of T2 instruments"
+    ],
+    [
+     "0840",
+     "(-) Indirect holdings of T2 instruments"
+    ],
+    [
+     "0841",
+     "(-) Synthetic holdings of T2 instruments"
+    ],
+    [
+     "0842",
+     "(-) Actual or contingent obligations to purchase own T2 instruments"
+    ],
+    [
+     "0890",
+     "Instruments issued by subsidiaries that are given recognition in T2 Capital"
+    ],
+    [
+     "0920",
+     "SA General credit risk adjustments"
+    ],
+    [
+     "0930",
+     "(-) Reciprocal cross holdings in T2 Capital"
+    ],
+    [
+     "0955",
+     "(-) Excess of deductions from eligible liabilities over eligible liabilities"
+    ],
+    [
+     "0970",
+     "Excess of deduction from T2 items over T2 Capital (deducted in AT1)"
+    ],
+    [
+     "0974",
+     "(-) Additional deductions of T2 Capital due to Article 3 CRR"
+    ],
+    [
+     "0978",
+     "T2 capital elements or deductions - other"
+    ]
+   ],
+   "title": "OWN FUNDS FOR SDDTS (CA1 SDDT)",
+   "z": []
+  },
+  "SC02.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "All approaches"
+    ]
+   ],
+   "filing_indicator": "SC02.00.01",
+   "group": "SC02.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "TOTAL RISK EXPOSURE AMOUNT"
+    ],
+    [
+     "0040",
+     "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES"
+    ],
+    [
+     "0050",
+     "Standardised Approach (SA)"
+    ],
+    [
+     "0060",
+     "SA exposure classes excluding securitisation positions"
+    ],
+    [
+     "0070",
+     "Central governments or central banks"
+    ],
+    [
+     "0080",
+     "Regional governments or local authorities"
+    ],
+    [
+     "0090",
+     "Public sector entities"
+    ],
+    [
+     "0100",
+     "Multilateral Development Banks"
+    ],
+    [
+     "0110",
+     "International Organisations"
+    ],
+    [
+     "0120",
+     "Institutions"
+    ],
+    [
+     "0130",
+     "Corporates"
+    ],
+    [
+     "0131",
+     "of which: specialised lending"
+    ],
+    [
+     "0140",
+     "Retail"
+    ],
+    [
+     "0150",
+     "Real estate exposures"
+    ],
+    [
+     "0160",
+     "Exposures in default"
+    ],
+    [
+     "0170",
+     "Exposures associated with particular high risk"
+    ],
+    [
+     "0180",
+     "Eligible covered bonds"
+    ],
+    [
+     "0200",
+     "Collective investments undertakings (CIU)"
+    ],
+    [
+     "0210",
+     "Subordinated debt, equity and other own funds instruments"
+    ],
+    [
+     "0211",
+     "Other items"
+    ],
+    [
+     "0460",
+     "Risk exposure amount for contributions to the default fund of a CCP"
+    ],
+    [
+     "0470",
+     "Securitisation positions"
+    ],
+    [
+     "0490",
+     "TOTAL RISK EXPOSURE AMOUNT FOR SETTLEMENT/DELIVERY"
+    ],
+    [
+     "0500",
+     "Settlement/delivery risk in the non-Trading book"
+    ],
+    [
+     "0510",
+     "Settlement/delivery risk in the Trading book"
+    ],
+    [
+     "5898",
+     "TOTAL RISK EXPOSURE AMOUNT FOR CAPITAL CHARGE DUE TO SWITCHING POSITIONS BETWEEN TRADING AND NON-TRADING BOOK"
+    ],
+    [
+     "0590",
+     "TOTAL RISK EXPOSURE AMOUNT FOR OPERATIONAL RISK (OpR)"
+    ],
+    [
+     "0630",
+     "ADDITIONAL RISK EXPOSURE AMOUNT DUE TO FIXED OVERHEADS"
+    ],
+    [
+     "0690",
+     "OTHER RISK EXPOSURE AMOUNTS"
+    ],
+    [
+     "0710",
+     "Of which: Additional stricter prudential requirements based on Article 458"
+    ],
+    [
+     "0720",
+     "Of which: requirements for large exposures"
+    ],
+    [
+     "0730",
+     "Of which: due to modified risk weights for targeting asset bubbles in the residential and commercial property"
+    ],
+    [
+     "0740",
+     "Of which: due to intra financial sector exposures"
+    ],
+    [
+     "0750",
+     "Of which: Additional stricter prudential requirements based on Article 459"
+    ],
+    [
+     "0760",
+     "Of which: Additional risk exposure amount due to Article 3 CRR"
+    ]
+   ],
+   "title": "OWN FUNDS REQUIREMENTS FOR SDDTS (CA2 SDDT)",
+   "z": []
+  },
+  "SC03.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Amount"
+    ]
+   ],
+   "filing_indicator": "SC03.00.01",
+   "group": "SC03.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "CET1 Capital ratio"
+    ],
+    [
+     "0020",
+     "Surplus(+)/Deficit(-) of CET1 capital"
+    ],
+    [
+     "0030",
+     "T1 Capital ratio"
+    ],
+    [
+     "0040",
+     "Surplus(+)/Deficit(-) of T1 capital"
+    ],
+    [
+     "0050",
+     "Total capital ratio"
+    ],
+    [
+     "0060",
+     "Surplus(+)/Deficit(-) of total capital"
+    ],
+    [
+     "0130",
+     "Memorandum Items: Total Capital Requirement (TCR), Overall Capital Requirement (OCR) and Single Capital Buffer (SCB) Total capital requirement (TCR) ratio"
+    ],
+    [
+     "0140",
+     "TCR: to be made up of CET1 capital"
+    ],
+    [
+     "0150",
+     "TCR: to be made up of Tier 1 capital"
+    ],
+    [
+     "0160",
+     "Overall capital requirement ratio (OCR)"
+    ],
+    [
+     "0170",
+     "OCR: to be made up of CET1 capital"
+    ],
+    [
+     "0180",
+     "OCR: to be made up of Tier 1"
+    ],
+    [
+     "0190",
+     "OCR and SCB ratio"
+    ],
+    [
+     "0200",
+     "OCR and SCB: to be made up of CET1 capital"
+    ],
+    [
+     "0210",
+     "OCR and SCB: to be made up of Tier 1 capital"
+    ],
+    [
+     "0220",
+     "Surplus(+)/Deficit(-) of CET1 capital considering Pillar 1 and Pillar 2A requirements"
+    ]
+   ],
+   "title": "CAPITAL ADEQUACY - CAPITAL RATIOS AND CAPITAL LEVELS FOR SDDTS (CA3 SDDT)",
+   "z": []
+  },
+  "SC04.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Amount"
+    ]
+   ],
+   "filing_indicator": "SC04.00.01",
+   "group": "SC04.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Deferred tax assets and liabilities Total deferred tax assets"
+    ],
+    [
+     "0020",
+     "Deferred tax assets that do not rely on future profitability"
+    ],
+    [
+     "0030",
+     "Deferred tax assets that rely on future profitability and do not arise from temporary differences"
+    ],
+    [
+     "0040",
+     "Deferred tax assets that rely on future profitability and arise from temporary differences"
+    ],
+    [
+     "0050",
+     "Total deferred tax liabilities"
+    ],
+    [
+     "0060",
+     "Deferred tax liabilities non deductible from deferred tax assets that rely on future profitability"
+    ],
+    [
+     "0070",
+     "Deferred tax liabilities deductible from deferred tax assets that rely on future profitability"
+    ],
+    [
+     "0080",
+     "Deductible deferred tax liabilities associated with deferred tax assets that rely on future profitability and do not arise from temporary differences"
+    ],
+    [
+     "0090",
+     "Deductible deferred tax liabilities associated with deferred tax assets that rely on future profitability and arise from temporary differences"
+    ],
+    [
+     "0093",
+     "Tax overpayments and tax loss carry backs"
+    ],
+    [
+     "0096",
+     "Deferred tax assets subject to a risk weight of 250%"
+    ],
+    [
+     "0097",
+     "Deferred tax assets subject to a risk weight of 0%"
+    ],
+    [
+     "0901",
+     "Exception from deductions  from CET1 Exception from deduction of intangible assets from CET1"
+    ],
+    [
+     "0905",
+     "Accounting classification of AT1 instruments Capital instruments and the related share premium accounts classified as equity under applicable accounting standards"
+    ],
+    [
+     "0906",
+     "Capital instruments and the related share premium accounts classified as liabilities under applicable accounting standards"
+    ],
+    [
+     "0170",
+     "Credit risk adjustments Total gross provisions eligible for inclusion in T2 capital"
+    ],
+    [
+     "0180",
+     "Risk weighted exposure amounts for calculating the cap to the provision eligible as T2"
+    ],
+    [
+     "0226",
+     "Thresholds for Common Equity Tier 1 deductions 25% CET1 threshold applicable to SDDTs"
+    ],
+    [
+     "0230",
+     "Investments in the capital of financial sector entities where the institution does not have a significant investment Holdings of CET1 capital of financial sector entities where the institution does not have a significant investment, net of short positions"
+    ],
+    [
+     "0240",
+     "Direct holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0250",
+     "Gross direct holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0260",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0270",
+     "Indirect holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0280",
+     "Gross indirect holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0290",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0291",
+     "Synthetic holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0292",
+     "Gross synthetic holdings of CET1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0293",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0300",
+     "Holdings of AT1 capital of financial sector entities where the institution does not have a significant investment, net of short positions"
+    ],
+    [
+     "0310",
+     "Direct holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0320",
+     "Gross direct holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0330",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0340",
+     "Indirect holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0350",
+     "Gross indirect holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0360",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0361",
+     "Synthetic holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0362",
+     "Gross synthetic holdings of AT1 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0363",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0370",
+     "Holdings of T2 capital of financial sector entities where the institution does not have a significant investment, net of short positions"
+    ],
+    [
+     "0380",
+     "Direct holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0390",
+     "Gross direct holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0400",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0410",
+     "Indirect holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0420",
+     "Gross indirect holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0430",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0431",
+     "Synthetic holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0432",
+     "Gross synthetic holdings of T2 capital of financial sector entities where the institution does not have a significant investment"
+    ],
+    [
+     "0433",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0440",
+     "Investments in the capital of financial sector entities where the institution has a significant investment Holdings of CET1 capital of financial sector entities where the institution has a significant investment, net of short positions"
+    ],
+    [
+     "0450",
+     "Direct holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0460",
+     "Gross direct holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0470",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0480",
+     "Indirect holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0490",
+     "Gross indirect holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0500",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0501",
+     "Synthetic holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0502",
+     "Gross synthetic holdings of CET1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0503",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0504",
+     "Investments in CET1 capital of financial sector entities where the institution has a significant investment - subject to a risk weight of 250%"
+    ],
+    [
+     "0510",
+     "Holdings of AT1 capital of financial sector entities where the institution has a significant investment, net of short positions"
+    ],
+    [
+     "0520",
+     "Direct holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0530",
+     "Gross direct holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0540",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0550",
+     "Indirect holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0560",
+     "Gross indirect holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0570",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0571",
+     "Synthetic holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0572",
+     "Gross synthetic holdings of AT1 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0573",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0580",
+     "Holdings of T2 capital of financial sector entities where the institution has a significant investment, net of short positions"
+    ],
+    [
+     "0590",
+     "Direct holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0600",
+     "Gross direct holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0610",
+     "(-) Permitted offsetting short positions in relation to the direct gross holdings included above"
+    ],
+    [
+     "0620",
+     "Indirect holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0630",
+     "Gross indirect holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0640",
+     "(-) Permitted offsetting short positions in relation to the indirect gross holdings included above"
+    ],
+    [
+     "0641",
+     "Synthetic holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0642",
+     "Gross synthetic holdings of T2 capital of financial sector entities where the institution has a significant investment"
+    ],
+    [
+     "0643",
+     "(-) Permitted offsetting short positions in relation to the synthetic gross holdings included above"
+    ],
+    [
+     "0650",
+     "Total risk exposure amounts of holdings not deducted from the corresponding capital category Risk weighted exposures of CET1 holdings in financial sector entities which are not deducted from the institution's CET1 capital"
+    ],
+    [
+     "0661",
+     "Risk weighted exposures of AT1 holdings in financial sector entities which are not deducted from the institution's CET1 capital"
+    ],
+    [
+     "0671",
+     "Risk weighted exposures of T2 holdings in financial sector entities which are not deducted from the institution's CET1 capital"
+    ],
+    [
+     "0680",
+     "Temporary waiver from deduction from own funds Holdings on CET1 Capital Instruments of financial sector entities where the institution does not have a significant investment temporary waived"
+    ],
+    [
+     "0690",
+     "Holdings on CET1 Capital Instruments of financial sector entities where the institution has a significant investment temporary waived"
+    ],
+    [
+     "0700",
+     "Holdings on AT1 Capital Instruments of financial sector entities where the institution does not have a significant investment temporary waived"
+    ],
+    [
+     "0710",
+     "Holdings on AT1 Capital Instruments of financial sector entities where the institution has a significant investment temporary waived"
+    ],
+    [
+     "0720",
+     "Holdings on T2 Capital Instruments of financial sector entities where the institution does not have a significant investment temporary waived"
+    ],
+    [
+     "0730",
+     "Holdings on T2 Capital Instruments of financial sector entities where the institution has a significant investment temporary waived"
+    ],
+    [
+     "0811",
+     "Capital buffers Single Capital Buffer for SDDTs"
+    ],
+    [
+     "0820",
+     "Pillar 2A requirements Pillar 2A requirements"
+    ],
+    [
+     "0830",
+     "Additional information for investment firms Initial capital"
+    ],
+    [
+     "0840",
+     "Own funds based on Fixed overheads"
+    ],
+    [
+     "0850",
+     "Additional information for calculation of reporting thresholds Non-domestic original exposures"
+    ],
+    [
+     "0860",
+     "Total original exposures"
+    ],
+    [
+     "0870",
+     "Absolute value of fair valued assets and liabilities Total fair valued assets and liabilities"
+    ],
+    [
+     "0880",
+     "of which: Assets"
+    ],
+    [
+     "0890",
+     "of which: Liabilities"
+    ]
+   ],
+   "title": "MEMORANDUM ITEMS FOR SDDTS (CA4 SDDT)",
+   "z": []
+  },
+  "SC06.01.01.01": {
+   "columns": [
+    [
+     "0250",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount"
+    ],
+    [
+     "0260",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount / Credit; counterparty credit; dilution risks, free deliveries and settlement/delivery risk"
+    ],
+    [
+     "0280",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount / Operational risk"
+    ],
+    [
+     "0290",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount / Other risk exposure amounts"
+    ],
+    [
+     "0300",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds"
+    ],
+    [
+     "0310",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying tier 1 instruments included in consolidated tier 1 capital"
+    ],
+    [
+     "0320",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying tier 1 instruments included in consolidated tier 1 capital / Minority interests included in consolidated common equity tier 1 capital"
+    ],
+    [
+     "0330",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying tier 1 instruments included in consolidated tier 1 capital / Qualifying tier 1 instruments included in consolidated additional tier 1 capital"
+    ],
+    [
+     "0340",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying own funds instruments included in consolidated tier 2 capital"
+    ],
+    [
+     "0350",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / MEMORANDUM ITEM: GOODWILL (-) / (+) NEGATIVE GOODWILL"
+    ],
+    [
+     "0360",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS"
+    ],
+    [
+     "0370",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: COMMON EQUITY TIER 1"
+    ],
+    [
+     "0380",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: ADDITIONAL TIER 1"
+    ],
+    [
+     "0390",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: CONRIBUTIONS TO CONSOLIDATED RESULT"
+    ],
+    [
+     "0400",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: (-) GOODWILL / (+) NEGATIVE GOODWILL"
+    ],
+    [
+     "0405",
+     "SINGLE CAPITAL BUFFER FOR SDDTS"
+    ]
+   ],
+   "filing_indicator": "SC06.01.01",
+   "group": "SC06.01.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Total"
+    ]
+   ],
+   "title": "GROUP SOLVENCY: INFORMATION ON AFFILIATES OF SDDTS - TOTAL (GS SDDT TOTAL)",
+   "z": []
+  },
+  "SC06.02.01.01": {
+   "columns": [
+    [
+     "0011",
+     "ENTITIES WITHIN SCOPE OF CONSOLIDATION / Name"
+    ],
+    [
+     "0027",
+     "ENTITIES WITHIN SCOPE OF CONSOLIDATION / National code"
+    ],
+    [
+     "0030",
+     "ENTITIES WITHIN SCOPE OF CONSOLIDATION / Institution or equivalent (yes / no)"
+    ],
+    [
+     "0035",
+     "ENTITIES WITHIN SCOPE OF CONSOLIDATION / Type of entity"
+    ],
+    [
+     "0040",
+     "ENTITIES WITHIN SCOPE OF CONSOLIDATION / Scope of data: solo fully consolidated (sf) or solo partially consolidated (sp)"
+    ],
+    [
+     "0050",
+     "ENTITIES WITHIN SCOPE OF CONSOLIDATION / Country code"
+    ],
+    [
+     "0060",
+     "ENTITIES WITHIN SCOPE OF CONSOLIDATION / Share of holding (%)"
+    ],
+    [
+     "0070",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Total risk exposure amount"
+    ],
+    [
+     "0080",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Total risk exposure amount / Credit; counterparty credit; dilution risks, free deliveries and settlement/delivery risk"
+    ],
+    [
+     "0090",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Total risk exposure amount / Position, fx and commodities risks"
+    ],
+    [
+     "0100",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Total risk exposure amount / Operational risk"
+    ],
+    [
+     "0110",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Total risk exposure amount / Other risk exposure amounts"
+    ],
+    [
+     "0120",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds"
+    ],
+    [
+     "0130",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Of which: qualifying own funds"
+    ],
+    [
+     "0140",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Related own funds instruments, related retained earnings and share premium accounts"
+    ],
+    [
+     "0150",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital"
+    ],
+    [
+     "0160",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital / Of which: qualifying tier 1 capital"
+    ],
+    [
+     "0170",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital / Related T1 instruments, related retained earnings and share premium accounts"
+    ],
+    [
+     "0180",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital / Common equity tier 1 capital"
+    ],
+    [
+     "0190",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital / Common equity tier 1 capital / Of which: minority interests"
+    ],
+    [
+     "0200",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital / Common equity tier 1 capital / Related own funds instruments, related retained earnings, share premium accounts and other reserves"
+    ],
+    [
+     "0210",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital / Additional tier 1 capital"
+    ],
+    [
+     "0220",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Total tier 1 capital / Additional tier 1 capital / Of which: qualifying additional tier 1 capital"
+    ],
+    [
+     "0230",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Tier 2 capital"
+    ],
+    [
+     "0240",
+     "INFORMATION ON ENTITIES SUBJECT TO OWN FUNDS REQUIREMENTS / Own funds / Tier 2 capital / Of which: qualifying tier 2 capital"
+    ],
+    [
+     "0250",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount"
+    ],
+    [
+     "0260",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount / Credit; counterparty credit; dilution risks, free deliveries and settlement/delivery risk"
+    ],
+    [
+     "0280",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount / Operational risk"
+    ],
+    [
+     "0290",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Total risk exposure amount / Other risk exposure amounts"
+    ],
+    [
+     "0300",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds"
+    ],
+    [
+     "0310",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying tier 1 instruments included in consolidated tier 1 capital"
+    ],
+    [
+     "0320",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying tier 1 instruments included in consolidated tier 1 capital / Minority interests included in consolidated common equity tier 1 capital"
+    ],
+    [
+     "0330",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying tier 1 instruments included in consolidated tier 1 capital / Qualifying tier 1 instruments included in consolidated additional tier 1 capital"
+    ],
+    [
+     "0340",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / Qualifying own funds instruments included in consolidated tier 2 capital"
+    ],
+    [
+     "0350",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / Qualifying own funds included in consolidated own funds / MEMORANDUM ITEM: GOODWILL (-) / (+) NEGATIVE GOODWILL"
+    ],
+    [
+     "0360",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS"
+    ],
+    [
+     "0370",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: COMMON EQUITY TIER 1"
+    ],
+    [
+     "0380",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: ADDITIONAL TIER 1"
+    ],
+    [
+     "0390",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: CONRIBUTIONS TO CONSOLIDATED RESULT"
+    ],
+    [
+     "0400",
+     "INFORMATION ON THE CONTRIBUTION OF ENTITIES TO SOLVENCY OF THE GROUP / CONSOLIDATED OWN FUNDS / OF WHICH: (-) GOODWILL / (+) NEGATIVE GOODWILL"
+    ],
+    [
+     "0405",
+     "SINGLE CAPITAL BUFFER FOR SDDTS"
+    ]
+   ],
+   "filing_indicator": "SC06.02.01",
+   "group": "SC06.02.01",
+   "open_keys": [
+    {
+     "code": "0026",
+     "dimension": "eba_dim:IGS",
+     "kind": "explicit",
+     "label": "Entities within scope of consolidation: Type of code",
+     "members": [
+      "eba_BT:x15",
+      "eba_BT:x16"
+     ],
+     "typed_element": null,
+     "typed_type": null
+    },
+    {
+     "code": "0021",
+     "dimension": "eba_dim:LGS",
+     "kind": "typed",
+     "label": "Code of Entity in Group Solvency",
+     "members": [],
+     "typed_element": "eba_typ:LE",
+     "typed_type": "string"
+    }
+   ],
+   "open_rows": true,
+   "rows": [],
+   "title": "GROUP SOLVENCY: INFORMATION ON AFFILIATES OF SDDTS (GS SDDT)",
+   "z": []
+  },
+  "SC07.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Original exposure pre conversion factors"
+    ],
+    [
+     "0030",
+     "(-) Value adjustments and provisions associated with the original exposure"
+    ],
+    [
+     "0035",
+     "(-) Adjustment to exposure value due to on-balance sheet netting"
+    ],
+    [
+     "0040",
+     "Exposure net of value adjustments, provisions, and on-balance sheet netting"
+    ],
+    [
+     "0050",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Guarantees"
+    ],
+    [
+     "0060",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Credit derivatives"
+    ],
+    [
+     "0070",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Financial collateral: simple method"
+    ],
+    [
+     "0080",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Other funded credit protection"
+    ],
+    [
+     "0090",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / (-) Total Outflows"
+    ],
+    [
+     "0100",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / Total Inflows (+)"
+    ],
+    [
+     "0110",
+     "Net exposure after CRM substitution effects pre conversion factors"
+    ],
+    [
+     "0120",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / Volatility adjustment to the exposure"
+    ],
+    [
+     "0130",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (Cvam)"
+    ],
+    [
+     "0140",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (Cvam) / (-) of which: Volatility and maturity adjustments"
+    ],
+    [
+     "0150",
+     "Fully adjusted exposure value (E*)"
+    ],
+    [
+     "0160",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 10%"
+    ],
+    [
+     "0170",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 20%"
+    ],
+    [
+     "0171",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 40%"
+    ],
+    [
+     "0180",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 50%"
+    ],
+    [
+     "0190",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 100%"
+    ],
+    [
+     "0200",
+     "Exposure value"
+    ],
+    [
+     "0220",
+     "Risk-weighted exposure amount"
+    ],
+    [
+     "0230",
+     "Risk-weighted exposure amount / Of which: with a credit assessment by a nominated ECAI"
+    ],
+    [
+     "0235",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available"
+    ],
+    [
+     "0240",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available / Of which: with a credit assessment derived from central government"
+    ]
+   ],
+   "filing_indicator": "SC07.00.01",
+   "group": "SC07.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "TOTAL EXPOSURES"
+    ],
+    [
+     "0015",
+     "of which: Defaulted exposures"
+    ],
+    [
+     "0020",
+     "of which: SME"
+    ],
+    [
+     "0021",
+     "of which: Exposures to corporates - Specialised lending - Object finance exposures"
+    ],
+    [
+     "0022",
+     "of which: Exposures to corporates - Specialised lending - Commodities finance exposures"
+    ],
+    [
+     "0023",
+     "of which: Exposures to corporates - Specialised lending - Project finance exposures"
+    ],
+    [
+     "0024",
+     "of which: pre-operational phase"
+    ],
+    [
+     "0025",
+     "of which: operational phase"
+    ],
+    [
+     "0026",
+     "of which: high quality operational phase"
+    ],
+    [
+     "0330",
+     "of which: Real estate exposures - regulatory residential real estate exposures"
+    ],
+    [
+     "0331",
+     "of which: not materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0332",
+     "of which: materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0340",
+     "of which: Real estate exposures - regulatory commercial real estate exposures"
+    ],
+    [
+     "0341",
+     "of which: not materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0343",
+     "of which: to SMEs"
+    ],
+    [
+     "0342",
+     "of which: materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0344",
+     "of which: to SMEs"
+    ],
+    [
+     "0350",
+     "of which: Real estate exposures - other real estate exposures"
+    ],
+    [
+     "0351",
+     "of which: residential real estate - not materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0352",
+     "of which: residential real estate - materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0353",
+     "of which: commercial real estate - not materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0354",
+     "of which: commercial real estate - materially dependent on the cash flows generated by the property"
+    ],
+    [
+     "0360",
+     "of which: Real estate exposures - land acquisition, development and construction exposures"
+    ],
+    [
+     "0070",
+     "BREAKDOWN OF TOTAL EXPOSURES BY EXPOSURE TYPES: On-balance sheet exposures subject to credit risk"
+    ],
+    [
+     "0080",
+     "Off-balance sheet exposures subject to credit risk"
+    ],
+    [
+     "0085",
+     "Other"
+    ],
+    [
+     "0140",
+     "BREAKDOWN OF TOTAL EXPOSURES BY RISK WEIGHTS: 0%"
+    ],
+    [
+     "0150",
+     "2%"
+    ],
+    [
+     "0160",
+     "4%"
+    ],
+    [
+     "0170",
+     "10%"
+    ],
+    [
+     "0171",
+     "15%"
+    ],
+    [
+     "0180",
+     "20%"
+    ],
+    [
+     "0181",
+     "25%"
+    ],
+    [
+     "0182",
+     "30%"
+    ],
+    [
+     "0190",
+     "35%"
+    ],
+    [
+     "0191",
+     "40%"
+    ],
+    [
+     "0192",
+     "45%"
+    ],
+    [
+     "0200",
+     "50%"
+    ],
+    [
+     "0201",
+     "60%"
+    ],
+    [
+     "0202",
+     "65%"
+    ],
+    [
+     "0210",
+     "70%"
+    ],
+    [
+     "0220",
+     "75%"
+    ],
+    [
+     "0221",
+     "80%"
+    ],
+    [
+     "0222",
+     "85%"
+    ],
+    [
+     "0230",
+     "100%"
+    ],
+    [
+     "0231",
+     "105%"
+    ],
+    [
+     "0232",
+     "110%"
+    ],
+    [
+     "0233",
+     "130%"
+    ],
+    [
+     "0234",
+     "135%"
+    ],
+    [
+     "0240",
+     "150%"
+    ],
+    [
+     "0250",
+     "250%"
+    ],
+    [
+     "0261",
+     "400%"
+    ],
+    [
+     "0270",
+     "1250%"
+    ],
+    [
+     "0280",
+     "Other risk weights"
+    ],
+    [
+     "0281",
+     "BREAKDOWN OF TOTAL EXPOSURES BY APPROACH (CIU): Look-through approach"
+    ],
+    [
+     "0284",
+     "of which: exposures to relevant CIUs"
+    ],
+    [
+     "0282",
+     "Mandate-based approach"
+    ],
+    [
+     "0285",
+     "of which: exposures to relevant CIUs"
+    ],
+    [
+     "0283",
+     "Fall-back approach"
+    ]
+   ],
+   "title": "CREDIT AND COUNTERPARTY CREDIT RISKS AND FREE DELIVERIES: STANDARDISED APPROACH TO CAPITAL REQUIREMENTS FOR SDDTS (CR SA SDDT)",
+   "z": [
+    {
+     "code": "Z1",
+     "kind": "fixed",
+     "label": "Sheets",
+     "sheets": [
+      {
+       "code": "0001",
+       "label": "Total (SA exposures)",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ]
+       ]
+      },
+      {
+       "code": "0002",
+       "label": "Central governments or Central banks",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x2"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x16"
+        ]
+       ]
+      },
+      {
+       "code": "0003",
+       "label": "Regional governments or local authorities",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x16"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x23"
+        ]
+       ]
+      },
+      {
+       "code": "0004",
+       "label": "Public sector entities",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x19"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x22"
+        ]
+       ]
+      },
+      {
+       "code": "0005",
+       "label": "Multilateral development banks",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x15"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x21"
+        ]
+       ]
+      },
+      {
+       "code": "0006",
+       "label": "International organisations",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x13"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x20"
+        ]
+       ]
+      },
+      {
+       "code": "0007",
+       "label": "Institutions",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x6"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x19"
+        ]
+       ]
+      },
+      {
+       "code": "0008",
+       "label": "Corporates",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x51"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x17"
+        ]
+       ]
+      },
+      {
+       "code": "0009",
+       "label": "Retail",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x22"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x26"
+        ]
+       ]
+      },
+      {
+       "code": "0010",
+       "label": "Real estate exposures",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "boe_eba_EC:x10015"
+        ]
+       ]
+      },
+      {
+       "code": "0011",
+       "label": "Exposures in default",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x12"
+        ]
+       ]
+      },
+      {
+       "code": "0012",
+       "label": "Exposures associated with particularly high risk",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x24"
+        ]
+       ]
+      },
+      {
+       "code": "0013",
+       "label": "Eligible covered bonds",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x13"
+        ]
+       ]
+      },
+      {
+       "code": "0015",
+       "label": "Exposures in the form of units or shares in collective investment undertakings (\u2018CIUs\u2019)",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x14"
+        ]
+       ]
+      },
+      {
+       "code": "0016",
+       "label": "Subordinated debt, equity and other own funds instruments",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "boe_eba_EC:x10016"
+        ]
+       ]
+      },
+      {
+       "code": "0017",
+       "label": "Other items",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x25"
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "SC07.00.01.03": {
+   "columns": [
+    [
+     "0010",
+     "Original exposure pre conversion factors"
+    ],
+    [
+     "0030",
+     "(-) Value adjustments and provisions associated with the original exposure"
+    ],
+    [
+     "0035",
+     "(-) Adjustment to exposure value due to on-balance sheet netting"
+    ],
+    [
+     "0040",
+     "Exposure net of value adjustments, provisions and on-balance sheet netting"
+    ],
+    [
+     "0050",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Guarantees"
+    ],
+    [
+     "0060",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Credit derivatives"
+    ],
+    [
+     "0070",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Financial collateral: simple method"
+    ],
+    [
+     "0080",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Other funded credit protection"
+    ],
+    [
+     "0090",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / (-) Total Outflows"
+    ],
+    [
+     "0100",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / Total Inflows (+)"
+    ],
+    [
+     "0110",
+     "Net exposure after CRM substitution effects pre conversion factors"
+    ],
+    [
+     "0120",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / Volatility adjustment to the exposure"
+    ],
+    [
+     "0130",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (CVAM)"
+    ],
+    [
+     "0140",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (CVAM) / (-) Of which: Volatility and maturity adjustments"
+    ],
+    [
+     "0150",
+     "Fully adjusted exposure value (E*)"
+    ],
+    [
+     "0160",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 10%"
+    ],
+    [
+     "0170",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 20%"
+    ],
+    [
+     "0171",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 40%"
+    ],
+    [
+     "0180",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 50%"
+    ],
+    [
+     "0190",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 100%"
+    ],
+    [
+     "0200",
+     "Exposure value"
+    ],
+    [
+     "0220",
+     "Risk-weighted exposure amount"
+    ],
+    [
+     "0230",
+     "Risk-weighted exposure amount / Of which: with a credit assessment by a nominated ECAI"
+    ],
+    [
+     "0235",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available"
+    ],
+    [
+     "0240",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available / Of which: with a credit assessment derived from central government"
+    ]
+   ],
+   "filing_indicator": "SC07.00.01",
+   "group": "SC07.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0300",
+     "Memorandum items Exposures in default subject to a risk weight of 100%"
+    ],
+    [
+     "0320",
+     "Exposures in default subject to a risk weight of 150%"
+    ]
+   ],
+   "title": "CREDIT AND COUNTERPARTY CREDIT RISKS AND FREE DELIVERIES: STANDARDISED APPROACH TO CAPITAL REQUIREMENTS FOR SDDTS (CR SA SDDT) - Memorandum items - Exposures in default",
+   "z": [
+    {
+     "code": "Z1",
+     "kind": "fixed",
+     "label": "Sheets",
+     "sheets": [
+      {
+       "code": "0001",
+       "label": "Total (SA exposures)",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ]
+       ]
+      },
+      {
+       "code": "0002",
+       "label": "Central governments or Central banks",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x2"
+        ],
+        [
+         "eba_dim:ECB",
+         "eba_EC:x16"
+        ]
+       ]
+      },
+      {
+       "code": "0003",
+       "label": "Regional governments or local authorities",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x16"
+        ],
+        [
+         "eba_dim:ECB",
+         "eba_EC:x23"
+        ]
+       ]
+      },
+      {
+       "code": "0004",
+       "label": "Public sector entities",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x19"
+        ],
+        [
+         "eba_dim:ECB",
+         "eba_EC:x22"
+        ]
+       ]
+      },
+      {
+       "code": "0007",
+       "label": "Institutions",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x6"
+        ],
+        [
+         "eba_dim:ECB",
+         "eba_EC:x19"
+        ]
+       ]
+      },
+      {
+       "code": "0008",
+       "label": "Corporates",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x51"
+        ],
+        [
+         "eba_dim:ECB",
+         "eba_EC:x17"
+        ]
+       ]
+      },
+      {
+       "code": "0009",
+       "label": "Retail",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x22"
+        ],
+        [
+         "eba_dim:ECB",
+         "eba_EC:x26"
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "SC07.00.01.04": {
+   "columns": [
+    [
+     "0010",
+     "Original exposure pre conversion factors"
+    ],
+    [
+     "0030",
+     "(-) Value adjustments and provisions associated with the original exposure"
+    ],
+    [
+     "0035",
+     "(-) Adjustment to exposure value due to on-balance sheet netting"
+    ],
+    [
+     "0040",
+     "Exposure net of value adjustments, provisions and on-balance sheet netting"
+    ],
+    [
+     "0050",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Guarantees"
+    ],
+    [
+     "0060",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Credit derivatives"
+    ],
+    [
+     "0070",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Financial collateral: simple method"
+    ],
+    [
+     "0080",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Other funded credit protection"
+    ],
+    [
+     "0090",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / (-) Total Outflows"
+    ],
+    [
+     "0100",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / Total Inflows (+)"
+    ],
+    [
+     "0110",
+     "Net exposure after CRM substitution effects pre conversion factors"
+    ],
+    [
+     "0120",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / Volatility adjustment to the exposure"
+    ],
+    [
+     "0130",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (CVAM)"
+    ],
+    [
+     "0140",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (CVAM) / (-) Of which: Volatility and maturity adjustments"
+    ],
+    [
+     "0150",
+     "Fully adjusted exposure value (E*)"
+    ],
+    [
+     "0160",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 10%"
+    ],
+    [
+     "0170",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 20%"
+    ],
+    [
+     "0171",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 40%"
+    ],
+    [
+     "0180",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 50%"
+    ],
+    [
+     "0190",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 100%"
+    ],
+    [
+     "0200",
+     "Exposure value"
+    ],
+    [
+     "0220",
+     "Risk-weighted exposure amount"
+    ],
+    [
+     "0230",
+     "Risk-weighted exposure amount / Of which: with a credit assessment by a nominated ECAI"
+    ],
+    [
+     "0235",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available"
+    ],
+    [
+     "0240",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available / Of which: with a credit assessment derived from central government"
+    ]
+   ],
+   "filing_indicator": "SC07.00.01",
+   "group": "SC07.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0371",
+     "Equity exposures - transitional provisions Standardised Transitional Approach (higher risk equity exposures)"
+    ],
+    [
+     "0372",
+     "Standardised Transitional Approach (other equity exposures)"
+    ]
+   ],
+   "title": "CREDIT AND COUNTERPARTY CREDIT RISKS AND FREE DELIVERIES: STANDARDISED APPROACH TO CAPITAL REQUIREMENTS FOR SDDTS (CR SA SDDT) - Memorandum items - Equity exposures - transitional provisions",
+   "z": [
+    {
+     "code": "Z1",
+     "kind": "fixed",
+     "label": "Sheets",
+     "sheets": [
+      {
+       "code": "0016",
+       "label": "Subordinated debt, equity and other own funds instruments",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "boe_eba_EC:x10016"
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "SC07.00.01.05": {
+   "columns": [
+    [
+     "0010",
+     "Original exposure pre conversion factors"
+    ],
+    [
+     "0030",
+     "(-) Value adjustments and provisions associated with the original exposure"
+    ],
+    [
+     "0035",
+     "(-) Adjustment to exposure value due to on-balance sheet netting"
+    ],
+    [
+     "0040",
+     "Exposure net of value adjustments, provisions and on-balance sheet netting"
+    ],
+    [
+     "0050",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Guarantees"
+    ],
+    [
+     "0060",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Unfunded credit protection: adjusted values / (-) Credit derivatives"
+    ],
+    [
+     "0070",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Financial collateral: simple method"
+    ],
+    [
+     "0080",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Funded credit protection / (-) Other funded credit protection"
+    ],
+    [
+     "0090",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / (-) Total Outflows"
+    ],
+    [
+     "0100",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / Substitution of the exposure due to CRM / Total Inflows (+)"
+    ],
+    [
+     "0110",
+     "Net exposure after CRM substitution effects pre conversion factors"
+    ],
+    [
+     "0120",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / Volatility adjustment to the exposure"
+    ],
+    [
+     "0130",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (CVAM)"
+    ],
+    [
+     "0140",
+     "Credit risk mitigation techniques affecting the exposure amount: funded credit protection. Financial collateral comprehensive method / (-) Financial collateral: adjusted value (CVAM) / (-) Of which: Volatility and maturity adjustments"
+    ],
+    [
+     "0150",
+     "Fully adjusted exposure value (E*)"
+    ],
+    [
+     "0160",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 10%"
+    ],
+    [
+     "0170",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 20%"
+    ],
+    [
+     "0171",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 40%"
+    ],
+    [
+     "0180",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 50%"
+    ],
+    [
+     "0190",
+     "Breakdown of the fully adjusted exposure value of off-balance sheet items by conversion factors / 100%"
+    ],
+    [
+     "0200",
+     "Exposure value"
+    ],
+    [
+     "0220",
+     "Risk-weighted exposure amount"
+    ],
+    [
+     "0230",
+     "Risk-weighted exposure amount / Of which: with a credit assessment by a nominated ECAI"
+    ],
+    [
+     "0235",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available"
+    ],
+    [
+     "0240",
+     "Risk-weighted exposure amount / Of which: where a credit assessment by a nominated ECAI is not available / Of which: with a credit assessment derived from central government"
+    ]
+   ],
+   "filing_indicator": "SC07.00.01",
+   "group": "SC07.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0380",
+     "Retail and real estate exposures - subject to the currency mismatch multiplier"
+    ]
+   ],
+   "title": "",
+   "z": [
+    {
+     "code": "Z1",
+     "kind": "fixed",
+     "label": "Sheets",
+     "sheets": [
+      {
+       "code": "0001",
+       "label": "Total (SA exposures)",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ]
+       ]
+      },
+      {
+       "code": "0009",
+       "label": "Retail",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:CPS",
+         "eba_CT:x22"
+        ],
+        [
+         "eba_dim:EXC",
+         "eba_EC:x26"
+        ]
+       ]
+      },
+      {
+       "code": "0010",
+       "label": "Real estate exposures",
+       "members": [
+        [
+         "eba_dim:APR",
+         "eba_AP:x42"
+        ],
+        [
+         "eba_dim:EXC",
+         "boe_eba_EC:x10015"
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "SC09.01.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Original exposure pre conversion factors"
+    ],
+    [
+     "0020",
+     "Original exposure pre conversion factors / Defaulted exposures"
+    ],
+    [
+     "0040",
+     "Observed new defaults for the period"
+    ],
+    [
+     "0050",
+     "General credit risk adjustments"
+    ],
+    [
+     "0055",
+     "Specific credit risk adjustments"
+    ],
+    [
+     "0060",
+     "Write offs"
+    ],
+    [
+     "0061",
+     "Additional value adjustments and other own funds reductions"
+    ],
+    [
+     "0070",
+     "Credit risk adjustments/write-offs for observed new defaults"
+    ],
+    [
+     "0075",
+     "Exposure value"
+    ],
+    [
+     "0090",
+     "Risk-weighted exposure amount"
+    ]
+   ],
+   "filing_indicator": "SC09.01.01",
+   "group": "SC09.01.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Central governments or central banks"
+    ],
+    [
+     "0020",
+     "Regional governments or local authorities"
+    ],
+    [
+     "0030",
+     "Public sector entities"
+    ],
+    [
+     "0040",
+     "Multilateral Development Banks"
+    ],
+    [
+     "0050",
+     "International Organisations"
+    ],
+    [
+     "0060",
+     "Institutions"
+    ],
+    [
+     "0070",
+     "Corporates"
+    ],
+    [
+     "0075",
+     "Of which: SME"
+    ],
+    [
+     "0071",
+     "of which: specialised lending - object finance exposures"
+    ],
+    [
+     "0072",
+     "of which: specialised lending - commodities finance exposures"
+    ],
+    [
+     "0073",
+     "of which: specialised lending - project finance exposures"
+    ],
+    [
+     "0080",
+     "Retail"
+    ],
+    [
+     "0085",
+     "Of which: SME"
+    ],
+    [
+     "0090",
+     "Real estate exposures"
+    ],
+    [
+     "0095",
+     "of which: SME"
+    ],
+    [
+     "0091",
+     "of which: Regulatory residential real estate"
+    ],
+    [
+     "0092",
+     "of which: Regulatory commercial real estate"
+    ],
+    [
+     "0093",
+     "of which: Other real estate"
+    ],
+    [
+     "0094",
+     "of which: Land acquisition, development and construction"
+    ],
+    [
+     "0100",
+     "Exposures in default"
+    ],
+    [
+     "0110",
+     "Exposures associated with particularly high risk"
+    ],
+    [
+     "0120",
+     "Eligible covered bonds"
+    ],
+    [
+     "0140",
+     "Collective investments undertakings (CIU)"
+    ],
+    [
+     "0141",
+     "Look-through approach"
+    ],
+    [
+     "0142",
+     "Mandate-based approach"
+    ],
+    [
+     "0143",
+     "Fall-back approach"
+    ],
+    [
+     "0150",
+     "Subordinated debt, equity and other own funds instruments"
+    ],
+    [
+     "0160",
+     "Other items"
+    ],
+    [
+     "0170",
+     "Total exposures"
+    ]
+   ],
+   "title": "GEOGRAPHICAL BREAKDOWN OF EXPOSURES BY RESIDENCE OF THE OBLIGOR (SA EXPOSURES) (CR GB 1)",
+   "z": [
+    {
+     "code": "0001",
+     "default_allowed": false,
+     "dimension": "eba_dim:CEG",
+     "kind": "open",
+     "label": "Country",
+     "members": [
+      "eba_GA:x1",
+      "eba_GA:AL",
+      "eba_GA:AT",
+      "eba_GA:BE",
+      "eba_GA:BG",
+      "eba_GA:CY",
+      "eba_GA:CZ",
+      "eba_GA:DK",
+      "eba_GA:EE",
+      "eba_GA:FI",
+      "eba_GA:FR",
+      "eba_GA:DE",
+      "eba_GA:GR",
+      "eba_GA:HU",
+      "eba_GA:IE",
+      "eba_GA:IT",
+      "eba_GA:JP",
+      "eba_GA:XK",
+      "eba_GA:LV",
+      "eba_GA:LT",
+      "eba_GA:LU",
+      "eba_GA:MK",
+      "eba_GA:MT",
+      "eba_GA:NL",
+      "eba_GA:NO",
+      "eba_GA:PL",
+      "eba_GA:PT",
+      "eba_GA:RO",
+      "eba_GA:RU",
+      "eba_GA:RS",
+      "eba_GA:SK",
+      "eba_GA:SI",
+      "eba_GA:ES",
+      "eba_GA:SE",
+      "eba_GA:CH",
+      "eba_GA:TR",
+      "eba_GA:UA",
+      "eba_GA:GB",
+      "eba_GA:US",
+      "eba_GA:AF",
+      "eba_GA:AX",
+      "eba_GA:DZ",
+      "eba_GA:AS",
+      "eba_GA:AD",
+      "eba_GA:AO",
+      "eba_GA:AI",
+      "eba_GA:AQ",
+      "eba_GA:AG",
+      "eba_GA:AR",
+      "eba_GA:AM",
+      "eba_GA:AW",
+      "eba_GA:AU",
+      "eba_GA:AZ",
+      "eba_GA:BS",
+      "eba_GA:BH",
+      "eba_GA:BD",
+      "eba_GA:BB",
+      "eba_GA:BY",
+      "eba_GA:BZ",
+      "eba_GA:BJ",
+      "eba_GA:BM",
+      "eba_GA:BT",
+      "eba_GA:BO",
+      "eba_GA:BQ",
+      "eba_GA:BA",
+      "eba_GA:BW",
+      "eba_GA:BV",
+      "eba_GA:BR",
+      "eba_GA:IO",
+      "eba_GA:BN",
+      "eba_GA:BF",
+      "eba_GA:BI",
+      "eba_GA:KH",
+      "eba_GA:CM",
+      "eba_GA:CA",
+      "eba_GA:CV",
+      "eba_GA:KY",
+      "eba_GA:CF",
+      "eba_GA:TD",
+      "eba_GA:CL",
+      "eba_GA:CN",
+      "eba_GA:CX",
+      "eba_GA:CC",
+      "eba_GA:CO",
+      "eba_GA:KM",
+      "eba_GA:CG",
+      "eba_GA:CD",
+      "eba_GA:CK",
+      "eba_GA:CR",
+      "eba_GA:CI",
+      "eba_GA:HR",
+      "eba_GA:CU",
+      "eba_GA:CW",
+      "eba_GA:DJ",
+      "eba_GA:DM",
+      "eba_GA:DO",
+      "eba_GA:EC",
+      "eba_GA:EG",
+      "eba_GA:SV",
+      "eba_GA:GQ",
+      "eba_GA:ER",
+      "eba_GA:ET",
+      "eba_GA:FK",
+      "eba_GA:FO",
+      "eba_GA:FJ",
+      "eba_GA:GF",
+      "eba_GA:PF",
+      "eba_GA:TF",
+      "eba_GA:GA",
+      "eba_GA:GM",
+      "eba_GA:GE",
+      "eba_GA:GH",
+      "eba_GA:GI",
+      "eba_GA:GL",
+      "eba_GA:GD",
+      "eba_GA:GP",
+      "eba_GA:GU",
+      "eba_GA:GT",
+      "eba_GA:GG",
+      "eba_GA:GN",
+      "eba_GA:GW",
+      "eba_GA:GY",
+      "eba_GA:HT",
+      "eba_GA:HM",
+      "eba_GA:VA",
+      "eba_GA:HN",
+      "eba_GA:HK",
+      "eba_GA:IS",
+      "eba_GA:IN",
+      "eba_GA:ID",
+      "eba_GA:IR",
+      "eba_GA:IQ",
+      "eba_GA:IM",
+      "eba_GA:IL",
+      "eba_GA:JM",
+      "eba_GA:JE",
+      "eba_GA:JO",
+      "eba_GA:KZ",
+      "eba_GA:KE",
+      "eba_GA:KI",
+      "eba_GA:KP",
+      "eba_GA:KR",
+      "eba_GA:KW",
+      "eba_GA:KG",
+      "eba_GA:LA",
+      "eba_GA:LB",
+      "eba_GA:LS",
+      "eba_GA:LR",
+      "eba_GA:LY",
+      "eba_GA:LI",
+      "eba_GA:MO",
+      "eba_GA:MG",
+      "eba_GA:MW",
+      "eba_GA:MY",
+      "eba_GA:MV",
+      "eba_GA:ML",
+      "eba_GA:MH",
+      "eba_GA:MQ",
+      "eba_GA:MR",
+      "eba_GA:MU",
+      "eba_GA:YT",
+      "eba_GA:MX",
+      "eba_GA:FM",
+      "eba_GA:MD",
+      "eba_GA:MC",
+      "eba_GA:MN",
+      "eba_GA:ME",
+      "eba_GA:MS",
+      "eba_GA:MA",
+      "eba_GA:MZ",
+      "eba_GA:MM",
+      "eba_GA:NA",
+      "eba_GA:NR",
+      "eba_GA:NP",
+      "eba_GA:NC",
+      "eba_GA:NZ",
+      "eba_GA:NI",
+      "eba_GA:NE",
+      "eba_GA:NG",
+      "eba_GA:NU",
+      "eba_GA:NF",
+      "eba_GA:MP",
+      "eba_GA:OM",
+      "eba_GA:PK",
+      "eba_GA:PW",
+      "eba_GA:PS",
+      "eba_GA:PA",
+      "eba_GA:PG",
+      "eba_GA:PY",
+      "eba_GA:PE",
+      "eba_GA:PH",
+      "eba_GA:PN",
+      "eba_GA:PR",
+      "eba_GA:QA",
+      "eba_GA:RE",
+      "eba_GA:RW",
+      "eba_GA:BL",
+      "eba_GA:SH",
+      "eba_GA:KN",
+      "eba_GA:LC",
+      "eba_GA:MF",
+      "eba_GA:PM",
+      "eba_GA:VC",
+      "eba_GA:WS",
+      "eba_GA:SM",
+      "eba_GA:ST",
+      "eba_GA:SA",
+      "eba_GA:SN",
+      "eba_GA:SC",
+      "eba_GA:SL",
+      "eba_GA:SG",
+      "eba_GA:SX",
+      "eba_GA:SB",
+      "eba_GA:SO",
+      "eba_GA:ZA",
+      "eba_GA:GS",
+      "eba_GA:SS",
+      "eba_GA:LK",
+      "eba_GA:SD",
+      "eba_GA:SR",
+      "eba_GA:SJ",
+      "eba_GA:SZ",
+      "eba_GA:SY",
+      "eba_GA:TW",
+      "eba_GA:TJ",
+      "eba_GA:TZ",
+      "eba_GA:TH",
+      "eba_GA:TL",
+      "eba_GA:TG",
+      "eba_GA:TK",
+      "eba_GA:TO",
+      "eba_GA:TT",
+      "eba_GA:TN",
+      "eba_GA:TM",
+      "eba_GA:TC",
+      "eba_GA:TV",
+      "eba_GA:UG",
+      "eba_GA:AE",
+      "eba_GA:UM",
+      "eba_GA:UY",
+      "eba_GA:UZ",
+      "eba_GA:VU",
+      "eba_GA:VE",
+      "eba_GA:VN",
+      "eba_GA:VG",
+      "eba_GA:VI",
+      "eba_GA:WF",
+      "eba_GA:EH",
+      "eba_GA:YE",
+      "eba_GA:ZM",
+      "eba_GA:ZW",
+      "eba_GA:x28"
+     ]
+    }
+   ]
+  },
+  "SC09.04.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Amount"
+    ],
+    [
+     "0030",
+     "Qualitative information"
+    ]
+   ],
+   "filing_indicator": "SC09.04.01",
+   "group": "SC09.04.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Exposure value under the Standardised Approach"
+    ],
+    [
+     "0055",
+     "Exposure value of securitisation positions in the banking book"
+    ],
+    [
+     "0150",
+     "Use of 2% threshold Use of 2 % threshold for general credit exposure"
+    ],
+    [
+     "0170",
+     "MEMORANDA Has made use of the adjustment in SDDT - General Application 2.6 of the PRA Rulebook"
+    ],
+    [
+     "0180",
+     "The % of relevant credit exposures located in the UK has been between 75% and 85% during the last quarter"
+    ]
+   ],
+   "title": "BREAKDOWN OF RELEVANT CREDIT EXPOSURES OF SDDTS BY COUNTRY",
+   "z": [
+    {
+     "code": "0001",
+     "default_allowed": false,
+     "dimension": "eba_dim:RIO",
+     "kind": "open",
+     "label": "Country",
+     "members": [
+      "eba_GA:x1",
+      "eba_GA:GB"
+     ]
+    }
+   ]
+  },
+  "SC13.01.01.01": {
+   "columns": [
+    [
+     "0010",
+     "TOTAL AMOUNT OF SECURITISATION EXPOSURES ORIGINATED"
+    ],
+    [
+     "0020",
+     "SYNTHETIC SECURITISATIONS: CREDIT PROTECTION TO THE SECURITISED EXPOSURES / (-) FUNDED CREDIT PROTECTION (Cva)"
+    ],
+    [
+     "0030",
+     "SYNTHETIC SECURITISATIONS: CREDIT PROTECTION TO THE SECURITISED EXPOSURES / (-) TOTAL OUTFLOWS / (-) UNFUNDED CREDIT PROTECTION ADJUSTED VALUES (G*)"
+    ],
+    [
+     "0040",
+     "SYNTHETIC SECURITISATIONS: CREDIT PROTECTION TO THE SECURITISED EXPOSURES / NOTIONAL AMOUNT RETAINED OR REPURCHASED OF CREDIT PROTECTION"
+    ],
+    [
+     "0050",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE CONVERSION FACTORS"
+    ],
+    [
+     "0060",
+     "(-) VALUE ADJUSTMENTS AND PROVISIONS"
+    ],
+    [
+     "0070",
+     "EXPOSURE NET OF VALUE ADJUSTMENTS AND PROVISIONS"
+    ],
+    [
+     "0080",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / (-) UNFUNDED CREDIT PROTECTION: ADJUSTED VALUES (Ga)"
+    ],
+    [
+     "0090",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / (-) FUNDED CREDIT PROTECTION"
+    ],
+    [
+     "0100",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / SUBSTITUTION OF THE EXPOSURE DUE TO CRM / (-) TOTAL OUTFLOWS"
+    ],
+    [
+     "0110",
+     "CREDIT RISK MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE / SUBSTITUTION OF THE EXPOSURE DUE TO CRM / TOTAL INFLOWS"
+    ],
+    [
+     "0120",
+     "NET EXPOSURE AFTER CRM SUBSTITUTION EFFECTS PRE CONVERSION FACTORS"
+    ],
+    [
+     "0130",
+     "(-) CREDIT RISK MITIGATION TECHNIQUES AFFECTING THE AMOUNT OF THE EXPOSURE: FUNDED CREDIT PROTECTION FINANCIAL COLLATERAL COMPREHENSIVE METHOD ADJUSTED VALUE (Cvam)"
+    ],
+    [
+     "0140",
+     "FULLY ADJUSTED EXPOSURE VALUE (E*)"
+    ],
+    [
+     "0150",
+     "FULLY ADJUSTED EXPOSURE VALUE (E*) / OF WHICH: SUBJECT TO A CCF OF 0%"
+    ],
+    [
+     "0160",
+     "(-) NON REFUNDABLE PURCHASE PRICE DISCOUNT"
+    ],
+    [
+     "0170",
+     "(-) SPECIFIC CREDIT RISK ADJUSTMENTS ON UNDERLYING EXPOSURES"
+    ],
+    [
+     "0180",
+     "EXPOSURE VALUE"
+    ],
+    [
+     "0190",
+     "EXPOSURE VALUE / (-) DEDUCTED FROM OWN FUNDS"
+    ],
+    [
+     "0200",
+     "EXPOSURE VALUE / SUBJECT TO RISK WEIGHTS"
+    ],
+    [
+     "0280",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-SA"
+    ],
+    [
+     "0290",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-SA / BREAKDOWN BY RW BANDS / <=20% RW"
+    ],
+    [
+     "0300",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-SA / BREAKDOWN BY RW BANDS / >20% TO 50% RW"
+    ],
+    [
+     "0310",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-SA / BREAKDOWN BY RW BANDS / >50% TO 100% RW"
+    ],
+    [
+     "0320",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-SA / BREAKDOWN BY RW BANDS / >100% TO 1250% RW"
+    ],
+    [
+     "0330",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-SA / BREAKDOWN BY RW BANDS / 1250% RW (W UNKNOWN)"
+    ],
+    [
+     "0340",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-SA / BREAKDOWN BY RW BANDS / 1250% RW (OTHER)"
+    ],
+    [
+     "0350",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA"
+    ],
+    [
+     "0360",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / SHORT TERM CREDIT QUALITY STEPS / CQS 1"
+    ],
+    [
+     "0370",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / SHORT TERM CREDIT QUALITY STEPS / CQS 2"
+    ],
+    [
+     "0380",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / SHORT TERM CREDIT QUALITY STEPS / CQS 3"
+    ],
+    [
+     "0390",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / SHORT TERM CREDIT QUALITY STEPS / ALL OTHER CQS"
+    ],
+    [
+     "0400",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 1"
+    ],
+    [
+     "0410",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 2"
+    ],
+    [
+     "0420",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 3"
+    ],
+    [
+     "0430",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 4"
+    ],
+    [
+     "0440",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 5"
+    ],
+    [
+     "0450",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 6"
+    ],
+    [
+     "0460",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 7"
+    ],
+    [
+     "0470",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 8"
+    ],
+    [
+     "0480",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 9"
+    ],
+    [
+     "0490",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 10"
+    ],
+    [
+     "0500",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 11"
+    ],
+    [
+     "0510",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 12"
+    ],
+    [
+     "0520",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 13"
+    ],
+    [
+     "0530",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 14"
+    ],
+    [
+     "0540",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 15"
+    ],
+    [
+     "0550",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 16"
+    ],
+    [
+     "0560",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / CQS 17"
+    ],
+    [
+     "0570",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY CREDIT QUALITY STEPS / LONG TERM CREDIT QUALITY STEPS / ALL OTHER CQS"
+    ],
+    [
+     "0580",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY REASONS FOR APPLICATION OF SEC-ERBA / AUTO LOANS, AUTO LEASES AND EQUIPMENT LEASES"
+    ],
+    [
+     "0590",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY REASONS FOR APPLICATION OF SEC-ERBA / SEC-ERBA OPTION"
+    ],
+    [
+     "0600",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY REASONS FOR APPLICATION OF SEC-ERBA / POSITIONS SUBJECT TO POINT (a) OF ARTICLE 254(2) CRR"
+    ],
+    [
+     "0610",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY REASONS FOR APPLICATION OF SEC-ERBA / POSITIONS SUBJECT TO POINT (b) OF ARTICLE 254(2) CRR"
+    ],
+    [
+     "0620",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY REASONS FOR APPLICATION OF SEC-ERBA / POSITIONS SUBJECT TO ARTICLES 254 (4) OR 258 (2) CRR"
+    ],
+    [
+     "0630",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / SEC-ERBA / BREAKDOWN BY REASONS FOR APPLICATION OF SEC-ERBA / FOLLOWING THE HIERARCHY OF APPROACHES"
+    ],
+    [
+     "0700",
+     "BREAKDOWN OF THE EXPOSURE VALUE SUBJECT TO RISK WEIGHTS / OTHER (RW=1250%)"
+    ],
+    [
+     "0710",
+     "RISK-WEIGHTED EXPOSURE AMOUNT"
+    ],
+    [
+     "0740",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-SA"
+    ],
+    [
+     "0750",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-SA / OF WHICH: RW=1250% (W UNKNOWN)"
+    ],
+    [
+     "0760",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-ERBA"
+    ],
+    [
+     "0770",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-ERBA / AUTO LOANS, AUTO LEASES AND EQUIPMENT LEASES"
+    ],
+    [
+     "0780",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-ERBA / SEC-ERBA OPTION"
+    ],
+    [
+     "0790",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-ERBA / POSITIONS SUBJECT TO POINT (a) OF ARTICLE 254(2) CRR"
+    ],
+    [
+     "0800",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-ERBA / POSITIONS SUBJECT TO POINT (b) OF ARTICLE 254(2) CRR"
+    ],
+    [
+     "0810",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-ERBA / POSITIONS SUBJECT TO ARTICLES 254 (4) OR 258 (2) CRR"
+    ],
+    [
+     "0820",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / SEC-ERBA / FOLLOWING THE HIERARCHY OF APPROACHES"
+    ],
+    [
+     "0850",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / OTHER (RW=1250%)"
+    ],
+    [
+     "0860",
+     "RISK-WEIGHTED EXPOSURE AMOUNT / OF WHICH: SYNTHETIC SECURITISATIONS"
+    ],
+    [
+     "0870",
+     "ADJUSTMENT TO THE RISK-WEIGHTED EXPOSURE AMOUNT DUE TO MATURITY MISMATCHES"
+    ],
+    [
+     "0880",
+     "OVERALL EFFECT (ADJUSTMENT) DUE TO INFRINGEMENT  OF CHAPTER 2 OF REGULATION (EU) 2017/2402"
+    ],
+    [
+     "0890",
+     "BEFORE CAP"
+    ],
+    [
+     "0900",
+     "(-) REDUCTION DUE TO RISK WEIGHT CAP"
+    ],
+    [
+     "0910",
+     "(-) REDUCTION DUE TO OVERALL CAP"
+    ],
+    [
+     "0920",
+     "TOTAL RISK-WEIGHTED EXPOSURE AMOUNT"
+    ],
+    [
+     "0930",
+     "MEMORANDUM ITEM: RISK WEIGHTED EXPOSURE AMOUNT CORRESPONDING TO THE OUTFLOWS FROM SECURITISATIONS TO OTHER EXPOSURE CLASSES"
+    ]
+   ],
+   "filing_indicator": "SC13.01.01",
+   "group": "SC13.01.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "TOTAL EXPOSURES"
+    ],
+    [
+     "0020",
+     "SECURITISATIONS"
+    ],
+    [
+     "0030",
+     "QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0040",
+     "STS EXPOSURES"
+    ],
+    [
+     "0050",
+     "SENIOR POSITION IN SMEs SECURITISATIONS"
+    ],
+    [
+     "0060",
+     "NOT QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0070",
+     "RE-SECURITISATIONS"
+    ],
+    [
+     "0080",
+     "ORIGINATOR: TOTAL EXPOSURES"
+    ],
+    [
+     "0090",
+     "SECURITISATIONS: ON-BALANCE SHEET ITEMS"
+    ],
+    [
+     "0100",
+     "QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0110",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0120",
+     "NOT QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0130",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0140",
+     "SECURITISATIONS: OFF-BALANCE SHEET ITEMS AND DERIVATIVES"
+    ],
+    [
+     "0150",
+     "QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0160",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0170",
+     "NOT QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0180",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0190",
+     "RE-SECURITISATIONS"
+    ],
+    [
+     "0200",
+     "INVESTOR: TOTAL EXPOSURES"
+    ],
+    [
+     "0210",
+     "SECURITISATIONS: ON-BALANCE SHEET ITEMS"
+    ],
+    [
+     "0220",
+     "QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0230",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0240",
+     "NOT QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0250",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0260",
+     "SECURITISATIONS: OFF-BALANCE SHEET ITEMS AND DERIVATIVES"
+    ],
+    [
+     "0270",
+     "QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0280",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0290",
+     "NOT QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0300",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0310",
+     "RE-SECURITISATIONS"
+    ],
+    [
+     "0320",
+     "SPONSOR: TOTAL EXPOSURES"
+    ],
+    [
+     "0330",
+     "SECURITISATIONS: ON-BALANCE SHEET ITEMS"
+    ],
+    [
+     "0340",
+     "QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0350",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0360",
+     "NOT QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0370",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0380",
+     "SECURITISATIONS: OFF-BALANCE SHEET ITEMS AND DERIVATIVES"
+    ],
+    [
+     "0390",
+     "QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0400",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0410",
+     "NOT QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT"
+    ],
+    [
+     "0420",
+     "OF WHICH: SENIOR EXPOSURES"
+    ],
+    [
+     "0430",
+     "RE-SECURITISATIONS"
+    ],
+    [
+     "0450",
+     "BREAKDOWN OF OUTSTANDING POSITIONS ACCORDING TO CQS AT INCEPTION: Short term CQS 1"
+    ],
+    [
+     "0460",
+     "CQS 2"
+    ],
+    [
+     "0470",
+     "CQS 3"
+    ],
+    [
+     "0480",
+     "ALL OTHER CQS AND UNRATED"
+    ],
+    [
+     "0500",
+     "BREAKDOWN OF OUTSTANDING POSITIONS ACCORDING TO CQS AT INCEPTION: Long term CQS 1"
+    ],
+    [
+     "0510",
+     "CQS 2"
+    ],
+    [
+     "0520",
+     "CQS 3"
+    ],
+    [
+     "0530",
+     "CQS 4"
+    ],
+    [
+     "0540",
+     "CQS 5"
+    ],
+    [
+     "0550",
+     "CQS 6"
+    ],
+    [
+     "0560",
+     "CQS 7"
+    ],
+    [
+     "0570",
+     "CQS 8"
+    ],
+    [
+     "0580",
+     "CQS 9"
+    ],
+    [
+     "0590",
+     "CQS 10"
+    ],
+    [
+     "0600",
+     "CQS 11"
+    ],
+    [
+     "0610",
+     "CQS 12"
+    ],
+    [
+     "0620",
+     "CQS 13"
+    ],
+    [
+     "0630",
+     "CQS 14"
+    ],
+    [
+     "0640",
+     "CQS 15"
+    ],
+    [
+     "0650",
+     "CQS 16"
+    ],
+    [
+     "0660",
+     "CQS 17"
+    ],
+    [
+     "0670",
+     "ALL OTHER CQS AND UNRATED"
+    ]
+   ],
+   "title": "CREDIT RISK: SECURITISATIONS FOR SDDTS (CR SEC SDDT)",
+   "z": []
+  },
+  "SC14.00.01.01": {
+   "columns": [
+    [
+     "0020",
+     "IDENTIFIER OF THE SECURITISATION"
+    ],
+    [
+     "0021",
+     "INTRA-GROUP, PRIVATE OR PUBLIC SECURITISA-TION?"
+    ],
+    [
+     "0110",
+     "ROLE OF THE INSTITUTION:(ORIGINATOR / SPONSOR / ORIGINAL LENDER / INVESTOR)"
+    ],
+    [
+     "0030",
+     "IDENTIFIER OF THE ORIGINATOR"
+    ],
+    [
+     "0040",
+     "SECURITISATION TYPE:(TRADITIONAL / SYNTHETIC / ABCP PROGRAMME / ABCP TRANSACTION)"
+    ],
+    [
+     "0051",
+     "ACCOUNTING TREATMENT: SECURITISED EXPOSURES ARE KEPT OR REMOVED FROM THE BALANCE SHEET?"
+    ],
+    [
+     "0060",
+     "SOLVENCY TREATMENT: Securitisation positions subject to own funds requirements?"
+    ],
+    [
+     "0061",
+     "SIGNIFICANT RISK TRANSFER"
+    ],
+    [
+     "0070",
+     "SECURITISATION OR RE-SECURITISATION?"
+    ],
+    [
+     "0075",
+     "STS OR NON-STS SECURITISATION?"
+    ],
+    [
+     "0446",
+     "SECURITISATION QUALIFYING FOR DIFFERENTIATED CAPITAL TREATMENT?"
+    ],
+    [
+     "0080",
+     "RETENTION / TYPE OF RETENTION APPLIED"
+    ],
+    [
+     "0090",
+     "RETENTION / % OF RETENTION AT REPORTING DATE"
+    ],
+    [
+     "0100",
+     "RETENTION / COMPLIANCE WITH THE RETENTION REQUIREMENT?"
+    ],
+    [
+     "0120",
+     "NON-ABCP PROGRAMMES / ORIGINATION DATE (yyyy-mm-dd)"
+    ],
+    [
+     "0121",
+     "NON-ABCP PROGRAMMES / DATE OF LATEST ISSUANCE (yyyy-mm-dd)"
+    ],
+    [
+     "0130",
+     "NON-ABCP PROGRAMMES / TOTAL AMOUNT OF SECURITISED EXPOSURES AT ORIGINATION DATE"
+    ],
+    [
+     "0140",
+     "SECURITISED EXPOSURES / TOTAL AMOUNT"
+    ],
+    [
+     "0150",
+     "SECURITISED EXPOSURES / INSTITUTION'S SHARE (%)"
+    ],
+    [
+     "0160",
+     "SECURITISED EXPOSURES / TYPE"
+    ],
+    [
+     "0180",
+     "SECURITISED EXPOSURES / NUMBER OF EXPOSURES"
+    ],
+    [
+     "0181",
+     "SECURITISED EXPOSURES / EXPOSURES IN DEFAULT W (%)"
+    ],
+    [
+     "0190",
+     "SECURITISED EXPOSURES / COUNTRY"
+    ],
+    [
+     "0204",
+     "SECURITISED EXPOSURES / EXPOSURE-WEIGHTED AVERAGE MATURITY OF ASSETS"
+    ],
+    [
+     "0210",
+     "SECURITISED EXPOSURES / (-) VALUE ADJUSTMENTS AND PROVISIONS"
+    ],
+    [
+     "0223",
+     "SECURITISED EXPOSURES / OWN FUNDS REQUIREMENTS BEFORE SECURITISATION (%) Ksa"
+    ],
+    [
+     "0225",
+     "SECURITISED EXPOSURES / MEMORANDUM ITEMS / CREDIT RISK ADJUSTMENTS DURING THE CURRENT PERIOD"
+    ],
+    [
+     "0230",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / SENIOR / AMOUNT"
+    ],
+    [
+     "0231",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / SENIOR / ATTACHMENT POINT (%)"
+    ],
+    [
+     "0232",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / SENIOR / CQS"
+    ],
+    [
+     "0240",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / MEZZANINE / AMOUNT"
+    ],
+    [
+     "0241",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / MEZZANINE / NUMBER OF TRANCHES"
+    ],
+    [
+     "0242",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / MEZZANINE / CQS OF THE MOST SUBORDINATED ONE"
+    ],
+    [
+     "0250",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / FIRST LOSS / AMOUNT"
+    ],
+    [
+     "0251",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / FIRST LOSS / DETACHMENT POINT (%)"
+    ],
+    [
+     "0252",
+     "SECURITISATION STRUCTURE / ON-BALANCE SHEET ITEMS / FIRST LOSS / CQS"
+    ],
+    [
+     "0260",
+     "SECURITISATION STRUCTURE / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / SENIOR"
+    ],
+    [
+     "0270",
+     "SECURITISATION STRUCTURE / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / MEZZANINE"
+    ],
+    [
+     "0280",
+     "SECURITISATION STRUCTURE / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / FIRST LOSS"
+    ],
+    [
+     "0290",
+     "SECURITISATION STRUCTURE / MATURITY / FIRST FORESEEABLE TERMINATION DATE"
+    ],
+    [
+     "0291",
+     "SECURITISATION STRUCTURE / MATURITY / ORIGINATOR'S CALL OPTIONS INCLUDED IN TRANSACTION"
+    ],
+    [
+     "0300",
+     "SECURITISATION STRUCTURE / MATURITY / LEGAL FINAL MATURITY DATE"
+    ],
+    [
+     "0302",
+     "SECURITISATION STRUCTURE / MEMORANDUM ITEMS / ATTACHMENT POINT OF RISK SOLD (%)"
+    ],
+    [
+     "0303",
+     "SECURITISATION STRUCTURE / MEMORANDUM ITEMS / DETACHMENT POINT OF RISK SOLD (%)"
+    ],
+    [
+     "0304",
+     "SECURITISATION STRUCTURE / MEMORANDUM ITEMS / RISK TRANSFER CLAIMED BY ORIGINATOR INSTITUTION (%)"
+    ]
+   ],
+   "filing_indicator": "SC14.00.01",
+   "group": "SC14.00.01",
+   "open_keys": [
+    {
+     "code": "0010",
+     "dimension": "eba_dim:SIC",
+     "kind": "typed",
+     "label": "Internal code",
+     "members": [],
+     "typed_element": "eba_typ:IS",
+     "typed_type": "string"
+    }
+   ],
+   "open_rows": true,
+   "rows": [],
+   "title": "DETAILED INFORMATION ON SECURITISATIONS FOR SDDTS (SEC Details SDDT)",
+   "z": []
+  },
+  "SC14.01.01.01": {
+   "columns": [
+    [
+     "0020",
+     "IDENTIFIER OF THE SECURITISATION"
+    ],
+    [
+     "0310",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / ON-BALANCE SHEET ITEMS / SENIOR"
+    ],
+    [
+     "0320",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / ON-BALANCE SHEET ITEMS / MEZZANINE"
+    ],
+    [
+     "0330",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / ON-BALANCE SHEET ITEMS / FIRST LOSS"
+    ],
+    [
+     "0340",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / SENIOR"
+    ],
+    [
+     "0350",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / MEZZANINE"
+    ],
+    [
+     "0351",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / MEZZANINE / RW CORRESPONDING TO PROTECTION PROVIDER / INSTRUMENT"
+    ],
+    [
+     "0360",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / FIRST LOSS"
+    ],
+    [
+     "0361",
+     "SECURITISATION POSITIONS / ORIGINAL EXPOSURE PRE-CONVERSION FACTORS / OFF-BALANCE SHEET ITEMS AND DERIVATIVES / FIRST LOSS / RW CORRESPONDING TO PROTECTION PROVIDER / INSTRUMENT"
+    ],
+    [
+     "0370",
+     "SECURITISATION POSITIONS / MEMORANDUM ITEMS: OFF-BALANCE SHEET ITEMS AND DERIVATIVES PRE CONVERSION FACTORS / DIRECT CREDIT SUBSTITUTES"
+    ],
+    [
+     "0380",
+     "SECURITISATION POSITIONS / MEMORANDUM ITEMS: OFF-BALANCE SHEET ITEMS AND DERIVATIVES PRE CONVERSION FACTORS / IRS / CRS"
+    ],
+    [
+     "0390",
+     "SECURITISATION POSITIONS / MEMORANDUM ITEMS: OFF-BALANCE SHEET ITEMS AND DERIVATIVES PRE CONVERSION FACTORS / LIQUIDITY FACILITIES"
+    ],
+    [
+     "0400",
+     "SECURITISATION POSITIONS / MEMORANDUM ITEMS: OFF-BALANCE SHEET ITEMS AND DERIVATIVES PRE CONVERSION FACTORS / OTHER"
+    ],
+    [
+     "0411",
+     "EXPOSURE VALUE"
+    ],
+    [
+     "0420",
+     "(-) EXPOSURE VALUE DEDUCTED FROM OWN FUNDS"
+    ],
+    [
+     "0430",
+     "TOTAL RISK WEIGHTED EXPOSURE AMOUNT / BEFORE CAP"
+    ],
+    [
+     "0431",
+     "TOTAL RISK WEIGHTED EXPOSURE AMOUNT / (-) REDUCTION DUE TO RISK WEIGHT CAP"
+    ],
+    [
+     "0432",
+     "TOTAL RISK WEIGHTED EXPOSURE AMOUNT / (-) REDUCTION DUE TO OVERALL CAP"
+    ],
+    [
+     "0440",
+     "TOTAL RISK WEIGHTED EXPOSURE AMOUNT / AFTER CAP"
+    ],
+    [
+     "0447",
+     "MEMORANDUM ITEMS / RISK-WEIGHTED EXPOSURE AMOUNT UNDER SEC-ERBA"
+    ],
+    [
+     "0448",
+     "MEMORANDUM ITEMS / RISK WEIGHTED EXPOSURE AMOUNT UNDER SEC-SA"
+    ],
+    [
+     "0450",
+     "SECURITISATION POSITIONS - TRADING BOOK / CTP OR NON-CTP?"
+    ]
+   ],
+   "filing_indicator": "SC14.01.01",
+   "group": "SC14.01.01",
+   "open_keys": [
+    {
+     "code": "0010",
+     "dimension": "eba_dim:SIC",
+     "kind": "typed",
+     "label": "Internal code",
+     "members": [],
+     "typed_element": "eba_typ:IS",
+     "typed_type": "string"
+    }
+   ],
+   "open_rows": true,
+   "rows": [],
+   "title": "DETAILED INFORMATION ON SECURITISATIONS BY APPROACH (CR SEC Details 2)",
+   "z": [
+    {
+     "code": "Z1",
+     "kind": "fixed",
+     "label": "Sheets",
+     "sheets": [
+      {
+       "code": "0010",
+       "label": "Standardised approach for securitisations (SEC-SA)",
+       "members": [
+        [
+         "eba_dim:MRW",
+         "eba_AP:x122"
+        ]
+       ]
+      },
+      {
+       "code": "0020",
+       "label": "External ratings-based approach for securitisation positions (SEC-ERBA)",
+       "members": [
+        [
+         "eba_dim:MRW",
+         "eba_AP:x125"
+        ]
+       ]
+      },
+      {
+       "code": "0040",
+       "label": "1250% for positions not subject to any method",
+       "members": [
+        [
+         "eba_dim:MRW",
+         "eba_AP:x1"
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "SC16.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Dates of all previous PRA approvals - excluded divested activities from BI"
+    ],
+    [
+     "0020",
+     "BI greater than \u00a3880 million? (Y/N)"
+    ]
+   ],
+   "filing_indicator": "SC16.00.01.01",
+   "group": "SC16.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Business Indicator and subcomponents"
+    ],
+    [
+     "0020",
+     "Historical losses"
+    ]
+   ],
+   "title": "OPERATIONAL RISK: PART 1 - COVER SHEET (OPR)",
+   "z": []
+  },
+  "SC16.00.01.02": {
+   "columns": [
+    [
+     "0010",
+     "Internal Loss Multiplier (ILM)=1"
+    ],
+    [
+     "0020",
+     "ILM (losses greater than \u00a320,000)"
+    ],
+    [
+     "0030",
+     "ILM (losses greater than \u00a390,000)"
+    ]
+   ],
+   "filing_indicator": "SC16.00.01.02",
+   "group": "SC16.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Minimum required operational risk capital (ORC)"
+    ],
+    [
+     "0020",
+     "Operational risk RWAs"
+    ]
+   ],
+   "title": "OPERATIONAL RISK: PART 2 - MINIMUM REQUIRED CAPITAL (OPR)",
+   "z": []
+  },
+  "SC16.00.01.03": {
+   "columns": [
+    [
+     "0010",
+     "Amount"
+    ],
+    [
+     "0020",
+     "BI Buckets and Marginal Coefficient (\u03b1i) / Bucket 1 - 12%"
+    ],
+    [
+     "0030",
+     "BI Buckets and Marginal Coefficient (\u03b1i) / Bucket 2 - 15%"
+    ],
+    [
+     "0040",
+     "BI Buckets and Marginal Coefficient (\u03b1i) / Bucket 3 - 18%"
+    ]
+   ],
+   "filing_indicator": "SC16.00.01.03",
+   "group": "SC16.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Business Indicator Component (BIC)"
+    ],
+    [
+     "0020",
+     "Bucket Amount"
+    ]
+   ],
+   "title": "OPERATIONAL RISK: PART 3 - BUSINESS INDICATOR COMPONENT (OPR)",
+   "z": []
+  },
+  "SC16.00.01.04": {
+   "columns": [
+    [
+     "0010",
+     "T-2"
+    ],
+    [
+     "0020",
+     "T-1"
+    ],
+    [
+     "0030",
+     "T"
+    ],
+    [
+     "0040",
+     "Average amount"
+    ],
+    [
+     "0050",
+     "Component value"
+    ]
+   ],
+   "filing_indicator": "SC16.00.01.04",
+   "group": "SC16.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Business Indicator (BI)"
+    ],
+    [
+     "0020",
+     "Business Indicator gross of PRA-approved excluded divested activities"
+    ],
+    [
+     "0030",
+     "Reduction in BI due to PRA-approved excluded divested activities"
+    ],
+    [
+     "0040",
+     "Interest, Lease and Dividend Component (ILDC)"
+    ],
+    [
+     "0050",
+     "Absolute value of interest income minus interest expense"
+    ],
+    [
+     "0060",
+     "Interest income"
+    ],
+    [
+     "0070",
+     "Interest income"
+    ],
+    [
+     "0080",
+     "Operating leases (income) other than investment property"
+    ],
+    [
+     "0090",
+     "Interest expense"
+    ],
+    [
+     "0100",
+     "Interest expense"
+    ],
+    [
+     "0110",
+     "Operating leases (expense) other than investment property"
+    ],
+    [
+     "0120",
+     "Interest earning assets"
+    ],
+    [
+     "0130",
+     "Cash, cash balances at central banks and other demand deposits"
+    ],
+    [
+     "0140",
+     "Financial assets held for trading"
+    ],
+    [
+     "0150",
+     "Non-trading financial assets mandatorily at fair value through profit or loss"
+    ],
+    [
+     "0160",
+     "Financial assets designated at fair value through profit or loss"
+    ],
+    [
+     "0170",
+     "Financial assets at fair value through other comprehensive income"
+    ],
+    [
+     "0180",
+     "Financial assets at amortised cost"
+    ],
+    [
+     "0190",
+     "Derivatives \u2014 hedge accounting"
+    ],
+    [
+     "0200",
+     "Tangible and intangible assets - assets subject to operating lease"
+    ],
+    [
+     "0210",
+     "Dividend income"
+    ],
+    [
+     "0220",
+     "Services Component (SC)"
+    ],
+    [
+     "0230",
+     "Fee and commission income"
+    ],
+    [
+     "0240",
+     "Fee and commission expense"
+    ],
+    [
+     "0250",
+     "Other operating income"
+    ],
+    [
+     "0260",
+     "Other operating income"
+    ],
+    [
+     "0270",
+     "Operating leases other than investment property"
+    ],
+    [
+     "0280",
+     "Profits from non-current assets and disposal groups classified as held for sale not qualifying as discontinued operations"
+    ],
+    [
+     "0290",
+     "Other operating expense"
+    ],
+    [
+     "0300",
+     "Other operating expense"
+    ],
+    [
+     "0310",
+     "Operating leases other than investment property"
+    ],
+    [
+     "0320",
+     "Expenses related to establishing provisions/reserves for operational loss events: new additions including increases in existing provisions"
+    ],
+    [
+     "0330",
+     "Expenses related to establishing provisions/reserves for operational loss events: unused amounts reversed during the period"
+    ],
+    [
+     "0340",
+     "Losses from non-current assets and disposal groups classified as held for sale not qualifying as discontinued operations"
+    ],
+    [
+     "0350",
+     "Financial Component (FC)"
+    ],
+    [
+     "0360",
+     "Net profit (loss) on trading book"
+    ],
+    [
+     "0370",
+     "Net profit (loss) on banking book"
+    ],
+    [
+     "0380",
+     "Gains or (-) losses on derecognition of financial assets and liabilities not measured at fair value through profit or loss, net"
+    ],
+    [
+     "0390",
+     "Gains or (-) losses on nontrading financial assets mandatorily at fair value through profit or loss, net"
+    ],
+    [
+     "0400",
+     "Gains or (-) losses on financial assets and liabilities designated at fair value through profit or loss, net"
+    ],
+    [
+     "0410",
+     "Gains or (-) losses from hedge accounting, net"
+    ],
+    [
+     "0420",
+     "Exchange differences [gain or (-) loss], net"
+    ]
+   ],
+   "title": "OPERATIONAL RISK: PART 4 - BUSINESS INDICATOR AND SUBCOMPONENTS (OPR)",
+   "z": []
+  },
+  "SC16.00.01.05": {
+   "columns": [
+    [
+     "0010",
+     "T-9"
+    ],
+    [
+     "0020",
+     "T-8"
+    ],
+    [
+     "0030",
+     "T-7"
+    ],
+    [
+     "0040",
+     "T-6"
+    ],
+    [
+     "0050",
+     "T-5"
+    ],
+    [
+     "0060",
+     "T-4"
+    ],
+    [
+     "0070",
+     "T-3"
+    ],
+    [
+     "0080",
+     "T-2"
+    ],
+    [
+     "0090",
+     "T-1"
+    ],
+    [
+     "0100",
+     "T"
+    ],
+    [
+     "0110",
+     "Ten-year average"
+    ]
+   ],
+   "filing_indicator": "SC16.00.01.05",
+   "group": "SC16.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Losses greater than \u00a320,000 Total amount of operational losses net of recoveries (no exclusions)"
+    ],
+    [
+     "0020",
+     "Total number of operational risk losses"
+    ],
+    [
+     "0030",
+     "Total amount of excluded operational risk losses"
+    ],
+    [
+     "0040",
+     "Total number of exclusions"
+    ],
+    [
+     "0050",
+     "Total amount of operational losses net of recoveries and net of excluded losses"
+    ],
+    [
+     "0060",
+     "Losses greater than \u00a390,000 Total amount of operational losses net of recoveries (no exclusions)"
+    ],
+    [
+     "0070",
+     "Total number of operational risk losses"
+    ],
+    [
+     "0080",
+     "Total amount of excluded operational risk losses"
+    ],
+    [
+     "0090",
+     "Total number of exclusions"
+    ],
+    [
+     "0100",
+     "Total amount of operational losses net of recoveries and net of excluded losses"
+    ]
+   ],
+   "title": "OPERATIONAL RISK: PART 5 - HISTORICAL LOSSES (OPR)",
+   "z": []
+  },
+  "SC16.00.01.06": {
+   "columns": [
+    [
+     "0010",
+     "Amount"
+    ]
+   ],
+   "filing_indicator": "SC16.00.01.06",
+   "group": "SC16.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "ILM (losses greater than \u00a320,000)"
+    ],
+    [
+     "0020",
+     "ILM (losses greater than \u00a390,000)"
+    ],
+    [
+     "0030",
+     "ILM (ILM=1)"
+    ]
+   ],
+   "title": "OPERATIONAL RISK: PART 6 - INTERNAL LOSS MULTIPLIER (OPR)",
+   "z": []
+  },
+  "SC22.00.01.01": {
+   "columns": [
+    [
+     "0020",
+     "All positions / Long"
+    ],
+    [
+     "0030",
+     "All positions / Short"
+    ],
+    [
+     "0040",
+     "Net positions / Long"
+    ],
+    [
+     "0050",
+     "Net positions / Short"
+    ]
+   ],
+   "filing_indicator": "SC22.00.01",
+   "group": "SC22.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "TOTAL POSITIONS"
+    ],
+    [
+     "0020",
+     "Currencies closely correlated"
+    ],
+    [
+     "0025",
+     "Of which: reporting currency"
+    ],
+    [
+     "0030",
+     "All other currencies (including CIUs treated as different currencies)"
+    ],
+    [
+     "0040",
+     "Gold"
+    ],
+    [
+     "0100",
+     "BREAKDOWN OF TOTAL POSITIONS (REPORTING CURRENCY INCLUDED) BY EXPOSURE TYPES Other assets and liabilities other than off-balance sheet items and derivatives"
+    ],
+    [
+     "0110",
+     "Off-balance sheet items"
+    ],
+    [
+     "0120",
+     "Derivatives"
+    ],
+    [
+     "0130",
+     "Memorandum items: CURRENCY POSITIONS Euro"
+    ],
+    [
+     "0140",
+     "Lek"
+    ],
+    [
+     "0150",
+     "Argentine Peso"
+    ],
+    [
+     "0160",
+     "Australian Dollar"
+    ],
+    [
+     "0170",
+     "Brazilian Real"
+    ],
+    [
+     "0180",
+     "Bulgarian Lev"
+    ],
+    [
+     "0190",
+     "Canadian Dollar"
+    ],
+    [
+     "0200",
+     "Czech Koruna"
+    ],
+    [
+     "0210",
+     "Danish Krone"
+    ],
+    [
+     "0220",
+     "Egyptian Pound"
+    ],
+    [
+     "0230",
+     "Pound Sterling"
+    ],
+    [
+     "0240",
+     "Forint"
+    ],
+    [
+     "0250",
+     "Yen"
+    ],
+    [
+     "0270",
+     "Lithuanian Litas"
+    ],
+    [
+     "0280",
+     "Denar"
+    ],
+    [
+     "0290",
+     "Mexican Peso"
+    ],
+    [
+     "0300",
+     "Zloty"
+    ],
+    [
+     "0310",
+     "Romanian Leu"
+    ],
+    [
+     "0320",
+     "Russian Ruble"
+    ],
+    [
+     "0330",
+     "Serbian Dinar"
+    ],
+    [
+     "0340",
+     "Swedish Krona"
+    ],
+    [
+     "0350",
+     "Swiss Franc"
+    ],
+    [
+     "0360",
+     "Turkish Lira"
+    ],
+    [
+     "0370",
+     "Hryvnia"
+    ],
+    [
+     "0380",
+     "US Dollar"
+    ],
+    [
+     "0390",
+     "Iceland Krona"
+    ],
+    [
+     "0400",
+     "Norwegian Krone"
+    ],
+    [
+     "0410",
+     "Hong Kong Dollar"
+    ],
+    [
+     "0420",
+     "New Taiwan Dollar"
+    ],
+    [
+     "0430",
+     "New Zealand Dollar"
+    ],
+    [
+     "0440",
+     "Singapore Dollar"
+    ],
+    [
+     "0450",
+     "Won"
+    ],
+    [
+     "0460",
+     "Yuan Renminbi"
+    ],
+    [
+     "0470",
+     "Other"
+    ],
+    [
+     "0480",
+     "Croatian Kuna"
+    ]
+   ],
+   "title": "INFORMATION ON FOREIGN EXCHANGE RISK FOR SDDTS (MKR SA FX SDDT)",
+   "z": []
+  },
+  "SC34.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "NOTIONAL AMOUNTS"
+    ],
+    [
+     "0020",
+     "LONG POSITIONS"
+    ],
+    [
+     "0030",
+     "SHORT POSITIONS"
+    ],
+    [
+     "0060",
+     "AMOUNT"
+    ]
+   ],
+   "filing_indicator": "SC34.00.01",
+   "group": "SC34.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Total derivative, securities financing and long settlement transactions"
+    ],
+    [
+     "0020",
+     "Breakdown of derivatives, securities financing and long settlement transactions of which: derivative transactions"
+    ],
+    [
+     "0030",
+     "of which: cleared through a QCCP"
+    ],
+    [
+     "0040",
+     "of which: cleared through a non-QCCP"
+    ],
+    [
+     "0050",
+     "of which: securities financing transactions"
+    ],
+    [
+     "0060",
+     "of which: cleared through a QCCP"
+    ],
+    [
+     "0070",
+     "of which: cleared through a non-QCCP"
+    ],
+    [
+     "0080",
+     "of which: long settlement transactions"
+    ],
+    [
+     "0090",
+     "of which: cleared through a QCCP"
+    ],
+    [
+     "0100",
+     "of which: cleared through a non-QCCP"
+    ],
+    [
+     "0110",
+     "Breakdown by transactions margined and those not margined Derivative transactions not cleared through a CCP"
+    ],
+    [
+     "0120",
+     "of which: not margined"
+    ],
+    [
+     "0160",
+     "Breakdown of derivatives Interest rate derivatives"
+    ],
+    [
+     "0170",
+     "Foreign exchange derivatives"
+    ],
+    [
+     "0180",
+     "Credit derivatives"
+    ],
+    [
+     "0190",
+     "Equity derivatives"
+    ],
+    [
+     "0200",
+     "Other derivatives"
+    ]
+   ],
+   "title": "INFORMATION ON DERIVATIVES, SECURITIES FINANCING AND LONG SETTLEMENT TRANSACTIONS OF SDDTS (CCR SDDT)",
+   "z": []
+  },
+  "SC34.00.01.03": {
+   "columns": [
+    [
+     "0010",
+     "NOTIONAL AMOUNTS"
+    ],
+    [
+     "0020",
+     "LONG POSITIONS"
+    ],
+    [
+     "0030",
+     "SHORT POSITIONS"
+    ],
+    [
+     "0060",
+     "AMOUNT"
+    ]
+   ],
+   "filing_indicator": "SC34.00.01",
+   "group": "SC34.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0140",
+     "Size of the derivative business Total assets"
+    ],
+    [
+     "0150",
+     "Percentage of total assets"
+    ]
+   ],
+   "title": "INFORMATION ON DERIVATIVES, SECURITIES FINANCING AND LONG SETTLEMENT TRANSACTIONS OF SDDTS (CCR SDDT) - Total assets and Percentage of total assets",
+   "z": []
+  },
+  "SC700.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Header info"
+    ]
+   ],
+   "filing_indicator": "SC700.00.01",
+   "group": "SC700.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Basis of reporting (select from list)"
+    ],
+    [
+     "0020",
+     "Firm reference number (FRN)"
+    ],
+    [
+     "0021",
+     "LEI code"
+    ],
+    [
+     "0030",
+     "Name of the firm"
+    ],
+    [
+     "0040",
+     "Reporting period start date"
+    ],
+    [
+     "0050",
+     "Reporting period end date"
+    ],
+    [
+     "0060",
+     "Reporting currency for this report"
+    ],
+    [
+     "0070",
+     "Notes from the firm, if any"
+    ]
+   ],
+   "title": "GENERAL INFORMATION",
+   "z": []
+  },
+  "SC90.00.01.01": {
+   "columns": [
+    [
+     "0030",
+     "Trading book business / Total"
+    ],
+    [
+     "0040",
+     "Trading book business / in % of total assets"
+    ],
+    [
+     "0080",
+     "Total assets"
+    ]
+   ],
+   "filing_indicator": "SC90.00.01",
+   "group": "SC90.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Reporting month Month 3"
+    ],
+    [
+     "0020",
+     "Month 2"
+    ],
+    [
+     "0030",
+     "Month 1"
+    ]
+   ],
+   "title": "SIZE OF SDDTS' TRADING BUSINESS (STB SDDT)",
+   "z": []
+  }
+ }
+}

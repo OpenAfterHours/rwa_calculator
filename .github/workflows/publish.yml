@@ -1,21 +1,81 @@
 name: Publish to PyPI
 
+# One workflow, two packages. The repository is a uv workspace that releases
+# `rwa-calc` (the root project) and `rwa-filer` (packages/rwa-filer) on their own
+# versions, and which one a run publishes is decided by the release TAG:
+#
+#   v0.3.35            -> rwa-calc
+#   rwa-filer-v0.1.0   -> rwa-filer
+#
+# The split is by prefix inside a single file, rather than a second workflow,
+# because a `release: published` event fires EVERY workflow that listens for it.
+# Before the split, an rwa-filer release would have run the rwa-calc version
+# check against a tag it can never match and failed; two files would instead
+# both fire and each have to skip the other's tags. One `select` step that either
+# names a package or fails keeps "an unrecognised tag publishes nothing" true in
+# exactly one place.
+#
+# PyPI trusted publishing is configured per PyPI project. Both projects name
+# this workflow file and the `pypi` environment, so each has its own trusted
+# publisher entry (rwa-filer's is added on PyPI as a pending publisher before
+# its first release).
 on:
   release:
     types: [published]
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual trigger: builds the chosen package and uploads it to TestPyPI
+    inputs:
+      package:
+        description: Package to build and upload to TestPyPI
+        type: choice
+        options:
+          - rwa-calc
+          - rwa-filer
+        default: rwa-calc
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.select.outputs.package }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      - name: Validate version consistency
-        if: github.event_name == 'release'
+      # `rwa-filer-v*` is tested FIRST: it does not start with `v`, but ordering
+      # the specific prefix ahead of the general one means a future tag scheme
+      # cannot make the bare `v*` arm swallow it. Anything else fails the run —
+      # a release whose tag names no package must not publish one by default.
+      - name: Select the package
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_PACKAGE: ${{ inputs.package }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            case "$GITHUB_REF_NAME" in
+              rwa-filer-v[0-9]*) PACKAGE=rwa-filer ;;
+              v[0-9]*)           PACKAGE=rwa-calc ;;
+              *)
+                echo "::error::Release tag '$GITHUB_REF_NAME' names no package. Expected vX.Y.Z (rwa-calc) or rwa-filer-vX.Y.Z (rwa-filer)."
+                exit 1
+                ;;
+            esac
+          else
+            PACKAGE="$DISPATCH_PACKAGE"
+          fi
+          case "$PACKAGE" in
+            rwa-calc)  DIST_DIR=dist ;;
+            rwa-filer) DIST_DIR=dist/rwa-filer ;;
+            *) echo "::error::Unknown package '$PACKAGE'"; exit 1 ;;
+          esac
+          echo "Publishing $PACKAGE from $DIST_DIR"
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "dist_dir=$DIST_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Validate version consistency (rwa-calc)
+        if: github.event_name == 'release' && steps.select.outputs.package == 'rwa-calc'
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PYPROJECT_VERSION=$(grep -m1 'version = ' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
@@ -53,8 +113,41 @@ jobs:
           fi
           echo "All versions match $TAG_VERSION"
 
+      - name: Validate version consistency (rwa-filer)
+        if: github.event_name == 'release' && steps.select.outputs.package == 'rwa-filer'
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#rwa-filer-v}"
+          PYPROJECT_VERSION=$(grep -m1 '^version = ' packages/rwa-filer/pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
+          INIT_VERSION=$(grep -m1 '__version__' packages/rwa-filer/src/rwa_filer/__init__.py | sed 's/.*"\(.*\)".*/\1/')
+
+          echo "Release tag:                                $TAG_VERSION"
+          echo "packages/rwa-filer/pyproject.toml:          $PYPROJECT_VERSION"
+          echo "packages/rwa-filer/src/rwa_filer/__init__:  $INIT_VERSION"
+
+          ERRORS=0
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "::error::Tag $TAG_VERSION != packages/rwa-filer/pyproject.toml $PYPROJECT_VERSION"
+            ERRORS=1
+          fi
+          if [ "$TAG_VERSION" != "$INIT_VERSION" ]; then
+            echo "::error::Tag $TAG_VERSION != rwa_filer/__init__.py $INIT_VERSION"
+            ERRORS=1
+          fi
+          if [ "$ERRORS" -ne 0 ]; then
+            echo ""
+            echo "Fix: run 'python scripts/deploy.py --package rwa-filer $TAG_VERSION' locally, commit, and re-create the release."
+            exit 1
+          fi
+          echo "All versions match $TAG_VERSION"
+
+      # `--package` builds exactly one workspace member; each builds into its own
+      # directory so neither the checks below nor the upload can ever pick up the
+      # other package's files.
       - name: Build package
-        run: uv build
+        env:
+          PACKAGE: ${{ steps.select.outputs.package }}
+          DIST_DIR: ${{ steps.select.outputs.dist_dir }}
+        run: uv build --package "$PACKAGE" -o "$DIST_DIR"
 
       # Two independent checks on the built distribution, before anything is
       # uploaded. `twine check` catches a malformed distribution; it does NOT
@@ -63,17 +156,25 @@ jobs:
       # frozen. check_distribution.py reads both versions together and is the
       # one that catches the skew.
       - name: Check distribution renders (twine)
-        run: uvx twine check dist/*
+        env:
+          DIST_DIR: ${{ steps.select.outputs.dist_dir }}
+        run: uvx twine check "$DIST_DIR"/*.whl "$DIST_DIR"/*.tar.gz
 
       # Stdlib-only on purpose, so it needs no resolved environment to run.
       - name: Check distribution is publishable by the pinned uploader
-        run: python scripts/check_distribution.py
+        env:
+          PACKAGE: ${{ steps.select.outputs.package }}
+        run: python scripts/check_distribution.py --package "$PACKAGE"
 
+      # Uploaded FLAT under the one artifact name, so the publish jobs below
+      # download a `dist/` holding only this package's two files whichever
+      # package was built.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: ${{ steps.select.outputs.dist_dir }}/*.*
+          if-no-files-found: error
 
   publish-testpypi:
     needs: build

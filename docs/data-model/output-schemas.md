@@ -186,7 +186,9 @@ from the output data alone.
 | `collateral_haircut_applied` | `Float64` | Weighted average haircut percentage |
 | `fx_haircut_applied` | `Float64` | FX mismatch haircut (8% or 0%) |
 | `maturity_mismatch_adjustment` | `Float64` | Adjustment for maturity mismatch |
-| `collateral_adjusted_value` | `Float64` | Net collateral value after haircuts |
+| `collateral_adjusted_value` | `Float64` | Net collateral value after haircuts. **Includes** any netted deposit — on-balance-sheet netting (Art. 219) is carried as synthetic cash collateral |
+| `on_bs_netting_amount` | `Float64` | The netted deposit allocated to this exposure, pro-rata by drawn balance, **before** any haircut — the netting part of the collateral market value |
+| `on_bs_netting_adjusted_value` | `Float64` | The same after the Art. 224 currency-mismatch haircut and the Art. 237–239 maturity scaling — the netting part of `collateral_adjusted_value`, and what Art. 219 takes off the exposure value. Equals `on_bs_netting_amount` only for a same-currency deposit that outlives its loan. OF 07.00 column 0035 reports it |
 
 ### CRM — life insurance collateral (Art. 232)
 

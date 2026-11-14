@@ -67,6 +67,13 @@ import pytest
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import _get_total_row
 
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_AIRB,
+    OF08_CORPORATE_NON_SME_FIRB,
+)
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -169,7 +176,7 @@ class TestSealedCarriersDriveColumns0180To0210:
         bundle = gen.generate_from_lazyframe(
             _airb_b31_row_with_lgd_collateral(), framework="BASEL_3_1"
         )
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
 
         # Assert
         assert total["0180"][0] == pytest.approx(80_000.0)
@@ -196,7 +203,7 @@ class TestSealedCarriersDriveColumns0180To0210:
 
         # Assert
         crr_total = _get_total_row(crr_bundle.c08_01["corporate"])
-        b31_total = _get_total_row(b31_bundle.c08_01["corporate"])
+        b31_total = _get_total_row(b31_bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
         assert crr_total["0190"][0] == pytest.approx(500_000.0)
         assert b31_total["0190"][0] == pytest.approx(500_000.0)
 
@@ -210,7 +217,7 @@ class TestSealedCarriersDriveColumns0180To0210:
         bundle = gen.generate_from_lazyframe(
             _airb_b31_row_with_lgd_collateral(), framework="BASEL_3_1"
         )
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
 
         # Assert
         assert total["0190"][0] == pytest.approx(500_000.0)
@@ -248,7 +255,7 @@ class TestOtherFundedProtectionMethodRouting:
         bundle = gen.generate_from_lazyframe(
             _airb_b31_row_with_lgd_collateral(), framework="BASEL_3_1"
         )
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
 
         # Assert
         assert total["0171"][0] == pytest.approx(300_000.0)
@@ -265,7 +272,7 @@ class TestOtherFundedProtectionMethodRouting:
         bundle = gen.generate_from_lazyframe(
             _airb_b31_row_with_lgd_collateral(), framework="BASEL_3_1"
         )
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
 
         # Assert
         assert total["0060"][0] == pytest.approx(0.0)
@@ -278,7 +285,7 @@ class TestOtherFundedProtectionMethodRouting:
 
         # Act
         bundle = gen.generate_from_lazyframe(_firb_row_with_lgd_collateral(), framework="BASEL_3_1")
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
 
         # Assert
         assert total["0060"][0] == pytest.approx(-600_000.0)
@@ -292,7 +299,7 @@ class TestOtherFundedProtectionMethodRouting:
 
         # Act
         bundle = gen.generate_from_lazyframe(_firb_row_with_lgd_collateral(), framework="BASEL_3_1")
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
 
         # Assert
         assert total["0171"][0] == pytest.approx(0.0)
@@ -315,7 +322,7 @@ class TestOtherFundedProtectionMethodRouting:
 
         # Assert
         crr_total = _get_total_row(crr_bundle.c08_01["corporate"])
-        b31_total = _get_total_row(b31_bundle.c08_01["corporate"])
+        b31_total = _get_total_row(b31_bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         assert crr_total["0060"][0] == pytest.approx(-600_000.0)
         assert b31_total["0060"][0] == pytest.approx(crr_total["0060"][0])
 
@@ -335,7 +342,7 @@ class TestOtherFundedProtectionMethodRouting:
         bundle = gen.generate_from_lazyframe(
             _airb_b31_row_with_lgd_collateral(), framework="BASEL_3_1"
         )
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
 
         # Assert
         assert total["0170"][0] == pytest.approx(
@@ -352,7 +359,7 @@ class TestOtherFundedProtectionMethodRouting:
         bundle = gen.generate_from_lazyframe(
             _airb_b31_row_with_lgd_collateral(), framework="BASEL_3_1"
         )
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
 
         # Assert
         for col in ("0171", "0172", "0173"):
@@ -370,7 +377,7 @@ class TestOtherFundedProtectionMethodRouting:
         bundle = gen.generate_from_lazyframe(
             _airb_b31_row_with_lgd_collateral(), framework="BASEL_3_1"
         )
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_AIRB])
 
         # Assert
         assert total["0173"][0] == pytest.approx(0.0)

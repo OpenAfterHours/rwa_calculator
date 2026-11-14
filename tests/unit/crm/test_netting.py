@@ -7,7 +7,7 @@ generates synthetic cash collateral that reduces other exposures carrying the
 SAME reference — pro-rata by drawn EAD.
 
 The netting agreement reference ALONE defines the set-off perimeter. Pools are
-keyed on (netting_agreement_reference, currency) and siblings match on the
+keyed on (netting_agreement_reference, deposit denomination) and siblings match on the
 agreement reference only, so a deposit nets every positive-drawn loan sibling
 under that agreement regardless of which counterparty within the agreement
 holds which leg — across facilities and across counterparties alike. This
@@ -525,12 +525,17 @@ class TestNettingSAEndToEnd:
     def test_currency_mismatch_fx_haircut(
         self, processor: CRMProcessor, sa_config: CalculationConfig
     ):
-        """FX mismatch between negative and positive loans → 8% FX haircut.
+        """A hand-built EUR cash row against a GBP loan → 8% FX haircut at 10 days.
 
-        P1.186: pre-built synthetic collateral with liquidation_period_days=10 is
-        passed directly so this test asserts the 10-day capital-market FX haircut
-        (8%). It tests FX haircut propagation through netting logic, not
-        liquidation-period scaling. The new pipeline default is 20-day (11.314%).
+        NOT A NETTING TEST, despite the row's ``NETTING_`` name: ``agreement_ref`` is
+        None, so ``generate_netting_collateral`` never runs and the row is ordinary
+        user collateral with an explicit ``liquidation_period_days=10``. It pins the
+        haircut stage's handling of a pre-built cash row, and nothing about how the
+        generator treats a deposit's currency — which this test hid for the life of
+        the feature (escape log 2026-11-13: the generator compared the reporting
+        currency, and under CRR Art. 219 a cross-currency deposit is not netted at
+        all). The generator's currency treatment is pinned through the full
+        pipeline by ``tests/acceptance/{crr,basel31}/test_art219_netting_currency_mismatch.py``.
         """
         # P1.186: pass pre-built netting collateral with liquidation_period_days=10
         # to pin the 10-day FX haircut (8%). The negative EUR loan (NEG01) nets

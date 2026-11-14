@@ -382,6 +382,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **A netted deposit's currency-mismatch haircut compared the wrong currencies
+  (CRR / PS1/26 Art. 219, Art. 224 Table 4).** On-balance-sheet netting turns a
+  deposit into synthetic `NETTING_<loan>` cash collateral. The generator pooled
+  deposits on `currency`, but by the CRM stage `FXConverter` has rewritten
+  `currency` to the reporting currency on every row. The currency each leg is
+  actually denominated in survives only in `original_currency`. The H_fx test
+  therefore compared the reporting currency with the loan's own currency.
+  Measured through the full pipeline (base GBP, 300 deposit against a 1,000 loan,
+  every rate 1.0), with the same result in both regimes:
+  - A EUR deposit netting a GBP loan took **no** haircut (EAD 700), which
+    understates capital.
+  - A EUR deposit netting a EUR loan took one it should not have (EAD 733.94),
+    which overstates capital.
+  - When the bundle also carried any collateral file, the synthetic rows
+    arrived with a null `original_currency`. Every netted deposit then went
+    un-haircut, whatever its currency.
+
+  Pools now key on each deposit's denomination, and the synthetic row carries it
+  as `original_currency` beside a `currency` that still matches its converted
+  value. Deposits in two currencies under one agreement now stay two pools.
+  `HaircutCalculator.apply_haircuts` and the life-insurance Art. 233(3) test now
+  fall back from `original_currency` to `currency` per row, not per frame.
+
+  **Direction: mostly RWA-increasing, but not only.** Currency-mismatched pairs
+  now take the haircut. A same-currency pair in a non-base currency with no
+  collateral file loses the spurious one, which **reduces** RWA (EUR/EUR: EAD
+  733.94 → 700).
+
+  The generator now lives in `engine/crm/netting.py`, moved out of
+  `engine/crm/collateral.py`, which had no room left under the module-size
+  ratchet. Pinned by `tests/acceptance/{crr,basel31}/test_art219_netting_currency_mismatch.py`.
+  Recorded in `docs/development/escape-log.md` (2026-11-13).
+- **Basel 3.1: a currency-mismatched netted deposit is now haircut at the PS1/26
+  Art. 219(2) 10-business-day liquidation period (8%).** Art. 219(2), read from
+  ps126app1.pdf (page 191 of 492):
+
+  > *"Where there is a currency mismatch between the exposure referred to in
+  > point (b)(i) of paragraph 1 and the loans and deposits referred to in point
+  > (b)(ii) of paragraph 1, the institution shall reflect the mismatch by
+  > applying the appropriate volatility adjustment specified in Table 4 in
+  > paragraph 1 of Article 224 to the value of the protection. The institution
+  > shall apply a 10 business day liquidation period. Where marking to market is
+  > not conducted daily, the institution shall scale up the volatility
+  > adjustment using the formula in paragraph 1 of Article 226."*
+
+  The synthetic `NETTING_` row carried no `liquidation_period_days`, so the
+  haircut stage applied its general Art. 224(2) default: 20 days (√2 × 8% =
+  11.314%), or 5 days (5.657%) when the netted loan was flagged `is_sft`. Every
+  netting row now carries the period from the new pack entry
+  `on_bs_netting_liquidation_period`:
+  - **Basel 3.1:** 10 days, citing PS1/26 Art. 219(2), whatever the loan.
+  - **CRR:** 20 days, citing Art. 224(2)(a). CRR Art. 219 sets no
+    netting-specific period.
+
+  **Direction, for a 300 EUR deposit netting a GBP loan:**
+  - **Basel 3.1, ordinary loan: RWA-REDUCING.** Relief rises from 266.06 to
+    276 (EAD 733.94 → 724).
+  - **Basel 3.1, SFT-flagged loan: RWA-increasing.** Relief falls from 283.03
+    to 276 (EAD 716.97 → 724).
+  - **CRR, SFT-flagged loan:** moves from 5 days to 20 days.
+  - **CRR, any other loan:** unchanged.
+
+  Art. 219(2)'s last sentence, the Art. 226(1) scale-up for non-daily marking
+  to market, is **not** applied to netting rows, because no input carries a
+  revaluation frequency for loans or deposits. That is filed as P1.388.
+
+  `CRMProcessor` no longer drops a user collateral table whose only dtype
+  difference from the synthetic rows is integer width, for example an unsealed
+  Int64 `liquidation_period_days` or `issuer_cqs`. It casts the synthetic side
+  to match instead. A table with a malformed column, such as a String
+  `market_value`, is still dropped with its warning.
+- **CRR: on-balance-sheet netting is now recognised only between loans and
+  deposits denominated in the same currency (CRR Art. 219).** UK CRR Art. 219
+  treats netted loans and deposits as cash collateral only *"for those loans
+  and deposits ... which are denominated in the same currency"*. The engine had
+  matched every deposit to every loan under the agreement and relied on a
+  currency haircut instead. A new cited pack Feature,
+  `on_bs_netting_same_currency_only`, now governs this:
+  - **CRR (enabled):** a deposit protects only loans in its own denomination,
+    and only those loans form its pro-rata denominator.
+  - **Basel 3.1 (disabled):** PS1/26 Art. 219(2) adjusts a mismatch rather than
+    refusing it.
+
+  Measured, with base GBP and a 300 deposit against a 1,000 loan:
+  - A EUR deposit against a GBP loan now leaves EAD at **1,000**, where the
+    currency fix above alone gave 733.94.
+  - A GBP 200 + EUR 100 pool against a GBP loan nets **200**.
+
+  A deposit pool that no loan within its netting perimeter shares a currency
+  with now raises `CRM003` (declared, never produced until now), because it
+  loses its whole value. The message gives the amount in the currency it is
+  measured in (the converted pool value).
+
+  **Direction under CRR:**
+  - **RWA-increasing** where a deposit has no same-currency loan under its
+    agreement, since the deposit now nets nothing.
+  - **RWA-REDUCING** in a mixed-currency agreement, where the same-currency
+    slice now lands whole and un-haircut. Example: a EUR 200 deposit against
+    EUR 600 + GBP 400 loans moves total SA EAD from 809.05 to 800 (EUR loan
+    400, GBP loan 400).
+
+  Basel 3.1 is unchanged.
 - **REPORTING: the Basel 3.1 IRB templates OF 08.01, 08.02, 08.03 and 08.05
   are generated on the published 17-sheet axis.** They were generated one sheet
   per exposure class, which the published axis splits further by approach, by

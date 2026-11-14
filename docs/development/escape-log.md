@@ -1861,6 +1861,12 @@ gate that shipped.
   due on a 300 / 1,000 pair, understating capital); and the engine scales the
   haircut to a 20-day liquidation period where PS1/26 Art. 219(2) says "The
   institution shall apply a 10 business day liquidation period" (overstating it).
+  **Both closed** by the 2026-11-13 netting currency entry below (plan P1.382 /
+  P1.383, PR #521). The figure due is not 733.94 once both land: Basel 3.1 gives
+  EAD 724 (300 × 0.92 at 10 days). Under CRR the pair is not netted at all
+  (EAD 1,000), because CRR Art. 219 recognises same-currency loans and deposits
+  only. The defect was also wider than noted here: with any collateral file in
+  the bundle, no netted deposit was haircut, whatever its currency.
 
 ## 2026-09-05 — A window nested inside a window made the classifier eleven times slower, and the one instrument that measured it asserted nothing
 
@@ -3370,6 +3376,168 @@ gate that shipped.
   that the product is right on every platform, and it was written down as one
   ("under fork, forkserver and spawn alike") on the evidence of two.
 
+## 2026-11-13 — A netted deposit's currency haircut compared the reporting currency with the loan's, so a cross-currency netting went un-haircut
+
+- **Defect**: on-balance-sheet netting turns a deposit (a negative-drawn loan
+  under a `netting_agreement_reference`) into synthetic `NETTING_<loan>` cash
+  collateral, and the Art. 224(1) Table 4 currency-mismatch adjustment (H_fx)
+  should then turn on whether the deposit and the loan are denominated in the
+  same currency. Measured through the full `PipelineOrchestrator` (STANDARDISED,
+  one unrated corporate, a 300 deposit and a 1,000 loan under one agreement, an
+  `fx_rates` table at 1.0 so only the haircut differs, base GBP), identical in
+  CRR and Basel 3.1. Each cell is the loan's `collateral_adjusted_value` /
+  `ead_final`:
+
+  | deposit / loan | no collateral file | any collateral file present |
+  |---|---|---|
+  | GBP / GBP | 300 / 700 | 300 / 700 |
+  | **EUR / GBP** | **300 / 700** — real mismatch, no haircut | **300 / 700** |
+  | GBP / EUR | 266.06 / 733.94 — right by coincidence | **300 / 700** — no haircut |
+  | EUR / EUR | **266.06 / 733.94** — no mismatch, haircut anyway | 300 / 700 |
+
+  The bolded mismatch cells **understate capital**. The EUR / EUR cell overstates it.
+  The collateral-file column is the common production shape. In it, no netted
+  deposit was ever haircut, whatever its currency.
+- **Rule**:
+  - UK CRR Art. 219 (legislation.gov.uk, onshored text): *"Loans to and deposits
+    with the lending institution subject to on-balance sheet netting are to be
+    treated by that institution as cash collateral for the purpose of calculating
+    the effect of funded credit protection for those loans and deposits of the
+    lending institution subject to on-balance sheet netting which are denominated
+    in the same currency."*
+  - PS1/26 Art. 219(2) (ps126app1.pdf, page 191 of 492, read with pymupdf):
+    *"Where there is a currency mismatch between the exposure referred to in
+    point (b)(i) of paragraph 1 and the loans and deposits referred to in point
+    (b)(ii) of paragraph 1, the institution shall reflect the mismatch by
+    applying the appropriate volatility adjustment specified in Table 4 in
+    paragraph 1 of Article 224 to the value of the protection."*
+
+  In both texts the currency that matters is each leg's **denomination**. The two
+  regimes then part on the consequence of a mismatch: CRR recognises no
+  cross-currency netting at all, and PS1/26 haircuts it. The regime
+  consequences are separate fixes (below); this entry is the shared carrier
+  defect.
+- **Origin**: `FXConverter` runs before CRM and rewrites `currency` to the
+  reporting currency on every exposure, keeping the denomination in
+  `original_currency`.
+  - **The generator.** `engine/crm/collateral.py::generate_netting_collateral` is
+    built from that already-converted exposures frame. It pooled deposits on
+    `currency` and wrote it onto the synthetic row as `currency`, with no
+    `original_currency`.
+  - **The haircut test.** `HaircutCalculator.apply_haircuts` compares the
+    collateral's `original_currency`, chosen **per frame** (whenever the column
+    exists), against `exposure_currency`. The processor sources
+    `exposure_currency` from the loan's `original_currency`.
+  - **No collateral file.** The comparison is therefore "reporting currency vs
+    loan denomination", which gives the inverted cells above.
+  - **With a collateral file.** `FXConverter.convert_collateral` adds
+    `original_currency` to the user collateral. The processor diagonal-concats
+    the synthetic rows onto it, so they arrive with a null there. `null !=
+    exposure_currency` is null, and `when(null)` takes the `otherwise(0.0)`
+    branch. H_fx was off for every netted deposit.
+  - **Pooling.** Pooling on the rebased `currency` also merged deposits in
+    different denominations under one agreement into a single pool.
+  - **History.** P1.135 fixed exactly this carrier for user collateral, by having
+    `FXConverter.convert_collateral` preserve `original_currency`. It never reached
+    the second producer of rows in the same frame.
+- **Escape class**: `path-never-exercised`.
+  - **No fixture had the shape.** Every netting fixture in the estate is
+    single-currency: P1.238, P1.241, `reporting_netting_portfolio`,
+    `r1_negative_gross` and `matched_short_netting` are all GBP.
+  - **The unit tests could not see it.** The CRM unit tests build frames with
+    `currency == original_currency`, a shape `FXConverter` never produces for a
+    foreign-currency row. At unit level the EUR-deposit / GBP-loan case
+    therefore haircuts correctly.
+  - **The one test named for this behaviour never ran it.**
+    `tests/unit/crm/test_netting.py::test_currency_mismatch_fx_haircut`
+    ("FX mismatch between negative and positive loans → 8%") sets
+    `agreement_ref=None` and hands the haircut stage a pre-built row. It never
+    runs the generator, and under CRR it pins a haircut as the consequence of a
+    netting mismatch, which Art. 219 does not grant. Its docstring now says so.
+- **Why nothing else would have caught it**:
+  - **No identity is broken.** The adjusted value is internally consistent from
+    C 07.00 col 0130 through to col 0200, so no supervisory rule fires. The
+    number is wrong; no relation between numbers is.
+  - **The reporting goldens cannot see it.** Every registered netting portfolio
+    is single-currency.
+  - **P1.135's regression tests pin the right branch on the wrong rows.** They
+    cover the `original_currency` comparison on hand-built user-collateral rows,
+    never on generator output.
+- **Gate change**:
+  1. `tests/acceptance/{crr,basel31}/test_art219_netting_currency_mismatch.py`
+     on the in-memory `tests/fixtures/netting_currency/` builder. Coverage:
+     - The four currency pairs, each run with and without a collateral file in
+       the bundle.
+     - A GBP + EUR deposit pool against one GBP loan.
+     - Both regimes, through the full pipeline, with an `fx_rates` table.
+
+     It carries two **adequacy assertions** (LESSONS C11): every loan row was
+     rebased (`currency == GBP`, `original_currency` == its denomination), and
+     the collateral file is live (the unrelated loan it secures is reduced).
+     Without those the fixture could not express the defect. The
+     regime-independent property is `test_mismatched_deposit_nets_less_than_matched_deposit`:
+     the same deposit relieves a loan in another currency strictly less than one
+     in its own. It isolates *which* currencies are compared from *how* a
+     mismatch is treated. `test_mixed_pool_sits_between_its_two_currency_bounds`
+     pins the two-pool split end to end: `ead(gbp_gbp) < ead(mixed_pool) <
+     ead(eur_gbp)`. It was added after review found the mixed pool otherwise
+     pinned only by strict xfails and a unit frame. A single mutation re-keying
+     the pool on the rebased currency collapses it to 700 and reddens it.
+  2. `tests/unit/crm/test_collateral_submodules.py`: pools split by deposit
+     denomination, including after a rebase. This replaces a test that asserted
+     only `"GBP" in currencies`.
+  3. `tests/unit/crm/test_collateral_fx_mismatch.py::test_null_original_currency_falls_back_to_currency_per_row`.
+  4. The engine fix:
+     - `engine/crm/netting.py` (moved out of `collateral.py`, which had no
+       room under `max_engine_module_loc`) pools on, and carries, the deposit's
+       `original_currency`.
+     - `apply_haircuts` and the life-insurance Art. 233(3) test fall back per
+       row via `coalesce`, not per frame.
+
+  **Deferred to P1.386:** a cross-currency netting leg in a `RUNS` portfolio, so
+  Tier 2 and the template-cell census see the treatment.
+- **Verified red**:
+  - **Acceptance tests.** `uv run pytest tests/acceptance/crr/test_art219_netting_currency_mismatch.py tests/acceptance/basel31/test_art219_netting_currency_mismatch.py -n 0 -q`,
+    run in a detached worktree at the pre-fix commit (module path printed and
+    confirmed as the worktree's), gave `12 failed, 45 passed, 25 xfailed`:
+    - In each regime, `eur_eur` failed with
+      `assert 733.9411254969543 == 700.0`.
+    - All four mismatch-vs-matched limbs failed: `assert 700.0 > 700.0`
+      (`eur_gbp`, and both `*_coll` pairs) and
+      `assert 733.9411254969543 > 733.9411254969543` (`gbp_eur`).
+  - **Unit tests.** The three new unit tests gave `3 failed, 47 passed` on the
+    same tree. The per-row fallback test fails as `{'COLL_002': 0.0}` where 0.08
+    is due.
+  - **After the fix:** `59 passed, 25 xfailed` (the two extra passes are the
+    mixed-pool brackets, which fail pre-fix with all three loans at 700). The xfails are the rows whose
+    final figure needs the two regime fixes, and each is strict.
+- **Related, fixed separately** (each with its own commit and review):
+  - PS1/26 Art. 219(2) prescribes a **10 business day** liquidation period for
+    a netted deposit. The engine gave the synthetic row the haircut stage's
+    default instead: 20 days (11.314%, not 8%), or 5 days for an SFT-flagged
+    loan. Correcting it is RWA-REDUCING, except on an SFT loan, where it
+    increases RWA. Art. 219(2)'s Art. 226(1) non-daily scale-up still does not
+    reach netting rows (P1.388).
+  - CRR Art. 219 recognises same-currency netting only. The engine haircut a
+    cross-currency deposit instead of excluding it. Correcting it is
+    RWA-increasing under CRR.
+
+  Found during the same work and filed rather than fixed: **P1.387**, the
+  simple method's Art. 222(6) same-currency 0% carve-out compares the rebased
+  `currency` on both sides.
+- **Lesson**: a column whose meaning changes at a boundary changes it for every
+  producer downstream of that boundary. P1.135 repaired the producer it was
+  looking at and left the second one, built from the other side of the same
+  conversion, carrying `currency` with its new meaning.
+
+  The concat half is LESSONS B1's mirror image in its sharpest form: *the
+  column existing is not the row having a value*. `X if "X" in names else Y`
+  chosen once per frame is wrong on any frame assembled by
+  `pl.concat(how="diagonal")`. That idiom appeared at two collateral consumers
+  (`haircuts.py`, `life_insurance.py`), and only one of them was in the bug
+  report. Graduation candidate, not built here: an `arch_check` rule flagging
+  per-frame column selection inside `engine/crm/` modules that read the merged
+  collateral frame.
 
 ## 2026-11-13 — C 07.00 / OF 07.00 took one loan's unused collateral off every other loan on the sheet
 

@@ -26,6 +26,10 @@
   </form>
 </div>
 
+{% if flash %}
+<div class="callout callout-fail" role="alert" id="flash"><div class="body"><div class="title">The override was not drafted</div><p>{{ flash }}</p></div></div>
+{% endif %}
+
 {% if grid.pages | length > 1 or grid.page.sheet or grid.page.open_key %}
 <nav class="sheet-tabs" aria-label="Sheets">
   {% for page in grid.pages %}
@@ -42,6 +46,7 @@
   <span><span class="key key-error"></span>read by a broken Error rule</span>
   <span><span class="key key-warning"></span>read by a broken Warning rule</span>
   <span><span class="key key-selected"></span>selected</span>
+  <span><span class="key key-adjusted"></span>drafted override</span>
   {% if grid.focus %}<span>showing <span class="mono">{{ grid.focus }}</span> only · <a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '') }}">show every break</a></span>{% endif %}
   <span style="margin-left: auto">{{ grid.values | count }} facts here · {{ grid.rows | length }} rows × {{ grid.columns | length }} columns, laid out from the taxonomy</span>
 </div>
@@ -60,7 +65,7 @@
         <tr>
           <th scope="row" class="row-head" title="{{ row.label }}"><span class="code">{{ row.code }}</span>{{ row.label }}</th>
           {% for cell in row.cells %}
-          <td class="{% if not cell.reportable %}cell-locked{% endif %}{% if cell.tone %} cell-{{ cell.tone }}{% endif %}{% if cell.selected %} cell-selected{% endif %}"><a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=row.code, col=cell.column, focus=grid.focus) }}" aria-label="Row {{ row.code }}, column {{ cell.column }}{% if cell.text %}, {{ cell.text }}{% elif not cell.reportable %}, not reportable{% else %}, empty{% endif %}{% if cell.marks %}, read by {{ cell.marks | length }} broken rule{{ 's' if cell.marks | length != 1 }}{% endif %}">{{ cell.text }}</a></td>
+          <td class="{% if not cell.reportable %}cell-locked{% endif %}{% if cell.tone %} cell-{{ cell.tone }}{% endif %}{% if cell.selected %} cell-selected{% endif %}{% if cell.override is not none %} cell-adjusted{% endif %}"{% if cell.override is not none %} title="Drafted: {{ cell.override }} (now {{ cell.text or 'empty' }})"{% endif %}><a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=row.code, col=cell.column, focus=grid.focus) }}" aria-label="Row {{ row.code }}, column {{ cell.column }}{% if cell.text %}, {{ cell.text }}{% elif not cell.reportable %}, not reportable{% else %}, empty{% endif %}{% if cell.marks %}, read by {{ cell.marks | length }} broken rule{{ 's' if cell.marks | length != 1 }}{% endif %}{% if cell.override is not none %}, override drafted{% endif %}">{{ cell.override if cell.override is not none else cell.text }}</a></td>
           {% endfor %}
         </tr>
         {% endfor %}
@@ -86,6 +91,37 @@
     </a>
     <a class="small" href="{{ link(rules_url, rule=mark.rule_id) }}">Why {{ mark.rule_id }} breaks</a>
     {% endfor %}
+    {% set here = link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=cell.row, col=cell.column, focus=grid.focus) %}
+    <section aria-label="Override this cell" id="override" style="display: flex; flex-direction: column; gap: 10px; padding-top: 6px; border-top: 1px solid var(--line)">
+      <h3>Override this cell</h3>
+      {% if cell.override %}
+      <div class="stat">
+        <div class="small muted">Drafted{% if cell.override.remove %}: take the cell out{% endif %}</div>
+        {% if not cell.override.remove %}<div class="value">{{ cell.override.value if cell.override.value is not none else cell.override.text_value }}</div>{% endif %}
+        <div class="small">“{{ cell.override.reason }}”</div>
+      </div>
+      <form method="post" action="/returns/{{ current.return_id }}/adjustments/drop">
+        <input type="hidden" name="table" value="{{ grid.table }}"><input type="hidden" name="sheet" value="{{ grid.page.sheet or '' }}"><input type="hidden" name="key" value="{{ grid.page.open_key or '' }}"><input type="hidden" name="row" value="{{ cell.row }}"><input type="hidden" name="col" value="{{ cell.column }}"><input type="hidden" name="next" value="{{ here }}">
+        <button class="btn" type="submit">Withdraw the override</button>
+      </form>
+      {% endif %}
+      {% if cell.reportable or cell.value %}
+      <form method="post" action="/returns/{{ current.return_id }}/adjustments" style="display: flex; flex-direction: column; gap: 10px">
+        <input type="hidden" name="table" value="{{ grid.table }}"><input type="hidden" name="sheet" value="{{ grid.page.sheet or '' }}"><input type="hidden" name="key" value="{{ grid.page.open_key or '' }}"><input type="hidden" name="row" value="{{ cell.row }}"><input type="hidden" name="col" value="{{ cell.column }}"><input type="hidden" name="data_type" value="{{ cell.data_type }}"><input type="hidden" name="next" value="{{ here }}">
+        <label class="field">{% if cell.override %}Change it to{% else %}New value{% endif %} <span class="hint">{% if cell.data_type == "percentage" %}a fraction (0.0045) or a percentage (0.45%){% elif cell.data_type in ("monetary", "integer", "decimal") %}a number{% elif cell.data_type %}{{ cell.data_type }}{% endif %}</span>
+          <input type="text" name="value" spellcheck="false" class="mono">
+        </label>
+        {% if cell.value %}<label class="check"><input type="checkbox" name="remove" value="yes"><span>Take the cell out of the return — unreported, which is not the same as zero</span></label>{% endif %}
+        <label class="field">Why <span class="hint">required: it is recorded with the override</span>
+          <input type="text" name="reason" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Draft the override</button>
+        <p class="small muted" style="margin: 0">Applied when the package is built, and recorded with what the cell held before in the manifest and the audit ledger. <a href="/returns/{{ current.return_id }}/filing">Overrides drafted so far</a></p>
+      </form>
+      {% else %}
+      <p class="small muted" style="margin: 0">The taxonomy does not accept a figure in this cell on this sheet.</p>
+      {% endif %}
+    </section>
     {% else %}
     <p class="muted" style="margin: 0">Pick a cell to see its row, its column and the rules that read it.</p>
     {% endif %}

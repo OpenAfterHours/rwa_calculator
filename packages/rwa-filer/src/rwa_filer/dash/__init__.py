@@ -11,14 +11,17 @@ Why a dashboard: the command line answers "does this return pass?" well and
 broken rule to the cells on the template grid that broke it.
 
 It holds no validation or filing logic of its own: every figure on every page
-comes from the functions the command line calls. It runs on this machine,
-answers only the browser holding the session's token, and sends nothing
-anywhere.
+comes from the functions the command line calls, and every file it writes is
+written by them — a build from the dashboard is byte for byte the command's.
+It runs on this machine, answers only the browser holding the session's token,
+and sends nothing anywhere.
 
 Module map:
 - ``app``       — the Starlette application: routes, middleware, static files
 - ``context``   — what every page shares: the workspace, templates, layout
 - ``pages``     — the read-only pages: open, overview, rules, templates
+- ``filing_pages`` — the write actions: overrides, build, sign-off, verify
+- ``filing``    — what those actions do, and the Build & sign off page model
 - ``views``     — page models for the overview and the rules
 - ``grid``      — the page model of the template viewer
 - ``workspace`` — the returns opened in one session

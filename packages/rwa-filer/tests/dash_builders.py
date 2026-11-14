@@ -29,3 +29,12 @@ HEADER_FORM = {"entity": VALID_LEI, "reference_date": REFERENCE_DATE, "module": 
 HEADER = HeaderFields(entity=VALID_LEI, reference_date=date(2027, 3, 31), module="PRA001")
 #: A loopback address: the app answers loopback host names only.
 BASE_URL = "http://127.0.0.1:8765"
+#: The same header as command-line options.
+HEADER_ARGS_CLI = [
+    "--entity",
+    VALID_LEI,
+    "--reference-date",
+    REFERENCE_DATE,
+    "--module",
+    "PRA001",
+]

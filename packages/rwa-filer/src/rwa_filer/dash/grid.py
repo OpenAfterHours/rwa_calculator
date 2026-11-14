@@ -33,8 +33,11 @@ from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.views import title_case
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from rwa_filer.dash.workspace import OpenedReturn
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
+    from rwa_filer.workflow.adjustments import Adjustment
 
 #: A cell's coordinates within one table: sheet, open-axis key, row, column.
 _Place = tuple[str | None, str | None, str, str]
@@ -72,6 +75,7 @@ class GridCell:
     marks: tuple[Mark, ...]
     selected: bool
     dimmed: bool
+    override: str | None = None
 
     @property
     def tone(self) -> str:
@@ -121,6 +125,7 @@ class CellDetail:
     data_type: str
     reportable: bool
     marks: tuple[Mark, ...]
+    override: Adjustment | None = None
 
 
 @dataclass(frozen=True)
@@ -142,6 +147,7 @@ class TemplateGrid:
 def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
     opened: OpenedReturn,
     *,
+    drafts: Sequence[Adjustment] = (),
     table: str = "",
     sheet: str = "",
     key: str = "",
@@ -151,7 +157,9 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
 ) -> TemplateGrid | None:
     """The grid for ``table`` (default: the first with a broken rule), or ``None``.
 
-    ``None`` only for a return with no fact in any table the taxonomy knows.
+    ``drafts`` are overrides drafted but not yet built: each cell one targets
+    shows what it will hold. ``None`` only for a return with no fact in any
+    table the taxonomy knows.
     """
     pack = opened.pack
     marks = failure_marks(opened)
@@ -191,6 +199,11 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
         )
         for fact in page_facts.iter_rows(named=True)
     }
+    overrides = {
+        (item.row, item.column): item
+        for item in drafts
+        if (item.table, item.sheet, item.open_key) == (table, page.sheet, page.open_key)
+    }
     picked = (row, column) if (row, column) in reportable | set(values) else None
     if picked is None and page_marks:
         picked = min(page_marks, key=lambda place: _order(rows, columns, place))
@@ -209,6 +222,9 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
                     and all(
                         mark.rule_id != focus for mark in page_marks.get((code, column_code), ())
                     ),
+                    override=_override_text(
+                        overrides.get((code, column_code)), types.get((code, column_code), "")
+                    ),
                 )
                 for column_code, _ in columns
             ),
@@ -223,7 +239,7 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
         page=page,
         columns=columns,
         rows=grid_rows,
-        cell=_detail(picked, rows, columns, values, types, reportable, page_marks),
+        cell=_detail(picked, rows, columns, values, types, reportable, page_marks, overrides),
         focus=focus,
         values=page_facts.height,
     )
@@ -369,6 +385,15 @@ def _order(
     return row_index.get(place[0], len(row_index)), column_index.get(place[1], len(column_index))
 
 
+def _override_text(adjustment: Adjustment | None, data_type: str) -> str | None:
+    """What a drafted override will make a cell show, or ``None`` for no override."""
+    if adjustment is None:
+        return None
+    if adjustment.remove:
+        return "removed"
+    return display_value(adjustment.value, adjustment.text_value, data_type)
+
+
 def _detail(  # noqa: PLR0913 - the parts of one cell, each from its own source
     picked: tuple[str, str] | None,
     rows: tuple[tuple[str, str], ...],
@@ -377,6 +402,7 @@ def _detail(  # noqa: PLR0913 - the parts of one cell, each from its own source
     types: dict[tuple[str, str], str],
     reportable: set[tuple[str, str]],
     marks: dict[tuple[str, str], tuple[Mark, ...]],
+    overrides: dict[tuple[str, str], Adjustment],
 ) -> CellDetail | None:
     if picked is None:
         return None
@@ -391,4 +417,5 @@ def _detail(  # noqa: PLR0913 - the parts of one cell, each from its own source
         data_type=types.get(picked, ""),
         reportable=picked in reportable,
         marks=marks.get(picked, ()),
+        override=overrides.get(picked),
     )

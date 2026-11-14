@@ -118,18 +118,9 @@ def sign_off(  # noqa: PLR0913 - each argument is a separate fact about the appr
             the ones the manifest describes; or the validation found something
             blocking and ``acknowledge_findings`` was not given.
     """
-    if not approver.strip() or not role.strip():
-        raise SignOffError("a sign-off names the approver and the capacity they approve in")
-    problems = verify_package(manifest, require_signoff=False)
-    if problems:
-        raise SignOffError(f"the package does not verify and was not signed: {problems[0]}")
+    check_signoff(manifest, approver=approver, role=role, acknowledge_findings=acknowledge_findings)
     record = json.loads(manifest.read_text(encoding="utf-8"))
     submittable = bool(record["validation"]["submittable"])
-    if not submittable and not acknowledge_findings:
-        raise SignOffError(
-            "the validation in the manifest found something that blocks submission; sign-off "
-            "needs the findings to be acknowledged explicitly"
-        )
     approval = SignOff(
         approver=approver.strip(),
         role=role.strip(),
@@ -146,6 +137,32 @@ def sign_off(  # noqa: PLR0913 - each argument is a separate fact about the appr
     )
     logger.info("signed off %s by %s (%s)", manifest.name, approval.approver, approval.role)
     return approval
+
+
+def check_signoff(
+    manifest: Path, *, approver: str, role: str, acknowledge_findings: bool = False
+) -> None:
+    """Refuse a sign-off ``sign_off`` would refuse, without recording anything.
+
+    For a caller that records the approval elsewhere first — the audit ledger —
+    and must not record one that is then refused.
+
+    Raises:
+        SignOffError: the approver or role is blank; the files on disk are not
+            the ones the manifest describes; or the validation found something
+            blocking and ``acknowledge_findings`` was not given.
+    """
+    if not approver.strip() or not role.strip():
+        raise SignOffError("a sign-off names the approver and the capacity they approve in")
+    problems = verify_package(manifest, require_signoff=False)
+    if problems:
+        raise SignOffError(f"the package does not verify and was not signed: {problems[0]}")
+    record = json.loads(manifest.read_text(encoding="utf-8"))
+    if not bool(record["validation"]["submittable"]) and not acknowledge_findings:
+        raise SignOffError(
+            "the validation in the manifest found something that blocks submission; sign-off "
+            "needs the findings to be acknowledged explicitly"
+        )
 
 
 def read_signoff(manifest: Path) -> SignOff | None:

@@ -18,6 +18,8 @@ Module map:
 - ``signoff``     — an approval bound to the checksum of the file approved, and
   the check that a package on disk is still the one that was signed
 - ``diff``        — two versions of a return, cell by cell
+- ``acts``        — a build, a sign-off and a verification as one call each:
+  what the ledger records for each, shared by the command line and the dashboard
 
 What this is not: access control or a digital signature. Nothing here stops a
 person who can write the files from writing them; it ensures that what was

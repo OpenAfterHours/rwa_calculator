@@ -130,6 +130,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **DOCS — installing and running both packages is shown with uv only.** The
+  `pip install` examples are gone from the [installation guide](../getting-started/installation.md),
+  the [quick start](../getting-started/quickstart.md), the
+  [interactive UI guide](../user-guide/interactive-ui.md), the
+  [rwa-filer page](../rwa-filer/index.md) and both READMEs. The installation guide
+  now starts with installing uv, creates a project with
+  `uv init --python 3.13` before `uv add rwa-calc` (so the project's Python
+  requirement does not block the install), shows `uvx --from rwa-calc rwa-ui` and
+  `uv tool install rwa-calc` for running the UI without a project, and replaces
+  the venv/`pip install -e .` source install, the `PYTHONPATH` workaround and the
+  `polars-lts-cpu` hint with `uv sync`, `uv run` and `uv add "polars[rtcompat]"`.
+  It also fixes instructions that would have failed: several pages ran a bare
+  `rwa-ui` straight after `uv add rwa-calc`, which installs into the project's
+  `.venv` and does not put `rwa-ui` on the `PATH`; they now run `uv run rwa-ui`.
+  The `ui` extra is described as what it now is (kept for compatibility; its
+  packages ship in the base install), and `rwa-filer` is installed with
+  `uv tool install rwa-filer` or `uv add rwa-filer`. Docs only — no calculation
+  impact.
 - **DOCS — the site documents two packages, and now says so.** The navigation
   is split into tabs: **RWA Calculator**, **rwa-filer**, **Development** and
   **Appendix**. Each sidebar shows only its own tab's pages, and no page URL

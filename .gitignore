@@ -29,6 +29,9 @@ scripts/coverage_metrics.json
 
 # defect_injection.py campaign output
 scripts/defect_scorecard.json
+
+# /brag-slim launch-video output (.claude/skills/brag-slim)
+brag-output*/
 .reference_dumps/
 .pytest_timings/
 

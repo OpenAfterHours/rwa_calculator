@@ -252,13 +252,14 @@ def render_text(comparison: ReturnComparison) -> str:
     """The comparison as ``rwa-filer compare`` prints it: the verdict, the cells, the findings."""
     names = comparison.names
     counts = comparison.counts()
-    lines = [_verdict_line(comparison)]
-    lines.append(f"  baseline   {names.baseline}")
-    lines.append(f"  candidate  {names.candidate}")
-    lines.append("")
-    lines.append(f"{comparison.cells.height:>9,} cells")
-    for category, words in _CATEGORY_WORDS.items():
-        lines.append(f"{counts[category]:>9,}  {words}")
+    lines = [
+        _verdict_line(comparison),
+        f"  baseline   {names.baseline}",
+        f"  candidate  {names.candidate}",
+        "",
+        f"{comparison.cells.height:>9,} cells",
+    ]
+    lines.extend(f"{counts[category]:>9,}  {words}" for category, words in _CATEGORY_WORDS.items())
     for name, (before, after) in comparison.header.items():
         lines.append(f"  header     {name}: {before} -> {after}")
     for code, pair in comparison.indicators.items():
@@ -352,25 +353,39 @@ def _difference(
     delta = (cand_value or 0.0) - (base_value or 0.0) if numeric else None
     allowance = _allowance(row["baseline_decimals"]) + _allowance(row["candidate_decimals"])
     if row["in_baseline"] and row["in_candidate"]:
-        if base == cand:
-            category = CATEGORY_SAME
-        elif delta is not None and abs(delta) <= allowance + tolerance:
-            category = CATEGORY_ROUNDING
-        else:
-            category = CATEGORY_MATERIAL
+        category = _both_reported(base, cand, delta, allowance + tolerance)
         return CellDifference(cell, category, base, cand, delta, allowance)
     held_by = SIDE_BASELINE if row["in_baseline"] else SIDE_CANDIDATE
     other = SIDE_CANDIDATE if held_by == SIDE_BASELINE else SIDE_BASELINE
     value = base if held_by == SIDE_BASELINE else cand
-    if not indicators[other].get(indicator, False):
-        category = CATEGORY_SCOPE
-    elif value == 0:
-        category = CATEGORY_ZERO_OR_BLANK
-    elif delta is not None and abs(delta) <= tolerance:
-        category = CATEGORY_ROUNDING
-    else:
-        category = CATEGORY_MATERIAL
+    category = _one_reported(
+        value, delta, other_reports=indicators[other].get(indicator, False), tolerance=tolerance
+    )
     return CellDifference(cell, category, base, cand, delta, allowance, held_by)
+
+
+def _both_reported(
+    base: float | str | None, cand: float | str | None, delta: float | None, within: float
+) -> str:
+    """The category of a cell both returns report."""
+    if base == cand:
+        return CATEGORY_SAME
+    if delta is not None and abs(delta) <= within:
+        return CATEGORY_ROUNDING
+    return CATEGORY_MATERIAL
+
+
+def _one_reported(
+    value: float | str | None, delta: float | None, *, other_reports: bool, tolerance: float
+) -> str:
+    """The category of a cell one return reports, given whether the other reports its template."""
+    if not other_reports:
+        return CATEGORY_SCOPE
+    if value == 0:
+        return CATEGORY_ZERO_OR_BLANK
+    if delta is not None and abs(delta) <= tolerance:
+        return CATEGORY_ROUNDING
+    return CATEGORY_MATERIAL
 
 
 def _allowance(decimals: int | None) -> float:

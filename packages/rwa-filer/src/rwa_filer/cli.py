@@ -119,6 +119,8 @@ DASH_PORT = 8765
 
 #: Changed cells listed by ``diff`` in text form; the JSON form lists them all.
 _DIFF_ROWS_SHOWN = 40
+#: The help of every command's ``--format`` option.
+_FORMAT_HELP = "how to print the result"
 
 _SOURCE_DESCRIPTION = (
     "{verb} FILE is a long-format fact table (.parquet or .csv), a workbook in the "
@@ -190,9 +192,7 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     )
     validate.add_argument("file", type=Path, metavar="FILE", help="the return to validate")
     _add_header_arguments(validate)
-    validate.add_argument(
-        "--format", choices=["text", "json"], default="text", help="how to print the result"
-    )
+    validate.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     validate.add_argument(
         "--report", type=Path, metavar="FILE", help="also write the full JSON report here"
     )
@@ -464,9 +464,7 @@ def _add_workflow_commands(
     diffing.add_argument("previous", type=Path, metavar="PREVIOUS", help="the earlier version")
     diffing.add_argument("current", type=Path, metavar="CURRENT", help="the later version")
     _add_header_arguments(diffing)
-    diffing.add_argument(
-        "--format", choices=["text", "json"], default="text", help="how to print the result"
-    )
+    diffing.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     diffing.set_defaults(handler=_diff)
 
     comparing = commands.add_parser(
@@ -499,9 +497,7 @@ def _add_workflow_commands(
             "(for sources that state none, e.g. a fact table rounded to thousands)"
         ),
     )
-    comparing.add_argument(
-        "--format", choices=["text", "json"], default="text", help="how to print the result"
-    )
+    comparing.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     comparing.set_defaults(handler=_compare)
 
 

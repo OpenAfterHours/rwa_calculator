@@ -160,7 +160,8 @@ def test_the_page_says_why_the_two_differ_and_what_each_finding_points_at(
     assert (
         "Corporates row 0220 (75%) by rwa-filer.csv and row 0200 (50%) by old-system.csv" in section
     )
-    assert "Points at rwa-filer.csv" in section and "boe_b0703 · holds → breaks" in section
+    assert "Points at rwa-filer.csv" in section
+    assert "boe_b0703 · holds → breaks" in section
 
 
 def test_the_category_filter_lists_only_that_category(

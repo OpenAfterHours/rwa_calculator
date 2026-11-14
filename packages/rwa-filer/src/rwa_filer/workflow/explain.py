@@ -235,7 +235,7 @@ class Names:
 # =============================================================================
 
 
-def explain_differences(  # noqa: PLR0913 - the two traces, the cells and how to word them
+def explain_differences(
     differences: Mapping[Cell, CellDifference],
     baseline_trace: Sequence[Evaluation],
     candidate_trace: Sequence[Evaluation],
@@ -338,6 +338,31 @@ def _one_sided(checks: list[_Check]) -> list[_Check]:
     return found
 
 
+def _one_sided_points(holder: str, broken_on: set[str | None]) -> str | None:
+    """Which return a column only ``holder`` reports points at, from the rules it breaks.
+
+    The return that lacks the column, when a rule breaks there; else the one
+    that has it, when its figures break a rule; else neither.
+    """
+    lacking = SIDE_CANDIDATE if holder == SIDE_BASELINE else SIDE_BASELINE
+    if lacking in broken_on:
+        return lacking
+    return holder if holder in broken_on else None
+
+
+def _rule_only_reason(ids: set[str], differing: set[Cell]) -> str:
+    """Why a one-sided break no other finding cites is listed on its own."""
+    if not differing:
+        them = "them" if len(ids) > 1 else "it"
+        return (
+            f"No differing cell is behind {them}: the same figures are judged differently "
+            "because of what else each return reports."
+        )
+    reads = "They read" if len(ids) > 1 else "It reads"
+    cells = f"{len(differing)} cells that differ" if len(differing) > 1 else "1 cell that differs"
+    return f"{reads} {cells}, in the findings above."
+
+
 def _cell(address: CellAddress) -> Cell:
     return (address.table, address.sheet, address.open_key, address.row, address.column)
 
@@ -419,7 +444,9 @@ def _breaks(rule_ids: Iterable[str]) -> str:
 
 def _listed(rule_ids: Iterable[str]) -> str:
     ids = sorted(set(rule_ids))
-    return ", ".join(ids[:-1]) + f" and {ids[-1]}" if len(ids) > 1 else (ids[0] if ids else "")
+    if len(ids) > 1:
+        return ", ".join(ids[:-1]) + f" and {ids[-1]}"
+    return ids[0] if ids else ""
 
 
 # =============================================================================
@@ -616,30 +643,12 @@ class _Links:
         for (table, column, holder), cells in sorted(self.columns.items()):
             members = set(cells)
             checks = self._citing(members)
-            lacking = SIDE_CANDIDATE if holder == SIDE_BASELINE else SIDE_BASELINE
-            breaks = {check.broken_on for check in checks}
-            points = lacking if lacking in breaks else holder if holder in breaks else None
-            names = self.context.names
+            points = _one_sided_points(holder, {check.broken_on for check in checks})
             title = (
-                f"Only {names.of(holder)} reports {table} column {column} "
+                f"Only {self.context.names.of(holder)} reports {table} column {column} "
                 f"({self.context.column_label(table, column)}): {len(cells)} cells"
             )
-            if points == lacking:
-                detail = (
-                    f"Without these cells, {names.of(lacking)} breaks "
-                    f"{_listed(check.rule_id for check in checks)}; {names.of(holder)}, "
-                    f"which reports them, satisfies {'it' if len({c.rule_id for c in checks}) == 1 else 'them'}."
-                )
-            elif points == holder:
-                detail = (
-                    f"The figures {names.of(holder)} reports there break "
-                    f"{_listed(check.rule_id for check in checks)}."
-                )
-            else:
-                detail = (
-                    "No Bank rule depends on these cells, so this is a choice between the two "
-                    "returns, not an error in either."
-                )
+            detail = self._one_sided_detail(holder, points, checks)
             drafts.append(
                 Discrepancy(
                     number=0,
@@ -745,19 +754,9 @@ class _Links:
             ids = {check.rule_id for check in checks}
             name = self.context.names.of(side)
             differing = set().union(*(check.cells() for check in checks)) & self.context.material
-            them = "them" if len(ids) > 1 else "it"
-            detail = f"{_breaks(ids)} in {name} and not in the other return."
-            if differing:
-                detail += (
-                    f" {'They read' if len(ids) > 1 else 'It reads'} {len(differing)} cell"
-                    f"{'s' if len(differing) > 1 else ''} that differ"
-                    f"{'' if len(differing) > 1 else 's'}, in the findings above."
-                )
-            else:
-                detail += (
-                    f" No differing cell is behind {them}: the same figures are judged "
-                    "differently because of what else each return reports."
-                )
+            detail = f"{_breaks(ids)} in {name} and not in the other return. " + _rule_only_reason(
+                ids, differing
+            )
             drafts.append(
                 Discrepancy(
                     number=0,
@@ -774,6 +773,22 @@ class _Links:
         return drafts
 
     # -- finding parts -----------------------------------------------------------------
+
+    def _one_sided_detail(self, holder: str, points: str | None, checks: list[_Check]) -> str:
+        names = self.context.names
+        rules = _listed(check.rule_id for check in checks)
+        if points is None:
+            return (
+                "No Bank rule depends on these cells, so this is a choice between the two "
+                "returns, not an error in either."
+            )
+        if points == holder:
+            return f"The figures {names.of(holder)} reports there break {rules}."
+        them = "it" if len({check.rule_id for check in checks}) == 1 else "them"
+        return (
+            f"Without these cells, {names.of(points)} breaks {rules}; {names.of(holder)}, "
+            f"which reports them, satisfies {them}."
+        )
 
     def _citing(self, cells: set[Cell]) -> list[_Check]:
         found = []

@@ -683,40 +683,46 @@ class _Evaluation:
         failures: list[Failure] = []
         seen: set[tuple[object, ...]] = set()
         for env in self._environments():
-            values = dict(env)
-            facts = self._facts_bound(values)
-            # A reference with no default and no reported cell cannot be bound:
-            # the evaluation does not exist.
-            if facts is None:
-                continue
-            # Nothing reported here at all: not evaluated, unless the rule is
-            # one the gateway runs regardless.
-            if not any(facts) and not self._rule.always_execute:
-                continue
-            # The gateway evaluates over FACTS. Two places that read exactly
-            # the same facts — a figure the table shows in two cells — are one
-            # evaluation.
-            if facts in seen:
-                continue
-            seen.add(facts)
-            try:
-                if (
-                    self._rule.where_tree is not None
-                    and self._value(self._rule.where_tree, values) is not True
-                ):
-                    continue
-                verdict = self._value(self._rule.tree, values)
-            except (_NotBound, ZeroDivisionError):
+            holds = self._verdict(env, seen)
+            if holds is None:
                 continue
             if trace is not None:
-                trace.append(self._traced(env, holds=verdict is True))
-            if verdict is True:
+                trace.append(self._traced(env, holds=holds))
+            if holds:
                 satisfied += 1
-            else:
-                unsatisfied += 1
-                if len(failures) < MAX_FAILURES:
-                    failures.append(self._failure(values))
+                continue
+            unsatisfied += 1
+            if len(failures) < MAX_FAILURES:
+                failures.append(self._failure(dict(env)))
         return satisfied, failures, unsatisfied
+
+    def _verdict(self, env: _Env, seen: set[tuple[object, ...]]) -> bool | None:
+        """Whether the evaluation at ``env`` holds; ``None`` where there is no evaluation."""
+        values = dict(env)
+        facts = self._facts_bound(values)
+        # A reference with no default and no reported cell cannot be bound:
+        # the evaluation does not exist.
+        if facts is None:
+            return None
+        # Nothing reported here at all: not evaluated, unless the rule is
+        # one the gateway runs regardless.
+        if not any(facts) and not self._rule.always_execute:
+            return None
+        # The gateway evaluates over FACTS. Two places that read exactly
+        # the same facts — a figure the table shows in two cells — are one
+        # evaluation.
+        if facts in seen:
+            return None
+        seen.add(facts)
+        try:
+            if (
+                self._rule.where_tree is not None
+                and self._value(self._rule.where_tree, values) is not True
+            ):
+                return None
+            return self._value(self._rule.tree, values) is True
+        except (_NotBound, ZeroDivisionError):
+            return None
 
     def _facts_bound(self, env: Mapping[str, str]) -> tuple[object, ...] | None:
         """The fact(s) each reference reads at ``env``; ``None`` if one cannot be bound.

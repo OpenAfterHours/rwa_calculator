@@ -29,11 +29,11 @@ import logging
 import re
 import secrets
 import threading
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
-from rwa_filer.readers import open_source
+from rwa_filer.readers import SourceReading, open_source
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.explain import Names
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
     from rwa_filer.filing import FilingPackage
     from rwa_filer.model import CanonicalReturn
-    from rwa_filer.readers import HeaderFields, SourceReading
+    from rwa_filer.readers import HeaderFields
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.returns import ReturnValidation
     from rwa_filer.workflow.adjustments import Adjustment, AppliedAdjustment
@@ -228,13 +228,14 @@ class Workspace:
             if baseline.name != candidate.name
             else Names(f"{baseline.name} (earlier)", f"{candidate.name} (later)")
         )
-        made = compare_returns(
-            replace(baseline.reading, pack=baseline.pack),
-            replace(candidate.reading, pack=candidate.pack),
-            names=names,
-        )
+        made = compare_returns(_reading(baseline), _reading(candidate), names=names)
         with self._lock:
             return self._comparisons.setdefault(key, made)
+
+
+def _reading(opened: OpenedReturn) -> SourceReading:
+    """What reading the return established, with the pack it was validated against."""
+    return SourceReading(ret=opened.reading.ret, pack=opened.pack, findings=opened.reading.findings)
 
 
 def safe_file_name(filename: str) -> str:

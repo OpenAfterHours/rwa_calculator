@@ -16,9 +16,21 @@ Polars alone and never imports `rwa_calc`. `rwa-calc` uses it to validate the
 returns it generates; any other system that can produce template-level figures
 can use it the same way.
 
+Install it with [uv](https://docs.astral.sh/uv/):
+
 ```bash
-pip install rwa-filer
+# As a command on your PATH
+uv tool install rwa-filer
+
+# Or as a library in a uv project (then run the command as `uv run rwa-filer`)
+uv add rwa-filer
+
+# Or run it once without installing anything
+uvx rwa-filer --help
 ```
+
+Extras go in quotes, so the shell leaves the brackets alone:
+`uv tool install "rwa-filer[excel]"`.
 
 ```bash
 # Check a return: structure against the taxonomy, then the published rules

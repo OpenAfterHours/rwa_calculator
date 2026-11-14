@@ -11,6 +11,9 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Changed
 - (Next release changes will go here)
+- The README installs the package with uv: `uv tool install rwa-filer` for the
+  command, `uv add rwa-filer` for use as a library, or `uvx rwa-filer` to run it
+  once, in place of `pip install rwa-filer`.
 - The package metadata now carries a `Documentation` link, so the PyPI page
   points to the rwa-filer docs
   (<https://openafterhours.github.io/rwa_calculator/rwa-filer/>), and the README

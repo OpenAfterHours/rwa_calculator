@@ -21,21 +21,21 @@ The fastest way to get started is the web-based interface.
 
 ```bash
 uv add rwa-calc
-# Or with pip
-pip install rwa-calc
 ```
 
-The UI dependencies ship with the base package — no extra is required.
+This adds the calculator to your uv project. If you do not have one yet, start with
+`uv init --python 3.13 my-rwa-project && cd my-rwa-project`; see
+[Installation](installation.md) for details. The UI dependencies ship with the base
+package, so no extra is required.
 
 ### Step 2: Start the Server
 
 ```bash
-# If installed from PyPI
-rwa-ui
-
-# Or from source
 uv run rwa-ui
 ```
+
+The same command works in a source checkout. To try the UI without creating a project,
+run `uvx --from rwa-calc rwa-ui` instead.
 
 ### Step 3: Open Your Browser
 

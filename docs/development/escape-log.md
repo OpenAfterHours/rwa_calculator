@@ -3646,6 +3646,37 @@ gate that shipped.
   defect nobody had named for three months. Record every rule a parked portfolio
   breaks, by ID.
 
+## 2026-11-14 — The CRR Framework heading opened the SA-CCR page, and SA-CCR was missing from the sidebar
+
+- **Defect**: the "CRR Framework" nav section in `zensical.toml` had no index
+  page of its own. Under the `navigation.indexes` theme feature Zensical makes
+  the first `index.md` directly inside a section that section's index, wherever
+  it sits, so the section's 10th child, `specifications/crr/ccr/index.md`,
+  became its index. On every CRR page the "SA-CCR (Counterparty Credit Risk)"
+  entry was absent from the sidebar and the heading linked to `../ccr/`.
+  `zensical build` exited 0 and no link broke. It predates the tab split; the
+  same mechanism had just been fixed for `reconciliation/index.md` in
+  [OpenAfterHours/rwa_calculator#527](https://github.com/OpenAfterHours/rwa_calculator/pull/527).
+- **Escape class**: `no-gate-exists`. Nothing reads the nav's shape: the build
+  does not warn, and `check_doc_links.py` sees only links. The Reconciliation
+  fix was recorded as a comment beside that one entry, which is why the
+  identical case two levels down survived it.
+- **Gate change**: `tests/contracts/test_docs_nav_section_indexes.py` fails any
+  nav section whose first `index.md` page is not at position 0, read from
+  `zensical.toml` in the dev loop, with no build. Another test pins that the
+  detector flags the pre-fix CRR shape and passes a one-page section. The fix
+  itself is `docs/specifications/crr/index.md` at position 0 of the section.
+- **Verified red**: before the fix,
+  `uv run pytest tests/contracts/test_docs_nav_section_indexes.py -n0 -q` —
+  `1 failed, 2 passed`: `RWA Calculator > Specifications > CRR Framework: child
+  9 is specifications/crr/ccr/index.md`. The built
+  `site/specifications/crr/sa-risk-weights/index.html` had the heading at
+  `../ccr/` and ten children, none of them SA-CCR. After: `3 passed`; the
+  heading points at the new index and all eleven entries are listed, SA-CCR and
+  SFT included.
+- **Lesson**: a fix recorded as a comment next to the one entry it bit is
+  prose, and the next instance elsewhere in the nav had no reason to read it.
+
 ## 2026-11-14 — Every rwa-calc release from 0.2.24 to 0.3.34 installed and could not import `rwa_calc.api`
 
 - **Defect**: in a clean environment, `uv add rwa-calc` (or `pip install

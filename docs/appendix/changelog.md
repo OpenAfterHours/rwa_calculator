@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **Two vendored third-party agent skills, both MIT and copied verbatim.**
+  `brag-slim` (from `latent-spaces/brag`) turns this project or a website into
+  a short launch/demo video with music and share copy; its output directory
+  `brag-output*/` is git-ignored. `writing-for-agents` (from `mattpocock/skills`)
+  is a reference for writing skills, `CLAUDE.md` and other agent-facing
+  documents. Each folder under `.claude/skills/` carries the upstream `LICENSE`
+  and an `UPSTREAM.md` with the pinned commit and how to refresh it, and both
+  are mirrored into `.agents/skills/` for Codex. No calculation or reported
+  figure changes.
 - **The repository is now a uv workspace with a second, separately released
   package: `rwa-filer`.** The root is still the `rwa-calc` project and is also
   the workspace root, so `src/rwa_calc`, `tests/` and `scripts/` did not move;
@@ -130,6 +139,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **DOCS — installing and running both packages is shown with uv only.** The
+  `pip install` examples are gone from the [installation guide](../getting-started/installation.md),
+  the [quick start](../getting-started/quickstart.md), the
+  [interactive UI guide](../user-guide/interactive-ui.md), the
+  [rwa-filer page](../rwa-filer/index.md) and both READMEs. The installation guide
+  now starts with installing uv, creates a project with
+  `uv init --python 3.13` before `uv add rwa-calc` (so the project's Python
+  requirement does not block the install), shows `uvx --from rwa-calc rwa-ui` and
+  `uv tool install rwa-calc` for running the UI without a project, and replaces
+  the venv/`pip install -e .` source install, the `PYTHONPATH` workaround and the
+  `polars-lts-cpu` hint with `uv sync`, `uv run` and `uv add "polars[rtcompat]"`.
+  It also fixes instructions that would have failed: several pages ran a bare
+  `rwa-ui` straight after `uv add rwa-calc`, which installs into the project's
+  `.venv` and does not put `rwa-ui` on the `PATH`; they now run `uv run rwa-ui`.
+  The `ui` extra is described as what it now is (kept for compatibility; its
+  packages ship in the base install), and `rwa-filer` is installed with
+  `uv tool install rwa-filer` or `uv add rwa-filer`. Docs only — no calculation
+  impact.
 - **DOCS — the site documents two packages, and now says so.** The navigation
   is split into tabs: **RWA Calculator**, **rwa-filer**, **Development** and
   **Appendix**. Each sidebar shows only its own tab's pages, and no page URL
@@ -141,6 +168,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gains the same table, and its docs links, which pointed to
   `openafterhours.club/rwa_calculator/` and returned 404, now point to the
   published site. No calculation or reported figure changed.
+- **DOCS — the CRR Framework section has its own index page.**
+  [CRR Specifications](../specifications/crr/index.md) lists every CRR
+  specification and how it relates to Basel 3.1, as the Basel 3.1 Framework
+  section already did. Without it, Zensical had made the SA-CCR page that
+  section's index: "SA-CCR (Counterparty Credit Risk)" was missing from the
+  sidebar and the "CRR Framework" heading opened it. Both SA-CCR and SFT now
+  appear in the sidebar. A new contract test,
+  `tests/contracts/test_docs_nav_section_indexes.py`, fails any nav section
+  whose first `index.md` page is not its first entry. No page URL changed.
 - **REPORTING — behaviour to expect where the Basel 3.1 output floor binds.**
   OF 02.00 column 0010 is now un-floored, as its data points require, while
   OF 08.01 still sums the post-floor RWEA (which carries the engine's pro-rata

@@ -21,8 +21,10 @@ Key responsibilities:
   each dimension's domain, typed-domain element and default member.
 
 This module only reads. It decides nothing about table layout — that is
-``compiler`` — and it holds the one ``openpyxl`` import of the taxonomy package
-(the ``rwa-filer[excel]`` extra), made lazily so the runtime never needs it.
+``compiler`` — and it is the one module of the taxonomy package that opens a
+workbook with ``openpyxl`` (the ``rwa-filer[excel]`` extra). It is imported
+through ``rwa_filer.extras`` when a workbook is opened, so the runtime never
+needs it.
 
 References:
 - Bank of England Banking Taxonomy: annotated templates and DPM dictionary
@@ -39,6 +41,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from rwa_filer.extras import import_openpyxl
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -320,18 +324,12 @@ def member_qname(member_owner: str, domain_owner: str, domain: str, code: str) -
 
 
 def _load_workbook(path: Path, *, read_only: bool) -> Any:
-    """Open a workbook, with a clear message when openpyxl is absent."""
-    try:
-        from openpyxl import load_workbook
-    except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without the extra
-        raise ModuleNotFoundError(
-            "Compiling a taxonomy pack reads the publisher's .xlsx workbooks and needs "
-            "openpyxl. Install it with: pip install 'rwa-filer[excel]'"
-        ) from exc
+    """Open a workbook; ``MissingExtraError`` when openpyxl is absent."""
+    openpyxl = import_openpyxl(needed_for="Compiling a taxonomy pack", command="taxonomy compile")
     with warnings.catch_warnings():
         # openpyxl warns that it drops the x14 validations; _read_zip_extras reads them.
         warnings.simplefilter("ignore")
-        return load_workbook(path, read_only=read_only, data_only=True)
+        return openpyxl.load_workbook(path, read_only=read_only, data_only=True)
 
 
 def _read_sheet(

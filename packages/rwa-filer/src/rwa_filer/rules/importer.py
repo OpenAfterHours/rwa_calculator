@@ -33,6 +33,8 @@ import re
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
+from rwa_filer.extras import import_openpyxl
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
@@ -331,16 +333,9 @@ _EXTRACTORS: Final[dict[str, Callable[[Path], dict[str, Any]]]] = {
 
 
 def _load_workbook(path: Path) -> Any:
-    """Open a workbook read-only, with a clear message when openpyxl is absent."""
-    try:
-        from openpyxl import load_workbook
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            "Reading a rule workbook needs openpyxl, from the rwa-filer[excel] extra. "
-            'Run the command with it: uvx "rwa-filer[excel]@latest" rules import ... '
-            '(in a uv project: uv add "rwa-filer[excel]")'
-        ) from exc
-    return load_workbook(path, read_only=True, data_only=True)
+    """Open a workbook read-only; ``MissingExtraError`` when openpyxl is absent."""
+    openpyxl = import_openpyxl(needed_for="Reading a rule workbook", command="rules import")
+    return openpyxl.load_workbook(path, read_only=True, data_only=True)
 
 
 def _matching_rows(

@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import polars as pl
 
+from rwa_filer.extras import import_openpyxl
 from rwa_filer.model import CODE_WIDTH, FACT_SCHEMA, CanonicalReturn, ReturnHeader
 
 if TYPE_CHECKING:
@@ -482,14 +483,6 @@ def _load_workbook(path: Path) -> Any:
 
 
 def _openpyxl() -> Any:
-    """Import openpyxl, with a clear message when the extra is not installed."""
-    try:
-        import openpyxl
-        import openpyxl.styles  # noqa: F401 - the styles submodule is used via the package
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            "Reading or writing a workbook needs openpyxl, from the rwa-filer[excel] extra. "
-            'Run the command with it: uvx "rwa-filer[excel]@latest" <command> ... '
-            '(in a uv project: uv add "rwa-filer[excel]")'
-        ) from exc
-    return openpyxl
+    """Import openpyxl; ``MissingExtraError`` when the extra is not installed."""
+    # "<command>": validate, build, diff and template all reach a workbook here.
+    return import_openpyxl(needed_for="Reading or writing a workbook", command="<command>")

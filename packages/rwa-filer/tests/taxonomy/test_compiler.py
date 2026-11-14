@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -781,3 +782,22 @@ def test_missing_input_is_a_usage_error(publisher: Publisher, tmp_path: Path) ->
             tmp_path / "absent.zip",
             module=builders.MODULE,
         )
+
+
+def test_without_the_excel_extra_the_error_says_how_to_run_with_it(
+    publisher: Publisher, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — the publisher's real inputs, then openpyxl unimportable, as without the extra
+    monkeypatch.setitem(sys.modules, "openpyxl", None)
+
+    # Act
+    with pytest.raises(ModuleNotFoundError) as raised:
+        compiler.compile_pack(
+            publisher.annotated, publisher.dictionary, publisher.taxonomy, module=builders.MODULE
+        )
+
+    # Assert — the uv remedies, spelt so they can be copied, and no pip
+    message = str(raised.value)
+    assert 'uvx "rwa-filer[excel]@latest" taxonomy compile' in message
+    assert 'uv add "rwa-filer[excel]"' in message
+    assert "pip install" not in message

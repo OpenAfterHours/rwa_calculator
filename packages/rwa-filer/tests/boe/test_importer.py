@@ -10,6 +10,7 @@ the opt-in test at the foot of this file.
 from __future__ import annotations
 
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -287,6 +288,24 @@ def test_a_workbook_that_is_not_a_rule_workbook_is_refused(tmp_path: Path) -> No
         import_workbook(no_column)
     with pytest.raises(ValueError, match="one framework version"):
         import_workbook(mixed)
+
+
+def test_without_the_excel_extra_the_error_says_how_to_run_with_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a real rule workbook, then openpyxl unimportable, as without the extra
+    path = workbook(tmp_path, FULL_HEADER, row(FULL_HEADER, **{"Rule code": "b1"}))
+    monkeypatch.setitem(sys.modules, "openpyxl", None)
+
+    # Act
+    with pytest.raises(ModuleNotFoundError) as raised:
+        import_workbook(path)
+
+    # Assert — the uv remedies, spelt so they can be copied, and no pip
+    message = str(raised.value)
+    assert 'uvx "rwa-filer[excel]@latest" rulebook import' in message
+    assert 'uv add "rwa-filer[excel]"' in message
+    assert "pip install" not in message
 
 
 # ---------------------------------------------------------------------------

@@ -11,9 +11,19 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Changed
 - (Next release changes will go here)
-- The README installs the package with uv: `uv tool install rwa-filer` for the
-  command, `uv add rwa-filer` for use as a library, or `uvx rwa-filer` to run it
-  once, in place of `pip install rwa-filer`.
+- The README runs the command with `uvx rwa-filer@latest`, in place of
+  `pip install rwa-filer`. `@latest` makes each run check PyPI and use the
+  newest release, so a return is checked with the newest rules and taxonomy
+  without anyone having to notice that a release came out; a bare
+  `uvx rwa-filer` can keep running an older copy, including one installed with
+  `uv tool install`. Each example names the extra it needs
+  (`uvx "rwa-filer[excel]@latest" template ...`). `uv add rwa-filer` remains for
+  use as a library, and `uv tool install rwa-filer` (with `uv tool upgrade`) for
+  a machine that has to run it offline.
+- The messages shown when the `excel` or `arelle` extra is missing give the uv
+  commands (`uvx "rwa-filer[excel]@latest" ...`, or `uv add "rwa-filer[excel]"`
+  in a project) in place of `pip install`, which has no lasting environment to
+  install into when the command was run with `uvx`.
 - The package metadata now carries a `Documentation` link, so the PyPI page
   points to the rwa-filer docs
   (<https://openafterhours.github.io/rwa_calculator/rwa-filer/>), and the README

@@ -339,7 +339,9 @@ class TestTheRefereeCommand:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         # Arrange
-        stub["result"] = RefereeUnavailableError('install it: pip install "rwa-filer[arelle]"')
+        stub["result"] = RefereeUnavailableError(
+            'run it as: uvx "rwa-filer[arelle]@latest" referee ...'
+        )
 
         # Act
         code, _out, err = run(str(instance), "--taxonomy-package", str(package), capsys=capsys)

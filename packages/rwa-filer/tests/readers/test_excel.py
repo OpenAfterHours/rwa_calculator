@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import polars as pl
@@ -216,3 +217,21 @@ def test_an_unknown_table_in_a_template_request_is_refused(
 ) -> None:
     with pytest.raises(ValueError, match="ZZ99"):
         write_workbook(pack, tmp_path / "x.xlsx", tables=["ZZ99"])
+
+
+def test_without_the_excel_extra_the_error_says_how_to_run_with_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange — openpyxl unimportable, as in an environment without the extra
+    monkeypatch.setitem(sys.modules, "openpyxl", None)
+
+    # Act
+    with pytest.raises(ModuleNotFoundError) as raised:
+        read_workbook(tmp_path / "return.xlsx")
+
+    # Assert — the uv remedies, spelt so they can be copied; a pip install has
+    # no lasting environment to go into when the command was run with uvx.
+    message = str(raised.value)
+    assert 'uvx "rwa-filer[excel]@latest"' in message
+    assert 'uv add "rwa-filer[excel]"' in message
+    assert "pip install" not in message

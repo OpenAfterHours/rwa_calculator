@@ -23,6 +23,7 @@ Key responsibilities:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -315,3 +316,20 @@ def test_a_written_extract_is_current_and_an_edited_one_is_not(
     assert importer.is_extract_current(payload, written)
     assert not importer.is_extract_current(payload, written.replace("v0001_m", "v0001_x"))
     assert not importer.is_extract_current(payload, None)
+
+
+def test_without_the_excel_extra_the_error_says_how_to_run_with_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange — openpyxl unimportable, as in an environment without the extra
+    monkeypatch.setitem(sys.modules, "openpyxl", None)
+
+    # Act
+    with pytest.raises(ModuleNotFoundError) as raised:
+        importer.extract_boe(tmp_path / "rules.xlsx")
+
+    # Assert — the uv remedies, spelt so they can be copied, and no pip
+    message = str(raised.value)
+    assert 'uvx "rwa-filer[excel]@latest" rules import' in message
+    assert 'uv add "rwa-filer[excel]"' in message
+    assert "pip install" not in message

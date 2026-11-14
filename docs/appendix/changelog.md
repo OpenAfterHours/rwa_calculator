@@ -154,9 +154,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rwa-ui` straight after `uv add rwa-calc`, which installs into the project's
   `.venv` and does not put `rwa-ui` on the `PATH`; they now run `uv run rwa-ui`.
   The `ui` extra is described as what it now is (kept for compatibility; its
-  packages ship in the base install), and `rwa-filer` is installed with
-  `uv tool install rwa-filer` or `uv add rwa-filer`. Docs only — no calculation
-  impact.
+  packages ship in the base install), and `rwa-filer` is run with
+  `uvx rwa-filer@latest`, so each run uses its newest release and with it the
+  newest rules and taxonomy; a bare `uvx rwa-filer`, or a copy installed with
+  `uv tool install`, can go on running an older one unnoticed. `uv add rwa-filer`
+  is shown for library use and `uv tool install rwa-filer` for machines that
+  run it offline. Docs only — no calculation impact.
 - **DOCS — the site documents two packages, and now says so.** The navigation
   is split into tabs: **RWA Calculator**, **rwa-filer**, **Development** and
   **Appendix**. Each sidebar shows only its own tab's pages, and no page URL

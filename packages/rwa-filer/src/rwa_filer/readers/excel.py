@@ -486,9 +486,10 @@ def _openpyxl() -> Any:
     try:
         import openpyxl
         import openpyxl.styles  # noqa: F401 - the styles submodule is used via the package
-    except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without the extra
+    except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
-            "Reading or writing a workbook needs openpyxl. Install it with: "
-            "pip install 'rwa-filer[excel]'"
+            "Reading or writing a workbook needs openpyxl, from the rwa-filer[excel] extra. "
+            'Run the command with it: uvx "rwa-filer[excel]@latest" <command> ... '
+            '(in a uv project: uv add "rwa-filer[excel]")'
         ) from exc
     return openpyxl

@@ -133,7 +133,8 @@ def import_workbook(
             )
         sheet = data_sheets[0]
         rows = sheet.iter_rows(values_only=True)
-        header = [str(cell).strip() if cell is not None else "" for cell in next(rows)]
+        # An empty sheet has no header row, so it lacks every required column.
+        header = [str(cell).strip() if cell is not None else "" for cell in next(rows, ())]
         missing = [name for name in REQUIRED_COLUMNS if name not in header]
         if missing:
             raise ValueError(f"{workbook.name}: no column(s) {', '.join(missing)}")

@@ -19,6 +19,24 @@ and released independently of `rwa-calc`; its release tags are prefixed
   (<https://openafterhours.github.io/rwa_calculator/rwa-filer/>), and the README
   links to them too.
 
+### Fixed
+- **`taxonomy compile`, `rules import` / `check` and `rulebook import` / `check`
+  report an input they refuse in one line, not a traceback.** Each now ends as
+  every other refusal does: one `rwa-filer: ...` line on stderr saying what is
+  wrong with which file, and exit 1.
+  - `taxonomy compile` given a `--module` that the workbook's Table of Contents
+    does not list, or that the taxonomy package has no entry point for, names
+    the module.
+  - Given a `--dictionary` that is not a DPM dictionary, it names the sheets
+    that are missing.
+  - `rules import` / `check` given a workbook that is not laid out as the
+    `--publisher`'s rule workbook used to fail with `KeyError`, `StopIteration`
+    or `IndexError`. That covers another publisher's workbook, an empty rule
+    sheet, or one narrower than the columns a rule is read from. It now names
+    the sheet it looked for and what it found there.
+  - `rulebook import` / `check` given a workbook whose data sheet is empty now
+    report the required columns it lacks.
+
 ---
 
 ## [0.1.0] - 2026-11-14

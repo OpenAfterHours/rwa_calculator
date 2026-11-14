@@ -306,11 +306,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     currency fix above alone gave 733.94.
   - A GBP 200 + EUR 100 pool against a GBP loan nets **200**.
 
-  A deposit pool that no loan under its agreement shares a currency with now
-  raises `CRM003` (declared, never produced until now), because it loses its
-  whole value. **Direction: RWA-increasing under CRR**, though within a
-  mixed-currency agreement the same-currency denominator moves relief between
-  loans. Basel 3.1 is unchanged.
+  A deposit pool that no loan within its netting perimeter shares a currency
+  with now raises `CRM003` (declared, never produced until now), because it
+  loses its whole value. The message gives the amount in the currency it is
+  measured in (the converted pool value).
+
+  **Direction under CRR:**
+  - **RWA-increasing** where a deposit has no same-currency loan under its
+    agreement, since the deposit now nets nothing.
+  - **RWA-REDUCING** in a mixed-currency agreement, where the same-currency
+    slice now lands whole and un-haircut. Example: a EUR 200 deposit against
+    EUR 600 + GBP 400 loans moves total SA EAD from 809.05 to 800 (EUR loan
+    400, GBP loan 400).
+
+  Basel 3.1 is unchanged.
 - **A parallel batch (`rwa_calc.api.run_batch`) could hang forever on Linux
   under Python 3.13.** `api/batch.py` built its `ProcessPoolExecutor` on
   `multiprocessing`'s *default* start method, and that default depends on both

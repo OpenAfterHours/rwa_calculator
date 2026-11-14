@@ -543,7 +543,7 @@ Every synthetic netting row carries its liquidation period from the pack entry `
 
 #### CRM003 — Netted Deposit Not Recognised for Currency
 
-Under CRR, a deposit pool whose currency **no** loan under the agreement shares nets nothing at all, and one `CRM003` warning per such pool records it (naming the agreement, the amount and the currency). A pool that nets in full, and every Basel 3.1 run, raises none.
+Under CRR, a deposit pool whose currency **no** loan within its netting perimeter shares nets nothing at all, and one `CRM003` warning per such pool records it. The warning names the agreement and the deposit currency, and gives the pool's amount in the currency it is measured in (the converted value). A pool that nets in full, a deposit with no loan in its perimeter at all, and every Basel 3.1 run raise none.
 
 ### No Double-Counting
 

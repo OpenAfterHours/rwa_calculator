@@ -987,9 +987,12 @@ ENTRIES: dict[str, RuleEntry] = {
     # denomination; one in another currency is not cash collateral for them at all
     # (no H_fx route — Art. 223(1) applies to what is already collateral). Gates the
     # sibling match and pro-rata denominator in
-    # engine/crm/netting.py::generate_netting_collateral. Direction: RWA-INCREASING
-    # against the previous cross-currency match-plus-H_fx; within a mixed-currency
-    # agreement the same-currency denominator moves relief between loans.
+    # engine/crm/netting.py::generate_netting_collateral. Direction, against the
+    # previous cross-currency match-plus-H_fx: RWA-increasing where a deposit has no
+    # same-currency loan under its perimeter (it now nets nothing); RWA-REDUCING in
+    # a mixed-currency agreement, where the same-currency slice now lands whole and
+    # un-haircut (EUR 200 deposit against EUR 600 + GBP 400 loans: total SA EAD
+    # 809.05 -> 800).
     "on_bs_netting_same_currency_only": Feature(
         name="on_bs_netting_same_currency_only",
         enabled=True,

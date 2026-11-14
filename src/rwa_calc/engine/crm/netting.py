@@ -454,7 +454,12 @@ def _unrecognised_currency_pools(
             positive_siblings.select(perimeter_keys).unique(), on=perimeter_keys, how="semi"
         )
         .join(positive_siblings.select(currency_keys).unique(), on=currency_keys, how="anti")
-        .select("netting_agreement_reference", "_pool_original_currency", "netting_pool")
+        .select(
+            "netting_agreement_reference",
+            "_pool_original_currency",
+            "_pool_currency",
+            "netting_pool",
+        )
     )
 
 
@@ -503,14 +508,17 @@ def _append_unrecognised_currency_warnings(
     a treatment that removes all of a protection's value says so."""
     for row in unrecognised:
         currency = row["_pool_original_currency"]
+        # netting_pool is the converted value, in the pool's (reporting) currency —
+        # or in the denomination itself when no FX rate converted it.
+        amount = f"{row['netting_pool']:,.2f} {row['_pool_currency']}"
         errors.append(
             crm_warning(
                 ERROR_CURRENCY_MISMATCH,
-                f"Netting agreement '{row['netting_agreement_reference']}': deposits of "
-                f"{row['netting_pool']:,.2f} denominated in {currency} are not recognised as "
-                f"on-balance-sheet netting — no loan under the agreement is denominated in "
-                f"{currency}, and loans and deposits are treated as cash collateral only "
-                f"where they are denominated in the same currency (Feature "
+                f"Netting agreement '{row['netting_agreement_reference']}': deposits "
+                f"denominated in {currency} ({amount}) are not recognised as "
+                f"on-balance-sheet netting — no loan within their netting perimeter is "
+                f"denominated in {currency}, and loans and deposits are treated as cash "
+                f"collateral only where they are denominated in the same currency (Feature "
                 f"on_bs_netting_same_currency_only).",
                 regulatory_reference="CRR Art. 219",
             )

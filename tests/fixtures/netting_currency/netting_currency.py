@@ -166,6 +166,43 @@ SCENARIOS: dict[str, Scenario] = {
     )
 }
 
+# One agreement, one EUR deposit, TWO loans in different currencies: the case
+# that decides the pro-rata denominator. CRR (same currency only) gives the whole
+# EUR 200 to the EUR loan; Basel 3.1 shares it 600:400 by drawn amount and
+# haircuts the GBP loan's 80 by Table 4 at 10 days. Built into the plain bundle.
+SPLIT_LABEL = "split_agreement"
+SPLIT_COUNTERPARTY = "NCCY-CP-split"
+SPLIT_AGREEMENT = "NCCY-AGR-split"
+SPLIT_DEPOSIT_REF = "NCCY-DEP-split"
+SPLIT_DEPOSIT: tuple[str, float] = ("EUR", 200.00)
+SPLIT_LOANS: dict[str, tuple[str, float]] = {
+    "NCCY-LN-split-EUR": ("EUR", 600.00),
+    "NCCY-LN-split-GBP": ("GBP", 400.00),
+}
+
+
+def split_expected_ead(regime: str) -> dict[str, float]:
+    """Hand-calc for the split agreement, per loan reference.
+
+    CRR Art. 219: only same-currency loans are protected AND form the pro-rata
+    denominator. PS1/26 Art. 219(2): every loan shares by drawn amount; a share in
+    another currency from the deposit takes the 10-day Table 4 H_fx.
+    """
+    deposit_currency, deposit = SPLIT_DEPOSIT
+    eligible = {
+        ref: drawn
+        for ref, (currency, drawn) in SPLIT_LOANS.items()
+        if regime == "b31" or currency == deposit_currency
+    }
+    total = sum(eligible.values())
+    ead: dict[str, float] = {}
+    for ref, (currency, drawn) in SPLIT_LOANS.items():
+        share = deposit * eligible[ref] / total if ref in eligible else 0.0
+        haircut = 0.0 if currency == deposit_currency else HFX_10_DAY
+        ead[ref] = drawn - share * (1.0 - haircut)
+    return ead
+
+
 # The two bundles: the collateral-file variants must not share a bundle with the
 # plain ones, because the presence of ANY collateral file is the condition.
 PLAIN_LABELS: tuple[str, ...] = (
@@ -190,12 +227,15 @@ def build_netting_currency_bundle(labels: tuple[str, ...], reporting_date: date)
     A bundle whose labels are the ``*_coll`` set also carries the unrelated user
     collateral file (see the module docstring).
     """
-    scenarios = [SCENARIOS[label] for label in labels]
+    scenarios = [SCENARIOS[label] for label in labels if label != SPLIT_LABEL]
+    with_split = SPLIT_LABEL in labels
     with_collateral = any(label.endswith("_coll") for label in labels)
 
     counterparty_refs = [s.counterparty for s in scenarios]
     if with_collateral:
         counterparty_refs.append(OTHER_COUNTERPARTY)
+    if with_split:
+        counterparty_refs.append(SPLIT_COUNTERPARTY)
     counterparties = pl.DataFrame(
         [_counterparty(ref) for ref in counterparty_refs],
         schema=dtypes_of(COUNTERPARTY_SCHEMA),
@@ -216,6 +256,15 @@ def build_netting_currency_bundle(labels: tuple[str, ...], reporting_date: date)
                 s.agreement_ref,
                 is_sft=s.loan_is_sft,
             )
+        )
+    if with_split:
+        currency, balance = SPLIT_DEPOSIT
+        loan_rows.append(
+            _loan(SPLIT_DEPOSIT_REF, SPLIT_COUNTERPARTY, currency, -balance, SPLIT_AGREEMENT)
+        )
+        loan_rows.extend(
+            _loan(ref, SPLIT_COUNTERPARTY, currency, drawn, SPLIT_AGREEMENT)
+            for ref, (currency, drawn) in SPLIT_LOANS.items()
         )
     if with_collateral:
         loan_rows.append(

@@ -285,7 +285,32 @@ class TestGenerateNettingCollateral:
         assert result.collect().height == 0
         assert [e.code for e in errors] == [ERROR_CURRENCY_MISMATCH]
         assert "'AGR01'" in errors[0].message
-        assert "EUR" in errors[0].message
+        # The amount is the CONVERTED pool value, so it carries the pool's own
+        # currency — labelling 200,000 GBP as EUR misstates it at any non-unit rate.
+        assert "denominated in EUR (200,000.00 GBP)" in errors[0].message
+
+    def test_deposit_with_no_loan_in_its_perimeter_raises_no_crm003(self) -> None:
+        """CRM003 reports a deposit the currency rule REFUSED. A deposit whose
+        perimeter holds no positive-drawn loan at all had nothing to offset under
+        either reading, so it is not a currency finding and must stay silent."""
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEP_EUR", "LOAN_ELSEWHERE"],
+                "drawn_amount": [-200_000.0, 500_000.0],
+                "netting_agreement_reference": ["AGR01", "AGR02"],
+                "parent_facility_reference": ["FAC001", "FAC002"],
+                "ead_gross": [0.0, 500_000.0],
+                "currency": ["GBP", "GBP"],
+                "original_currency": ["EUR", "GBP"],
+            }
+        )
+        errors: list[CalculationError] = []
+
+        result = generate_netting_collateral(lf, errors, pack=_PACK)
+
+        assert result is not None
+        assert result.collect().height == 0
+        assert errors == []
 
     def test_netting_eligible_requires_reference(self) -> None:
         """Only loans with a netting_agreement_reference provide a netting pool."""

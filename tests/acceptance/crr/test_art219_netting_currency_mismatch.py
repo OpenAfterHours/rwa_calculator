@@ -46,8 +46,11 @@ from tests.fixtures.netting_currency.netting_currency import (
     OTHER_LOAN_DRAWN,
     PLAIN_LABELS,
     SCENARIOS,
+    SPLIT_LABEL,
+    SPLIT_LOANS,
     WITH_COLLATERAL_LABELS,
     build_netting_currency_bundle,
+    split_expected_ead,
 )
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle
@@ -71,8 +74,8 @@ def _run(labels: tuple[str, ...]) -> AggregatedResultBundle:
 
 @pytest.fixture(scope="module")
 def plain_result() -> AggregatedResultBundle:
-    """Scenarios in a bundle WITHOUT a collateral file."""
-    return _run(PLAIN_LABELS)
+    """Scenarios in a bundle WITHOUT a collateral file, plus the split agreement."""
+    return _run((*PLAIN_LABELS, SPLIT_LABEL))
 
 
 @pytest.fixture(scope="module")
@@ -221,3 +224,13 @@ class TestCRRUnrecognisedDepositIsReported:
             "eur_gbp_coll",
             "gbp_eur_coll",
         }
+
+
+class TestSplitAgreementDenominator:
+    """One EUR deposit, an EUR loan and a GBP loan under one agreement: which loans
+    share the deposit, and in what proportion, is the regime's currency scope."""
+
+    @pytest.mark.parametrize("loan_ref", sorted(SPLIT_LOANS))
+    def test_each_loan_takes_its_regime_share(self, plain: pl.DataFrame, loan_ref: str) -> None:
+        expected = split_expected_ead(REGIME)[loan_ref]
+        assert _row(plain, loan_ref)["ead_final"] == pytest.approx(expected, rel=1e-9)

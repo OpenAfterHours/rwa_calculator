@@ -19,6 +19,13 @@ Key responsibilities:
 - Never let an empty finding list stand for "clean" when little or nothing was
   checked: ``VAL003`` reports a return on which no rule ran, or a reported
   template none of whose rules ran.
+- Name every template the return leaves out that its reported templates are
+  checked against (``VAL004``, a Warning). The gateway runs a rule only when
+  every template it reads is filed, so leaving one out does not fail those
+  rules — it switches them off, and the regulator receives the return without
+  that template's figures. Whether the firm must report the template is not
+  something the rules can say, so this warns rather than blocks; a template the
+  return declares not filed is the return saying so, and is not named.
 
 References:
 - BoE XBRL Filing Manual v1.0.1
@@ -32,9 +39,15 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from rwa_filer.boe.catalogue import SEVERITY_ERROR, RuleBookNotFoundError, rulebook_for_module
+from rwa_filer.boe.catalogue import (
+    SEVERITY_ERROR,
+    SEVERITY_WARNING,
+    RuleBookNotFoundError,
+    rulebook_for_module,
+)
 from rwa_filer.boe.engine import (
     REASON_CLOSED_BY_FORMULA,
+    REASON_NOT_REPORTED,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
@@ -46,6 +59,7 @@ from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
     COVERAGE_TEMPLATE_NOT_COVERED,
     FINDING_COVERAGE_INSUFFICIENT,
+    FINDING_LINKED_TEMPLATE_MISSING,
     FINDING_RULE_ERROR,
     FINDING_RULE_WARNING,
     Finding,
@@ -65,6 +79,8 @@ logger = logging.getLogger(__name__)
 
 #: Not-evaluated reasons quoted in a coverage finding (commonest first).
 _REASONS_QUOTED = 4
+#: Rule codes quoted in a missing-template finding; the report holds them all.
+_RULES_QUOTED = 3
 
 
 # =============================================================================
@@ -86,6 +102,9 @@ class RuleReport:
         templates_ruled: Those of them the rule book has an enforced rule for
             that the taxonomy's formula can fire on this return.
         templates_covered: Those of them at least one rule was executed on.
+        templates_missing: Templates the return does not report, and does not
+            declare not filed, that enforced rules check a reported template
+            against — by filing indicator.
     """
 
     module: str
@@ -96,6 +115,7 @@ class RuleReport:
     templates_reported: tuple[str, ...] = ()
     templates_ruled: tuple[str, ...] = ()
     templates_covered: tuple[str, ...] = ()
+    templates_missing: tuple[MissingTemplate, ...] = ()
 
     @property
     def rules_enforced(self) -> int:
@@ -139,6 +159,22 @@ class RuleReport:
             result.reason for result in self.results if result.status == STATUS_NOT_EVALUATED
         )
         return dict(counts.most_common())
+
+
+@dataclass(frozen=True)
+class MissingTemplate:
+    """A template left out of the return that the reported templates are checked against.
+
+    Attributes:
+        code: Its filing indicator, e.g. ``OF09.02.01``.
+        rules: The enforced rules that read it with a reported template, and
+            did not run because it is absent.
+        linked_from: The reported templates those rules read.
+    """
+
+    code: str
+    rules: tuple[str, ...]
+    linked_from: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -229,18 +265,23 @@ def validate_return(
 
 
 def findings_for(report: RuleReport) -> list[Finding]:
-    """The findings a report yields: the coverage shortfall first, then each broken rule.
+    """The findings a report yields: what was not checked first, then each broken rule.
 
-    One finding per broken rule, however many times it was unsatisfied: the
-    rule code is on ``subject`` and the first unsatisfied evaluation is quoted.
+    The coverage shortfall (``VAL003``) leads, then one ``VAL004`` per missing
+    linked template, then one finding per broken rule, however many times it
+    was unsatisfied: the rule code is on ``subject`` and the first unsatisfied
+    evaluation is quoted.
     """
-    findings = [
-        _rule_finding(result, report) for result in report.results if result.status == STATUS_FAIL
-    ]
     shortfall = _coverage_finding(report)
-    if shortfall is not None:
-        findings.insert(0, shortfall)
-    return findings
+    return [
+        *([shortfall] if shortfall is not None else []),
+        *(_missing_finding(missing, report) for missing in report.templates_missing),
+        *(
+            _rule_finding(result, report)
+            for result in report.results
+            if result.status == STATUS_FAIL
+        ),
+    ]
 
 
 # =============================================================================
@@ -251,13 +292,9 @@ def findings_for(report: RuleReport) -> list[Finding]:
 def _report(
     ret: CanonicalReturn, pack: TaxonomyPack, rulebook: RuleBook, results: tuple[RuleResult, ...]
 ) -> RuleReport:
-    """The results with which reported templates the rules reached."""
-    reported = tuple(code for code, filed in filing_indicators(ret, pack).items() if filed)
-
-    def indicators(result: RuleResult) -> set[str]:
-        return {
-            pack.tables[table].filing_indicator for table in result.tables if table in pack.tables
-        }
+    """The results with which reported templates the rules reached, and which they missed."""
+    declared = filing_indicators(ret, pack)
+    reported = tuple(code for code, filed in declared.items() if filed)
 
     ruled: set[str] = set()
     covered: set[str] = set()
@@ -266,9 +303,9 @@ def _report(
         # the template either: it is not a rule this check failed to reach.
         if result.reason == REASON_CLOSED_BY_FORMULA:
             continue
-        ruled |= indicators(result)
+        ruled |= _indicators(result, pack)
         if result.status != STATUS_NOT_EVALUATED:
-            covered |= indicators(result)
+            covered |= _indicators(result, pack)
     return RuleReport(
         module=pack.info.module,
         framework_version=rulebook.framework_version,
@@ -278,6 +315,70 @@ def _report(
         templates_reported=reported,
         templates_ruled=tuple(code for code in reported if code in ruled),
         templates_covered=tuple(code for code in reported if code in covered),
+        templates_missing=_missing_templates(results, pack, set(reported), set(declared)),
+    )
+
+
+def _indicators(result: RuleResult, pack: TaxonomyPack) -> set[str]:
+    """The filing indicators of the templates a rule reads."""
+    return {pack.tables[table].filing_indicator for table in result.tables if table in pack.tables}
+
+
+def _missing_templates(
+    results: Sequence[RuleResult], pack: TaxonomyPack, reported: set[str], declared: set[str]
+) -> tuple[MissingTemplate, ...]:
+    """The templates left unsaid that rules read together with a reported one.
+
+    A rule not run because a template it reads is absent says nothing about
+    the return when it reads no reported template either — it is about
+    templates this firm does not file. Only a rule that ALSO reads a reported
+    template ties the absence to this return. A template the return declares
+    not filed is not missing: the return has said so.
+    """
+    rules: dict[str, set[str]] = {}
+    linked: dict[str, set[str]] = {}
+    for result in results:
+        if result.reason != REASON_NOT_REPORTED:
+            continue
+        codes = _indicators(result, pack)
+        present = codes & reported
+        if not present:
+            continue
+        for code in codes - declared:
+            rules.setdefault(code, set()).add(result.rule_id)
+            linked.setdefault(code, set()).update(present)
+    return tuple(
+        MissingTemplate(
+            code=code, rules=tuple(sorted(rules[code])), linked_from=tuple(sorted(linked[code]))
+        )
+        for code in sorted(rules)
+    )
+
+
+def _missing_finding(missing: MissingTemplate, report: RuleReport) -> Finding:
+    """``VAL004`` for one template the reported ones are checked against."""
+    count = len(missing.rules)
+    quoted = ", ".join(missing.rules[:_RULES_QUOTED])
+    more = f" and {count - _RULES_QUOTED} more" if count > _RULES_QUOTED else ""
+    return Finding(
+        code=FINDING_LINKED_TEMPLATE_MISSING,
+        severity=SEVERITY_WARNING,
+        message=(
+            f"Template {missing.code} is not in this return, but {count} enforced rule(s) "
+            f"check {', '.join(missing.linked_from)} against it ({quoted}{more}). None of them "
+            f"ran, and the gateway does not run them either while {missing.code} is not filed: "
+            f"the return can be accepted with them unchecked, and without {missing.code}'s "
+            f"figures. Report {missing.code} if the firm is required to; if it is not, a "
+            "negative filing indicator for it records that."
+        ),
+        reference=(
+            f"Bank of England Banking Taxonomy v{report.taxonomy}, validation rules "
+            f"({report.framework_version}) — rules reading {missing.code} with a reported "
+            "template"
+        ),
+        subject=missing.code,
+        expected=f"{missing.code} reported, or declared not filed",
+        actual=f"{missing.code} not reported; {count} rule(s) not run",
     )
 
 

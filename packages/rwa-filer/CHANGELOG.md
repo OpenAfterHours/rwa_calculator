@@ -27,6 +27,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
   results with every evaluation behind them: where it was made, whether it
   held, the comparison at the top of the rule, and the cells and number each
   side of it read, uncapped. `Failure.addresses` now comes from the same code.
+- `VAL004` (Warning) — a template the return leaves out that enforced rules
+  check a reported template against: OF 09.02 for a return holding OF 08.01
+  without it, say. A rule runs only when every template it reads is filed, so
+  those rules were switched off rather than failed, here and at the gateway, and
+  the return would be accepted without the template's figures. One finding per
+  missing template, naming the rules and the reported templates they read; a
+  template declared not filed is not named. Shown on `rwa-filer validate`'s
+  summary line, in the JSON report (`summary.templates_missing`, also
+  `RuleReport.templates_missing`), and on the dashboard overview as **Linked
+  templates not in this return**.
 
 ### Changed
 - `rwa-filer dash` — Compare now opens with the comparison's findings, each

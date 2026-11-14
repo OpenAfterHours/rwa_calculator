@@ -102,6 +102,9 @@ FINDING_RULE_ERROR: Final = "VAL001"
 FINDING_RULE_WARNING: Final = "VAL002"
 #: The return was not checked well enough for an empty result to mean anything.
 FINDING_COVERAGE_INSUFFICIENT: Final = "VAL003"
+#: A template the return does not report is one enforced rules check a reported
+#: template against — those rules did not run. Raised by ``validate_return``.
+FINDING_LINKED_TEMPLATE_MISSING: Final = "VAL004"
 
 #: The reference quoted on a coverage finding, which no single rule owns.
 COVERAGE_REFERENCE: Final = (
@@ -198,12 +201,14 @@ class Finding:
     """One reportable result of validating a return.
 
     Attributes:
-        code: ``VAL001`` / ``VAL002`` / ``VAL003``.
+        code: ``VAL001`` / ``VAL002`` / ``VAL003`` / ``VAL004``, or a
+            structure code (``STR...``, ``XBR...``).
         severity: ``"ERROR"`` (blocks the submission) or ``"WARNING"``.
         message: The full human-readable finding.
         reference: The regulatory source the finding rests on.
         subject: What the finding is about, machine-readable — the rule id for a
-            broken rule, the ``CoverageShortfall`` reason for ``VAL003``.
+            broken rule, the ``CoverageShortfall`` reason for ``VAL003``, the
+            missing template's filing indicator for ``VAL004``.
         expected: The figure or state the rule requires.
         actual: The figure or state the return carries.
     """

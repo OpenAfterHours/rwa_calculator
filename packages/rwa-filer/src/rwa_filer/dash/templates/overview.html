@@ -16,7 +16,7 @@
 <section class="callout callout-pass" aria-label="Verdict" id="verdict" data-verdict="submittable">
   <div class="body">
     <div class="title">Nothing found blocks submission</div>
-    <p>{% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained, but do{{ "es" if view.warnings == 1 }} not block it. {% endif %}{{ view.executed | count }} of {{ view.enforced | count }} enforced rules were executed.</p>
+    <p>{% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained, but do{{ "es" if view.warnings == 1 }} not block it. {% endif %}{{ view.executed | count }} of {{ view.enforced | count }} enforced rules were executed.{% if view.missing %} <a href="#missing-templates">{{ view.missing | length }} template{{ "s" if view.missing | length != 1 }} the reported ones are checked against {{ "are" if view.missing | length != 1 else "is" }} not in this return</a>, so {{ view.missing_rules | count }} rule{{ "s" if view.missing_rules != 1 }} did not run.{% endif %}</p>
   </div>
 </section>
 {% else %}
@@ -26,7 +26,7 @@
     <p>
       {% if view.structure %}{{ view.structure | length }} structure finding{{ "s" if view.structure | length != 1 }}: the taxonomy cannot express part of the return, so no XBRL file can be written until {{ "they are" if view.structure | length != 1 else "it is" }} fixed. {% else %}There are no structure findings: every fact has a cell in the taxonomy. {% endif %}
       {% if view.errors %}{{ view.errors }} Error-severity rule break{{ "s" if view.errors != 1 }} reject{{ "s" if view.errors == 1 }} a submission. {% endif %}
-      {% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained.{% endif %}
+      {% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained.{% endif %}{% if view.missing %} <a href="#missing-templates">{{ view.missing | length }} template{{ "s" if view.missing | length != 1 }} the reported ones are checked against {{ "are" if view.missing | length != 1 else "is" }} not in this return</a>, so {{ view.missing_rules | count }} rule{{ "s" if view.missing_rules != 1 }} did not run.{% endif %}
     </p>
   </div>
   {% if view.errors or view.warnings %}<a class="btn" href="{{ rules_url }}" style="align-self: center">Review the {{ view.errors + view.warnings }} break{{ "s" if view.errors + view.warnings != 1 }}</a>{% endif %}
@@ -105,6 +105,32 @@
     </table>
   </div>
 </section>
+
+{% if view.missing %}
+<section class="panel" id="missing-templates">
+  <div class="panel-head">
+    <h2>Linked templates not in this return</h2>
+    <span class="small muted">{{ view.missing_rules | count }} rule{{ "s" if view.missing_rules != 1 }} not run</span>
+  </div>
+  <p class="small muted" style="margin: 0">Rules check the templates reported here against these, so none of those rules ran. The gateway does not run them either while a template is not filed, so the return can be accepted unchecked, and without these figures. Load each one the firm is required to report; a negative filing indicator records one it is not.</p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th scope="col">Template</th><th scope="col">Title</th><th scope="col" class="num">Rules not run</th><th scope="col">Checked against</th><th scope="col"><span class="visually-hidden">Rules</span></th></tr></thead>
+      <tbody>
+      {% for item in view.missing %}
+      <tr>
+        <td class="code">{{ item.code }}</td>
+        <td>{{ item.title }}</td>
+        <td class="num">{{ item.rules | count }}</td>
+        <td class="mono small">{{ item.linked_from | join(", ") }}</td>
+        <td class="num" style="white-space: nowrap"><a href="{{ link(rules_url, status='NOT_EVALUATED', template=item.code) }}">Its rules</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 {% if view.breaks %}
 <section class="panel" id="breaks">

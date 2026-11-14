@@ -45,12 +45,28 @@ fact table needs its header (entity, reference date, module); a workbook or an
 XBRL instance states its own, and anything entered on the form overrides it.
 Returns you open stay listed until the dashboard is stopped.
 
+One file is one return, validated on its own. Put every template of the return
+in that file: one fact table with a row per cell, one workbook (`rwa-filer
+template --tables ...` writes the worksheets), or one instance. Rules that check
+one template against another run only when both are in the same return, so
+templates opened as separate files are never checked against each other.
+
 **Overview.** Whether anything blocks submission, and the counts behind the
 answer: structure findings, rule breaks by severity, how many of the rules the
 module enforces were executed, and — for every rule that was not — why
 (`template_not_reported`, `no_data`, ...). "No breaks" is never shown on its own:
 a return on which few rules ran says so, as `VAL003` does on the command line.
 Each reported template is listed with the rules that read it.
+
+Below them, **Linked templates not in this return** lists every template the
+return leaves out that rules check a reported template against — OF 09.02 for a
+return holding OF 08.01 without it, say — with how many rules did not run
+because of it and which reported templates they read. These are the `VAL004`
+warnings. The gateway does not run those rules either while the template is not
+filed, so leaving one out does not fail them: the return is accepted unchecked,
+and the regulator does not get those figures. Load each template the firm is
+required to report. A template the return declares not filed (a negative filing
+indicator in an XBRL instance) is not listed.
 
 **Rules.** Every enforced rule, filtered by status (failed, passed, not
 evaluated), severity, template, or words in its ID or label. Picking a rule shows

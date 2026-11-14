@@ -7,7 +7,24 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- `rwa-filer dash` — a local web dashboard (`uvx rwa-filer@latest dash return.xbrl`).
+  Open a return from a file or a path; see whether anything blocks submission
+  with the counts behind the verdict, including how many rules ran and why the
+  rest did not; filter and search the rules, each with its expression and the
+  cells it read; and see any table of the return on its template grid, laid out
+  from the taxonomy pack, with cells the sheet does not accept hatched and every
+  cell a broken rule read outlined. Listens on `127.0.0.1` only — there is no
+  option to listen on a network, which plain HTTP would expose — and answers
+  only the browser holding the session token the command prints. Dark by
+  default, with a light theme. Guide: `docs/rwa-filer/dash.md`.
+- `boe.engine.CellAddress` and `Failure.addresses`: each failing evaluation now
+  records where the cells it read are (table, sheet, open-axis key, row,
+  column), up to `MAX_ADDRESSES`, and whether each was reported or read at its
+  default. `Failure.cells` still describes them in words.
+- `readers.open_source` and `readers.HeaderFields`: read a file the way
+  `rwa-filer validate` does — check it exists and is supported, require a
+  header for a fact table, apply any header field given over the file's own.
+  The command line and the dashboard share it.
 - `rwa_filer.extras.MissingExtraError`, raised by everything that opens a
   workbook when openpyxl (the `excel` extra) is not installed. It is a
   `ModuleNotFoundError`, so code that catches that keeps working.
@@ -24,9 +41,27 @@ and released independently of `rwa-calc`; its release tags are prefixed
   `pip install`. Each one now names the command to run:
   `uvx "rwa-filer[excel]@latest" <command> ...`, or
   `uv add "rwa-filer[excel]"` in a project.
+- **`taxonomy compile`, `rules import` / `check` and `rulebook import` / `check`
+  report an input they refuse in one line, not a traceback.** Each now ends as
+  every other refusal does: one `rwa-filer: ...` line on stderr saying what is
+  wrong with which file, and exit 1.
+  - `taxonomy compile` given a `--module` that the workbook's Table of Contents
+    does not list, or that the taxonomy package has no entry point for, names
+    the module.
+  - Given a `--dictionary` that is not a DPM dictionary, it names the sheets
+    that are missing.
+  - `rules import` / `check` given a workbook that is not laid out as the
+    `--publisher`'s rule workbook used to fail with `KeyError`, `StopIteration`
+    or `IndexError`. That covers another publisher's workbook, an empty rule
+    sheet, or one narrower than the columns a rule is read from. It now names
+    the sheet it looked for and what it found there.
+  - `rulebook import` / `check` given a workbook whose data sheet is empty now
+    report the required columns it lacks.
 
 ### Changed
-- (Next release changes will go here)
+- Starlette, uvicorn, Jinja2 and python-multipart are now dependencies, for the
+  dashboard. They are required rather than an extra so that `uvx rwa-filer dash`
+  works as typed; nothing outside `rwa_filer.dash` imports them.
 - The README runs the command with `uvx rwa-filer@latest`, in place of
   `pip install rwa-filer`. `@latest` makes each run check PyPI and use the
   newest release, so a return is checked with the newest rules and taxonomy
@@ -44,24 +79,6 @@ and released independently of `rwa-calc`; its release tags are prefixed
   points to the rwa-filer docs
   (<https://openafterhours.github.io/rwa_calculator/rwa-filer/>), and the README
   links to them too.
-
-### Fixed
-- **`taxonomy compile`, `rules import` / `check` and `rulebook import` / `check`
-  report an input they refuse in one line, not a traceback.** Each now ends as
-  every other refusal does: one `rwa-filer: ...` line on stderr saying what is
-  wrong with which file, and exit 1.
-  - `taxonomy compile` given a `--module` that the workbook's Table of Contents
-    does not list, or that the taxonomy package has no entry point for, names
-    the module.
-  - Given a `--dictionary` that is not a DPM dictionary, it names the sheets
-    that are missing.
-  - `rules import` / `check` given a workbook that is not laid out as the
-    `--publisher`'s rule workbook used to fail with `KeyError`, `StopIteration`
-    or `IndexError`. That covers another publisher's workbook, an empty rule
-    sheet, or one narrower than the columns a rule is read from. It now names
-    the sheet it looked for and what it found there.
-  - `rulebook import` / `check` given a workbook whose data sheet is empty now
-    report the required columns it lacks.
 
 ---
 

@@ -1,0 +1,66 @@
+{%- from "_macros.html" import icon -%}
+<!doctype html>
+<html lang="en" class="t-{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}rwa-filer dash{% endblock %}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='1' y='1' width='26' height='26' rx='8' fill='none' stroke='%23ff9100' stroke-width='2'/%3E%3Cpath d='M12 16l2 2 4-4' fill='none' stroke='%23ff9100' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/dash.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="8" stroke="currentColor" stroke-width="1.6"></rect><path d="M9 7h7l4 4v10H9z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M12 16l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    rwa-filer <span class="tag">dash</span>
+  </a>
+  {% if current %}
+  <div class="file-chip">
+    {{ icon("file") }}
+    <span class="name">{{ current.name }}</span>
+    {% if current.validation.is_submittable %}<span class="chip chip-pass">SUBMITTABLE</span>{% else %}<span class="chip chip-fail">BLOCKED</span>{% endif %}
+  </div>
+  {% endif %}
+  <div class="topbar-end">
+    <span class="local"><span class="dot"></span>Local only</span>
+    <span class="mono">{{ version }}</span>
+    <form class="theme-switch" method="post" action="/theme">
+      <input type="hidden" name="next" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+      {% if theme == "dark" %}
+      <button type="submit" name="theme" value="light">Light</button>
+      {% else %}
+      <button type="submit" name="theme" value="dark">Dark</button>
+      {% endif %}
+    </form>
+  </div>
+</header>
+<div class="layout">
+  <nav class="sidenav" aria-label="Sections">
+    <a href="/"{% if not current and section == "" %} aria-current="page"{% endif %}>{{ icon("open") }}Open a return</a>
+    {% if current %}
+    <div class="group">This return</div>
+    {% for item in sections %}
+    <a href="/returns/{{ current.return_id }}{{ item.suffix }}"{% if section == item.key %} aria-current="page"{% endif %}>{{ icon(item.key) }}{{ item.label }}{% if item.key == "rules" and current.validation.rules %}<span class="count">{{ current.validation.report.status_counts()["FAIL"] if current.validation.report else 0 }}</span>{% endif %}</a>
+    {% endfor %}
+    {% endif %}
+    {% block nav_extra %}{% endblock %}
+    {% set others = opened_returns | rejectattr("return_id", "equalto", current.return_id if current else "") | list %}
+    {% if others %}
+    <div class="group">Opened this session</div>
+    {% for other in others[:8] %}
+    <a href="/returns/{{ other.return_id }}" class="small">{{ icon("file") }}<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ other.name }}</span></a>
+    {% endfor %}
+    {% endif %}
+    <div class="foot">Bank of England banking taxonomy {{ current.pack.info.version if current else "4.1.1" }}<br>Nothing leaves this machine.</div>
+  </nav>
+  <main class="page" id="main">
+    {% block content %}{% endblock %}
+    <footer class="page-foot">
+      {% block command %}{% endblock %}
+      <div>The regulator's own validation on upload is authoritative; a clean result here is evidence the return is well-formed, not a guarantee of acceptance.</div>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

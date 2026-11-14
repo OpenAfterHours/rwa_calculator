@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% from "_macros.html" import severity_chip %}
+{% block title %}Overview · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set header = current.ret.header %}
+{% set rules_url = "/returns/" ~ current.return_id ~ "/rules" %}
+<div class="page-head">
+  <div style="min-width: 0">
+    <div class="small muted">Overview</div>
+    <h1>{{ header.module }} return at {{ header.reference_date | long_date }}</h1>
+    <p class="lede">Entity <span class="mono">{{ header.entity_identifier }}</span> · {{ header.currency }} · taxonomy {{ current.pack.info.version }} · {{ current.ret.facts.height | count }} facts in {{ current.ret.tables | length }} tables · opened {{ current.opened_at | moment }}</p>
+  </div>
+</div>
+
+{% if view.submittable %}
+<section class="callout callout-pass" aria-label="Verdict" id="verdict" data-verdict="submittable">
+  <div class="body">
+    <div class="title">Nothing found blocks submission</div>
+    <p>{% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained, but do{{ "es" if view.warnings == 1 }} not block it. {% endif %}{{ view.executed | count }} of {{ view.enforced | count }} enforced rules were executed.</p>
+  </div>
+</section>
+{% else %}
+<section class="callout callout-fail" aria-label="Verdict" id="verdict" data-verdict="blocked">
+  <div class="body">
+    <div class="title">Blocked: {{ view.blocking }} finding{{ "s" if view.blocking != 1 }} would make the gateway reject this return</div>
+    <p>
+      {% if view.structure %}{{ view.structure | length }} structure finding{{ "s" if view.structure | length != 1 }}: the taxonomy cannot express part of the return, so no XBRL file can be written until {{ "they are" if view.structure | length != 1 else "it is" }} fixed. {% else %}There are no structure findings: every fact has a cell in the taxonomy. {% endif %}
+      {% if view.errors %}{{ view.errors }} Error-severity rule break{{ "s" if view.errors != 1 }} reject{{ "s" if view.errors == 1 }} a submission. {% endif %}
+      {% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained.{% endif %}
+    </p>
+  </div>
+  {% if view.errors or view.warnings %}<a class="btn" href="{{ rules_url }}" style="align-self: center">Review the {{ view.errors + view.warnings }} break{{ "s" if view.errors + view.warnings != 1 }}</a>{% endif %}
+</section>
+{% endif %}
+
+<div class="tiles">
+  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--pass' if not view.structure else '--fail' }})"></span>Structure findings</div><div class="value">{{ view.structure | length }}</div><div class="sub">{{ "every fact has a cell in the taxonomy" if not view.structure else "the taxonomy cannot express these" }}</div></div>
+  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.errors + view.warnings else '--pass' }})"></span>Rule breaks</div><div class="value">{{ view.errors + view.warnings }}</div><div class="sub">{{ view.errors }} error · {{ view.warnings }} warning</div></div>
+  <div class="tile"><div class="label"><span class="swatch" style="background: var(--ne)"></span>Rules executed</div><div class="value">{{ view.executed | count }}</div><div class="sub">of {{ view.enforced | count }} the module enforces</div></div>
+  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.shortfall else '--pass' }})"></span>Templates covered</div><div class="value">{{ (view.templates | length) - (current.validation.report.templates_uncovered | length if current.validation.report else 0) }} of {{ view.templates | length }}</div><div class="sub">reported templates at least one rule ran on</div></div>
+</div>
+
+{% if view.structure %}
+<section class="panel" id="structure-findings">
+  <h2>Structure findings</h2>
+  <p class="small muted" style="margin: 0">What the taxonomy cannot express. A return with any of these cannot be written as XBRL at all.</p>
+  {% for finding in view.structure %}
+  <div class="failure"><div class="place"><span class="mono">{{ finding.code }}</span> · {{ finding.subject }}</div><ul><li style="font-family: var(--font-sans)">{{ finding.message }}</li></ul></div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="panel" id="coverage">
+  <div class="panel-head">
+    <h2>What was checked</h2>
+    <span class="small muted">{% if view.rule_book %}rule book <span class="mono">{{ view.rule_book }}</span> · {{ view.enforced | count }} rules enforced for {{ header.module }}{% else %}no rule book is packaged for {{ header.module }}: only the structure was checked{% endif %}</span>
+  </div>
+  {% if view.enforced %}
+  <div class="bar" role="img" aria-label="{{ view.status_counts['PASS'] }} passed, {{ view.status_counts['FAIL'] }} failed, {{ view.status_counts['NOT_EVALUATED'] }} not evaluated">
+    <span class="pass" style="width: {{ '%.2f' | format(view.share('PASS')) }}%"></span>
+    <span class="fail{{ ' none' if not view.status_counts['FAIL'] }}" style="width: {{ '%.2f' | format(view.share('FAIL')) }}%"></span>
+  </div>
+  <div class="legend">
+    <span><span class="swatch" style="background: var(--pass)"></span><strong>{{ view.status_counts['PASS'] | count }}</strong> passed</span>
+    <span><span class="swatch" style="background: var(--fail)"></span><strong>{{ view.status_counts['FAIL'] | count }}</strong> failed</span>
+    <span><span class="swatch" style="background: var(--ne)"></span><strong>{{ view.status_counts['NOT_EVALUATED'] | count }}</strong> not evaluated</span>
+  </div>
+  {% if view.reasons %}
+  <div class="reasons">
+    {% for reason, number, text in view.reasons %}
+    <a class="reason" href="{{ link(rules_url, status='NOT_EVALUATED') }}" style="color: var(--fg)"><div class="mono small muted">{{ reason }}</div><div><strong>{{ number | count }}</strong> rule{{ "s" if number != 1 }}: {{ text }}</div></a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+  {% if view.shortfall %}
+  <div class="callout callout-warn"><div class="body"><div class="title">Not checked well enough</div><p>{{ view.shortfall.message }}</p></div></div>
+  {% else %}
+  <p class="small muted" style="margin: 0">“No breaks” only means something when rules ran, so this page always shows what could not be checked and why.</p>
+  {% endif %}
+</section>
+
+<section class="panel" id="templates">
+  <h2>Templates reported</h2>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th scope="col">Template</th><th scope="col">Title</th><th scope="col" class="num">Facts</th><th scope="col" style="width: 190px">Rules on it</th><th scope="col">Result</th><th scope="col"><span class="visually-hidden">Open</span></th></tr></thead>
+      <tbody>
+      {% for item in view.templates %}
+      <tr>
+        <td class="code">{{ item.code }}</td>
+        <td>{{ item.title }}</td>
+        <td class="num">{{ item.cells | count }}</td>
+        <td>
+          {% if item.rules %}
+          <div class="bar thin" role="img" aria-label="{{ item.passed }} passed, {{ item.failed }} failed, {{ item.not_evaluated }} not evaluated"><span class="pass" style="width: {{ '%.1f' | format(100 * item.passed / item.rules) }}%"></span><span class="fail{{ ' none' if not item.failed }}" style="width: {{ '%.1f' | format(100 * item.failed / item.rules) }}%"></span></div>
+          <div class="small muted" style="margin-top: 4px">{{ item.passed }} passed · {{ item.failed }} failed · {{ item.not_evaluated }} not evaluated</div>
+          {% else %}<span class="small muted">no rule reads it</span>{% endif %}
+        </td>
+        <td>{% if item.failed %}<a class="chip chip-fail" href="{{ link(rules_url, template=item.code) }}">{{ item.failed }} break{{ "s" if item.failed != 1 }}</a>{% else %}<span class="chip chip-pass">no breaks</span>{% endif %}</td>
+        <td class="num">{% if item.tables %}<a href="{{ link('/returns/' ~ current.return_id ~ '/templates', table=item.tables[0]) }}">View</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if view.breaks %}
+<section class="panel" id="breaks">
+  <div class="panel-head"><h2>Breaks to resolve</h2><a class="small" href="{{ rules_url }}">All {{ view.errors + view.warnings }} in Rules</a></div>
+  <div class="rule-list">
+  {% for row in view.breaks %}
+    <a class="rule-item" href="{{ link(rules_url, rule=row.rule_id) }}">
+      <span class="top">{{ severity_chip(row.severity) }}<span class="mono small muted">{{ row.rule_id }}</span><span class="evals">{{ row.unsatisfied }} of {{ row.evaluations }} evaluation{{ "s" if row.evaluations != 1 }} break</span></span>
+      <span class="label">{{ row.label or "No label published" }}</span>
+    </a>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+{% block command %}<div>Same check on the command line: <span class="mono" style="color: var(--fg)">rwa-filer validate {{ current.name }}</span></div>{% endblock %}

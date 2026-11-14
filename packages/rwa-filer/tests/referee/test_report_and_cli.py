@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 import polars as pl
 import pytest
@@ -30,9 +31,6 @@ from rwa_filer.referee.runner import CHUNK_OK, MODE_TRIM, ChunkStat
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.xbrl.reader import read_instance
 from rwa_filer.xbrl.writer import write_instance
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 SCHEMA_REF = "http://example.test/mod/pra001.xsd"
 
@@ -279,7 +277,7 @@ class TestTheRefereeCommand:
         # Assert
         called_instance, called_package, options = stub["call"]
         assert (called_instance, called_package) == (instance, package)
-        assert str(options["python"]) == "/opt/arelle/bin/python"
+        assert options["python"] == Path("/opt/arelle/bin/python")
         assert options["rules"] == "^boe_b07"
         assert options["workdir"] == tmp_path / "work"
         assert (options["chunk_mb"], options["max_rss_gb"], options["timeout"]) == (60, 6.5, 900)

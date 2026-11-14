@@ -99,8 +99,7 @@ from rwa_filer.xbrl.writer import InstanceOptions
 EXIT_OK = 0
 EXIT_FAILED = 1
 
-#: Where ``rwa-filer dash`` listens unless told otherwise: this machine only.
-DASH_HOST = "127.0.0.1"
+#: The port ``rwa-filer dash`` tries first. It listens on this machine only.
 DASH_PORT = 8765
 
 #: Changed cells listed by ``diff`` in text form; the JSON form lists them all.
@@ -569,20 +568,14 @@ def _add_dash_command(commands: argparse._SubParsersAction[argparse.ArgumentPars
         description=(
             "Start a dashboard on this machine and open it in the browser: open a return, "
             "see whether it can be filed, walk from a broken rule to the cells on the "
-            "template that broke it. It listens on the loopback interface and answers only "
-            "the browser holding the address it prints, which carries this session's token."
+            "template that broke it. It listens on this machine only (127.0.0.1) and answers "
+            "only the browser holding the address it prints, which carries this session's token."
         ),
     )
     dash.add_argument(
         "file", nargs="?", type=Path, metavar="FILE", help="a return to open straight away"
     )
     _add_header_arguments(dash)
-    dash.add_argument(
-        "--host",
-        default=DASH_HOST,
-        metavar="HOST",
-        help=f"the interface to listen on (default {DASH_HOST}: this machine only)",
-    )
     dash.add_argument(
         "--port",
         type=int,
@@ -620,7 +613,6 @@ def _dash(args: argparse.Namespace) -> int:
     try:
         serve(
             workspace,
-            host=args.host,
             port=args.port,
             open_browser=not args.no_browser,
             start_path=start,

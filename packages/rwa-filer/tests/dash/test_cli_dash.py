@@ -12,7 +12,7 @@ import pytest
 import rwa_filer.dash
 from dash_builders import HEADER_FORM
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
-from rwa_filer.dash.server import free_port, session_address
+from rwa_filer.dash.server import LOOPBACK, free_port, session_address
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,7 +53,7 @@ def test_dash_opens_the_file_given_and_starts_on_its_overview(
     (opened,) = call["workspace"].returns()
     assert call["start_path"] == f"/returns/{opened.return_id}"
     assert call["open_browser"] is False
-    assert call["host"] == "127.0.0.1"
+    assert "host" not in call
 
 
 def test_dash_without_a_file_starts_on_the_open_page(
@@ -82,22 +82,31 @@ def test_dash_with_a_file_it_cannot_open_fails_before_serving(
 def test_a_taken_port_moves_to_the_next_free_one() -> None:
     # Arrange — hold a port open.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as held:
-        held.bind(("127.0.0.1", 0))
+        held.bind((LOOPBACK, 0))
         held.listen()
         taken = held.getsockname()[1]
 
         # Act
-        chosen = free_port("127.0.0.1", taken)
+        chosen = free_port(taken)
 
     # Assert
     assert chosen != taken
 
 
-def test_the_session_address_carries_the_token_and_brackets_ipv6() -> None:
-    assert session_address("127.0.0.1", 8765, "/", "t") == "http://127.0.0.1:8765/?token=t"
-    assert (
-        session_address("::1", 8765, "/returns/ab", "t") == "http://[::1]:8765/returns/ab?token=t"
-    )
+def test_the_session_address_is_this_machine_with_the_token() -> None:
+    assert session_address(8765, "/returns/ab", "t") == "http://localhost:8765/returns/ab?token=t"
+
+
+def test_there_is_no_option_to_listen_beyond_this_machine(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Plain HTTP on a network interface would carry the token in clear."""
+    # Act
+    with pytest.raises(SystemExit):
+        main(["dash", "--host", "192.0.2.1", "--workdir", str(tmp_path)])
+
+    # Assert
+    assert "unrecognized arguments: --host" in capsys.readouterr().err
 
 
 def test_no_command_but_dash_loads_the_web_stack() -> None:

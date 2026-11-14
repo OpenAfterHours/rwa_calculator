@@ -104,3 +104,35 @@ def test_a_host_name_other_than_loopback_is_refused(workspace: Workspace) -> Non
 
     # Assert
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize(("scheme", "secure"), [("http", False), ("https", True)])
+def test_the_session_cookie_is_secure_exactly_when_served_over_https(
+    workspace: Workspace, scheme: str, secure: bool
+) -> None:
+    # Arrange
+    client = TestClient(create_app(workspace, token=TOKEN), base_url=f"{scheme}://127.0.0.1:8765")
+
+    # Act
+    cookie = client.get(f"/?token={TOKEN}", follow_redirects=False).headers["set-cookie"]
+
+    # Assert
+    assert "HttpOnly" in cookie
+    assert ("Secure" in cookie) is secure
+
+
+@pytest.mark.parametrize(("scheme", "secure"), [("http", False), ("https", True)])
+def test_the_theme_cookie_is_http_only_and_secure_over_https(
+    workspace: Workspace, scheme: str, secure: bool
+) -> None:
+    # Arrange
+    client = TestClient(create_app(workspace), base_url=f"{scheme}://127.0.0.1:8765")
+
+    # Act
+    cookie = client.post(
+        "/theme", data={"theme": "light", "next": "/"}, follow_redirects=False
+    ).headers["set-cookie"]
+
+    # Assert
+    assert "HttpOnly" in cookie
+    assert ("Secure" in cookie) is secure

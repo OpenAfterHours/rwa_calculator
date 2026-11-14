@@ -32,6 +32,7 @@ from starlette.routing import Route
 from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.context import THEME_COOKIE, THEMES
 from rwa_filer.dash.grid import template_grid
+from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.views import overview, rules_page
 from rwa_filer.readers import HeaderFields, carries_header
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs
@@ -156,7 +157,14 @@ class ReturnPages:
             target = "/"
         response = RedirectResponse(target, status_code=303)
         if chosen in THEMES:
-            response.set_cookie(THEME_COOKIE, chosen, samesite="strict", max_age=365 * 24 * 3600)
+            response.set_cookie(
+                THEME_COOKIE,
+                chosen,
+                max_age=365 * 24 * 3600,
+                httponly=True,
+                secure=served_securely(request),
+                samesite="strict",
+            )
         return response
 
     # -- helpers ----------------------------------------------------------------

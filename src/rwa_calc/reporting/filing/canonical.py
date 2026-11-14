@@ -344,8 +344,14 @@ def _place_sheet(
         "row",
         "column",
         pl.when(is_flag).then(None).otherwise(pl.col("value")).alias("value"),
+        # ``is_flag`` admits only 0.0 and 1.0, so the boolean cast IS the test for
+        # 1.0 — with no equality comparison on a float (SonarCloud python:S1244).
         pl.when(is_flag)
-        .then(pl.when(pl.col("value") == 1.0).then(pl.lit("true")).otherwise(pl.lit("false")))
+        .then(
+            pl.when(pl.col("value").cast(pl.Boolean))
+            .then(pl.lit("true"))
+            .otherwise(pl.lit("false"))
+        )
         .otherwise(None)
         .cast(pl.String)
         .alias("text_value"),

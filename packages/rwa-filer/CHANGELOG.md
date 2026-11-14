@@ -143,6 +143,12 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Changed
 - (Next release changes will go here)
+- The referee's worker process takes its spec on standard input and writes its
+  result to a fixed name (`worker.RESULT_FILE`) in the working directory the
+  runner starts it in. No path reaches it from its command line or from the
+  spec, which clears SonarCloud's `pythonsecurity:S8707` and `S2083` findings on
+  `referee/worker.py`. A hand-run worker is now `python -I worker.py < SPEC.json`.
+  The files a run leaves in its workdir are unchanged.
 - `validate_return` and `rwa-filer validate` / `build` now run the v4.1.1 rule
   books through the new engine. Verdicts change, and are stricter: an
   unreported cell is zero to a rule that says so, where the earlier engine

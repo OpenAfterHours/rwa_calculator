@@ -2,12 +2,14 @@
 Referee worker — one Arelle session on one instance. The only code that touches Arelle.
 
 Pipeline position:
-    runner.run_referee -> (SPEC.json) -> this script, in its own process
-        -> Arelle session -> (result JSON at the path the spec names) -> runner
+    runner.run_referee -> (spec JSON on standard input) -> this script, in its
+        own process, in the run's working directory -> Arelle session
+        -> (result JSON at ``RESULT_FILE`` in that directory) -> runner
 
-Run as a script, by an interpreter that has Arelle and need not have rwa-filer::
+Run as a script, by an interpreter that has Arelle and need not have rwa-filer,
+from the directory the result is to be written in::
 
-    python -I /path/to/rwa_filer/referee/worker.py SPEC.json
+    python -I /path/to/rwa_filer/referee/worker.py < SPEC.json
 
 That is why this file imports the standard library only, and reaches Arelle
 through ``importlib.import_module``: it must run where rwa-filer is not
@@ -33,7 +35,9 @@ The spec (JSON object)
     formulas call), ``repairs`` (names from ``REPAIRS``), ``formula``
     (false to skip the assertions), ``run_ids`` (``|``-joined assertion ids, or
     null for all), ``skip_loading`` (a file pattern, or null), ``xdg`` (Arelle's
-    configuration and cache home), ``max_examples``, ``out``.
+    configuration and cache home), ``max_examples``, and ``chunk`` (the worker's
+    position in the run; for the record, not read here). The spec names no
+    output path: the result always goes to ``RESULT_FILE``.
 
 The result (JSON object)
     ``assertions`` (``{assertion id: [satisfied, unsatisfied]}``), ``examples``
@@ -66,6 +70,12 @@ from typing import Any
 # Constants
 # =============================================================================
 
+#: Where the result is written: a fixed name in the working directory the
+#: runner starts the worker in. The runner runs one worker at a time, removes
+#: any file of this name before each, and renames it to the chunk's own result
+#: afterwards.
+RESULT_FILE = "result.json"
+
 #: Arelle's message code for an assertion's evaluation message is this prefix
 #: followed by the assertion id.
 EVALUATION_PREFIX = "message:"
@@ -86,14 +96,23 @@ _Record = tuple[float, str, str, str, list[dict[str, Any]]]
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the session ``SPEC.json`` describes and write its result."""
+    """Run the session the spec on standard input describes; write ``RESULT_FILE``.
+
+    No path reaches this process from outside it: the spec is read from standard
+    input, and the result is written to a fixed name in the working directory the
+    runner starts it in, through a stream rather than a path-taking write call.
+    That is what clears the two taint flows SonarCloud reported here — the
+    spec's path from the command line (``pythonsecurity:S8707``) and the
+    result's path from the spec's own content (``pythonsecurity:S2083``).
+    """
     arguments = sys.argv[1:] if argv is None else argv
-    if len(arguments) != 1:
-        sys.stderr.write("usage: python -I worker.py SPEC.json\n")
+    if arguments:
+        sys.stderr.write("usage: python -I worker.py < SPEC.json\n")
         return 2
-    spec = json.loads(Path(arguments[0]).read_text(encoding="utf-8"))
+    spec = json.load(sys.stdin)
     result = run_session(spec)
-    Path(spec["out"]).write_text(json.dumps(result), encoding="utf-8")
+    with Path(RESULT_FILE).open("w", encoding="utf-8") as handle:
+        json.dump(result, handle)
     return 0
 
 

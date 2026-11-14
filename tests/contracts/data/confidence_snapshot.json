@@ -2287,7 +2287,6 @@
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/p1_127/p1_127.py",
-        "tests/fixtures/p1_144/p1_144.py",
         "tests/oracle/derivations/formulas.py",
         "tests/unit/crm/test_provision_submodules.py",
         "tests/unit/crr/test_irb_transforms.py",

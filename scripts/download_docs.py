@@ -36,7 +36,6 @@ PRA_RULEBOOK = "https://www.prarulebook.co.uk/pra-rules/crr-firms"
 
 BOE_CRR_BASE = "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2023/november/"
 
-BOE_REPORTING_LANDING = "https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/regulatory-reporting-banking-sector"
 # The taxonomy, its validations and the known-issues log are published on this sub-page.
 BOE_BANKS_REPORTING_LANDING = (
     "https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/"

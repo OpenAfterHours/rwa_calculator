@@ -64,7 +64,7 @@ def _make_results_lf(
     rwa_finals: list[float | None],
     ead_finals: list[float | None],
 ) -> pl.LazyFrame:
-    """Build a minimal results LazyFrame matching RESULT_SCHEMA."""
+    """Build a minimal per-exposure results LazyFrame."""
     n = len(exposure_references)
     return pl.LazyFrame(
         {

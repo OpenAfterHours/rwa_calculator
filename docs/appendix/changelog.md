@@ -395,6 +395,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **A release step that fails now shows why.** `scripts/deploy.py` reported a
+  failed step from its stderr alone, and pytest writes its failure report to
+  stdout, so a failed test run printed a blank `ERROR:` and named no test. A
+  failed step now prints its exit code, the last 40 lines of its stdout and all
+  of its stderr. Release tooling only; no calculation or reported figure moves.
 - **A netted deposit's currency-mismatch haircut compared the wrong currencies
   (CRR / PS1/26 Art. 219, Art. 224 Table 4).** On-balance-sheet netting turns a
   deposit into synthetic `NETTING_<loan>` cash collateral. The generator pooled

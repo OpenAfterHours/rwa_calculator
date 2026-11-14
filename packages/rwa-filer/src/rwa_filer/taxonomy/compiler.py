@@ -278,7 +278,8 @@ def compile_pack(
 
     Raises:
         FileNotFoundError: an input path does not exist.
-        ValueError: the workbook or the taxonomy package has no such module.
+        ValueError: the workbook or the taxonomy package has no such module, or
+            ``dictionary_workbook`` is not a DPM dictionary.
     """
     for path in (annotated_workbook, dictionary_workbook, taxonomy_package):
         if not path.exists():

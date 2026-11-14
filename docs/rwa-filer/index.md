@@ -9,8 +9,35 @@ returns it generates; any other system that can produce template-level figures
 can use it the same way.
 
 ```bash
-pip install rwa-filer
+uvx rwa-filer@latest --help
 ```
+
+`@latest` makes each run check PyPI and use the newest release, so a return is
+always checked with the newest rules and taxonomy `rwa-filer` carries. A new
+taxonomy version reaches you as a new release, and nothing else tells you one
+is out. Without `@latest`, `uvx` may run a copy it already has: one it fetched
+recently, or one installed with `uv tool install`, for as long as that stays
+installed. Extras go in quotes, so the shell leaves the brackets alone:
+`uvx "rwa-filer[excel]@latest" ...`.
+
+The manifest `build` writes records the version that wrote it. To repeat a run
+on that version, name it in place of `latest`: `uvx rwa-filer@0.1.0 ...`.
+
+```bash
+# As a library in a uv project. The lock file holds it at one version;
+# `uv lock --upgrade-package rwa-filer` moves it to the newest release
+uv add rwa-filer
+
+# As a command on your PATH, for a machine that has to run it offline. It
+# stays on the version installed until you upgrade it
+uv tool install rwa-filer
+uv tool upgrade rwa-filer
+```
+
+The command examples on this page run `uvx rwa-filer@latest`. If you installed
+it with `uv tool install`, type `rwa-filer` in its place, with any extra the
+example names installed (`uv tool install "rwa-filer[excel]"`); in a uv
+project, type `uv run rwa-filer`.
 
 !!! warning "The regulator's validation is authoritative"
     A clean result from `rwa-filer` is evidence that a return is well-formed. It
@@ -36,14 +63,14 @@ pip install rwa-filer
 
 ```bash
 # A long-format fact table: one row per reported cell
-rwa-filer validate return.parquet \
+uvx rwa-filer@latest validate return.parquet \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 
 # A workbook in the template layout carries its own header
-rwa-filer validate return.xlsx --format json --report findings.json
+uvx "rwa-filer[excel]@latest" validate return.xlsx --format json --report findings.json
 
 # An XBRL instance from any system, bare or zipped
-rwa-filer validate return.xbrl
+uvx rwa-filer@latest validate return.xbrl
 ```
 
 The exit code is `0` when nothing blocks submission and `1` when something
@@ -182,7 +209,7 @@ table and sheet, laid out as the published template, with the cells the
 taxonomy does not accept shaded grey. Fill it in and pass it to `validate`.
 
 ```bash
-rwa-filer template --module PRA001 --reference-date 2027-03-31 \
+uvx "rwa-filer[excel]@latest" template --module PRA001 --reference-date 2027-03-31 \
     --tables OF02.00.01.01 OF07.00.01.01 --out return.xlsx
 ```
 
@@ -215,7 +242,7 @@ against is not reported as clean.
 ## Writing the submission file
 
 ```bash
-rwa-filer build return.parquet --out filing/ \
+uvx rwa-filer@latest build return.parquet --out filing/ \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 ```
 
@@ -272,7 +299,7 @@ OF07.00.01.01,0008,0010,0030,,Follows the exposure,yes
 ```
 
 ```bash
-rwa-filer build return.parquet --out filing/ \
+uvx rwa-filer@latest build return.parquet --out filing/ \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001 \
     --adjustments adjustments.csv --author "A. Preparer"
 ```
@@ -295,7 +322,7 @@ content. Changing, removing or re-ordering an entry breaks the chain, and
 ### Sign-off
 
 ```bash
-rwa-filer signoff filing/5493001KJTIIGC8Y1R12_PRA001_2027-03-31.manifest.json \
+uvx rwa-filer@latest signoff filing/5493001KJTIIGC8Y1R12_PRA001_2027-03-31.manifest.json \
     --approver "C. Approver" --role "Head of Regulatory Reporting"
 ```
 
@@ -305,7 +332,7 @@ submittable is signed only with `--acknowledge-findings`, and the record says
 so.
 
 ```bash
-rwa-filer verify filing/5493001KJTIIGC8Y1R12_PRA001_2027-03-31.manifest.json
+uvx rwa-filer@latest verify filing/5493001KJTIIGC8Y1R12_PRA001_2027-03-31.manifest.json
 ```
 
 `verify` checks that the instance and the zip are the files the manifest
@@ -321,7 +348,7 @@ intact. It exits `1` if any of that fails. Run it immediately before upload.
 ### What changed since the last filing
 
 ```bash
-rwa-filer diff filed.xbrl resubmission.xbrl
+uvx rwa-filer@latest diff filed.xbrl resubmission.xbrl
 ```
 
 `diff` compares two versions of a return cell by cell and lists the cells
@@ -360,7 +387,7 @@ file against the Bank's published taxonomy package, and reports three things.
 - Where that verdict differs from this package's own, rule by rule.
 
 ```bash
-rwa-filer referee 5493001KJTIIGC8Y1R12_PRA001_2027-03-31.xbrl \
+uvx rwa-filer@latest referee 5493001KJTIIGC8Y1R12_PRA001_2027-03-31.xbrl \
     --taxonomy-package boe-banking-v411.zip \
     --arelle-python /opt/arelle/bin/python
 ```
@@ -380,10 +407,15 @@ about the figures, not about the file, and does not change the exit code.
 `--no-compare` reports Arelle alone. `--rules REGEX` runs a subset.
 
 Arelle is optional and is never imported: it is run as a separate process.
-Install it with `pip install "rwa-filer[arelle]"`, or keep it in an environment
-of its own and name that interpreter with `--arelle-python` or the
-`RWA_FILER_ARELLE_PYTHON` variable. The taxonomy package is the zip the Bank
-publishes; it is not redistributed with `rwa-filer`.
+Run the command with the `arelle` extra,
+`uvx "rwa-filer[arelle]@latest" referee ...` (or `uv add "rwa-filer[arelle]"` in
+a project), or keep Arelle in an environment of its own and name that
+interpreter with `--arelle-python` or the `RWA_FILER_ARELLE_PYTHON` variable, as
+the example above does. `uv tool install arelle-release` makes such an
+environment; its interpreter is under the directory `uv tool dir` prints, at
+`arelle-release/bin/python` (`arelle-release\Scripts\python.exe` on Windows).
+The taxonomy package is the zip the Bank publishes; it is not redistributed with
+`rwa-filer`.
 
 A large module is slow and heavy. PRA001 is 741 MB of taxonomy XML, so the
 referee trims the entry point to the rules the file can trigger and runs them
@@ -418,7 +450,7 @@ each table are reportable, and which data point each cell reports. It ships
 inside the package, so validation needs no network access.
 
 ```bash
-rwa-filer taxonomy list
+uvx rwa-filer@latest taxonomy list
 ```
 
 | Module | Applies from | Tables | Reportable cells |
@@ -448,7 +480,7 @@ authoritative for which cells are reportable. The compile is reproducible: the
 same three files always give byte-identical output.
 
 ```bash
-rwa-filer taxonomy compile --module PRA001 --valid-from 2027-01-01 \
+uvx "rwa-filer[excel]@latest" taxonomy compile --module PRA001 --valid-from 2027-01-01 \
     --annotated "Annotated Templates.xlsx" --dictionary "DPM dictionary.xlsx" \
     --taxonomy taxonomy-package.zip --out pra001-4.1.1/
 ```
@@ -540,29 +572,29 @@ and the register is empty.
 uvx rwa-filer dash return.xbrl
 
 # The packaged Bank of England rule books: modules, rules, rules enforced
-rwa-filer rulebook list
+uvx rwa-filer@latest rulebook list
 
 # Rebuild a rule book from one of the Bank's validation workbooks. With the
 # taxonomy package it also records what each rule's formula fixes
-rwa-filer rulebook import "Validations Banking Reporting v4.1.1.xlsx" --out rulebooks/ \
-    --taxonomy-package boe-banking-v411.zip
+uvx "rwa-filer[excel]@latest" rulebook import "Validations Banking Reporting v4.1.1.xlsx" \
+    --out rulebooks/ --taxonomy-package boe-banking-v411.zip
 
 # Fail if the packaged rule book is not exactly what the workbook yields.
 # Without --taxonomy-package only the workbook content is compared
-rwa-filer rulebook check "Validations Banking Reporting v4.1.1.xlsx" \
+uvx "rwa-filer[excel]@latest" rulebook check "Validations Banking Reporting v4.1.1.xlsx" \
     --taxonomy-package boe-banking-v411.zip
 
 # Have Arelle check a written file and compare its verdicts with this package's
-rwa-filer referee return.xbrl --taxonomy-package boe-banking-v411.zip
+uvx "rwa-filer[arelle]@latest" referee return.xbrl --taxonomy-package boe-banking-v411.zip
 
 # The packaged rule extracts used by the template-level engine
-rwa-filer rules list
+uvx rwa-filer@latest rules list
 
-# Rebuild an extract from a publisher's rule workbook (needs rwa-filer[excel])
-rwa-filer rules import --publisher boe rules.xlsx --out extract.json
+# Rebuild an extract from a publisher's rule workbook
+uvx "rwa-filer[excel]@latest" rules import --publisher boe rules.xlsx --out extract.json
 
 # Fail if the packaged extract is not exactly what the workbook yields
-rwa-filer rules check --publisher boe rules.xlsx
+uvx "rwa-filer[excel]@latest" rules check --publisher boe rules.xlsx
 ```
 
 The rule workbooks are the publishers' own files and are not redistributed. The

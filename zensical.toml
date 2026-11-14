@@ -98,6 +98,11 @@ nav = [
     { "Specifications" = [
       "specifications/index.md",
       { "CRR Framework" = [
+        # The section's own index must come first: Zensical makes the first
+        # index.md directly inside a section its index, which had taken
+        # SA-CCR (ccr/index.md) out of the sidebar and pointed this heading at
+        # it. Gated by tests/contracts/test_docs_nav_section_indexes.py.
+        "specifications/crr/index.md",
         { "SA Risk Weights" = "specifications/crr/sa-risk-weights.md" },
         { "Supporting Factors" = "specifications/crr/supporting-factors.md" },
         { "Foundation IRB" = "specifications/crr/firb-calculation.md" },

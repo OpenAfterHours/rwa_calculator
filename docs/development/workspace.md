@@ -168,16 +168,22 @@ The shared workspace environment makes `rwa_calc` importable from everywhere, so
 an import in the wrong direction passes lint, types and the whole test suite
 here — and raises `ModuleNotFoundError` for the first person who installs the
 `rwa-filer` wheel without the calculator. Two gates close that, and they catch
-different things:
+different things — and a third, which covers both packages:
 
 | Gate | What it proves | Where |
 |------|----------------|-------|
 | `arch_check` check 23 | No module under `packages/rwa-filer/src/rwa_filer` imports `rwa_calc`, as a statement or through `importlib.import_module` / `__import__`. Also holds the member to checks 1, 2 and 14. | `scripts/arch_check.py` — every commit, and CI's lint job |
 | `rwa-filer (isolated)` CI job | The member's declared dependencies are complete: its suite passes in an environment built with `uv sync --package rwa-filer`, which contains `rwa-filer`, Polars and pytest and nothing from `rwa-calc`. | `.github/workflows/ci.yml` |
+| `scripts/check_wheel_install.py` | Each package's *built wheel* works from a clean install: installed into a fresh environment holding only its declared dependencies (workspace siblings from the same build), every module it ships imports, every console script resolves, and `rwa-ui`'s app serves its landing page. | the `wheel-install` CI job on every push; `publish.yml` and `scripts/deploy.py` on every release |
 
-The second gate is the only place a *missing dependency declaration* shows up. A
-new runtime dependency for `rwa-filer` goes in `packages/rwa-filer/pyproject.toml`
-— adding it to the root project alone would work locally and fail there.
+The second and third gates are the only places a *missing dependency
+declaration* shows up — every other job runs in the shared dev environment,
+which holds the dev extra and group. A new runtime dependency for `rwa-filer`
+goes in `packages/rwa-filer/pyproject.toml` — adding it to the root project alone
+would work locally and fail there. For `rwa-calc`, the third gate is the only
+one: a module-level import of a package declared only as a dev dependency is
+green everywhere else. That is how every release from 0.2.24 to 0.3.34 shipped
+unable to import `rwa_calc.api` (`watchfire`; escape log, 2026-11-14).
 
 ## Day-to-day commands
 
@@ -287,10 +293,11 @@ refused, since the packages do not share one. The run:
 
 A new member under `packages/` joins `--package all` once it has an entry in
 `scripts/deploy.py::MEMBER_RELEASES`, a build directory in
-`scripts/check_distribution.py::DIST_DIRS`, and a tag-prefix arm plus a
+`scripts/check_distribution.py::DIST_DIRS`, clean-install probes in
+`scripts/check_wheel_install.py::PROBES`, and a tag-prefix arm plus a
 version-check step in `.github/workflows/publish.yml`.
-`tests/contracts/test_release_coverage.py` fails until all three exist. The
-fourth step — a trusted (pending) publisher for the new PyPI project, as below —
+`tests/contracts/test_release_coverage.py` fails until all four exist. The
+fifth step — a trusted (pending) publisher for the new PyPI project, as below —
 cannot be checked from the repository.
 
 ### One-time PyPI set-up for `rwa-filer`

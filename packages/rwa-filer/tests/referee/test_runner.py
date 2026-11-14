@@ -878,9 +878,12 @@ def test_with_no_arelle_anywhere_the_error_says_how_to_get_it(no_arelle: None) -
     with pytest.raises(RefereeUnavailableError) as raised:
         find_arelle_python(None)
 
-    # Assert — both remedies, spelt so they can be copied.
+    # Assert — both remedies, spelt so they can be copied, and in uv's words: a
+    # pip install has no lasting environment to go into when run under uvx.
     message = str(raised.value)
-    assert 'pip install "rwa-filer[arelle]"' in message
+    assert 'uvx "rwa-filer[arelle]@latest" referee' in message
+    assert 'uv add "rwa-filer[arelle]"' in message
+    assert "pip install" not in message
     assert "RWA_FILER_ARELLE_PYTHON" in message
     assert "arelle-release" in message
     assert isinstance(raised.value, RuntimeError)

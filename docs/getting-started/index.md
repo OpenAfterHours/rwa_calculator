@@ -7,7 +7,7 @@ This section will help you get up and running with the UK Credit Risk RWA Calcul
 Before you begin, ensure you have:
 
 - **Python 3.13+** installed
-- **uv** package manager (recommended) or pip
+- **[uv](https://docs.astral.sh/uv/)** package manager (it can install Python 3.13 for you)
 - Access to your exposure data in Parquet or CSV format
 
 ## What You'll Learn

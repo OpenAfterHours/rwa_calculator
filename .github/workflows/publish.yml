@@ -166,6 +166,18 @@ jobs:
           PACKAGE: ${{ steps.select.outputs.package }}
         run: python scripts/check_distribution.py --package "$PACKAGE"
 
+      # The third check, and the one on what a user gets: neither twine nor the
+      # metadata gate installs anything, and every release from 0.2.24 to 0.3.34
+      # passed both while unable to import rwa_calc.api — a module-level import
+      # of a distribution declared only in the dev extra (escape log,
+      # 2026-11-14). This builds the package's wheel from the release commit,
+      # installs it into a fresh environment holding only its declared
+      # dependencies, imports every module it ships and starts its entry points.
+      - name: Check the wheel works from a clean install
+        env:
+          PACKAGE: ${{ steps.select.outputs.package }}
+        run: python scripts/check_wheel_install.py --package "$PACKAGE"
+
       # Uploaded FLAT under the one artifact name, so the publish jobs below
       # download a `dist/` holding only this package's two files whichever
       # package was built.

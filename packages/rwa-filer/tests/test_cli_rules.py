@@ -117,6 +117,45 @@ def test_a_missing_workbook_is_a_failure_not_a_traceback(
     assert "workbook not found" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("action", ["import", "check"])
+@pytest.mark.parametrize(
+    ("publisher", "layout", "named"),
+    [
+        pytest.param("eba", "boe", "no sheet 'v3.0(3.0.1)'", id="another-publishers-workbook"),
+        pytest.param("boe", "empty", "is empty", id="empty-rule-sheet"),
+        pytest.param("boe", "narrow", "has 2 columns", id="narrower-than-the-layout"),
+    ],
+)
+def test_a_workbook_not_laid_out_for_the_publisher_fails_in_one_line_that_says_why(
+    action: str,
+    publisher: str,
+    layout: str,
+    named: str,
+    boe_workbook: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Arrange
+    workbook = boe_workbook if layout == "boe" else _rule_sheet(tmp_path / f"{layout}.xlsx", layout)
+    extract = tmp_path / "extract.json"
+    argv = ["rules", action, "--publisher", publisher, str(workbook)]
+    if action == "import":
+        argv += ["--out", str(extract)]
+
+    # Act
+    code = main(argv)
+
+    # Assert — the CLI's own failure path: one diagnostic line, nothing else
+    captured = capsys.readouterr()
+    assert code == EXIT_FAILED
+    assert captured.err.startswith(f"rwa-filer: {workbook.name} ")
+    assert captured.err.count("\n") == 1
+    assert named in captured.err
+    assert "Traceback" not in captured.err
+    assert captured.out == ""
+    assert not extract.exists()
+
+
 # ---------------------------------------------------------------------------
 # rulebook — the Bank of England rule books
 # ---------------------------------------------------------------------------
@@ -147,3 +186,36 @@ def test_rulebook_import_and_check_report_a_missing_workbook_cleanly(
     # Assert
     assert (imported, checked) == (EXIT_FAILED, EXIT_FAILED)
     assert capsys.readouterr().err.count("workbook not found") == 2
+
+
+def test_rulebook_import_and_check_refuse_a_workbook_with_no_header_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Arrange — one data sheet, and nothing on it
+    blank = tmp_path / "blank.xlsx"
+    Workbook().save(blank)
+    out = tmp_path / "out"
+
+    # Act
+    imported = main(["rulebook", "import", str(blank), "--out", str(out)])
+    checked = main(["rulebook", "check", str(blank)])
+
+    # Assert — the missing header is a missing column, reported as one
+    err = capsys.readouterr().err
+    assert (imported, checked) == (EXIT_FAILED, EXIT_FAILED)
+    assert err.count("rwa-filer: blank.xlsx: no column(s) ") == 2
+    assert err.count("\n") == 2
+    assert "Traceback" not in err
+    assert not out.exists()
+
+
+def _rule_sheet(path: Path, layout: str) -> Path:
+    """A workbook holding the BoE rule sheet, either ``"empty"`` or two columns wide."""
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = importer.BOE_SHEET
+    if layout == "narrow":
+        worksheet.append(["header", "header"])
+        worksheet.append(["BoE", "boe_b0001"])
+    workbook.save(path)
+    return path

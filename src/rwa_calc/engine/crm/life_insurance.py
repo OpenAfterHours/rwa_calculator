@@ -168,15 +168,15 @@ def compute_life_insurance_columns(
     li_coll = li_coll.with_columns(_map_insurer_rw_to_secured_rw_expr().alias("_li_item_rw"))
 
     # The policy's own denomination for the Art. 233(3) FX test: original_currency
-    # (pre-FX-conversion) if present, else currency; None when neither exists.
+    # (pre-FX-conversion), falling back to currency PER ROW — the collateral frame
+    # is diagonal-concatenated with the synthetic netting rows, so the column can
+    # exist while a row's value is null (escape log 2026-11-13). None when neither
+    # column exists.
     coll_names = coll_schema.names()
-    coll_ccy_col = (
-        "original_currency"
-        if "original_currency" in coll_names
-        else "currency"
-        if "currency" in coll_names
-        else None
-    )
+    ccy_sources = [c for c in ("original_currency", "currency") if c in coll_names]
+    coll_ccy_col = "_li_policy_ccy" if ccy_sources else None
+    if coll_ccy_col is not None:
+        li_coll = li_coll.with_columns(pl.coalesce(ccy_sources).alias(coll_ccy_col))
     if coll_ccy_col is not None and errors is not None:
         _record_unknown_currency_warnings(li_coll, coll_ccy_col, coll_names, errors)
 

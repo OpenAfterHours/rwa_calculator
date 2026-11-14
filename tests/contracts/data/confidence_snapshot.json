@@ -1058,6 +1058,7 @@
         "tests/acceptance/basel31/test_p1_110_art_122_corporate_cqs3_guarantee_substitution.py",
         "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/crr/test_art_222_fcsm_unified_pipeline.py",
         "tests/acceptance/crr/test_p1_101_art_226_1_non_daily_revaluation.py",
         "tests/acceptance/crr/test_p1_104_art_239_1_fcsm_maturity_eligibility.py",
@@ -2916,7 +2917,7 @@
     {
       "article": "195",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral"
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -2929,7 +2930,7 @@
         "contracts/errors.py",
         "contracts/validation.py",
         "data/schemas.py",
-        "engine/crm/collateral.py",
+        "engine/crm/netting.py",
         "engine/crm/processor.py",
         "engine/hierarchy/facility_undrawn.py",
         "reporting/kernel/columns.py",
@@ -2937,6 +2938,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/reporting/test_r1_negative_gross_carriers.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
@@ -3149,7 +3151,7 @@
     {
       "article": "205",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral"
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -3157,7 +3159,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/collateral.py"
+        "engine/crm/netting.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
@@ -3342,36 +3344,44 @@
     {
       "article": "219",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral",
-        "rwa_calc.engine.crm.expressions::flag_netting_rows"
+        "rwa_calc.engine.crm.expressions::flag_netting_rows",
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "on_bs_netting_same_currency_only@crr"
+      ],
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
         "engine/crm/haircuts.py",
+        "engine/crm/netting.py",
         "engine/crm/processor.py",
         "engine/crm/simple_method.py",
         "engine/re_split/carriers.py",
-        "reporting/corep/c07.py"
+        "reporting/corep/c07.py",
+        "rulebook/packs/b31.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/reporting/test_of07_netting_single_deduction.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p1_238/p1_238.py",
         "tests/fixtures/p1_241/p1_241.py",
         "tests/fixtures/reporting_netting_mismatch_portfolio.py",
         "tests/fixtures/reporting_netting_portfolio.py",
+        "tests/unit/crm/test_collateral_submodules.py",
         "tests/unit/crm/test_netting.py",
         "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
         "tests/unit/test_re_split_carrier_classification.py"
@@ -3502,8 +3512,8 @@
       "article": "223",
       "code_functions": [
         "rwa_calc.engine.crm.collateral::apply_collateral",
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral",
         "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr",
+        "rwa_calc.engine.crm.netting::generate_netting_collateral",
         "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
       ],
       "confidence": "HIGH",
@@ -3554,6 +3564,7 @@
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
         "engine/crm/min_collateralisation.py",
+        "engine/crm/netting.py",
         "engine/crm/processor.py",
         "engine/hierarchy/unify.py",
         "engine/irb/formulas.py",
@@ -3651,7 +3662,8 @@
         "liquidation_period_repo@b31",
         "liquidation_period_repo@crr",
         "liquidation_period_secured_lending@b31",
-        "liquidation_period_secured_lending@crr"
+        "liquidation_period_secured_lending@crr",
+        "on_bs_netting_liquidation_period@crr"
       ],
       "source_files": [
         "contracts/bundles.py",
@@ -4131,7 +4143,8 @@
         "data/schemas.py",
         "engine/crm/guarantees.py",
         "engine/crm/haircut_tables.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/haircuts.py",
+        "engine/crm/netting.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_122_short_term_institution_guarantor_substitution.py",
@@ -4169,8 +4182,8 @@
     {
       "article": "238",
       "code_functions": [
-        "rwa_calc.engine.crm.collateral::generate_netting_collateral",
-        "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch"
+        "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch",
+        "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -4178,9 +4191,9 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/collateral.py",
         "engine/crm/guarantees.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/haircuts.py",
+        "engine/crm/netting.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
@@ -6396,6 +6409,7 @@
       ],
       "test_files": [
         "tests/acceptance/_fs1_expectations.py",
+        "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/basel31/test_p1_103_art_122_3_short_term_corporate_ecai.py",
         "tests/acceptance/basel31/test_p1_107_fcsm_b31_corporate_cqs3.py",
         "tests/acceptance/basel31/test_p1_110_art_122_corporate_cqs3_guarantee_substitution.py",
@@ -6421,6 +6435,7 @@
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/generate_all.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p1_103/p1_103.py",
         "tests/fixtures/p1_110/p1_110.py",
         "tests/fixtures/p1_122a/p1_122a.py",
@@ -8195,23 +8210,32 @@
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "on_bs_netting_liquidation_period@b31",
+        "on_bs_netting_same_currency_only@b31"
+      ],
       "source_files": [
         "analysis/legacy_ledger.py",
         "engine/crm/expressions.py",
+        "engine/crm/netting.py",
         "reporting/corep/c07.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/basel31/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py",
+        "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/reporting/test_of07_netting_single_deduction.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/reporting_netting_mismatch_portfolio.py",
+        "tests/unit/crm/test_collateral_submodules.py",
         "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
-        "tests/unit/reporting/corep/test_c07_netting.py"
+        "tests/unit/reporting/corep/test_c07_netting.py",
+        "tests/unit/test_engine_utils_silent_skip.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8296,9 +8320,11 @@
         "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/basel31/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
         "tests/acceptance/basel31/test_scenario_b31_d_crm.py",
+        "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p2_18/p2_18.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_crm_basel31.py",
@@ -8742,8 +8768,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "be501c3fe55131179e4da131f4be37dd8ab2f6fc69f11cacac2d60074c9b19e8",
-    "crr": "9c63304e801e3a38dbcbb03e55130676fd230352e80de778f335dc455b77b26a"
+    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
+    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

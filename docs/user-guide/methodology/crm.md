@@ -459,8 +459,8 @@ The perimeter is gated by the cited rulepack Feature `on_bs_netting_perimeter_is
 
 | Feature state | Netting pool key | Beneficiary match |
 |---------------|------------------|-------------------|
-| **Enabled** (default, both regimes) | `(netting_agreement_reference, currency)` | shared `netting_agreement_reference` |
-| Disabled | `(netting_agreement_reference, currency, counterparty_reference)` | shared reference **and** same `counterparty_reference` |
+| **Enabled** (default, both regimes) | `(netting_agreement_reference, deposit denomination)` | shared `netting_agreement_reference` |
+| Disabled | `(netting_agreement_reference, deposit denomination, counterparty_reference)` | shared reference **and** same `counterparty_reference` |
 
 Disabled, a deposit nets only loans owed by the same counterparty, and any cross-counterparty offset is dropped. Flipping the Feature changes no input data and no other pipeline stage.
 
@@ -510,16 +510,40 @@ CRR Art. 219 limits on-balance-sheet netting to **drawn loans and deposits** —
 
 The calculator implements netting as **synthetic cash collateral**:
 
-1. Loans with a non-null `netting_agreement_reference` and `drawn_amount < 0` contribute their absolute drawn amount to a **netting pool** per `(netting_agreement_reference, currency)`
-2. The pool is allocated **pro-rata by drawn portion (`on_bs_for_ead`)** to positive-drawn **loan** siblings carrying the **same reference** — contingents and facility-undrawn rows are excluded per Art. 219; facility hierarchy and counterparty are irrelevant to the match
+1. Loans with a non-null `netting_agreement_reference` and `drawn_amount < 0` contribute their absolute drawn amount to a **netting pool** per `(netting_agreement_reference, deposit denomination)` — see [Currency](#currency-art-219-and-art-2192) below
+2. The pool is allocated **pro-rata by drawn portion (`on_bs_for_ead`)** to positive-drawn **loan** siblings carrying the **same reference** (and, under CRR, the same denomination) — contingents and facility-undrawn rows are excluded per Art. 219; facility hierarchy and counterparty are irrelevant to the match
 3. Each allocation becomes a synthetic cash collateral row fed into the existing collateral pipeline
 
 This reuses the full collateral mechanics:
 
 - **SA**: Cash collateral (0% haircut) directly reduces EAD
 - **F-IRB**: Cash collateral has 0% LGD → weighted LGD reduction
-- **FX mismatch**: the standard currency-mismatch haircut applies when the pool currency differs from the beneficiary loan's currency
+- **FX mismatch** (Basel 3.1 only): the Table 4 currency-mismatch haircut at a 10-day liquidation period — see [Currency](#currency-art-219-and-art-2192)
 - **Maturity mismatch**: the pool carries the **earliest** deposit maturity, so the Art. 237–239 treatment is applied on the most conservative single maturity in the pool
+
+### Currency (Art. 219 and Art. 219(2))
+
+The currency that matters is each leg's **denomination** — the currency the deposit and the loan are booked in, which `FXConverter` preserves as `original_currency` when it rebases `currency` to the reporting currency. The two regimes treat a deposit in a different currency from the loan differently, gated by the cited rulepack Feature `on_bs_netting_same_currency_only`:
+
+| Regime | Feature | A deposit in another currency from the loan |
+|--------|---------|---------------------------------------------|
+| **CRR** | enabled | **Not recognised** for that loan. CRR Art. 219 treats netted loans and deposits as cash collateral only *"which are denominated in the same currency"*. A pool protects only loans in its own denomination, and only those loans form its pro-rata denominator. |
+| **Basel 3.1** | disabled | **Recognised net of H_fx.** PS1/26 Art. 219(2) applies the Art. 224(1) Table 4 volatility adjustment with *"a 10 business day liquidation period"* — 8% — scaled up under Art. 226(1) if not marked to market daily. |
+
+Every synthetic netting row carries its liquidation period from the pack entry `on_bs_netting_liquidation_period` (10 business days under Basel 3.1; 20 under CRR, where it scales nothing because a CRR netting row is never currency-mismatched).
+
+```python
+# Base currency GBP, one agreement: a 300 deposit nets a 1,000 loan.
+#                     CRR EAD    Basel 3.1 EAD
+# EUR deposit, EUR loan    700          700         (same currency: no haircut)
+# EUR deposit, GBP loan  1,000          724         (CRR: not netted; B31: 300 x 0.92)
+# GBP 200 + EUR 100,
+#   GBP loan               800          708         (two pools; only GBP nets under CRR)
+```
+
+#### CRM003 — Netted Deposit Not Recognised for Currency
+
+Under CRR, a deposit pool whose currency **no** loan within its netting perimeter shares nets nothing at all, and one `CRM003` warning per such pool records it. The warning names the agreement and the deposit currency, and gives the pool's amount in the currency it is measured in (the converted value). A pool that nets in full, a deposit with no loan in its perimeter at all, and every Basel 3.1 run raise none.
 
 ### No Double-Counting
 
@@ -562,9 +586,9 @@ A mixed facility containing a drawn loan, a contingent guarantee, and an undrawn
 ```
 
 > **Implementation:** `generate_netting_collateral` in
-> [`crm/collateral.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/collateral.py)
-> builds the pool, applies the Feature to the pool key and the beneficiary match,
-> and emits CRM016.
+> [`crm/netting.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/netting.py)
+> builds the pool, applies the Features to the pool key and the beneficiary match,
+> and emits CRM016 and CRM003.
 
 ## Cross-Approach CCF Substitution
 

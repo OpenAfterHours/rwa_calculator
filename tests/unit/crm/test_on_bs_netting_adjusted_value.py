@@ -22,7 +22,8 @@ What these tests pin, at the level where it is cheapest to state exactly:
 
 - the carrier is the netting part of ``collateral_adjusted_value`` and nothing
   else — never more than it, and exactly it on a row with no other collateral;
-- it DIFFERS from the allocation under a currency mismatch (Art. 219(2)) and
+- it DIFFERS from the allocation under a currency mismatch (PS1/26 Art. 219(2);
+  under CRR a cross-currency deposit is not netted at all, Art. 219) and
   under a maturity mismatch (Art. 219(3)) — the two cases the registered
   ``netting`` reporting portfolio cannot produce, because every leg of it is in
   one currency and matures on one date;
@@ -221,40 +222,38 @@ def test_matched_same_currency_deposit_adjusts_to_its_whole_allocation(regime: s
     _assert_is_the_netting_part_of_the_collateral(loan)
 
 
-@pytest.mark.parametrize("regime", _REGIMES)
-def test_currency_mismatch_carrier_is_the_haircut_value_not_the_allocation(regime: str) -> None:
-    """Art. 219(2): a EUR deposit against a GBP loan nets at its haircut value.
+def test_currency_mismatch_carrier_is_the_haircut_value_not_the_allocation() -> None:
+    """PS1/26 Art. 219(2): a EUR deposit against a GBP loan nets at its haircut value.
+
+    Basel 3.1 only — under CRR the pair is not netted at all (next test).
 
     Hand calculation. The allocation is the whole EUR 300 pool. Art. 224 Table 4
     lists the currency-mismatch volatility adjustment per liquidation period;
     the pack holds its 10-day figure (entry ``fx_haircut``) and the engine scales
-    it by sqrt(T_M / 10) to the period it holds the row at — for a netted
-    deposit, its secured-lending default (entry
-    ``liquidation_period_secured_lending``). Cash carries no adjustment of its
-    own, so
+    it by sqrt(T_M / 10) to the period the synthetic netting row carries — entry
+    ``on_bs_netting_liquidation_period``, which PS1/26 Art. 219(2) fixes for a
+    netted deposit: "The institution shall apply a 10 business day liquidation
+    period". Cash carries no adjustment of its own, so
 
-        adjusted = 300 x (1 - H_fx x sqrt(T_M / 10))
+        adjusted = 300 x (1 - H_fx x sqrt(T_M / 10))     = 276.00 at T_M = 10
         EAD      = 1,000 - adjusted
 
-    The scalars are read from the pack rather than typed (LESSONS A4), and the
-    assertion that matters does not depend on them: the carrier is strictly
+    The scalars are read from the pack rather than typed (LESSONS A4); the
+    10-day value itself is pinned against the article by
+    ``tests/unit/crm/test_collateral_submodules.py`` and the full-pipeline
+    ``tests/acceptance/basel31/test_art219_netting_currency_mismatch.py``. The
+    assertion that matters here does not depend on them: the carrier is strictly
     BELOW the allocation and is exactly what the exposure value fell by.
-
-    This pins the carrier to what the engine DEDUCTED; it does not endorse the
-    period. PS1/26 Art. 219(2) says of a netted deposit "The institution shall
-    apply a 10 business day liquidation period", which the engine does not yet
-    single out — an exposure-value question, reported separately and deliberately
-    not changed with a reporting carrier.
 
     Arrange: EUR 300 deposit, GBP 1,000 loan, one agreement.
     Act:     run the CRM stage.
     Assert:  allocation 300; carrier = the haircut value; EAD = 1,000 - carrier.
     """
     # Arrange
-    config = _config(regime)
+    config = _config("b31")
     pack = RulepackV0.from_config(config).pack
     h_fx = scalar_value(pack.scalar_param("fx_haircut"))
-    period = pack.int_param("liquidation_period_secured_lending").value
+    period = pack.int_param("on_bs_netting_liquidation_period").value
     expected = POOL * (1.0 - h_fx * math.sqrt(period / 10.0))
     assert 0.0 < expected < POOL, (
         "the hand-calculated adjusted value equals the allocation, so this case "
@@ -273,6 +272,28 @@ def test_currency_mismatch_carrier_is_the_haircut_value_not_the_allocation(regim
     assert loan[CARRIER] == pytest.approx(expected)
     assert loan[CARRIER] == pytest.approx(loan["collateral_adjusted_value"])
     assert loan["ead_final"] == pytest.approx(LOAN_DRAWN - expected)
+
+
+def test_crr_cross_currency_deposit_is_not_netted_so_both_carriers_are_zero() -> None:
+    """CRR Art. 219: netting is recognised only between loans and deposits
+    "denominated in the same currency", so a EUR deposit is not cash collateral
+    for a GBP loan at all — no allocation, no adjusted value, no deduction.
+
+    Arrange: EUR 300 deposit, GBP 1,000 loan, one agreement, CRR.
+    Act:     run the CRM stage.
+    Assert:  allocation 0, carrier 0, EAD 1,000 (the whole loan).
+    """
+    # Arrange + Act
+    df = _run(
+        _config("crr"),
+        [_exposure(DEPOSIT, DEPOSIT_BALANCE, currency="EUR"), _exposure(LOAN, LOAN_DRAWN)],
+    )
+    loan = _row(df, LOAN)
+
+    # Assert
+    assert loan[ALLOCATION] == pytest.approx(0.0)
+    assert loan[CARRIER] == pytest.approx(0.0)
+    assert loan["ead_final"] == pytest.approx(LOAN_DRAWN)
 
 
 @pytest.mark.parametrize("regime", _REGIMES)

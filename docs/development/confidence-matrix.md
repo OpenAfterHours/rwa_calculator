@@ -32,8 +32,8 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `9c63304e801e3a38`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `be501c3fe5513117`
+- **CRR** (`crr` @ 2026-01-01) — content hash `4dff1c383e4b0a89`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `e55b27a31950b2d5`
 
 ## Summary
 
@@ -70,7 +70,7 @@ Package version `0.3.34`. Resolved packs:
 | 119 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 120 | 1 | 2 | 13 | 6 | 94 | HIGH |
 | 121 | 4 | 3 | 8 | 9 | 20 | HIGH |
-| 122 | 2 | 4 | 6 | 11 | 73 | HIGH |
+| 122 | 2 | 4 | 6 | 11 | 74 | HIGH |
 | 123 | 3 | 7 | 13 | 2 | 27 | HIGH |
 | 124 | 1 | 2 | 8 | 2 | 13 | HIGH |
 | 125 | 1 | 3 | 17 | 2 | 22 | HIGH |
@@ -119,7 +119,7 @@ Package version `0.3.34`. Resolved packs:
 | 192 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 193 | 1 | 0 | 12 | 1 | 6 | HIGH |
 | 194 | 2 | 0 | 1 | 0 | 4 | MEDIUM |
-| 195 | 1 | 1 | 8 | 0 | 15 | MEDIUM |
+| 195 | 1 | 1 | 8 | 0 | 16 | MEDIUM |
 | 197 | 4 | 0 | 7 | 19 | 19 | HIGH |
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
@@ -135,12 +135,12 @@ Package version `0.3.34`. Resolved packs:
 | 216 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
-| 219 | 2 | 0 | 9 | 0 | 13 | MEDIUM |
+| 219 | 2 | 1 | 12 | 0 | 16 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 13 | HIGH |
-| 223 | 4 | 0 | 18 | 30 | 29 | HIGH |
-| 224 | 4 | 10 | 11 | 33 | 44 | HIGH |
+| 223 | 4 | 0 | 19 | 30 | 29 | HIGH |
+| 224 | 4 | 11 | 11 | 33 | 44 | HIGH |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
 | 227 | 0 | 2 | 3 | 0 | 1 | MEDIUM |
 | 228 | 0 | 0 | 1 | 25 | 2 | UNCITED |
@@ -153,7 +153,7 @@ Package version `0.3.34`. Resolved packs:
 | 234 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
 | 235 | 10 | 1 | 15 | 7 | 18 | HIGH |
 | 236 | 0 | 0 | 0 | 0 | 4 | GAP |
-| 237 | 2 | 0 | 4 | 0 | 29 | MEDIUM |
+| 237 | 2 | 0 | 5 | 0 | 29 | MEDIUM |
 | 238 | 2 | 0 | 3 | 0 | 12 | MEDIUM |
 | 239 | 0 | 0 | 2 | 0 | 13 | UNCITED |
 | 244 | 1 | 0 | 5 | 0 | 0 | LOW |
@@ -222,7 +222,7 @@ Package version `0.3.34`. Resolved packs:
 | 120 | 0 | 6 | 12 | 2 | 36 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 121 | 1 | 1 | 7 | 4 | 17 | HIGH |
-| 122 | 2 | 7 | 7 | 5 | 47 | HIGH |
+| 122 | 2 | 7 | 7 | 5 | 49 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 123 | 1 | 4 | 3 | 5 | 15 | HIGH |
@@ -286,11 +286,11 @@ Package version `0.3.34`. Resolved packs:
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 219 | 2 | 0 | 3 | 0 | 8 | MEDIUM |
+| 219 | 2 | 2 | 4 | 0 | 13 | MEDIUM |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
 | 223 | 1 | 0 | 5 | 0 | 3 | MEDIUM |
-| 224 | 0 | 2 | 3 | 0 | 12 | MEDIUM |
+| 224 | 0 | 2 | 3 | 0 | 14 | MEDIUM |
 | 226 | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 227 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 228 | 0 | 0 | 1 | 0 | 0 | UNCITED |

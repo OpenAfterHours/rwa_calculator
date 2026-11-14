@@ -181,13 +181,6 @@
   "rwa_calc.engine.crm.collateral::apply_firb_supervisory_lgd_no_collateral": [
     "CRR Art. 161"
   ],
-  "rwa_calc.engine.crm.collateral::generate_netting_collateral": [
-    "CRR Art. 195",
-    "CRR Art. 205",
-    "CRR Art. 219",
-    "CRR Art. 223",
-    "CRR Art. 238"
-  ],
   "rwa_calc.engine.crm.eligibility::credit_linked_note_ineligible_expr": [
     "CRR Art. 218"
   ],
@@ -263,6 +256,13 @@
   "rwa_calc.engine.crm.min_collateralisation::record_below_min_collateralisation": [
     "CRR Art. 230",
     "PS1/26 Art. 230"
+  ],
+  "rwa_calc.engine.crm.netting::generate_netting_collateral": [
+    "CRR Art. 195",
+    "CRR Art. 205",
+    "CRR Art. 219",
+    "CRR Art. 223",
+    "CRR Art. 238"
   ],
   "rwa_calc.engine.crm.ofcp_routing::route_other_funded_protection": [
     "CRR Art. 232",

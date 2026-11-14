@@ -10,6 +10,9 @@ Key responsibilities:
   code. This module holds no validation or filing logic of its own.
 - Report a missing optional extra (``MissingExtraError``, from whichever
   command reached the workbook) as one diagnostic line, not a traceback.
+- Report an input that is not what the command reads (``rwa_filer.inputs``
+  raises a ``ValueError`` naming it) as one line, and refuse an output path
+  that writing would certainly fail on before the command does its work.
 
 Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
@@ -54,7 +57,8 @@ Exit codes:
     0  success — for ``validate`` and ``build``, nothing blocks submission;
        for ``referee``, Arelle accepts the instance and the engines agree
     1  the command ran and the answer is "no" (a blocking finding, a stale
-       extract, a missing file), or it needs an extra that is not installed
+       extract, a missing file, a file that is not what the command reads, an
+       output path in the way), or it needs an extra that is not installed
     2  usage error (argparse's own convention)
 """
 
@@ -193,6 +197,8 @@ def _add_header_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _validate(args: argparse.Namespace) -> int:
     """``rwa-filer validate`` — read, validate, report."""
+    if problem := _unwritable(args.report, "--report"):
+        return _fail(problem)
     try:
         source = _load(args)
         validation = validate_return(source.ret, source.pack, source_findings=source.findings)
@@ -343,6 +349,9 @@ def _build(args: argparse.Namespace) -> int:
     now = datetime.now(UTC)
     if args.adjustments is not None and not args.author:
         return _fail("--adjustments needs --author: an override is recorded against a name")
+    problem = _unwritable(args.out, "--out", directory=True) or _unwritable(args.ledger, "--ledger")
+    if problem:
+        return _fail(problem)
     try:
         source = _load(args)
         ret, applied = source.ret, ()
@@ -625,6 +634,8 @@ def _template(args: argparse.Namespace) -> int:
     """``rwa-filer template`` — write a blank workbook."""
     from rwa_filer.readers.excel import write_workbook
 
+    if problem := _unwritable(args.out, "--out"):
+        return _fail(problem)
     try:
         pack = resolve_pack(args.module, args.reference_date)
         written = write_workbook(pack, args.out, tables=args.tables)
@@ -695,6 +706,8 @@ def _taxonomy_compile(args: argparse.Namespace) -> int:
     for path in (args.annotated, args.dictionary, args.taxonomy):
         if not path.exists():
             return _fail(f"not found: {path}")
+    if problem := _unwritable(args.out, "--out", directory=True):
+        return _fail(problem)
     try:
         compiled = compile_pack(args.annotated, args.dictionary, args.taxonomy, module=args.module)
         info = write_pack(compiled, args.out, valid_from=args.valid_from, valid_to=args.valid_to)
@@ -876,6 +889,8 @@ def _read_rulebook(args: argparse.Namespace) -> dict[str, Any]:
 
 def _rulebook_import(args: argparse.Namespace) -> int:
     """``rwa-filer rulebook import`` — write a rule book."""
+    if problem := _unwritable(args.out, "--out", directory=True):
+        return _fail(problem)
     try:
         rulebook = _read_rulebook(args)
     except ValueError as exc:
@@ -973,6 +988,8 @@ def _rules_import(args: argparse.Namespace) -> int:
     workbook: Path = args.workbook
     if not workbook.is_file():
         return _fail(f"workbook not found: {workbook}")
+    if problem := _unwritable(args.out, "--out"):
+        return _fail(problem)
     try:
         payload = importer.extract(args.publisher, workbook)
     except ValueError as exc:
@@ -1029,6 +1046,32 @@ def _fail(message: str) -> int:
     """Write a diagnostic to stderr and return the failure exit code."""
     sys.stderr.write(f"rwa-filer: {message}\n")
     return EXIT_FAILED
+
+
+def _unwritable(path: Path | None, option: str, *, directory: bool = False) -> str | None:
+    """Why ``option``'s ``path`` cannot be written, or ``None`` (also when not given).
+
+    Asked before the command does its work, so that a path in the way is refused
+    in one line before a compile runs, rather than as the ``FileExistsError`` or
+    ``IsADirectoryError`` of writing it afterwards. Only what writing would
+    certainly fail on is refused; an existing file where a file is written is
+    replaced, as it always was.
+
+    Args:
+        path: The option's value.
+        option: The option, as the user typed it, e.g. ``"--out"``.
+        directory: Whether the command writes a directory there, not a file.
+    """
+    if path is None:
+        return None
+    if directory and path.exists() and not path.is_dir():
+        return f"{option} {path} is a file, not a directory"
+    if not directory and path.is_dir():
+        return f"{option} {path} is a directory, not a file"
+    in_the_way = next((p for p in path.parents if p.exists() and not p.is_dir()), None)
+    if in_the_way is not None:
+        return f"{option} {path} cannot be written: {in_the_way} is a file, not a directory"
+    return None
 
 
 if __name__ == "__main__":

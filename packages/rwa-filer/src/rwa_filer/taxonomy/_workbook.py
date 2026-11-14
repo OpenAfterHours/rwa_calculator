@@ -42,7 +42,7 @@ import zipfile
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from rwa_filer.extras import import_openpyxl
+from rwa_filer.inputs import load_workbook
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -217,10 +217,16 @@ class Dictionary:
 
 
 def read_annotated_workbook(path: Path) -> AnnotatedWorkbook:
-    """Read every table sheet, the Table of Contents and the enumeration lists."""
-    extras = _read_zip_extras(path)
+    """Read every table sheet, the Table of Contents and the enumeration lists.
+
+    Raises:
+        ValueError: ``path`` is not a readable .xlsx workbook.
+    """
+    # openpyxl first: it refuses a file that is not a workbook in one line, and
+    # only then are the parts it does not read taken out of the zip directly.
     workbook = _load_workbook(path, read_only=False)
     try:
+        extras = _read_zip_extras(path)
         sheets = {
             sheet.title: _read_sheet(sheet, *extras.get(sheet.title, ((), {})))
             for sheet in workbook.worksheets
@@ -248,8 +254,9 @@ def read_dictionary(path: Path) -> Dictionary:
     """Read metric types and each dimension's domain, typed element and default member.
 
     Raises:
-        ValueError: the workbook lacks one of ``DICTIONARY_SHEETS``, so it is not
-            a DPM dictionary (another of the publisher's workbooks, given as one).
+        ValueError: ``path`` is not a readable .xlsx workbook, or it lacks one
+            of ``DICTIONARY_SHEETS``, so it is not a DPM dictionary (another of
+            the publisher's workbooks, given as one).
     """
     workbook = _load_workbook(path, read_only=True)
     try:
@@ -336,12 +343,21 @@ def member_qname(member_owner: str, domain_owner: str, domain: str, code: str) -
 
 
 def _load_workbook(path: Path, *, read_only: bool) -> Any:
-    """Open a workbook; ``MissingExtraError`` when openpyxl is absent."""
-    openpyxl = import_openpyxl(needed_for="Compiling a taxonomy pack", command="taxonomy compile")
+    """Open a workbook through ``inputs.load_workbook``.
+
+    Raises:
+        MissingExtraError: openpyxl is not installed.
+        ValueError: ``path`` is not a readable .xlsx workbook.
+    """
     with warnings.catch_warnings():
         # openpyxl warns that it drops the x14 validations; _read_zip_extras reads them.
         warnings.simplefilter("ignore")
-        return openpyxl.load_workbook(path, read_only=read_only, data_only=True)
+        return load_workbook(
+            path,
+            needed_for="Compiling a taxonomy pack",
+            command="taxonomy compile",
+            read_only=read_only,
+        )
 
 
 def _read_sheet(

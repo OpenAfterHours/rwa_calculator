@@ -172,11 +172,18 @@ class TaxonomyModule:
         """Read the entry point ``schema_ref`` names out of ``package``.
 
         Raises:
-            RefereePlanError: ``schema_ref`` is not an entry point of the
-                package, or its preconditions cannot be resolved.
+            RefereePlanError: ``package`` is not a zip archive, ``schema_ref``
+                is not an entry point of it, or its preconditions cannot be
+                resolved.
         """
         tail = schema_ref.partition("://")[2]
-        with zipfile.ZipFile(package) as archive:
+        # Not rwa_filer.inputs.open_zip: this module imports only the standard
+        # library (it also runs where rwa-filer is not installed).
+        try:
+            archive = zipfile.ZipFile(package)
+        except zipfile.BadZipFile as exc:
+            raise RefereePlanError(f"{package} is not a zip archive") from exc
+        with archive:
             sizes = {info.filename: info.file_size for info in archive.infolist()}
             member = next((name for name in sizes if tail and name.endswith("/" + tail)), None)
             if member is None:

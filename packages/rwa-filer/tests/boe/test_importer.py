@@ -10,6 +10,7 @@ the opt-in test at the foot of this file.
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -173,6 +174,27 @@ def test_a_severity_cell_lists_one_module_per_line(tmp_path: Path) -> None:
         "PRA114": "ERROR",
     }
     assert rulebook["modules"] == ["PRA112", "PRA113", "PRA114"]
+
+
+def test_a_severity_cell_with_a_long_run_of_blanks_is_read_promptly(tmp_path: Path) -> None:
+    """A workbook is downloaded input. The line pattern once backtracked cubically
+    on a run of blanks followed by anything but the end: 2,000 blanks took
+    seconds, 4,000 took minutes. Read in linear time it is a fraction of a second.
+    """
+    # Arrange
+    cell = "ERROR - PRA114" + " " * 2_000 + "|x\nWARNING - PRA112|"
+    path = workbook(
+        tmp_path, FULL_HEADER, row(FULL_HEADER, **{"Rule code": "b1", "Severity and modules": cell})
+    )
+
+    # Act
+    started = time.perf_counter()
+    rulebook = import_workbook(path)
+    elapsed = time.perf_counter() - started
+
+    # Assert — the malformed line is not a module; the well-formed one is.
+    assert rulebook["rules"][0]["severity"] == {"PRA112": "WARNING"}
+    assert elapsed < 1.0
 
 
 def test_a_rule_with_no_table_is_kept(tmp_path: Path) -> None:

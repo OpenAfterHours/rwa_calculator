@@ -442,7 +442,11 @@ REGISTER_NOTES: dict[str, str] = {
         "'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, "
         "including exposure-weighted averages, where it cannot hold unless there is exactly "
         "one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's "
-        "risk-weight column. Recognise it before re-deriving it a fourth time."
+        "risk-weight column. Recognise it before re-deriving it a fourth time. PUBLISHER "
+        "CONFIRMATION (BoE taxonomy v4.1.1, Aug 2026): of the 35 boe_b0752_* members the BoE "
+        "withdrew exactly the four on averaged columns - _1 (c0010 PD), _22/_23 (c0230/c0240 "
+        "LGD), _24 (c0250 maturity) - and rewrote the weighted restatements boe_b0755-0758 into "
+        "the per-grade paired form sum(avg * exposure), marking them not-in-XBRL."
     ),
     "pattern_empty_subrow_vs_negated_column": (
         "An inequality between an 'of which' sub-row and its parent inverts when the parent "
@@ -452,7 +456,11 @@ REGISTER_NOTES: dict[str, str] = {
         "reads false however correct that negative figure is. Same shape as the zero-exposure "
         "ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' — see the caution "
         "on unattributed entries above before assuming the parent's negative figure is itself "
-        "the bug, as it genuinely was in the boe_b0378 worked example there)."
+        "the bug, as it genuinely was in the boe_b0378 worked example there). PUBLISHER "
+        "CONFIRMATION (BoE taxonomy v4.1.1, Aug 2026): boe_b0378/boe_b0379 were each split into "
+        "a _1 rule (of-which <= total on the positive columns) and a _2 rule (total <= of-which "
+        "on the '(-)' deduction columns), and both _2 rules PASS on real coordinates on "
+        "crm-substitution (5 and 3) where the unsplit rules failed."
     ),
     # Hand-written into the JSON on 2026-08-xx and dropped by the next REGEN because
     # it lived only there; moved here (verbatim) on 2026-09-05 so regeneration keeps it.
@@ -471,7 +479,9 @@ REGISTER_NOTES: dict[str, str] = {
         "total 1673. Our figures are correct on their own definitions in both cases. This "
         "surfaced only when the irb-shapes portfolio arrived because it is the FIRST portfolio "
         "in the estate where a single obligor spans both the on- and off-balance-sheet rows, "
-        "which is inherent to covering IRB off-balance-sheet exposure at all."
+        "which is inherent to covering IRB off-balance-sheet exposure at all. BoE taxonomy "
+        "v4.1.1 (Aug 2026) withdrew the rule this was measured on, boe_b0744, together with its "
+        "IRB-axis twin boe_b0745; the EBA restatement v0338_m still binds the CRR template."
     ),
 }
 

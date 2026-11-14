@@ -284,10 +284,10 @@ Cell semantics (recorded decisions, this slice):
   ``boe_b0752_8`` / ``boe_b0814_07`` (col 0080) and ``boe_b0752_9`` /
   ``boe_b0814_08`` (col 0090), two distinct identities each stated twice in the
   pack — require ``{OF08.01 r0070} = sum({OF08.02})`` on those columns. Together
-  with ``boe_b0745`` / ``v0338_m`` (which put the inflow on row 0070) that is a
-  published statement that C 08.02 MUST carry the inflow, so "excluded entirely"
-  was never available and the MONITORED divergence R12 recorded here was in fact
-  a standing breach of four ERROR-severity rules. What survives is the reason
+  with ``v0338_m`` (which put the inflow on row 0070; BoE ``boe_b0745``, withdrawn
+  in v4.1.1) that is a published statement that C 08.02 MUST carry the inflow, so
+  "excluded entirely" was never available and the MONITORED divergence R12 here
+  was a standing breach of four ERROR-severity rules. What survives is the reason
   per-GRADE attribution is unsound — the ledger carries the obligor's grade,
   never the guarantor's — and that is precisely why the inflow lands on the
   residual "Unassigned" row (``_C08_02_INFLOW_ROW``) rather than on any grade:
@@ -457,13 +457,13 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 
 # Which ``ReportingContext`` inflow component each C 08.01 row's col 0080 takes.
 # The Total row 0010 takes the whole inflow; rows 0020/0030 take its balance-sheet
-# split. Both are needed: row 0010 is decomposed TWICE over the same columns by
-# live ERROR rules — ``boe_b0744`` on the balance-sheet axis (r0020+r0030+r0040+
-# r0050+r0060) and ``boe_b0745`` / EBA ``v0338_m`` on the IRB treatment axis
-# (r0070+r0080+r0170+r0180) — and a Total-row-only inflow breached BOTH by exactly
-# the inflow on cols 0080/0090/0104 (measured on the CRM-substitution portfolio,
-# not inferred). The balance-sheet split is unambiguous: the side is a property of
-# the underlying asset and substitution does not change it.
+# split. Both are needed: row 0010 is decomposed TWICE over the same columns — the
+# balance-sheet axis (r0020+r0030+r0040+r0050+r0060, BoE ``boe_b0744``) and the IRB
+# treatment axis (r0070+r0080+r0170+r0180, EBA ``v0338_m``, live ERROR; BoE
+# ``boe_b0745``, both BoE rules withdrawn in v4.1.1) — and a Total-row-only inflow
+# breached BOTH by exactly the inflow on cols 0080/0090/0104 (measured on the
+# CRM-substitution portfolio). The balance-sheet split is unambiguous: the side is
+# a property of the asset, not of substitution.
 #
 # ROWS 0070/0080 CARRY THE TREATMENT SPLIT, and binding them is only coherent
 # BECAUSE C 08.02 now carries the inflow too. Four live ERROR rules —
@@ -471,8 +471,8 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 # ``boe_b0814_08`` (col 0090), two distinct identities each stated twice in the
 # pack — require ``{OF08.01 r0070} = sum({OF08.02})`` on those columns. So the
 # published set jointly demands that the inflow reach row 0070 AND that the
-# C 08.02 grade rows sum to it: binding row 0070 alone would fix ``boe_b0745`` /
-# ``v0338_m`` and break both identities. See ``_C08_02_INFLOW_ROW``.
+# C 08.02 grade rows sum to it: binding row 0070 alone would fix ``v0338_m`` (and
+# v4.0.0's ``boe_b0745``) and break both identities. See ``_C08_02_INFLOW_ROW``.
 
 # The C 08.02 row the substitution inflow lands on — the residual "Unassigned"
 # grade bucket ``_c08_02_keyed`` already emits for legs with no rating grade.
@@ -787,8 +787,8 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         # 0080 (the substitution INFLOW) lands on the Total row AND on one row of
         # each published decomposition of it — ``boe_b0744`` (balance-sheet axis,
         # rows 0020/0030) and ``boe_b0745`` / ``v0338_m`` (IRB treatment axis, rows
-        # 0070/0080). Both are live ERROR rules and both are stated over the same
-        # columns, so a Total-row-only inflow breaches each by exactly the inflow.
+        # 0070/0080). Both span the same columns (``v0338_m`` live ERROR; the BoE pair
+        # withdrawn in v4.1.1), so a Total-row-only inflow breaks each by the inflow.
         # ``inflow_key`` names which component this row takes; None = a row outside
         # both decompositions, which reports the recorded constant 0.0.
         "0080": (

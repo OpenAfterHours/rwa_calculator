@@ -2,14 +2,12 @@
 Referee worker — one Arelle session on one instance. The only code that touches Arelle.
 
 Pipeline position:
-    runner.run_referee -> (spec JSON on standard input) -> this script, in its
-        own process, in the run's working directory -> Arelle session
-        -> (result JSON at ``RESULT_FILE`` in that directory) -> runner
+    runner.run_referee -> (spec on stdin) -> this script, in its own process
+        -> Arelle session -> (result JSON on stdout) -> runner
 
-Run as a script, by an interpreter that has Arelle and need not have rwa-filer,
-from the directory the result is to be written in::
+Run as a script, by an interpreter that has Arelle and need not have rwa-filer::
 
-    python -I /path/to/rwa_filer/referee/worker.py < SPEC.json
+    python -I /path/to/rwa_filer/referee/worker.py < SPEC.json > RESULT.json
 
 That is why this file imports the standard library only, and reaches Arelle
 through ``importlib.import_module``: it must run where rwa-filer is not
@@ -17,6 +15,9 @@ installed, and it must not make rwa-filer's own environment — or its type
 checker — need Arelle.
 
 Key responsibilities:
+- Name no file itself. The runner opens the spec, the result and the log and
+  hands them over as standard input, output and error, so no path reaches a
+  file-opening call here from the command line or from the spec.
 - Run one Arelle session: load the instance against the taxonomy packages the
   spec lists, validate it (XBRL 2.1, dimensions, the filing-rule plug-in when
   one is named) and evaluate the formula assertions.
@@ -24,6 +25,8 @@ Key responsibilities:
   the log: after formula processing Arelle appends ONE dict
   ``{assertion id: (satisfied, notSatisfied, okMsgs, warningMsgs, errorMsgs)}``
   to ``modelXbrl.errors``. An assertion that was never evaluated counts 0 / 0.
+- Keep the result readable. Anything Arelle or a plug-in prints during the
+  session goes to standard error; standard output carries the result alone.
 - Keep the log small. A large filing produces tens of thousands of evaluation
   messages per run; only the first few per assertion are let through, as
   examples, and they are refused before Arelle builds them.
@@ -35,9 +38,8 @@ The spec (JSON object)
     formulas call), ``repairs`` (names from ``REPAIRS``), ``formula``
     (false to skip the assertions), ``run_ids`` (``|``-joined assertion ids, or
     null for all), ``skip_loading`` (a file pattern, or null), ``xdg`` (Arelle's
-    configuration and cache home), ``max_examples``, and ``chunk`` (the worker's
-    position in the run; for the record, not read here). The spec names no
-    output path: the result always goes to ``RESULT_FILE``.
+    configuration and cache home), ``max_examples``, and ``chunk`` (the
+    worker's position in the run; a record for the reader, not used here).
 
 The result (JSON object)
     ``assertions`` (``{assertion id: [satisfied, unsatisfied]}``), ``examples``
@@ -45,8 +47,9 @@ The result (JSON object)
     message of WARNING level or above, ``[{code, level, text}]``) and
     ``timings``.
 
-Exit status: 0 once the result is written. Anything else — Arelle missing, an
-exception, a kill — leaves no result, and the runner reports the chunk as lost.
+Exit status: 0 once the result is written; 2 for a command-line argument (the
+spec comes on standard input). Anything else — Arelle missing, an exception, a
+kill — leaves no result, and the runner reports the chunk as lost.
 
 References:
 - Arelle (arelle-release 2.47.5): ``arelle.api.Session``, ``RuntimeOptions``,
@@ -56,6 +59,7 @@ References:
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import json
 import logging
@@ -63,18 +67,12 @@ import os
 import re
 import sys
 import time
-from pathlib import Path
-from typing import Any
+from collections.abc import Iterator
+from typing import Any, TextIO
 
 # =============================================================================
 # Constants
 # =============================================================================
-
-#: Where the result is written: a fixed name in the working directory the
-#: runner starts the worker in. The runner runs one worker at a time, removes
-#: any file of this name before each, and renames it to the chunk's own result
-#: afterwards.
-RESULT_FILE = "result.json"
 
 #: Arelle's message code for an assertion's evaluation message is this prefix
 #: followed by the assertion id.
@@ -83,6 +81,9 @@ EVALUATION_PREFIX = "message:"
 ARELLE_LOGGER = "arelle"
 _TIMING = re.compile(r"(loaded|validated) in ([0-9.]+) secs")
 _QUIET_LEVELS = ("DEBUG", "INFO")
+#: The descriptors of standard output and standard error, whatever wraps them.
+_STDOUT_FD = 1
+_STDERR_FD = 2
 #: Marks the replacement match filter, so that it is installed once.
 _REPAIRED = "repaired_match_any"
 
@@ -96,23 +97,15 @@ _Record = tuple[float, str, str, str, list[dict[str, Any]]]
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the session the spec on standard input describes; write ``RESULT_FILE``.
-
-    No path reaches this process from outside it: the spec is read from standard
-    input, and the result is written to a fixed name in the working directory the
-    runner starts it in, through a stream rather than a path-taking write call.
-    That is what clears the two taint flows SonarCloud reported here — the
-    spec's path from the command line (``pythonsecurity:S8707``) and the
-    result's path from the spec's own content (``pythonsecurity:S2083``).
-    """
+    """Run the session the spec on standard input describes; write its result to stdout."""
     arguments = sys.argv[1:] if argv is None else argv
     if arguments:
-        sys.stderr.write("usage: python -I worker.py < SPEC.json\n")
+        sys.stderr.write("usage: python -I worker.py < SPEC.json > RESULT.json\n")
         return 2
     spec = json.load(sys.stdin)
-    result = run_session(spec)
-    with Path(RESULT_FILE).open("w", encoding="utf-8") as handle:
-        json.dump(result, handle)
+    with _result_stream() as out:
+        result = run_session(spec)
+        json.dump(result, out)
     return 0
 
 
@@ -236,6 +229,29 @@ def summarise(records: list[_Record], instance: str, max_examples: int) -> dict[
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+@contextlib.contextmanager
+def _result_stream() -> Iterator[TextIO]:
+    """Standard output for the result alone, for as long as the session runs.
+
+    Arelle and its plug-ins may print. While the session runs, both Python's
+    ``sys.stdout`` and file descriptor 1 itself point at standard error, so a
+    print from Python or a write from a C extension alike lands in the log. The
+    stream yielded here is the original standard output; nothing else writes to
+    it.
+    """
+    sys.stdout.flush()
+    original = os.dup(_STDOUT_FD)
+    os.dup2(_STDERR_FD, _STDOUT_FD)
+    with os.fdopen(original, "w", encoding="utf-8") as stream:
+        try:
+            with contextlib.redirect_stdout(sys.stderr):
+                yield stream
+        finally:
+            sys.stdout.flush()
+            stream.flush()
+            os.dup2(original, _STDOUT_FD)
 
 
 class _ExampleLimiter:

@@ -70,16 +70,22 @@ logger = logging.getLogger(__name__)
 TAXONOMY_NAME: Final = "boe-banking"
 
 METRICS_HEADER: Final = "Metrics"
-EBA_DICTIONARY: Final = "http://www.eba.europa.eu/xbrl/crr/dict"
-BOE_DICTIONARY: Final = "http://www.bankofengland.co.uk/data/xbrl/dict"
+# XBRL names its namespaces, roles and arcroles as http:// strings. They are
+# identifiers, compared as strings and never fetched: https:// would be another
+# name. Hence the line-end marker for python:S5332, held to that by
+# test_identifier_literals.py.
+EBA_DICTIONARY: Final = "http://www.eba.europa.eu/xbrl/crr/dict"  # NOSONAR
+BOE_DICTIONARY: Final = "http://www.bankofengland.co.uk/data/xbrl/dict"  # NOSONAR
 ZERO_WIDTH_NON_JOINER: Final = "\N{ZERO WIDTH NON-JOINER}"
 
 # Basel 3.1-era tables use 4-digit ordinate codes; some older modules 3-digit ones.
 CODE = re.compile(r"^\d{3,4}$")
 TITLE = re.compile(r"^(?P<code>\S+)(?: - (?P<title>.*))?$", re.S)
 VERSION = re.compile(r"\bv(\d+(?:\.\d+)+)")
-KEY_HEADER = re.compile(r'^(?P<label>.*?)\s*"mandatory"\s*\((?P<code>\d{3,4})\)', re.S)
-AXIS_LABEL = re.compile(r"^(?P<label>.*?)\s*\((?P<code>Z\d+|\d{3,4})\)\s*$", re.S)
+# The label groups end at a literal and so carry any whitespace before it; every
+# reader strips them. Ending them on ``\s*`` instead backtracks quadratically.
+KEY_HEADER = re.compile(r'^(?P<label>.*?)"mandatory"\s*\((?P<code>\d{3,4})\)', re.S)
+AXIS_LABEL = re.compile(r"^(?P<label>.*?)\((?P<code>Z\d+|\d{3,4})\)\s*$", re.S)
 DIMENSION_HEADER = re.compile(r"^(?P<qname>\w+_dim:\w+) \(.*\)$", re.S)
 METRIC = re.compile(r"^(?P<qname>\w+_met:\w+) \(.*?\)(?: \[(?P<enumeration>\w+:\w+)\])?$", re.S)
 MEMBER = re.compile(r"^(?P<qname>\w+:[\w.\-]+) \(.*\)$", re.S)

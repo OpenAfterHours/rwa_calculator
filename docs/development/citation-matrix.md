@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-13.
+Last generated: 2026-11-14.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -135,9 +135,9 @@ Last generated: 2026-11-13.
     --8<-- "src/rwa_calc/engine/eu_sovereign.py:140:179"
     ```
 
-??? quote "`_create_rgla_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:290"
+??? quote "`_create_rgla_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:283"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:290:302"
+    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:283:295"
     ```
 
 ??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:118"
@@ -163,9 +163,9 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 116 — Exposures to public sector entities
 
-??? quote "`_create_pse_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:247"
+??? quote "`_create_pse_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:240"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:247:258"
+    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:240:251"
     ```
 
 ??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:119"
@@ -191,9 +191,9 @@ Last generated: 2026-11-13.
     --8<-- "src/rwa_calc/engine/sa/cqs_lift.py:47:82"
     ```
 
-??? quote "`_create_mdb_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:338"
+??? quote "`_create_mdb_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:331"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:338:346"
+    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:331:339"
     ```
 
 ??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:120"
@@ -204,9 +204,9 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 118 — Exposures to international organisations
 
-??? quote "`_create_io_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:362"
+??? quote "`_create_io_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:355"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:362:376"
+    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:355:369"
     ```
 
 ??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:122"
@@ -344,9 +344,9 @@ Last generated: 2026-11-13.
     --8<-- "src/rwa_calc/engine/sa/covered_bond.py:88:106"
     ```
 
-??? quote "`_create_covered_bond_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:561"
+??? quote "`_create_covered_bond_df` — src/rwa_calc/engine/sa/crr_risk_weight_tables.py:554"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:561:568"
+    --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:554:561"
     ```
 
 

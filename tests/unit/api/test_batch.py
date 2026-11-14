@@ -21,28 +21,34 @@ these tests pin:
   pool, asserting the worker pids differ from this process's. Without that
   check the test would pass just as happily if the parallel path had silently
   degraded to serial, which is the one thing it exists to rule out.
+- **The start method** — every worker is SPAWNED, on every platform and
+  interpreter, asserted both on the arguments the pool is built with and on what
+  a real worker reports. Left to the default, a batch hangs on Linux under
+  Python 3.13 (``fork``), and every real-pool test here passed regardless,
+  because nothing ran them there; see ``TestWorkerStartMethod``.
 - **The worker Polars cap** — asserted inside a real worker against an uncapped
   control measured in the same session, with the cap chosen so that the control's
   value cannot satisfy it. Deliberately independent of this process's
-  environment and of the multiprocessing start method; see
-  ``TestWorkerPolarsCap`` for the CI failure that taught us why.
+  environment; see ``TestWorkerPolarsCap`` for the CI failure that taught us why.
 - **Both sides of the run index** — a successful run is written, a failed one
   and an undispatched one are not.
 - **max_workers bounding** — against a monkeypatched ``os.cpu_count`` so the
   assertions pin the intended policy rather than this box's core count.
 
-Four groups spawn real processes: ``TestSerialParallelEquivalence`` (a real
+Five groups spawn real processes: ``TestSerialParallelEquivalence`` (a real
 pipeline, two workers), ``TestHardWorkerExit`` (one pool plus one recovery pool
-per lost scope, hence the ~20s), ``TestWorkerPolarsCap``, and the
-reversed-completion order test. They are deliberately NOT skipped under xdist —
-a skipped test of the parallel path is indistinguishable from a passing one that
-never ran anything, and the whole file is ~50s for that reason. Everything else
-monkeypatches ``_run_scope`` or replaces the executor.
+per lost scope, hence the ~20s), ``TestWorkerStartMethod``,
+``TestWorkerPolarsCap``, and the reversed-completion order test. They are
+deliberately NOT skipped under xdist — a skipped test of the parallel path is
+indistinguishable from a passing one that never ran anything, and the whole
+file is ~50s for that reason. Everything else monkeypatches ``_run_scope`` or
+replaces the executor.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import multiprocessing
 import os
 import pickle
 from concurrent.futures import Future
@@ -654,6 +660,73 @@ class TestHardWorkerExit:
 
 
 # =============================================================================
+# The start method — spawn, on every platform
+# =============================================================================
+
+
+class TestWorkerStartMethod:
+    """Every worker is SPAWNED — chosen here, never left to the platform default.
+
+    **The defect this pins.** ``ProcessPoolExecutor()`` with no ``mp_context``
+    takes ``multiprocessing``'s default start method, and that default is a
+    function of platform AND interpreter: ``spawn`` on Windows and macOS,
+    ``forkserver`` on Linux from Python 3.14, ``fork`` on Linux up to 3.13.
+    Under ``fork`` a worker is a copy of a parent whose Polars runtime is
+    already running, minus that runtime's threads — so its first ``collect()``
+    queues work for a thread pool that does not exist in it, and the batch
+    hangs. The same inheritance is why the worker's Polars cap could not land
+    there: the pool it was meant to size had been sized in the parent.
+    (docs/development/escape-log.md, 2026-11-13.)
+
+    The real-pool tests below this class DO detect that — one hangs and one
+    fails under ``fork`` — and they passed for the life of the feature, because
+    neither CI (Linux, Python 3.14) nor the dev box (Windows) defaults to
+    ``fork``. So the pin is asserted two ways, each covering the other's blind
+    spot:
+
+    - on the ARGUMENTS the pool is built with — red on every platform,
+      including the ones whose default happens to be ``spawn``;
+    - on what a REAL worker reports — red wherever the default is not
+      ``spawn``, and indifferent to how ``_make_executor`` comes to be written.
+    """
+
+    @pytest.mark.parametrize("polars_threads", [None, 1], ids=["uncapped", "capped"])
+    def test_the_pool_is_built_on_an_explicit_spawn_context(
+        self, monkeypatch: pytest.MonkeyPatch, polars_threads: int | None
+    ) -> None:
+        """Both construction branches name ``spawn``; neither takes the default.
+
+        Platform-independent on purpose. Where the default IS ``spawn``, no
+        observation of a running pool can tell "pinned" from "left to the
+        platform" — only the arguments can.
+        """
+        built: list[dict[str, object]] = []
+        monkeypatch.setattr(batch, "ProcessPoolExecutor", lambda **kwargs: built.append(kwargs))
+
+        batch._make_executor(2, polars_threads)
+
+        assert len(built) == 1
+        context = built[0].get("mp_context")
+        assert context is not None, (
+            "no mp_context: the pool would take the platform's default start method"
+        )
+        assert isinstance(context, multiprocessing.context.BaseContext)
+        assert context.get_start_method() == batch.WORKER_START_METHOD == "spawn"
+
+    def test_a_real_worker_runs_as_a_spawned_process(self) -> None:
+        """What the worker itself reports, over a real pool.
+
+        ``ForkProcess`` and ``ForkServerProcess`` are what the two Linux
+        defaults produce, so this goes red on CI the day the pin is lost, by
+        whatever route it is lost.
+        """
+        with batch._make_executor(1, None) as executor:
+            process_class = executor.submit(_batch_probe.worker_process_class).result()
+
+        assert process_class == "SpawnProcess"
+
+
+# =============================================================================
 # The Polars cap inside a real worker
 # =============================================================================
 
@@ -685,8 +758,15 @@ class TestWorkerPolarsCap:
     **So nothing below reads the parent's environment.** The test CALIBRATES
     instead: it measures what an uncapped worker actually reports on this
     platform, picks a cap that value cannot already be, and asserts the capped
-    worker reports the cap. Correct under fork, forkserver and spawn alike, and
-    incapable of passing by inheritance.
+    worker reports the cap. Correct under forkserver and spawn, and incapable of
+    passing by inheritance.
+
+    **Not correct under fork — and this docstring used to say it was.** Nobody
+    had run it there. Under ``fork`` the test FAILS (``assert 1 == 2``), and
+    rightly: a forked worker starts life with its parent's Polars already
+    sized, so no initializer can cap it. That was a defect in the product, not
+    in the test — ``TestWorkerStartMethod`` pins the pool to ``spawn`` on every
+    platform, which is what makes the cap deliverable at all.
     """
 
     def test_the_initializer_caps_the_worker_before_polars_is_imported(self) -> None:
@@ -753,7 +833,7 @@ class TestWorkerPolarsCap:
 
 
 class TestProcessBoundary:
-    """Windows spawn pickles everything that crosses; nothing may hold a frame."""
+    """spawn pickles everything that crosses; nothing may hold a frame."""
 
     def test_the_job_carries_only_plain_values(self, tmp_path: Path) -> None:
         request = _request(

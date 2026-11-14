@@ -111,7 +111,7 @@ sources = [
   # NON-PUBLISHED sources, listed because they influenced the file and a reader
   # is entitled to know a second opinion drew on in-repo material:
   "src/rwa_calc/engine/aggregator/aggregator.py lines 830-960 — the aggregator-exit projection docstring. Read to learn what each sealed ledger carrier MEANS (you cannot choose a carrier without that). It also supplied the null-resolution rule behind operator #3 and the carrier-versus-clause split behind c0700-corporate-0070-0010, both attributed at their sites.",
-  "src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json — the published EBA validation rules v0204_m / v0205_m / v0206_m / v0207_m / v0210_m / v0211_m, used as secondary authority for the C 02.00 row hierarchy.",
+  "packages/rwa-filer/src/rwa_filer/rules/data/crr-eba-v3.0-credit-risk.json — the published EBA validation rules v0204_m / v0205_m / v0206_m / v0207_m / v0210_m / v0211_m, used as secondary authority for the C 02.00 row hierarchy.",
   "tests/expected_outputs/reporting/validation_known_breaks.json — read for the caution_on_plan_doc_definitions note on the C 07.00 col 0200/0220 substitution basis.",
   "src/rwa_calc/reporting/corep/c02.py module docstring — read AFTER the C 02.00 row-shift was derived, to check whether the implementation cited a different published source before it was reported as a defect. It did not. One phrase from it is quoted in test_output_floor_column_is_the_floor_amount, and its absent-tolerant equity rule is cited in the UK 4a xfail.",
 ]

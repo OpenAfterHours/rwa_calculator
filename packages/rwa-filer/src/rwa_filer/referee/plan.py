@@ -79,17 +79,23 @@ if TYPE_CHECKING:
 # Constants
 # =============================================================================
 
-NS_FIND: Final = "http://www.eurofiling.info/xbrl/ext/filing-indicators"
-NS_LINK: Final = "http://www.xbrl.org/2003/linkbase"
+# XBRL names its namespaces, roles and arcroles as http:// strings. They are
+# identifiers, compared as strings and never fetched: https:// would be another
+# name. Hence the line-end marker for python:S5332, held to that by
+# test_identifier_literals.py.
+NS_FIND: Final = "http://www.eurofiling.info/xbrl/ext/filing-indicators"  # NOSONAR
+NS_LINK: Final = "http://www.xbrl.org/2003/linkbase"  # NOSONAR
 NS_XLINK: Final = "http://www.w3.org/1999/xlink"
-NS_GEN: Final = "http://xbrl.org/2008/generic"
-NS_VARIABLE: Final = "http://xbrl.org/2008/variable"
+NS_GEN: Final = "http://xbrl.org/2008/generic"  # NOSONAR
+NS_VARIABLE: Final = "http://xbrl.org/2008/variable"  # NOSONAR
 
 #: The arc that ties a precondition to the assertion it guards.
-ARCROLE_PRECONDITION: Final = "http://xbrl.org/arcrole/2008/variable-set-precondition"
+ARCROLE_PRECONDITION: Final = "http://xbrl.org/arcrole/2008/variable-set-precondition"  # NOSONAR
 
 #: The label role that carries a table's filing-indicator code.
-ROLE_FILING_INDICATOR_CODE: Final = "http://www.eurofiling.info/xbrl/role/filing-indicator-code"
+ROLE_FILING_INDICATOR_CODE: Final = (
+    "http://www.eurofiling.info/xbrl/role/filing-indicator-code"  # NOSONAR
+)
 
 #: ``write_overlay(tables=...)``: import only the filed templates' tables, or all.
 TABLES_INDICATED: Final = "indicated"
@@ -103,13 +109,13 @@ _CONJUNCTION: Final = re.compile(r"\(?\s*\$find:t[\w.]+(\s+and\s+\$find:t[\w.]+)
 _INDICATOR_VARIABLE: Final = re.compile(r"\$find:t([A-Za-z0-9._]+)")
 
 _VAL_LOCATOR: Final = re.compile(r"\.\./val/(?P<file>[^/#]+)#(?P<id>.+)")
-_LINKBASE_REF: Final = re.compile(
-    r'[ \t]*<link:linkbaseRef\b[^>]*xlink:href="([^"]+)"[^>]*/>\r?\n?'
-)
+# A reference and its import are matched as whole elements, with the indentation
+# of their line when they start one, and their attribute read from the match:
+# one quantifier per element, so the scan is linear in the schema's length.
+_LINKBASE_REF: Final = re.compile(r"(?:^[ \t]+)?<link:linkbaseRef\b[^>]*/>\r?\n?", re.M)
+_HREF: Final = re.compile(r'\bxlink:href="([^"]+)"')
 _ASSERTION_REF: Final = re.compile(r"\.\./val/(vr-.+?)(-err-en|-lab-en)?\.xml")
-_TABLE_IMPORT: Final = re.compile(
-    r'[ \t]*<xsd:import\b[^>]*schemaLocation="\.\./tab/([^/"]+)/[^"]*"[^>]*/>\r?\n?'
-)
+_TABLE_IMPORT: Final = re.compile(r"(?:^[ \t]+)?<xsd:import\b[^>]*/>\r?\n?", re.M)
 _TABLE_LOCATION: Final = re.compile(r'schemaLocation="\.\./tab/([^/"]+)/')
 
 _XLINK_HREF: Final = f"{{{NS_XLINK}}}href"
@@ -316,7 +322,10 @@ class TaxonomyModule:
         """The entry point schema, referencing only ``keep`` and the filed tables."""
 
         def keep_ref(match: re.Match[str]) -> str:
-            href = match.group(1)
+            attribute = _HREF.search(match.group(0))
+            if attribute is None:
+                return match.group(0)
+            href = attribute.group(1)
             if href.startswith("../val/aset-") or href.endswith("-pre.xml"):
                 # Assertion sets and the module presentation only pull every
                 # assertion and table back in; evaluation needs neither.
@@ -332,7 +341,10 @@ class TaxonomyModule:
             return match.group(0) if file in keep and reference.group(2) != "-lab-en" else ""
 
         def keep_import(match: re.Match[str]) -> str:
-            code = self.table_codes.get(match.group(1))
+            location = _TABLE_LOCATION.search(match.group(0))
+            if location is None:
+                return match.group(0)
+            code = self.table_codes.get(location.group(1))
             return match.group(0) if code is None or code in indicators else ""
 
         xsd = _LINKBASE_REF.sub(keep_ref, self.xsd)

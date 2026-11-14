@@ -75,7 +75,7 @@ The magnitude of each change lives in the generated tables; the shape of it is h
 - **BCBS CRE Standards:** https://www.bis.org/basel_framework/standard/CRE.htm
 - **Source PDFs:** `docs/assets/ps126app1.pdf` (full rules), `docs/assets/comparison-of-the-final-rules.pdf` (delta summary) — for auditing a suspect pack value, not for routine lookup
 - **BoE regulatory reporting (banking sector):** https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/regulatory-reporting-banking-sector
-- **BoE banking XBRL taxonomy validations v4.0.0:** https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/february/boebankingtaxonomyvalidationsv400.zip — raw at `docs/assets/boe-banking-taxonomy-validations-v4.0.0.zip` (gitignored; `uv run python scripts/download_docs.py`), extract at `src/rwa_calc/reporting/validations/rules/basel31-boe-v4.0.0-credit-risk.json`
+- **BoE banking XBRL taxonomy validations v4.1.1** (27 Aug 2026; supersedes v4.0.0 for PRA001 from 1 Jan 2027): https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-taxonomy-validations-v411.zip — raw at `docs/assets/boe-banking-taxonomy-validations-v4.1.1.zip` (gitignored; `uv run python scripts/download_docs.py`), extract at `packages/rwa-filer/src/rwa_filer/rules/data/basel31-boe-v4.1.1-credit-risk.json`
 
 ## Project Specification & Comparison Files
 

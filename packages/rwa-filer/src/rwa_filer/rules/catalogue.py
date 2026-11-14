@@ -34,7 +34,7 @@ tolerance semantics intact.
 
 References:
 - EBA DPM 3.0(3.0.1) validation rules (CRR framework)
-- BoE banking_reporting v4.0.0 validation rules (PS1/26 / Basel 3.1 framework)
+- BoE banking_reporting v4.1.1 validation rules (PS1/26 / Basel 3.1 framework)
 - rwa_filer.rules.importer — how the extracts are produced from the workbooks
 """
 
@@ -70,7 +70,7 @@ RULES_PACKAGE: Final = "rwa_filer.rules"
 RULES_DIRECTORY: Final = "data"
 EXTRACT_FILES: Final[dict[str, str]] = {
     FRAMEWORK_CRR: "crr-eba-v3.0-credit-risk.json",
-    FRAMEWORK_BASEL_3_1: "basel31-boe-v4.0.0-credit-risk.json",
+    FRAMEWORK_BASEL_3_1: "basel31-boe-v4.1.1-credit-risk.json",
 }
 
 # Severity, as normalised by the extractor (both publishers use the same two).
@@ -97,7 +97,7 @@ SCOPE_ALL: Final = "all"
 SCOPE_LIST: Final = "list"
 
 #: The BoE raw expression marks a rounding-tolerant comparison with an ``i``
-#: prefix (``i=``, ``i>=``, ``i<=``, ``i>``). 654 of the 820 raw expressions use
+#: prefix (``i=``, ``i>=``, ``i<=``, ``i>``). 650 of the 816 raw expressions use
 #: one; the simplified expression drops them, losing the tolerance semantics, so
 #: the arithmetic approach is recovered from the RAW form.
 _BOE_INTERVAL_OPERATOR = re.compile(r"(?<![A-Za-z0-9_])i\s*(?:=|>=|<=|>|<)")
@@ -308,7 +308,7 @@ def build_rule_reference(publisher: str, tables: Iterable[str]) -> str:
     codes = ", ".join(tables)
     if publisher == "EBA":
         return f"EBA DPM 3.0(3.0.1) validation rules; COREP Annex II {codes}"
-    return f"BoE banking_reporting v4.0.0 validation rules; PRA PS1/26 Annex II {codes}"
+    return f"BoE banking_reporting v4.1.1 validation rules; PRA PS1/26 Annex II {codes}"
 
 
 # =============================================================================

@@ -12,7 +12,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
   absent.
 - `rwa_filer.rules` — the published supervisory validation rules as package
   data (EBA DPM 3.0(3.0.1) for CRR: 1,011 rules, 741 enforced; BoE
-  banking_reporting v4.0.0 for Basel 3.1: 820 rules, 808 enforced), normalised
+  banking_reporting v4.1.1 for Basel 3.1: 816 rules, 800 enforced), normalised
   onto one `ValidationRule` shape by `load_rules(framework)`.
 - `rwa_filer.validate` — the rule engine, moved here unchanged from
   `rwa_calc.reporting.validations`. `TemplateIndex` is the one shape a return is
@@ -115,7 +115,9 @@ and released independently of `rwa-calc`; its release tags are prefixed
   (`rwa_filer.referee.differential.compare`). Arelle is optional
   (`rwa-filer[arelle]`, or its own environment named by
   `RWA_FILER_ARELLE_PYTHON`) and runs as a subprocess, in memory-bounded
-  workers over a trimmed entry point. A worker that is killed, or that returns
+  workers over a trimmed entry point. A worker names no file: the runner hands
+  it its spec on standard input and takes its result from standard output,
+  and whatever Arelle prints during the session goes to the worker's log. A worker that is killed, or that returns
   no verdict for a rule, makes the run incomplete, and an incomplete run is
   never reported as agreement. The referee loads Arelle's math-functions
   plug-in and repairs its `matchAny` match filter; both are named in every
@@ -143,12 +145,6 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Changed
 - (Next release changes will go here)
-- The referee's worker process takes its spec on standard input and writes its
-  result to a fixed name (`worker.RESULT_FILE`) in the working directory the
-  runner starts it in. No path reaches it from its command line or from the
-  spec, which clears SonarCloud's `pythonsecurity:S8707` and `S2083` findings on
-  `referee/worker.py`. A hand-run worker is now `python -I worker.py < SPEC.json`.
-  The files a run leaves in its workdir are unchanged.
 - `validate_return` and `rwa-filer validate` / `build` now run the v4.1.1 rule
   books through the new engine. Verdicts change, and are stricter: an
   unreported cell is zero to a rule that says so, where the earlier engine
@@ -160,7 +156,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
   tables use four digits, the MREL and older tables three. A code that differs
   from one of its table's only in leading zeros is taken as that code.
 - The template-level engine (`TemplateIndex`, `check_index`, the EBA and BoE
-  v4.0.0 extracts) is unchanged and remains what `rwa-calc` runs on its own
+  template-level extracts) is unchanged and remains what `rwa-calc` runs on its own
   frames.
 
 ### Fixed

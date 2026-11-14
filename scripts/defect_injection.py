@@ -954,17 +954,7 @@ def main() -> int:
         return 3
 
     if not args.reachability_only:
-        for gate in gates:
-            if gate.baseline_cmd is None:
-                continue
-            print(f"Preparing baseline for {gate.name} ...", flush=True)
-            subprocess.run(
-                resolve_command(
-                    tuple(p.format(baseline=baseline_dir.as_posix()) for p in gate.baseline_cmd)
-                ),
-                cwd=_REPO_ROOT,
-                check=False,
-            )
+        _prepare_gate_baselines(gates, baseline_dir)
 
     results = run_campaign(
         mutants,
@@ -990,6 +980,21 @@ def main() -> int:
     print_scorecard(payload)
     print(f"\nWrote {out.name} in {payload['runtime_seconds']}s")
     return 0
+
+
+def _prepare_gate_baselines(gates: tuple[Gate, ...], baseline_dir: Path) -> None:
+    """Run each gate's ``baseline_cmd`` once on the clean tree, before any mutant."""
+    for gate in gates:
+        if gate.baseline_cmd is None:
+            continue
+        print(f"Preparing baseline for {gate.name} ...", flush=True)
+        subprocess.run(
+            resolve_command(
+                tuple(p.format(baseline=baseline_dir.as_posix()) for p in gate.baseline_cmd)
+            ),
+            cwd=_REPO_ROOT,
+            check=False,
+        )
 
 
 def _canonical_value(value: Any) -> str:

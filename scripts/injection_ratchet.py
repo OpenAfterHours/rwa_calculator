@@ -184,10 +184,7 @@ def load_board(path: Path) -> Board:
             by_verdict[verdict].add(mutant_id)
         else:
             other[mutant_id] = verdict
-        # A scorecard from before the probe result was recorded falls back to the
-        # verdict, which is what an UNREACHABLE verdict meant then.
-        reachable = entry.get("reachable")
-        if reachable is False or (reachable is None and verdict == VERDICT_UNREACHABLE):
+        if _probe_found_unreachable(entry):
             probe_unreachable.add(mutant_id)
         if entry.get("caught_by"):
             caught_by[mutant_id] = entry["caught_by"]
@@ -236,6 +233,18 @@ def load_boards(paths: list[Path]) -> dict[str, Board]:
             )
         boards[board.ladder] = board
     return boards
+
+
+def _probe_found_unreachable(entry: dict[str, Any]) -> bool:
+    """Whether the reachability PROBE found this mutant moved nothing.
+
+    A scorecard from before the probe result was recorded falls back to the
+    verdict, which is what an UNREACHABLE verdict meant then.
+    """
+    reachable = entry.get("reachable")
+    if reachable is None:
+        return entry["verdict"] == VERDICT_UNREACHABLE
+    return reachable is False
 
 
 def _catalogue_ids_by_category(category: str) -> frozenset[str]:

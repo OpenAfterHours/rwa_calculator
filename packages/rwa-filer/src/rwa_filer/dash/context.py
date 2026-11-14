@@ -57,6 +57,7 @@ SECTIONS: Final = (
     Section("overview", "Overview", ""),
     Section("rules", "Rules", "/rules"),
     Section("templates", "Templates", "/templates"),
+    Section("filing", "Build & sign off", "/filing"),
 )
 
 
@@ -70,10 +71,12 @@ class DashContext:
 
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
+        self._flashes: dict[str, str] = {}
         self.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
         self.templates.env.filters["count"] = format_count
         self.templates.env.filters["long_date"] = long_date
         self.templates.env.filters["moment"] = moment
+        self.templates.env.filters["figure"] = figure
         # Jinja types its globals after its own defaults; ours are of other types.
         shared = cast("dict[str, Any]", self.templates.env.globals)
         shared.update(version=__version__, sections=SECTIONS, link=link)
@@ -95,6 +98,15 @@ class DashContext:
             **context,
         }
         return self.templates.TemplateResponse(request, name, values, status_code=status_code)
+
+    def flash(self, return_id: str, message: str) -> None:
+        """Keep a message for the next page drawn for ``return_id`` — a refusal
+        made by a form whose answer is a redirect back to the page it came from."""
+        self._flashes[return_id] = message
+
+    def take_flash(self, return_id: str) -> str | None:
+        """The message kept for ``return_id``, once."""
+        return self._flashes.pop(return_id, None)
 
     def opened(self, request: Request) -> OpenedReturn:
         """The return the address names.
@@ -128,6 +140,15 @@ def long_date(value: date) -> str:
 def moment(value: datetime) -> str:
     """A time as ``14 Nov 2026, 17:05 UTC``."""
     return f"{value.day} {value:%b %Y, %H:%M} UTC"
+
+
+def figure(value: object) -> str:
+    """A cell's value as a person reads it: grouped digits, text as it is, a dash for none."""
+    if value is None:
+        return "—"
+    if isinstance(value, float):
+        return f"{value:,.0f}" if value.is_integer() else f"{value:,}"
+    return str(value)
 
 
 def format_count(value: int | float) -> str:

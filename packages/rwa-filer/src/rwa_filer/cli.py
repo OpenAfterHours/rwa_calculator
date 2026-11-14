@@ -61,7 +61,6 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 import tempfile
@@ -85,10 +84,16 @@ from rwa_filer.rules.catalogue import EXTRACT_FILES, extract_resource, load_rule
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs, resolve_pack, write_pack
 from rwa_filer.validate.report import render_text, to_record
 from rwa_filer.validate.returns import validate_return
-from rwa_filer.workflow import ledger as audit
+from rwa_filer.workflow.acts import (
+    ledger_beside,
+    ledger_for_instance,
+    record_build,
+    record_signoff,
+    verify_filing,
+)
 from rwa_filer.workflow.adjustments import apply_adjustments, read_adjustments
 from rwa_filer.workflow.diff import diff_returns
-from rwa_filer.workflow.signoff import SignOffError, read_signoff, sign_off, verify_package
+from rwa_filer.workflow.signoff import SignOffError
 from rwa_filer.xbrl.writer import InstanceOptions
 
 EXIT_OK = 0
@@ -356,28 +361,13 @@ def _build(args: argparse.Namespace) -> int:
     if applied:
         _out(f"Applied {len(applied)} adjustment(s); each is recorded in the manifest.")
     if args.author:
-        ledger = args.ledger or package.instance_path.with_name(
-            f"{package.instance_path.stem}{audit.LEDGER_SUFFIX}"
-        )
+        ledger = args.ledger or ledger_for_instance(package.instance_path)
         try:
-            if applied:
-                audit.append_entry(
-                    ledger,
-                    audit.EVENT_ADJUSTMENT,
-                    {"adjustments": [item.as_record() for item in applied]},
-                    author=args.author,
-                    at=now,
-                )
-            audit.append_entry(
+            record_build(
                 ledger,
-                audit.EVENT_BUILD,
-                {
-                    "instance": package.instance_path.name,
-                    "sha256": hashlib.sha256(instance.content).hexdigest(),
-                    "facts": instance.facts,
-                    "submittable": package.validation.is_submittable,
-                    "forced": bool(args.force),
-                },
+                package,
+                applied=applied,
+                forced=bool(args.force),
                 author=args.author,
                 at=now,
             )
@@ -453,38 +443,18 @@ def _add_workflow_commands(
     diffing.set_defaults(handler=_diff)
 
 
-def _ledger_beside(manifest: Path) -> Path:
-    """The default ledger of the package ``manifest`` describes."""
-    base = manifest.name.removesuffix(".manifest.json")
-    return manifest.with_name(f"{base}{audit.LEDGER_SUFFIX}")
-
-
 def _signoff(args: argparse.Namespace) -> int:
     """``rwa-filer signoff`` — record an approval and note it in the ledger."""
     manifest: Path = args.manifest
-    ledger = args.ledger or _ledger_beside(manifest)
-    now = datetime.now(UTC)
     try:
-        if ledger.is_file() and (problems := audit.verify_ledger(ledger)):
-            return _fail(f"the audit ledger does not verify: {problems[0]}")
-        entry = None
-        if ledger.is_file():
-            approval_record = {
-                "manifest": manifest.name,
-                "approver": args.approver,
-                "role": args.role,
-            }
-            entry = audit.append_entry(
-                ledger, audit.EVENT_SIGNOFF, approval_record, author=args.approver, at=now
-            )
-        approval = sign_off(
+        approval = record_signoff(
             manifest,
+            ledger=args.ledger or ledger_beside(manifest),
             approver=args.approver,
             role=args.role,
-            at=now,
+            at=datetime.now(UTC),
             statement=args.statement,
             acknowledge_findings=args.acknowledge_findings,
-            ledger_head=entry.hash if entry is not None else None,
         )
     except (SignOffError, ValueError) as exc:
         return _fail(str(exc))
@@ -499,18 +469,7 @@ def _signoff(args: argparse.Namespace) -> int:
 def _verify(args: argparse.Namespace) -> int:
     """``rwa-filer verify`` — the package, its sign-off and its ledger."""
     manifest: Path = args.manifest
-    problems = verify_package(manifest, require_signoff=not args.unsigned)
-    ledger = args.ledger or _ledger_beside(manifest)
-    if args.ledger is not None or ledger.is_file():
-        problems += audit.verify_ledger(ledger)
-        try:
-            approval = read_signoff(manifest)
-        except ValueError:
-            approval = None
-        if approval is not None and approval.ledger_head is not None and not problems:
-            hashes = {entry.hash for entry in audit.read_ledger(ledger)}
-            if approval.ledger_head not in hashes:
-                problems.append("the audit ledger is not the one the sign-off was recorded in")
+    problems = verify_filing(manifest, ledger=args.ledger, require_signoff=not args.unsigned)
     if problems:
         for problem in problems:
             _out(f"FAILED  {problem}")

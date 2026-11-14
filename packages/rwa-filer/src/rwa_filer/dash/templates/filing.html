@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Build &amp; sign off · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set rid = current.return_id %}
+{% set latest = view.latest %}
+{% set written = latest and latest.record.package.written %}
+<div>
+  <div class="small muted">Build &amp; sign off</div>
+  <h1>Build, sign off, verify</h1>
+  <p class="lede">Write the XBRL filing package, record who approved it against the file's checksum, and check that the file you upload is the file that was approved. Each step is the one <span class="mono">rwa-filer build</span>, <span class="mono">signoff</span> and <span class="mono">verify</span> take, and records the same things.</p>
+</div>
+
+{% if error %}
+<div class="callout callout-fail" role="alert" id="filing-error"><div class="body"><div class="title">Not done</div><p>{{ error }}</p></div></div>
+{% endif %}
+
+<ol class="steps" aria-label="Progress">
+  <li class="step done"><span class="num">✓</span><span><strong>Validate</strong><span class="small muted">{{ "submittable" if current.validation.is_submittable else current.validation.blocking | length ~ " blocking" }}</span></span></li>
+  <li class="step{{ ' done' if written else ' current' }}"><span class="num">{{ "✓" if written else "2" }}</span><span><strong>Build</strong><span class="small muted">{% if written %}{{ latest.record.package.instance.content | length | count }} bytes written{% elif latest %}not written{% else %}the .xbrl and its manifest{% endif %}</span></span></li>
+  <li class="step{{ ' done' if latest and latest.signoff else (' current' if written else '') }}"><span class="num">{{ "✓" if latest and latest.signoff else "3" }}</span><span><strong>Sign off</strong><span class="small muted">{{ latest.signoff.approver if latest and latest.signoff else "bound to the file's checksum" }}</span></span></li>
+  <li class="step{{ ' done' if latest and latest.verification == () else (' current' if latest and latest.signoff else '') }}"><span class="num">{{ "✓" if latest and latest.verification == () else "4" }}</span><span><strong>Verify</strong><span class="small muted">{% if latest and latest.verification is not none %}{{ "the files agree" if not latest.verification else latest.verification | length ~ " problem(s)" }}{% else %}before you upload{% endif %}</span></span></li>
+</ol>
+
+<div class="split">
+<div class="wide">
+
+<section class="panel" id="overrides">
+  <div class="panel-head"><h2>Overrides</h2><a class="small" href="/returns/{{ rid }}/templates">Override a cell on the template grid</a></div>
+  {% if view.draft_problem %}
+  <div class="callout callout-fail"><div class="body"><p style="margin: 0">{{ view.draft_problem }}</p></div></div>
+  {% endif %}
+  {% if view.drafts %}
+  <ul class="drafts" id="drafts">
+    {% for item in view.drafts %}
+    {% set a = item.adjustment %}
+    <li class="draft">
+      <div class="draft-top">
+        <a class="mono small" href="{{ link('/returns/' ~ rid ~ '/templates', table=a.table, sheet=a.sheet or '', key=a.open_key or '', row=a.row, col=a.column) }}">{{ a.describe() }}</a>
+        <span class="chip chip-info">{{ item.action | replace("_", " ") }}</span>
+        <span class="mono small">{{ item.before | figure }} → {{ item.after | figure }}</span>
+      </div>
+      <div class="draft-bottom">
+        <span class="small">“{{ a.reason }}”</span>
+        <form method="post" action="/returns/{{ rid }}/adjustments/drop">
+          <input type="hidden" name="table" value="{{ a.table }}"><input type="hidden" name="sheet" value="{{ a.sheet or '' }}"><input type="hidden" name="key" value="{{ a.open_key or '' }}"><input type="hidden" name="row" value="{{ a.row }}"><input type="hidden" name="col" value="{{ a.column }}"><input type="hidden" name="next" value="/returns/{{ rid }}/filing#overrides">
+          <button class="btn btn-small" type="submit">Withdraw</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if view.preview %}
+  {% set p = view.preview %}
+  <div class="callout {{ 'callout-pass' if p.submittable else 'callout-warn' }}" id="preview">
+    <div class="body">
+      <div class="title">With these overrides: {{ "nothing blocks submission" if p.submittable else p.blocking_after ~ " blocking finding" ~ ("s" if p.blocking_after != 1 else "") }}</div>
+      <p>Blocking findings {{ p.blocking_before }} → {{ p.blocking_after }} · rule breaks {{ p.breaks_before }} → {{ p.breaks_after }}{% if p.structure_after %} · {{ p.structure_after }} structure finding{{ "s" if p.structure_after != 1 }}{% endif %}.</p>
+    </div>
+  </div>
+  {% else %}
+  <div class="btn-row"><a class="btn" href="/returns/{{ rid }}/filing?preview=1#overrides">Check the return with these overrides</a></div>
+  {% endif %}
+  {% else %}
+  <p class="small muted" style="margin: 0">No override drafted. A build files the return exactly as it was opened.</p>
+  {% endif %}
+</section>
+
+<section class="panel" id="build">
+  <h2>{{ "Build again" if latest else "Build the filing package" }}</h2>
+  <form method="post" action="/returns/{{ rid }}/build" style="display: flex; flex-direction: column; gap: 14px">
+    <div class="fields">
+      <label class="field" style="flex: 3 1 320px">Write to <span class="hint">a folder on this machine</span>
+        <input type="text" name="directory" value="{{ view.default_directory }}" spellcheck="false" class="mono">
+      </label>
+      <label class="field" style="flex: 2 1 240px">Base name <span class="hint">default: entity_module_date</span>
+        <input type="text" name="name" spellcheck="false" class="mono">
+      </label>
+      <label class="field">Monetary figures stated to
+        <select name="monetary_decimals">
+          {% for decimals in monetary_decimals %}<option value="{{ decimals }}">{{ {-3: "thousands (−3, default)", 0: "units (0)", 2: "pence (2)"}[decimals] }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field">Percentage decimals <span class="hint">at least 4</span>
+        <input type="number" name="percentage_decimals" value="4" min="4" max="10">
+      </label>
+      <label class="field">Prepared by <span class="hint">{{ "required with overrides" if view.drafts else "recorded in the audit ledger" }}</span>
+        <input type="text" name="author" value="{{ view.default_author }}"{% if view.drafts %} required{% endif %}>
+      </label>
+    </div>
+    <label class="check"><input type="checkbox" name="declare_unreported" value="yes"><span>Declare every template the return does not report as not reported</span></label>
+    <label class="check"><input type="checkbox" name="always_zip" value="yes"><span>Write a .zip whatever the size</span></label>
+    <label class="check"><input type="checkbox" name="reproducible" value="yes"><span>Omit the creation time, so the same return always gives the same bytes</span></label>
+    {% if not current.validation.is_submittable %}
+    <div class="callout callout-fail" style="padding: 14px 16px">
+      <div class="body">
+        <div class="title" style="font-size: 15px">As opened, the return has {{ current.validation.blocking | length }} blocking finding{{ "s" if current.validation.blocking | length != 1 }}</div>
+        <p>Nothing is written while a published rule is broken unless you choose to write it anyway; the manifest records that you did. A structure finding stops the file whatever you choose.</p>
+        <label class="check" style="margin-top: 8px"><input type="checkbox" name="force" value="yes"><strong>Write it anyway</strong></label>
+      </div>
+    </div>
+    {% endif %}
+    <div class="btn-row"><button class="btn btn-primary" type="submit">Build package</button></div>
+  </form>
+</section>
+
+{% if latest %}
+{% set package = latest.record.package %}
+<section class="panel" id="package">
+  <div class="panel-head"><h2>{{ "Package written" if written else "Nothing was written" }}</h2><span class="small muted">build {{ latest.index + 1 }} of {{ view.builds }} · {{ latest.record.built_at | moment }}{% if latest.record.author %} · {{ latest.record.author }}{% endif %}</span></div>
+  {% if not written %}
+  <div class="callout callout-fail"><div class="body"><p style="margin: 0">{{ blocked }}</p></div></div>
+  {% else %}
+  {% set instance = package.instance %}
+  <p style="margin: 0">Wrote <span class="mono">{{ package.instance_path.name }}</span>: {{ instance.facts | count }} fact{{ "s" if instance.facts != 1 }} from {{ instance.cells | count }} cell{{ "s" if instance.cells != 1 }}, {{ instance.filing_indicators | length }} template{{ "s" if instance.filing_indicators | length != 1 }} reported, {{ instance.content | length | count }} bytes. {% if package.zip_path %}Upload <span class="mono">{{ package.zip_path.name }}</span>.{% else %}Upload the instance as it is.{% endif %}</p>
+  {% if latest.record.forced and not package.validation.is_submittable %}
+  <div class="callout callout-warn" style="padding: 12px 16px"><div class="body"><p style="margin: 0">Written anyway: the manifest records that validation found {{ package.validation.blocking | length }} blocking finding{{ "s" if package.validation.blocking | length != 1 }}.</p></div></div>
+  {% endif %}
+  {% if latest.record.applied %}<p class="small muted" style="margin: 0">{{ latest.record.applied | length }} override{{ "s" if latest.record.applied | length != 1 }} applied, each recorded in the manifest{% if latest.record.ledger %} and the ledger{% endif %}.</p>{% endif %}
+  <div class="table-wrap">
+    <table class="data">
+      <tbody>
+        <tr><th scope="row">Folder</th><td class="mono" style="word-break: break-all">{{ package.instance_path.parent }}</td></tr>
+        <tr><th scope="row">Instance SHA-256</th><td class="mono" style="word-break: break-all">{{ latest.sha256 }}</td></tr>
+        <tr><th scope="row">Templates filed</th><td>{% for code in instance.filing_indicators %}<span class="chip chip-ne mono" style="margin: 0 4px 4px 0">{{ code }}</span>{% endfor %}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="btn-row">
+    {% for file in latest.files %}<a class="btn" href="/returns/{{ rid }}/builds/{{ latest.index }}/files/{{ file.kind }}" download>{{ file.label }}</a>{% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% if written %}
+<section class="panel" id="signoff">
+  <h2>Sign off</h2>
+  {% if latest.signoff %}
+  {% set approval = latest.signoff %}
+  <p style="margin: 0">Signed off by <strong>{{ approval.approver }}</strong> ({{ approval.role }}) at <span class="mono">{{ approval.at }}</span>{% if not approval.submittable %}, although the validation found blocking findings{% endif %}.</p>
+  {% if approval.statement %}<p class="small muted" style="margin: 0">“{{ approval.statement }}”</p>{% endif %}
+  <div class="small"><span class="muted">Instance SHA-256</span> <span class="mono" style="word-break: break-all">{{ approval.instance_sha256 }}</span></div>
+  <div class="small"><span class="muted">Manifest SHA-256</span> <span class="mono" style="word-break: break-all">{{ approval.manifest_sha256 }}</span></div>
+  {% if approval.ledger_head %}<div class="small"><span class="muted">Ledger head</span> <span class="mono" style="word-break: break-all">{{ approval.ledger_head }}</span></div>{% endif %}
+  {% else %}
+  <p class="small muted" style="margin: 0">The approval is bound to the instance's SHA-256. If the file changes afterwards, it no longer verifies.</p>
+  <form method="post" action="/returns/{{ rid }}/builds/{{ latest.index }}/signoff" style="display: flex; flex-direction: column; gap: 14px">
+    <div class="fields">
+      <label class="field">Approver<input type="text" name="approver" required></label>
+      <label class="field">In what capacity<input type="text" name="role" required placeholder="Head of Regulatory Reporting"></label>
+    </div>
+    <label class="field">Statement <span class="hint">optional, in the approver's own words</span><textarea name="statement" rows="2"></textarea></label>
+    {% if not package.validation.is_submittable %}
+    <label class="check callout callout-fail" style="padding: 12px 14px"><input type="checkbox" name="acknowledge" value="yes"><span><strong>I acknowledge the validation found findings that block submission.</strong> A package that is not submittable is signed only with this acknowledgement.</span></label>
+    {% endif %}
+    <div class="btn-row"><button class="btn btn-primary" type="submit">Record sign-off</button></div>
+  </form>
+  {% endif %}
+</section>
+
+<section class="panel" id="verify">
+  <div class="panel-head"><h2>Verify</h2><a class="btn" href="/returns/{{ rid }}/filing?verify=1#verify">Verify the files on disk</a></div>
+  {% if latest.verification is none %}
+  <p class="small muted" style="margin: 0">Checks that the instance and zip are the files the manifest describes, that the sign-off was given for exactly them, and that the audit ledger is intact. Verify again just before you upload if the folder has been out of your hands.</p>
+  {% elif not latest.verification %}
+  <div class="callout callout-pass" id="verified"><div class="body"><div class="title">The files, the sign-off and the ledger agree</div></div></div>
+  {% else %}
+  <div class="callout callout-fail" id="verify-problems"><div class="body"><div class="title">The package does not verify</div>
+    <ul style="margin: 6px 0 0; padding-left: 18px">{% for problem in latest.verification %}<li>{{ problem }}</li>{% endfor %}</ul></div></div>
+  {% endif %}
+</section>
+{% endif %}
+{% endif %}
+</div>
+
+<aside class="narrow">
+  <section class="panel" id="ledger">
+    <h2>Audit ledger</h2>
+    <p class="small muted" style="margin: 0">Append-only JSON lines beside the files. Each entry carries the hash of the one before it, so an edit anywhere breaks the chain.</p>
+    {% if latest and latest.ledger_problems %}
+    <div class="callout callout-fail"><div class="body"><div class="title">The ledger does not verify</div><p>{{ latest.ledger_problems[0] }}</p></div></div>
+    {% elif latest and latest.ledger %}
+    <ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+      {% for entry in latest.ledger %}
+      <li class="stat">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline"><span class="mono small muted">#{{ entry.sequence }}</span><strong>{{ entry.event }}</strong><span class="small">{{ entry.author }}</span><span class="small muted" style="margin-left: auto">{{ entry.at }}</span></div>
+        <div class="small">
+          {% if entry.event == "build" %}{{ entry.payload.facts | count }} fact{{ "s" if entry.payload.facts != 1 }} · submittable: {{ "yes" if entry.payload.submittable else "no" }}{% if entry.payload.forced %} · written anyway{% endif %}
+          {% elif entry.event == "adjustment" %}{{ entry.payload.adjustments | length }} override{{ "s" if entry.payload.adjustments | length != 1 }}
+          {% elif entry.event == "signoff" %}{{ entry.payload.role }}{% endif %}
+        </div>
+        <div class="mono small muted" style="word-break: break-all">hash {{ entry.hash[:12] }}… · previous {{ entry.previous[:12] }}…</div>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="small muted" style="margin: 0">Nothing recorded yet. A build with a preparer's name starts the ledger.</p>
+    {% endif %}
+  </section>
+</aside>
+</div>
+{% endblock %}
+{% block command %}<div>Same on the command line: <span class="mono" style="color: var(--fg)">rwa-filer build {{ current.name }} --out filing/ --author NAME</span>, then <span class="mono" style="color: var(--fg)">rwa-filer signoff</span> and <span class="mono" style="color: var(--fg)">rwa-filer verify</span> on the manifest.</div>{% endblock %}

@@ -131,6 +131,7 @@ class ReturnPages:
         query = request.query_params
         grid = template_grid(
             opened,
+            drafts=self.context.workspace.adjustments(opened.return_id),
             table=query.get("table", ""),
             sheet=query.get("sheet", ""),
             key=query.get("key", ""),
@@ -139,7 +140,12 @@ class ReturnPages:
             focus=query.get("focus", ""),
         )
         return self.context.render(
-            request, "templates.html", current=opened, section="templates", grid=grid
+            request,
+            "templates.html",
+            current=opened,
+            section="templates",
+            grid=grid,
+            flash=self.context.take_flash(opened.return_id),
         )
 
     async def theme(self, request: Request) -> Response:

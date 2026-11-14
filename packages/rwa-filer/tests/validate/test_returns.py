@@ -323,7 +323,8 @@ def test_a_template_the_reported_ones_are_checked_against_is_a_warning(
         SEVERITY_WARNING,
         "T03.00.01",
     )
-    assert "tst_0007" in finding.message and "T02.00.01" in finding.message
+    assert "tst_0007" in finding.message
+    assert "T02.00.01" in finding.message
     assert validation.is_submittable
 
 
@@ -358,7 +359,8 @@ def test_a_rule_that_reads_no_reported_template_names_no_missing_one(
     validation = validate_return(build_return(only(T01)), pack, rulebook=book(FOOTING, T02_TO_T03))
 
     # Assert
-    assert validation.report is not None and validation.report.templates_missing == ()
+    assert validation.report is not None
+    assert validation.report.templates_missing == ()
     assert validation.findings == ()
 
 
@@ -377,7 +379,8 @@ def test_a_template_the_return_declares_not_filed_is_not_reported_as_missing(
     validation = validate_return(ret, pack, rulebook=book(RWEA_CAP, T02_TO_T03))
 
     # Assert
-    assert validation.report is not None and validation.report.templates_missing == ()
+    assert validation.report is not None
+    assert validation.report.templates_missing == ()
     assert FINDING_LINKED_TEMPLATE_MISSING not in {finding.code for finding in validation.rules}
 
 

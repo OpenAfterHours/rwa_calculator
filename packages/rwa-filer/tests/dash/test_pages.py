@@ -162,7 +162,8 @@ def test_the_overview_names_each_linked_template_not_in_the_return(
 ) -> None:
     # Arrange
     report = broken.validation.report
-    assert report is not None and report.templates_missing, "the fixture must leave one out"
+    assert report is not None
+    assert report.templates_missing, "the fixture must leave one out"
 
     # Act
     page = client.get(f"/returns/{broken.return_id}").text

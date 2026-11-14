@@ -37,7 +37,8 @@ def test_the_overview_lists_the_templates_the_reported_ones_are_checked_against(
     """OF 07.00 alone: the rules tying it to other templates did not run."""
     # Arrange
     report = broken.validation.report
-    assert report is not None and report.templates_missing, "the fixture must leave one out"
+    assert report is not None
+    assert report.templates_missing, "the fixture must leave one out"
 
     # Act
     missing = overview(broken).missing

@@ -29,6 +29,10 @@ Commands:
         Check that a package on disk is the one that was built and signed off.
     rwa-filer diff PREVIOUS CURRENT
         What changed between two versions of a return, cell by cell.
+    rwa-filer compare BASELINE CANDIDATE [--tolerance AMOUNT]
+        A return beside the one another system (or an earlier filing) produced:
+        every cell categorised, and the material differences grouped into
+        findings, each saying which return the Bank's rules point at.
     rwa-filer referee INSTANCE --taxonomy-package ZIP [--arelle-python PYTHON]
         A second opinion on a written instance: run the Arelle XBRL processor
         on it against the publisher's taxonomy package, and set its verdict on
@@ -57,7 +61,8 @@ Commands:
 
 Exit codes:
     0  success — for ``validate`` and ``build``, nothing blocks submission;
-       for ``referee``, Arelle accepts the instance and the engines agree
+       for ``referee``, Arelle accepts the instance and the engines agree;
+       for ``diff``, the returns are identical; for ``compare``, equivalent
     1  the command ran and the answer is "no" (a blocking finding, a stale
        extract, a missing file, a file that is not what the command reads, an
        output path in the way), or it needs an extra that is not installed
@@ -99,7 +104,10 @@ from rwa_filer.workflow.acts import (
     verify_filing,
 )
 from rwa_filer.workflow.adjustments import apply_adjustments, read_adjustments
+from rwa_filer.workflow.compare import compare_returns
+from rwa_filer.workflow.compare import render_text as render_comparison
 from rwa_filer.workflow.diff import diff_returns
+from rwa_filer.workflow.explain import Names
 from rwa_filer.workflow.signoff import SignOffError
 from rwa_filer.xbrl.writer import InstanceOptions
 
@@ -111,6 +119,8 @@ DASH_PORT = 8765
 
 #: Changed cells listed by ``diff`` in text form; the JSON form lists them all.
 _DIFF_ROWS_SHOWN = 40
+#: The help of every command's ``--format`` option.
+_FORMAT_HELP = "how to print the result"
 
 _SOURCE_DESCRIPTION = (
     "{verb} FILE is a long-format fact table (.parquet or .csv), a workbook in the "
@@ -182,9 +192,7 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     )
     validate.add_argument("file", type=Path, metavar="FILE", help="the return to validate")
     _add_header_arguments(validate)
-    validate.add_argument(
-        "--format", choices=["text", "json"], default="text", help="how to print the result"
-    )
+    validate.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     validate.add_argument(
         "--report", type=Path, metavar="FILE", help="also write the full JSON report here"
     )
@@ -404,7 +412,7 @@ def _build(args: argparse.Namespace) -> int:
 def _add_workflow_commands(
     commands: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
-    """Register ``rwa-filer signoff``, ``verify`` and ``diff``."""
+    """Register ``rwa-filer signoff``, ``verify``, ``diff`` and ``compare``."""
     signing = commands.add_parser(
         "signoff",
         help="record an approval of a built package, bound to the file's checksum",
@@ -456,10 +464,41 @@ def _add_workflow_commands(
     diffing.add_argument("previous", type=Path, metavar="PREVIOUS", help="the earlier version")
     diffing.add_argument("current", type=Path, metavar="CURRENT", help="the later version")
     _add_header_arguments(diffing)
-    diffing.add_argument(
-        "--format", choices=["text", "json"], default="text", help="how to print the result"
-    )
+    diffing.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     diffing.set_defaults(handler=_diff)
+
+    comparing = commands.add_parser(
+        "compare",
+        help="a return beside the one another system produced, and why they differ",
+        description=(
+            "Compare a return with a baseline: the filing already made, or the return your "
+            "current system produces for the same entity and date. Every cell is put in one "
+            "category - the same, within the rounding the files state, a zero against a blank, "
+            "in a template only one reports, or material - and the material differences are "
+            "grouped into findings, each saying which return the Bank's own rules point at. "
+            "Each file may be any file `validate` reads; the header options apply to a fact "
+            "table. Exit 0 only when the two are equivalent."
+        ),
+    )
+    comparing.add_argument(
+        "baseline", type=Path, metavar="BASELINE", help="the return already trusted"
+    )
+    comparing.add_argument(
+        "candidate", type=Path, metavar="CANDIDATE", help="the return to check against it"
+    )
+    _add_header_arguments(comparing)
+    comparing.add_argument(
+        "--tolerance",
+        type=float,
+        default=0.0,
+        metavar="AMOUNT",
+        help=(
+            "count figures this close as the same, on top of the rounding the files state "
+            "(for sources that state none, e.g. a fact table rounded to thousands)"
+        ),
+    )
+    comparing.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
+    comparing.set_defaults(handler=_compare)
 
 
 def _signoff(args: argparse.Namespace) -> int:
@@ -526,6 +565,29 @@ def _diff(args: argparse.Namespace) -> int:
     if difference.changes.height > _DIFF_ROWS_SHOWN:
         _out(f"  ... and {difference.changes.height - _DIFF_ROWS_SHOWN} more (use --format json)")
     return EXIT_OK if difference.is_identical else EXIT_FAILED
+
+
+def _compare(args: argparse.Namespace) -> int:
+    """``rwa-filer compare`` — a return beside a baseline, and why they differ."""
+    try:
+        baseline = _load(argparse.Namespace(**{**vars(args), "file": args.baseline}))
+        candidate = _load(argparse.Namespace(**{**vars(args), "file": args.candidate}))
+        names = _names(args.baseline, args.candidate)
+        comparison = compare_returns(baseline, candidate, names=names, tolerance=args.tolerance)
+    except (ValueError, PackNotFoundError) as exc:
+        return _fail(str(exc))
+    if args.format == "json":
+        _out(json.dumps(comparison.as_record(), indent=2))
+    else:
+        _out(render_comparison(comparison))
+    return EXIT_OK if comparison.is_equivalent else EXIT_FAILED
+
+
+def _names(baseline: Path, candidate: Path) -> Names:
+    """The two files' names, or their paths where the names alone are the same."""
+    if baseline.name != candidate.name:
+        return Names(baseline.name, candidate.name)
+    return Names(str(baseline), str(candidate))
 
 
 # =============================================================================

@@ -5,8 +5,8 @@
 {% set rid = current.return_id %}
 <div>
   <div class="small muted">Compare</div>
-  <h1>What changed between two versions</h1>
-  <p class="lede">Cell by cell, and rule by rule. Either side may be any file the dashboard opens, so a resubmission can be checked against the instance already filed.</p>
+  <h1>Compare two returns</h1>
+  <p class="lede">Why they differ, then cell by cell and rule by rule. Either side may be any file the dashboard opens: a resubmission against the instance already filed, or this return against the one your current system produces for the same date. The earlier one is the baseline; each finding says which return the Bank's own rules point at.</p>
 </div>
 
 {% if error %}
@@ -55,6 +55,39 @@
 </div>
 {% endif %}
 
+{% set cmp = view.comparison %}
+<section class="panel" id="findings">
+  <div class="panel-head">
+    <h2>{% if cmp.is_equivalent %}Equivalent{% else %}{{ view.findings | length }} finding{{ "s" if view.findings | length != 1 }} to explain{% endif %}</h2>
+    <span class="small muted">{{ cmp.cells.height | count }} cells compared{% if not cmp.rules_compared %} · no rule book is packaged for the module, so rules were not compared{% endif %}</span>
+  </div>
+  {% if cmp.is_equivalent %}
+  <p class="small muted" style="margin: 0">The same header and templates, nothing unplaced, and no difference beyond the rounding the two files state.</p>
+  {% endif %}
+  <div class="legend" id="categories">
+    {% for key, label, cells in view.categories %}
+    <a href="{{ link(base, against=against, swap='1' if swap else '', category='' if view.category == key else key) }}"{% if view.category == key %} aria-current="true"{% endif %}><span class="chip {{ 'chip-fail' if key == 'material' else 'chip-ne' }}">{{ cells | count }}</span> {{ label }}</a>
+    {% endfor %}
+  </div>
+  {% for item in view.findings %}
+  <div class="rule-item finding" id="finding-{{ item.number }}">
+    <span class="top"><span class="mono small muted">{{ item.number }}</span><span class="chip {{ item.chip }}">Points at {{ item.points_at }}</span>{% if item.cells %}<a class="evals" href="{{ link(base, against=against, swap='1' if swap else '', finding=item.number) }}">{{ item.cells | count }} cell{{ "s" if item.cells != 1 }}</a>{% endif %}</span>
+    <span class="label" style="color: var(--strong); font-weight: 600">{{ item.title }}</span>
+    <span class="label small muted">{{ item.detail }}</span>
+    {% if item.rules %}
+    <span class="cells" style="padding: 8px 0 0; border: 0">{% for rule in item.rules[:6] %}<a href="{{ link('/returns/' ~ (view.earlier.return_id if rule.earlier == 'breaks' else view.later.return_id) ~ '/rules', rule=rule.rule_id) }}" title="{{ rule.label }}">{{ rule.rule_id }} · {{ rule.earlier }} → {{ rule.later }}</a>{% endfor %}{% if item.rules | length > 6 %}<span class="small muted">and {{ item.rules | length - 6 }} more</span>{% endif %}</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if cmp.indicators or cmp.baseline_unplaced or cmp.candidate_unplaced or cmp.shared_breaks %}
+  <div class="reasons" id="also">
+    {% for code, pair in cmp.indicators.items() %}<div class="reason small"><strong>{{ code }}</strong> is {{ {True: "reported", False: "declared not reported", None: "not mentioned"}[pair[0]] }} in {{ cmp.names.baseline }} and {{ {True: "reported", False: "declared not reported", None: "not mentioned"}[pair[1]] }} in {{ cmp.names.candidate }}.</div>{% endfor %}
+    {% for side_name, unplaced in [(cmp.names.baseline, cmp.baseline_unplaced), (cmp.names.candidate, cmp.candidate_unplaced)] %}{% for found in unplaced %}<div class="reason small"><strong>{{ found.code }} in {{ side_name }}</strong> — {{ found.message }}</div>{% endfor %}{% endfor %}
+    {% if cmp.shared_breaks %}<div class="reason small"><strong>Broken in both</strong> — {{ cmp.shared_breaks | join(", ") }}: not a difference, but neither return satisfies {{ "it" if cmp.shared_breaks | length == 1 else "them" }}.</div>{% endif %}
+  </div>
+  {% endif %}
+</section>
+
 {% if view.header %}
 <section class="panel"><h2>Header</h2>
   <table class="data"><tbody>{% for name, pair in view.header.items() %}<tr><th scope="row">{{ name }}</th><td class="mono">{{ pair[0] or "—" }} → {{ pair[1] or "—" }}</td></tr>{% endfor %}</tbody></table>
@@ -88,22 +121,28 @@
   </section>
   <section class="wide panel" aria-label="Changed cells" style="flex: 3 1 560px">
     <div class="panel-head">
-      <h2>{{ "Cells in " ~ view.table if view.table else "Cells that differ" }}</h2>
+      <h2>{% if view.finding %}Cells of finding {{ view.finding }}{% elif view.table %}Cells in {{ view.table }}{% else %}Cells that differ{% endif %}</h2>
       <nav class="seg" aria-label="Kind of change">
         {% for kind, label in [("", "All"), ("changed", "Changed"), ("added", "Added"), ("removed", "Removed")] %}
-        <a href="{{ link(base, against=against, swap='1' if swap else '', kind=kind, table=view.table) }}"{% if view.kind == kind %} aria-current="true"{% endif %}>{{ label }}</a>
+        <a href="{{ link(base, against=against, swap='1' if swap else '', kind=kind, category=view.category, finding=view.finding or '', table=view.table) }}"{% if view.kind == kind %} aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+      <nav class="seg" aria-label="Category">
+        {% for key, label in [("", "Every category"), ("material", "Material"), ("rounding", "Rounding"), ("zero_or_blank", "Zero or blank"), ("scope", "Scope")] %}
+        <a href="{{ link(base, against=against, swap='1' if swap else '', kind=view.kind, category=key, table=view.table) }}"{% if view.category == key and not view.finding %} aria-current="true"{% endif %}>{{ label }}</a>
         {% endfor %}
       </nav>
     </div>
     <div class="table-wrap">
-      <table class="data" id="changes" style="min-width: 620px">
-        <thead><tr><th scope="col">Cell</th><th scope="col">Change</th><th scope="col" class="num">Before</th><th scope="col" class="num">After</th><th scope="col" class="num">Difference</th></tr></thead>
+      <table class="data" id="changes" style="min-width: 680px">
+        <thead><tr><th scope="col">Cell</th><th scope="col">Change</th><th scope="col">Category</th><th scope="col" class="num">Before</th><th scope="col" class="num">After</th><th scope="col" class="num">Difference</th></tr></thead>
         <tbody>
         {% for cell in view.cells %}
         {% set owner = view.earlier if cell.change == "removed" else view.later %}
         <tr>
           <td class="code"><a href="{{ link('/returns/' ~ owner.return_id ~ '/templates', table=cell.table, sheet=cell.sheet or '', key=cell.open_key or '', row=cell.row, col=cell.column) }}">{{ cell.address }}</a></td>
           <td><span class="chip {{ {'changed': 'chip-accent', 'added': 'chip-info', 'removed': 'chip-ne'}[cell.change] }}">{{ cell.change }}</span></td>
+          <td class="small category">{{ cell.category_label }}{% if cell.finding %} · <a href="#finding-{{ cell.finding }}" title="Finding {{ cell.finding }}">#{{ cell.finding }}</a>{% endif %}</td>
           <td class="num mono muted">{{ cell.before or "—" }}</td>
           <td class="num mono" style="color: var(--strong)">{{ cell.after or "—" }}</td>
           <td class="num mono">{{ cell.delta }}</td>
@@ -122,4 +161,4 @@
 {% endif %}
 {% endif %}
 {% endblock %}
-{% block command %}<div>Same on the command line: <span class="mono" style="color: var(--fg)">rwa-filer diff EARLIER LATER</span></div>{% endblock %}
+{% block command %}<div>Same on the command line: <span class="mono" style="color: var(--fg)">rwa-filer compare EARLIER LATER</span> (why they differ) and <span class="mono" style="color: var(--fg)">rwa-filer diff EARLIER LATER</span> (every changed cell)</div>{% endblock %}

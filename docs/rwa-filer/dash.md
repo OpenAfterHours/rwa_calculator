@@ -96,13 +96,21 @@ and the rules that read it; pick a rule there to show only that rule's cells.
 A build from the dashboard is the build the command makes: the same return,
 overrides and options give byte-identical files.
 
-**Compare.** This return beside another version of it — one already opened, or
-a file opened from the page, such as the instance already filed. Every cell that
-changed, was added or was removed, by table and filterable by kind, with the
-difference in each figure; any header field that differs; and what the change did
-to the verdict: the broken rules the later version fixed, the ones it newly
-breaks, and the blocking findings before and after. Swap the two to read the
-change the other way. The counts are `rwa-filer diff`'s own.
+**Compare.** This return beside another one: a version already opened, or a
+file opened from the page, such as the instance already filed or the return your
+current system produces for the same date. The earlier one is the baseline.
+First, why they differ, as `rwa-filer compare` says it. Every cell is counted
+by category (the same, within the files' rounding, a zero against a blank, a
+template only one side files, material), and the material differences are
+grouped into findings. Each finding says which return the Bank's rules point
+at, with each rule's standing in both, and links to its cells. Then every cell
+that changed, was added or was removed, by table, filterable by kind, by
+category and by finding, with the difference in each figure. After that come
+any header field that differs, and what the change did to the verdict: the
+broken rules the later version fixed, the ones it newly breaks, and the
+blocking findings before and after. Swap the two to read the change the other
+way. The counts are `rwa-filer diff`'s own. A pair is compared once per
+session, so filtering does not re-run the rules.
 
 **Referee (Arelle).** The second opinion `rwa-filer referee` gives: the Arelle
 XBRL processor checks a written instance against the Bank's taxonomy package,

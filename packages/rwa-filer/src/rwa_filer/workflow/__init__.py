@@ -5,6 +5,8 @@ Pipeline position:
     CanonicalReturn  ->  adjustments.apply_adjustments  ->  filing.build_filing
         ->  ledger (what was done, by whom)  ->  signoff (who approved which file)
     two returns      ->  diff.diff_returns   (what changed since the last filing)
+    two returns      ->  compare.compare_returns  (why they differ; explain.py groups
+                         the differences into findings)
 
 A filing is rarely the unedited output of a system. Someone corrects a cell,
 someone approves the result, and after a resubmission someone has to say what
@@ -18,6 +20,10 @@ Module map:
 - ``signoff``     — an approval bound to the checksum of the file approved, and
   the check that a package on disk is still the one that was signed
 - ``diff``        — two versions of a return, cell by cell
+- ``compare``     — a return beside a baseline: every cell categorised, the
+  material differences grouped into findings, and the verdict "equivalent"
+- ``explain``     — how differences become findings, and which return the
+  Bank's own rules point at for each
 - ``acts``        — a build, a sign-off and a verification as one call each:
   what the ledger records for each, shared by the command line and the dashboard
 

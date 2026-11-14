@@ -55,7 +55,7 @@ project, type `uv run rwa-filer`.
 | Structure checks: every fact sits in a cell the taxonomy accepts | Available |
 | File readers (Parquet, CSV, Excel, XBRL) and `rwa-filer validate` | Available |
 | XBRL submission file: `rwa-filer build` writes the instance, a zip where required, and a manifest | Available |
-| Preparer workflow: cell adjustments with reasons, an audit ledger, sign-off, and a diff between two versions | Available |
+| Preparer workflow: cell adjustments with reasons, an audit ledger, sign-off, a diff between two versions, and a comparison with another system's return that says why they differ | Available |
 | Arelle referee: `rwa-filer referee` runs an independent XBRL processor on a written file and compares its verdict on every rule with this package's own | Available (needs Arelle and the Bank's taxonomy package) |
 | Local web dashboard: `rwa-filer dash` — the verdict, the rules and the template grid in a browser ([guide](dash.md)) | Available |
 
@@ -357,6 +357,63 @@ added, removed and changed, with the figures. Each side may be any file
 from it. The exit code is `0` when the two are identical and `1` otherwise.
 `--format json` gives every change.
 
+### Is this return the same as the one we file today?
+
+```bash
+uvx rwa-filer@latest compare current-system.xbrl rwa-filer.xbrl
+```
+
+`compare` is for proving a new way of producing a return against the old one,
+during a parallel run, or a resubmission against the filing it replaces. The
+first file is the **baseline**, the return already trusted. The second is the
+**candidate**. Each may be any file `validate` reads, so the current system's
+XBRL instance can be compared with rwa-filer's, or with a fact table.
+
+`diff` answers "which cells differ". On two systems' returns that is usually
+thousands of cells: one rounds to thousands, one files explicit zeros, one
+does not file a template the other does. `compare` answers "what does a
+reviewer have to explain". Every cell either return reports goes into one
+category:
+
+| Category | Meaning |
+|---|---|
+| the same | the same figure or text |
+| rounding | within the accuracy both files state (`decimals`), plus `--tolerance` |
+| zero or blank | a zero in one return, nothing in the other |
+| scope | a template only one of the two reports |
+| material | a difference to explain |
+
+Then the material differences are grouped into **findings**, and each finding
+says which side the Bank's own rules point at. Both returns are evaluated
+against the packaged rule book, check by check. A check that holds in one file
+and breaks in the other at the same place points at the file it breaks in.
+
+| Finding | What it means | Points at |
+|---|---|---|
+| Differences that move together | Every rule linking the cells holds in both files, so neither is put together wrongly. The figures were calculated differently. Where a figure sits in another row (a 75% risk-weight row in one, 50% in the other), the move is named, and where the rows are rates the change it implies in the column applying them is checked. | the inputs |
+| A cell that does not equal what a rule says it must | A total and its components disagree in one file only. The difference at the total is split into what the components explain and what is in the total alone, which is typical of an adjustment booked to a total. | that file |
+| A column only one return reports | Points at the return that breaks a rule because of it, or at neither when no rule depends on it. | the file breaking a rule, or neither |
+| Zeros where the Bank expects nothing | A zero is a reported figure, and some cells must not be reported on some sheets. | the file filing them |
+| Rules that break in one file only | A one-sided break no other finding cites. Never dropped. | that file |
+
+Every material cell is in exactly one finding. A fact the reader could not
+place in the module, such as a member from an older template, is listed beside
+the comparison, never dropped: the regulator's checks would not see it either.
+Rules that break in both files are listed too: not a difference, but neither
+return satisfies them.
+
+The exit code is `0` only when the two are equivalent: the same header and
+templates, nothing unplaced, no material difference, and no rule that breaks
+in one file only. `--format json` gives the whole comparison, every finding and
+every cell that is not the same. A fact table states no accuracy, so its
+figures are compared exactly. `--tolerance 500` treats figures within 500 of
+each other as the same.
+
+!!! note "A finding says where to look, not who is right"
+    Two returns that agree on every rule can still both be wrong. The
+    comparison shows where they part and what the Bank's rules say about each
+    side. Whether the figures are right rests on how they were calculated.
+
 ### Reading an XBRL file
 
 `rwa-filer validate` accepts an `.xbrl` file, or a `.zip` holding one, written
@@ -570,6 +627,9 @@ and the register is empty.
 ```bash
 # The dashboard in a browser, with a return opened in it (see the dashboard guide)
 uvx rwa-filer@latest dash return.xbrl
+
+# A return beside the one your current system produces, and why they differ
+uvx rwa-filer@latest compare current-system.xbrl rwa-filer.xbrl
 
 # The packaged Bank of England rule books: modules, rules, rules enforced
 uvx rwa-filer@latest rulebook list

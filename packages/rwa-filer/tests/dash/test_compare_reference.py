@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from compare_builders import corporate_csv
 from dash_builders import HEADER, HEADER_FORM
 from rwa_filer.boe.catalogue import rulebook_for_module
 from rwa_filer.boe.engine import STATUS_FAIL
@@ -122,6 +123,101 @@ def test_without_another_version_the_page_offers_to_open_one(
 
     # Assert
     assert "Open and compare" in page and "No other return is open" in page
+
+
+# ---------------------------------------------------------------------------
+# Compare — why two returns differ
+# ---------------------------------------------------------------------------
+
+
+def _pair(
+    workspace: Workspace, tmp_path: Path, **later: object
+) -> tuple[OpenedReturn, OpenedReturn]:
+    """The old system's corporates return (50%, ECAI columns filled) and a later one."""
+    (tmp_path / "old-system.csv").write_text(
+        corporate_csv(risk_weight_row="0200", ecai_columns=True)
+    )
+    (tmp_path / "rwa-filer.csv").write_text(corporate_csv(**later))
+    return (
+        workspace.open(tmp_path / "old-system.csv", HEADER),
+        workspace.open(tmp_path / "rwa-filer.csv", HEADER),
+    )
+
+
+def test_the_page_says_why_the_two_differ_and_what_each_finding_points_at(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    # Arrange — 75% in rwa-filer, and the ECAI columns left empty.
+    earlier, later = _pair(workspace, tmp_path, risk_weight_row="0220")
+
+    # Act
+    page = client.get(f"/returns/{later.return_id}/compare?against={earlier.return_id}").text
+    section = page[page.index('id="findings"') : page.index('id="rule-changes"')]
+
+    # Assert
+    assert "2 findings to explain" in section
+    assert "Points at the inputs" in section
+    assert (
+        "Corporates row 0220 (75%) by rwa-filer.csv and row 0200 (50%) by old-system.csv" in section
+    )
+    assert "Points at rwa-filer.csv" in section
+    assert "boe_b0703 · holds → breaks" in section
+
+
+def test_the_category_filter_lists_only_that_category(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    # Arrange
+    earlier, later = _pair(workspace, tmp_path, risk_weight_row="0220")
+    base = f"/returns/{later.return_id}/compare?against={earlier.return_id}"
+
+    # Act
+    page = client.get(f"{base}&category=material").text
+    table = page[page.index('id="changes"') :]
+
+    # Assert
+    rows = re.findall(r'<td class="small category">([^<·]+)', table)
+    assert rows, "the material filter must list the material cells"
+    assert {row.strip() for row in rows} == {"Material"}
+
+
+def test_the_finding_filter_lists_that_findings_cells(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    # Arrange
+    earlier, later = _pair(workspace, tmp_path, risk_weight_row="0220")
+    comparison = workspace.comparison(earlier, later)
+    expected = comparison.by_finding(2).height
+
+    # Act
+    page = client.get(
+        f"/returns/{later.return_id}/compare?against={earlier.return_id}&finding=2"
+    ).text
+    table = page[page.index('id="changes"') :]
+
+    # Assert
+    assert "Cells of finding 2" in page
+    assert table.count('href="#finding-2"') == expected > 0
+
+
+def test_two_equivalent_returns_are_called_equivalent(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    earlier, later = _pair(workspace, tmp_path, risk_weight_row="0200", ecai_columns=True)
+
+    page = client.get(f"/returns/{later.return_id}/compare?against={earlier.return_id}").text
+
+    assert "<h2>Equivalent</h2>" in page
+
+
+def test_a_pair_is_compared_once_however_often_the_page_is_drawn(
+    workspace: Workspace, tmp_path: Path
+) -> None:
+    """Every rule runs on both returns; a filter click must not run them again."""
+    earlier, later = _pair(workspace, tmp_path, risk_weight_row="0220")
+
+    assert workspace.comparison(earlier, later) is workspace.comparison(earlier, later)
+    assert workspace.comparison(later, earlier) is not workspace.comparison(earlier, later)
 
 
 # ---------------------------------------------------------------------------

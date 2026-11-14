@@ -141,6 +141,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gains the same table, and its docs links, which pointed to
   `openafterhours.club/rwa_calculator/` and returned 404, now point to the
   published site. No calculation or reported figure changed.
+- **DOCS — the CRR Framework section has its own index page.**
+  [CRR Specifications](../specifications/crr/index.md) lists every CRR
+  specification and how it relates to Basel 3.1, as the Basel 3.1 Framework
+  section already did. Without it, Zensical had made the SA-CCR page that
+  section's index: "SA-CCR (Counterparty Credit Risk)" was missing from the
+  sidebar and the "CRR Framework" heading opened it. Both SA-CCR and SFT now
+  appear in the sidebar. A new contract test,
+  `tests/contracts/test_docs_nav_section_indexes.py`, fails any nav section
+  whose first `index.md` page is not its first entry. No page URL changed.
 - **REPORTING — behaviour to expect where the Basel 3.1 output floor binds.**
   OF 02.00 column 0010 is now un-floored, as its data points require, while
   OF 08.01 still sums the post-floor RWEA (which carries the engine's pro-rata

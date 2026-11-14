@@ -40,7 +40,7 @@ from rwa_filer.boe.formulas import (
     KEY_OPEN,
     read_formula_reach,
 )
-from rwa_filer.extras import import_openpyxl
+from rwa_filer.inputs import load_workbook
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -118,14 +118,14 @@ def import_workbook(
 
     Raises:
         MissingExtraError: ``openpyxl`` is not installed (``rwa-filer[excel]``).
-        ValueError: the file is not a rule workbook — it has no single data
-            sheet, lacks a required column, or mixes framework versions; or
-            ``taxonomy_package`` holds no formula for any of its rules.
+        ValueError: the file is not a rule workbook — it is not a readable
+            .xlsx, has no single data sheet, lacks a required column, or mixes
+            framework versions; or ``taxonomy_package`` is not a zip archive, or
+            holds no formula for any of its rules.
     """
-    openpyxl = import_openpyxl(
-        needed_for="Reading a validation-rule workbook", command="rulebook import"
+    book = load_workbook(
+        workbook, needed_for="Reading a validation-rule workbook", command="rulebook import"
     )
-    book = openpyxl.load_workbook(workbook, read_only=True, data_only=True)
     try:
         data_sheets = [sheet for sheet in book.worksheets if sheet.title != NOTE_SHEET]
         if len(data_sheets) != 1:

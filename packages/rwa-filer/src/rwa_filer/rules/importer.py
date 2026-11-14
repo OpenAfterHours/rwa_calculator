@@ -33,7 +33,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from rwa_filer.extras import import_openpyxl
+from rwa_filer.inputs import load_workbook
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -248,9 +248,10 @@ def extract(publisher: str, workbook: Path) -> dict[str, Any]:
 
     Raises:
         ValueError: ``publisher`` is not one of the two supported publishers, or
-            ``workbook`` is not laid out as that publisher's rule workbook — it
-            has no rule sheet of the publisher's name, the sheet is empty, or it
-            is narrower than the columns a rule is read from.
+            ``workbook`` is not a readable .xlsx workbook, or is not laid out as
+            that publisher's rule workbook — it has no rule sheet of the
+            publisher's name, the sheet is empty, or it is narrower than the
+            columns a rule is read from.
     """
     extractor = _EXTRACTORS.get(publisher)
     if extractor is None:
@@ -350,9 +351,12 @@ _EXTRACTORS: Final[dict[str, Callable[[Path], dict[str, Any]]]] = {
 
 
 def _load_workbook(path: Path) -> Any:
-    """Open a workbook read-only; ``MissingExtraError`` when openpyxl is absent."""
-    openpyxl = import_openpyxl(needed_for="Reading a rule workbook", command="rules import")
-    return openpyxl.load_workbook(path, read_only=True, data_only=True)
+    """Open a workbook read-only; ``MissingExtraError`` when openpyxl is absent.
+
+    Raises:
+        ValueError: ``path`` is not a readable .xlsx workbook.
+    """
+    return load_workbook(path, needed_for="Reading a rule workbook", command="rules import")
 
 
 def _matching_rows(

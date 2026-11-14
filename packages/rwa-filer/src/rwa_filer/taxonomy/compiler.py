@@ -278,8 +278,11 @@ def compile_pack(
 
     Raises:
         FileNotFoundError: an input path does not exist.
-        ValueError: the workbook or the taxonomy package has no such module, or
-            ``dictionary_workbook`` is not a DPM dictionary.
+        ValueError: the workbook or the taxonomy package has no such module; or
+            an input is not what it should be — a workbook that is not a readable
+            .xlsx, a ``dictionary_workbook`` that is not a DPM dictionary, a
+            package that is neither a folder nor a zip archive, a linkbase that
+            is not well-formed XML. The message names the file.
     """
     for path in (annotated_workbook, dictionary_workbook, taxonomy_package):
         if not path.exists():
@@ -563,7 +566,8 @@ def _compile_table(
         note("skipped - the taxonomy package has no table (or no definition linkbase) of this code")
         return None
     layout = replace(layout, axes=_name_default_sheets(layout.axes, package, module_table, note))
-    with package.stream(module_table.definition) as stream:
+    definition = module_table.definition
+    with package.stream(definition) as stream, package.well_formed(definition):
         cubes = _linkbase.read_hypercubes(stream)
     defaults = {dim: info.default for dim, info in dictionary.dimensions.items()}
     cells, enumerations = _reportable_cells(layout, sheet, workbook, cubes, defaults, note)

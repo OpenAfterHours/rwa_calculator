@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING, Any, Final
 import polars as pl
 
 from rwa_filer.extras import import_openpyxl
+from rwa_filer.inputs import load_workbook
 from rwa_filer.model import CODE_WIDTH, FACT_SCHEMA, CanonicalReturn, ReturnHeader
 
 if TYPE_CHECKING:
@@ -82,6 +83,11 @@ _GREY_FILL: Final = "FFBBBBBB"
 _SHEET_NAME_INVALID: Final = re.compile(r"[\[\]:*?/\\]")
 _SHEET_NAME_MAX: Final = 31
 
+#: What reaches openpyxl here, for the message when the ``excel`` extra is missing.
+_NEEDED_FOR: Final = "Reading or writing a workbook"
+#: validate, build, diff and template all reach a workbook here.
+_COMMAND: Final = "<command>"
+
 
 # =============================================================================
 # Public API — read
@@ -97,8 +103,9 @@ def read_workbook(path: Path, header: ReturnHeader | None = None) -> CanonicalRe
             the workbook has no such worksheet.
 
     Raises:
-        ValueError: the workbook has no ``Return`` worksheet and no ``header``
-            was given, or its header is incomplete. (A usage error.)
+        ValueError: ``path`` is not a readable .xlsx workbook, or it has no
+            ``Return`` worksheet and no ``header`` was given, or its header is
+            incomplete. (A usage error.)
     """
     workbook = _load_workbook(path)
     try:
@@ -478,11 +485,10 @@ def _worksheet_name(table: str, sheet: str | None, open_key: str | None, used: s
 
 
 def _load_workbook(path: Path) -> Any:
-    """Open a workbook read-only, values only."""
-    return _openpyxl().load_workbook(path, read_only=True, data_only=True)
+    """Open a workbook read-only, values only; ``ValueError`` when it is not one."""
+    return load_workbook(path, needed_for=_NEEDED_FOR, command=_COMMAND)
 
 
 def _openpyxl() -> Any:
     """Import openpyxl; ``MissingExtraError`` when the extra is not installed."""
-    # "<command>": validate, build, diff and template all reach a workbook here.
-    return import_openpyxl(needed_for="Reading or writing a workbook", command="<command>")
+    return import_openpyxl(needed_for=_NEEDED_FOR, command=_COMMAND)

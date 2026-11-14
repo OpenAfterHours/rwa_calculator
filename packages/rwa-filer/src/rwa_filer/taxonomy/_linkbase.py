@@ -37,12 +37,15 @@ import posixpath
 import re
 import sys
 import xml.etree.ElementTree as ET
-import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING
 
+from rwa_filer.inputs import open_zip
+
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping
+    import zipfile
+    from collections.abc import Collection, Iterator, Mapping
     from pathlib import Path
 
 #: One closed hypercube: dimension -> allowed members, or ``None`` for a typed dimension.
@@ -92,7 +95,11 @@ class TaxonomyPackage:
 
     @classmethod
     def open(cls, path: Path) -> TaxonomyPackage:
-        """Index the package's ``.xml`` / ``.xsd`` members by their path inside it."""
+        """Index the package's ``.xml`` / ``.xsd`` members by their path inside it.
+
+        Raises:
+            ValueError: ``path`` is a file that is not a zip archive.
+        """
         if path.is_dir():
             names = sorted(
                 p.relative_to(path).as_posix()
@@ -100,7 +107,7 @@ class TaxonomyPackage:
                 if p.suffix in {".xml", ".xsd"} and p.is_file()
             )
             return cls(path, tuple(names), frozenset(names), None)
-        archive = zipfile.ZipFile(path)
+        archive = open_zip(path)
         names = sorted(archive.namelist())
         return cls(path, tuple(names), frozenset(names), archive)
 
@@ -118,6 +125,26 @@ class TaxonomyPackage:
         if self.archive is not None:
             return self.archive.read(name)
         return (self.path / name).read_bytes()
+
+    def parse(self, name: str) -> ET.Element:
+        """One member parsed as XML.
+
+        Raises:
+            ValueError: the member is not well-formed XML.
+        """
+        with self.well_formed(name):
+            return ET.fromstring(self.read(name))
+
+    @contextmanager
+    def well_formed(self, name: str) -> Iterator[None]:
+        """Report XML that ``name`` fails to parse as a ``ValueError`` naming the member.
+
+        For a member read as a stream (``stream``), where ``parse`` cannot be used.
+        """
+        try:
+            yield
+        except ET.ParseError as exc:
+            raise ValueError(f"{self.path}: {name} is not well-formed XML ({exc})") from exc
 
     def stream(self, name: str) -> IO[bytes]:
         """An open binary stream on one member — for the large definition linkbases."""
@@ -168,7 +195,7 @@ def read_module(package: TaxonomyPackage, module: str) -> ModuleListing:
     presentation = schema[: -len(".xsd")] + "-pre.xml"
     if not package.has(presentation):
         raise ValueError(f"taxonomy package {package.path.name} has no {presentation}")
-    root = ET.fromstring(package.read(presentation))
+    root = package.parse(presentation)
     locators = {
         e.get(f"{_XLINK}label"): e.get(f"{_XLINK}href", "") for e in root.iter(f"{_LINK}loc")
     }
@@ -183,7 +210,7 @@ def read_module(package: TaxonomyPackage, module: str) -> ModuleListing:
         codes_part = rendering[: -len(_RENDERING_SUFFIX)] + "-lab-codes.xml"
         if not package.has(codes_part):
             continue
-        code, indicator = _read_table_codes(package.read(codes_part), table_id)
+        code, indicator = _read_table_codes(package.parse(codes_part), table_id)
         if code is not None:
             tables[code] = ModuleTable(
                 code, table_id, source.partition("#")[2], rendering, indicator
@@ -199,7 +226,7 @@ def read_default_sheets(
     That node is the sheet whose members are all dimension defaults — the
     "Total" sheet the annotated workbook leaves as an empty list entry.
     """
-    root = ET.fromstring(package.read(rendering))
+    root = package.parse(rendering)
     z_breakdowns = [
         arc.get(f"{_XLINK}to")
         for arc in root.iter(f"{_TABLE}tableBreakdownArc")
@@ -335,7 +362,7 @@ def _locate_entry_point(package: TaxonomyPackage, module: str) -> tuple[str, str
     """
     wanted = f"/mod/{module.lower()}.xsd"
     for manifest in package.ending_with("META-INF/taxonomyPackage.xml"):
-        for document in ET.fromstring(package.read(manifest)).iter(f"{_PACKAGE}entryPointDocument"):
+        for document in package.parse(manifest).iter(f"{_PACKAGE}entryPointDocument"):
             url = document.get("href", "")
             if url.lower().endswith(wanted):
                 paths = package.ending_with(url.partition("://")[2])
@@ -351,9 +378,8 @@ def _locate_entry_point(package: TaxonomyPackage, module: str) -> tuple[str, str
     return _ENTRY_POINT_SCHEME + (path[host:] if host >= 0 else path), path
 
 
-def _read_table_codes(part: bytes, table_id: str) -> tuple[str | None, str | None]:
-    """A table's own ``(rc-code, filing-indicator-code)`` labels."""
-    root = ET.fromstring(part)
+def _read_table_codes(root: ET.Element, table_id: str) -> tuple[str | None, str | None]:
+    """A table's own ``(rc-code, filing-indicator-code)`` labels, from its ``-lab-codes.xml``."""
     labels = {e.get(f"{_XLINK}label"): e for e in root.iter(f"{_LABEL}label")}
     table_locators = {
         e.get(f"{_XLINK}label")
@@ -378,7 +404,7 @@ def _node_labels(package: TaxonomyPackage, part: str, role_suffix: str) -> dict[
     """node id -> text of its generic label whose role ends with ``role_suffix``."""
     if not package.has(part):
         return {}
-    root = ET.fromstring(package.read(part))
+    root = package.parse(part)
     locators = {
         e.get(f"{_XLINK}label"): e.get(f"{_XLINK}href", "").rpartition("#")[2]
         for e in root.iter(f"{_LINK}loc")

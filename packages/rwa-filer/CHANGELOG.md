@@ -67,8 +67,6 @@ and released independently of `rwa-calc`; its release tags are prefixed
     the sheet it looked for and what it found there.
   - `rulebook import` / `check` given a workbook whose data sheet is empty now
     report the required columns it lacks.
-
-### Fixed
 - `rwa-filer signoff` recorded a sign-off entry in the audit ledger before
   checking that the sign-off would be given, so a refused sign-off (for
   example, a not-submittable package without `--acknowledge-findings`) left

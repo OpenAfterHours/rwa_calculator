@@ -2,15 +2,19 @@
 """
 Deployment script for the workspace's packages (rwa-calc, and rwa-filer).
 
-The repository is a uv workspace that releases two packages on their own
+The repository is a uv workspace that releases its packages on their own
 versions. Without ``--package`` this script releases ``rwa-calc``, exactly as it
 always has; ``--package rwa-filer`` releases the workspace member instead — its
 own version files, its own changelog, tags prefixed ``rwa-filer-v`` and its own
 build directory (see ``MEMBER_RELEASES`` and ``run_member_release``).
+``--package all`` releases every package, one after another, in dependency order
+(see ``main_all`` and ``run_all_release``).
 
 RELEASE ORDER: rwa-calc declares ``rwa-filer>=A,<B`` and resolves it from PyPI
 once installed, so an rwa-calc release that needs a new rwa-filer must come
-AFTER that rwa-filer version is published.
+AFTER that rwa-filer version is published. ``--package all`` derives that order
+from each package's declared dependencies and waits for each published version
+to appear on PyPI before it releases anything that depends on it.
 
 For rwa-calc, automates version updates, the release commit, tag and push, and
 PyPI publishing:
@@ -41,6 +45,8 @@ Usage:
     python scripts/deploy.py --bump minor --publish
     python scripts/deploy.py --package rwa-filer 0.1.0
     python scripts/deploy.py --package rwa-filer --bump minor --dry-run
+    python scripts/deploy.py --package all --set-version rwa-filer=0.1.0 --set-version rwa-calc=0.3.35
+    python scripts/deploy.py --package all --bump patch --dry-run
 """
 
 from __future__ import annotations
@@ -50,6 +56,8 @@ import json
 import re
 import subprocess
 import sys
+import time
+import tomllib
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -111,6 +119,8 @@ class MemberRelease:
 
     Attributes:
         name: The distribution name, as passed to ``uv build --package``.
+        pyproject: The member's own ``pyproject.toml``: where its dependencies
+            on other workspace packages are read from.
         tag_prefix: Prepended to the version to form the release tag. It is what
             ``.github/workflows/publish.yml`` reads to decide which package a
             release publishes, so it must stay in step with that file.
@@ -124,6 +134,7 @@ class MemberRelease:
     """
 
     name: str
+    pyproject: str
     tag_prefix: str
     version_files: dict[str, str]
     changelog: str
@@ -148,6 +159,7 @@ class MemberRelease:
 MEMBER_RELEASES: dict[str, MemberRelease] = {
     "rwa-filer": MemberRelease(
         name="rwa-filer",
+        pyproject="packages/rwa-filer/pyproject.toml",
         tag_prefix="rwa-filer-v",
         version_files={
             "packages/rwa-filer/pyproject.toml": r'(?m)^version = "(\d+\.\d+\.\d+)"',
@@ -170,6 +182,23 @@ MEMBER_RELEASES: dict[str, MemberRelease] = {
 
 #: The root project's name, and the default for ``--package``.
 ROOT_PACKAGE = "rwa-calc"
+#: The root project's own ``pyproject.toml``.
+ROOT_PYPROJECT = "pyproject.toml"
+#: The root project's suite, run before an rwa-calc release changes anything.
+ROOT_TEST_COMMAND = ("uv", "run", "pytest", "-x", "-q")
+#: Every release mode refuses to push from a detached HEAD.
+DETACHED_HEAD_ERROR = "\nERROR: HEAD is detached. Check out the release branch and re-run."
+
+#: The ``--package`` value that releases every workspace package, in dependency
+#: order. Adding a package to ``MEMBER_RELEASES`` adds it to this release.
+ALL_PACKAGES = "all"
+
+#: How long ``--package all`` waits for a published version to show on PyPI
+#: before it releases the packages that depend on it. publish.yml normally takes
+#: a few minutes; the margin covers a queued runner and PyPI's CDN.
+PYPI_WAIT_TIMEOUT_SECONDS = 30 * 60
+#: How often PyPI is asked while waiting.
+PYPI_POLL_INTERVAL_SECONDS = 30
 
 
 def get_current_version() -> str:
@@ -427,6 +456,142 @@ def _pypi_versions(distribution: str) -> list[str] | None:
     return sorted(payload.get("releases", {}))
 
 
+# ── The workspace graph: what "every package" is, and in which order ─────────
+#
+# Read from each package's own pyproject.toml rather than written down here, so
+# a new dependency between workspace packages reorders `--package all` without
+# anyone remembering to. The set of packages is `MEMBER_RELEASES` plus the root;
+# tests/contracts/test_release_coverage.py fails when a workspace member exists
+# that the release flow does not know about.
+
+_REQUIREMENT_NAME_RE = re.compile(
+    r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?P<spec>[^;]*)"
+)
+
+
+def workspace_packages() -> list[str]:
+    """Every package this script releases: the members, then the root."""
+    return [*MEMBER_RELEASES, ROOT_PACKAGE]
+
+
+def package_tag(name: str, version: str) -> str:
+    """The release tag publish.yml reads to publish ``name`` at ``version``."""
+    member = MEMBER_RELEASES.get(name)
+    return member.tag(version) if member is not None else f"v{version}"
+
+
+def current_version_of(name: str) -> str:
+    """The version ``name`` is at in this checkout."""
+    member = MEMBER_RELEASES.get(name)
+    return get_member_version(member) if member is not None else get_current_version()
+
+
+def workspace_dependencies(name: str) -> dict[str, str]:
+    """The other workspace packages ``name`` requires once installed, with each range.
+
+    Optional-dependency extras count: an extra that names a workspace package
+    resolves it from PyPI exactly as a core dependency does. A package named in
+    more than one place gets the ranges joined, which is how pip reads them.
+    """
+    member = MEMBER_RELEASES.get(name)
+    pyproject = PROJECT_ROOT / (member.pyproject if member is not None else ROOT_PYPROJECT)
+    project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project", {})
+    requirements = list(project.get("dependencies", []))
+    for extra in project.get("optional-dependencies", {}).values():
+        requirements.extend(extra)
+
+    others = set(workspace_packages()) - {name}
+    found: dict[str, str] = {}
+    for requirement in requirements:
+        match = _REQUIREMENT_NAME_RE.match(requirement)
+        if match is None:
+            continue
+        dependency = re.sub(r"[-_.]+", "-", match.group("name")).lower()
+        if dependency in others:
+            spec = match.group("spec").strip()
+            found[dependency] = ",".join(part for part in (found.get(dependency), spec) if part)
+    return found
+
+
+def release_order(packages: list[str]) -> list[str]:
+    """Order ``packages`` so each one follows every workspace package it depends on.
+
+    Packages with nothing left to wait for keep their order in ``packages``, so
+    the result is deterministic. A dependency cycle cannot be released in any
+    order and is a programming error in the workspace, not a release failure.
+    """
+    pending = list(packages)
+    ordered: list[str] = []
+    while pending:
+        ready = [name for name in pending if not set(workspace_dependencies(name)) & set(pending)]
+        if not ready:
+            raise ValueError(f"workspace dependency cycle among: {', '.join(pending)}")
+        ordered.extend(ready)
+        pending = [name for name in pending if name not in ready]
+    return ordered
+
+
+def dependents_rejecting(name: str, new_version: str) -> list[tuple[str, str]]:
+    """The workspace packages whose declared range for ``name`` excludes ``new_version``."""
+    rejecting: list[tuple[str, str]] = []
+    for other in workspace_packages():
+        spec = workspace_dependencies(other).get(name)
+        if spec is not None and not version_satisfies(new_version, spec):
+            rejecting.append((other, spec))
+    return rejecting
+
+
+def check_dependents_admit(name: str, new_version: str) -> bool:
+    """Refuse a version the rest of the workspace has not declared it accepts.
+
+    Nothing else catches this. ``uv lock`` takes a workspace member at whatever
+    version it is, range or no range, so every test in this repository runs the
+    dependent against the NEW version — while an installed copy, resolving the
+    unchanged range from PyPI, gets an OLD one. The dependent would ship tested
+    against code its users never receive. Widening the range is the explicit,
+    reviewed edit that makes the two agree.
+    """
+    rejecting = dependents_rejecting(name, new_version)
+    for other, spec in rejecting:
+        print(f"  ERROR: {other} requires '{name}{spec}', which excludes {name} {new_version}.")
+        print(f"  Widen that range in {other}'s pyproject.toml first, then re-run.")
+    return not rejecting
+
+
+def wait_for_pypi(
+    name: str,
+    version: str,
+    *,
+    timeout: float = PYPI_WAIT_TIMEOUT_SECONDS,
+    interval: float = PYPI_POLL_INTERVAL_SECONDS,
+) -> bool:
+    """Block until ``name`` ``version`` is listed on PyPI, or ``timeout`` seconds pass.
+
+    PyPI being unreachable on one poll is not a verdict; only the deadline is.
+    """
+    print(f"\nWaiting for {name} {version} on PyPI (up to {timeout / 60:.0f} min)...")
+    deadline = _clock() + timeout
+    while True:
+        versions = _pypi_versions(name)
+        if versions is not None and version in versions:
+            print(f"  {name} {version} is on PyPI")
+            return True
+        if _clock() >= deadline:
+            print(f"  ERROR: {name} {version} was not on PyPI after {timeout / 60:.0f} min.")
+            return False
+        _sleep(interval)
+
+
+def _clock() -> float:
+    """Monotonic seconds. A seam, so the PyPI wait can be tested without waiting."""
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    """Sleep between PyPI polls. A seam, like ``_clock``."""
+    time.sleep(seconds)
+
+
 def commit_and_tag(new_version: str) -> bool:
     """Stage release files, commit, and create an annotated tag."""
     tag = f"v{new_version}"
@@ -567,7 +732,7 @@ def _gh(*args: str) -> subprocess.CompletedProcess[str]:
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser for the deploy script."""
     parser = argparse.ArgumentParser(
-        description="Deploy rwa-calc to PyPI",
+        description="Release the workspace's packages to PyPI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -579,26 +744,43 @@ Examples:
   python scripts/deploy.py 0.1.4 --no-push # Commit and tag locally; push by hand
   python scripts/deploy.py 0.1.4 --publish # Upload from here instead of via the release
   python scripts/deploy.py --dry-run       # Show what would be done
+  python scripts/deploy.py --package rwa-filer 0.1.0  # Release the member alone
+  python scripts/deploy.py --package all --bump patch # Every package, dependencies first
+  python scripts/deploy.py --package all --set-version rwa-filer=0.1.0  # Pin one, bump the rest
         """,
     )
     parser.add_argument(
         "version",
         nargs="?",
-        help="New version number (e.g., 0.1.4)",
+        help="New version number (e.g., 0.1.4). Not with --package all: use --set-version",
     )
     parser.add_argument(
         "--package",
-        choices=[ROOT_PACKAGE, *MEMBER_RELEASES],
+        choices=[ROOT_PACKAGE, *MEMBER_RELEASES, ALL_PACKAGES],
         default=ROOT_PACKAGE,
         help=(
             "Which workspace package to release (default: rwa-calc). A member is "
-            "versioned, tagged and published on its own"
+            "versioned, tagged and published on its own; 'all' releases every "
+            "package in dependency order, waiting for each on PyPI before its dependents"
         ),
     )
     parser.add_argument(
         "--bump",
         choices=["major", "minor", "patch"],
-        help="Bump version by type instead of setting explicitly",
+        help=(
+            "Bump version by type instead of setting explicitly. With --package all it "
+            "applies to every package --set-version does not name (default: patch)"
+        ),
+    )
+    parser.add_argument(
+        "--set-version",
+        action="append",
+        default=[],
+        metavar="PACKAGE=VERSION",
+        help=(
+            "With --package all: the exact version for one package (repeatable). "
+            "Packages not named take --bump"
+        ),
     )
     parser.add_argument(
         "--publish",
@@ -708,6 +890,16 @@ def irreversible_steps(args: argparse.Namespace, tag: str) -> list[str]:
     if args.publish:
         steps.append("upload the built distributions to PyPI from this machine (uv publish)")
     return steps
+
+
+def confirm_steps(steps: list[str], *, assume_yes: bool) -> bool:
+    """Name the irreversible steps and ask to go on; True straight away if none or ``--yes``."""
+    if not steps or assume_yes:
+        return True
+    print("\nOnce every check has passed, this run will:")
+    for step in steps:
+        print(f"  - {step}")
+    return confirm_irreversible()
 
 
 def confirm_irreversible() -> bool:
@@ -824,7 +1016,7 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
     github_release = wants_github_release(args)
     branch = current_branch()
     if push and branch is None:
-        print("\nERROR: HEAD is detached. Check out the release branch and re-run.")
+        print(DETACHED_HEAD_ERROR)
         return 1
     push_target = branch if push else None
 
@@ -849,9 +1041,7 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
         return 1
 
     # Run tests first (unless skipped)
-    if not args.skip_tests and not run_command(
-        ["uv", "run", "pytest", "-x", "-q"], "Running tests"
-    ):
+    if not args.skip_tests and not run_command(list(ROOT_TEST_COMMAND), "Running tests"):
         print("\nTests failed. Fix tests before deploying.")
         print("Use --skip-tests to bypass (not recommended).")
         return 1
@@ -995,7 +1185,8 @@ def print_member_dry_run(args: argparse.Namespace, member: MemberRelease, new_ve
     """Print what a real member release would do, without changing anything."""
     tag = member.tag(new_version)
     print(f"\n[DRY RUN] Would release {member.name} {new_version}:")
-    print(f"  - Run: {' '.join(member.test_command)}")
+    if not args.skip_tests:
+        print(f"  - Run: {' '.join(member.test_command)}")
     print(f"  - Update version to {new_version} in:")
     for path in member.version_files:
         print(f"    - {path}")
@@ -1025,7 +1216,7 @@ def run_member_release(args: argparse.Namespace, member: MemberRelease, new_vers
     github_release = wants_github_release(args)
     branch = current_branch()
     if push and branch is None:
-        print("\nERROR: HEAD is detached. Check out the release branch and re-run.")
+        print(DETACHED_HEAD_ERROR)
         return 1
     push_target = branch if push else None
 
@@ -1085,23 +1276,250 @@ def main_member(args: argparse.Namespace, member: MemberRelease) -> int:
         return 1
     print(f"New {member.name} version: {new_version}")
 
+    if not check_dependents_admit(member.name, new_version):
+        return 1
+
     if args.dry_run:
         print_member_dry_run(args, member, new_version)
         return 0
 
     steps = irreversible_steps(args, member.tag(new_version))
-    if steps and not args.yes:
-        print("\nOnce every check has passed, this run will:")
-        for step in steps:
-            print(f"  - {step}")
-        if not confirm_irreversible():
-            return 1
+    if not confirm_steps(steps, assume_yes=args.yes):
+        return 1
 
     return run_member_release(args, member, new_version)
 
 
+# =============================================================================
+# Every package at once (--package all)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class PlannedRelease:
+    """One package's place in a ``--package all`` release.
+
+    Attributes:
+        name: The distribution name.
+        current: Its version in this checkout.
+        new: The version it is released at.
+    """
+
+    name: str
+    current: str
+    new: str
+
+    @property
+    def tag(self) -> str:
+        """The release tag publish.yml reads to publish this package."""
+        return package_tag(self.name, self.new)
+
+
+def plan_all_releases(args: argparse.Namespace) -> list[PlannedRelease] | None:
+    """Resolve every package's new version, in release order; None if the args are invalid.
+
+    A single positional version cannot mean anything across packages that are
+    versioned independently, so it is refused rather than applied to all.
+    """
+    if args.version:
+        print("ERROR: --package all takes no positional version; packages are versioned")
+        print("  independently. Use --set-version PACKAGE=VERSION and/or --bump.")
+        return None
+
+    explicit: dict[str, str] = {}
+    for item in args.set_version:
+        name, sep, version = item.partition("=")
+        if not sep or name not in workspace_packages():
+            print(f"ERROR: --set-version '{item}' is not PACKAGE=VERSION for a workspace package.")
+            print(f"  Packages: {', '.join(workspace_packages())}")
+            return None
+        if name in explicit:
+            print(f"ERROR: --set-version names {name} twice.")
+            return None
+        explicit[name] = validate_semver(version)
+
+    plan: list[PlannedRelease] = []
+    for name in release_order(workspace_packages()):
+        current = current_version_of(name)
+        new = explicit.get(name) or bump_version(current, args.bump or "patch")
+        plan.append(PlannedRelease(name=name, current=current, new=new))
+    return plan
+
+
+def dependents_later_in(plan: list[PlannedRelease], index: int) -> list[str]:
+    """Packages released after ``plan[index]`` that depend on it, so must wait for it."""
+    name = plan[index].name
+    return [later.name for later in plan[index + 1 :] if name in workspace_dependencies(later.name)]
+
+
+def suite_command_for(name: str) -> tuple[str, ...]:
+    """The suite a release of ``name`` runs before changing anything."""
+    member = MEMBER_RELEASES.get(name)
+    return member.test_command if member is not None else ROOT_TEST_COMMAND
+
+
+def print_all_dry_run(args: argparse.Namespace, plan: list[PlannedRelease]) -> None:
+    """Print what a real ``--package all`` run would do, without changing anything."""
+    publishes = wants_github_release(args) or args.publish
+    print("\n[DRY RUN] Would release every workspace package, in this order:")
+    if not args.skip_tests:
+        print("  - Run every package's tests before changing anything:")
+        for release in plan:
+            print(f"    - {' '.join(suite_command_for(release.name))}")
+    # The suites run once, above; no package's own flow repeats them.
+    package_args = argparse.Namespace(**{**vars(args), "skip_tests": True})
+    for index, release in enumerate(plan):
+        member = MEMBER_RELEASES.get(release.name)
+        if member is not None:
+            print_member_dry_run(package_args, member, release.new)
+        else:
+            print_dry_run(package_args, release.new)
+        waiting = dependents_later_in(plan, index)
+        if publishes and waiting:
+            print(
+                f"  - Wait for {release.name} {release.new} on PyPI before releasing "
+                f"{', '.join(waiting)}"
+            )
+
+
+def run_all_release(args: argparse.Namespace, plan: list[PlannedRelease]) -> int:
+    """Release every package in ``plan``, in order, each through its own flow.
+
+    Everything that can refuse is asked before the first package changes: every
+    tag's remote state and every package's suite. A failure there publishes
+    nothing. After that, each package is released by the same function a
+    single-package run uses, and a package that something later in the plan
+    depends on must be ON PyPI — the exact version just released, not merely
+    one that satisfies the range — before the next package starts.
+    """
+    push = wants_push(args)
+    github_release = wants_github_release(args)
+    publishes = github_release or args.publish
+    branch = current_branch()
+    if push and branch is None:
+        print(DETACHED_HEAD_ERROR)
+        return 1
+
+    if not _check_before_any_release(args, plan, branch if push else None, github_release):
+        return 1
+
+    # The suites have run; each package's own flow must not run them again.
+    package_args = argparse.Namespace(**{**vars(args), "skip_tests": True})
+    for index, release in enumerate(plan):
+        rc = _release_package(package_args, release)
+        if rc != 0:
+            _report_unfinished(plan, index, partial=True)
+            return rc
+        if publishes and not _await_on_pypi(plan, index):
+            _report_unfinished(plan, index + 1, partial=False)
+            return 1
+
+    print("\nEvery workspace package released:")
+    for release in plan:
+        print(f"  {release.name} {release.new} ({release.tag})")
+    return 0
+
+
+def main_all(args: argparse.Namespace) -> int:
+    """The ``--package all`` entry point: plan, check, confirm once, release in order."""
+    plan = plan_all_releases(args)
+    if plan is None:
+        return 1
+
+    print("Releasing every workspace package, dependencies first:")
+    for release in plan:
+        print(f"  {release.name}: {release.current} -> {release.new} ({release.tag})")
+
+    # Every package is checked, so one run reports every range that needs widening.
+    refused = [r.name for r in plan if not check_dependents_admit(r.name, r.new)]
+    if refused:
+        return 1
+
+    if args.dry_run:
+        print_all_dry_run(args, plan)
+        return 0
+
+    steps = [step for release in plan for step in irreversible_steps(args, release.tag)]
+    if not confirm_steps(steps, assume_yes=args.yes):
+        return 1
+
+    return run_all_release(args, plan)
+
+
+def _check_before_any_release(
+    args: argparse.Namespace,
+    plan: list[PlannedRelease],
+    branch: str | None,
+    github_release: bool,
+) -> bool:
+    """Every tag's remote state (when pushing ``branch``), then every package's suite."""
+    if branch is not None:
+        for release in plan:
+            if not check_release_preflight(branch, release.tag, github_release=github_release):
+                return False
+    if args.skip_tests:
+        return True
+    for release in plan:
+        if not run_command(list(suite_command_for(release.name)), f"Running {release.name} tests"):
+            print(f"\n{release.name} tests failed. Nothing was released.")
+            return False
+    return True
+
+
+def _release_package(args: argparse.Namespace, release: PlannedRelease) -> int:
+    """Release one planned package through the flow a single-package run uses."""
+    print(f"\n=== {release.name} {release.current} -> {release.new} ({release.tag}) ===")
+    member = MEMBER_RELEASES.get(release.name)
+    if member is not None:
+        return run_member_release(args, member, release.new)
+    return run_release(args, release.new, release.current)
+
+
+def _await_on_pypi(plan: list[PlannedRelease], index: int) -> bool:
+    """Wait for ``plan[index]`` on PyPI if anything later in the plan depends on it."""
+    release = plan[index]
+    waiting = dependents_later_in(plan, index)
+    if not waiting or wait_for_pypi(release.name, release.new):
+        return True
+    print(f"  {', '.join(waiting)} depend on it, so the release stops here.")
+    print("  Check the publish run: gh run list --workflow=publish.yml --limit 3")
+    return False
+
+
+def _report_unfinished(plan: list[PlannedRelease], stopped_at: int, *, partial: bool) -> None:
+    """Say what was released, and how to finish the rest one package at a time.
+
+    ``partial`` means ``plan[stopped_at]`` failed inside its own flow, which may
+    already have committed, tagged or pushed it. That flow printed its own
+    recovery commands; re-running it from scratch would refuse on the tag, so
+    it is pointed at, not repeated.
+    """
+    released = plan[:stopped_at]
+    if released:
+        print("\nReleased before the stop:")
+        for release in released:
+            print(f"  {release.name} {release.new} ({release.tag})")
+
+    rest = plan[stopped_at:]
+    if partial:
+        stopped = rest[0]
+        rest = rest[1:]
+        print(f"\n{stopped.name} {stopped.new} did not finish. Follow its output above to")
+        print("complete it: it may already be committed, tagged or pushed.")
+    if rest:
+        print("\nThen release the rest one at a time, in this order:")
+        for release in rest:
+            print(f"  uv run python scripts/deploy.py --package {release.name} {release.new}")
+
+
 def main() -> int:
     args = build_parser().parse_args()
+
+    if args.package == ALL_PACKAGES:
+        return main_all(args)
+    if args.set_version:
+        print("ERROR: --set-version is only for --package all; give the version positionally.")
+        return 1
 
     member = MEMBER_RELEASES.get(args.package)
     if member is not None:
@@ -1121,12 +1539,8 @@ def main() -> int:
         return 0
 
     steps = irreversible_steps(args, f"v{new_version}")
-    if steps and not args.yes:
-        print("\nOnce every check has passed, this run will:")
-        for step in steps:
-            print(f"  - {step}")
-        if not confirm_irreversible():
-            return 1
+    if not confirm_steps(steps, assume_yes=args.yes):
+        return 1
 
     return run_release(args, new_version, current_version)
 

@@ -169,6 +169,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `packages/rwa-filer/src/rwa_filer/rules/data/`; the same extraction ships as
   `rwa-filer rules import` / `rwa-filer rules check`. `arch_check` check 22 is
   re-pointed at `reporting/filing/`.
+- **`scripts/deploy.py --package all` releases every workspace package in one
+  run** (`/release all`). It orders the packages by their declared
+  dependencies (`rwa-filer`, then `rwa-calc`), checks every tag and runs every
+  package's suite before anything changes, releases each through its own flow,
+  and waits for each published version to appear on PyPI before releasing the
+  packages that depend on it. `/release` now takes a target —
+  `/release rwa-filer 0.1.0`, `/release rwa-calc 0.3.35`, `/release all` — and
+  defaults to `rwa-calc` as before. A member release is also refused, before
+  anything changes, at a version another workspace package's declared range
+  excludes: `uv lock` accepts a workspace member at any version, so nothing else
+  noticed. New contract test `tests/contracts/test_release_coverage.py` fails
+  when a workspace member is not wired into `deploy.py`, `check_distribution.py`
+  and `publish.yml`.
 - **`scripts/deploy.py` refuses an `rwa-calc` publish until the `rwa-filer`
   version it depends on is on PyPI.** Inside the workspace `rwa-filer` always
   resolves from the checkout, so no gate here can see an `rwa-calc` release

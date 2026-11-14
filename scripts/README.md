@@ -64,7 +64,20 @@ python scripts/deploy.py --bump patch --skip-tests
 
 # Commit and tag locally without pushing
 python scripts/deploy.py 0.1.4 --no-push
+
+# Release the workspace member alone (its own version, changelog and tag)
+python scripts/deploy.py --package rwa-filer 0.1.0
+
+# Release every workspace package, dependencies first; pin some, bump the rest
+python scripts/deploy.py --package all --set-version rwa-filer=0.1.0 --bump patch
 ```
+
+`--package all` runs every package's pre-flight and test suite before anything
+changes, then releases each package through its own flow in dependency order
+(read from each package's `pyproject.toml`), and waits for each published
+version to appear on PyPI before releasing the packages that depend on it. The
+`/release` equivalents are `/release rwa-filer 0.1.0`, `/release rwa-calc 0.3.35`
+and `/release all rwa-filer=0.1.0 rwa-calc=0.3.35`.
 
 ### Windows
 

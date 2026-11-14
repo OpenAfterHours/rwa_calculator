@@ -229,6 +229,7 @@ Each package has its own version, changelog, tag and PyPI project.
 | Changelog | `docs/appendix/changelog.md` | `packages/rwa-filer/CHANGELOG.md` |
 | Tag | `v0.3.35` | `rwa-filer-v0.1.0` |
 | Release command | `uv run python scripts/deploy.py 0.3.35` | `uv run python scripts/deploy.py --package rwa-filer 0.1.0` |
+| Slash command | `/release rwa-calc 0.3.35` | `/release rwa-filer 0.1.0` |
 | Build | `uv build` → `dist/` | `uv build --package rwa-filer -o dist/rwa-filer` |
 | PyPI project | `rwa-calc` | `rwa-filer` |
 
@@ -256,7 +257,41 @@ confirmed by hand.
 While `rwa-filer` is `0.x`, `rwa-calc` pins its minor version
 (`>=0.1,<0.2`). A breaking `rwa-filer` change is a minor bump, so `rwa-calc`
 never picks one up unannounced; widening the range is an explicit edit to the
-root `pyproject.toml`.
+root `pyproject.toml`. `scripts/deploy.py` refuses to release a member at a
+version another workspace package's declared range excludes, before anything
+changes. Nothing else would catch it: `uv lock` takes a workspace member at
+whatever version it is, so every test here would run `rwa-calc` against the new
+`rwa-filer` while an installed `rwa-calc` resolved the old one from PyPI.
+
+### Releasing every package at once
+
+```bash
+uv run python scripts/deploy.py --package all --set-version rwa-filer=0.1.0 --set-version rwa-calc=0.3.35
+```
+
+or `/release all rwa-filer=0.1.0 rwa-calc=0.3.35`. Packages not pinned with
+`--set-version` take `--bump` (default `patch`); a single positional version is
+refused, since the packages do not share one. The run:
+
+1. Orders the packages so each follows the workspace packages it depends on,
+   read from each package's own `pyproject.toml` (today: `rwa-filer`, then
+   `rwa-calc`).
+2. Checks every range, every tag's remote state and runs every package's test
+   suite before the first package changes — a failure here publishes nothing.
+3. Releases each package through the same flow a single-package run uses.
+4. After a package that a later one depends on, waits (up to 30 minutes) until
+   that exact version is on PyPI before starting the next. If it times out, it
+   stops and prints the single-package commands that finish the rest.
+
+### Adding a workspace package
+
+A new member under `packages/` joins `--package all` once it has an entry in
+`scripts/deploy.py::MEMBER_RELEASES`, a build directory in
+`scripts/check_distribution.py::DIST_DIRS`, and a tag-prefix arm plus a
+version-check step in `.github/workflows/publish.yml`.
+`tests/contracts/test_release_coverage.py` fails until all three exist. The
+fourth step — a trusted (pending) publisher for the new PyPI project, as below —
+cannot be checked from the repository.
 
 ### One-time PyPI set-up for `rwa-filer`
 

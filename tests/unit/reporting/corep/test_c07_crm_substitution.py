@@ -227,18 +227,33 @@ class TestSubstitutionOutflowSubtotal:
         assert total["0110"][0] == pytest.approx(4_500.0)
 
     def test_fully_adjusted_exposure_foots_the_waterfall(self) -> None:
-        """``v0307_m`` / ``boe_b0699``: 0150 = 0110 + 0120 + 0130."""
+        """``v0307_m`` / ``boe_b0699``: 0150 = 0110 + 0120 + 0130.
+
+        Stated on the COMPREHENSIVE-method variant of the four-protection row
+        (``fcsm_collateral_value`` null, as the sealed ledger carries it under that
+        election). The row as built holds Simple-Method collateral (col 0070) AND
+        a Cvam (col 0130) together, which no ledger can: the Art. 191A election is
+        firm-wide, the engine zeroes an SA row's adjusted value under the Simple
+        Method, and cols 0120-0140 report only Comprehensive-Method exposures —
+        so on the row as built col 0130 is zero and the identity would hold
+        without its col 0130 term. Here the block is 3,000 (guarantee 2,000,
+        Art. 232 1,000), 0110 = 9,000 - 3,000 = 6,000, and 0150 = 6,000 - 500.
+        """
         # Arrange
         gen = LedgerShimCorepGenerator()
+        comprehensive = _sa_results_with_all_four_protections().with_columns(
+            pl.lit(None, dtype=pl.Float64).alias("fcsm_collateral_value")
+        )
 
         # Act
-        bundle = gen.generate_from_lazyframe(_sa_results_with_all_four_protections())
+        bundle = gen.generate_from_lazyframe(comprehensive)
         total = _get_total_row(bundle.c07_00["corporate"])
 
         # Assert — 0130 is emitted negative, so the identity is a plain sum.
+        assert total["0130"][0] == pytest.approx(-500.0)
         expected = total["0110"][0] + total["0120"][0] + total["0130"][0]
         assert total["0150"][0] == pytest.approx(expected)
-        assert total["0150"][0] == pytest.approx(4_000.0)
+        assert total["0150"][0] == pytest.approx(5_500.0)
 
 
 def _sa_results_same_class_guarantee() -> pl.LazyFrame:

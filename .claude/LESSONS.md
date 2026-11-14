@@ -251,6 +251,16 @@ manual form is: before trusting a green Tier 2 on a reporting-adjacent change,
 measure the cell you are changing across every golden portfolio and confirm it
 is non-zero somewhere.
 
+**FOURTH FORM, 2026-11-13: registered, LIVE cell, no row past the clamp.** C 07.00
+col 0130 was live in several registered portfolios and summed collateral
+uncapped, with the only floor at the cell; no portfolio held an SA loan whose
+collateral EXCEEDED it, so the per-exposure floor was never reached and one
+loan's unused collateral silently came off every other loan (col 0150 < col
+0200, both regimes; escape log 2026-11-13). Neither ratchet can see this — the
+cell was live. **Detect:** for any per-row cap, floor or clamp a template or
+calculator applies, a registered portfolio must hold a row PAST it and a row
+SHORT of it (`reporting_over_collateralised_portfolio.py` is the shape).
+
 ### B6. An (approach, class) pair with no row is invisible to every published rule
 
 **Trap.** After a re-key, RWEA falls out of the breakdown rows while the parent

@@ -3538,3 +3538,110 @@ gate that shipped.
   report. Graduation candidate, not built here: an `arch_check` rule flagging
   per-frame column selection inside `engine/crm/` modules that read the merged
   collateral frame.
+
+## 2026-11-13 — C 07.00 / OF 07.00 took one loan's unused collateral off every other loan on the sheet
+
+- **Defect**: column 0130 "(-) Financial collateral adjusted value (Cvam)" summed
+  the whole `collateral_adjusted_value` carrier, and the only floor was the
+  CELL's — `0150 = max(0, 0110 - 0130)` over the sheet's totals. The engine
+  floors each SA exposure at zero after its OWN collateral (Art. 223(5), E* =
+  max{0, ...}; `engine/crm/collateral.py`), so collateral larger than its loan is
+  simply unused there, but on the template it came off every other loan on the
+  sheet. Measured through the full pipeline, STANDARDISED, one unrated corporate
+  with two GBP loans (100 secured by 300 of cash, 1,000 unsecured), identically
+  in both regimes: col 0010 1,100; col 0130 -300; col 0150 **800**; col 0200
+  **1,000**. Under CRR the same happens when the excess is a netted deposit
+  larger than its loan (300 against 100 gives the identical cells), because CRR
+  reports the deposit in col 0130; under Basel 3.1 col 0035 was already capped
+  per row (`_netting_reduction_expr`). No EAD or RWA was wrong.
+- **Rule**: `boe_b0471` (ERROR) and `boe_b0556` (WARNING) under Basel 3.1;
+  `v0308_m` (ERROR) and `v8726_m` (WARNING) under CRR — col 0200 against col 0150.
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py` — col 0130 bound
+  `Sum(collateral_adjusted_value)` (or its netting-carved twin) uncapped, while
+  every other per-row magnitude on the sheet (the substitution block, col 0035)
+  is capped at the row's exposure.
+- **Escape class**: `path-never-exercised`. Every rule that sees it is live and
+  the register ran on every commit; col 0130 was live in several registered
+  portfolios. But no registered portfolio held an SA exposure whose collateral
+  EXCEEDS it, so the per-exposure floor was never reached and the cell-level
+  `max` never bound. This is LESSONS B5 in a fourth form: registered, live cell,
+  and no fixture driving a row past the clamp the defect lives behind.
+- **The reading taken**: col 0130 is capped per exposure at what is left of it
+  after col 0030, col 0035 and the substitution block (its own share of col
+  0110, which is EVA with col 0120 unmodelled); col 0140 is NOT scaled with it.
+  Annex II's col 0130 instruction gives only the Cvam formula; the block heading
+  over cols 0050-0100 states "Collateral that has an effect on the exposure value
+  ... shall be capped at the exposure value"; `boe_b0699` / `v0307_m` ({c0150} =
+  {c0110} + {c0120} + {c0130}, live ERROR) admit no other reading once col 0150 is
+  the per-exposure E*; and EBA Q&A 2015_2010 answers this case for C 07.00 — col
+  0150 "shall be floored to zero", col 0130 "reported as calculated ... however
+  capped at the volatility adjusted value EVA ... in line with validation rule
+  v0307_m", and in its worked example col 0140 stays at its calculated -10 while
+  col 0130 moves from -110 to -105.
+- **Gate change**: `tests/fixtures/reporting_over_collateralised_portfolio.py`
+  registered in `RUNS` under both regimes — two over-collateralised loans (one
+  with a maturity mismatch, so col 0140 is live and pins the unscaled reading),
+  a deposit netted against a smaller loan (the CRR form), and a loan whose
+  collateral is BELOW it that the cap must leave alone (LESSONS B5's surviving
+  leg). `tests/acceptance/reporting/test_c07_collateral_columns.py` states the
+  published identities per regime on real pipeline output, and
+  `tests/unit/reporting/corep/test_c07_collateral_cap.py` pins each mechanism
+  (provisions, the substitution block, col 0035, the CRR deposit, the unscaled
+  col 0140).
+- **Verified red**: with the portfolio registered and `c07.py` at its pre-fix
+  revision, `uv run pytest tests/acceptance/reporting/test_supervisory_validations.py -n 0 -q`
+  — `1 failed, 7 passed`: `4 NEW supervisory validation break(s), 2 of them
+  Error-severity`: `b31/boe_b0471 [ERROR] left = 1,300,000.0000 vs right =
+  1,015,789.4737 on 4 cell(s)`, `b31/boe_b0556`, `crr/v0308_m [ERROR] left =
+  1,300,000.0000 vs right = 815,789.4737 on 4 cell(s)`, `crr/v8726_m` — each
+  regime red on its own. The acceptance file: `9 failed, 8 passed` (the passes are
+  the controls, the engine-unchanged pin and the col 0140 pin); the unit file:
+  `14 failed, 2 passed`. After the fix all pass, and the register banks the new
+  runs only onto the four existing estate-wide entries.
+- **Lesson**: a live cell proves a figure flows through a column, not that any
+  row ever crossed the clamp inside it. For a per-row cap or floor, the fixture
+  must hold a row past it AND a row short of it.
+
+## 2026-11-13 — Under the Simple Method C 07.00 col 0140 reported the collateral's whole market value as a volatility adjustment
+
+- **Defect**: under the Art. 222 Financial Collateral Simple Method
+  `engine/crm/simple_method.py::undo_sa_ead_reduction` zeroes an SA row's
+  `collateral_adjusted_value` (the method does not reduce the exposure value) and
+  keeps `collateral_market_value`. Column 0140 "(-) Of which: volatility and
+  maturity adjustments" was market less adjusted (`_financial_collateral_exprs`),
+  so it reported the entire market value as an adjustment under a column 0130 —
+  the column it is an "of which" of — of zero. Measured on
+  `tests/fixtures/reporting_netting_portfolio.py` under CRR with the Simple
+  Method: corporate row 0010 col 0130 0.00, col 0140 -3,000,000; on the `fcsm`
+  portfolio col 0140 -1,200,000 in both regimes. Annex II: cols 0120-0140 "shall
+  be reported for exposures subject to the Financial Collateral Comprehensive
+  Method"; EBA Q&A 2015_2010 puts Simple-Method exposures in cols 050-100. No EAD
+  or RWA was wrong.
+- **Rule**: `boe_b0555` (Basel 3.1, WARNING — {c0130} <= {c0140}). Its EBA twin
+  `v0008_h` is deactivated, so no enforced CRR rule sees it.
+- **Escape class**: `caught-and-parked`. The `fcsm` portfolio is the estate's only
+  Simple-Method book and is deliberately withheld from `RUNS` (P1.347). When it
+  was registered correctly in 2026-08 it was measured to expose "six breaks, two
+  of them ERROR-severity", and the record named only the two. Re-measured on the
+  pre-fix code (BoE rules now v4.1.1, so this is today's set, not proven to be
+  August's), the book's breaks beyond the estate-wide register entries are
+  exactly six with the same two ERRORs — `v0308_m`, `v8726_m`, `e4895_n` (CRR),
+  `boe_b0471`, `boe_b0556`, `boe_b0555` (Basel 3.1) — and `boe_b0555` is this
+  defect. The gate fired; the count became its resting place.
+- **Gate change**: `tests/acceptance/reporting/test_c07_collateral_columns.py`
+  asserts on real pipeline output, without registration, that no row reports
+  anything in cols 0130 / 0140 under the Simple Method (the `fcsm` book in both
+  regimes, the `netting` book under CRR) and — the surviving leg — that the same
+  `fcsm` book under the Comprehensive Method keeps both columns live. The
+  register cannot see the Simple-Method path until P1.347 registers the book;
+  that bullet now itemises the five breaks that remain.
+- **Verified red**: against the pre-fix `c07.py`,
+  `uv run pytest tests/acceptance/reporting/test_c07_collateral_columns.py -n 0`
+  — `test_simple_method_collateral_is_not_reported_as_a_comprehensive_adjustment`
+  failed for `fcsm-crr`, `fcsm-b31` and `netting-crr`
+  (`total r0010: c0130 0.0, c0140 -1200000.0`); the comprehensive control passed.
+  The unit file's Simple-Method case failed in both regimes. After: all pass, and
+  `boe_b0555` no longer breaks on the `fcsm` book.
+- **Lesson**: a parked count is not an itemised one — "six breaks" carried a
+  defect nobody had named for three months. Record every rule a parked portfolio
+  breaks, by ID.

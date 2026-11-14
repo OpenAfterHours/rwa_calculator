@@ -129,6 +129,15 @@ docs/plans/phase7-declarative-reporting.md §6):
   / ``boe_b0556``). Under CRR there is no col 0035: the deposit stays financial
   collateral in cols 0130 / 0140 and the chain nets once, unchanged. See
   ``_reports_netting_apart``.
+- COLLATERAL IS CAPPED AT THE EXPOSURE IT SECURES (recorded fix, 2026-11-13).
+  Col 0130 is each exposure's Cvam, no more than its own share of col 0110;
+  col 0140 is the adjustment as calculated; both are zero on a Simple-Method
+  row, whose collateral is col 0070. Summed whole and floored only at the cell,
+  one loan's unused collateral came off every other loan (col 0150 < col 0200,
+  ``boe_b0471`` / ``boe_b0556``), and Simple-Method collateral was reported as a
+  col 0140 adjustment (``boe_b0555``). The reading and its sources (the block
+  heading over cols 0050-0100, ``boe_b0699`` / ``v0307_m``, EBA Q&A 2015_2010):
+  ``_collateral_cap_expr``.
 - The intra-row waterfalls are Formulas over positive magnitudes:
   0040 = 0010 - 0030 (- 0035 under Basel 3.1); 0090 = 0050 + 0060 + 0070
   + 0080; 0110 = 0040 - 0090 + 0100; 0150 = max(0, 0110 - 0130). 0110
@@ -366,10 +375,23 @@ _COLLATERAL_ADJUSTED_COL: str = "collateral_adjusted_value"
 _COLLATERAL_MARKET_COL: str = "collateral_market_value"
 _NETTING_ADJUSTED_COL: str = "on_bs_netting_adjusted_value"
 _NETTING_ALLOCATION_COL: str = "on_bs_netting_amount"
-# Derived per row by ``_prepare`` under Basel 3.1: col 0035's capped reduction,
-# and col 0130's collateral with the deposit taken out.
+# Derived per row by ``_prepare``: col 0035's capped reduction (Basel 3.1 only),
+# col 0130's Cvam (the deposit taken out under Basel 3.1; capped at the exposure
+# it secures in both regimes) and col 0140's adjustment. See the module docstring
+# ("COLLATERAL IS CAPPED AT THE EXPOSURE IT SECURES").
 _NETTING_REDUCTION_COL: str = "c07_netting"
 _FIN_COLLATERAL_COL: str = "c07_fin_collateral"
+_VOL_MAT_ADJ_COL: str = "c07_vol_mat_adj"
+
+# The four per-row substitution-block magnitudes ``_protection_exprs`` derives
+# (cols 0050-0080, already capped together at the row's exposure). The col 0130
+# cap reads them as what the substitution block has taken off the exposure.
+_SUBSTITUTION_BLOCK_COLS: tuple[str, ...] = (
+    "c07_prot_guarantee",
+    "c07_prot_credit_derivative",
+    "c07_prot_fcsm",
+    "c07_prot_other_funded",
+)
 
 # The capped unfunded limb (cols 0050 + 0060 per row) that col 0100's inflow is
 # measured on — see ``_protection_exprs``.
@@ -532,7 +554,14 @@ def _net_after_substitution(cells: Mapping[str, float | None], _prior: bool) -> 
 
 
 def _fully_adjusted(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0150 = max(0, 0110 - 0130)."""
+    """0150 = max(0, 0110 - 0130).
+
+    E* is floored at zero PER EXPOSURE (Art. 223(5)), and that floor is applied
+    where it belongs — col 0130 is capped at each exposure's own share of col
+    0110 (``_collateral_cap_expr``), so ``0110 - 0130`` is already a sum of
+    non-negative terms and this cell-level ``max`` never binds. It used to be the
+    only floor, which let one loan's unused collateral reduce every other loan.
+    """
     return max(0.0, (cells["0110"] or 0.0) - (cells["0130"] or 0.0))
 
 
@@ -1139,7 +1168,11 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     second_pass = _protection_exprs(prepared_cols)
     if netting_apart:
         second_pass.append(_netting_reduction_expr(prepared_cols))
-    return prepared.with_columns(second_pass)
+    prepared = prepared.with_columns(second_pass)
+    # Third pass: col 0130's cap is what the exposure has LEFT after col 0035 and
+    # the substitution block, both derived by the second pass.
+    collateral_cap = _collateral_cap_expr(set(prepared.columns), netting_apart=netting_apart)
+    return prepared if collateral_cap is None else prepared.with_columns(collateral_cap)
 
 
 def _reports_netting_apart(cols: set[str], *, is_b31: bool) -> bool:
@@ -1151,15 +1184,17 @@ def _reports_netting_apart(cols: set[str], *, is_b31: bool) -> bool:
     is reported as the financial collateral Art. 219 makes it), and on a frame
     without the carrier (a synthetic unit frame, a projected legacy extract),
     where there is nothing to carve out and col 0130 keeps the whole collateral
-    column. ``_prepare`` and ``_row_cells`` both ask this one question, so the
-    derived columns and the cells that bind them cannot disagree.
+    column. ``_prepare`` asks it once and hands the answer to every expression
+    that depends on it (the carve-out, the col 0035 reduction and the col 0130
+    cap), so they cannot disagree; ``_row_cells`` binds col 0035 on the regime
+    alone, because an underived reduction is the structural null it should be.
     """
     return is_b31 and _NETTING_ADJUSTED_COL in cols
 
 
 @cites("PS1/26 Art. 223")
 def _financial_collateral_exprs(cols: set[str], *, netting_apart: bool) -> list[pl.Expr]:
-    """Per-row magnitudes for cols 0130 (Cvam) and 0140 (market value - Cvam).
+    """Per-row magnitudes for cols 0130 (Cvam, UNCAPPED) and 0140 (market value - Cvam).
 
     PS1/26 Annex II: col 0130 is the "Financial collateral adjusted value (Cvam)"
     and col 0140 the "joint impact of volatility and maturity adjustments
@@ -1170,8 +1205,17 @@ def _financial_collateral_exprs(cols: set[str], *, netting_apart: bool) -> list[
     are the collateral that is NOT the deposit: each collateral carrier less its
     netting part. Otherwise they are the collateral carriers as sealed.
 
-    The adjusted column is derived only when the deposit is carved out; with
-    nothing to carve, col 0130 binds the sealed carrier directly.
+    BOTH ARE ZERO ON A SIMPLE-METHOD ROW. Annex II: cols 0120-0140 "shall be
+    reported for exposures subject to the Financial Collateral Comprehensive
+    Method", and EBA Q&A 2015_2010 puts Simple-Method collateral in cols 050-100
+    (here col 0070). For an SA row under Art. 222 the engine zeroes
+    ``collateral_adjusted_value`` (the method does not reduce the exposure
+    value) and KEEPS ``collateral_market_value``, so market less adjusted
+    reported the whole collateral as a "volatility and maturity adjustment" under
+    a col 0130 of zero (``boe_b0555``). See ``_under_comprehensive_method``.
+
+    Col 0130's Cvam is capped at the exposure it secures afterwards, by
+    ``_collateral_cap_expr``; col 0140 is not (it is reported as calculated).
     """
 
     def money(column: str) -> pl.Expr:
@@ -1183,12 +1227,73 @@ def _financial_collateral_exprs(cols: set[str], *, netting_apart: bool) -> list[
         adjusted = adjusted - money(_NETTING_ADJUSTED_COL)
         market = market - money(_NETTING_ALLOCATION_COL)
 
+    comprehensive = _under_comprehensive_method(cols)
     exprs: list[pl.Expr] = []
-    if netting_apart and _COLLATERAL_ADJUSTED_COL in cols:
-        exprs.append(adjusted.alias(_FIN_COLLATERAL_COL))
+    if _COLLATERAL_ADJUSTED_COL in cols:
+        exprs.append(
+            pl.when(comprehensive).then(adjusted).otherwise(0.0).alias(_FIN_COLLATERAL_COL)
+        )
     if _COLLATERAL_MARKET_COL in cols:
-        exprs.append((market - adjusted).alias("c07_vol_mat_adj"))
+        exprs.append(
+            pl.when(comprehensive).then(market - adjusted).otherwise(0.0).alias(_VOL_MAT_ADJ_COL)
+        )
     return exprs
+
+
+def _under_comprehensive_method(cols: set[str]) -> pl.Expr:
+    """True on a row whose collateral the Financial Collateral Comprehensive Method values.
+
+    The Art. 191A election is firm-wide and the ledger states it per row:
+    ``engine/crm/simple_method.py::compute_fcsm_columns`` runs only under the
+    Simple Method and writes a non-null ``fcsm_collateral_value`` on every
+    exposure (``0.0`` where nothing is pledged); under the Comprehensive Method
+    the carrier is never produced and the sealed ledger carries it as a typed
+    null. A frame without the column (a synthetic or projected extract) has no
+    Simple Method on it at all.
+    """
+    if _FCSM_CARRIER not in cols:
+        return pl.lit(value=True)
+    return pl.col(_FCSM_CARRIER).is_null()
+
+
+@cites("CRR Art. 223")
+@cites("PS1/26 Art. 223")
+def _collateral_cap_expr(cols: set[str], *, netting_apart: bool) -> pl.Expr | None:
+    """Col 0130's Cvam capped at what is left of the exposure it secures — or None.
+
+    The engine floors each exposure at zero after its OWN collateral (Art.
+    223(5): E* = max{0, ...}), so collateral larger than its exposure is unused.
+    Summed whole into col 0130 and floored only at the CELL
+    (``_fully_adjusted``), one loan's excess came off every other loan on the
+    sheet and col 0150 fell below col 0200 (``boe_b0471`` / ``boe_b0556``).
+
+    THE READING TAKEN: col 0130 is capped per exposure; col 0140 is not. Annex
+    II's col 0130 instruction gives only the formula Cvam = C(1-Hc-Hfx)(t-t*)/
+    (T-t*). The block heading over cols 0050-0100 states the cap: "Collateral
+    that has an effect on the exposure value ... shall be capped at the exposure
+    value". The live ERROR rules ``boe_b0699`` / ``v0307_m`` ({c0150} = {c0110}
+    + {c0120} + {c0130}) admit no other reading once col 0150 is the
+    per-exposure E*. And EBA Q&A 2015_2010 answers the over-collateralised case
+    for this template: col 0150 "shall be floored to zero", col 0130 "reported
+    as calculated ... however capped at the volatility adjusted value EVA ...
+    in line with validation rule v0307_m", col 0140 left as calculated (its
+    worked example caps c130 from -110 to -105 and keeps c140 at -10).
+
+    The cap is the row's own share of col 0110 — its exposure net of provisions
+    (``_net_exposure_basis``), less the netted deposit col 0035 already took
+    (Basel 3.1) and less the covered part the substitution block moved out —
+    which is EVA, col 0120 (the exposure volatility adjustment) not being
+    modelled. Under CRR the netted deposit is part of the Cvam being capped.
+    Uncapped (None) on a frame with no gross carrier, as col 0035 is.
+    """
+    basis = _net_exposure_basis(cols, _GROSS_CARRIERS)
+    if basis is None or _FIN_COLLATERAL_COL not in cols:
+        return None
+    taken = [pl.col(col) for col in _SUBSTITUTION_BLOCK_COLS]
+    if netting_apart:
+        taken.append(pl.col(_NETTING_REDUCTION_COL))
+    remaining = (basis - pl.sum_horizontal(taken)).clip(lower_bound=0.0)
+    return pl.min_horizontal(pl.col(_FIN_COLLATERAL_COL), remaining).alias(_FIN_COLLATERAL_COL)
 
 
 @cites("PS1/26 Art. 219")
@@ -1896,18 +2001,21 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
         "0090": CellSpec(Formula(refs=("0050", "0060", "0070", "0080"), fn=_substitution_outflow)),
         "0110": CellSpec(Formula(refs=("0040", "0090", "0100"), fn=_net_after_substitution)),
         "0120": CellSpec(Formula(refs=(), fn=_const(0.0))),
-        # Col 0130: the collateral with the netted deposit taken out where col
-        # 0035 reports it (Basel 3.1), else the sealed carrier as it stands.
+        # Col 0130: each exposure's Cvam capped at what it secures, with the netted
+        # deposit taken out where col 0035 reports it (Basel 3.1) and nothing on a
+        # Simple-Method row (``_financial_collateral_exprs`` / ``_collateral_cap_expr``).
+        # The sealed carrier stays the binding on a frame without it, where it is
+        # the recorded structural null.
         "0130": CellSpec(
             Sum(
                 _FIN_COLLATERAL_COL
-                if _reports_netting_apart(cols, is_b31=is_b31)
+                if _COLLATERAL_ADJUSTED_COL in cols
                 else _COLLATERAL_ADJUSTED_COL
             ),
             predicate=member,
         ),
         "0140": (
-            CellSpec(Sum("c07_vol_mat_adj"), predicate=member)
+            CellSpec(Sum(_VOL_MAT_ADJ_COL), predicate=member)
             if _COLLATERAL_MARKET_COL in cols
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),

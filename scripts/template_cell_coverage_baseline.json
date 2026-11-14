@@ -114,6 +114,16 @@
       },
       {
         "source": "reporting",
+        "portfolio": "over-collateralised",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "over-collateralised",
+        "regime": "b31"
+      },
+      {
+        "source": "reporting",
         "portfolio": "facility-share-binding",
         "regime": "crr"
       },
@@ -207,13 +217,13 @@
       "BASEL_3_1",
       "CRR"
     ],
-    "runs": 40,
+    "runs": 42,
     "prior_period_runs": 14,
     "config_source": "each portfolio runs under its OWN canonical config - RUNS in tests/acceptance/reporting/test_supervisory_validations.py for the reporting fixtures, tests/properties/portfolios.py::config_for for the corpus. One uniform config would strand six portfolios in the missing-model_permissions SA fallback and record their IRB columns dead.",
     "excludes": {
       "tests/fixtures/reporting_funded_protection_portfolio.py": "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a config electing the Art. 222 SIMPLE Method (_fcsm_config); registered against _sa_config, which defaults to comprehensive, the fixture sits in the gate with its own feature silenced - C 07.00 col 0070 reads 0.00 under comprehensive and non-zero under SIMPLE on the identical bundle, and dropping its two runs left this census at 210 live / 129 dead unchanged, so it contributed no liveness. Registered CORRECTLY it exposes two ERROR-severity supervisory breaks (boe_b0471, v0308_m) that predate the carrier fix, so the registration is filed as a Tier 1 item with the Art. 222 defect rather than banked here. Its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Registering it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 43.4
+    "seconds": 46.1
   },
   "counts": {
     "template_column_pairs": 339,
@@ -222,11 +232,11 @@
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
-    "frames": 950,
-    "numeric_cells": 324130,
-    "non_null_cells": 57353,
-    "non_zero_cells": 16097,
-    "cell_fill_pct": 4.97
+    "frames": 1030,
+    "numeric_cells": 347358,
+    "non_null_cells": 63604,
+    "non_zero_cells": 18211,
+    "cell_fill_pct": 5.24
   },
   "caveats": [
     "reporting/facility-share-binding/b31: OF 02.00: the engine's post-floor total (1699200.00) differs from max(U-TREA 1245491.29, floor 1643200.00) by 56000.00 \u2014 the engine floors the modelled subset only"

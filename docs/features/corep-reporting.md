@@ -499,6 +499,30 @@ flowchart LR
         in columns 0130 / 0140. Under the Financial Collateral **Simple** Method the deposit
         is recognised as Simple-Method cash (column 0070) and column 0035 is zero.
 
+    !!! info "Columns 0130 / 0140 — collateral is capped at the exposure it secures"
+        The engine floors each exposure at zero after its **own** collateral (Art. 223(5):
+        E\* = max{0, …}), so collateral worth more than its loan is simply unused. The
+        template follows it, in both regimes:
+
+        - **0130** is each exposure's adjusted collateral value (Cvam), **capped** at what is
+          left of that exposure after column 0030, column 0035 (Basel 3.1) and the
+          substitution columns 0050–0080 — its own share of column 0110. One loan's unused
+          collateral never reduces another loan's figures, and column 0150 is the sum of the
+          per-exposure E\* (`v0307_m` / `boe_b0699`: 0150 = 0110 + 0120 + 0130).
+        - **0140** is the joint volatility and maturity adjustment **as calculated**
+          (C − Cvam), not scaled down by the cap.
+
+        This is the reading of EBA Q&A 2015_2010 for this template (column 0150 *"shall be
+        floored to zero"*, column 0130 *"capped at the volatility adjusted value EVA … in line
+        with validation rule v0307_m"*, column 0140 left as calculated in its worked example),
+        and of the Annex II heading over columns 0050–0100: *"Collateral that has an effect on
+        the exposure value … shall be capped at the exposure value"*. Until the 2026-11 fix
+        column 0130 summed every pledge whole and only the column 0150 cell was floored.
+
+        Under the Financial Collateral **Simple** Method columns 0130 and 0140 are **zero**:
+        Annex II reports columns 0120–0140 *"for exposures subject to the Financial Collateral
+        Comprehensive Method"*, and Simple-Method collateral is in column 0070.
+
     !!! info "Not every row carries every column"
         The published OF 07.00 greys out much of its grid, and a greyed cell is left empty:
 

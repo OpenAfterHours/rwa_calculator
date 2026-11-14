@@ -112,10 +112,10 @@ _VAL_LOCATOR: Final = re.compile(r"\.\./val/(?P<file>[^/#]+)#(?P<id>.+)")
 # A reference and its import are matched as whole elements, with the indentation
 # of their line when they start one, and their attribute read from the match:
 # one quantifier per element, so the scan is linear in the schema's length.
-_LINKBASE_REF: Final = re.compile(r"(?:^[ \t]*)?<link:linkbaseRef\b[^>]*/>\r?\n?", re.M)
+_LINKBASE_REF: Final = re.compile(r"(?:^[ \t]+)?<link:linkbaseRef\b[^>]*/>\r?\n?", re.M)
 _HREF: Final = re.compile(r'\bxlink:href="([^"]+)"')
 _ASSERTION_REF: Final = re.compile(r"\.\./val/(vr-.+?)(-err-en|-lab-en)?\.xml")
-_TABLE_IMPORT: Final = re.compile(r"(?:^[ \t]*)?<xsd:import\b[^>]*/>\r?\n?", re.M)
+_TABLE_IMPORT: Final = re.compile(r"(?:^[ \t]+)?<xsd:import\b[^>]*/>\r?\n?", re.M)
 _TABLE_LOCATION: Final = re.compile(r'schemaLocation="\.\./tab/([^/"]+)/')
 
 _XLINK_HREF: Final = f"{{{NS_XLINK}}}href"

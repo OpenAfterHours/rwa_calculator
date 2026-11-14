@@ -208,7 +208,8 @@ def test_a_wheel_shipping_no_modules_fails_rather_than_passes(tmp_path: Path) ->
     problems = gate.probe_modules(venv, gate.wheel_modules(wheel, _PACKAGE), _PROBE, tmp_path, {})
 
     # Assert
-    assert problems and "nothing was imported" in problems[0]
+    assert len(problems) == 1
+    assert "nothing was imported" in problems[0]
 
 
 # ---------------------------------------------------------------------------

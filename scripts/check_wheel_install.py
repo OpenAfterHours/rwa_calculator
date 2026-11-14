@@ -365,7 +365,7 @@ def probe_app(venv: Path, factory: str, workdir: Path, env: dict[str, str]) -> l
     port = _free_port()
     log = workdir / "app.log"
     with log.open("w", encoding="utf-8") as sink:
-        server = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
+        server = subprocess.Popen(
             [str(venv_python(venv)), "-I", "-c", _SERVE_APP, factory, str(port)],
             cwd=workdir,
             env=env,
@@ -632,7 +632,7 @@ def _run(
     stdin: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(  # noqa: S603 — fixed argv, no shell
+        return subprocess.run(
             argv,
             cwd=cwd,
             env=env,

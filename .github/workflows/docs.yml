@@ -33,6 +33,7 @@ jobs:
       # the lockfile has no wheels for makes `uv sync` build sdists from
       # source. Python 3.15 broke every deploy that way — `loro` (via marimo)
       # ships wheels only up to cp314, and its PyO3 refuses to build for 3.15.
+      # tests/contracts/test_workflow_python_pins.py gates the floating form.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

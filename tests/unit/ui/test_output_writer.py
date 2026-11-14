@@ -10,6 +10,7 @@ Tests cover:
 from __future__ import annotations
 
 import importlib.util
+import uuid
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +22,11 @@ from tests.fixtures.recon_ledger import with_reporting_ledger
 
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
 from rwa_calc.api.results_cache import ResultsCache
-from rwa_calc.ui.app.output_writer import OutputWriteResult, write_selected_formats
+from rwa_calc.ui.app.output_writer import (
+    OutputWriteResult,
+    export_stamp,
+    write_selected_formats,
+)
 
 XLSXWRITER_AVAILABLE = importlib.util.find_spec("xlsxwriter") is not None
 
@@ -124,3 +129,46 @@ def test_writes_pillar3_workbook(sample_response: CalculationResponse, tmp_path:
     assert (subdir / "rwa_pillar3.xlsx").exists()
     assert result.errors == ()
     assert any(f.name == "rwa_pillar3.xlsx" for f in result.files)
+
+
+def test_export_stamp_is_a_minted_run_id_unchanged() -> None:
+    """Every registered run id is ``uuid4().hex``; its stamp is the same 32 characters."""
+    # Arrange
+    run_id = uuid.uuid4().hex
+
+    # Act
+    stamp = export_stamp(run_id)
+
+    # Assert
+    assert stamp == run_id
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "..",
+        "../" + "0" * 30,
+        "0" * 31 + "/",
+        "0" * 32 + "/..",
+        "r1",
+        "",
+        "0x" + "0" * 30,  # int(..., 16) accepts a prefix: the stamp must not
+        " " + "0" * 31,  # nor surrounding whitespace
+        "A" * 32,  # nor a case uuid4().hex never mints
+        "0" * 33,
+    ],
+)
+def test_export_stamp_refuses_anything_a_run_id_is_not(run_id: str) -> None:
+    """The save route takes its run id from the URL, so the subfolder name is built
+    only from a value that cannot carry path syntax — or is refused outright.
+
+    This is the SonarCloud pythonsecurity:S6549 flow (``POST
+    /results/{run_id}/save`` -> ``(folder / f"rwa_export_{run_id}").resolve()``):
+    the URL's text must not reach a filesystem path, even though only a
+    registered id gets that far.
+    """
+    # Act
+    stamp = export_stamp(run_id)
+
+    # Assert
+    assert stamp is None

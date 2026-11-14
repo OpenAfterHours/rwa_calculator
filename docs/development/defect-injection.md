@@ -68,7 +68,7 @@ edits real source files. Their failures would be yours.
 |---|---|
 | `DETECTED` | A gate went red. We know which, at what tier, and how long it took. |
 | `ESCAPED` | The mutant changed output and every gate stayed green. |
-| `UNREACHABLE` | The mutant applied cleanly but changed no observable output. |
+| `UNREACHABLE` | No gate went red, and the mutant changed no observable output. |
 
 The three stay distinct everywhere they are published — in the scorecard JSON, in
 the rendered board, and in the ratchet. Collapsing `UNREACHABLE` into `ESCAPED`
@@ -88,11 +88,31 @@ were vacuous. They were not — that scalar is only consumed when a firm elects
 applied perfectly to a **dead path**.
 
 Without a reachability probe, that mutant scores as an escape and the headline
-rate is fiction in the pessimistic direction. So every mutant must be shown to
-move an output *before* any gate runs. The probe runs one portfolio through both
-regimes and hashes every generated template cell; both regimes, because a
-Basel-3.1-only mutant moves nothing under CRR and "wrong regime" must not be
-mistaken for "dead path".
+rate is fiction in the pessimistic direction. So every mutant is probed for
+whether it moves an output, and a mutant that no gate catches counts as an escape
+only if it did. The probe runs `rich` through both regimes and hashes every
+generated template cell, escalating to the whole RUNS matrix when `rich` shows
+nothing. Both regimes, because a Basel-3.1-only mutant moves nothing under CRR,
+and "wrong regime" must not be mistaken for "dead path".
+
+**The gates run on every mutant; the probe never overrides one.** The probe sees
+only the RUNS portfolios' templates, and a unit test reaches paths no portfolio
+exercises: a scalar wrapper, or an (approach, class) pair no fixture carries. A
+gate going red is a detection whatever the probe says. The probe decides one
+thing: whether a mutant **no** gate caught is `ESCAPED` or `UNREACHABLE`. Until
+2026-11-14 the harness skipped the gates whenever the probe said unreachable.
+That went unnoticed only because the probe never said so (see below). Once it
+did, two of the four known defects that a unit-test gate catches would have
+scored `UNREACHABLE`.
+
+**The digest must be deterministic, and is checked to be.** The pipeline's
+parallel sums are not bit-reproducible. Two unmutated captures rendered one
+Basel 3.1 C 09.01 cell as `51355833.333333336` and then `51355833.33333333`.
+Hashed at full precision, that one-ulp difference moved the digest on every call,
+so every mutant probed reachable and none was ever escalated to the wide matrix.
+Floats now enter the digest at `DIGEST_SIGNIFICANT_FIGURES` (10). Each baseline
+is also captured twice, and the campaign aborts (exit 3) before scoring anything
+if the two captures disagree.
 
 ### The two controls
 
@@ -104,9 +124,12 @@ The catalogue carries a matched pair whose verdicts prove the probe still works:
 - `control-reachable-output-floor-schedule` — the schedule step that *is* read.
   **Must** come back `REACHABLE`.
 
-Any mutant whose verdict contradicts its `expect_unreachable` flag is reported
-under **expectation mismatches**, which is the signal that the catalogue has
-rotted against the code. `injection_ratchet.py --check` fails on any such
+Both are judged on the **probe's** result (`reachable` in the scorecard), not on
+the verdict. A gate may still catch the dead-path control: its pack key is listed
+by name in `scripts/generate_regulatory_tables.py`, so renaming it can turn the
+docs freshness test red. That is a detection, not a broken probe. Any mutant whose probe result contradicts its
+`expect_unreachable` flag is reported under **expectation mismatches**, which is
+the signal that the catalogue has rotted against the code. `injection_ratchet.py --check` fails on any such
 mismatch, independently of the baseline: while a control disagrees with its flag
 there is no licence to believe any non-detection verdict, so there is nothing
 worth ratcheting.
@@ -366,15 +389,26 @@ uv run python scripts/injection_ratchet.py --summary \
 Both are real, both are recorded in `scripts/injection_baseline.json` under
 `blockers`, and both are owned elsewhere. Do not rediscover them.
 
-**The reachability probe's control pair has stopped discriminating** (task
-`0.1a`). `control-unreachable-output-floor-full` carries
-`expect_unreachable=True` and comes back **reachable**, because
-`scripts/generate_regulatory_tables.py:314` enumerates the very pack key the
-mutation renames — so the mutation moves a generated docs artefact and the probe
-sees output move. The catalogue's own rationale is explicit that while a control
-contradicts its flag, every "not detected" verdict is unsafe. Diagnosed, not yet
-re-based. `--check` fails on it independently of the baseline, which is the
-intended behaviour, not a nuisance.
+**Probe-unreachable catalogue entries.** With the probe deterministic, 11 of the
+22 mutants move nothing in the RUNS matrix (measured with `--reachability-only`,
+2026-11-14):
+- **3 by design:** the flagged `expect_unreachable` mutants.
+- **8 the catalogue expects to be reachable:**
+  - three of the four known defects (`known-c02-phantom-class-key`,
+    `known-p3-empty-class-tuple`, `known-sovereign-ladder-flattened`);
+  - `lessons-e3-subtotal-double-count`;
+  - `generic-firb-corporate-stranded`, `generic-benefit-cap-inverted`,
+    `generic-b31-institution-cqs2` and `generic-scaling-regime-inverted`.
+
+Two causes so far:
+- C 02.00 rows that are empty in every RUNS portfolio (the A-IRB institutions and
+  F-IRB specialised-lending lookups).
+- `engine/irb/formulas.py::calculate_irb_rwa`, a scalar wrapper the pipeline
+  never calls.
+
+Gates still run on all of them. Any mutant that **no** gate catches scores
+`UNREACHABLE` and fails the trust check until it is re-targeted at a live site,
+or a RUNS portfolio exercises its path.
 
 **A quiet tree** (task `0.1`). The campaign mutates `src/` one file at a time and
 refuses to start if any catalogue target is dirty in git, so it cannot run while
@@ -382,12 +416,25 @@ anyone is editing `src/` — and if it did, their failures would score as
 detections. This is why the first bankable run is a manual dispatch on a quiet
 `master` rather than an ordinary nightly.
 
-A third, now closed: the harness hardcoded `uv run` for every gate, so on a
-runner where `uv` cannot spawn every gate returned non-zero, every mutant scored
-`DETECTED`, and the campaign would have published a fabricated ~100% rate.
-`DEFECT_INJECTION_PYTHON` plus the spawn pre-flight fixed that. The nightly does
-not depend on the override — GitHub runners have `uv` — but a locally measured
-baseline does.
+Two more, now closed:
+- **The interpreter override.** The harness hardcoded `uv run` for every gate.
+  On a runner where `uv` cannot spawn, every gate returned non-zero, every mutant
+  scored `DETECTED`, and the campaign would have published a fabricated ~100%
+  rate. `DEFECT_INJECTION_PYTHON` plus the spawn pre-flight fixed that. The
+  nightly does not depend on the override, since GitHub runners have `uv`, but a
+  locally measured baseline does.
+- **The control pair that stopped discriminating** (task `0.1a`). Every mutant,
+  `control-unreachable-output-floor-full` included, probed reachable because the
+  digest was not deterministic (above). It was recorded as a docs artefact moving
+  under the probe, but the probe hashes template cells only. Fixed 2026-11-14:
+  under the stable probe, all three `expect_unreachable` mutants come back
+  `UNREACHABLE` and `control-reachable-output-floor-schedule` comes back
+  reachable.
+
+A run of the harness also used to leave `engine/irb/formulas.py` dirty. That file
+is committed with CRLF endings, and `injected` restored the decoded text rather
+than the bytes. It now restores and verifies the bytes, so the next campaign is
+no longer refused on a dirty target.
 
 ## Reading the board
 

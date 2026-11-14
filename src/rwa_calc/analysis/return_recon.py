@@ -1948,7 +1948,9 @@ def _terms(pairs: Iterable[_KeyPair]) -> tuple[CellTerm, ...]:
     for pair in pairs:
         amounts[pair.term] += pair.delta
         keys[pair.term] += 1
-        differing[pair.term] += int(pair.delta != 0.0)
+        # Exact by design (see ``CellTerm``): a float is falsy only at +/-0.0, so
+        # this is ``delta != 0.0`` without a float equality (SonarCloud S1244).
+        differing[pair.term] += int(bool(pair.delta))
 
     return tuple(
         CellTerm(

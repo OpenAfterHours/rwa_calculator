@@ -21,7 +21,7 @@ incapable of seeing the /100 direction, and the /100 direction is the one that
 UNDERSTATES capital.
 
 Measured on this branch, CRR, one GBP 1,000,000 senior corporate A-IRB exposure
-(``internal_pd=0.01``, ``firm_lgd=0.45``, 5y):
+(``internal_pd=0.01``, ``firm_lgd=0.45``, 5y, annual revenue GBP 100m):
 
 =========================  =================  ==============
 LGD as supplied            ``rwa_final``      Signal raised
@@ -37,6 +37,31 @@ finite, in-bounds result — which is exactly why this module states the blind
 spot as a separate, provable assertion rather than pretending the invariant
 covers it. Closing it needs a plausibility signal (a distribution check against
 the portfolio, or a declared expected scale), not a tighter bound.
+
+The same exposure under Basel 3.1 (the nightly's ``B31`` leg), measured
+2026-11-14:
+
+=========================  =================  ==============
+LGD as supplied            ``rwa_final``      Signal raised
+=========================  =================  ==============
+``0.45``   (correct)       GBP 1,240,475.01   none (correct)
+``0.0045`` (/100)          GBP 689,152.78     **none**
+=========================  =================  ==============
+
+A **44.4% understatement**, still with nothing raised. It is smaller only
+because the Basel 3.1 A-IRB LGD floor (pack ``lgd_floors``, gated by the
+``airb_lgd_floor`` Feature) lifts the 0.0045 back to the unsecured floor, so
+the loss is ``1 - floor / 0.45`` exactly. The floor bounds the error; it does
+not reveal it. The correct control is the CRR one without the 1.06 scaling
+factor, which Basel 3.1 removes.
+
+The revenue is what puts the exposure on A-IRB in BOTH regimes. Without it,
+Basel 3.1 treats the obligor as a large corporate (``CLS008``) and routes it to
+F-IRB, whose supervisory LGD ignores the firm's. The B31 leg then measured an
+LGD error that could not move anything (control GBP 1,102,644.45, 0.0%
+understatement), and failed every night from the module's first run because
+the control it was compared with was the CRR one. GBP 100m is above both
+regimes' SME turnover thresholds, so the CRR control is unchanged by it.
 
 Pipeline position:
     corpus portfolio -> ratio x k -> full pipeline -> triage invariant
@@ -57,6 +82,7 @@ from hypothesis import strategies as st
 from rwa_calc.contracts.errors import ERROR_PD_OUT_OF_RANGE
 from tests.properties.portfolios import ExposureSpec, build_bundle
 from tests.robustness.harness import (
+    DEFAULT_REGIME,
     Injection,
     assert_accounted,
     present_columns,
@@ -72,21 +98,25 @@ from tests.robustness.strategies import (
     ratio_columns,
 )
 
-#: The A-IRB exposure the measured table above is built on. A single obligor so
+#: The A-IRB exposure the measured tables above are built on. A single obligor so
 #: the movement is attributable, and A-IRB so the firm's own LGD is the input
-#: that moves (an SA exposure ignores ``lgd`` entirely and would measure nothing).
+#: that moves (an SA exposure ignores ``lgd`` entirely and would measure nothing;
+#: so does an F-IRB one). ``annual_revenue`` is what keeps it on A-IRB under
+#: Basel 3.1 — without it the obligor is a large corporate, restricted to F-IRB.
 _MEASURED_SPEC = ExposureSpec(
     entity_type="corporate",
     drawn=1_000_000.0,
     internal_pd=0.01,
     firm_lgd=0.45,
     maturity_years=5.0,
+    annual_revenue=100_000_000.0,
 )
 
-#: Measured on this branch; see the module docstring.
-_MEASURED_RWA_CORRECT = 1_314_904.0
+#: The correct-LGD control, per nightly regime leg; see the module docstring.
+_MEASURED_RWA_CORRECT: dict[str, float] = {"CRR": 1_314_904.0, "B31": 1_240_475.0}
 #: The floor a /100 unit error must fall through for the blind spot to be real.
-_MATERIAL_UNDERSTATEMENT = 0.90
+#: Lower under Basel 3.1 because the A-IRB LGD floor caps the loss (44.4%).
+_MATERIAL_UNDERSTATEMENT: dict[str, float] = {"CRR": 0.90, "B31": 0.40}
 
 
 # =============================================================================
@@ -133,6 +163,12 @@ def test_a_hundredfold_lgd_unit_error_is_invisible_to_the_invariant() -> None:
     portfolio as clean.
     """
     # Arrange
+    assert DEFAULT_REGIME in _MEASURED_RWA_CORRECT, (
+        f"no measured control for regime {DEFAULT_REGIME!r}; measure it and add it "
+        "to the module docstring and both tables before trusting this test there"
+    )
+    expected_rwa = _MEASURED_RWA_CORRECT[DEFAULT_REGIME]
+    material = _MATERIAL_UNDERSTATEMENT[DEFAULT_REGIME]
     clean_bundle = build_bundle((_MEASURED_SPEC,))
     clean = run(clean_bundle)
     clean_rwa = float(clean.results.collect()["rwa_final"].sum())
@@ -146,11 +182,11 @@ def test_a_hundredfold_lgd_unit_error_is_invisible_to_the_invariant() -> None:
     understatement = 1.0 - (scaled_rwa / clean_rwa)
 
     # Assert
-    assert clean_rwa == pytest.approx(_MEASURED_RWA_CORRECT, rel=1e-6), (
-        "the control moved; re-measure the table in this module's docstring "
-        f"before reading anything else here (got {clean_rwa:,.2f})"
+    assert clean_rwa == pytest.approx(expected_rwa, rel=1e-6), (
+        f"the {DEFAULT_REGIME} control moved; re-measure the tables in this module's "
+        f"docstring before reading anything else here (got {clean_rwa:,.2f})"
     )
-    assert understatement > _MATERIAL_UNDERSTATEMENT, (
+    assert understatement > material, (
         f"a /100 LGD moved RWA by only {understatement:.1%} "
         f"(GBP {clean_rwa:,.2f} -> GBP {scaled_rwa:,.2f})"
     )

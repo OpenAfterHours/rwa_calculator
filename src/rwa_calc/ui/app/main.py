@@ -64,7 +64,7 @@ from rwa_calc.ui.app.calculator_state import (
     load_calculator_state,
     save_calculator_state,
 )
-from rwa_calc.ui.app.output_writer import write_selected_formats
+from rwa_calc.ui.app.output_writer import export_stamp, write_selected_formats
 from rwa_calc.ui.app.progress import (
     EXPORT_STAGE_NAME,
     EXPORT_STAGE_SEQUENCE,
@@ -612,8 +612,10 @@ def _register_pages(app: FastAPI) -> None:
         output_formats: Annotated[list[str] | None, Form()] = None,
     ) -> Response:
         # Re-export an already-computed run to a chosen folder without recomputing.
+        # The subfolder is stamped from ``export_stamp``, never from the URL text.
         response = get_run(run_id)
-        if response is None:
+        stamp = export_stamp(run_id)
+        if response is None or stamp is None:
             return _not_found(
                 request,
                 "That result has expired or does not exist — re-run the calculation.",
@@ -641,7 +643,7 @@ def _register_pages(app: FastAPI) -> None:
                 status_code=400,
             )
         outcome = write_selected_formats(
-            response, Path(validation.data_path), formats, run_id=run_id
+            response, Path(validation.data_path), formats, run_id=stamp
         )
         return templates.TemplateResponse(
             request=request,

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -43,6 +44,9 @@ _PILLAR3_NAME = "rwa_pillar3.xlsx"
 
 # Message shown when a workbook format is requested but xlsxwriter is not installed.
 _XLSX_HINT = "Excel/COREP/Pillar III export needs xlsxwriter — install it with 'uv add xlsxwriter'."
+
+# A run id as the app mints it: ``uuid4().hex``, 32 lowercase hex digits.
+_MINTED_RUN_ID = re.compile(r"[0-9a-f]{32}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +89,9 @@ def write_selected_formats(
         folder: The user-chosen output folder (a run-stamped subfolder is made).
         formats: Any of ``parquet``, ``csv``, ``excel``, ``corep``, ``pillar3``
             (order kept).
-        run_id: The run identifier, used to stamp the isolating subfolder.
+        run_id: The run identifier, used to stamp the isolating subfolder. A
+            caller holding it as request text passes it through
+            ``export_stamp`` first, so none of that text reaches the path.
 
     Returns:
         OutputWriteResult with the resolved subfolder, written files and errors.
@@ -102,6 +108,29 @@ def write_selected_formats(
             errors.append(f"{fmt}: could not export to {subdir} ({exc}).")
             logger.warning("output write failed for %s: %s", fmt, exc)
     return OutputWriteResult(folder=str(subdir), files=tuple(files), errors=tuple(errors))
+
+
+def export_stamp(run_id: str) -> str | None:
+    """
+    The export subfolder's stamp for *run_id*, or None if it is not a minted run id.
+
+    Every run id the app registers is ``uuid4().hex``, and for those the stamp
+    is the same 32 characters. It is re-rendered from the id's 128-bit value
+    rather than copied from the string, so a caller that holds the id as
+    request text (the save route reads it from the URL) hands none of that text
+    to a filesystem path, and anything that is not exactly 32 lowercase hex
+    digits is refused. This closes SonarCloud pythonsecurity:S6549 (filesystem
+    oracle) on the save route's ``.resolve()`` of the subfolder.
+
+    Args:
+        run_id: A run identifier, possibly taken from an HTTP request.
+
+    Returns:
+        The 32-character stamp, or None when *run_id* is not a minted run id.
+    """
+    if _MINTED_RUN_ID.fullmatch(run_id) is None:
+        return None
+    return f"{int(run_id, 16):032x}"
 
 
 # =============================================================================

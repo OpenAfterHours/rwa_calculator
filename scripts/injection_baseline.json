@@ -6,14 +6,9 @@
   "bank_command": "uv run python scripts/injection_ratchet.py --bank --note '<why this baseline moved>' --ladder legacy --ladder full",
   "blockers": [
     {
-      "task": "0.1a",
-      "summary": "The reachability probe's control pair has stopped discriminating: control-unreachable-output-floor-full carries expect_unreachable=True and comes back REACHABLE, because scripts/generate_regulatory_tables.py:314 enumerates the very pack key the mutation renames. While a control contradicts its flag, every 'not detected' verdict in the scorecard is unsafe, so no rate measured now is bankable.",
-      "state": "Diagnosed, not yet re-based. --check fails on it independently of the baseline."
-    },
-    {
-      "task": "runner interpreter override",
-      "summary": "The harness hardcoded `uv run` for every gate. Where uv cannot spawn, every gate returns non-zero, every mutant scores DETECTED, and the campaign publishes a fabricated ~100% detection rate. DEFECT_INJECTION_PYTHON plus a spawn pre-flight that aborts rather than scoring is landing in scripts/defect_injection.py.",
-      "state": "Landing. The nightly runs on a runner that HAS uv, so it does not depend on the override \u2014 but a locally measured baseline does."
+      "task": "probe-unreachable catalogue entries",
+      "summary": "With the reachability probe made deterministic (2026-11-14), 11 of the 22 catalogue mutants move nothing in the RUNS matrix: the 3 flagged expect_unreachable, as designed, and 8 the catalogue expects to be reachable - known-c02-phantom-class-key, known-p3-empty-class-tuple, known-sovereign-ladder-flattened, lessons-e3-subtotal-double-count, generic-firb-corporate-stranded, generic-benefit-cap-inverted, generic-b31-institution-cqs2, generic-scaling-regime-inverted. Gates still run on all of them (a unit test reaches paths no portfolio does), but any that NO gate catches scores UNREACHABLE and fails the trust check until it is re-targeted at a live site or a RUNS portfolio exercises its path. Two causes seen so far: C 02.00 rows that are empty in every RUNS portfolio (the A-IRB institutions and F-IRB specialised-lending lookups), and engine/irb/formulas.py::calculate_irb_rwa, a scalar wrapper the pipeline never calls.",
+      "state": "Open - measured with --reachability-only; which of the 8 a gate catches is settled by the next campaign."
     },
     {
       "task": "0.1",

@@ -12,16 +12,18 @@ Three verdicts, not two
 -----------------------
 ``DETECTED``    a gate went red, and we know which one and how long it took.
 ``ESCAPED``     the mutant changed output and every gate stayed green.
-``UNREACHABLE`` the mutant applied cleanly but changed no observable output.
+``UNREACHABLE`` no gate went red AND the mutant changed no observable output.
 
 The third category is not bookkeeping. Mutating the rulepack's
 ``output_floor_pct_full`` from 0.725 to 0.100 once left 52/52 floor properties
 passing, which read as proof they were vacuous -- they were not, the scalar is
 only consumed under an election no test makes. Without a reachability probe that
 mutant scores as an escape and the headline rate is fiction in the pessimistic
-direction. So every mutant must be shown to move an output BEFORE any gate runs,
-and the catalogue carries two deliberate controls (one reachable, one not) whose
-verdicts prove the probe still works.
+direction. So every mutant is probed for whether it moves an output, and a mutant
+no gate catches is an escape only if it did. The probe never overrides a gate: it
+sees only the RUNS portfolios' templates, and a unit test that goes red on a path
+no portfolio exercises is still a detection. The catalogue carries two deliberate
+controls (one reachable, one not) whose PROBE results prove the probe still works.
 
 ``TIMEOUT`` is its own outcome and is never counted as a pass.
 
@@ -438,7 +440,13 @@ def injected(mutant: Mutant) -> Iterator[None]:
     if mutant.target not in targets():
         raise SystemExit(f"{mutant.id}: {mutant.target} is not a declared target")
 
+    # The BYTES are what must come back. ``read_text`` translates CRLF to LF, so
+    # restoring the decoded text rewrote a CRLF target (engine/irb/formulas.py
+    # is one) with LF endings while a text comparison called it restored — the
+    # tree was left dirty and the next campaign refused to start on it.
+    original_bytes = path.read_bytes()
     original = path.read_text(encoding="utf-8")
+    newline = "\r\n" if b"\r\n" in original_bytes else "\n"
     occurrences = original.count(mutant.old)
     if occurrences != 1:
         raise SystemExit(
@@ -448,17 +456,17 @@ def injected(mutant: Mutant) -> Iterator[None]:
         )
 
     def _restore() -> None:
-        if path.read_text(encoding="utf-8") != original:
-            path.write_text(original, encoding="utf-8")
+        if path.read_bytes() != original_bytes:
+            path.write_bytes(original_bytes)
 
     atexit.register(_restore)
     try:
-        path.write_text(original.replace(mutant.old, mutant.new), encoding="utf-8")
+        path.write_text(original.replace(mutant.old, mutant.new), encoding="utf-8", newline=newline)
         yield
     finally:
         _restore()
         atexit.unregister(_restore)
-        if path.read_text(encoding="utf-8") != original:
+        if path.read_bytes() != original_bytes:
             raise SystemExit(
                 f"{mutant.id}: FAILED TO RESTORE {mutant.target}. "
                 f"Run: git checkout -- {mutant.target}"
@@ -471,6 +479,22 @@ def injected(mutant: Mutant) -> Iterator[None]:
 
 
 NARROW_PROBE_PORTFOLIOS: tuple[str, ...] = ("rich",)
+
+#: Floats enter the digest at this many significant figures. The pipeline's
+#: parallel sums are not bit-reproducible: two unmutated runs in one process
+#: rendered the Basel 3.1 C 09.01 GB sheet as ``51355833.333333336`` and then
+#: ``51355833.33333333``. Hashed at full precision that one ulp changed the
+#: digest on every call, so EVERY mutant probed REACHABLE — the three
+#: ``expect_unreachable`` controls included, which is what the nightly ratchet
+#: reported, and no mutant was ever escalated from the narrow to the wide probe.
+#: Ten figures sits six orders of magnitude above that noise (relative ~1e-16)
+#: and far below anything a gate could see (the tightest tolerances in the
+#: suite are relative 1e-9).
+DIGEST_SIGNIFICANT_FIGURES = 10
+
+
+class ProbeUnstable(RuntimeError):
+    """Two captures of the same unmutated estate produced different digests."""
 
 
 def output_digest(portfolios: tuple[str, ...] | None = NARROW_PROBE_PORTFOLIOS) -> str:
@@ -517,8 +541,42 @@ def output_digest(portfolios: tuple[str, ...] | None = NARROW_PROBE_PORTFOLIOS) 
                 frame = index.frames[attribute][sheet]
                 digest.update(f"{run.regime}/{attribute}/{sheet}".encode())
                 for column in sorted(frame.columns):
-                    digest.update(str(frame.get_column(column).to_list()).encode())
+                    digest.update(canonical_column(frame.get_column(column).to_list()).encode())
     return digest.hexdigest()
+
+
+def canonical_column(values: list[Any]) -> str:
+    """One template column as the digest sees it: floats at fixed precision.
+
+    A float is rendered to ``DIGEST_SIGNIFICANT_FIGURES`` with ``-0.0`` folded
+    into ``0.0`` and an ``f`` marker, so float-reassociation noise cannot move
+    the digest; ``None``, strings and integers render as ``repr`` and stay
+    distinct from any float.
+    """
+    return "[" + ", ".join(_canonical_value(value) for value in values) + "]"
+
+
+def stable_baseline(portfolios: tuple[str, ...] | None = NARROW_PROBE_PORTFOLIOS) -> str:
+    """The unmutated digest, captured twice and refused unless both agree.
+
+    The probe's verdict is "did the digest move", so a digest that moves on its
+    own makes every mutant REACHABLE and every ``not detected`` verdict unsafe —
+    silently, because nothing else in a campaign compares two unmutated runs.
+    This is that comparison, made once per baseline before anything is mutated.
+    """
+    first = output_digest(portfolios)
+    second = output_digest(portfolios)
+    if first != second:
+        scope = "rich" if portfolios == NARROW_PROBE_PORTFOLIOS else "the whole RUNS matrix"
+        raise ProbeUnstable(
+            f"The reachability probe is not deterministic on {scope}: two captures "
+            f"of the UNMUTATED estate gave {first[:16]} and {second[:16]}. Every "
+            "mutant would probe REACHABLE, so the campaign is aborted before "
+            "scoring any. Find the column that differs (record the digest's "
+            "update() calls across two captures) and canonicalise it in "
+            "canonical_column."
+        )
+    return first
 
 
 def probe_reachable(
@@ -658,14 +716,17 @@ def _score_mutant(
             "nothing; either the probe is too narrow or the path is dead"
         )
 
-    if not reachable:
-        result.verdict = VERDICT_UNREACHABLE
-        return result
-
     if reachability_only:
-        result.verdict = "PROBED"
+        result.verdict = "PROBED" if reachable else VERDICT_UNREACHABLE
         return result
 
+    # Gates first, whatever the probe said. The probe only sees the RUNS
+    # portfolios' templates; a unit test reaches paths no portfolio exercises (a
+    # scalar wrapper, an approach/class pair no fixture carries), so a gate going
+    # red is a DETECTION even on a mutant the probe calls unreachable. The probe
+    # decides one thing: whether a mutant NO gate caught is an escape or a dead
+    # path. Short-circuiting on it instead scored mutants the unit tests catch as
+    # UNREACHABLE — two of the four known defects, measured 2026-11-14.
     with injected(mutant):
         for gate in gates:
             outcome = run_gate(gate, baseline_dir)
@@ -677,7 +738,7 @@ def _score_mutant(
                 result.caught_at_tier = gate.tier
                 break
         else:
-            result.verdict = VERDICT_ESCAPED
+            result.verdict = VERDICT_ESCAPED if reachable else VERDICT_UNREACHABLE
     return result
 
 
@@ -882,24 +943,18 @@ def main() -> int:
     baseline_dir.mkdir(parents=True, exist_ok=True)
 
     started = time.perf_counter()
-    print("Capturing the unmutated baseline digest ...", flush=True)
-    baseline_digest = output_digest()
-    print(f"  narrow baseline {baseline_digest[:16]} (rich)")
-    wide_baseline_digest = output_digest(portfolios=None)
-    print(f"  wide   baseline {wide_baseline_digest[:16]} (whole RUNS matrix)")
+    print("Capturing the unmutated baseline digest (twice, to prove it stable) ...", flush=True)
+    try:
+        baseline_digest = stable_baseline()
+        print(f"  narrow baseline {baseline_digest[:16]} (rich)")
+        wide_baseline_digest = stable_baseline(portfolios=None)
+        print(f"  wide   baseline {wide_baseline_digest[:16]} (whole RUNS matrix)")
+    except ProbeUnstable as exc:
+        print(exc, file=sys.stderr)
+        return 3
 
     if not args.reachability_only:
-        for gate in gates:
-            if gate.baseline_cmd is None:
-                continue
-            print(f"Preparing baseline for {gate.name} ...", flush=True)
-            subprocess.run(
-                resolve_command(
-                    tuple(p.format(baseline=baseline_dir.as_posix()) for p in gate.baseline_cmd)
-                ),
-                cwd=_REPO_ROOT,
-                check=False,
-            )
+        _prepare_gate_baselines(gates, baseline_dir)
 
     results = run_campaign(
         mutants,
@@ -925,6 +980,29 @@ def main() -> int:
     print_scorecard(payload)
     print(f"\nWrote {out.name} in {payload['runtime_seconds']}s")
     return 0
+
+
+def _prepare_gate_baselines(gates: tuple[Gate, ...], baseline_dir: Path) -> None:
+    """Run each gate's ``baseline_cmd`` once on the clean tree, before any mutant."""
+    for gate in gates:
+        if gate.baseline_cmd is None:
+            continue
+        print(f"Preparing baseline for {gate.name} ...", flush=True)
+        subprocess.run(
+            resolve_command(
+                tuple(p.format(baseline=baseline_dir.as_posix()) for p in gate.baseline_cmd)
+            ),
+            cwd=_REPO_ROOT,
+            check=False,
+        )
+
+
+def _canonical_value(value: Any) -> str:
+    """One cell for the digest; see ``canonical_column``."""
+    if isinstance(value, float):
+        # The ``f`` keeps a float distinct from an int: ``.10g`` renders 0.0 as "0".
+        return "f" + format(value + 0.0, f".{DIGEST_SIGNIFICANT_FIGURES}g")
+    return repr(value)
 
 
 if __name__ == "__main__":

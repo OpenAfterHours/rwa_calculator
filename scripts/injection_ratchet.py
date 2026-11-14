@@ -142,6 +142,10 @@ class Board:
     detected: frozenset[str]
     escaped: frozenset[str]
     unreachable: frozenset[str]
+    #: Mutants the reachability PROBE found moved nothing, whatever their verdict.
+    #: A gate can detect one of these (it reaches paths the probe's portfolios do
+    #: not), so the controls are checked against this, not against ``unreachable``.
+    probe_unreachable: frozenset[str]
     detection_rate: float | None
     mean_tier: float | None
     #: mutant id -> the gate that caught it, for the board.
@@ -171,6 +175,7 @@ def load_board(path: Path) -> Board:
     notes: dict[str, str] = {}
     other: dict[str, str] = {}
     escaped_rows: list[tuple[str, str, str]] = []
+    probe_unreachable: set[str] = set()
 
     for entry in results:
         mutant_id = entry["mutant_id"]
@@ -179,6 +184,8 @@ def load_board(path: Path) -> Board:
             by_verdict[verdict].add(mutant_id)
         else:
             other[mutant_id] = verdict
+        if _probe_found_unreachable(entry):
+            probe_unreachable.add(mutant_id)
         if entry.get("caught_by"):
             caught_by[mutant_id] = entry["caught_by"]
         if entry.get("note"):
@@ -203,6 +210,7 @@ def load_board(path: Path) -> Board:
         detected=frozenset(by_verdict[VERDICT_DETECTED]),
         escaped=frozenset(by_verdict[VERDICT_ESCAPED]),
         unreachable=frozenset(by_verdict[VERDICT_UNREACHABLE]),
+        probe_unreachable=frozenset(probe_unreachable),
         detection_rate=board["detection_rate"],
         mean_tier=board["mean_tier_of_detection"],
         caught_by=caught_by,
@@ -225,6 +233,18 @@ def load_boards(paths: list[Path]) -> dict[str, Board]:
             )
         boards[board.ladder] = board
     return boards
+
+
+def _probe_found_unreachable(entry: dict[str, Any]) -> bool:
+    """Whether the reachability PROBE found this mutant moved nothing.
+
+    A scorecard from before the probe result was recorded falls back to the
+    verdict, which is what an UNREACHABLE verdict meant then.
+    """
+    reachable = entry.get("reachable")
+    if reachable is None:
+        return entry["verdict"] == VERDICT_UNREACHABLE
+    return reachable is False
 
 
 def _catalogue_ids_by_category(category: str) -> frozenset[str]:
@@ -276,7 +296,11 @@ def trust_failures(board: Board) -> list[str]:
     expected_unreachable = frozenset(mutant.id for mutant in CATALOGUE if mutant.expect_unreachable)
     # `unscored` subtracted so a mutant that never ran is reported once, as
     # missing, rather than a second time as a contradicted expectation.
-    wrongly_reachable = sorted(expected_unreachable - board.unreachable - unscored)
+    # A control is about the PROBE, so it is judged on the probe's result: a gate
+    # may still catch a probe-unreachable mutant, and that is not a contradiction.
+    wrongly_reachable = sorted(expected_unreachable - board.probe_unreachable - unscored)
+    # The other direction is judged on the VERDICT: only a mutant that no gate
+    # caught and the probe calls dead leaves the denominator wrongly.
     wrongly_unreachable = sorted(board.unreachable - expected_unreachable)
     if wrongly_reachable:
         failures.append(

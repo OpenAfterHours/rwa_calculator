@@ -830,6 +830,32 @@ def test_save_to_folder_unknown_run_is_404(client: TestClient, tmp_path: Path) -
     assert resp.status_code == 404
 
 
+def test_save_to_folder_refuses_a_run_id_that_is_not_a_minted_uuid(
+    client: TestClient, warm_run_id: str, tmp_path: Path
+) -> None:
+    """The URL's run id never becomes part of an export path, even for a registered run.
+
+    Every id the app mints is ``uuid4().hex``; the export subfolder is stamped
+    from that value re-rendered, never from the URL text (SonarCloud
+    pythonsecurity:S6549). So a run held under any other id — which no code path
+    mints — is refused rather than given a folder named after the request.
+    """
+    # Arrange — the warm run's response, registered under an id the app never mints.
+    response = get_run(warm_run_id)
+    assert response is not None
+    register_run_with_id("registered-but-not-a-uuid", response)
+
+    # Act
+    resp = client.post(
+        "/results/registered-but-not-a-uuid/save",
+        data={"output_folder": str(tmp_path), "output_formats": ["parquet"]},
+    )
+
+    # Assert
+    assert resp.status_code == 404
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_save_to_folder_invalid_folder_is_400(client: TestClient, warm_run_id: str) -> None:
     run_id = warm_run_id
     resp = client.post(

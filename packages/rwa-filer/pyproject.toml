@@ -51,6 +51,7 @@ rwa-filer = "rwa_filer.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenAfterHours/rwa_calculator"
+Documentation = "https://openafterhours.github.io/rwa_calculator/rwa-filer/"
 Repository = "https://github.com/OpenAfterHours/rwa_calculator.git"
 Issues = "https://github.com/OpenAfterHours/rwa_calculator/issues"
 Changelog = "https://github.com/OpenAfterHours/rwa_calculator/blob/master/packages/rwa-filer/CHANGELOG.md"

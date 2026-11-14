@@ -318,6 +318,60 @@ body:has(.landing-hero) {
 }
 .copy-btn.is-copied { color: var(--oah-terminal-green); }
 
+/* ---------- Install row + sibling package ------------------- */
+/* The install command shares its row with a strip pointing to
+   rwa-filer, the separately released filing package. Side by side
+   the strip adds no height to the single-screen hero; on narrow
+   screens it wraps below the install command. */
+.install-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+.install-row .install { margin-bottom: 0; }
+.sibling {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--hero-install-bg);
+  border: 1px solid var(--hero-install-border);
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--hero-fg-muted);
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.sibling:hover {
+  border-color: var(--oah-orange);
+  color: var(--hero-fg);
+}
+.sibling-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hero-fg-mute);
+  white-space: nowrap;
+}
+.sibling-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--oah-orange);
+  white-space: nowrap;
+}
+.sibling-arrow {
+  flex: none;
+  color: var(--oah-orange);
+  transition: transform 200ms var(--ease-std);
+}
+.sibling:hover .sibling-arrow { transform: translateX(2px); }
+
 /* ---------- Meta row (stats) -------------------------------- */
 .meta-row {
   display: flex;
@@ -411,6 +465,6 @@ body:has(.landing-hero) {
    animations/transitions need silencing here. */
 @media (prefers-reduced-motion: reduce) {
   .status-dot { animation: none; }
-  .btn, .nav-links a, .copy-btn { transition: none; }
+  .btn, .nav-links a, .copy-btn, .sibling, .sibling-arrow { transition: none; }
   .hero-body { animation: none; }   /* show the hero copy immediately, no tow-in */
 }

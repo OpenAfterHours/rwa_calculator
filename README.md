@@ -3,11 +3,20 @@
 
 # UK Credit Risk (CR) & Counterparty Credit Risk (CCR) RWA Calculator
 
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://OpenAfterHours.club/rwa_calculator/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://openafterhours.github.io/rwa_calculator/)
 
 A high-performance Risk-Weighted Assets (RWA) calculator for UK CR & CCR, supporting both current regulations and future Basel 3.1 implementation. Built with Python using Polars for vectorized performance.
 
-**Documentation:** [https://OpenAfterHours.club/rwa_calculator/](https://OpenAfterHours.club/rwa_calculator/)
+**Documentation:** [https://openafterhours.github.io/rwa_calculator/](https://openafterhours.github.io/rwa_calculator/)
+
+## Packages in this repository
+
+This repository releases two packages to PyPI, each versioned on its own:
+
+| Package | What it does | Docs |
+|---------|--------------|------|
+| [`rwa-calc`](https://pypi.org/project/rwa-calc/) | Calculates credit risk and counterparty credit risk RWAs under CRR and Basel 3.1, and generates the COREP and Pillar 3 templates. This README covers it. | [RWA Calculator](https://openafterhours.github.io/rwa_calculator/overview/) |
+| [`rwa-filer`](https://pypi.org/project/rwa-filer/) | Validates a regulatory return against the Bank of England's published validation rules and writes the XBRL file for submission. Standalone: it needs Polars, not `rwa-calc`. Source in [`packages/rwa-filer`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/packages/rwa-filer). | [rwa-filer](https://openafterhours.github.io/rwa_calculator/rwa-filer/) |
 
 ## Installation
 
@@ -50,7 +59,7 @@ if response.success:
 **IRB Mode** — set `permission_mode="irb"` and provide a `model_permissions` input table
 to route exposures to FIRB, AIRB, or slotting based on per-model approvals. Exposures
 without a matching model permission fall back to SA. See the
-[Data Model docs](https://OpenAfterHours.club/rwa_calculator/data-model/input-schemas/#model-permissions-schema)
+[Data Model docs](https://openafterhours.github.io/rwa_calculator/data-model/input-schemas/#model-permissions-schema)
 for the model permissions schema.
 
 **Interactive UI** — server-rendered web interface (calculator, results, CRR vs
@@ -113,7 +122,7 @@ You can also run it without writing Python from the **Reconciliation** page in t
 `POST /api/reconcile`. This is distinct from Framework Comparison (CRR vs Basel 3.1 on the
 *same* engine) — here the other side is your external, legacy output.
 
-> **Details:** See the [Parallel-Run Reconciliation guide](https://OpenAfterHours.club/rwa_calculator/reconciliation/).
+> **Details:** See the [Parallel-Run Reconciliation guide](https://openafterhours.github.io/rwa_calculator/reconciliation/).
 
 ## Key Features
 
@@ -143,18 +152,19 @@ Sovereign / Central Bank, Institution, Corporate, Corporate SME, PSE, MDB, RGLA,
 
 ## Documentation
 
-Comprehensive documentation is available at **[OpenAfterHours.club/rwa_calculator](https://OpenAfterHours.club/rwa_calculator/)**
+Comprehensive documentation is available at **[openafterhours.github.io/rwa_calculator](https://openafterhours.github.io/rwa_calculator/)**
 
 | Section | Description |
 |---------|-------------|
-| [Getting Started](https://OpenAfterHours.club/rwa_calculator/getting-started/) | Installation and first calculation |
-| [User Guide](https://OpenAfterHours.club/rwa_calculator/user-guide/) | Regulatory frameworks, methodology, exposure classes |
-| [Reconciliation](https://OpenAfterHours.club/rwa_calculator/reconciliation/) | Parallel-run tie-out against a legacy calculator for migration |
-| [Architecture](https://OpenAfterHours.club/rwa_calculator/architecture/) | System design and pipeline |
-| [Data Model](https://OpenAfterHours.club/rwa_calculator/data-model/) | Input schemas and validation |
-| [API Reference](https://OpenAfterHours.club/rwa_calculator/api/) | Complete technical documentation |
-| [Development](https://OpenAfterHours.club/rwa_calculator/development/) | Testing, benchmarks, contributing |
-| [Plans](https://OpenAfterHours.club/rwa_calculator/plans/) | Development roadmap and status |
+| [Getting Started](https://openafterhours.github.io/rwa_calculator/getting-started/) | Installation and first calculation |
+| [User Guide](https://openafterhours.github.io/rwa_calculator/user-guide/) | Regulatory frameworks, methodology, exposure classes |
+| [Reconciliation](https://openafterhours.github.io/rwa_calculator/reconciliation/) | Parallel-run tie-out against a legacy calculator for migration |
+| [Architecture](https://openafterhours.github.io/rwa_calculator/architecture/) | System design and pipeline |
+| [Data Model](https://openafterhours.github.io/rwa_calculator/data-model/) | Input schemas and validation |
+| [API Reference](https://openafterhours.github.io/rwa_calculator/api/) | Complete technical documentation |
+| [Development](https://openafterhours.github.io/rwa_calculator/development/) | Testing, benchmarks, contributing |
+| [Plans](https://openafterhours.github.io/rwa_calculator/plans/) | Development roadmap and status |
+| [rwa-filer](https://openafterhours.github.io/rwa_calculator/rwa-filer/) | The companion filing package: validate a return and write the XBRL submission |
 
 ## Running Tests
 

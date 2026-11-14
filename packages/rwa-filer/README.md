@@ -7,6 +7,8 @@ It carries the Bank of England's validation rules for banking taxonomy v4.1.1
 and evaluates them as the Bank's gateway does, for 14 reporting modules
 (`PRA001`, `PRA116`, Capital+, leverage, MREL and financial statements).
 
+**Documentation:** <https://openafterhours.github.io/rwa_calculator/rwa-filer/>
+
 `rwa-filer` is a standalone package. It lives in the
 [rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator) repository as a
 uv workspace member and is released separately from `rwa-calc`: it depends on

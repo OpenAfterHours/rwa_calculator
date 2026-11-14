@@ -9,6 +9,15 @@ Welcome to the documentation for the **UK Credit Risk + Counterparty Credit Risk
 
 **Source Code:** [https://github.com/OpenAfterHours/rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator)
 
+## Two Packages
+
+This repository releases two Python packages, each versioned and published to PyPI on its own. This site documents both, under the **RWA Calculator** and **rwa-filer** sections of the navigation.
+
+| Package | What it does | Docs |
+|---------|--------------|------|
+| **`rwa-calc`** | Calculates credit risk and counterparty credit risk RWAs under CRR and Basel 3.1, and generates the COREP and Pillar 3 templates | [Getting Started](getting-started/index.md) |
+| **`rwa-filer`** | Validates a regulatory return against the Bank of England's published validation rules, evaluated as the Bank's gateway evaluates them, and writes the XBRL file for submission. Standalone: it needs Polars, not `rwa-calc` | [rwa-filer](rwa-filer/index.md) |
+
 ## Overview
 
 This calculator supports both current and forthcoming UK regulatory frameworks:
@@ -28,6 +37,7 @@ The system provides accurate, auditable RWA calculations across all major exposu
 - **Counterparty Credit Risk (SA-CCR)**: Derivative EAD via CRR Art. 271-311 using `EAD = α · (RC + PFE)` with `α = 1.4` per Art. 274(2); RC (Art. 275), PFE add-on (Art. 278) including the FX asset class, hedging-set aggregation, supervisory deltas, and the Art. 272(4) legal-enforceability netting gate are all in scope. See the [SA-CCR specifications](specifications/crr/ccr/index.md).
 - **Credit Risk Mitigation**: Complete CRM support including collateral, guarantees, and provisions
 - **Audit Trail**: Error accumulation and full traceability for regulatory compliance
+- **Validation & Filing**: `ResultExporter.export_filing_package` validates the generated Basel 3.1 return against the Bank of England's published rules and writes the XBRL submission, through the companion [`rwa-filer`](rwa-filer/index.md) package. `rwa-filer` also works on its own, on returns produced by any system.
 - **Parallel-Run Reconciliation**: Compare outputs against your existing/legacy calculator, component by component, to gain comfort the numbers are right before you migrate. See the [Reconciliation guide](reconciliation/index.md).
 - **Extensible Architecture**: Protocol-based design enabling easy customization
 
@@ -65,6 +75,14 @@ This documentation serves multiple audiences:
     Install the calculator and run your first RWA calculation
 
     [:octicons-arrow-right-24: Quick Start](getting-started/quickstart.md)
+
+-   :material-file-check-outline:{ .lg .middle } **Validate & File Returns**
+
+    ---
+
+    Check a return against the Bank of England's published rules and write the XBRL submission
+
+    [:octicons-arrow-right-24: rwa-filer](rwa-filer/index.md)
 
 -   :material-compare-horizontal:{ .lg .middle } **Migrate with Confidence**
 

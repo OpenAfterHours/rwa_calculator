@@ -4,7 +4,12 @@
   OpenAfterHours — Zensical landing page override.
   On "/" (page.url empty) we render a full-viewport constellation hero
   and hide Material's header, sidebar, main container, and footer so the
-  hero owns the screen. Every other page gets the stock Material layout.
+  hero owns the screen (the navigation tabs are hidden there too). Every
+  other page gets the stock Material layout.
+
+  The hero is about rwa-calc; rwa-filer, the separately released filing
+  package, is reached from the "rwa-filer" nav link and the strip beside
+  the install command.
 
   The animated polar-bear constellation is injected into .constellation-bg
   by assets/javascripts/bear-constellation.js (loaded via zensical.toml
@@ -42,6 +47,7 @@
           </a>
           <nav class="nav-links">
             <a href="overview/">Docs</a>
+            <a href="rwa-filer/">rwa-filer</a>
             <a href="user-guide/interactive-ui/">Calculator</a>
             <a href="framework-comparison/technical-reference/">Reference</a>
             <a href="https://github.com/OpenAfterHours/rwa_calculator" class="github-link" target="_blank" rel="noopener">
@@ -79,16 +85,25 @@
             </a>
           </div>
 
-          <div class="install">
-            <span class="prompt">$</span>
-            <code>uv add rwa-calc</code>
-            <button
-              class="copy-btn"
-              type="button"
-              aria-label="Copy install command"
-              onclick="var b=this;navigator.clipboard&amp;&amp;navigator.clipboard.writeText('uv add rwa-calc').then(function(){b.classList.add('is-copied');setTimeout(function(){b.classList.remove('is-copied');},1400);});">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            </button>
+          <div class="install-row">
+            <div class="install">
+              <span class="prompt">$</span>
+              <code>uv add rwa-calc</code>
+              <button
+                class="copy-btn"
+                type="button"
+                aria-label="Copy install command"
+                onclick="var b=this;navigator.clipboard&amp;&amp;navigator.clipboard.writeText('uv add rwa-calc').then(function(){b.classList.add('is-copied');setTimeout(function(){b.classList.remove('is-copied');},1400);});">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+
+            <a class="sibling" href="rwa-filer/">
+              <span class="sibling-tag">Also</span>
+              <span class="sibling-name">rwa-filer</span>
+              <span class="sibling-desc">Validate &amp; file regulatory returns</span>
+              <svg class="sibling-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
           </div>
 
           <div class="meta-row">
@@ -120,6 +135,13 @@
         </footer>
       </div>
     </section>
+  {% endif %}
+{% endblock %}
+
+{% block tabs %}
+  {% if not page.url %}
+  {% else %}
+    {{ super() }}
   {% endif %}
 {% endblock %}
 

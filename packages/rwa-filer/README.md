@@ -16,47 +16,59 @@ Polars alone and never imports `rwa_calc`. `rwa-calc` uses it to validate the
 returns it generates; any other system that can produce template-level figures
 can use it the same way.
 
-Install it with [uv](https://docs.astral.sh/uv/):
+Run it with [uv](https://docs.astral.sh/uv/), naming `@latest`:
 
 ```bash
-# As a command on your PATH
-uv tool install rwa-filer
-
-# Or as a library in a uv project (then run the command as `uv run rwa-filer`)
-uv add rwa-filer
-
-# Or run it once without installing anything
-uvx rwa-filer --help
+uvx rwa-filer@latest --help
 ```
 
-Extras go in quotes, so the shell leaves the brackets alone:
-`uv tool install "rwa-filer[excel]"`.
+`@latest` makes each run check PyPI and use the newest release, so a return is
+always checked with the newest rules and taxonomy `rwa-filer` carries. Without
+it, `uvx` may run a copy it already has: one it fetched recently, or one
+installed with `uv tool install`, for as long as that stays installed. Extras go
+in quotes, so the shell leaves the brackets alone: a command that reads or
+writes a workbook runs as `uvx "rwa-filer[excel]@latest" ...`.
+
+The manifest `build` writes records the version that wrote it. To repeat a run
+on that version, name it in place of `latest`: `uvx rwa-filer@0.1.0 ...`.
+
+```bash
+# As a library in a uv project (then run the command as `uv run rwa-filer`).
+# The lock file holds it at one version; `uv lock --upgrade-package rwa-filer`
+# moves it to the newest release
+uv add rwa-filer
+
+# As a command on your PATH, for a machine that has to run it offline. It
+# stays on the version installed until you upgrade it
+uv tool install rwa-filer
+uv tool upgrade rwa-filer
+```
 
 ```bash
 # Check a return: structure against the taxonomy, then the published rules
-rwa-filer validate return.parquet \
+uvx rwa-filer@latest validate return.parquet \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 
 # Validate it and write the XBRL submission file, with a manifest
-rwa-filer build return.parquet --out filing/ \
+uvx rwa-filer@latest build return.parquet --out filing/ \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 
 # Record an approval against the file's checksum, and check it before upload
-rwa-filer signoff filing/<name>.manifest.json --approver "C. Approver" --role "Head of Reporting"
-rwa-filer verify filing/<name>.manifest.json
+uvx rwa-filer@latest signoff filing/<name>.manifest.json --approver "C. Approver" --role "Head of Reporting"
+uvx rwa-filer@latest verify filing/<name>.manifest.json
 
 # What changed since the version already filed
-rwa-filer diff filed.xbrl resubmission.xbrl
+uvx rwa-filer@latest diff filed.xbrl resubmission.xbrl
 
 # A second opinion: have the Arelle XBRL processor check the written file
 # against the Bank's taxonomy package, and compare its verdict on every rule
-# with this package's own (needs rwa-filer[arelle] and the Bank's package)
-rwa-filer referee filing/<name>.xbrl --taxonomy-package boe-banking-v411.zip
+# with this package's own (needs the Bank's package)
+uvx "rwa-filer[arelle]@latest" referee filing/<name>.xbrl --taxonomy-package boe-banking-v411.zip
 
 # A blank workbook in the template layout, to fill in and validate
-rwa-filer template --module PRA001 --reference-date 2027-03-31 --out return.xlsx
+uvx "rwa-filer[excel]@latest" template --module PRA001 --reference-date 2027-03-31 --out return.xlsx
 
-rwa-filer --help
+uvx rwa-filer@latest --help
 ```
 
 A return is a table with one row per reported cell (`table`, `sheet`,

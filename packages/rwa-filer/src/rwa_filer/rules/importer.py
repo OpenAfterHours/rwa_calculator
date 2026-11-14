@@ -334,10 +334,11 @@ def _load_workbook(path: Path) -> Any:
     """Open a workbook read-only, with a clear message when openpyxl is absent."""
     try:
         from openpyxl import load_workbook
-    except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without the extra
+    except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
-            "Reading a rule workbook needs openpyxl. Install it with: "
-            "pip install 'rwa-filer[excel]'"
+            "Reading a rule workbook needs openpyxl, from the rwa-filer[excel] extra. "
+            'Run the command with it: uvx "rwa-filer[excel]@latest" rules import ... '
+            '(in a uv project: uv add "rwa-filer[excel]")'
         ) from exc
     return load_workbook(path, read_only=True, data_only=True)
 

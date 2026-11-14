@@ -34,6 +34,7 @@ from rwa_filer.dash.context import THEME_COOKIE, THEMES
 from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.views import overview, rules_page
+from rwa_filer.extras import MissingExtraError
 from rwa_filer.readers import HeaderFields, carries_header
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs
 
@@ -97,7 +98,7 @@ class ReturnPages:
             return self._home(request, error=message, values=values, status_code=400)
         try:
             opened = await run_in_threadpool(self.context.workspace.open, path, fields, name=name)
-        except (ValueError, PackNotFoundError) as exc:
+        except (ValueError, PackNotFoundError, MissingExtraError) as exc:
             return self._home(request, error=str(exc), values=values, status_code=400)
         return RedirectResponse(f"/returns/{opened.return_id}", status_code=303)
 

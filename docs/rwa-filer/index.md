@@ -569,7 +569,7 @@ and the register is empty.
 
 ```bash
 # The dashboard in a browser, with a return opened in it (see the dashboard guide)
-uvx rwa-filer dash return.xbrl
+uvx rwa-filer@latest dash return.xbrl
 
 # The packaged Bank of England rule books: modules, rules, rules enforced
 uvx rwa-filer@latest rulebook list

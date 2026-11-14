@@ -48,7 +48,7 @@ uv tool upgrade rwa-filer
 ```bash
 # The dashboard: open a return in the browser and walk from the verdict to the
 # broken rules to the cells on the template grid that broke them
-uvx rwa-filer dash return.xbrl
+uvx rwa-filer@latest dash return.xbrl
 ```
 
 ```bash

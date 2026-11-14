@@ -7,7 +7,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- `rwa-filer dash` — a local web dashboard (`uvx rwa-filer dash return.xbrl`).
+- `rwa-filer dash` — a local web dashboard (`uvx rwa-filer@latest dash return.xbrl`).
   Open a return from a file or a path; see whether anything blocks submission
   with the counts behind the verdict, including how many rules ran and why the
   rest did not; filter and search the rules, each with its expression and the

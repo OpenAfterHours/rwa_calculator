@@ -6,8 +6,11 @@ import re
 from html import unescape
 from typing import TYPE_CHECKING
 
+import pytest
+
 from dash_builders import HEADER_FORM
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS
+from rwa_filer.extras import MissingExtraError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -337,3 +340,25 @@ def test_the_theme_switch_never_redirects_off_the_dashboard(client: TestClient) 
 
     # Assert
     assert response.headers["location"] == "/"
+
+
+def test_a_workbook_without_the_excel_extra_is_refused_with_the_remedy(
+    client: TestClient, workspace: Workspace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reading a workbook needs openpyxl; without it the page says how to get it."""
+    # Arrange — opening raises what readers.excel raises when openpyxl is missing.
+    message = "Reading a workbook needs openpyxl, from the rwa-filer[excel] extra."
+
+    def missing_extra(*_args: object, **_kwargs: object) -> None:
+        raise MissingExtraError(message, name="openpyxl")
+
+    monkeypatch.setattr(workspace, "open", missing_extra)
+    workbook = tmp_path / "return.xlsx"
+    workbook.write_bytes(b"PK")
+
+    # Act
+    response = client.post("/open", data={"path": str(workbook)})
+
+    # Assert
+    assert response.status_code == 400
+    assert "rwa-filer[excel]" in response.text

@@ -188,6 +188,9 @@ ROOT_PYPROJECT = "pyproject.toml"
 ROOT_TEST_COMMAND = ("uv", "run", "pytest", "-x", "-q")
 #: Every release mode refuses to push from a detached HEAD.
 DETACHED_HEAD_ERROR = "\nERROR: HEAD is detached. Check out the release branch and re-run."
+#: How much of a failed step's stdout ``run_command`` shows: its last lines, where
+#: pytest puts the failures and its short summary. stderr is shown in full.
+FAILURE_STDOUT_TAIL_LINES = 40
 
 #: The ``--package`` value that releases every workspace package, in dependency
 #: order. Adding a package to ``MEMBER_RELEASES`` adds it to this release.
@@ -701,7 +704,7 @@ def run_command(cmd: list[str], description: str) -> bool:
             text=True,
         )
         if result.returncode != 0:
-            print(f"  ERROR: {result.stderr}")
+            _print_failure(result)
             return False
         if result.stdout.strip():
             for line in result.stdout.strip().split("\n")[:5]:
@@ -710,6 +713,20 @@ def run_command(cmd: list[str], description: str) -> bool:
     except FileNotFoundError:
         print(f"  ERROR: Command not found: {cmd[0]}")
         return False
+
+
+def _print_failure(result: subprocess.CompletedProcess[str]) -> None:
+    """Print what a failed step said: its exit code, the tail of stdout, all of stderr.
+
+    pytest writes its failure report to stdout and nothing to stderr, so a report
+    built from stderr alone printed a blank ``ERROR:`` for a failed test run and
+    hid which test had failed.
+    """
+    print(f"  ERROR: exit code {result.returncode}")
+    for line in result.stdout.rstrip().splitlines()[-FAILURE_STDOUT_TAIL_LINES:]:
+        print(f"  {line}")
+    for line in result.stderr.rstrip().splitlines():
+        print(f"  {line}")
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:

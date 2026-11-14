@@ -248,6 +248,12 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     )
 
 
+def rule_label(module: str, rule_id: str) -> str:
+    """The publisher's short description of a rule, or empty when it gives none."""
+    rule = _rule(module, rule_id)
+    return (rule.label or "").rstrip("|").strip() if rule else ""
+
+
 def title_case(title: str) -> str:
     """A taxonomy title in sentence case, its parenthesised short name kept as is.
 
@@ -269,12 +275,11 @@ def title_case(title: str) -> str:
 
 
 def _row(result: RuleResult, pack: TaxonomyPack) -> RuleRow:
-    rule = _rule(pack.info.module, result.rule_id)
     return RuleRow(
         rule_id=result.rule_id,
         severity=result.severity,
         status=result.status,
-        label=(rule.label or "").rstrip("|").strip() if rule else "",
+        label=rule_label(pack.info.module, result.rule_id),
         templates=tuple(
             sorted(
                 {

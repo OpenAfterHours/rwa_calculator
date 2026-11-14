@@ -25,6 +25,7 @@ from starlette.exceptions import HTTPException
 from starlette.templating import Jinja2Templates
 
 from rwa_filer import __version__
+from rwa_filer.dash.referee_jobs import JobBoard
 
 if TYPE_CHECKING:
     from datetime import date, datetime
@@ -58,6 +59,8 @@ SECTIONS: Final = (
     Section("rules", "Rules", "/rules"),
     Section("templates", "Templates", "/templates"),
     Section("filing", "Build & sign off", "/filing"),
+    Section("compare", "Compare", "/compare"),
+    Section("referee", "Referee (Arelle)", "/referee"),
 )
 
 
@@ -71,6 +74,7 @@ class DashContext:
 
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
+        self.jobs = JobBoard(workspace.directory)
         self._flashes: dict[str, str] = {}
         self.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
         self.templates.env.filters["count"] = format_count

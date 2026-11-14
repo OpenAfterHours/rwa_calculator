@@ -28,3 +28,40 @@
 {%- else -%}<span class="chip chip-ne">Not evaluated</span>
 {%- endif -%}
 {%- endmacro -%}
+
+{#- The file and header fields of a form that opens a return (Open and Compare pages). -#}
+{%- macro open_fields(values, modules) -%}
+<label class="dropzone">
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="color: var(--accent-text)"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"></path><path d="M4 15v4h16v-4"></path></svg>
+  <span class="title">Choose a return to open</span>
+  <span class="small muted mono">.parquet · .csv · .xlsx · .xbrl · .zip</span>
+  <input type="file" name="file" accept=".parquet,.csv,.xlsx,.xbrl,.zip">
+</label>
+<label class="field">Or the path of a file on this machine
+  <input type="text" name="path" value="{{ values.path or '' }}" placeholder="/path/to/return.xbrl" spellcheck="false">
+</label>
+<section class="panel">
+  <div>
+    <h2>Return header</h2>
+    <p class="small muted" style="margin: 4px 0 0">A fact table (.parquet or .csv) carries no header, so the entity, the reference date and the module are required for one. A workbook or an XBRL instance states its own; anything entered here overrides it.</p>
+  </div>
+  <div class="fields">
+    <label class="field" style="flex: 2 1 260px">Entity identifier (LEI)
+      <input type="text" name="entity" value="{{ values.entity or '' }}" maxlength="40" spellcheck="false" class="mono">
+    </label>
+    <label class="field">Reference date
+      <input type="date" name="reference_date" value="{{ values.reference_date or '' }}">
+    </label>
+    <label class="field">Module
+      <select name="module">
+        <option value="">From the file</option>
+        {% for module in modules %}<option value="{{ module }}"{% if values.module == module %} selected{% endif %}>{{ module }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field" style="flex: 1 1 100px">Currency <span class="hint">default GBP</span>
+      <input type="text" name="currency" value="{{ values.currency or '' }}" maxlength="3">
+    </label>
+  </div>
+  {{ caller() }}
+</section>
+{%- endmacro -%}

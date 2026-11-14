@@ -8,6 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='1' y='1' width='26' height='26' rx='8' fill='none' stroke='%23ff9100' stroke-width='2'/%3E%3Cpath d='M12 16l2 2 4-4' fill='none' stroke='%23ff9100' stroke-width='2'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/dash.css">
+{% block head_extra %}{% endblock %}
 </head>
 <body>
 <header class="topbar">
@@ -38,6 +39,7 @@
 <div class="layout">
   <nav class="sidenav" aria-label="Sections">
     <a href="/"{% if not current and section == "" %} aria-current="page"{% endif %}>{{ icon("open") }}Open a return</a>
+    <a href="/reference"{% if section == "reference" %} aria-current="page"{% endif %}>{{ icon("reference") }}Taxonomies &amp; rules</a>
     {% if current %}
     <div class="group">This return</div>
     {% for item in sections %}

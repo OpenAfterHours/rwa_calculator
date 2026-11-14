@@ -33,6 +33,8 @@ import polars as pl
 from rwa_calc.contracts.results import ExportResult
 
 if TYPE_CHECKING:
+    from datetime import date
+
     from polars._typing import PolarsDataType
 
     from rwa_calc.api.models import (
@@ -45,8 +47,9 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.facts import FilingMetadata
+    from rwa_calc.reporting.filing import FilingOutcome
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
-    from rwa_calc.reporting.validations import CoverageShortfall, RuleOutcome
+    from rwa_filer.validate import CoverageShortfall, RuleOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -305,6 +308,9 @@ class ResultExporter:
         generator = COREPGenerator()
         bundle = generator.generate(
             response,
+            # The run's own floor summary: OF 02.00 takes OF-ADJ from it, and
+            # without OF-ADJ cannot state the output floor at all.
+            output_floor_summary=response.output_floor_summary,
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )
@@ -377,6 +383,9 @@ class ResultExporter:
         generator = COREPGenerator()
         bundle = generator.generate(
             response,
+            # The run's own floor summary: OF 02.00 takes OF-ADJ from it, and
+            # without OF-ADJ cannot state the output floor at all.
+            output_floor_summary=response.output_floor_summary,
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )
@@ -466,6 +475,13 @@ class ResultExporter:
         corep = COREPGenerator().generate_from_lazyframe(
             results,
             framework=response.framework,
+            # OF 02.00 takes OF-ADJ from the floor summary: the caller's if one
+            # was supplied, otherwise the run's own.
+            output_floor_summary=(
+                output_floor_summary
+                if output_floor_summary is not None
+                else response.output_floor_summary
+            ),
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )
@@ -476,6 +492,106 @@ class ResultExporter:
             previous_period_results=previous_period_results,
         )
         return summarise_validation(corep, pillar3, response.framework)
+
+    def export_filing_package(
+        self,
+        response: CalculationResponse,
+        output_dir: Path,
+        *,
+        entity_identifier: str,
+        reference_date: date,
+        currency: str = "GBP",
+        entity_scheme: str | None = None,
+        output_floor_config: OutputFloorConfig | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
+        monetary_decimals: int = -3,
+        allow_incomplete: bool = False,
+        allow_rule_breaks: bool = False,
+        always_zip: bool = False,
+        name: str | None = None,
+    ) -> FilingOutcome:
+        """Write this run's COREP return as the file the PRA accepts.
+
+        Generates the COREP bundle exactly as ``export_to_corep`` does,
+        re-addresses every cell to the PRA001 taxonomy, validates the result —
+        its structure against the taxonomy, then the published rules — and
+        writes an XBRL instance, a zip where the Filing Manual requires one,
+        and a manifest recording what was filed under which validation result.
+
+        Nothing is written while something stands in the way, and the outcome
+        says what: a non-zero figure the taxonomy has no cell for
+        (``"unplaced_figures"``), a fact the taxonomy cannot express
+        (``"structure"``), or a rule check that does not pass (``"rules"``).
+        None of these raises: each is an expected business outcome.
+
+        Args:
+            response: CalculationResponse with cached results. Must be a
+                Basel 3.1 run: PRA001 is the Basel 3.1 return.
+            output_dir: Directory the files are written into.
+            entity_identifier: The reporting entity's LEI.
+            reference_date: The date the return reports as at. It selects the
+                taxonomy version; PRA001 v4.1.1 applies from 1 January 2027.
+            currency: The reporting currency.
+            entity_scheme: The identifier scheme; the LEI scheme by default.
+            output_floor_config: As ``export_to_corep``.
+            previous_period_results: As ``export_to_corep``.
+            monetary_decimals: The accuracy monetary figures are stated to in
+                the instance: -3 thousands, 0 units, 2 pence.
+            allow_incomplete: Write the file even though figures have no place
+                in the taxonomy; they are left out and listed on the outcome.
+            allow_rule_breaks: Write the file even though a rule check fails.
+            always_zip: Write a zip whatever the instance's size.
+            name: The files' base name. Defaults to
+                ``<entity>_PRA001_<reference date>``.
+
+        Returns:
+            A ``FilingOutcome``: the mapping (placed and unplaced cells) and
+            ``rwa-filer``'s filing package (validation, and the written files).
+
+        Raises:
+            ValueError: the run is not a Basel 3.1 run.
+            PackNotFoundError: no taxonomy is packaged for ``reference_date``.
+
+        References:
+            - Bank of England Banking Taxonomy v4.1.1 (PRA001)
+            - BoE XBRL Filing Manual v1.0.1
+        """
+        from rwa_calc.reporting.corep.generator import COREPGenerator
+        from rwa_calc.reporting.filing import FILING_MODULE, build_filing_package
+        from rwa_filer.model import LEI_SCHEME, ReturnHeader
+        from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1
+        from rwa_filer.xbrl.writer import InstanceOptions
+
+        if response.framework != FRAMEWORK_BASEL_3_1:
+            raise ValueError(
+                f"A filing package is written for a Basel 3.1 run ({FILING_MODULE}); this run "
+                f"is {response.framework}"
+            )
+        corep = COREPGenerator().generate(
+            response,
+            # The run's own floor summary: OF 02.00 takes OF-ADJ from it, and
+            # without OF-ADJ cannot state the output floor at all.
+            output_floor_summary=response.output_floor_summary,
+            output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
+        )
+        header = ReturnHeader(
+            entity_identifier=entity_identifier,
+            reference_date=reference_date,
+            module=FILING_MODULE,
+            currency=currency,
+            entity_scheme=entity_scheme or LEI_SCHEME,
+        )
+        return build_filing_package(
+            corep,
+            header,
+            output_dir,
+            options=InstanceOptions(monetary_decimals=monetary_decimals),
+            name=name,
+            allow_incomplete=allow_incomplete,
+            allow_rule_breaks=allow_rule_breaks,
+            always_zip=always_zip,
+        )
 
     def export_validation_report(
         self,
@@ -784,7 +900,7 @@ class SubmissionValidationResult:
         False only for ``no_rule_executed``: the estate could not be reached by
         the rule set at all, so an absent break asserts nothing whatsoever.
         """
-        from rwa_calc.reporting.validations import COVERAGE_NO_RULE_EXECUTED
+        from rwa_filer.validate import COVERAGE_NO_RULE_EXECUTED
 
         return self.coverage_shortfall != COVERAGE_NO_RULE_EXECUTED
 
@@ -836,7 +952,7 @@ class SubmissionValidationResult:
         the number that misleads; "0 blocking of 224 executed, 484 not
         evaluable" is the one a filer can judge.
         """
-        from rwa_calc.reporting.validations import COVERAGE_NO_RULE_EXECUTED
+        from rwa_filer.validate import COVERAGE_NO_RULE_EXECUTED
 
         verdict = "SUBMITTABLE" if self.is_submittable else "BLOCKED"
         if self.coverage_shortfall == COVERAGE_NO_RULE_EXECUTED:
@@ -879,7 +995,7 @@ def summarise_validation(
         corep: The generated COREP template bundle.
         pillar3: The generated Pillar III bundle, or ``None``. Carried for the
             checker's contract; no published rule addresses a Pillar III
-            template today (see ``validations.scope.build_template_index``).
+            template today (see ``reporting.filing.build_template_index``).
         framework: ``"CRR"`` or ``"BASEL_3_1"``.
 
     Returns:
@@ -892,14 +1008,13 @@ def summarise_validation(
         ValueError: ``framework`` is not a supported framework (a programming
             error, raised by ``load_rules`` — not a data-quality outcome).
     """
-    from rwa_calc.reporting.validations import (
-        SEVERITY_ERROR,
+    from rwa_calc.reporting.filing import check_supervisory_validations, evaluate_all
+    from rwa_filer.rules import SEVERITY_ERROR
+    from rwa_filer.validate import (
         STATUS_FAIL,
         STATUS_NOT_EVALUATED,
         STATUS_PASS,
         STATUS_VACUOUS,
-        check_supervisory_validations,
-        evaluate_all,
     )
 
     report = evaluate_all(corep, pillar3, framework)
@@ -1015,7 +1130,8 @@ def _validation_report_frame(result: SubmissionValidationResult) -> pl.DataFrame
     recorded anywhere) reloads as its true dtype, and an estate with no enforced
     rules still writes a readable, correctly-typed empty file.
     """
-    from rwa_calc.reporting.validations import SEVERITY_ERROR, SINGLE_SHEET, STATUS_FAIL
+    from rwa_filer.rules import SEVERITY_ERROR
+    from rwa_filer.validate import SINGLE_SHEET, STATUS_FAIL
 
     # Run-level context, stamped on every row so the file is self-contained: a
     # reviewer sorting or filtering it can never end up looking at rule outcomes

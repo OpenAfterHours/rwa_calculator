@@ -90,7 +90,9 @@ from rwa_calc.reporting.corep.c34 import (
     c34_08_frames,
     c34_08_plans,
 )
+from rwa_calc.reporting.corep.irb_sheets import TOTAL_AIRB_KEY, TOTAL_FIRB_SLOTTING_KEY
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.kernel import available_columns
 from rwa_calc.reporting.pillar3.ccr import (
     ccr1_frames,
@@ -148,7 +150,13 @@ _ROW_COLUMNS: tuple[str, ...] = (
     "guarantee_rwa_benefit",
 )
 
-type CellKind = Literal["rows", "formula", "side_context", "prior_period", "constant", "unbound"]
+# ``unreported`` is a cell the PUBLISHED template has no data point for
+# (``SheetPlan.unreported``). The spec binds it — a reported cell may be a
+# formula over it — but it is not a cell of the sheet, so it has no population
+# to explain and nothing to tie out, whatever its binding is.
+type CellKind = Literal[
+    "rows", "formula", "side_context", "prior_period", "constant", "unbound", "unreported"
+]
 
 
 @dataclass(frozen=True)
@@ -868,8 +876,9 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "supporting-factor adjustment columns (0121/0122) carry "
             "Σ(rwa_pre_factor − rwa) over each factor's applied subset (0121 fires "
             "non-zero and negative on the TOTAL sheet), so 0110 + 0121 + 0122 = "
-            "0125 foots. B31 carries none of these refs (supporting factors are "
-            "CRR-only)",
+            "0125 foots. OF 09.02 (Basel 3.1) has no supporting factors and one "
+            "RWEA column, 0110, which there carries the reported RWEA; 0121 / "
+            "0122 / 0125 do not exist",
         ),
         sheet_label="country",
     ),
@@ -1118,6 +1127,26 @@ LINEAGE_PLANS: dict[str, _Provider] = {
 }
 
 
+# Sheets that are the sum of their template's other sheets, and what to tell a
+# reader who asks for the exposures behind one of their cells.
+_SUMMED_SHEETS: dict[tuple[str, str], str] = {
+    ("c07_00", C07_00_TOTAL_SHEET_KEY): (
+        "The Total sheet is the sum of the exposure-class sheets. Open the same "
+        "cell on a class sheet to see the exposures behind it."
+    ),
+    **{
+        (template_id, total_key): (
+            "A Total sheet is built from the class sheets of its approach: amounts "
+            "and counts are their sum, and an average is the exposure-weighted "
+            "average over them. Open the same cell on a class sheet to see the "
+            "exposures behind it."
+        )
+        for template_id in ("c08_01", "c08_02", "c08_03", "c08_05")
+        for total_key in (TOTAL_AIRB_KEY, TOTAL_FIRB_SLOTTING_KEY)
+    },
+}
+
+
 def is_instrumented(template_id: str) -> bool:
     """Whether this template's cells can be explained.
 
@@ -1126,6 +1155,23 @@ def is_instrumented(template_id: str) -> bool:
     drill-down only where there is a truthful answer to give.
     """
     return template_id in LINEAGE_PLANS
+
+
+def summed_sheet_reason(template_id: str, sheet: str | None) -> str | None:
+    """Why a sheet has no drill-down of its own, when it is a sum of other sheets.
+
+    The C 07.00 / OF 07.00 Total sheet is the cell-by-cell sum of the
+    exposure-class sheets (``corep/c07.py::c07_total_sheet``), and the two
+    OF 08.01 / 08.02 / 08.03 / 08.05 Total sheets are built from their class
+    sheets likewise (``corep/c08_sheets.py::with_total_sheets``). None has an
+    execution plan — there is no population to select — so ``sheet_lineage``
+    returns ``None`` for it. That is a different answer from "no such cell", and
+    a reader who clicked a figure on a Total deserves to be told where its
+    exposures are. ``None`` for every other sheet.
+    """
+    if sheet is None:
+        return None
+    return _SUMMED_SHEETS.get((template_id, sheet))
 
 
 @dataclass(frozen=True)
@@ -1284,6 +1330,8 @@ def describe_cell(  # noqa: PLR0913 - the cell's full identity plus its two sour
     cell = plan.spec.cells.get((row_ref, col_ref))
     binding = cell.binding if cell is not None else None
     kind, metric, metric_columns, refs = _binding_facts(binding)
+    if col_ref in plan.unreported.get(row_ref, ()):
+        kind, metric, metric_columns, refs = "unreported", None, (), ()
 
     terms: list[FilterTerm] = []
     if kind == "rows":

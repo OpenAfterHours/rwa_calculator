@@ -705,10 +705,15 @@ def _require_non_binding_floor(run: _Run, portfolio: str) -> None:
 
     Both reporting portfolios are non-binding today, so this never skips; it exists
     so that a future binding-floor fixture does not make the tie-out fail spuriously.
+
+    Read off the ledger. Until 2026-11-13 this read OF 02.00 row 0034 column 0010,
+    a cell the published template does not have — the indicator is column 0030 and
+    is empty without the floor summary — so the guard could no longer fire.
     """
-    activated = run.c02_row("0034")["0010"]
-    if activated not in (0.0, None):
+    add_on = float(run.ledger["rwa_final"].sum()) - float(run.ledger["rwa_pre_floor"].sum())
+    if add_on > _ABS:
         pytest.skip(
-            f"[{portfolio}] output floor is activated (C 02.00 row 0034 = {activated}); "
-            "the CMS1-to-C 02.00 tie-out does not hold by construction."
+            f"[{portfolio}] output floor is activated (add-on {add_on:,.2f} in rwa_final); "
+            "CMS1 reports the floored RWA and OF 02.00 column 0010 the un-floored, so "
+            "the tie-out does not hold by construction."
         )

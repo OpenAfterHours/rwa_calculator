@@ -10,7 +10,8 @@ Key responsibilities:
   ``TemplateSpec``, its prepared+partitioned frame, and its ``ReportingContext``
   side inputs — with the post-``execute`` metadata a consumer needs to read a
   rendered cell WITHOUT re-deciding it (the Annex II §1.3 "(-)" negation set,
-  and the tolerant-equals terms of any inert/empty rows).
+  the tolerant-equals terms of any inert/empty rows, and the cells the
+  published template has no data point for).
 
 Why this lives OUTSIDE any one template module: a ``SheetPlan`` is the seam
 between a template's generator and the lineage drill-down. It was born inside
@@ -39,6 +40,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     import polars as pl
 
     from rwa_calc.reporting.cellspec import TemplateSpec
@@ -73,6 +76,14 @@ class SheetPlan:
     empty own-subset does not make them empty, and nulling them would delete the
     component the template's row sums (EBA ``v0338_m``; BoE v4.0.0 ``boe_b0744`` /
     ``boe_b0745``) require.
+
+    ``unreported`` maps a row ref to the column refs the PUBLISHED template has
+    no cell for (OF 07.00's grey cells — ``corep/of07_published_cells.py``). The
+    spec still binds them, because a reported cell can be a formula over one,
+    but the generator blanks them as its last pass and they are NOT cells of the
+    sheet: a consumer explaining or tying out a sheet must skip them, which
+    ``lineage.describe_cell`` does by describing them as kind ``unreported``.
+    Empty for a template that reports every cell it binds.
     """
 
     spec: TemplateSpec
@@ -81,3 +92,4 @@ class SheetPlan:
     negative_cols: frozenset[str]
     row_terms: dict[str, RowTerms | None] = field(default_factory=dict)
     inflow_rows: frozenset[str] = frozenset()
+    unreported: Mapping[str, frozenset[str]] = field(default_factory=dict)

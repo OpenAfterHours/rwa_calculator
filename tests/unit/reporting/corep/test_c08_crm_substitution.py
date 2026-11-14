@@ -16,7 +16,7 @@ the C 08.01 twin of the C 07.00 fix already pinned in
 ``_net_after_substitution``).
 
 Published identities pinned here (all four rules already shipped in this repo
-at ``src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json``):
+at ``packages/rwa-filer/src/rwa_filer/rules/data/crr-eba-v3.0-credit-risk.json``):
 - ``v1663_m`` (live, C 08.01.a): ``{c0070} = {c0040} + {c0050} + {c0060}``.
 - ``v1662_m`` (C 08.01.a): ``{c0090} = {c0020} + {c0070} + {c0080}`` — on the
   REPORTED (negative-outflow) signs, so the money is removed exactly once.
@@ -24,7 +24,7 @@ at ``src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json``):
   exposure classes ... shall also be considered" (the D4 same-class fix).
 
 A further Basel 3.1-only gap (``TestB31OnBalanceSheetNettingInWaterfall``,
-found via the published BoE rules — ``src/rwa_calc/reporting/validations/rules/basel31-boe-v4.1.1-credit-risk.json``):
+found via the published BoE rules — ``packages/rwa-filer/src/rwa_filer/rules/data/basel31-boe-v4.1.1-credit-risk.json``):
 col 0035 (the "(-)" on-balance-sheet netting adjustment, B31-only) is never
 folded into the col 0090 waterfall at all today, on ANY row. The BoE rules are
 ROW-SCOPED and disagree deliberately: ``boe_b0746`` / ``boe_b0746_1`` (C 08.01)
@@ -53,6 +53,12 @@ import pytest
 
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import _get_total_row
+
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_FIRB,
+)
 
 # The three C 08.01 substitution-block columns, in Annex II order.
 _BLOCK_COLS = ("0040", "0050", "0060")
@@ -597,7 +603,7 @@ class TestB31OnBalanceSheetNettingInWaterfall:
             _irb_results_b31_on_off_bs_netting(), framework="BASEL_3_1"
         )
 
-        total = _get_total_row(bundle.c08_01["corporate"])
+        total = _get_total_row(bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB])
         expected = total["0020"][0] + total["0035"][0] + total["0070"][0] + total["0080"][0]
         assert total["0090"][0] == pytest.approx(expected)
         assert total["0090"][0] == pytest.approx(6_400.0)
@@ -610,7 +616,7 @@ class TestB31OnBalanceSheetNettingInWaterfall:
             _irb_results_b31_on_off_bs_netting(), framework="BASEL_3_1"
         )
 
-        on_row = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0020")
+        on_row = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0020")
         assert on_row["0090"][0] == pytest.approx(4_500.0)
 
     def test_off_bs_breakdown_row_waterfall_excludes_col_0035(self) -> None:
@@ -623,7 +629,7 @@ class TestB31OnBalanceSheetNettingInWaterfall:
             _irb_results_b31_on_off_bs_netting(), framework="BASEL_3_1"
         )
 
-        off_row = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0030")
+        off_row = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0030")
         assert off_row["0035"][0] == pytest.approx(-100.0)
         assert off_row["0090"][0] == pytest.approx(2_000.0)
 
@@ -635,7 +641,7 @@ class TestB31OnBalanceSheetNettingInWaterfall:
             _irb_results_b31_netting_single_leg(), framework="BASEL_3_1"
         )
 
-        band = bundle.c08_02["corporate"]
+        band = bundle.c08_02[OF08_CORPORATE_NON_SME_FIRB]
         expected = band["0020"][0] + band["0035"][0] + band["0070"][0] + band["0080"][0]
         assert band["0090"][0] == pytest.approx(expected)
         assert band["0090"][0] == pytest.approx(4_500.0)

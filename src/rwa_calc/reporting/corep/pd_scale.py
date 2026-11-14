@@ -92,6 +92,15 @@ def pd_band_col_post(cols: set[str], framework: str) -> str | None:
     return carrier if carrier in cols else pd_band_col(cols, framework)
 
 
+def published_row_refs(framework: str) -> list[str]:
+    """The fixed PD scale's row codes in published order.
+
+    The row order of a sheet built from several sparse sheets (the OF 08.03 /
+    OF 08.05 Total sheets), each of which emits only its populated bands.
+    """
+    return [ref for _lower, _upper, ref, _label in get_c08_03_pd_ranges(framework)]
+
+
 def banded_rows(
     class_df: pl.DataFrame, alloc_pd_col: str, framework: str
 ) -> tuple[list[tuple[str, str, str]], pl.DataFrame]:

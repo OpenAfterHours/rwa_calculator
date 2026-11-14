@@ -33,10 +33,13 @@ Cell semantics (recorded decisions):
   share. Absent the input column the slice is empty, 0040 = 0.0 and 0030 keeps the
   whole SA share. Col 0040 first carries the roll-out EAD Sum and is rescaled to a
   fraction post-execute (``_c08_07_rollout_pct``).
-- Empty real-class rows stay 0.0 — the opposite of C 07.00's empty-subset rule;
-  only the FIXED structural-null set is nulled (``_null_fixed_rows``). The B31
-  materiality columns 0160-0180 are always null (the retired
-  ``output_floor_config`` gate was dead code, recorded).
+- Empty real-class rows keep 0.0 in their AMOUNT columns — the opposite of
+  C 07.00's empty-subset rule; only the FIXED structural-null set is nulled
+  (``_null_fixed_rows``). Their three SHARE columns (0030/0040/0050) are EMPTY,
+  not 0.0: each share is a quotient over the row's column 0020, and a row with
+  nothing in column 0020 has no quotient (recorded fix 2026-11-13 — see
+  ``_pct_ppu``). The B31 materiality columns 0160-0180 are always null (the
+  retired ``output_floor_config`` gate was dead code, recorded).
 - Lineage-instrumented (R22, single frame): ``c08_07_plans`` exposes the one
   full-population plan; the two post-execute passes (the col-0040 rescale and
   ``_null_fixed_rows``) live on the REPORTED frame (``c08_07_frames``), which the
@@ -304,7 +307,7 @@ def _c08_07_spec(
 
 
 def _pct_ppu(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0030 = SA share subject to PERMANENT PARTIAL USE, as a DPM FRACTION (0.0
+    """0030 = SA share subject to PERMANENT PARTIAL USE, as a DPM FRACTION (EMPTY
     on a zero denominator): the SA EAD (row total 0020 minus IRB 0010) EXCLUDING
     the roll-out-plan slice (col 0040, still the raw EAD Sum when this formula
     runs). 0030 + 0040 == the total SA coverage, so the aggregate the pre-R14 col
@@ -321,26 +324,35 @@ def _pct_ppu(cells: Mapping[str, float | None], _prior: bool) -> float | None:
     0030), and the published rules bound the cell at 1, not 100 (EBA v09769_m
     ``{c0030} <= 1``, v09771_m ``{c0050} <= 1``, v09796_m and boe_b0778
     ``{c0030} + {c0040} + {c0050} = 1``). The retired ``* 100.0`` reported
-    100.0/27.54/72.46 where the DPM wanted 1.0/0.2754/0.7246."""
+    100.0/27.54/72.46 where the DPM wanted 1.0/0.2754/0.7246.
+
+    ZERO DENOMINATOR (recorded fix 2026-11-13): a roll-out class with no
+    exposure reports NO share. The instruction defines each of 0030/0040/0050
+    as "(1) divided by (2)", (2) being the row's column 0020; where that is
+    zero there is no quotient to report. The earlier 0.0 was a made-up figure
+    and one the published identity rejects: with 0.0 in all three, boe_b0778
+    and v09796_m read 0 = 1 on every empty class - on every portfolio. An empty
+    cell gives the rule nothing to evaluate, which is the only right answer
+    for that row."""
     total = cells["0020"] or 0.0
     if total <= 0:
-        return 0.0
+        return None
     return (total - (cells["0010"] or 0.0) - (cells["0040"] or 0.0)) / total
 
 
 def _pct_irb(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0050 = IRB share of the row's EAD, as a DPM fraction (0.0 on a zero
-    denominator — see ``_pct_ppu`` for the units basis)."""
+    """0050 = IRB share of the row's EAD, as a DPM fraction (EMPTY on a zero
+    denominator — see ``_pct_ppu`` for the units basis and for why not 0.0)."""
     total = cells["0020"] or 0.0
     if total <= 0:
-        return 0.0
+        return None
     return (cells["0010"] or 0.0) / total
 
 
 def _c08_07_rollout_pct(frame: pl.DataFrame) -> pl.DataFrame:
     """Rescale C 08.07 col 0040 from the roll-out-plan EAD (the Sum bound in the
-    spec) to its DPM fraction of the row total (col 0020), guarding a zero
-    denominator to 0.0 — the executor has no verb for "share of another
+    spec) to its DPM fraction of the row total (col 0020), leaving the cell
+    EMPTY on a zero denominator — the executor has no verb for "share of another
     cell", so it is derived here post-execute. Col 0030 already excludes this
     slice (``_pct_ppu``), so 0030 + 0040 == the row's total SA coverage. A
     no-op when no roll-out data is present (col 0040 EAD is 0.0). The units are
@@ -348,7 +360,7 @@ def _c08_07_rollout_pct(frame: pl.DataFrame) -> pl.DataFrame:
     if "0040" not in frame.columns or "0020" not in frame.columns:
         return frame
     total = pl.col("0020")
-    pct = pl.when(total > 0).then(pl.col("0040") / total).otherwise(0.0)
+    pct = pl.when(total > 0).then(pl.col("0040") / total).otherwise(pl.lit(None, dtype=pl.Float64))
     return frame.with_columns(pct.alias("0040"))
 
 

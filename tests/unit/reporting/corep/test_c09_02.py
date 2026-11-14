@@ -79,6 +79,13 @@ class TestC0902TemplateDefinitions:
         ]
 
     def test_b31_column_refs(self) -> None:
+        """The column codes of the PRA's own OF 09.02 template, in its order.
+
+        Source: PS1/26 Annex I, "OF 09.02 - Geographical breakdown of exposures
+        by residence of the obligor: IRB" (effective 1 January 2027), header
+        row of codes. The RWEA column is 0110. Column 0125 is the CRR "after
+        supporting factors" column and does not exist in OF 09.02.
+        """
         from rwa_calc.reporting.corep.templates import B31_C09_02_COLUMN_REFS
 
         assert B31_C09_02_COLUMN_REFS == [
@@ -94,8 +101,8 @@ class TestC0902TemplateDefinitions:
             "0100",
             "0105",
             "0107",
+            "0110",
             "0120",
-            "0125",
             "0130",
         ]
 
@@ -105,11 +112,12 @@ class TestC0902TemplateDefinitions:
         assert "0107" in B31_C09_02_COLUMN_REFS
 
     def test_b31_removes_supporting_factor_columns(self) -> None:
+        """The two adjustment columns and the post-factor RWEA column go; 0110 stays."""
         from rwa_calc.reporting.corep.templates import B31_C09_02_COLUMN_REFS
 
-        assert "0110" not in B31_C09_02_COLUMN_REFS
         assert "0121" not in B31_C09_02_COLUMN_REFS
         assert "0122" not in B31_C09_02_COLUMN_REFS
+        assert "0125" not in B31_C09_02_COLUMN_REFS
 
     def test_crr_rows_count(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_02_ROWS
@@ -303,9 +311,27 @@ class TestC0902B31Features:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_geo_results(), framework="BASEL_3_1")
         total = bundle.c09_02["TOTAL"]
-        assert "0110" not in total.columns
         assert "0121" not in total.columns
         assert "0122" not in total.columns
+        assert "0125" not in total.columns
+
+    def test_rwea_is_reported_in_col_0110(self) -> None:
+        """OF 09.02 has ONE RWEA column, 0110 - and it carries the reported RWEA.
+
+        Under CRR the same figure sits in 0125 ("after supporting factors").
+        Reporting it there under Basel 3.1 puts it in a column the published
+        template does not have, and leaves 0110 - which the Bank's rules tie to
+        OF 08.01's RWEA - empty.
+        """
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_irb_geo_results(), framework="BASEL_3_1")
+        total_row = bundle.c09_02["TOTAL"].filter(pl.col("row_ref") == "0150")
+
+        # Assert - rwa_final sum: 700 + 350 + 600 + 200 + 300 = 2150
+        assert total_row["0110"][0] == pytest.approx(2150.0)
 
     def test_has_col_0107_defaulted_ev(self) -> None:
         gen = LedgerShimCorepGenerator()
@@ -570,7 +596,9 @@ class TestC0902SupportingFactorColumns:
         total = gen.generate_from_lazyframe(_irb_sf_results(), framework="BASEL_3_1").c09_02[
             "TOTAL"
         ]
-        for ref in ("0110", "0121", "0122"):
+        # 0121 / 0122 are the adjustments and 0125 the post-factor RWEA. 0110
+        # stays: it is OF 09.02's one RWEA column (PS1/26 Annex I).
+        for ref in ("0121", "0122", "0125"):
             assert ref not in total.columns
 
     def test_consistency_with_c08_01_supporting_factor_pair(self) -> None:

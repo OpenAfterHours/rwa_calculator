@@ -44,6 +44,7 @@ your browser at the landing page.
 | **Landing** | `/` | Overview and navigation |
 | **Calculator** | `/calculator` | Configure and run an RWA calculation |
 | **Results** | `/results/{run_id}` | Headline metrics, charts and an exposure sample for a run |
+| **Filing** | `/results/{run_id}/filing` | Whether a Basel 3.1 run can be written as the PRA's XBRL return, what stands in the way, and the download |
 | **Comparison** | `/comparison` | CRR vs Basel 3.1 with the capital-impact waterfall |
 | **Reconciliation** | `/reconciliation` | Reconcile against a legacy calculator, component by component |
 | **Hierarchy** | `/hierarchy` | Browse the reporting-entity registry tree and the scopes each entity can head |
@@ -109,6 +110,33 @@ still write.
     a folder you name is written by your own process on your own machine, and a
     web page on another site cannot drive a write. Do not expose the app off
     loopback.
+
+---
+
+## Filing
+
+The **Filing status** button on a results page opens the filing page for that
+run. Enter the reporting entity's LEI and the page says whether the run can be
+written as the XBRL return the Bank of England's gateway accepts (PRA001).
+
+Three things can stand in the way, and the page names the first that applies.
+
+- **Figures with no cell in the taxonomy.** The run reports a non-zero figure
+  in a row, column or sheet the published template does not have. The page
+  lists them per template and reason.
+- **Structure findings.** A placed figure the taxonomy cannot express, for
+  example two cells that are one data point and hold different values.
+- **Rule breaks.** A validation rule the gateway would reject the return for.
+
+The download offered follows from the verdict. A return nothing blocks is
+offered as the filing package: a zip of the `.xbrl` instance and a manifest
+recording its checksum and what was validated. A return blocked by missing
+figures or rule breaks is offered only as a file **for review**, labelled as
+not submittable; its manifest says the same, and the figures left out are
+listed in the zip. Where a structure finding remains, no file is offered,
+because no valid one can be written.
+
+A CRR run has no such return, and the page says so.
 
 ---
 
@@ -183,6 +211,8 @@ other tools). Interactive docs are at `/docs` (OpenAPI).
 | `POST` | `/api/reconcile` | Reconcile against a legacy output; returns a `recon_id` + tiers. Optional `run_id` reuses a registered calculation instead of re-running the pipeline (404 unknown, 422 mismatch) |
 | `GET`  | `/api/reconcile/export/{csv\|excel}?recon_id=…` | Download the reconciliation |
 | `GET`  | `/api/export/{parquet\|csv\|excel\|corep\|pillar3}?run_id=…` | Download an export |
+| `GET`  | `/api/filing/status?run_id=…&entity_identifier=…` | Whether a Basel 3.1 run can be filed as the PRA001 XBRL return, and what stands in the way. With `allow_incomplete` / `allow_rule_breaks`, what would still stand in the way |
+| `GET`  | `/api/filing/package?run_id=…&entity_identifier=…` | Download the instance and its manifest as a zip. `409` with the status payload when nothing was written |
 
 ```bash
 curl -X POST http://localhost:8000/api/calculate \

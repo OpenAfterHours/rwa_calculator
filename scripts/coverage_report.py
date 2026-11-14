@@ -124,17 +124,17 @@ from tests.acceptance.reporting.test_supervisory_validations import RUNS  # noqa
 
 from rwa_calc.engine.pipeline import PipelineOrchestrator  # noqa: E402
 from rwa_calc.reporting.corep.generator import COREPGenerator  # noqa: E402
+from rwa_calc.reporting.filing import build_template_index, evaluate_all  # noqa: E402
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator  # noqa: E402
-from rwa_calc.reporting.validations import (  # noqa: E402
+from rwa_filer.validate import (  # noqa: E402
+    SINGLE_SHEET,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
-    evaluate_all,
 )
-from rwa_calc.reporting.validations.scope import SINGLE_SHEET, build_template_index  # noqa: E402
 
 if TYPE_CHECKING:
-    from rwa_calc.reporting.validations.checker import ValidationReport
+    from rwa_filer.validate import ValidationReport
 
 DEFAULT_OUT = _REPO_ROOT / "scripts" / "coverage_metrics.json"
 FIXTURES_DIR = _REPO_ROOT / "tests" / "fixtures"
@@ -269,6 +269,8 @@ def observe_runs(limit: int | None = None) -> Observation:
         corep = COREPGenerator().generate_from_lazyframe(
             result.results,
             framework=framework,
+            # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+            output_floor_summary=result.output_floor_summary,
             previous_period_results=None if prior is None else prior.results,
         )
         pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)
@@ -507,7 +509,9 @@ def check_portfolios_registered() -> dict[str, Any]:
     allowlist that outlives its reason is a hole in the gate that reads as a pass,
     and this check exists precisely to stop a hole reading as a pass.
     """
-    registered = {run.build_bundle.__name__ for run in RUNS}
+    # A builder parameterised by the reporting date is registered as a
+    # ``functools.partial`` over it; the builder is the function it wraps.
+    registered = {getattr(run.build_bundle, "func", run.build_bundle).__name__ for run in RUNS}
     declared: dict[str, list[str]] = {}
     for path in sorted(FIXTURES_DIR.glob("reporting_*.py")):
         builders = _bundle_builders(path)

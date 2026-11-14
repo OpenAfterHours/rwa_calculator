@@ -371,6 +371,9 @@ class TestRunReleaseFlow:
                 events.append(f"preflight(github_release={kw['github_release']})") or True
             ),
         )
+        # The release-ordering check asks PyPI; it has its own tests
+        # (test_deploy_release_order.py) and is stubbed out of this trace.
+        monkeypatch.setattr(deploy, "check_filer_dependency_published", lambda: True)
         monkeypatch.setattr(deploy, "update_versioned_files", lambda n, c: events.append("bump"))
         monkeypatch.setattr(deploy, "build_release", lambda n: events.append("build") or True)
         monkeypatch.setattr(

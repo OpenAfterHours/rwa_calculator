@@ -80,7 +80,7 @@ Extraction is idempotent and independent of the download outcome, which matters 
 
 ### `scripts/extract_validation_rules.py` — Extract the committed validation-rule JSON
 
-Reads the two validation-rule workbooks fetched above and emits a filtered, machine-readable JSON extract to [Reporting Validation Rules](../reference/validation-rules/index.md), covering only the templates this project produces:
+Reads the two validation-rule workbooks fetched above and emits a filtered, machine-readable JSON extract (see [Reporting Validation Rules](../reference/validation-rules/index.md)), covering only the templates this project produces. The extraction itself lives in `rwa-filer` (`rwa_filer.rules.importer`, also exposed as `rwa-filer rules import`); this script binds it to the repository's paths — the workbooks in `docs/assets/`, the committed extracts in `packages/rwa-filer/src/rwa_filer/rules/data/`:
 
 | Output | Framework | Scope |
 |--------|-----------|-------|
@@ -124,7 +124,14 @@ uv run python scripts/deploy.py 0.1.4 --publish
 
 # Dry run
 uv run python scripts/deploy.py --bump patch --dry-run
+
+# Release the workspace member instead (its own version, changelog and tag)
+uv run python scripts/deploy.py --package rwa-filer 0.1.0
 ```
+
+The repository releases two packages; `--package rwa-filer` releases the member
+with its own version files, changelog and `rwa-filer-v*` tag. See
+[Workspace & Packages](workspace.md) for the release order.
 
 !!! info "See also"
     Full details (Windows batch wrapper, PyPI token setup, post-deployment git workflow) in [`scripts/README.md`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/scripts/README.md).
@@ -202,6 +209,60 @@ Two conditions fail it. **An entry outside `scripts/parked_registers_baseline.js
 The set arithmetic and the owner grammar live in `scripts/tolerated_findings.py`, shared with the **measured** register in `tests/acceptance/reporting/test_supervisory_validations.py` — that one keeps its own runner, because its membership is a union over sixteen pipeline runs, but both use the same `diff`. `tests/contracts/test_parked_register_ratchet.py` runs this gate on every pytest run, so it cannot rot unwired.
 
 ---
+
+### `scripts/filing_mapping_report.py` — The filing-mapping ratchet
+
+Measures how much of the generated Basel 3.1 COREP estate has a place in the
+PRA001 taxonomy. It runs every Basel 3.1 portfolio in the supervisory
+register's matrix, re-addresses each generated cell to the taxonomy's
+coordinates, and counts the cells that land on a data point and the non-zero
+figures that do not.
+
+```bash
+uv run python scripts/filing_mapping_report.py              # measure and print
+uv run python scripts/filing_mapping_report.py --check      # gate against the baseline
+uv run python scripts/filing_mapping_report.py --update-baseline
+```
+
+`--check` fails if `placed_cells` fell, if `unplaced_figures` rose, or if any
+(template, reason) cell of the breakdown rose. The baseline is
+`scripts/filing_mapping_baseline.json`. See
+[Workspace & Packages](workspace.md#the-filing-mapping-ratchet) for the counts
+and what each reason means.
+
+
+### `scripts/referee_differential.py` — The referee differential
+
+Files golden returns from the calculator and asks an independent XBRL processor
+about them. For every Basel 3.1 portfolio whose estate has no structure finding
+it writes the XBRL instance, runs Arelle on it against the Bank of England's
+taxonomy package, and compares Arelle's verdict on every rule with the native
+rule engine's.
+
+```bash
+# Once: put the Bank's package where the script looks for it
+mkdir -p .taxonomy && cp /path/to/boe-banking-v411.zip .taxonomy/
+
+export RWA_FILER_ARELLE_PYTHON=/path/to/arelle-venv/bin/python
+uv run python scripts/referee_differential.py --check
+uv run python scripts/referee_differential.py --portfolio off-bs   # one return, a quick look
+uv run python scripts/referee_differential.py --update-baseline
+```
+
+The package and the interpreter are found at fixed places and are not
+arguments: `.taxonomy/boe-banking-v411.zip`, and the interpreter
+`RWA_FILER_ARELLE_PYTHON` names (or the current one, if it has Arelle). Each run
+leaves its instances, Arelle's per-worker files and `measured.json` in
+`.referee-run/`. Both folders are git-ignored.
+
+Held two-way against `scripts/referee_differential_baseline.json`: the
+disagreements, Arelle's error codes and the count differences of each golden
+return must be exactly the banked lists, the number of rules compared may not
+fall, and the set of golden returns may not change unrecorded. A run that did
+not finish fails. It needs Arelle and the taxonomy package, takes several
+minutes and about 3 GB per return, and so runs in its own workflow
+(`.github/workflows/referee-differential.yml`) and not in `ci.yml`. Its fast
+contract tests are in `tests/contracts/test_referee_differential.py`.
 
 ## Test Data Scripts
 

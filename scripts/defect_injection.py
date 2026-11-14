@@ -499,8 +499,8 @@ def output_digest(portfolios: tuple[str, ...] | None = NARROW_PROBE_PORTFOLIOS) 
 
     from rwa_calc.engine.pipeline import PipelineOrchestrator
     from rwa_calc.reporting.corep.generator import COREPGenerator
+    from rwa_calc.reporting.filing import build_template_index
     from rwa_calc.reporting.pillar3.generator import Pillar3Generator
-    from rwa_calc.reporting.validations.scope import build_template_index
 
     digest = hashlib.sha256()
     for run in RUNS:

@@ -42,6 +42,10 @@ _KIND_SUMMARY: dict[str, str] = {
     "prior_period": "Evaluated over the previous reporting period.",
     "constant": "Not produced — this cell has no source in the calculation ledger.",
     "unbound": "Not bound to a value — reports the template's empty-cell policy.",
+    "unreported": (
+        "Not a cell of the published template — it is greyed out there, so nothing "
+        "is reported here."
+    ),
 }
 
 _METRIC_LABEL: dict[str, str] = {

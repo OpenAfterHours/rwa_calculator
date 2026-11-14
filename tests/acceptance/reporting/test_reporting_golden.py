@@ -163,7 +163,12 @@ def _generate_frames(regime_key: str) -> tuple[dict[str, pl.DataFrame], dict]:
     config = config_factory()
     result = PipelineOrchestrator().run_with_data(build_reporting_bundle(), config)
 
-    corep = COREPGenerator().generate_from_lazyframe(result.results, framework=framework)
+    corep = COREPGenerator().generate_from_lazyframe(
+        result.results,
+        framework=framework,
+        # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+        output_floor_summary=result.output_floor_summary,
+    )
     pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)
 
     corep_frames, corep_meta = _flatten_bundle("corep", corep)

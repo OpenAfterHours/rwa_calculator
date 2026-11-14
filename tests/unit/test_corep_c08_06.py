@@ -34,6 +34,13 @@ from rwa_calc.reporting.corep.templates import (
 )
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 
+# RE-ANCHORED 2026-11-13: the Basel 3.1 OF 08 sheets moved from exposure-class keys to the
+# published axis (taxonomy v4.1.1 OF08.01.01.01); each OF08_* name is one published sheet.
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_SPECIALISED_LENDING_FIRB_SLOTTING,
+    irb_sheet,
+)
+
 # =============================================================================
 # TEST FIXTURES (module-level functions, not pytest fixtures)
 # =============================================================================
@@ -546,7 +553,9 @@ class TestC0806ColumnValues:
         """C08.06's post-basis totals reconcile to C08.01 row 0080."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_slotting_results(), framework=framework)
-        c08_01_total = bundle.c08_01["specialised_lending"].filter(pl.col("row_ref") == "0080")
+        c08_01_total = bundle.c08_01[
+            irb_sheet(framework, "specialised_lending", OF08_SPECIALISED_LENDING_FIRB_SLOTTING)
+        ].filter(pl.col("row_ref") == "0080")
 
         def c08_06_total(column_ref: str) -> float:
             return sum(

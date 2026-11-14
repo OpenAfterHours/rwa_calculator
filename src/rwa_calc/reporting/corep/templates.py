@@ -32,6 +32,12 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from rwa_calc.reporting.corep.c02_rows import B31_LAYOUT, CRR_LAYOUT
+
+if TYPE_CHECKING:
+    from rwa_calc.reporting.corep.c02_rows import Layout
 
 # =============================================================================
 # COREP ROW / COLUMN / SECTION METADATA
@@ -126,12 +132,9 @@ _LBL_ROW_OF_WHICH_QCCP = "  of which: centrally cleared through a QCCP"
 _LBL_ROW_DERIV_LST_NETTING = "Derivatives & Long Settlement Transactions netting sets"
 _LBL_ROW_CCP_NETTING = "From Contractual Cross Product netting sets"
 # Correct ONLY where a sibling "Counterparty credit risk" row exists (OF 02.01, OV1).
+# C 02.00 / OF 02.00 row 0040 has no such sibling — CCR is INSIDE it (Annex II
+# wording; its label is declared with the rest of that template in c02_rows.py).
 _LBL_ROW_CREDIT_RISK_EXCL_CCR = "Credit risk (excluding CCR)"
-# C 02.00 / OF 02.00 row 0050 has no such sibling — CCR is INSIDE it (Annex II wording).
-_LBL_ROW_CREDIT_CCR_DILUTION_FREE_DELIV = (
-    "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS "
-    "AND FREE DELIVERIES"
-)
 _LBL_ROW_OP_RISK = "Operational risk"
 _LBL_ROW_CIU = "Collective investment undertakings (CIU)"
 _LBL_ROW_OF_WHICH_SME_LC = "  of which: SME"
@@ -239,11 +242,10 @@ CRR_C07_COLUMNS: list[COREPColumn] = [
     COREPColumn("0240", "Of which: credit assessment derived from central govt", "RWEA"),
 ]
 
-# Basel 3.1 OF 07.00: 22 columns — adds 0035, 0171, 0235; removes 0215-0217;
-# changes 0160 from 0% CCF to 10% CCF.
+# Basel 3.1 OF 07.00: the 27 published columns (PS1/26 Annex I) — adds 0035, 0171,
+# 0235; removes 0215-0217 and 0020 (see corep/of07_published_cells.py); 0160 = 10% CCF.
 B31_C07_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
-    COREPColumn("0020", "Exposures deducted from own funds", "Exposure"),
     COREPColumn("0030", _LBL_COL_VALUE_ADJUSTMENTS, "Exposure"),
     COREPColumn(
         "0035", "(-) Adjustment due to on-balance sheet netting", "Exposure"
@@ -528,6 +530,10 @@ C07_00_SA_SHEET_MAP: dict[str, str] = {
 # key outside this set reached the axis by the pass-through limb, i.e. it is not
 # an Art. 112(1) class. Consumed by ``corep/c07.py::c07_plans``.
 C07_00_SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
+
+# The Total sheet (published z-code 0001, Annex II ¶47): the sum of the class
+# sheets, built by ``corep/c07.py::c07_total_sheet``. Never an exposure class.
+C07_00_TOTAL_SHEET_KEY: str = "total"
 
 # The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
 # report under the IRB umbrella: Art. 155(2) simple-RW and Art. 155(3) PD/LGD.
@@ -1438,20 +1444,17 @@ C08_01_COLUMNS: list[COREPColumn] = [
 # =============================================================================
 
 # C 02.00 (CRR) / OF 02.00 (Basel 3.1) is the master capital template that
-# aggregates RWEA across all risk types. It is the template where the output
-# floor is applied at total capital level.
+# aggregates RWEA across all risk types.
 #
-# CRR: 1 column (col 0010 — all approaches).
-# Basel 3.1: 3 columns — col 0010 (all approaches / U-TREA), col 0020
-# (SA-only RWEA for floor comparison), col 0030 (output floor RWEA after
-# applying floor multiplier and OF-ADJ per Art. 92).
+# CRR: 1 column (col 0010).
+# Basel 3.1: 3 columns — col 0010 (all approaches: the UN-floored amounts,
+# U-TREA at row 0010), col 0020 (the standardised-approach RWEA of the modelled
+# rows, S-TREA at row 0040) and col 0030 (the output floor x * S-TREA + OF-ADJ,
+# on row 0010 only, with its three indicator rows 0034-0036).
 #
-# Rows cover credit risk (SA, F-IRB, A-IRB, slotting, equity), CCR, CVA,
-# securitisation, market risk, and operational risk. This calculator only
-# populates credit risk rows; all other risk-type rows are null.
-#
-# Basel 3.1 adds three indicator rows: 0034 (floor activated Yes/No),
-# 0035 (floor multiplier %), 0036 (OF-ADJ monetary value).
+# The ROWS — codes, the publishers' labels and, for Basel 3.1, the cells each row
+# has — are declared in ``corep/c02_rows.py``, with their sources. This calculator
+# populates the credit-risk rows; the other risk types are laid out and empty.
 #
 # References:
 # - CRR Art. 92 (own funds requirements)
@@ -1464,201 +1467,35 @@ CRR_C02_00_COLUMNS: list[COREPColumn] = [
 ]
 
 B31_C02_00_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "All approaches (U-TREA components)", "Own Funds Requirements"),
-    COREPColumn("0020", "Standardised approaches only (S-TREA components)", "Floor Comparison"),
-    COREPColumn("0030", "Output floor (after floor multiplier and OF-ADJ)", _GRP_OUTPUT_FLOOR),
+    COREPColumn("0010", "All approaches", "Own Funds Requirements"),
+    COREPColumn("0020", "Standardised approaches only (Output Floor)", "Floor Comparison"),
+    COREPColumn("0030", "Output Floor", _GRP_OUTPUT_FLOOR),
 ]
 
-# --- CRR C 02.00 Row Sections ---
-# Rows cover the complete own funds requirements structure. Only the credit risk
-# section is populated by this calculator; market/op risk rows are null. CCR has no
-# row of its own: Annex II folds it into 0050 and its SA child 0060 (c02.py::_SA_APPROACHES).
 
-CRR_C02_00_ROW_SECTIONS: list[RowSection] = [
-    RowSection(
-        "Total and Credit Risk",
-        [
-            COREPRow("0010", "TOTAL RISK EXPOSURE AMOUNT"),
-            COREPRow("0040", "TOTAL OWN FUNDS REQUIREMENTS"),
-            # Credit, counterparty credit and dilution risk
-            COREPRow("0050", _LBL_ROW_CREDIT_CCR_DILUTION_FREE_DELIV),
-            COREPRow("0060", "Of which: Standardised Approach (SA)"),
-            COREPRow("0070", _LBL_IRB_CENTRAL_GOVT),
-            COREPRow("0080", "Regional governments and local authorities"),
-            COREPRow("0090", _LBL_SA_PSE),
-            COREPRow("0100", _LBL_SA_MDB),
-            COREPRow("0110", _LBL_SA_INTL_ORG),
-            COREPRow("0120", "Institutions"),
-            COREPRow("0130", "Corporates"),
-            COREPRow("0140", "Retail"),
-            COREPRow("0150", _LBL_SA_MORTGAGES),
-            COREPRow("0160", _LBL_SA_DEFAULTED),
-            COREPRow("0170", "Higher-risk items"),
-            COREPRow("0180", _LBL_SA_COVERED_BOND),
-            COREPRow("0190", "Short-term credit assessment"),
-            COREPRow("0200", _LBL_ROW_CIU),
-            COREPRow("0210", "Equity"),
-            COREPRow("0211", _LBL_SA_OTHER),
-        ],
-    ),
-    RowSection(
-        "IRB Approach",
-        [
-            COREPRow("0220", "Of which: IRB Approach"),
-            COREPRow("0240", "Of which: Foundation IRB (F-IRB)"),
-            COREPRow("0250", "F-IRB — Institutions"),
-            COREPRow("0260", "F-IRB — Corporates"),
-            COREPRow("0300", "Of which: Advanced IRB (A-IRB)"),
-            COREPRow("0310", "A-IRB — Central governments and central banks"),
-            COREPRow("0330", "A-IRB — Institutions"),
-            COREPRow("0340", "A-IRB — Corporates"),
-            COREPRow("0370", "A-IRB — Retail"),
-            COREPRow("0380", "A-IRB — Retail, secured by immovable property"),
-            COREPRow("0390", "A-IRB — Retail, qualifying revolving (QRRE)"),
-            COREPRow("0400", "A-IRB — Retail, other SME"),
-            COREPRow("0410", "Supervisory slotting"),
-            COREPRow("0420", "Equity IRB"),
-        ],
-    ),
-    RowSection(
-        "Other Risk Types",
-        [
-            COREPRow("0430", "Settlement risk"),
-            COREPRow("0440", "Securitisation positions in non-trading book"),
-            COREPRow("0460", "Position, foreign exchange and commodities risk"),
-            COREPRow("0590", "Credit valuation adjustment (CVA)"),
-            COREPRow("0640", _LBL_ROW_OP_RISK),
-            COREPRow("0680", "Additional risk exposure: fixed overheads"),
-        ],
-    ),
-]
+def _c02_00_row_sections(layout: Layout) -> list[RowSection]:
+    """The published C 02.00 / OF 02.00 layout as ``RowSection`` objects."""
+    return [
+        RowSection(name, [COREPRow(row.ref, row.label) for row in published])
+        for name, published in layout
+    ]
 
-# --- Basel 3.1 OF 02.00 Row Sections ---
-# Extends CRR rows with: F-IRB/A-IRB sub-class breakdowns (new refs 0271,
-# 0290, 0295-0297, 0350, 0355-0356, 0382-0385), slotting by SL type
-# (0411-0416), SA specialised lending (0131), output floor indicator rows
-# (0034-0036), and expanded market/CVA rows.
 
-B31_C02_00_ROW_SECTIONS: list[RowSection] = [
-    RowSection(
-        "Total and Output Floor",
-        [
-            COREPRow("0010", "TOTAL RISK EXPOSURE AMOUNT"),
-            COREPRow("0034", "Output floor activated"),
-            COREPRow("0035", "Output floor multiplier"),
-            COREPRow("0036", "Output floor adjustment (OF-ADJ)"),
-            COREPRow("0040", "TOTAL OWN FUNDS REQUIREMENTS"),
-        ],
-    ),
-    RowSection(
-        "Credit Risk — SA",
-        [
-            COREPRow("0050", _LBL_ROW_CREDIT_CCR_DILUTION_FREE_DELIV),
-            COREPRow("0060", "Of which: Standardised Approach (SA)"),
-            COREPRow("0070", _LBL_IRB_CENTRAL_GOVT),
-            COREPRow("0080", "Regional governments and local authorities"),
-            COREPRow("0090", _LBL_SA_PSE),
-            COREPRow("0100", _LBL_SA_MDB),
-            COREPRow("0110", _LBL_SA_INTL_ORG),
-            COREPRow("0120", "Institutions"),
-            COREPRow("0130", "Corporates"),
-            COREPRow("0131", "Of which: specialised lending"),
-            COREPRow("0140", "Retail"),
-            COREPRow("0150", _LBL_SA_MORTGAGES),
-            COREPRow("0160", _LBL_SA_DEFAULTED),
-            COREPRow("0170", "Higher-risk items"),
-            COREPRow("0180", _LBL_SA_COVERED_BOND),
-            COREPRow("0190", "Short-term credit assessment"),
-            COREPRow("0200", _LBL_ROW_CIU),
-            COREPRow("0210", "Equity"),
-            COREPRow("0211", _LBL_SA_OTHER),
-        ],
-    ),
-    RowSection(
-        "Credit Risk — F-IRB",
-        [
-            COREPRow("0220", "Of which: IRB Approach"),
-            COREPRow("0240", "Of which: Foundation IRB (F-IRB)"),
-            COREPRow("0250", "F-IRB — Institutions"),
-            COREPRow("0271", "F-IRB — Institutions (detail)"),
-            COREPRow("0260", "F-IRB — Corporates"),
-            COREPRow("0290", "F-IRB — SL excluding slotting"),
-            COREPRow("0295", "F-IRB — Financial and large corporates"),
-            COREPRow("0296", "F-IRB — Other general corporates SME"),
-            COREPRow("0297", "F-IRB — Other general corporates non-SME"),
-        ],
-    ),
-    RowSection(
-        "Credit Risk — A-IRB",
-        [
-            COREPRow("0300", "Of which: Advanced IRB (A-IRB)"),
-            COREPRow("0310", "A-IRB — Central governments and central banks"),
-            COREPRow("0330", "A-IRB — Institutions"),
-            COREPRow("0340", "A-IRB — Corporates"),
-            COREPRow("0350", "A-IRB — SL excluding slotting"),
-            COREPRow("0355", "A-IRB — Other general corporates SME"),
-            COREPRow("0356", "A-IRB — Other general corporates non-SME"),
-            COREPRow("0370", "A-IRB — Retail"),
-            COREPRow("0380", "A-IRB — Retail, secured by immovable property"),
-            COREPRow("0382", "A-IRB — Retail, residential immovable SME"),
-            COREPRow("0383", "A-IRB — Retail, residential immovable non-SME"),
-            COREPRow("0384", "A-IRB — Retail, commercial RE SME"),
-            COREPRow("0385", "A-IRB — Retail, commercial RE non-SME"),
-            COREPRow("0390", "A-IRB — Retail, qualifying revolving (QRRE)"),
-            COREPRow("0400", "A-IRB — Retail, other SME"),
-            COREPRow("0410", "A-IRB — Retail, other non-SME"),
-        ],
-    ),
-    RowSection(
-        "Slotting and Equity",
-        [
-            COREPRow("0411", "Supervisory slotting"),
-            COREPRow("0412", "Slotting — Project finance"),
-            COREPRow("0413", "Slotting — Object finance"),
-            COREPRow("0414", "Slotting — Commodities finance"),
-            COREPRow("0415", "Slotting — IPRE"),
-            COREPRow("0416", "Slotting — HVCRE"),
-            COREPRow("0420", "Equity IRB"),
-        ],
-    ),
-    RowSection(
-        "Other Risk Types",
-        [
-            COREPRow("0430", "Settlement risk"),
-            COREPRow("0440", "Securitisation positions in non-trading book"),
-            COREPRow("0460", "Position, foreign exchange and commodities risk"),
-            COREPRow("0590", "Credit valuation adjustment (CVA)"),
-            COREPRow("0640", _LBL_ROW_OP_RISK),
-            COREPRow("0680", "Additional risk exposure: fixed overheads"),
-        ],
-    ),
-    RowSection(
-        _SEC_MEMORANDUM_ITEMS,
-        [
-            # PRA PS1/26 Art. 123B: portfolio-total RWEA of retail/RE exposures
-            # that received the 1.5x currency-mismatch multiplier. Memo-only
-            # (col 0010 populated; S-TREA / output floor cols left None) and not
-            # summed into the TREA total. Basel-3.1-only (absent under CRR).
-            COREPRow(
-                "0500",
-                "Of which: retail/RE subject to currency mismatch multiplier (RWEA)",
-            ),
-        ],
-    ),
-]
+CRR_C02_00_ROW_SECTIONS: list[RowSection] = _c02_00_row_sections(CRR_LAYOUT)
+B31_C02_00_ROW_SECTIONS: list[RowSection] = _c02_00_row_sections(B31_LAYOUT)
 
 CRR_C02_00_COLUMN_REFS: list[str] = [c.ref for c in CRR_C02_00_COLUMNS]
 B31_C02_00_COLUMN_REFS: list[str] = [c.ref for c in B31_C02_00_COLUMNS]
 
 # Mapping from sealed ``reporting_class_origin`` values to the C 02.00 /
 # OF 02.00 Art. 112(1) class rows 0070-0211. Used by the generator to route SA
-# RWEA into the correct row; many-to-one entries ACCUMULATE (c02.py::_sa_rows).
+# RWEA into the correct row; many-to-one entries ACCUMULATE (c02.py::_sa_class_rows).
 #
 # The keys are ``domain.enums.ExposureClass`` members — the vocabulary the
 # aggregator actually seals. They MUST be, because rows 0070-0211 are "See CR SA
 # template" (COREP Annex II §1.3.1; PS1/26 Annex II §1.3.1), i.e. each row is an
 # identity against the C 07.00 sheet for the same Art. 112(1) letter. The
-# groupings below therefore mirror ``validations/scope.py::_C07_SHEETS`` /
+# groupings below therefore mirror ``filing/sheet_maps.py::_C07_SHEETS`` /
 # ``_OF07_SHEETS`` letter for letter:
 #   0130 (g) corporates  <- corporate + corporate_sme + specialised_lending
 #                           (PS1/26 Art. 122A/122B assign SA SL to (g); it also
@@ -1672,8 +1509,10 @@ B31_C02_00_COLUMN_REFS: list[str] = [c.ref for c in B31_C02_00_COLUMNS]
 #                        engine/aggregator/_equity_prep.py; (o) and (p) are
 #                        disjoint, so 0200 is NOT an of-which of 0210
 # Row 0190 (n) alone has NO key: this calculator emits no short-term-assessment
-# exposure, as ``_C07_SHEETS`` gives s0014 empty bundle keys. An absent key drops
-# the RWEA out of the breakdown SILENTLY (measured: ``ciu`` lost 28,000,000).
+# exposure, as ``_C07_SHEETS`` gives s0014 empty bundle keys (and OF 02.00 has no
+# row 0190 at all). An absent key drops the RWEA out of the breakdown SILENTLY
+# (measured: ``ciu`` lost 28,000,000) — c02.py reports the shortfall.
+# The codes are the published ones in BOTH templates.
 C02_00_SA_CLASS_MAP: dict[str, str] = {
     "central_govt_central_bank": "0070",
     "rgla": "0080",
@@ -1696,71 +1535,6 @@ C02_00_SA_CLASS_MAP: dict[str, str] = {
     "equity": "0210",
     "other": "0211",
 }
-
-# Rows that are populated from pipeline data (credit risk scope).
-# All other rows are null (CCR, market, op risk out of scope).
-C02_00_CREDIT_RISK_ROWS: frozenset[str] = frozenset(
-    {
-        "0010",
-        "0040",
-        "0050",
-        "0060",
-        "0070",
-        "0080",
-        "0090",
-        "0100",
-        "0110",
-        "0120",
-        "0130",
-        "0131",
-        "0140",
-        "0150",
-        "0160",
-        "0170",
-        "0180",
-        "0190",
-        "0200",
-        "0210",
-        "0211",
-        "0220",
-        "0240",
-        "0250",
-        "0260",
-        "0271",
-        "0290",
-        "0295",
-        "0296",
-        "0297",
-        "0300",
-        "0310",
-        "0330",
-        "0340",
-        "0350",
-        "0355",
-        "0356",
-        "0370",
-        "0380",
-        "0382",
-        "0383",
-        "0384",
-        "0385",
-        "0390",
-        "0400",
-        "0410",
-        "0411",
-        "0412",
-        "0413",
-        "0414",
-        "0415",
-        "0416",
-        "0420",
-        "0034",
-        "0035",
-        "0036",
-        # PRA PS1/26 Art. 123B currency-mismatch memo (B31 OF 02.00 row 0500).
-        "0500",
-    }
-)
 
 
 # =============================================================================
@@ -1909,7 +1683,10 @@ CRR_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0130", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
 ]
 
-# OF 09.02 (Basel 3.1): adds 0107 (defaulted EV), removes 0110/0121/0122
+# OF 09.02 (Basel 3.1): adds 0107 (defaulted EV) and removes the supporting-factor
+# columns 0121 / 0122 / 0125. The ONE RWEA column is 0110 - the codes on the PRA's
+# own template (PS1/26 Annex I, OF 09.02) run ... 0105, 0107, 0110, 0120, 0130.
+# The figure CRR reports in 0125 ("after supporting factors") is reported here.
 B31_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0030", "Of which: defaulted", "Exposure"),
@@ -1923,8 +1700,8 @@ B31_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
     COREPColumn("0105", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
     COREPColumn("0107", "Of which: defaulted (exposure value)", _GRP_EXPOSURE_VALUE),
+    COREPColumn("0110", _LBL_COL_RWEA_HYPHEN, "RWEA"),
     COREPColumn("0120", "Of which: defaulted (RWEA)", "RWEA"),
-    COREPColumn("0125", _LBL_COL_RWEA_HYPHEN, "RWEA"),
     COREPColumn("0130", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
 ]
 

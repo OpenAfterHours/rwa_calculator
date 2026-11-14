@@ -46,6 +46,7 @@ from rwa_calc.engine.crm.expressions import (
     beneficiary_level_expr,
     collateral_category_expr,
     collateral_lgd_expr,
+    flag_netting_rows,
     is_financial_collateral_type_expr,
     lgd_star_exposure_basis_expr,
     overcollateralisation_ratio_expr,
@@ -688,7 +689,7 @@ def _apply_collateral_unified(
     else:
         airb_flag_expr = pl.lit(False)
 
-    annotated = adjusted_collateral.with_columns(
+    annotated = flag_netting_rows(adjusted_collateral, collateral_schema.names()).with_columns(
         [
             collateral_lgd_expr(resolved_pack).alias("collateral_lgd"),
             overcollateralisation_ratio_expr(resolved_pack).alias("overcollateralisation_ratio"),
@@ -833,6 +834,9 @@ def _apply_collateral_unified(
         .group_by(["_level", "beneficiary_reference"])
         .agg(
             _split_aggs("_cv", val_expr, is_eligible)
+            # The netted-deposit part of ``_cv`` (CRR Art. 219): same value, same
+            # eligibility, same blend below — so it can never exceed ``_cv``.
+            + _split_aggs("_cv_net", val_expr, is_eligible & pl.col("_is_on_bs_netting"))
             + _split_aggs("_mv", pl.col("market_value"), is_eligible)
             + _split_aggs("_adj_fin", pl.col("adjusted_value"), cat == "financial")
             + _split_aggs("_adj_cash", pl.col("adjusted_value"), cat == "cash")
@@ -851,15 +855,7 @@ def _apply_collateral_unified(
     # pool-gated allocation that drives LGD / EAD.
     _pool_agnostic_metrics = list(market_value_carriers)
     _metrics = (
-        [
-            "_cv",
-            "_mv",
-            "_adj_fin",
-            "_adj_cash",
-            "_adj_re",
-            "_adj_rec",
-            "_adj_oth",
-        ]
+        ["_cv", "_cv_net", "_mv", "_adj_fin", "_adj_cash", "_adj_re", "_adj_rec", "_adj_oth"]
         + _pool_agnostic_metrics
         + [f"_e{s}" for s in _wf_suffixes]
     )
@@ -1008,6 +1004,7 @@ def _apply_collateral_unified(
 
     combine_exprs = [
         _sum6("_cv").alias("collateral_adjusted_value"),
+        _sum6("_cv_net").alias("on_bs_netting_adjusted_value"),
         _sum6("_mv").alias("collateral_market_value"),
         _sum6("_adj_fin").alias("collateral_financial_value"),
         _sum6("_adj_cash").alias("collateral_cash_value"),

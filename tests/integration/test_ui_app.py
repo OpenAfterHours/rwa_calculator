@@ -363,6 +363,80 @@ def test_uninstrumented_templates_offer_no_dead_drilldown_links(
     assert dead.status_code == 404
 
 
+def test_results_page_links_the_filing_page(client: TestClient, warm_run_id: str) -> None:
+    # Act
+    page = client.get(f"/results/{warm_run_id}").text
+
+    # Assert
+    assert f"/results/{warm_run_id}/filing" in page
+
+
+def test_filing_page_asks_for_the_entity_before_it_checks_anything(
+    client: TestClient, warm_run_id: str
+) -> None:
+    # Act
+    resp = client.get(f"/results/{warm_run_id}/filing")
+
+    # Assert — the form, and no verdict.
+    assert resp.status_code == 200
+    assert 'name="entity_identifier"' in resp.text
+    assert 'id="filing-verdict"' not in resp.text
+
+
+def test_filing_page_says_why_a_crr_run_has_no_return(client: TestClient, tmp_path: Path) -> None:
+    """PRA001 is the Basel 3.1 return: the page explains, it does not error."""
+    # Arrange
+    _seed_irb_run(
+        "ui-filing-crr", date(2027, 3, 31), firb_rwa=1.0, airb_rwa=1.0, results_dir=tmp_path
+    )
+
+    # Act
+    resp = client.get("/results/ui-filing-crr/filing?entity_identifier=5493001KJTIIGC8Y1R12")
+
+    # Assert
+    assert resp.status_code == 200
+    assert 'id="filing-problem"' in resp.text and "Basel 3.1" in resp.text
+    assert "/api/filing/package" not in resp.text
+
+
+def test_filing_page_shows_the_verdict_and_only_the_downloads_it_allows(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange — a Basel 3.1 run; whatever stands in its way is the page's to say.
+    _seed_irb_run(
+        "ui-filing-b31",
+        date(2027, 3, 31),
+        firb_rwa=400_000.0,
+        airb_rwa=300_000.0,
+        results_dir=tmp_path,
+        framework="BASEL_3_1",
+    )
+    lei = "5493001KJTIIGC8Y1R12"
+
+    # Act
+    resp = client.get(f"/results/ui-filing-b31/filing?entity_identifier={lei}")
+    status = client.get(f"/api/filing/status?run_id=ui-filing-b31&entity_identifier={lei}").json()
+
+    # Assert — the page states the API's own verdict.
+    assert resp.status_code == 200
+    blocked_by = status["blocked_by"] or ""
+    assert f'id="filing-verdict" data-blocked-by="{blocked_by}"' in resp.text
+    assert f'id="filing-unplaced">{status["unplaced_figures"]}<' in resp.text
+    # A plain package link exists only for a return nothing blocks.
+    plain = f'/api/filing/package?run_id=ui-filing-b31&amp;entity_identifier={lei}"'
+    assert (plain in resp.text) is (status["blocked_by"] is None)
+    if status["blocked_by"] is not None:
+        assert "allow_incomplete=true" in resp.text or 'id="filing-no-download"' in resp.text
+
+
+def test_filing_page_unknown_run_is_not_found(client: TestClient) -> None:
+    # Act
+    resp = client.get("/results/does-not-exist/filing?entity_identifier=X")
+
+    # Assert
+    assert resp.status_code == 404
+
+
 def test_template_viewer_unknown_run_is_not_found(client: TestClient) -> None:
     # Act
     resp = client.get("/results/does-not-exist/templates")

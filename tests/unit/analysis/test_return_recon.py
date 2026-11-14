@@ -36,6 +36,11 @@ from functools import lru_cache
 import polars as pl
 import pytest
 from tests.fixtures.recon_ledger import with_reporting_ledger
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_FIRB,
+    OF08_INSTITUTIONS_FIRB,
+    irb_sheet,
+)
 
 from rwa_calc.analysis import return_recon as recon_module
 from rwa_calc.analysis.legacy_ledger import LegacyLedgerSource, ledger_coverage
@@ -69,9 +74,24 @@ FRAMEWORKS = ("CRR", "BASEL_3_1")
 #: module rather than typed, so the fixtures cannot drift from the ladder.
 _FALLBACK_IDENTITY = recon_module._FALLBACK_KEY_COLUMN
 
-# The corporate IRB sheet is where every cause is planted, so the isolation
-# tests all address one cell family on it.
+# The corporate exposure class every cause is planted in, and the C 07.00 sheet
+# key for Art. 112(1)(g) on both frameworks. The IRB sheet those legs report on
+# is ``_irb_corporate(framework)`` — the two stopped being one string when the
+# Basel 3.1 OF 08 sheets moved onto the published class-and-approach axis.
 CORPORATE = "corporate"
+
+
+def _irb_corporate(framework: str) -> str:
+    """The IRB sheet the planted corporate legs report on, per framework.
+
+    Re-anchored: the isolation tests addressed the Basel 3.1 class sheet
+    ``corporate``. OF 08 is published per class AND approach (taxonomy v4.1.1,
+    ``OF08.03.01.01`` sheet 0012 — F-IRB, corporates other than SME / financial
+    and large), and every planted leg is F-IRB non-SME, so that is its sheet.
+    CRR C 08 stays keyed by exposure class.
+    """
+    return irb_sheet(framework, CORPORATE, OF08_CORPORATE_NON_SME_FIRB)
+
 
 # The C 07.00 sheet key for Art. 112(1)(i). That template's z-axis is the
 # Art. 112(1) class list, so every mortgage-secured ExposureClass member —
@@ -479,18 +499,19 @@ def _leaf_row_of(
     axes differ (18 rows against 17), so a literal ref would pin one framework.
     """
     side = recon.ours if ours else recon.theirs
+    sheet = _irb_corporate(recon.framework)
     served = side.membership.columns.filter(
         (pl.col("template_id") == "c08_03")
-        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("sheet") == sheet)
         & (pl.col("col_ref") == col_ref)
     )["predicate_key"].unique()
     assert len(served) == 1, (
-        f"C 08.03/{CORPORATE}/{col_ref} has {len(served)} predicate groups, expected 1"
+        f"C 08.03/{sheet}/{col_ref} has {len(served)} predicate groups, expected 1"
     )
     predicate_key = str(served[0])
     rows = side.membership.legs.filter(
         (pl.col("template_id") == "c08_03")
-        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("sheet") == sheet)
         & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == reference)
         & (pl.col("is_parent_row").eq(other=False))
@@ -654,7 +675,7 @@ def test_a_single_cause_pair_moves_only_its_own_term(cause: str, framework: str)
     row_ref = _leaf_row_of(recon, ours=reference[1], reference=reference[0])
 
     # Act — column 0040 is C 08.03's EAD, a plain additive Sum.
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0040")
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, "0040")
     terms = _terms(result)
 
     # Assert — the named term is the only live one, and it explains the delta.
@@ -674,8 +695,8 @@ def test_row_placement_prices_the_band_move_at_its_own_ead(framework: str) -> No
     assert our_row != their_row, "the mover did not change row — the fixture is vacuous"
 
     # Act
-    left = decompose_cell(recon, "c08_03", CORPORATE, our_row, "0040")
-    right = decompose_cell(recon, "c08_03", CORPORATE, their_row, "0040")
+    left = decompose_cell(recon, "c08_03", _irb_corporate(framework), our_row, "0040")
+    right = decompose_cell(recon, "c08_03", _irb_corporate(framework), their_row, "0040")
 
     # Assert — it leaves our band and arrives in theirs, at the same EAD.
     assert _terms(left)["row_placement"] == pytest.approx(_BAND_MOVER.ead)
@@ -752,7 +773,7 @@ def test_non_additive_cells_are_refused_not_decomposed(col_ref: str, framework: 
     row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref=col_ref)
 
     # Act
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, col_ref)
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, col_ref)
 
     # Assert
     assert not result.decomposable
@@ -795,7 +816,7 @@ def test_a_broken_decomposition_reports_reconciles_false(
 
     recon = _uncached_combined(framework)
     row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
-    healthy = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0040")
+    healthy = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, "0040")
     assert healthy.reconciles
 
     original = module._key_money
@@ -809,7 +830,7 @@ def test_a_broken_decomposition_reports_reconciles_false(
     recon.theirs.money.clear()
 
     # Act
-    broken = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0040")
+    broken = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, "0040")
 
     # Assert
     assert not broken.reconciles
@@ -831,7 +852,7 @@ def test_cell_diff_distinguishes_one_sided_cells_from_zero_on_both(framework: st
     our_source, their_source = _sources([*base, lone], base, framework)
 
     # Act
-    diff = cell_diff(our_source, their_source, "c08_03", sheet=CORPORATE)
+    diff = cell_diff(our_source, their_source, "c08_03", sheet=_irb_corporate(framework))
 
     # Assert — the lone band's row is ours-only; a shared zero cell is "both".
     assert diff.schema == CELL_DIFF_SCHEMA
@@ -862,7 +883,7 @@ def test_cell_diff_enumerates_rows_only_THEIR_side_emits(framework: str) -> None
     our_source, their_source = _sources(base, [*base, lone], framework)
 
     # Act
-    diff = cell_diff(our_source, their_source, "c08_03", sheet=CORPORATE)
+    diff = cell_diff(our_source, their_source, "c08_03", sheet=_irb_corporate(framework))
 
     # Assert — their band is enumerated, and reads as theirs-only.
     theirs_only = diff.filter(pl.col("status") == "theirs_only")
@@ -923,7 +944,7 @@ def test_a_cell_whose_metric_source_one_side_lacks_is_refused(framework: str) ->
     row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref="0100")
 
     # Act
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0100")
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, "0100")
 
     # Assert
     assert result.theirs_state == "unavailable"
@@ -931,7 +952,7 @@ def test_a_cell_whose_metric_source_one_side_lacks_is_refused(framework: str) ->
     assert not result.decomposable
     assert "unavailable on theirs" in (result.refusal or "")
     assert result.delta is None
-    diff = diff_cells(recon, "c08_03", CORPORATE)
+    diff = diff_cells(recon, "c08_03", _irb_corporate(framework))
     unmeasurable = diff.filter((pl.col("row_ref") == row_ref) & (pl.col("col_ref") == "0100"))
     assert unmeasurable["status"][0] == "unmeasurable"
     assert unmeasurable["delta"][0] is None
@@ -997,7 +1018,7 @@ def test_an_unpopulatable_cell_prints_a_zero_that_is_not_a_zero(framework: str) 
     our_source, their_source, coverage = _unmapped_gross(framework)
 
     # Act — no coverage passed: the raw, undefended comparison.
-    naive = cell_diff(our_source, their_source, "c08_03", sheet=CORPORATE)
+    naive = cell_diff(our_source, their_source, "c08_03", sheet=_irb_corporate(framework))
     cell = naive.filter((pl.col("col_ref") == "0010") & (pl.col("status") == "both"))
 
     # Assert — a printed 0.00 on their side against our real gross, and the
@@ -1015,7 +1036,13 @@ def test_coverage_makes_an_unpopulatable_cell_unavailable_not_zero(framework: st
     our_source, their_source, coverage = _unmapped_gross(framework)
 
     # Act
-    diff = cell_diff(our_source, their_source, "c08_03", sheet=CORPORATE, theirs_coverage=coverage)
+    diff = cell_diff(
+        our_source,
+        their_source,
+        "c08_03",
+        sheet=_irb_corporate(framework),
+        theirs_coverage=coverage,
+    )
     guarded = diff.filter(pl.col("col_ref") == "0010")
 
     # Assert — unavailable on theirs, no figure carried, no delta computed.
@@ -1046,15 +1073,15 @@ def test_an_unpopulatable_cell_is_refused_not_attributed_to_measurement(framewor
     # Arrange
     unguarded = _unmapped_gross_recon(framework, guarded=False)
     row_ref = _leaf_row_of(unguarded, ours=True, reference="BASE_A1", col_ref="0010")
-    our_gross = unguarded.ours.frames["c08_03"][CORPORATE].filter(pl.col("row_ref") == row_ref)[
-        "0010"
-    ][0]
+    our_gross = unguarded.ours.frames["c08_03"][_irb_corporate(framework)].filter(
+        pl.col("row_ref") == row_ref
+    )["0010"][0]
     assert our_gross > 0.0, "our own gross is zero here — the guard would be vacuous"
 
     # Act — the same cell, without the coverage record and then with it.
-    wrong = decompose_cell(unguarded, "c08_03", CORPORATE, row_ref, "0010")
+    wrong = decompose_cell(unguarded, "c08_03", _irb_corporate(framework), row_ref, "0010")
     guarded = _unmapped_gross_recon(framework, guarded=True)
-    result = decompose_cell(guarded, "c08_03", CORPORATE, row_ref, "0010")
+    result = decompose_cell(guarded, "c08_03", _irb_corporate(framework), row_ref, "0010")
 
     # Assert — unguarded, the whole cell is a confident MEASUREMENT difference
     # against a printed zero that means "not mapped".
@@ -1170,7 +1197,9 @@ def test_migration_diagonal_is_agreement_and_off_diagonal_is_the_moved_money(
     their_row = _leaf_row_of(recon, ours=False, reference="BAND_MOVER")
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
 
     # Assert — one off-diagonal cell, priced at the mover's EAD; the diagonal
     # holds every other leg and none of the moved money.
@@ -1199,7 +1228,9 @@ def test_migration_puts_one_sided_legs_in_the_absent_bucket(framework: str) -> N
     predicate_key = _c08_03_predicate_key(recon)
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
 
     # Assert
     absent = matrix.filter(pl.col("their_row_ref") == ABSENT_ROW)
@@ -1248,7 +1279,7 @@ def test_a_leg_under_a_strict_parent_resolves_to_its_leaf_row(framework: str) ->
     predicate_key = _c08_03_predicate_key(recon)
     legs = recon.ours.membership.legs.filter(
         (pl.col("template_id") == "c08_03")
-        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("sheet") == _irb_corporate(framework))
         & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == "BASE_A1")
     )
@@ -1256,7 +1287,9 @@ def test_a_leg_under_a_strict_parent_resolves_to_its_leaf_row(framework: str) ->
     leaf_row = _leaf_row_of(recon, ours=True, reference="BASE_A1")
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
     placed = matrix.filter(pl.col("our_row_ref") == leaf_row)
 
     # Assert — the leg really is under a strict parent, and still resolves.
@@ -1285,7 +1318,9 @@ def test_migration_money_equals_the_groups_distinct_leg_total(framework: str) ->
     predicate_key = _c08_03_predicate_key(recon)
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
 
     # Assert
     for ours in (True, False):
@@ -1310,7 +1345,9 @@ def test_a_leg_with_no_decidable_leaf_row_is_bucketed_not_dropped(framework: str
     predicate_key = _c08_03_predicate_key(recon)
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
     undecidable = matrix.filter(pl.col("movement_basis") == "undecidable")
 
     # Assert — the leg is present, priced, labelled, and the axis says so.
@@ -1326,7 +1363,7 @@ def _distinct_leg_total(recon: ReturnRecon, *, ours: bool, predicate_key: str) -
     side = recon.ours if ours else recon.theirs
     legs = side.membership.legs.filter(
         (pl.col("template_id") == "c08_03")
-        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("sheet") == _irb_corporate(recon.framework))
         & (pl.col("predicate_key") == predicate_key)
     ).unique(subset=["exposure_reference"])
     return float(legs["ead_final"].sum())
@@ -1339,7 +1376,13 @@ def test_migration_refuses_a_money_column_membership_does_not_carry() -> None:
 
     # Act / Assert
     with pytest.raises(ValueError, match="money_column"):
-        row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="pd_floored")
+        row_migration(
+            recon,
+            "c08_03",
+            _irb_corporate(recon.framework),
+            predicate_key,
+            money_column="pd_floored",
+        )
 
 
 # =============================================================================
@@ -1381,9 +1424,11 @@ def test_every_result_carries_the_placement_attribution_caveat() -> None:
     predicate_key = _c08_03_predicate_key(recon)
 
     # Act
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0040")
-    refused = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0050")
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    result = decompose_cell(recon, "c08_03", _irb_corporate(recon.framework), row_ref, "0040")
+    refused = decompose_cell(recon, "c08_03", _irb_corporate(recon.framework), row_ref, "0050")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(recon.framework), predicate_key, money_column="ead_final"
+    )
 
     # Assert — on the decomposition (refusals included) and on every matrix row.
     assert result.attribution == PLACEMENT_ATTRIBUTION
@@ -1400,7 +1445,7 @@ def _c08_03_predicate_key(recon: ReturnRecon) -> str:
     """The predicate group serving C 08.03 column 0040 on the corporate sheet."""
     served = recon.ours.membership.columns.filter(
         (pl.col("template_id") == "c08_03")
-        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("sheet") == _irb_corporate(recon.framework))
         & (pl.col("col_ref") == "0040")
     )
     assert served.height > 0, "C 08.03 column 0040 is not row-backed on the corporate sheet"
@@ -1544,9 +1589,7 @@ def _uncached_split_recon(
     return build_recon(our_source, their_source, key_column=key_column)
 
 
-def _population_offenders(
-    recon: ReturnRecon, template_id: str = "c08_03", sheet: str | None = CORPORATE
-) -> list[str]:
+def _population_offenders(recon: ReturnRecon, template_id: str, sheet: str | None) -> list[str]:
     """Every cell of one template (or one sheet of it) reporting a population term."""
     diff = diff_cells(recon, template_id, sheet)
     offenders: list[str] = []
@@ -1593,14 +1636,14 @@ def test_a_split_exposure_pairs_against_the_legacy_whole_loan(framework: str) ->
     assert row_ref == _leaf_row_of(recon, ours=True, reference=_SPLIT_REM_LEG.reference)
 
     # Act
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
     terms = _terms(result)
     keys = _term_keys(result)
 
     # Assert — the sheet is emitted on both sides and the cell carries a real
     # figure on each: a null and a legitimate zero are different claims.
-    assert CORPORATE in recon.ours.frames["c08_03"]
-    assert CORPORATE in recon.theirs.frames["c08_03"]
+    assert _irb_corporate(framework) in recon.ours.frames["c08_03"]
+    assert _irb_corporate(framework) in recon.theirs.frames["c08_03"]
     assert result.decomposable, result.refusal
     assert (result.ours_state, result.theirs_state) == ("figure", "figure")
     assert result.ours == pytest.approx(_SPLIT_G_LEG.rwa + _SPLIT_REM_LEG.rwa)
@@ -1618,7 +1661,7 @@ def test_a_split_exposure_pairs_against_the_legacy_whole_loan(framework: str) ->
 
     # Assert — and it does not leak anywhere else: on a portfolio the two sides
     # agree about exactly, NO cell of the sheet may report a population at all.
-    assert _population_offenders(recon) == []
+    assert _population_offenders(recon, "c08_03", _irb_corporate(framework)) == []
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -1639,7 +1682,7 @@ def test_a_split_exposures_legs_are_summed_not_picked(framework: str) -> None:
     row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
 
     # Act
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
     terms = _terms(result)
     keys = _term_keys(result)
 
@@ -1683,8 +1726,8 @@ def test_split_legs_in_different_rows_are_not_merged_across_them(framework: str)
     assert our_other_row != shared_row, "both legs are in one row — the fixture is vacuous"
 
     # Act
-    shared = decompose_cell(recon, "c08_03", CORPORATE, shared_row, RWEA_COL)
-    other = decompose_cell(recon, "c08_03", CORPORATE, our_other_row, RWEA_COL)
+    shared = decompose_cell(recon, "c08_03", _irb_corporate(framework), shared_row, RWEA_COL)
+    other = decompose_cell(recon, "c08_03", _irb_corporate(framework), our_other_row, RWEA_COL)
 
     # Assert — the row both sides use prices OUR LEG ONLY against their whole
     # loan; the merged reading would have made this term 0.00 and broken the
@@ -1723,7 +1766,7 @@ def test_an_unsplit_exposure_still_pairs_on_its_own_reference(framework: str) ->
     row_ref = _leaf_row_of(recon, ours=True, reference="U1")
 
     # Act
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
     terms = _terms(result)
 
     # Assert
@@ -1765,7 +1808,7 @@ def test_the_migration_matrix_conserves_a_split_exposures_money(framework: str) 
     predicate_key = _c08_03_predicate_key(recon)
     our_legs = recon.ours.membership.legs.filter(
         (pl.col("template_id") == "c08_03")
-        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("sheet") == _irb_corporate(framework))
         & (pl.col("predicate_key") == predicate_key)
     ).unique(subset=["exposure_reference"])
 
@@ -1780,7 +1823,9 @@ def test_the_migration_matrix_conserves_a_split_exposures_money(framework: str) 
     assert _SPLIT_G_LEG.ead != _SPLIT_REM_LEG.ead, "equal legs make .first() undetectable"
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
 
     # Assert — the matrix's money is the group's distinct-leg total, each side.
     for ours in (True, False):
@@ -1833,7 +1878,7 @@ def test_a_side_whose_frame_omits_the_base_reference_can_still_be_keyed(framewor
 
     # Act — this is the call that raises when the ladder is not filtered.
     row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
 
     # Assert — the comparison completes, and the split exposure still pairs on
     # the rung their frame does carry.
@@ -2285,7 +2330,7 @@ def test_both_key_column_settings_name_the_same_grain(framework: str) -> None:
             )
             row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
             results[key_column, supplied] = decompose_cell(
-                recon, "c08_03", CORPORATE, row_ref, RWEA_COL
+                recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL
             )
 
     # Assert — every combination pairs the split exposure on one key, reports no
@@ -2339,7 +2384,7 @@ def test_a_side_that_omits_the_base_reference_still_pairs_on_its_own(
             key_column="source_exposure_reference",
         )
     their_legs = recon.theirs.membership.legs.filter(
-        (pl.col("template_id") == "c08_03") & (pl.col("sheet") == CORPORATE)
+        (pl.col("template_id") == "c08_03") & (pl.col("sheet") == _irb_corporate(framework))
     )
 
     # Assert the premise: their side offers the first two rungs nothing at all.
@@ -2358,7 +2403,7 @@ def test_a_side_that_omits_the_base_reference_still_pairs_on_its_own(
 
     # Act
     row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
-    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    result = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
 
     # Assert — paired on one key, and nothing reported missing from either side.
     assert result.decomposable, result.refusal
@@ -2529,14 +2574,14 @@ def test_the_pair_table_ranks_the_drivers_a_size_ranked_table_buries(framework: 
     # Arrange
     recon = _probe(framework)
     row_ref = _probe_row(recon)
-    group = _group_of(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    group = _group_of(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
     drivers = set(_PROBE_DRIVERS)
 
     # Assert the fixture's adequacy — BOTH halves, because either one failing
     # would leave the ranking assertion below true for the wrong reason.
     for side, label in ((recon.ours, "ours"), (recon.theirs, "theirs")):
         held = set(
-            _probe_group_legs(side, "c08_03", CORPORATE, row_ref, group)[
+            _probe_group_legs(side, "c08_03", _irb_corporate(framework), row_ref, group)[
                 "exposure_reference"
             ].to_list()
         )
@@ -2547,14 +2592,16 @@ def test_the_pair_table_ranks_the_drivers_a_size_ranked_table_buries(framework: 
             f"{len(present)} drivers; unless the agreeing legs OUTNUMBER the drivers "
             "the cap cannot hide anything and this test would prove nothing"
         )
-        buried = _size_ranked_keys(side, "c08_03", CORPORATE, row_ref, group, CELL_PAIRS_LIMIT)
+        buried = _size_ranked_keys(
+            side, "c08_03", _irb_corporate(framework), row_ref, group, CELL_PAIRS_LIMIT
+        )
         assert not (buried & drivers), (
             f"the size-ranked table already shows {sorted(buried & drivers)} on the "
             f"{label} side, so it never had the defect this test pins"
         )
 
     # Act
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
 
     # Assert — every driver is on the page, ranked, ahead of every agreeing key.
     assert table.refusal is None
@@ -2562,7 +2609,7 @@ def test_the_pair_table_ranks_the_drivers_a_size_ranked_table_buries(framework: 
     assert drivers <= {pair.key for pair in table.pairs}
 
     # Act — the tied remainder, ranked by the KEY and by nothing else.
-    full = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    full = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, limit=None)
     all_tied = sorted(pair.key for pair in full.pairs if pair.delta == 0.0)
     tied_shown = [pair.key for pair in table.pairs if pair.delta == 0.0]
 
@@ -2607,8 +2654,8 @@ def test_the_cap_states_what_it_hides(framework: str) -> None:
     row_ref = _probe_row(recon)
 
     # Act
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
-    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
+    decomposition = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
 
     # Assert the fixture's adequacy: an uncapped table would exercise nothing.
     assert table.hidden_keys > 0, "the cap is not engaged — the test would prove nothing"
@@ -2624,7 +2671,7 @@ def test_the_cap_states_what_it_hides(framework: str) -> None:
     assert table.hidden_delta == pytest.approx(0.0)
 
     # Act — the same cell under a cap that actually bites.
-    tight = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=3)
+    tight = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, limit=3)
 
     # Assert the adequacy of THAT, first and on its own: it is the limb that
     # keeps this test from going vacuous again if the probe or the default
@@ -2655,8 +2702,8 @@ def test_an_uncapped_table_hides_nothing(framework: str) -> None:
     row_ref = _probe_row(recon)
 
     # Act
-    capped = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
-    uncapped = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    capped = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
+    uncapped = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, limit=None)
 
     # Assert
     assert uncapped.hidden_keys == 0
@@ -2684,7 +2731,7 @@ def test_each_pair_carries_both_sides_placement_carriers(framework: str) -> None
     row_ref = _probe_row(recon)
 
     # Act
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
     by_key = {pair.key: pair for pair in table.pairs}
 
     # Assert — the mover is on our row and on a DIFFERENT row of their sheet.
@@ -2726,7 +2773,7 @@ def test_a_pairs_money_is_signed_so_the_deltas_sum_to_the_cell(framework: str) -
     row_ref = _probe_row(recon)
 
     # Act
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, limit=None)
     by_key = {pair.key: pair for pair in table.pairs}
 
     # Assert — a measurement pair carries both sides' money and their difference.
@@ -2767,8 +2814,8 @@ def test_differing_keys_counts_the_keys_that_differ_not_the_population(framework
     row_ref = _probe_row(recon)
 
     # Act
-    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    decomposition = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, limit=None)
     terms = {term.name: term for term in decomposition.terms}
 
     # Assert the fixture's adequacy: without agreeing keys inside the
@@ -2797,7 +2844,7 @@ def test_the_term_filter_selects_exactly_that_terms_keys(framework: str) -> None
     # Arrange
     recon = _probe(framework)
     row_ref = _probe_row(recon)
-    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    decomposition = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
     live = [term for term in decomposition.terms if term.keys]
 
     # Assert the fixture's adequacy: one live term proves nothing about a filter.
@@ -2806,7 +2853,13 @@ def test_the_term_filter_selects_exactly_that_terms_keys(framework: str) -> None
     for term in decomposition.terms:
         # Act
         table = cell_pairs(
-            recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None, term=term.name
+            recon,
+            "c08_03",
+            _irb_corporate(framework),
+            row_ref,
+            RWEA_COL,
+            limit=None,
+            term=term.name,
         )
 
         # Assert — that term's keys, that term's money, and nothing else.
@@ -2822,11 +2875,13 @@ def test_the_capped_term_filter_reports_the_keys_it_left_off(framework: str) -> 
     # Arrange
     recon = _probe(framework)
     row_ref = _probe_row(recon)
-    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    decomposition = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL)
     measurement = next(term for term in decomposition.terms if term.name == "measurement")
 
     # Act
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, term="measurement")
+    table = cell_pairs(
+        recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, term="measurement"
+    )
 
     # Assert
     assert measurement.keys > CELL_PAIRS_LIMIT, "the cap is not engaged — vacuous"
@@ -2915,8 +2970,8 @@ def test_a_non_additive_cell_yields_no_pairs(col_ref: str, framework: str) -> No
     row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref=col_ref)
 
     # Act
-    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, col_ref)
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, col_ref)
+    decomposition = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, col_ref)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, col_ref)
 
     # Assert
     assert not decomposition.decomposable
@@ -2943,8 +2998,8 @@ def test_a_coverage_unavailable_cell_yields_no_pairs(framework: str) -> None:
     row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref="0010")
 
     # Act
-    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0010")
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, "0010")
+    decomposition = decompose_cell(recon, "c08_03", _irb_corporate(framework), row_ref, "0010")
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, "0010")
 
     # Assert the premise: without the guard this cell prints a zero, not a blank.
     assert "0010" in coverage.unavailable_refs("c08_03")
@@ -2963,8 +3018,8 @@ def test_an_unbound_cell_yields_no_pairs() -> None:
     recon = _combined("CRR")
 
     # Act
-    decomposition = decompose_cell(recon, "c08_03", CORPORATE, "9999", "0040")
-    table = cell_pairs(recon, "c08_03", CORPORATE, "9999", "0040")
+    decomposition = decompose_cell(recon, "c08_03", _irb_corporate(recon.framework), "9999", "0040")
+    table = cell_pairs(recon, "c08_03", _irb_corporate(recon.framework), "9999", "0040")
 
     # Assert
     assert not decomposition.decomposable
@@ -2980,7 +3035,9 @@ def test_cell_pairs_refuses_a_term_that_is_not_a_term() -> None:
 
     # Act / Assert
     with pytest.raises(ValueError, match="term must be one of"):
-        cell_pairs(recon, "c08_03", CORPORATE, row_ref, "0040", term="measuremnt")  # type: ignore[arg-type]
+        cell_pairs(
+            recon, "c08_03", _irb_corporate(recon.framework), row_ref, "0040", term="measuremnt"
+        )  # type: ignore[arg-type]
 
 
 def test_cell_pairs_refuses_a_negative_limit() -> None:
@@ -2991,7 +3048,7 @@ def test_cell_pairs_refuses_a_negative_limit() -> None:
 
     # Act / Assert
     with pytest.raises(ValueError, match="limit must not be negative"):
-        cell_pairs(recon, "c08_03", CORPORATE, row_ref, "0040", limit=-1)
+        cell_pairs(recon, "c08_03", _irb_corporate(recon.framework), row_ref, "0040", limit=-1)
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -3015,7 +3072,7 @@ def test_a_sheet_placement_pair_names_the_class_the_other_side_moved_it_to(
     row_ref = _leaf_row_of(recon, ours=True, reference="CLASS_MOVER")
 
     # Act
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, limit=None)
     pair = next(item for item in table.pairs if item.key == "CLASS_MOVER")
 
     # Assert the fixture's adequacy: identical classes on the two sides would
@@ -3115,7 +3172,7 @@ def test_a_split_exposures_pair_is_placed_on_the_key_it_paired_on(framework: str
     recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG], [_WHOLE_LOAN], framework)
     row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
     our_legs = recon.ours.membership.legs.filter(
-        (pl.col("template_id") == "c08_03") & (pl.col("sheet") == CORPORATE)
+        (pl.col("template_id") == "c08_03") & (pl.col("sheet") == _irb_corporate(framework))
     )
     references = set(our_legs["exposure_reference"].to_list())
 
@@ -3128,7 +3185,7 @@ def test_a_split_exposures_pair_is_placed_on_the_key_it_paired_on(framework: str
     )
 
     # Act
-    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    table = cell_pairs(recon, "c08_03", _irb_corporate(framework), row_ref, RWEA_COL, limit=None)
     pair = next(item for item in table.pairs if item.key == _WHOLE_LOAN.reference)
 
     # Assert — both sides place the pair, on the key they paired on.
@@ -3191,8 +3248,8 @@ def test_the_pairs_read_the_one_group_serving_the_cell(framework: str) -> None:
     # Arrange
     recon = _combined(framework)
     row_ref = "0010"
-    ours = _row_group_members(recon.ours, "c08_01", CORPORATE, row_ref)
-    theirs = _row_group_members(recon.theirs, "c08_01", CORPORATE, row_ref)
+    ours = _row_group_members(recon.ours, "c08_01", _irb_corporate(framework), row_ref)
+    theirs = _row_group_members(recon.theirs, "c08_01", _irb_corporate(framework), row_ref)
     narrow = min(ours, key=lambda key: len(ours[key]))
     wide = max(ours, key=lambda key: len(ours[key]))
 
@@ -3204,15 +3261,21 @@ def test_the_pairs_read_the_one_group_serving_the_cell(framework: str) -> None:
     )
 
     # Act
-    narrow_col = _first_decomposable_col(recon, "c08_01", CORPORATE, row_ref, narrow)
-    wide_col = _first_decomposable_col(recon, "c08_01", CORPORATE, row_ref, wide)
+    narrow_col = _first_decomposable_col(
+        recon, "c08_01", _irb_corporate(framework), row_ref, narrow
+    )
+    wide_col = _first_decomposable_col(recon, "c08_01", _irb_corporate(framework), row_ref, wide)
     narrow_keys = {
         pair.key
-        for pair in cell_pairs(recon, "c08_01", CORPORATE, row_ref, narrow_col, limit=None).pairs
+        for pair in cell_pairs(
+            recon, "c08_01", _irb_corporate(framework), row_ref, narrow_col, limit=None
+        ).pairs
     }
     wide_keys = {
         pair.key
-        for pair in cell_pairs(recon, "c08_01", CORPORATE, row_ref, wide_col, limit=None).pairs
+        for pair in cell_pairs(
+            recon, "c08_01", _irb_corporate(framework), row_ref, wide_col, limit=None
+        ).pairs
     }
 
     # Assert — the narrow cell lists its OWN group's exposures and no others.
@@ -3326,7 +3389,7 @@ def test_a_split_exposures_absent_legs_are_a_decomposition_not_a_scope_finding(
     predicate_key = _c08_03_predicate_key(recon)
     our_legs = recon.ours.membership.legs.filter(
         (pl.col("template_id") == "c08_03")
-        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("sheet") == _irb_corporate(framework))
         & (pl.col("predicate_key") == predicate_key)
     ).unique(subset=["exposure_reference"])
 
@@ -3343,7 +3406,9 @@ def test_a_split_exposures_absent_legs_are_a_decomposition_not_a_scope_finding(
     )
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="rwa_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="rwa_final"
+    )
     ours_side = _absent_cell(matrix, ours=True)
     theirs_side = _absent_cell(matrix, ours=False)
 
@@ -3380,7 +3445,9 @@ def test_the_base_presence_test_spans_the_template_not_the_group(framework: str)
     """
     # Arrange
     recon = _split_recon([_XSHEET_G_LEG, _XSHEET_REM_LEG], [_XSHEET_WHOLE], framework)
-    sheet = _XSHEET_G_LEG.exposure_class
+    # Re-anchored: the guarantor's Basel 3.1 sheet was read as the class key; an
+    # F-IRB institution leg is on published sheet 0006 (taxonomy OF08.03.01.01).
+    sheet = irb_sheet(framework, _XSHEET_G_LEG.exposure_class, OF08_INSTITUTIONS_FIRB)
     predicate_key = _group_key_of(recon, "c08_03", sheet, "0090")
     their_sheet_legs = recon.theirs.membership.legs.filter(
         (pl.col("template_id") == "c08_03") & (pl.col("sheet") == sheet)
@@ -3425,12 +3492,14 @@ def test_a_cell_holding_a_split_leg_and_a_one_sided_leg_is_labelled_as_both(
     predicate_key = _c08_03_predicate_key(recon)
 
     # Act
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="rwa_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="rwa_final"
+    )
     cell = _absent_cell(matrix, ours=True)
     legs = migration_legs(
         recon,
         "c08_03",
-        CORPORATE,
+        _irb_corporate(framework),
         predicate_key,
         str(cell["our_row_ref"]),
         ABSENT_ROW,
@@ -3468,7 +3537,9 @@ def test_the_matrix_counts_and_the_drill_list_are_one_computation(framework: str
     # Arrange
     recon = _combined(framework)
     predicate_key = _c08_03_predicate_key(recon)
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
 
     # Assert the premise — a matrix of singleton cells could not show a grain
     # difference, and one with no absent bucket could not show a label one.
@@ -3481,7 +3552,7 @@ def test_the_matrix_counts_and_the_drill_list_are_one_computation(framework: str
         legs = migration_legs(
             recon,
             "c08_03",
-            CORPORATE,
+            _irb_corporate(framework),
             predicate_key,
             str(record["our_row_ref"]),
             str(record["their_row_ref"]),
@@ -3516,7 +3587,9 @@ def test_the_drill_list_ranks_on_money_and_names_the_exposure_behind_each_leg(
     # Arrange
     recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG], [_WHOLE_LOAN], framework)
     predicate_key = _c08_03_predicate_key(recon)
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(framework), predicate_key, money_column="ead_final"
+    )
     cell = _absent_cell(matrix, ours=True)
 
     # Assert the premise — the two legs must be priced DIFFERENTLY, or the
@@ -3527,7 +3600,7 @@ def test_the_drill_list_ranks_on_money_and_names_the_exposure_behind_each_leg(
     legs = migration_legs(
         recon,
         "c08_03",
-        CORPORATE,
+        _irb_corporate(framework),
         predicate_key,
         str(cell["our_row_ref"]),
         ABSENT_ROW,
@@ -3561,7 +3634,9 @@ def test_a_matrix_pair_no_leg_occupies_lists_nothing() -> None:
     # Arrange
     recon = _combined("CRR")
     predicate_key = _c08_03_predicate_key(recon)
-    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    matrix = row_migration(
+        recon, "c08_03", _irb_corporate(recon.framework), predicate_key, money_column="ead_final"
+    )
     occupied = set(zip(matrix["our_row_ref"], matrix["their_row_ref"], strict=True))
     empty = next(
         (ours, theirs)
@@ -3571,7 +3646,10 @@ def test_a_matrix_pair_no_leg_occupies_lists_nothing() -> None:
     )
 
     # Act / Assert
-    assert migration_legs(recon, "c08_03", CORPORATE, predicate_key, *empty) == ()
+    assert (
+        migration_legs(recon, "c08_03", _irb_corporate(recon.framework), predicate_key, *empty)
+        == ()
+    )
 
 
 def test_migration_legs_refuses_a_money_column_membership_does_not_carry() -> None:
@@ -3587,7 +3665,13 @@ def test_migration_legs_refuses_a_money_column_membership_does_not_carry() -> No
     # Act / Assert
     with pytest.raises(ValueError, match="money_column"):
         migration_legs(
-            recon, "c08_03", CORPORATE, predicate_key, "0030", "0030", money_column="pd_floored"
+            recon,
+            "c08_03",
+            _irb_corporate(recon.framework),
+            predicate_key,
+            "0030",
+            "0030",
+            money_column="pd_floored",
         )
 
 
@@ -3680,7 +3764,7 @@ def test_every_term_the_engine_builds_satisfies_the_constructor_bound() -> None:
     # Assert the census is not vacuous, and that it reached the probe cell,
     # whose measurement term is the one with a real gap between the counts.
     assert checked > 0, "no term was examined at all"
-    probe = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    probe = decompose_cell(recon, "c08_03", _irb_corporate(recon.framework), row_ref, RWEA_COL)
     measurement = next(term for term in probe.terms if term.name == "measurement")
     assert measurement.differing_keys < measurement.keys, (
         "the probe's measurement term has no agreeing keys, so this census "

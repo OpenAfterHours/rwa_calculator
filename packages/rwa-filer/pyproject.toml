@@ -1,0 +1,95 @@
+[project]
+name = "rwa-filer"
+version = "0.1.0"
+description = "Validate regulatory returns against the published supervisory rules and write them for submission"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "OpenAfterHours"}
+]
+maintainers = [
+    {name = "OpenAfterHours"}
+]
+keywords = ["regulatory-reporting", "xbrl", "corep", "pra", "bank-of-england", "validation", "banking", "polars"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+    "Typing :: Typed",
+]
+# rwa-filer is the standalone half of the workspace: it must install and run with
+# rwa-calc ABSENT. Never list rwa-calc here — scripts/arch_check.py check 23 fails
+# any `rwa_calc` import under src/rwa_filer, and CI runs these tests in an
+# environment that holds this package alone.
+dependencies = [
+    "polars>=1.0.0",
+]
+
+[project.optional-dependencies]
+# Reading a publisher's .xlsx rule workbook (`rwa-filer rules import` / `check`).
+# Nothing on the validation path needs it: the rule extracts ship as JSON.
+excel = [
+    "openpyxl>=3.1.5",
+]
+# The Arelle XBRL processor, for `rwa-filer referee`: an independent second
+# opinion on a written instance. rwa-filer never imports it — the referee runs
+# it as a subprocess — so it may equally live in an environment of its own,
+# named by RWA_FILER_ARELLE_PYTHON. Heavy (lxml, a GUI toolkit's worth of
+# transitive packages); nothing on the validate / build path needs it.
+arelle = [
+    "arelle-release>=2.37",
+]
+
+[project.scripts]
+rwa-filer = "rwa_filer.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/OpenAfterHours/rwa_calculator"
+Repository = "https://github.com/OpenAfterHours/rwa_calculator.git"
+Issues = "https://github.com/OpenAfterHours/rwa_calculator/issues"
+Changelog = "https://github.com/OpenAfterHours/rwa_calculator/blob/master/packages/rwa-filer/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rwa_filer"]
+
+# Allowlist, root-anchored — same reasoning as the root project's sdist target.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+
+# Its own pytest section on purpose. pytest takes its configuration from the
+# closest pyproject.toml that carries one, so this keeps the member's suite off
+# the ROOT project's addopts (`-n 8`, `--benchmark-disable`, the marker filter),
+# which need plugins an rwa-filer-only environment does not install.
+# `importlib` import mode because tests/ has no __init__.py — deliberately, so it
+# can never collide with the root `tests` package.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# tests/ is on the path so the shared helper module (tests/filer_builders.py)
+# imports by name — there is no tests package to import it through.
+pythonpath = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "--tb=short --strict-markers --import-mode=importlib"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "openpyxl>=3.1.5",  # the importer tests build throwaway rule workbooks
+]

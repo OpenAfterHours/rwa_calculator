@@ -142,13 +142,16 @@ when reading any floor-related property as evidence.
 
 ### Known defects are injected on their *twin*
 
-The four known defects exist in the tree today, so injecting them again would be
-a no-op. Each is instead applied to the **adjacent correct site of the same
-shape** — if the estate catches the twin, it would have caught the original.
+A known defect that is still in the tree cannot be injected again — that would be
+a no-op — so each is applied to the **adjacent correct site of the same shape**:
+if the estate catches the twin, it would have caught the original. A twin outlives
+its original: the two C 02.00 defects were fixed on 2026-11-13, and their mutants
+stay, on the sites that were always correct.
 
-For example, C 02.00 asks for `("advanced_irb", "central_government")` where the
-enum says `central_govt_central_bank`, pinning row 0310 to zero permanently. The
-mutant does the same thing to the *correct* institution lookup on the next line.
+For example, C 02.00 asked for `("advanced_irb", "central_government")` where the
+enum says `central_govt_central_bank`, pinning the A-IRB central-governments row to
+zero for as long as the template existed. The mutant does the same thing to the
+*correct* institution lookup on the next line.
 
 ### Adding a mutant
 

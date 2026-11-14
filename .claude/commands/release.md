@@ -12,6 +12,28 @@ version to PyPI. This command wraps that flow with a preview + confirmation
 step so the operator can verify the changelog promotion before any of it
 happens.
 
+## Which package
+
+The repository is a uv workspace with **two** separately released packages.
+Everything below describes the default, `rwa-calc`. To release the workspace
+member instead, the operator names it — `/release rwa-filer 0.1.0` or
+`/release rwa-filer minor` — and every `scripts/deploy.py` call below gains
+`--package rwa-filer`. A member release differs in four ways:
+
+- the current version is read from `packages/rwa-filer/pyproject.toml`;
+- the changelog previewed in Step 2 is `packages/rwa-filer/CHANGELOG.md`;
+- the tag is `rwa-filer-v<version>`, which is what makes `publish.yml` publish
+  `rwa-filer` and not `rwa-calc`;
+- only the member's own suite runs first (`uv run pytest packages/rwa-filer`).
+
+**Order matters.** An installed `rwa-calc` resolves `rwa-filer` from PyPI, so if
+the `rwa-calc` release needs a new `rwa-filer` version, release `rwa-filer`
+first and confirm it is on PyPI before starting the `rwa-calc` release. Never
+release both from one invocation. `scripts/deploy.py` checks this itself and
+refuses an `rwa-calc` publish when no published `rwa-filer` satisfies the range
+in the root `pyproject.toml`; if it refuses, release `rwa-filer` rather than
+reaching for `--skip-filer-check`.
+
 ## Step 0 — pre-flight
 
 Releases are cut from `master`. Before previewing anything:

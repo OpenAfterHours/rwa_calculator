@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 import polars as pl
 
-from rwa_calc.reporting.corep import sheet_labels
+from rwa_calc.reporting.corep import irb_sheets, sheet_labels
 from rwa_calc.reporting.corep import templates as ct
 from rwa_calc.reporting.pillar3 import templates as pt
 
@@ -152,11 +152,39 @@ _TEMPLATES: tuple[_TemplateDef, ...] = (
         _CLASS,
         sheet_labels.get_c07_sheet_labels,
     ),
-    _TemplateDef("c08_01", "C 08.01 — IRB totals", "corep", ct.get_c08_columns, _CLASS),
-    _TemplateDef("c08_02", "C 08.02 — IRB by PD grade", "corep", ct.get_c08_02_columns, _CLASS),
-    _TemplateDef("c08_03", "C 08.03 — IRB PD ranges", "corep", ct.get_c08_03_columns, _CLASS),
+    _TemplateDef(
+        "c08_01",
+        "C 08.01 — IRB totals",
+        "corep",
+        ct.get_c08_columns,
+        _CLASS,
+        irb_sheets.get_irb_sheet_labels,
+    ),
+    _TemplateDef(
+        "c08_02",
+        "C 08.02 — IRB by PD grade",
+        "corep",
+        ct.get_c08_02_columns,
+        _CLASS,
+        irb_sheets.get_irb_sheet_labels,
+    ),
+    _TemplateDef(
+        "c08_03",
+        "C 08.03 — IRB PD ranges",
+        "corep",
+        ct.get_c08_03_columns,
+        _CLASS,
+        irb_sheets.get_irb_sheet_labels,
+    ),
     _TemplateDef("c08_04", "C 08.04 — IRB RWEA flow", "corep", ct.get_c08_04_columns, _CLASS),
-    _TemplateDef("c08_05", "C 08.05 — IRB PD backtesting", "corep", ct.get_c08_05_columns, _CLASS),
+    _TemplateDef(
+        "c08_05",
+        "C 08.05 — IRB PD backtesting",
+        "corep",
+        ct.get_c08_05_columns,
+        _CLASS,
+        irb_sheets.get_irb_sheet_labels,
+    ),
     _TemplateDef("c08_06", "C 08.06 — IRB slotting", "corep", ct.get_c08_06_columns, _CLASS),
     _TemplateDef("c08_07", "C 08.07 — IRB scope of use", "corep", ct.get_c08_07_columns),
     _TemplateDef("of_02_01", "OF 02.01 — Output floor", "corep", _fixed(ct.OF_02_01_COLUMNS)),

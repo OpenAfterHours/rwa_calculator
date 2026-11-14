@@ -870,7 +870,7 @@ class CRMProcessor:
         if netting_collateral is None:
             exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))
             return exposures, collateral
-        # Track per-exposure netting amount for COREP col 0035
+        # The pre-haircut allocation; its ADJUSTED twin is written by the collateral step.
         exposures = _join_netting_amounts(exposures, netting_collateral)
         if collateral is not None and has_required_columns(
             collateral, self.COLLATERAL_REQUIRED_COLUMNS
@@ -1473,6 +1473,9 @@ class CRMProcessor:
                 # Initialize collateral-related columns
                 pl.lit(0.0).alias("collateral_allocated"),
                 pl.lit(0.0).alias("collateral_adjusted_value"),
+                # The on-balance-sheet netting part of the line above (CRR Art. 219);
+                # written by the collateral step, zero on a path that never reaches it.
+                pl.lit(0.0).alias("on_bs_netting_adjusted_value"),
                 # Initialize guarantee-related columns
                 pl.lit(0.0).alias("guarantee_amount"),
                 pl.lit(None).cast(pl.String).alias("guarantor_reference"),

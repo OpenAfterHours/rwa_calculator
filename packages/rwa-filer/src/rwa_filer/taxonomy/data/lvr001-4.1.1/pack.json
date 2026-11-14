@@ -1,0 +1,1487 @@
+{
+ "dimensions": {
+  "boe_dim:RRP": {
+   "default": "eba_PC:x0",
+   "domain": "eba_PC",
+   "kind": "explicit",
+   "label": "Surplus (shortfall) of required ratio",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:APR": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Approach for prudential purposes",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:ARQ": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Applicable requirement",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:BAS": {
+   "default": "eba_BA:x0",
+   "domain": "eba_BA",
+   "kind": "explicit",
+   "label": "Base",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CAL": {
+   "default": "eba_AP:x0",
+   "domain": "eba_AP",
+   "kind": "explicit",
+   "label": "Calculation method",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CFO": {
+   "default": "eba_PC:x0",
+   "domain": "eba_PC",
+   "kind": "explicit",
+   "label": "Conversion factors for off-balance sheet items",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CPS": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Counterparty sector",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CPZ": {
+   "default": "eba_CT:x0",
+   "domain": "eba_CT",
+   "kind": "explicit",
+   "label": "Size of the counterparty",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:CUE": {
+   "default": "eba_CU:x0",
+   "domain": "eba_CU",
+   "kind": "explicit",
+   "label": "Currency of the exposure",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:ECW": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Exposure classes used for weighting purposes",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:EXC": {
+   "default": "eba_EC:x0",
+   "domain": "eba_EC",
+   "kind": "explicit",
+   "label": "Exposure class",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:IMS": {
+   "default": "eba_IM:x0",
+   "domain": "eba_IM",
+   "kind": "explicit",
+   "label": "Impairment status",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCB": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Instrument",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCG": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category of collateral or guarantee received",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCS": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category of the source of encumbrance",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCY": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:OFS": {
+   "default": "eba_OF:x0",
+   "domain": "eba_OF",
+   "kind": "explicit",
+   "label": "Own funds",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:PRP": {
+   "default": "eba_PL:x0",
+   "domain": "eba_PL",
+   "kind": "explicit",
+   "label": "Prudential portfolio",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RCP": {
+   "default": "eba_GA:x0",
+   "domain": "eba_GA",
+   "kind": "explicit",
+   "label": "Residence of counterparty",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:REF": {
+   "default": "eba_RF:x0",
+   "domain": "eba_RF",
+   "kind": "explicit",
+   "label": "Reference date or period",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RPC": {
+   "default": "eba_RP:x0",
+   "domain": "eba_RP",
+   "kind": "explicit",
+   "label": "Related parties/Relationship of the collateral",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RPR": {
+   "default": "eba_RP:x0",
+   "domain": "eba_RP",
+   "kind": "explicit",
+   "label": "Related parties/Relationships",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:RWS": {
+   "default": "eba_PC:x0",
+   "domain": "eba_PC",
+   "kind": "explicit",
+   "label": "Risk weights",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:SCC": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Specific contract clauses or netting agreements",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:SCO": {
+   "default": "eba_SC:x0",
+   "domain": "eba_SC",
+   "kind": "explicit",
+   "label": "Scope of consolidation",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TAC": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Type of assets with collateral received",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:TYA": {
+   "default": "eba_TA:x0",
+   "domain": "eba_TA",
+   "kind": "explicit",
+   "label": "Type of activity",
+   "typed_element": null,
+   "typed_type": null
+  }
+ },
+ "enumerations": {
+  "eba_AP:boe_AP24_2": [
+   "eba_AP:x38",
+   "eba_AP:x183",
+   "eba_AP:x184"
+  ],
+  "eba_AS:eba_AS1": [
+   "eba_AS:x1",
+   "eba_AS:x2"
+  ],
+  "eba_CU:boe_CU600": [
+   "eba_CU:GBP",
+   "eba_CU:EUR",
+   "eba_CU:CAD",
+   "eba_CU:USD",
+   "eba_CU:CHF",
+   "eba_CU:JPY",
+   "eba_CU:SEK"
+  ],
+  "eba_SC:boe_SC600": [
+   "boe_eba_SC:x6000",
+   "boe_eba_SC:x6001",
+   "boe_eba_SC:x6002",
+   "boe_eba_SC:x6003",
+   "boe_eba_SC:x6006"
+  ],
+  "eba_ZZ:eba_ZZ4": [
+   "eba_ZZ:x16",
+   "eba_ZZ:x17",
+   "eba_ZZ:x18"
+  ],
+  "eba_ZZ:eba_ZZ6_2": [
+   "eba_ZZ:x21",
+   "eba_ZZ:x22",
+   "eba_ZZ:x23",
+   "eba_ZZ:x24",
+   "eba_ZZ:x424",
+   "eba_ZZ:x43"
+  ]
+ },
+ "format": 1,
+ "info": {
+  "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/leverage/2026-02-27/mod/lvr001.xsd",
+  "irregularities": [],
+  "module": "LVR001",
+  "sources": {
+   "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Leverage.xlsx",
+   "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
+   "taxonomy_package": "boe411.zip"
+  },
+  "taxonomy": "boe-banking",
+  "title": "Leverage ratio",
+  "valid_from": "2026-02-27",
+  "valid_to": null,
+  "version": "4.1.1"
+ },
+ "metrics": {
+  "boe_met:di6003": {
+   "enumeration": null,
+   "label": "Reporting period start date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:di6004": {
+   "enumeration": null,
+   "label": "Reporting period end date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:ei6006": {
+   "enumeration": "eba_CU:boe_CU600",
+   "label": "Reporting currency",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei6007": {
+   "enumeration": "eba_SC:boe_SC600",
+   "label": "Basis of reporting",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei8050": {
+   "enumeration": "eba_AP:boe_AP24_2",
+   "label": "Derivatives treatment (Leverage ratio)",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:pi8047": {
+   "enumeration": null,
+   "label": "Leverage ratio requirement",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "boe_met:pi8048": {
+   "enumeration": null,
+   "label": "Countercyclical leverage ratio buffer",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "boe_met:si6002": {
+   "enumeration": null,
+   "label": "Entity code",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6005": {
+   "enumeration": null,
+   "label": "Additional notes",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:ei144": {
+   "enumeration": "eba_ZZ:eba_ZZ6_2",
+   "label": "Institution type",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei145": {
+   "enumeration": "eba_ZZ:eba_ZZ4",
+   "label": "Institution company structure",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:ei4": {
+   "enumeration": "eba_AS:eba_AS1",
+   "label": "Accounting standard",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "eba_met:mi118": {
+   "enumeration": null,
+   "label": "Exposure net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi119": {
+   "enumeration": null,
+   "label": "Exposure value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi125": {
+   "enumeration": null,
+   "label": "Exposure value, net of value adjustments and provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi136": {
+   "enumeration": null,
+   "label": "Gross carrying amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi170": {
+   "enumeration": null,
+   "label": "Notional amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi180": {
+   "enumeration": null,
+   "label": "Original exposure pre conversion factors",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi265": {
+   "enumeration": null,
+   "label": "Leverage ratio exposure value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi272": {
+   "enumeration": null,
+   "label": "Carrying amount assuming no netting or other credit risk mitigation",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi287": {
+   "enumeration": null,
+   "label": "Nominal amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi310": {
+   "enumeration": null,
+   "label": "Risk weighted exposure amount after SME-supporting factor",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi419": {
+   "enumeration": null,
+   "label": "Capped notional amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi423": {
+   "enumeration": null,
+   "label": "Amounts deducted with fully phased-in definition",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi425": {
+   "enumeration": null,
+   "label": "Add-on amount for difference between transaction legs",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi426": {
+   "enumeration": null,
+   "label": "Add-on amount for floor adjustment",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi427": {
+   "enumeration": null,
+   "label": "Value of exempted leg of client-cleared trade exposures",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi429": {
+   "enumeration": null,
+   "label": "Amount of eligible cash variation margin offset against derivatives market values",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi431": {
+   "enumeration": null,
+   "label": "Original exposure value",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi432": {
+   "enumeration": null,
+   "label": "Amount of eligible purchased credit derivatives offset against written credit derivatives",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi496": {
+   "enumeration": null,
+   "label": "Replacement cost without the effect of NICA and cash variation margin",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi497": {
+   "enumeration": null,
+   "label": "Effect recognised of collateral on NICA for QCCP client-cleared transactions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi498": {
+   "enumeration": null,
+   "label": "Potential future exposure value (multiplier at 1)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi499": {
+   "enumeration": null,
+   "label": "Effect lower multiplier for QCCP client-cleared transaction on the PFE",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi53": {
+   "enumeration": null,
+   "label": "Carrying amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi549": {
+   "enumeration": null,
+   "label": "Accounting value under trade date accounting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi560": {
+   "enumeration": null,
+   "label": "Amount offset in accounting under trade date accounting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi561": {
+   "enumeration": null,
+   "label": "Amount offset for the calculation of the LR exposure value under trade date accounting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi568": {
+   "enumeration": null,
+   "label": "Nominal value of commitments to pay under settlement date accounting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi570": {
+   "enumeration": null,
+   "label": "Amount offset for the calculation of the LR exposure value under settlement date accounting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi58": {
+   "enumeration": null,
+   "label": "Amount fully phased-in definition",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi582": {
+   "enumeration": null,
+   "label": "Value after accounting netting",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi583": {
+   "enumeration": null,
+   "label": "Amount netted under the applicable accounting framework",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi586": {
+   "enumeration": null,
+   "label": "Amount allowed to be netted when the institution transfer the individual original accounts into a single account, setting the original accounts to zero on daily basis.",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi587": {
+   "enumeration": null,
+   "label": "Amount allowed to be netted when the institution transfer the individual original accounts into a single account,  setting the original accounts to zero but does not do it on daily basis.",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi641": {
+   "enumeration": null,
+   "label": "Amounts deducted or added including transitional provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi650": {
+   "enumeration": null,
+   "label": "Replacement cost",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi76": {
+   "enumeration": null,
+   "label": "Computable amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi81": {
+   "enumeration": null,
+   "label": "Amount including transitional provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:pi270": {
+   "enumeration": null,
+   "label": "Leverage Ratio - Tier 1 fully phased-in definition",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi271": {
+   "enumeration": null,
+   "label": "Leverage Ratio - Tier 1 transitional definition",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:pi649": {
+   "enumeration": null,
+   "label": "Leverage ratio -  without  the  temporary treatment of unrealised gains and losses measured at fair value through OCI",
+   "period": "instant",
+   "type": "percentage"
+  },
+  "eba_met:si168": {
+   "enumeration": null,
+   "label": "Name of entity",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si288": {
+   "enumeration": null,
+   "label": "LEI code",
+   "period": "instant",
+   "type": "string"
+  }
+ },
+ "namespaces": {
+  "boe_dim": "http://www.bankofengland.co.uk/data/xbrl/dict/dim",
+  "boe_eba_AP": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_AP",
+  "boe_eba_CT": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_CT",
+  "boe_eba_EC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_EC",
+  "boe_eba_GA": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_GA",
+  "boe_eba_MC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_MC",
+  "boe_eba_OF": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_OF",
+  "boe_eba_PC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_PC",
+  "boe_eba_SC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_SC",
+  "boe_met": "http://www.bankofengland.co.uk/data/xbrl/dict/met",
+  "eba_AP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AP",
+  "eba_AS": "http://www.eba.europa.eu/xbrl/crr/dict/dom/AS",
+  "eba_BA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BA",
+  "eba_CT": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CT",
+  "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+  "eba_EC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/EC",
+  "eba_GA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/GA",
+  "eba_IM": "http://www.eba.europa.eu/xbrl/crr/dict/dom/IM",
+  "eba_MC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/MC",
+  "eba_OF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/OF",
+  "eba_PC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PC",
+  "eba_PL": "http://www.eba.europa.eu/xbrl/crr/dict/dom/PL",
+  "eba_RF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RF",
+  "eba_RP": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RP",
+  "eba_SC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/SC",
+  "eba_TA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/TA",
+  "eba_ZZ": "http://www.eba.europa.eu/xbrl/crr/dict/dom/ZZ",
+  "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
+  "eba_met": "http://www.eba.europa.eu/xbrl/crr/dict/met"
+ },
+ "tables": {
+  "LV40.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Accounting balance sheet value"
+    ],
+    [
+     "0020",
+     "Accounting value assuming no netting or other CRM"
+    ],
+    [
+     "0070",
+     "Notional amount/ nominal value"
+    ],
+    [
+     "0075",
+     "Capped notional amount"
+    ],
+    [
+     "0085",
+     "Capped notional amount (same reference name)"
+    ]
+   ],
+   "filing_indicator": "LV40.00.00",
+   "group": "LV40.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Derivatives"
+    ],
+    [
+     "0020",
+     "Credit derivatives (protection sold)"
+    ],
+    [
+     "0030",
+     "Credit derivatives (protection sold), which are subject to a close out clause"
+    ],
+    [
+     "0040",
+     "Credit derivatives (protection sold), which are not subject to a close out clause"
+    ],
+    [
+     "0050",
+     "Credit derivatives (protection bought)"
+    ],
+    [
+     "0060",
+     "Financial derivatives"
+    ],
+    [
+     "0071",
+     "Security Financing Transactions"
+    ],
+    [
+     "0090",
+     "Other assets"
+    ],
+    [
+     "0095",
+     "Off-balance sheet items"
+    ],
+    [
+     "0210",
+     "Cash collateral received in derivatives transactions"
+    ],
+    [
+     "0220",
+     "Receivables for cash collateral posted in derivatives transactions"
+    ],
+    [
+     "0230",
+     "Securities received in a SFT that are recognised as an asset"
+    ],
+    [
+     "0240",
+     "SFT cash conduit lending (cash receivables)"
+    ],
+    [
+     "0380",
+     "Central bank exposures"
+    ],
+    [
+     "0410",
+     "Total assets"
+    ]
+   ],
+   "title": "Alternative treatment of the exposure measure (LR1)",
+   "z": []
+  },
+  "LV41.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "On- and off- balance sheet exposures (SA exposures)"
+    ],
+    [
+     "0020",
+     "On- and off- balance sheet exposures (IRB exposures)"
+    ],
+    [
+     "0030",
+     "Nominal value"
+    ]
+   ],
+   "filing_indicator": "LV41.00.00",
+   "group": "LV41.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Total on- and off-balance sheet exposures belonging to the non-trading book as well as exposures of the trading book subject to counterparty credit risk (breakdown in accordance with the risk weight):"
+    ],
+    [
+     "0020",
+     "= 0%"
+    ],
+    [
+     "0030",
+     "> 0 and \u2264 12%"
+    ],
+    [
+     "0040",
+     "> 12 and \u2264 20%"
+    ],
+    [
+     "0050",
+     "> 20 and \u2264 50%"
+    ],
+    [
+     "0060",
+     "> 50 and \u2264 75%"
+    ],
+    [
+     "0070",
+     "> 75 and \u2264 100%"
+    ],
+    [
+     "0080",
+     "> 100 and \u2264 425%"
+    ],
+    [
+     "0090",
+     "> 425 and \u2264 1250%"
+    ],
+    [
+     "0100",
+     "Exposures in default"
+    ],
+    [
+     "0110",
+     "Low risk off-balance sheet items and off-balance sheet items attracting a 0% conversion factor under the solvency ratio (memo item)"
+    ]
+   ],
+   "title": "On- and off-balance sheet items \u2013 additional breakdown of exposures (LR2)",
+   "z": []
+  },
+  "LV43.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Leverage Ratio Exposure Value"
+    ],
+    [
+     "0020",
+     "RWEA"
+    ]
+   ],
+   "filing_indicator": "LV43.00.00.01",
+   "group": "LV43.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Off-balance sheet items"
+    ],
+    [
+     "0020",
+     "of which: Trade finance"
+    ],
+    [
+     "0030",
+     "of which: Under official export credit insurance scheme"
+    ],
+    [
+     "0040",
+     "Derivatives and SFTs subject to a cross-product netting agreement"
+    ],
+    [
+     "0050",
+     "Derivatives not subject to a cross-product netting agreement"
+    ],
+    [
+     "0060",
+     "SFTs not subject to a cross-product netting agreement"
+    ],
+    [
+     "0065",
+     "Exposure amounts resulting from the additional treatment for credit derivatives"
+    ],
+    [
+     "0070",
+     "Other assets belonging to the trading book"
+    ]
+   ],
+   "title": "(LR4) Alternative breakdown of leverage ratio exposure measure components: Off-balance sheet items, derivatives, SFTs and trading book",
+   "z": []
+  },
+  "LV43.00.00.02": {
+   "columns": [
+    [
+     "0010",
+     "Leverage Ratio Exposure Value: SA Exposures"
+    ],
+    [
+     "0030",
+     "RWEA: SA exposures"
+    ]
+   ],
+   "filing_indicator": "LV43.00.00.02",
+   "group": "LV43.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0080",
+     "Covered bonds"
+    ],
+    [
+     "0090",
+     "Exposures treated as sovereigns"
+    ],
+    [
+     "0100",
+     "Central governments and central banks"
+    ],
+    [
+     "0110",
+     "Regional governments and local authorities treated as sovereigns"
+    ],
+    [
+     "0120",
+     "MDBs and international organisations treated as sovereigns"
+    ],
+    [
+     "0130",
+     "PSEs treated as sovereigns"
+    ],
+    [
+     "0140",
+     "Exposures to regional governments, MDBs, international organisations and PSEs NOT treated as sovereigns"
+    ],
+    [
+     "0150",
+     "Regional governments and local authorities NOT treated as sovereigns"
+    ],
+    [
+     "0160",
+     "MDBs NOT treated as sovereigns"
+    ],
+    [
+     "0170",
+     "PSEs NOT treated as a sovereigns"
+    ],
+    [
+     "0180",
+     "Institutions"
+    ],
+    [
+     "0190",
+     "Secured by mortgages of immovable properties"
+    ],
+    [
+     "0200",
+     "of which: Secured by mortgages of residential properties"
+    ],
+    [
+     "0210",
+     "Retail Exposures"
+    ],
+    [
+     "0220",
+     "of which: Retail SME"
+    ],
+    [
+     "0230",
+     "Corporate"
+    ],
+    [
+     "0240",
+     "Financial"
+    ],
+    [
+     "0250",
+     "Non-financial"
+    ],
+    [
+     "0260",
+     "SME exposures"
+    ],
+    [
+     "0270",
+     "Exposures other than SME exposures"
+    ],
+    [
+     "0280",
+     "Exposures in default"
+    ],
+    [
+     "0290",
+     "Other exposures"
+    ],
+    [
+     "0300",
+     "of which: Securitisation exposures"
+    ],
+    [
+     "0310",
+     "Trade finance (memo item)"
+    ],
+    [
+     "0320",
+     "of which: Under official export credit insurance scheme"
+    ]
+   ],
+   "title": "(LR4) Alternative breakdown of leverage ratio exposure measure components: Other non-trading book exposures (SA)",
+   "z": []
+  },
+  "LV43.00.00.03": {
+   "columns": [
+    [
+     "0020",
+     "Leverage Ratio Exposure Value: IRB Exposures"
+    ],
+    [
+     "0040",
+     "RWEA: IRB exposures"
+    ]
+   ],
+   "filing_indicator": "LV43.00.00.03",
+   "group": "LV43.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0080",
+     "Covered bonds"
+    ],
+    [
+     "0090",
+     "Exposures treated as sovereigns"
+    ],
+    [
+     "0100",
+     "Central governments and central banks"
+    ],
+    [
+     "0110",
+     "Regional governments and local authorities treated as sovereigns"
+    ],
+    [
+     "0120",
+     "MDBs and international organisations treated as sovereigns"
+    ],
+    [
+     "0130",
+     "PSEs treated as sovereigns"
+    ],
+    [
+     "0140",
+     "Exposures to regional governments, MDBs, international organisations and PSEs NOT treated as sovereigns"
+    ],
+    [
+     "0150",
+     "Regional governments and local authorities NOT treated as sovereigns"
+    ],
+    [
+     "0160",
+     "MDBs NOT treated as sovereigns"
+    ],
+    [
+     "0170",
+     "PSEs NOT treated as a sovereigns"
+    ],
+    [
+     "0180",
+     "Institutions"
+    ],
+    [
+     "0190",
+     "Secured by mortgages of immovable properties"
+    ],
+    [
+     "0200",
+     "of which: Secured by mortgages of residential properties"
+    ],
+    [
+     "0210",
+     "Retail Exposures"
+    ],
+    [
+     "0220",
+     "of which: Retail SME"
+    ],
+    [
+     "0230",
+     "Corporate"
+    ],
+    [
+     "0240",
+     "Financial"
+    ],
+    [
+     "0250",
+     "Non-financial"
+    ],
+    [
+     "0260",
+     "SME exposures"
+    ],
+    [
+     "0270",
+     "Exposures other than SME exposures"
+    ],
+    [
+     "0280",
+     "Exposures in default"
+    ],
+    [
+     "0290",
+     "Other exposures"
+    ],
+    [
+     "0300",
+     "of which: Securitisation exposures"
+    ],
+    [
+     "0310",
+     "Trade finance (memo item)"
+    ],
+    [
+     "0320",
+     "of which: Under official export credit insurance scheme"
+    ]
+   ],
+   "title": "(LR4) Alternative breakdown of leverage ratio exposure measure components: Other non-trading book exposures (IRB)",
+   "z": []
+  },
+  "LV44.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "General Information"
+    ]
+   ],
+   "filing_indicator": "LV44.00.00",
+   "group": "LV44.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Institution's company structure"
+    ],
+    [
+     "0020",
+     "Derivatives treatment"
+    ],
+    [
+     "0040",
+     "Institution type"
+    ],
+    [
+     "0050",
+     "Foreign assets"
+    ]
+   ],
+   "title": "General information (LR5)",
+   "z": []
+  },
+  "LV47.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "LR Exposure: Reporting reference date"
+    ],
+    [
+     "0020",
+     "Daily/Monthly Average over the reporting quarter (LREQ firms only)"
+    ],
+    [
+     "0030",
+     "Quarter Low (LREQ firms only)"
+    ],
+    [
+     "0040",
+     "Quarter high (LREQ firms only)"
+    ]
+   ],
+   "filing_indicator": "LV47.00.00",
+   "group": "LV47.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Exposure Values SFTs: Exposure value"
+    ],
+    [
+     "0020",
+     "SFTs: Add-on for counterparty credit risk"
+    ],
+    [
+     "0030",
+     "Derogation for SFTs: Add-on in accordance with Article 429e(5) and 222 CRR"
+    ],
+    [
+     "0040",
+     "Counterparty credit risk of SFT agent transactions"
+    ],
+    [
+     "0050",
+     "(-) Exempted CCP leg of client-cleared SFT exposures"
+    ],
+    [
+     "0061",
+     "Derivatives: Replacement cost under the SA-CCR (without the effect of collateral on net independent collateral amount (NICA))"
+    ],
+    [
+     "0065",
+     "(-) Effect of the recognition of collateral on NICA on QCCP client-cleared transactions (SA-CCR - replacement cost)"
+    ],
+    [
+     "0071",
+     "(-) Effect of the eligible cash variation margin received offset against derivatives market value (SA-CCR - replacement cost)"
+    ],
+    [
+     "0081",
+     "(-) Effect of the exempted CCP leg of client-cleared trade exposures (SA-CCR -replacement cost)"
+    ],
+    [
+     "0091",
+     "Derivatives: Potential future exposure contribution under SA-CCR (multiplier at 1)"
+    ],
+    [
+     "0092",
+     "(-) Effect lower multiplier for QCCP client-cleared transactions on the PFE contribution (SA-CCR - Potential future exposure)"
+    ],
+    [
+     "0093",
+     "(-)Effect of the exempted CCP leg of client-cleared trade exposures (SA-CCR approach-potential future exposure)"
+    ],
+    [
+     "0101",
+     "Derogation for derivatives: Replacement costs contribution under the simplified standardised approach"
+    ],
+    [
+     "0102",
+     "(-) Effect of exempted CCP leg of client-cleared trade exposures (simplified standardised approach - replacement costs)"
+    ],
+    [
+     "0103",
+     "Derogation for derivatives: Potential future exposure contribution under the simplified standardised approach (multiplier at 1)"
+    ],
+    [
+     "0104",
+     "(-)Effect of exempted CCP leg of client-cleared trade exposures (simplified standardised approach - potential future exposure)"
+    ],
+    [
+     "0110",
+     "Derogation for derivatives: Original exposure method"
+    ],
+    [
+     "0120",
+     "(-) Exempted CCP leg of client-cleared trade exposures (original exposure method)"
+    ],
+    [
+     "0121",
+     "Derogation for derivatives: the SDDT method in accordance with Article 429c(6)"
+    ],
+    [
+     "0130",
+     "Capped notional amount of written credit derivatives"
+    ],
+    [
+     "0140",
+     "(-) Eligible purchased credit derivatives offset against written credit derivatives"
+    ],
+    [
+     "0150",
+     "Off-balance sheet items with a 10% CCF in accordance with Article 429f CRR"
+    ],
+    [
+     "0160",
+     "Off-balance sheet items with a 20% CCF in accordance with Article 429f CRR"
+    ],
+    [
+     "0170",
+     "Off-balance sheet items with a 50% CCF in accordance with Article 429f CRR"
+    ],
+    [
+     "0180",
+     "Off-balance sheet items with a 100% CCF in accordance with Article 429f CRR"
+    ],
+    [
+     "0181",
+     "(-) General credit risk adjustments to off balance sheet items"
+    ],
+    [
+     "0185",
+     "Regular-way purchases and sales awaiting settlement: Accounting value under trade date accounting"
+    ],
+    [
+     "0186",
+     "Regular-way sales awaiting settlement: Reverse out of accounting offsetting under trade date accounting"
+    ],
+    [
+     "0187",
+     "(-) Regular-way sales awaiting settlement: Offset in accordance with 429g(2) CRR"
+    ],
+    [
+     "0188",
+     "Regular-way purchases awaiting settlement: Full recognition of commitments to pay under settlement date accounting"
+    ],
+    [
+     "0189",
+     "(-) Regular-way purchases or sales awaiting settlement: Offset for assets under settlement date accounting in accordance with 429g(3) CRR"
+    ],
+    [
+     "0190",
+     "Other assets"
+    ],
+    [
+     "0191",
+     "(-) General credit risk adjustments to on balance sheet items"
+    ],
+    [
+     "0193",
+     "Cash pooling arrangements that cannot be netted prudentially: Value in the accounting framework"
+    ],
+    [
+     "0194",
+     "Cash pooling arrangements that cannot be netted prudentially: Effect of grossing-up the netting applied in the accounting framework"
+    ],
+    [
+     "0195",
+     "Cash pooling arrangements that can be netted prudentially: Value in the accounting framework"
+    ],
+    [
+     "0196",
+     "Cash pooling arrangements that can be netted prudentially: Effect of grossing-up the netting applied in the accounting framework"
+    ],
+    [
+     "0197",
+     "(-) Cash pooling arrangements that can be netted prudentially: Recognition of netting in accordance with Article 429b(2) CRR"
+    ],
+    [
+     "0198",
+     "(-) Cash pooling arrangements that can be netted prudentially: Recognition of netting in accordance with Article 429b(3) CRR"
+    ],
+    [
+     "0200",
+     "Gross up for derivatives collateral provided"
+    ],
+    [
+     "0210",
+     "(-) Receivables for cash variation margin provided in derivatives transactions"
+    ],
+    [
+     "0220",
+     "(-) Exempted CCP leg of client-cleared trade exposures (initial margin)"
+    ],
+    [
+     "0230",
+     "Adjustments for SFT sales accounting transactions"
+    ],
+    [
+     "0240",
+     "(-) Fiduciary assets"
+    ],
+    [
+     "0250",
+     "(-) Intragroup exposures (solo basis) exempted in accordance with point (c) of Article 429a(1) CRR"
+    ],
+    [
+     "0251",
+     "(-) IPS exposures exempted in accordance with point (c) of Article 429a(1) CRR"
+    ],
+    [
+     "0253",
+     "(-) Excluded excess collateral deposited at triparty agents"
+    ],
+    [
+     "0254",
+     "(-) Excluded securitised exposures representing significant risk transfer"
+    ],
+    [
+     "0260",
+     "(-) Exposures exempted in accordance with point (j) of Article 429a(1) CRR"
+    ],
+    [
+     "0270",
+     "(-) Asset amount deducted - tier 1 capital (leverage) - fully phased-in definition"
+    ],
+    [
+     "0280",
+     "Asset amount deducted (-) or added (+) - tier 1 capital (leverage) - transitional definition"
+    ],
+    [
+     "0281",
+     "Total exposure measure including claims on central banks - using a fully phased-in definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0282",
+     "Total exposure measure including claims on central banks - using a transitional definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0283",
+     "(-) Claims on central banks excluded"
+    ],
+    [
+     "0284",
+     "(-) of which claims in sterling to the Bank of England"
+    ],
+    [
+     "0290",
+     "Total exposure measure excluding claims on central banks - using a fully phased-in definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0300",
+     "Total exposure measure excluding claims on central banks - using a transitional definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0310",
+     "Capital Tier 1 capital (leverage) - fully phased-in definition"
+    ],
+    [
+     "0320",
+     "Tier 1 capital (leverage) - transitional definition"
+    ],
+    [
+     "0330",
+     "Leverage Ratio Leverage ratio excluding claims on central banks \u2013 using a fully phased-in definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0340",
+     "Leverage ratio excluding claims on central banks - using a transitional definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0341",
+     "Memorandum items Leverage Ratio including claims on central banks \u2013 using a fully phased-in definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0342",
+     "Leverage Ratio including claims on central banks - using a transitional definition of tier 1 capital (leverage)"
+    ],
+    [
+     "0490",
+     "Leverage ratio as if the temporary treatment of unrealised gains and losses measured at fair value through other comprehensive income have not been applied"
+    ],
+    [
+     "0500",
+     "Tier 1 capital (leverage) - fully phased-in definition but including the benefit of IFRS9 transitional provisions"
+    ],
+    [
+     "0510",
+     "Total exposure measure excluding claims on central banks - using, where that is affected by deductions and adjustments from tier 1 capital (leverage), a fully-phased in definition but including the benefit of IFRS9 transitional provisions"
+    ],
+    [
+     "0520",
+     "CET1 capital"
+    ],
+    [
+     "0530",
+     "Leverage Ratio Buffers (LREQ firms only) G-SII or O-SII additional leverage ratio buffer rate, as applicable (%)"
+    ],
+    [
+     "0540",
+     "Countercyclical leverage ratio buffer rate (%)"
+    ],
+    [
+     "0550",
+     "Capital Surplus / (Shortfall) (LREQ firms only) Surplus (Shortfall) CET1 to 2.4375% minimum CET1 requirement"
+    ],
+    [
+     "0560",
+     "Surplus (Shortfall) Tier 1 to 3.25% minimum Tier 1 requirement"
+    ],
+    [
+     "0570",
+     "Surplus (Shortfall) CET1 to 2.4375% minimum CET1 plus buffers"
+    ]
+   ],
+   "title": "Leverage ratio calculation (LRCalc)",
+   "z": []
+  },
+  "LV700.00.00.01": {
+   "columns": [
+    [
+     "0010",
+     "Header info"
+    ]
+   ],
+   "filing_indicator": "LV700.00.00",
+   "group": "LV700.00.00",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Basis of reporting (select from list)"
+    ],
+    [
+     "0020",
+     "Accounting framework"
+    ],
+    [
+     "0030",
+     "Firm reference number (FRN)"
+    ],
+    [
+     "0040",
+     "Legal entity identifier (LEI)"
+    ],
+    [
+     "0050",
+     "Name of the firm"
+    ],
+    [
+     "0060",
+     "Reporting period start date"
+    ],
+    [
+     "0070",
+     "Reporting period end date"
+    ],
+    [
+     "0080",
+     "Reporting currency for this report"
+    ],
+    [
+     "0090",
+     "Notes from the firm, if any"
+    ]
+   ],
+   "title": "Header info (LR0)",
+   "z": []
+  }
+ }
+}

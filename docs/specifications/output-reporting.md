@@ -73,7 +73,7 @@ Where:
     CVA and operational risk **are** included in S-TREA (they have no IRB counterpart so the
     modelled and standardised figures are identical). The output floor multiplier `x` is
     applied to S-TREA; see OF 02.01 col 0040 which reports S-TREA with the multiplier **not**
-    applied (the multiplier is applied in OF 02.00 col 0030). Source: PS1/26 Annex II §1.3.2
+    applied (the multiplier is applied in OF 02.00 row 0010 col 0030). Source: PS1/26 Annex II §1.3.2
     column 0040 instructions.
 
 !!! note "Transitional Rates Are Permissive"
@@ -104,8 +104,8 @@ a row dimension. Within each submission, rows are organised into sections (total
 breakdown, risk weight breakdown, memorandum items).
 
 ### Templates
-- **C 02.00 / OF 02.00** — Own Funds Requirements: master template aggregating RWEA across all risk types. 1 column (CRR) / 3 columns (Basel 3.1). Basel 3.1 adds col 0020 ("Standardised approaches only (output floor)" — SA-only RWEA per exposure class, pre-multiplier) and col 0030 ("Output floor" — the post-floor RWEA: SA totals after applying the output floor multiplier and OF-ADJ, i.e. the *floor-adjusted* number used in the TREA = max(U-TREA, x·S-TREA + OF-ADJ) comparison). Rows restructured: FIRB/AIRB/Slotting separated, corporate and retail subclass breakdowns added, slotting by 5 SL types, market risk expanded for ASA/IMA. Source: PS1/26 Annex II §1.3.
-- **OF 02.01** — Output Floor (**new**, no CRR equivalent): dedicated output floor comparison for IM firms. 4 columns: col 0010 "RWA for modelled approaches" (portfolios under permitted internal models), col 0020 "RWA for portfolios on standardised approaches", col 0030 "Total RWA (U-TREA)" = arithmetic sum of 0010 + 0020 (the un-floored TREA from Art. 92), col 0040 "Standardised total RWA (S-TREA)" (all portfolios on SA, **no** multiplier applied). **Cols 0010 and 0020 partition the book** — col 0030 is only "the complete current portfolio" because each exposure is counted in exactly one of them, so col 0020 is the *complement* of the modelled set (SA, SA-CCR and equity all land there), never an allow-list of approach labels. 8 rows by risk type (credit excl. CCR, CCR, CVA, securitisation, market, op risk, residual, total); rows 0010/0020 partition the credit-risk book and row 0080 is their sum. Produces the raw U-TREA / S-TREA inputs that feed OF 02.00 col 0030. Note: OF 02.01 col 0030 is **U-TREA** (un-floored) and is distinct from OF 02.00 col 0030 (floor-adjusted) — same column number, different meaning. Source: PS1/26 Annex II §1.3.2.
+- **C 02.00 / OF 02.00** — Own Funds Requirements: master template aggregating RWEA across all risk types. 1 column (CRR) / 3 columns (Basel 3.1). Row 0040 is the credit-risk RWEA and equals SA (0050, the same figure as 0060) + IRB (0240) + CCP default fund (0460) + securitisation (0470) in both templates (EBA `v0205_m`; BoE `boe_b1093`); neither template has an "8% own funds requirement" row. Basel 3.1 col 0010 ("All approaches") is the **un-floored** RWEA — row 0010 col 0010 is U-TREA, one data point with OF 02.01 row 0080 col 0030. Col 0020 ("Standardised approaches only (Output Floor)") exists on row 0040 and the modelled rows only and holds the standardised-approach RWEA of the same exposures; row 0040 col 0020 is S-TREA = row 0050 col 0010 + row 0240 col 0020 (`boe_b0716`). Col 0030 ("Output Floor") exists on rows 0010, 0034, 0035 and 0036 only: row 0010 is the floor `x·S-TREA + OF-ADJ`, and TREA = max(row 0010 col 0010, col 0030). Rows restructured: FIRB (0250) / AIRB (0310) / Slotting (0411) separated, corporate and retail subclass breakdowns added, slotting by 5 SL types, market risk expanded for ASA/IMA; no rows for IRB sovereigns, A-IRB institutions or IRB equity (Art. 147A). Row codes, labels and cells are declared in `reporting/corep/c02_rows.py` and held to the PRA001 taxonomy by `tests/contracts/test_of02_published_cells.py`. Source: PS1/26 Annex II §1.3; taxonomy table `OF02.00.01.01`.
+- **OF 02.01** — Output Floor (**new**, no CRR equivalent): dedicated output floor comparison for IM firms. 4 columns: col 0010 "RWA for modelled approaches" (portfolios under permitted internal models), col 0020 "RWA for portfolios on standardised approaches", col 0030 "Total RWA (U-TREA)" = arithmetic sum of 0010 + 0020 (the un-floored TREA from Art. 92), col 0040 "Standardised total RWA (S-TREA)" (all portfolios on SA, **no** multiplier applied). **Cols 0010 and 0020 partition the book** — col 0030 is only "the complete current portfolio" because each exposure is counted in exactly one of them, so col 0020 is the *complement* of the modelled set (SA, SA-CCR and equity all land there), never an allow-list of approach labels. 8 rows by risk type (credit excl. CCR, CCR, CVA, securitisation, market, op risk, residual, total); rows 0010/0020 partition the credit-risk book and row 0080 is their sum. Produces the raw U-TREA / S-TREA inputs that feed OF 02.00 col 0030. Note: OF 02.01 col 0030 is **U-TREA** (un-floored) — the same data point as OF 02.00 row 0010 col **0010** — and is distinct from OF 02.00 col 0030 (the floor) — same column number, different meaning. Source: PS1/26 Annex II §1.3.2.
 - **C 07.00 / OF 07.00** — CR SA: one submission per SA exposure class. 24 columns (CRR) / ~29 columns (Basel 3.1) covering original exposure, provisions, CRM substitution effects, on-balance sheet netting adjustment, Financial Collateral Comprehensive Method, CCF breakdown (5 bands: 10%, 20%, 40%, 50%, 100%), exposure value, and RWEA. 5 row sections: totals, exposure types (on-BS/off-BS/CCR), risk weights (15 bands CRR / 29 bands Basel 3.1), CIU approach, memorandum items.
 - **C 08.01 / OF 08.01** — CR IRB totals: one submission per IRB exposure class × own-estimates filter. 33 columns (CRR) / 40+ columns (Basel 3.1) covering PD, original exposure, CRM substitution effects, CRM in LGD estimates (detailed collateral breakdown), exposure value, LGD, maturity, RWEA, expected loss, provisions, obligor count. Basel 3.1 adds post-model adjustment and output floor columns.
 - **C 08.02 / OF 08.02** — CR IRB by obligor grade: same columns as C 08.01 with dynamic rows (one per firm-specific internal rating grade/pool, ordered by PD).
@@ -125,7 +125,7 @@ breakdown, risk weight breakdown, memorandum items).
 ### Basel 3.1 Reporting Field Additions
 
 **OF 07.00 (SA)** — new columns vs CRR C 07.00:
-- Col 0035: (-) Adjustment for on-balance sheet netting (Art. 219)
+- Col 0035: (-) Adjustment for on-balance sheet netting (Art. 219) — the netted deposit's **adjusted** value (after the Art. 224 currency-mismatch haircut and the Art. 237-239 maturity scaling), capped at the exposure it reduces. The deposit is reported here and **excluded** from cols 0130 / 0140, so col 0150 is reduced by it once (`boe_b0471`). CRR C 07.00 has no col 0035 and keeps the deposit in col 0130.
 - Col 0160-0190: Off-balance sheet breakdown now uses 5 CCF bands (10%, 20%, 40%, 50%, 100%) instead of 4
 - Col 0235: Of which: where a credit assessment by a nominated ECAI is not available (new)
 - Rows 0021-0026: Specialised lending sub-types (object, commodities, project finance phases)
@@ -139,7 +139,7 @@ breakdown, risk weight breakdown, memorandum items).
 - Col 0252: Adjustment for post-model adjustments
 - Col 0253: Adjustment for mortgage RW floor
 - Col 0254: Unrecognised exposure adjustments (Art. 153(5A)(b), 154(4A)(c)) — not reported for F-IRB or slotting sheets
-- Col 0260: Risk-weighted exposure amount **after** adjustments — equals col 0251 adjusted for cols 0252 to 0254 (i.e. `0251 + 0252 + 0253 + 0254`). This is the post-adjustment RWEA that flows into OF 02.00 row 0010 as the IRB credit-risk RWEA contribution. Source: PS1/26 Annex II §3.3.1, p. 112.
+- Col 0260: Risk-weighted exposure amount **after** adjustments — equals col 0251 adjusted for cols 0252 to 0254 (i.e. `0251 + 0252 + 0253 + 0254`). This is the post-adjustment RWEA that flows into OF 02.00's IRB class rows (0271–0410, column 0010; each is one data point with this cell on the class's sheet) and through them into rows 0240, 0040 and 0010. Source: PS1/26 Annex II §3.3.1, p. 112.
 - Col 0265: Of which: exposure value for non-defaulted
 - Col 0275-0276: Non-modelled approaches exposure value and RWEA (for output floor)
 - Col 0281: Expected loss adjustment for post-model adjustments
@@ -152,9 +152,10 @@ breakdown, risk weight breakdown, memorandum items).
 - Rows 0355-0356: A-IRB corporate breakdown (SME, non-SME)
 - Rows 0382-0385: A-IRB retail residential/commercial splits (SME/non-SME)
 - Rows 0411-0416: Slotting by 5 SL types (PF, OF, CF, IPRE, HVCRE)
-- Row 0034: Output floor activated (Yes/No indicator, not RWEA)
-- Row 0035: Output floor multiplier (percentage 60%-72.5%, not RWEA)
-- Row 0036: Output floor adjustment OF-ADJ (monetary value)
+- Row 0034: Output floor activated (Yes/No indicator, not RWEA) — column 0030 only
+- Row 0035: Output floor multiplier (the rate 0.55 / 0.60 / 0.65 / 0.70 / 0.725 per `boe_b0359`, not a percentage and not RWEA) — column 0030 only
+- Row 0036: Output floor adjustment OF-ADJ (monetary value) — column 0030 only
+- Rows OF 02.00 does **not** have, which the CRR C 02.00 does: 0190 (short-term credit assessment), 0260 / 0320 (IRB central governments), 0330 (A-IRB institutions), 0370 / 0380 (retail real estate SME / non-SME, replaced by 0382–0385) and 0420 (Equity IRB)
 
 **OF 07.00 (SA)** — missing row IDs:
 - Rows 0021-0026: Specialised lending sub-types (0021=OF, 0022=CF, 0023=PF, 0024=PF pre-operational, 0025=PF operational, 0026=PF high-quality operational — hierarchical under PF)

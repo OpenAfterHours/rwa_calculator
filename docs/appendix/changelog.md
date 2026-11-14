@@ -9,16 +9,180 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **The repository is now a uv workspace with a second, separately released
+  package: `rwa-filer`.** The root is still the `rwa-calc` project and is also
+  the workspace root, so `src/rwa_calc`, `tests/` and `scripts/` did not move;
+  `packages/rwa-filer` (import name `rwa_filer`) is the one member — the
+  standalone filing package, which will validate regulatory returns against the
+  published supervisory rules and write them for submission. `rwa-calc` now
+  declares `rwa-filer>=0.1,<0.2`; the dependency points one way only, enforced
+  by the new `arch_check` check 23 (nothing under `rwa_filer` may import
+  `rwa_calc`) and by a new CI job that runs the member's tests in an environment
+  holding it alone. `scripts/deploy.py` gains `--package rwa-filer` and
+  `.github/workflows/publish.yml` selects the package from the release tag
+  (`v*` → `rwa-calc`, `rwa-filer-v*` → `rwa-filer`). See
+  [Workspace & Packages](../development/workspace.md). This release changes no
+  calculation and no reported figure.
+- **The generated Basel 3.1 COREP estate can now be expressed as a canonical
+  return in the PRA taxonomy's own coordinates.**
+  `rwa_calc.reporting.filing.build_canonical_return(corep, header)` re-addresses
+  every generated cell to a published table, sheet, row and column of the
+  `PRA001` module (Bank of England banking taxonomy v4.1.1, in `rwa-filer`), and
+  returns the cells that have no place there with a reason for each. No cell is
+  dropped silently.
+- **New gate: the filing-mapping ratchet**
+  (`scripts/filing_mapping_report.py --check`, CI job `Filing Mapping Ratchet`).
+  Over the 13 Basel 3.1 portfolios of the supervisory register, 1,911 distinct
+  generated cells land on a taxonomy data point and 1,025 distinct non-zero
+  figures do not. The first may not fall; the second may not rise, in total or
+  for any (template, reason). 816 of the 1,025 are the IRB templates
+  (OF 08.01–08.05): our sheets are per exposure class, while the published sheet
+  axis also splits by approach and by SME / non-SME. The full breakdown is in
+  [Workspace & Packages](../development/workspace.md#the-filing-mapping-ratchet).
+  These figures cannot be filed until the layouts are aligned; no reported
+  number changes in this release.
+- **A Basel 3.1 run can be written as the XBRL file the PRA accepts.**
+  `ResultExporter.export_filing_package(response, output_dir,
+  entity_identifier=..., reference_date=...)` generates the COREP estate,
+  re-addresses it to the PRA001 taxonomy, validates it and has `rwa-filer` write
+  the instance, a zip where the Bank requires one, and a manifest. Nothing is
+  written while something stands in the way, and the outcome says what: a
+  non-zero figure the taxonomy has no cell for, a fact the taxonomy cannot
+  express, or a rule check that does not pass. Each can be overridden
+  explicitly; a file written that way is never reported as submittable.
+- **Fixed: Basel 3.1 OF 09.02 reported its RWEA in the wrong column.** The
+  risk-weighted exposure amount was in column 0125, which the published
+  OF 09.02 does not have, and column 0110 was missing. It is now in column 0110
+  (PS1/26 Annex I). CRR C 09.02 is unchanged. Anything that reads the Basel 3.1
+  OF 09.02 export by column code must read 0110.
+- **The filing-mapping ratchet now also holds `error_rule_breaks`**: the
+  Error-severity rules of the Bank's v4.1.1 rule book that a generated return
+  breaks, per rule and per portfolio. 34 rules break somewhere in the matrix
+  today. Not all are defects in the templates: a few published rules cannot be
+  satisfied by a return that follows the Bank's own instructions, and the
+  baseline's note says which.
+- **Fixed: equity and CIU holdings were missing from the country sheets of
+  C 09.01 / OF 09.01.** They were reported on the all-countries sheet only,
+  although their counterparty has a country, so the country sheets did not add
+  up to the total (the Bank's rule `boe_b0904`). Equity exposures now carry
+  their counterparty's country (`cp_country_code`) through the pipeline and
+  report on its sheet. No RWA, EAD or risk weight changes.
+- **C 07.00 / OF 07.00 now carries its Total sheet.** The instructions require
+  the template "for the total exposure across all exposure classes and
+  individually for each of the exposure classes"; only the class sheets were
+  produced. The Total (published sheet code 0001) is the cell-by-cell sum of
+  the class sheets and is `bundle.c07_00["total"]`; it has its own tab in the
+  Excel export and its own entry in the template index. **This changes what
+  iterating `bundle.c07_00` yields**: code that adds up every sheet now counts
+  each exposure twice and must add the class sheets instead
+  (`rwa_calc.reporting.corep.c07.c07_class_sheets`).
+- **Fixed: Basel 3.1 OF 07.00 reported figures in cells the template does not
+  have.** The published template greys out much of its grid: the CRM
+  substitution block on the risk-weight rows, everything before the exposure
+  value on the counterparty-credit-risk rows, column 0211 outside the
+  netting-set and risk-weight rows, and the ECAI breakdown on most "of which"
+  rows. Those cells are now empty, and column 0020 ("Exposures deducted from
+  own funds"), which OF 07.00 does not have, is gone from the Basel 3.1 layout.
+  No reported total changes: the blanked cells were intermediates, and column
+  0150 on a risk-weight row still includes the substitution inflow. CRR C 07.00
+  is unchanged. Anything that reads those cells from the Basel 3.1 export must
+  accept an empty cell; anything that reads column 0020 there must stop.
+- **Fixed: OF 08.07 / C 08.07 reported a share of nothing as 0.0.** Columns
+  0030, 0040 and 0050 are shares of the row's total exposure value (column
+  0020). On a roll-out class with no exposure they were reported as 0.0; they
+  are now empty, because there is nothing to take a share of (PS1/26 Annex II
+  3.3.10.2). A return carrying the zeros broke the Bank's rule that the three
+  shares total 1 (`boe_b0778`) on every portfolio. Rows with exposure are
+  unchanged. Anything that reads these columns must accept an empty cell.
+- **New gate: the referee differential**
+  (`scripts/referee_differential.py --check`, workflow `Referee Differential`).
+  It files golden Basel 3.1 returns from the calculator, has the Arelle XBRL
+  processor load each against the Bank of England's taxonomy package, and
+  requires that Arelle raises no error and that its verdict on every rule is
+  the native rule engine's. Five of the thirteen Basel 3.1 portfolios have an
+  estate that can be written as valid XBRL today and are refereed; the other
+  eight carry structure findings and are not. The gate runs in its own
+  workflow, on a change to the code it referees, weekly and on demand, because
+  it needs Arelle and a download from the Bank's site.
+- **The filing package is on the REST API.** `GET /api/filing/status` says
+  whether a completed Basel 3.1 run can be filed and, if not, what stands in
+  the way; `GET /api/filing/package` downloads the XBRL instance and its
+  manifest as a zip, and answers `409` with the same verdict when there is no
+  file to give. File names come from the run's framework and reporting date,
+  never from the caller's identifier.
+- **The UI has a Filing page** (`/results/{run_id}/filing`, linked from the
+  results page). For the LEI entered it shows the same verdict, the figures the
+  taxonomy has no cell for, and the validation findings. It offers the filing
+  package only for a return nothing blocks; a blocked return is offered, at
+  most, as a file for review that is labelled as not submittable.
+- **The filing-mapping ratchet now also holds `structure_findings`**: placed
+  facts that still cannot be filed. Eight exist today, in four tables. In three,
+  two cells that are one data point in the taxonomy hold different values
+  (OF 02.00 rows 0050 and 0060; OF 08.01 column 0276 against OF 02.00 column
+  0020; OF 02.01 U-TREA against OF 02.00 row 0010). In the fourth, OF 08.03
+  column 0080 is an integer in the taxonomy and holds a fractional maturity.
+  These are defects in the generated estate that no earlier gate could see.
+- **`export_filing_package` validates with the Bank's v4.1.1 rules, evaluated as
+  the Bank's gateway evaluates them** (`rwa-filer`'s new rule engine). It is
+  stricter than the supervisory register: a cell this calculator does not
+  report is zero to a rule that says so. The supervisory register
+  (`check_supervisory_validations`, the coverage ratchet) is unchanged and still
+  runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **REPORTING — behaviour to expect where the Basel 3.1 output floor binds.**
+  OF 02.00 column 0010 is now un-floored, as its data points require, while
+  OF 08.01 still sums the post-floor RWEA (which carries the engine's pro-rata
+  floor add-on), and the engine still floors the modelled exposures alone.
+  Two cross-template findings therefore appear on a run whose floor binds:
+  `irb_rwea_c08_01_vs_c02`, by the size of the add-on, and
+  `total_rwea_c02_vs_ov1`, by `(1 − x)` times the standardised book. Both are
+  true statements about open items (plan P1.369 and P1.367), not regressions
+  in the figures: no RWA moved.
+- **REPORTING: `boe_b0793` is reported as broken where OF-ADJ is not zero.**
+  The rule computes `x · (S-TREA + OF-ADJ)`; PS1/26 Art. 92(2A) and Annex II
+  §1.3.1 give `x · S-TREA + OF-ADJ`, and that is what OF 02.00 reports.
 - (Next release changes will go here)
+- **BREAKING (import paths only): the supervisory validation engine moved out of
+  `rwa_calc.reporting.validations` into the separately released `rwa-filer`
+  package.** The rule extracts, the expression evaluator, scope expansion and the
+  checker are generic — they know nothing about this calculator — so they now
+  live in `rwa_filer.rules` and `rwa_filer.validate`, where any other source of
+  template-level figures can use them. `rwa_calc.reporting.validations` is gone,
+  with no alias left behind. What remains in `rwa-calc` is the thin adapter
+  `rwa_calc.reporting.filing`: the cited sheet-index maps
+  (`filing/sheet_maps.py`), the table bindings and `build_template_index`
+  (`filing/bindings.py`), and `check_supervisory_validations` / `evaluate_all`
+  (`filing/checks.py`), which map the engine's findings onto `CalculationError`
+  `VAL001`–`VAL003` exactly as before. **No behaviour changed**: the public
+  entry points (`validate_submission`, `summarise_validation`, the REST
+  `/validations` route) are untouched, the reporting coverage ratchet reports
+  the same 272 / 331 binding rules, 8,754 live cells and 757 never-evaluated
+  rules, the supervisory register is unmoved, and the relocated importer
+  reproduces both committed extracts byte for byte from the publishers'
+  workbooks. If you imported the old package directly, repoint: rule shapes and
+  `load_rules` to `rwa_filer.rules`; statuses, `TemplateIndex`, `SheetCode`,
+  `ValidationReport` and `RuleOutcome` to `rwa_filer.validate`;
+  `SHEET_INDEX_MAPS`, `build_template_index`, `check_supervisory_validations`
+  and `evaluate_all` to `rwa_calc.reporting.filing`.
+  `scripts/extract_validation_rules.py` keeps its flags and now writes to
+  `packages/rwa-filer/src/rwa_filer/rules/data/`; the same extraction ships as
+  `rwa-filer rules import` / `rwa-filer rules check`. `arch_check` check 22 is
+  re-pointed at `reporting/filing/`.
+- **`scripts/deploy.py` refuses an `rwa-calc` publish until the `rwa-filer`
+  version it depends on is on PyPI.** Inside the workspace `rwa-filer` always
+  resolves from the checkout, so no gate here can see an `rwa-calc` release
+  whose requirement nothing published satisfies — a release nobody could
+  install. The script now reads the range from the root `pyproject.toml`, asks
+  PyPI, and stops before the tests when no published version satisfies it or
+  PyPI cannot be reached. `--skip-filer-check` bypasses it.
 - **Basel 3.1 supervisory validation rules now come from BoE Banking Taxonomy v4.1.1
   (27 Aug 2026), replacing v4.0.0.** v4.1.1 supersedes v4.0.0 for entry point PRA001
   (Own Funds). The v4.0.0 PRA001 SchemaRef is retired for live reporting from 1 Jan 2027, the
   date PS1/26 takes effect. The packaged extract is renamed from
-  `basel31-boe-v4.0.0-credit-risk.json` to `basel31-boe-v4.1.1-credit-risk.json`. Code that
-  reads it through `rwa_calc.reporting.validations.load_rules` needs no change; a path
-  hard-coded to the old filename will break. The credit-risk subset goes from 820 rules
+  `basel31-boe-v4.0.0-credit-risk.json` to `basel31-boe-v4.1.1-credit-risk.json` (package data
+  of `rwa-filer` since the validation engine moved there). Code that reads it through
+  `rwa_filer.rules.load_rules` needs no change; a path hard-coded to the old filename will break. The credit-risk subset goes from 820 rules
   (808 enforced) to 816 (800).
   - **Withdrawn by the BoE:** `boe_b0303`, `boe_b0744`, `boe_b0745` and `boe_b0752_1/22/23/24`.
   - **Split:** `boe_b0378` and `boe_b0379` each become a `_1` and a `_2` rule, and the `_2` rule
@@ -282,7 +446,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Art. 219(2)'s last sentence, the Art. 226(1) scale-up for non-daily marking
   to market, is **not** applied to netting rows, because no input carries a
-  revaluation frequency for loans or deposits. That is filed as P1.384.
+  revaluation frequency for loans or deposits. That is filed as P1.388.
 
   `CRMProcessor` no longer drops a user collateral table whose only dtype
   difference from the synthetic rows is integer width, for example an unsealed
@@ -320,6 +484,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     400, GBP loan 400).
 
   Basel 3.1 is unchanged.
+- **REPORTING: the Basel 3.1 IRB templates OF 08.01, 08.02, 08.03 and 08.05
+  are generated on the published 17-sheet axis.** They were generated one sheet
+  per exposure class, which the published axis splits further by approach, by
+  SME / non-SME and by residential / commercial property, so no figure on them
+  could be filed. Sheets now carry the published keys (`institution_firb`,
+  `corporate_non_sme_airb`, `retail_residential_re_non_sme_airb`, …) and the two
+  Totals (`total_airb`, `total_firb_slotting`) are produced. Code that adds up
+  every OF 08 sheet must use `c08_class_sheets(...)` or it counts the Totals
+  twice. Supervisory slotting is on the specialised-lending FIRB-or-slotting
+  sheet (row 0080) and its Total, and is excluded from OF 08.02 / 08.03 / 08.05.
+  OF 02.00 and OF 08 read one classification, so an IRB class row and its sheet
+  total — one data point in the taxonomy — always agree. No RWA or exposure
+  value changes, and CRR C 08 is unchanged.
+- **REPORTING: Basel 3.1 OF 07.00 deducts on-balance-sheet netting once.** A
+  netted deposit was taken off in column 0035 and again inside column 0130
+  (financial collateral), so column 0150 (fully adjusted exposure value) was
+  understated by the deposit while column 0200 was right — on the netting
+  reporting portfolio 16,000,000 against 19,000,000. Column 0035 now reports the
+  deposit's adjusted value (after currency and maturity mismatch adjustments,
+  PS1/26 Art. 219), capped at the exposure it reduces, and columns 0130 / 0140
+  report only the genuine financial collateral. The Bank's `boe_b0471` and
+  `boe_b0556` now hold. CRR C 07.00 is unchanged, and no RWA or exposure value
+  moves. The result ledger gains one column, `on_bs_netting_adjusted_value`.
+- **ENGINE: the on-balance-sheet netting amount is divided between the legs of
+  a partly guaranteed loan.** Each leg carried the whole amount, so the
+  C 08.01 column 0035 total for such a loan was doubled. Capital was not
+  affected.
+- **REPORTING: C 02.00 / OF 02.00 now uses the published row codes and cells,
+  in both regimes — every row of the template moves.** The layout had been
+  written from row headings and its codes were not the publishers'. What a
+  consumer of the template will see:
+    - **Credit-risk RWEA is row 0040** (was 0050). There is no "own funds
+      requirement (8%)" row: the figure that was reported in row 0040 is gone,
+      because neither template has such a row.
+    - **Standardised approach is rows 0050 and 0060** (one figure in two rows,
+      as published); **IRB is row 0240** (was 0220); **F-IRB is row 0250** (was
+      0240) and **A-IRB row 0310** (was 0300). The class rows follow each
+      regime's own template: under Basel 3.1 F-IRB institutions is 0271 and the
+      corporate rows 0295 / 0296 / 0297; A-IRB corporates 0355 / 0356 and retail
+      real estate 0382–0385; slotting 0411–0416. Under CRR the F-IRB rows are
+      0260–0300 and the A-IRB rows 0320–0410, with Equity IRB at 0420.
+    - **CRR supervisory slotting is reported at row 0290**, "Corporates —
+      Specialised Lending" without own estimates, inside row 0250. It had been
+      written to row 0410, which is "Retail — Other non-SME".
+    - **Basel 3.1 column 0010 is the un-floored RWEA.** Row 0010 column 0010 is
+      U-TREA; the output floor, `x · S-TREA + OF-ADJ`, is row 0010 column 0030;
+      total risk exposure is the greater of the two. Column 0010 used to carry
+      the post-floor figure and column 0030 repeated it.
+    - **Column 0020 is reported on row 0040 and the modelled rows only, column
+      0030 on rows 0010 and 0034–0036 only** — the cells the template has.
+    - **Row 0035 is the multiplier as a rate** (0.6, not 60.0); row 0034 is the
+      yes/no indicator; row 0036 is OF-ADJ, taken from the run's floor summary.
+      Without that summary OF-ADJ is unknown, and then it, the floor and the
+      indicator are left empty rather than reported as zero.
+    - **The Basel 3.1 currency-mismatch memorandum row 0500 is removed.**
+      Published row 0500 is settlement/delivery risk in the non-trading book.
+      The figure still reports at OF 07.00 memorandum row 0380.
+    - The other risk types (settlement, market, operational, CVA, large
+      exposures, …) are laid out at their published codes and left empty.
+  No RWA, EAD or risk weight changes. Held to the Bank of England taxonomy by
+  `tests/contracts/test_of02_published_cells.py`; the row table is
+  `reporting/corep/c02_rows.py`. Four Error rules of the Bank's rule book that
+  broke on every Basel 3.1 return (`boe_b0359`, `boe_b0716`, `boe_b0793`,
+  `boe_b1093`) now hold, the third except where OF-ADJ is not zero (below).
+- **REPORTING: the export, validation and filing paths pass the run's own
+  output-floor summary to the COREP generator.** None of them did, so unless
+  a caller supplied one OF 02.00 reported no multiplier and no OF-ADJ.
+  `export_to_corep`, `export_corep_facts`, `validate_submission`,
+  `export_filing_package` and the REST template-bundle endpoint are affected.
+- **REPORTING: an A-IRB exposure whose class is `corporate_sme` is counted in
+  the corporate SME row of C 02.00 / OF 02.00.** It matched neither side of the
+  corporate split and fell out of the breakdown while the A-IRB total still
+  counted it (16,063,845.09 on the Basel 3.1 reporting portfolio).
+- **REPORTING: two false cross-template findings (`TIE001`) on a CRR book with
+  IRB equity are gone.** The equity term sat on the wrong tie-out, so the SA
+  and the IRB tie were each reported as off by exactly the IRB equity RWEA.
+- **FILING (`rwa-filer`): a figure reported through one template is read in
+  every reported template that shows the same data point.** The rule engine
+  read it only in the cell that named it, so a rule comparing the two cells
+  failed against a default of zero — on a return whose XBRL file the same
+  engine, and Arelle, pass. Seven Error rules were failing for this reason
+  alone.
+- **FILING: two cells of one data point that differ only in the last digits of
+  a floating-point sum are filed as one value.** The standardised-approach
+  total is shown in OF 02.00 and on the OF 07.00 Total sheet, each adding the
+  same exposures in its own order; the return was being refused over the
+  difference. Cells that disagree by more than rounding are still refused.
 - **A parallel batch (`rwa_calc.api.run_batch`) could hang forever on Linux
   under Python 3.13.** `api/batch.py` built its `ProcessPoolExecutor` on
   `multiprocessing`'s *default* start method, and that default depends on both

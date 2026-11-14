@@ -111,6 +111,24 @@ docs/plans/phase7-declarative-reporting.md §6):
   produce an outflow with no matching inflow — the recorded residual, kept
   visible rather than hidden by re-gating the outflow (which the live rule
   ``v0305_m`` fixes as the subtotal). C 08.01 col 0060 carries the same residual.
+- ON-BALANCE-SHEET NETTING IS DEDUCTED ONCE (recorded fix; escape log
+  2026-09-05). CRR Art. 219 makes a netted deposit synthetic cash collateral,
+  so on the ledger ``collateral_adjusted_value`` / ``collateral_market_value``
+  INCLUDE it; ``on_bs_netting_adjusted_value`` / ``on_bs_netting_amount`` say
+  how much of each is the deposit. Under BASEL 3.1 the template has col 0035
+  for it — "the reduction in exposure value due to on-balance sheet netting
+  determined in accordance with Article 219" — and col 0040 is the "sum of
+  columns 0010, 0030, and 0035", so the deposit is reported THERE, at the value
+  PS1/26 Art. 219(1) deducts ("adjusted for any currency and maturity
+  mismatches", floored at a zero exposure value, hence capped per row at the
+  exposure net of provisions), and is taken OUT of cols 0130 / 0140: PS1/26
+  Art. 223(3) starts the Financial Collateral Comprehensive Method from E =
+  "where Article 219 applies, the exposure value calculated in accordance with
+  that Article". Summing the whole collateral column into 0130 as well deducted
+  the deposit twice and left col 0150 below col 0200 by col 0035 (``boe_b0471``
+  / ``boe_b0556``). Under CRR there is no col 0035: the deposit stays financial
+  collateral in cols 0130 / 0140 and the chain nets once, unchanged. See
+  ``_reports_netting_apart``.
 - The intra-row waterfalls are Formulas over positive magnitudes:
   0040 = 0010 - 0030 (- 0035 under Basel 3.1); 0090 = 0050 + 0060 + 0070
   + 0080; 0110 = 0040 - 0090 + 0100; 0150 = max(0, 0110 - 0130). 0110
@@ -132,6 +150,22 @@ docs/plans/phase7-declarative-reporting.md §6):
   carrier is sealed; the CCF buckets and supporting-factor adjustments
   when their carriers are absent), preserving the recorded structural-null
   cells.
+- ONLY THE CELLS THE TEMPLATE HAS (Basel 3.1; recorded fix 2026-11-13). Every
+  cell of a row is COMPUTED — col 0150 on a risk-weight row is a formula
+  reached through that row's col 0100 inflow and col 0110 — but PS1/26 Annex I
+  greys out much of the grid, and a greyed cell is not reported:
+  the CRM substitution block (cols 0050-0140) on the risk-weight rows, every
+  column before the exposure value on the CCR rows 0090-0130, col 0211 away
+  from the netting-set and risk-weight rows, and the ECAI breakdown on most
+  "of which" rows. The grey cells are declared in
+  ``corep/of07_published_cells.py``, carried on every ``SheetPlan``
+  (``unreported``) and blanked as the last pass
+  (``postpass.blank_unreported_cells``); the declaration is held exactly to the
+  Bank's taxonomy by ``tests/contracts/test_of07_published_cells.py``. Until
+  then the risk-weight rows published the col 0100 inflow and col 0110, and the
+  CCR rows their gross, in cells a return cannot carry. OF 07.00 also has no
+  col 0020 (``templates.B31_C07_COLUMNS``). CRR is untouched: no EBA template is
+  held to read its grey cells from.
 - The CCF buckets (0160-0190) are a breakdown of the **fully adjusted
   exposure value of off-balance-sheet items** — Annex II heads that block
   "BREAKDOWN OF THE FULLY ADJUSTED EXPOSURE VALUE OF OFF-BALANCE SHEET
@@ -177,7 +211,15 @@ from rwa_calc.reporting.cellspec import (
     execute,
 )
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
-from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
+from rwa_calc.reporting.corep.of07_published_cells import (
+    get_c07_rows_not_on_total,
+    get_c07_unreported_cells,
+)
+from rwa_calc.reporting.corep.postpass import (
+    blank_unreported_cells,
+    negate_deduction_cols,
+    null_empty_rows,
+)
 from rwa_calc.reporting.corep.supporting_factors import (
     sf_adjustment_terms,
     sf_infra_flag_exprs,
@@ -185,6 +227,7 @@ from rwa_calc.reporting.corep.supporting_factors import (
 from rwa_calc.reporting.corep.templates import (
     C07_00_SA_SHEET_KEYS,
     C07_00_SA_SHEET_MAP,
+    C07_00_TOTAL_SHEET_KEY,
     EQUITY_IRB_METHODS,
     get_c07_columns,
     get_sa_risk_weight_bands,
@@ -210,6 +253,7 @@ logger = logging.getLogger(__name__)
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute.
 # 0216/0217 are the CRR-only "(-) SME/Infrastructure supporting factor adjustment"
 # columns (Art. 501/501a) — reported negative so 0215 + 0216 + 0217 = 0220 foots.
+_LABEL_COLS: tuple[str, str] = ("row_ref", "row_name")
 _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
@@ -313,6 +357,19 @@ _OFCP_CARRIERS: tuple[str, ...] = ("life_ins_collateral_value", "third_party_dep
 
 # Col 0070 "(-) Financial collateral: Simple method" (Art. 222(1)-(2)).
 _FCSM_CARRIER: str = "fcsm_collateral_value"
+
+# The Financial Collateral Comprehensive Method valuations (cols 0130 / 0140)
+# and the on-balance-sheet netting PART of each — Art. 219 makes the netted
+# deposit synthetic cash collateral, so the collateral columns include it. See
+# the module docstring ("ON-BALANCE-SHEET NETTING IS DEDUCTED ONCE").
+_COLLATERAL_ADJUSTED_COL: str = "collateral_adjusted_value"
+_COLLATERAL_MARKET_COL: str = "collateral_market_value"
+_NETTING_ADJUSTED_COL: str = "on_bs_netting_adjusted_value"
+_NETTING_ALLOCATION_COL: str = "on_bs_netting_amount"
+# Derived per row by ``_prepare`` under Basel 3.1: col 0035's capped reduction,
+# and col 0130's collateral with the deposit taken out.
+_NETTING_REDUCTION_COL: str = "c07_netting"
+_FIN_COLLATERAL_COL: str = "c07_fin_collateral"
 
 # The capped unfunded limb (cols 0050 + 0060 per row) that col 0100's inflow is
 # measured on — see ``_protection_exprs``.
@@ -528,6 +585,7 @@ def c07_plans(
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
+    unreported = get_c07_unreported_cells(framework)
 
     plans: dict[str, SheetPlan] = {}
     # Sealed-ledger rule: the class columns always exist; a null key (no source
@@ -569,6 +627,7 @@ def c07_plans(
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
             inflow_rows=_inflow_rows(row_terms, sides, bands),
+            unreported=unreported,
         )
     return plans
 
@@ -593,7 +652,12 @@ def generate_c07(
     framework: str,
     errors: list[str],
 ) -> dict[str, pl.DataFrame]:
-    """Execute C 07.00 per obligor-class sheet over the sealed ledger."""
+    """Execute C 07.00 per obligor-class sheet over the sealed ledger.
+
+    The last pass leaves out the cells the published template greys out (module
+    docstring, "ONLY THE CELLS THE TEMPLATE HAS") — after the waterfall, the
+    empty-row rule and the sign convention have all read them.
+    """
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c07_plans(results, cols, framework, errors).items():
         frame = execute(plan.spec, plan.frame, plan.ctx)
@@ -604,8 +668,58 @@ def generate_c07(
             for ref, terms in plan.row_terms.items()
         }
         frame = null_empty_rows(frame, plan.frame, preds, plan.inflow_rows)
-        result[ec] = negate_deduction_cols(frame, _NEGATIVE_COLS)
+        frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
+        result[ec] = blank_unreported_cells(frame, plan.unreported)
     return result
+
+
+def c07_class_sheets(sheets: Mapping[str, pl.DataFrame]) -> dict[str, pl.DataFrame]:
+    """The exposure-class sheets of a C 07.00 template — everything but the Total.
+
+    The Total sheet is the sum of these, so anything that ADDS THE SHEETS UP (a
+    tie-out against C 02.00, a conservation check against the population) must
+    read this view; adding the whole template counts every exposure twice.
+    """
+    return {key: sheet for key, sheet in sheets.items() if key != C07_00_TOTAL_SHEET_KEY}
+
+
+@cites("PS1/26, paragraph 1.3")
+def c07_total_sheet(sheets: Mapping[str, pl.DataFrame], framework: str) -> pl.DataFrame | None:
+    """The Total sheet (published z-code 0001): the class sheets, added up.
+
+    Annex II §3.2.2 ¶47: "The information in OF CR SA is required for the total
+    exposure across all exposure classes and individually for each of the
+    exposure classes ... The total figures as well as the information of each
+    exposure class shall be reported in a separate dimension." ``sheets`` is
+    ``generate_c07``'s output; ``None`` when it is empty.
+
+    A CELL-BY-CELL SUM OF THE REPORTED SHEETS, not a second execution over the
+    whole population. Every row is evaluated per sheet over that sheet's own
+    population — the real-estate rows exist on the real-estate sheet alone, an
+    inflow lands on the protection provider's sheet, each cell reads its own
+    basis — so the sum of the sheets is the only total consistent with them, and
+    it is what the published rule states (``boe_b0713``: sheet 0001 equals the
+    sum of sheets 0002-0017). A cell no sheet reports is EMPTY on the Total, not
+    zero: a sum over nothing is not a measured figure, and a grey cell stays
+    grey. A sheet outside the published axis (``c07_plans`` records it as an
+    error) is still part of the total exposure and is included.
+
+    The rows the published Total does not carry are blanked
+    (``get_c07_rows_not_on_total``).
+    """
+    if not sheets:
+        return None
+    stacked = pl.concat(list(sheets.values()), how="vertical_relaxed")
+    value_cols = [col for col in stacked.columns if col not in _LABEL_COLS]
+    total = stacked.group_by("row_ref", maintain_order=True).agg(
+        pl.col("row_name").first(),
+        *(
+            pl.when(pl.col(col).count() > 0).then(pl.col(col).sum()).alias(col)
+            for col in value_cols
+        ),
+    )
+    not_on_total = {ref: frozenset(value_cols) for ref in get_c07_rows_not_on_total(framework)}
+    return blank_unreported_cells(total.select(stacked.columns), not_on_total)
 
 
 @cites("PS1/26")
@@ -939,16 +1053,9 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
             .alias("c07_qccp")
         )
 
-    # Collateral volatility/maturity adjustment (col 0140 = market - Cvam).
-    if "collateral_market_value" in cols:
-        adjusted = (
-            pl.col("collateral_adjusted_value").fill_null(0.0)
-            if "collateral_adjusted_value" in cols
-            else pl.lit(0.0)
-        )
-        exprs.append(
-            (pl.col("collateral_market_value").fill_null(0.0) - adjusted).alias("c07_vol_mat_adj")
-        )
+    # Financial collateral: col 0130's Cvam and col 0140 = market - Cvam.
+    netting_apart = _reports_netting_apart(cols, is_b31=framework == "BASEL_3_1")
+    exprs.extend(_financial_collateral_exprs(cols, netting_apart=netting_apart))
 
     # The null-safe infrastructure discriminator col 0216 excludes on, so the two
     # "(-)" columns stay disjoint. Derived on its own source-column gate rather
@@ -1025,9 +1132,88 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
             exprs.append(carrier.alias("c07_provision"))
 
     prepared = data.with_columns(exprs) if exprs else data
-    # Second pass: the CRM substitution block reads c07_provision / c07_ccr_gross
-    # derived above, so it cannot share their ``with_columns``.
-    return prepared.with_columns(_protection_exprs(set(prepared.columns)))
+    # Second pass: the CRM substitution block and the col 0035 netting cap read
+    # c07_provision / c07_ccr_gross derived above, so they cannot share their
+    # ``with_columns``.
+    prepared_cols = set(prepared.columns)
+    second_pass = _protection_exprs(prepared_cols)
+    if netting_apart:
+        second_pass.append(_netting_reduction_expr(prepared_cols))
+    return prepared.with_columns(second_pass)
+
+
+def _reports_netting_apart(cols: set[str], *, is_b31: bool) -> bool:
+    """Whether col 0035 owns the netted deposit on this frame.
+
+    True under Basel 3.1 on a frame carrying the sealed adjusted-value carrier —
+    every real ledger. Then col 0035 reports the deposit and cols 0130 / 0140
+    leave it out. False under CRR (the template has no col 0035, so the deposit
+    is reported as the financial collateral Art. 219 makes it), and on a frame
+    without the carrier (a synthetic unit frame, a projected legacy extract),
+    where there is nothing to carve out and col 0130 keeps the whole collateral
+    column. ``_prepare`` and ``_row_cells`` both ask this one question, so the
+    derived columns and the cells that bind them cannot disagree.
+    """
+    return is_b31 and _NETTING_ADJUSTED_COL in cols
+
+
+@cites("PS1/26 Art. 223")
+def _financial_collateral_exprs(cols: set[str], *, netting_apart: bool) -> list[pl.Expr]:
+    """Per-row magnitudes for cols 0130 (Cvam) and 0140 (market value - Cvam).
+
+    PS1/26 Annex II: col 0130 is the "Financial collateral adjusted value (Cvam)"
+    and col 0140 the "joint impact of volatility and maturity adjustments
+    (Cvam-C)" — an "of which" of col 0130. PS1/26 Art. 223(3) starts the
+    comprehensive method from E = "where Article 219 applies, the exposure value
+    calculated in accordance with that Article", so where col 0035 has already
+    taken the netted deposit off the exposure (``netting_apart``) BOTH columns
+    are the collateral that is NOT the deposit: each collateral carrier less its
+    netting part. Otherwise they are the collateral carriers as sealed.
+
+    The adjusted column is derived only when the deposit is carved out; with
+    nothing to carve, col 0130 binds the sealed carrier directly.
+    """
+
+    def money(column: str) -> pl.Expr:
+        return pl.col(column).fill_null(0.0) if column in cols else pl.lit(0.0)
+
+    adjusted = money(_COLLATERAL_ADJUSTED_COL)
+    market = money(_COLLATERAL_MARKET_COL)
+    if netting_apart:
+        adjusted = adjusted - money(_NETTING_ADJUSTED_COL)
+        market = market - money(_NETTING_ALLOCATION_COL)
+
+    exprs: list[pl.Expr] = []
+    if netting_apart and _COLLATERAL_ADJUSTED_COL in cols:
+        exprs.append(adjusted.alias(_FIN_COLLATERAL_COL))
+    if _COLLATERAL_MARKET_COL in cols:
+        exprs.append((market - adjusted).alias("c07_vol_mat_adj"))
+    return exprs
+
+
+@cites("PS1/26 Art. 219")
+def _netting_reduction_expr(cols: set[str]) -> pl.Expr:
+    """Per-row magnitude for col 0035: the reduction in exposure value.
+
+    PS1/26 Annex II: "The reduction in exposure value due to on-balance sheet
+    netting determined in accordance with Article 219 ... shall be reported."
+    Art. 219(1) sets the netted exposure value to the greater of zero and the
+    exposure less the deposit "adjusted for any currency and maturity
+    mismatches", so the reduction is the deposit's ADJUSTED value and no more
+    than the exposure it reduces. A pool larger than its loans allocates each
+    loan more than it owes; reporting that whole would take the excess off the
+    other exposures on the sheet and put col 0040 below the exposure value.
+
+    The cap is the row's own col 0010 - col 0030: Art. 219(1)(b)(i) nets against
+    the Art. 111(1) value, an asset's "accounting value remaining after specific
+    credit risk adjustments". It is the basis the substitution block is capped
+    on. Uncapped on a frame with no gross carrier.
+    """
+    reduction = pl.col(_NETTING_ADJUSTED_COL).fill_null(0.0)
+    basis = _net_exposure_basis(cols, _GROSS_CARRIERS)
+    if basis is not None:
+        reduction = pl.min_horizontal(reduction, basis)
+    return reduction.alias(_NETTING_REDUCTION_COL)
 
 
 def _rw_band_expr(framework: str) -> pl.Expr:
@@ -1158,16 +1344,28 @@ def _block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
     a frame that carries neither a gross carrier nor ``ead_final``, which the
     sealed ledger never is.
     """
-    gross = [pl.col(col).fill_null(0.0) for col in _GROSS_CARRIERS if col in cols]
-    if not gross and "ead_final" in cols:
-        gross = [pl.col("ead_final").fill_null(0.0)]
-    if not gross:
+    basis = _net_exposure_basis(cols, _GROSS_CARRIERS)
+    if basis is None:
+        basis = _net_exposure_basis(cols, ("ead_final",))
+    if basis is None:
         return pl.lit(1.0)
-    basis = pl.sum_horizontal(gross)
+    return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
+
+
+def _net_exposure_basis(cols: set[str], carriers: tuple[str, ...]) -> pl.Expr | None:
+    """A row's exposure net of provisions, floored at zero — or None with no carrier.
+
+    The row's own contribution to col 0010 - col 0030 when ``carriers`` are col
+    0010's gross carriers: the one basis both per-row caps are stated on (the
+    substitution block, and the col 0035 netting reduction).
+    """
+    present = [pl.col(col).fill_null(0.0) for col in carriers if col in cols]
+    if not present:
+        return None
+    basis = pl.sum_horizontal(present)
     if "c07_provision" in cols:
         basis = basis - pl.col("c07_provision").fill_null(0.0)
-    basis = basis.clip(lower_bound=0.0)
-    return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
+    return basis.clip(lower_bound=0.0)
 
 
 class _Inflows(NamedTuple):
@@ -1698,10 +1896,19 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
         "0090": CellSpec(Formula(refs=("0050", "0060", "0070", "0080"), fn=_substitution_outflow)),
         "0110": CellSpec(Formula(refs=("0040", "0090", "0100"), fn=_net_after_substitution)),
         "0120": CellSpec(Formula(refs=(), fn=_const(0.0))),
-        "0130": CellSpec(Sum("collateral_adjusted_value"), predicate=member),
+        # Col 0130: the collateral with the netted deposit taken out where col
+        # 0035 reports it (Basel 3.1), else the sealed carrier as it stands.
+        "0130": CellSpec(
+            Sum(
+                _FIN_COLLATERAL_COL
+                if _reports_netting_apart(cols, is_b31=is_b31)
+                else _COLLATERAL_ADJUSTED_COL
+            ),
+            predicate=member,
+        ),
         "0140": (
             CellSpec(Sum("c07_vol_mat_adj"), predicate=member)
-            if "collateral_market_value" in cols
+            if _COLLATERAL_MARKET_COL in cols
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
         "0150": CellSpec(Formula(refs=("0110", "0130"), fn=_fully_adjusted)),
@@ -1738,7 +1945,9 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     if inflow_key is not None:
         cells["0100"] = CellSpec(SideContext(inflow_key))
     if is_b31:
-        cells["0035"] = CellSpec(Sum("on_bs_netting_amount"), predicate=member)
+        # The capped ADJUSTED value of the netted deposit (``_netting_reduction_expr``);
+        # underived — and so a structural null — on a frame without the carrier.
+        cells["0035"] = CellSpec(Sum(_NETTING_REDUCTION_COL), predicate=member)
         cells["0040"] = CellSpec(Formula(refs=("0010", "0030", "0035"), fn=_net_of_adjustments))
     else:
         cells["0040"] = CellSpec(Formula(refs=("0010", "0030"), fn=_net_of_adjustments))

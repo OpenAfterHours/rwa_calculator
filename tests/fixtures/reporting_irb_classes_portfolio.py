@@ -303,12 +303,21 @@ IRB_CLASS_EXPECTED_SHEET_CRR: dict[str, str] = {
 }
 
 #: PS1/26 Art. 147A(1)(a): the sovereign class is Standardised-only under Basel
-#: 3.1, so the three sovereign rows leave the IRB book entirely. Everything else
-#: keeps its CRR sheet.
+#: 3.1, so the three sovereign rows leave the IRB book entirely. Every other row
+#: reports on the OF 08 sheet of its class AND approach — the published axis
+#: (BoE Banking Taxonomy v4.1.1, ``OF08.01.01.01``). RE-ANCHORED 2026-11-13: this
+#: was the CRR map less the sovereigns, i.e. the class sheets ``institution`` /
+#: ``retail_mortgage`` / ``retail_qrre`` / ``corporate``, which no published code
+#: names. The institution and the masterscale corporates (non-SME, not financial
+#: or large) are F-IRB — sheets 0006 and 0012; the three mortgages are A-IRB,
+#: non-SME and residential — sheet 0021; the QRRE row is sheet 0015.
 IRB_CLASS_EXPECTED_SHEET_B31: dict[str, str] = {
-    ref: sheet
-    for ref, sheet in IRB_CLASS_EXPECTED_SHEET_CRR.items()
-    if ref not in (LN_SOV_A, LN_SOV_B, LN_SOV_C)
+    LN_INST: "institution_firb",
+    LN_RRE: "retail_residential_re_non_sme_airb",
+    LN_RRE_FLOOR: "retail_residential_re_non_sme_airb",
+    LN_RRE_DEF: "retail_residential_re_non_sme_airb",
+    LN_QRRE: "retail_qrre_airb",
+    **{corp_ln(grade): "corporate_non_sme_firb" for grade, _pd in CORP_MASTERSCALE},
 }
 
 #: The approach each row must resolve to, per regime. The sovereign trio is the

@@ -36,6 +36,7 @@ from rwa_calc.contracts.errors import (
     crm_warning,
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.engine.crm.expressions import on_bs_netting_reference_expr
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.errors import CalculationError
@@ -116,7 +117,7 @@ def generate_netting_collateral(
     the haircut stage's default: 20 days (11.314%), or 5 for an SFT loan (5.657%).
     Art. 219(2)'s non-daily mark-to-market scale-up (Art. 226(1)) does not reach
     these rows — no input carries a revaluation frequency for loans or deposits
-    (P1.384).
+    (P1.388).
 
     Art. 219 treats the netted deposit as cash collateral, so the funded-
     protection maturity-mismatch rules (Art. 237-239) apply exactly as for any
@@ -344,7 +345,7 @@ def generate_netting_collateral(
     # original_maturity_years are the DEPOSIT's (Art. 219/237-238), not the
     # beneficiary loan's.
     synthetic = allocated.select(
-        (pl.lit("NETTING_") + pl.col("exposure_reference")).alias("collateral_reference"),
+        on_bs_netting_reference_expr("exposure_reference").alias("collateral_reference"),
         pl.lit("cash").alias("collateral_type"),
         pl.col("_pool_currency").alias("currency"),
         pl.col("_pool_original_currency").alias("original_currency"),

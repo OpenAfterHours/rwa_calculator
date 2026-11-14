@@ -10,6 +10,8 @@ Key responsibilities:
 - Render inert rows and rows with EMPTY subsets all-null (``null_empty_rows``).
 - Emit the Annex II §1.3 "(-)"-labelled deduction columns as negative figures
   (``negate_deduction_cols``).
+- Leave out the cells the published template greys out
+  (``blank_unreported_cells``, OF 07.00).
 - Swap a provisions cell to the best available carrier when its base sum nets
   to ~0 (``provisions_postfix``, C 08.01/02/03/06).
 - Fill the two C 08.01/02 columns the executor cannot bind — the off-balance-
@@ -129,6 +131,40 @@ def negate_deduction_cols(frame: pl.DataFrame, negative_cols: frozenset[str]) ->
     return frame.with_columns(
         pl.when(pl.col(col).eq(0.0)).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)
         for col in targets
+    )
+
+
+def blank_unreported_cells(
+    frame: pl.DataFrame, unreported: Mapping[str, frozenset[str]]
+) -> pl.DataFrame:
+    """Leave out the cells the published template has no data point for.
+
+    ``unreported`` maps a row ref to the column refs greyed out on that row
+    (``SheetPlan.unreported``). The LAST pass on a frame, and
+    deliberately a pass rather than a property of the cell specs: a greyed cell
+    is often an intermediate another cell is a formula over — OF 07.00 col 0150
+    on a risk-weight row is reached through the col 0100 inflow and col 0110 —
+    so it has to be computed, and then not reported.
+
+    A cell is blanked whatever it holds. That is what "the template has no cell
+    here" means, and it is safe only because the declaration is held exactly to
+    the Bank's taxonomy (``tests/contracts/test_of07_published_cells.py``) — a
+    declaration wider than the template would silently drop real figures.
+    Columns the frame does not carry are skipped; an empty mapping is a no-op.
+    """
+    by_column: dict[str, list[str]] = {}
+    for row_ref, columns in unreported.items():
+        for column in columns:
+            if column in frame.columns:
+                by_column.setdefault(column, []).append(row_ref)
+    if not by_column:
+        return frame
+    return frame.with_columns(
+        pl.when(pl.col("row_ref").is_in(row_refs))
+        .then(pl.lit(None, dtype=frame.schema[column]))
+        .otherwise(pl.col(column))
+        .alias(column)
+        for column, row_refs in by_column.items()
     )
 
 

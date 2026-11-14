@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
 """
-Deployment script for rwa-calc package.
+Deployment script for the workspace's packages (rwa-calc, and rwa-filer).
 
-Automates version updates, the release commit, tag and push, and PyPI publishing:
+The repository is a uv workspace that releases two packages on their own
+versions. Without ``--package`` this script releases ``rwa-calc``, exactly as it
+always has; ``--package rwa-filer`` releases the workspace member instead — its
+own version files, its own changelog, tags prefixed ``rwa-filer-v`` and its own
+build directory (see ``MEMBER_RELEASES`` and ``run_member_release``).
+
+RELEASE ORDER: rwa-calc declares ``rwa-filer>=A,<B`` and resolves it from PyPI
+once installed, so an rwa-calc release that needs a new rwa-filer must come
+AFTER that rwa-filer version is published.
+
+For rwa-calc, automates version updates, the release commit, tag and push, and
+PyPI publishing:
 1. Checks the remote state the final push needs (fails fast, before the tests)
 2. Runs the test suite
 3. Updates version in pyproject.toml, __init__.py, docs
@@ -28,14 +39,20 @@ Usage:
     python scripts/deploy.py 0.1.4 --no-push
     python scripts/deploy.py --bump patch
     python scripts/deploy.py --bump minor --publish
+    python scripts/deploy.py --package rwa-filer 0.1.0
+    python scripts/deploy.py --package rwa-filer --bump minor --dry-run
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -82,6 +99,77 @@ GIT_STAGE_FILES = [
     "tests/contracts/data/confidence_snapshot.json",
     "uv.lock",
 ]
+
+
+@dataclass(frozen=True)
+class MemberRelease:
+    """Everything that differs when releasing a workspace member instead of rwa-calc.
+
+    A member release is deliberately a SMALLER flow than the root one: there is
+    no docs version table, no generated citation/confidence pages and no
+    ``docs/overview.md`` stamp, because none of those describe the member.
+
+    Attributes:
+        name: The distribution name, as passed to ``uv build --package``.
+        tag_prefix: Prepended to the version to form the release tag. It is what
+            ``.github/workflows/publish.yml`` reads to decide which package a
+            release publishes, so it must stay in step with that file.
+        version_files: ``{path: regex}`` — each regex's group 1 is the version.
+        changelog: The member's own changelog (``[Unreleased]`` promotion).
+        dist_dir: Where the member builds. Never ``dist/`` itself: a local
+            ``uv publish`` of rwa-calc globs that directory.
+        test_command: The member's suite, run before anything is changed.
+        build_command: Builds this member alone into ``dist_dir``.
+        check_command: The distribution gate, pointed at ``dist_dir``.
+    """
+
+    name: str
+    tag_prefix: str
+    version_files: dict[str, str]
+    changelog: str
+    dist_dir: str
+    test_command: tuple[str, ...]
+    build_command: tuple[str, ...]
+    check_command: tuple[str, ...]
+
+    def tag(self, version: str) -> str:
+        """The release tag for ``version`` (e.g. ``rwa-filer-v0.1.0``)."""
+        return f"{self.tag_prefix}{version}"
+
+    @property
+    def stage_files(self) -> list[str]:
+        """Files the release commit carries: the bump, the changelog, the lockfile."""
+        return [*self.version_files, self.changelog, "uv.lock"]
+
+
+#: Workspace members this script can release, by distribution name. A literal
+#: table on purpose: ``--package`` selects from its keys via ``choices=``, so no
+#: operator string ever builds a path (arch_check check 19).
+MEMBER_RELEASES: dict[str, MemberRelease] = {
+    "rwa-filer": MemberRelease(
+        name="rwa-filer",
+        tag_prefix="rwa-filer-v",
+        version_files={
+            "packages/rwa-filer/pyproject.toml": r'(?m)^version = "(\d+\.\d+\.\d+)"',
+            "packages/rwa-filer/src/rwa_filer/__init__.py": r'__version__ = "(\d+\.\d+\.\d+)"',
+        },
+        changelog="packages/rwa-filer/CHANGELOG.md",
+        dist_dir="dist/rwa-filer",
+        test_command=("uv", "run", "pytest", "packages/rwa-filer", "-q"),
+        build_command=("uv", "build", "--package", "rwa-filer", "-o", "dist/rwa-filer"),
+        check_command=(
+            "uv",
+            "run",
+            "python",
+            "scripts/check_distribution.py",
+            "--package",
+            "rwa-filer",
+        ),
+    ),
+}
+
+#: The root project's name, and the default for ``--package``.
+ROOT_PACKAGE = "rwa-calc"
 
 
 def get_current_version() -> str:
@@ -219,6 +307,124 @@ def check_release_preflight(branch: str, tag: str, *, github_release: bool = Fal
 
     print(f"  {branch} is up to date with {upstream}; tag {tag} is free")
     return True
+
+
+# ── Release ordering: rwa-calc may not outrun the rwa-filer it depends on ────
+#
+# Inside this repository rwa-calc resolves rwa-filer from the workspace, so
+# every gate passes whatever is on PyPI. An INSTALLED rwa-calc resolves the
+# same requirement from PyPI — and if no published rwa-filer satisfies it, the
+# release is uninstallable for everyone, with nothing in this repo to show for
+# it. The only place that gap is visible is here, before the publish.
+
+#: The workspace member rwa-calc depends on at runtime.
+FILER_DISTRIBUTION = "rwa-filer"
+#: PyPI's JSON API for a project: the authoritative list of published versions.
+PYPI_JSON_URL = "https://pypi.org/pypi/{name}/json"
+_REQUIREMENT_RE = re.compile(r'"(?P<name>[A-Za-z0-9_.-]+)\s*(?P<spec>[<>=!~][^";]*)"')
+_CLAUSE_RE = re.compile(r"^(?P<op>>=|<=|==|>|<)\s*(?P<version>\d+(?:\.\d+)*)$")
+
+
+def required_range(distribution: str) -> str | None:
+    """The version range the root project declares for ``distribution``, if any."""
+    content = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    for match in _REQUIREMENT_RE.finditer(content):
+        if match.group("name").lower().replace("_", "-") == distribution:
+            return match.group("spec").strip()
+    return None
+
+
+def version_satisfies(version: str, spec: str) -> bool:
+    """Whether a plain ``X.Y.Z`` version satisfies a comma-separated range.
+
+    Supports the comparison operators this project's own requirement uses
+    (``>=``, ``>``, ``<=``, ``<``, ``==``). A pre-release or otherwise
+    non-numeric version never satisfies, and an operator outside that set makes
+    the whole range unsatisfiable — failing closed, so an unreadable requirement
+    blocks the release rather than waving it through.
+    """
+    if not re.fullmatch(r"\d+(?:\.\d+)*", version):
+        return False
+    candidate = _version_key(version)
+    for clause in (part.strip() for part in spec.split(",") if part.strip()):
+        match = _CLAUSE_RE.match(clause)
+        if match is None:
+            return False
+        bound = _version_key(match.group("version"))
+        op = match.group("op")
+        holds = {
+            ">=": candidate >= bound,
+            ">": candidate > bound,
+            "<=": candidate <= bound,
+            "<": candidate < bound,
+            "==": candidate == bound,
+        }[op]
+        if not holds:
+            return False
+    return True
+
+
+def published_versions(distribution: str) -> list[str] | None:
+    """Versions of ``distribution`` on PyPI; ``[]`` if the project does not exist.
+
+    Returns None when PyPI could not be asked at all — which the caller must
+    treat as "unknown", never as "published".
+    """
+    return _pypi_versions(distribution)
+
+
+def check_filer_dependency_published() -> bool:
+    """Refuse an rwa-calc publish until a satisfying rwa-filer is on PyPI."""
+    spec = required_range(FILER_DISTRIBUTION)
+    if spec is None:
+        return True  # rwa-calc declares no such dependency: nothing to order
+
+    print(f"\nChecking PyPI for a published {FILER_DISTRIBUTION} satisfying '{spec}'...")
+    versions = published_versions(FILER_DISTRIBUTION)
+    if versions is None:
+        print(f"  ERROR: could not reach PyPI to confirm {FILER_DISTRIBUTION} is published.")
+        print("  An rwa-calc release that names an unpublished rwa-filer cannot be installed.")
+        print("  Re-run when PyPI is reachable, or pass --skip-filer-check if you have")
+        print("  confirmed it by hand.")
+        return False
+
+    satisfying = sorted((v for v in versions if version_satisfies(v, spec)), key=_version_key)
+    if satisfying:
+        print(f"  {FILER_DISTRIBUTION} {satisfying[-1]} is published and satisfies '{spec}'")
+        return True
+
+    print(f"  ERROR: no published {FILER_DISTRIBUTION} satisfies '{spec}'.")
+    print(
+        f"  Published: {', '.join(versions) if versions else '(none - the project is not on PyPI)'}"
+    )
+    print("  Release rwa-filer first, wait for it to appear on PyPI, then re-run:")
+    print("    python scripts/deploy.py --package rwa-filer <version>")
+    return False
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """A numeric sort/compare key for a plain dotted version.
+
+    Trailing zeros are dropped so ``0.9`` and ``0.9.0`` compare EQUAL — as they
+    are — rather than the longer tuple reading as the greater version.
+    """
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
+def _pypi_versions(distribution: str) -> list[str] | None:
+    """Ask PyPI's JSON API for a project's versions. The single network seam."""
+    url = PYPI_JSON_URL.format(name=distribution)
+    try:
+        with urllib.request.urlopen(url, timeout=20) as response:  # noqa: S310 - fixed https URL
+            payload = json.load(response)
+    except urllib.error.HTTPError as exc:
+        return [] if exc.code == 404 else None
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    return sorted(payload.get("releases", {}))
 
 
 def commit_and_tag(new_version: str) -> bool:
@@ -381,6 +587,15 @@ Examples:
         help="New version number (e.g., 0.1.4)",
     )
     parser.add_argument(
+        "--package",
+        choices=[ROOT_PACKAGE, *MEMBER_RELEASES],
+        default=ROOT_PACKAGE,
+        help=(
+            "Which workspace package to release (default: rwa-calc). A member is "
+            "versioned, tagged and published on its own"
+        ),
+    )
+    parser.add_argument(
         "--bump",
         choices=["major", "minor", "patch"],
         help="Bump version by type instead of setting explicitly",
@@ -422,6 +637,14 @@ Examples:
         "--yes",
         action="store_true",
         help="Skip the interactive confirmation of the irreversible steps (for /release)",
+    )
+    parser.add_argument(
+        "--skip-filer-check",
+        action="store_true",
+        help=(
+            "Publish rwa-calc without confirming that an rwa-filer version satisfying "
+            "its requirement is on PyPI (only when confirmed by hand)"
+        ),
     )
     return parser
 
@@ -613,6 +836,18 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
     ):
         return 1
 
+    # A publish that names an unpublished rwa-filer is uninstallable, and nothing
+    # inside this workspace can see that — so it is checked here, with the other
+    # fail-fast remote checks, before the test run. Only a run that PUBLISHES is
+    # gated: a local commit-and-tag publishes nothing.
+    publishes = github_release or args.publish
+    if (
+        publishes
+        and not getattr(args, "skip_filer_check", False)
+        and not check_filer_dependency_published()
+    ):
+        return 1
+
     # Run tests first (unless skipped)
     if not args.skip_tests and not run_command(
         ["uv", "run", "pytest", "-x", "-q"], "Running tests"
@@ -656,8 +891,221 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
     return 0
 
 
+# =============================================================================
+# Workspace-member release (--package rwa-filer)
+# =============================================================================
+
+
+def get_member_version(member: MemberRelease) -> str:
+    """The member's current version, from its own pyproject.toml."""
+    path, pattern = next(iter(member.version_files.items()))
+    match = re.search(pattern, (PROJECT_ROOT / path).read_text(encoding="utf-8"))
+    if not match:
+        raise ValueError(f"Could not find the {member.name} version in {path}")
+    return match.group(1)
+
+
+def update_member_files(member: MemberRelease, new_version: str) -> bool:
+    """Bump the member's version files and promote its changelog.
+
+    Returns False when any version file did not take the bump — a release whose
+    tag disagrees with its own metadata is rejected by publish.yml, so it is
+    stopped here, before the build, rather than after the tag is public.
+    """
+    print(f"\nUpdating {member.name} version numbers...")
+    updated = [
+        update_version_in_file(PROJECT_ROOT / path, pattern, new_version)
+        for path, pattern in member.version_files.items()
+    ]
+
+    print(f"\nUpdating {member.changelog}...")
+    changelog = PROJECT_ROOT / member.changelog
+    content = changelog.read_text(encoding="utf-8")
+    promoted = promote_unreleased(content, new_version, today=date.today().strftime("%Y-%m-%d"))
+    if promoted != content:
+        changelog.write_text(promoted, encoding="utf-8")
+        print(f"  Updated {member.changelog}")
+    return all(updated)
+
+
+def member_distributions(member: MemberRelease) -> list[Path]:
+    """The member's built wheel and sdist, for an explicit local upload."""
+    dist_dir = PROJECT_ROOT / member.dist_dir
+    return sorted([*dist_dir.glob("*.whl"), *dist_dir.glob("*.tar.gz")])
+
+
+def build_member(member: MemberRelease) -> bool:
+    """Relock, build the member alone into its own directory, and gate the result.
+
+    The directory is emptied of earlier builds first: a local ``--publish``
+    uploads what is there, and a stale distribution from the previous version
+    must never ride along.
+    """
+    for stale in member_distributions(member):
+        stale.unlink()
+
+    if not run_command(["uv", "lock"], "Syncing uv.lock"):
+        return False
+    if not run_command(list(member.build_command), f"Building {member.name}"):
+        return False
+    if not run_command(list(member.check_command), "Checking distribution metadata"):
+        return False
+
+    print("\nBuilt packages:")
+    for built in member_distributions(member):
+        print(f"  {built.name}")
+    return True
+
+
+def write_member_release_notes(member: MemberRelease, new_version: str) -> Path:
+    """Write the member's promoted changelog section as its GitHub Release notes."""
+    content = (PROJECT_ROOT / member.changelog).read_text(encoding="utf-8")
+    section = extract_version_section(content, new_version) or (
+        f"{member.name} {new_version}. See {member.changelog}."
+    )
+    path = PROJECT_ROOT / "dist" / f"release_notes_{member.tag(new_version)}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(section + "\n", encoding="utf-8")
+    print(f"\nRelease notes written to {path.relative_to(PROJECT_ROOT)}")
+    return path
+
+
+def commit_and_tag_member(member: MemberRelease, new_version: str) -> bool:
+    """Stage the member's release files, commit, and create its prefixed tag."""
+    tag = member.tag(new_version)
+    if git_tag_exists(tag):
+        print(f"  ERROR: tag {tag} already exists. Aborting before commit.")
+        return False
+
+    existing = [f for f in member.stage_files if (PROJECT_ROOT / f).exists()]
+    if not run_command(["git", "add", *existing], "Staging release files"):
+        return False
+
+    message = f"chore(release): bump {member.name} to {new_version}"
+    if not run_command(["git", "commit", "-m", message], "Committing release"):
+        return False
+
+    return run_command(
+        ["git", "tag", "-a", tag, "-m", f"Release {member.name} {new_version}"],
+        f"Creating tag {tag}",
+    )
+
+
+def print_member_dry_run(args: argparse.Namespace, member: MemberRelease, new_version: str) -> None:
+    """Print what a real member release would do, without changing anything."""
+    tag = member.tag(new_version)
+    print(f"\n[DRY RUN] Would release {member.name} {new_version}:")
+    print(f"  - Run: {' '.join(member.test_command)}")
+    print(f"  - Update version to {new_version} in:")
+    for path in member.version_files:
+        print(f"    - {path}")
+    print(f"  - Promote [Unreleased] in {member.changelog}")
+    print("  - Run: uv lock")
+    print(f"  - Run: {' '.join(member.build_command)}")
+    print(f"  - Run: {' '.join(member.check_command)}")
+    if not args.no_git:
+        print(f"  - git commit + git tag {tag}")
+        if not args.no_push:
+            print(f"  - git push --atomic {RELEASE_REMOTE} <branch> refs/tags/{tag}")
+        if wants_github_release(args):
+            print(f"  - gh release create {tag} --verify-tag ... (runs publish.yml -> PyPI)")
+    if args.publish:
+        print(f"  - Run: uv publish {member.dist_dir}/*")
+
+
+def run_member_release(args: argparse.Namespace, member: MemberRelease, new_version: str) -> int:
+    """Release one workspace member: pre-flight, tests, bump, build, tag, push, release.
+
+    The same ordering guarantees as ``run_release`` — remote state is checked
+    before the tests, nothing is published before its tag is on the remote, and
+    the GitHub Release (the CI publish trigger) is last.
+    """
+    tag = member.tag(new_version)
+    push = wants_push(args)
+    github_release = wants_github_release(args)
+    branch = current_branch()
+    if push and branch is None:
+        print("\nERROR: HEAD is detached. Check out the release branch and re-run.")
+        return 1
+    push_target = branch if push else None
+
+    if push_target is not None and not check_release_preflight(
+        push_target, tag, github_release=github_release
+    ):
+        return 1
+
+    if not args.skip_tests and not run_command(
+        list(member.test_command), f"Running {member.name} tests"
+    ):
+        print("\nTests failed. Fix tests before deploying.")
+        return 1
+
+    if not update_member_files(member, new_version):
+        print(f"\nA {member.name} version file did not take the bump. Nothing was committed.")
+        return 1
+
+    if not build_member(member):
+        return 1
+
+    notes_path = write_member_release_notes(member, new_version)
+
+    if not args.no_git:
+        print("\nCommitting release and creating tag...")
+        if not commit_and_tag_member(member, new_version):
+            print("\nGit commit/tag failed. Resolve manually before publishing.")
+            return 1
+
+    if push_target is not None and not push_release(push_target, tag):
+        return 1
+
+    if github_release and not create_github_release(tag, notes_path):
+        return 1
+
+    if args.publish:
+        files = [str(path) for path in member_distributions(member)]
+        if not run_command(["uv", "publish", *files], f"Publishing {member.name} to PyPI"):
+            return 1
+        print(f"\nSuccessfully published {member.name} {new_version} to PyPI!")
+
+    print(f"\n{member.name} {new_version}: release flow finished ({tag}).")
+    if github_release:
+        print("publish.yml selects the package from the tag prefix. Watch with:")
+        print("  gh run list --workflow=publish.yml --limit 1")
+    print(f"Then: https://pypi.org/project/{member.name}/{new_version}/")
+    return 0
+
+
+def main_member(args: argparse.Namespace, member: MemberRelease) -> int:
+    """The ``--package <member>`` entry point: resolve the version, confirm, release."""
+    current_version = get_member_version(member)
+    print(f"Current {member.name} version: {current_version}")
+
+    new_version = resolve_new_version(args, current_version)
+    if new_version is None:
+        return 1
+    print(f"New {member.name} version: {new_version}")
+
+    if args.dry_run:
+        print_member_dry_run(args, member, new_version)
+        return 0
+
+    steps = irreversible_steps(args, member.tag(new_version))
+    if steps and not args.yes:
+        print("\nOnce every check has passed, this run will:")
+        for step in steps:
+            print(f"  - {step}")
+        if not confirm_irreversible():
+            return 1
+
+    return run_member_release(args, member, new_version)
+
+
 def main() -> int:
     args = build_parser().parse_args()
+
+    member = MEMBER_RELEASES.get(args.package)
+    if member is not None:
+        return main_member(args, member)
 
     current_version = get_current_version()
     print(f"Current version: {current_version}")

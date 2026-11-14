@@ -141,8 +141,8 @@ mandatory** — it is the tier that catches what reaches production:
 
 ```
 uv run python scripts/arch_check.py
-uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/
-uv run ty check src/rwa_calc/
+uv run ruff check src/ tests/ packages/ && uv run ruff format --check src/ tests/ packages/
+uv run ty check src/rwa_calc/ && uv run ty check packages/rwa-filer/src/
 uv run pytest tests/contracts/ --benchmark-skip -q
 uv run pytest <the new test path> --benchmark-skip
 uv run pytest tests/oracle/ --benchmark-skip -q

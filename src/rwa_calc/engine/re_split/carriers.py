@@ -191,6 +191,12 @@ logger = logging.getLogger(__name__)
 #:   closure. ``reporting/corep/c07.py`` derives the volatility / maturity
 #:   adjustment as ``market - adjusted``; moving one and not the other
 #:   manufactures a phantom adjustment.
+#: - ``on_bs_netting_amount`` + ``on_bs_netting_adjusted_value`` with the pair
+#:   above: two more DIFFERENCE closures. Each netting carrier is the netted-
+#:   deposit PART of its collateral twin (CRR Art. 219 makes the deposit cash
+#:   collateral), and OF 07.00 takes one from the other to report the deposit in
+#:   column 0035 and only the remainder in columns 0130 / 0140. All four must
+#:   carry one share, or a split leg reports a negative collateral value.
 #: - ``on_bs_for_ead`` + ``ead_from_ccf`` + ``ead_pre_crm``: a SUM closure.
 #:   ``engine/ccf.py`` builds ``ead_pre_crm = on_bs_for_ead + ead_from_ccf``
 #:   and ``ead_from_ccf = nominal_after_provision * ccf`` (``ccf`` is a rate,
@@ -218,6 +224,7 @@ _PRORATA_CARRIERS: tuple[str, ...] = (
     "nominal_after_provision",
     "facility_limit",
     "on_bs_netting_amount",
+    "on_bs_netting_adjusted_value",
     # EAD waterfall snapshots.
     "ead_from_ccf",
     "ead_modelled",

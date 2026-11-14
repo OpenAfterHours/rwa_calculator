@@ -1,0 +1,476 @@
+{
+ "dimensions": {
+  "eba_dim:BAS": {
+   "default": "eba_BA:x0",
+   "domain": "eba_BA",
+   "kind": "explicit",
+   "label": "Base",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:MCY": {
+   "default": "eba_MC:x0",
+   "domain": "eba_MC",
+   "kind": "explicit",
+   "label": "Main category",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:OFS": {
+   "default": "eba_OF:x0",
+   "domain": "eba_OF",
+   "kind": "explicit",
+   "label": "Own funds",
+   "typed_element": null,
+   "typed_type": null
+  },
+  "eba_dim:REF": {
+   "default": "eba_RF:x0",
+   "domain": "eba_RF",
+   "kind": "explicit",
+   "label": "Reference date or period",
+   "typed_element": null,
+   "typed_type": null
+  }
+ },
+ "enumerations": {
+  "eba_CU:boe_CU600": [
+   "eba_CU:GBP",
+   "eba_CU:EUR",
+   "eba_CU:CAD",
+   "eba_CU:USD",
+   "eba_CU:CHF",
+   "eba_CU:JPY",
+   "eba_CU:SEK"
+  ],
+  "eba_SC:boe_SC600": [
+   "boe_eba_SC:x6000",
+   "boe_eba_SC:x6001",
+   "boe_eba_SC:x6002",
+   "boe_eba_SC:x6003",
+   "boe_eba_SC:x6006"
+  ]
+ },
+ "format": 1,
+ "info": {
+  "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/capital_plus_sddt/2026-02-27/mod/pra118.xsd",
+  "irregularities": [
+   "SC01.00.03.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)",
+   "SC02.00.03.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)",
+   "SC04.00.03.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)",
+   "SC701.00.03.01: annotation states the default member eba_dim:REF=eba_RF:x0 (dropped)"
+  ],
+  "module": "PRA118",
+  "sources": {
+   "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Capital Plus for SDDTs.xlsx",
+   "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
+   "taxonomy_package": "boe411.zip"
+  },
+  "taxonomy": "boe-banking",
+  "title": "PRA118 Capital+ forecast annual for SDDTs and SDDT consolidation entities",
+  "valid_from": "2026-02-27",
+  "valid_to": null,
+  "version": "4.1.1"
+ },
+ "metrics": {
+  "boe_met:di6003": {
+   "enumeration": null,
+   "label": "Reporting period start date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:di6004": {
+   "enumeration": null,
+   "label": "Reporting period end date",
+   "period": "instant",
+   "type": "date"
+  },
+  "boe_met:ei6006": {
+   "enumeration": "eba_CU:boe_CU600",
+   "label": "Reporting currency",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:ei6007": {
+   "enumeration": "eba_SC:boe_SC600",
+   "label": "Basis of reporting",
+   "period": "instant",
+   "type": "enumeration"
+  },
+  "boe_met:si6002": {
+   "enumeration": null,
+   "label": "Entity code",
+   "period": "instant",
+   "type": "string"
+  },
+  "boe_met:si6005": {
+   "enumeration": null,
+   "label": "Additional notes",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:md103": {
+   "enumeration": null,
+   "label": "Current period (flow)",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi184": {
+   "enumeration": null,
+   "label": "Own funds requirements",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi237": {
+   "enumeration": null,
+   "label": "Total risk exposure amount, Risk weighted exposure amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi53": {
+   "enumeration": null,
+   "label": "Carrying amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi76": {
+   "enumeration": null,
+   "label": "Computable amount",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:mi81": {
+   "enumeration": null,
+   "label": "Amount including transitional provisions",
+   "period": "instant",
+   "type": "monetary"
+  },
+  "eba_met:si168": {
+   "enumeration": null,
+   "label": "Name of entity",
+   "period": "instant",
+   "type": "string"
+  },
+  "eba_met:si288": {
+   "enumeration": null,
+   "label": "LEI code",
+   "period": "instant",
+   "type": "string"
+  }
+ },
+ "namespaces": {
+  "boe_eba_MC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_MC",
+  "boe_eba_RF": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_RF",
+  "boe_eba_SC": "http://www.bankofengland.co.uk/data/xbrl/dict/dom/eba_SC",
+  "boe_met": "http://www.bankofengland.co.uk/data/xbrl/dict/met",
+  "eba_BA": "http://www.eba.europa.eu/xbrl/crr/dict/dom/BA",
+  "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+  "eba_MC": "http://www.eba.europa.eu/xbrl/crr/dict/dom/MC",
+  "eba_OF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/OF",
+  "eba_RF": "http://www.eba.europa.eu/xbrl/crr/dict/dom/RF",
+  "eba_dim": "http://www.eba.europa.eu/xbrl/crr/dict/dim",
+  "eba_met": "http://www.eba.europa.eu/xbrl/crr/dict/met"
+ },
+ "tables": {
+  "SC01.00.03.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "SC01.00.03",
+   "group": "SC01.00.03",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "OWN FUNDS"
+    ],
+    [
+     "0015",
+     "TIER 1 CAPITAL"
+    ],
+    [
+     "0020",
+     "COMMON EQUITY TIER 1 CAPITAL"
+    ],
+    [
+     "0530",
+     "ADDITIONAL TIER 1 CAPITAL"
+    ],
+    [
+     "0750",
+     "TIER 2 CAPITAL"
+    ]
+   ],
+   "title": "OWN FUNDS FOR SDDTS (CA1 SDDT)",
+   "z": []
+  },
+  "SC02.00.03.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "SC02.00.03",
+   "group": "SC02.00.03",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "TOTAL RISK EXPOSURE AMOUNT"
+    ]
+   ],
+   "title": "OWN FUNDS REQUIREMENTS FOR SDDTS (CA2 SDDT)",
+   "z": []
+  },
+  "SC04.00.03.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "SC04.00.03",
+   "group": "SC04.00.03",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0811",
+     "Capital buffer Single capital buffer for SDDTs"
+    ],
+    [
+     "0820",
+     "Pillar II requirements Own funds requirements related to Pillar II adjustments"
+    ]
+   ],
+   "title": "MEMORANDUM ITEMS FOR SDDTS (CA4 SDDT)",
+   "z": []
+  },
+  "SC700.00.01.01": {
+   "columns": [
+    [
+     "0010",
+     "Header info"
+    ]
+   ],
+   "filing_indicator": "SC700.00.01",
+   "group": "SC700.00.01",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0010",
+     "Basis of reporting (select from list)"
+    ],
+    [
+     "0020",
+     "Firm reference number (FRN)"
+    ],
+    [
+     "0021",
+     "LEI code"
+    ],
+    [
+     "0030",
+     "Name of the firm"
+    ],
+    [
+     "0040",
+     "Reporting period start date"
+    ],
+    [
+     "0050",
+     "Reporting period end date"
+    ],
+    [
+     "0060",
+     "Reporting currency for this report"
+    ],
+    [
+     "0070",
+     "Notes from the firm, if any"
+    ]
+   ],
+   "title": "Header Info",
+   "z": []
+  },
+  "SC701.00.03.01": {
+   "columns": [
+    [
+     "0010",
+     "Current reporting month"
+    ],
+    [
+     "0020",
+     "Q1"
+    ],
+    [
+     "0030",
+     "Q2"
+    ],
+    [
+     "0040",
+     "Q3"
+    ],
+    [
+     "0050",
+     "Q4"
+    ],
+    [
+     "0060",
+     "Q5"
+    ],
+    [
+     "0070",
+     "Q6"
+    ],
+    [
+     "0080",
+     "Q7"
+    ],
+    [
+     "0090",
+     "Q8"
+    ],
+    [
+     "0100",
+     "Year-end following Q8"
+    ]
+   ],
+   "filing_indicator": "SC701.00.03",
+   "group": "SC701.00.03",
+   "open_keys": [],
+   "open_rows": false,
+   "rows": [
+    [
+     "0260",
+     "Additional information on P&L, balance sheet and leverage data Profit (+) or loss (-) for the period"
+    ],
+    [
+     "0270",
+     "Total balance sheet assets"
+    ],
+    [
+     "0281",
+     "Total Leverage Ratio exposure measure - using a fully phased-in definition of Tier 1 capital"
+    ]
+   ],
+   "title": "PRA SUPPLEMENTARY DATA SECTION",
+   "z": []
+  }
+ }
+}

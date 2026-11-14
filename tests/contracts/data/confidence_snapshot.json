@@ -191,6 +191,7 @@
         "engine/stages/calc.py",
         "engine/stages/ccr.py",
         "reporting/corep/c02.py",
+        "reporting/corep/c02_rows.py",
         "reporting/corep/templates.py",
         "reporting/tieouts.py",
         "ui/views/comparison.py"
@@ -390,7 +391,6 @@
         "tests/unit/crm/test_ead_for_crm.py",
         "tests/unit/crm/test_provision_submodules.py",
         "tests/unit/crm/test_provisions.py",
-        "tests/unit/reporting/corep/test_c07.py",
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
@@ -435,7 +435,7 @@
         "reporting/corep/c09.py",
         "reporting/corep/sheet_labels.py",
         "reporting/corep/templates.py",
-        "reporting/validations/scope.py",
+        "reporting/filing/sheet_maps.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
@@ -470,8 +470,8 @@
         "tests/integration/test_pre_post_crm_reporting.py",
         "tests/unit/crr/test_crr_sa.py",
         "tests/unit/reporting/corep/test_cross.py",
-        "tests/unit/reporting/validations/test_scope_expansion.py",
-        "tests/unit/reporting/validations/test_sheet_index_map.py",
+        "tests/unit/reporting/filing/test_scope_expansion.py",
+        "tests/unit/reporting/filing/test_sheet_index_map.py",
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_aggregator.py",
         "tests/unit/test_classifier.py",
@@ -1864,9 +1864,11 @@
         "engine/slotting/__init__.py",
         "engine/slotting/calculator.py",
         "engine/stages/classify.py",
+        "reporting/corep/c02.py",
+        "reporting/corep/c02_rows.py",
         "reporting/corep/templates.py",
+        "reporting/filing/sheet_maps.py",
         "reporting/tieouts.py",
-        "reporting/validations/scope.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -1884,12 +1886,12 @@
         "tests/fixtures/p1_243/p1_243.py",
         "tests/fixtures/ratings/specialised_lending.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
-        "tests/properties/test_template_row_axis.py",
         "tests/unit/classifier/test_facility_share_granularity_denominator.py",
         "tests/unit/classifier/test_p1_243_natural_person_irb_retail_cap.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
         "tests/unit/irb/test_p1_277_art_160_1_cgcb_pd_floor.py",
-        "tests/unit/reporting/validations/test_sheet_index_map.py",
+        "tests/unit/reporting/corep/test_c02_00_published_rows.py",
+        "tests/unit/reporting/filing/test_sheet_index_map.py",
         "tests/unit/rulebook/test_classifier_features.py",
         "tests/unit/test_b31_approach_restrictions.py",
         "tests/unit/test_classifier_qrre_warnings.py",
@@ -1967,12 +1969,13 @@
       "pack_entries": [],
       "source_files": [
         "engine/irb/formulas.py",
-        "reporting/corep/c02.py"
+        "reporting/corep/irb_sheets.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_197_crr_slotting_obs_ead_firb_ccf.py",
         "tests/conformance/portfolios.py",
         "tests/fixtures/p1_197/p1_197.py",
+        "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/properties/test_template_row_axis.py"
       ],
       "watchfire_index_gap": false
@@ -3120,7 +3123,8 @@
       "source_files": [
         "engine/crm/guarantees.py",
         "engine/crm/processor.py",
-        "reporting/corep/c02.py"
+        "reporting/corep/c02.py",
+        "reporting/corep/irb_sheets.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_227_art_201_guarantor_eligibility.py",
@@ -3340,6 +3344,7 @@
     {
       "article": "219",
       "code_functions": [
+        "rwa_calc.engine.crm.expressions::flag_netting_rows",
         "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
@@ -3351,9 +3356,15 @@
       ],
       "source_files": [
         "contracts/edges.py",
+        "data/schemas.py",
+        "engine/crm/collateral.py",
+        "engine/crm/expressions.py",
         "engine/crm/haircuts.py",
         "engine/crm/netting.py",
         "engine/crm/processor.py",
+        "engine/crm/simple_method.py",
+        "engine/re_split/carriers.py",
+        "reporting/corep/c07.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -3362,14 +3373,18 @@
         "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
+        "tests/acceptance/reporting/test_of07_netting_single_deduction.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p1_238/p1_238.py",
         "tests/fixtures/p1_241/p1_241.py",
+        "tests/fixtures/reporting_netting_mismatch_portfolio.py",
         "tests/fixtures/reporting_netting_portfolio.py",
         "tests/unit/crm/test_collateral_submodules.py",
-        "tests/unit/crm/test_netting.py"
+        "tests/unit/crm/test_netting.py",
+        "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
+        "tests/unit/test_re_split_carrier_classification.py"
       ],
       "watchfire_index_gap": false
     },
@@ -3487,6 +3502,7 @@
         "tests/fixtures/reporting_funded_protection_portfolio.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
+        "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
         "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/crm/test_simple_method.py"
       ],
@@ -4156,8 +4172,10 @@
         "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/pse_rgla_guarantor/pse_rgla_guarantor.py",
+        "tests/fixtures/reporting_netting_mismatch_portfolio.py",
         "tests/unit/crm/test_art237_guarantee_ineligibility.py",
-        "tests/unit/crm/test_art237_ineligibility.py"
+        "tests/unit/crm/test_art237_ineligibility.py",
+        "tests/unit/crm/test_on_bs_netting_adjusted_value.py"
       ],
       "watchfire_index_gap": false
     },
@@ -5742,6 +5760,7 @@
       "code_functions": [
         "rwa_calc.reporting.corep.c02::generate_c02_00",
         "rwa_calc.reporting.corep.c07::c07_plans",
+        "rwa_calc.reporting.corep.c07::c07_total_sheet",
         "rwa_calc.reporting.corep.c07::generate_c07",
         "rwa_calc.reporting.corep.c08::generate_c08_01",
         "rwa_calc.reporting.corep.c08::generate_c08_02",
@@ -5750,6 +5769,8 @@
         "rwa_calc.reporting.corep.c08::generate_c08_05",
         "rwa_calc.reporting.corep.c08::generate_c08_06",
         "rwa_calc.reporting.corep.c08_07::generate_c08_07",
+        "rwa_calc.reporting.corep.c08_sheets::sheet_keys",
+        "rwa_calc.reporting.corep.c08_sheets::with_total_sheets",
         "rwa_calc.reporting.corep.c09::generate_c09_01",
         "rwa_calc.reporting.corep.c09::generate_c09_02",
         "rwa_calc.reporting.corep.of02::generate_of_02_01"
@@ -5764,6 +5785,7 @@
         "reporting/corep/c07.py",
         "reporting/corep/c08.py",
         "reporting/corep/c08_07.py",
+        "reporting/corep/c08_sheets.py",
         "reporting/corep/c09.py",
         "reporting/corep/crm_substitution.py",
         "reporting/corep/of02.py"
@@ -5867,9 +5889,11 @@
         "engine/stages/calc.py",
         "reporting/corep/__init__.py",
         "reporting/corep/c02.py",
+        "reporting/corep/c02_rows.py",
         "reporting/corep/of02.py",
         "reporting/corep/templates.py",
         "reporting/metadata.py",
+        "reporting/tieouts.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
       ],
@@ -5895,6 +5919,7 @@
         "tests/properties/test_output_floor_identities.py",
         "tests/properties/test_structural_invariants.py",
         "tests/unit/ccr/test_failed_trades.py",
+        "tests/unit/reporting/test_tieouts.py",
         "tests/unit/rulebook/test_model.py",
         "tests/unit/rulebook/test_output_floor_features.py",
         "tests/unit/rulebook/test_subconfig_gate_features.py",
@@ -6001,7 +6026,7 @@
         "engine/aggregator/_equity_prep.py",
         "engine/aggregator/aggregator.py",
         "reporting/corep/sheet_labels.py",
-        "reporting/validations/scope.py"
+        "reporting/filing/sheet_maps.py"
       ],
       "test_files": [
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
@@ -6578,8 +6603,6 @@
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/sa/rw_adjustments.py",
-        "reporting/corep/c02.py",
-        "reporting/corep/templates.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -7276,6 +7299,7 @@
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/thresholds.py",
+        "reporting/corep/irb_sheets.py",
         "reporting/pillar3/cr9.py",
         "reporting/pillar3/generator.py",
         "rulebook/packs/b31.py",
@@ -7339,7 +7363,10 @@
         "engine/classify/subtypes.py",
         "engine/securitisation/allocator.py",
         "reporting/corep/c02.py",
+        "reporting/corep/c02_rows.py",
+        "reporting/corep/c08_sheets.py",
         "reporting/corep/crm_substitution.py",
+        "reporting/corep/irb_sheets.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
@@ -7352,6 +7379,7 @@
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_cell_rederivation.py",
+        "tests/contracts/test_of08_published_sheets.py",
         "tests/fixtures/p1_125/p1_125.py",
         "tests/fixtures/p1_126/p1_126.py",
         "tests/fixtures/p1_245/p1_245.py",
@@ -7367,7 +7395,10 @@
         "tests/unit/classifier/test_p1_278_top_down_pd.py",
         "tests/unit/classifier/test_sme_assets_fallback.py",
         "tests/unit/config/test_p2_36_sovereign_institution_pd_floors.py",
+        "tests/unit/reporting/corep/_c02_frames.py",
         "tests/unit/reporting/corep/test_c02_00.py",
+        "tests/unit/reporting/corep/test_c02_00_published_rows.py",
+        "tests/unit/reporting/corep/test_c08_sheet_axis.py",
         "tests/unit/rulebook/test_classifier_features.py",
         "tests/unit/test_b31_approach_restrictions.py",
         "tests/unit/test_classifier.py"
@@ -8173,17 +8204,23 @@
     },
     {
       "article": "219",
-      "code_functions": [],
+      "code_functions": [
+        "rwa_calc.engine.crm.expressions::flag_netting_rows",
+        "rwa_calc.reporting.corep.c07::_netting_reduction_expr"
+      ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
       "pack_entries": [
         "on_bs_netting_liquidation_period@b31",
         "on_bs_netting_same_currency_only@b31"
       ],
       "source_files": [
-        "engine/crm/netting.py"
+        "analysis/legacy_ledger.py",
+        "engine/crm/expressions.py",
+        "engine/crm/netting.py",
+        "reporting/corep/c07.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_art219_netting_currency_mismatch.py",
@@ -8191,9 +8228,13 @@
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
+        "tests/acceptance/reporting/test_of07_netting_single_deduction.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/netting_currency/netting_currency.py",
+        "tests/fixtures/reporting_netting_mismatch_portfolio.py",
         "tests/unit/crm/test_collateral_submodules.py",
+        "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
+        "tests/unit/reporting/corep/test_c07_netting.py",
         "tests/unit/test_engine_utils_silent_skip.py"
       ],
       "watchfire_index_gap": false
@@ -8240,19 +8281,23 @@
     },
     {
       "article": "223",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.reporting.corep.c07::_financial_collateral_exprs"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
         "engine/ccf.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
-        "engine/crm/processor.py"
+        "engine/crm/processor.py",
+        "reporting/corep/c07.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_of07_netting_single_deduction.py",
         "tests/fixtures/p1_161/p1_161.py",
         "tests/unit/crm/test_ead_for_crm.py"
       ],
@@ -8285,6 +8330,7 @@
         "tests/unit/crm/test_crm_basel31.py",
         "tests/unit/crm/test_equity_main_index.py",
         "tests/unit/crm/test_liquidation_period_haircuts.py",
+        "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
         "tests/unit/crm/test_p1_234_securitisation_haircut_table.py",
         "tests/unit/data/tables/test_collateral_haircut_null_maturity.py",
         "tests/unit/rulebook/test_haircut_features.py"

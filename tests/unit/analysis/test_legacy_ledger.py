@@ -15,6 +15,11 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_AIRB,
+    OF08_INSTITUTIONS_FIRB,
+    irb_sheet,
+)
 
 from rwa_calc.analysis.legacy_ledger import (
     LEDGER_TEMPLATE_IDS,
@@ -47,7 +52,9 @@ from rwa_calc.data.schemas import (
     VALID_SLOTTING_CATEGORIES,
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.kernel.columns import _CREDIT_BS_TYPES
 
 if TYPE_CHECKING:
@@ -762,7 +769,11 @@ def test_raw_and_derived_gross_routes_agree(shared: _Shared, framework: str) -> 
     _assert_same_templates(raw_bundle, derived_bundle)
     # ...and the agreement is not between two sets of zeros: both gross SIDES
     # carry money on the derived route, so the derivation is genuinely exercised.
-    assert _cell(raw_bundle.c08_03["corporate"], "0050", "0010") == pytest.approx(4_000_000.0)
+    # Re-anchored: the Basel 3.1 leg was read off the class sheet ``corporate``. The
+    # two modelled corporate legs are A-IRB, so they are on published sheet 0011
+    # (taxonomy v4.1.1 OF08.03.01.01); CRR C 08.03 stays keyed by exposure class.
+    corporate_sheet = irb_sheet(framework, "corporate", OF08_CORPORATE_NON_SME_AIRB)
+    assert _cell(raw_bundle.c08_03[corporate_sheet], "0050", "0010") == pytest.approx(4_000_000.0)
     assert _cell(raw_bundle.c07_00["retail"], "0080", "0010") == pytest.approx(500_000.0)
 
 
@@ -1000,7 +1011,9 @@ def test_categorical_component_labels_are_canonicalised_by_the_projection(
     # ...and the canonical labels are what the sheet axes actually key on.
     # C 07.00 keys the Art. 112(1) LETTER, so the canonical ``retail_other``
     # label is what routes the row and ``retail`` is the sheet it routes to.
-    assert set(sheets.c07_00) == {"corporate", "retail"}
+    # (The class sheets: the Total sheet beside them is their sum, not a label.)
+    assert set(c07_class_sheets(sheets.c07_00)) == {"corporate", "retail"}
+    assert C07_00_TOTAL_SHEET_KEY in sheets.c07_00
     assert set(sheets.c08_01) == {"corporate", "institution"}
 
 
@@ -1363,7 +1376,10 @@ def test_mapped_pd_bands_correctly_across_a_band_boundary(
 
     # Act
     source, _coverage = project_legacy_ledger(legacy, mapping, framework=framework)
-    sheet = COREPGenerator().generate(source).c08_03["institution"]
+    # Re-anchored: the Basel 3.1 sheet was read as the class key ``institution``.
+    # IRB3 is F-IRB, so it is on published sheet 0006 (taxonomy OF08.03.01.01).
+    institution_sheet = irb_sheet(framework, "institution", OF08_INSTITUTIONS_FIRB)
+    sheet = COREPGenerator().generate(source).c08_03[institution_sheet]
 
     # Assert
     assert expected_row in sheet["row_ref"].to_list()

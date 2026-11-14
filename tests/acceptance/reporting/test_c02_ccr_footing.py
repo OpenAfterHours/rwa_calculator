@@ -8,12 +8,19 @@ Pipeline position:
 Key responsibilities (the oracle for docs/plans/c07-ccr-derivatives.md step 5):
 - C 02.00's parent credit row is "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT,
   **COUNTERPARTY CREDIT** AND DILUTION RISKS AND FREE DELIVERIES" (Art. 92(3)(a),(f)).
-  Rows 0010/0050 are a flat sum over the whole ledger, so they already carry the
+  Rows 0010/0040 are a flat sum over the whole ledger, so they already carry the
   SA-CCR derivative RWEA.
-- Its child row 0060 "Of which: Standardised Approach (SA)" is defined by Annex II
-  as "**CR SA and SEC SA templates at the level of total exposures**" — the SA row
-  IS the C 07.00 total. C 07.00 now reports SA-CCR derivatives (steps 3-4), so the
-  SA row must carry them too.
+- Its child rows 0050 "Standardised approach (SA)" / 0060 "SA exposure classes
+  excluding securitisation positions" are defined by Annex II as the "**CR SA
+  template at the level of total exposures**" — the SA row IS the C 07.00 total.
+  C 07.00 now reports SA-CCR derivatives (steps 3-4), so the SA row must carry
+  them too.
+
+ROW CODES RE-ANCHORED 2026-11-13 (EBA v0205_m: r0040 = r0050 + r0240 + r0460 +
+r0470; taxonomy OF02.00.01.01). This file read the credit-risk row at 0050 and
+called 0060 "Of which: SA". The credit-risk row is 0040; 0050 and 0060 are the
+standardised total. On this SA-only book all three hold the same number, so the
+old code passed — which is exactly why it is corrected here rather than left.
 - The SA exposure-class rows are "CR SA template at the level of total exposures",
   so the derivative RWEA belongs on row 0120 (Institutions) — its counterparty's
   Art. 112 class.
@@ -22,14 +29,14 @@ The defect this pins: row 0060 reads ``approach_rwa["standardised"]``, but under
 Basel 3.1 the CCR legs carry ``approach_applied == "standardised_ccr"`` (the
 output-floor relabel, which is load-bearing and must NOT be reverted). So under
 Basel 3.1 the SA row excludes the derivatives and **C 02.00 does not foot**:
-rows 0010/0050 total 4,060,296.72 while row 0060 reports only the 2,500,000 loan.
+rows 0010/0040 total 4,060,296.72 while row 0060 reports only the 2,500,000 loan.
 
 Under CRR the legs already carry ``"standardised"``, so C 02.00 foots today. The
 CRR parametrisations below are therefore the "no cell moves" guard: if a CRR cell
 moves when Basel 3.1 is fixed, the fix is wrong.
 
 References:
-- COREP Annex II, C 02.00 rows 0010 / 0050 / 0060 / 0120 / 0130
+- COREP Annex II, C 02.00 rows 0010 / 0040 / 0050 / 0060 / 0120 / 0130
 - CRR Art. 92(3)(a),(f) (own funds requirements for credit AND counterparty
   credit risk); Art. 120(1) (institution 50% RW); Art. 306(1)(a) (QCCP 2% RW)
 - PS1/26 ECRA CQS 2 (institution 30% RW)
@@ -71,7 +78,7 @@ class _Expected:
 
     @property
     def total_rwea(self) -> float:
-        """Rows 0010 / 0050 / 0060 — all three, once C 02.00 foots."""
+        """Rows 0010 / 0040 / 0050 / 0060 — all four, once C 02.00 foots."""
         return self.derivative_rwea + self.loan_rwea
 
 
@@ -98,7 +105,7 @@ def c02_sheets() -> dict[str, pl.DataFrame]:
 def test_c02_sa_row_0060_includes_the_sa_ccr_derivatives(
     regime_key: str, c02_sheets: dict[str, pl.DataFrame]
 ) -> None:
-    """Row 0060 ("Of which: SA") covers the whole SA book — derivatives included.
+    """Row 0060 (the SA exposure classes) covers the whole SA book — derivatives included.
 
     Annex II defines the row as the CR SA (+ SEC SA) template "at the level of
     total exposures". C 07.00 reports the SA-CCR derivative netting sets, so the
@@ -116,7 +123,7 @@ def test_c02_sa_row_0060_includes_the_sa_ccr_derivatives(
 
     # Assert
     assert row[_RWEA] == pytest.approx(expected.total_rwea, rel=_REL), (
-        f"[{regime_key}] C 02.00 row 0060 ('Of which: Standardised Approach') must "
+        f"[{regime_key}] C 02.00 row 0060 ('SA exposure classes') must "
         f"carry the SA-CCR derivative RWEA ({expected.derivative_rwea:,.6f}) on top "
         f"of the loan ({expected.loan_rwea:,.2f}) — Annex II defines the row as the "
         f"CR SA template at the level of total exposures. Expected "
@@ -159,21 +166,23 @@ def test_c02_institutions_row_0120_carries_the_derivative_rwea(
 def test_c02_credit_risk_breakdown_foots_to_the_total(
     regime_key: str, c02_sheets: dict[str, pl.DataFrame]
 ) -> None:
-    """Rows 0010 == 0050 == 0060: the whole book is credit risk, all of it SA.
+    """Rows 0010 == 0040 == 0050 == 0060: the whole book is credit risk, all of it SA.
 
     This portfolio has no IRB, no equity, no market or operational risk — so the
-    total risk exposure amount, the credit-risk row and the SA row are the same
-    number. If row 0060 excludes the derivatives while 0010/0050 (flat sums over
-    the ledger) include them, C 02.00 does not foot.
+    total risk exposure amount, the credit-risk row and the SA rows are the same
+    number. If rows 0050 / 0060 exclude the derivatives while 0010/0040 (flat sums
+    over the ledger) include them, C 02.00 does not foot.
 
     Arrange: the CCR portfolio (SA-only, credit risk only).
     Act:     run the pipeline -> COREP C 02.00.
-    Assert:  rows 0010, 0050 and 0060 are all the portfolio total RWEA.
+    Assert:  rows 0010, 0040, 0050 and 0060 are all the portfolio total RWEA.
     """
     # Arrange + Act
     expected = _EXPECTED[regime_key]
     sheet = c02_sheets[regime_key]
-    total, credit, sa = (_row(sheet, ref)[_RWEA] for ref in ("0010", "0050", "0060"))
+    total, credit, sa_total, sa = (
+        _row(sheet, ref)[_RWEA] for ref in ("0010", "0040", "0050", "0060")
+    )
 
     # Assert
     assert total == pytest.approx(expected.total_rwea, rel=_REL), (
@@ -181,13 +190,17 @@ def test_c02_credit_risk_breakdown_foots_to_the_total(
         f"{expected.total_rwea:,.6f}, got {total}."
     )
     assert credit == pytest.approx(total, rel=_REL), (
-        f"[{regime_key}] C 02.00 row 0050 (credit, counterparty credit and dilution "
+        f"[{regime_key}] C 02.00 row 0040 (credit, counterparty credit and dilution "
         f"risks) must equal the total — this portfolio has no other risk type "
-        f"(row 0010 {total}, row 0050 {credit})."
+        f"(row 0010 {total}, row 0040 {credit})."
+    )
+    assert sa_total == pytest.approx(sa, rel=_REL), (
+        f"[{regime_key}] C 02.00 rows 0050 and 0060 are one figure (the SA total): "
+        f"{sa_total} vs {sa}."
     )
     assert sa == pytest.approx(total, rel=_REL), (
         f"[{regime_key}] C 02.00 DOES NOT FOOT: row 0060 (SA) reports {sa} but the "
-        f"credit-risk row 0050 reports {credit}. Every exposure in this portfolio is "
+        f"credit-risk row 0040 reports {credit}. Every exposure in this portfolio is "
         "standardised — the SA-CCR derivatives are missing from the SA row."
     )
 

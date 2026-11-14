@@ -4,7 +4,6 @@
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
-      "0020": "Float64",
       "0030": "Float64",
       "0035": "Float64",
       "0040": "Float64",
@@ -32,7 +31,38 @@
       "0235": "Float64",
       "0240": "Float64"
     },
-    "corep__c08_01__corporate": {
+    "corep__c07_00__total": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0030": "Float64",
+      "0035": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0110": "Float64",
+      "0120": "Float64",
+      "0130": "Float64",
+      "0140": "Float64",
+      "0150": "Float64",
+      "0160": "Float64",
+      "0170": "Float64",
+      "0171": "Float64",
+      "0180": "Float64",
+      "0190": "Float64",
+      "0200": "Float64",
+      "0210": "Float64",
+      "0211": "Float64",
+      "0220": "Float64",
+      "0230": "Float64",
+      "0235": "Float64",
+      "0240": "Float64"
+    },
+    "corep__c08_01__corporate_non_sme_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0020": "Float64",
@@ -83,7 +113,7 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_01__institution": {
+    "corep__c08_01__institution_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0020": "Float64",
@@ -134,7 +164,7 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_01__retail_mortgage": {
+    "corep__c08_01__retail_qrre_airb": {
       "row_ref": "String",
       "row_name": "String",
       "0020": "Float64",
@@ -185,7 +215,7 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_01__retail_qrre": {
+    "corep__c08_01__retail_residential_re_non_sme_airb": {
       "row_ref": "String",
       "row_name": "String",
       "0020": "Float64",
@@ -236,7 +266,109 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_02__corporate": {
+    "corep__c08_01__total_airb": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0035": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0101": "Float64",
+      "0102": "Float64",
+      "0103": "Float64",
+      "0104": "Float64",
+      "0110": "Float64",
+      "0120": "Float64",
+      "0125": "Float64",
+      "0130": "Float64",
+      "0140": "Float64",
+      "0150": "Float64",
+      "0160": "Float64",
+      "0170": "Float64",
+      "0171": "Float64",
+      "0172": "Float64",
+      "0173": "Float64",
+      "0180": "Float64",
+      "0190": "Float64",
+      "0200": "Float64",
+      "0210": "Float64",
+      "0230": "Float64",
+      "0240": "Float64",
+      "0250": "Float64",
+      "0251": "Float64",
+      "0252": "Float64",
+      "0253": "Float64",
+      "0254": "Float64",
+      "0260": "Float64",
+      "0265": "Float64",
+      "0270": "Float64",
+      "0275": "Float64",
+      "0276": "Float64",
+      "0280": "Float64",
+      "0281": "Float64",
+      "0282": "Float64",
+      "0290": "Float64",
+      "0300": "Float64",
+      "0310": "Float64"
+    },
+    "corep__c08_01__total_firb_slotting": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0035": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0101": "Float64",
+      "0102": "Float64",
+      "0103": "Float64",
+      "0104": "Float64",
+      "0110": "Float64",
+      "0120": "Float64",
+      "0125": "Float64",
+      "0130": "Float64",
+      "0140": "Float64",
+      "0150": "Float64",
+      "0160": "Float64",
+      "0170": "Float64",
+      "0171": "Float64",
+      "0172": "Float64",
+      "0173": "Float64",
+      "0180": "Float64",
+      "0190": "Float64",
+      "0200": "Float64",
+      "0210": "Float64",
+      "0230": "Float64",
+      "0240": "Float64",
+      "0250": "Float64",
+      "0251": "Float64",
+      "0252": "Float64",
+      "0253": "Float64",
+      "0254": "Float64",
+      "0260": "Float64",
+      "0265": "Float64",
+      "0270": "Float64",
+      "0275": "Float64",
+      "0276": "Float64",
+      "0280": "Float64",
+      "0281": "Float64",
+      "0282": "Float64",
+      "0290": "Float64",
+      "0300": "Float64",
+      "0310": "Float64"
+    },
+    "corep__c08_02__corporate_non_sme_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0005": "String",
@@ -289,7 +421,7 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_02__institution": {
+    "corep__c08_02__institution_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0005": "String",
@@ -342,7 +474,7 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_02__retail_mortgage": {
+    "corep__c08_02__retail_qrre_airb": {
       "row_ref": "String",
       "row_name": "String",
       "0005": "String",
@@ -395,7 +527,7 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_02__retail_qrre": {
+    "corep__c08_02__retail_residential_re_non_sme_airb": {
       "row_ref": "String",
       "row_name": "String",
       "0005": "String",
@@ -448,7 +580,113 @@
       "0300": "Float64",
       "0310": "Float64"
     },
-    "corep__c08_03__corporate": {
+    "corep__c08_02__total_airb": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0005": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0035": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0101": "Float64",
+      "0102": "Float64",
+      "0103": "Float64",
+      "0104": "Float64",
+      "0110": "Float64",
+      "0120": "Float64",
+      "0125": "Float64",
+      "0130": "Float64",
+      "0140": "Float64",
+      "0150": "Float64",
+      "0160": "Float64",
+      "0170": "Float64",
+      "0171": "Float64",
+      "0172": "Float64",
+      "0173": "Float64",
+      "0180": "Float64",
+      "0190": "Float64",
+      "0200": "Float64",
+      "0210": "Float64",
+      "0230": "Float64",
+      "0240": "Float64",
+      "0250": "Float64",
+      "0251": "Float64",
+      "0252": "Float64",
+      "0253": "Float64",
+      "0254": "Float64",
+      "0260": "Float64",
+      "0265": "Float64",
+      "0270": "Float64",
+      "0275": "Float64",
+      "0276": "Float64",
+      "0280": "Float64",
+      "0281": "Float64",
+      "0282": "Float64",
+      "0290": "Float64",
+      "0300": "Float64",
+      "0310": "Float64"
+    },
+    "corep__c08_02__total_firb_slotting": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0005": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0035": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0101": "Float64",
+      "0102": "Float64",
+      "0103": "Float64",
+      "0104": "Float64",
+      "0110": "Float64",
+      "0120": "Float64",
+      "0125": "Float64",
+      "0130": "Float64",
+      "0140": "Float64",
+      "0150": "Float64",
+      "0160": "Float64",
+      "0170": "Float64",
+      "0171": "Float64",
+      "0172": "Float64",
+      "0173": "Float64",
+      "0180": "Float64",
+      "0190": "Float64",
+      "0200": "Float64",
+      "0210": "Float64",
+      "0230": "Float64",
+      "0240": "Float64",
+      "0250": "Float64",
+      "0251": "Float64",
+      "0252": "Float64",
+      "0253": "Float64",
+      "0254": "Float64",
+      "0260": "Float64",
+      "0265": "Float64",
+      "0270": "Float64",
+      "0275": "Float64",
+      "0276": "Float64",
+      "0280": "Float64",
+      "0281": "Float64",
+      "0282": "Float64",
+      "0290": "Float64",
+      "0300": "Float64",
+      "0310": "Float64"
+    },
+    "corep__c08_03__corporate_non_sme_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -463,7 +701,7 @@
       "0100": "Float64",
       "0110": "Float64"
     },
-    "corep__c08_03__institution": {
+    "corep__c08_03__institution_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -478,7 +716,7 @@
       "0100": "Float64",
       "0110": "Float64"
     },
-    "corep__c08_03__retail_mortgage": {
+    "corep__c08_03__retail_qrre_airb": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -493,7 +731,37 @@
       "0100": "Float64",
       "0110": "Float64"
     },
-    "corep__c08_03__retail_qrre": {
+    "corep__c08_03__retail_residential_re_non_sme_airb": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0110": "Float64"
+    },
+    "corep__c08_03__total_airb": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0110": "Float64"
+    },
+    "corep__c08_03__total_firb_slotting": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -528,7 +796,7 @@
       "row_name": "String",
       "0010": "Float64"
     },
-    "corep__c08_05__corporate": {
+    "corep__c08_05__corporate_non_sme_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -537,7 +805,7 @@
       "0040": "Float64",
       "0050": "Float64"
     },
-    "corep__c08_05__institution": {
+    "corep__c08_05__institution_firb": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -546,7 +814,7 @@
       "0040": "Float64",
       "0050": "Float64"
     },
-    "corep__c08_05__retail_mortgage": {
+    "corep__c08_05__retail_qrre_airb": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -555,7 +823,25 @@
       "0040": "Float64",
       "0050": "Float64"
     },
-    "corep__c08_05__retail_qrre": {
+    "corep__c08_05__retail_residential_re_non_sme_airb": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0040": "Float64",
+      "0050": "Float64"
+    },
+    "corep__c08_05__total_airb": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0040": "Float64",
+      "0050": "Float64"
+    },
+    "corep__c08_05__total_firb_slotting": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -657,8 +943,8 @@
       "0100": "Float64",
       "0105": "Float64",
       "0107": "Float64",
+      "0110": "Float64",
       "0120": "Float64",
-      "0125": "Float64",
       "0130": "Float64"
     },
     "corep__c09_02__TOTAL": {
@@ -676,8 +962,8 @@
       "0100": "Float64",
       "0105": "Float64",
       "0107": "Float64",
+      "0110": "Float64",
       "0120": "Float64",
-      "0125": "Float64",
       "0130": "Float64"
     },
     "corep__c_02_00": {
@@ -949,34 +1235,41 @@
       "c07_00": {
         "kind": "dict",
         "keys": [
-          "central_govt_central_bank"
+          "central_govt_central_bank",
+          "total"
         ]
       },
       "c08_01": {
         "kind": "dict",
         "keys": [
-          "corporate",
-          "institution",
-          "retail_mortgage",
-          "retail_qrre"
+          "corporate_non_sme_firb",
+          "institution_firb",
+          "retail_qrre_airb",
+          "retail_residential_re_non_sme_airb",
+          "total_airb",
+          "total_firb_slotting"
         ]
       },
       "c08_02": {
         "kind": "dict",
         "keys": [
-          "corporate",
-          "institution",
-          "retail_mortgage",
-          "retail_qrre"
+          "corporate_non_sme_firb",
+          "institution_firb",
+          "retail_qrre_airb",
+          "retail_residential_re_non_sme_airb",
+          "total_airb",
+          "total_firb_slotting"
         ]
       },
       "c08_03": {
         "kind": "dict",
         "keys": [
-          "corporate",
-          "institution",
-          "retail_mortgage",
-          "retail_qrre"
+          "corporate_non_sme_firb",
+          "institution_firb",
+          "retail_qrre_airb",
+          "retail_residential_re_non_sme_airb",
+          "total_airb",
+          "total_firb_slotting"
         ]
       },
       "c08_04": {
@@ -991,10 +1284,12 @@
       "c08_05": {
         "kind": "dict",
         "keys": [
-          "corporate",
-          "institution",
-          "retail_mortgage",
-          "retail_qrre"
+          "corporate_non_sme_firb",
+          "institution_firb",
+          "retail_qrre_airb",
+          "retail_residential_re_non_sme_airb",
+          "total_airb",
+          "total_firb_slotting"
         ]
       },
       "c08_06": {

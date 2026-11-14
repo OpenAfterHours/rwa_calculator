@@ -10,6 +10,10 @@ import pytest
 
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
+from tests.unit.reporting.corep._irb_sheet_frames import (
+    OF08_CORPORATE_NON_SME_AIRB,
+    OF08_CORPORATE_NON_SME_FIRB,
+)
 
 
 def _irb_pd_backtest_results() -> pl.LazyFrame:
@@ -217,7 +221,7 @@ class TestC0805PDRangeAssignment:
         """Basel 3.1 allocates rows by pd (pre-floor)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
-        corp = bundle.c08_05["corporate"]
+        corp = bundle.c08_05[OF08_CORPORATE_NON_SME_FIRB]
         # E1: pd=0.001 → row 0030 (0.10 to <0.15); pd_floored=0.002 would have
         # landed in row 0040, so its absence is what pins the basis.
         refs = corp["row_ref"].to_list()
@@ -357,7 +361,7 @@ class TestC0805B31Features:
         """Basel 3.1 col 0010 reports post-input-floor PD."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
-        corp = bundle.c08_05["corporate"]
+        corp = bundle.c08_05[OF08_CORPORATE_NON_SME_FIRB]
         # E1: allocated to row 0030 by original PD 0.001, but col 0010 reports
         # the arithmetic avg of floored PD (0.002)
         row = corp.filter(pl.col("row_ref") == "0030")
@@ -375,7 +379,7 @@ class TestC0805B31Features:
     def test_b31_still_5_columns(self) -> None:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
-        corp = bundle.c08_05["corporate"]
+        corp = bundle.c08_05[OF08_CORPORATE_NON_SME_FIRB]
         # 5 data + row_ref + row_name = 7
         assert len(corp.columns) == 7
 
@@ -385,14 +389,18 @@ class TestC0805B31Features:
         crr_bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="CRR")
         b31_bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
         crr_corp = crr_bundle.c08_05["corporate"]
-        b31_corp = b31_bundle.c08_05["corporate"]
+        # Re-anchored: this read one Basel 3.1 ``corporate`` sheet. The published
+        # axis (taxonomy OF08.05.00.01) splits it by approach — E3 is A-IRB (sheet
+        # 0011), the other four F-IRB (sheet 0012) — so the rows are counted over both.
+        b31_firb = b31_bundle.c08_05[OF08_CORPORATE_NON_SME_FIRB]
+        b31_airb = b31_bundle.c08_05[OF08_CORPORATE_NON_SME_AIRB]
         # E1 has different original (0.001) vs floored (0.002) PD:
         # CRR: E1 -> row 0040 (0.15 to <0.25), a standalone band -> 7 rows.
         # B31: E1 -> row 0030 (0.10 to <0.15), which sits UNDER parent 0010,
         #      so the pre-floor basis pulls in an extra parent row -> 8 rows.
         assert len(crr_corp) == 7
-        assert len(b31_corp) == 8
-        b31_refs = set(b31_corp["row_ref"].to_list())
+        b31_refs = set(b31_firb["row_ref"].to_list()) | set(b31_airb["row_ref"].to_list())
+        assert len(b31_firb) + len(b31_airb) == len(b31_refs) == 8
         crr_refs = set(crr_corp["row_ref"].to_list())
         # B31 has the 0.10-0.15 leaf and its 0.00-0.15 parent; CRR has neither.
         assert {"0030", "0010"} <= b31_refs

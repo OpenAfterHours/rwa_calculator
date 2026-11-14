@@ -25,19 +25,42 @@ reconcile with each other. This is the first in-house analogue of the
 supervisory validation rules (e.g. the EBA COREP/Pillar 3 validation rules)
 that check exactly these cross-template identities.
 
-The comparable ties (all hold on both frameworks on a real IRB+SA pipeline run):
+The comparable ties (all hold on both frameworks on a real IRB+SA pipeline run).
+The C 02.00 rows are named by what they are — ``corep/c02_rows.py`` holds the
+row code each regime's published template gives them:
 
-- ``total_rwea_c02_vs_ov1``    C 02.00 [0010] (total RWEA) == OV1 [29] (total).
-- ``credit_risk_rollup_c02``   C 02.00 [0050] == [0060] + [0220] (SA incl.
-                               equity + IRB of-which = total credit risk).
-- ``sa_rwea_c07_vs_c02``       Σ C 07.00 sheets [0010][0220] == C 02.00 [0060]
-                               minus [0420] (SA of-which line net of the equity
-                               RWEA folded into it — C 07.00 has no equity
-                               sheet, so the equity term must be removed).
-- ``irb_rwea_c08_01_vs_c02``   Σ C 08.01 sheets [0010][0260] == C 02.00 [0220]
-                               (IRB of-which line).
+- ``total_rwea_c02_vs_ov1``    C 02.00 TREA == OV1 [29] (total). TREA is the
+                               total row under CRR; under Basel 3.1 it is
+                               max(U-TREA, floor) — row 0010, columns 0010 and
+                               0030 — because OF 02.00 column 0010 is UN-floored
+                               (Art. 92(2A); ``boe_b0560`` takes the same max).
+- ``credit_risk_rollup_c02``   C 02.00 credit risk == SA + IRB (``v0205_m`` /
+                               ``boe_b1093``: r0040 = r0050 + r0240 + ...).
+- ``sa_rwea_c07_vs_c02``       Σ C 07.00 sheets [0010][0220] == C 02.00 "SA
+                               exposure classes" (``v4744_i``). SA-method equity
+                               is on both sides: it has a C 07.00 sheet.
+- ``irb_rwea_c08_01_vs_c02``   Σ C 08.01 sheets [0010][0260] == C 02.00 IRB net
+                               of "Equity IRB" where the template has that row —
+                               Art. 155 equity is IRB RWEA but reports in
+                               C 10.01 (``v4260_i``), not C 08.01. The CLASS
+                               sheets: OF 08.01 also carries two Total sheets,
+                               which are their sum (``c08_class_sheets``).
 - ``irb_rwea_c08_01_vs_ov1``   Σ C 08.01 sheets [0010][0260] == OV1 [3]+[4]+[5]
                                (F-IRB + slotting + A-IRB).
+
+RECORDED CORRECTION (2026-11-13). The two C 02.00 class ties carried the equity
+term on the WRONG tie: the SA tie subtracted "Equity IRB" from the SA line and
+the IRB tie subtracted nothing. Measured on the CRR rich portfolio, whose IRB
+equity is 25,100,000: Σ C 07.00 = 17,353,450.00 against a stated -7,746,550.00,
+and Σ C 08.01 = 127,597,353.77 against 152,697,353.77 — two false TIE001
+findings on a consistent estate, each off by exactly the IRB equity. The premise
+behind it ("C 07.00 has no equity sheet") stopped being true when the
+Art. 112(1)(p) sheet was added.
+
+WHERE THE BASEL 3.1 FLOOR BINDS, ``irb_rwea_c08_01_vs_c02`` FIRES, AND THAT IS A
+FINDING ABOUT OF 08.01. OF 02.00 column 0010 is the un-floored RWEA; C 07.00 and
+C 08.01 still sum ``rwa_final``, which carries the engine's pro-rata floor
+add-on. The two agree on every run whose floor does not bind.
 
 THE TWO IRB TIES SPANNED A BASIS MIGRATION, AND BOTH SIDES HAVE NOW CROSSED.
 Their right-hand sides (C 02.00 row 0220, OV1 rows 3/4/5) moved to the
@@ -74,6 +97,9 @@ import polars as pl
 
 from rwa_calc.contracts.errors import ERROR_CROSS_TEMPLATE_INCONSISTENCY
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+from rwa_calc.reporting.corep import c02_rows as rows
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
+from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -226,70 +252,75 @@ TIE_OUTS: list[TieOut] = [
     TieOut(
         name="total_rwea_c02_vs_ov1",
         description=(
-            "Total RWEA in COREP C 02.00 (row 0010) equals the Pillar 3 OV1 total (row 29)."
+            "Total RWEA in COREP C 02.00 (row 0010) equals the Pillar 3 OV1 total "
+            "(row 29). Under Basel 3.1 column 0010 is the un-floored total, so the "
+            "total is the greater of it and the output floor in column 0030."
         ),
         regulatory_reference=(
-            "CRR Art. 92(3); COREP Annex II C 02.00 row 0010; Pillar 3 OV1 "
-            "row 29 (CRR Art. 438; PS1/26 Annex XX)"
+            "CRR Art. 92(3); PS1/26 Art. 92(2A); COREP Annex II C 02.00 row 0010; "
+            "Pillar 3 OV1 row 29 (CRR Art. 438; PS1/26 Annex XX)"
         ),
         templates=(_TEMPLATE_C02, "OV1"),
-        lhs_label="C 02.00 [0010][0010] total RWEA",
+        lhs_label="C 02.00 [0010] total RWEA (max of cols 0010 / 0030)",
         rhs_label="OV1 [29][a] total RWEA",
-        lhs=lambda c, _p: _cell(c.c_02_00, "0010", "0010"),
+        lhs=lambda c, _p: _c02_trea(c),
         rhs=lambda _c, p: _cell(p.ov1, "29", "a"),
     ),
     TieOut(
         name="credit_risk_rollup_c02",
         description=(
-            "COREP C 02.00 total credit-risk RWEA (row 0050) equals the SA "
-            "of-which line incl. equity (row 0060) plus the IRB of-which line "
-            "(row 0220)."
+            "COREP C 02.00 total credit-risk RWEA (row 0040) equals the "
+            "standardised approach (row 0050, incl. SA-method equity) plus the "
+            "IRB approach (row 0240)."
         ),
         regulatory_reference=(
-            "CRR Art. 92(3)(a); COREP Annex II C 02.00 rows 0050/0060/0220 "
-            "(PS1/26 Annex II OF 02.00)"
+            "CRR Art. 92(3)(a); COREP Annex II C 02.00 rows 0040/0050/0240 "
+            "(EBA v0205_m; PS1/26 Annex II OF 02.00, boe_b1093)"
         ),
         templates=(_TEMPLATE_C02,),
-        lhs_label="C 02.00 [0050][0010] credit-risk RWEA",
-        rhs_label="C 02.00 [0060]+[0220] (SA incl. equity + IRB)",
-        lhs=lambda c, _p: _cell(c.c_02_00, "0050", "0010"),
-        rhs=lambda c, _p: _rows_sum(c.c_02_00, ("0060", "0220"), "0010"),
+        lhs_label="C 02.00 [0040][0010] credit-risk RWEA",
+        rhs_label="C 02.00 [0050]+[0240] (SA + IRB)",
+        lhs=lambda c, _p: _c02_cell(c, rows.CREDIT_RISK),
+        rhs=lambda c, _p: _c02_sum(c, (rows.SA, rows.IRB)),
     ),
     TieOut(
         name="sa_rwea_c07_vs_c02",
         description=(
-            "Aggregate SA RWEA across the C 07.00 obligor-class sheets equals "
-            "the C 02.00 SA of-which line (row 0060) net of the equity RWEA "
-            "(row 0420) folded into it — C 07.00 has no equity sheet."
+            "Aggregate SA RWEA across the C 07.00 class sheets equals the "
+            "C 02.00 'SA exposure classes' line (row 0060). SA-method equity is "
+            "on both sides — it has a C 07.00 sheet — and IRB-method equity on "
+            "neither."
         ),
         regulatory_reference=(
-            "CRR Art. 92(3)(a); COREP Annex II C 07.00 col 0220 / C 02.00 rows "
-            "0060/0420 (PS1/26 Annex II OF 07.00 / OF 02.00)"
+            "CRR Art. 92(3)(a); COREP Annex II C 07.00 col 0220 / C 02.00 row "
+            "0060 (EBA v4744_i; PS1/26 Annex II OF 07.00 / OF 02.00)"
         ),
         templates=(_TEMPLATE_C07, _TEMPLATE_C02),
         lhs_label="Σ C 07.00 [0010][0220] SA RWEA",
-        rhs_label="C 02.00 [0060]-[0420] (SA of-which net of equity)",
-        lhs=lambda c, _p: _sheet_total(c.c07_00, "0220"),
-        rhs=lambda c, _p: _cell_diff(c.c_02_00, "0060", "0420", "0010"),
+        rhs_label="C 02.00 [0060][0010] SA exposure classes",
+        lhs=lambda c, _p: _sheet_total(c07_class_sheets(c.c07_00), "0220"),
+        rhs=lambda c, _p: _c02_cell(c, rows.SA_CLASSES),
     ),
     TieOut(
         name="irb_rwea_c08_01_vs_c02",
         description=(
             "Aggregate IRB RWEA across the C 08.01 class sheets equals the "
-            "C 02.00 IRB of-which line (row 0220). BOTH sides key the "
+            "C 02.00 IRB line (row 0240) net of 'Equity IRB' (row 0420, CRR "
+            "only), which reports in C 10.01. BOTH sides key the "
             "POST-substitution approach. Verify any change to either with a "
             "NON-zero-RW guarantor — a 0%-RW one crosses no RWEA and cannot "
             "tell a correct basis from an incomplete one."
         ),
         regulatory_reference=(
-            "CRR Art. 92(3)(a); COREP Annex II C 08.01 col 0260 / C 02.00 row "
-            "0220 (PS1/26 Annex II OF 08.01 / OF 02.00)"
+            "CRR Art. 92(3)(a); COREP Annex II C 08.01 col 0260 / C 02.00 rows "
+            "0240/0420 (EBA v3339_i/v3340_i/v4260_i; PS1/26 Annex II OF 08.01 / "
+            "OF 02.00)"
         ),
         templates=(_TEMPLATE_C08_01, _TEMPLATE_C02),
         lhs_label="Σ C 08.01 [0010][0260] IRB RWEA",
-        rhs_label="C 02.00 [0220][0010] IRB of-which RWEA",
-        lhs=lambda c, _p: _sheet_total(c.c08_01, "0260"),
-        rhs=lambda c, _p: _cell(c.c_02_00, "0220", "0010"),
+        rhs_label="C 02.00 [0240][0010] IRB RWEA net of Equity IRB",
+        lhs=lambda c, _p: _sheet_total(c08_class_sheets(c.c08_01), "0260"),
+        rhs=lambda c, _p: _c02_irb_excluding_equity(c),
     ),
     TieOut(
         name="irb_rwea_c08_01_vs_ov1",
@@ -307,7 +338,7 @@ TIE_OUTS: list[TieOut] = [
         templates=(_TEMPLATE_C08_01, "OV1"),
         lhs_label="Σ C 08.01 [0010][0260] IRB RWEA",
         rhs_label="OV1 [3]+[4]+[5] IRB RWEA",
-        lhs=lambda c, _p: _sheet_total(c.c08_01, "0260"),
+        lhs=lambda c, _p: _sheet_total(c08_class_sheets(c.c08_01), "0260"),
         rhs=lambda _c, p: _rows_sum(p.ov1, ("3", "4", "5"), "a"),
     ),
 ]
@@ -409,15 +440,55 @@ def _cell(df: pl.DataFrame | None, row_ref: str, col_ref: str) -> float | None:
     return float(value) if value is not None else None
 
 
-def _cell_diff(
-    df: pl.DataFrame | None, minuend_ref: str, subtrahend_ref: str, col_ref: str
+def _c02_cell(
+    corep: COREPTemplateBundle, slot: rows.Slot, col_ref: str = rows.COL_ALL_APPROACHES
 ) -> float | None:
-    """``df[minuend_ref][col] - df[subtrahend_ref][col]``; None if either absent."""
-    minuend = _cell(df, minuend_ref, col_ref)
-    subtrahend = _cell(df, subtrahend_ref, col_ref)
-    if minuend is None or subtrahend is None:
+    """One C 02.00 figure, at the row the bundle's own regime reports it in.
+
+    ``None`` when that regime's template has no such row, as well as for every
+    reason ``_cell`` gives.
+    """
+    row_ref = slot.ref(corep.framework)
+    return None if row_ref is None else _cell(corep.c_02_00, row_ref, col_ref)
+
+
+def _c02_sum(corep: COREPTemplateBundle, slots: tuple[rows.Slot, ...]) -> float | None:
+    """Sum of several C 02.00 figures; ``None`` unless EVERY one resolves.
+
+    A partial sum is never a valid side of a tie — it would silently understate
+    the aggregate — so one missing figure skips the whole tie.
+    """
+    total = 0.0
+    for slot in slots:
+        value = _c02_cell(corep, slot)
+        if value is None:
+            return None
+        total += value
+    return total
+
+
+def _c02_trea(corep: COREPTemplateBundle) -> float | None:
+    """The total risk exposure amount C 02.00 / OF 02.00 states.
+
+    CRR: the total row. Basel 3.1: column 0010 of that row is the UN-floored
+    total and column 0030 the output floor, and TREA is the greater (PS1/26
+    Art. 92(2A)). With no floor reported — an exempt entity, or no
+    ``OutputFloorSummary`` to take OF-ADJ from — it is the un-floored total.
+    """
+    unfloored = _c02_cell(corep, rows.TOTAL)
+    if unfloored is None:
         return None
-    return minuend - subtrahend
+    floor = _c02_cell(corep, rows.TOTAL, rows.COL_OUTPUT_FLOOR)
+    return unfloored if floor is None else max(unfloored, floor)
+
+
+def _c02_irb_excluding_equity(corep: COREPTemplateBundle) -> float | None:
+    """C 02.00 IRB RWEA net of "Equity IRB", where the template has that row."""
+    irb = _c02_cell(corep, rows.IRB)
+    if irb is None or rows.EQUITY_IRB.ref(corep.framework) is None:
+        return irb
+    equity = _c02_cell(corep, rows.EQUITY_IRB)
+    return None if equity is None else irb - equity
 
 
 def _rows_sum(df: pl.DataFrame | None, row_refs: tuple[str, ...], col_ref: str) -> float | None:

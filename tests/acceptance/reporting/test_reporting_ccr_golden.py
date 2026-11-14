@@ -75,7 +75,12 @@ def _generate_frames(regime_key: str) -> tuple[dict[str, pl.DataFrame], dict]:
     _subdir, framework = _REGIMES[regime_key]
     result = PipelineOrchestrator().run_with_data(build_reporting_ccr_bundle(), _config(regime_key))
 
-    corep = COREPGenerator().generate_from_lazyframe(result.results, framework=framework)
+    corep = COREPGenerator().generate_from_lazyframe(
+        result.results,
+        framework=framework,
+        # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+        output_floor_summary=result.output_floor_summary,
+    )
     pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)
 
     corep_frames, corep_meta = _flatten_bundle("corep", corep)
@@ -199,8 +204,13 @@ def test_basel31_reports_derivatives_in_c07() -> None:
     frames, _meta = _generate_frames("b31")
 
     # Assert
+    # The class sheets, and beside them the Total sheet (the sum of the classes).
     c07_sheets = sorted(key for key in frames if key.startswith("corep__c07_00__"))
-    assert c07_sheets == ["corep__c07_00__corporate", "corep__c07_00__institution"], (
+    assert c07_sheets == [
+        "corep__c07_00__corporate",
+        "corep__c07_00__institution",
+        "corep__c07_00__total",
+    ], (
         "the SA-CCR derivative netting sets must reach C 07.00 under Basel 3.1 "
         f"(sheets produced: {c07_sheets})"
     )

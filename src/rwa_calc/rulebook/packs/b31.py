@@ -948,7 +948,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # deposit of 300: RWA-REDUCING against the 20-day default (nets 276 instead of
     # 266.06), RWA-increasing against the 5-day SFT default (276 instead of 283.03).
     # The third sentence's Art. 226(1) scale-up is NOT applied to netting rows: no
-    # input carries a revaluation frequency for loans or deposits (P1.384).
+    # input carries a revaluation frequency for loans or deposits (P1.388).
     "on_bs_netting_liquidation_period": IntParam(
         name="on_bs_netting_liquidation_period",
         value=10,

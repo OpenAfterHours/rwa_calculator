@@ -31,3 +31,8 @@ scripts/coverage_metrics.json
 scripts/defect_scorecard.json
 .reference_dumps/
 .pytest_timings/
+
+# Referee differential: the Bank's taxonomy package, Arelle's environment, a run's files
+.taxonomy/
+.referee-run/
+.arelle-venv/

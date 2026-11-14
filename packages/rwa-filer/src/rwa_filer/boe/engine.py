@@ -119,6 +119,9 @@ REASON_UNSUPPORTED: Final = "unsupported"
 
 #: Failing evaluations recorded per rule.
 MAX_FAILURES: Final = 5
+#: Cell addresses recorded per failing evaluation. A summed sequence can read
+#: hundreds of cells; a viewer marking them needs the first screenful, not all.
+MAX_ADDRESSES: Final = 64
 
 AXIS_ROW: Final = "r"
 AXIS_COLUMN: Final = "c"
@@ -178,11 +181,38 @@ class Accuracy:
 
 
 @dataclass(frozen=True)
+class CellAddress:
+    """One cell an unsatisfied evaluation read, in the publisher's coordinates.
+
+    Attributes:
+        table: The table code.
+        sheet: The fixed-axis sheet code, or ``None`` for a table without one.
+        open_key: The open-axis member's local name, or ``None``.
+        row: The row code.
+        column: The column code.
+        reported: ``False`` for a cell the rule read at its default because the
+            return leaves it empty — often the cell the break is really about.
+    """
+
+    table: str
+    sheet: str | None
+    open_key: str | None
+    row: str
+    column: str
+    reported: bool = True
+
+
+@dataclass(frozen=True)
 class Failure:
-    """One unsatisfied evaluation: where it was, and what the rule's cells held."""
+    """One unsatisfied evaluation: where it was, and what the rule's cells held.
+
+    ``cells`` describes the cells in words, for a report; ``addresses`` locates
+    them, up to ``MAX_ADDRESSES``, for anything that marks them on a template.
+    """
 
     place: str
     cells: tuple[str, ...]
+    addresses: tuple[CellAddress, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1057,31 +1087,38 @@ class _Evaluation:
 
     def _failure(self, env: Mapping[str, str]) -> Failure:
         cells: list[str] = []
+        addresses: dict[CellAddress, None] = {}
         seen: set[int] = set()
         for reference in references(self._rule.tree):
             if id(reference) in seen:
                 continue
             seen.add(id(reference))
             selector = self._selectors[id(reference)]
+            table = selector.table.code
             label = _describe(reference)
             if reference.sequence:
-                values = [
-                    selector.data.cells[key]
-                    for key in self._matching(selector)
-                    if self._at(selector, key, env)
-                ]
+                keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
+                values = [selector.data.cells[key] for key in keys]
                 amounts = [item.value for value in values if (item := _amount(value)) is not None]
                 cells.append(f"{label} = {len(values)} cell(s), sum {_number(math.fsum(amounts))}")
+                addresses.update(dict.fromkeys(_address(table, key, reported=True) for key in keys))
                 continue
             key = self._cell(selector, env)
-            if key is not None and key in selector.data.cells:
+            reported = key is not None and key in selector.data.cells
+            if key is not None:
+                addresses[_address(table, key, reported=reported)] = None
+            if reported:
                 cells.append(f"{label} = {_show(selector.data.cells[key])}")
             else:
                 cells.append(f"{label} not reported")
         place = ", ".join(
             f"{_axis_label(axis)} {local_name(value)}" for axis, value in sorted(env.items())
         )
-        return Failure(place=place, cells=tuple(cells[:8]))
+        return Failure(
+            place=place,
+            cells=tuple(cells[:8]),
+            addresses=tuple(addresses)[:MAX_ADDRESSES],
+        )
 
 
 # =============================================================================
@@ -1248,6 +1285,19 @@ def _compare(operator: str, left: object, right: object, interval: bool) -> bool
             return left >= right
         return left > right
     return False
+
+
+def _address(table: str, key: _CellKey, *, reported: bool) -> CellAddress:
+    """A cell key as the address a failure records."""
+    sheet, member, row, column = key
+    return CellAddress(
+        table=table,
+        sheet=sheet,
+        open_key=None if member is None else local_name(member),
+        row=row,
+        column=column,
+        reported=reported,
+    )
 
 
 def _describe(reference: Reference) -> str:

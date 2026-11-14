@@ -12,12 +12,19 @@ and evaluates them as the Bank's gateway does, for 14 reporting modules
 `rwa-filer` is a standalone package. It lives in the
 [rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator) repository as a
 uv workspace member and is released separately from `rwa-calc`: it depends on
-Polars alone and never imports `rwa_calc`. `rwa-calc` uses it to validate the
+Polars and, for its dashboard, a small web stack (Starlette, uvicorn, Jinja2), and
+never imports `rwa_calc`. `rwa-calc` uses it to validate the
 returns it generates; any other system that can produce template-level figures
 can use it the same way.
 
 ```bash
 pip install rwa-filer
+```
+
+```bash
+# The dashboard: open a return in the browser and walk from the verdict to the
+# broken rules to the cells on the template grid that broke them
+uvx rwa-filer dash return.xbrl
 ```
 
 ```bash

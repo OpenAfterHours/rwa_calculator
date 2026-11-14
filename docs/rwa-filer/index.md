@@ -2,8 +2,9 @@
 
 `rwa-filer` validates regulatory returns against the supervisor's own published
 rules and writes them in the format the regulator accepts. It is a separate
-package from the calculator: it depends on Polars alone, never imports
-`rwa_calc`, and is released on its own version. `rwa-calc` uses it to check the
+package from the calculator: it depends on Polars and, for its dashboard, a small
+web stack (Starlette, uvicorn, Jinja2); it never imports `rwa_calc`, and is
+released on its own version. `rwa-calc` uses it to check the
 returns it generates; any other system that can produce template-level figures
 can use it the same way.
 
@@ -29,6 +30,7 @@ pip install rwa-filer
 | XBRL submission file: `rwa-filer build` writes the instance, a zip where required, and a manifest | Available |
 | Preparer workflow: cell adjustments with reasons, an audit ledger, sign-off, and a diff between two versions | Available |
 | Arelle referee: `rwa-filer referee` runs an independent XBRL processor on a written file and compares its verdict on every rule with this package's own | Available (needs Arelle and the Bank's taxonomy package) |
+| Local web dashboard: `rwa-filer dash` — the verdict, the rules and the template grid in a browser ([guide](dash.md)) | Available |
 
 ## Validating a file
 
@@ -534,6 +536,9 @@ and the register is empty.
 ## The `rwa-filer` command
 
 ```bash
+# The dashboard in a browser, with a return opened in it (see the dashboard guide)
+uvx rwa-filer dash return.xbrl
+
 # The packaged Bank of England rule books: modules, rules, rules enforced
 rwa-filer rulebook list
 

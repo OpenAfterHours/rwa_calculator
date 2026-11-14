@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Open a return — rwa-filer dash{% endblock %}
+{% block content %}
+<div>
+  <h1>Open a return</h1>
+  <p class="lede">Check a return from any system against the taxonomy and the Bank of England's published rules. The file is read on this machine; nothing is uploaded anywhere.</p>
+</div>
+
+{% if error %}
+<div class="callout callout-fail" role="alert" id="open-error">
+  <div class="body"><div class="title">The return could not be opened</div><p>{{ error }}</p></div>
+</div>
+{% endif %}
+
+<div class="split">
+  <form class="wide" method="post" action="/open" enctype="multipart/form-data">
+    <label class="dropzone">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="color: var(--accent-text)"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"></path><path d="M4 15v4h16v-4"></path></svg>
+      <span class="title">Choose a return to open</span>
+      <span class="small muted mono">.parquet · .csv · .xlsx · .xbrl · .zip</span>
+      <input type="file" name="file" accept=".parquet,.csv,.xlsx,.xbrl,.zip">
+    </label>
+    <label class="field">Or the path of a file on this machine
+      <input type="text" name="path" value="{{ values.path or '' }}" placeholder="/path/to/return.xbrl" spellcheck="false">
+    </label>
+
+    <section class="panel">
+      <div>
+        <h2>Return header</h2>
+        <p class="small muted" style="margin: 4px 0 0">A fact table (.parquet or .csv) carries no header, so the entity, the reference date and the module are required for one. A workbook or an XBRL instance states its own; anything entered here overrides it.</p>
+      </div>
+      <div class="fields">
+        <label class="field" style="flex: 2 1 260px">Entity identifier (LEI)
+          <input type="text" name="entity" value="{{ values.entity or '' }}" maxlength="40" spellcheck="false" class="mono">
+        </label>
+        <label class="field">Reference date
+          <input type="date" name="reference_date" value="{{ values.reference_date or '' }}">
+        </label>
+        <label class="field">Module
+          <select name="module">
+            <option value="">From the file</option>
+            {% for module in modules %}<option value="{{ module }}"{% if values.module == module %} selected{% endif %}>{{ module }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="field" style="flex: 1 1 100px"><span>Currency <span class="hint">default GBP</span></span>
+          <input type="text" name="currency" value="{{ values.currency or '' }}" maxlength="3">
+        </label>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" type="submit">Validate</button>
+        <span class="small muted">Structure first, then the published rules. A PRA001 return takes a few seconds.</span>
+      </div>
+      <div class="command">Same check on the command line: <span class="mono">rwa-filer validate FILE --entity LEI --reference-date YYYY-MM-DD --module PRA001</span></div>
+    </section>
+  </form>
+
+  <aside class="narrow">
+    <section class="panel">
+      <h2>Opened this session</h2>
+      {% if opened_returns %}
+      {% for item in opened_returns %}
+      <a class="rule-item" href="/returns/{{ item.return_id }}">
+        <span class="top">
+          {% if item.validation.is_submittable %}<span class="chip chip-pass">Submittable</span>{% elif item.validation.structure %}<span class="chip chip-fail">Blocked by structure</span>{% else %}<span class="chip chip-fail">Blocked</span>{% endif %}
+          <span class="evals">{{ item.ret.facts.height | count }} facts</span>
+        </span>
+        <span class="label mono">{{ item.name }}</span>
+        <span class="where">{{ item.ret.header.module }} · {{ item.ret.header.reference_date.isoformat() }} · {{ item.validation.blocking | length }} blocking</span>
+      </a>
+      {% endfor %}
+      {% else %}
+      <p class="small muted" style="margin: 0">Nothing yet. Returns you open stay here until the dashboard is stopped.</p>
+      {% endif %}
+    </section>
+    <section class="panel">
+      <h2>Start from a blank template</h2>
+      <p class="small muted" style="margin: 0">A workbook in the template layout, one worksheet per table and sheet, with the cells the taxonomy does not accept shaded grey.</p>
+      <div class="command"><span class="mono">rwa-filer template --module PRA001 --reference-date 2027-03-31 --out return.xlsx</span></div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

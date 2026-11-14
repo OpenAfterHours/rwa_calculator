@@ -7,10 +7,28 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- `rwa-filer dash` — a local web dashboard (`uvx rwa-filer dash return.xbrl`).
+  Open a return from a file or a path; see whether anything blocks submission
+  with the counts behind the verdict, including how many rules ran and why the
+  rest did not; filter and search the rules, each with its expression and the
+  cells it read; and see any table of the return on its template grid, laid out
+  from the taxonomy pack, with cells the sheet does not accept hatched and every
+  cell a broken rule read outlined. Listens on `127.0.0.1` and answers only the
+  browser holding the session token the command prints. Dark by default, with a
+  light theme. Guide: `docs/rwa-filer/dash.md`.
+- `boe.engine.CellAddress` and `Failure.addresses`: each failing evaluation now
+  records where the cells it read are (table, sheet, open-axis key, row,
+  column), up to `MAX_ADDRESSES`, and whether each was reported or read at its
+  default. `Failure.cells` still describes them in words.
+- `readers.open_source` and `readers.HeaderFields`: read a file the way
+  `rwa-filer validate` does — check it exists and is supported, require a
+  header for a fact table, apply any header field given over the file's own.
+  The command line and the dashboard share it.
 
 ### Changed
-- (Next release changes will go here)
+- Starlette, uvicorn, Jinja2 and python-multipart are now dependencies, for the
+  dashboard. They are required rather than an extra so that `uvx rwa-filer dash`
+  works as typed; nothing outside `rwa_filer.dash` imports them.
 - The package metadata now carries a `Documentation` link, so the PyPI page
   points to the rwa-filer docs
   (<https://openafterhours.github.io/rwa_calculator/rwa-filer/>), and the README

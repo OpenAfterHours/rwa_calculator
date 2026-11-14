@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_chip %}
+{% block title %}Rules · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set base = "/returns/" ~ current.return_id ~ "/rules" %}
+{% set grid_url = "/returns/" ~ current.return_id ~ "/templates" %}
+{% set labels = {"FAIL": "Failed", "PASS": "Passed", "NOT_EVALUATED": "Not evaluated"} %}
+<div>
+  <div class="small muted">Rules</div>
+  <h1>{{ "Why the return is blocked" if not current.validation.is_submittable and view.counts["FAIL"] else "The published rules" }}</h1>
+  <p class="lede">{{ (view.counts.values() | sum) | count }} rules enforced for {{ current.ret.header.module }}, evaluated the way the taxonomy's XBRL formulas evaluate them. Pick a rule to see the cells it read.</p>
+</div>
+
+<div class="filters">
+  <nav class="seg" aria-label="Status">
+    {% for status in ["FAIL", "PASS", "NOT_EVALUATED"] %}
+    <a href="{{ link(base, status=status, severity=view.severity if status == 'FAIL' else '', template=view.template, q=view.query) }}"{% if view.status == status %} aria-current="true"{% endif %}>{{ labels[status] }} {{ view.counts[status] | count }}</a>
+    {% endfor %}
+  </nav>
+  <form method="get" action="{{ base }}">
+    <input type="hidden" name="status" value="{{ view.status }}">
+    {% if view.status == "FAIL" %}
+    <label class="visually-hidden" for="severity">Severity</label>
+    <select id="severity" name="severity">
+      <option value="">Every severity</option>
+      <option value="ERROR"{% if view.severity == "ERROR" %} selected{% endif %}>Error</option>
+      <option value="WARNING"{% if view.severity == "WARNING" %} selected{% endif %}>Warning</option>
+    </select>
+    {% endif %}
+    <label class="visually-hidden" for="template">Template</label>
+    <select id="template" name="template">
+      <option value="">Every template</option>
+      {% for code in view.templates %}<option value="{{ code }}"{% if view.template == code %} selected{% endif %}>{{ code }}</option>{% endfor %}
+    </select>
+    <label class="visually-hidden" for="q">Search rules</label>
+    <input id="q" type="search" name="q" value="{{ view.query }}" placeholder="Rule ID or words in its label" style="flex: 1 1 220px">
+    <button class="btn" type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="split">
+  <section class="wide" aria-label="Rule list">
+    <div class="small muted">{{ view.matched | count }} {{ labels[view.status] | lower }} rule{{ "s" if view.matched != 1 }}{% if view.pages > 1 %} · page {{ view.page }} of {{ view.pages }}{% endif %}</div>
+    {% if view.rows %}
+    <div class="rule-list">
+      {% for row in view.rows %}
+      <a class="rule-item" href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page if view.page > 1 else '', rule=row.rule_id) }}"{% if view.selected and view.selected.row.rule_id == row.rule_id %} aria-current="true"{% endif %}>
+        <span class="top">{{ status_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span>
+          <span class="evals">{% if row.status == "FAIL" %}{{ row.unsatisfied }} of {{ row.evaluations }} break{% elif row.status == "PASS" %}{{ row.satisfied }} hold{% else %}{{ row.reason }}{% endif %}</span>
+        </span>
+        <span class="label">{{ row.label or "No label published" }}</span>
+        <span class="where">{{ row.templates | join(" · ") }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% if view.pages > 1 %}
+    <div class="pager">
+      {% if view.page > 1 %}<a class="btn" href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page - 1) }}">Previous</a>{% endif %}
+      {% if view.page < view.pages %}<a class="btn" href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page + 1) }}">Next</a>{% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="panel"><p class="muted" style="margin: 0">No rule matches.{% if view.status == "FAIL" and not view.query and not view.template %} Nothing is broken.{% endif %}</p></div>
+    {% endif %}
+  </section>
+
+  {% if view.selected %}
+  {% set rule = view.selected %}
+  <section class="narrow panel" aria-label="Rule detail" id="rule-detail" style="flex: 2 1 460px">
+    <div class="panel-head">
+      <span style="display: flex; gap: 8px; align-items: center">{{ status_chip(rule.row) }}<span class="mono" style="color: var(--strong)">{{ rule.row.rule_id }}</span></span>
+      <span class="small muted mono">{{ rule.row.templates | join(" · ") }}</span>
+    </div>
+    <h2 style="font-size: 21px; line-height: 1.3">{{ rule.row.label or "No label published" }}</h2>
+    <div class="stats">
+      <div class="stat"><div class="small muted">Evaluations that hold</div><div class="value">{{ rule.row.satisfied | count }}</div></div>
+      <div class="stat"><div class="small muted">Evaluations that break</div><div class="value" style="color: var({{ '--fail' if rule.row.unsatisfied else '--strong' }})">{{ rule.row.unsatisfied | count }}</div></div>
+      {% if rule.row.status == "NOT_EVALUATED" %}
+      <div class="stat" style="flex: 2 1 240px"><div class="small muted">Not evaluated because</div><div class="mono" style="color: var(--strong)">{{ rule.row.reason }}</div><div class="small muted">{{ rule.reason_text }}{% if rule.detail %}: {{ rule.detail }}{% endif %}</div></div>
+      {% endif %}
+    </div>
+    {% if rule.expression %}
+    <div>
+      <h3>The rule, as the Bank's workbook states it</h3>
+      <pre class="expr">{{ rule.expression }}</pre>
+      {% if rule.scope %}<h3 style="margin-top: 10px">Scope</h3><pre class="expr">{{ rule.scope }}</pre>{% endif %}
+    </div>
+    {% endif %}
+    {% if rule.failures %}
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h3>Where it breaks{% if rule.row.unsatisfied > rule.failures | length %} — the first {{ rule.failures | length }} of {{ rule.row.unsatisfied }}{% endif %}</h3>
+      {% for failure in rule.failures %}
+      <div class="failure">
+        <div class="place">{{ "At " ~ failure.place if failure.place else "One evaluation over the whole template" }}</div>
+        <ul>{% for cell in failure.cells %}<li>{{ cell }}</li>{% endfor %}</ul>
+        {% if failure.addresses %}
+        <div class="cells" aria-label="Cells on the template grid">
+          {% for address in failure.addresses[:24] %}
+          <a href="{{ link(grid_url, table=address.table, sheet=address.sheet or '', key=address.open_key or '', row=address.row, col=address.column, focus=rule.row.rule_id) }}"{% if not address.reported %} class="empty" title="Not reported: read at its default"{% endif %}>{{ address.table }}{% if address.sheet %} z{{ address.sheet }}{% endif %}{% if address.open_key %} {{ address.open_key }}{% endif %} r{{ address.row }} c{{ address.column }}</a>
+          {% endfor %}
+          {% if failure.addresses | length > 24 %}<span class="small muted">and {{ failure.addresses | length - 24 }} more</span>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

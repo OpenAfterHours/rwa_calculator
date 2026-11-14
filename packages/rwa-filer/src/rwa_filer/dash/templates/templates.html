@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_macros.html" import severity_chip %}
+{% block title %}Templates · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set base = "/returns/" ~ current.return_id ~ "/templates" %}
+{% set rules_url = "/returns/" ~ current.return_id ~ "/rules" %}
+{% if not grid %}
+<div>
+  <div class="small muted">Templates</div>
+  <h1>No table to show</h1>
+  <p class="lede">The return holds no fact in any table the {{ current.pack.info.module }} taxonomy has.</p>
+</div>
+{% else %}
+<div class="page-head">
+  <div style="min-width: 0">
+    <div class="small muted">Templates</div>
+    <h1>{{ grid.table }}</h1>
+    <p class="lede">{{ grid.title }}</p>
+  </div>
+  <form method="get" action="{{ base }}" class="btn-row">
+    <label class="visually-hidden" for="table">Table</label>
+    <select id="table" name="table">
+      {% for choice in grid.choices %}<option value="{{ choice.code }}"{% if choice.code == grid.table %} selected{% endif %}>{{ choice.code }}{% if choice.marks %} — {{ choice.marks }} flagged{% endif %}</option>{% endfor %}
+    </select>
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+
+{% if grid.pages | length > 1 or grid.page.sheet or grid.page.open_key %}
+<nav class="sheet-tabs" aria-label="Sheets">
+  {% for page in grid.pages %}
+  <a href="{{ link(base, table=grid.table, sheet=page.sheet or '', key=page.open_key or '') }}"{% if page == grid.page %} aria-current="true"{% endif %}>
+    <span class="code mono">{% if page.sheet %}z{{ page.sheet }}{% endif %}{% if page.open_key %} {{ page.open_key }}{% endif %} {% if page.marks %}<span class="chip chip-fail">{{ page.marks }} flagged</span>{% else %}<span class="chip chip-pass">clean</span>{% endif %}</span>
+    <span class="name">{{ page.label }}</span>
+  </a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+<div class="grid-legend">
+  <span><span class="key key-locked"></span>not reportable</span>
+  <span><span class="key key-error"></span>read by a broken Error rule</span>
+  <span><span class="key key-warning"></span>read by a broken Warning rule</span>
+  <span><span class="key key-selected"></span>selected</span>
+  {% if grid.focus %}<span>showing <span class="mono">{{ grid.focus }}</span> only · <a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '') }}">show every break</a></span>{% endif %}
+  <span style="margin-left: auto">{{ grid.values | count }} facts here · {{ grid.rows | length }} rows × {{ grid.columns | length }} columns, laid out from the taxonomy</span>
+</div>
+
+<div class="split">
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th scope="col" class="corner">Row</th>
+          {% for code, label in grid.columns %}<th scope="col" title="{{ label }}"{% if grid.cell and grid.cell.column == code %} class="picked-column"{% endif %}>{{ code }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in grid.rows %}
+        <tr>
+          <th scope="row" class="row-head" title="{{ row.label }}"><span class="code">{{ row.code }}</span>{{ row.label }}</th>
+          {% for cell in row.cells %}
+          <td class="{% if not cell.reportable %}cell-locked{% endif %}{% if cell.tone %} cell-{{ cell.tone }}{% endif %}{% if cell.selected %} cell-selected{% endif %}"><a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=row.code, col=cell.column, focus=grid.focus) }}" aria-label="Row {{ row.code }}, column {{ cell.column }}{% if cell.text %}, {{ cell.text }}{% elif not cell.reportable %}, not reportable{% else %}, empty{% endif %}{% if cell.marks %}, read by {{ cell.marks | length }} broken rule{{ 's' if cell.marks | length != 1 }}{% endif %}">{{ cell.text }}</a></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <aside class="narrow panel cell-panel" aria-label="Selected cell" style="flex: 1 1 300px">
+    {% if grid.cell %}
+    {% set cell = grid.cell %}
+    <div class="coords">{{ grid.table }}{% if grid.page.sheet %} · z{{ grid.page.sheet }}{% endif %}{% if grid.page.open_key %} · {{ grid.page.open_key }}{% endif %} · r{{ cell.row }} · c{{ cell.column }}</div>
+    <div><div class="small muted">Row {{ cell.row }}</div><div style="color: var(--strong)">{{ cell.row_label }}</div></div>
+    <div><div class="small muted">Column {{ cell.column }}</div><div style="color: var(--strong)">{{ cell.column_label }}</div></div>
+    <div class="stat">
+      <div class="small muted">{% if not cell.reportable %}Not reportable on this sheet{% elif cell.value %}Reported{% if cell.data_type %} · {{ cell.data_type }}{% endif %}{% else %}Reportable, not reported{% if cell.data_type %} · {{ cell.data_type }}{% endif %}{% endif %}</div>
+      <div class="value">{{ cell.value or "—" }}</div>
+    </div>
+    <h3>{{ "Broken rules that read this cell" if cell.marks else "No broken rule reads this cell" }}</h3>
+    {% for mark in cell.marks %}
+    <a class="mark" href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=cell.row, col=cell.column, focus='' if grid.focus == mark.rule_id else mark.rule_id) }}"{% if grid.focus == mark.rule_id %} aria-current="true"{% endif %}>
+      <span style="display: flex; gap: 8px; align-items: center">{{ severity_chip(mark.severity) }}<span class="mono small muted">{{ mark.rule_id }}</span>{% if not mark.reported %}<span class="small muted">read at its default</span>{% endif %}</span>
+      <span class="small" style="display: block; margin-top: 4px">{{ "Showing only its cells — select again for every break" if grid.focus == mark.rule_id else "Show only this rule's cells" }}</span>
+    </a>
+    <a class="small" href="{{ link(rules_url, rule=mark.rule_id) }}">Why {{ mark.rule_id }} breaks</a>
+    {% endfor %}
+    {% else %}
+    <p class="muted" style="margin: 0">Pick a cell to see its row, its column and the rules that read it.</p>
+    {% endif %}
+  </aside>
+</div>
+<script>
+  // Bring the picked cell into view: a wide table would otherwise hide it.
+  document.querySelector(".cell-selected a")?.scrollIntoView({ block: "nearest", inline: "center" });
+</script>
+{% endif %}
+{% endblock %}

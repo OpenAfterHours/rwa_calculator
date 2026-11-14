@@ -24,23 +24,28 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+from rwa_filer.model import LEI_SCHEME, ReturnHeader
 from rwa_filer.readers.tabular import read_csv, read_parquet
 
 if TYPE_CHECKING:
+    from datetime import date
     from pathlib import Path
 
-    from rwa_filer.model import CanonicalReturn, ReturnHeader
+    from rwa_filer.model import CanonicalReturn
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
 
 __all__ = [
     "INSTANCE_SUFFIXES",
     "SUPPORTED_SUFFIXES",
+    "HeaderFields",
     "SourceReading",
+    "carries_header",
     "load_source",
+    "open_source",
     "read_csv",
     "read_parquet",
     "read_return",
@@ -70,6 +75,59 @@ class SourceReading:
     ret: CanonicalReturn
     pack: TaxonomyPack | None = None
     findings: tuple[Finding, ...] = ()
+
+
+@dataclass(frozen=True)
+class HeaderFields:
+    """Return-header fields a person supplies beside a file, each optional.
+
+    A fact table needs the first three: it carries no header of its own. A
+    workbook or an instance carries one, and any field given here overrides it.
+    """
+
+    entity: str | None = None
+    reference_date: date | None = None
+    module: str | None = None
+    currency: str | None = None
+    entity_scheme: str | None = None
+
+
+def carries_header(path: Path) -> bool:
+    """Whether a file of this type states its own return header."""
+    suffix = path.suffix.lower()
+    return suffix == ".xlsx" or suffix in INSTANCE_SUFFIXES
+
+
+def open_source(path: Path, fields: HeaderFields | None = None) -> SourceReading:
+    """Read a file a person named, as ``rwa-filer validate`` and the dashboard do.
+
+    Checks the file exists and is of a supported type, reads it, and applies any
+    header field given over the header the file states.
+
+    Raises:
+        ValueError: the file is missing, of an unsupported type, lacks a header
+            it needs, or is not readable as what its suffix says it is.
+    """
+    fields = fields or HeaderFields()
+    suffix = path.suffix.lower()
+    if not path.is_file():
+        raise ValueError(f"file not found: {path}")
+    if suffix not in (*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES):
+        accepted = ", ".join((*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES))
+        raise ValueError(f"unsupported file type {path.suffix!r}; expected one of {accepted}")
+    source = load_source(path, _header(fields, required=not carries_header(path)))
+    overrides = {
+        "entity_identifier": fields.entity,
+        "reference_date": fields.reference_date,
+        "module": fields.module,
+        "currency": fields.currency,
+        "entity_scheme": fields.entity_scheme,
+    }
+    changed = {name: value for name, value in overrides.items() if value}
+    if not changed:
+        return source
+    ret = source.ret
+    return replace(source, ret=replace(ret, header=replace(ret.header, **changed)))
 
 
 def load_source(path: Path, header: ReturnHeader | None = None) -> SourceReading:
@@ -120,3 +178,26 @@ def read_return(path: Path, header: ReturnHeader | None = None) -> CanonicalRetu
             "(entity identifier, reference date, module)"
         )
     return read_parquet(path, header) if suffix == ".parquet" else read_csv(path, header)
+
+
+def _header(fields: HeaderFields, *, required: bool) -> ReturnHeader | None:
+    """A header from ``fields``, or ``None`` when the file supplies its own.
+
+    Raises:
+        ValueError: the file needs a header and the three required fields were
+            not all given.
+    """
+    if not (fields.entity and fields.reference_date and fields.module):
+        if required:
+            raise ValueError(
+                "a fact table carries no header: --entity, --reference-date and --module "
+                "are all required"
+            )
+        return None
+    return ReturnHeader(
+        entity_identifier=fields.entity,
+        reference_date=fields.reference_date,
+        module=fields.module,
+        currency=fields.currency or "GBP",
+        entity_scheme=fields.entity_scheme or LEI_SCHEME,
+    )

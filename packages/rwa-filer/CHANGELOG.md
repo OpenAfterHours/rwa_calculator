@@ -7,6 +7,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.2] - 2026-11-14
+
+### Added
 - `rwa-filer compare BASELINE CANDIDATE`: a return beside the one another
   system produced, or beside the filing it replaces, and why they differ.
   Every cell goes into one category: the same, within the rounding the files

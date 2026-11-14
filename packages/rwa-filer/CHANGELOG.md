@@ -7,16 +7,6 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
-
-### Changed
-- (Next release changes will go here)
-
----
-
-## [0.1.0] - 2026-11-14
-
-### Added
 - Package scaffold: the `rwa_filer` import package, the `rwa-filer` command
   (`--version`, `--help`) and an isolated test suite that runs with `rwa-calc`
   absent.
@@ -154,6 +144,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
   packs do not yet account for every sample fact.
 
 ### Changed
+- (Next release changes will go here)
 - `validate_return` and `rwa-filer validate` / `build` now run the v4.1.1 rule
   books through the new engine. Verdicts change, and are stricter: an
   unreported cell is zero to a rule that says so, where the earlier engine

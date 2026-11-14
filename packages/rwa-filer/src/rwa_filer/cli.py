@@ -8,6 +8,8 @@ Key responsibilities:
 - Parse the command line and dispatch to a subcommand.
 - Write results to stdout and diagnostics to stderr, and return a process exit
   code. This module holds no validation or filing logic of its own.
+- Report a missing optional extra (``MissingExtraError``, from whichever
+  command reached the workbook) as one diagnostic line, not a traceback.
 
 Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
@@ -52,7 +54,7 @@ Exit codes:
     0  success — for ``validate`` and ``build``, nothing blocks submission;
        for ``referee``, Arelle accepts the instance and the engines agree
     1  the command ran and the answer is "no" (a blocking finding, a stale
-       extract, a missing file)
+       extract, a missing file), or it needs an extra that is not installed
     2  usage error (argparse's own convention)
 """
 
@@ -71,6 +73,7 @@ from typing import Any
 from rwa_filer import __version__
 from rwa_filer.boe import importer as boe_importer
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
+from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
 from rwa_filer.model import LEI_SCHEME, CanonicalReturn, ReturnHeader
 from rwa_filer.readers import INSTANCE_SUFFIXES, SUPPORTED_SUFFIXES, SourceReading, load_source
@@ -117,7 +120,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if handler is None:
         parser.print_help(sys.stdout)
         return EXIT_OK
-    return handler(args)
+    try:
+        return handler(args)
+    except MissingExtraError as exc:
+        # Caught here, not per handler, so that every command which can reach a
+        # workbook is covered, including one added later. Only this subclass: an
+        # import error in the package itself is a defect, and its traceback is the
+        # report.
+        return _fail(str(exc))
 
 
 def build_parser() -> argparse.ArgumentParser:

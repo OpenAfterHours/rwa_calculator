@@ -8,6 +8,22 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Added
 - (Next release changes will go here)
+- `rwa_filer.extras.MissingExtraError`, raised by everything that opens a
+  workbook when openpyxl (the `excel` extra) is not installed. It is a
+  `ModuleNotFoundError`, so code that catches that keeps working.
+
+### Fixed
+- A command that needs the `excel` extra, run without it, now prints one line
+  on stderr and exits 1, as any other refusal does. Before, it ended in a
+  Python traceback with the useful message on its last line. This covers
+  `validate`, `build` and `diff` given an `.xlsx`, `template`,
+  `taxonomy compile`, `rulebook import` / `check` and `rules import` / `check`.
+  The message is now the same wherever a workbook is opened.
+  `rulebook import` / `check` used to fail with Python's bare
+  `No module named 'openpyxl'`, and `taxonomy compile` still gave
+  `pip install`. Each one now names the command to run:
+  `uvx "rwa-filer[excel]@latest" <command> ...`, or
+  `uv add "rwa-filer[excel]"` in a project.
 
 ### Changed
 - (Next release changes will go here)

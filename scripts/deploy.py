@@ -186,6 +186,8 @@ ROOT_PACKAGE = "rwa-calc"
 ROOT_PYPROJECT = "pyproject.toml"
 #: The root project's suite, run before an rwa-calc release changes anything.
 ROOT_TEST_COMMAND = ("uv", "run", "pytest", "-x", "-q")
+#: Every release mode refuses to push from a detached HEAD.
+DETACHED_HEAD_ERROR = "\nERROR: HEAD is detached. Check out the release branch and re-run."
 
 #: The ``--package`` value that releases every workspace package, in dependency
 #: order. Adding a package to ``MEMBER_RELEASES`` adds it to this release.
@@ -890,6 +892,16 @@ def irreversible_steps(args: argparse.Namespace, tag: str) -> list[str]:
     return steps
 
 
+def confirm_steps(steps: list[str], *, assume_yes: bool) -> bool:
+    """Name the irreversible steps and ask to go on; True straight away if none or ``--yes``."""
+    if not steps or assume_yes:
+        return True
+    print("\nOnce every check has passed, this run will:")
+    for step in steps:
+        print(f"  - {step}")
+    return confirm_irreversible()
+
+
 def confirm_irreversible() -> bool:
     """Prompt for interactive confirmation of the irreversible steps."""
     response = input("Continue? [y/N]: ").strip().lower()
@@ -1004,7 +1016,7 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
     github_release = wants_github_release(args)
     branch = current_branch()
     if push and branch is None:
-        print("\nERROR: HEAD is detached. Check out the release branch and re-run.")
+        print(DETACHED_HEAD_ERROR)
         return 1
     push_target = branch if push else None
 
@@ -1204,7 +1216,7 @@ def run_member_release(args: argparse.Namespace, member: MemberRelease, new_vers
     github_release = wants_github_release(args)
     branch = current_branch()
     if push and branch is None:
-        print("\nERROR: HEAD is detached. Check out the release branch and re-run.")
+        print(DETACHED_HEAD_ERROR)
         return 1
     push_target = branch if push else None
 
@@ -1272,12 +1284,8 @@ def main_member(args: argparse.Namespace, member: MemberRelease) -> int:
         return 0
 
     steps = irreversible_steps(args, member.tag(new_version))
-    if steps and not args.yes:
-        print("\nOnce every check has passed, this run will:")
-        for step in steps:
-            print(f"  - {step}")
-        if not confirm_irreversible():
-            return 1
+    if not confirm_steps(steps, assume_yes=args.yes):
+        return 1
 
     return run_member_release(args, member, new_version)
 
@@ -1389,39 +1397,20 @@ def run_all_release(args: argparse.Namespace, plan: list[PlannedRelease]) -> int
     publishes = github_release or args.publish
     branch = current_branch()
     if push and branch is None:
-        print("\nERROR: HEAD is detached. Check out the release branch and re-run.")
+        print(DETACHED_HEAD_ERROR)
         return 1
 
-    if push and branch is not None:
-        for release in plan:
-            if not check_release_preflight(branch, release.tag, github_release=github_release):
-                return 1
-
-    if not args.skip_tests:
-        for release in plan:
-            if not run_command(
-                list(suite_command_for(release.name)), f"Running {release.name} tests"
-            ):
-                print(f"\n{release.name} tests failed. Nothing was released.")
-                return 1
+    if not _check_before_any_release(args, plan, branch if push else None, github_release):
+        return 1
 
     # The suites have run; each package's own flow must not run them again.
     package_args = argparse.Namespace(**{**vars(args), "skip_tests": True})
     for index, release in enumerate(plan):
-        print(f"\n=== {release.name} {release.current} -> {release.new} ({release.tag}) ===")
-        member = MEMBER_RELEASES.get(release.name)
-        if member is not None:
-            rc = run_member_release(package_args, member, release.new)
-        else:
-            rc = run_release(package_args, release.new, release.current)
+        rc = _release_package(package_args, release)
         if rc != 0:
             _report_unfinished(plan, index, partial=True)
             return rc
-
-        waiting = dependents_later_in(plan, index)
-        if publishes and waiting and not wait_for_pypi(release.name, release.new):
-            print(f"  {', '.join(waiting)} depend on it, so the release stops here.")
-            print("  Check the publish run: gh run list --workflow=publish.yml --limit 3")
+        if publishes and not _await_on_pypi(plan, index):
             _report_unfinished(plan, index + 1, partial=False)
             return 1
 
@@ -1442,8 +1431,8 @@ def main_all(args: argparse.Namespace) -> int:
         print(f"  {release.name}: {release.current} -> {release.new} ({release.tag})")
 
     # Every package is checked, so one run reports every range that needs widening.
-    admitted = [check_dependents_admit(release.name, release.new) for release in plan]
-    if not all(admitted):
+    refused = [r.name for r in plan if not check_dependents_admit(r.name, r.new)]
+    if refused:
         return 1
 
     if args.dry_run:
@@ -1451,14 +1440,50 @@ def main_all(args: argparse.Namespace) -> int:
         return 0
 
     steps = [step for release in plan for step in irreversible_steps(args, release.tag)]
-    if steps and not args.yes:
-        print("\nOnce every check has passed, this run will:")
-        for step in steps:
-            print(f"  - {step}")
-        if not confirm_irreversible():
-            return 1
+    if not confirm_steps(steps, assume_yes=args.yes):
+        return 1
 
     return run_all_release(args, plan)
+
+
+def _check_before_any_release(
+    args: argparse.Namespace,
+    plan: list[PlannedRelease],
+    branch: str | None,
+    github_release: bool,
+) -> bool:
+    """Every tag's remote state (when pushing ``branch``), then every package's suite."""
+    if branch is not None:
+        for release in plan:
+            if not check_release_preflight(branch, release.tag, github_release=github_release):
+                return False
+    if args.skip_tests:
+        return True
+    for release in plan:
+        if not run_command(list(suite_command_for(release.name)), f"Running {release.name} tests"):
+            print(f"\n{release.name} tests failed. Nothing was released.")
+            return False
+    return True
+
+
+def _release_package(args: argparse.Namespace, release: PlannedRelease) -> int:
+    """Release one planned package through the flow a single-package run uses."""
+    print(f"\n=== {release.name} {release.current} -> {release.new} ({release.tag}) ===")
+    member = MEMBER_RELEASES.get(release.name)
+    if member is not None:
+        return run_member_release(args, member, release.new)
+    return run_release(args, release.new, release.current)
+
+
+def _await_on_pypi(plan: list[PlannedRelease], index: int) -> bool:
+    """Wait for ``plan[index]`` on PyPI if anything later in the plan depends on it."""
+    release = plan[index]
+    waiting = dependents_later_in(plan, index)
+    if not waiting or wait_for_pypi(release.name, release.new):
+        return True
+    print(f"  {', '.join(waiting)} depend on it, so the release stops here.")
+    print("  Check the publish run: gh run list --workflow=publish.yml --limit 3")
+    return False
 
 
 def _report_unfinished(plan: list[PlannedRelease], stopped_at: int, *, partial: bool) -> None:
@@ -1514,12 +1539,8 @@ def main() -> int:
         return 0
 
     steps = irreversible_steps(args, f"v{new_version}")
-    if steps and not args.yes:
-        print("\nOnce every check has passed, this run will:")
-        for step in steps:
-            print(f"  - {step}")
-        if not confirm_irreversible():
-            return 1
+    if not confirm_steps(steps, assume_yes=args.yes):
+        return 1
 
     return run_release(args, new_version, current_version)
 

@@ -236,8 +236,12 @@ class TestPlan:
         assert plan is None
 
     def test_a_malformed_version_is_a_usage_error(self, workspace):
+        # Arrange
+        args = _args(set_version=["rwa-filer=0.1"])
+
+        # Act / Assert
         with pytest.raises(SystemExit):
-            deploy.plan_all_releases(_args(set_version=["rwa-filer=0.1"]))
+            deploy.plan_all_releases(args)
 
 
 class TestWaitForPypi:

@@ -80,15 +80,6 @@ T2_CREDIT_CAP_RATE = 0.006
 # Empty-frame schemas
 # =============================================================================
 
-RESULT_SCHEMA: dict[str, PolarsDataType] = {
-    "exposure_reference": pl.String,
-    "approach_applied": pl.String,
-    "exposure_class": pl.String,
-    "ead_final": pl.Float64,
-    "risk_weight": pl.Float64,
-    "rwa_final": pl.Float64,
-}
-
 FLOOR_IMPACT_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
     "approach_applied": pl.String,

@@ -10,7 +10,8 @@ Key responsibilities:
   computation: ATM call/put (option delta), OTM short call (option delta),
   ITM long put (option delta), linear non-option (pass-through delta=1),
   long CDO tranche, and short CDO tranche.
-- ``make_option_delta_trades()`` returns a ``pl.LazyFrame`` typed by
+- ``make_option_trades_only()``, ``make_linear_trade()`` and
+  ``make_cdo_trades_only()`` return ``pl.LazyFrame`` subsets typed by
   ``dtypes_of(TRADE_SCHEMA)`` ready for the unit test to pass directly to
   the function under test.
 - Module-level constants are the single source of truth for test-writer
@@ -188,35 +189,8 @@ TRADE_CDO_002: Trade = make_trade(
 )
 
 # ---------------------------------------------------------------------------
-# Public factory
+# Public factories
 # ---------------------------------------------------------------------------
-
-_ALL_TRADES: list[Trade] = [
-    TRADE_OPT_001,
-    TRADE_OPT_002,
-    TRADE_OPT_003,
-    TRADE_OPT_004,
-    TRADE_LIN_001,
-    TRADE_CDO_001,
-    TRADE_CDO_002,
-]
-
-
-def make_option_delta_trades() -> pl.LazyFrame:
-    """
-    Return a 7-row ``LazyFrame`` covering option, linear, and CDO-tranche trades.
-
-    Schema matches ``TRADE_SCHEMA`` exactly (via ``dtypes_of``), including the
-    four new nullable columns added for P8.13:
-        option_type, option_underlying_price, cdo_attachment, cdo_detachment.
-
-    Use ``reporting_date = START_DATE`` in the test so that T_to_maturity
-    equals the T values in the proposal table exactly.
-
-    Returns:
-        ``pl.LazyFrame`` with 7 rows and full TRADE_SCHEMA columns.
-    """
-    return create_trades(_ALL_TRADES).lazy()
 
 
 def make_option_trades_only() -> pl.LazyFrame:

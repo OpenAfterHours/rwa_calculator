@@ -10,6 +10,8 @@ Key responsibilities:
   validation itself: these functions count and group, they never judge.
 - Never let "no breaks" stand alone: the overview always carries how many rules
   ran, how many could not, and why — the same rule ``render_text`` keeps.
+- Name the templates the return leaves out that its reported templates are
+  checked against, so loading only some templates is never silent.
 - Keep paging, filtering and lookup out of the templates, so a template is
   layout and nothing else.
 
@@ -45,6 +47,7 @@ if TYPE_CHECKING:
     from rwa_filer.dash.workspace import OpenedReturn
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
+    from rwa_filer.validate.returns import MissingTemplate
 
 #: The rule statuses, in the order the pages list them.
 STATUSES: Final = (STATUS_FAIL, STATUS_PASS, STATUS_NOT_EVALUATED)
@@ -90,6 +93,16 @@ class TemplateSummary:
 
 
 @dataclass(frozen=True)
+class MissingSummary:
+    """A template left out that the reported templates are checked against."""
+
+    code: str
+    title: str
+    rules: int
+    linked_from: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class RuleRow:
     """One rule as a list shows it."""
 
@@ -126,6 +139,8 @@ class Overview:
     status_counts: dict[str, int]
     reasons: tuple[tuple[str, int, str], ...]
     templates: tuple[TemplateSummary, ...]
+    missing: tuple[MissingSummary, ...]
+    missing_rules: int
     breaks: tuple[RuleRow, ...]
     errors: int
     warnings: int
@@ -177,6 +192,7 @@ def overview(opened: OpenedReturn) -> Overview:
     shortfall = next(
         (item for item in validation.rules if item.code == FINDING_COVERAGE_INSUFFICIENT), None
     )
+    missing = report.templates_missing if report else ()
     return Overview(
         submittable=validation.is_submittable,
         blocking=len(validation.blocking),
@@ -192,6 +208,8 @@ def overview(opened: OpenedReturn) -> Overview:
             for reason, count in (report.not_evaluated_reasons() if report else {}).items()
         ),
         templates=_templates(opened, results),
+        missing=_missing(opened.pack, missing),
+        missing_rules=len({rule_id for item in missing for rule_id in item.rules}),
         breaks=tuple(breaks[:BREAKS_SHOWN]),
         errors=sum(row.is_error for row in breaks),
         warnings=sum(not row.is_error for row in breaks),
@@ -355,3 +373,22 @@ def _templates(
             )
         )
     return tuple(summaries)
+
+
+def _missing(
+    pack: TaxonomyPack, missing: tuple[MissingTemplate, ...]
+) -> tuple[MissingSummary, ...]:
+    """The missing linked templates with their titles, the most-checked first."""
+    titles: dict[str, str] = {}
+    for code in sorted(pack.tables):
+        titles.setdefault(pack.tables[code].filing_indicator, pack.tables[code].title)
+    ranked = sorted(missing, key=lambda item: (-len(item.rules), item.code))
+    return tuple(
+        MissingSummary(
+            code=item.code,
+            title=title_case(titles[item.code]) if item.code in titles else item.code,
+            rules=len(item.rules),
+            linked_from=item.linked_from,
+        )
+        for item in ranked
+    )

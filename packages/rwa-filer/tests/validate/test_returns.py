@@ -16,8 +16,8 @@ import polars as pl
 import pytest
 
 from boe_builders import T01, T02, T03, book, ref, rule
-from pack_builders import SAMPLE_MODULE, build_pack, build_return
-from rwa_filer.boe.catalogue import RuleBookNotFoundError, rulebook_for_module
+from pack_builders import SAMPLE_MODULE, build_header, build_pack, build_return
+from rwa_filer.boe.catalogue import SEVERITY_WARNING, RuleBookNotFoundError, rulebook_for_module
 from rwa_filer.boe.engine import (
     REASON_NOT_REPORTED,
     STATUS_FAIL,
@@ -25,18 +25,19 @@ from rwa_filer.boe.engine import (
     STATUS_PASS,
     Accuracy,
 )
-from rwa_filer.model import DECIMALS_EXACT
+from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
     COVERAGE_TEMPLATE_NOT_COVERED,
     FINDING_COVERAGE_INSUFFICIENT,
+    FINDING_LINKED_TEMPLATE_MISSING,
     FINDING_RULE_ERROR,
     FINDING_RULE_WARNING,
     Finding,
 )
 from rwa_filer.validate.report import render_text, to_record
-from rwa_filer.validate.returns import validate_return
+from rwa_filer.validate.returns import MissingTemplate, validate_return
 from rwa_filer.validate.structure import FINDING_CELL_NOT_REPORTABLE
 
 #: The figures here are small and the tests are about the verdict, not about
@@ -91,6 +92,16 @@ RWEA_CAP = rule(
 )
 #: A rule that holds on T03, so that table is covered where a test needs it to be.
 GEOGRAPHY = rule("tst_0004", f"{ref(T03, '0010', '0010')} >= 0", tables=(T03,))
+#: T01's total against T03's: read together, so run only when both are reported.
+T01_TO_T03 = rule(
+    "tst_0006", f"{ref(T01, '0010', '0010')} i= {ref(T03, '0010', '0010')}", tables=(T01, T03)
+)
+#: T02's first-sheet exposure against T03's total: likewise.
+T02_TO_T03 = rule(
+    "tst_0007",
+    f"{ref(T02, '0010', '0010', '0001')} i<= {ref(T03, '0010', '0010')}",
+    tables=(T02, T03),
+)
 
 
 def only(table: str) -> pl.DataFrame:
@@ -232,13 +243,14 @@ def test_a_reported_template_none_of_whose_rules_ran_is_a_coverage_finding(
     # Act
     validation = validate_return(build_return(frame), pack, rulebook=book(FOOTING, needs_both))
 
-    # Assert
-    (finding,) = validation.rules
+    # Assert — the shortfall first; T03 is also named as the template it needs.
+    finding, missing = validation.rules
     assert (finding.code, finding.subject) == (
         FINDING_COVERAGE_INSUFFICIENT,
         COVERAGE_TEMPLATE_NOT_COVERED,
     )
     assert "T02.00.01" in finding.message and REASON_NOT_REPORTED in finding.message
+    assert (missing.code, missing.subject) == (FINDING_LINKED_TEMPLATE_MISSING, "T03.00.01")
     assert not validation.is_submittable
 
 
@@ -280,6 +292,113 @@ def test_a_module_with_no_packaged_rule_book_has_only_its_structure_checked(
     # Assert
     assert validation.report is None and validation.rules == ()
     assert validation.is_submittable
+
+
+# ---------------------------------------------------------------------------
+# Linked templates — what the reported templates are checked against
+# ---------------------------------------------------------------------------
+
+
+def test_a_template_the_reported_ones_are_checked_against_is_a_warning(
+    pack: TaxonomyPack,
+) -> None:
+    """T02 is reported and checked against T03, which is not: the check never runs.
+
+    The gateway would not run it either, so nothing here rejects the return —
+    which is exactly why it is reported: the file would be accepted with T02's
+    tie to T03 unchecked, and the regulator would not have T03.
+    """
+    # Arrange — T02's own rule runs, so T02 is covered and there is no VAL003.
+    frame = pl.concat([only(T01), only(T02)])
+
+    # Act
+    validation = validate_return(
+        build_return(frame), pack, rulebook=book(FOOTING, RWEA_CAP, T02_TO_T03)
+    )
+
+    # Assert
+    (finding,) = validation.rules
+    assert (finding.code, finding.severity, finding.subject) == (
+        FINDING_LINKED_TEMPLATE_MISSING,
+        SEVERITY_WARNING,
+        "T03.00.01",
+    )
+    assert "tst_0007" in finding.message
+    assert "T02.00.01" in finding.message
+    assert validation.is_submittable
+
+
+def test_a_missing_template_is_one_finding_however_many_rules_and_templates_need_it(
+    pack: TaxonomyPack,
+) -> None:
+    # Arrange — T01 and T02 are both checked against T03.
+    frame = pl.concat([only(T01), only(T02)])
+
+    # Act
+    validation = validate_return(
+        build_return(frame), pack, rulebook=book(FOOTING, RWEA_CAP, T01_TO_T03, T02_TO_T03)
+    )
+
+    # Assert
+    assert validation.report is not None
+    assert validation.report.templates_missing == (
+        MissingTemplate(
+            code="T03.00.01",
+            rules=("tst_0006", "tst_0007"),
+            linked_from=("T01.00.01", "T02.00.01"),
+        ),
+    )
+    assert [finding.subject for finding in validation.rules] == ["T03.00.01"]
+
+
+def test_a_rule_that_reads_no_reported_template_names_no_missing_one(
+    pack: TaxonomyPack,
+) -> None:
+    """T02 and T03 are both absent: the rule is about templates this firm does not file."""
+    # Act
+    validation = validate_return(build_return(only(T01)), pack, rulebook=book(FOOTING, T02_TO_T03))
+
+    # Assert
+    assert validation.report is not None
+    assert validation.report.templates_missing == ()
+    assert validation.findings == ()
+
+
+def test_a_template_the_return_declares_not_filed_is_not_reported_as_missing(
+    pack: TaxonomyPack,
+) -> None:
+    """A negative filing indicator is the return saying so: nothing is left unsaid."""
+    # Arrange
+    ret = CanonicalReturn.from_frame(
+        build_header(),
+        only(T02),
+        {"T02.00.01": True, "T03.00.01": False},
+    )
+
+    # Act
+    validation = validate_return(ret, pack, rulebook=book(RWEA_CAP, T02_TO_T03))
+
+    # Assert
+    assert validation.report is not None
+    assert validation.report.templates_missing == ()
+    assert FINDING_LINKED_TEMPLATE_MISSING not in {finding.code for finding in validation.rules}
+
+
+def test_the_report_lists_the_missing_templates(pack: TaxonomyPack) -> None:
+    # Arrange
+    ret = build_return(pl.concat([only(T01), only(T02)]))
+    validation = validate_return(ret, pack, rulebook=book(FOOTING, RWEA_CAP, T02_TO_T03))
+
+    # Act
+    record = to_record(ret, validation)
+    text = render_text(ret, validation)
+
+    # Assert
+    assert record["summary"]["templates_missing"] == [
+        {"template": "T03.00.01", "rules": ["tst_0007"], "linked_from": ["T02.00.01"]}
+    ]
+    assert "linked templates not reported: T03.00.01 (1 rule)" in text
+    assert f"[{FINDING_LINKED_TEMPLATE_MISSING}] WARNING" in text
 
 
 # ---------------------------------------------------------------------------

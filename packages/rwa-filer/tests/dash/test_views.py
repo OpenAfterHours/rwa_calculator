@@ -31,6 +31,27 @@ def test_the_overview_counts_are_the_reports_own(broken: OpenedReturn) -> None:
     assert view.submittable is broken.validation.is_submittable is False
 
 
+def test_the_overview_lists_the_templates_the_reported_ones_are_checked_against(
+    broken: OpenedReturn,
+) -> None:
+    """OF 07.00 alone: the rules tying it to other templates did not run."""
+    # Arrange
+    report = broken.validation.report
+    assert report is not None
+    assert report.templates_missing, "the fixture must leave one out"
+
+    # Act
+    missing = overview(broken).missing
+
+    # Assert — every one, with its title, the most-checked first.
+    assert {item.code for item in missing} == {item.code for item in report.templates_missing}
+    assert all(item.title and item.title != item.code for item in missing)
+    assert [item.rules for item in missing] == sorted(
+        (item.rules for item in missing), reverse=True
+    )
+    assert {code for item in missing for code in item.linked_from} == {"OF07.00.01"}
+
+
 def test_the_overview_lists_errors_before_warnings(broken: OpenedReturn) -> None:
     # Act
     severities = [row.severity for row in overview(broken).breaks]

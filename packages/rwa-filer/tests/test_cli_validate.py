@@ -65,10 +65,13 @@ def test_validate_exits_zero_on_a_return_whose_rules_all_hold(
     code = main(["validate", str(_csv(tmp_path, CLEAN_CSV)), *HEADER_ARGS])
 
     # Assert — rules ran (it is not clean for want of checking) and none failed.
+    # OF 07.00 alone leaves out templates its rules read, which is a VAL004
+    # warning and does not change the exit code.
     out = capsys.readouterr().out
     assert code == EXIT_OK
     assert out.startswith("SUBMITTABLE") and "0 failed" in out
-    assert "rules: 0 of" not in out and "[VAL" not in out
+    assert "rules: 0 of" not in out
+    assert not {"[VAL001]", "[VAL002]", "[VAL003]"} & set(out.split())
 
 
 def test_validate_fails_on_a_structure_error(

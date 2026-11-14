@@ -10,6 +10,8 @@ Key responsibilities:
 - Never let "no breaks" stand alone: the report always carries how many rules
   were executed, how many could not be, and why — because "0 broken" on a
   return where nothing ran is the answer that misleads.
+- Name the templates left out that the reported ones are checked against, in
+  the summary as well as in their ``VAL004`` findings.
 - Keep the record self-contained: a reader holding only the JSON knows which
   entity, date, module and taxonomy version it describes.
 
@@ -27,10 +29,12 @@ from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 if TYPE_CHECKING:
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.validate.checker import Finding
-    from rwa_filer.validate.returns import ReturnValidation
+    from rwa_filer.validate.returns import MissingTemplate, ReturnValidation
 
 #: Not-evaluated reasons quoted in the text summary (commonest first).
 _REASONS_SHOWN = 5
+#: Missing linked templates named in the text summary (most rules first).
+_MISSING_SHOWN = 5
 
 
 def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, Any]:
@@ -63,6 +67,14 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
             "not_evaluated_reasons": report.not_evaluated_reasons() if report else {},
             "templates_reported": list(report.templates_reported) if report else [],
             "templates_uncovered": list(report.templates_uncovered) if report else [],
+            "templates_missing": [
+                {
+                    "template": missing.code,
+                    "rules": list(missing.rules),
+                    "linked_from": list(missing.linked_from),
+                }
+                for missing in (report.templates_missing if report else ())
+            ],
         },
         "findings": [_finding_record(finding) for finding in validation.findings],
         "rules": [
@@ -112,6 +124,10 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
                 "  not evaluated because: "
                 + ", ".join(f"{reason} ({count})" for reason, count in reasons)
             )
+        if report.templates_missing:
+            lines.append(
+                f"  linked templates not reported: {_missing_line(report.templates_missing)}"
+            )
     if validation.findings:
         lines.append("")
         lines.extend(
@@ -124,6 +140,17 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
         "is evidence the return is well-formed, not a guarantee of acceptance."
     )
     return "\n".join(lines)
+
+
+def _missing_line(missing: tuple[MissingTemplate, ...]) -> str:
+    """The missing linked templates, most rules first, the rest counted."""
+    ranked = sorted(missing, key=lambda item: (-len(item.rules), item.code))
+    named = ", ".join(
+        f"{item.code} ({len(item.rules)} rule{'s' if len(item.rules) != 1 else ''})"
+        for item in ranked[:_MISSING_SHOWN]
+    )
+    rest = len(ranked) - _MISSING_SHOWN
+    return f"{named} and {rest} more" if rest > 0 else named
 
 
 def _finding_record(finding: Finding) -> dict[str, Any]:

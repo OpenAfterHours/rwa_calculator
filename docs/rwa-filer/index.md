@@ -586,10 +586,22 @@ in the data.
 | `VAL001` | Error | An Error-severity published rule is broken. The regulator rejects the return. |
 | `VAL002` | Warning | A Warning-severity published rule is broken. It must be explained. |
 | `VAL003` | Error | Coverage is insufficient: no rule could be executed at all, or a reported template that has rules had none of them executed. |
+| `VAL004` | Warning | A template the return does not report is one that enforced rules check a reported template against, so those rules did not run. One finding per missing template; `subject` is its filing indicator. Raised by `validate_return` only. |
 
 `VAL003` is what makes an empty list safe to read as "checked and clean". Without
 it, a return on which no rule could run would produce no breaks and look
 identical to a clean one.
+
+`VAL004` covers the return that holds only some of its templates. A rule runs
+only when every template it reads is filed, at the Bank's gateway as here, so a
+return holding OF 08.01 without OF 09.02 does not fail the 43 rules that read
+both: they are switched off. The file is accepted with those checks unrun, and
+the regulator receives it without OF 09.02's figures. Whether a firm must report
+a template depends on its permissions and thresholds, which the rules do not
+record, so this is a Warning, not an Error. A template the return declares not
+filed (a negative filing indicator) is the return saying so, and is not named.
+The JSON report lists the same templates under `summary.templates_missing`, each
+with its rules and the reported templates they read.
 
 `validate_return` adds the structure findings. All are Errors: the regulator
 rejects a file that has any of them.

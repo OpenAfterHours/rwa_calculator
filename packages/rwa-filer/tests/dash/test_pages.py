@@ -157,6 +157,22 @@ def test_the_overview_lists_each_broken_rule(client: TestClient, broken: OpenedR
     assert all(rule_id in page for rule_id in failed)
 
 
+def test_the_overview_names_each_linked_template_not_in_the_return(
+    client: TestClient, broken: OpenedReturn
+) -> None:
+    # Arrange
+    report = broken.validation.report
+    assert report is not None
+    assert report.templates_missing, "the fixture must leave one out"
+
+    # Act
+    page = client.get(f"/returns/{broken.return_id}").text
+
+    # Assert
+    assert 'id="missing-templates"' in page
+    assert all(item.code in page for item in report.templates_missing)
+
+
 def test_an_unknown_return_is_not_found(client: TestClient) -> None:
     # Act
     response = client.get("/returns/00000000/rules")

@@ -16,6 +16,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
   cell a broken rule read outlined. Listens on `127.0.0.1` and answers only the
   browser holding the session token the command prints. Dark by default, with a
   light theme. Guide: `docs/rwa-filer/dash.md`.
+- `rwa-filer dash` — Build & sign off: draft cell overrides from the template
+  grid, each with its reason and checked as a batch when it is made; see the
+  return validated with them; build the package with the options
+  `rwa-filer build` takes (byte-identical to the command's build); sign it off
+  and verify it; follow the audit ledger; download the files the build wrote.
+- `workflow.acts` — `record_build`, `record_signoff`, `verify_filing`: the
+  build, sign-off and verify bookkeeping, shared by the command line and the
+  dashboard so the two cannot record the same act differently.
+- `workflow.signoff.check_signoff`: the sign-off preconditions, without
+  recording anything.
 - `boe.engine.CellAddress` and `Failure.addresses`: each failing evaluation now
   records where the cells it read are (table, sheet, open-axis key, row,
   column), up to `MAX_ADDRESSES`, and whether each was reported or read at its
@@ -24,6 +34,13 @@ and released independently of `rwa-calc`; its release tags are prefixed
   `rwa-filer validate` does — check it exists and is supported, require a
   header for a fact table, apply any header field given over the file's own.
   The command line and the dashboard share it.
+
+### Fixed
+- `rwa-filer signoff` recorded a sign-off entry in the audit ledger before
+  checking that the sign-off would be given, so a refused sign-off (for
+  example, a not-submittable package without `--acknowledge-findings`) left
+  the ledger claiming an approval that never happened. The checks now run
+  first, and a refused sign-off records nothing.
 
 ### Changed
 - Starlette, uvicorn, Jinja2 and python-multipart are now dependencies, for the

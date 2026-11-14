@@ -67,6 +67,36 @@ the empty cells a rule read at its default, which are often what the break is
 about. Pick a cell to see its row and column labels, its value and data type,
 and the rules that read it; pick a rule there to show only that rule's cells.
 
+**Build & sign off.** The same three acts as `rwa-filer build`, `signoff` and
+`verify`, recording the same things:
+
+- *Overrides.* Pick a cell on the template grid and draft an override: a new
+  value, or taking the cell out of the return (unreported, which is not the same
+  as zero), with the reason — required, because it is recorded. A draft is
+  checked against the ones already made, so one that could never be applied is
+  refused when it is made. Drafted cells show their new value on the grid,
+  outlined in blue. *Check the return with these overrides* validates the
+  adjusted return and shows the blocking findings before and after.
+- *Build.* Choose the folder (beside the opened file by default, or a `filing`
+  folder in the working directory for an uploaded one) and the options the
+  command takes: monetary accuracy, percentage decimals, declaring unreported
+  templates, always zipping, omitting the creation time. A return a published
+  rule blocks is written only if you choose to write it anyway, and the manifest
+  records that you did; a structure finding stops the file whatever you choose.
+  With a preparer's name the build — and the overrides applied before it — go
+  into the audit ledger beside the files. The written files can be downloaded
+  from the page; nothing else can.
+- *Sign off.* The approver and their capacity, optionally a statement, bound to
+  the instance's SHA-256. A package the validation found not submittable is
+  signed only with the findings acknowledged. A refused sign-off records
+  nothing in the ledger.
+- *Verify.* That the instance and zip are the files the manifest describes, that
+  the sign-off was given for exactly them, and that the ledger is intact and is
+  the one the sign-off was recorded in.
+
+A build from the dashboard is the build the command makes: the same return,
+overrides and options give byte-identical files.
+
 The theme switch in the top bar swaps between the dark look (the default, as in
 `rwa-ui` and these docs) and a light one; the choice is remembered.
 

@@ -9,6 +9,9 @@ Pipeline position:
 Key responsibilities:
 - Hold each opened return with the validation it was given, so that drawing a
   page never re-validates.
+- Hold, per return, the cell overrides a preparer has drafted and the filing
+  packages built from it — the session's working state, which the files on
+  disk (manifest, ledger, sign-off) then record for good.
 - Keep uploaded files under the one directory the session owns, under names a
   browser cannot steer outside it.
 - Be safe to call from the server's worker threads.
@@ -34,10 +37,15 @@ from rwa_filer.validate.returns import validate_return
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from rwa_filer.filing import FilingPackage
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.readers import HeaderFields, SourceReading
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.returns import ReturnValidation
+    from rwa_filer.workflow.adjustments import Adjustment, AppliedAdjustment
+
+#: A cell's full address: table, sheet, open-axis key, row, column.
+Cell = tuple[str, str | None, str | None, str, str]
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +91,35 @@ class OpenedReturn:
         return self.validation.pack
 
 
+@dataclass(frozen=True)
+class FilingRecord:
+    """One filing package built from the dashboard.
+
+    Attributes:
+        built_at: When it was built.
+        package: What ``build_filing`` produced — written or not, and why.
+        applied: The overrides applied before it was built.
+        author: Who prepared it, or ``None`` (then nothing is in a ledger).
+        ledger: The audit ledger its build was recorded in, if any.
+        forced: Whether it was written despite a broken rule.
+    """
+
+    built_at: datetime
+    package: FilingPackage
+    applied: tuple[AppliedAdjustment, ...]
+    author: str | None
+    ledger: Path | None
+    forced: bool
+
+
 class Workspace:
     """The returns opened in this session, and the directory its files live in."""
 
     def __init__(self, directory: Path) -> None:
         self.directory = directory
         self._returns: dict[str, OpenedReturn] = {}
+        self._adjustments: dict[str, dict[Cell, Adjustment]] = {}
+        self._builds: dict[str, list[FilingRecord]] = {}
         self._lock = threading.Lock()
 
     def open(
@@ -139,6 +170,39 @@ class Workspace:
         with self._lock:
             opened = list(self._returns.values())
         return sorted(opened, key=lambda item: item.opened_at, reverse=True)
+
+    # -- drafted overrides --------------------------------------------------------
+
+    def adjustments(self, return_id: str) -> tuple[Adjustment, ...]:
+        """The overrides drafted for a return, in the order they were made."""
+        with self._lock:
+            return tuple(self._adjustments.get(return_id, {}).values())
+
+    def set_adjustment(self, return_id: str, adjustment: Adjustment) -> None:
+        """Draft an override, replacing any already drafted for the same cell."""
+        with self._lock:
+            drafted = self._adjustments.setdefault(return_id, {})
+            drafted.pop(adjustment.cell, None)
+            drafted[adjustment.cell] = adjustment
+
+    def drop_adjustment(self, return_id: str, cell: Cell) -> None:
+        """Withdraw the override drafted for ``cell``, if there is one."""
+        with self._lock:
+            self._adjustments.get(return_id, {}).pop(cell, None)
+
+    # -- builds -------------------------------------------------------------------
+
+    def add_build(self, return_id: str, record: FilingRecord) -> int:
+        """Keep a build of a return; its index among the return's builds."""
+        with self._lock:
+            builds = self._builds.setdefault(return_id, [])
+            builds.append(record)
+            return len(builds) - 1
+
+    def builds(self, return_id: str) -> tuple[FilingRecord, ...]:
+        """Every build of a return, the first first."""
+        with self._lock:
+            return tuple(self._builds.get(return_id, ()))
 
 
 def safe_file_name(filename: str) -> str:

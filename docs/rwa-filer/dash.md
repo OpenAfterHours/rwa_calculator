@@ -20,7 +20,7 @@ uvx rwa-filer dash facts.parquet --entity 5493001KJTIIGC8Y1R12 \
 The command prints one address and opens it:
 
 ```text
-rwa-filer dash is running at http://127.0.0.1:8765/returns/2e5c2d7d?token=…
+rwa-filer dash is running at http://localhost:8765/returns/2e5c2d7d?token=…
 The address carries this session's token: keep it to yourself. Ctrl+C stops it.
 ```
 
@@ -36,7 +36,6 @@ The address carries this session's token: keep it to yourself. Ctrl+C stops it.
 | `--entity`, `--reference-date`, `--module`, `--currency` | The return header. Required with a fact table; with a workbook or an instance, each one given overrides the file's own |
 | `--port N` | The port to try first (default 8765). If it is taken the next free one is used, so two dashboards can run side by side |
 | `--no-browser` | Print the address but do not open a browser |
-| `--host HOST` | The interface to listen on. The default, `127.0.0.1`, is this machine only |
 | `--workdir DIR` | Where the dashboard keeps files opened in it. The default is a new temporary folder |
 
 ## The pages
@@ -126,13 +125,19 @@ The theme switch in the top bar swaps between the dark look (the default, as in
 
 ## Who can use it
 
-The dashboard listens on `127.0.0.1` unless told otherwise, so nothing outside
+The dashboard listens on `127.0.0.1` and nowhere else, so nothing outside
 this machine can reach it. The address it prints carries a random token for the
 session: opening it sets a cookie, and every request after that must carry the
 cookie. Another user of the same machine, or a web page that guesses the port,
 is refused. A form posted from another site is refused too, and so is a request
 for any host name other than the loopback ones, which stops a page that rebinds
 its own name to `127.0.0.1`.
+
+There is deliberately no option to listen on a network interface: the server
+speaks plain HTTP, so it would send the session token, and every figure of the
+return, across that network unencrypted. Both cookies it sets are `HttpOnly`;
+they are also marked `Secure` whenever a page is served over HTTPS (on plain
+HTTP to this machine some browsers refuse a `Secure` cookie altogether).
 
 Nothing is sent anywhere: files are read where they are, or kept in the working
 folder when they are uploaded through the browser.

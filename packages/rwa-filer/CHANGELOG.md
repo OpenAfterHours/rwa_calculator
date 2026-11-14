@@ -13,9 +13,10 @@ and released independently of `rwa-calc`; its release tags are prefixed
   rest did not; filter and search the rules, each with its expression and the
   cells it read; and see any table of the return on its template grid, laid out
   from the taxonomy pack, with cells the sheet does not accept hatched and every
-  cell a broken rule read outlined. Listens on `127.0.0.1` and answers only the
-  browser holding the session token the command prints. Dark by default, with a
-  light theme. Guide: `docs/rwa-filer/dash.md`.
+  cell a broken rule read outlined. Listens on `127.0.0.1` only — there is no
+  option to listen on a network, which plain HTTP would expose — and answers
+  only the browser holding the session token the command prints. Dark by
+  default, with a light theme. Guide: `docs/rwa-filer/dash.md`.
 - `rwa-filer dash` — Build & sign off: draft cell overrides from the template
   grid, each with its reason and checked as a batch when it is made; see the
   return validated with them; build the package with the options

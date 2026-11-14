@@ -82,7 +82,13 @@ class SessionGate(BaseHTTPMiddleware):
             ]
             target = request.url.path + (f"?{urlencode(rest)}" if rest else "")
             response = RedirectResponse(target, status_code=303)
-            response.set_cookie(cookie, self.token, httponly=True, samesite="strict")
+            response.set_cookie(
+                cookie,
+                self.token,
+                httponly=True,
+                secure=served_securely(request),
+                samesite="strict",
+            )
             return response
         held = request.cookies.get(cookie)
         if held is not None and secrets.compare_digest(held, self.token):
@@ -113,6 +119,18 @@ def is_same_origin(request: Request) -> bool:
     if origin is None:
         return True
     return urlsplit(origin).netloc == request.headers.get("host", "")
+
+
+def served_securely(request: Request) -> bool:
+    """Whether a cookie set in answer to ``request`` should be marked ``Secure``.
+
+    Marked whenever the page came over HTTPS. The dashboard itself serves plain
+    HTTP on the loopback interface, where nothing crosses a network for the
+    flag to protect — and where some browsers (Safari among them) refuse a
+    ``Secure`` cookie outright, which would shut the person out of their own
+    session. An HTTPS front put before it gets the flag.
+    """
+    return request.url.scheme == "https"
 
 
 def cookie_name(port: int | None) -> str:

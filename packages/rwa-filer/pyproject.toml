@@ -11,7 +11,7 @@ authors = [
 maintainers = [
     {name = "OpenAfterHours"}
 ]
-keywords = ["regulatory-reporting", "xbrl", "corep", "pra", "bank-of-england", "validation", "banking", "polars"]
+keywords = ["regulatory-reporting", "xbrl", "corep", "pra", "bank-of-england", "validation", "banking", "polars", "dashboard"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Financial and Insurance Industry",
@@ -29,6 +29,15 @@ classifiers = [
 # environment that holds this package alone.
 dependencies = [
     "polars>=1.0.0",
+    # `rwa-filer dash`, the local web dashboard. Required rather than an extra so
+    # that `uvx rwa-filer dash` works as typed: an extra would need
+    # `uvx --from 'rwa-filer[dash]' rwa-filer dash`. A small, pure-Python stack —
+    # no FastAPI, no pydantic. python-multipart is what Starlette parses an
+    # uploaded file with.
+    "starlette>=0.40.0",
+    "uvicorn>=0.30.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -93,4 +102,5 @@ addopts = "--tb=short --strict-markers --import-mode=importlib"
 dev = [
     "pytest>=8.0.0",
     "openpyxl>=3.1.5",  # the importer tests build throwaway rule workbooks
+    "httpx>=0.27.0",  # Starlette's TestClient, for the dashboard tests
 ]

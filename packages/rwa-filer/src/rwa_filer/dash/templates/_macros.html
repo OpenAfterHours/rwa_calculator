@@ -1,0 +1,67 @@
+{#- Small pieces the pages share: icons, and the chips for severity and status. -#}
+
+{%- macro icon(name) -%}
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0">
+{%- if name == "open" -%}<path d="M3 6h6l2 2h10v11H3z"></path>
+{%- elif name == "overview" -%}<path d="M4 20V13M10 20V5M16 20v-9M21 20H3"></path>
+{%- elif name == "rules" -%}<path d="M10 6h10M10 12h10M10 18h10M4 6l1.2 1.2L7.5 5M4 12l1.2 1.2 2.3-2.2M4 18l1.2 1.2 2.3-2.2"></path>
+{%- elif name == "templates" -%}<path d="M3 4h18v16H3zM3 10h18M3 15h18M9 4v16M15 4v16"></path>
+{%- elif name == "filing" -%}<path d="M12 3l7 3v6c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6z"></path><path d="M9 12l2 2 4-4"></path>
+{%- elif name == "compare" -%}<path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3"></path>
+{%- elif name == "referee" -%}<circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path>
+{%- elif name == "reference" -%}<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"></path><path d="M5 17a3 3 0 0 1 3-3h11"></path>
+{%- elif name == "file" -%}<path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4"></path>
+{%- else -%}<circle cx="12" cy="12" r="3"></circle>
+{%- endif -%}
+</svg>
+{%- endmacro -%}
+
+{%- macro severity_chip(severity) -%}
+{%- if severity == "ERROR" -%}<span class="chip chip-fail">Error</span>
+{%- else -%}<span class="chip chip-warn">Warning</span>
+{%- endif -%}
+{%- endmacro -%}
+
+{%- macro status_chip(row) -%}
+{%- if row.status == "FAIL" -%}{{ severity_chip(row.severity) }}
+{%- elif row.status == "PASS" -%}<span class="chip chip-pass">Passed</span>
+{%- else -%}<span class="chip chip-ne">Not evaluated</span>
+{%- endif -%}
+{%- endmacro -%}
+
+{#- The file and header fields of a form that opens a return (Open and Compare pages). -#}
+{%- macro open_fields(values, modules) -%}
+<label class="dropzone">
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="color: var(--accent-text)"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"></path><path d="M4 15v4h16v-4"></path></svg>
+  <span class="title">Choose a return to open</span>
+  <span class="small muted mono">.parquet · .csv · .xlsx · .xbrl · .zip</span>
+  <input type="file" name="file" accept=".parquet,.csv,.xlsx,.xbrl,.zip">
+</label>
+<label class="field">Or the path of a file on this machine
+  <input type="text" name="path" value="{{ values.path or '' }}" placeholder="/path/to/return.xbrl" spellcheck="false">
+</label>
+<section class="panel">
+  <div>
+    <h2>Return header</h2>
+    <p class="small muted" style="margin: 4px 0 0">A fact table (.parquet or .csv) carries no header, so the entity, the reference date and the module are required for one. A workbook or an XBRL instance states its own; anything entered here overrides it.</p>
+  </div>
+  <div class="fields">
+    <label class="field" style="flex: 2 1 260px">Entity identifier (LEI)
+      <input type="text" name="entity" value="{{ values.entity or '' }}" maxlength="40" spellcheck="false" class="mono">
+    </label>
+    <label class="field">Reference date
+      <input type="date" name="reference_date" value="{{ values.reference_date or '' }}">
+    </label>
+    <label class="field">Module
+      <select name="module">
+        <option value="">From the file</option>
+        {% for module in modules %}<option value="{{ module }}"{% if values.module == module %} selected{% endif %}>{{ module }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field" style="flex: 1 1 100px">Currency <span class="hint">default GBP</span>
+      <input type="text" name="currency" value="{{ values.currency or '' }}" maxlength="3">
+    </label>
+  </div>
+  {{ caller() }}
+</section>
+{%- endmacro -%}

@@ -149,6 +149,7 @@ nav = [
   ]},
   { "rwa-filer" = [
     "rwa-filer/index.md",
+    { "Dashboard" = "rwa-filer/dash.md" },
     { "Validation Rule Extracts" = "reference/validation-rules/index.md" },
   ]},
   { "Development" = [

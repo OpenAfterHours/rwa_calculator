@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% from "_macros.html" import open_fields, severity_chip %}
+{% block title %}Compare · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set rid = current.return_id %}
+<div>
+  <div class="small muted">Compare</div>
+  <h1>What changed between two versions</h1>
+  <p class="lede">Cell by cell, and rule by rule. Either side may be any file the dashboard opens, so a resubmission can be checked against the instance already filed.</p>
+</div>
+
+{% if error %}
+<div class="callout callout-fail" role="alert" id="compare-error"><div class="body"><div class="title">The other version could not be opened</div><p>{{ error }}</p></div></div>
+{% endif %}
+
+{% if not view %}
+<div class="split">
+  <section class="narrow panel" style="flex: 2 1 320px">
+    <h2>Opened this session</h2>
+    {% if others %}
+    <p class="small muted" style="margin: 0">Compare <span class="mono">{{ current.name }}</span> with:</p>
+    {% for other in others %}
+    <a class="rule-item" href="/returns/{{ rid }}/compare?against={{ other.return_id }}">
+      <span class="label mono">{{ other.name }}</span>
+      <span class="where">{{ other.ret.header.module }} · {{ other.ret.header.reference_date.isoformat() }} · {{ other.ret.facts.height | count }} facts</span>
+    </a>
+    {% endfor %}
+    {% else %}
+    <p class="small muted" style="margin: 0">No other return is open. Open the other version here.</p>
+    {% endif %}
+  </section>
+  <form class="wide" method="post" action="/returns/{{ rid }}/compare" enctype="multipart/form-data">
+    {% call open_fields(values, modules) %}
+    <div class="btn-row"><button class="btn btn-primary" type="submit">Open and compare</button><span class="small muted">The file opened becomes the earlier version; swap the two on the next page.</span></div>
+    {% endcall %}
+  </form>
+</div>
+{% else %}
+{% set base = "/returns/" ~ rid ~ "/compare" %}
+{% set against = view.later.return_id if swap else view.earlier.return_id %}
+<div class="split" style="align-items: stretch">
+  <div class="stat" style="flex: 1 1 280px"><div class="small muted">Earlier</div><div class="mono" style="color: var(--strong); word-break: break-all">{{ view.earlier.name }}</div><div class="small muted">{{ view.earlier.ret.header.module }} · {{ view.earlier.ret.header.reference_date.isoformat() }} · {{ view.earlier.ret.facts.height | count }} facts · {{ view.blocking_before }} blocking</div></div>
+  <div style="display: flex; align-items: center"><a class="btn" href="{{ link(base, against=against, swap='' if swap else '1') }}">Swap</a></div>
+  <div class="stat" style="flex: 1 1 280px"><div class="small muted">Later</div><div class="mono" style="color: var(--strong); word-break: break-all">{{ view.later.name }}</div><div class="small muted">{{ view.later.ret.header.module }} · {{ view.later.ret.header.reference_date.isoformat() }} · {{ view.later.ret.facts.height | count }} facts · {{ view.blocking_after }} blocking</div></div>
+</div>
+
+{% if view.identical %}
+<div class="callout callout-pass" id="identical"><div class="body"><div class="title">Identical: the same header and the same {{ view.unchanged | count }} cells</div></div></div>
+{% else %}
+<div class="tiles" id="counts">
+  <div class="tile"><div class="label">Changed</div><div class="value" style="color: var(--accent-text)">{{ view.counts["changed"] | count }}</div></div>
+  <div class="tile"><div class="label">Added</div><div class="value" style="color: var(--info)">{{ view.counts["added"] | count }}</div></div>
+  <div class="tile"><div class="label">Removed</div><div class="value">{{ view.counts["removed"] | count }}</div></div>
+  <div class="tile"><div class="label">Unchanged</div><div class="value" style="color: var(--muted)">{{ view.unchanged | count }}</div></div>
+</div>
+{% endif %}
+
+{% if view.header %}
+<section class="panel"><h2>Header</h2>
+  <table class="data"><tbody>{% for name, pair in view.header.items() %}<tr><th scope="row">{{ name }}</th><td class="mono">{{ pair[0] or "—" }} → {{ pair[1] or "—" }}</td></tr>{% endfor %}</tbody></table>
+</section>
+{% endif %}
+
+<section class="panel" id="rule-changes">
+  <div class="panel-head"><h2>What it did to the verdict</h2><span class="small muted">blocking findings {{ view.blocking_before }} → {{ view.blocking_after }} · {{ view.still_broken }} rule{{ "s" if view.still_broken != 1 }} broken in both</span></div>
+  <div class="split">
+    <div class="wide" style="flex: 1 1 300px">
+      <h3>Fixed in the later version ({{ view.fixed | length }})</h3>
+      {% for rule in view.fixed %}<div class="rule-item"><span class="top">{{ severity_chip(rule.severity) }}<span class="mono small muted">{{ rule.rule_id }}</span></span><span class="label">{{ rule.label or "No label published" }}</span></div>{% else %}<p class="small muted" style="margin: 0">None.</p>{% endfor %}
+    </div>
+    <div class="wide" style="flex: 1 1 300px">
+      <h3>Newly broken ({{ view.broken | length }})</h3>
+      {% for rule in view.broken %}<a class="rule-item" href="{{ link('/returns/' ~ view.later.return_id ~ '/rules', rule=rule.rule_id) }}"><span class="top">{{ severity_chip(rule.severity) }}<span class="mono small muted">{{ rule.rule_id }}</span></span><span class="label">{{ rule.label or "No label published" }}</span></a>{% else %}<p class="small muted" style="margin: 0">None.</p>{% endfor %}
+    </div>
+  </div>
+</section>
+
+{% if not view.identical %}
+<div class="split">
+  <section class="narrow panel" aria-label="Changes by table" style="flex: 1 1 280px">
+    <h2>By table</h2>
+    {% for item in view.tables %}
+    <a class="rule-item" href="{{ link(base, against=against, swap='1' if swap else '', kind=view.kind, table='' if view.table == item.table else item.table) }}"{% if view.table == item.table %} aria-current="true"{% endif %}>
+      <span class="top"><span class="mono small">{{ item.table }}</span><span class="evals">{{ item.total | count }}</span></span>
+      <span class="where">{{ item.changed }} changed · {{ item.added }} added · {{ item.removed }} removed</span>
+    </a>
+    {% endfor %}
+  </section>
+  <section class="wide panel" aria-label="Changed cells" style="flex: 3 1 560px">
+    <div class="panel-head">
+      <h2>{{ "Cells in " ~ view.table if view.table else "Cells that differ" }}</h2>
+      <nav class="seg" aria-label="Kind of change">
+        {% for kind, label in [("", "All"), ("changed", "Changed"), ("added", "Added"), ("removed", "Removed")] %}
+        <a href="{{ link(base, against=against, swap='1' if swap else '', kind=kind, table=view.table) }}"{% if view.kind == kind %} aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+    </div>
+    <div class="table-wrap">
+      <table class="data" id="changes" style="min-width: 620px">
+        <thead><tr><th scope="col">Cell</th><th scope="col">Change</th><th scope="col" class="num">Before</th><th scope="col" class="num">After</th><th scope="col" class="num">Difference</th></tr></thead>
+        <tbody>
+        {% for cell in view.cells %}
+        {% set owner = view.earlier if cell.change == "removed" else view.later %}
+        <tr>
+          <td class="code"><a href="{{ link('/returns/' ~ owner.return_id ~ '/templates', table=cell.table, sheet=cell.sheet or '', key=cell.open_key or '', row=cell.row, col=cell.column) }}">{{ cell.address }}</a></td>
+          <td><span class="chip {{ {'changed': 'chip-accent', 'added': 'chip-info', 'removed': 'chip-ne'}[cell.change] }}">{{ cell.change }}</span></td>
+          <td class="num mono muted">{{ cell.before or "—" }}</td>
+          <td class="num mono" style="color: var(--strong)">{{ cell.after or "—" }}</td>
+          <td class="num mono">{{ cell.delta }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span>{{ view.matched | count }} cell{{ "s" if view.matched != 1 }}{% if view.pages > 1 %} · page {{ view.page }} of {{ view.pages }}{% endif %}</span>
+      {% if view.page > 1 %}<a class="btn btn-small" href="{{ link(base, against=against, swap='1' if swap else '', kind=view.kind, table=view.table, page=view.page - 1) }}">Previous</a>{% endif %}
+      {% if view.page < view.pages %}<a class="btn btn-small" href="{{ link(base, against=against, swap='1' if swap else '', kind=view.kind, table=view.table, page=view.page + 1) }}">Next</a>{% endif %}
+    </div>
+  </section>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+{% block command %}<div>Same on the command line: <span class="mono" style="color: var(--fg)">rwa-filer diff EARLIER LATER</span></div>{% endblock %}

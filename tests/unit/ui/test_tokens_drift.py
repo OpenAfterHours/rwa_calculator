@@ -3,9 +3,10 @@ Drift-guard: the app's vendored front-end assets must match their docs sources.
 
 The brand design tokens, the landing-page design system, and the polar-bear
 constellation script each live once under docs/ (loaded by the Zensical docs).
-The packaged app cannot read docs/ at runtime, so it ships vendored copies under
-src/rwa_calc/ui/app/static/. These tests fail if a copy drifts from its source —
-re-copy the docs file into the app static dir to fix.
+The packaged apps cannot read docs/ at runtime, so they ship vendored copies:
+``rwa-ui`` under src/rwa_calc/ui/app/static/, and ``rwa-filer dash`` (the brand
+tokens only) under packages/rwa-filer/src/rwa_filer/dash/static/. These tests
+fail if a copy drifts from its source — re-copy the docs file to fix.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DOCS = _REPO_ROOT / "docs"
 _APP_STATIC = _REPO_ROOT / "src" / "rwa_calc" / "ui" / "app" / "static"
+_FILER_DASH_STATIC = _REPO_ROOT / "packages" / "rwa-filer" / "src" / "rwa_filer" / "dash" / "static"
 
 # (docs source, app vendored copy) pairs that must stay byte-identical
 # (newline-normalised). Add a row here when vendoring another shared asset.
@@ -33,13 +35,17 @@ _VENDORED_ASSETS = [
         _DOCS / "assets" / "javascripts" / "bear-constellation.js",
         _APP_STATIC / "bear-constellation.js",
     ),
+    (
+        _DOCS / "assets" / "stylesheets" / "tokens.css",
+        _FILER_DASH_STATIC / "tokens.css",
+    ),
 ]
 
 
 @pytest.mark.parametrize(
     "docs_source, app_copy",
     _VENDORED_ASSETS,
-    ids=lambda p: p.name,
+    ids=lambda p: str(p.relative_to(_REPO_ROOT)),
 )
 def test_app_asset_matches_docs_source(docs_source: Path, app_copy: Path) -> None:
     # Arrange

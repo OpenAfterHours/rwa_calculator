@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ entry.module }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set base = "/reference/" ~ entry.module %}
+<div>
+  <div class="small muted"><a href="/reference">Taxonomies &amp; rules</a></div>
+  <h1>{{ entry.module }}</h1>
+  <p class="lede">{% if entry.pack %}Taxonomy {{ entry.pack.version }}, in force from {{ entry.pack.valid_from | long_date }}{% if entry.pack.valid_to %} to {{ entry.pack.valid_to | long_date }}{% endif %} · <span class="mono">{{ entry.pack.entry_point }}</span>{% else %}No taxonomy pack is packaged for this module: its rules can be read but a return cannot be validated.{% endif %}</p>
+</div>
+
+<div class="split">
+  {% if tables %}
+  <section class="narrow panel" id="tables" style="flex: 2 1 360px">
+    <h2>Tables ({{ tables | length }})</h2>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th scope="col">Table</th><th scope="col">Title</th><th scope="col" class="num">Rows × columns</th></tr></thead>
+        <tbody>{% for table, title in tables %}<tr><td class="code">{{ table.code }}</td><td class="small">{{ title }}{% if table.sheet_codes %} <span class="muted">· {{ table.sheet_codes | length }} sheets</span>{% endif %}{% if table.open_rows %} <span class="muted">· open rows</span>{% endif %}</td><td class="num small">{{ table.rows | length if not table.open_rows else "open" }} × {{ table.columns | length }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+  <section class="wide panel" id="rules" style="flex: 3 1 480px">
+    <div class="panel-head"><h2>Rules enforced ({{ entry.enforced | count }})</h2><span class="small muted mono">{{ entry.rule_book or "no rule book" }}</span></div>
+    <form method="get" action="{{ base }}" class="btn-row">
+      <label class="visually-hidden" for="q">Search rules</label>
+      <input id="q" type="search" name="q" value="{{ query }}" placeholder="Rule ID or words in its label" style="flex: 1 1 240px">
+      <button class="btn" type="submit">Search</button>
+    </form>
+    <div class="small muted">{{ matched | count }} rule{{ "s" if matched != 1 }}{% if pages > 1 %} · page {{ page }} of {{ pages }}{% endif %}</div>
+    <div class="rule-list">
+      {% for rule in rules %}
+      <div class="rule-item">
+        <span class="top">{% if rule.severities.get(entry.module) == "ERROR" %}<span class="chip chip-fail">Error</span>{% else %}<span class="chip chip-warn">Warning</span>{% endif %}<span class="mono small muted">{{ rule.rule_id }}</span></span>
+        <span class="label">{{ (rule.label or "No label published") | replace("|", "") }}</span>
+        <span class="where">{{ rule.tables | join(" · ") }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% if pages > 1 %}
+    <div class="pager">
+      {% if page > 1 %}<a class="btn btn-small" href="{{ link(base, q=query, page=page - 1) }}">Previous</a>{% endif %}
+      {% if page < pages %}<a class="btn btn-small" href="{{ link(base, q=query, page=page + 1) }}">Next</a>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -32,6 +32,7 @@ from rwa_filer.boe.engine import (
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
     Accuracy,
+    CellAddress,
     RuleResult,
     evaluate_rules,
 )
@@ -865,6 +866,39 @@ def test_a_failure_names_its_place_and_the_cells_involved(pack: TaxonomyPack) ->
     (failure,) = result.failures
     assert failure.place == "sheet 0002"
     assert failure.cells == (f"{T02} r0020 c0010 = 50", f"{T02} r0010 c0010 = 40")
+
+
+def test_a_failure_addresses_each_cell_it_read_in_rule_order(pack: TaxonomyPack) -> None:
+    """The addresses a viewer marks on the template grid: table, sheet, row, column."""
+    result = run(pack, CAP, t02("0002", "0010", 40), t02("0002", "0020", 50))
+
+    (failure,) = result.failures
+    assert failure.addresses == (
+        CellAddress(T02, "0002", None, "0020", "0010"),
+        CellAddress(T02, "0002", None, "0010", "0010"),
+    )
+
+
+def test_a_cell_read_at_its_default_is_addressed_as_unreported(pack: TaxonomyPack) -> None:
+    """Row 0030 is empty and read as 0: the break is as much that cell as the others."""
+    # Act — 100 is not 60 + 0.
+    result = run(pack, FOOTING, t01("0010", "0010", 100), t01("0020", "0010", 60))
+
+    # Assert
+    (failure,) = result.failures
+    assert CellAddress(T01, None, None, "0030", "0010", reported=False) in failure.addresses
+    assert CellAddress(T01, None, None, "0010", "0010") in failure.addresses
+
+
+def test_a_summed_sequence_addresses_every_cell_in_the_sum_once(pack: TaxonomyPack) -> None:
+    """The total is read by the sum and again on its own: it is one cell, listed once."""
+    result = run(
+        pack, COUNTRIES_FOOT, geo("GB", "0010", 70), geo("FR", "0010", 20), geo("x1", "0010", 100)
+    )
+
+    (failure,) = result.failures
+    assert sorted(address.open_key or "" for address in failure.addresses) == ["FR", "GB", "x1"]
+    assert {address.reported for address in failure.addresses} == {True}
 
 
 def test_recorded_failures_are_capped_but_every_one_is_counted(pack: TaxonomyPack) -> None:

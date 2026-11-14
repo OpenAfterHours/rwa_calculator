@@ -198,6 +198,17 @@ jobs:
               for member in ("cells.arrow", "datapoints.arrow"):
                   if f"{pack}/{member}" not in names:
                       problems.append(f"taxonomy pack {pack} is missing {member} in the wheel")
+          # `rwa-filer dash` renders from templates and stylesheets read at run
+          # time: a wheel without them installs, imports, and fails on the first
+          # page. The editable install the suite runs against cannot see that.
+          dash = {
+              n.removeprefix("rwa_filer/dash/") for n in names
+              if n.startswith("rwa_filer/dash/") and not n.endswith(".py")
+          }
+          for asset in ("templates/base.html", "templates/overview.html",
+                        "templates/filing.html", "static/dash.css", "static/tokens.css"):
+              if asset not in dash:
+                  problems.append(f"the dashboard's {asset} is missing from the wheel")
           for problem in problems:
               print(f"::error::{problem}")
           sys.exit(1 if problems else 0)

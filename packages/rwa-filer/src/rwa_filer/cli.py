@@ -35,6 +35,8 @@ Commands:
         every rule beside this package's own. Needs Arelle (rwa-filer[arelle]).
     rwa-filer template --module CODE --reference-date DATE --out FILE [--tables ...]
         Write a blank workbook to fill in and validate.
+    rwa-filer dash [FILE] [--port N] [--no-browser]
+        Start the local web dashboard, and open FILE in it if one is given.
     rwa-filer taxonomy list
         The packaged taxonomy packs and the dates they apply to.
     rwa-filer taxonomy compile ... --out DIR
@@ -65,9 +67,9 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -79,8 +81,8 @@ from rwa_filer.boe import importer as boe_importer
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
-from rwa_filer.model import LEI_SCHEME, CanonicalReturn, ReturnHeader
-from rwa_filer.readers import INSTANCE_SUFFIXES, SUPPORTED_SUFFIXES, SourceReading, load_source
+from rwa_filer.model import LEI_SCHEME
+from rwa_filer.readers import HeaderFields, SourceReading, load_source, open_source
 from rwa_filer.referee import RefereePlanError, RefereeUnavailableError, run_referee
 from rwa_filer.referee import report as referee_report
 from rwa_filer.referee.differential import compare
@@ -89,14 +91,23 @@ from rwa_filer.rules.catalogue import EXTRACT_FILES, extract_resource, load_rule
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs, resolve_pack, write_pack
 from rwa_filer.validate.report import render_text, to_record
 from rwa_filer.validate.returns import validate_return
-from rwa_filer.workflow import ledger as audit
+from rwa_filer.workflow.acts import (
+    ledger_beside,
+    ledger_for_instance,
+    record_build,
+    record_signoff,
+    verify_filing,
+)
 from rwa_filer.workflow.adjustments import apply_adjustments, read_adjustments
 from rwa_filer.workflow.diff import diff_returns
-from rwa_filer.workflow.signoff import SignOffError, read_signoff, sign_off, verify_package
+from rwa_filer.workflow.signoff import SignOffError
 from rwa_filer.xbrl.writer import InstanceOptions
 
 EXIT_OK = 0
 EXIT_FAILED = 1
+
+#: The port ``rwa-filer dash`` tries first. It listens on this machine only.
+DASH_PORT = 8765
 
 #: Changed cells listed by ``diff`` in text form; the JSON form lists them all.
 _DIFF_ROWS_SHOWN = 40
@@ -150,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_workflow_commands(commands)
     _add_referee_command(commands)
     _add_template_command(commands)
+    _add_dash_command(commands)
     _add_taxonomy_commands(commands)
     _add_rulebook_commands(commands)
     _add_rules_commands(commands)
@@ -224,53 +236,18 @@ def _load(args: argparse.Namespace) -> SourceReading:
         ValueError: the file is missing, of an unsupported type, lacks a header
             it needs, or is not readable as what its suffix says it is.
     """
-    path: Path = args.file
-    suffix = path.suffix.lower()
-    if not path.is_file():
-        raise ValueError(f"file not found: {path}")
-    if suffix not in (*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES):
-        accepted = ", ".join((*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES))
-        raise ValueError(f"unsupported file type {path.suffix!r}; expected one of {accepted}")
-    carries_header = suffix == ".xlsx" or suffix in INSTANCE_SUFFIXES
-    source = load_source(path, _header_from_args(args, required=not carries_header))
-    return replace(source, ret=_apply_header_overrides(source.ret, args))
+    return open_source(args.file, _header_fields(args))
 
 
-def _header_from_args(args: argparse.Namespace, *, required: bool) -> ReturnHeader | None:
-    """A header from the command line, or ``None`` when the file supplies its own.
-
-    Raises:
-        ValueError: the file needs a header and the three required options were
-            not all given.
-    """
-    given = (args.entity, args.reference_date, args.module)
-    if not all(given):
-        if required:
-            raise ValueError(
-                "a fact table carries no header: --entity, --reference-date and --module "
-                "are all required"
-            )
-        return None
-    return ReturnHeader(
-        entity_identifier=args.entity,
+def _header_fields(args: argparse.Namespace) -> HeaderFields:
+    """The return-header options given on the command line."""
+    return HeaderFields(
+        entity=args.entity,
         reference_date=args.reference_date,
         module=args.module,
-        currency=args.currency or "GBP",
-        entity_scheme=args.entity_scheme or LEI_SCHEME,
+        currency=args.currency,
+        entity_scheme=args.entity_scheme,
     )
-
-
-def _apply_header_overrides(ret: CanonicalReturn, args: argparse.Namespace) -> CanonicalReturn:
-    """Apply any header option given on the command line over a workbook's own header."""
-    overrides = {
-        "entity_identifier": args.entity,
-        "reference_date": args.reference_date,
-        "module": args.module,
-        "currency": args.currency,
-        "entity_scheme": args.entity_scheme,
-    }
-    changed = {name: value for name, value in overrides.items() if value is not None}
-    return replace(ret, header=replace(ret.header, **changed)) if changed else ret
 
 
 # =============================================================================
@@ -403,28 +380,13 @@ def _build(args: argparse.Namespace) -> int:
     if applied:
         _out(f"Applied {len(applied)} adjustment(s); each is recorded in the manifest.")
     if args.author:
-        ledger = args.ledger or package.instance_path.with_name(
-            f"{package.instance_path.stem}{audit.LEDGER_SUFFIX}"
-        )
+        ledger = args.ledger or ledger_for_instance(package.instance_path)
         try:
-            if applied:
-                audit.append_entry(
-                    ledger,
-                    audit.EVENT_ADJUSTMENT,
-                    {"adjustments": [item.as_record() for item in applied]},
-                    author=args.author,
-                    at=now,
-                )
-            audit.append_entry(
+            record_build(
                 ledger,
-                audit.EVENT_BUILD,
-                {
-                    "instance": package.instance_path.name,
-                    "sha256": hashlib.sha256(instance.content).hexdigest(),
-                    "facts": instance.facts,
-                    "submittable": package.validation.is_submittable,
-                    "forced": bool(args.force),
-                },
+                package,
+                applied=applied,
+                forced=bool(args.force),
                 author=args.author,
                 at=now,
             )
@@ -500,38 +462,18 @@ def _add_workflow_commands(
     diffing.set_defaults(handler=_diff)
 
 
-def _ledger_beside(manifest: Path) -> Path:
-    """The default ledger of the package ``manifest`` describes."""
-    base = manifest.name.removesuffix(".manifest.json")
-    return manifest.with_name(f"{base}{audit.LEDGER_SUFFIX}")
-
-
 def _signoff(args: argparse.Namespace) -> int:
     """``rwa-filer signoff`` — record an approval and note it in the ledger."""
     manifest: Path = args.manifest
-    ledger = args.ledger or _ledger_beside(manifest)
-    now = datetime.now(UTC)
     try:
-        if ledger.is_file() and (problems := audit.verify_ledger(ledger)):
-            return _fail(f"the audit ledger does not verify: {problems[0]}")
-        entry = None
-        if ledger.is_file():
-            approval_record = {
-                "manifest": manifest.name,
-                "approver": args.approver,
-                "role": args.role,
-            }
-            entry = audit.append_entry(
-                ledger, audit.EVENT_SIGNOFF, approval_record, author=args.approver, at=now
-            )
-        approval = sign_off(
+        approval = record_signoff(
             manifest,
+            ledger=args.ledger or ledger_beside(manifest),
             approver=args.approver,
             role=args.role,
-            at=now,
+            at=datetime.now(UTC),
             statement=args.statement,
             acknowledge_findings=args.acknowledge_findings,
-            ledger_head=entry.hash if entry is not None else None,
         )
     except (SignOffError, ValueError) as exc:
         return _fail(str(exc))
@@ -546,18 +488,7 @@ def _signoff(args: argparse.Namespace) -> int:
 def _verify(args: argparse.Namespace) -> int:
     """``rwa-filer verify`` — the package, its sign-off and its ledger."""
     manifest: Path = args.manifest
-    problems = verify_package(manifest, require_signoff=not args.unsigned)
-    ledger = args.ledger or _ledger_beside(manifest)
-    if args.ledger is not None or ledger.is_file():
-        problems += audit.verify_ledger(ledger)
-        try:
-            approval = read_signoff(manifest)
-        except ValueError:
-            approval = None
-        if approval is not None and approval.ledger_head is not None and not problems:
-            hashes = {entry.hash for entry in audit.read_ledger(ledger)}
-            if approval.ledger_head not in hashes:
-                problems.append("the audit ledger is not the one the sign-off was recorded in")
+    problems = verify_filing(manifest, ledger=args.ledger, require_signoff=not args.unsigned)
     if problems:
         for problem in problems:
             _out(f"FAILED  {problem}")
@@ -642,6 +573,74 @@ def _template(args: argparse.Namespace) -> int:
     except (ValueError, PackNotFoundError) as exc:
         return _fail(str(exc))
     _out(f"wrote {args.out} ({written} worksheet(s), {pack.info.module} {pack.info.version})")
+    return EXIT_OK
+
+
+# =============================================================================
+# dash
+# =============================================================================
+
+
+def _add_dash_command(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register ``rwa-filer dash``."""
+    dash = commands.add_parser(
+        "dash",
+        help="start the local web dashboard",
+        description=(
+            "Start a dashboard on this machine and open it in the browser: open a return, "
+            "see whether it can be filed, walk from a broken rule to the cells on the "
+            "template that broke it. It listens on this machine only (127.0.0.1) and answers "
+            "only the browser holding the address it prints, which carries this session's token."
+        ),
+    )
+    dash.add_argument(
+        "file", nargs="?", type=Path, metavar="FILE", help="a return to open straight away"
+    )
+    _add_header_arguments(dash)
+    dash.add_argument(
+        "--port",
+        type=int,
+        default=DASH_PORT,
+        metavar="N",
+        help=f"the port to try first (default {DASH_PORT}; the next free one if it is taken)",
+    )
+    dash.add_argument(
+        "--no-browser", action="store_true", help="print the address but do not open a browser"
+    )
+    dash.add_argument(
+        "--workdir",
+        type=Path,
+        metavar="DIR",
+        help="where the dashboard keeps the files opened in it (default: a new temporary folder)",
+    )
+    dash.set_defaults(handler=_dash)
+
+
+def _dash(args: argparse.Namespace) -> int:
+    """``rwa-filer dash`` — open FILE if given, then serve until interrupted."""
+    # The web stack is imported here, not at the top: no other command needs it.
+    from rwa_filer.dash import Workspace, serve
+
+    workdir: Path = args.workdir or Path(tempfile.mkdtemp(prefix="rwa-filer-dash-"))
+    workdir.mkdir(parents=True, exist_ok=True)
+    workspace = Workspace(workdir)
+    start = "/"
+    if args.file is not None:
+        try:
+            opened = workspace.open(args.file, _header_fields(args))
+        except (ValueError, PackNotFoundError) as exc:
+            return _fail(str(exc))
+        start = f"/returns/{opened.return_id}"
+    try:
+        serve(
+            workspace,
+            port=args.port,
+            open_browser=not args.no_browser,
+            start_path=start,
+            announce=_out,
+        )
+    except KeyboardInterrupt:
+        _out("stopped")
     return EXIT_OK
 
 

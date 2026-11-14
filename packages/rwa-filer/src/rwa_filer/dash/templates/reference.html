@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Taxonomies &amp; rules — rwa-filer dash{% endblock %}
+{% block content %}
+<div>
+  <div class="small muted">Reference</div>
+  <h1>Taxonomies &amp; rules</h1>
+  <p class="lede">What this package carries: a taxonomy pack per module — its tables, cells and data points — and the Bank of England's rule books, with how many rules each module enforces. A return can be validated for a module that has both.</p>
+</div>
+<section class="panel">
+  <div class="table-wrap">
+    <table class="data" id="modules" style="min-width: 760px">
+      <thead><tr><th scope="col">Module</th><th scope="col">Taxonomy</th><th scope="col">Applies from</th><th scope="col">Rule book</th><th scope="col" class="num">Rules</th><th scope="col" class="num">Enforced</th><th scope="col">Validates</th></tr></thead>
+      <tbody>
+      {% for entry in modules %}
+      <tr>
+        <td class="code"><a href="/reference/{{ entry.module }}">{{ entry.module }}</a></td>
+        <td class="mono small">{{ entry.pack.version if entry.pack else "—" }}</td>
+        <td class="mono small">{{ entry.pack.valid_from.isoformat() if entry.pack else "—" }}</td>
+        <td class="mono small">{{ entry.rule_book or "—" }}</td>
+        <td class="num">{{ entry.rules | count if entry.rule_book else "—" }}</td>
+        <td class="num">{{ entry.enforced | count if entry.rule_book else "—" }}</td>
+        <td>{% if entry.pack and entry.rule_book %}<span class="chip chip-pass">structure and rules</span>{% elif entry.pack %}<span class="chip chip-ne">structure only</span>{% else %}<span class="chip chip-ne">rules only: no taxonomy pack</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block command %}<div>Same on the command line: <span class="mono" style="color: var(--fg)">rwa-filer taxonomy list</span> and <span class="mono" style="color: var(--fg)">rwa-filer rulebook list</span></div>{% endblock %}

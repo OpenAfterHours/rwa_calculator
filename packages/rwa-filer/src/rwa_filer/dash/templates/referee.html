@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Referee · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block head_extra %}{% if running %}<meta http-equiv="refresh" content="{{ refresh }}">{% endif %}{% endblock %}
+{% block content %}
+{% set rid = current.return_id %}
+<div>
+  <div class="small muted">Referee</div>
+  <h1>A second opinion from Arelle</h1>
+  <p class="lede">Run the Arelle XBRL processor on a written instance against the Bank's taxonomy package, and set its verdict on every rule beside this package's own. A disagreement means one of the two has misread a rule. A large module takes minutes and several GB of memory; the run continues while you use the rest of the dashboard.</p>
+</div>
+
+{% if error %}
+<div class="callout callout-fail" role="alert" id="referee-error"><div class="body"><div class="title">Not started</div><p>{{ error }}</p></div></div>
+{% endif %}
+
+{% if not arelle_available %}
+<div class="callout callout-warn" id="arelle-missing"><div class="body"><div class="title">Arelle is not available</div><p>{{ arelle_detail }}</p></div></div>
+{% endif %}
+
+{% if job %}
+<section class="panel" id="job" data-status="{{ job.status }}">
+  <div class="panel-head"><h2>{{ {"running": "Running", "done": "Finished", "failed": "Stopped"}[job.status] }}</h2><span class="small muted">started {{ job.started_at | moment }}{% if job.finished_at %} · finished {{ job.finished_at | moment }}{% endif %}</span></div>
+  <div class="small"><span class="muted">Instance</span> <span class="mono" style="word-break: break-all">{{ job.instance }}</span></div>
+  <div class="small"><span class="muted">Taxonomy package</span> <span class="mono" style="word-break: break-all">{{ job.package }}</span>{% if job.rules %} · <span class="muted">rules matching</span> <span class="mono">{{ job.rules }}</span>{% endif %}</div>
+  {% if running %}
+  {% set progress = job.progress() %}
+  <p style="margin: 0">{% if progress %}{{ progress[0] }} of {{ progress[1] }} worker{{ "s" if progress[1] != 1 }} finished.{% else %}Planning the run…{% endif %} This page reloads every {{ refresh }} seconds.</p>
+  {% elif job.error %}
+  <div class="callout callout-fail"><div class="body"><p style="margin: 0">{{ job.error }}</p></div></div>
+  {% else %}
+  {% set result = job.result %}
+  <div class="callout {{ 'callout-pass' if supported else 'callout-fail' }}" id="referee-verdict"><div class="body"><div class="title">{{ verdict }}</div></div></div>
+  <div class="tiles">
+    <div class="tile"><div class="label">Rules evaluated</div><div class="value">{{ result.rules | length | count }}</div><div class="sub">{{ result.skipped | length }} skipped (template not filed) · {{ result.lost | length }} lost</div></div>
+    <div class="tile"><div class="label">Arelle messages</div><div class="value">{{ result.messages | length }}</div><div class="sub">{{ result.errors | length }} at an error level</div></div>
+    {% if job.differential %}
+    {% set counts = job.differential.counts() %}
+    <div class="tile"><div class="label">Engines agree</div><div class="value">{{ counts["agree"] | count }}</div><div class="sub">of {{ job.differential.compared | count }} compared · {{ counts["count_differs"] }} differ only in count</div></div>
+    <div class="tile"><div class="label">Disagree</div><div class="value" style="color: var({{ '--fail' if counts['disagree'] else '--pass' }})">{{ counts["disagree"] }}</div><div class="sub">{{ counts["not_compared"] }} not compared</div></div>
+    {% endif %}
+  </div>
+  {% if job.differential and job.differential.disagreements %}
+  <h3>Where the engines disagree</h3>
+  <div class="table-wrap"><table class="data" id="disagreements">
+    <thead><tr><th scope="col">Rule</th><th scope="col">This package</th><th scope="col">Arelle</th><th scope="col">Note</th></tr></thead>
+    <tbody>{% for item in job.differential.disagreements %}<tr><td class="code"><a href="{{ link('/returns/' ~ rid ~ '/rules', rule=item.rule_id) }}">{{ item.rule_id }}</a></td><td class="mono">{{ item.native }} {{ item.native_counts }}</td><td class="mono">{{ item.referee }} {{ item.referee_counts or "" }}</td><td class="small">{{ item.note }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  {% if result.messages %}
+  <h3>Arelle's messages</h3>
+  <div class="table-wrap"><table class="data" id="messages">
+    <thead><tr><th scope="col">Code</th><th scope="col">Level</th><th scope="col">Message</th></tr></thead>
+    <tbody>{% for message in result.messages[:50] %}<tr><td class="code">{{ message.code }}</td><td>{{ message.level }}</td><td class="small">{{ message.text }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="panel" id="start">
+  <h2>{{ "Run again" if job else "Start a run" }}</h2>
+  {% if instances %}
+  <form method="post" action="/returns/{{ rid }}/referee" style="display: flex; flex-direction: column; gap: 14px">
+    <fieldset style="border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px">
+      <legend class="small" style="font-weight: 600; margin-bottom: 6px">Instance</legend>
+      {% for key, path in instances %}
+      <label class="check"><input type="radio" name="instance" value="{{ key }}"{% if loop.last %} checked{% endif %}><span><span class="mono small" style="word-break: break-all">{{ path }}</span> <span class="small muted">{{ "the opened file" if key == "source" else "written by build " ~ (key.split(":")[1] | int + 1) }}</span></span></label>
+      {% endfor %}
+    </fieldset>
+    <div class="fields">
+      <label class="field" style="flex: 3 1 340px">Taxonomy package <span class="hint">the Bank's zip, e.g. boe-banking-v411.zip</span>
+        <input type="text" name="package" value="{{ last_package }}" spellcheck="false" class="mono" required>
+      </label>
+      <label class="field" style="flex: 2 1 240px">Interpreter with Arelle <span class="hint">optional</span>
+        <input type="text" name="python" value="{{ last_python }}" spellcheck="false" class="mono" placeholder="RWA_FILER_ARELLE_PYTHON">
+      </label>
+      <label class="field">Only rules matching <span class="hint">optional regex</span>
+        <input type="text" name="rules" spellcheck="false" class="mono" placeholder="boe_b07">
+      </label>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" type="submit">Start the referee</button>{% if arelle_available %}<span class="small muted">Arelle: <span class="mono">{{ arelle_detail }}</span></span>{% endif %}</div>
+  </form>
+  {% else %}
+  <p class="small muted" style="margin: 0">The referee reads an XBRL instance. This return was not opened from one: build its package first on <a href="/returns/{{ rid }}/filing">Build &amp; sign off</a>, then check the file that build wrote.</p>
+  {% endif %}
+</section>
+
+{% if history | length > 1 %}
+<section class="panel"><h2>Earlier runs</h2>
+  {% for item in history %}<a class="rule-item" href="/returns/{{ rid }}/referee?job={{ item.job_id }}"><span class="top"><span class="chip {{ {'running': 'chip-info', 'done': 'chip-pass', 'failed': 'chip-fail'}[item.status] }}">{{ item.status }}</span><span class="small muted">{{ item.started_at | moment }}</span></span><span class="where">{{ item.instance.name }}</span></a>{% endfor %}
+</section>
+{% endif %}
+{% endblock %}
+{% block command %}<div>Same on the command line: <span class="mono" style="color: var(--fg)">rwa-filer referee INSTANCE --taxonomy-package ZIP</span></div>{% endblock %}

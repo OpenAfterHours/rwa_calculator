@@ -7,7 +7,41 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- `rwa-filer dash` — a local web dashboard (`uvx rwa-filer@latest dash return.xbrl`).
+  Open a return from a file or a path; see whether anything blocks submission
+  with the counts behind the verdict, including how many rules ran and why the
+  rest did not; filter and search the rules, each with its expression and the
+  cells it read; and see any table of the return on its template grid, laid out
+  from the taxonomy pack, with cells the sheet does not accept hatched and every
+  cell a broken rule read outlined. Listens on `127.0.0.1` only — there is no
+  option to listen on a network, which plain HTTP would expose — and answers
+  only the browser holding the session token the command prints. Dark by
+  default, with a light theme. Guide: `docs/rwa-filer/dash.md`.
+- `rwa-filer dash` — Build & sign off: draft cell overrides from the template
+  grid, each with its reason and checked as a batch when it is made; see the
+  return validated with them; build the package with the options
+  `rwa-filer build` takes (byte-identical to the command's build); sign it off
+  and verify it; follow the audit ledger; download the files the build wrote.
+- `rwa-filer dash` — Compare: this return beside another version, cell by cell
+  (`rwa-filer diff`'s counts) and rule by rule (fixed, newly broken, blocking
+  findings before and after). Referee: Arelle's verdict on an instance the
+  return has, run in the background with its progress shown, set beside the
+  native engine's rule by rule. Taxonomies & rules: every packaged pack and rule
+  book, each module's tables, and its enforced rules, searchable.
+- `referee.report.verdict_line` (was private): the run's verdict in one line.
+- `workflow.acts` — `record_build`, `record_signoff`, `verify_filing`: the
+  build, sign-off and verify bookkeeping, shared by the command line and the
+  dashboard so the two cannot record the same act differently.
+- `workflow.signoff.check_signoff`: the sign-off preconditions, without
+  recording anything.
+- `boe.engine.CellAddress` and `Failure.addresses`: each failing evaluation now
+  records where the cells it read are (table, sheet, open-axis key, row,
+  column), up to `MAX_ADDRESSES`, and whether each was reported or read at its
+  default. `Failure.cells` still describes them in words.
+- `readers.open_source` and `readers.HeaderFields`: read a file the way
+  `rwa-filer validate` does — check it exists and is supported, require a
+  header for a fact table, apply any header field given over the file's own.
+  The command line and the dashboard share it.
 - `rwa_filer.extras.MissingExtraError`, raised by everything that opens a
   workbook when openpyxl (the `excel` extra) is not installed. It is a
   `ModuleNotFoundError`, so code that catches that keeps working.
@@ -62,9 +96,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
   `build --ledger`), or a path beneath a file. Before, it ended in
   `FileExistsError` or `IsADirectoryError`, for `taxonomy compile` only once
   the whole compile had run.
+- `rwa-filer signoff` recorded a sign-off entry in the audit ledger before
+  checking that the sign-off would be given, so a refused sign-off (for
+  example, a not-submittable package without `--acknowledge-findings`) left
+  the ledger claiming an approval that never happened. The checks now run
+  first, and a refused sign-off records nothing.
 
 ### Changed
-- (Next release changes will go here)
+- Starlette, uvicorn, Jinja2 and python-multipart are now dependencies, for the
+  dashboard. They are required rather than an extra so that `uvx rwa-filer dash`
+  works as typed; nothing outside `rwa_filer.dash` imports them.
 - The README runs the command with `uvx rwa-filer@latest`, in place of
   `pip install rwa-filer`. `@latest` makes each run check PyPI and use the
   newest release, so a return is checked with the newest rules and taxonomy

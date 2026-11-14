@@ -96,8 +96,8 @@ h3 { font-size: 13px; font-family: var(--font-sans); text-transform: uppercase; 
 
 /* ---------- Layout ----------------------------------------- */
 .layout { display: flex; flex-wrap: wrap; min-height: calc(100vh - 57px); }
-.sidenav { flex: 0 0 220px; padding: 20px 12px; border-right: 1px solid var(--line); background: var(--bar); display: flex; flex-direction: column; gap: 4px; }
-.sidenav a { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: var(--fg); font-size: 14px; }
+.sidenav { flex: 0 0 220px; min-width: 0; max-width: 220px; padding: 20px 12px; border-right: 1px solid var(--line); background: var(--bar); display: flex; flex-direction: column; gap: 4px; }
+.sidenav a { min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border-radius: 8px; color: var(--fg); font-size: 14px; }
 .sidenav a[aria-current="page"] { color: var(--accent-text); background: var(--accent-soft); font-weight: 600; }
 .sidenav .group { margin: 14px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .sidenav .count { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--fail); }
@@ -238,7 +238,7 @@ table.grid td a { display: block; min-width: 96px; height: 34px; line-height: 34
 .mark[aria-current="true"] { background: var(--accent-soft); border-color: var(--accent); }
 
 @media (max-width: 760px) {
-  .sidenav { flex: 1 1 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidenav { flex: 1 1 100%; max-width: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .page { padding: 20px 16px 40px; }
 }
 

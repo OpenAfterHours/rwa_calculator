@@ -25,7 +25,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.routing import Mount
 from starlette.staticfiles import StaticFiles
 
-from rwa_filer.dash import filing_pages, pages
+from rwa_filer.dash import (
+    compare_pages,
+    filing_pages,
+    pages,
+    referee_pages,
+    reference_pages,
+)
 from rwa_filer.dash.context import STATIC_DIR, DashContext
 from rwa_filer.dash.security import LOOPBACK_HOSTS, SameOriginGate, SessionGate
 
@@ -63,6 +69,9 @@ def create_app(
         routes=[
             *pages.routes(context),
             *filing_pages.routes(context),
+            *compare_pages.routes(context),
+            *referee_pages.routes(context),
+            *reference_pages.routes(context),
             Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
         ],
         middleware=[

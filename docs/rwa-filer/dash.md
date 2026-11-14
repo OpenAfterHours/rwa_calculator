@@ -96,6 +96,30 @@ and the rules that read it; pick a rule there to show only that rule's cells.
 A build from the dashboard is the build the command makes: the same return,
 overrides and options give byte-identical files.
 
+**Compare.** This return beside another version of it — one already opened, or
+a file opened from the page, such as the instance already filed. Every cell that
+changed, was added or was removed, by table and filterable by kind, with the
+difference in each figure; any header field that differs; and what the change did
+to the verdict: the broken rules the later version fixed, the ones it newly
+breaks, and the blocking findings before and after. Swap the two to read the
+change the other way. The counts are `rwa-filer diff`'s own.
+
+**Referee (Arelle).** The second opinion `rwa-filer referee` gives: the Arelle
+XBRL processor checks a written instance against the Bank's taxonomy package,
+and its verdict on every rule is set beside this package's own. The page offers
+the instances this return has — the file itself when it is an XBRL instance, and
+every package a build wrote — and asks for the taxonomy package's path and,
+optionally, the interpreter that has Arelle and a pattern for the rules to run.
+The run goes on in the background (a large module takes minutes and several GB)
+and the page shows how many workers have finished, then the verdict, Arelle's
+messages, and every rule on which the two engines part. Arelle is optional: the
+page says how to install it when it is not there.
+
+**Taxonomies & rules.** Every packaged taxonomy pack and rule book, with the
+rules each module enforces and whether a return of it can be validated (both a
+pack and a rule book), and for each module its tables and its enforced rules,
+searchable — without a return open.
+
 The theme switch in the top bar swaps between the dark look (the default, as in
 `rwa-ui` and these docs) and a light one; the choice is remembered.
 

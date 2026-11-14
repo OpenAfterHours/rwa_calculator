@@ -20,34 +20,26 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import date
-from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
-from starlette.concurrency import run_in_threadpool
-from starlette.datastructures import UploadFile
 from starlette.responses import RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.context import THEME_COOKIE, THEMES
+from rwa_filer.dash.forms import form_values, open_from_form, page_number
 from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.views import overview, rules_page
-from rwa_filer.readers import HeaderFields, carries_header
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs
 
 if TYPE_CHECKING:
-    from starlette.datastructures import FormData
     from starlette.requests import Request
     from starlette.responses import Response
 
     from rwa_filer.dash.context import DashContext
 
 logger = logging.getLogger(__name__)
-
-#: The form fields of the open page, echoed back when a return cannot be opened.
-_FORM_FIELDS: Final = ("path", "entity", "reference_date", "module", "currency")
 
 
 # =============================================================================
@@ -81,24 +73,10 @@ class ReturnPages:
     async def open_return(self, request: Request) -> Response:
         """Open the uploaded file, or the file at the given path, and show its overview."""
         form = await request.form()
-        values = {name: str(form.get(name) or "").strip() for name in _FORM_FIELDS}
         try:
-            fields = _header_fields(values)
-            path, name = await self._source(form, values["path"])
-        except ValueError as exc:
-            return self._home(request, error=str(exc), values=values, status_code=400)
-        if not carries_header(path) and not (
-            fields.entity and fields.reference_date and fields.module
-        ):
-            message = (
-                f"{name} is a fact table, which carries no header: give the entity, the "
-                "reference date and the module."
-            )
-            return self._home(request, error=message, values=values, status_code=400)
-        try:
-            opened = await run_in_threadpool(self.context.workspace.open, path, fields, name=name)
+            opened = await open_from_form(self.context.workspace, form)
         except (ValueError, PackNotFoundError) as exc:
-            return self._home(request, error=str(exc), values=values, status_code=400)
+            return self._home(request, error=str(exc), values=form_values(form), status_code=400)
         return RedirectResponse(f"/returns/{opened.return_id}", status_code=303)
 
     def overview(self, request: Request) -> Response:
@@ -119,7 +97,7 @@ class ReturnPages:
             query=query.get("q", ""),
             template=query.get("template", ""),
             rule_id=query.get("rule", ""),
-            page=_page_number(query.get("page")),
+            page=page_number(query.get("page")),
         )
         return self.context.render(
             request, "rules.html", current=opened, section="rules", view=view
@@ -186,52 +164,3 @@ class ReturnPages:
             values=values or {},
             modules=modules,
         )
-
-    async def _source(self, form: FormData, path_text: str) -> tuple[Path, str]:
-        """Where the return to open is, and the name to show it under.
-
-        Raises:
-            ValueError: neither a file nor a path was given.
-        """
-        upload = form.get("file")
-        if isinstance(upload, UploadFile) and upload.filename:
-            content = await upload.read()
-            saved = await run_in_threadpool(
-                self.context.workspace.save_upload, upload.filename, content
-            )
-            return saved, upload.filename
-        if path_text:
-            path = Path(path_text).expanduser()
-            return path, path.name
-        raise ValueError("Choose a file to open, or give the path of one on this machine.")
-
-
-# =============================================================================
-# Private helpers
-# =============================================================================
-
-
-def _header_fields(values: dict[str, str]) -> HeaderFields:
-    """The header the person typed in.
-
-    Raises:
-        ValueError: the reference date is not a date.
-    """
-    text = values.get("reference_date", "")
-    try:
-        reference_date = date.fromisoformat(text) if text else None
-    except ValueError:
-        raise ValueError(f"{text!r} is not a date: write it as YYYY-MM-DD.") from None
-    return HeaderFields(
-        entity=values.get("entity") or None,
-        reference_date=reference_date,
-        module=values.get("module") or None,
-        currency=values.get("currency") or None,
-    )
-
-
-def _page_number(text: str | None) -> int:
-    try:
-        return int(text) if text else 1
-    except ValueError:
-        return 1

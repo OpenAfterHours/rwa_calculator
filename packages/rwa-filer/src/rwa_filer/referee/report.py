@@ -83,8 +83,26 @@ def render_text(
         lines.append(f"    ... and {len(result.messages) - _LISTED} more")
     if differential is not None:
         lines += _differential_lines(differential)
-    lines.append(_verdict_line(result, differential))
+    lines.append(verdict_line(result, differential))
     return "\n".join(lines)
+
+
+def verdict_line(result: RefereeResult, differential: Differential | None = None) -> str:
+    """The run's verdict in one line: established or not, and what it says."""
+    if not result.complete:
+        return "Verdict: NOT ESTABLISHED — the referee run did not finish; see the lost rules."
+    if result.errors:
+        return f"Verdict: REJECTED — Arelle raised {len(result.errors)} error-level message(s)."
+    if differential is None:
+        return "Verdict: Arelle accepts the instance (the native engine was not compared)."
+    if differential.disagreements:
+        return (
+            f"Verdict: DISAGREEMENT — the two engines differ on "
+            f"{len(differential.disagreements)} rule(s); one of them has misread each."
+        )
+    if not differential.is_clean:
+        return "Verdict: NOT ESTABLISHED — no rule could be compared."
+    return "Verdict: Arelle accepts the instance and the two engines agree on every rule compared."
 
 
 # =============================================================================
@@ -115,20 +133,3 @@ def _comparison_line(item: RuleComparison) -> str:
         f"    {item.outcome:<13} {item.rule_id}: native {item.native} {item.native_counts}, "
         f"Arelle {item.referee}{referee}{note}"
     )
-
-
-def _verdict_line(result: RefereeResult, differential: Differential | None) -> str:
-    if not result.complete:
-        return "Verdict: NOT ESTABLISHED — the referee run did not finish; see the lost rules."
-    if result.errors:
-        return f"Verdict: REJECTED — Arelle raised {len(result.errors)} error-level message(s)."
-    if differential is None:
-        return "Verdict: Arelle accepts the instance (the native engine was not compared)."
-    if differential.disagreements:
-        return (
-            f"Verdict: DISAGREEMENT — the two engines differ on "
-            f"{len(differential.disagreements)} rule(s); one of them has misread each."
-        )
-    if not differential.is_clean:
-        return "Verdict: NOT ESTABLISHED — no rule could be compared."
-    return "Verdict: Arelle accepts the instance and the two engines agree on every rule compared."

@@ -21,6 +21,13 @@ and released independently of `rwa-calc`; its release tags are prefixed
   return validated with them; build the package with the options
   `rwa-filer build` takes (byte-identical to the command's build); sign it off
   and verify it; follow the audit ledger; download the files the build wrote.
+- `rwa-filer dash` — Compare: this return beside another version, cell by cell
+  (`rwa-filer diff`'s counts) and rule by rule (fixed, newly broken, blocking
+  findings before and after). Referee: Arelle's verdict on an instance the
+  return has, run in the background with its progress shown, set beside the
+  native engine's rule by rule. Taxonomies & rules: every packaged pack and rule
+  book, each module's tables, and its enforced rules, searchable.
+- `referee.report.verdict_line` (was private): the run's verdict in one line.
 - `workflow.acts` — `record_build`, `record_signoff`, `verify_filing`: the
   build, sign-off and verify bookkeeping, shared by the command line and the
   dashboard so the two cannot record the same act differently.

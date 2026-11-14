@@ -22,6 +22,10 @@ Module map:
 - ``pages``     — the read-only pages: open, overview, rules, templates
 - ``filing_pages`` — the write actions: overrides, build, sign-off, verify
 - ``filing``    — what those actions do, and the Build & sign off page model
+- ``compare_pages`` / ``compare`` — this return beside another version of it
+- ``referee_pages`` / ``referee_jobs`` — Arelle's verdict, run in the background
+- ``reference_pages`` — the packaged taxonomy packs and rule books
+- ``forms``     — opening a return from a form, for every page that takes one
 - ``views``     — page models for the overview and the rules
 - ``grid``      — the page model of the template viewer
 - ``workspace`` — the returns opened in one session

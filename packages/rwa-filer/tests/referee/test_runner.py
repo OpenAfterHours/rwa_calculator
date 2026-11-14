@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import io
 import json
 import logging
 import re
@@ -102,9 +103,11 @@ from pathlib import Path
 
 if not sys.flags.isolated:
     sys.exit("a worker must be launched isolated (python -I)")
-spec = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if sys.argv[1:]:
+    sys.exit("a worker takes its spec on standard input, not as an argument")
+spec = json.load(sys.stdin)
 script = json.loads(Path(__file__).with_name("script.json").read_text(encoding="utf-8"))
-chunk = Path(spec["out"]).stem  # "chunk0", "chunk1", ...
+chunk = f"chunk{spec['chunk']}"  # "chunk0", "chunk1", ...
 behaviour = {**script.get("every", {}), **script.get(chunk, {})}
 
 # The assertions handed over: the ones the overlay's preconditions name or,
@@ -133,7 +136,7 @@ if behaviour.get("exit", 0) == 0 and not behaviour.get("silent"):
         "messages": behaviour.get("messages", []),
         "timings": {"loaded_s": 1.5, "validated_s": 2.5},
     }
-    Path(spec["out"]).write_text(json.dumps(result), encoding="utf-8")
+    json.dump(result, sys.stdout)
 sys.exit(behaviour.get("exit", 0))
 '''
 
@@ -1144,9 +1147,56 @@ def test_the_collector_installs_the_limiter_on_arelles_logger_at_the_first_recor
     )
 
 
-def test_the_worker_script_needs_exactly_one_argument() -> None:
-    assert worker.main([]) == 2
-    assert worker.main(["one.json", "two.json"]) == 2
+def test_the_worker_script_takes_no_arguments() -> None:
+    """The spec arrives on standard input; a path argument is a usage error."""
+    assert worker.main(["spec.json"]) == 2
+
+
+def test_the_worker_reads_its_spec_from_stdin_and_writes_only_its_result_to_stdout(
+    monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """Whatever the session prints goes to stderr, so the result stays parseable."""
+    # Arrange
+    spec = {"instance": "instance.xbrl", "chunk": 0}
+    seen: list[dict[str, Any]] = []
+
+    def session(handed: dict[str, Any]) -> dict[str, Any]:
+        seen.append(handed)
+        print("arelle chatter")  # noqa: T201 - stands in for a processor that prints
+        return {"assertions": {"boe_a": [1, 0]}}
+
+    monkeypatch.setattr(worker, "run_session", session)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(spec)))
+
+    # Act
+    code = worker.main([])
+    captured = capfd.readouterr()
+
+    # Assert
+    assert code == 0
+    assert seen == [spec]
+    assert json.loads(captured.out) == {"assertions": {"boe_a": [1, 0]}}
+    assert "arelle chatter" in captured.err
+
+
+def test_the_worker_names_no_file_itself() -> None:
+    """The runner opens the spec, result and log files and hands the worker streams.
+
+    So no path reaches a file-opening call in the worker — not from its command
+    line, and not from the spec it reads — and there is nothing to traverse.
+    """
+    # Arrange
+    opening = {"Path", "open", "read_text", "write_text", "read_bytes", "write_bytes"}
+
+    # Act
+    calls = {
+        node.func.id if isinstance(node.func, ast.Name) else node.func.attr
+        for node in ast.walk(_tree(REFEREE_DIR / "worker.py"))
+        if isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute))
+    }
+
+    # Assert
+    assert calls & opening == set()
 
 
 # ---------------------------------------------------------------------------

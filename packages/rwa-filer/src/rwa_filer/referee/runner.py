@@ -8,7 +8,8 @@ Pipeline position:
 Key responsibilities:
 - Locate an interpreter that has Arelle (``find_arelle_python``). Arelle is an
   optional external tool: this module never imports it, and runs it only as a
-  subprocess — ``<python> -I worker.py SPEC.json``.
+  subprocess — ``<python> -I worker.py < SPEC.json > RESULT.json``. The runner
+  opens every file a worker uses; the worker is handed streams, never a path.
 - Plan the run. A small entry point is validated untrimmed against the official
   entry point in one worker (``MODE_FULL``). A large one is run in chunks, each
   against an overlay package that trims the entry point to that chunk's
@@ -243,7 +244,7 @@ def run_referee(
                 "skip_loading": None,
                 "xdg": str(folder / "xdg"),
                 "max_examples": max_examples,
-                "out": str(folder / f"chunk{index}.json"),
+                "chunk": index,
             }
             if plan.mode == MODE_TRIM:
                 overlay = module.write_overlay(
@@ -257,7 +258,7 @@ def run_referee(
                 spec["run_ids"] = (
                     "|".join(module.assertions[file].assertion_id for file in files) or None
                 )
-            outcomes.append(_run_chunk(index, files, spec, module, interpreter, guard))
+            outcomes.append(_run_chunk(index, folder, files, spec, module, interpreter, guard))
             # Survive an interrupted run: what has been measured so far is on disk.
             (folder / "progress.json").write_text(
                 json.dumps(
@@ -553,20 +554,25 @@ def _guard(max_rss_gb: float, timeout: float) -> _Guard:
 
 def _run_chunk(
     index: int,
+    folder: Path,
     files: tuple[str, ...],
     spec: Mapping[str, Any],
     module: TaxonomyModule,
     interpreter: Path,
     guard: _Guard,
 ) -> _Outcome:
-    """Write the spec, run one guarded worker on it, and read back its result."""
-    out = Path(spec["out"])
-    out.unlink(missing_ok=True)  # never read a result an earlier run left behind
+    """Write the spec, run one guarded worker on it, and read back its result.
+
+    The worker is handed the spec as its standard input and the result file as
+    its standard output, and names no file itself. The result file is opened
+    afresh, so a result an earlier run left behind is never read.
+    """
+    out = folder / f"chunk{index}.json"
     spec_path = out.with_suffix(".spec.json")
     spec_path.write_text(json.dumps(spec), encoding="utf-8")
     stderr_path = out.with_suffix(".stderr.txt")
     run = _run_guarded(
-        [str(interpreter), "-I", str(WORKER_SCRIPT), str(spec_path)], stderr_path, guard
+        [str(interpreter), "-I", str(WORKER_SCRIPT)], spec_path, out, stderr_path, guard
     )
     result: Mapping[str, Any] | None = None
     if run.killed is not None:
@@ -574,7 +580,7 @@ def _run_chunk(
     elif run.returncode != 0:
         tail = _last_line(stderr_path)
         status = f"worker exit {run.returncode}" + (f": {tail}" if tail else "")
-    elif not out.is_file():
+    elif out.stat().st_size == 0:
         status = "worker wrote no result"
     else:
         result = json.loads(out.read_text(encoding="utf-8"))
@@ -611,8 +617,12 @@ def _run_chunk(
     return _Outcome(stat=stat, files=files, result=result)
 
 
-def _run_guarded(command: Sequence[str], stderr_path: Path, guard: _Guard) -> _WorkerRun:
+def _run_guarded(
+    command: Sequence[str], stdin_path: Path, stdout_path: Path, stderr_path: Path, guard: _Guard
+) -> _WorkerRun:
     """Run one worker; kill it, and all it started, above the memory cap or timeout.
+
+    Its standard streams are the three files named; the output file is truncated.
 
     The worker gets its own session so that the whole process group can be
     killed, which also means an interrupt of this process does not reach it:
@@ -621,9 +631,13 @@ def _run_guarded(command: Sequence[str], stderr_path: Path, guard: _Guard) -> _W
     started = time.monotonic()
     peak_kb = 0
     killed: str | None = None
-    with stderr_path.open("wb") as stderr:
+    with (
+        stdin_path.open("rb") as stdin,
+        stdout_path.open("wb") as stdout,
+        stderr_path.open("wb") as stderr,
+    ):
         process = subprocess.Popen(
-            command, stdout=subprocess.DEVNULL, stderr=stderr, start_new_session=True
+            command, stdin=stdin, stdout=stdout, stderr=stderr, start_new_session=True
         )
         try:
             while killed is None:

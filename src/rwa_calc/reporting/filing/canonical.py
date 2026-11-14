@@ -344,10 +344,10 @@ def _place_sheet(
         "row",
         "column",
         pl.when(is_flag).then(None).otherwise(pl.col("value")).alias("value"),
+        # A flag is exactly 0 or 1 here, so its boolean reads "false" or "true".
         pl.when(is_flag)
-        .then(pl.when(pl.col("value") == 1.0).then(pl.lit("true")).otherwise(pl.lit("false")))
+        .then(pl.col("value").cast(pl.Boolean).cast(pl.String))
         .otherwise(None)
-        .cast(pl.String)
         .alias("text_value"),
     )
     known_rows = cells["row"].unique().to_list()

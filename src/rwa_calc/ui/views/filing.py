@@ -168,18 +168,19 @@ def _downloads(
         query.update({name: "true" for name, wanted in allow.items() if wanted})
         return f"/api/filing/package?{urlencode(query)}"
 
+    offered: list[Download] = []
     if blocked_by is None:
-        return (Download("Download the filing package", url()),)
-    if not reviewable:
-        return ()
-    return (
-        Download(
-            "Download for review (not a submittable return)",
-            url(allow_incomplete=True, allow_rule_breaks=True),
-            caution=(
-                "Written with whatever stands in the way overridden. The package's manifest "
-                "records that it is not submittable, and where figures were left out the "
-                "package lists each one."
-            ),
-        ),
-    )
+        offered.append(Download("Download the filing package", url()))
+    elif reviewable:
+        offered.append(
+            Download(
+                "Download for review (not a submittable return)",
+                url(allow_incomplete=True, allow_rule_breaks=True),
+                caution=(
+                    "Written with whatever stands in the way overridden. The package's manifest "
+                    "records that it is not submittable, and where figures were left out the "
+                    "package lists each one."
+                ),
+            )
+        )
+    return tuple(offered)

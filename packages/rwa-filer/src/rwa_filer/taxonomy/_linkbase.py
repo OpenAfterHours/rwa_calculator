@@ -57,10 +57,16 @@ _LABEL = "{http://xbrl.org/2008/label}"
 _TABLE = "{http://xbrl.org/2014/table}"
 _XBRLDT = "{http://xbrl.org/2005/xbrldt}"
 _PACKAGE = "{http://xbrl.org/2016/taxonomy-package}"
-_ARC_ALL = "http://xbrl.org/int/dim/arcrole/all"
-_ARC_HYPERCUBE_DIMENSION = "http://xbrl.org/int/dim/arcrole/hypercube-dimension"
-_ARC_DIMENSION_DOMAIN = "http://xbrl.org/int/dim/arcrole/dimension-domain"
-_ARC_DOMAIN_MEMBER = "http://xbrl.org/int/dim/arcrole/domain-member"
+# XBRL names its namespaces, roles and arcroles as http:// strings. They are
+# identifiers, compared as strings and never fetched: https:// would be another
+# name. Hence the line-end marker for python:S5332, held to that by
+# test_identifier_literals.py.
+_ARC_ALL = "http://xbrl.org/int/dim/arcrole/all"  # NOSONAR
+_ARC_HYPERCUBE_DIMENSION = "http://xbrl.org/int/dim/arcrole/hypercube-dimension"  # NOSONAR
+_ARC_DIMENSION_DOMAIN = "http://xbrl.org/int/dim/arcrole/dimension-domain"  # NOSONAR
+_ARC_DOMAIN_MEMBER = "http://xbrl.org/int/dim/arcrole/domain-member"  # NOSONAR
+#: The scheme of a taxonomy's published URLs, which a schemaRef must repeat.
+_ENTRY_POINT_SCHEME = "http://"  # NOSONAR
 _RENDERING_SUFFIX = "-rend.xml"
 
 _DICT_ITEM = re.compile(r"/dict/(dim|met)/\w+\.xsd$")
@@ -342,7 +348,7 @@ def _locate_entry_point(package: TaxonomyPackage, module: str) -> tuple[str, str
         )
     path = paths[-1]  # several dated folders: the lexically last is the latest
     host = path.find("www.")
-    return "http://" + (path[host:] if host >= 0 else path), path
+    return _ENTRY_POINT_SCHEME + (path[host:] if host >= 0 else path), path
 
 
 def _read_table_codes(part: bytes, table_id: str) -> tuple[str | None, str | None]:

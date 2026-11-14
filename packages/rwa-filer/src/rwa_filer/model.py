@@ -68,8 +68,10 @@ if TYPE_CHECKING:
 # =============================================================================
 
 #: The identifier scheme for a Legal Entity Identifier (ISO 17442) — the scheme
-#: the BoE Filing Manual requires where the reporting entity has an LEI.
-LEI_SCHEME: Final = "http://standards.iso.org/iso/17442"
+#: the BoE Filing Manual requires where the reporting entity has an LEI. An
+#: identifier, not a URL that is fetched: hence the line-end marker for
+#: python:S5332, held to that by test_identifier_literals.py.
+LEI_SCHEME: Final = "http://standards.iso.org/iso/17442"  # NOSONAR
 
 #: The fact table, in column order.
 FACT_SCHEMA: Final = pl.Schema(

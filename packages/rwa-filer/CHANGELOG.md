@@ -115,7 +115,9 @@ and released independently of `rwa-calc`; its release tags are prefixed
   (`rwa_filer.referee.differential.compare`). Arelle is optional
   (`rwa-filer[arelle]`, or its own environment named by
   `RWA_FILER_ARELLE_PYTHON`) and runs as a subprocess, in memory-bounded
-  workers over a trimmed entry point. A worker that is killed, or that returns
+  workers over a trimmed entry point. A worker names no file: the runner hands
+  it its spec on standard input and takes its result from standard output,
+  and whatever Arelle prints during the session goes to the worker's log. A worker that is killed, or that returns
   no verdict for a rule, makes the run incomplete, and an incomplete run is
   never reported as agreement. The referee loads Arelle's math-functions
   plug-in and repairs its `matchAny` match filter; both are named in every

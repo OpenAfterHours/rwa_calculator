@@ -86,12 +86,16 @@ logger = logging.getLogger(__name__)
 # Constants
 # =============================================================================
 
-NS_XBRLI: Final = "http://www.xbrl.org/2003/instance"
-NS_LINK: Final = "http://www.xbrl.org/2003/linkbase"
+# XBRL names its namespaces, roles and arcroles as http:// strings. They are
+# identifiers, compared as strings and never fetched: https:// would be another
+# name. Hence the line-end marker for python:S5332, held to that by
+# test_identifier_literals.py.
+NS_XBRLI: Final = "http://www.xbrl.org/2003/instance"  # NOSONAR
+NS_LINK: Final = "http://www.xbrl.org/2003/linkbase"  # NOSONAR
 NS_XLINK: Final = "http://www.w3.org/1999/xlink"
-NS_XBRLDI: Final = "http://xbrl.org/2006/xbrldi"
-NS_ISO4217: Final = "http://www.xbrl.org/2003/iso4217"
-NS_FIND: Final = "http://www.eurofiling.info/xbrl/ext/filing-indicators"
+NS_XBRLDI: Final = "http://xbrl.org/2006/xbrldi"  # NOSONAR
+NS_ISO4217: Final = "http://www.xbrl.org/2003/iso4217"  # NOSONAR
+NS_FIND: Final = "http://www.eurofiling.info/xbrl/ext/filing-indicators"  # NOSONAR
 
 #: The identifier written by the ``instance-generator`` processing instruction.
 GENERATOR_ID: Final = "rwa-filer"

@@ -84,7 +84,9 @@ REQUIRED_COLUMNS: Final = (
 CELL_LIMIT: Final = 32_700
 
 _TABLE_COLUMN: Final = re.compile(r"^T\d+$")
-_SEVERITY_LINE: Final = re.compile(r"^\s*([A-Za-z]+)\s*-\s*([^|]*?)\s*\|?\s*$")
+#: ``ERROR - PRA001|``. The module group keeps its surrounding blanks (the
+#: reader strips them), so no two adjacent quantifiers compete for a character.
+_SEVERITY_LINE: Final = re.compile(r"^\s*([A-Za-z]+)\s*-([^|]*)(?:\|\s*)?$")
 _VERSION: Final = re.compile(r"v(\d+\.\d+\.\d+)")
 _SHORT_LABEL: Final = re.compile(
     r"SHORT_LABEL\(en\)\s*-\s*(.*?)(?:\s*\|\s*[A-Z_]+\(en\)\s*-|$)", re.DOTALL
@@ -302,8 +304,9 @@ def _severities(cell: str) -> dict[str, str]:
     severities: dict[str, str] = {}
     for line in cell.splitlines():
         match = _SEVERITY_LINE.match(line)
-        if match is not None and match.group(2):
-            severities[match.group(2).strip()] = match.group(1).upper()
+        module = match.group(2).strip() if match is not None else ""
+        if match is not None and module:
+            severities[module] = match.group(1).upper()
     return dict(sorted(severities.items()))
 
 

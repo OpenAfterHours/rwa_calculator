@@ -2,81 +2,19 @@
 
 This guide covers how to install the UK Credit Risk RWA Calculator and its dependencies.
 
+The calculator is installed and run with [uv](https://docs.astral.sh/uv/), and every
+command in this documentation assumes it. uv installs the right Python version, creates
+the project's virtual environment and keeps the lockfile, so there is no environment to
+create or activate by hand: you prefix a command with `uv run` and it runs inside the
+project's environment.
+
 ## Requirements
 
-- **Python**: 3.13 or higher
+- **Python**: 3.13 or higher (uv downloads it for you if it is missing)
 - **Operating System**: Windows, macOS, or Linux
-- **Package Manager**: uv (recommended) or pip
+- **Package Manager**: [uv](https://docs.astral.sh/uv/)
 
-## Install from PyPI (Recommended)
-
-The simplest way to install the calculator:
-
-=== "uv"
-
-    ```bash
-    uv add rwa-calc
-    ```
-
-=== "pip"
-
-    ```bash
-    pip install rwa-calc
-    ```
-
-### Optional Dependencies
-
-The calculator provides several optional dependency groups:
-
-=== "uv"
-
-    ```bash
-    # UI and Marimo workbook support
-    uv add rwa-calc[ui]
-
-    # Everything (ui and dev dependencies)
-    uv add rwa-calc[all]
-    ```
-
-=== "pip"
-
-    ```bash
-    # UI and Marimo workbook support
-    pip install rwa-calc[ui]
-
-    # Everything (ui and dev dependencies)
-    pip install rwa-calc[all]
-    ```
-
-| Extra | Description |
-|-------|-------------|
-| `ui` | Marimo (for the expected-output workbooks); the server-rendered web UI also ships in the base package |
-| `dev` | Development tools (pytest, ty, zensical, etc.) |
-| `all` | All optional dependencies combined |
-
-!!! tip "Recommended Installation"
-    For most users, we recommend installing with `ui` for the interactive web interface:
-    ```bash
-    uv add rwa-calc[ui]
-    ```
-
----
-
-## Install from Source
-
-For development or to get the latest unreleased changes, install from the GitHub repository.
-
-### Installation with uv (Recommended)
-
-[uv](https://docs.astral.sh/uv/) is the recommended package manager for this project due to its speed and reliability.
-
-### Install uv
-
-=== "Windows (PowerShell)"
-
-    ```powershell
-    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-    ```
+## Install uv
 
 === "macOS/Linux"
 
@@ -84,47 +22,103 @@ For development or to get the latest unreleased changes, install from the GitHub
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
 
-### Install the Calculator
+=== "Windows (PowerShell)"
+
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+
+Check it with `uv --version`. The
+[uv installation guide](https://docs.astral.sh/uv/getting-started/installation/) lists
+other options, such as Homebrew and WinGet.
+
+---
+
+## Install from PyPI (Recommended)
+
+Add the calculator to a uv project. If you do not have one yet, create it first:
+
+```bash
+# Create a project that targets Python 3.13 (skip if you already have a pyproject.toml)
+uv init --python 3.13 my-rwa-project
+cd my-rwa-project
+
+# Add the calculator
+uv add rwa-calc
+```
+
+`uv add` records `rwa-calc` in `pyproject.toml`, pins the resolved versions in
+`uv.lock`, and installs everything into the project's `.venv`. Run your code and the
+calculator's commands through `uv run`, which uses that environment without activating
+it:
+
+```bash
+uv run python my_calculation.py   # your own script using rwa_calc
+uv run rwa-ui                     # the web UI, on http://localhost:8000
+```
+
+The base package is all most users need: the web UI, the REST API, the Marimo workbooks
+and [`rwa-filer`](../rwa-filer/index.md) are all included.
+
+### Run the UI without a project
+
+To try the web UI without creating a project, run it in a temporary environment:
+
+```bash
+uvx --from rwa-calc rwa-ui
+```
+
+To keep the UI available as a command on your `PATH`, install it as a uv tool:
+
+```bash
+uv tool install rwa-calc
+rwa-ui
+```
+
+### Optional Dependencies
+
+```bash
+# Development tools (pytest, ruff, ty, zensical)
+uv add "rwa-calc[dev]"
+
+# Everything (ui and dev dependencies)
+uv add "rwa-calc[all]"
+```
+
+The quotes stop shells such as zsh from reading the square brackets as a file pattern.
+
+| Extra | Description |
+|-------|-------------|
+| `ui` | Kept for compatibility. Marimo, FastAPI and Uvicorn now ship in the base package |
+| `dev` | Development tools (pytest, ruff, ty, zensical, etc.) |
+| `all` | All optional dependencies combined |
+
+---
+
+## Install from Source
+
+For development or to get the latest unreleased changes, install from the GitHub
+repository:
 
 ```bash
 # Clone the repository
 git clone https://github.com/OpenAfterHours/rwa_calculator.git
 cd rwa_calculator
 
-# Install dependencies with uv
+# Create .venv and install the locked dependencies
 uv sync
 
-# Install with development dependencies
+# Or include the development tools (pytest, ruff, ty, zensical)
 uv sync --all-extras
 
 # Download regulatory reference documents
 uv run python scripts/download_docs.py
 ```
 
-## Installation with pip
-
-If you prefer pip, you can install using:
-
-```bash
-# Clone the repository
-git clone https://github.com/OpenAfterHours/rwa_calculator.git
-cd rwa_calculator
-
-# Create a virtual environment
-python -m venv .venv
-
-# Activate the virtual environment
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
-# Install in editable mode
-pip install -e .
-
-# Install with development dependencies
-pip install -e ".[dev]"
-```
+The repository is a [uv workspace](../development/workspace.md). `uv sync` installs
+`rwa-calc` and `rwa-filer` in editable mode, so a change under `src/` takes effect
+without reinstalling. Run every script, test and tool through `uv run` so it uses that
+environment.
 
 ## Dependencies
 
@@ -136,48 +130,38 @@ pip install -e ".[dev]"
 | `polars-normal-stats` | Statistical functions for IRB calculations (normal CDF/PPF) |
 | `fastexcel` | Excel file reading (polars read_excel backend) |
 | `xlsxwriter` | Excel file writing |
-
-### Optional Dependencies
-
-| Package | Extra | Purpose |
-|---------|-------|---------|
-| `marimo` | `ui` | Interactive notebook UI |
-| `uvicorn` | `ui` | ASGI server for UI |
+| `fastapi`, `uvicorn`, `jinja2` | Web UI and REST API (`rwa-ui`) |
+| `marimo` | Interactive notebooks and the expected-output workbooks |
+| `rwa-filer` | Validation of generated returns against the published rules |
 
 ### Development Dependencies
 
 | Package | Purpose |
 |---------|---------|
-| `pytest` | Testing framework |
-| `pytest-cov` | Test coverage reporting |
+| `pytest` | Testing framework (with `pytest-xdist`, `pytest-benchmark`, `pytest-cov`) |
+| `hypothesis` | Property-based tests |
 | `ruff` | Linting and formatting |
 | `ty` | Static type checking |
 | `zensical` | Documentation generation |
 | `mkdocstrings[python]` | API documentation |
-| `marimo` | Interactive notebooks |
 
 ## Verifying Installation
 
-After installation, verify everything is working:
+After installing from PyPI, check that the calculator's entry point imports:
 
 ```bash
-# Run the test suite
-uv run pytest
-
-# Or with pip
-pytest
+uv run python -c "import rwa_calc; from rwa_calc.api import CreditRiskCalc; print(rwa_calc.__version__)"
 ```
 
-You should see output similar to:
+From a source checkout, build the test fixtures (they are git-ignored, so a fresh clone
+has none) and run the test suite:
 
+```bash
+uv run python tests/fixtures/generate_all.py
+uv run pytest tests/
 ```
-========================= test session starts ==========================
-collected 468 items
 
-tests/contracts/test_bundles.py::TestRawDataBundle ...
-...
-========================= 448 passed, 20 skipped =======================
-```
+pytest ends with a summary of passed and skipped tests. No test should fail.
 
 ## Project Structure
 
@@ -193,11 +177,14 @@ rwa_calculator/
 │       ├── domain/         # Core domain enums
 │       ├── rulebook/       # Regulatory rulepack — cited values in packs/{common,crr,b31}.py
 │       └── engine/         # Calculation engines (incl. thin pack-binding RW/haircut shims)
+├── packages/
+│   └── rwa-filer/          # The separately released filing package
 ├── tests/                  # Test suite
 ├── workbooks/              # Reference implementations
 ├── docs/assets/            # Regulatory documents (run scripts/download_docs.py)
 ├── docs/                   # This documentation
-├── pyproject.toml          # Project configuration
+├── pyproject.toml          # Project and uv workspace configuration
+├── uv.lock                 # Locked dependency versions
 └── zensical.toml           # Documentation configuration
 ```
 
@@ -211,6 +198,9 @@ The calculator uses sensible defaults, but you can configure:
 | `RWA_OUTPUT_PATH` | Default path for output files | `./output` |
 
 ## IDE Setup
+
+Point your IDE at the environment `uv sync` created: `.venv/bin/python` on macOS and
+Linux, `.venv\Scripts\python.exe` on Windows.
 
 ### VS Code
 
@@ -229,7 +219,7 @@ Install recommended extensions:
 ### PyCharm
 
 1. Open the project directory
-2. Configure the Python interpreter to use the virtual environment
+2. Set the project interpreter to the `.venv` interpreter that `uv sync` created
 3. Mark `src` as a Sources Root
 
 ## Troubleshooting
@@ -239,29 +229,43 @@ Install recommended extensions:
 **Python version mismatch**
 
 ```bash
-# Check your Python version
-python --version
+# List the Python versions uv can find or has installed
+uv python list
 
-# Ensure it's 3.13 or higher
-# If not, install Python 3.13+ from python.org
+# Install Python 3.13 (uv also does this on demand)
+uv python install 3.13
+
+# Pin the project to it
+uv python pin 3.13
 ```
 
-**Import errors**
+If `uv add rwa-calc` fails because your project's Python requirement is lower than 3.13,
+set `requires-python = ">=3.13"` in your `pyproject.toml` and run `uv add rwa-calc`
+again.
+
+**Import errors or `command not found`**
+
+`ModuleNotFoundError: No module named 'rwa_calc'` or `rwa-ui: command not found` usually
+means the command ran outside the project's environment. Run it through `uv run`:
 
 ```bash
-# Ensure the package is installed in editable mode
-uv pip install -e .
+uv run python my_calculation.py
+uv run rwa-ui
+```
 
-# Or verify PYTHONPATH includes src/
-export PYTHONPATH="${PYTHONPATH}:./src"
+In a source checkout, `uv sync` brings an out-of-date environment back in line with
+`uv.lock`:
+
+```bash
+uv sync --all-extras
 ```
 
 **Polars installation issues**
 
 ```bash
-# Polars requires a compatible CPU architecture
-# For older CPUs, try:
-pip install polars-lts-cpu
+# Polars needs a recent CPU instruction set. For older CPUs,
+# add the compatibility runtime:
+uv add "polars[rtcompat]"
 ```
 
 ## Next Steps

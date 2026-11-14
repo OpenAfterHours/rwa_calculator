@@ -7,13 +7,13 @@ broke it.
 
 ```bash
 # Nothing to install first: uvx fetches rwa-filer into a throwaway environment
-uvx rwa-filer dash
+uvx rwa-filer@latest dash
 
 # Open a return straight away
-uvx rwa-filer dash return.xbrl
+uvx rwa-filer@latest dash return.xbrl
 
 # A fact table carries no header, so give one
-uvx rwa-filer dash facts.parquet --entity 5493001KJTIIGC8Y1R12 \
+uvx rwa-filer@latest dash facts.parquet --entity 5493001KJTIIGC8Y1R12 \
     --reference-date 2027-03-31 --module PRA001
 ```
 
@@ -147,5 +147,6 @@ folder when they are uploaded through the browser.
 `rwa-filer` itself needs only Polars. The dashboard adds Starlette, uvicorn,
 Jinja2 and python-multipart — a small, pure-Python web stack, with no FastAPI or
 pydantic — and they are ordinary dependencies rather than an extra so that
-`uvx rwa-filer dash` works exactly as typed. Nothing on the validation or filing
-path imports them: they load only when the `dash` command runs.
+`uvx rwa-filer@latest dash` (or a bare `uvx rwa-filer dash`) works exactly as
+typed. Nothing on the validation or filing path imports them: they load only
+when the `dash` command runs.

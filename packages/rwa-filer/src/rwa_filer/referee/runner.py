@@ -460,7 +460,8 @@ def find_arelle_python(explicit: Path | None = None) -> Path:
         return Path(sys.executable)
     raise RefereeUnavailableError(
         "The referee needs the Arelle XBRL processor, which is not installed. Either "
-        'install it beside rwa-filer (pip install "rwa-filer[arelle]"), or point the '
+        'run the command with the rwa-filer[arelle] extra: uvx "rwa-filer[arelle]@latest" '
+        'referee ... (in a uv project: uv add "rwa-filer[arelle]"), or point the '
         f"{ENV_ARELLE_PYTHON} environment variable at a Python interpreter that has "
         "the arelle-release package."
     )

@@ -20,16 +20,19 @@ This repository releases two packages to PyPI, each versioned on its own:
 
 ## Installation
 
-**Install with uv** (recommended)
+Install with [uv](https://docs.astral.sh/uv/), into a new or existing uv project:
+
 ```bash
+uv init --python 3.13 my-rwa-project   # skip if you already have a pyproject.toml
+cd my-rwa-project
 uv add rwa-calc
 ```
-*Or with pip*
-```bash
-pip install rwa-calc
-```
 
-The web UI and REST API ship with the base package — no extra required.
+Run your code and the calculator's commands through `uv run`, which uses the project's
+environment without activating it. The web UI and REST API ship with the base package —
+no extra required. See the
+[installation guide](https://openafterhours.github.io/rwa_calculator/getting-started/installation/)
+for installing from source.
 
 ### Optional Dependencies
 
@@ -67,8 +70,11 @@ Basel 3.1 comparison, and legacy-engine reconciliation) plus a REST API:
 
 ```bash
 uv add rwa-calc
-rwa-ui
+uv run rwa-ui
 # Open http://localhost:8000 in your browser (REST API + OpenAPI at /docs)
+
+# Or try it without a project
+uvx --from rwa-calc rwa-ui
 ```
 
 ## Regulatory Scope

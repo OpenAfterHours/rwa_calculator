@@ -21,8 +21,10 @@ Key responsibilities:
   each dimension's domain, typed-domain element and default member.
 
 This module only reads. It decides nothing about table layout — that is
-``compiler`` — and it holds the one ``openpyxl`` import of the taxonomy package
-(the ``rwa-filer[excel]`` extra), made lazily so the runtime never needs it.
+``compiler`` — and it is the one module of the taxonomy package that opens a
+workbook with ``openpyxl`` (the ``rwa-filer[excel]`` extra). It is imported
+through ``rwa_filer.extras`` when a workbook is opened, so the runtime never
+needs it.
 
 References:
 - Bank of England Banking Taxonomy: annotated templates and DPM dictionary
@@ -40,6 +42,8 @@ import zipfile
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from rwa_filer.extras import import_openpyxl
+
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
     from pathlib import Path
@@ -55,6 +59,8 @@ NOTE_SHEET = "Note"
 #: Sheets that are not tables. ``MAPPING`` (some workbooks) lists table / ordinate
 #: code / spreadsheet position and carries nothing the compiler needs.
 NON_TABLE_SHEETS = frozenset({NOTE_SHEET, CONTENTS_SHEET, ENUMERATIONS_SHEET, "MAPPING"})
+#: The DPM dictionary's sheets that ``read_dictionary`` reads by name.
+DICTIONARY_SHEETS = ("Domains", "Dimensions", "Metrics")
 
 #: Dictionary "Data type" spellings -> the pack's lower-case type names.
 DATA_TYPES = {
@@ -239,9 +245,19 @@ def read_annotated_workbook(path: Path) -> AnnotatedWorkbook:
 
 
 def read_dictionary(path: Path) -> Dictionary:
-    """Read metric types and each dimension's domain, typed element and default member."""
+    """Read metric types and each dimension's domain, typed element and default member.
+
+    Raises:
+        ValueError: the workbook lacks one of ``DICTIONARY_SHEETS``, so it is not
+            a DPM dictionary (another of the publisher's workbooks, given as one).
+    """
     workbook = _load_workbook(path, read_only=True)
     try:
+        missing = [name for name in DICTIONARY_SHEETS if name not in workbook.sheetnames]
+        if missing:
+            raise ValueError(
+                f"{path.name} is not a DPM dictionary: no sheet(s) {', '.join(missing)}"
+            )
         domains = {row["Code"]: row for row in _header_rows(workbook["Domains"]) if row.get("Code")}
         defaults: dict[str, str] = {}
         for sheet in workbook.worksheets:
@@ -320,18 +336,12 @@ def member_qname(member_owner: str, domain_owner: str, domain: str, code: str) -
 
 
 def _load_workbook(path: Path, *, read_only: bool) -> Any:
-    """Open a workbook, with a clear message when openpyxl is absent."""
-    try:
-        from openpyxl import load_workbook
-    except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without the extra
-        raise ModuleNotFoundError(
-            "Compiling a taxonomy pack reads the publisher's .xlsx workbooks and needs "
-            "openpyxl. Install it with: pip install 'rwa-filer[excel]'"
-        ) from exc
+    """Open a workbook; ``MissingExtraError`` when openpyxl is absent."""
+    openpyxl = import_openpyxl(needed_for="Compiling a taxonomy pack", command="taxonomy compile")
     with warnings.catch_warnings():
         # openpyxl warns that it drops the x14 validations; _read_zip_extras reads them.
         warnings.simplefilter("ignore")
-        return load_workbook(path, read_only=read_only, data_only=True)
+        return openpyxl.load_workbook(path, read_only=read_only, data_only=True)
 
 
 def _read_sheet(

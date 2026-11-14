@@ -5,10 +5,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+import pytest
+
 from dash_builders import HEADER, HEADER_FORM
 from rwa_filer.boe.catalogue import rulebook_for_module
 from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.compare import compare_page
+from rwa_filer.extras import MissingExtraError
 from rwa_filer.taxonomy.pack import available_packs
 from rwa_filer.workflow.diff import diff_returns
 
@@ -154,3 +157,28 @@ def test_a_module_page_lists_its_tables_and_finds_rules_by_their_words(
 
 def test_an_unknown_module_is_not_found(client: TestClient) -> None:
     assert client.get("/reference/NOPE").status_code == 404
+
+
+def test_a_workbook_without_the_excel_extra_is_refused_on_compare_too(
+    client: TestClient,
+    workspace: Workspace,
+    broken: OpenedReturn,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange — opening raises what readers.excel raises when openpyxl is missing.
+    def missing_extra(*_args: object, **_kwargs: object) -> None:
+        raise MissingExtraError(
+            "Reading a workbook needs openpyxl, from the rwa-filer[excel] extra."
+        )
+
+    monkeypatch.setattr(workspace, "open", missing_extra)
+    workbook = tmp_path / "filed.xlsx"
+    workbook.write_bytes(b"PK")
+
+    # Act
+    response = client.post(f"/returns/{broken.return_id}/compare", data={"path": str(workbook)})
+
+    # Assert
+    assert response.status_code == 400
+    assert 'id="compare-error"' in response.text and "rwa-filer[excel]" in response.text

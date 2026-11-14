@@ -24,6 +24,7 @@ from starlette.routing import Route
 
 from rwa_filer.dash.compare import compare_page
 from rwa_filer.dash.forms import form_values, open_from_form, page_number
+from rwa_filer.extras import MissingExtraError
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs
 
 if TYPE_CHECKING:
@@ -75,7 +76,7 @@ class ComparePages:
         form = await request.form()
         try:
             other = await open_from_form(self.context.workspace, form)
-        except (ValueError, PackNotFoundError) as exc:
+        except (ValueError, PackNotFoundError, MissingExtraError) as exc:
             return self._choose(
                 request, opened, error=str(exc), values=form_values(form), status_code=400
             )

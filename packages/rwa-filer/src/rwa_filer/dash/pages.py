@@ -31,6 +31,7 @@ from rwa_filer.dash.forms import form_values, open_from_form, page_number
 from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.views import overview, rules_page
+from rwa_filer.extras import MissingExtraError
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs
 
 if TYPE_CHECKING:
@@ -75,7 +76,7 @@ class ReturnPages:
         form = await request.form()
         try:
             opened = await open_from_form(self.context.workspace, form)
-        except (ValueError, PackNotFoundError) as exc:
+        except (ValueError, PackNotFoundError, MissingExtraError) as exc:
             return self._home(request, error=str(exc), values=form_values(form), status_code=400)
         return RedirectResponse(f"/returns/{opened.return_id}", status_code=303)
 

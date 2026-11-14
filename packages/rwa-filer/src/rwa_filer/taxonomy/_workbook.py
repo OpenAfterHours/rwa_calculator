@@ -59,6 +59,8 @@ NOTE_SHEET = "Note"
 #: Sheets that are not tables. ``MAPPING`` (some workbooks) lists table / ordinate
 #: code / spreadsheet position and carries nothing the compiler needs.
 NON_TABLE_SHEETS = frozenset({NOTE_SHEET, CONTENTS_SHEET, ENUMERATIONS_SHEET, "MAPPING"})
+#: The DPM dictionary's sheets that ``read_dictionary`` reads by name.
+DICTIONARY_SHEETS = ("Domains", "Dimensions", "Metrics")
 
 #: Dictionary "Data type" spellings -> the pack's lower-case type names.
 DATA_TYPES = {
@@ -243,9 +245,19 @@ def read_annotated_workbook(path: Path) -> AnnotatedWorkbook:
 
 
 def read_dictionary(path: Path) -> Dictionary:
-    """Read metric types and each dimension's domain, typed element and default member."""
+    """Read metric types and each dimension's domain, typed element and default member.
+
+    Raises:
+        ValueError: the workbook lacks one of ``DICTIONARY_SHEETS``, so it is not
+            a DPM dictionary (another of the publisher's workbooks, given as one).
+    """
     workbook = _load_workbook(path, read_only=True)
     try:
+        missing = [name for name in DICTIONARY_SHEETS if name not in workbook.sheetnames]
+        if missing:
+            raise ValueError(
+                f"{path.name} is not a DPM dictionary: no sheet(s) {', '.join(missing)}"
+            )
         domains = {row["Code"]: row for row in _header_rows(workbook["Domains"]) if row.get("Code")}
         defaults: dict[str, str] = {}
         for sheet in workbook.worksheets:

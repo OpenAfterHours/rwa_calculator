@@ -773,6 +773,14 @@ def test_unknown_module_is_a_usage_error(publisher: Publisher) -> None:
         )
 
 
+def test_a_dictionary_that_is_not_one_is_a_usage_error(publisher: Publisher) -> None:
+    # Act / Assert — the annotated workbook, given as the dictionary, has none of its sheets
+    with pytest.raises(ValueError, match="not a DPM dictionary: no sheet.s. Domains, Dimensions"):
+        compiler.compile_pack(
+            publisher.annotated, publisher.annotated, publisher.taxonomy, module=builders.MODULE
+        )
+
+
 def test_missing_input_is_a_usage_error(publisher: Publisher, tmp_path: Path) -> None:
     # Act / Assert
     with pytest.raises(FileNotFoundError, match="absent.zip"):

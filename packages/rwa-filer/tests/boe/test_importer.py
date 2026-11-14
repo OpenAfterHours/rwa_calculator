@@ -270,6 +270,21 @@ def test_the_taxonomy_version_may_be_given_where_the_file_name_lacks_it(tmp_path
         import_workbook(path)
 
 
+def test_a_data_sheet_with_no_header_row_is_refused_for_its_missing_columns(
+    tmp_path: Path,
+) -> None:
+    # Arrange — the one data sheet beside the note, and nothing on it
+    book = openpyxl.Workbook()
+    book.active.title = "Note"
+    book.create_sheet("test_fw")
+    path = tmp_path / "blank v1.0.0.xlsx"
+    book.save(path)
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="no column.*Rule code"):
+        import_workbook(path)
+
+
 def test_a_workbook_that_is_not_a_rule_workbook_is_refused(tmp_path: Path) -> None:
     # Arrange
     no_column = workbook(

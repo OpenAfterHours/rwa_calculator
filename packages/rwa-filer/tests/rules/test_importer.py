@@ -286,6 +286,32 @@ def test_extract_rejects_an_unknown_publisher(eba_workbook: Path) -> None:
         importer.extract("esma", eba_workbook)
 
 
+def test_a_workbook_not_laid_out_for_the_publisher_is_refused(
+    boe_workbook: Path, tmp_path: Path
+) -> None:
+    # Arrange — an empty rule sheet, and each publisher's sheet one column short of
+    # its layout (the fixtures above, at full width, are read)
+    empty = Workbook()
+    empty.active.title = importer.BOE_SHEET
+    empty.save(tmp_path / "empty.xlsx")
+    eba_short = _write_workbook(
+        tmp_path / "eba.xlsx", importer.EBA_SHEET, [_eba_row(id="v1", table="C 07.00")[:-1]]
+    )
+    boe_short = _write_workbook(
+        tmp_path / "boe.xlsx", importer.BOE_SHEET, [_boe_row(id="b1", table="OF07")[:-1]]
+    )
+
+    # Act / Assert
+    with pytest.raises(ValueError, match=r"not the EBA rule workbook: it has no sheet 'v3\.0"):
+        importer.extract(importer.PUBLISHER_EBA, boe_workbook)
+    with pytest.raises(ValueError, match="sheet 'banking_reporting' is empty"):
+        importer.extract(importer.PUBLISHER_BOE, tmp_path / "empty.xlsx")
+    with pytest.raises(ValueError, match=f"has {EBA_WIDTH - 1} columns.*across {EBA_WIDTH}"):
+        importer.extract(importer.PUBLISHER_EBA, eba_short)
+    with pytest.raises(ValueError, match=f"has {BOE_WIDTH - 1} columns.*across {BOE_WIDTH}"):
+        importer.extract(importer.PUBLISHER_BOE, boe_short)
+
+
 def test_serialisation_is_deterministic_and_pure_ascii(boe_workbook: Path) -> None:
     # Arrange — a label carrying a typographic dash, as the real workbooks do.
     payload = importer.extract_boe(boe_workbook)

@@ -78,6 +78,8 @@ EBA_COL_PREREQUISITES = 21
 EBA_COL_IF_VALUE_MISSING = 22
 EBA_COL_ARITHMETIC = 23
 EBA_COL_NARRATIVE = 24
+#: Columns a row of the EBA sheet is read across: A to the narrative.
+EBA_WIDTH: Final = EBA_COL_NARRATIVE + 1
 
 # ── BoE source (Basel 3.1 framework) ─────────────────────────────────────────
 
@@ -119,6 +121,8 @@ BOE_COL_ERROR_MESSAGE = 14
 BOE_COL_LABEL = 15
 BOE_COL_SEVERITY = 16
 BOE_COL_TABLES = range(17, 21)  # T1..T4
+#: Columns a row of the BoE sheet is read across: A to the last table column.
+BOE_WIDTH: Final = BOE_COL_TABLES.stop
 
 # ── Parsing patterns ─────────────────────────────────────────────────────────
 
@@ -243,7 +247,10 @@ def extract(publisher: str, workbook: Path) -> dict[str, Any]:
         workbook: The publisher's validation-rule workbook.
 
     Raises:
-        ValueError: ``publisher`` is not one of the two supported publishers.
+        ValueError: ``publisher`` is not one of the two supported publishers, or
+            ``workbook`` is not laid out as that publisher's rule workbook — it
+            has no rule sheet of the publisher's name, the sheet is empty, or it
+            is narrower than the columns a rule is read from.
     """
     extractor = _EXTRACTORS.get(publisher)
     if extractor is None:
@@ -253,8 +260,13 @@ def extract(publisher: str, workbook: Path) -> dict[str, Any]:
 
 
 def extract_eba(workbook: Path) -> dict[str, Any]:
-    """Extract credit-risk rules from the EBA workbook into a JSON-ready payload."""
-    rules = [_parse_eba_row(row) for row in _matching_rows(workbook, EBA_SHEET, _eba_tables)]
+    """Extract credit-risk rules from the EBA workbook into a JSON-ready payload.
+
+    Raises:
+        ValueError: ``workbook`` is not laid out as the EBA workbook (see ``extract``).
+    """
+    rows = _matching_rows(workbook, "EBA", EBA_SHEET, EBA_WIDTH, _eba_tables)
+    rules = [_parse_eba_row(row) for row in rows]
     live = sum(1 for r in rules if r.status == ("live",))
     reactivated = sum(1 for r in rules if r.reactivated_on and "deleted" not in r.status)
     return {
@@ -279,8 +291,13 @@ def extract_eba(workbook: Path) -> dict[str, Any]:
 
 
 def extract_boe(workbook: Path) -> dict[str, Any]:
-    """Extract credit-risk rules from the BoE workbook into a JSON-ready payload."""
-    rules = [_parse_boe_row(row) for row in _matching_rows(workbook, BOE_SHEET, _boe_tables)]
+    """Extract credit-risk rules from the BoE workbook into a JSON-ready payload.
+
+    Raises:
+        ValueError: ``workbook`` is not laid out as the BoE workbook (see ``extract``).
+    """
+    rows = _matching_rows(workbook, "BoE", BOE_SHEET, BOE_WIDTH, _boe_tables)
+    rules = [_parse_boe_row(row) for row in rows]
     live = sum(1 for r in rules if r.status == ("live",))
     not_deactivated = sum(1 for r in rules if "deactivated" not in r.status)
     return {
@@ -340,14 +357,34 @@ def _load_workbook(path: Path) -> Any:
 
 def _matching_rows(
     path: Path,
+    publisher: str,
     sheet: str,
+    width: int,
     tables_of: Callable[[tuple[Any, ...]], tuple[str, ...]],
 ) -> list[tuple[Any, ...]]:
-    """Return data rows whose table codes match the source's prefix filter."""
+    """Return data rows whose table codes match the source's prefix filter.
+
+    Raises:
+        ValueError: the workbook has no ``sheet``, or it is empty, or its header
+            is narrower than the ``width`` columns a rule is read across — which
+            is what another publisher's workbook, or no rule workbook, looks like.
+    """
+    refused = f"{path.name} is not the {publisher} rule workbook"
     workbook = _load_workbook(path)
     try:
+        if sheet not in workbook.sheetnames:
+            raise ValueError(
+                f"{refused}: it has no sheet {sheet!r} (its sheets: {workbook.sheetnames})"
+            )
         rows = workbook[sheet].iter_rows(values_only=True)
-        next(rows)  # discard the header row
+        header = next(rows, None)
+        if header is None:
+            raise ValueError(f"{refused}: sheet {sheet!r} is empty")
+        if len(header) < width:
+            raise ValueError(
+                f"{refused}: sheet {sheet!r} has {len(header)} columns, "
+                f"and a rule is read across {width}"
+            )
         return [row for row in rows if row and row[0] and tables_of(row)]
     finally:
         workbook.close()

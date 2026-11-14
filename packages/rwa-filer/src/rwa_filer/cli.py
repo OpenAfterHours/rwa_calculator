@@ -695,8 +695,11 @@ def _taxonomy_compile(args: argparse.Namespace) -> int:
     for path in (args.annotated, args.dictionary, args.taxonomy):
         if not path.exists():
             return _fail(f"not found: {path}")
-    compiled = compile_pack(args.annotated, args.dictionary, args.taxonomy, module=args.module)
-    info = write_pack(compiled, args.out, valid_from=args.valid_from, valid_to=args.valid_to)
+    try:
+        compiled = compile_pack(args.annotated, args.dictionary, args.taxonomy, module=args.module)
+        info = write_pack(compiled, args.out, valid_from=args.valid_from, valid_to=args.valid_to)
+    except ValueError as exc:
+        return _fail(str(exc))
     cells = sum(len(table["cells"]) for table in compiled["tables"].values())
     _out(
         f"wrote {args.out} ({info.module} {info.version}: {len(compiled['tables'])} tables, "
@@ -970,7 +973,10 @@ def _rules_import(args: argparse.Namespace) -> int:
     workbook: Path = args.workbook
     if not workbook.is_file():
         return _fail(f"workbook not found: {workbook}")
-    payload = importer.extract(args.publisher, workbook)
+    try:
+        payload = importer.extract(args.publisher, workbook)
+    except ValueError as exc:
+        return _fail(str(exc))
     importer.write_extract(payload, args.out)
     counts = payload["filter"]
     _out(f"wrote {args.out} ({counts['matched']} rules, {counts['live']} live)")
@@ -992,7 +998,10 @@ def _rules_check(args: argparse.Namespace) -> int:
         label = str(against)
         committed = against.read_text(encoding="utf-8") if against.is_file() else None
 
-    payload = importer.extract(args.publisher, workbook)
+    try:
+        payload = importer.extract(args.publisher, workbook)
+    except ValueError as exc:
+        return _fail(str(exc))
     if importer.is_extract_current(payload, committed):
         _out(f"ok    {label}")
         return EXIT_OK

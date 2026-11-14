@@ -23,7 +23,7 @@ pip install rwa-filer
 | The Bank of England's validation rules for taxonomy v4.1.1: all 3,813 rules of all 11 return families, as package data | Available |
 | Rule engine that evaluates those rules as the Bank's gateway does, on any return in canonical form | Available for 14 modules |
 | Taxonomy packs: the tables, cells and data points of a reporting module | Available for 14 modules |
-| The EBA (CRR) and BoE v4.0.0 rule extracts, and the template-level engine `rwa-calc` uses on its own frames | Available |
+| The EBA (CRR) and BoE v4.1.1 rule extracts, and the template-level engine `rwa-calc` uses on its own frames | Available |
 | Structure checks: every fact sits in a cell the taxonomy accepts | Available |
 | File readers (Parquet, CSV, Excel, XBRL) and `rwa-filer validate` | Available |
 | XBRL submission file: `rwa-filer build` writes the instance, a zip where required, and a manifest | Available |

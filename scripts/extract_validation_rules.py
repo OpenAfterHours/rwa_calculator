@@ -13,7 +13,7 @@ command refreshes or checks both.
 
 - EBA DPM 3.0(3.0.1) validation rules  -> COREP C 02.00 / C 07.00 / C 08.0x /
   C 09.0x / C 34.xx  (the CRR framework)
-- BoE banking_reporting v4.0.0 rules   -> OF02 / OF07 / OF08 / OF09 / C08.04 /
+- BoE banking_reporting v4.1.1 rules   -> OF02 / OF07 / OF08 / OF09 / C08.04 /
   C09.04 / C34.xx    (the Basel 3.1 framework)
 
 The workbooks are xlsx (gitignored); the JSON extracts are the committed
@@ -51,7 +51,7 @@ OUTPUT_DIR = PROJECT_ROOT / "packages" / "rwa-filer" / "src" / "rwa_filer" / "ru
 EBA_FILE = ASSETS_DIR / "eba-validation-rules.xlsx"
 EBA_OUTPUT = OUTPUT_DIR / EXTRACT_FILES[FRAMEWORK_CRR]
 
-BOE_FILE = ASSETS_DIR / "boe-validation-rules-banking-reporting-v4.0.0.xlsx"
+BOE_FILE = ASSETS_DIR / "boe-validation-rules-banking-reporting-v4.1.1.xlsx"
 BOE_OUTPUT = OUTPUT_DIR / EXTRACT_FILES[FRAMEWORK_BASEL_3_1]
 
 

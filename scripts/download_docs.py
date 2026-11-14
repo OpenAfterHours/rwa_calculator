@@ -37,6 +37,11 @@ PRA_RULEBOOK = "https://www.prarulebook.co.uk/pra-rules/crr-firms"
 BOE_CRR_BASE = "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2023/november/"
 
 BOE_REPORTING_LANDING = "https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/regulatory-reporting-banking-sector"
+# The taxonomy, its validations and the known-issues log are published on this sub-page.
+BOE_BANKS_REPORTING_LANDING = (
+    "https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/"
+    "regulatory-reporting-banking-sector/banks-building-societies-and-investment-firms"
+)
 EBA_REPORTING_LANDING = (
     "https://www.eba.europa.eu/risk-and-data-analysis/reporting/reporting-frameworks"
 )
@@ -152,15 +157,30 @@ MANIFEST: list[DocEntry] = [
         source=EBA_REPORTING_LANDING,
     ),
     DocEntry(
-        filename="boe-banking-taxonomy-validations-v4.0.0.zip",
+        filename="boe-banking-taxonomy-validations-v4.1.1.zip",
         description=(
-            "BoE banking XBRL taxonomy validation rules v4.0.0 "
-            "(Banking reporting module — contains the OF credit-risk tables)"
+            "BoE banking XBRL taxonomy validation rules v4.1.1 "
+            "(Banking Reporting module, entry point PRA001 — contains the OF credit-risk tables)"
         ),
-        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/february/boebankingtaxonomyvalidationsv400.zip",
-        source=BOE_REPORTING_LANDING,
-        extract_member="Bank of England Banking Taxonomy Validations Banking reporting v4.0.0.xlsx",
-        extract_as="boe-validation-rules-banking-reporting-v4.0.0.xlsx",
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-taxonomy-validations-v411.zip",
+        source=BOE_BANKS_REPORTING_LANDING,
+        extract_member="Bank of England Banking Taxonomy Validations Banking Reporting v4.1.1.xlsx",
+        extract_as="boe-validation-rules-banking-reporting-v4.1.1.xlsx",
+    ),
+    DocEntry(
+        filename="boe-banking-taxonomy-release-note-v4.1.1.pdf",
+        description="BoE banking XBRL taxonomy v4.1.1 release note (entry points, SchemaRefs)",
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boebankingtaxonomyreleasenotev411.pdf",
+        source=BOE_BANKS_REPORTING_LANDING,
+    ),
+    DocEntry(
+        filename="boe-banking-known-issues-august-2026.xlsx",
+        description=(
+            "BoE banking taxonomy known-issues log (27 Aug 2026) — rules downgraded or "
+            "deactivated between taxonomy releases"
+        ),
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-known-issues-august-2026.xlsx",
+        source=BOE_BANKS_REPORTING_LANDING,
     ),
     # --- Reporting templates (manual download) ---
     # DocEntry(

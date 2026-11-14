@@ -9,7 +9,7 @@ Module map:
 
 References:
 - EBA DPM 3.0(3.0.1) validation rules (CRR framework)
-- BoE banking_reporting v4.0.0 validation rules (PS1/26 / Basel 3.1 framework)
+- BoE banking_reporting v4.1.1 validation rules (PS1/26 / Basel 3.1 framework)
 """
 
 from __future__ import annotations

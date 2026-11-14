@@ -19,7 +19,7 @@ References:
 - PS1/26 Annex II §3.3.2 ¶76, §3.3.3.2 (cols 0090-0104, 0251-0260), §3.3.4 ¶77A,
   §3.3.10.2; COREP Annex II §3.3.2 ¶76, §3.3.6.2
 - PS1/26 Art. 147B(1) (roll-out classes)
-- docs/assets/boe-validation-rules-banking-reporting-v4.0.0.xlsx
+- docs/assets/boe-validation-rules-banking-reporting-v4.1.1.xlsx
 """
 
 from __future__ import annotations

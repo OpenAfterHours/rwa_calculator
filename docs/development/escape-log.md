@@ -3178,3 +3178,194 @@ gate that shipped.
 - **The fix**: a sheet of the table's own axis that the table does not carry is
   `sheet_not_emitted` for that reference; the every-sheet fallback is kept for
   a coordinate with no sheet on that axis.
+## 2026-11-13 — A parallel batch hung forever on Linux under Python 3.13, and the two tests that detect it had only ever run where the default start method hides it
+
+- **Defect**: `rwa_calc.api.run_batch` with two or more runs to dispatch could
+  fail ever to return on Linux under Python 3.13 — and did whenever the caller
+  had already run a Polars query. `api/batch.py::_make_executor` built its
+  `ProcessPoolExecutor` with no `mp_context`, so the pool took
+  `multiprocessing`'s **default** start method — `fork` on Linux up to 3.13. A
+  forked worker is a copy of the caller in which Polars is already initialised
+  but none of its threads exist, and its first `LazyFrame.collect()` waits on a
+  thread pool that is not there. Captured with `faulthandler` on the hung
+  processes: the parent in `concurrent.futures.as_completed` (`_run_parallel`,
+  `batch.py:642` as it then stood), each child in `LazyFrame.collect` ←
+  `has_rows` (`engine/utils.py:123`) ← `_load_file_optional`
+  (`engine/loader.py`) ← `ParquetLoader.load` ← `PipelineOrchestrator.run` ←
+  `CreditRiskCalc.calculate` ← `_run_scope`, bottoming out in
+  `multiprocessing/popen_fork.py`. The same inheritance left the per-worker
+  Polars thread cap unapplied: the pool the initializer sizes had been sized in
+  the parent.
+
+  **It is an availability defect, not a numerical one.** Nothing wrong was ever
+  published — the batch produced no result, no error, no timeout and no
+  `BATCH00x` code. There is therefore no sign or magnitude to state in capital
+  terms; the magnitude is "the group submission and its solo entities do not
+  come back".
+
+  **Blast radius.** Linux, Python 3.13 — which is the *floor* `pyproject.toml`
+  declares (`requires-python = ">=3.13"`) — in every release from 0.3.29 to
+  0.3.34: the measurements below are on the current tree, and `api/batch.py`
+  has exactly one commit in its history, so they all carry this code. The
+  population is library callers; `run_batch` is exported from `rwa_calc.api`
+  and nothing inside the package calls it. The trigger, measured, is narrower
+  than "fork": the caller must have run a Polars query before the pool is
+  created.
+
+  | Caller on Linux / CPython 3.13.18, same two-scope batch | Outcome |
+  |---|---|
+  | fresh process, data already on disk, nothing run first | completes, 0.7s |
+  | one warm-up query in the parent, then the batch | **hangs** (killed at 40s) |
+  | a script that writes its input frame first | **hangs** (`timeout 90`, exit 124, 0.5s CPU) |
+  | a serial batch, then a parallel one (the equivalence test) | **hangs** (`timeout 120`, exit 124, 3.0s CPU) |
+
+  So a one-shot script could work, which is the worst shape for a defect to
+  have: it passes the smoke test and fails in the long-lived host — a service,
+  a notebook, any process that reads the first batch's results before starting
+  the next. Not affected: Windows and macOS (`spawn`), Linux on Python
+  3.14+ (`forkserver`), and the serial path (`max_workers=1`,
+  `RWA_BATCH_SERIAL=1`) everywhere.
+- **Rule**: Not a regulatory escape; no article governs it. The controlling
+  text is CPython's own, emitted at the moment of the fork and visible in the
+  failing test's output: *"This process (pid=584) is multi-threaded, use of
+  fork() may lead to deadlocks in the child."*
+- **Origin**: `9e572c3` (2026-08-29, *feat(api): batch scoped calculations over
+  a process pool (P1)*), released in 0.3.29. Not a `/next-items` batch. The
+  module's design assumed `spawn` from the first line — its docstring argues
+  from "a spawned child imports the initializer's module during bootstrap" and
+  calls the picklability of its job "what Windows `spawn` requires" — while the
+  code left the choice to the platform. The design was written as a property of
+  the module and implemented as a property of the host.
+- **Escape class**: `path-never-exercised`. Two tests that detect the defect
+  were already in the suite and ran on every push — the first since the commit
+  that added the feature, the second in its present form since the day after
+  (`b570ad7`):
+  `TestSerialParallelEquivalence::test_parallel_and_serial_batches_agree` hangs
+  under `fork`, and
+  `TestWorkerPolarsCap::test_the_initializer_caps_the_worker_before_polars_is_imported`
+  fails with `assert 1 == 2`. Neither was ever driven down the `fork` path,
+  because no environment the gates run in has `fork` as its default. That is
+  this class with the interpreter in the role the fixture portfolio usually
+  plays: the gate ran, and nothing it ran on reached the code. `gate-not-run` is
+  the near miss and is wrong — nothing needed moving earlier; the tests ran at
+  the right tier, on the wrong interpreter.
+- **Why every gate missed it**: the gates run in two environments, and both
+  hide it.
+
+    - **CI runs whatever `python3` the runner image ships.**
+      `.github/workflows/ci.yml` names no interpreter and the repo has no
+      `.python-version`, so `uv sync` takes the system one. From the log of the
+      most recent `master` run (43438755694), identically in all eight jobs:
+      `Using CPython 3.14.4 interpreter at: /usr/bin/python3`, and in the Tests
+      job `platform linux -- Python 3.14.4, pytest-9.1.1`. Python 3.14 changed
+      the Linux default to `forkserver`, whose children are forked from a
+      separate server process rather than from the caller, so they never
+      inherit the caller's running Polars. So the declared floor is 3.13 and the
+      interpreter CI runs is 3.14. Reproduced here on
+      CPython 3.14.6 against the pre-fix source: all 35 pre-existing tests in
+      `test_batch.py` pass, the hanging one included.
+    - **The dev box is Windows**, where `spawn` is the only start method there
+      is.
+    - **The first bite was closed as an instance.** One day after the feature
+      landed, `b570ad7` (*fix(tests): make the worker Polars-cap test
+      independent of the start method*) fixed a CI failure caused by the
+      `forkserver` capturing its environment — by making the *test* calibrate,
+      and by writing into its docstring that the result was "correct under fork,
+      forkserver and spawn alike". Nobody had run it under `fork`, where it
+      fails — and fails with `assert 1 == 2`, the very line that commit records
+      for *deleting the initializer*, because under `fork` the initializer might
+      as well not be there. That is `.claude/LESSONS.md` C10 exactly (a claim
+      quantified over three start methods, measured on two). It was a red CI
+      run rather than a production escape, so it left no entry here and no
+      lesson, and the start method's second bite arrived with nothing waiting
+      for it.
+    - **A hang is not a failure.** No real-pool test bounds its wait and the
+      suite has no timeout plugin, so under xdist `--dist=loadfile` the symptom
+      is one worker going quiet and the run stalling at ~99% — which reads as a
+      slow box, not as a red test. Filed as P5.73.
+- **Gate change**: the fix for this class is normally "build the portfolio and
+  register it" — here, add the missing interpreter. The stronger form was
+  available and was taken instead: **delete the path**, so there is no
+  environment left to forget.
+
+  **`src/rwa_calc/api/batch.py`** — `_make_executor` now builds both of its
+  pools on `multiprocessing.get_context(WORKER_START_METHOD)`, with
+  `WORKER_START_METHOD = "spawn"`: the one start method every platform has, and
+  the one the module's design already assumed. `forkserver` was the
+  alternative and was rejected because it does not exist on Windows, which
+  would have kept two worker behaviours and with them the category.
+
+  **`tests/unit/api/test_batch.py::TestWorkerStartMethod`** pins it two ways,
+  because each has a blind spot the other covers:
+
+    - `test_the_pool_is_built_on_an_explicit_spawn_context[uncapped|capped]`
+      asserts on the arguments both construction branches pass. It starts no
+      process, so it is red on **every** platform — including Windows and macOS,
+      where the default is already `spawn` and no observation of a running pool
+      can tell "pinned" from "left to the platform".
+    - `test_a_real_worker_runs_as_a_spawned_process` asks a real worker which
+      `multiprocessing` process class it is running as. Red wherever the default
+      is not `spawn`, by whatever route the pin is lost. It reads the process
+      class rather than `multiprocessing.get_start_method()` because the latter
+      is useless here: measured, a spawned child reports its *parent's default*
+      (`fork`) whatever context started it.
+
+  With the pool pinned, the two pre-existing detectors now run down the same
+  path on every interpreter, so they have stopped being platform-conditional.
+
+  **Deferred, filed as P5.72**: CI still never runs the declared floor
+  interpreter, and its interpreter is still chosen by the runner image. This
+  defect no longer needs that leg, but the next 3.13-versus-3.14 difference
+  will. It is a CI-cost decision (roughly one more Tests job per push) and is
+  left to the operator rather than taken here.
+- **Verified red**: in a detached worktree at the pre-fix commit `0fd6435`
+  carrying the final test files, with `rwa_calc.api.batch.__file__` printed and
+  confirmed to be the worktree's copy (`PYTHONPATH=.:src`, per the 2026-08-15
+  ledger row).
+
+  Linux, CPython 3.13.18 (default `fork`):
+
+  ```
+  $ python -m pytest "tests/unit/api/test_batch.py::TestWorkerStartMethod" \
+      "tests/unit/api/test_batch.py::TestWorkerPolarsCap::test_the_initializer_caps_the_worker_before_polars_is_imported" -n 0 -q
+  E   AssertionError: no mp_context: the pool would take the platform's default start method
+  E   AssertionError: no mp_context: the pool would take the platform's default start method
+  E   AssertionError: assert 'ForkProcess' == 'SpawnProcess'
+  E   assert 1 == 2
+  4 failed, 3 warnings in 0.49s
+
+  $ timeout 120 uv run pytest "tests/unit/api/test_batch.py::TestSerialParallelEquivalence::test_parallel_and_serial_batches_agree" -n 0 -q
+  (no output; exit 124 after 2m0.014s, 2.987s of CPU)
+  ```
+
+  Linux, CPython 3.14.6 (default `forkserver` — CI's interpreter line), the
+  whole file:
+
+  ```
+  $ python -m pytest tests/unit/api/test_batch.py -n 0 -q
+  E   AssertionError: no mp_context: the pool would take the platform's default start method
+  E   AssertionError: no mp_context: the pool would take the platform's default start method
+  E   AssertionError: assert 'ForkServerProcess' == 'SpawnProcess'
+  3 failed, 35 passed, 4 warnings in 9.25s
+  ```
+
+  That second run is the one that matters for CI: without the fix, the three
+  new tests are the **only** red on the interpreter CI uses, and the 35 that
+  were there before are green. With the fix: `38 passed` on 3.13.18 (9.79s) and
+  on 3.14.6 (10.34s), and the plain-script reproductions that hung now print
+  `DONE in 1.2s parallel=True success=[True, True]` with the default still
+  reported as `fork`.
+
+  **Not observed**: Windows and macOS — there was no such host. The
+  construction test's red there is by construction (it starts no process), not
+  by observation; the real-worker test is green there with or without the pin,
+  which is its stated blind spot.
+- **Lesson**: graduated — see the 2026-11-13 row of the Graduation ledger in
+  `.claude/LESSONS.md`. *A default that varies by platform and interpreter is an
+  input, and it was an input nobody had varied.* The fix is not a wider test
+  matrix; it is to stop taking the default, the same shape as the skill-value
+  graduation: not "be more careful which Python the tests run on" but "make the
+  module incapable of behaving differently by host". The second half is about
+  the first bite — a test-only fix to a platform-dependent failure is a claim
+  that the product is right on every platform, and it was written down as one
+  ("under fork, forkserver and spawn alike") on the evidence of two.

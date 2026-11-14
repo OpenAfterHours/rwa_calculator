@@ -176,6 +176,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   install. The script now reads the range from the root `pyproject.toml`, asks
   PyPI, and stops before the tests when no published version satisfies it or
   PyPI cannot be reached. `--skip-filer-check` bypasses it.
+- **Basel 3.1 supervisory validation rules now come from BoE Banking Taxonomy v4.1.1
+  (27 Aug 2026), replacing v4.0.0.** v4.1.1 supersedes v4.0.0 for entry point PRA001
+  (Own Funds). The v4.0.0 PRA001 SchemaRef is retired for live reporting from 1 Jan 2027, the
+  date PS1/26 takes effect. The packaged extract is renamed from
+  `basel31-boe-v4.0.0-credit-risk.json` to `basel31-boe-v4.1.1-credit-risk.json` (package data
+  of `rwa-filer` since the validation engine moved there). Code that reads it through
+  `rwa_filer.rules.load_rules` needs no change; a path hard-coded to the old filename will break. The credit-risk subset goes from 820 rules
+  (808 enforced) to 816 (800).
+  - **Withdrawn by the BoE:** `boe_b0303`, `boe_b0744`, `boe_b0745` and `boe_b0752_1/22/23/24`.
+  - **Split:** `boe_b0378` and `boe_b0379` each become a `_1` and a `_2` rule, and the `_2` rule
+    reverses the inequality on the "(-)" deduction columns.
+  - **New:** `boe_b0751_1` (WARNING).
+  - **No longer enforced:** `boe_b0755`–`boe_b0758` were rewritten and taken out of XBRL.
+  - **Edited:** expressions on `boe_b0263`, `boe_b0718`, `boe_b0735` and `boe_b0739`; scopes on
+    `boe_b0751` and `boe_b0767`.
+
+  Seven supervisory-register breaks we had recorded against those rules are gone, five of them
+  previously filed as limits of the published rule. **One consequence for users:** v4.1.1 drops
+  every `DESCRIPTION` label, so the extract's `eba_equivalent` / `eba_equivalents` fields (the
+  BoE→EBA rule cross-reference) are now empty. The 85 BoE rules that reuse an EBA rule id are
+  unaffected. The downloader also fetches the v4.1.1 release note and the BoE known-issues log;
+  the August 2026 log changes nothing in the credit-risk extract.
 - **BREAKING (reporting surface): COREP C 07.00 / OF 07.00 now keys its
   exposure-class dimension on the Article 112(1) classes, not on the engine's
   internal exposure classes.** The template's class dimension is the Art. 112(1)
@@ -447,6 +469,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   total is shown in OF 02.00 and on the OF 07.00 Total sheet, each adding the
   same exposures in its own order; the return was being refused over the
   difference. Cells that disagree by more than rounding are still refused.
+- **A parallel batch (`rwa_calc.api.run_batch`) could hang forever on Linux
+  under Python 3.13.** `api/batch.py` built its `ProcessPoolExecutor` on
+  `multiprocessing`'s *default* start method, and that default depends on both
+  platform and interpreter: `spawn` on Windows and macOS, `forkserver` on Linux
+  from Python 3.14, `fork` on Linux up to 3.13. A forked worker is a copy of the
+  calling process with Polars already initialised but none of its threads, so
+  once the caller had run any Polars query the worker's first
+  `LazyFrame.collect()` (in `ParquetLoader.load`) waited forever and `run_batch`
+  never returned — no error, no timeout, no `BATCH00x` code. **Affected:** every
+  release from 0.3.29, on Linux with Python 3.13, for a batch of two or more
+  runs started from a process that had already used Polars — a long-lived host,
+  or any caller that ran a calculation or read a result frame first. Measured:
+  the same two-scope batch completes in 0.7s from a fresh process and hangs
+  after a single warm-up query in the parent. **No result was ever wrong; the
+  batch did not return.** The same inheritance left the per-worker Polars thread
+  cap unapplied there, because the pool it sizes had been sized in the parent.
+  The pool is now built on an explicit `spawn` context
+  (`batch.WORKER_START_METHOD`) on every platform and interpreter, so worker
+  behaviour no longer follows the default. **Two consequences on Linux:** a
+  *script* that calls `run_batch` must do so behind
+  `if __name__ == "__main__":` (already the rule on Windows, on macOS and under
+  Python 3.14 — a spawned worker re-imports `__main__`), and each worker now
+  starts as a fresh interpreter rather than a copy (measured on that two-scope
+  batch: 1.2s spawned against 0.7s forked). `max_workers=1` and
+  `RWA_BATCH_SERIAL=1` remain the in-process path and are unaffected. Pinned by
+  `tests/unit/api/test_batch.py::TestWorkerStartMethod`, on the pool's
+  construction arguments and on what a real worker reports. CI did not see it
+  because every CI job runs the runner's CPython 3.14; see the 2026-11-13 entry
+  in `docs/development/escape-log.md`.
 - **CAPITAL: the Art. 501a infrastructure supporting factor was granted with no
   eligibility gate at all, understating own funds.** `is_infrastructure` is
   derived as a bare substring match on `product_type`

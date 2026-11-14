@@ -49,7 +49,7 @@ from rwa_filer.rules.catalogue import (
 #: A change here is a deliberate taxonomy refresh, never an accident.
 EXPECTED_COUNTS: dict[str, tuple[int, int]] = {
     FRAMEWORK_CRR: (1011, 741),
-    FRAMEWORK_BASEL_3_1: (820, 808),
+    FRAMEWORK_BASEL_3_1: (816, 800),
 }
 
 #: Fields the EBA / BoE parsers index unconditionally — a missing one is a

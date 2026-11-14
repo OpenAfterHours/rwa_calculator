@@ -8,7 +8,7 @@ CI, tooling) needs the raw spreadsheets.
 | File | Framework | Rules | Live |
 |---|---|---:|---:|
 | `crr-eba-v3.0-credit-risk.json` | CRR (EBA DPM 3.0) | 1,011 | 588 |
-| `basel31-boe-v4.0.0-credit-risk.json` | Basel 3.1 (BoE banking v4.0.0) | 820 | 808 |
+| `basel31-boe-v4.1.1-credit-risk.json` | Basel 3.1 (BoE banking v4.1.1) | 816 | 800 |
 
 !!! info "What these are for"
     A validation rule is the supervisor's own arithmetic check on a submitted return —
@@ -47,7 +47,7 @@ from pathlib import Path
 
 BASE = Path("packages/rwa-filer/src/rwa_filer/rules/data")
 eba = json.load(open(BASE / "crr-eba-v3.0-credit-risk.json"))
-boe = json.load(open(BASE / "basel31-boe-v4.0.0-credit-risk.json"))
+boe = json.load(open(BASE / "basel31-boe-v4.1.1-credit-risk.json"))
 ```
 
 **Which rules apply to a template?** Match on the `tables` list — a rule is included if
@@ -83,20 +83,23 @@ reads as: *for each of those eight rows of `C 07.00.a`, column 0090 must equal t
 columns 0050, 0060, 0070 and 0080.* See [Formula grammar](#formula-grammar) for the full
 reference syntax.
 
-**Cross-referencing the two frameworks.** Most BoE rules name their EBA ancestor, which is
-how you find the CRR equivalent of a Basel 3.1 check (and vice versa):
+**Cross-referencing the two frameworks.** 85 of the 816 BoE rules reuse an EBA rule id
+outright (`v10627_m`, `v10476_a`, …), and all 85 resolve within the CRR extract:
 
 ```python
 by_id = {r["id"]: r for r in eba["rules"]}
-pairs = [(b, by_id[b["eba_equivalent"]]) for b in boe["rules"]
-         if b["eba_equivalent"] and b["eba_equivalent"] in by_id]
-# 426 BoE rules resolve to an EBA rule held in this extract
-# e.g. boe_b0190 -> v5745_q
+shared = [b for b in boe["rules"] if b["id"] in by_id]
+# 85 BoE rules carry an EBA id verbatim
 ```
 
-427 BoE rules carry a single `eba_equivalent`; 426 of those resolve within this extract, the
-odd one pointing at a rule on a table outside the credit-risk filter. See the
-[`eba_equivalents` caveat](#boe-rule-object) for the 35 rules that name several.
+!!! warning "v4.1.1 dropped the BoE→EBA labels"
+    Up to v4.0.0 the BoE `Label` cell carried a `DESCRIPTION(en)` segment naming each
+    `boe_*` rule's EBA ancestor (462 rules; 427 with exactly one id, e.g.
+    `boe_b0190 -> v5745_q`). **v4.1.1 removed every `DESCRIPTION` segment**, so
+    `description` and `eba_equivalent` are `null` and `eba_equivalents` is empty on all
+    816 rules. The fields are kept so the schema is stable. To recover the mapping, read
+    the v4.0.0 extract from git history — `basel31-boe-v4.0.0-credit-risk.json` in the
+    commit before the v4.1.1 refresh.
 
 ## Regeneration
 
@@ -157,15 +160,27 @@ Note the space after `C` in this workbook (`C 07.00.a`).
 
 ### Source 2 — BoE (Basel 3.1 framework)
 
-- **File**: `docs/assets/boe-validation-rules-banking-reporting-v4.0.0.xlsx`
+- **File**: `docs/assets/boe-validation-rules-banking-reporting-v4.1.1.xlsx`
 - **Sheet**: `banking_reporting` (the other sheet, `Note`, is prose and is ignored)
 - **Publisher**: Bank of England
-- **Download URL**: `https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/february/boebankingtaxonomyvalidationsv400.zip`
-- **Archive member**: `Bank of England Banking Taxonomy Validations Banking reporting v4.0.0.xlsx`
+- **Taxonomy version**: v4.1.1, published 27 August 2026 — a corrective release superseding
+  v4.0.0 (27 February 2026) for entry point **PRA001** (Own Funds). Its SchemaRef is
+  `http://www.bankofengland.co.uk/data/xbrl/fws/banking/banking_reporting/2026-08-17/mod/pra001.xsd`;
+  the v4.0.0 PRA001 SchemaRef is retired for live reporting from 1 January 2027, the date
+  PS1/26 takes effect.
+- **Download URL**: `https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-taxonomy-validations-v411.zip`
+- **Archive member**: `Bank of England Banking Taxonomy Validations Banking Reporting v4.1.1.xlsx`
   — the workbook ships inside the taxonomy zip; `scripts/download_docs.py` extracts it.
-- **Landing page**: <https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/regulatory-reporting-banking-sector>
-- **Retrieved**: 2026-08-01
-- **Sheet size**: 1,490 rules, of which 820 match the credit-risk filter.
+- **Landing page**: <https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/regulatory-reporting-banking-sector/banks-building-societies-and-investment-firms>
+- **Retrieved**: 2026-11-13
+- **Sheet size**: 1,486 rules (889 ERROR / 597 WARNING; 1,441 included in XBRL; 7
+  deactivated), of which 816 match the credit-risk filter.
+- **Release note**: `docs/assets/boe-banking-taxonomy-release-note-v4.1.1.pdf`.
+- **Known-issues log**: `docs/assets/boe-banking-known-issues-august-2026.xlsx`. The BoE
+  downgrades or deactivates rules here between releases. The extractor does **not** read it yet
+  (plan item P2.59). As of the 27 August 2026 log, nothing in it changes this extract: the
+  three PRA001 entries are all marked "Amended in release 4.1.1", and no open entry touches
+  PRA001.
 
 Filter — keep a rule if any of its `T1`..`T4` table codes starts with:
 
@@ -208,16 +223,38 @@ read `reactivated_on` rather than trusting `status` alone.
 
 ### BoE
 
-All 820 matched rules have `Deactivated = no`. 808 are included in XBRL; the remaining 12 are
-flagged `not_in_xbrl` and so report as non-live, which is why `live` is 808 while
-`not_deactivated` is 820.
+All 816 matched rules have `Deactivated = no`. The workbook as a whole deactivates 7 rules,
+all of them on the securitisation tables (C 13.01, C 14.00, C 14.01, OF 19, OF 20) outside the
+credit-risk filter, so none reaches this extract. 800 are included in XBRL; the remaining 16 are
+flagged `not_in_xbrl` and so report as non-live, which is why `live` is 800 while
+`not_deactivated` is 816.
 
-Severity: **514 ERROR / 306 WARNING**. 34 rules set `always_execute`.
-462 rules carry a `DESCRIPTION` label; 427 of those resolve to exactly one EBA rule id.
+Severity: **509 ERROR / 307 WARNING** overall; **505 ERROR / 295 WARNING among live rules**.
+35 rules set `always_execute`. No rule carries a `DESCRIPTION` label (see the
+[cross-referencing warning](#looking-up-a-rule)).
 
-`Precondition` and `Simplified Precondition` are empty for all 820 matched rules, as are
-`Where` and `Join`. `Scope` is populated on 466 of them. The fields are still emitted (as
+`Precondition` and `Simplified Precondition` are empty for all 816 matched rules, as are
+`Where` and `Join`. `Scope` is populated on 463 of them. The fields are still emitted (as
 `null`) so the schema stays stable if a future taxonomy release starts using them.
+
+### BoE v4.0.0 → v4.1.1
+
+The credit-risk subset moved from 820 rules to 816 and from 808 enforced to 800. Rule by rule:
+
+| Change | Rules |
+|---|---|
+| Withdrawn | `boe_b0303`, `boe_b0744`, `boe_b0745`, `boe_b0752_1`, `boe_b0752_22`, `boe_b0752_23`, `boe_b0752_24` |
+| Split in two | `boe_b0378` → `boe_b0378_1` / `_2`; `boe_b0379` → `boe_b0379_1` / `_2`. The `_2` rule reverses the inequality on the "(-)" deduction columns |
+| New | `boe_b0751_1` (WARNING; r0170 col 0251 = col 0260 on the OF 08.01 Total-IRB sheets) |
+| Taken out of XBRL (so no longer enforced) | `boe_b0755`–`boe_b0758`, rewritten as per-grade `sum(average * exposure)` |
+| Expression changed | `boe_b0263` (adds OF 09.01 r0140), `boe_b0718` (now `If … then … else`), `boe_b0735` (adds OF 08.03 r0170), `boe_b0739` (col 0280 → 0282) |
+| Scope narrowed | `boe_b0751` (drops rows 0080 / 0170), `boe_b0767` (drops col 0030) |
+| Notation only | `v10270_a`, `v10475_a`, `v10476_a`, `v10564_a` (enumeration literals now `$[…]`), `v10627_m` (whitespace) |
+
+Labels changed on 529 rules. 76 `SHORT_LABEL`s were reworded, 73 of them to correct the table
+codes they cite (known-issues entry #16), and every `DESCRIPTION` segment was removed. The four withdrawn `boe_b0752_*` members are exactly
+the family's averaged columns (PD c0010, LGD c0230 / c0240, maturity c0250). The supervisory
+register had recorded those rules as unsatisfiable against a correct return.
 
 ## Row and column id normalisation
 
@@ -298,27 +335,28 @@ Both files share the top-level shape:
 | `id` | str | e.g. `boe_b0190` |
 | `severity` | str | `ERROR` / `WARNING`, parsed out of `Severity and modules` |
 | `severity_modules` | list[str] | the module codes from the same cell, e.g. `["PRA001"]` |
-| `status` | list[str] | `["live"]` or `["not_in_xbrl"]` (none are deactivated) |
+| `status` | list[str] | `["live"]` or `["not_in_xbrl"]` (none in this extract are deactivated) |
 | `tables` | list[str] | `T1`..`T4`, blanks dropped |
 | `expression` | str \| null | **`Simplified Expression`** — the readable primary form |
 | `expression_raw` | str \| null | the full `Expression`; keeps the interval operators (below) |
 | `precondition`, `precondition_raw` | str \| null | simplified / raw; both empty in this extract |
 | `scope`, `where`, `join` | str \| null | `scope(...)` iteration domain; `where`/`join` empty here |
 | `short_label` | str \| null | the `SHORT_LABEL(en)` segment |
-| `description` | str \| null | the `DESCRIPTION(en)` segment, verbatim |
-| `eba_equivalent` | str \| null | the corresponding EBA rule id, **only when exactly one** |
-| `eba_equivalents` | list[str] | every EBA id found in `description` (see caveat) |
+| `description` | str \| null | the `DESCRIPTION(en)` segment, verbatim — `null` throughout v4.1.1 |
+| `eba_equivalent` | str \| null | the corresponding EBA rule id, **only when exactly one** — `null` throughout v4.1.1 |
+| `eba_equivalents` | list[str] | every EBA id found in `description` (see caveat) — empty throughout v4.1.1 |
 | `error_message` | str \| null | the `BUSINESS(en)` segment of `Error message` |
 | `labels` | dict | all parsed `KIND(en)` segments, `{"SHORT_LABEL": ..., "DESCRIPTION": ...}` |
 | `include_in_xbrl`, `always_execute` | bool | |
 | `owner`, `framework_code`, `framework_version_code` | str \| null | `BOE`, `banking`, `banking_reporting` |
 
-**`eba_equivalents` caveat.** The `DESCRIPTION` segment usually holds one EBA id (`v5745_q`),
-but 35 rules hold an expression over several: an enumeration (`v10293_s, v10295_s`), a sum
+**`eba_equivalents` caveat** (applies to the v4.0.0 extract; v4.1.1 carries no `DESCRIPTION`).
+The `DESCRIPTION` segment usually held one EBA id (`v5745_q`), but 35 v4.0.0 rules held an
+expression over several: an enumeration (`v10293_s, v10295_s`), a sum
 (`v2042_s + v10312_s + v10314_s + v10485_s`) or a **range** (`v3354_i to v3370_i`).
 `eba_equivalents` lists the ids appearing literally in the text, so for a range it captures the
 two endpoints, not the rules in between. Read `description` when the distinction matters.
-`eba_equivalent` is populated only for the unambiguous single-id case (427 rules).
+`eba_equivalent` was populated only for the unambiguous single-id case (427 rules in v4.0.0).
 
 ## Formula grammar
 
@@ -407,7 +445,7 @@ References are keyed maps rather than positional:
 the domain the rule iterates over — the BoE analogue of the EBA row/column scope columns.
 
 !!! danger "The expression is not self-contained — apply `scope` first"
-    **79 of the 820 BoE rules have an expression with no `r:`/`c:` binding at all**; the row,
+    **79 of the 816 BoE rules have an expression with no `r:`/`c:` binding at all**; the row,
     column and sheet coordinates live entirely in `scope`. All 79 have `scope` populated.
     Evaluating `expression` alone turns a single-cell check into a whole-table assertion and
     produces mass false positives.
@@ -426,13 +464,13 @@ the domain the rule iterates over — the BoE analogue of the EBA row/column sco
     ```
 
     Together they mean *row 0140 / column 0220 of OF07.00.01.01 must be zero, on each of the
-    listed sheets*. Its EBA equivalent `v0316_m` states the identical check inline —
+    listed sheets*. Its EBA equivalent `v0316_m` (named by the v4.0.0 label) states the identical check inline —
     `{r0140, c0215} = 0` — which is the clearest illustration of the grammar difference: the
     EBA puts the coordinates in the formula, the BoE hoists them into `scope`. (The column
     differs, 0215 vs 0220, because the templates were renumbered between frameworks.)
 
     Always evaluate `scope`, and `where` / `precondition` where present, before the
-    expression. Those three are empty across all 820 rules in *this* extract, but a future
+    expression. Those three are empty across all 816 rules in *this* extract, but a future
     taxonomy release may populate them, so handle them rather than assuming they are null.
 
 !!! warning "The EBA has the same trap, in mirror image"
@@ -447,7 +485,7 @@ the domain the rule iterates over — the BoE analogue of the EBA row/column sco
 (rounding-tolerant) comparison — the equivalent of the EBA `Interval` arithmetic approach.
 The `Simplified Expression` collapses these to plain `=`, `>=`, `<=`, `>`, **losing the
 tolerance semantics**. Use `expression` for reading, `expression_raw` when the comparison
-semantics matter. In this extract 654 of the 820 raw expressions use an interval operator.
+semantics matter. In this extract 650 of the 816 raw expressions use an interval operator.
 
 Example — `boe_b0190`, a cross-template consistency check:
 
@@ -458,7 +496,7 @@ Example — `boe_b0190`, a cross-template consistency check:
 
 reads as: *original exposure pre-conversion-factors for central governments/central banks
 (sheet 0002 of OF07.00) must equal the corresponding domestic-geography cell in OF09.01.*
-Its `eba_equivalent` is `v5745_q`, the matching EBA rule in the CRR extract.
+The v4.0.0 label named `v5745_q`, the matching EBA rule in the CRR extract, as its equivalent.
 
 ## Severity semantics
 

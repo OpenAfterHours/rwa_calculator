@@ -12,7 +12,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
   absent.
 - `rwa_filer.rules` — the published supervisory validation rules as package
   data (EBA DPM 3.0(3.0.1) for CRR: 1,011 rules, 741 enforced; BoE
-  banking_reporting v4.0.0 for Basel 3.1: 820 rules, 808 enforced), normalised
+  banking_reporting v4.1.1 for Basel 3.1: 816 rules, 800 enforced), normalised
   onto one `ValidationRule` shape by `load_rules(framework)`.
 - `rwa_filer.validate` — the rule engine, moved here unchanged from
   `rwa_calc.reporting.validations`. `TemplateIndex` is the one shape a return is
@@ -154,7 +154,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
   tables use four digits, the MREL and older tables three. A code that differs
   from one of its table's only in leading zeros is taken as that code.
 - The template-level engine (`TemplateIndex`, `check_index`, the EBA and BoE
-  v4.0.0 extracts) is unchanged and remains what `rwa-calc` runs on its own
+  template-level extracts) is unchanged and remains what `rwa-calc` runs on its own
   frames.
 
 ### Fixed

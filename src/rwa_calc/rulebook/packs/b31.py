@@ -912,6 +912,25 @@ ENTRIES: dict[str, RuleEntry] = {
             "restore the single-counterparty (P1.238) keying",
         ),
     ),
+    # On-balance-sheet netting currency scope. PS1/26 replaces the CRR same-currency
+    # limit (CRR Art. 219: "... which are denominated in the same currency") with an
+    # adjustment: Art. 219(1)(b)(ii) nets loans and deposits "adjusted for any
+    # currency and maturity mismatches", and Art. 219(2) (ps126app1.pdf page 191 of
+    # 492) reflects a currency mismatch "by applying the appropriate volatility
+    # adjustment specified in Table 4 in paragraph 1 of Article 224 to the value of
+    # the protection". So a deposit protects every loan under the agreement and a
+    # mismatched one takes H_fx at on_bs_netting_liquidation_period. Disabled here;
+    # enabled in packs/crr.py.
+    "on_bs_netting_same_currency_only": Feature(
+        name="on_bs_netting_same_currency_only",
+        enabled=False,
+        citation=Citation(
+            "PS1/26",
+            "219",
+            "(1)(b)(ii)/(2) cross-currency on-B/S netting recognised net of the Table 4 "
+            "currency-mismatch volatility adjustment",
+        ),
+    ),
     # Liquidation period (business days) carried by every synthetic NETTING_ cash
     # row built in engine/crm/netting.py::generate_netting_collateral, feeding the
     # Art. 226(2) sqrt(T_m/10) scaling of its Table 4 currency-mismatch H_fx.

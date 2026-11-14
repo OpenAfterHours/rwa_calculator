@@ -977,6 +977,29 @@ ENTRIES: dict[str, RuleEntry] = {
             "restore the single-counterparty (P1.238) keying",
         ),
     ),
+    # On-balance-sheet netting currency scope. UK CRR Art. 219 (legislation.gov.uk,
+    # onshored text, read verbatim): "Loans to and deposits with the lending
+    # institution subject to on-balance sheet netting are to be treated by that
+    # institution as cash collateral for the purpose of calculating the effect of
+    # funded credit protection for those loans and deposits of the lending
+    # institution subject to on-balance sheet netting which are denominated in the
+    # same currency." A deposit therefore protects only loans in its own
+    # denomination; one in another currency is not cash collateral for them at all
+    # (no H_fx route — Art. 223(1) applies to what is already collateral). Gates the
+    # sibling match and pro-rata denominator in
+    # engine/crm/netting.py::generate_netting_collateral. Direction: RWA-INCREASING
+    # against the previous cross-currency match-plus-H_fx; within a mixed-currency
+    # agreement the same-currency denominator moves relief between loans.
+    "on_bs_netting_same_currency_only": Feature(
+        name="on_bs_netting_same_currency_only",
+        enabled=True,
+        citation=Citation(
+            "CRR",
+            "219",
+            "on-B/S netting recognised as cash collateral only for loans and deposits "
+            "denominated in the same currency",
+        ),
+    ),
     # Liquidation period (business days) carried by every synthetic NETTING_ cash
     # row built in engine/crm/netting.py::generate_netting_collateral, feeding the
     # Art. 226(2) sqrt(T_m/10) scaling of its Table 4 currency-mismatch H_fx. CRR

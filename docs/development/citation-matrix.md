@@ -890,9 +890,9 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 195 — On-balance sheet netting
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:43"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:47"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:47:373"
     ```
 
 
@@ -945,9 +945,9 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 205 — Requirements for on-balance sheet netting agreements other than master netting agreements referred to in Article 206
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:44"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:48"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:47:373"
     ```
 
 
@@ -1003,9 +1003,9 @@ Last generated: 2026-11-13.
 
 ### CRR Art. 219 — On-balance sheet netting
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:45"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:49"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:47:373"
     ```
 
 
@@ -1042,9 +1042,9 @@ Last generated: 2026-11-13.
     --8<-- "src/rwa_calc/engine/crm/expressions.py:106:130"
     ```
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:46"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:50"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:47:373"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
@@ -1232,9 +1232,9 @@ Last generated: 2026-11-13.
     --8<-- "src/rwa_calc/engine/crm/haircuts.py:684:821"
     ```
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:47"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/netting.py:51"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/netting.py:43:334"
+    --8<-- "src/rwa_calc/engine/crm/netting.py:47:373"
     ```
 
 

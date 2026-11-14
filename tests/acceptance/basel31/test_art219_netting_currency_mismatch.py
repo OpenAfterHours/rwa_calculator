@@ -42,6 +42,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ERROR_CURRENCY_MISMATCH
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.netting_currency.netting_currency import (
@@ -60,26 +61,39 @@ REGIME = "b31"
 REPORTING_DATE = date(2027, 1, 1)
 
 
-def _run(labels: tuple[str, ...]) -> pl.DataFrame:
+def _run(labels: tuple[str, ...]) -> AggregatedResultBundle:
     config = CalculationConfig.basel_3_1(
         reporting_date=REPORTING_DATE,
         permission_mode=PermissionMode.STANDARDISED,
     )
     bundle = build_netting_currency_bundle(labels, REPORTING_DATE)
-    result: AggregatedResultBundle = PipelineOrchestrator().run_with_data(bundle, config)
-    return result.results.collect()
+    return PipelineOrchestrator().run_with_data(bundle, config)
 
 
 @pytest.fixture(scope="module")
-def plain() -> pl.DataFrame:
+def plain_result() -> AggregatedResultBundle:
     """Scenarios in a bundle WITHOUT a collateral file."""
     return _run(PLAIN_LABELS)
 
 
 @pytest.fixture(scope="module")
-def with_collateral() -> pl.DataFrame:
+def with_collateral_result() -> AggregatedResultBundle:
     """The same pairs in a bundle that also carries an ordinary collateral file."""
     return _run(WITH_COLLATERAL_LABELS)
+
+
+@pytest.fixture(scope="module")
+def plain(plain_result: AggregatedResultBundle) -> pl.DataFrame:
+    return plain_result.results.collect()
+
+
+@pytest.fixture(scope="module")
+def with_collateral(with_collateral_result: AggregatedResultBundle) -> pl.DataFrame:
+    return with_collateral_result.results.collect()
+
+
+def _currency_warnings(*results: AggregatedResultBundle) -> list[str]:
+    return [e.message for r in results for e in r.errors if e.code == ERROR_CURRENCY_MISMATCH]
 
 
 def _row(results: pl.DataFrame, reference: str) -> dict:
@@ -174,3 +188,14 @@ class TestB31NettingCurrencyMismatch:
         row = _row(_frame(request, label), s.loan_ref)
         assert row["on_bs_netting_amount"] == pytest.approx(s.total_deposits)
         assert s.total_deposits == pytest.approx(DEPOSIT_ABS)
+
+
+class TestB31MismatchIsAdjustedNotRefused:
+    """Basel 3.1 recognises every deposit (Art. 219(2)), so nothing is unrecognised."""
+
+    def test_no_currency_netting_warning(
+        self,
+        plain_result: AggregatedResultBundle,
+        with_collateral_result: AggregatedResultBundle,
+    ) -> None:
+        assert _currency_warnings(plain_result, with_collateral_result) == []

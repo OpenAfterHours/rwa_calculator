@@ -3344,14 +3344,17 @@
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "on_bs_netting_same_currency_only@crr"
+      ],
       "source_files": [
         "contracts/edges.py",
         "engine/crm/haircuts.py",
         "engine/crm/netting.py",
         "engine/crm/processor.py",
+        "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -8176,7 +8179,8 @@
       "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [
-        "on_bs_netting_liquidation_period@b31"
+        "on_bs_netting_liquidation_period@b31",
+        "on_bs_netting_same_currency_only@b31"
       ],
       "source_files": [
         "engine/crm/netting.py"
@@ -8718,8 +8722,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "cae257b83cf5f6aee337713b02643c7e5a2df4535dabd78664c0d7f66b7b13f7",
-    "crr": "e6294a6aa2f47757ddafd118b96cb1e1c88f2b46a4f5e76857e9db02dd8b9fee"
+    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
+    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

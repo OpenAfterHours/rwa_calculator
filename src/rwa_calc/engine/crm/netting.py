@@ -25,12 +25,16 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.contracts.errors import ERROR_CROSS_COUNTERPARTY_NETTING, crm_warning
+from rwa_calc.contracts.errors import (
+    ERROR_CROSS_COUNTERPARTY_NETTING,
+    ERROR_CURRENCY_MISMATCH,
+    crm_warning,
+)
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 
 if TYPE_CHECKING:
@@ -92,6 +96,15 @@ def generate_netting_collateral(
     denomination instead: a EUR deposit against a GBP loan took no haircut, a EUR
     deposit against a EUR loan took one, and with any collateral file present no
     netted deposit was haircut at all (escape log 2026-11-13).
+
+    Which loans a pool may protect is the cited pack Feature
+    ``on_bs_netting_same_currency_only``. CRR Art. 219 treats netted loans and
+    deposits as cash collateral only where they "are denominated in the same
+    currency": enabled, a pool matches (and its pro-rata denominator counts) only
+    loans in its own denomination, and a pool no loan under the perimeter shares
+    nets nothing and raises one CRM003 record. PS1/26 Art. 219(2) adjusts a
+    mismatch rather than refusing it: disabled, a pool matches every loan under the
+    perimeter and the haircut stage applies the Table 4 H_fx.
 
     Every synthetic row also carries ``liquidation_period_days`` from the pack
     entry ``on_bs_netting_liquidation_period``, the period the haircut stage
@@ -199,15 +212,23 @@ def generate_netting_collateral(
         perimeter_keys.append("counterparty_reference")
     allocation_keys = [*perimeter_keys, "_pool_original_currency", "_pool_currency"]
 
+    # Which loans a pool may protect, from the cited pack Feature. CRR Art. 219
+    # treats netted loans and deposits as cash collateral only where they "are
+    # denominated in the same currency", so a pool matches only loans in its own
+    # denomination (enabled). PS1/26 Art. 219(2) recognises a mismatch net of the
+    # Table 4 H_fx instead, so a pool matches every loan under the perimeter
+    # (disabled). Matching on the denomination also confines the pro-rata
+    # denominator to the same-currency loans, so relief the rule grants is never
+    # stranded on a loan it cannot protect.
+    same_currency_only = pack.feature("on_bs_netting_same_currency_only")
+    sibling_keys = (
+        [*perimeter_keys, "_pool_original_currency"] if same_currency_only else perimeter_keys
+    )
+
     # Negative-drawn loans carrying a netting agreement reference provide the pool
     negative_loans = exposures.filter(
         pl.col("netting_agreement_reference").is_not_null() & (pl.col("drawn_amount") < 0)
     )
-
-    # Art. 195/205(a): CRM016 audit record for any agreement spanning more than
-    # one counterparty (or carrying a null one) — the offset itself applies.
-    if errors is not None:
-        _record_cross_counterparty_netting(exposures, errors, perimeter_is_agreement)
 
     # Sum abs(drawn_amount) per (perimeter keys, denomination) → netting pool.
     # The rebased ``currency`` is a function of the denomination (one rate per
@@ -247,10 +268,28 @@ def generate_netting_collateral(
         "counterparty_reference",
         "currency",
         "on_bs_for_ead",
+        # The loan's denomination, named as the pool key it is matched against.
+        pl.col("_denomination").alias("_pool_original_currency"),
     )
+    # Audit records, from one collect: CRM016 for any agreement spanning more than
+    # one counterparty (Art. 195/205(a) — the offset itself applies) and, under the
+    # same-currency rule, CRM003 for a deposit pool that nets nothing.
+    if errors is not None:
+        _record_netting_audit(
+            exposures,
+            netting_pool,
+            positive_siblings,
+            perimeter_keys,
+            errors,
+            perimeter_is_agreement=perimeter_is_agreement,
+            same_currency_only=same_currency_only,
+        )
+    if not same_currency_only:
+        positive_siblings = positive_siblings.drop("_pool_original_currency")
 
-    # Match siblings to pools on the perimeter keys.
-    matched = positive_siblings.join(netting_pool, on=perimeter_keys, how="inner")
+    # Match siblings to pools on the perimeter keys (plus the denomination when
+    # netting is same-currency only).
+    matched = positive_siblings.join(netting_pool, on=sibling_keys, how="inner")
 
     # Total drawn EAD per pool for pro-rata allocation. CRR Art. 219 nets cash
     # against drawn loans, so the basis is the on-BS (drawn) portion, NOT
@@ -334,25 +373,51 @@ def generate_netting_collateral(
     return synthetic
 
 
-def _record_cross_counterparty_netting(
+def _record_netting_audit(
     exposures: pl.LazyFrame,
+    netting_pool: pl.LazyFrame,
+    positive_siblings: pl.LazyFrame,
+    perimeter_keys: list[str],
     errors: list[CalculationError],
+    *,
     perimeter_is_agreement: bool,
+    same_currency_only: bool,
 ) -> None:
-    """Emit one CRM016 warning per netting agreement that spans >1 counterparty.
+    """Emit the on-B/S netting audit records from ONE targeted collect.
+
+    CRM016 for every agreement spanning more than one counterparty (both
+    perimeter states), and — only under the same-currency rule — CRM003 for every
+    deposit pool that nets nothing because no loan under its perimeter shares its
+    denomination. Both are small offending-key frames (the accepted DQ-emission
+    idiom, P1.264), tagged and materialised in ONE collect so the generator keeps
+    the single eager site it had before the currency record existed.
+    """
+    queries = [_spanning_agreements(exposures).with_columns(pl.lit("CRM016").alias("_record"))]
+    if same_currency_only:
+        queries.append(
+            _unrecognised_currency_pools(
+                netting_pool, positive_siblings, perimeter_keys
+            ).with_columns(pl.lit("CRM003").alias("_record"))
+        )
+    records = pl.concat(queries, how="diagonal").collect()
+    # Partition in Python: an eager DataFrame.filter is itself a collect.
+    rows: dict[str, list[dict[str, Any]]] = {"CRM016": [], "CRM003": []}
+    for row in records.iter_rows(named=True):
+        rows[row["_record"]].append(row)
+    _append_cross_counterparty_warnings(rows["CRM016"], errors, perimeter_is_agreement)
+    _append_unrecognised_currency_warnings(rows["CRM003"], errors)
+
+
+def _spanning_agreements(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Agreements whose deposit/loan counterparty cannot be positively confirmed.
 
     The trigger is the same in both perimeter states: an agreement carrying both
-    a deposit and a positive loan whose counterparty cannot be positively
-    confirmed — more than one distinct counterparty, OR any null counterparty.
-    Only the WORDING varies. Under the agreement perimeter the offset IS applied
-    and the warning is the audit record that Art. 205(a) enforceability against
-    every party must be evidenced; with the Feature disabled the offset is
-    refused and the message says so. Targeted collect of the offending
-    agreements (the accepted DQ-emission idiom, P1.264).
+    a deposit and a positive loan with more than one distinct counterparty, OR
+    any null counterparty.
     """
     is_deposit = pl.col("drawn_amount") < 0
     is_positive_loan = (pl.col("exposure_type") == "loan") & (pl.col("on_bs_for_ead") > 0)
-    spanning = (
+    return (
         exposures.filter(
             pl.col("netting_agreement_reference").is_not_null() & (is_deposit | is_positive_loan)
         )
@@ -369,15 +434,48 @@ def _record_cross_counterparty_netting(
             & (pl.col("_n_positive") > 0)
         )
         .select("netting_agreement_reference", "_n_cp", "_has_null_cp")
-        .collect()
     )
+
+
+def _unrecognised_currency_pools(
+    netting_pool: pl.LazyFrame,
+    positive_siblings: pl.LazyFrame,
+    perimeter_keys: list[str],
+) -> pl.LazyFrame:
+    """Deposit pools with a loan under their perimeter but none in their currency.
+
+    Under the same-currency rule (CRR Art. 219) such a pool is not recognised at
+    all — the whole deposit balance gives no CRM benefit. Pools with no loan under
+    the perimeter are excluded: they had nothing to offset in either reading.
+    """
+    currency_keys = [*perimeter_keys, "_pool_original_currency"]
+    return (
+        netting_pool.join(
+            positive_siblings.select(perimeter_keys).unique(), on=perimeter_keys, how="semi"
+        )
+        .join(positive_siblings.select(currency_keys).unique(), on=currency_keys, how="anti")
+        .select("netting_agreement_reference", "_pool_original_currency", "netting_pool")
+    )
+
+
+def _append_cross_counterparty_warnings(
+    spanning: list[dict[str, Any]],
+    errors: list[CalculationError],
+    perimeter_is_agreement: bool,
+) -> None:
+    """One CRM016 per spanning agreement; only the WORDING varies by perimeter.
+
+    Under the agreement perimeter the offset IS applied and the warning is the
+    audit record that Art. 205(a) enforceability against every party must be
+    evidenced; with the Feature disabled the offset is refused and it says so.
+    """
     refused_tail = (
         "could not be confined to a single confirmed counterparty (cross-counterparty "
         "or null-counterparty rows present); on-balance-sheet netting is limited to "
         "reciprocal balances with one counterparty (Art. 195), so those offsets are "
         "disallowed."
     )
-    for row in spanning.iter_rows(named=True):
+    for row in spanning:
         agr = row.get("netting_agreement_reference")
         null_cp = " and an unconfirmed (null) counterparty" if row["_has_null_cp"] else ""
         tail = (
@@ -393,5 +491,27 @@ def _record_cross_counterparty_netting(
                 ERROR_CROSS_COUNTERPARTY_NETTING,
                 f"Netting agreement '{agr}' {tail}",
                 regulatory_reference="CRR Art. 195",
+            )
+        )
+
+
+def _append_unrecognised_currency_warnings(
+    unrecognised: list[dict[str, Any]],
+    errors: list[CalculationError],
+) -> None:
+    """One CRM003 per deposit pool that nets nothing for currency (CRR Art. 219):
+    a treatment that removes all of a protection's value says so."""
+    for row in unrecognised:
+        currency = row["_pool_original_currency"]
+        errors.append(
+            crm_warning(
+                ERROR_CURRENCY_MISMATCH,
+                f"Netting agreement '{row['netting_agreement_reference']}': deposits of "
+                f"{row['netting_pool']:,.2f} denominated in {currency} are not recognised as "
+                f"on-balance-sheet netting — no loan under the agreement is denominated in "
+                f"{currency}, and loans and deposits are treated as cash collateral only "
+                f"where they are denominated in the same currency (Feature "
+                f"on_bs_netting_same_currency_only).",
+                regulatory_reference="CRR Art. 219",
             )
         )

@@ -26,6 +26,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ERROR_CURRENCY_MISMATCH, CalculationError
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.collateral import apply_firb_supervisory_lgd_no_collateral
 from rwa_calc.engine.crm.netting import generate_netting_collateral
@@ -220,6 +221,71 @@ class TestGenerateNettingCollateral:
         df = result.collect()
         assert df.schema["liquidation_period_days"] == pl.Int32
         assert df["liquidation_period_days"].to_list() == [expected_days]
+
+    @pytest.mark.parametrize(
+        ("pack", "expected"),
+        [
+            # CRR Art. 219: cash collateral only for loans and deposits "denominated
+            # in the same currency" — the whole EUR pool protects the EUR loan, and
+            # the GBP loan is no part of the pro-rata denominator.
+            pytest.param(_PACK, {"LOAN_EUR": 200_000.0}, id="crr-same-currency-only"),
+            # PS1/26 Art. 219(2): a mismatch is adjusted, not refused — the pool is
+            # shared by drawn amount across both loans (600k : 400k).
+            pytest.param(
+                _B31_PACK,
+                {"LOAN_EUR": 120_000.0, "LOAN_GBP": 80_000.0},
+                id="b31-across-currencies",
+            ),
+        ],
+    )
+    def test_pool_allocation_follows_the_regime_currency_scope(
+        self, pack: ResolvedRulepack, expected: dict[str, float]
+    ) -> None:
+        """Which loans a deposit pool may protect is a regime Feature
+        (``on_bs_netting_same_currency_only``). Under CRR the denominator must be the
+        same-currency loans alone, or relief the rule grants is stranded on a loan it
+        cannot protect (matching on the agreement alone gave the EUR loan 120k)."""
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEP_EUR", "LOAN_EUR", "LOAN_GBP"],
+                "drawn_amount": [-200_000.0, 600_000.0, 400_000.0],
+                "netting_agreement_reference": ["AGR01"] * 3,
+                "parent_facility_reference": ["FAC001"] * 3,
+                "ead_gross": [0.0, 600_000.0, 400_000.0],
+                "currency": ["GBP"] * 3,
+                "original_currency": ["EUR", "EUR", "GBP"],
+            }
+        )
+        result = generate_netting_collateral(lf, pack=pack)
+        assert result is not None
+
+        df = result.collect()
+        allocation = dict(df.select("beneficiary_reference", "market_value").iter_rows())
+        assert allocation == pytest.approx(expected)
+
+    def test_unrecognised_cross_currency_deposit_raises_crm003(self) -> None:
+        """Under CRR a deposit whose currency no loan under the agreement shares nets
+        NOTHING; a treatment that removes all of a protection's value records it."""
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEP_EUR", "LOAN_GBP"],
+                "drawn_amount": [-200_000.0, 500_000.0],
+                "netting_agreement_reference": ["AGR01", "AGR01"],
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "ead_gross": [0.0, 500_000.0],
+                "currency": ["GBP", "GBP"],
+                "original_currency": ["EUR", "GBP"],
+            }
+        )
+        errors: list[CalculationError] = []
+
+        result = generate_netting_collateral(lf, errors, pack=_PACK)
+
+        assert result is not None
+        assert result.collect().height == 0
+        assert [e.code for e in errors] == [ERROR_CURRENCY_MISMATCH]
+        assert "'AGR01'" in errors[0].message
+        assert "EUR" in errors[0].message
 
     def test_netting_eligible_requires_reference(self) -> None:
         """Only loans with a netting_agreement_reference provide a netting pool."""

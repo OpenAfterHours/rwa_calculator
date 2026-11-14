@@ -289,6 +289,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Int64 `liquidation_period_days` or `issuer_cqs`. It casts the synthetic side
   to match instead. A table with a malformed column, such as a String
   `market_value`, is still dropped with its warning.
+- **CRR: on-balance-sheet netting is now recognised only between loans and
+  deposits denominated in the same currency (CRR Art. 219).** UK CRR Art. 219
+  treats netted loans and deposits as cash collateral only *"for those loans
+  and deposits ... which are denominated in the same currency"*. The engine had
+  matched every deposit to every loan under the agreement and relied on a
+  currency haircut instead. A new cited pack Feature,
+  `on_bs_netting_same_currency_only`, now governs this:
+  - **CRR (enabled):** a deposit protects only loans in its own denomination,
+    and only those loans form its pro-rata denominator.
+  - **Basel 3.1 (disabled):** PS1/26 Art. 219(2) adjusts a mismatch rather than
+    refusing it.
+
+  Measured, with base GBP and a 300 deposit against a 1,000 loan:
+  - A EUR deposit against a GBP loan now leaves EAD at **1,000**, where the
+    currency fix above alone gave 733.94.
+  - A GBP 200 + EUR 100 pool against a GBP loan nets **200**.
+
+  A deposit pool that no loan under its agreement shares a currency with now
+  raises `CRM003` (declared, never produced until now), because it loses its
+  whole value. **Direction: RWA-increasing under CRR**, though within a
+  mixed-currency agreement the same-currency denominator moves relief between
+  loans. Basel 3.1 is unchanged.
 - **A parallel batch (`rwa_calc.api.run_batch`) could hang forever on Linux
   under Python 3.13.** `api/batch.py` built its `ProcessPoolExecutor` on
   `multiprocessing`'s *default* start method, and that default depends on both

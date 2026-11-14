@@ -52,52 +52,47 @@ from tests.fixtures.netting_currency.netting_currency import (
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ERROR_CURRENCY_MISMATCH
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 REGIME = "crr"
 REPORTING_DATE = date(2026, 6, 30)
 
-# Rows whose correct figure needs the Art. 219 same-currency restriction.
-# Strict, so each flips to a hard failure the moment it starts passing early.
-_PENDING_SAME_CURRENCY = pytest.mark.xfail(
-    strict=True,
-    reason="CRR Art. 219 same-currency restriction not yet applied to netted deposits",
-)
-_NEEDS_SAME_CURRENCY: frozenset[str] = frozenset(
-    {"eur_gbp", "gbp_eur", "mixed_pool", "eur_gbp_sft", "eur_gbp_coll", "gbp_eur_coll"}
-)
 
-
-def _params(labels: tuple[str, ...]) -> list:
-    return [
-        pytest.param(label, marks=_PENDING_SAME_CURRENCY)
-        if label in _NEEDS_SAME_CURRENCY
-        else label
-        for label in labels
-    ]
-
-
-def _run(labels: tuple[str, ...]) -> pl.DataFrame:
+def _run(labels: tuple[str, ...]) -> AggregatedResultBundle:
     config = CalculationConfig.crr(
         reporting_date=REPORTING_DATE,
         permission_mode=PermissionMode.STANDARDISED,
     )
     bundle = build_netting_currency_bundle(labels, REPORTING_DATE)
-    result: AggregatedResultBundle = PipelineOrchestrator().run_with_data(bundle, config)
-    return result.results.collect()
+    return PipelineOrchestrator().run_with_data(bundle, config)
 
 
 @pytest.fixture(scope="module")
-def plain() -> pl.DataFrame:
+def plain_result() -> AggregatedResultBundle:
     """Scenarios in a bundle WITHOUT a collateral file."""
     return _run(PLAIN_LABELS)
 
 
 @pytest.fixture(scope="module")
-def with_collateral() -> pl.DataFrame:
+def with_collateral_result() -> AggregatedResultBundle:
     """The same pairs in a bundle that also carries an ordinary collateral file."""
     return _run(WITH_COLLATERAL_LABELS)
+
+
+@pytest.fixture(scope="module")
+def plain(plain_result: AggregatedResultBundle) -> pl.DataFrame:
+    return plain_result.results.collect()
+
+
+@pytest.fixture(scope="module")
+def with_collateral(with_collateral_result: AggregatedResultBundle) -> pl.DataFrame:
+    return with_collateral_result.results.collect()
+
+
+def _currency_warnings(*results: AggregatedResultBundle) -> list[str]:
+    return [e.message for r in results for e in r.errors if e.code == ERROR_CURRENCY_MISMATCH]
 
 
 def _row(results: pl.DataFrame, reference: str) -> dict:
@@ -139,7 +134,7 @@ class TestCRRNettingCurrencyAdequacy:
 class TestCRRNettingSameCurrencyOnly:
     """Art. 219: only a deposit in the loan's own currency is cash collateral for it."""
 
-    @pytest.mark.parametrize("label", _params(PLAIN_LABELS + WITH_COLLATERAL_LABELS))
+    @pytest.mark.parametrize("label", PLAIN_LABELS + WITH_COLLATERAL_LABELS)
     def test_loan_ead_reflects_the_deposit_denomination(
         self, request: pytest.FixtureRequest, label: str
     ) -> None:
@@ -147,7 +142,7 @@ class TestCRRNettingSameCurrencyOnly:
         row = _row(_frame(request, label), s.loan_ref)
         assert row["ead_final"] == pytest.approx(s.expected_ead(REGIME), rel=1e-9)
 
-    @pytest.mark.parametrize("label", _params(PLAIN_LABELS + WITH_COLLATERAL_LABELS))
+    @pytest.mark.parametrize("label", PLAIN_LABELS + WITH_COLLATERAL_LABELS)
     def test_loan_rwa_is_ead_at_the_unrated_corporate_weight(
         self, request: pytest.FixtureRequest, label: str
     ) -> None:
@@ -155,7 +150,7 @@ class TestCRRNettingSameCurrencyOnly:
         row = _row(_frame(request, label), s.loan_ref)
         assert row["rwa_final"] == pytest.approx(s.expected_ead(REGIME), rel=1e-9)
 
-    @pytest.mark.parametrize("label", _params(PLAIN_LABELS + WITH_COLLATERAL_LABELS))
+    @pytest.mark.parametrize("label", PLAIN_LABELS + WITH_COLLATERAL_LABELS)
     def test_only_same_currency_deposits_are_reported_as_netted(
         self, request: pytest.FixtureRequest, label: str
     ) -> None:
@@ -198,3 +193,31 @@ class TestCRRNettingSameCurrencyOnly:
         mismatched = _row(frame, SCENARIOS[mismatch].loan_ref)["ead_final"]
         matched = _row(frame, SCENARIOS[control].loan_ref)["ead_final"]
         assert mismatched > matched
+
+
+class TestCRRUnrecognisedDepositIsReported:
+    """A deposit Art. 219 does not recognise loses ALL its value, so it says so."""
+
+    def test_crm003_names_exactly_the_agreements_with_an_unrecognised_deposit(
+        self,
+        plain_result: AggregatedResultBundle,
+        with_collateral_result: AggregatedResultBundle,
+    ) -> None:
+        """One CRM003 per deposit pool whose currency no loan under the agreement
+        shares — the mismatched pairs and the EUR 100 in the mixed pool — and none
+        for a pool that nets in full."""
+        messages = _currency_warnings(plain_result, with_collateral_result)
+        named = {
+            label
+            for label, s in SCENARIOS.items()
+            if any(f"'{s.agreement_ref}'" in message for message in messages)
+        }
+        assert len(messages) == len(named)
+        assert named == {
+            "eur_gbp",
+            "gbp_eur",
+            "mixed_pool",
+            "eur_gbp_sft",
+            "eur_gbp_coll",
+            "gbp_eur_coll",
+        }

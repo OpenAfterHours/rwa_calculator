@@ -32,8 +32,8 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `e6294a6aa2f47757`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `cae257b83cf5f6ae`
+- **CRR** (`crr` @ 2026-01-01) — content hash `4dff1c383e4b0a89`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `e55b27a31950b2d5`
 
 ## Summary
 
@@ -135,7 +135,7 @@ Package version `0.3.34`. Resolved packs:
 | 216 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
-| 219 | 1 | 0 | 5 | 0 | 12 | MEDIUM |
+| 219 | 1 | 1 | 6 | 0 | 12 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
@@ -286,7 +286,7 @@ Package version `0.3.34`. Resolved packs:
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 219 | 0 | 1 | 1 | 0 | 9 | MEDIUM |
+| 219 | 0 | 2 | 1 | 0 | 9 | MEDIUM |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
 | 223 | 0 | 0 | 4 | 0 | 2 | UNCITED |

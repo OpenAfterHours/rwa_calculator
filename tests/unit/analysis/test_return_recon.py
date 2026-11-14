@@ -2838,6 +2838,29 @@ def test_differing_keys_counts_the_keys_that_differ_not_the_population(framework
         assert terms[name].keys == terms[name].differing_keys == 1, name
 
 
+def test_differing_keys_counts_any_nonzero_delta_however_small() -> None:
+    """A key differs exactly when its delta is not zero; there is no tolerance.
+
+    ``CellTerm`` documents the choice: saying two sides AGREE about an exposure
+    is saying their figures are equal. So float dust is a difference and either
+    signed zero is not. Pinned because the exact comparison is a SonarCloud
+    python:S1244 finding, and its usual remedy (``abs(delta) < eps``) would
+    quietly drop the 1e-15 key below and change what the page reports.
+    """
+    # Arrange — four measurement keys: both signed zeros, dust, and a real break.
+    pairs = tuple(
+        recon_module._KeyPair(key=key, ours=1.0, theirs=1.0, delta=delta, term="measurement")
+        for key, delta in (("zero", 0.0), ("neg_zero", -0.0), ("dust", 1e-15), ("break", -3.0))
+    )
+
+    # Act
+    terms = {term.name: term for term in recon_module._terms(pairs)}
+
+    # Assert
+    assert terms["measurement"].keys == 4
+    assert terms["measurement"].differing_keys == 2
+
+
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_the_term_filter_selects_exactly_that_terms_keys(framework: str) -> None:
     """``term=`` is what links a waterfall row to the exposures behind it."""

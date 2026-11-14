@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **Two vendored third-party agent skills, both MIT and copied verbatim.**
+  `brag-slim` (from `latent-spaces/brag`) turns this project or a website into
+  a short launch/demo video with music and share copy; its output directory
+  `brag-output*/` is git-ignored. `writing-for-agents` (from `mattpocock/skills`)
+  is a reference for writing skills, `CLAUDE.md` and other agent-facing
+  documents. Each folder under `.claude/skills/` carries the upstream `LICENSE`
+  and an `UPSTREAM.md` with the pinned commit and how to refresh it, and both
+  are mirrored into `.agents/skills/` for Codex. No calculation or reported
+  figure changes.
 - **The repository is now a uv workspace with a second, separately released
   package: `rwa-filer`.** The root is still the `rwa-calc` project and is also
   the workspace root, so `src/rwa_calc`, `tests/` and `scripts/` did not move;

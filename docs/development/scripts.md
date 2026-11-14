@@ -13,6 +13,7 @@ The project includes several scripts for setup, deployment, test data generation
 | `scripts/arch_check.py` | The numbered architectural invariants — the project's main structural gate | Every commit (pre-commit hook) and in CI |
 | `scripts/validator_reachability.py` | Census of which contracts-layer guards production can actually reach | When draining an `arch_check` check 20 failure |
 | `scripts/check_parked_registers.py` | Shrink-only ratchet over the declared registers of parked findings | Runs in-suite on every pytest run; by hand when adding or draining a known disagreement |
+| `scripts/export_check_catalogue.py` | Export every check the calculator runs, read from the code, as an Excel workbook | Before a review, an audit or a release; whenever someone asks what is checked |
 | `tests/fixtures/generate_all.py` | Regenerate test fixture parquet files | After modifying fixture definitions |
 | `workbooks/crr_expected_outputs/generate_outputs.py` | Generate CRR acceptance test golden files | After adding/changing CRR scenarios |
 | `loop.sh` | Iterative Claude agent development loop | Hands-off agent-driven development |
@@ -267,6 +268,28 @@ not finish fails. It needs Arelle and the taxonomy package, takes several
 minutes and about 3 GB per return, and so runs in its own workflow
 (`.github/workflows/referee-differential.yml`) and not in `ci.yml`. Its fast
 contract tests are in `tests/contracts/test_referee_differential.py`.
+
+## Review & Assurance
+
+### `scripts/export_check_catalogue.py` — The check catalogue
+
+Writes `dist/check-catalogue.xlsx`: one sheet per family of checks (error codes, input
+domains, the published template and filing rules, tie-outs) and per layer of test evidence
+(the oracle, the classification table, cell re-derivations, invariant tests, article
+coverage, a test inventory). There is also a front sheet with provenance and the banked
+coverage measures. It is read from the code at generation time, so re-running it is how it
+stays current.
+
+```bash
+uv run python scripts/export_check_catalogue.py
+```
+
+The output path is fixed (check 19); import `export_check_catalogue` to write elsewhere.
+`tests/contracts/test_check_catalogue.py` holds every sheet to its source. See
+[Check Catalogue](check-catalogue.md) for what each sheet holds and how its code-derived
+columns are worked out.
+
+---
 
 ## Test Data Scripts
 

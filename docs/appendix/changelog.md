@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **A check catalogue: every check the calculator runs, read from the code, as one Excel
+  workbook.** `uv run python scripts/export_check_catalogue.py` writes
+  `dist/check-catalogue.xlsx`. It has a sheet for each runtime family (error codes, input
+  column domains, the EBA and BoE template rules, the Bank's PRA001 filing rules, the
+  cross-template tie-outs) and for each layer of test evidence (the hand-derived oracle, the
+  classification decision table, the cell re-derivations, the invariant tests, per-article
+  coverage, an inventory of every test). A front sheet records provenance and the banked
+  coverage measures. Each runtime family states where it runs, worked out from the call sites
+  in `src/rwa_calc`. Each error code states whether anything raises it. Generating it
+  surfaced three things now visible in the workbook:
+  - the tie-outs in `reporting/tieouts.py` have no production call site;
+  - 17 declared error codes are never raised, among them CLS001–CLS003, SA001–SA003,
+    HIE001–HIE002 and RE001 (the comment in `engine/re_split/splitter.py` saying CRM emits
+    RE001 is stale);
+  - `api/validation.py` reports an invalid input path as VAL001 and a missing input file as
+    VAL002, the same codes `contracts/errors.py` gives a broken supervisory rule.
+
+  Held to its sources by `tests/contracts/test_check_catalogue.py`. See
+  [Check Catalogue](../development/check-catalogue.md). No calculation or reported figure
+  changes.
 - **Two vendored third-party agent skills, both MIT and copied verbatim.**
   `brag-slim` (from `latent-spaces/brag`) turns this project or a website into
   a short launch/demo video with music and share copy; its output directory

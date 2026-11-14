@@ -164,6 +164,7 @@ nav = [
     { "Citation Tracking" = "development/citation-tracking.md" },
     { "Citation Coverage Matrix" = "development/citation-matrix.md" },
     { "Confidence & Evidence Matrix" = "development/confidence-matrix.md" },
+    { "Check Catalogue" = "development/check-catalogue.md" },
     { "Module Dependencies" = "development/module-dependencies.md" },
     { "Workspace & Packages" = "development/workspace.md" },
     { "Change-Impact Report" = "development/impact-report.md" },

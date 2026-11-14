@@ -37,9 +37,10 @@ from __future__ import annotations
 import logging
 import re
 import xml.etree.ElementTree as ET
-import zipfile
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
+
+from rwa_filer.inputs import open_zip
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
@@ -137,9 +138,10 @@ def read_formula_reach(package: Path, rule_ids: Collection[str]) -> FormulaReach
     Raises:
         FormulaPackageError: no folder of the package holds a formula for any
             of the rules.
+        ValueError: ``package`` is not a zip archive.
     """
     wanted = set(rule_ids)
-    with zipfile.ZipFile(package) as archive:
+    with open_zip(package) as archive:
         folders: dict[str, dict[str, str]] = {}
         for name in archive.namelist():
             match = _FORMULA_FILE.search(name)

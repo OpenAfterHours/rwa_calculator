@@ -372,6 +372,16 @@ def test_one_file_located_as_two_assertions_is_refused(tmp_path: Path) -> None:
         TaxonomyModule.read(package, ENTRY_POINT)
 
 
+def test_a_package_that_is_not_a_zip_is_refused_by_name(tmp_path: Path) -> None:
+    # Arrange
+    package = tmp_path / "not-a-package.zip"
+    package.write_text("plain text, not a zip\n")
+
+    # Act / Assert
+    with pytest.raises(RefereePlanError, match=r"not-a-package\.zip is not a zip archive"):
+        TaxonomyModule.read(package, ENTRY_POINT)
+
+
 def test_an_arc_of_another_kind_is_not_a_precondition(tmp_path: Path) -> None:
     # Arrange — an arc with a different arcrole, between labels that mean nothing here.
     extra = (

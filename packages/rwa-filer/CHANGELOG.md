@@ -23,14 +23,22 @@ and released independently of `rwa-calc`; its release tags are prefixed
   equivalent. `--tolerance` for sources that state no accuracy;
   `--format json`. Library: `workflow.compare.compare_returns`,
   `ReturnComparison`; `workflow.explain`.
-- `rwa-filer dash` — Compare now opens with the comparison's findings, each
-  with what it points at, its rules and a link to its cells, and the cell list
-  filters by category and by finding. The comparison is worked out once per
-  pair per session.
 - `boe.engine.trace_rules` and `Evaluation` / `RuleTrace`: `evaluate_rules`'s
   results with every evaluation behind them: where it was made, whether it
   held, the comparison at the top of the rule, and the cells and number each
   side of it read, uncapped. `Failure.addresses` now comes from the same code.
+
+### Changed
+- `rwa-filer dash` — Compare now opens with the comparison's findings, each
+  with what it points at, its rules and a link to its cells, and the cell list
+  filters by category and by finding. The comparison is worked out once per
+  pair per session.
+
+---
+
+## [0.1.1] - 2026-11-14
+
+### Added
 - `rwa-filer dash` — a local web dashboard (`uvx rwa-filer@latest dash return.xbrl`).
   Open a return from a file or a path; see whether anything blocks submission
   with the counts behind the verdict, including how many rules ran and why the
@@ -98,6 +106,28 @@ and released independently of `rwa-calc`; its release tags are prefixed
     the sheet it looked for and what it found there.
   - `rulebook import` / `check` given a workbook whose data sheet is empty now
     report the required columns it lacks.
+- A file that is not what the command reads now ends in one line on stderr
+  that names it, and exit 1:
+  `rwa-filer: annotated.xlsx is not a readable .xlsx workbook`. Before,
+  `validate`, `build` and `diff` given such an `.xlsx`, `rules import` /
+  `check`, `rulebook import` / `check` and `taxonomy compile` ended in a
+  traceback: `zipfile.BadZipFile: File is not a zip file` for a file that is
+  not a zip, `InvalidFileException` for a `.csv`, `KeyError` for a zip that
+  holds no workbook. The same now holds for a `--taxonomy` or
+  `--taxonomy-package` that is not a zip, and for a taxonomy package with a
+  linkbase that is not well-formed XML. `taxonomy compile` takes three
+  inputs, and the message is what says which one is wrong. Called as a
+  library, `read_workbook`, `compile_pack`, `boe.importer.import_workbook` and
+  `rules.importer.extract` raise a `ValueError` naming the file in place of
+  those exceptions.
+- An output option naming a path that writing would certainly fail on is
+  refused in one line before the command does any work, and the file in the
+  way is left alone. That is an existing file where a directory is written
+  (`build`, `taxonomy compile` and `rulebook import --out`), a directory where
+  a file is (`template` and `rules import --out`, `validate --report`,
+  `build --ledger`), or a path beneath a file. Before, it ended in
+  `FileExistsError` or `IsADirectoryError`, for `taxonomy compile` only once
+  the whole compile had run.
 - `rwa-filer signoff` recorded a sign-off entry in the audit ledger before
   checking that the sign-off would be given, so a refused sign-off (for
   example, a not-submittable package without `--acknowledge-findings`) left

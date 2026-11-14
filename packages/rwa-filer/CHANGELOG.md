@@ -7,6 +7,30 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
+- `rwa-filer compare BASELINE CANDIDATE`: a return beside the one another
+  system produced, or beside the filing it replaces, and why they differ.
+  Every cell goes into one category: the same, within the rounding the files
+  state, a zero against a blank, in a template only one reports, or material.
+  The material differences are grouped into findings, each saying which return
+  the Bank's own rules point at, checked place by place in both files. A
+  finding is one of: differences that move together (with the row a figure
+  moved between, and the change that move implies where the rows are rates);
+  a cell that does not equal what a rule says it must, split into what its
+  components explain and what is in the cell alone; a column only one return
+  fills; zeros where the Bank expects nothing; or a rule that breaks in one
+  file only. Every material cell is in exactly one finding. Facts the reader
+  could not place are listed, never dropped. Exit `0` only when the two are
+  equivalent. `--tolerance` for sources that state no accuracy;
+  `--format json`. Library: `workflow.compare.compare_returns`,
+  `ReturnComparison`; `workflow.explain`.
+- `rwa-filer dash` — Compare now opens with the comparison's findings, each
+  with what it points at, its rules and a link to its cells, and the cell list
+  filters by category and by finding. The comparison is worked out once per
+  pair per session.
+- `boe.engine.trace_rules` and `Evaluation` / `RuleTrace`: `evaluate_rules`'s
+  results with every evaluation behind them: where it was made, whether it
+  held, the comparison at the top of the rule, and the cells and number each
+  side of it read, uncapped. `Failure.addresses` now comes from the same code.
 - `rwa-filer dash` — a local web dashboard (`uvx rwa-filer@latest dash return.xbrl`).
   Open a return from a file or a path; see whether anything blocks submission
   with the counts behind the verdict, including how many rules ran and why the

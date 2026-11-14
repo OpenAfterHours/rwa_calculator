@@ -12,6 +12,8 @@ Key responsibilities:
 - Hold, per return, the cell overrides a preparer has drafted and the filing
   packages built from it — the session's working state, which the files on
   disk (manifest, ledger, sign-off) then record for good.
+- Compare two opened returns once per pair: a comparison evaluates every rule
+  on both, and a page redrawn to filter its cells must not do that again.
 - Keep uploaded files under the one directory the session owns, under names a
   browser cannot steer outside it.
 - Be safe to call from the server's worker threads.
@@ -27,12 +29,14 @@ import logging
 import re
 import secrets
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from rwa_filer.readers import open_source
 from rwa_filer.validate.returns import validate_return
+from rwa_filer.workflow.compare import compare_returns
+from rwa_filer.workflow.explain import Names
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,6 +47,7 @@ if TYPE_CHECKING:
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.returns import ReturnValidation
     from rwa_filer.workflow.adjustments import Adjustment, AppliedAdjustment
+    from rwa_filer.workflow.compare import ReturnComparison
 
 #: A cell's full address: table, sheet, open-axis key, row, column.
 Cell = tuple[str, str | None, str | None, str, str]
@@ -120,6 +125,7 @@ class Workspace:
         self._returns: dict[str, OpenedReturn] = {}
         self._adjustments: dict[str, dict[Cell, Adjustment]] = {}
         self._builds: dict[str, list[FilingRecord]] = {}
+        self._comparisons: dict[tuple[str, str], ReturnComparison] = {}
         self._lock = threading.Lock()
 
     def open(
@@ -203,6 +209,32 @@ class Workspace:
         """Every build of a return, the first first."""
         with self._lock:
             return tuple(self._builds.get(return_id, ()))
+
+    # -- comparisons ----------------------------------------------------------------
+
+    def comparison(self, baseline: OpenedReturn, candidate: OpenedReturn) -> ReturnComparison:
+        """``candidate`` compared with ``baseline``, worked out once for the pair.
+
+        An opened return never changes — overrides are drafted beside it — so a
+        pair's comparison holds for the session.
+        """
+        key = (baseline.return_id, candidate.return_id)
+        with self._lock:
+            found = self._comparisons.get(key)
+        if found is not None:
+            return found
+        names = (
+            Names(baseline.name, candidate.name)
+            if baseline.name != candidate.name
+            else Names(f"{baseline.name} (earlier)", f"{candidate.name} (later)")
+        )
+        made = compare_returns(
+            replace(baseline.reading, pack=baseline.pack),
+            replace(candidate.reading, pack=candidate.pack),
+            names=names,
+        )
+        with self._lock:
+            return self._comparisons.setdefault(key, made)
 
 
 def safe_file_name(filename: str) -> str:

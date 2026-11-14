@@ -151,6 +151,8 @@ h3 { font-size: 13px; font-family: var(--font-sans); text-transform: uppercase; 
 .bar .fail.none { min-width: 0; }
 .legend { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; }
 .legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend a { display: inline-flex; align-items: center; gap: 8px; color: var(--fg); min-height: 32px; }
+.legend a[aria-current="true"] { color: var(--accent-text); font-weight: 600; }
 .reasons { display: flex; flex-wrap: wrap; gap: 12px; }
 .reason { flex: 1 1 260px; padding: 12px 14px; border-radius: 8px; background: var(--panel2); }
 
@@ -160,6 +162,7 @@ table.data th { text-align: left; color: var(--muted); font-size: 12px; text-tra
 table.data td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.data th.num, table.data td.num { text-align: right; }
 .code { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.category { white-space: nowrap; }
 
 .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; background: var(--panel2); }
 .seg a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 7px; color: var(--muted); font-size: 13px; font-weight: 600; }

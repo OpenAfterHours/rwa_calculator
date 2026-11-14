@@ -9,10 +9,11 @@ Key responsibilities:
   new one — an earlier filing, a resubmission — through the same form as the
   Open page.
 - Draw the comparison with every filter in the address, earlier and later
-  swappable.
+  swappable. The comparison itself is worked out once per pair, by the
+  workspace, so filtering never re-evaluates the rules.
 
 References:
-- rwa_filer.cli — ``rwa-filer diff``, which this shows
+- rwa_filer.cli — ``rwa-filer diff`` and ``rwa-filer compare``, which this shows
 """
 
 from __future__ import annotations
@@ -65,6 +66,9 @@ class ComparePages:
             kind=query.get("kind", ""),
             table=query.get("table", ""),
             page=page_number(query.get("page")),
+            category=query.get("category", ""),
+            finding=page_number(query.get("finding")) if query.get("finding") else 0,
+            comparison=self.context.workspace.comparison(earlier, later),
         )
         return self.context.render(
             request, "compare.html", current=opened, section="compare", view=view, swap=swap

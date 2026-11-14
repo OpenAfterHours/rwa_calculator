@@ -4,6 +4,9 @@ The rule engine — Bank of England validation rules over a canonical return.
 Pipeline position:
     CanonicalReturn + TaxonomyPack + rules  ->  evaluate_rules
         ->  RuleResult per rule (satisfied / unsatisfied evaluations, failures)
+    the same  ->  trace_rules  ->  RuleTrace (the results, and every evaluation
+        with the cells each side of the rule read — what a comparison of two
+        returns points at)
 
 Key responsibilities:
 - Evaluate each rule the way the taxonomy's formula is evaluated by the Bank's
@@ -271,6 +274,63 @@ def evaluate_rules(
     return results
 
 
+@dataclass(frozen=True)
+class Evaluation:
+    """One evaluation of one rule: where it was made, what it read, whether it held.
+
+    Attributes:
+        rule_id: The rule code.
+        place: The evaluation's place — one value per axis the rule iterates —
+            as ``(axis, value)`` pairs. The same rule at the same place in two
+            returns is the same check, which is how a comparison pairs them.
+        holds: Whether the evaluation was satisfied.
+        relation: The comparison at the top of the rule (``=``, ``<=``, ...);
+            ``None`` for a rule that is not one comparison.
+        left / right: The cells each side of that comparison read, in rule
+            order, a cell read at its default marked ``reported=False``. A rule
+            that is not one comparison has every cell on the left.
+        left_value / right_value: Each side's number, where it is one; ``None``
+            otherwise. Their difference is how far a broken equality is out.
+    """
+
+    rule_id: str
+    place: tuple[tuple[str, str], ...]
+    holds: bool
+    relation: str | None
+    left: tuple[CellAddress, ...]
+    right: tuple[CellAddress, ...] = ()
+    left_value: float | None = None
+    right_value: float | None = None
+
+
+@dataclass(frozen=True)
+class RuleTrace:
+    """``evaluate_rules``'s results, with every evaluation behind them."""
+
+    results: tuple[RuleResult, ...]
+    evaluations: tuple[Evaluation, ...]
+
+
+def trace_rules(
+    ret: CanonicalReturn,
+    pack: TaxonomyPack,
+    rules: Iterable[Rule],
+    *,
+    accuracy: Accuracy | None = None,
+) -> RuleTrace:
+    """Evaluate ``rules`` as ``evaluate_rules`` does, keeping every evaluation.
+
+    The results are exactly ``evaluate_rules``'s. Each evaluation the engine
+    made — satisfied or not, unlike ``RuleResult.failures``, which keeps the
+    first few unsatisfied ones — is kept with every cell it read, uncapped.
+    """
+    store = _Store(ret, pack, accuracy or Accuracy())
+    module = pack.info.module
+    evaluations: list[Evaluation] = []
+    results = tuple(_evaluate_rule(rule, store, module, evaluations) for rule in rules)
+    return RuleTrace(results=results, evaluations=tuple(evaluations))
+
+
 # =============================================================================
 # Private helpers — the return, indexed for evaluation
 # =============================================================================
@@ -534,7 +594,9 @@ class _Selector:
         return self.own_axes.get(kind, kind)
 
 
-def _evaluate_rule(rule: Rule, store: _Store, module: str) -> RuleResult:
+def _evaluate_rule(
+    rule: Rule, store: _Store, module: str, trace: list[Evaluation] | None = None
+) -> RuleResult:
     severity = rule.severity(module)
 
     def not_evaluated(reason: str, detail: str = "") -> RuleResult:
@@ -553,7 +615,7 @@ def _evaluate_rule(rule: Rule, store: _Store, module: str) -> RuleResult:
 
     try:
         evaluation = _Evaluation(rule, store)
-        satisfied, failures, unsatisfied = evaluation.run()
+        satisfied, failures, unsatisfied = evaluation.run(trace)
     except _Unsupported as unsupported:
         return not_evaluated(REASON_UNSUPPORTED, str(unsupported))
     except GrammarError as error:
@@ -615,7 +677,8 @@ class _Evaluation:
 
     # -- the evaluations -----------------------------------------------------
 
-    def run(self) -> tuple[int, list[Failure], int]:
+    def run(self, trace: list[Evaluation] | None = None) -> tuple[int, list[Failure], int]:
+        """Every evaluation: counted, the first failures kept, each traced if asked."""
         satisfied = unsatisfied = 0
         failures: list[Failure] = []
         seen: set[tuple[object, ...]] = set()
@@ -645,6 +708,8 @@ class _Evaluation:
                 verdict = self._value(self._rule.tree, values)
             except (_NotBound, ZeroDivisionError):
                 continue
+            if trace is not None:
+                trace.append(self._traced(env, holds=verdict is True))
             if verdict is True:
                 satisfied += 1
             else:
@@ -1094,20 +1159,16 @@ class _Evaluation:
                 continue
             seen.add(id(reference))
             selector = self._selectors[id(reference)]
-            table = selector.table.code
             label = _describe(reference)
+            addresses.update(dict.fromkeys(self._addresses(reference, env)))
             if reference.sequence:
                 keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
                 values = [selector.data.cells[key] for key in keys]
                 amounts = [item.value for value in values if (item := _amount(value)) is not None]
                 cells.append(f"{label} = {len(values)} cell(s), sum {_number(math.fsum(amounts))}")
-                addresses.update(dict.fromkeys(_address(table, key, reported=True) for key in keys))
                 continue
             key = self._cell(selector, env)
-            reported = key is not None and key in selector.data.cells
-            if key is not None:
-                addresses[_address(table, key, reported=reported)] = None
-            if reported:
+            if key is not None and key in selector.data.cells:
                 cells.append(f"{label} = {_show(selector.data.cells[key])}")
             else:
                 cells.append(f"{label} not reported")
@@ -1119,6 +1180,56 @@ class _Evaluation:
             cells=tuple(cells[:8]),
             addresses=tuple(addresses)[:MAX_ADDRESSES],
         )
+
+    def _traced(self, env: _Env, *, holds: bool) -> Evaluation:
+        """One evaluation as the trace keeps it: each side's cells and number."""
+        tree = self._rule.tree
+        values = dict(env)
+        if isinstance(tree, Binary) and tree.is_comparison:
+            return Evaluation(
+                rule_id=self._rule.rule_id,
+                place=env,
+                holds=holds,
+                relation=tree.operator,
+                left=self._side(tree.left, values),
+                right=self._side(tree.right, values),
+                left_value=self._figure(tree.left, values),
+                right_value=self._figure(tree.right, values),
+            )
+        return Evaluation(
+            rule_id=self._rule.rule_id,
+            place=env,
+            holds=holds,
+            relation=None,
+            left=self._side(tree, values),
+        )
+
+    def _side(self, node: Node, env: Mapping[str, str]) -> tuple[CellAddress, ...]:
+        """Every cell the references in ``node`` read at ``env``, once each, in rule order."""
+        found: dict[CellAddress, None] = {}
+        for reference in references(node):
+            found.update(dict.fromkeys(self._addresses(reference, env)))
+        return tuple(found)
+
+    def _addresses(self, reference: Reference, env: Mapping[str, str]) -> list[CellAddress]:
+        """The cells one reference reads at ``env``; a cell read at its default is unreported."""
+        selector = self._selectors[id(reference)]
+        table = selector.table.code
+        if reference.sequence:
+            keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
+            return [_address(table, key, reported=True) for key in keys]
+        key = self._cell(selector, env)
+        if key is None:
+            return []
+        return [_address(table, key, reported=key in selector.data.cells)]
+
+    def _figure(self, node: Node, env: Mapping[str, str]) -> float | None:
+        """``node``'s value as a number, or ``None`` where it is not one."""
+        try:
+            amount = _amount(self._value(node, env))
+        except (_NotBound, ZeroDivisionError):
+            return None
+        return None if amount is None else amount.value
 
 
 # =============================================================================

@@ -3676,3 +3676,137 @@ gate that shipped.
   SFT included.
 - **Lesson**: a fix recorded as a comment next to the one entry it bit is
   prose, and the next instance elsewhere in the nav had no reason to read it.
+
+## 2026-11-14 — Every rwa-calc release from 0.2.24 to 0.3.34 installed and could not import `rwa_calc.api`
+
+- **Defect**: in a clean environment, `uv add rwa-calc` (or `pip install
+  rwa-calc`) followed by `from rwa_calc.api import CreditRiskCalc` raised
+
+  ```
+  File ".../site-packages/rwa_calc/contracts/config.py", line 24, in <module>
+    from watchfire import cites
+  ModuleNotFoundError: No module named 'watchfire'
+  ```
+
+  and so did `rwa-ui`, including `uvx --from rwa-calc rwa-ui`. 79 modules under
+  `src/rwa_calc` import `watchfire` at module level for the `@cites` decorator;
+  `watchfire==0.3.1` was declared only in the `dev` extra and in
+  `[dependency-groups].dev`, neither of which a user's install includes.
+  `import rwa_calc` on its own succeeds — the package `__init__` reaches no module
+  that needs it — which is why a shallow smoke check passes. Reproduced in a fresh
+  `uv init --python 3.13` project against PyPI 0.3.34. **Scope**, measured from
+  PyPI's per-version metadata rather than inferred: 0.2.10–0.2.23 declared
+  `watchfire==0.3.1` unconditionally; **0.2.24 (2026-06-07) through 0.3.34
+  (2026-09-05) — 38 consecutive releases over three months — declared it only
+  under `extra == "dev"` / `"all"`**, while the 0.2.24 wheel already imported it
+  in 42 modules and 0.3.34 in 77. No figure was ever wrong; the package could not
+  produce one. This is total unavailability for anyone installing without the dev
+  extra, not a misstatement of capital.
+- **Rule**: not a regulatory escape. A wheel's users get exactly its unconditional
+  `Requires-Dist` entries (core metadata specification); extras and dependency
+  groups are opt-in and installed for no one by default.
+- **Origin**: `2888cad5` (2026-06-07, "chore(deps): update watchfire version in
+  pyproject.toml", body "Remove redundant watchfire dependency"), a manual commit
+  with no `[batch …]` footer, moved `watchfire==0.3.1` and `ty` out of
+  `[project].dependencies` into the `dev` extra; it shipped as 0.2.24 the same
+  day. Moving `ty` was right — nothing under `src/` imports it. Moving `watchfire`
+  was not — 42 modules did. The next commit to touch `pyproject.toml`,
+  `875127f5`, the same afternoon, met the identical `No module named 'watchfire'`
+  in `arch_check` after a plain `uv sync`, and fixed it by adding `watchfire` to
+  `[dependency-groups].dev`: for developers only.
+- **Escape class**: `no-gate-exists`. Nothing anywhere installed the rwa-calc
+  wheel. Every CI job, the dev-loop suite, `arch_check`, and `deploy.py`'s
+  pre-release test run execute in the workspace dev environment (`uv sync --extra
+  dev`, or the default-synced dev group), where `watchfire` is always present.
+  `deploy.py` and `publish.yml` did build the wheel, and checked its metadata
+  (`check_distribution.py`) and its rendering (`twine check`) — neither installs
+  it. The one job in the estate that runs a package where only its declared
+  dependencies exist, `rwa-filer (isolated)`, names this exact failure mode in its
+  own comment ("a dependency rwa-filer forgot to declare … would pass there and
+  fail only for a user who installed the wheel on its own"), and was built for the
+  workspace member only; the root package never had one. `gate-not-run` was
+  considered and rejected: that job never runs rwa-calc's code in any form, so
+  there was no catching gate to move earlier.
+- **Why every gate missed it**: the dev environment is a strict superset of a
+  user's, and every gate ran in the superset. A missing runtime dependency cannot
+  be expressed there — not by a thorough test, not by any test — so the class
+  was invisible by construction, not by oversight of a case. The general form was
+  already on record: the 2026-08-11 entry above says "the whole estate tests *the
+  source tree*, and this defect does not exist in the source tree. It exists only
+  in the artifact", and the gate built then read the artifact's metadata without
+  ever installing it. The symptom itself had appeared in this repository at least
+  twice and was both times read as a developer-environment problem: `875127f5`
+  on the day of the move, and the 2026-08-15 row of the `.claude/LESSONS.md`
+  Graduation ledger, where a commit from a worktree failed on `No module named
+  'watchfire'`. The error users got was in the project's own history, twice,
+  filed as tooling.
+- **Gate change**: `scripts/check_wheel_install.py`. It builds every workspace
+  wheel from the tree (`uv build --all-packages --wheel`), installs one into a
+  fresh environment on the floor of its `Requires-Python`, holding the wheel, its
+  unconditional dependencies, and the workspace wheels it declares taken from the
+  same build (so the gate measures this tree, not whatever PyPI holds), and then,
+  under `python -I` from a scratch directory:
+  imports **every module the wheel ships**; resolves every `console_scripts`
+  entry; runs the per-package `PROBES` (`from rwa_calc.api import CreditRiskCalc;
+  from rwa_calc.ui.app.main import create_app`, `rulepack-diff --help`,
+  `rwa-filer --version`); and serves `rwa-ui`'s `create_app` on a free loopback
+  port, requiring `GET /` and a static asset that page references to answer 200,
+  which also catches package data missing from the wheel. Each import probe
+  reports where the package came from, and a path outside the fresh environment
+  is a failure. Two shallower designs were measured and rejected: importing the
+  top-level package passes the broken wheel (above), and a `pkgutil.walk_packages`
+  walk of the installed package silently skips `rwa_calc/data/`, which has no
+  `__init__.py` and holds `schemas` and `column_spec` — so the module list is
+  read from the wheel's own file listing.
+
+  Wired in three places: a new `wheel-install` CI job (every push, both packages,
+  and deliberately no `uv sync` of its own), `publish.yml`'s build job before
+  upload, and `deploy.py`'s `build_release` / `build_member` after the build and
+  before anything is tagged. `tests/contracts/test_wheel_install_gate.py` drives
+  the probes on a hand-built wheel installed offline — a module importing an
+  undeclared distribution behind a clean `__init__` FAILS, the same wheel cleaned
+  PASSES, a module under a directory without `__init__.py` is still imported, a
+  wheel shipping nothing fails rather than passes — and asserts all three call
+  sites; `tests/contracts/test_release_coverage.py` fails until a new workspace
+  member has an entry in `PROBES`. Each was observed red under an isolating
+  mutation: probing only the top-level package (2 tests red), skipping the
+  `__init__`-less directory (1), dropping the gate from `build_release` (1),
+  commenting out the CI `run:` line (1). Code fix: `watchfire==0.3.1` moved to
+  `[project].dependencies`, removed from the dev extra and group, exact pin kept
+  because `@cites` raises `CitationParseError` at import time on a citation its
+  parser rejects.
+- **Verified red**: Step 4b route 1. The shipped gate, copied into a detached
+  worktree of the pre-fix commit `828849fa`, `python3
+  scripts/check_wheel_install.py --package rwa-calc`:
+
+  ```
+  rwa-calc: the wheel does not work from a clean install.
+    - import rwa_calc.analysis.comparison -> ModuleNotFoundError: No module named 'watchfire'
+    ...
+    - import rwa_calc.api -> ModuleNotFoundError: No module named 'watchfire'
+    ...
+    - console script rwa-ui = rwa_calc.ui.app.main:main -> ModuleNotFoundError: No module named 'watchfire'
+    - from rwa_calc.api import CreditRiskCalc; from rwa_calc.ui.app.main import create_app failed:
+    - the app from rwa_calc.ui.app.main:create_app exited with 1 before answering:
+  ```
+
+  Exit 1: 216 of the 266 shipped modules fail, every one on `watchfire`;
+  `rulepack-diff --help` passes, its module reaching no `@cites`. On the genuine
+  article as well: the same probes against the published
+  `rwa_calc-0.3.34-py3-none-any.whl`, installed from PyPI with its declared
+  dependencies, report 208 failed imports, all `watchfire`, and the same three
+  entry-point failures. After the fix, on this tree: `imported all 266 modules`,
+  `resolved console scripts: rulepack-diff, rwa-ui`, `served
+  rwa_calc.ui.app.main:create_app: GET / -> 200, GET /static/favicon.png -> 200`,
+  rwa-filer `imported all 43 modules`; exit 0 in about 9 seconds. Separately, the
+  real `rwa-ui` console script, run from a clean install of the built wheel,
+  answered `GET /` with 200 (`<title>RWA Calculator</title>`).
+- **Not closed by this entry**: 0.2.24–0.3.34 stay broken on PyPI until the next
+  release ships. The workaround is to add the dependency by hand (`uv add rwa-calc
+  watchfire==0.3.1`, or `uvx --from rwa-calc --with watchfire==0.3.1 rwa-ui`).
+  Whether to yank those releases is a maintainer decision and was not taken here.
+- **Lesson**: graduated to a check — the 2026-11-14 row of the `.claude/LESSONS.md`
+  Graduation ledger. The general form: *a gate whose environment is a superset
+  of the user's cannot see what the user lacks.* And `No module named X` from a
+  dev gate says what the package needs before it says anything about the dev
+  environment.

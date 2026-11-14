@@ -186,6 +186,12 @@ ROOT_PACKAGE = "rwa-calc"
 ROOT_PYPROJECT = "pyproject.toml"
 #: The root project's suite, run before an rwa-calc release changes anything.
 ROOT_TEST_COMMAND = ("uv", "run", "pytest", "-x", "-q")
+#: The clean-install gate, completed with ``--package <name>`` by
+#: ``wheel_install_command``. Every release runs it after its build: no other step
+#: installs the wheel, and every rwa-calc release from 0.2.24 to 0.3.34 passed the
+#: suite and the metadata gate while unable to import ``rwa_calc.api`` from a clean
+#: install (escape log, 2026-11-14).
+WHEEL_INSTALL_COMMAND = ("uv", "run", "python", "scripts/check_wheel_install.py", "--package")
 #: Every release mode refuses to push from a detached HEAD.
 DETACHED_HEAD_ERROR = "\nERROR: HEAD is detached. Check out the release branch and re-run."
 #: How much of a failed step's stdout ``run_command`` shows: its last lines, where
@@ -872,6 +878,8 @@ def print_dry_run(args: argparse.Namespace, new_version: str) -> None:
     print("  - Run: uv run python scripts/generate_citation_matrix.py")
     print("  - Run: uv sync")
     print("  - Run: uv build")
+    print("  - Run: uv run python scripts/check_distribution.py")
+    print(f"  - Run: {' '.join(wheel_install_command(ROOT_PACKAGE))}")
     if not args.no_git:
         print(f"  - git commit + git tag v{new_version}")
         if not args.no_push:
@@ -939,6 +947,11 @@ def update_versioned_files(new_version: str, current_version: str) -> None:
     update_changelog(new_version, current_version)
 
 
+def wheel_install_command(package: str) -> list[str]:
+    """The clean-install gate for one workspace package."""
+    return [*WHEEL_INSTALL_COMMAND, package]
+
+
 def build_release(new_version: str) -> bool:
     """Regenerate generated docs, sync the lockfile, and build the package."""
     if not run_command(
@@ -981,6 +994,14 @@ def build_release(new_version: str) -> bool:
     if not run_command(
         ["uv", "run", "python", "scripts/check_distribution.py"],
         "Checking distribution metadata",
+    ):
+        return False
+
+    # The suite ran in the dev environment, which holds the dev extra and group.
+    # Users get only [project].dependencies, so install the wheel where that is
+    # all there is and import it, before anything is tagged.
+    if not run_command(
+        wheel_install_command(ROOT_PACKAGE), "Checking the wheel works from a clean install"
     ):
         return False
 
@@ -1157,6 +1178,10 @@ def build_member(member: MemberRelease) -> bool:
         return False
     if not run_command(list(member.check_command), "Checking distribution metadata"):
         return False
+    if not run_command(
+        wheel_install_command(member.name), "Checking the wheel works from a clean install"
+    ):
+        return False
 
     print("\nBuilt packages:")
     for built in member_distributions(member):
@@ -1211,6 +1236,7 @@ def print_member_dry_run(args: argparse.Namespace, member: MemberRelease, new_ve
     print("  - Run: uv lock")
     print(f"  - Run: {' '.join(member.build_command)}")
     print(f"  - Run: {' '.join(member.check_command)}")
+    print(f"  - Run: {' '.join(wheel_install_command(member.name))}")
     if not args.no_git:
         print(f"  - git commit + git tag {tag}")
         if not args.no_push:

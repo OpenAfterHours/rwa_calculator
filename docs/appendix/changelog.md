@@ -442,6 +442,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **An installed `rwa-calc` can be imported again: `watchfire` is a runtime
+  dependency.** Every release from 0.2.24 to 0.3.34 installed cleanly and then
+  failed on first use — `from rwa_calc.api import CreditRiskCalc`, and `rwa-ui`
+  (including `uvx --from rwa-calc rwa-ui`), raised `ModuleNotFoundError: No
+  module named 'watchfire'`, under uv and pip alike. 79 modules import the
+  `@cites` citation decorator from `watchfire` at module level, and `watchfire`
+  was declared only in the `dev` extra and dependency group, which are not
+  installed for users; `import rwa_calc` on its own succeeded, which hid it from
+  a shallow check. `watchfire==0.3.1` is now in `[project].dependencies` and
+  nowhere else. It stays an exact pin: `@cites` parses its citation when the
+  module is imported, so a newer parser that rejected one of ours would break
+  the import the same way. Until this release reaches PyPI, a 0.3.34 install
+  works with the dependency added by hand — `uv add rwa-calc watchfire==0.3.1`,
+  or `uvx --from rwa-calc --with watchfire==0.3.1 rwa-ui`. No calculation or
+  reported figure moves.
+
+  **New gate: `scripts/check_wheel_install.py`.** It builds each workspace
+  package's wheel, installs it into a fresh environment on its `Requires-Python`
+  floor holding only its declared dependencies, then imports every module the
+  wheel ships, resolves every console script, and starts the `rwa-ui` app and
+  fetches its landing page. It runs in a new CI job, `Wheel Install (clean
+  environment)`, on every push, and again in `publish.yml` and
+  `scripts/deploy.py` before a release is tagged or uploaded; it failed on the
+  pre-fix tree with 216 of 266 modules unimportable. Pinned by
+  `tests/contracts/test_wheel_install_gate.py`. Postmortem:
+  [escape log, 2026-11-14](../development/escape-log.md).
 - **A release step that fails now shows why.** `scripts/deploy.py` reported a
   failed step from its stderr alone, and pytest writes its failure report to
   stdout, so a failed test run printed a blank `ERROR:` and named no test. A

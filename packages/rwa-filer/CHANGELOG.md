@@ -13,9 +13,10 @@ and released independently of `rwa-calc`; its release tags are prefixed
   rest did not; filter and search the rules, each with its expression and the
   cells it read; and see any table of the return on its template grid, laid out
   from the taxonomy pack, with cells the sheet does not accept hatched and every
-  cell a broken rule read outlined. Listens on `127.0.0.1` and answers only the
-  browser holding the session token the command prints. Dark by default, with a
-  light theme. Guide: `docs/rwa-filer/dash.md`.
+  cell a broken rule read outlined. Listens on `127.0.0.1` only — there is no
+  option to listen on a network, which plain HTTP would expose — and answers
+  only the browser holding the session token the command prints. Dark by
+  default, with a light theme. Guide: `docs/rwa-filer/dash.md`.
 - `boe.engine.CellAddress` and `Failure.addresses`: each failing evaluation now
   records where the cells it read are (table, sheet, open-axis key, row,
   column), up to `MAX_ADDRESSES`, and whether each was reported or read at its

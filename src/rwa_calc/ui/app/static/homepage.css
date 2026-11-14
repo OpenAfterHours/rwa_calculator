@@ -1,8 +1,9 @@
 /* =============================================================
    OpenAfterHours Docs — Landing page
    Source of truth for the Zensical landing-page design system.
-   Single-screen constellation hero; adapts to Material's light/
-   dark colour scheme toggle.
+   Single-screen constellation hero (the page scrolls where the hero
+   cannot fit one screen); adapts to Material's light/dark colour
+   scheme toggle.
    ============================================================= */
 
 /* Brand tokens (--oah-* palette, font stack, --ease-std) and the
@@ -10,13 +11,41 @@
    of truth, loaded before this file via zensical.toml extra_css.
    This file only consumes them via var(--oah-*). */
 
+/* ---------- Page scroll ------------------------------------- */
+/* The hero is designed to fit one screen, and on short viewports its
+   spacing tightens so that it still does on common laptop sizes (see
+   "Short viewports" below). Where it cannot fit (phones, very short
+   windows) the page scrolls vertically, so the rwa-filer strip, the
+   stats row and the footer are never out of reach. Horizontal overflow
+   stays hidden: the ground-shake in bear-constellation.js nudges the
+   hero sideways, and the phone tow-in starts the copy off-screen left.
+
+   Overflow is set on <html> so that <html>, not <body>, is the viewport
+   scroller; body's overflow then clips body's own box instead of
+   locking the viewport. The Zensical theme already sets
+   html { overflow-x: hidden }, but the app's landing page loads no
+   theme CSS, so the rule is stated here rather than relied on. */
+html:has(.landing-hero) {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+/* The docs theme renders an empty <main class="md-main"> after the hero,
+   outside any block main.html can override; its 1.5rem top margin would
+   add a strip of dead scroll below the footer. */
+.landing-hero ~ .md-main { display: none; }
+
 /* ---------- Landing hero tokens (always dark) --------------- */
 /* Landing is fixed dark by design; it does not participate in
    Material's light/dark toggle. Only docs pages respect the
    user's palette choice. */
 body:has(.landing-hero) {
   margin: 0;
+  /* Clip the ground-shake's few-pixel overshoot at the page edge. `clip`,
+     not `hidden`: it never makes body a second scroll container, so a
+     focus-scroll mid-shake cannot leave the page nudged out of place.
+     `hidden` is the fallback where `clip` is unsupported (Safari < 16). */
   overflow: hidden;
+  overflow: clip;
   background: var(--oah-slate-900);   /* match the hero edge so the ground-shake reveals nothing */
 
   --hero-bg-gradient: radial-gradient(ellipse at 50% 30%, #1a1f2e 0%, var(--oah-slate-900) 70%);
@@ -51,8 +80,10 @@ body:has(.landing-hero) {
 }
 .landing-hero {
   position: relative;
+  /* No max-height on the hero or .hero: min-height wins over max-height,
+     so on a tall screen a cap does nothing, and on a narrow one it could
+     only cut off content taller than the cap (overflow is hidden here). */
   min-height: 100svh;
-  max-height: 1100px;
   width: 100%;
   overflow: hidden;
   color: var(--hero-fg);
@@ -100,7 +131,6 @@ body:has(.landing-hero) {
   position: relative;
   z-index: 2;
   min-height: 100svh;
-  max-height: 1100px;
   display: grid;
   grid-template-rows: auto 1fr auto;
   padding: 28px 56px;
@@ -452,6 +482,29 @@ body:has(.landing-hero) {
     animation: bear-tow-in 5s var(--ease-std) both;
     will-change: transform, opacity;
   }
+}
+
+/* ---------- Short viewports --------------------------------- */
+/* At desktop widths the hero's natural spacing needs ~830px of height.
+   Below 860px, tighten the vertical rhythm and let the title scale with
+   height as well as width, so common laptop viewports (1366x768,
+   1280x720) still show the whole hero on one screen and small phones
+   bring the rwa-filer strip up towards the first screen. Anything still
+   too tall scrolls (see "Page scroll"). This block must stay after the
+   880px block: its padding-block overrides that block's .hero padding. */
+@media (max-height: 860px) {
+  .hero { padding-block: 20px; }
+  .hero-body { padding-block: 16px; }
+  .eyebrow { margin-bottom: 18px; }
+  .title {
+    font-size: clamp(40px, min(5.4vw, 8.5svh), 68px);
+    margin-bottom: 16px;
+  }
+  .lede { margin-bottom: 24px; }
+  .cta-row { margin-bottom: 20px; }
+  .install,
+  .install-row { margin-bottom: 24px; }
+  .meta-row { padding-top: 16px; }
 }
 
 @media (min-width: 1600px) {

@@ -406,6 +406,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **The landing page no longer cuts off its own bottom on short or narrow
+  screens.** The hero is meant to fit one screen, but its content is taller than
+  common laptop and phone viewports, so the stats row, the footer and, on small
+  phones, the rwa-filer strip sat below the fold. In the app the page could not
+  be scrolled to them at all. On a 320px-wide phone the footer was cut off
+  even on the docs site, where the page did scroll, because a 1100px height cap
+  clipped the hero. Below 860px of
+  viewport height the hero's spacing now tightens and the title scales with
+  height, so at 1366×768 and 1280×720 the whole hero fits one screen and at
+  360×740 the rwa-filer strip is on the first screen. Where the hero still
+  cannot fit, the page scrolls vertically. Horizontal overflow stays hidden, and
+  the polar bear's ground-shake still shows no page edge. The app's landing page
+  shares the stylesheet and gets the same fix. No calculation or reported figure
+  changed.
 - **A release step that fails now shows why.** `scripts/deploy.py` reported a
   failed step from its stderr alone, and pytest writes its failure report to
   stdout, so a failed test run printed a blank `ERROR:` and named no test. A

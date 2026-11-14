@@ -27,6 +27,8 @@ The `[Unreleased]` -> new-version promotion logic lives in
 - Regenerates the version-stamped generated docs pages
 - Syncs uv.lock
 - Builds the package and checks the distribution metadata
+- Installs the built wheel into a clean environment holding only its declared
+  dependencies and imports every module it ships (`check_wheel_install.py`)
 - Commits and tags the release
 - Pushes the branch and the release tag to `origin` in one atomic push
 - Creates the GitHub Release from the promoted changelog section, which runs

@@ -1687,6 +1687,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "rwa-filer" },
     { name = "uvicorn" },
+    { name = "watchfire" },
     { name = "xlsxwriter" },
     { name = "zensical" },
 ]
@@ -1706,7 +1707,6 @@ all = [
     { name = "ruff" },
     { name = "ty" },
     { name = "uvicorn" },
-    { name = "watchfire" },
     { name = "zensical" },
 ]
 dev = [
@@ -1720,7 +1720,6 @@ dev = [
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "ty" },
-    { name = "watchfire" },
     { name = "zensical" },
 ]
 ui = [
@@ -1742,7 +1741,6 @@ dev = [
     { name = "pytest-benchmark" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "watchfire" },
     { name = "zensical" },
 ]
 
@@ -1772,7 +1770,7 @@ requires-dist = [
     { name = "ty", marker = "extra == 'dev'" },
     { name = "uvicorn", specifier = ">=0.40.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.27.0" },
-    { name = "watchfire", marker = "extra == 'dev'", specifier = "==0.3.1" },
+    { name = "watchfire", specifier = "==0.3.1" },
     { name = "xlsxwriter", specifier = ">=3.1.0" },
     { name = "zensical", specifier = ">=0.0.30" },
     { name = "zensical", marker = "extra == 'dev'", specifier = ">=0.0.29" },
@@ -1792,7 +1790,6 @@ dev = [
     { name = "pytest-benchmark", specifier = ">=5.2.3" },
     { name = "pytest-xdist", specifier = ">=3.5.0" },
     { name = "ruff", specifier = ">=0.14.14" },
-    { name = "watchfire", specifier = "==0.3.1" },
     { name = "zensical", specifier = ">=0.0.29" },
 ]
 

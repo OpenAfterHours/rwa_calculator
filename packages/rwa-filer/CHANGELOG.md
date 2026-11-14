@@ -11,6 +11,10 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Changed
 - (Next release changes will go here)
+- The package metadata now carries a `Documentation` link, so the PyPI page
+  points to the rwa-filer docs
+  (<https://openafterhours.github.io/rwa_calculator/rwa-filer/>), and the README
+  links to them too.
 
 ---
 

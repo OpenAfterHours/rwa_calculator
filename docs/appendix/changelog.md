@@ -130,6 +130,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **DOCS — the site documents two packages, and now says so.** The navigation
+  is split into tabs: **RWA Calculator**, **rwa-filer**, **Development** and
+  **Appendix**. Each sidebar shows only its own tab's pages, and no page URL
+  changed. The [rwa-filer](../rwa-filer/index.md) tab also carries the
+  validation rule extracts page, which was under Appendix. The landing page
+  has an "rwa-filer" link at the top and an "rwa-filer" strip beside the
+  install command, and the [Overview](../overview.md) gains a "Two Packages"
+  table, a Key Features line and a Quick Navigation card. The root `README.md`
+  gains the same table, and its docs links, which pointed to
+  `openafterhours.club/rwa_calculator/` and returned 404, now point to the
+  published site. No calculation or reported figure changed.
 - **REPORTING — behaviour to expect where the Basel 3.1 output floor binds.**
   OF 02.00 column 0010 is now un-floored, as its data points require, while
   OF 08.01 still sums the post-floor RWEA (which carries the engine's pro-rata

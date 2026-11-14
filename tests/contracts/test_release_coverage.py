@@ -4,6 +4,7 @@ Contract tests: every workspace package is wired into the release flow.
 Pipeline position:
     pyproject.toml [tool.uv.workspace] -> scripts/deploy.py (MEMBER_RELEASES,
     --package all) -> scripts/check_distribution.py (DIST_DIRS)
+    -> scripts/check_wheel_install.py (PROBES)
     -> .github/workflows/publish.yml (tag prefix -> package)
 
 Key responsibilities:
@@ -16,9 +17,11 @@ Key responsibilities:
   and strips, for every member, not only the first.
 
 Adding a workspace package means: an entry in ``deploy.MEMBER_RELEASES``, one in
-``check_distribution.DIST_DIRS``, a case arm and a version-check step in
-publish.yml, and a trusted publisher on PyPI for the new project. The first
-three are asserted here; the last cannot be seen from the repository.
+``check_distribution.DIST_DIRS``, one in ``check_wheel_install.PROBES`` (without
+it the clean-install gate cannot be pointed at the package), a case arm and a
+version-check step in publish.yml, and a trusted publisher on PyPI for the new
+project. All but the last are asserted here; the last cannot be seen from the
+repository.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import check_distribution  # noqa: E402  # ty: ignore[unresolved-import]
+import check_wheel_install  # noqa: E402  # ty: ignore[unresolved-import]
 import deploy  # noqa: E402  # ty: ignore[unresolved-import]
 
 PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish.yml"
@@ -97,6 +101,18 @@ def test_release_all_puts_every_package_after_its_workspace_dependencies() -> No
 @pytest.mark.parametrize("name", [deploy.ROOT_PACKAGE, *sorted(MEMBERS)])
 def test_every_package_has_a_distribution_directory(name: str) -> None:
     assert name in check_distribution.DIST_DIRS
+
+
+@pytest.mark.parametrize("name", [deploy.ROOT_PACKAGE, *sorted(MEMBERS)])
+def test_every_package_has_clean_install_probes(name: str) -> None:
+    assert name in check_wheel_install.PROBES, (
+        f"{name} has no entry in scripts/check_wheel_install.py PROBES, so neither CI "
+        "nor its release installs its wheel where only its declared dependencies exist"
+    )
+
+
+def test_the_clean_install_probes_name_no_package_outside_the_workspace() -> None:
+    assert set(check_wheel_install.PROBES) <= {deploy.ROOT_PACKAGE, *MEMBERS}
 
 
 @pytest.mark.parametrize("name", [deploy.ROOT_PACKAGE, *sorted(MEMBERS)])

@@ -36,6 +36,16 @@ dependencies = [
     "jinja2>=3.1.0",  # server-rendered read-only UI (rwa-ui)
     "python-multipart>=0.0.9",  # FastAPI form parsing for the calculator
     "marimo>=0.19.6",
+    # `@cites` is imported at module level by ~80 modules under src/rwa_calc, so
+    # this is a RUNTIME dependency, not a dev tool — and its only home. From
+    # 0.2.24 to 0.3.34 it lived in the dev extra and dev group alone, and no
+    # installed wheel could import rwa_calc.api (escape log, 2026-11-14;
+    # scripts/check_wheel_install.py is the gate). Pinned EXACTLY: `@cites` parses
+    # its citation string at import time and raises CitationParseError, so a newer
+    # parser that rejected one of our citations would break `import rwa_calc` for
+    # every install the same way. It is also the version arch_check's
+    # `watchfire check` runs, against [tool.watchfire] rulebook_version below.
+    "watchfire==0.3.1",
     # The filing half of the workspace (packages/rwa-filer). Pinned to the MINOR
     # while it is 0.x: a breaking rwa-filer change is a minor bump there, so
     # rwa-calc never picks one up unannounced. Resolved from the workspace in
@@ -72,7 +82,6 @@ dev = [
     "zensical>=0.0.29",
     "mkdocstrings[python]>=0.24.0",
     "numpy>=1.26.0",  # For benchmark data generation only
-    "watchfire==0.3.1",
     "hypothesis>=6.100.0",  # tests/properties/ portfolio search + shrinking
 ]
 all = [
@@ -209,7 +218,6 @@ dev = [
     "pymupdf>=1.27.2.2",
     "ruff>=0.14.14",
     "curfew>=0.1.0",
-    "watchfire==0.3.1",  # arch_check pre-commit gate runs `watchfire check`; must be in the default-synced group
     "httpx>=0.27.0",  # FastAPI TestClient; the REST/UI test gate needs it in the default-synced group
     "psutil>=5.9.0",  # scripts/profile_memory.py peak-RSS sampling (degrades gracefully if absent)
     "openpyxl>=3.1.5",  # scripts/extract_validation_rules.py reads the EBA/BoE rule workbooks

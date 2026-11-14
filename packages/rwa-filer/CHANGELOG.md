@@ -7,7 +7,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- `rwa-filer dash` — a local web dashboard (`uvx rwa-filer dash return.xbrl`).
+- `rwa-filer dash` — a local web dashboard (`uvx rwa-filer@latest dash return.xbrl`).
   Open a return from a file or a path; see whether anything blocks submission
   with the counts behind the verdict, including how many rules ran and why the
   rest did not; filter and search the rules, each with its expression and the
@@ -35,6 +35,38 @@ and released independently of `rwa-calc`; its release tags are prefixed
   `rwa-filer validate` does — check it exists and is supported, require a
   header for a fact table, apply any header field given over the file's own.
   The command line and the dashboard share it.
+- `rwa_filer.extras.MissingExtraError`, raised by everything that opens a
+  workbook when openpyxl (the `excel` extra) is not installed. It is a
+  `ModuleNotFoundError`, so code that catches that keeps working.
+
+### Fixed
+- A command that needs the `excel` extra, run without it, now prints one line
+  on stderr and exits 1, as any other refusal does. Before, it ended in a
+  Python traceback with the useful message on its last line. This covers
+  `validate`, `build` and `diff` given an `.xlsx`, `template`,
+  `taxonomy compile`, `rulebook import` / `check` and `rules import` / `check`.
+  The message is now the same wherever a workbook is opened.
+  `rulebook import` / `check` used to fail with Python's bare
+  `No module named 'openpyxl'`, and `taxonomy compile` still gave
+  `pip install`. Each one now names the command to run:
+  `uvx "rwa-filer[excel]@latest" <command> ...`, or
+  `uv add "rwa-filer[excel]"` in a project.
+- **`taxonomy compile`, `rules import` / `check` and `rulebook import` / `check`
+  report an input they refuse in one line, not a traceback.** Each now ends as
+  every other refusal does: one `rwa-filer: ...` line on stderr saying what is
+  wrong with which file, and exit 1.
+  - `taxonomy compile` given a `--module` that the workbook's Table of Contents
+    does not list, or that the taxonomy package has no entry point for, names
+    the module.
+  - Given a `--dictionary` that is not a DPM dictionary, it names the sheets
+    that are missing.
+  - `rules import` / `check` given a workbook that is not laid out as the
+    `--publisher`'s rule workbook used to fail with `KeyError`, `StopIteration`
+    or `IndexError`. That covers another publisher's workbook, an empty rule
+    sheet, or one narrower than the columns a rule is read from. It now names
+    the sheet it looked for and what it found there.
+  - `rulebook import` / `check` given a workbook whose data sheet is empty now
+    report the required columns it lacks.
 
 ### Fixed
 - `rwa-filer signoff` recorded a sign-off entry in the audit ledger before
@@ -47,6 +79,19 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - Starlette, uvicorn, Jinja2 and python-multipart are now dependencies, for the
   dashboard. They are required rather than an extra so that `uvx rwa-filer dash`
   works as typed; nothing outside `rwa_filer.dash` imports them.
+- The README runs the command with `uvx rwa-filer@latest`, in place of
+  `pip install rwa-filer`. `@latest` makes each run check PyPI and use the
+  newest release, so a return is checked with the newest rules and taxonomy
+  without anyone having to notice that a release came out; a bare
+  `uvx rwa-filer` can keep running an older copy, including one installed with
+  `uv tool install`. Each example names the extra it needs
+  (`uvx "rwa-filer[excel]@latest" template ...`). `uv add rwa-filer` remains for
+  use as a library, and `uv tool install rwa-filer` (with `uv tool upgrade`) for
+  a machine that has to run it offline.
+- The messages shown when the `excel` or `arelle` extra is missing give the uv
+  commands (`uvx "rwa-filer[excel]@latest" ...`, or `uv add "rwa-filer[excel]"`
+  in a project) in place of `pip install`, which has no lasting environment to
+  install into when the command was run with `uvx`.
 - The package metadata now carries a `Documentation` link, so the PyPI page
   points to the rwa-filer docs
   (<https://openafterhours.github.io/rwa_calculator/rwa-filer/>), and the README

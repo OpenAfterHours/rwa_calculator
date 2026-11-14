@@ -314,7 +314,7 @@ falls back silently to a full recompute. The reuse pool persists under
 
 ```bash
 uv add rwa-calc
-rwa-ui                 # then open http://localhost:8000/reconciliation
+uv run rwa-ui          # then open http://localhost:8000/reconciliation
 ```
 
 The same flow is available over HTTP for programmatic callers via `POST /api/reconcile`

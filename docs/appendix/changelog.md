@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **Two vendored third-party agent skills, both MIT and copied verbatim.**
+  `brag-slim` (from `latent-spaces/brag`) turns this project or a website into
+  a short launch/demo video with music and share copy; its output directory
+  `brag-output*/` is git-ignored. `writing-for-agents` (from `mattpocock/skills`)
+  is a reference for writing skills, `CLAUDE.md` and other agent-facing
+  documents. Each folder under `.claude/skills/` carries the upstream `LICENSE`
+  and an `UPSTREAM.md` with the pinned commit and how to refresh it, and both
+  are mirrored into `.agents/skills/` for Codex. No calculation or reported
+  figure changes.
 - **The repository is now a uv workspace with a second, separately released
   package: `rwa-filer`.** The root is still the `rwa-calc` project and is also
   the workspace root, so `src/rwa_calc`, `tests/` and `scripts/` did not move;
@@ -130,6 +139,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **DOCS — installing and running both packages is shown with uv only.** The
+  `pip install` examples are gone from the [installation guide](../getting-started/installation.md),
+  the [quick start](../getting-started/quickstart.md), the
+  [interactive UI guide](../user-guide/interactive-ui.md), the
+  [rwa-filer page](../rwa-filer/index.md) and both READMEs. The installation guide
+  now starts with installing uv, creates a project with
+  `uv init --python 3.13` before `uv add rwa-calc` (so the project's Python
+  requirement does not block the install), shows `uvx --from rwa-calc rwa-ui` and
+  `uv tool install rwa-calc` for running the UI without a project, and replaces
+  the venv/`pip install -e .` source install, the `PYTHONPATH` workaround and the
+  `polars-lts-cpu` hint with `uv sync`, `uv run` and `uv add "polars[rtcompat]"`.
+  It also fixes instructions that would have failed: several pages ran a bare
+  `rwa-ui` straight after `uv add rwa-calc`, which installs into the project's
+  `.venv` and does not put `rwa-ui` on the `PATH`; they now run `uv run rwa-ui`.
+  The `ui` extra is described as what it now is (kept for compatibility; its
+  packages ship in the base install), and `rwa-filer` is run with
+  `uvx rwa-filer@latest`, so each run uses its newest release and with it the
+  newest rules and taxonomy; a bare `uvx rwa-filer`, or a copy installed with
+  `uv tool install`, can go on running an older one unnoticed. `uv add rwa-filer`
+  is shown for library use and `uv tool install rwa-filer` for machines that
+  run it offline. Docs only — no calculation impact.
 - **DOCS — the site documents two packages, and now says so.** The navigation
   is split into tabs: **RWA Calculator**, **rwa-filer**, **Development** and
   **Appendix**. Each sidebar shows only its own tab's pages, and no page URL
@@ -141,6 +171,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gains the same table, and its docs links, which pointed to
   `openafterhours.club/rwa_calculator/` and returned 404, now point to the
   published site. No calculation or reported figure changed.
+- **DOCS — the CRR Framework section has its own index page.**
+  [CRR Specifications](../specifications/crr/index.md) lists every CRR
+  specification and how it relates to Basel 3.1, as the Basel 3.1 Framework
+  section already did. Without it, Zensical had made the SA-CCR page that
+  section's index: "SA-CCR (Counterparty Credit Risk)" was missing from the
+  sidebar and the "CRR Framework" heading opened it. Both SA-CCR and SFT now
+  appear in the sidebar. A new contract test,
+  `tests/contracts/test_docs_nav_section_indexes.py`, fails any nav section
+  whose first `index.md` page is not its first entry. No page URL changed.
 - **REPORTING — behaviour to expect where the Basel 3.1 output floor binds.**
   OF 02.00 column 0010 is now un-floored, as its data points require, while
   OF 08.01 still sums the post-floor RWEA (which carries the engine's pro-rata
@@ -406,6 +445,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **An installed `rwa-calc` can be imported again: `watchfire` is a runtime
+  dependency.** Every release from 0.2.24 to 0.3.34 installed cleanly and then
+  failed on first use — `from rwa_calc.api import CreditRiskCalc`, and `rwa-ui`
+  (including `uvx --from rwa-calc rwa-ui`), raised `ModuleNotFoundError: No
+  module named 'watchfire'`, under uv and pip alike. 79 modules import the
+  `@cites` citation decorator from `watchfire` at module level, and `watchfire`
+  was declared only in the `dev` extra and dependency group, which are not
+  installed for users; `import rwa_calc` on its own succeeded, which hid it from
+  a shallow check. `watchfire==0.3.1` is now in `[project].dependencies` and
+  nowhere else. It stays an exact pin: `@cites` parses its citation when the
+  module is imported, so a newer parser that rejected one of ours would break
+  the import the same way. Until this release reaches PyPI, a 0.3.34 install
+  works with the dependency added by hand — `uv add rwa-calc watchfire==0.3.1`,
+  or `uvx --from rwa-calc --with watchfire==0.3.1 rwa-ui`. No calculation or
+  reported figure moves.
+
+  **New gate: `scripts/check_wheel_install.py`.** It builds each workspace
+  package's wheel, installs it into a fresh environment on its `Requires-Python`
+  floor holding only its declared dependencies, then imports every module the
+  wheel ships, resolves every console script, and starts the `rwa-ui` app and
+  fetches its landing page. It runs in a new CI job, `Wheel Install (clean
+  environment)`, on every push, and again in `publish.yml` and
+  `scripts/deploy.py` before a release is tagged or uploaded; it failed on the
+  pre-fix tree with 216 of 266 modules unimportable. Pinned by
+  `tests/contracts/test_wheel_install_gate.py`. Postmortem:
+  [escape log, 2026-11-14](../development/escape-log.md).
 - **A release step that fails now shows why.** `scripts/deploy.py` reported a
   failed step from its stderr alone, and pytest writes its failure report to
   stdout, so a failed test run printed a blank `ERROR:` and named no test. A

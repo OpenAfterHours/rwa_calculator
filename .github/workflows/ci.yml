@@ -203,6 +203,34 @@ jobs:
           sys.exit(1 if problems else 0)
           PY
 
+  wheel-install:
+    name: Wheel Install (clean environment)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      # Every other job shares the workspace DEV environment, where the dev extra
+      # and dependency group are installed, so a module that imports a dev-only
+      # distribution passes all of them. That is how every rwa-calc release from
+      # 0.2.24 to 0.3.34 shipped unable to import rwa_calc.api: `watchfire` (the
+      # `@cites` decorator, imported at module level by 79 modules) was declared
+      # only in the dev extra and group (docs/development/escape-log.md,
+      # 2026-11-14).
+      #
+      # This job deliberately installs NOTHING itself — no `uv sync`. The script
+      # builds every workspace wheel from this commit, installs each into a fresh
+      # environment on its Requires-Python floor holding only what the wheel
+      # declares, then imports every module the wheel ships, resolves every
+      # console script, and boots the `rwa-ui` app. It is stdlib-only, so the
+      # runner's own interpreter can drive it, and invoked as the script so the
+      # exit code is the gate's own. publish.yml and scripts/deploy.py run it
+      # again on the release itself.
+      - name: Install each wheel into a clean environment and import it
+        run: python scripts/check_wheel_install.py --package all
+
   benchmarks:
     name: Benchmarks
     runs-on: ubuntu-latest

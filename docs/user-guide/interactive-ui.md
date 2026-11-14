@@ -9,7 +9,7 @@ step is required and it bundles cleanly for local distribution.
 ## Prerequisites
 
 ```bash
-uv add rwa-calc      # or: pip install rwa-calc
+uv add rwa-calc
 ```
 
 The UI dependencies (FastAPI, Uvicorn, Jinja) ship with the base package — no
@@ -19,10 +19,10 @@ extra is required.
 
 ## Starting the UI server
 
-=== "Installed from PyPI"
+=== "In your uv project"
 
     ```bash
-    rwa-ui
+    uv run rwa-ui
     ```
 
 === "From source"
@@ -30,6 +30,12 @@ extra is required.
     ```bash
     uv run rwa-ui
     # or: uv run python -m rwa_calc.ui.app.main
+    ```
+
+=== "Without a project"
+
+    ```bash
+    uvx --from rwa-calc rwa-ui
     ```
 
 The server starts on [http://localhost:8000](http://localhost:8000) and opens

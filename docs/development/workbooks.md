@@ -20,8 +20,8 @@ reconciliation) is a server-rendered FastAPI + Jinja app at `rwa_calc.ui.app` (t
 [Interactive UI Guide](../user-guide/interactive-ui.md) for full coverage.
 
 ```bash
-rwa-ui            # installed from PyPI
-uv run rwa-ui     # from source
+uv run rwa-ui                # in a uv project, or from source
+uvx --from rwa-calc rwa-ui   # without a project
 ```
 
 ---

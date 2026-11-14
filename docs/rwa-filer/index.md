@@ -8,8 +8,18 @@ returns it generates; any other system that can produce template-level figures
 can use it the same way.
 
 ```bash
-pip install rwa-filer
+# As a command on your PATH
+uv tool install rwa-filer
+
+# Or as a library in a uv project
+uv add rwa-filer
 ```
+
+The command examples on this page call `rwa-filer` as `uv tool install` puts it on
+your `PATH`. In a uv project, run them through the project's environment instead
+(`uv run rwa-filer validate ...`); to run one once without installing anything, use
+`uvx rwa-filer validate ...`. Extras go in quotes, so the shell leaves the brackets
+alone: `uv tool install "rwa-filer[excel]"`.
 
 !!! warning "The regulator's validation is authoritative"
     A clean result from `rwa-filer` is evidence that a return is well-formed. It
@@ -378,10 +388,14 @@ about the figures, not about the file, and does not change the exit code.
 `--no-compare` reports Arelle alone. `--rules REGEX` runs a subset.
 
 Arelle is optional and is never imported: it is run as a separate process.
-Install it with `pip install "rwa-filer[arelle]"`, or keep it in an environment
-of its own and name that interpreter with `--arelle-python` or the
-`RWA_FILER_ARELLE_PYTHON` variable. The taxonomy package is the zip the Bank
-publishes; it is not redistributed with `rwa-filer`.
+Install it beside `rwa-filer` with `uv tool install "rwa-filer[arelle]"` (or
+`uv add "rwa-filer[arelle]"` in a project), or keep it in an environment of its
+own and name that interpreter with `--arelle-python` or the
+`RWA_FILER_ARELLE_PYTHON` variable. `uv tool install arelle-release` makes such an
+environment; its interpreter is under the directory `uv tool dir` prints, at
+`arelle-release/bin/python` (`arelle-release\Scripts\python.exe` on Windows).
+The taxonomy package is the zip the Bank publishes; it is not redistributed with
+`rwa-filer`.
 
 A large module is slow and heavy. PRA001 is 741 MB of taxonomy XML, so the
 referee trims the entry point to the rules the file can trigger and runs them

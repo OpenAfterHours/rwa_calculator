@@ -7,6 +7,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.1] - 2026-11-14
+
+### Added
 - `rwa-filer dash` — a local web dashboard (`uvx rwa-filer@latest dash return.xbrl`).
   Open a return from a file or a path; see whether anything blocks submission
   with the counts behind the verdict, including how many rules ran and why the

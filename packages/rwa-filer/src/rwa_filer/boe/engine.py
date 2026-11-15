@@ -120,6 +120,12 @@ REASON_UNKNOWN_TABLE: Final = "table_not_in_taxonomy"
 #: The rule does not parse, or uses something the engine does not implement.
 REASON_UNSUPPORTED: Final = "unsupported"
 
+#: Where the ``decimals`` a numeric fact is compared at came from: the fact's
+#: own, the run's ``Accuracy`` for its data type, or an integer's unit.
+DECIMALS_STATED: Final = "stated"
+DECIMALS_ACCURACY: Final = "accuracy"
+DECIMALS_INTEGER: Final = "integer"
+
 #: Failing evaluations recorded per rule.
 MAX_FAILURES: Final = 5
 #: Cell addresses recorded per failing evaluation. A summed sequence can read
@@ -291,6 +297,12 @@ class Evaluation:
             that is not one comparison has every cell on the left.
         left_value / right_value: Each side's number, where it is one; ``None``
             otherwise. Their difference is how far a broken equality is out.
+        comparisons: Every comparison the evaluation executed, in the order the
+            engine executed it — with each operand's value and allowance, the
+            cells it read and the cells it read at their default. ``and`` /
+            ``or`` stop at the first operand that decides them, and a
+            conditional runs one branch, so a comparison never reached is not
+            here.
     """
 
     rule_id: str
@@ -301,14 +313,20 @@ class Evaluation:
     right: tuple[CellAddress, ...] = ()
     left_value: float | None = None
     right_value: float | None = None
+    comparisons: tuple[Comparison, ...] = ()
 
 
 @dataclass(frozen=True)
 class RuleTrace:
-    """``evaluate_rules``'s results, with every evaluation behind them."""
+    """``evaluate_rules``'s results, with every evaluation behind them.
+
+    ``cells`` holds every reported cell an evaluation read, once, with the
+    accuracy its comparisons allowed for.
+    """
 
     results: tuple[RuleResult, ...]
     evaluations: tuple[Evaluation, ...]
+    cells: Mapping[CellAddress, CellFact] = field(default_factory=dict)
 
 
 def trace_rules(
@@ -327,8 +345,130 @@ def trace_rules(
     store = _Store(ret, pack, accuracy or Accuracy())
     module = pack.info.module
     evaluations: list[Evaluation] = []
-    results = tuple(_evaluate_rule(rule, store, module, evaluations) for rule in rules)
-    return RuleTrace(results=results, evaluations=tuple(evaluations))
+    cells: dict[CellAddress, CellFact] = {}
+    results = tuple(_evaluate_rule(rule, store, module, evaluations, cells) for rule in rules)
+    return RuleTrace(results=results, evaluations=tuple(evaluations), cells=cells)
+
+
+@dataclass(frozen=True)
+class DefaultedCell:
+    """A cell a reference read at its default, because the return leaves it empty.
+
+    Attributes:
+        reference: The reference as the rule writes it, e.g. ``C01.00.01.01 r0080 c0010``.
+        default: The kind of default (``zero``, ``false``, ``empty``, ``member``,
+            ``string``, ``date``) — the reference's ``dv``.
+        default_value: The member, text or date for a default that names one.
+        address: The cell, where the reference names exactly one; ``None`` for
+            a sequence, which has no cell to name when it is empty.
+    """
+
+    reference: str
+    default: str
+    default_value: str | None = None
+    address: CellAddress | None = None
+
+
+@dataclass(frozen=True)
+class Operand:
+    """One side of a comparison, as the engine compared it.
+
+    Attributes:
+        value: The side's value — a number, text or a boolean; ``None`` where
+            it has none (an empty sequence, or one of several values).
+        allowance: Its rounding allowance as the engine propagated it: a
+            fact's ``10^(-decimals) / 2``, summed over ``i+``, and so on. Zero
+            for a literal, a default, or arithmetic without the ``i`` prefix.
+        cells: The reported cells it read.
+        defaulted: The cells it read at their default.
+    """
+
+    value: float | str | bool | None
+    allowance: float
+    cells: tuple[CellAddress, ...] = ()
+    defaulted: tuple[DefaultedCell, ...] = ()
+
+
+@dataclass(frozen=True)
+class Comparison:
+    """One comparison an evaluation executed, and why it held or did not.
+
+    With numbers on both sides, ``difference`` is ``left - right`` and
+    ``tolerance`` is what the comparison allowed for: both operands'
+    allowances with the ``i`` prefix, zero without it. Then ``=`` holds iff
+    ``|difference| <= tolerance``; ``!=`` iff ``|difference| > tolerance``;
+    ``<=`` iff ``difference <= tolerance``; ``<`` iff ``difference < tolerance``;
+    ``>=`` iff ``difference >= -tolerance``; ``>`` iff ``difference > -tolerance``.
+    Equivalently: each side is the interval ``value +/- allowance``, and ``i=``
+    holds when the two overlap.
+
+    Attributes:
+        operator: ``=``, ``!=``, ``<=``, ``<``, ``>=`` or ``>``.
+        interval: The ``i`` prefix.
+        left / right: The two operands.
+        difference: ``left - right`` where both are numbers; ``None`` otherwise.
+        tolerance: See above; zero where the operands are not both numbers.
+        excess: How far the difference is beyond the bound the operator sets
+            — zero when it holds, and zero for a strict comparison that fails
+            exactly on its bound. ``None`` for ``!=`` and for non-numbers.
+        holds: Whether the comparison held.
+        branch: Where in the rule it was executed: ``rule`` or ``where``, then
+            ``if`` / ``then`` / ``else`` for each conditional entered, joined
+            by ``/`` (``rule/then``).
+    """
+
+    operator: str
+    interval: bool
+    left: Operand
+    right: Operand
+    difference: float | None
+    tolerance: float
+    excess: float | None
+    holds: bool
+    branch: str
+
+
+@dataclass(frozen=True)
+class CellFact:
+    """A reported cell an evaluation read, and the accuracy it was compared at.
+
+    Attributes:
+        address: The cell.
+        datapoint: The index of the data point it reports, in the pack.
+        metric: The data point's metric.
+        data_type: The metric's DPM type.
+        value: What the rule language read: a number, text or a boolean.
+        decimals: The ``decimals`` a numeric fact was compared at; ``None``
+            for a fact that is not a number.
+        decimals_source: ``stated``, ``accuracy`` or ``integer`` (see the
+            ``DECIMALS_*`` constants); empty for a fact that is not a number.
+        allowance: ``10^(-decimals) / 2``, or zero for a figure stated exact.
+    """
+
+    address: CellAddress
+    datapoint: int
+    metric: str
+    data_type: str
+    value: float | str | bool | None
+    decimals: int | None
+    decimals_source: str
+    allowance: float
+
+
+def effective_decimals(decimals: object, data_type: str, accuracy: Accuracy) -> tuple[int, str]:
+    """The ``decimals`` a numeric fact is compared at, and where it came from.
+
+    A fact that states its own is compared at that. One that does not takes the
+    run's ``accuracy`` for its type; an integer is exact to the unit. THE one
+    implementation: the rounding allowance and a report of it both read this.
+    """
+    if isinstance(decimals, int):
+        return decimals, DECIMALS_STATED
+    if data_type == "monetary":
+        return accuracy.monetary_decimals, DECIMALS_ACCURACY
+    if data_type == "integer":
+        return 0, DECIMALS_INTEGER
+    return accuracy.percentage_decimals, DECIMALS_ACCURACY
 
 
 # =============================================================================
@@ -357,6 +497,8 @@ class _TableData:
     #: The data point each reported cell holds. Two cells of one data point —
     #: some figures are shown twice — are ONE fact to the gateway.
     points: dict[_CellKey, int] = field(default_factory=dict)
+    #: The ``decimals`` each reported cell states, where it states one.
+    decimals: dict[_CellKey, int] = field(default_factory=dict)
     by_row_column: dict[tuple[str, str], list[_CellKey]] = field(default_factory=dict)
     by_column: dict[str, list[_CellKey]] = field(default_factory=dict)
     by_row: dict[str, list[_CellKey]] = field(default_factory=dict)
@@ -370,9 +512,11 @@ class _TableData:
     #: default — what a formula that closes a dimension turns away.
     carried: dict[int, frozenset[str]] = field(default_factory=dict)
 
-    def add(self, key: _CellKey, value: object, point: int) -> None:
+    def add(self, key: _CellKey, value: object, point: int, decimals: object = None) -> None:
         self.cells[key] = value
         self.points[key] = point
+        if isinstance(decimals, int):
+            self.decimals[key] = decimals
         _sheet, _member, row, column = key
         self.by_row_column.setdefault((row, column), []).append(key)
         self.by_column.setdefault(column, []).append(key)
@@ -384,6 +528,7 @@ class _Store:
 
     def __init__(self, ret: CanonicalReturn, pack: TaxonomyPack, accuracy: Accuracy) -> None:
         self.pack = pack
+        self.accuracy = accuracy
         self.reported = {code for code, filed in filing_indicators(ret, pack).items() if filed}
         self.tables: dict[str, _TableData] = {}
         types = [
@@ -428,7 +573,7 @@ class _Store:
                 continue
             key = (row["sheet"], self._member(table, row["open_key"]), row["row"], row["column"])
             holder = self._data(table)
-            holder.add(key, value, number)
+            holder.add(key, value, number, row["decimals"])
             if number not in holder.carried:
                 holder.carried[number] = frozenset(
                     dimension
@@ -441,6 +586,21 @@ class _Store:
         if table not in self.pack.tables:
             return None
         return self._data(self.pack.tables[table])
+
+    def fact(self, data: _TableData, key: _CellKey, address: CellAddress) -> CellFact:
+        """A reported cell as the evidence records it."""
+        point = data.points[key]
+        metric = self.pack.datapoints[point].metric
+        definition = self.pack.metrics.get(metric)
+        data_type = definition.data_type if definition is not None else ""
+        value = data.cells[key]
+        if isinstance(value, _Amount):
+            decimals, source = effective_decimals(data.decimals.get(key), data_type, self.accuracy)
+            return CellFact(
+                address, point, metric, data_type, value.value, decimals, source, value.allowance
+            )
+        shown = value if isinstance(value, (str, bool)) else None
+        return CellFact(address, point, metric, data_type, shown, None, "", 0.0)
 
     def is_reported(self, table: str) -> bool:
         definition = self.pack.tables.get(table)
@@ -539,16 +699,10 @@ def _typed(
 
 def _allowance(decimals: object, data_type: str, accuracy: Accuracy) -> float:
     """``10^(-decimals) / 2`` — zero for a figure stated to be exact."""
-    if not isinstance(decimals, int):
-        if data_type == "monetary":
-            decimals = accuracy.monetary_decimals
-        elif data_type == "integer":
-            decimals = 0
-        else:
-            decimals = accuracy.percentage_decimals
-    if decimals >= DECIMALS_EXACT:
+    effective, _source = effective_decimals(decimals, data_type, accuracy)
+    if effective >= DECIMALS_EXACT:
         return 0.0
-    return 10.0 ** (-decimals) / 2.0
+    return 10.0 ** (-effective) / 2.0
 
 
 # =============================================================================
@@ -595,7 +749,11 @@ class _Selector:
 
 
 def _evaluate_rule(
-    rule: Rule, store: _Store, module: str, trace: list[Evaluation] | None = None
+    rule: Rule,
+    store: _Store,
+    module: str,
+    trace: list[Evaluation] | None = None,
+    cells: dict[CellAddress, CellFact] | None = None,
 ) -> RuleResult:
     severity = rule.severity(module)
 
@@ -614,7 +772,7 @@ def _evaluate_rule(
         return not_evaluated(REASON_NOT_REPORTED, ", ".join(silent))
 
     try:
-        evaluation = _Evaluation(rule, store)
+        evaluation = _Evaluation(rule, store, cells)
         satisfied, failures, unsatisfied = evaluation.run(trace)
     except _Unsupported as unsupported:
         return not_evaluated(REASON_UNSUPPORTED, str(unsupported))
@@ -650,9 +808,16 @@ def _evaluate_rule(
 class _Evaluation:
     """One rule against one return: its selectors, its evaluations, its verdicts."""
 
-    def __init__(self, rule: Rule, store: _Store) -> None:
+    def __init__(
+        self, rule: Rule, store: _Store, cells: dict[CellAddress, CellFact] | None = None
+    ) -> None:
         self._rule = rule
         self._store = store
+        #: Tracing only: the reported cells read so far, and the comparisons
+        #: the current evaluation has executed and where in the rule.
+        self._cells_out = cells
+        self._log: list[Comparison] | None = None
+        self._branch: list[str] = []
         self._aliases = _key_aliases(rule.joins)
         self._selectors: dict[int, _Selector] = {}
         scope = {group.table: group for group in rule.scope_groups}
@@ -683,11 +848,16 @@ class _Evaluation:
         failures: list[Failure] = []
         seen: set[tuple[object, ...]] = set()
         for env in self._environments():
+            if trace is not None:
+                self._log = []
             holds = self._verdict(env, seen)
+            # Stop logging before anything re-reads the rule's sides to report
+            # them: the log is what the verdict itself executed.
+            executed, self._log = tuple(self._log or ()), None
             if holds is None:
                 continue
             if trace is not None:
-                trace.append(self._traced(env, holds=holds))
+                trace.append(self._traced(env, holds=holds, comparisons=executed))
             if holds:
                 satisfied += 1
                 continue
@@ -717,10 +887,10 @@ class _Evaluation:
         try:
             if (
                 self._rule.where_tree is not None
-                and self._value(self._rule.where_tree, values) is not True
+                and self._branched("where", self._rule.where_tree, values) is not True
             ):
                 return None
-            return self._value(self._rule.tree, values) is True
+            return self._branched("rule", self._rule.tree, values) is True
         except (_NotBound, ZeroDivisionError):
             return None
 
@@ -1066,13 +1236,16 @@ class _Evaluation:
                 return all(self._value(operand, env) is True for operand in node.operands)
             return any(self._value(operand, env) is True for operand in node.operands)
         if isinstance(node, Conditional):
-            if self._value(node.condition, env) is True:
-                return self._value(node.then, env)
-            return True if node.otherwise is None else self._value(node.otherwise, env)
+            if self._branched("if", node.condition, env) is True:
+                return self._branched("then", node.then, env)
+            return True if node.otherwise is None else self._branched("else", node.otherwise, env)
         if isinstance(node, Binary):
             left, right = self._value(node.left, env), self._value(node.right, env)
             if node.is_comparison:
-                return _compare(node.operator, left, right, node.interval)
+                holds = _compare(node.operator, left, right, node.interval)
+                if self._log is not None:
+                    self._log.append(self._comparison(node, left, right, env, holds=holds))
+                return holds
             return _arithmetic(node.operator, _amount(left), _amount(right), node.interval)
         if isinstance(node, Call):
             return self._call(node, env)
@@ -1187,7 +1360,9 @@ class _Evaluation:
             addresses=tuple(addresses)[:MAX_ADDRESSES],
         )
 
-    def _traced(self, env: _Env, *, holds: bool) -> Evaluation:
+    def _traced(
+        self, env: _Env, *, holds: bool, comparisons: tuple[Comparison, ...] = ()
+    ) -> Evaluation:
         """One evaluation as the trace keeps it: each side's cells and number."""
         tree = self._rule.tree
         values = dict(env)
@@ -1201,6 +1376,7 @@ class _Evaluation:
                 right=self._side(tree.right, values),
                 left_value=self._figure(tree.left, values),
                 right_value=self._figure(tree.right, values),
+                comparisons=comparisons,
             )
         return Evaluation(
             rule_id=self._rule.rule_id,
@@ -1208,7 +1384,74 @@ class _Evaluation:
             holds=holds,
             relation=None,
             left=self._side(tree, values),
+            comparisons=comparisons,
         )
+
+    def _branched(self, branch: str, node: Node, env: Mapping[str, str]) -> object:
+        """``node``'s value, with the branch it is in noted while comparisons are logged."""
+        if self._log is None:
+            return self._value(node, env)
+        self._branch.append(branch)
+        try:
+            return self._value(node, env)
+        finally:
+            self._branch.pop()
+
+    def _comparison(
+        self, node: Binary, left: object, right: object, env: Mapping[str, str], *, holds: bool
+    ) -> Comparison:
+        """A comparison just executed, as the evidence records it."""
+        first, second = _single(left), _single(right)
+        difference = excess = None
+        tolerance = 0.0
+        if isinstance(first, _Amount) and isinstance(second, _Amount):
+            difference = first.value - second.value
+            tolerance = first.allowance + second.allowance if node.interval else 0.0
+            excess = _excess(node.operator, difference, tolerance)
+        return Comparison(
+            operator=node.operator,
+            interval=node.interval,
+            left=self._operand(node.left, first, env),
+            right=self._operand(node.right, second, env),
+            difference=difference,
+            tolerance=tolerance,
+            excess=excess,
+            holds=holds,
+            branch="/".join(self._branch),
+        )
+
+    def _operand(self, node: Node, value: object, env: Mapping[str, str]) -> Operand:
+        """One side of a comparison: its value, its allowance and the cells behind it."""
+        read: dict[CellAddress, None] = {}
+        defaulted: list[DefaultedCell] = []
+        for reference in references(node):
+            selector = self._selectors[id(reference)]
+            if reference.sequence:
+                keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
+                read.update(dict.fromkeys(self._register(selector, key) for key in keys))
+                if not keys and reference.default is not None:
+                    defaulted.append(_defaulted(reference, None))
+                continue
+            key = self._cell(selector, env)
+            if key is not None and key in selector.data.cells and self._accepts(selector, key):
+                read[self._register(selector, key)] = None
+            elif reference.default is not None:
+                cell = None if key is None else _address(selector.table.code, key, reported=False)
+                defaulted.append(_defaulted(reference, cell))
+        if isinstance(value, _Amount):
+            shown: float | str | bool | None = value.value
+            allowance = value.allowance
+        else:
+            shown = value if isinstance(value, (str, bool)) else None
+            allowance = 0.0
+        return Operand(shown, allowance, tuple(read), tuple(defaulted))
+
+    def _register(self, selector: _Selector, key: _CellKey) -> CellAddress:
+        """A reported cell's address, recorded in the trace's cells if tracing."""
+        address = _address(selector.table.code, key, reported=True)
+        if self._cells_out is not None and address not in self._cells_out:
+            self._cells_out[address] = self._store.fact(selector.data, key, address)
+        return address
 
     def _side(self, node: Node, env: Mapping[str, str]) -> tuple[CellAddress, ...]:
         """Every cell the references in ``node`` read at ``env``, once each, in rule order."""
@@ -1223,11 +1466,13 @@ class _Evaluation:
         table = selector.table.code
         if reference.sequence:
             keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
-            return [_address(table, key, reported=True) for key in keys]
+            return [self._register(selector, key) for key in keys]
         key = self._cell(selector, env)
         if key is None:
             return []
-        return [_address(table, key, reported=key in selector.data.cells)]
+        if key in selector.data.cells:
+            return [self._register(selector, key)]
+        return [_address(table, key, reported=False)]
 
     def _figure(self, node: Node, env: Mapping[str, str]) -> float | None:
         """``node``'s value as a number, or ``None`` where it is not one."""
@@ -1402,6 +1647,31 @@ def _compare(operator: str, left: object, right: object, interval: bool) -> bool
             return left >= right
         return left > right
     return False
+
+
+def _single(value: object) -> object:
+    """A value as a comparison reads it: a one-item sequence is its item, a longer one nothing."""
+    if isinstance(value, list):
+        return value[0] if len(value) == 1 else None
+    return value
+
+
+def _excess(operator: str, difference: float, tolerance: float) -> float | None:
+    """How far ``difference`` is beyond the bound ``operator`` sets; see ``Comparison``."""
+    if operator == "=":
+        return max(0.0, abs(difference) - tolerance)
+    if operator in ("<=", "<"):
+        return max(0.0, difference - tolerance)
+    if operator in (">=", ">"):
+        return max(0.0, -tolerance - difference)
+    return None
+
+
+def _defaulted(reference: Reference, address: CellAddress | None) -> DefaultedCell:
+    """A reference read at its default."""
+    default = reference.default
+    assert default is not None  # noqa: S101 - callers check
+    return DefaultedCell(_describe(reference), default.kind, default.value, address)
 
 
 def _address(table: str, key: _CellKey, *, reported: bool) -> CellAddress:

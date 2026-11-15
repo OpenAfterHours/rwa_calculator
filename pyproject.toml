@@ -222,6 +222,7 @@ dev = [
     "psutil>=5.9.0",  # scripts/profile_memory.py peak-RSS sampling (degrades gracefully if absent)
     "openpyxl>=3.1.5",  # scripts/extract_validation_rules.py reads the EBA/BoE rule workbooks
     "hypothesis>=6.100.0",  # tests/properties/ runs in the default gate; must be default-synced
+    "jsonschema>=4.20.0",  # packages/rwa-filer tests check output against the shipped schemas
 ]
 
 # One repository, two separately released packages. The root stays the rwa-calc

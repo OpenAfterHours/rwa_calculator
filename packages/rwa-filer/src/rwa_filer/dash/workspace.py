@@ -39,6 +39,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from rwa_filer.readers import SourceReading, open_source
+from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.adjustments import AdjustmentError, apply_adjustments
 from rwa_filer.workflow.compare import compare_returns
@@ -178,7 +179,12 @@ class Workspace:
                 module and reference date.
         """
         reading = open_source(path, fields)
-        validation = validate_return(reading.ret, reading.pack, source_findings=reading.findings)
+        validation = validate_return(
+            reading.ret,
+            reading.pack,
+            source_findings=reading.findings,
+            source=source_identity(path),
+        )
         opened = OpenedReturn(
             return_id=secrets.token_hex(4),
             name=name or path.name,
@@ -300,7 +306,12 @@ def _work_out(opened: OpenedReturn, drafts: tuple[Adjustment, ...]) -> WorkingRe
         ret, applied = apply_adjustments(opened.ret, drafts)
     except AdjustmentError as exc:
         return WorkingReturn(opened=opened, current=opened, drafts=drafts, problem=str(exc))
-    validation = validate_return(ret, opened.pack, source_findings=opened.reading.findings)
+    validation = validate_return(
+        ret,
+        opened.pack,
+        source_findings=opened.reading.findings,
+        source=opened.validation.source,
+    )
     current = replace(opened, reading=replace(opened.reading, ret=ret), validation=validation)
     logger.info("validated %s with %d override(s)", opened.name, len(applied))
     return WorkingReturn(

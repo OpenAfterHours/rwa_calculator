@@ -7,10 +7,51 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **Evidence export**: `rwa-filer validate --evidence FILE` (and `build
+  --evidence FILE`) writes everything a validation executed as JSON Lines
+  (`.jsonl`, or `.jsonl.gz`), schema `rwa-filer/evidence` 1.0. It holds every
+  enforced rule, passes included; every evaluation, satisfied or not,
+  uncapped; and every comparison each evaluation executed, with both
+  operands' values and rounding allowances, the difference, the tolerance the
+  `i` prefix allowed, the excess beyond it, and the branch of the rule it was
+  in. It also holds every reported cell read, once, with the `decimals` it was
+  compared at and where that came from (stated by the fact, the run's
+  accuracy, or an integer's unit), and every cell read at its default. It is
+  written from the same evaluation pass as the verdict. A trailer digest over
+  every line makes a cut or altered file detectable, and without a creation
+  time (`--no-timestamp`) the same inputs give the same bytes. Library:
+  `rwa_filer.evidence.collect_evidence`, `write_evidence`, `read_evidence`.
+- **Evidence identity**: the validation report and the evidence header carry an
+  `identity` block. It holds SHA-256 digests of the facts and header
+  (independent of row order and file format), the source file, the taxonomy
+  pack's files and the rule book (with the Bank's workbook and formula-package
+  digests it was built from), plus the accuracy in effect and the generator
+  version. `evidence_id` is one digest over the inputs. Each rule carries a
+  `rule_sha256`, so a changed formula under an unchanged code shows.
+- **Validation status**: `ReturnValidation.status` is `CLEAN`, `INCOMPLETE` or
+  `BLOCKED`. `ReturnValidation.completeness` names each cause of an incomplete
+  check (`no_rulebook`, `rules_unsupported`, `rules_table_not_in_taxonomy`,
+  `linked_templates_missing`, `coverage_shortfall`) with every rule and template
+  it covers. The text summary states it on its second line, the JSON gives
+  `status` and `completeness`, and the dashboard overview shows it.
+  `validate --require-complete` exits `3` on an incomplete check.
+- `VAL005` (Warning): enforced rules the engine could not evaluate (one it does
+  not implement, or one reading a table the taxonomy pack lacks).
+- `Finding.positions`: every fact a structure (`STR…`) or reading (`XBR…`)
+  finding is about, uncapped, each with what it holds and, where it differs
+  fact by fact, what is wrong with it. Messages still quote the first five; the
+  report gives `positions_total`, the evidence lists them all.
+- `validate --monetary-decimals N --percentage-decimals N`, the options `build`
+  takes, from one definition. A rule on the rounding boundary can hold at
+  thousands and break at units, and `validate` could not be told which.
+- JSON Schemas for the validation report and the evidence, in the package:
+  `rwa_filer.schemas.load_schema`.
+- `build --evidence` records the evidence file's checksum and `evidence_id` in
+  the manifest, so a sign-off covers it. The manifest also gains `identity`,
+  `validation.status` and `validation.completeness`. The dashboard offers the
+  evidence for an opened return as **Download evidence**.
 
 ### Changed
-- (Next release changes will go here)
 - `rwa-filer dash`, Templates: the selected-cell panel now explains each broken
   rule where it stands, instead of only linking to the Rules page. Every rule
   carries the publisher's description, and **Read the rule** expands it in
@@ -21,6 +62,18 @@ and released independently of `rwa-calc`; its release tags are prefixed
   on the next within the tab. The rule focused with **Show only this rule's
   cells** opens expanded. The link to the Rules page is kept. Library:
   `dash.grid.CellDetail.rules` (`CellRule`), `dash.views.rule_detail`.
+- **The validation report's `rules` lists every enforced rule, passes included**
+  (it listed only the rules that did not pass), each with `rule_sha256`,
+  `evaluations`, `tables` and, for each kept failure, its cell `addresses`. The
+  report declares `"schema": {"name": "rwa-filer/validation-report", "version":
+  "2.0"}`. Code that read `rules` as "the rules that did not pass" must filter on
+  `status`.
+- **A module no rule book covers is no longer reported as clean.**
+  `validate_return` returned `submittable` with only the structure checked, and
+  logged a warning. It now raises `VAL003` with subject `no_rulebook` (Error),
+  as it does when no rule runs. Every packaged taxonomy pack has a packaged rule
+  book, so this changes nothing for a packaged module; it affects a caller that
+  passes its own pack.
 - `rwa-filer dash` — every page of a return now shows it as a build would file
   it now: the Overview, the Rules, the template grid's marks, the Build & sign
   off page and the top-bar verdict are all worked out with the drafted

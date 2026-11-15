@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openafterhours.github.io/rwa_calculator/rwa-filer/schemas/evidence-1.schema.json",
+  "title": "rwa-filer evidence export, version 1 — one record (one line)",
+  "description": "An evidence file is JSON Lines: one header, then cell, rule, evaluation, finding and structure_exception records in that order, then one trailer whose content_sha256 is the SHA-256 of every line before it (bytes, newlines included). Numbers JSON cannot carry (NaN, infinities) are null. For a comparison of two numbers, difference = left.value - right.value and tolerance = left.allowance + right.allowance when interval is true, else 0; then '=' holds iff |difference| <= tolerance, '!=' iff |difference| > tolerance, '<=' iff difference <= tolerance, '<' iff difference < tolerance, '>=' iff difference >= -tolerance, '>' iff difference > -tolerance. Within major version 1 records only gain fields.",
+  "oneOf": [
+    { "$ref": "#/$defs/header" },
+    { "$ref": "#/$defs/cell" },
+    { "$ref": "#/$defs/rule" },
+    { "$ref": "#/$defs/evaluation" },
+    { "$ref": "#/$defs/finding" },
+    { "$ref": "#/$defs/structure_exception" },
+    { "$ref": "#/$defs/trailer" }
+  ],
+  "$defs": {
+    "number": { "type": ["number", "null"] },
+    "value": { "type": ["number", "string", "boolean", "null"] },
+    "counts": {
+      "type": "object",
+      "required": ["cell", "rule", "evaluation", "finding", "structure_exception"],
+      "properties": {
+        "cell": { "type": "integer", "minimum": 0 },
+        "rule": { "type": "integer", "minimum": 0 },
+        "evaluation": { "type": "integer", "minimum": 0 },
+        "finding": { "type": "integer", "minimum": 0 },
+        "structure_exception": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "address": {
+      "type": "object",
+      "required": ["table", "sheet", "open_key", "row", "column"],
+      "properties": {
+        "table": { "type": "string" },
+        "sheet": { "type": ["string", "null"] },
+        "open_key": { "type": ["string", "null"] },
+        "row": { "type": "string" },
+        "column": { "type": "string" }
+      }
+    },
+    "side": {
+      "type": "object",
+      "required": ["cells", "unreported"],
+      "properties": {
+        "cells": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "unreported": { "type": "array", "items": { "$ref": "#/$defs/address" } }
+      }
+    },
+    "operand": {
+      "type": "object",
+      "required": ["value", "allowance", "cells", "defaulted"],
+      "properties": {
+        "value": { "$ref": "#/$defs/value" },
+        "allowance": { "$ref": "#/$defs/number" },
+        "cells": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "defaulted": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["reference", "default", "default_value", "address"],
+            "properties": {
+              "reference": { "type": "string" },
+              "default": { "enum": ["zero", "false", "empty", "member", "string", "date"] },
+              "default_value": { "type": ["string", "null"] },
+              "address": { "oneOf": [{ "$ref": "#/$defs/address" }, { "type": "null" }] }
+            }
+          }
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "required": [
+        "operator",
+        "interval",
+        "branch",
+        "holds",
+        "difference",
+        "tolerance",
+        "excess",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "operator": { "enum": ["=", "!=", "<=", "<", ">=", ">"] },
+        "interval": { "type": "boolean" },
+        "branch": { "type": "string" },
+        "holds": { "type": "boolean" },
+        "difference": { "$ref": "#/$defs/number" },
+        "tolerance": { "$ref": "#/$defs/number" },
+        "excess": { "$ref": "#/$defs/number" },
+        "left": { "$ref": "#/$defs/operand" },
+        "right": { "$ref": "#/$defs/operand" }
+      }
+    },
+    "header": {
+      "type": "object",
+      "required": [
+        "record",
+        "schema",
+        "generated_at",
+        "identity",
+        "status",
+        "submittable",
+        "completeness",
+        "counts"
+      ],
+      "properties": {
+        "record": { "const": "header" },
+        "schema": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "const": "rwa-filer/evidence" },
+            "version": { "type": "string", "pattern": "^1\\.[0-9]+$" }
+          }
+        },
+        "generated_at": { "type": ["string", "null"] },
+        "identity": { "type": "object", "required": ["evidence_id"] },
+        "status": { "enum": ["CLEAN", "INCOMPLETE", "BLOCKED"] },
+        "submittable": { "type": "boolean" },
+        "completeness": { "type": "array" },
+        "counts": { "$ref": "#/$defs/counts" }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "required": [
+        "record",
+        "id",
+        "table",
+        "sheet",
+        "open_key",
+        "row",
+        "column",
+        "datapoint",
+        "metric",
+        "data_type",
+        "value",
+        "decimals",
+        "decimals_source",
+        "allowance"
+      ],
+      "properties": {
+        "record": { "const": "cell" },
+        "id": { "type": "integer", "minimum": 0 },
+        "table": { "type": "string" },
+        "sheet": { "type": ["string", "null"] },
+        "open_key": { "type": ["string", "null"] },
+        "row": { "type": "string" },
+        "column": { "type": "string" },
+        "datapoint": { "type": "integer", "minimum": 0 },
+        "metric": { "type": "string" },
+        "data_type": { "type": "string" },
+        "value": { "$ref": "#/$defs/value" },
+        "decimals": { "type": ["integer", "null"] },
+        "decimals_source": { "enum": ["stated", "accuracy", "integer", ""] },
+        "allowance": { "$ref": "#/$defs/number" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "record",
+        "rule_id",
+        "rule_sha256",
+        "severity",
+        "status",
+        "reason",
+        "detail",
+        "evaluations",
+        "satisfied",
+        "unsatisfied",
+        "tables",
+        "label",
+        "expression",
+        "scope",
+        "where",
+        "join"
+      ],
+      "properties": {
+        "record": { "const": "rule" },
+        "rule_id": { "type": "string" },
+        "rule_sha256": { "type": ["string", "null"] },
+        "severity": { "enum": ["ERROR", "WARNING"] },
+        "status": { "enum": ["PASS", "FAIL", "NOT_EVALUATED"] },
+        "reason": { "type": "string" },
+        "detail": { "type": "string" },
+        "evaluations": { "type": "integer", "minimum": 0 },
+        "satisfied": { "type": "integer", "minimum": 0 },
+        "unsatisfied": { "type": "integer", "minimum": 0 },
+        "tables": { "type": "array", "items": { "type": "string" } },
+        "label": { "type": ["string", "null"] },
+        "expression": { "type": ["string", "null"] },
+        "scope": { "type": ["string", "null"] },
+        "where": { "type": ["string", "null"] },
+        "join": { "type": ["string", "null"] }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "required": [
+        "record",
+        "rule_id",
+        "seq",
+        "place",
+        "holds",
+        "relation",
+        "left_value",
+        "right_value",
+        "left",
+        "right",
+        "comparisons"
+      ],
+      "properties": {
+        "record": { "const": "evaluation" },
+        "rule_id": { "type": "string" },
+        "seq": { "type": "integer", "minimum": 0 },
+        "place": { "type": "object", "additionalProperties": { "type": "string" } },
+        "holds": { "type": "boolean" },
+        "relation": { "type": ["string", "null"] },
+        "left_value": { "$ref": "#/$defs/number" },
+        "right_value": { "$ref": "#/$defs/number" },
+        "left": { "$ref": "#/$defs/side" },
+        "right": { "$ref": "#/$defs/side" },
+        "comparisons": { "type": "array", "items": { "$ref": "#/$defs/comparison" } }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "record",
+        "index",
+        "code",
+        "severity",
+        "blocking",
+        "subject",
+        "message",
+        "expected",
+        "actual",
+        "reference",
+        "positions_total"
+      ],
+      "properties": {
+        "record": { "const": "finding" },
+        "index": { "type": "integer", "minimum": 0 },
+        "code": { "type": "string" },
+        "severity": { "enum": ["ERROR", "WARNING"] },
+        "blocking": { "type": "boolean" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "reference": { "type": "string" },
+        "positions_total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "structure_exception": {
+      "type": "object",
+      "required": ["record", "finding", "code", "position"],
+      "properties": {
+        "record": { "const": "structure_exception" },
+        "finding": { "type": "integer", "minimum": 0 },
+        "code": { "type": "string" },
+        "position": {
+          "type": "object",
+          "required": [
+            "table",
+            "sheet",
+            "open_key",
+            "row",
+            "column",
+            "value",
+            "text_value",
+            "detail",
+            "source_ref"
+          ],
+          "properties": {
+            "table": { "type": ["string", "null"] },
+            "sheet": { "type": ["string", "null"] },
+            "open_key": { "type": ["string", "null"] },
+            "row": { "type": ["string", "null"] },
+            "column": { "type": ["string", "null"] },
+            "value": { "$ref": "#/$defs/number" },
+            "text_value": { "type": ["string", "null"] },
+            "detail": { "type": "string" },
+            "source_ref": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "trailer": {
+      "type": "object",
+      "required": ["record", "counts", "content_sha256"],
+      "properties": {
+        "record": { "const": "trailer" },
+        "counts": { "$ref": "#/$defs/counts" },
+        "content_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

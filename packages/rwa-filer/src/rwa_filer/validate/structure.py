@@ -12,6 +12,8 @@ Key responsibilities:
 - Report what is wrong in the filer's coordinates — table, sheet, row, column —
   rolled up to one finding per kind of problem per table, with a count and the
   first few cells, so 400 facts on a misnamed sheet are one finding, not 400.
+  The finding's ``positions`` hold all 400, uncapped, each with what it holds
+  and, where it differs fact by fact, what is wrong with it.
 - Catch the conditions the regulator's gateway rejects a whole file for and
   that no published arithmetic rule looks at: a figure in a greyed-out cell, the
   same cell reported twice, one data point reported with two different values.
@@ -41,7 +43,7 @@ import polars as pl
 from rwa_filer.model import COORDINATE_COLUMNS, LEI_SCHEME
 from rwa_filer.rules.catalogue import SEVERITY_ERROR
 from rwa_filer.taxonomy.pack import DIMENSION_EXPLICIT
-from rwa_filer.validate.checker import Finding
+from rwa_filer.validate.checker import FactPosition, Finding
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -348,22 +350,20 @@ def _check_header(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
 
 
 def _unknown_tables(facts: pl.DataFrame, pack: TaxonomyPack) -> list[Finding]:
-    counts = (
-        facts.filter(~pl.col("table").is_in(list(pack.tables)) | pl.col("table").is_null())
-        .group_by("table")
-        .len()
-        .sort("table")
-    )
+    unknown = facts.filter(
+        ~pl.col("table").is_in(list(pack.tables)) | pl.col("table").is_null()
+    ).sort(COORDINATE_COLUMNS, nulls_last=False)
     return [
         _finding(
             FINDING_UNKNOWN_TABLE,
             f"Table {table!r} is not part of module {pack.info.module} "
-            f"(taxonomy {pack.info.version}); {count} fact(s) address it.",
+            f"(taxonomy {pack.info.version}); {part.height} fact(s) address it.",
             subject=str(table),
             expected=f"a {pack.info.module} table code",
-            actual=f"{count} fact(s)",
+            actual=f"{part.height} fact(s)",
+            positions=_positions(part),
         )
-        for table, count in counts.iter_rows()
+        for (table,), part in unknown.group_by("table", maintain_order=True)
     ]
 
 
@@ -382,6 +382,7 @@ def _duplicates(facts: pl.DataFrame) -> list[Finding]:
             "rejects the file even when the values agree."
         ),
         expected="each cell reported once",
+        detail=lambda row: f"reported {row['len']} times",
     )
 
 
@@ -614,6 +615,7 @@ def _type_findings(resolved: pl.DataFrame, pack: TaxonomyPack) -> list[Finding]:
             "non-integer count, or a malformed boolean or date)."
         ),
         expected="a value of the metric's data type",
+        detail=lambda row: f"the cell takes a {row['data_type']} value",
     )
 
 
@@ -650,6 +652,9 @@ def _inconsistent_datapoints(resolved: pl.DataFrame, pack: TaxonomyPack) -> list
             "a different value. The two cells are one fact in the submission."
         ),
         expected="one value per data point",
+        detail=lambda row: (
+            f"data point {row['datapoint']} is reported with another value elsewhere"
+        ),
     )
 
 
@@ -714,8 +719,9 @@ def _roll_up(
     describe: Callable[[str, int], str],
     *,
     expected: str,
+    detail: Callable[[dict[str, object]], str] | None = None,
 ) -> list[Finding]:
-    """One finding per table for ``offending`` facts, with the first few cells."""
+    """One finding per table for ``offending`` facts: the first few quoted, every one kept."""
     if offending.is_empty():
         return []
     findings: list[Finding] = []
@@ -731,9 +737,33 @@ def _roll_up(
                 subject=str(table),
                 expected=expected,
                 actual=f"{part.height} fact(s)",
+                positions=_positions(part, detail),
             )
         )
     return findings
+
+
+def _positions(
+    facts: pl.DataFrame, detail: Callable[[dict[str, object]], str] | None = None
+) -> tuple[FactPosition, ...]:
+    """Every fact of ``facts`` as a position, in the order given."""
+    return tuple(
+        FactPosition(
+            table=_text(row.get("table")),
+            sheet=_text(row.get("sheet")),
+            open_key=_text(row.get("open_key")),
+            row=_text(row.get("row")),
+            column=_text(row.get("column")),
+            value=value if isinstance(value := row.get("value"), float) else None,
+            text_value=_text(row.get("text_value")),
+            detail=detail(row) if detail is not None else "",
+        )
+        for row in facts.iter_rows(named=True)
+    )
+
+
+def _text(value: object) -> str | None:
+    return None if value is None else str(value)
 
 
 def _address(row: dict[str, object]) -> str:
@@ -743,7 +773,15 @@ def _address(row: dict[str, object]) -> str:
     return f"{row['table']}{sheet}{key}[r{row['row']}][c{row['column']}]"
 
 
-def _finding(code: str, message: str, *, subject: str, expected: str, actual: str) -> Finding:
+def _finding(  # noqa: PLR0913 - a Finding's fields
+    code: str,
+    message: str,
+    *,
+    subject: str,
+    expected: str,
+    actual: str,
+    positions: tuple[FactPosition, ...] = (),
+) -> Finding:
     return Finding(
         code=code,
         severity=SEVERITY_ERROR,
@@ -752,4 +790,5 @@ def _finding(code: str, message: str, *, subject: str, expected: str, actual: st
         subject=subject,
         expected=expected,
         actual=actual,
+        positions=positions,
     )

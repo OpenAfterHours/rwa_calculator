@@ -7,6 +7,8 @@ Pipeline position:
         ->  structure.check_structure
         ->  boe.catalogue.rulebook_for_module  ->  boe.engine.evaluate_rules
         ->  ReturnValidation
+    the same, keeping every evaluation  ->  trace_return
+        ->  (ReturnValidation, boe.engine.RuleTrace)  ->  rwa_filer.evidence
 
 Key responsibilities:
 - Be the one call that answers "is this return fit to submit?" for a return in
@@ -17,8 +19,17 @@ Key responsibilities:
   rejects it) and rules (the supervisor's arithmetic does not hold) — and say
   plainly whether anything blocks submission.
 - Never let an empty finding list stand for "clean" when little or nothing was
-  checked: ``VAL003`` reports a return on which no rule ran, or a reported
-  template none of whose rules ran.
+  checked: ``VAL003`` reports a return on which no rule ran — including one
+  whose module has no rule book at all — or a reported template none of whose
+  rules ran.
+- Say whether the check was COMPLETE, separately from whether it passed
+  (``ReturnValidation.status``: ``CLEAN`` / ``INCOMPLETE`` / ``BLOCKED``).
+  Every cause of incompleteness — no rule book, rules this engine cannot
+  evaluate, rules reading a table the pack lacks, linked templates left out, a
+  coverage shortfall — is named with the rules and templates it covers, by one
+  implementation (``RuleReport.completeness``) that ``VAL003``–``VAL005`` and
+  the status all read. ``VAL005`` (a Warning) names the rules that could not be
+  evaluated.
 - Name every template the return leaves out that its reported templates are
   checked against (``VAL004``, a Warning). The gateway runs a rule only when
   every template it reads is filed, so leaving one out does not fail those
@@ -36,8 +47,8 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Final
 
 from rwa_filer.boe.catalogue import (
     SEVERITY_ERROR,
@@ -48,20 +59,25 @@ from rwa_filer.boe.catalogue import (
 from rwa_filer.boe.engine import (
     REASON_CLOSED_BY_FORMULA,
     REASON_NOT_REPORTED,
+    REASON_UNKNOWN_TABLE,
+    REASON_UNSUPPORTED,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
     Accuracy,
     evaluate_rules,
+    trace_rules,
 )
 from rwa_filer.taxonomy.pack import resolve_pack
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
+    COVERAGE_NO_RULEBOOK,
     COVERAGE_TEMPLATE_NOT_COVERED,
     FINDING_COVERAGE_INSUFFICIENT,
     FINDING_LINKED_TEMPLATE_MISSING,
     FINDING_RULE_ERROR,
     FINDING_RULE_WARNING,
+    FINDING_RULES_NOT_EVALUABLE,
     Finding,
 )
 from rwa_filer.validate.structure import check_structure, filing_indicators
@@ -70,10 +86,11 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from rwa_filer.boe.catalogue import RuleBook
-    from rwa_filer.boe.engine import RuleResult
+    from rwa_filer.boe.engine import RuleResult, RuleTrace
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import CoverageShortfall
+    from rwa_filer.validate.identity import SourceIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +98,31 @@ logger = logging.getLogger(__name__)
 _REASONS_QUOTED = 4
 #: Rule codes quoted in a missing-template finding; the report holds them all.
 _RULES_QUOTED = 3
+
+#: What a validation established, in one word. ``BLOCKED``: a finding stops the
+#: return being submitted. ``INCOMPLETE``: nothing blocks it, but some of what
+#: the module requires checking was not checked (``completeness`` says what).
+#: ``CLEAN``: nothing blocks it and nothing was left unchecked.
+VERDICT_CLEAN: Final = "CLEAN"
+VERDICT_INCOMPLETE: Final = "INCOMPLETE"
+VERDICT_BLOCKED: Final = "BLOCKED"
+
+#: Why a validation is incomplete — ``IncompleteCause.code``.
+INCOMPLETE_NO_RULEBOOK: Final = "no_rulebook"
+INCOMPLETE_RULES_UNSUPPORTED: Final = "rules_unsupported"
+INCOMPLETE_RULES_TABLE_NOT_IN_TAXONOMY: Final = "rules_table_not_in_taxonomy"
+INCOMPLETE_LINKED_TEMPLATES_MISSING: Final = "linked_templates_missing"
+INCOMPLETE_COVERAGE_SHORTFALL: Final = "coverage_shortfall"
+
+#: The not-evaluated reasons that leave a validation incomplete, and the cause
+#: each is reported under. The others are not gaps: ``no_data`` (nothing to
+#: check), ``closed_by_formula`` (the gateway never runs the rule either) and
+#: ``template_not_reported`` (a gap only where a reported template is read with
+#: the absent one — ``linked_templates_missing``).
+_NOT_EVALUABLE: Final = (
+    (REASON_UNSUPPORTED, INCOMPLETE_RULES_UNSUPPORTED),
+    (REASON_UNKNOWN_TABLE, INCOMPLETE_RULES_TABLE_NOT_IN_TAXONOMY),
+)
 
 
 # =============================================================================
@@ -145,6 +187,45 @@ class RuleReport:
             return COVERAGE_TEMPLATE_NOT_COVERED
         return None
 
+    @property
+    def completeness(self) -> tuple[IncompleteCause, ...]:
+        """Why the check is incomplete, cause by cause; empty when it is complete.
+
+        THE one implementation of "incomplete" for a return with a rule book.
+        It reads the same predicates ``VAL003`` (``coverage_shortfall``),
+        ``VAL004`` (``templates_missing``) and ``VAL005`` are built from.
+        """
+        causes: list[IncompleteCause] = []
+        shortfall = self.coverage_shortfall
+        if shortfall is not None:
+            causes.append(
+                IncompleteCause(
+                    INCOMPLETE_COVERAGE_SHORTFALL,
+                    templates=self.templates_uncovered,
+                    detail=shortfall,
+                )
+            )
+        for reason, code in _NOT_EVALUABLE:
+            rules = tuple(
+                result.rule_id
+                for result in self.results
+                if result.status == STATUS_NOT_EVALUATED and result.reason == reason
+            )
+            if rules:
+                causes.append(IncompleteCause(code, rules=rules, detail=reason))
+        if self.templates_missing:
+            causes.append(
+                IncompleteCause(
+                    INCOMPLETE_LINKED_TEMPLATES_MISSING,
+                    rules=tuple(
+                        sorted({rule for item in self.templates_missing for rule in item.rules})
+                    ),
+                    templates=tuple(item.code for item in self.templates_missing),
+                    detail=REASON_NOT_REPORTED,
+                )
+            )
+        return tuple(causes)
+
     def status_counts(self) -> dict[str, int]:
         """Rule counts per status, in a stable order."""
         counts = Counter(result.status for result in self.results)
@@ -178,6 +259,24 @@ class MissingTemplate:
 
 
 @dataclass(frozen=True)
+class IncompleteCause:
+    """One reason a validation did not check everything the module requires.
+
+    Attributes:
+        code: One of the ``INCOMPLETE_*`` constants.
+        rules: Every enforced rule the cause left unrun, where it is about rules.
+        templates: The filing indicators it is about, where it is about templates.
+        detail: The machine reason behind it — the not-evaluated reason, or the
+            coverage shortfall.
+    """
+
+    code: str
+    rules: tuple[str, ...] = ()
+    templates: tuple[str, ...] = ()
+    detail: str = ""
+
+
+@dataclass(frozen=True)
 class ReturnValidation:
     """Everything validating one return established.
 
@@ -187,13 +286,24 @@ class ReturnValidation:
             the return's source (``XBR...``).
         report: The per-rule report, or ``None`` when no rule book is packaged
             for the module.
-        rules: Rule findings (``VAL...``), from ``report``.
+        rules: Rule findings (``VAL...``), from ``report`` — or, with no rule
+            book, the ``VAL003`` that says no rule ran.
+        accuracy: The accuracy the rules' comparisons allowed for, where a
+            fact does not state its own.
+        accuracy_given: Whether the caller chose ``accuracy``, rather than it
+            being the default.
+        rulebook: The rule book the rules came from.
+        source: The file the return was read from, where the caller said.
     """
 
     pack: TaxonomyPack
     structure: tuple[Finding, ...]
     report: RuleReport | None
     rules: tuple[Finding, ...]
+    accuracy: Accuracy = field(default_factory=Accuracy)
+    accuracy_given: bool = False
+    rulebook: RuleBook | None = field(default=None, compare=False, repr=False)
+    source: SourceIdentity | None = None
 
     @property
     def findings(self) -> tuple[Finding, ...]:
@@ -214,6 +324,25 @@ class ReturnValidation:
         """
         return not self.blocking
 
+    @property
+    def completeness(self) -> tuple[IncompleteCause, ...]:
+        """Why the check is incomplete; empty when everything required was checked."""
+        if self.report is None:
+            return (
+                IncompleteCause(
+                    INCOMPLETE_NO_RULEBOOK,
+                    detail=f"no rule book covers module {self.pack.info.module}",
+                ),
+            )
+        return self.report.completeness
+
+    @property
+    def status(self) -> str:
+        """``BLOCKED``, else ``INCOMPLETE``, else ``CLEAN`` (see ``VERDICT_*``)."""
+        if self.blocking:
+            return VERDICT_BLOCKED
+        return VERDICT_INCOMPLETE if self.completeness else VERDICT_CLEAN
+
 
 def validate_return(
     ret: CanonicalReturn,
@@ -222,6 +351,7 @@ def validate_return(
     rulebook: RuleBook | None = None,
     accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
+    source: SourceIdentity | None = None,
 ) -> ReturnValidation:
     """Validate ``ret``: structure against the taxonomy, then the published rules.
 
@@ -238,6 +368,8 @@ def validate_return(
         source_findings: What reading the return's source found — an XBRL
             instance holding a fact the module does not have, say. They are
             reported first, with the structure findings.
+        source: The file the return was read from (``identity.source_identity``),
+            for the report to fingerprint.
 
     Returns:
         A ``ReturnValidation``. Never raises for a condition in the data.
@@ -246,36 +378,49 @@ def validate_return(
         PackNotFoundError: no ``pack`` was given and none is packaged for the
             module and reference date.
     """
-    pack = pack or resolve_pack(ret.header.module, ret.header.reference_date)
-    structure = (*source_findings, *check_structure(ret, pack))
-    module = pack.info.module
-    if rulebook is None:
-        try:
-            rulebook = rulebook_for_module(module)
-        except RuleBookNotFoundError:
-            logger.warning("no packaged rule book for module %s; rules not run", module)
-            return ReturnValidation(pack=pack, structure=structure, report=None, rules=())
-
-    enforced = rulebook.enforced(module)
-    results = tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy))
-    report = _report(ret, pack, rulebook, results)
-    return ReturnValidation(
-        pack=pack, structure=structure, report=report, rules=tuple(findings_for(report))
+    validation, _trace = _validate(
+        ret, pack, rulebook, accuracy, source_findings, source, trace=False
     )
+    return validation
+
+
+def trace_return(
+    ret: CanonicalReturn,
+    pack: TaxonomyPack | None = None,
+    *,
+    rulebook: RuleBook | None = None,
+    accuracy: Accuracy | None = None,
+    source_findings: Sequence[Finding] = (),
+    source: SourceIdentity | None = None,
+) -> tuple[ReturnValidation, RuleTrace | None]:
+    """``validate_return``, keeping every evaluation the verdict was reached by.
+
+    One evaluation pass gives both: the validation's rule results ARE the
+    trace's, so the evidence cannot describe a different run from the verdict.
+    The trace is ``None`` when no rule book covers the module.
+    """
+    return _validate(ret, pack, rulebook, accuracy, source_findings, source, trace=True)
 
 
 def findings_for(report: RuleReport) -> list[Finding]:
     """The findings a report yields: what was not checked first, then each broken rule.
 
     The coverage shortfall (``VAL003``) leads, then one ``VAL004`` per missing
-    linked template, then one finding per broken rule, however many times it
-    was unsatisfied: the rule code is on ``subject`` and the first unsatisfied
+    linked template, then one ``VAL005`` per kind of rule that could not be
+    evaluated, then one finding per broken rule, however many times it was
+    unsatisfied: the rule code is on ``subject`` and the first unsatisfied
     evaluation is quoted.
     """
     shortfall = _coverage_finding(report)
+    not_evaluable = {code for _reason, code in _NOT_EVALUABLE}
     return [
         *([shortfall] if shortfall is not None else []),
         *(_missing_finding(missing, report) for missing in report.templates_missing),
+        *(
+            _not_evaluable_finding(cause, report)
+            for cause in report.completeness
+            if cause.code in not_evaluable
+        ),
         *(
             _rule_finding(result, report)
             for result in report.results
@@ -287,6 +432,58 @@ def findings_for(report: RuleReport) -> list[Finding]:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _validate(  # noqa: PLR0913 - validate_return's arguments, plus whether to trace
+    ret: CanonicalReturn,
+    pack: TaxonomyPack | None,
+    rulebook: RuleBook | None,
+    accuracy: Accuracy | None,
+    source_findings: Sequence[Finding],
+    source: SourceIdentity | None,
+    *,
+    trace: bool,
+) -> tuple[ReturnValidation, RuleTrace | None]:
+    pack = pack or resolve_pack(ret.header.module, ret.header.reference_date)
+    structure = (*source_findings, *check_structure(ret, pack))
+    module = pack.info.module
+    effective = accuracy or Accuracy()
+    given = accuracy is not None
+    if rulebook is None:
+        try:
+            rulebook = rulebook_for_module(module)
+        except RuleBookNotFoundError:
+            logger.warning("no packaged rule book for module %s; no rule can run", module)
+            unchecked = ReturnValidation(
+                pack=pack,
+                structure=structure,
+                report=None,
+                rules=(_no_rulebook_finding(module),),
+                accuracy=effective,
+                accuracy_given=given,
+                source=source,
+            )
+            return unchecked, None
+
+    enforced = rulebook.enforced(module)
+    traced = trace_rules(ret, pack, enforced, accuracy=accuracy) if trace else None
+    results = (
+        traced.results
+        if traced is not None
+        else tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy))
+    )
+    report = _report(ret, pack, rulebook, results)
+    validation = ReturnValidation(
+        pack=pack,
+        structure=structure,
+        report=report,
+        rules=tuple(findings_for(report)),
+        accuracy=effective,
+        accuracy_given=given,
+        rulebook=rulebook,
+        source=source,
+    )
+    return validation, traced
 
 
 def _report(
@@ -406,6 +603,51 @@ def _rule_finding(result: RuleResult, report: RuleReport) -> Finding:
         subject=result.rule_id,
         expected="the rule to hold in every evaluation",
         actual=f"{result.unsatisfied} unsatisfied evaluation(s)",
+    )
+
+
+def _no_rulebook_finding(module: str) -> Finding:
+    """``VAL003`` for a module no rule book covers: nothing was checked but structure."""
+    return Finding(
+        code=FINDING_COVERAGE_INSUFFICIENT,
+        severity=SEVERITY_ERROR,
+        message=(
+            f"Validation coverage is insufficient for {module} [{COVERAGE_NO_RULEBOOK}]: no rule "
+            f"book covers the module, so none of its published rules was run. Only the "
+            "structure was checked. An absent break is not evidence that the return holds."
+        ),
+        reference=f"Validation rules for {module} — rule coverage",
+        subject=COVERAGE_NO_RULEBOOK,
+        expected="a rule book for the module, and its rules run",
+        actual="no rule book; 0 rules executed",
+    )
+
+
+def _not_evaluable_finding(cause: IncompleteCause, report: RuleReport) -> Finding:
+    """``VAL005`` for the enforced rules one kind of gap left unevaluated."""
+    count = len(cause.rules)
+    quoted = ", ".join(cause.rules[:_RULES_QUOTED])
+    more = f" and {count - _RULES_QUOTED} more" if count > _RULES_QUOTED else ""
+    why = (
+        "use something this engine does not implement"
+        if cause.code == INCOMPLETE_RULES_UNSUPPORTED
+        else "read a table the taxonomy pack does not have"
+    )
+    return Finding(
+        code=FINDING_RULES_NOT_EVALUABLE,
+        severity=SEVERITY_WARNING,
+        message=(
+            f"{count} enforced rule(s) {why} ({quoted}{more}), so they were neither passed nor "
+            "failed. The gateway runs them; this result says nothing about them, and is "
+            "incomplete until they are checked another way."
+        ),
+        reference=(
+            f"Bank of England Banking Taxonomy v{report.taxonomy}, validation rules "
+            f"({report.framework_version}) — rules not evaluated: {cause.detail}"
+        ),
+        subject=cause.code,
+        expected="every enforced rule evaluated",
+        actual=f"{count} rule(s) not evaluable ({cause.detail})",
     )
 
 

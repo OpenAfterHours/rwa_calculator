@@ -133,7 +133,14 @@ def test_a_written_instance_validates_like_the_table_it_came_from(
     main(["validate", str(_csv(tmp_path)), *HEADER_ARGS, "--format", "json"])
     from_table = json.loads(capsys.readouterr().out)
 
-    # Assert
+    # Assert — the same facts in two containers: one evidence id, two file fingerprints.
+    instance_identity, zip_identity = from_instance.pop("identity"), from_zip.pop("identity")
+    assert instance_identity["evidence_id"] == zip_identity["evidence_id"]
+    assert (instance_identity["input"]["format"], zip_identity["input"]["format"]) == (
+        "xbrl",
+        "zip",
+    )
+    assert instance_identity["input"]["file_sha256"] != zip_identity["input"]["file_sha256"]
     assert from_instance == from_zip
     for key in ("header", "taxonomy", "submittable", "facts", "tables", "summary", "findings"):
         assert from_instance[key] == from_table[key], key

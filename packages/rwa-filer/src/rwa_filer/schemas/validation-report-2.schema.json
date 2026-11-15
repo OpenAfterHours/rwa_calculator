@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openafterhours.github.io/rwa_calculator/rwa-filer/schemas/validation-report-2.schema.json",
+  "title": "rwa-filer validation report, version 2",
+  "description": "One validated return: what it was computed from (identity), the verdict and whether the check was complete, the counts behind them, every finding, and every enforced rule's outcome, passes included. Within major version 2 the report only gains fields.",
+  "type": "object",
+  "required": [
+    "schema",
+    "generator",
+    "identity",
+    "header",
+    "taxonomy",
+    "status",
+    "submittable",
+    "completeness",
+    "facts",
+    "tables",
+    "summary",
+    "findings",
+    "rules"
+  ],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "rwa-filer/validation-report" },
+        "version": { "type": "string", "pattern": "^2\\.[0-9]+$" }
+      }
+    },
+    "generator": { "type": "string" },
+    "identity": { "$ref": "#/$defs/identity" },
+    "header": { "type": "object", "additionalProperties": { "type": "string" } },
+    "taxonomy": {
+      "type": "object",
+      "required": ["module", "version", "entry_point"],
+      "properties": {
+        "module": { "type": "string" },
+        "version": { "type": "string" },
+        "entry_point": { "type": "string" }
+      }
+    },
+    "status": { "$ref": "#/$defs/status" },
+    "submittable": { "type": "boolean" },
+    "completeness": { "type": "array", "items": { "$ref": "#/$defs/cause" } },
+    "facts": { "type": "integer", "minimum": 0 },
+    "tables": { "type": "array", "items": { "type": "string" } },
+    "summary": {
+      "type": "object",
+      "required": [
+        "structure_findings",
+        "rule_findings",
+        "blocking_findings",
+        "rules_enforced",
+        "rules_executed",
+        "rule_status",
+        "not_evaluated_reasons",
+        "templates_reported",
+        "templates_uncovered",
+        "templates_missing"
+      ],
+      "properties": {
+        "structure_findings": { "type": "integer" },
+        "rule_findings": { "type": "integer" },
+        "blocking_findings": { "type": "integer" },
+        "rule_book": { "type": ["string", "null"] },
+        "rules_enforced": { "type": "integer" },
+        "rules_executed": { "type": "integer" },
+        "rule_status": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "not_evaluated_reasons": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "templates_reported": { "type": "array", "items": { "type": "string" } },
+        "templates_uncovered": { "type": "array", "items": { "type": "string" } },
+        "templates_missing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["template", "rules", "linked_from"],
+            "properties": {
+              "template": { "type": "string" },
+              "rules": { "type": "array", "items": { "type": "string" } },
+              "linked_from": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+    "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "status": { "enum": ["CLEAN", "INCOMPLETE", "BLOCKED"] },
+    "identity": {
+      "type": "object",
+      "required": ["evidence_id", "generator", "input", "taxonomy", "rulebook", "settings"],
+      "properties": {
+        "evidence_id": { "$ref": "#/$defs/sha256" },
+        "generator": {
+          "type": "object",
+          "required": ["package", "version"],
+          "properties": { "package": { "const": "rwa-filer" }, "version": { "type": "string" } }
+        },
+        "input": {
+          "type": "object",
+          "required": ["file", "format", "file_sha256", "facts_sha256", "facts", "header"],
+          "properties": {
+            "file": { "type": ["string", "null"] },
+            "format": { "type": ["string", "null"] },
+            "file_sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+            "facts_sha256": { "$ref": "#/$defs/sha256" },
+            "facts": { "type": "integer", "minimum": 0 },
+            "header": { "type": "object", "additionalProperties": { "type": "string" } }
+          }
+        },
+        "taxonomy": {
+          "type": "object",
+          "required": ["module", "version", "pack", "entry_point", "sha256"],
+          "properties": {
+            "module": { "type": "string" },
+            "version": { "type": "string" },
+            "pack": { "type": "string" },
+            "entry_point": { "type": "string" },
+            "sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
+          }
+        },
+        "rulebook": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": [
+                "file",
+                "framework_version",
+                "taxonomy",
+                "sha256",
+                "workbook_sha256",
+                "formulas_package_sha256",
+                "rules_loaded",
+                "rules_enforced"
+              ],
+              "properties": {
+                "file": { "type": ["string", "null"] },
+                "framework_version": { "type": "string" },
+                "taxonomy": { "type": "string" },
+                "sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+                "workbook_sha256": { "type": ["string", "null"] },
+                "formulas_package_sha256": { "type": ["string", "null"] },
+                "rules_loaded": { "type": "integer" },
+                "rules_enforced": { "type": "integer" }
+              }
+            }
+          ]
+        },
+        "settings": {
+          "type": "object",
+          "required": ["accuracy"],
+          "properties": {
+            "accuracy": {
+              "type": "object",
+              "required": ["monetary_decimals", "percentage_decimals", "source"],
+              "properties": {
+                "monetary_decimals": { "type": "integer" },
+                "percentage_decimals": { "type": "integer" },
+                "source": { "enum": ["default", "given"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "cause": {
+      "type": "object",
+      "required": ["code", "rules", "templates", "detail"],
+      "properties": {
+        "code": {
+          "enum": [
+            "no_rulebook",
+            "rules_unsupported",
+            "rules_table_not_in_taxonomy",
+            "linked_templates_missing",
+            "coverage_shortfall"
+          ]
+        },
+        "rules": { "type": "array", "items": { "type": "string" } },
+        "templates": { "type": "array", "items": { "type": "string" } },
+        "detail": { "type": "string" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "code",
+        "severity",
+        "blocking",
+        "subject",
+        "message",
+        "expected",
+        "actual",
+        "reference",
+        "positions_total"
+      ],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "enum": ["ERROR", "WARNING"] },
+        "blocking": { "type": "boolean" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "reference": { "type": "string" },
+        "positions_total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "address": {
+      "type": "object",
+      "required": ["table", "sheet", "open_key", "row", "column"],
+      "properties": {
+        "table": { "type": "string" },
+        "sheet": { "type": ["string", "null"] },
+        "open_key": { "type": ["string", "null"] },
+        "row": { "type": "string" },
+        "column": { "type": "string" },
+        "reported": { "type": "boolean" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "rule_sha256",
+        "severity",
+        "status",
+        "reason",
+        "detail",
+        "evaluations",
+        "satisfied",
+        "unsatisfied",
+        "tables",
+        "failures"
+      ],
+      "properties": {
+        "rule_id": { "type": "string" },
+        "rule_sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "severity": { "enum": ["ERROR", "WARNING"] },
+        "status": { "enum": ["PASS", "FAIL", "NOT_EVALUATED"] },
+        "reason": { "type": "string" },
+        "detail": { "type": "string" },
+        "evaluations": { "type": "integer", "minimum": 0 },
+        "satisfied": { "type": "integer", "minimum": 0 },
+        "unsatisfied": { "type": "integer", "minimum": 0 },
+        "tables": { "type": "array", "items": { "type": "string" } },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["place", "cells", "addresses"],
+            "properties": {
+              "place": { "type": "string" },
+              "cells": { "type": "array", "items": { "type": "string" } },
+              "addresses": { "type": "array", "items": { "$ref": "#/$defs/address" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -13,6 +13,8 @@ Key responsibilities:
   validated again once per change of them (``Workspace.working``).
 - Keep every filter in the address, so a page can be bookmarked, reloaded and
   shared with whoever else is looking at the same screen.
+- Hand over the evidence behind an opened return's verdict as the file
+  ``rwa-filer validate --evidence`` writes.
 
 References:
 - rwa_filer.cli — ``rwa-filer validate``, which these pages show the result of
@@ -23,7 +25,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from starlette.responses import RedirectResponse
+from starlette.responses import FileResponse, RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.boe.engine import STATUS_FAIL
@@ -32,6 +34,7 @@ from rwa_filer.dash.forms import form_values, open_from_form, page_number
 from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.views import overview, rules_page
+from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs
 
@@ -58,6 +61,7 @@ def routes(context: DashContext) -> list[Route]:
         Route("/returns/{return_id}", pages.overview, name="overview"),
         Route("/returns/{return_id}/rules", pages.rules, name="rules"),
         Route("/returns/{return_id}/templates", pages.templates, name="templates"),
+        Route("/returns/{return_id}/evidence.jsonl", pages.evidence, name="evidence"),
         Route("/theme", pages.theme, methods=["POST"], name="theme"),
     ]
 
@@ -108,6 +112,26 @@ class ReturnPages:
         return self.context.render(
             request, "rules.html", working=working, section="rules", view=view
         )
+
+    def evidence(self, request: Request) -> Response:
+        """The evidence behind the verdict the pages show, as the file ``--evidence`` writes.
+
+        That is the return with its drafted overrides applied, as every page of
+        it is drawn — so the evidence answers for what a build would file now.
+        Collected when asked for, at the accuracy the overview's verdict was
+        reached at, and written inside the session's workspace.
+        """
+        current = self.context.working(request).current
+        collected = collect_evidence(
+            current.ret,
+            current.pack,
+            source_findings=current.reading.findings,
+            source=current.validation.source,
+        )
+        folder = self.context.workspace.directory / "evidence"
+        written = write_evidence(collected, folder / f"{current.return_id}.evidence.jsonl")
+        name = f"{current.path.stem}.evidence.jsonl"
+        return FileResponse(written.path, filename=name, media_type="application/x-ndjson")
 
     def templates(self, request: Request) -> Response:
         """One table of the return on its grid, with the broken rules' cells marked."""

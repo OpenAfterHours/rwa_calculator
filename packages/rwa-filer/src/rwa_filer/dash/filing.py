@@ -266,6 +266,7 @@ def build_package(
         always_zip=options.always_zip,
         source_findings=opened.reading.findings,
         adjustments=applied,
+        source=opened.validation.source,
     )
     ledger = None
     if package.written and author is not None and package.instance_path is not None:

@@ -15,8 +15,9 @@ across all 104 tables — in a file this package did not write. If the pack had 
 data point wrong, a fact would fail to match (``XBR001``); if the writer put a
 member in the wrong place, the rewritten file would not hold the same facts.
 
-The counts below were measured on the v4.1.1 sample (taxonomy package dated
-2026-08-17). A new publication needs a new measurement, not an edit.
+The counts are the sample's release's measurements (``tests/releases/<version>/``,
+written by ``scripts/build_filer_release.py`` from the same sample). A new
+publication is re-measured, never edited in here.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from pathlib import Path
 import pytest
 
 from pack_builders import VALID_LEI
+from release_measurements import measurements
 from rwa_filer.model import CanonicalReturn
 from rwa_filer.taxonomy.pack import available_packs
 from rwa_filer.validate.structure import FINDING_HEADER_INVALID, check_structure
@@ -40,10 +42,6 @@ BOE_DIR = os.environ.get("RWA_FILER_BOE_DIR")
 pytestmark = pytest.mark.skipif(
     not BOE_DIR, reason="set RWA_FILER_BOE_DIR to a directory holding the BoE PRA001 sample"
 )
-
-SAMPLE_FACTS = 61_428
-SAMPLE_TABLES = 104
-SAMPLE_INDICATORS = 83
 
 
 @pytest.fixture(scope="module")
@@ -64,15 +62,16 @@ def test_every_fact_of_the_sample_is_a_data_point_of_the_packaged_pack(
 ) -> None:
     # Assert — nothing unmatched, nothing orphaned, no filing-rule breach.
     assert reading.findings == ()
-    assert reading.facts == SAMPLE_FACTS
-    assert len(reading.ret.tables) == SAMPLE_TABLES
-    assert len(reading.ret.indicators or {}) == SAMPLE_INDICATORS
+    measured = _measured(reading)
+    assert reading.facts == measured["facts"]
+    assert len(reading.ret.tables) == measured["tables"]
+    assert len(reading.ret.indicators or {}) == measured["filing_indicators"]
 
 
 def test_the_sample_is_structurally_clean_apart_from_its_placeholder_header(
     reading: InstanceReading,
 ) -> None:
-    """The sample's LEI is a placeholder and its date predates the taxonomy's start."""
+    """The sample's LEI is a placeholder (its date is the release's concern: STR011)."""
     # Act
     findings = check_structure(reading.ret, reading.pack)
 
@@ -98,8 +97,8 @@ def test_rewriting_the_sample_gives_the_same_facts(
     instance = write_instance(ret, reading.pack)
 
     # Assert
-    assert instance.facts == SAMPLE_FACTS
-    assert len(instance.filing_indicators) == SAMPLE_INDICATORS
+    assert instance.facts == _measured(reading)["facts"]
+    assert len(instance.filing_indicators) == _measured(reading)["filing_indicators"]
     assert fact_set(instance.content) == fact_set(_content(sample_path))
 
 
@@ -156,3 +155,8 @@ def test_every_packaged_modules_sample_reads_and_rewrites_without_loss() -> None
     # Assert
     assert problems == {}
     assert set(samples) == {info.module for info in available_packs()}
+
+
+def _measured(reading: InstanceReading) -> dict[str, int]:
+    """What the sample's own release measured its PRA001 sample as."""
+    return measurements(reading.release.version)["samples"]["PRA001"]

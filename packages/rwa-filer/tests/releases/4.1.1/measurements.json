@@ -1,0 +1,335 @@
+{
+ "closed_by_formula": {
+  "PRA001/boe_b0281": "eba_dim:PRP",
+  "PRA001/boe_b0408": "eba_dim:PRP",
+  "PRA001/boe_b0527": "eba_dim:PRP",
+  "PRA001/boe_b0528": "eba_dim:PRP",
+  "PRA001/boe_b0539": "eba_dim:PRP",
+  "PRA001/boe_b0540": "eba_dim:PRP",
+  "PRA001/boe_b0541": "eba_dim:PRP"
+ },
+ "format": 1,
+ "packs": {
+  "LVR001": {
+   "applies_from": "2026-02-27",
+   "cells": 329,
+   "datapoints": 329,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/leverage/2026-02-27/mod/lvr001.xsd",
+   "filing_indicators": 8,
+   "linkbase_cells": 0,
+   "tables": 8
+  },
+  "LVR002": {
+   "applies_from": "2023-05-11",
+   "cells": 159,
+   "datapoints": 159,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/leverage/2023-05-11/mod/lvr002.xsd",
+   "filing_indicators": 5,
+   "linkbase_cells": 0,
+   "tables": 5
+  },
+  "MRL001": {
+   "applies_from": "2026-06-22",
+   "cells": 277,
+   "datapoints": 277,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/mrel/2026-06-22/mod/mrl001.xsd",
+   "filing_indicators": 2,
+   "linkbase_cells": 0,
+   "tables": 3
+  },
+  "MRL003": {
+   "applies_from": "2026-06-22",
+   "cells": 59,
+   "datapoints": 59,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/mrel/2026-06-22/mod/mrl003.xsd",
+   "filing_indicators": 2,
+   "linkbase_cells": 0,
+   "tables": 2
+  },
+  "PRA001": {
+   "applies_from": "2027-01-01",
+   "cells": 61615,
+   "datapoints": 61428,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/banking_reporting/2026-08-17/mod/pra001.xsd",
+   "filing_indicators": 83,
+   "linkbase_cells": 42,
+   "tables": 104
+  },
+  "PRA112": {
+   "applies_from": "2026-02-27",
+   "cells": 1681,
+   "datapoints": 1671,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/capital_plus/2026-02-27/mod/pra112.xsd",
+   "filing_indicators": 6,
+   "linkbase_cells": 9,
+   "tables": 6
+  },
+  "PRA113": {
+   "applies_from": "2026-02-27",
+   "cells": 788,
+   "datapoints": 783,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/capital_plus/2026-02-27/mod/pra113.xsd",
+   "filing_indicators": 6,
+   "linkbase_cells": 5,
+   "tables": 6
+  },
+  "PRA114": {
+   "applies_from": "2026-02-27",
+   "cells": 62,
+   "datapoints": 62,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/capital_plus/2026-02-27/mod/pra114.xsd",
+   "filing_indicators": 5,
+   "linkbase_cells": 0,
+   "tables": 5
+  },
+  "PRA116": {
+   "applies_from": "2027-01-01",
+   "cells": 23165,
+   "datapoints": 23146,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/banking_reporting_sddt/2026-08-17/mod/pra116.xsd",
+   "filing_indicators": 22,
+   "linkbase_cells": 0,
+   "tables": 26
+  },
+  "PRA117": {
+   "applies_from": "2026-02-27",
+   "cells": 539,
+   "datapoints": 534,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/capital_plus_sddt/2026-02-27/mod/pra117.xsd",
+   "filing_indicators": 5,
+   "linkbase_cells": 5,
+   "tables": 5
+  },
+  "PRA118": {
+   "applies_from": "2026-02-27",
+   "cells": 41,
+   "datapoints": 41,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/capital_plus_sddt/2026-02-27/mod/pra118.xsd",
+   "filing_indicators": 5,
+   "linkbase_cells": 0,
+   "tables": 5
+  },
+  "PRA_GAAP": {
+   "applies_from": "2021-07-31",
+   "cells": 182,
+   "datapoints": 182,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/financialstatements/2021-07-31/mod/pra_gaap.xsd",
+   "filing_indicators": 5,
+   "linkbase_cells": 0,
+   "tables": 5
+  },
+  "PRA_IFRS": {
+   "applies_from": "2021-07-31",
+   "cells": 152,
+   "datapoints": 152,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/financialstatements/2021-07-31/mod/pra_ifrs.xsd",
+   "filing_indicators": 5,
+   "linkbase_cells": 0,
+   "tables": 5
+  },
+  "PRA_MEM": {
+   "applies_from": "2021-07-31",
+   "cells": 43,
+   "datapoints": 43,
+   "entry_point": "http://www.bankofengland.co.uk/data/xbrl/fws/banking/financialstatements/2021-07-31/mod/pra_mem.xsd",
+   "filing_indicators": 2,
+   "linkbase_cells": 0,
+   "tables": 3
+  }
+ },
+ "rulebooks": {
+  "banking_reporting-4.1.1.json": {
+   "enforced": {
+    "PRA001": 1441
+   },
+   "formula_folder": "banking/banking_reporting/2026-08-17",
+   "rules": 1486,
+   "unreadable": [
+    "v4011_a",
+    "v4023_a"
+   ]
+  },
+  "banking_reporting_sddt-4.1.1.json": {
+   "enforced": {
+    "PRA116": 531
+   },
+   "formula_folder": "banking/banking_reporting_sddt/2026-08-17",
+   "rules": 560,
+   "unreadable": [
+    "v4023_a"
+   ]
+  },
+  "capital_plus-4.1.1.json": {
+   "enforced": {
+    "PRA112": 46,
+    "PRA113": 18,
+    "PRA114": 3
+   },
+   "formula_folder": "banking/capital_plus/2026-02-27",
+   "rules": 61,
+   "unreadable": []
+  },
+  "capital_plus_sddt-4.1.1.json": {
+   "enforced": {
+    "PRA117": 13,
+    "PRA118": 9
+   },
+   "formula_folder": "banking/capital_plus_sddt/2026-02-27",
+   "rules": 19,
+   "unreadable": []
+  },
+  "financialstatements-4.1.1.json": {
+   "enforced": {
+    "PRA_GAAP": 15,
+    "PRA_IFRS": 13,
+    "PRA_MEM": 2
+   },
+   "formula_folder": "banking/financialstatements/2021-07-31",
+   "rules": 30,
+   "unreadable": []
+  },
+  "leverage_2023_05_11-4.1.1.json": {
+   "enforced": {
+    "LVR002": 48
+   },
+   "formula_folder": "banking/leverage/2023-05-11",
+   "rules": 48,
+   "unreadable": []
+  },
+  "leverage_ratio-4.1.1.json": {
+   "enforced": {
+    "LVR001": 61
+   },
+   "formula_folder": "banking/leverage/2026-02-27",
+   "rules": 61,
+   "unreadable": []
+  },
+  "liquidity_pillarii-4.1.1.json": {
+   "enforced": {
+    "PRA110": 1108
+   },
+   "formula_folder": "banking/liquidity_pillarii/2019-08-14",
+   "rules": 1108,
+   "unreadable": []
+  },
+  "mrel-4.1.1.json": {
+   "enforced": {
+    "MRL001": 15,
+    "MRL003": 11
+   },
+   "formula_folder": "banking/mrel/2026-06-22",
+   "rules": 26,
+   "unreadable": []
+  },
+  "step_in_risk-4.1.1.json": {
+   "enforced": {
+    "PRA115": 26
+   },
+   "formula_folder": "banking/step-in-risk/2025-09-08",
+   "rules": 27,
+   "unreadable": []
+  },
+  "structural_reform-4.1.1.json": {
+   "enforced": {
+    "RFB001": 46,
+    "RFB002": 7,
+    "RFB003": 29,
+    "RFB004": 162,
+    "RFB005": 12,
+    "RFB006": 11,
+    "RFB007": 46,
+    "RFB008": 57
+   },
+   "formula_folder": "banking/structural_reform/2021-07-31",
+   "rules": 387,
+   "unreadable": []
+  }
+ },
+ "samples": {
+  "LVR001": {
+   "facts": 328,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_LVR001_2026-02-28_20260220142259000.xbrl",
+   "filing_indicators": 8,
+   "tables": 8
+  },
+  "LVR002": {
+   "facts": 159,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_LVR002_2024-06-30_20230808105633000.xbrl",
+   "filing_indicators": 5,
+   "tables": 5
+  },
+  "MRL001": {
+   "facts": 277,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_MRL001_2026-06-30_20260616114801000.xbrl",
+   "filing_indicators": 2,
+   "tables": 3
+  },
+  "MRL003": {
+   "facts": 59,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_MRL003_2026-06-30_20260616114803000.xbrl",
+   "filing_indicators": 2,
+   "tables": 2
+  },
+  "PRA001": {
+   "facts": 61428,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRA001_2026-07-31_20260820132546000.xbrl",
+   "filing_indicators": 83,
+   "tables": 104
+  },
+  "PRA112": {
+   "facts": 1670,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRA112_2026-02-28_20260220142044000.xbrl",
+   "filing_indicators": 6,
+   "tables": 6
+  },
+  "PRA113": {
+   "facts": 782,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRA113_2026-02-28_20260220142048000.xbrl",
+   "filing_indicators": 6,
+   "tables": 6
+  },
+  "PRA114": {
+   "facts": 61,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRA114_2026-02-28_20260220142051000.xbrl",
+   "filing_indicators": 5,
+   "tables": 5
+  },
+  "PRA116": {
+   "facts": 23146,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRA116_2026-07-31_20260813120753000.xbrl",
+   "filing_indicators": 22,
+   "tables": 26
+  },
+  "PRA117": {
+   "facts": 534,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRA117_2026-02-28_20260220142202000.xbrl",
+   "filing_indicators": 5,
+   "tables": 5
+  },
+  "PRA118": {
+   "facts": 40,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRA118_2026-02-28_20260220142204000.xbrl",
+   "filing_indicators": 5,
+   "tables": 5
+  },
+  "PRA_GAAP": {
+   "facts": 182,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRAGAAP_2021-11-30_20211025144259000.xbrl",
+   "filing_indicators": 5,
+   "tables": 5
+  },
+  "PRA_IFRS": {
+   "facts": 152,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRAIFRS_2021-11-30_20211025144300000.xbrl",
+   "filing_indicators": 5,
+   "tables": 5
+  },
+  "PRA_MEM": {
+   "facts": 43,
+   "file": "ABCDEFGHIJ0123456789_GB_banking_PRAMEM_2021-11-30_20211025144301000.xbrl",
+   "filing_indicators": 2,
+   "tables": 3
+  }
+ },
+ "version": "4.1.1"
+}

@@ -23,118 +23,70 @@ from __future__ import annotations
 from datetime import date
 
 import polars as pl
+import pytest
 
 from pack_builders import VALID_LEI
-from rwa_filer.boe.catalogue import Rule, available_rulebooks, load_rulebook
+from release_measurements import shipped_measurements
+from rwa_filer.boe.catalogue import available_rulebooks, load_rulebook
 from rwa_filer.boe.engine import REASON_UNKNOWN_TABLE, REASON_UNSUPPORTED, evaluate_rules
-from rwa_filer.boe.formulas import DEFAULT_MEMBER
-from rwa_filer.boe.grammar import references
 from rwa_filer.model import FACT_SCHEMA, CanonicalReturn, ReturnHeader
-from rwa_filer.release import release_rulebook
-from rwa_filer.taxonomy.pack import TaxonomyPack, available_packs, load_packaged
+from rwa_filer.release import release_packs, release_rulebook, release_rulebooks
+from rwa_filer.release_build import closing_dimensions
+from rwa_filer.taxonomy.pack import available_packs, load_packaged
 
-TAXONOMY = "4.1.1"
-
-#: Rule book file -> (rules, {module: rules the gateway runs}). Measured on the
-#: v4.1.1 workbooks; a new publication needs a new measurement, not an edit.
-EXPECTED = {
-    "banking_reporting-4.1.1.json": (1486, {"PRA001": 1441}),
-    "banking_reporting_sddt-4.1.1.json": (560, {"PRA116": 531}),
-    "capital_plus-4.1.1.json": (61, {"PRA112": 46, "PRA113": 18, "PRA114": 3}),
-    "capital_plus_sddt-4.1.1.json": (19, {"PRA117": 13, "PRA118": 9}),
-    "financialstatements-4.1.1.json": (30, {"PRA_GAAP": 15, "PRA_IFRS": 13, "PRA_MEM": 2}),
-    "leverage_2023_05_11-4.1.1.json": (48, {"LVR002": 48}),
-    "leverage_ratio-4.1.1.json": (61, {"LVR001": 61}),
-    "liquidity_pillarii-4.1.1.json": (1108, {"PRA110": 1108}),
-    "mrel-4.1.1.json": (26, {"MRL001": 15, "MRL003": 11}),
-    "step_in_risk-4.1.1.json": (27, {"PRA115": 26}),
-    "structural_reform-4.1.1.json": (
-        387,
-        {
-            "RFB001": 46,
-            "RFB002": 7,
-            "RFB003": 29,
-            "RFB004": 162,
-            "RFB005": 12,
-            "RFB006": 11,
-            "RFB007": 46,
-            "RFB008": 57,
-        },
-    ),
-}
-
-#: (rule book, rule) this package cannot parse, and why. All three are cells the
-#: publisher's export cut at the spreadsheet cell limit; none is run by the
-#: gateway ("Include in XBRL: no").
-UNREADABLE = {
-    ("banking_reporting-4.1.1.json", "v4011_a"): "cut at the spreadsheet cell limit",
-    ("banking_reporting-4.1.1.json", "v4023_a"): "cut at the spreadsheet cell limit",
-    ("banking_reporting_sddt-4.1.1.json", "v4023_a"): "cut at the spreadsheet cell limit",
-}
+#: Each shipped release's measured numbers (``tests/releases/<version>/``):
+#: rule counts, formula folders, unreadable rules and the closed-by-formula
+#: register, re-measured by ``scripts/build_filer_release.py``, never typed.
+MEASURED = shipped_measurements()
+RELEASES = sorted(MEASURED)
 
 #: (module, rule) the gateway runs and the engine refuses. Empty: for every
 #: module with a packaged taxonomy pack, every enforced rule is evaluated.
 UNSUPPORTED: dict[tuple[str, str], str] = {}
 
-#: Rule book file -> the folder of the taxonomy package its formulas were read
-#: from. Not derivable from the name: "leverage_ratio" is ``leverage/2026-02-27``.
-FORMULA_FOLDERS = {
-    "banking_reporting-4.1.1.json": "banking/banking_reporting/2026-08-17",
-    "banking_reporting_sddt-4.1.1.json": "banking/banking_reporting_sddt/2026-08-17",
-    "capital_plus-4.1.1.json": "banking/capital_plus/2026-02-27",
-    "capital_plus_sddt-4.1.1.json": "banking/capital_plus_sddt/2026-02-27",
-    "financialstatements-4.1.1.json": "banking/financialstatements/2021-07-31",
-    "leverage_2023_05_11-4.1.1.json": "banking/leverage/2023-05-11",
-    "leverage_ratio-4.1.1.json": "banking/leverage/2026-02-27",
-    "liquidity_pillarii-4.1.1.json": "banking/liquidity_pillarii/2019-08-14",
-    "mrel-4.1.1.json": "banking/mrel/2026-06-22",
-    "step_in_risk-4.1.1.json": "banking/step-in-risk/2025-09-08",
-    "structural_reform-4.1.1.json": "banking/structural_reform/2021-07-31",
-}
 
-#: (module, rule) -> the dimension its formula closes that every cell it names
-#: carries. Table OF 91.01 is filed on two sheets, each a member of
-#: ``eba_dim:PRP``; the v4.1.1 formulas for its rules fix PRP to its default
-#: member, so no reported fact binds. Arelle never fires any of the seven on the
-#: Bank's sample (``pra001_sample_all_tables_oracle.json``).
-CLOSED_BY_FORMULA = {
-    ("PRA001", "boe_b0281"): "eba_dim:PRP",
-    ("PRA001", "boe_b0408"): "eba_dim:PRP",
-    ("PRA001", "boe_b0527"): "eba_dim:PRP",
-    ("PRA001", "boe_b0528"): "eba_dim:PRP",
-    ("PRA001", "boe_b0539"): "eba_dim:PRP",
-    ("PRA001", "boe_b0540"): "eba_dim:PRP",
-    ("PRA001", "boe_b0541"): "eba_dim:PRP",
-}
-
-
-def test_every_family_of_the_publication_is_packaged() -> None:
+@pytest.mark.parametrize("version", RELEASES)
+def test_every_family_of_the_publication_is_packaged(version: str) -> None:
     # Act
     counts = {
-        name: (len(book.rules), {module: len(book.enforced(module)) for module in book.modules})
-        for name in available_rulebooks()
+        name: {
+            "rules": len(book.rules),
+            "enforced": {module: len(book.enforced(module)) for module in sorted(book.modules)},
+        }
+        for name in release_rulebooks(version)
         for book in [load_rulebook(name)]
     }
 
-    # Assert — 3,813 rules in eleven rule books, all of one taxonomy release.
-    assert counts == EXPECTED
-    assert sum(rules for rules, _enforced in counts.values()) == 3813
-    assert {load_rulebook(name).taxonomy for name in available_rulebooks()} == {TAXONOMY}
+    # Assert — every rule book the release was measured with, and no other.
+    assert counts == {
+        name: {"rules": book["rules"], "enforced": book["enforced"]}
+        for name, book in MEASURED[version]["rulebooks"].items()
+    }
 
 
-def test_the_rules_this_package_cannot_read_are_exactly_the_registered_ones() -> None:
+@pytest.mark.parametrize("version", RELEASES)
+def test_the_rules_this_package_cannot_read_are_exactly_the_measured_ones(version: str) -> None:
+    """Each one a cell the publisher's export cut at the spreadsheet cell limit."""
     # Act
     unreadable = {
         (name, rule.rule_id): rule
-        for name in available_rulebooks()
+        for name in release_rulebooks(version)
         for rule in load_rulebook(name).rules
         if rule.parse_error is not None
     }
 
-    # Assert — two-way: nothing unregistered, nothing registered that now parses.
-    assert set(unreadable) == set(UNREADABLE)
+    # Assert — two-way: nothing unmeasured, nothing measured that now parses; and
+    # none is a rule the gateway runs.
+    assert set(unreadable) == {
+        (name, rule_id)
+        for name, book in MEASURED[version]["rulebooks"].items()
+        for rule_id in book["unreadable"]
+    }
     for key, rule in unreadable.items():
-        assert rule.truncated and UNREADABLE[key] in (rule.parse_error or ""), key
+        assert rule.truncated and "cut at the spreadsheet cell limit" in (rule.parse_error or ""), (
+            key
+        )
+        assert not rule.in_xbrl, key
 
 
 def test_no_rule_the_gateway_runs_is_unreadable() -> None:
@@ -153,24 +105,25 @@ def test_no_rule_the_gateway_runs_is_unreadable() -> None:
     assert enforced_and_unreadable == []
 
 
-def test_a_module_is_found_in_its_release_whatever_its_case_and_an_unknown_one_is_not() -> None:
-    pra001 = release_rulebook(TAXONOMY, "pra001")
-    lvr001 = release_rulebook(TAXONOMY, "LVR001")
+@pytest.mark.parametrize("version", RELEASES)
+def test_a_module_is_found_in_its_release_whatever_its_case_and_an_unknown_one_is_not(
+    version: str,
+) -> None:
+    pra001 = release_rulebook(version, "pra001")
+    lvr001 = release_rulebook(version, "LVR001")
     assert pra001 is not None and pra001.framework_version == "banking_reporting"
     assert lvr001 is not None and lvr001.framework_version == "leverage_ratio"
-    assert release_rulebook(TAXONOMY, "XYZ999") is None
+    assert release_rulebook(version, "XYZ999") is None
     assert release_rulebook("0.0.0", "PRA001") is None
 
 
 def test_the_same_rule_code_names_different_rules_in_different_families() -> None:
     """Why a rule's identity is its framework version AND its code."""
-    # Act
-    banking = load_rulebook("banking_reporting-4.1.1.json").rule("boe_b1014")
-    step_in = load_rulebook("step_in_risk-4.1.1.json").rule("boe_b1014")
+    # Act — a code two families of one release both use, for different rules.
+    shared = [(version, code) for version in RELEASES for code in _codes_in_two_families(version)]
 
     # Assert
-    assert isinstance(banking, Rule) and isinstance(step_in, Rule)
-    assert banking.expression != step_in.expression
+    assert shared, "no rule code is shared between families: identity by code alone would do"
 
 
 def test_every_enforced_rule_of_a_packaged_module_is_supported_by_the_engine() -> None:
@@ -203,61 +156,34 @@ def test_every_enforced_rule_of_a_packaged_module_is_supported_by_the_engine() -
     )
 
 
-def test_every_packaged_rule_book_records_what_its_formulas_close() -> None:
+@pytest.mark.parametrize("version", RELEASES)
+def test_every_packaged_rule_book_records_what_its_formulas_close(version: str) -> None:
     """Built with the taxonomy package, each from its own framework's folder."""
     # Act
     folders = {
         name: load_rulebook(name).source.get("formulas", {}).get("folder")
-        for name in available_rulebooks()
+        for name in release_rulebooks(version)
     }
     without = [
         (name, rule.rule_id)
-        for name in available_rulebooks()
+        for name in release_rulebooks(version)
         for rule in load_rulebook(name).rules
         if rule.in_xbrl and not rule.closed and not rule.closed_by_variable
     ]
 
     # Assert — nearly every formula closes something; a rule book where none
     # does was built without the package.
-    assert folders == FORMULA_FOLDERS
+    assert all(folders.values()), f"rule books built without the taxonomy package: {folders}"
+    assert folders == {
+        name: book["formula_folder"] for name, book in MEASURED[version]["rulebooks"].items()
+    }
     assert len(without) < 100, f"{len(without)} XBRL rules record no closed dimension"
 
 
-def _closing_dimensions(pack: TaxonomyPack, rule: Rule) -> set[str] | None:
-    """The closed dimensions that shut out EVERY cell some reference of ``rule`` names.
-
-    ``None`` when each reference keeps at least one cell its formula admits.
-    A static reading of the pack, with no return: which cells the rule text
-    names, and whether the formula closes a dimension each of them carries.
-    """
-    shut: set[str] = set()
-    for reference in references(rule.tree):
-        table = pack.tables.get(reference.table or "")
-        if table is None:
-            continue
-        rows = {table.row_code(code) for code in reference.rows}
-        columns = {table.column_code(code) for code in reference.columns}
-        sheets = {table.sheet_code(code) for code in reference.sheets}
-        named = pack.cells.filter(pl.col("table") == table.code)
-        for column, accepted in (("row", rows), ("column", columns), ("sheet", sheets)):
-            if accepted:
-                named = named.filter(pl.col(column).is_in(sorted(accepted)))
-        closed = rule.closed | rule.closed_by_variable.get(reference.variable or "", frozenset())
-        hits = [
-            closed
-            & {
-                dimension
-                for dimension, member in pack.datapoints[point].dimensions
-                if member.rpartition(":")[2] != DEFAULT_MEMBER
-            }
-            for point in named["datapoint"].unique().to_list()
-        ]
-        if hits and all(hits):
-            shut |= set().union(*hits)
-    return shut or None
-
-
-def test_the_rules_their_own_formulas_cannot_fire_are_exactly_the_registered_ones() -> None:
+@pytest.mark.parametrize("version", RELEASES)
+def test_the_rules_their_own_formulas_cannot_fire_are_exactly_the_measured_ones(
+    version: str,
+) -> None:
     """For each module whose pack ships: which enforced rules nobody can run.
 
     A rule joins this register when a new taxonomy closes a dimension its
@@ -265,18 +191,18 @@ def test_the_rules_their_own_formulas_cannot_fire_are_exactly_the_registered_one
     Either is a change in what a return is checked against, and must be seen.
     """
     # Act
-    found: dict[tuple[str, str], str] = {}
-    for info in available_packs():
+    found: dict[str, str] = {}
+    for info in release_packs(version):
         pack = load_packaged(info.key)
         for rule in _rulebook(info.version, info.module).enforced(info.module):
             if rule.parse_error is not None or not (rule.closed or rule.closed_by_variable):
                 continue
-            shut = _closing_dimensions(pack, rule)
+            shut = closing_dimensions(pack, rule)
             if shut is not None:
-                found[(info.module, rule.rule_id)] = ", ".join(sorted(shut))
+                found[f"{info.module}/{rule.rule_id}"] = ", ".join(sorted(shut))
 
-    # Assert — two-way against the register.
-    assert found == CLOSED_BY_FORMULA
+    # Assert — two-way against the measured register.
+    assert found == MEASURED[version]["closed_by_formula"]
 
 
 def _rulebook(version: str, module: str):  # noqa: ANN202 - a test helper
@@ -284,3 +210,12 @@ def _rulebook(version: str, module: str):  # noqa: ANN202 - a test helper
     rulebook = release_rulebook(version, module)
     assert rulebook is not None, f"no rule book for {module} in {version}"
     return rulebook
+
+
+def _codes_in_two_families(version: str) -> list[str]:
+    """Rule codes two rule books of ``version`` both use, for different expressions."""
+    expressions: dict[str, set[str]] = {}
+    for name in release_rulebooks(version):
+        for rule in load_rulebook(name).rules:
+            expressions.setdefault(rule.rule_id, set()).add(rule.expression)
+    return sorted(code for code, seen in expressions.items() if len(seen) > 1)

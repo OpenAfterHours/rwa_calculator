@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from rwa_filer.rules import importer
 
@@ -84,11 +84,17 @@ def _boe_row(**cells: Any) -> list[Any]:
     return row
 
 
-def _write_workbook(path: Path, sheet: str, rows: list[list[Any]]) -> Path:
+def _write_workbook(
+    path: Path, sheet: str, rows: list[list[Any]], header: list[str] | None = None
+) -> Path:
+    """A one-sheet workbook. The BoE sheet is read by its header names, so it gets them."""
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = sheet
-    worksheet.append(["header"] * len(rows[0]))
+    if header is None:
+        names = importer.BOE_COLUMNS if sheet == importer.BOE_SHEET else ()
+        header = list(names[: len(rows[0])]) if names else ["header"] * len(rows[0])
+    worksheet.append(header)
     for row in rows:
         worksheet.append(row)
     workbook.save(path)
@@ -297,8 +303,12 @@ def test_a_workbook_not_laid_out_for_the_publisher_is_refused(
     eba_short = _write_workbook(
         tmp_path / "eba.xlsx", importer.EBA_SHEET, [_eba_row(id="v1", table="C 07.00")[:-1]]
     )
+    no_rule_code = [name for name in importer.BOE_COLUMNS if name != "Rule code"]
     boe_short = _write_workbook(
-        tmp_path / "boe.xlsx", importer.BOE_SHEET, [_boe_row(id="b1", table="OF07")[:-1]]
+        tmp_path / "boe.xlsx",
+        importer.BOE_SHEET,
+        [_boe_row(id="b1", table="OF07")[:-1]],
+        header=no_rule_code,
     )
 
     # Act / Assert
@@ -308,8 +318,44 @@ def test_a_workbook_not_laid_out_for_the_publisher_is_refused(
         importer.extract(importer.PUBLISHER_BOE, tmp_path / "empty.xlsx")
     with pytest.raises(ValueError, match=f"has {EBA_WIDTH - 1} columns.*across {EBA_WIDTH}"):
         importer.extract(importer.PUBLISHER_EBA, eba_short)
-    with pytest.raises(ValueError, match=f"has {BOE_WIDTH - 1} columns.*across {BOE_WIDTH}"):
+    with pytest.raises(ValueError, match="'banking_reporting' has no column.s. Rule code"):
         importer.extract(importer.PUBLISHER_BOE, boe_short)
+
+
+def test_the_boe_sheet_is_read_by_header_name_not_position(
+    boe_workbook: Path, tmp_path: Path
+) -> None:
+    """A column the Bank adds, or moves, does not shift a field."""
+    # Arrange — the same rows with a new column inserted before "Rule code", and
+    # the precondition columns (which some layouts lack) dropped.
+    source = load_workbook(boe_workbook)["banking_reporting"]
+    rows = [list(row) for row in source.iter_rows(values_only=True)]
+    dropped = {importer.BOE_COL_PRECONDITION, importer.BOE_COL_SIMPLE_PRECONDITION}
+    moved = [
+        [
+            *[cell for i, cell in enumerate(row[: importer.BOE_COL_RULE_CODE]) if i not in dropped],
+            "Comment" if index == 0 else "a note",
+            *[
+                cell
+                for i, cell in enumerate(row)
+                if i >= importer.BOE_COL_RULE_CODE and i not in dropped
+            ],
+        ]
+        for index, row in enumerate(rows)
+    ]
+    shuffled = _write_workbook(
+        tmp_path / "shuffled.xlsx", importer.BOE_SHEET, moved[1:], header=moved[0]
+    )
+
+    # Act
+    expected = importer.extract_boe(boe_workbook)
+    actual = importer.extract_boe(shuffled)
+
+    # Assert
+    for rule in expected["rules"]:
+        rule["precondition"] = rule["precondition_raw"] = None
+    expected["source"]["file"] = actual["source"]["file"]
+    assert actual == expected
 
 
 def test_serialisation_is_deterministic_and_pure_ascii(boe_workbook: Path) -> None:

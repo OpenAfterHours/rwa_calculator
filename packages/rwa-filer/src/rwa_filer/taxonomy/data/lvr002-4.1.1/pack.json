@@ -143,7 +143,7 @@
   "sources": {
    "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Leverage.xlsx",
    "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
-   "taxonomy_package": "boe411.zip"
+   "taxonomy_package": "boe-banking-v411.zip"
   },
   "taxonomy": "boe-banking",
   "title": "Contingent Leverage",

@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook
 
+from release_measurements import shipped_measurements
+from rwa_filer.boe.catalogue import load_rulebook
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 from rwa_filer.rules import importer
 from rwa_filer.rules.catalogue import EXTRACT_FILES
@@ -15,7 +17,7 @@ from rwa_filer.rules.catalogue import EXTRACT_FILES
 
 @pytest.fixture
 def boe_workbook(tmp_path: Path) -> Path:
-    """A one-rule BoE workbook on the publisher's column positions."""
+    """A one-rule BoE workbook, under the publisher's column headers."""
     row: list[object] = [None] * 21
     row[importer.BOE_COL_OWNER] = "BoE"
     row[importer.BOE_COL_RULE_CODE] = "boe_b0001"
@@ -26,7 +28,7 @@ def boe_workbook(tmp_path: Path) -> Path:
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = importer.BOE_SHEET
-    worksheet.append(["header"] * 21)
+    worksheet.append(list(importer.BOE_COLUMNS))
     worksheet.append(row)
     path = tmp_path / "boe.xlsx"
     workbook.save(path)
@@ -123,7 +125,7 @@ def test_a_missing_workbook_is_a_failure_not_a_traceback(
     [
         pytest.param("eba", "boe", "no sheet 'v3.0(3.0.1)'", id="another-publishers-workbook"),
         pytest.param("boe", "empty", "is empty", id="empty-rule-sheet"),
-        pytest.param("boe", "narrow", "has 2 columns", id="narrower-than-the-layout"),
+        pytest.param("boe", "narrow", "has no column(s) Owner", id="narrower-than-the-layout"),
     ],
 )
 def test_a_workbook_not_laid_out_for_the_publisher_fails_in_one_line_that_says_why(
@@ -168,12 +170,16 @@ def test_rulebook_list_shows_every_module_and_what_it_enforces(
     code = main(["rulebook", "list"])
 
     # Assert
-    lines = capsys.readouterr().out.splitlines()
+    rows = [line.split() for line in capsys.readouterr().out.splitlines()]
+    expected = [
+        f"{load_rulebook(name).framework_version} {version} {book['rules']} {module} {count}".split()
+        for version, measured in shipped_measurements().items()
+        for name, book in measured["rulebooks"].items()
+        for module, count in book["enforced"].items()
+    ]
     assert code == EXIT_OK
-    assert any(
-        line.split() == ["banking_reporting", "4.1.1", "1486", "PRA001", "1441"] for line in lines
-    )
-    assert any(line.split() == ["leverage_ratio", "4.1.1", "61", "LVR001", "61"] for line in lines)
+    assert expected, "no measured rule book: the listing would be checked against nothing"
+    assert [row for row in expected if row not in rows] == []
 
 
 def test_rulebook_import_and_check_report_a_missing_workbook_cleanly(

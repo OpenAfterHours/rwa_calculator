@@ -26,34 +26,58 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from release_measurements import oracle_path
 from rwa_filer.boe.engine import (
     REASON_CLOSED_BY_FORMULA,
     REASON_NOT_REPORTED,
     RuleResult,
     evaluate_rules,
 )
+from rwa_filer.release import resolve_release
 from rwa_filer.validate.structure import check_structure
 from rwa_filer.xbrl.reader import read_instance
 from rwa_filer.xbrl.writer import write_instance
 from sample_carve import CREDIT_INDICATORS, thin_carve
 
 BOE_DIR = os.environ.get("RWA_FILER_BOE_DIR")
-ORACLE_PATH = Path(__file__).parent / "data" / "pra001_sample_credit_oracle.json"
+#: The oracles are per release (``tests/releases/<version>/oracles/``): Arelle
+#: counted them on that release's sample. Which release a download is, its
+#: PRA001 sample's own schemaRef says.
+_SCHEMA_REF = re.compile(rb'schemaRef[^>]*href="([^"]+)"')
 
 pytestmark = pytest.mark.skipif(
     not BOE_DIR, reason="set RWA_FILER_BOE_DIR to a directory holding the BoE PRA001 sample"
 )
 
 
+def _release_of_downloads() -> str:
+    """The release the downloads under ``RWA_FILER_BOE_DIR`` are, from the PRA001 sample."""
+    found = sorted(Path(BOE_DIR or "").rglob("*_PRA001_*.xbrl"))
+    if not found:
+        pytest.skip("no *_PRA001_*.xbrl sample instance under RWA_FILER_BOE_DIR")
+    with found[0].open("rb") as handle:
+        match = _SCHEMA_REF.search(handle.read(1 << 16))
+    assert match is not None, f"{found[0].name} names no entry point"
+    return resolve_release(None, entry_point=match.group(1).decode()).version
+
+
+def _oracle(name: str) -> dict[str, Any]:
+    path = oracle_path(_release_of_downloads(), name)
+    if not path.is_file():
+        pytest.skip(f"no Arelle oracle {name} measured for this release yet")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @pytest.fixture(scope="module")
 def oracle() -> dict[str, Any]:
-    return json.loads(ORACLE_PATH.read_text(encoding="utf-8"))
+    return _oracle("pra001_sample_credit_oracle.json")
 
 
 @pytest.fixture(scope="module")
@@ -132,12 +156,10 @@ def test_the_engine_blocks_exactly_the_rules_arelle_did_not_run(
 # Every PRA001 rule, on a carve of every table
 # ---------------------------------------------------------------------------
 
-ALL_TABLES_ORACLE_PATH = Path(__file__).parent / "data" / "pra001_sample_all_tables_oracle.json"
-
 
 @pytest.fixture(scope="module")
 def all_tables_oracle() -> dict[str, Any]:
-    return json.loads(ALL_TABLES_ORACLE_PATH.read_text(encoding="utf-8"))
+    return _oracle("pra001_sample_all_tables_oracle.json")
 
 
 @pytest.fixture(scope="module")
@@ -219,8 +241,6 @@ def test_the_join_rules_hold_where_both_tables_report_the_same_desk(
 # Twelve further modules, each on its whole sample
 # ---------------------------------------------------------------------------
 
-MODULES_ORACLE_PATH = Path(__file__).parent / "data" / "module_sample_oracles.json"
-
 
 def test_every_rule_of_twelve_further_modules_is_counted_as_arelle_counts_it() -> None:
     """Leverage, MREL, Capital+ and financial statements: 254 rules, exact counts.
@@ -231,7 +251,7 @@ def test_every_rule_of_twelve_further_modules_is_counted_as_arelle_counts_it() -
     cells, and tables that show one data point in two cells.
     """
     # Arrange
-    oracle = json.loads(MODULES_ORACLE_PATH.read_text(encoding="utf-8"))["modules"]
+    oracle = _oracle("module_sample_oracles.json")["modules"]
     differences: dict[str, object] = {}
     compared = 0
 

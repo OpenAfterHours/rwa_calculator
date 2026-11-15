@@ -1,6 +1,8 @@
 # Taxonomy release selection in rwa-filer
 
-**Status:** Proposed 2026-11-15. Nothing is implemented. Written against `f52dba0`
+**Status:** Proposed 2026-11-15. D2, D3, D7 and D8 were revised the same day: there is
+no cap on the number of releases, the data stays inside rwa-filer, and any release other
+than the live one is chosen by its version number. Nothing is implemented. Written against `f52dba0`
 (rwa-filer 0.1.2), which ships one release: Bank of England banking taxonomy 4.1.1.
 Scope is `packages/rwa-filer`; [§9](#9-effect-on-rwa-calc) lists the knock-on in
 rwa-calc.
@@ -8,11 +10,13 @@ rwa-calc.
 ## 1. The change in one paragraph
 
 The user chooses, per run, which taxonomy release a return is validated, built and
-compared against: `--taxonomy live`, `--taxonomy future` or `--taxonomy 4.1.1`. With no
-choice, the run uses the live release. A run always takes its taxonomy pack and its rule
+compared against, by naming its version: `--taxonomy 4.1.1`. With no choice, the run uses
+the live release. A run always takes its taxonomy pack and its rule
 book from the same release, and its first line of output says which release it used and
-why. rwa-filer ships at most two releases, named in one committed file, and packaging the
-next one is a single script run followed by a review of the diff.
+why. rwa-filer ships as many releases as firms need, named in one committed file. The
+default is worked out per module, so returns whose rules come into force on different
+dates each get the release in force for them. Packaging the next release is a single
+script run followed by a review of the diff.
 
 ## 2. Decisions
 
@@ -21,11 +25,13 @@ Agreed 2026-11-15.
 | # | Decision |
 |---|---|
 | D1 | The user picks the release for a run. The return's reference date never picks it. |
-| D2 | With no choice, the default is the **live** release. Where a module has no live release, the default is the future one. |
-| D3 | rwa-filer ships at most **two** releases, named explicitly rather than "the newest two". Normally these are the live release and the future one. |
+| D2 | With no choice, the default is the **live** release: the newest shipped release in force for the module on the run date. If the module has no live release, the default is its future release when there is exactly one. With several, the run stops and asks for a version. |
+| D3 | rwa-filer ships **as many releases as are needed**, each named explicitly. There is no fixed cap: reporting modules come into force on different dates, so firms may need several releases at once. Growth is watched by a size budget ([§7.1](#71-releasesjson)), not a count. |
 | D4 | Live, future and superseded are worked out **per module**, from the dates in each pack, against the date of the run. |
 | D5 | A run's pack and rule book always come from the same release. |
 | D6 | For now only 4.1.1 ships. It is built for the Basel 3.1 rules that go live on 1 January 2027. |
+| D7 | Every shipped release stays inside the rwa-filer package. It is not split into separately installed packages, and rwa-filer does not download taxonomy data itself ([§11](#11-considered-and-not-taken)). |
+| D8 | Any release other than the default is chosen by its **version number**. There are no `live` or `future` shortcuts: once several releases are shipped, "the future one" can mean more than one, so the user says which they want. |
 
 ## 3. Today
 
@@ -86,7 +92,7 @@ Some of the groundwork is already there:
   a pack per module (`taxonomy/data/<module>-<version>/`) and a rule book per return
   family (`boe/data/<family>-<version>.json`).
 - **Shipped releases**: the releases named in `src/rwa_filer/releases.json`
-  ([§7.1](#71-releasesjson)). Never more than two.
+  ([§7.1](#71-releasesjson)). There can be as many as are needed.
 - **Run date**: the date the run happens. On the command line it is `date.today()`; in the
   library it is a `today=` argument, so that tests are fixed.
 - **Status of a module in a release** comes from that pack's `valid_from` and `valid_to`,
@@ -111,15 +117,22 @@ defined once for those. `template` (`cli.py:600`) and `referee` need it added se
 
 | VALUE | Release used for the return's module |
 |---|---|
-| *(none)* | `live`; if the module has no live release, `future` |
-| `live` | the newest shipped release in which the module is live |
-| `future` | the newest shipped release in which the module is future |
+| *(none)* | the live release: the newest shipped release in which the module is live. If the module has no live release and exactly one future release, that one. |
 | a version, e.g. `4.1.1` | that release |
 
-When the user names something, a problem is an error and never a fallback:
+Every other release is chosen by its version number (D8).
 
-- **`live` or `future` with no such release for the module.** The message lists what is
-  shipped, the module's status in each release, and the value that would work.
+The default is worked out per module. A firm filing several returns therefore gets, for
+each one, the release in force for that module, even when the modules come into force on
+different dates. Nobody needs to choose unless they want something other than the live
+release.
+
+A problem is always an error, never a fallback:
+
+- **No version given, no live release, and more than one future release for the
+  module.** The run stops and lists the future releases with their applies-from dates.
+  For example: `PRA001 has no live release; choose one: --taxonomy 4.2.0 (from 1 January
+  2028), --taxonomy 4.3.0 (from 1 July 2028)`.
 - **A version that is not shipped.** If `retired.json` ([§7.2](#72-retiredjson)) records
   it, the message names the last rwa-filer version that shipped it, e.g.
   `uvx rwa-filer@0.4.0 ...`. Otherwise it lists what is shipped.
@@ -139,8 +152,9 @@ With only 4.1.1 shipped, on 15 November 2026:
 | PRA001, PRA116 | 4.1.1 | no live release is shipped; in 4.1.1 they are future, from 1 January 2027 |
 | the other 12 | 4.1.1 | live |
 
-`--taxonomy live` on a PRA001 return fails and suggests `--taxonomy future`. On 1 January
-2027 the PRA001 default is still 4.1.1, now as live, with no change to any install.
+On 1 January 2027 the PRA001 default is still 4.1.1, now as live, with no change to any
+install. If a second future release for PRA001 were shipped before then, a PRA001 run
+with no `--taxonomy` would stop and ask which one to use.
 
 ### 5.3 XBRL files
 
@@ -170,11 +184,13 @@ is before PRA001 applies in taxonomy 4.1.1 (1 January 2027)". A Warning does not
     Taxonomy 4.1.1 (default) — PRA001 future: applies from 1 January 2027; no live release shipped
     ```
 
-    And during 2027 with two releases shipped (4.2.0 and its date are illustrative):
+    And during 2027 with three releases shipped (4.2.0, 4.3.0 and their dates are
+    illustrative):
 
     ```text
     Taxonomy 4.1.1 (default) — PRA001 live since 1 January 2027
-    Also shipped: 4.2.0 — PRA001 future from 1 January 2028 (--taxonomy future)
+    Also shipped for PRA001: 4.2.0 future from 1 January 2028 (--taxonomy 4.2.0)
+                             4.3.0 future from 1 July 2028 (--taxonomy 4.3.0)
     ```
 
 2. **The JSON report and the build manifest.** The existing `taxonomy` block gains fields:
@@ -194,7 +210,7 @@ is before PRA001 applies in taxonomy 4.1.1 (1 January 2027)". A Warning does not
     }
     ```
 
-    `chosen_by` is one of `default`, `live`, `future` or `version`. A filed return then
+    `chosen_by` is `default` or `version`. A filed return then
     records which release it used and why.
 
 3. **`taxonomy list`** shows one row per shipped release and module: its status on the
@@ -218,7 +234,7 @@ class Release:
     pack: TaxonomyPack
     rulebook: RuleBook
     status: str       # "live", "future" or "superseded", on run_date
-    chosen_by: str    # "default", "live", "future" or "version"
+    chosen_by: str    # "default" or "version"
     run_date: date
 
 
@@ -273,10 +289,18 @@ file we edit by hand, and `shipped_releases()` reads it.
 
 New contract tests in `packages/rwa-filer/tests/test_releases.py`:
 
-- there are at most two releases, with no version listed twice;
+- no version is listed twice;
 - the packs and rule books on disk are exactly those of the listed releases, with nothing
   extra and nothing missing;
-- every module with a pack has a rule book in the same release.
+- every module with a pack has a rule book in the same release;
+- the packaged taxonomy data stays within the size budget below.
+
+There is no cap on the number of releases, so the budget is a size, not a count. One
+release adds about 1.6 MB, compressed, to the wheel today: 1.36 MB of packs and 0.23 MB
+of rule books, measured on 4.1.1. The proposed budget is 50 MB of compressed package
+data, roughly 30 releases at today's size and well below PyPI's default 100 MB limit per
+file. Passing it is a prompt to retire releases or to revisit
+[§11](#11-considered-and-not-taken), not a hard limit.
 
 ### 7.2 `retired.json`
 
@@ -310,8 +334,9 @@ A build does nine things:
 6. It checks each module's sample file against its pack. This is today's packaging rule:
    a module ships only when every fact in the Bank's sample file is a data point of its
    pack. A module that fails is not packaged, and the reason is reported.
-7. For each module the new release changes, it sets `valid_to` on the other shipped
-   release's pack to the day before the new `valid_from`.
+7. For each module the new release changes, it sets `valid_to` on the previous release's
+   pack for that module (the newest older shipped release that has it) to the day before
+   the new `valid_from`.
 8. It removes every shipped release that is not in `releases.json` (its packs, rule
    books, measurements and oracles) and records it in `retired.json`.
 9. It writes the release's measurement file ([§7.4](#74-tests-per-release)) and prints a
@@ -343,6 +368,7 @@ CI checks what it committed.
 | A future release goes live | Nothing. Status and the default move on the date by themselves, on every install. |
 | The Bank corrects a release (e.g. 4.2.0 → 4.2.1) | Replace the version in `releases.json` and rebuild. The corrected release takes the slot. |
 | An old release is no longer needed | Remove it from `releases.json`, run the build script, release rwa-filer. |
+| A retired release is needed again | Add it back to `releases.json` and rebuild it from the Bank's files. The build is reproducible, so it comes back exactly as it was. |
 
 Judgement is only needed when the build reports something: a refused module, rules
 marked `unsupported`, or a `RefereePlanError` from the Arelle comparison planner.
@@ -354,10 +380,10 @@ adds an entry to `packages/rwa-filer/CHANGELOG.md`.
 
 | # | Slice | Done when |
 |---|---|---|
-| 1 | **Resolver** ([§6](#6-the-resolver)) with a minimal `releases.json` listing 4.1.1. Numeric ordering; status on the run date; default live, else future. Every caller in [§3](#3-today) moves to it. | No code picks a pack by date or a rule book by file name. The simulation in [§3](#3-today) is a test that fails on today's code. The three date-selection tests in `tests/taxonomy/test_pack.py` (lines 202, 221 and 235) are replaced by release tests. |
+| 1 | **Resolver** ([§6](#6-the-resolver)) with a minimal `releases.json` listing 4.1.1. Numeric ordering; status on the run date; default live, else the only future release, else ask for a version. Every caller in [§3](#3-today) moves to it. | No code picks a pack by date or a rule book by file name. The simulation in [§3](#3-today) is a test that fails on today's code. The three date-selection tests in `tests/taxonomy/test_pack.py` (lines 202, 221 and 235) are replaced by release tests. |
 | 2 | **Choosing** ([§5.1](#51-choosing-a-release), [§5.3](#53-xbrl-files), [§5.4](#54-a-reference-date-outside-the-releases-dates)): `--taxonomy`, `taxonomy=` and `today=`, the XBRL entry-point rule, and `STR011`. | Every command in [§5.1](#51-choosing-a-release) accepts `--taxonomy`, and each error has a test. A 2026-12-31 PRA001 return validates against 4.1.1 with one `STR011` warning, and `build` still writes it. |
 | 3 | **Saying what was used** ([§5.5](#55-saying-what-was-used)), plus the docs. | Every text output starts with the release line. The report and manifest carry the new fields. `taxonomy list` and the dashboard show status. `docs/rwa-filer/index.md` ("Reading an XBRL file", "Taxonomy packs") and `docs/rwa-filer/dash.md` describe choosing a release, not dates. |
-| 4 | **`retired.json` and the contract tests** ([§7.1](#71-releasesjson), [§7.2](#72-retiredjson)). | The contract tests pass for 4.1.1 and fail when a stray pack or rule book is added. |
+| 4 | **`retired.json` and the contract tests** ([§7.1](#71-releasesjson), [§7.2](#72-retiredjson)). | The contract tests pass for 4.1.1, and fail when a stray pack or rule book is added or when the data passes the size budget. |
 | 5 | **The build script** ([§7.3](#73-scriptsbuild_filer_releasepy)). | `--check` against the Bank's 4.1.1 downloads reproduces today's packaged data byte for byte. |
 | 6 | **Tests per release** ([§7.4](#74-tests-per-release)). | No test names 4.1.1 except through a measurement file. A second listed release would be tested with no test edits. |
 | 7 | **The template-level engine** reads the Bank's sheet by header name, and the build script regenerates its extract. It stays on one release, the newest shipped, and users cannot select it. | A Bank workbook with an extra column inserted imports correctly. |
@@ -381,9 +407,9 @@ Slices 1 and 2 change rwa-filer's public API, so they ship as rwa-filer 0.2.0.
 
 ## 10. Open questions
 
-1. **A module whose entry point does not change between the two releases.** Its pack
-   dates come from the entry point's folder, so both releases would show it live from the
-   same day, and `live` would pick the newer release. That holds even if the newer
+1. **A module whose entry point does not change between releases.** Its pack dates come
+   from the entry point's folder, so every release that carries it would show it live from
+   the same day, and the default would pick the newest. That holds even if the newer
    release changes the module's rules from a later date. The dates alone cannot say when
    the newer rules take effect; the Bank's release note does. Proposal: record that date
    in the release's `applies_from` in `releases.json`. This must be settled before a
@@ -391,8 +417,9 @@ Slices 1 and 2 change rwa-filer's public API, so they ship as rwa-filer 0.2.0.
 2. **A return for a period before a changeover, run after it**, e.g. a 31 December 2026
    PRA001 return validated in February 2027. The default is the release live on the run
    date, 4.1.1, and the return gets `STR011`. The user then needs `--taxonomy` naming the
-   earlier release, which works only while that release is shipped. Today no earlier
-   release is shipped, by choice (D6).
+   earlier release, which works only while that release is shipped. With no cap on
+   releases (D3), it can stay shipped for as long as late or corrected returns need it.
+   Today no earlier release is shipped, by choice (D6).
 3. **Whether the Bank's file names are stable enough to find by pattern.** If they are
    not, the build script takes a small per-release list of which file is which.
 4. **The Bank's known-issues log.** Between releases the Bank downgrades or deactivates
@@ -400,3 +427,21 @@ Slices 1 and 2 change rwa-filer's public API, so they ship as rwa-filer 0.2.0.
    with the release it amends, which the resolver applies. P2.59 still names a rwa-calc
    path, `src/rwa_calc/reporting/validations/rules/`, that no longer exists now that the
    rules live in rwa-filer.
+
+## 11. Considered and not taken
+
+- **A separate data package per release, installed as an extra**
+  (`uvx "rwa-filer[4.1.1]"`), so that users download only the releases they use. It
+  works with uv. On a toy package built with hatchling, the build tool rwa-filer uses:
+    - the extra was stored as `4-1-1`, the standard spelling;
+    - `uvx --from "demo-core[4.1.1]"` installed the data package;
+    - the core found it at run time through an entry point.
+
+  It was not taken because one release is about 1.6 MB compressed, which does not
+  justify the costs: a new package to publish for every release, a core release to add
+  each extra, and format compatibility between separately versioned packages. Revisit
+  it if the size budget in [§7.1](#71-releasesjson) is approached.
+- **rwa-filer downloading taxonomy data itself at run time.** Not taken. Banks' networks
+  usually reach PyPI through an internal mirror but block other downloads. It would also
+  end the guarantee that validation needs no network access, and make runs harder to
+  audit.

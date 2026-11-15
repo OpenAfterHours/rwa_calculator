@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import severity_chip %}
 {% block title %}Build &amp; sign off · {{ current.name }} — rwa-filer dash{% endblock %}
 {% block content %}
 {% set rid = current.return_id %}
@@ -15,7 +16,7 @@
 {% endif %}
 
 <ol class="steps" aria-label="Progress">
-  <li class="step done"><span class="num">✓</span><span><strong>Validate</strong><span class="small muted">{{ "submittable" if current.validation.is_submittable else current.validation.blocking | length ~ " blocking" }}</span></span></li>
+  <li class="step done"><span class="num">✓</span><span><strong>Validate</strong><span class="small muted">{{ "submittable" if current.validation.is_submittable else current.validation.blocking | length ~ " blocking" }}{% if working.adjusted %} with the overrides{% endif %}</span></span></li>
   <li class="step{{ ' done' if written else ' current' }}"><span class="num">{{ "✓" if written else "2" }}</span><span><strong>Build</strong><span class="small muted">{% if written %}{{ latest.record.package.instance.content | length | count }} bytes written{% elif latest %}not written{% else %}the .xbrl and its manifest{% endif %}</span></span></li>
   <li class="step{{ ' done' if latest and latest.signoff else (' current' if written else '') }}"><span class="num">{{ "✓" if latest and latest.signoff else "3" }}</span><span><strong>Sign off</strong><span class="small muted">{{ latest.signoff.approver if latest and latest.signoff else "bound to the file's checksum" }}</span></span></li>
   <li class="step{{ ' done' if latest and latest.verification == () else (' current' if latest and latest.signoff else '') }}"><span class="num">{{ "✓" if latest and latest.verification == () else "4" }}</span><span><strong>Verify</strong><span class="small muted">{% if latest and latest.verification is not none %}{{ "the files agree" if not latest.verification else latest.verification | length ~ " problem(s)" }}{% else %}before you upload{% endif %}</span></span></li>
@@ -49,16 +50,37 @@
     </li>
     {% endfor %}
   </ul>
-  {% if view.preview %}
-  {% set p = view.preview %}
-  <div class="callout {{ 'callout-pass' if p.submittable else 'callout-warn' }}" id="preview">
+  {% if view.effect %}
+  {% set e = view.effect %}
+  {% set rules_url = "/returns/" ~ rid ~ "/rules" %}
+  <div class="callout {{ 'callout-pass' if e.submittable else 'callout-warn' }}" id="effect">
     <div class="body">
-      <div class="title">With these overrides: {{ "nothing blocks submission" if p.submittable else p.blocking_after ~ " blocking finding" ~ ("s" if p.blocking_after != 1 else "") }}</div>
-      <p>Blocking findings {{ p.blocking_before }} → {{ p.blocking_after }} · rule breaks {{ p.breaks_before }} → {{ p.breaks_after }}{% if p.structure_after %} · {{ p.structure_after }} structure finding{{ "s" if p.structure_after != 1 }}{% endif %}.</p>
+      <div class="title">With these overrides: {{ "nothing blocks submission" if e.submittable else e.blocking_after ~ " blocking finding" ~ ("s" if e.blocking_after != 1 else "") }}</div>
+      <p>Blocking findings {{ e.blocking_before }} → {{ e.blocking_after }} · rule breaks {{ e.breaks_before }} → {{ e.breaks_after }}{% if e.structure_after %} · {{ e.structure_after }} structure finding{{ "s" if e.structure_after != 1 }}{% endif %}. The overview, the rules and the template grid show the return this way too.</p>
     </div>
   </div>
-  {% else %}
-  <div class="btn-row"><a class="btn" href="/returns/{{ rid }}/filing?preview=1#overrides">Check the return with these overrides</a></div>
+  {% if e.broken %}
+  <div class="effect-group" id="effect-broken">
+    <h3>Newly broken ({{ e.broken | length }})</h3>
+    <ul class="effects">{% for rule in e.broken %}<li data-change="{{ rule.change }}" data-rule="{{ rule.rule_id }}"><a class="rule-item" href="{{ link(rules_url, rule=rule.rule_id) }}"><span class="top">{{ severity_chip(rule.severity) }}<span class="mono small muted">{{ rule.rule_id }}</span></span><span class="label">{{ rule.label or "No label published" }}</span></a></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if e.stopped %}
+  <div class="effect-group" id="effect-stopped">
+    <h3>No longer run ({{ e.stopped | length }})</h3>
+    <p class="small muted" style="margin: 0">Broken as opened, and not run with the overrides. A rule that does not run is not passed: nothing checks the figures it reads.</p>
+    <ul class="effects">{% for rule in e.stopped %}<li data-change="{{ rule.change }}" data-rule="{{ rule.rule_id }}"><a class="rule-item" href="{{ link(rules_url, status='NOT_EVALUATED', rule=rule.rule_id) }}"><span class="top">{{ severity_chip(rule.severity) }}<span class="mono small muted">{{ rule.rule_id }}</span><span class="chip chip-ne">Not evaluated</span></span><span class="label">{{ rule.label or "No label published" }}</span><span class="where">not run: {{ rule.reason }}</span></a></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if e.fixed %}
+  <div class="effect-group" id="effect-fixed">
+    <h3>Fixed ({{ e.fixed | length }})</h3>
+    <ul class="effects">{% for rule in e.fixed %}<li data-change="{{ rule.change }}" data-rule="{{ rule.rule_id }}"><a class="rule-item" href="{{ link(rules_url, status='PASS', rule=rule.rule_id) }}"><span class="top">{{ severity_chip(rule.severity) }}<span class="mono small muted">{{ rule.rule_id }}</span><span class="chip chip-pass">Passed</span></span><span class="label">{{ rule.label or "No label published" }}</span></a></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if e.no_longer_run %}
+  <p class="small muted" style="margin: 0">{{ e.no_longer_run | count }} rule{{ "s" if e.no_longer_run != 1 }} that held as opened {{ "do" if e.no_longer_run != 1 else "does" }} not run with the overrides. <a href="{{ link(rules_url, status='NOT_EVALUATED') }}">See what does not run</a>.</p>
+  {% endif %}
   {% endif %}
   {% else %}
   <p class="small muted" style="margin: 0">No override drafted. A build files the return exactly as it was opened.</p>
@@ -93,7 +115,7 @@
     {% if not current.validation.is_submittable %}
     <div class="callout callout-fail" style="padding: 14px 16px">
       <div class="body">
-        <div class="title" style="font-size: 15px">As opened, the return has {{ current.validation.blocking | length }} blocking finding{{ "s" if current.validation.blocking | length != 1 }}</div>
+        <div class="title" style="font-size: 15px">{{ "With the overrides" if working.adjusted else "As opened" }}, the return has {{ current.validation.blocking | length }} blocking finding{{ "s" if current.validation.blocking | length != 1 }}</div>
         <p>Nothing is written while a published rule is broken unless you choose to write it anyway; the manifest records that you did. A structure finding stops the file whatever you choose.</p>
         <label class="check" style="margin-top: 8px"><input type="checkbox" name="force" value="yes"><strong>Write it anyway</strong></label>
       </div>

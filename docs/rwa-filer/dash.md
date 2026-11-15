@@ -51,6 +51,18 @@ template --tables ...` writes the worksheets), or one instance. Rules that check
 one template against another run only when both are in the same return, so
 templates opened as separate files are never checked against each other.
 
+**Every page shows the return as it would be filed now.** Once you draft an
+override (see *Build & sign off* below), the Overview, the Rules, the template
+grid, the Build & sign off page and the verdict in the top bar are all worked
+out for the return with the drafted overrides applied, the way a build would
+validate it. A banner on each page says how many overrides are applied and how
+many blocking findings the return had as opened. An override that clears a
+break clears it on every page, and withdrawing it brings the break back. The
+return is validated again once each time the overrides change, not each time
+a page is drawn. The file itself is never changed: overrides live beside it
+until a build applies them. Compare is the exception: it compares the two
+files as they were opened.
+
 **Overview.** Whether anything blocks submission, and the counts behind the
 answer: structure findings, rule breaks by severity, how many of the rules the
 module enforces were executed, and — for every rule that was not — why
@@ -90,8 +102,16 @@ and the rules that read it; pick a rule there to show only that rule's cells.
   as zero), with the reason — required, because it is recorded. A draft is
   checked against the ones already made, so one that could never be applied is
   refused when it is made. Drafted cells show their new value on the grid,
-  outlined in blue. *Check the return with these overrides* validates the
-  adjusted return and shows the blocking findings before and after.
+  outlined in blue, and the grid's red and amber marks are those of the return
+  with the overrides applied, so a cell whose break an override clears is no
+  longer marked. Below the overrides, the page says what they change: the
+  blocking findings and rule breaks before and after, then each rule they move.
+  A broken rule that now holds is listed under *Fixed*. A broken rule that no
+  longer runs, because the overrides took out the figures it reads, is listed
+  under *No longer run*, with the reason. It is not counted as fixed, because
+  nothing checks those figures any more. Any rule the overrides newly break is
+  listed under *Newly broken*. The page also counts the rules that held as
+  opened and no longer run.
 - *Build.* Choose the folder (beside the opened file by default, or a `filing`
   folder in the working directory for an uploaded one) and the options the
   command takes: monetary accuracy, percentage decimals, declaring unreported

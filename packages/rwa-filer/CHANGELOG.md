@@ -10,7 +10,23 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- `rwa-filer dash` — every page of a return now shows it as a build would file
+  it now: the Overview, the Rules, the template grid's marks, the Build & sign
+  off page and the top-bar verdict are all worked out with the drafted
+  overrides applied. Before this, they kept showing the validation from when
+  the file was opened, so an override that cleared a break left it showing
+  everywhere except one button's preview. A banner says how many overrides are
+  applied and how many blocking findings the return had as opened. The return
+  is re-validated once per change to its overrides (`Workspace.working`,
+  `WorkingReturn`). Compare still compares the files as they were opened, and
+  now says so while overrides are drafted.
+- `rwa-filer dash` — Build & sign off says what the drafted overrides change
+  without being asked: the blocking findings and rule breaks before and after,
+  then each rule they fix, each they newly break, and each broken rule they
+  stopped from running. A rule whose figures were taken out does not run, so
+  it is listed as no longer run, never as fixed. The *Check the return with
+  these overrides* button is gone. The *write it anyway* option is offered
+  only while the return, with its overrides, is still blocked.
 
 ---
 

@@ -12,7 +12,7 @@ from rwa_filer.dash.views import RULES_PER_PAGE, overview, rules_page, title_cas
 from rwa_filer.dash.workspace import safe_file_name
 
 if TYPE_CHECKING:
-    from rwa_filer.dash import OpenedReturn
+    from rwa_filer.dash import OpenedReturn, Workspace
 
 
 def test_the_overview_counts_are_the_reports_own(broken: OpenedReturn) -> None:
@@ -115,17 +115,17 @@ def test_every_failure_address_becomes_a_mark(broken: OpenedReturn) -> None:
     }
 
     # Act
-    marks = failure_marks(broken)
+    marks = failure_marks(broken.validation)
 
     # Assert
     assert expected and set(marks) == expected
 
 
 def test_the_grid_opens_on_a_flagged_sheet_with_a_flagged_cell_picked(
-    broken: OpenedReturn,
+    workspace: Workspace, broken: OpenedReturn
 ) -> None:
     # Act
-    grid = template_grid(broken)
+    grid = template_grid(workspace.working(broken))
 
     # Assert
     assert grid is not None
@@ -134,13 +134,13 @@ def test_the_grid_opens_on_a_flagged_sheet_with_a_flagged_cell_picked(
 
 
 def test_the_grid_lays_a_table_out_in_the_taxonomys_rows_and_columns(
-    broken: OpenedReturn,
+    workspace: Workspace, broken: OpenedReturn
 ) -> None:
     # Arrange
     table = broken.pack.tables["OF07.00.01.01"]
 
     # Act
-    grid = template_grid(broken, table=table.code, sheet="0008")
+    grid = template_grid(workspace.working(broken), table=table.code, sheet="0008")
 
     # Assert
     assert grid is not None

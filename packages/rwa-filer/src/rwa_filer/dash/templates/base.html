@@ -21,6 +21,7 @@
     {{ icon("file") }}
     <span class="name">{{ current.name }}</span>
     {% if current.validation.is_submittable %}<span class="chip chip-pass">SUBMITTABLE</span>{% else %}<span class="chip chip-fail">BLOCKED</span>{% endif %}
+    {% if working and working.adjusted %}<a class="chip chip-info" href="/returns/{{ current.return_id }}/filing#overrides" title="The verdict is for the return with its drafted overrides applied">{{ working.applied | length }} override{{ "s" if working.applied | length != 1 }}</a>{% endif %}
   </div>
   {% endif %}
   <div class="topbar-end">
@@ -57,6 +58,24 @@
     <div class="foot">Bank of England banking taxonomy {{ current.pack.info.version if current else "4.1.1" }}<br>Nothing leaves this machine.</div>
   </nav>
   <main class="page" id="main">
+    {% if working and working.drafts %}
+    {% if working.problem %}
+    <section class="callout callout-fail" id="overrides-problem" role="status" aria-label="Drafted overrides">
+      <div class="body"><div class="title">The drafted overrides cannot be applied</div><p>{{ working.problem }} Every page shows the return as it was opened until they are corrected or withdrawn.</p></div>
+    </section>
+    {% else %}
+    {% set drafted = working.applied | length %}
+    {% set before = working.opened.validation.blocking | length %}
+    {% set after = current.validation.blocking | length %}
+    <section class="callout callout-info" id="overrides-applied" role="status" aria-label="Drafted overrides">
+      <div class="body">
+        <div class="title">Showing the return with {{ drafted }} drafted override{{ "s" if drafted != 1 }} applied</div>
+        <p>As a build would file it now: the verdict above, the overview, the rules and the template grid are worked out with the overrides in place. As opened: {{ before }} blocking finding{{ "s" if before != 1 }} · with the overrides: {{ after }}.</p>
+      </div>
+      {% if section != "filing" %}<a class="btn" href="/returns/{{ current.return_id }}/filing#overrides" style="align-self: center">What the overrides change</a>{% endif %}
+    </section>
+    {% endif %}
+    {% endif %}
     {% block content %}{% endblock %}
     <footer class="page-foot">
       {% block command %}{% endblock %}

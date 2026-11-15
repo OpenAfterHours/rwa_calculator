@@ -10,6 +10,9 @@ Key responsibilities:
 - Draft a cell override from the template grid, checked as a batch with the
   ones already drafted, so a draft that could never be applied is refused when
   it is made rather than when the package is built.
+- Say what the drafted overrides change, rule by rule, whenever any is drafted:
+  the breaks they fix, the ones they newly cause, and — never counted as fixed
+  — the breaks that stop because the overrides left a rule nothing to read.
 - Build a package exactly as ``rwa-filer build`` does — the same validation,
   the same refusal while a structure finding stands, the same manifest — and
   record it in the audit ledger through the same call the command uses.
@@ -30,10 +33,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from rwa_filer.boe.engine import STATUS_FAIL
+from rwa_filer.boe.catalogue import SEVERITY_ERROR
+from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
+from rwa_filer.dash.views import REASON_TEXT, rule_label
 from rwa_filer.dash.workspace import FilingRecord
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
-from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.acts import ledger_beside, ledger_for_instance, record_build, verify_filing
 from rwa_filer.workflow.adjustments import Adjustment, apply_adjustments
 from rwa_filer.workflow.ledger import read_ledger, verify_ledger
@@ -43,8 +47,8 @@ from rwa_filer.xbrl.writer import InstanceOptions
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from rwa_filer.dash.workspace import OpenedReturn, Workspace
-    from rwa_filer.model import CanonicalReturn
+    from rwa_filer.boe.engine import RuleResult
+    from rwa_filer.dash.workspace import OpenedReturn, WorkingReturn, Workspace
     from rwa_filer.validate.returns import RuleReport
     from rwa_filer.workflow.adjustments import AppliedAdjustment
     from rwa_filer.workflow.ledger import LedgerEntry
@@ -58,6 +62,10 @@ NUMERIC_TYPES: Final = frozenset({"monetary", "percentage", "integer", "decimal"
 FILE_KINDS: Final = ("instance", "zip", "manifest", "ledger", "signoff")
 #: Where packages go when the return was uploaded rather than opened in place.
 DEFAULT_FOLDER: Final = "filing"
+#: How the overrides change a rule: it held as opened and holds now, and so on.
+CHANGE_FIXED: Final = "fixed"
+CHANGE_STOPPED: Final = "stopped"
+CHANGE_BROKEN: Final = "broken"
 
 
 # =============================================================================
@@ -81,8 +89,38 @@ class BuildOptions:
 
 
 @dataclass(frozen=True)
-class Preview:
-    """What validating the return with its drafted overrides applied found."""
+class RuleEffect:
+    """A rule whose standing the drafted overrides change.
+
+    Attributes:
+        rule_id: The rule's code.
+        severity: ``ERROR`` or ``WARNING``.
+        label: The publisher's short description, or empty.
+        change: ``fixed`` (broken as opened, holds now), ``stopped`` (broken as
+            opened, does not run now) or ``broken`` (broken now, not as opened).
+        status: Its status with the overrides applied.
+        reason: Why it does not run now, in words; empty when it runs.
+    """
+
+    rule_id: str
+    severity: str
+    label: str
+    change: str
+    status: str
+    reason: str
+
+    @property
+    def is_error(self) -> bool:
+        return self.severity == SEVERITY_ERROR
+
+
+@dataclass(frozen=True)
+class OverrideEffect:
+    """What the drafted overrides change: the verdict, and each rule they move.
+
+    ``no_longer_run`` counts the rules that held as opened and do not run with
+    the overrides — checks the return loses, though none of them was broken.
+    """
 
     blocking_before: int
     blocking_after: int
@@ -90,6 +128,10 @@ class Preview:
     breaks_after: int
     structure_after: int
     submittable: bool
+    fixed: tuple[RuleEffect, ...]
+    stopped: tuple[RuleEffect, ...]
+    broken: tuple[RuleEffect, ...]
+    no_longer_run: int
 
 
 @dataclass(frozen=True)
@@ -125,7 +167,7 @@ class FilingPage:
 
     drafts: tuple[AppliedAdjustment, ...]
     draft_problem: str | None
-    preview: Preview | None
+    effect: OverrideEffect | None
     latest: BuildView | None
     builds: int
     default_directory: Path
@@ -242,28 +284,66 @@ def build_package(
 
 
 def filing_page(
-    workspace: Workspace, opened: OpenedReturn, *, verify: bool = False, preview: bool = False
+    workspace: Workspace, working: WorkingReturn, *, verify: bool = False
 ) -> FilingPage:
-    """The Build & sign off page for ``opened``."""
-    drafts = workspace.adjustments(opened.return_id)
-    applied: tuple[AppliedAdjustment, ...] = ()
-    problem = None
-    adjusted = None
-    if drafts:
-        try:
-            adjusted, applied = apply_adjustments(opened.ret, drafts)
-        except ValueError as exc:
-            problem = str(exc)
+    """The Build & sign off page for ``working``, with what its drafted overrides change."""
+    opened = working.opened
     builds = workspace.builds(opened.return_id)
     latest = _build_view(len(builds) - 1, builds[-1], verify=verify) if builds else None
     return FilingPage(
-        drafts=applied,
-        draft_problem=problem,
-        preview=_preview(opened, adjusted) if preview and adjusted is not None else None,
+        drafts=working.applied,
+        draft_problem=working.problem,
+        effect=override_effect(working),
         latest=latest,
         builds=len(builds),
         default_directory=default_directory(workspace, opened),
         default_author=_user(),
+    )
+
+
+def override_effect(working: WorkingReturn) -> OverrideEffect | None:
+    """What the drafted overrides change, or ``None`` while none is applied.
+
+    A broken rule the overrides leave nothing to read is ``stopped``, never
+    ``fixed``: it no longer runs, so nothing checks the figures it read.
+    """
+    if not working.adjusted:
+        return None
+    before = working.opened.validation
+    after = working.current.validation
+    was = _results(before.report)
+    now = _results(after.report)
+    module = working.opened.pack.info.module
+    effects: dict[str, list[RuleEffect]] = {CHANGE_FIXED: [], CHANGE_STOPPED: [], CHANGE_BROKEN: []}
+    no_longer_run = 0
+    for rule_id, result in sorted({**was, **now}.items()):
+        held = was[rule_id].status if rule_id in was else STATUS_NOT_EVALUATED
+        holds = now[rule_id].status if rule_id in now else STATUS_NOT_EVALUATED
+        change = _change(held, holds)
+        if change is None:
+            no_longer_run += held == STATUS_PASS and holds == STATUS_NOT_EVALUATED
+            continue
+        effects[change].append(
+            RuleEffect(
+                rule_id=rule_id,
+                severity=result.severity,
+                label=rule_label(module, rule_id),
+                change=change,
+                status=holds,
+                reason=_reason(now.get(rule_id)) if holds == STATUS_NOT_EVALUATED else "",
+            )
+        )
+    return OverrideEffect(
+        blocking_before=len(before.blocking),
+        blocking_after=len(after.blocking),
+        breaks_before=_breaks(before.report),
+        breaks_after=_breaks(after.report),
+        structure_after=len(after.structure),
+        submittable=after.is_submittable,
+        fixed=_ranked(effects[CHANGE_FIXED]),
+        stopped=_ranked(effects[CHANGE_STOPPED]),
+        broken=_ranked(effects[CHANGE_BROKEN]),
+        no_longer_run=no_longer_run,
     )
 
 
@@ -357,17 +437,31 @@ def _build_view(index: int, record: FilingRecord, *, verify: bool) -> BuildView:
     )
 
 
-def _preview(opened: OpenedReturn, adjusted: CanonicalReturn) -> Preview:
-    before = opened.validation
-    after = validate_return(adjusted, opened.pack, source_findings=opened.reading.findings)
-    return Preview(
-        blocking_before=len(before.blocking),
-        blocking_after=len(after.blocking),
-        breaks_before=_breaks(before.report),
-        breaks_after=_breaks(after.report),
-        structure_after=len(after.structure),
-        submittable=after.is_submittable,
-    )
+def _results(report: RuleReport | None) -> dict[str, RuleResult]:
+    return {result.rule_id: result for result in (report.results if report else ())}
+
+
+def _change(held: str, holds: str) -> str | None:
+    """How a rule's status as opened and with the overrides differ, if it matters."""
+    if held == STATUS_FAIL and holds == STATUS_PASS:
+        return CHANGE_FIXED
+    if held == STATUS_FAIL and holds == STATUS_NOT_EVALUATED:
+        return CHANGE_STOPPED
+    if holds == STATUS_FAIL and held != STATUS_FAIL:
+        return CHANGE_BROKEN
+    return None
+
+
+def _reason(result: RuleResult | None) -> str:
+    """Why a rule does not run, in words."""
+    if result is None:
+        return "it is not in the report on the return with the overrides"
+    return REASON_TEXT.get(result.reason, result.reason)
+
+
+def _ranked(effects: list[RuleEffect]) -> tuple[RuleEffect, ...]:
+    """Error rules first, then by code."""
+    return tuple(sorted(effects, key=lambda item: (not item.is_error, item.rule_id)))
 
 
 def _breaks(report: RuleReport | None) -> int:

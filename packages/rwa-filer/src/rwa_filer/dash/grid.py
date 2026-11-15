@@ -2,8 +2,8 @@
 The template grid — one table of a return, laid out as the taxonomy lays it out.
 
 Pipeline position:
-    OpenedReturn (facts + pack + rule results)  ->  template_grid
-        ->  dash/templates/templates.html
+    WorkingReturn (facts as opened + drafts + rule results with them applied)
+        ->  template_grid  ->  dash/templates/templates.html
 
 Key responsibilities:
 - Lay a table out in the publisher's own rows, columns and sheets, from the
@@ -14,6 +14,10 @@ Key responsibilities:
 - Mark every cell a broken rule read, from the addresses the engine records
   for each failing evaluation — including the empty cells a rule read at its
   default, which are often what the break is about.
+- Draw the figures the file holds with each drafted override on top of its
+  cell, and take the marks from the return with the overrides applied: a cell
+  stays marked only while a rule it feeds is still broken in what a build
+  would file now.
 
 References:
 - rwa_filer.taxonomy.pack — ``Table`` (rows, columns, sheets) and ``cells``
@@ -35,8 +39,9 @@ from rwa_filer.dash.views import title_case
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from rwa_filer.dash.workspace import OpenedReturn
+    from rwa_filer.dash.workspace import WorkingReturn
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
+    from rwa_filer.validate.returns import ReturnValidation
     from rwa_filer.workflow.adjustments import Adjustment
 
 #: A cell's coordinates within one table: sheet, open-axis key, row, column.
@@ -145,9 +150,8 @@ class TemplateGrid:
 
 
 def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
-    opened: OpenedReturn,
+    working: WorkingReturn,
     *,
-    drafts: Sequence[Adjustment] = (),
     table: str = "",
     sheet: str = "",
     key: str = "",
@@ -157,12 +161,15 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
 ) -> TemplateGrid | None:
     """The grid for ``table`` (default: the first with a broken rule), or ``None``.
 
-    ``drafts`` are overrides drafted but not yet built: each cell one targets
-    shows what it will hold. ``None`` only for a return with no fact in any
-    table the taxonomy knows.
+    The figures are the file's own, as opened; each cell a drafted override
+    targets shows what it will hold. The marks are the broken rules of the
+    return with those overrides applied. ``None`` only for a return with no
+    fact in any table the taxonomy knows.
     """
+    opened = working.opened
+    drafts: Sequence[Adjustment] = working.drafts
     pack = opened.pack
-    marks = failure_marks(opened)
+    marks = failure_marks(working.current.validation)
     facts = opened.ret.facts.filter(pl.col("table").is_in(list(pack.tables)))
     codes = sorted(set(facts["table"].to_list()))
     if not codes:
@@ -246,14 +253,14 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
 
 
 def failure_marks(
-    opened: OpenedReturn,
+    validation: ReturnValidation,
 ) -> dict[tuple[str, str | None, str | None, str, str], tuple[Mark, ...]]:
     """Every cell a broken rule read, with the rules that read it.
 
     Keyed by ``(table, sheet, open_key, row, column)``. A rule that read a cell
     in several of its failing evaluations marks it once.
     """
-    report = opened.validation.report
+    report = validation.report
     found: dict[tuple[str, str | None, str | None, str, str], dict[str, Mark]] = {}
     for result in report.results if report else ():
         if result.status != STATUS_FAIL:

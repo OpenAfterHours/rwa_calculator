@@ -7,6 +7,9 @@ Pipeline position:
 Key responsibilities:
 - Render a page with what its layout needs on every page: the theme, the
   returns opened this session, and the sections a return's pages offer.
+- Hand every page of a return one ``WorkingReturn``, so the layout's verdict
+  is the one for the return a build would file now — with the drafted
+  overrides applied — on whichever page it is drawn.
 - Find the return a page address names, or answer "not found".
 - Hold the layout's section list in one place, so adding a page is one line.
 
@@ -33,7 +36,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-    from rwa_filer.dash.workspace import OpenedReturn, Workspace
+    from rwa_filer.dash.workspace import OpenedReturn, WorkingReturn, Workspace
 
 TEMPLATES_DIR: Final = Path(__file__).resolve().parent / "templates"
 STATIC_DIR: Final = Path(__file__).resolve().parent / "static"
@@ -90,14 +93,21 @@ class DashContext:
         request: Request,
         name: str,
         *,
+        working: WorkingReturn | None = None,
         status_code: int = 200,
         **context: Any,
     ) -> Response:
-        """Render ``name`` with the layout's shared values and ``context``."""
+        """Render ``name`` with the layout's shared values and ``context``.
+
+        ``working`` is the return the page is about: the layout draws its
+        ``current`` — the return with its drafted overrides applied — as
+        ``current``, and says when that differs from the file as opened.
+        """
         values = {
             "theme": theme_of(request),
             "opened_returns": self.workspace.returns(),
-            "current": None,
+            "current": working.current if working else None,
+            "working": working,
             "section": "",
             **context,
         }
@@ -113,7 +123,7 @@ class DashContext:
         return self._flashes.pop(return_id, None)
 
     def opened(self, request: Request) -> OpenedReturn:
-        """The return the address names.
+        """The return the address names, as it was opened.
 
         Raises:
             HTTPException: 404, when no return is open under that id.
@@ -122,6 +132,14 @@ class DashContext:
         if opened is None:
             raise HTTPException(status_code=404, detail="No return is open under that address.")
         return opened
+
+    def working(self, request: Request) -> WorkingReturn:
+        """The return the address names, with the overrides drafted for it applied.
+
+        Raises:
+            HTTPException: 404, when no return is open under that id.
+        """
+        return self.workspace.working(self.opened(request))
 
 
 def theme_of(request: Request) -> str:

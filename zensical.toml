@@ -178,7 +178,7 @@ nav = [
       { "Single-Lazy-Plan Refactor (superseded)" = "plans/single-lazy-plan-refactor.md" },
       { "Facility Share — Riskiest Member (implemented)" = "plans/facility-share-riskiest-member.md" },
       { "Test-Suite Runtime (proposed)" = "plans/test-suite-runtime-proposal.md" },
-      { "rwa-filer Evidence Export (proposed)" = "plans/rwa-filer-evidence-export.md" },
+      { "rwa-filer Evidence Export (implemented)" = "plans/rwa-filer-evidence-export.md" },
     ]},
   ]},
   { "Appendix" = [

@@ -1,8 +1,10 @@
 # rwa-filer evidence export: a complete, versioned record of what validation executed
 
-**Status:** Proposal only — nothing implemented. Every measurement below was taken
-on `rwa-filer` 0.1.2 at `22b43d1` (master, 2026-11-15) in an environment holding
-the member alone (`uv sync --package rwa-filer`), and is reproducible with the
+**Status:** Implemented 2026-11-15 in rwa-filer, for release as 0.2.0. See
+[Outcome](#outcome-what-landed) at the end for what landed and where it differs
+from the design below. Every measurement in the diagnosis was taken on
+`rwa-filer` 0.1.2 at `22b43d1` (master, 2026-11-15) in an environment holding the
+member alone (`uv sync --package rwa-filer`), and is reproducible with the
 commands in the appendix.
 
 **Origin:** user feedback on 0.1.2. Their summary: the validation engine already
@@ -470,6 +472,57 @@ engine. The referee's Arelle evidence, which has its own report. The older
 template-level engine (`rwa_filer.validate.{index,evaluate,checker}`) that rwa-calc
 maps onto `VAL001`–`VAL003` in `reporting/filing/checks.py`: completeness here
 applies to the BoE path that `validate`, `build` and `validate_return` use.
+
+## Outcome: what landed
+
+All five phases landed in rwa-filer. Decisions D1–D5 were taken as recommended:
+JSON Lines, exit `3` only with `--require-complete`, `no_rulebook` as a blocking
+`VAL003`, only the cells some evaluation read, and `rules` changed in place
+under report schema 2.0.
+
+- **F1 is closed and pinned.** `tests/test_cli_accuracy.py` checks that the
+  measured return really sits on the rounding boundary (PASS at −3, FAIL at 0),
+  and that `validate` and `build` agree at −3, 0 and 2. It was red before the
+  change: `validate` rejected the option.
+- **F2 is closed and pinned.** The test that asserted a module with no rule
+  book is submittable now asserts `VAL003` `no_rulebook`. `tests/test_filing.py`,
+  whose docstring relied on the hole, now hands its builds an explicit rule
+  book.
+- **The evidence explains itself, and that is tested.** `tests/test_evidence.py`
+  holds a checker that imports nothing from `rwa_filer`. It validates every line
+  against the shipped schema, recomputes every recorded comparison verdict from
+  its recorded numbers, and recomputes every rule's counts from its evaluation
+  records. Three single-change mutations of the capture each turn it red:
+  recording `tolerance` as 0, recording `interval` as `False`, and keeping only
+  `MAX_FAILURES` failing evaluations. Each was measured, and the test's
+  docstring records which tests each one reddens.
+- **Determinism** is checked across two processes with different
+  `PYTHONHASHSEED` values, for `.jsonl` and `.jsonl.gz`.
+
+Where the implementation differs from the design:
+
+- **`referee` did not get the accuracy options.** An instance must state
+  `decimals` on every numeric fact (Filing Manual rule 2.18, which the reader
+  checks), so the referee's own validation already compares at the accuracy the
+  file states. `validate` and `build` share the options through one helper.
+- **`evidence_id` does not depend on how the accuracy was chosen.** It covers
+  the accuracy's value. `settings.accuracy.source` (`default` / `given`) is
+  recorded beside it, so `validate` at the default and `build`, which always
+  passes its accuracy, give one id for one input.
+- **The evidence is collected in memory, then streamed to disk.** The trace
+  holds every evaluation, as `trace_rules` already did, and `write_evidence`
+  writes it line by line. Capture during evaluation in constant memory was not
+  built, and no memory-bound test was added. The default path traces nothing:
+  it pays one `is None` check per comparison and per conditional branch. It was
+  not benchmarked separately.
+- **rwa-calc's side of P5 is not in this change.** rwa-calc pins
+  `rwa-filer>=0.1,<0.2`, and an installed rwa-calc resolves rwa-filer from PyPI.
+  Exposing `status` and `completeness` in `api/rest.py`'s filing payload, and
+  evidence from `export_filing_package`, follows the rwa-filer 0.2.0 release
+  together with the pin bump, as CLAUDE.md's release order requires.
+- **Positions are not attached to header findings, to unknown declared filing
+  indicators, or to `VAL…` findings.** Those are not about facts. A rule
+  finding's facts are its failing evaluations in the evidence.
 
 ## Appendix: reproducing the measurements
 

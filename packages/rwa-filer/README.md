@@ -56,6 +56,12 @@ uvx rwa-filer@latest dash return.xbrl
 uvx rwa-filer@latest validate return.parquet \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 
+# The same, at the accuracy the file will be written with, and with the evidence
+# behind the verdict: every rule outcome, evaluation and comparison, as JSON Lines
+uvx rwa-filer@latest validate return.parquet --monetary-decimals 0 \
+    --evidence evidence.jsonl.gz --require-complete \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+
 # Validate it and write the XBRL submission file, with a manifest
 uvx rwa-filer@latest build return.parquet --out filing/ \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001

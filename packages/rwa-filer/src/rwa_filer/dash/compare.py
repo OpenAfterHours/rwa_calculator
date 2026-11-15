@@ -55,6 +55,7 @@ from rwa_filer.workflow.explain import (
 
 if TYPE_CHECKING:
     from rwa_filer.dash.workspace import OpenedReturn
+    from rwa_filer.taxonomy.pack import PackInfo
     from rwa_filer.workflow.compare import ReturnComparison
 
 #: The kinds of change, in the order the page lists them.
@@ -221,7 +222,7 @@ def compare_page(  # noqa: PLR0913 - the two returns and every filter of the pag
     window = shown.slice((page - 1) * CHANGES_PER_PAGE, CHANGES_PER_PAGE)
     before_breaks = _broken(earlier)
     after_breaks = _broken(later)
-    module = later.pack.info.module
+    info = later.pack.info
     return ComparePage(
         earlier=earlier,
         later=later,
@@ -236,13 +237,13 @@ def compare_page(  # noqa: PLR0913 - the two returns and every filter of the pag
         table=table,
         page=page,
         pages=pages,
-        fixed=_rule_changes(module, before_breaks, set(after_breaks)),
-        broken=_rule_changes(module, after_breaks, set(before_breaks)),
+        fixed=_rule_changes(info, before_breaks, set(after_breaks)),
+        broken=_rule_changes(info, after_breaks, set(before_breaks)),
         still_broken=len(set(before_breaks) & set(after_breaks)),
         blocking_before=len(earlier.validation.blocking),
         blocking_after=len(later.validation.blocking),
         comparison=comparison,
-        findings=tuple(_finding(item, comparison, module) for item in comparison.findings),
+        findings=tuple(_finding(item, comparison, info) for item in comparison.findings),
         category=category if category in CATEGORY_LABELS else "",
         finding=finding,
     )
@@ -275,7 +276,7 @@ def _with_categories(changes: pl.DataFrame, comparison: ReturnComparison) -> pl.
     return changes.join(found, on=coordinates, how="left", nulls_equal=True)
 
 
-def _finding(item: Discrepancy, comparison: ReturnComparison, module: str) -> FindingView:
+def _finding(item: Discrepancy, comparison: ReturnComparison, info: PackInfo) -> FindingView:
     names = comparison.names
     points = {
         SIDE_BASELINE: names.baseline,
@@ -292,7 +293,7 @@ def _finding(item: Discrepancy, comparison: ReturnComparison, module: str) -> Fi
         rules=tuple(
             RuleStandingView(
                 rule_id=rule.rule_id,
-                label=rule_label(module, rule.rule_id),
+                label=rule_label(info, rule.rule_id),
                 earlier=rule.baseline,
                 later=rule.candidate,
             )
@@ -341,9 +342,11 @@ def _broken(opened: OpenedReturn) -> dict[str, str]:
     }
 
 
-def _rule_changes(module: str, breaks: dict[str, str], other: set[str]) -> tuple[RuleChange, ...]:
+def _rule_changes(
+    info: PackInfo, breaks: dict[str, str], other: set[str]
+) -> tuple[RuleChange, ...]:
     return tuple(
-        RuleChange(rule_id, severity, rule_label(module, rule_id))
+        RuleChange(rule_id, severity, rule_label(info, rule_id))
         for rule_id, severity in sorted(breaks.items())
         if rule_id not in other
     )

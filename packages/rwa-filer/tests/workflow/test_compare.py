@@ -18,7 +18,7 @@ import pytest
 from compare_builders import CORPORATES, TABLE, corporate_return, unreported_return
 from rwa_filer.boe.engine import CellAddress, Evaluation
 from rwa_filer.readers import SourceReading
-from rwa_filer.taxonomy.pack import resolve_pack
+from rwa_filer.release import resolve_release
 from rwa_filer.validate.checker import Finding
 from rwa_filer.validate.structure import check_structure
 from rwa_filer.workflow.compare import ReturnComparison, compare_returns
@@ -49,7 +49,7 @@ def compare(baseline: dict[str, object], candidate: dict[str, object]) -> Return
     readings = []
     for differences in (baseline, candidate):
         ret = corporate_return(**differences)
-        pack = resolve_pack(ret.header.module, ret.header.reference_date)
+        pack = resolve_release(ret.header.module).pack
         assert check_structure(ret, pack) == [], "the fixture must be a valid PRA001 return"
         readings.append(SourceReading(ret=ret))
     return compare_returns(*readings, names=Names("the old system", "rwa-filer"))
@@ -312,7 +312,7 @@ def _evaluation(rule_id: str, *, holds: bool, cell: Cell) -> Evaluation:
 def test_a_rule_broken_in_one_return_that_no_finding_explains_is_still_a_finding() -> None:
     """The safety net: a one-sided break is never dropped for want of a differing cell."""
     cell: Cell = (TABLE, CORPORATES, None, "0010", "0220")
-    pack = resolve_pack("PRA001", corporate_return().header.reference_date)
+    pack = resolve_release("PRA001").pack
 
     findings = explain_differences(
         {},
@@ -330,7 +330,7 @@ def test_a_rule_broken_in_both_returns_at_different_places_is_not_one_sided() ->
     """A figure moved to another row takes its break with it: the rule breaks in both."""
     first: Cell = (TABLE, CORPORATES, None, "0200", "0220")
     second: Cell = (TABLE, CORPORATES, None, "0220", "0220")
-    pack = resolve_pack("PRA001", corporate_return().header.reference_date)
+    pack = resolve_release("PRA001").pack
 
     findings = explain_differences(
         {},

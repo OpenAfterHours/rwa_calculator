@@ -38,7 +38,7 @@ from rwa_filer.referee import (
     find_arelle_python,
     run_referee,
 )
-from rwa_filer.taxonomy.pack import PackNotFoundError
+from rwa_filer.release import ReleaseNotFoundError
 from rwa_filer.validate.returns import validate_return
 
 if TYPE_CHECKING:
@@ -160,9 +160,11 @@ class JobBoard:
                 rules=job.rules,
             )
             source = load_source(job.instance)
-            validation = validate_return(source.ret, source.pack, source_findings=source.findings)
+            validation = validate_return(
+                source.ret, release=source.release, source_findings=source.findings
+            )
             differential = compare(validation.report.results, result) if validation.report else None
-        except (RefereeUnavailableError, RefereePlanError, ValueError, PackNotFoundError) as exc:
+        except (RefereeUnavailableError, RefereePlanError, ValueError, ReleaseNotFoundError) as exc:
             self._finish(job, error=str(exc))
             return
         except Exception as exc:  # noqa: BLE001 - a background run must report, not vanish

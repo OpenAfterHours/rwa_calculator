@@ -6,16 +6,20 @@ import pytest
 
 from rwa_filer import __version__
 from rwa_filer.cli import EXIT_OK, build_parser, main
+from rwa_filer.release import shipped_releases
 
 
-def test_version_flag_prints_the_package_version(capsys: pytest.CaptureFixture[str]) -> None:
+def test_version_flag_prints_the_package_version_and_its_taxonomy_releases(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     # Arrange / Act
     with pytest.raises(SystemExit) as exit_info:
         main(["--version"])
 
     # Assert
     assert exit_info.value.code == 0
-    assert capsys.readouterr().out.strip() == f"rwa-filer {__version__}"
+    expected = f"rwa-filer {__version__} (taxonomy releases: {', '.join(shipped_releases())})"
+    assert capsys.readouterr().out.strip() == expected
 
 
 def test_no_command_prints_help_and_succeeds(capsys: pytest.CaptureFixture[str]) -> None:

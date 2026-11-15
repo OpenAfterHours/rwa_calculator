@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from dash_builders import HEADER_FORM
+from dash_builders import HEADER, HEADER_FORM
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS
 from rwa_filer.dash.views import rules_page
 from rwa_filer.extras import MissingExtraError
+from rwa_filer.release import shipped_releases
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -441,3 +442,81 @@ def test_a_workbook_without_the_excel_extra_is_refused_with_the_remedy(
     # Assert
     assert response.status_code == 400
     assert "rwa-filer[excel]" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Taxonomy releases
+# ---------------------------------------------------------------------------
+
+
+def test_the_open_page_offers_the_default_and_every_shipped_release(client: TestClient) -> None:
+    page = client.get("/").text
+
+    assert '<option value="">Default: the release live for the module</option>' in page
+    for version in shipped_releases():
+        assert f'<option value="{version}"' in page
+
+
+def test_every_page_of_a_return_says_which_release_it_was_validated_against(
+    client: TestClient, broken_csv: Path
+) -> None:
+    # Act
+    location = _open(client, broken_csv, **HEADER_FORM)
+    pages = [client.get(f"{location}{suffix}").text for suffix in ("", "/rules", "/templates")]
+
+    # Assert
+    for page in pages:
+        chip = page[page.index('id="taxonomy-release"') :]
+        assert "Taxonomy 4.1.1" in chip[:400] and "PRA001" in chip[:600]
+
+
+def test_a_return_opened_against_a_release_that_is_not_shipped_is_refused(
+    client: TestClient, broken_csv: Path
+) -> None:
+    # Act
+    response = client.post(
+        "/open", data={"path": str(broken_csv), **HEADER_FORM, "taxonomy": "9.9.9"}
+    )
+
+    # Assert
+    assert response.status_code == 400
+    assert "Taxonomy 9.9.9 is not shipped" in response.text
+
+
+def test_switching_to_the_release_already_used_keeps_the_return(
+    client: TestClient, broken_csv: Path
+) -> None:
+    location = _open(client, broken_csv, **HEADER_FORM)
+
+    response = client.post(
+        f"{location}/taxonomy", data={"taxonomy": "4.1.1"}, follow_redirects=False
+    )
+
+    assert response.status_code == 303 and response.headers["location"] == location
+
+
+def test_switching_to_a_release_that_is_not_shipped_says_why(
+    client: TestClient, broken_csv: Path
+) -> None:
+    location = _open(client, broken_csv, **HEADER_FORM)
+
+    response = client.post(f"{location}/taxonomy", data={"taxonomy": "9.9.9"})
+
+    assert response.status_code == 400
+    assert "Taxonomy 9.9.9 is not shipped" in response.text
+
+
+def test_a_return_reopened_against_a_named_release_is_kept_beside_the_first(
+    workspace: Workspace, broken_csv: Path
+) -> None:
+    # Arrange
+    first = workspace.open(broken_csv, HEADER)
+
+    # Act
+    second = workspace.reopen(first, "4.1.1")
+
+    # Assert
+    assert second.return_id != first.return_id
+    assert (first.release.chosen_by, second.release.chosen_by) == ("default", "version")
+    assert second.ret.header == first.ret.header
+    assert {item.return_id for item in workspace.returns()} >= {first.return_id, second.return_id}

@@ -61,13 +61,15 @@ from rwa_calc.reporting.corep import c02_rows, irb_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from rwa_calc.reporting.filing.canonical import (
     FILING_MODULE,
+    FILING_TAXONOMY,
     REASON_SHEET_COARSER,
     REASON_SHEET_UNPUBLISHED,
     build_canonical_return,
 )
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_filer.model import ReturnHeader
-from rwa_filer.taxonomy.pack import Sheet, TaxonomyPack, resolve_pack
+from rwa_filer.release import resolve_release
+from rwa_filer.taxonomy.pack import Sheet, TaxonomyPack
 
 REFERENCE_DATE = dt.date(2027, 3, 31)
 FRAMEWORK = "BASEL_3_1"
@@ -120,7 +122,7 @@ SLOTTING_SHEET_CODE = "0010"
 
 @pytest.fixture(scope="module")
 def pack() -> TaxonomyPack:
-    return resolve_pack(FILING_MODULE, REFERENCE_DATE)
+    return resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
 
 
 @pytest.fixture(scope="module")

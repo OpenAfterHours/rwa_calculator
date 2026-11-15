@@ -32,7 +32,6 @@ from typing import Any
 
 import pytest
 
-from rwa_filer.boe.catalogue import rulebook_for_module
 from rwa_filer.boe.engine import (
     REASON_CLOSED_BY_FORMULA,
     REASON_NOT_REPORTED,
@@ -73,7 +72,8 @@ def results(oracle: dict[str, Any]) -> dict[str, RuleResult]:
     instance = write_instance(carved, sample.pack)
     assert instance.facts == oracle["carve"]["facts"], "the carve is not the one Arelle saw"
     filed = read_instance(instance.content, pack=sample.pack)
-    rules = rulebook_for_module("PRA001").enforced("PRA001")
+    assert filed.release.rulebook is not None
+    rules = filed.release.rulebook.enforced("PRA001")
     return {result.rule_id: result for result in evaluate_rules(filed.ret, filed.pack, rules)}
 
 
@@ -156,7 +156,8 @@ def all_tables_results(all_tables_oracle: dict[str, Any]) -> dict[str, RuleResul
     instance = write_instance(carved, sample.pack)
     assert instance.facts == carve["facts"], "the carve is not the one Arelle saw"
     filed = read_instance(instance.content, pack=sample.pack)
-    rules = rulebook_for_module("PRA001").enforced("PRA001")
+    assert filed.release.rulebook is not None
+    rules = filed.release.rulebook.enforced("PRA001")
     return {result.rule_id: result for result in evaluate_rules(filed.ret, filed.pack, rules)}
 
 
@@ -240,7 +241,8 @@ def test_every_rule_of_twelve_further_modules_is_counted_as_arelle_counts_it() -
             continue
         # Act
         sample = read_instance(found[0])
-        rules = rulebook_for_module(module).enforced(module)
+        assert sample.release.rulebook is not None
+        rules = sample.release.rulebook.enforced(module)
         native = {
             result.rule_id: (result.satisfied, result.unsatisfied)
             for result in evaluate_rules(sample.ret, sample.pack, rules)

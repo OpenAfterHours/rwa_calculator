@@ -1,9 +1,9 @@
 """
-Taxonomy pack — the on-disk format, the loader, and the resolver by reference date.
+Taxonomy pack — the on-disk format, the loader, and the packaged-pack index.
 
 Pipeline position:
     compiler.compile_pack  ->  write_pack  ->  taxonomy/data/<module>-<version>/
-    resolve_pack(module, reference_date)  ->  TaxonomyPack
+    rwa_filer.release.resolve_release  ->  load_packaged(key)  ->  TaxonomyPack
         ->  validate.structure / xbrl writer
 
 Key responsibilities:
@@ -14,8 +14,9 @@ Key responsibilities:
   ``pack.json`` (everything a human might review — tables, axes, metrics,
   dimensions), ``cells.arrow`` and ``datapoints.arrow`` (the two large tables,
   as Arrow IPC files, which Polars reads directly).
-- Resolve the pack in force on a reference date. A return is always read
-  against the taxonomy that applied on its own date, never "the latest".
+- Index the packaged packs by ``<module>-<version>`` and read each one's
+  identity and dates (``pack_info``) without loading its tables. Which pack a
+  run uses is ``rwa_filer.release``'s decision, made by release, never here.
 
 Why package data and not a taxonomy parser: an XBRL taxonomy for one module is
 hundreds of megabytes of linkbase XML, and loading it is the slow, memory-hungry
@@ -49,7 +50,7 @@ from typing import TYPE_CHECKING, Any, Final
 import polars as pl
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
     from importlib.resources.abc import Traversable
     from pathlib import Path
 
@@ -118,7 +119,7 @@ DATAPOINT_SCHEMA: Final = pl.Schema(
 
 
 class PackNotFoundError(LookupError):
-    """No packaged taxonomy applies to the requested module and reference date."""
+    """No pack is packaged under the requested ``<module>-<version>`` key."""
 
 
 # =============================================================================
@@ -383,64 +384,27 @@ def match_code(codes: Sequence[str], written: str) -> str:
 # =============================================================================
 
 
-def resolve_pack(module: str, reference_date: date) -> TaxonomyPack:
-    """The packaged taxonomy that applies to ``module`` on ``reference_date``.
-
-    Raises:
-        PackNotFoundError: no packaged pack covers that module and date. The
-            message lists what IS packaged, because the usual cause is a
-            reference date before the first packaged release.
-    """
-    return load_packaged(select_pack(available_packs(), module, reference_date).key)
-
-
-def select_pack(infos: Iterable[PackInfo], module: str, reference_date: date) -> PackInfo:
-    """Choose, from ``infos``, the pack for ``module`` on ``reference_date``.
-
-    The module code is matched case-insensitively. Where two releases both
-    cover the date — a packaging mistake — the later release wins, so the
-    answer is at least deterministic, and it is logged.
-
-    Raises:
-        PackNotFoundError: none of ``infos`` covers that module and date.
-    """
-    candidates = tuple(infos)
-    wanted = module.upper()
-    matches = [
-        info
-        for info in candidates
-        if info.module.upper() == wanted and info.applies_to(reference_date)
-    ]
-    if not matches:
-        packaged = ", ".join(_describe(info) for info in candidates) or "none"
-        raise PackNotFoundError(
-            f"No taxonomy pack for module {module!r} on {reference_date.isoformat()}. "
-            f"Packaged: {packaged}."
-        )
-    chosen = max(matches, key=lambda info: (info.valid_from, info.version))
-    if len(matches) > 1:
-        logger.warning(
-            "%d taxonomy packs cover %s on %s; using %s",
-            len(matches),
-            module,
-            reference_date.isoformat(),
-            chosen.version,
-        )
-    return chosen
-
-
 @cache
 def available_packs() -> tuple[PackInfo, ...]:
     """Every packaged pack's ``PackInfo``, ordered by module then validity."""
     root = resources.files(PACKS_PACKAGE).joinpath(PACKS_DIRECTORY)
     if not root.is_dir():
         return ()
-    infos = [
-        _info_from_json(json.loads(entry.joinpath(PACK_FILE).read_text(encoding="utf-8"))["info"])
-        for entry in root.iterdir()
-        if entry.is_dir() and entry.joinpath(PACK_FILE).is_file()
-    ]
+    infos = [info for entry in root.iterdir() if (info := pack_info(entry.name)) is not None]
     return tuple(sorted(infos, key=lambda info: (info.module, info.valid_from, info.version)))
+
+
+@cache
+def pack_info(key: str) -> PackInfo | None:
+    """The ``PackInfo`` of the pack packaged under ``key``, or ``None`` if there is none.
+
+    Reads only the pack's ``info`` block: the tables, cells and data points
+    are not loaded.
+    """
+    resource = resources.files(PACKS_PACKAGE).joinpath(PACKS_DIRECTORY, key, PACK_FILE)
+    if not resource.is_file():
+        return None
+    return _info_from_json(json.loads(resource.read_text(encoding="utf-8"))["info"])
 
 
 @cache
@@ -564,12 +528,6 @@ def write_pack(
 # =============================================================================
 
 _NUMERIC_TYPES: Final[frozenset[str]] = frozenset({"monetary", "percentage", "integer", "decimal"})
-
-
-def _describe(info: PackInfo) -> str:
-    """One pack, as it reads in an error message."""
-    until = info.valid_to.isoformat() if info.valid_to else "onwards"
-    return f"{info.module} {info.version} ({info.valid_from.isoformat()} to {until})"
 
 
 def _info_from_json(raw: Mapping[str, Any]) -> PackInfo:

@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse
 from starlette.routing import Route
 
@@ -33,7 +34,7 @@ from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.views import overview, rules_page
 from rwa_filer.extras import MissingExtraError
-from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs
+from rwa_filer.release import ReleaseNotFoundError, release_packs, shipped_releases
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -58,6 +59,12 @@ def routes(context: DashContext) -> list[Route]:
         Route("/returns/{return_id}", pages.overview, name="overview"),
         Route("/returns/{return_id}/rules", pages.rules, name="rules"),
         Route("/returns/{return_id}/templates", pages.templates, name="templates"),
+        Route(
+            "/returns/{return_id}/taxonomy",
+            pages.switch_taxonomy,
+            methods=["POST"],
+            name="switch_taxonomy",
+        ),
         Route("/theme", pages.theme, methods=["POST"], name="theme"),
     ]
 
@@ -77,9 +84,28 @@ class ReturnPages:
         form = await request.form()
         try:
             opened = await open_from_form(self.context.workspace, form)
-        except (ValueError, PackNotFoundError, MissingExtraError) as exc:
+        except (ValueError, ReleaseNotFoundError, MissingExtraError) as exc:
             return self._home(request, error=str(exc), values=form_values(form), status_code=400)
         return RedirectResponse(f"/returns/{opened.return_id}", status_code=303)
+
+    async def switch_taxonomy(self, request: Request) -> Response:
+        """Open the return again against the release the form names, and show it."""
+        opened = self.context.opened(request)
+        form = await request.form()
+        version = str(form.get("taxonomy") or "").strip()
+        if not version or version == opened.release.version:
+            return RedirectResponse(f"/returns/{opened.return_id}", status_code=303)
+        try:
+            other = await run_in_threadpool(self.context.workspace.reopen, opened, version)
+        except (ValueError, ReleaseNotFoundError) as exc:
+            return self.context.render(
+                request,
+                "error.html",
+                status_code=400,
+                title="The return could not be opened against that release",
+                message=str(exc),
+            )
+        return RedirectResponse(f"/returns/{other.return_id}", status_code=303)
 
     def overview(self, request: Request) -> Response:
         """Whether the return is fit to file, and the counts behind the answer."""
@@ -160,7 +186,8 @@ class ReturnPages:
         values: dict[str, str] | None = None,
         status_code: int = 200,
     ) -> Response:
-        modules = sorted({info.module for info in available_packs()})
+        shipped = shipped_releases()
+        modules = sorted({info.module for version in shipped for info in release_packs(version)})
         workspace = self.context.workspace
         return self.context.render(
             request,
@@ -170,4 +197,5 @@ class ReturnPages:
             error=error,
             values=values or {},
             modules=modules,
+            releases=shipped,
         )

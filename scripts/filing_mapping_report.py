@@ -95,13 +95,14 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator  # noqa: E402
 from rwa_calc.reporting.corep.generator import COREPGenerator  # noqa: E402
 from rwa_calc.reporting.filing.canonical import (  # noqa: E402
     FILING_MODULE,
+    FILING_TAXONOMY,
     build_canonical_return,
 )
 from rwa_filer.boe.catalogue import SEVERITY_ERROR  # noqa: E402
 from rwa_filer.boe.engine import STATUS_FAIL  # noqa: E402
 from rwa_filer.model import ReturnHeader  # noqa: E402
+from rwa_filer.release import resolve_release  # noqa: E402
 from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1  # noqa: E402
-from rwa_filer.taxonomy.pack import resolve_pack  # noqa: E402
 from rwa_filer.validate.returns import validate_return  # noqa: E402
 
 BASELINE_PATH = _REPO_ROOT / "scripts" / "filing_mapping_baseline.json"
@@ -185,7 +186,7 @@ def measure() -> dict[str, Any]:
     of how many portfolios happen to exercise it.
     """
     header = ReturnHeader(ENTITY_IDENTIFIER, REFERENCE_DATE, FILING_MODULE)
-    pack = resolve_pack(FILING_MODULE, REFERENCE_DATE)
+    pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
     runs = filed_runs()
     placed: set[tuple[str, str | None, str | None, str, str]] = set()
     unplaced: dict[tuple[str, str], set[tuple[str | None, str, str]]] = {}

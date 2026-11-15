@@ -17,7 +17,7 @@ import pytest
 
 from boe_builders import T01, T02, T03, book, ref, rule
 from pack_builders import SAMPLE_MODULE, build_header, build_pack, build_return
-from rwa_filer.boe.catalogue import SEVERITY_WARNING, RuleBookNotFoundError, rulebook_for_module
+from rwa_filer.boe.catalogue import SEVERITY_WARNING
 from rwa_filer.boe.engine import (
     REASON_NOT_REPORTED,
     STATUS_FAIL,
@@ -26,6 +26,7 @@ from rwa_filer.boe.engine import (
     Accuracy,
 )
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
+from rwa_filer.release import release_rulebook
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
@@ -282,9 +283,8 @@ def test_nothing_executed_is_reported_as_such(pack: TaxonomyPack) -> None:
 def test_a_module_with_no_packaged_rule_book_has_only_its_structure_checked(
     pack: TaxonomyPack,
 ) -> None:
-    # Arrange — adequacy: the synthetic module really has no packaged rule book.
-    with pytest.raises(RuleBookNotFoundError):
-        rulebook_for_module(SAMPLE_MODULE)
+    # Arrange — adequacy: the synthetic pack's release packages no rule book.
+    assert release_rulebook(pack.info.version, SAMPLE_MODULE) is None
 
     # Act
     validation = validate_return(build_return(RETURN), pack)

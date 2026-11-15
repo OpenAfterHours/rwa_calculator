@@ -16,8 +16,11 @@ Key responsibilities:
 
 Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
+                            [--taxonomy VERSION]
         Validate a return (.parquet / .csv / .xlsx, or an XBRL instance .xbrl /
         .zip): structure against the taxonomy, then the published rules.
+        --taxonomy names the release (default: the one live for the module);
+        every command that reads a return takes it.
     rwa-filer build FILE --out DIR [--monetary-decimals N] [--zip] [--force]
         Validate a return and write its filing package: the .xbrl instance, a
         .zip where required, and a manifest.
@@ -37,12 +40,13 @@ Commands:
         A second opinion on a written instance: run the Arelle XBRL processor
         on it against the publisher's taxonomy package, and set its verdict on
         every rule beside this package's own. Needs Arelle (rwa-filer[arelle]).
-    rwa-filer template --module CODE --reference-date DATE --out FILE [--tables ...]
+    rwa-filer template --module CODE --out FILE [--taxonomy VERSION] [--tables ...]
         Write a blank workbook to fill in and validate.
     rwa-filer dash [FILE] [--port N] [--no-browser]
         Start the local web dashboard, and open FILE in it if one is given.
-    rwa-filer taxonomy list
-        The packaged taxonomy packs and the dates they apply to.
+    rwa-filer taxonomy list [--module CODE]
+        The shipped taxonomy releases: each module's status in each, its dates,
+        and which release a run uses by default.
     rwa-filer taxonomy compile ... --out DIR
         Build a taxonomy pack from the publisher's DPM files.
     rwa-filer rulebook list
@@ -91,9 +95,18 @@ from rwa_filer.readers import HeaderFields, SourceReading, load_source, open_sou
 from rwa_filer.referee import RefereePlanError, RefereeUnavailableError, run_referee
 from rwa_filer.referee import report as referee_report
 from rwa_filer.referee.differential import compare
+from rwa_filer.release import (
+    ReleaseNotFoundError,
+    module_releases,
+    release_lines,
+    release_packs,
+    release_record,
+    resolve_release,
+    shipped_releases,
+)
 from rwa_filer.rules import importer
 from rwa_filer.rules.catalogue import EXTRACT_FILES, extract_resource, load_rules
-from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs, resolve_pack, write_pack
+from rwa_filer.taxonomy.pack import write_pack
 from rwa_filer.validate.report import render_text, to_record
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.acts import (
@@ -164,7 +177,11 @@ def build_parser() -> argparse.ArgumentParser:
             "and write them for submission."
         ),
     )
-    parser.add_argument("--version", action="version", version=f"rwa-filer {__version__}")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"rwa-filer {__version__} (taxonomy releases: {', '.join(shipped_releases())})",
+    )
     commands = parser.add_subparsers(dest="command", metavar="<command>")
     _add_validate_command(commands)
     _add_build_command(commands)
@@ -213,6 +230,19 @@ def _add_header_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--module", metavar="CODE", help="the reporting module, e.g. PRA001")
     parser.add_argument("--currency", metavar="CCY", help="the reporting currency (default GBP)")
+    _add_taxonomy_argument(parser)
+
+
+def _add_taxonomy_argument(parser: argparse.ArgumentParser) -> None:
+    """``--taxonomy VERSION``: the release a command reads the return against."""
+    parser.add_argument(
+        "--taxonomy",
+        metavar="VERSION",
+        help=(
+            "the taxonomy release to use, e.g. 4.1.1 (default: the release live for the "
+            "return's module; see `rwa-filer taxonomy list`)"
+        ),
+    )
 
 
 def _validate(args: argparse.Namespace) -> int:
@@ -221,8 +251,10 @@ def _validate(args: argparse.Namespace) -> int:
         return _fail(problem)
     try:
         source = _load(args)
-        validation = validate_return(source.ret, source.pack, source_findings=source.findings)
-    except (ValueError, PackNotFoundError) as exc:
+        validation = validate_return(
+            source.ret, release=source.release, source_findings=source.findings
+        )
+    except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
 
     record = to_record(source.ret, validation)
@@ -243,8 +275,9 @@ def _load(args: argparse.Namespace) -> SourceReading:
     Raises:
         ValueError: the file is missing, of an unsupported type, lacks a header
             it needs, or is not readable as what its suffix says it is.
+        ReleaseNotFoundError: the taxonomy release could not be resolved.
     """
-    return open_source(args.file, _header_fields(args))
+    return open_source(args.file, _header_fields(args), taxonomy=args.taxonomy)
 
 
 def _header_fields(args: argparse.Namespace) -> HeaderFields:
@@ -353,7 +386,7 @@ def _build(args: argparse.Namespace) -> int:
         package = build_filing(
             ret,
             args.out,
-            pack=source.pack,
+            release=source.release,
             options=options,
             name=args.name,
             allow_rule_breaks=args.force,
@@ -361,7 +394,7 @@ def _build(args: argparse.Namespace) -> int:
             source_findings=source.findings,
             adjustments=applied,
         )
-    except (ValueError, PackNotFoundError) as exc:
+    except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
     source = replace(source, ret=ret)
 
@@ -541,7 +574,7 @@ def _diff(args: argparse.Namespace) -> int:
     try:
         previous = _load(argparse.Namespace(**{**vars(args), "file": args.previous})).ret
         current = _load(argparse.Namespace(**{**vars(args), "file": args.current})).ret
-    except (ValueError, PackNotFoundError) as exc:
+    except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
     difference = diff_returns(previous, current)
     if args.format == "json":
@@ -574,12 +607,28 @@ def _compare(args: argparse.Namespace) -> int:
         candidate = _load(argparse.Namespace(**{**vars(args), "file": args.candidate}))
         names = _names(args.baseline, args.candidate)
         comparison = compare_returns(baseline, candidate, names=names, tolerance=args.tolerance)
-    except (ValueError, PackNotFoundError) as exc:
+    except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
+    sides = {"baseline": baseline, "candidate": candidate}
     if args.format == "json":
-        _out(json.dumps(comparison.as_record(), indent=2))
+        record = comparison.as_record()
+        record["taxonomy"] = {
+            side: release_record(reading.release, reading.ret.header.reference_date)
+            for side, reading in sides.items()
+            if reading.release is not None
+        }
+        _out(json.dumps(record, indent=2))
     else:
-        _out(render_comparison(comparison))
+        verdict, _, body = render_comparison(comparison).partition("\n")
+        _out(verdict)
+        for side, reading in sides.items():
+            if reading.release is None:
+                continue
+            first, *rest = release_lines(reading.release)
+            _out(f"{side.capitalize()}: {first}")
+            for line in rest:
+                _out(f"  {line}")
+        _out(body)
     return EXIT_OK if comparison.is_equivalent else EXIT_FAILED
 
 
@@ -606,12 +655,13 @@ def _add_template_command(commands: argparse._SubParsersAction[argparse.Argument
         ),
     )
     template.add_argument("--module", required=True, metavar="CODE", help="e.g. PRA001")
+    _add_taxonomy_argument(template)
     template.add_argument(
         "--reference-date",
-        required=True,
         type=date.fromisoformat,
         metavar="YYYY-MM-DD",
-        help="selects the taxonomy version in force on that date",
+        help="the date the return will be for: a warning is printed if the release does "
+        "not cover it (it does not choose the release)",
     )
     template.add_argument(
         "--tables",
@@ -630,11 +680,18 @@ def _template(args: argparse.Namespace) -> int:
     if problem := _unwritable(args.out, "--out"):
         return _fail(problem)
     try:
-        pack = resolve_pack(args.module, args.reference_date)
-        written = write_workbook(pack, args.out, tables=args.tables)
-    except (ValueError, PackNotFoundError) as exc:
+        release = resolve_release(args.module, args.taxonomy)
+        written = write_workbook(release.pack, args.out, tables=args.tables)
+    except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
-    _out(f"wrote {args.out} ({written} worksheet(s), {pack.info.module} {pack.info.version})")
+    for line in release_lines(release):
+        _out(line)
+    if args.reference_date is not None and not release.covers(args.reference_date):
+        _out(
+            f"warning: reference date {args.reference_date.isoformat()} is outside "
+            f"{release.module}'s dates in taxonomy {release.version} ({release.summary})"
+        )
+    _out(f"wrote {args.out} ({written} worksheet(s), {release.module} {release.version})")
     return EXIT_OK
 
 
@@ -685,12 +742,12 @@ def _dash(args: argparse.Namespace) -> int:
 
     workdir: Path = args.workdir or Path(tempfile.mkdtemp(prefix="rwa-filer-dash-"))
     workdir.mkdir(parents=True, exist_ok=True)
-    workspace = Workspace(workdir)
+    workspace = Workspace(workdir, taxonomy=args.taxonomy)
     start = "/"
     if args.file is not None:
         try:
-            opened = workspace.open(args.file, _header_fields(args))
-        except (ValueError, PackNotFoundError) as exc:
+            opened = workspace.open(args.file, _header_fields(args), taxonomy=args.taxonomy)
+        except (ValueError, ReleaseNotFoundError) as exc:
             return _fail(str(exc))
         start = f"/returns/{opened.return_id}"
     try:
@@ -717,7 +774,16 @@ def _add_taxonomy_commands(commands: argparse._SubParsersAction[argparse.Argumen
     taxonomy.set_defaults(handler=lambda _args: _print_help(taxonomy))
     actions = taxonomy.add_subparsers(dest="taxonomy_command", metavar="<action>")
 
-    listing = actions.add_parser("list", help="show the packaged taxonomy packs")
+    listing = actions.add_parser(
+        "list",
+        help="show the shipped taxonomy releases and each module's status in them",
+        description=(
+            "One line per shipped release and module: the module's status in the release "
+            "today (live, future or superseded), its dates, and whether a run with no "
+            "--taxonomy uses it."
+        ),
+    )
+    listing.add_argument("--module", metavar="CODE", help="only this module")
     listing.set_defaults(handler=_taxonomy_list)
 
     compiling = actions.add_parser(
@@ -748,15 +814,38 @@ def _add_taxonomy_commands(commands: argparse._SubParsersAction[argparse.Argumen
     compiling.set_defaults(handler=_taxonomy_compile)
 
 
-def _taxonomy_list(_args: argparse.Namespace) -> int:
-    """``rwa-filer taxonomy list`` — one line per packaged pack."""
-    _out(f"{'module':<10}{'version':<10}{'valid from':<13}{'valid to':<13}entry point")
-    for info in available_packs():
-        until = info.valid_to.isoformat() if info.valid_to else "-"
-        _out(
-            f"{info.module:<10}{info.version:<10}{info.valid_from.isoformat():<13}"
-            f"{until:<13}{info.entry_point}"
-        )
+def _taxonomy_list(args: argparse.Namespace) -> int:
+    """``rwa-filer taxonomy list`` — one line per shipped release and module."""
+    today = date.today()
+    shipped = shipped_releases()
+    modules = sorted({info.module for version in shipped for info in release_packs(version)})
+    if args.module is not None:
+        modules = [module for module in modules if module.upper() == args.module.upper()]
+        if not modules:
+            return _fail(f"no shipped taxonomy release has module {args.module}")
+    _out(
+        f"{'module':<10}{'release':<10}{'status':<12}{'applies from':<14}{'applies to':<14}"
+        f"{'default':<9}entry point"
+    )
+    for module in modules:
+        try:
+            default = resolve_release(module, today=today).version
+        except ReleaseNotFoundError:
+            default = None
+        for option in module_releases(module, today=today):
+            info = option.info
+            until = info.valid_to.isoformat() if info.valid_to else "-"
+            marker = "yes" if option.version == default else ""
+            _out(
+                f"{module:<10}{option.version:<10}{option.status:<12}"
+                f"{info.valid_from.isoformat():<14}{until:<14}{marker:<9}{info.entry_point}"
+            )
+    _out(
+        f"\n{len(shipped)} release(s) shipped: {', '.join(shipped)}. Status as of "
+        f"{today.isoformat()}. A run with no --taxonomy uses the release marked default; "
+        "`status` is the module's in that release, so one release can be live for one "
+        "module and future for another."
+    )
     return EXIT_OK
 
 
@@ -816,6 +905,7 @@ def _add_referee_command(
         "--arelle-python", type=Path, metavar="PYTHON", help="an interpreter that has Arelle"
     )
     referee.add_argument("--rules", metavar="REGEX", help="run only the rules whose id matches")
+    _add_taxonomy_argument(referee)
     referee.add_argument(
         "--workdir", type=Path, metavar="DIR", help="keep each worker's files here"
     )
@@ -856,12 +946,14 @@ def _referee(args: argparse.Namespace) -> int:
         )
         differential = None
         if not args.no_compare:
-            source = load_source(instance)
-            validation = validate_return(source.ret, source.pack, source_findings=source.findings)
+            source = load_source(instance, taxonomy=args.taxonomy)
+            validation = validate_return(
+                source.ret, release=source.release, source_findings=source.findings
+            )
             if validation.report is None:
                 return _fail(f"no rule book is packaged for module {source.ret.header.module}")
             differential = compare(validation.report.results, result)
-    except (RefereeUnavailableError, RefereePlanError, ValueError, PackNotFoundError) as exc:
+    except (RefereeUnavailableError, RefereePlanError, ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
 
     record = referee_report.to_record(result, differential)

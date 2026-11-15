@@ -3,16 +3,18 @@ Validate a canonical return — structure first, then the published rules.
 
 Pipeline position:
     CanonicalReturn  ->  validate_return
-        ->  taxonomy.resolve_pack(module, reference date)
+        ->  release.choose_release (the release's pack AND its rule book)
         ->  structure.check_structure
-        ->  boe.catalogue.rulebook_for_module  ->  boe.engine.evaluate_rules
+        ->  boe.engine.evaluate_rules
         ->  ReturnValidation
 
 Key responsibilities:
 - Be the one call that answers "is this return fit to submit?" for a return in
   canonical form, whatever file or system it came from.
 - Run every rule the module ENFORCES, with the taxonomy's own semantics, and
-  report each as passed, failed or not evaluated — with the reason.
+  report each as passed, failed or not evaluated — with the reason. The rules
+  always come from the same taxonomy release as the pack the return is read
+  against.
 - Keep the two kinds of finding apart in the result — structure (the taxonomy
   rejects it) and rules (the supervisor's arithmetic does not hold) — and say
   plainly whether anything blocks submission.
@@ -39,12 +41,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from rwa_filer.boe.catalogue import (
-    SEVERITY_ERROR,
-    SEVERITY_WARNING,
-    RuleBookNotFoundError,
-    rulebook_for_module,
-)
+from rwa_filer.boe.catalogue import SEVERITY_ERROR, SEVERITY_WARNING
 from rwa_filer.boe.engine import (
     REASON_CLOSED_BY_FORMULA,
     REASON_NOT_REPORTED,
@@ -54,7 +51,7 @@ from rwa_filer.boe.engine import (
     Accuracy,
     evaluate_rules,
 )
-from rwa_filer.taxonomy.pack import resolve_pack
+from rwa_filer.release import choose_release
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
     COVERAGE_TEMPLATE_NOT_COVERED,
@@ -64,14 +61,16 @@ from rwa_filer.validate.checker import (
     FINDING_RULE_WARNING,
     Finding,
 )
-from rwa_filer.validate.structure import check_structure, filing_indicators
+from rwa_filer.validate.structure import check_reference_date, check_structure, filing_indicators
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from datetime import date
 
     from rwa_filer.boe.catalogue import RuleBook
     from rwa_filer.boe.engine import RuleResult
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import CoverageShortfall
 
@@ -182,23 +181,33 @@ class ReturnValidation:
     """Everything validating one return established.
 
     Attributes:
-        pack: The taxonomy the return was read against.
+        release: The taxonomy release the return was read against: its pack,
+            the rule book the rules came from, and why it was chosen.
         structure: Structure findings (``STR...``), and any finding from reading
             the return's source (``XBR...``).
-        report: The per-rule report, or ``None`` when no rule book is packaged
-            for the module.
+        report: The per-rule report, or ``None`` when the release packages no
+            rule book for the module.
         rules: Rule findings (``VAL...``), from ``report``.
+        release_findings: Findings about the release chosen for the return —
+            ``STR011`` when its reference date is outside the release's dates
+            for the module. Warnings: they never block.
     """
 
-    pack: TaxonomyPack
+    release: Release
     structure: tuple[Finding, ...]
     report: RuleReport | None
     rules: tuple[Finding, ...]
+    release_findings: tuple[Finding, ...] = ()
+
+    @property
+    def pack(self) -> TaxonomyPack:
+        """The taxonomy pack the return was read against."""
+        return self.release.pack
 
     @property
     def findings(self) -> tuple[Finding, ...]:
-        """Every finding, structure first."""
-        return (*self.structure, *self.rules)
+        """Every finding: the release first, then structure, then the rules."""
+        return (*self.release_findings, *self.structure, *self.rules)
 
     @property
     def blocking(self) -> tuple[Finding, ...]:
@@ -220,6 +229,9 @@ def validate_return(
     pack: TaxonomyPack | None = None,
     *,
     rulebook: RuleBook | None = None,
+    release: Release | None = None,
+    taxonomy: str | None = None,
+    today: date | None = None,
     accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
 ) -> ReturnValidation:
@@ -227,10 +239,18 @@ def validate_return(
 
     Args:
         ret: The return, in canonical form.
-        pack: The taxonomy to read it against. Defaults to the packaged pack in
-            force for the return's module on its reference date.
-        rulebook: The rules to run. Defaults to the packaged rule book for the
-            module; a module with none packaged has only its structure checked.
+        pack: The taxonomy pack to read it against. Its rules come from the
+            same release. Give at most one of ``pack``, ``release`` and
+            ``taxonomy``.
+        rulebook: The rules to run, in place of the release's own. A release
+            with no rule book for the module has only its structure checked.
+        release: A release already resolved (``rwa_filer.release``), e.g. the
+            one an XBRL instance was read against.
+        taxonomy: The release to use, by version (``"4.1.1"``). With none of
+            the three given, the default release for the module: the one live
+            on ``today``.
+        today: The run date the default and the statuses are worked out for.
+            Defaults to today.
         accuracy: The accuracy facts are stated to where they do not state
             their own (their ``decimals``). It sets the rounding allowance the
             rules' comparisons use, and should be what the file will be written
@@ -243,24 +263,42 @@ def validate_return(
         A ``ReturnValidation``. Never raises for a condition in the data.
 
     Raises:
-        PackNotFoundError: no ``pack`` was given and none is packaged for the
-            module and reference date.
+        ReleaseNotFoundError: the release could not be resolved — see
+            ``rwa_filer.release.resolve_release``.
     """
-    pack = pack or resolve_pack(ret.header.module, ret.header.reference_date)
+    chosen = choose_release(
+        ret.header.module,
+        release=release,
+        pack=pack,
+        rulebook=rulebook,
+        taxonomy=taxonomy,
+        today=today,
+    )
+    pack = chosen.pack
     structure = (*source_findings, *check_structure(ret, pack))
+    release_findings = tuple(check_reference_date(ret, pack))
     module = pack.info.module
-    if rulebook is None:
-        try:
-            rulebook = rulebook_for_module(module)
-        except RuleBookNotFoundError:
-            logger.warning("no packaged rule book for module %s; rules not run", module)
-            return ReturnValidation(pack=pack, structure=structure, report=None, rules=())
+    if chosen.rulebook is None:
+        logger.warning(
+            "taxonomy %s packages no rule book for module %s; rules not run", chosen.version, module
+        )
+        return ReturnValidation(
+            release=chosen,
+            structure=structure,
+            report=None,
+            rules=(),
+            release_findings=release_findings,
+        )
 
-    enforced = rulebook.enforced(module)
+    enforced = chosen.rulebook.enforced(module)
     results = tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy))
-    report = _report(ret, pack, rulebook, results)
+    report = _report(ret, pack, chosen.rulebook, results)
     return ReturnValidation(
-        pack=pack, structure=structure, report=report, rules=tuple(findings_for(report))
+        release=chosen,
+        structure=structure,
+        report=report,
+        rules=tuple(findings_for(report)),
+        release_findings=release_findings,
     )
 
 

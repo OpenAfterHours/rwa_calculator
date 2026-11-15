@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Final
 import polars as pl
 
 from rwa_filer.model import COORDINATE_COLUMNS, LEI_SCHEME
-from rwa_filer.rules.catalogue import SEVERITY_ERROR
+from rwa_filer.rules.catalogue import SEVERITY_ERROR, SEVERITY_WARNING
 from rwa_filer.taxonomy.pack import DIMENSION_EXPLICIT
 from rwa_filer.validate.checker import Finding
 
@@ -79,6 +79,11 @@ FINDING_EMPTY_RETURN: Final = "STR009"
 #: A declared filing indicator the module does not have, or a fact in a template
 #: that is not declared as reported.
 FINDING_INDICATOR_INVALID: Final = "STR010"
+#: The return's reference date is outside the dates the chosen taxonomy release
+#: gives its module. A WARNING: the user chose the release (to try a return
+#: against next year's rules, say), so it does not block; the gateway accepts a
+#: filing only against the release in force for its date.
+FINDING_REFERENCE_DATE_OUTSIDE_RELEASE: Final = "STR011"
 
 STRUCTURE_REFERENCE: Final = (
     "BoE XBRL Filing Manual; Bank of England Banking Taxonomy (reportable cells)"
@@ -310,17 +315,6 @@ def _check_header(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
                 subject="module",
                 expected=pack.info.module,
                 actual=header.module,
-            )
-        )
-    if not pack.info.applies_to(header.reference_date):
-        findings.append(
-            _finding(
-                FINDING_HEADER_INVALID,
-                f"Reference date {header.reference_date.isoformat()} is outside the validity "
-                f"of taxonomy {pack.info.version} (from {pack.info.valid_from.isoformat()}).",
-                subject="reference_date",
-                expected=f"on or after {pack.info.valid_from.isoformat()}",
-                actual=header.reference_date.isoformat(),
             )
         )
     if header.entity_scheme == LEI_SCHEME and not is_valid_lei(header.entity_identifier):
@@ -743,10 +737,51 @@ def _address(row: dict[str, object]) -> str:
     return f"{row['table']}{sheet}{key}[r{row['row']}][c{row['column']}]"
 
 
-def _finding(code: str, message: str, *, subject: str, expected: str, actual: str) -> Finding:
+def check_reference_date(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
+    """``STR011`` when the return's reference date is outside the pack's dates.
+
+    Kept apart from ``check_structure`` on purpose: it is a WARNING about the
+    taxonomy release the user chose, not a reason the taxonomy cannot express
+    the return, so neither writing the instance nor building the filing
+    package is held up by it. ``validate_return`` reports it.
+    """
+    reference_date = ret.header.reference_date
+    if pack.info.applies_to(reference_date):
+        return []
+    info = pack.info
+    window = (
+        f"from {info.valid_from.isoformat()} to {info.valid_to.isoformat()}"
+        if info.valid_to is not None
+        else f"on or after {info.valid_from.isoformat()}"
+    )
+    return [
+        _finding(
+            FINDING_REFERENCE_DATE_OUTSIDE_RELEASE,
+            f"Reference date {reference_date.isoformat()} is outside the dates taxonomy "
+            f"{info.version} gives {info.module} ({window}). The return was checked against "
+            f"{info.version} as chosen, but the regulator accepts a filing only against the "
+            "release in force on its reference date: choose that release to file it "
+            "(--taxonomy VERSION; `rwa-filer taxonomy list` shows each release's dates).",
+            subject="reference_date",
+            expected=window,
+            actual=reference_date.isoformat(),
+            severity=SEVERITY_WARNING,
+        )
+    ]
+
+
+def _finding(
+    code: str,
+    message: str,
+    *,
+    subject: str,
+    expected: str,
+    actual: str,
+    severity: str = SEVERITY_ERROR,
+) -> Finding:
     return Finding(
         code=code,
-        severity=SEVERITY_ERROR,
+        severity=severity,
         message=message,
         reference=STRUCTURE_REFERENCE,
         subject=subject,

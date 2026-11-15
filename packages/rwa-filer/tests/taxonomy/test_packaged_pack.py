@@ -2,7 +2,7 @@
 Integrity of the packaged taxonomy packs.
 
 Pipeline position:
-    taxonomy/data/<module>-<version>/ (package data)  ->  resolve_pack  ->  everything downstream
+    taxonomy/data/<module>-<version>/ (package data)  ->  load_packaged  ->  everything downstream
 
 Why this exists: a pack is compiled from the publisher's DPM files, which are
 not redistributed and so cannot be re-derived in CI
@@ -25,6 +25,7 @@ from importlib import resources
 import polars as pl
 import pytest
 
+from rwa_filer.release import STATUS_FUTURE, STATUS_LIVE, status_on
 from rwa_filer.taxonomy.pack import (
     CELLS_FILE,
     DATAPOINTS_FILE,
@@ -36,10 +37,9 @@ from rwa_filer.taxonomy.pack import (
     PACKS_PACKAGE,
     SOURCE_LINKBASE,
     SOURCE_WORKBOOK,
-    PackNotFoundError,
     TaxonomyPack,
     available_packs,
-    resolve_pack,
+    load_packaged,
 )
 
 PRA001_KEY = "pra001-4.1.1"
@@ -63,7 +63,7 @@ CREDIT_RISK_TABLES = (
 
 @pytest.fixture(scope="module")
 def pra001() -> TaxonomyPack:
-    return resolve_pack("PRA001", date(2027, 3, 31))
+    return load_packaged(PRA001_KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -118,15 +118,9 @@ def test_pra001_is_packaged_from_the_first_of_january_2027() -> None:
     ]
 
 
-def test_a_2027_reference_date_resolves_to_v4_1_1(pra001: TaxonomyPack) -> None:
+def test_the_pra001_pack_is_v4_1_1_at_its_published_entry_point(pra001: TaxonomyPack) -> None:
     assert (pra001.info.module, pra001.info.version) == ("PRA001", "4.1.1")
     assert pra001.info.entry_point == PRA001_ENTRY_POINT
-
-
-def test_a_2026_reference_date_has_no_pack() -> None:
-    """The Basel 3.1 return starts on 1 January 2027; nothing earlier is packaged."""
-    with pytest.raises(PackNotFoundError, match="PRA001"):
-        resolve_pack("PRA001", date(2026, 12, 31))
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +279,7 @@ def test_the_packaged_modules_and_their_measured_sizes() -> None:
     # Act
     measured = {}
     for info in available_packs():
-        pack = resolve_pack(info.module, info.valid_from)
+        pack = load_packaged(info.key)
         measured[info.module] = (
             len(pack.tables),
             pack.cells.height,
@@ -302,7 +296,7 @@ def test_the_packaged_modules_and_their_measured_sizes() -> None:
 def test_every_packaged_pack_is_internally_consistent(module: str) -> None:
     """Every cell names a table, a data point and a metric the pack defines."""
     # Arrange
-    pack = resolve_pack(module, PACKAGED[module][4])
+    pack = load_packaged(f"{module}-4.1.1".lower())
 
     # Act
     cell_tables = set(pack.cells["table"].unique().to_list())
@@ -322,9 +316,9 @@ def test_every_packaged_pack_is_internally_consistent(module: str) -> None:
     assert all(table.filing_indicator for table in pack.tables.values())
 
 
-def test_a_module_resolves_only_from_the_date_its_framework_applies() -> None:
-    # Act / Assert — the day before each pack's first date has no pack.
+def test_a_module_goes_live_on_the_date_its_framework_applies() -> None:
+    # Act / Assert — future the day before each pack's first date, live on it.
     for module, (*_counts, valid_from) in PACKAGED.items():
-        assert resolve_pack(module, valid_from).info.module == module
-        with pytest.raises(PackNotFoundError):
-            resolve_pack(module, date.fromordinal(valid_from.toordinal() - 1))
+        info = load_packaged(f"{module}-4.1.1".lower()).info
+        assert status_on(info, date.fromordinal(valid_from.toordinal() - 1)) == STATUS_FUTURE
+        assert status_on(info, valid_from) == STATUS_LIVE

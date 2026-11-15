@@ -29,6 +29,7 @@ from starlette.templating import Jinja2Templates
 
 from rwa_filer import __version__
 from rwa_filer.dash.referee_jobs import JobBoard
+from rwa_filer.release import shipped_releases
 
 if TYPE_CHECKING:
     from datetime import date, datetime
@@ -106,6 +107,7 @@ class DashContext:
         values = {
             "theme": theme_of(request),
             "opened_returns": self.workspace.returns(),
+            "shipped_releases": shipped_releases(),
             "current": working.current if working else None,
             "working": working,
             "section": "",

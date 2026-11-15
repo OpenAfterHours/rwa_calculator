@@ -65,8 +65,8 @@ import polars as pl
 
 from rwa_calc.reporting.filing.bindings import build_template_index
 from rwa_filer.model import FACT_SCHEMA, CanonicalReturn
+from rwa_filer.release import resolve_release
 from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1
-from rwa_filer.taxonomy.pack import resolve_pack
 from rwa_filer.validate.evaluate import GEOGRAPHY_TOTAL_SHEET
 from rwa_filer.validate.index import SINGLE_SHEET
 from rwa_filer.validate.structure import local_name
@@ -87,6 +87,11 @@ logger = logging.getLogger(__name__)
 
 #: The reporting module our Basel 3.1 COREP estate is filed under.
 FILING_MODULE: Final = "PRA001"
+#: The taxonomy release our generated estate is laid out for. The sheet maps,
+#: bindings and published-cell declarations are written against this release's
+#: coordinates, so it is named rather than left to rwa-filer's default: a later
+#: release going live must not move our figures before our layout follows it.
+FILING_TAXONOMY: Final = "4.1.1"
 
 REASON_SHEET_COARSER: Final = "sheet_coarser_than_published_axis"
 REASON_SHEET_UNPUBLISHED: Final = "sheet_has_no_published_code"
@@ -185,9 +190,9 @@ def build_canonical_return(
     Args:
         corep: The generated COREP bundle (Basel 3.1 framework).
         header: Who is reporting and for which date. Its module must be
-            ``PRA001``; its reference date selects the taxonomy version.
-        pack: The taxonomy to place the figures in. Defaults to the packaged
-            pack in force on the header's reference date.
+            ``PRA001``.
+        pack: The taxonomy to place the figures in. Defaults to the
+            ``FILING_TAXONOMY`` release's PRA001 pack.
 
     Returns:
         The canonical return of every figure that has a place, and the table of
@@ -195,14 +200,14 @@ def build_canonical_return(
 
     Raises:
         ValueError: ``header.module`` is not ``PRA001``.
-        PackNotFoundError: no ``pack`` was given and none is packaged for the
-            reference date (the PRA001 taxonomy applies from 1 January 2027).
+        ReleaseNotFoundError: no ``pack`` was given and rwa-filer does not
+            ship the ``FILING_TAXONOMY`` release.
     """
     if header.module.upper() != FILING_MODULE:
         raise ValueError(
             f"The Basel 3.1 COREP estate is filed under {FILING_MODULE}, not {header.module!r}"
         )
-    pack = pack or resolve_pack(header.module, header.reference_date)
+    pack = pack or resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
     index = build_template_index(corep, None, FRAMEWORK_BASEL_3_1)
     flags = [
         number

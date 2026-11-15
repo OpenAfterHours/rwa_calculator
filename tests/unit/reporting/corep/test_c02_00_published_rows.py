@@ -32,10 +32,14 @@ import pytest
 from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.contracts.config import OutputFloorConfig
 from rwa_calc.domain.enums import InstitutionType, ReportingBasis
-from rwa_calc.reporting.filing.canonical import FILING_MODULE, build_canonical_return
+from rwa_calc.reporting.filing.canonical import (
+    FILING_MODULE,
+    FILING_TAXONOMY,
+    build_canonical_return,
+)
 from rwa_filer.model import ReturnHeader
+from rwa_filer.release import resolve_release
 from rwa_filer.rules.catalogue import FRAMEWORK_CRR, load_rules
-from rwa_filer.taxonomy.pack import resolve_pack
 from rwa_filer.validate.structure import check_structure
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._c02_frames import (
@@ -561,7 +565,7 @@ class TestB31OneFactWithOf0201:
         u_trea = bundle.of_02_01.filter(pl.col("row_ref") == "0080")["0030"][0]
         assert _cell(bundle.c_02_00, "0010") != u_trea, "the two sums no longer differ"
         assert _cell(bundle.c_02_00, "0010") == pytest.approx(u_trea)
-        pack = resolve_pack(FILING_MODULE, REFERENCE_DATE)
+        pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
         header = ReturnHeader(ENTITY_IDENTIFIER, REFERENCE_DATE, FILING_MODULE)
 
         # Act

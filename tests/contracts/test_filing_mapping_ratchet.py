@@ -48,8 +48,8 @@ import pytest
 from tests.contracts._ci_workflow import WORKFLOW_REL, gate_wiring_problems
 
 from rwa_calc.reporting.filing import canonical
-from rwa_filer.boe.catalogue import SEVERITY_ERROR, rulebook_for_module
-from rwa_filer.taxonomy.pack import resolve_pack
+from rwa_filer.boe.catalogue import SEVERITY_ERROR
+from rwa_filer.release import resolve_release
 from rwa_filer.validate import structure
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -207,7 +207,7 @@ def test_the_structure_breakdown_names_real_finding_codes_and_tables() -> None:
     """A key no structure check can produce is an allowance nobody is using."""
     # Arrange
     keys = _baseline()[STRUCTURE_KEY]
-    pack = resolve_pack(canonical.FILING_MODULE, MAPPING.REFERENCE_DATE)
+    pack = resolve_release(canonical.FILING_MODULE, canonical.FILING_TAXONOMY).pack
     codes = {
         value
         for name, value in vars(structure).items()
@@ -236,7 +236,7 @@ def test_the_rule_breakdown_names_error_rules_the_module_enforces() -> None:
     banked = _baseline()[RULES_KEY]
     enforced = {
         rule.rule_id: rule.severity(canonical.FILING_MODULE)
-        for rule in rulebook_for_module(canonical.FILING_MODULE).enforced(canonical.FILING_MODULE)
+        for rule in _filing_rulebook().enforced(canonical.FILING_MODULE)
     }
     portfolios = _baseline()["provenance"]["runs"]
 
@@ -559,3 +559,10 @@ def test_filing_mapping_check_passes_against_the_committed_baseline() -> None:
     assert completed.returncode == 0, (
         f"{SCRIPT_REL} --check failed:\n{completed.stdout[-4000:]}\n{completed.stderr[-2000:]}"
     )
+
+
+def _filing_rulebook():  # noqa: ANN202 - a test helper
+    """The rule book of the release our estate is laid out for."""
+    rulebook = resolve_release(canonical.FILING_MODULE, canonical.FILING_TAXONOMY).rulebook
+    assert rulebook is not None, "the filing release packages no PRA001 rule book"
+    return rulebook

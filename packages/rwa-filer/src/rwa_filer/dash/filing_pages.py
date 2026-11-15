@@ -38,7 +38,7 @@ from rwa_filer.dash.filing import (
     draft_adjustment,
     filing_page,
 )
-from rwa_filer.taxonomy.pack import PackNotFoundError
+from rwa_filer.release import ReleaseNotFoundError
 from rwa_filer.workflow.acts import ledger_beside, record_signoff
 
 if TYPE_CHECKING:
@@ -128,7 +128,7 @@ class FilingPages:
                 options,
                 at=datetime.now(UTC),
             )
-        except (ValueError, PackNotFoundError, OSError) as exc:
+        except (ValueError, ReleaseNotFoundError, OSError) as exc:
             return self._page(request, self._working(opened), error=str(exc), status_code=400)
         return RedirectResponse(f"/returns/{opened.return_id}/filing#build", status_code=303)
 

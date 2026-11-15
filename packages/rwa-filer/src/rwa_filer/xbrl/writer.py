@@ -59,11 +59,11 @@ import polars as pl
 
 from rwa_filer import __version__
 from rwa_filer.model import DECIMALS_EXACT
+from rwa_filer.release import choose_release
 from rwa_filer.taxonomy.pack import (
     MEMBER_OPEN,
     MEMBER_OPEN_OPTIONAL,
     MEMBER_TYPED_PREFIX,
-    resolve_pack,
 )
 from rwa_filer.validate.structure import (
     IS_KEY,
@@ -75,7 +75,7 @@ from rwa_filer.validate.structure import (
 )
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from datetime import date, datetime
 
     from rwa_filer.model import CanonicalReturn, ReturnHeader
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
@@ -182,22 +182,27 @@ def write_instance(
     pack: TaxonomyPack | None = None,
     *,
     options: InstanceOptions | None = None,
+    taxonomy: str | None = None,
+    today: date | None = None,
 ) -> Instance:
     """Write ``ret`` as an XBRL 2.1 instance against ``pack``'s entry point.
 
     Args:
         ret: The return. It must pass the structure checks.
-        pack: The taxonomy it is filed against. Defaults to the packaged pack
-            in force for the return's module on its reference date.
+        pack: The taxonomy it is filed against. Give this or ``taxonomy``.
         options: How numbers are stated; the defaults follow the Bank's samples.
+        taxonomy: The release to file against, by version. With neither, the
+            default release for the module (``rwa_filer.release``).
+        today: The run date the default release is worked out for.
 
     Raises:
         UnwritableReturnError: ``ret`` has structure findings. Run
             ``validate_return`` first: its findings say what to fix.
-        PackNotFoundError: no ``pack`` was given and none is packaged.
+        ReleaseNotFoundError: no ``pack`` was given and the release could not
+            be resolved.
     """
     options = options or InstanceOptions()
-    pack = pack or resolve_pack(ret.header.module, ret.header.reference_date)
+    pack = choose_release(ret.header.module, pack=pack, taxonomy=taxonomy, today=today).pack
     findings = check_structure(ret, pack)
     if findings:
         raise UnwritableReturnError(

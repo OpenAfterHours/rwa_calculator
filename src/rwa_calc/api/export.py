@@ -550,7 +550,8 @@ class ResultExporter:
 
         Raises:
             ValueError: the run is not a Basel 3.1 run.
-            PackNotFoundError: no taxonomy is packaged for ``reference_date``.
+            ReleaseNotFoundError: rwa-filer does not ship the taxonomy release
+                the estate is laid out for (``FILING_TAXONOMY``).
 
         References:
             - Bank of England Banking Taxonomy v4.1.1 (PRA001)

@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from rwa_filer.dash.workspace import OpenedReturn, Workspace
 
 #: The text fields of an open form, echoed back when a return cannot be opened.
-FORM_FIELDS: Final = ("path", "entity", "reference_date", "module", "currency")
+FORM_FIELDS: Final = ("path", "entity", "reference_date", "module", "currency", "taxonomy")
 
 
 async def open_from_form(workspace: Workspace, form: FormData) -> OpenedReturn:
@@ -42,7 +42,7 @@ async def open_from_form(workspace: Workspace, form: FormData) -> OpenedReturn:
     Raises:
         ValueError: nothing was named, the header is incomplete for a fact
             table, the date is not a date, or the file cannot be read.
-        PackNotFoundError: no taxonomy pack for the module and date.
+        ReleaseNotFoundError: the taxonomy release could not be resolved.
     """
     values = form_values(form)
     fields = header_fields(values)
@@ -52,7 +52,9 @@ async def open_from_form(workspace: Workspace, form: FormData) -> OpenedReturn:
             f"{name} is a fact table, which carries no header: give the entity, the "
             "reference date and the module."
         )
-    return await run_in_threadpool(workspace.open, path, fields, name=name)
+    return await run_in_threadpool(
+        workspace.open, path, fields, name=name, taxonomy=values["taxonomy"] or None
+    )
 
 
 def form_values(form: FormData) -> dict[str, str]:

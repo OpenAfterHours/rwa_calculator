@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING, Final
 
-from rwa_filer.boe.catalogue import SEVERITY_ERROR, RuleBookNotFoundError, rulebook_for_module
+from rwa_filer.boe.catalogue import SEVERITY_ERROR
 from rwa_filer.boe.engine import (
     REASON_CLOSED_BY_FORMULA,
     REASON_NO_DATA,
@@ -39,13 +39,14 @@ from rwa_filer.boe.engine import (
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
 )
+from rwa_filer.release import release_rulebook
 from rwa_filer.validate.checker import FINDING_COVERAGE_INSUFFICIENT
 
 if TYPE_CHECKING:
     from rwa_filer.boe.catalogue import Rule
     from rwa_filer.boe.engine import Failure, RuleResult
     from rwa_filer.dash.workspace import OpenedReturn
-    from rwa_filer.taxonomy.pack import TaxonomyPack
+    from rwa_filer.taxonomy.pack import PackInfo, TaxonomyPack
     from rwa_filer.validate.checker import Finding
     from rwa_filer.validate.returns import MissingTemplate
 
@@ -274,9 +275,13 @@ def rule_detail(opened: OpenedReturn, rule_id: str) -> RuleDetail | None:
     return _detail(opened, _row(result, opened.pack), results) if result else None
 
 
-def rule_label(module: str, rule_id: str) -> str:
-    """The publisher's short description of a rule, or empty when it gives none."""
-    rule = _rule(module, rule_id)
+def rule_label(info: PackInfo, rule_id: str) -> str:
+    """The publisher's short description of a rule, or empty when it gives none.
+
+    ``info`` is the pack the return was read against: the rule is looked up in
+    the same release's rule book.
+    """
+    rule = _rule(info.version, info.module, rule_id)
     return (rule.label or "").rstrip("|").strip() if rule else ""
 
 
@@ -305,7 +310,7 @@ def _row(result: RuleResult, pack: TaxonomyPack) -> RuleRow:
         rule_id=result.rule_id,
         severity=result.severity,
         status=result.status,
-        label=rule_label(pack.info.module, result.rule_id),
+        label=rule_label(pack.info, result.rule_id),
         templates=tuple(
             sorted(
                 {
@@ -323,7 +328,7 @@ def _row(result: RuleResult, pack: TaxonomyPack) -> RuleRow:
 
 def _detail(opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...]) -> RuleDetail:
     result = next(item for item in results if item.rule_id == row.rule_id)
-    rule = _rule(opened.pack.info.module, row.rule_id)
+    rule = _rule(opened.release.version, opened.pack.info.module, row.rule_id)
     return RuleDetail(
         row=row,
         expression=rule.expression if rule else "",
@@ -334,17 +339,18 @@ def _detail(opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...])
     )
 
 
-def _rule(module: str, rule_id: str) -> Rule | None:
-    return _rules_by_id(module).get(rule_id)
+def _rule(version: str, module: str, rule_id: str) -> Rule | None:
+    return _rules_by_id(version, module).get(rule_id)
 
 
 @cache
-def _rules_by_id(module: str) -> dict[str, Rule]:
-    """The module's rule book by rule code. Cached: packaged rule books never change."""
-    try:
-        return {rule.rule_id: rule for rule in rulebook_for_module(module).rules}
-    except RuleBookNotFoundError:
-        return {}
+def _rules_by_id(version: str, module: str) -> dict[str, Rule]:
+    """Release ``version``'s rule book for the module, by rule code.
+
+    Cached: packaged rule books never change.
+    """
+    rulebook = release_rulebook(version, module)
+    return {rule.rule_id: rule for rule in rulebook.rules} if rulebook is not None else {}
 
 
 def _templates(

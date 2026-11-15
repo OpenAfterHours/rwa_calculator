@@ -13,7 +13,10 @@ Key responsibilities:
 - Name the templates left out that the reported ones are checked against, in
   the summary as well as in their ``VAL004`` findings.
 - Keep the record self-contained: a reader holding only the JSON knows which
-  entity, date, module and taxonomy version it describes.
+  entity, date, module and taxonomy release it describes — the release's
+  status for the module, its dates, and whether it was the default or named.
+- Say, straight after the verdict, which taxonomy release was used and why,
+  and which other shipped releases have the module.
 
 References:
 - rwa_filer.validate.returns — what a ``ReturnValidation`` holds
@@ -25,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from rwa_filer import __version__
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
+from rwa_filer.release import release_lines, release_record
 
 if TYPE_CHECKING:
     from rwa_filer.model import CanonicalReturn
@@ -44,15 +48,10 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
     line per rule that did not simply pass.
     """
     report = validation.report
-    info = validation.pack.info
     return {
         "generator": f"rwa-filer {__version__}",
         "header": ret.header.as_fields(),
-        "taxonomy": {
-            "module": info.module,
-            "version": info.version,
-            "entry_point": info.entry_point,
-        },
+        "taxonomy": release_record(validation.release, ret.header.reference_date),
         "submittable": validation.is_submittable,
         "facts": ret.facts.height,
         "tables": list(ret.tables),
@@ -107,6 +106,7 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
         f"{verdict}: {header.module} for {header.entity_identifier} "
         f"at {header.reference_date.isoformat()} "
         f"(taxonomy {info.version}, {ret.facts.height} facts, {len(ret.tables)} tables)",
+        *release_lines(validation.release),
         f"  structure: {len(validation.structure)} finding(s)",
     ]
     if report is None:

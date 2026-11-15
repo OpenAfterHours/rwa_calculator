@@ -41,10 +41,9 @@ from typing import TYPE_CHECKING, Any, Final
 
 import polars as pl
 
-from rwa_filer.boe.catalogue import RuleBookNotFoundError, rulebook_for_module
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, RuleTrace, trace_rules
 from rwa_filer.model import COORDINATE_COLUMNS
-from rwa_filer.taxonomy.pack import resolve_pack
+from rwa_filer.release import resolve_release
 from rwa_filer.validate.structure import filing_indicators
 from rwa_filer.workflow.explain import (
     CATEGORIES,
@@ -65,9 +64,12 @@ from rwa_filer.workflow.explain import (
 )
 
 if TYPE_CHECKING:
+    from datetime import date
+
     from rwa_filer.boe.engine import Evaluation
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.readers import SourceReading
+    from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
 
@@ -187,6 +189,8 @@ def compare_returns(
     *,
     names: Names | None = None,
     tolerance: float = 0.0,
+    taxonomy: str | None = None,
+    today: date | None = None,
 ) -> ReturnComparison:
     """Compare ``candidate`` with ``baseline``, cell by cell and rule by rule.
 
@@ -199,14 +203,23 @@ def compare_returns(
         tolerance: An absolute amount within which two figures count as the
             same, on top of the rounding the files state. For sources that
             state no accuracy — a fact table rounded to thousands, say.
+        taxonomy: The release, by version, for a side whose reading has none
+            (a fact table read with ``load_source``). ``None`` for the default.
+            A side read with its own release keeps it.
+        today: The run date the default release is worked out for.
 
     Raises:
-        PackNotFoundError: a return names no taxonomy pack and none is packaged
-            for its module and reference date.
+        ReleaseNotFoundError: a side has no release and one could not be
+            resolved for its module.
     """
     names = names or Names()
-    baseline_pack = baseline.pack or _pack_for(baseline.ret)
-    candidate_pack = candidate.pack or _pack_for(candidate.ret)
+    baseline_release = baseline.release or resolve_release(
+        baseline.ret.header.module, taxonomy, today=today
+    )
+    candidate_release = candidate.release or resolve_release(
+        candidate.ret.header.module, taxonomy, today=today
+    )
+    baseline_pack, candidate_pack = baseline_release.pack, candidate_release.pack
     indicators = {
         SIDE_BASELINE: filing_indicators(baseline.ret, baseline_pack),
         SIDE_CANDIDATE: filing_indicators(candidate.ret, candidate_pack),
@@ -215,8 +228,8 @@ def compare_returns(
         baseline.ret, candidate.ret, candidate_pack, indicators, tolerance=tolerance
     )
     traces = {
-        SIDE_BASELINE: _trace(baseline.ret, baseline_pack),
-        SIDE_CANDIDATE: _trace(candidate.ret, candidate_pack),
+        SIDE_BASELINE: _trace(baseline.ret, baseline_release),
+        SIDE_CANDIDATE: _trace(candidate.ret, candidate_release),
     }
     baseline_trace, candidate_trace = traces[SIDE_BASELINE], traces[SIDE_CANDIDATE]
     rules_compared = baseline_trace is not None and candidate_trace is not None
@@ -427,18 +440,17 @@ def _cell_frame(
 # =============================================================================
 
 
-def _pack_for(ret: CanonicalReturn) -> TaxonomyPack:
-    return resolve_pack(ret.header.module, ret.header.reference_date)
-
-
-def _trace(ret: CanonicalReturn, pack: TaxonomyPack) -> RuleTrace | None:
-    module = pack.info.module
-    try:
-        rules = rulebook_for_module(module).enforced(module)
-    except RuleBookNotFoundError:
-        logger.warning("no packaged rule book for module %s; rules not compared", module)
+def _trace(ret: CanonicalReturn, release: Release) -> RuleTrace | None:
+    """Every enforced rule of the side's own release, traced on its return."""
+    module = release.pack.info.module
+    if release.rulebook is None:
+        logger.warning(
+            "taxonomy %s packages no rule book for module %s; rules not compared",
+            release.version,
+            module,
+        )
         return None
-    return trace_rules(ret, pack, rules)
+    return trace_rules(ret, release.pack, release.rulebook.enforced(module))
 
 
 def _shared_breaks(traces: dict[str, RuleTrace | None]) -> tuple[str, ...]:

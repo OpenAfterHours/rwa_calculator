@@ -136,8 +136,8 @@ def build_filing_package(
 
     Raises:
         ValueError: ``header.module`` is not ``PRA001``.
-        PackNotFoundError: no ``pack`` was given and none is packaged for the
-            reference date.
+        ReleaseNotFoundError: no ``pack`` was given and rwa-filer does not
+            ship the ``FILING_TAXONOMY`` release.
     """
     mapping = build_canonical_return(corep, header, pack=pack)
     missing = mapping.unplaced_figures.height

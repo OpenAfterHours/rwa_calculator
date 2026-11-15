@@ -95,12 +95,13 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator  # noqa: E402
 from rwa_calc.reporting.corep.generator import COREPGenerator  # noqa: E402
 from rwa_calc.reporting.filing.canonical import (  # noqa: E402
     FILING_MODULE,
+    FILING_TAXONOMY,
     build_canonical_return,
 )
 from rwa_filer.model import ReturnHeader  # noqa: E402
 from rwa_filer.referee import find_arelle_python, run_referee  # noqa: E402
 from rwa_filer.referee.differential import compare  # noqa: E402
-from rwa_filer.taxonomy.pack import resolve_pack  # noqa: E402
+from rwa_filer.release import resolve_release  # noqa: E402
 from rwa_filer.validate.returns import validate_return  # noqa: E402
 from rwa_filer.validate.structure import check_structure  # noqa: E402
 from rwa_filer.xbrl.reader import read_instance  # noqa: E402
@@ -211,7 +212,7 @@ def measure(
         max_rss_gb: The memory an Arelle worker is held to.
     """
     header = ReturnHeader(ENTITY_IDENTIFIER, REFERENCE_DATE, FILING_MODULE)
-    pack = resolve_pack(FILING_MODULE, REFERENCE_DATE)
+    pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
     portfolios: dict[str, Any] = {}
     not_golden: dict[str, int] = {}
     runs = [run for run in filed_runs() if not only or run.portfolio in only]

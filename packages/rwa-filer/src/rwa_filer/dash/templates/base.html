@@ -23,6 +23,21 @@
     {% if current.validation.is_submittable %}<span class="chip chip-pass">SUBMITTABLE</span>{% else %}<span class="chip chip-fail">BLOCKED</span>{% endif %}
     {% if working and working.adjusted %}<a class="chip chip-info" href="/returns/{{ current.return_id }}/filing#overrides" title="The verdict is for the return with its drafted overrides applied">{{ working.applied | length }} override{{ "s" if working.applied | length != 1 }}</a>{% endif %}
   </div>
+  {% set release = current.release %}
+  <div class="file-chip" id="taxonomy-release" title="The taxonomy release this return is validated against">
+    <span class="mono">Taxonomy {{ release.version }}</span>
+    <span class="chip {% if release.status == 'live' %}chip-pass{% else %}chip-warn{% endif %}">{{ release.status | upper }}</span>
+    <span class="small muted">{{ release.module }} {{ release.summary }} · {% if release.chosen_by == "default" %}default{% else %}chosen{% endif %}</span>
+    {% if release.others %}
+    <form method="post" action="/returns/{{ current.return_id }}/taxonomy" class="btn-row" style="margin: 0">
+      <label class="visually-hidden" for="switch-taxonomy">Validate against another release</label>
+      <select id="switch-taxonomy" name="taxonomy">
+        {% for option in release.shipped %}<option value="{{ option.version }}"{% if option.version == release.version %} selected{% endif %}>{{ option.version }} — {{ option.summary }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-small" type="submit">Open against it</button>
+    </form>
+    {% endif %}
+  </div>
   {% endif %}
   <div class="topbar-end">
     <span class="local"><span class="dot"></span>Local only</span>
@@ -55,7 +70,7 @@
     <a href="/returns/{{ other.return_id }}" class="small">{{ icon("file") }}<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ other.name }}</span></a>
     {% endfor %}
     {% endif %}
-    <div class="foot">Bank of England banking taxonomy {{ current.pack.info.version if current else "4.1.1" }}<br>Nothing leaves this machine.</div>
+    <div class="foot">Bank of England banking taxonomy {{ current.release.version ~ " (" ~ current.release.status ~ ")" if current else "releases " ~ (shipped_releases | join(", ")) }}<br>Nothing leaves this machine.</div>
   </nav>
   <main class="page" id="main">
     {% if working and working.drafts %}

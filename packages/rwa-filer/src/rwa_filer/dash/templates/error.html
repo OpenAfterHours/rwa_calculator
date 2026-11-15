@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Not found — rwa-filer dash{% endblock %}
+{% block title %}{{ title or "Not found" }} — rwa-filer dash{% endblock %}
 {% block content %}
 <div>
-  <h1>Not found</h1>
+  <h1>{{ title or "Not found" }}</h1>
   <p class="lede" id="error-message">{{ message }}</p>
-  <p class="lede">Returns are kept only while the dashboard runs: one opened before a restart has to be opened again.</p>
+  {% if not title %}<p class="lede">Returns are kept only while the dashboard runs: one opened before a restart has to be opened again.</p>{% endif %}
 </div>
 <div class="btn-row"><a class="btn btn-primary" href="/">Open a return</a></div>
 {% endblock %}

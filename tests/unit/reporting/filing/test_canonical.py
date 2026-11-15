@@ -40,6 +40,7 @@ from rwa_calc.reporting.corep.irb_sheets import B31_SHEET_KEYS
 from rwa_calc.reporting.filing import bindings
 from rwa_calc.reporting.filing.canonical import (
     FILING_MODULE,
+    FILING_TAXONOMY,
     REASON_CELL,
     REASON_COLUMN,
     REASON_OPEN_KEY,
@@ -52,7 +53,7 @@ from rwa_calc.reporting.filing.canonical import (
 )
 from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 from rwa_filer.model import FACT_SCHEMA, ReturnHeader
-from rwa_filer.taxonomy.pack import PackNotFoundError, resolve_pack
+from rwa_filer.release import resolve_release
 from rwa_filer.validate.structure import check_structure
 from tests.unit.reporting.corep._irb_sheet_frames import OF08_INSTITUTIONS_FIRB
 
@@ -185,7 +186,9 @@ def test_a_number_that_is_not_yes_or_no_is_left_for_the_structure_check() -> Non
     result = mapping(c_02_00=build_frame({"0034": {"0030": 0.5}}))
 
     # Act
-    findings = check_structure(result.canonical, resolve_pack(FILING_MODULE, REFERENCE_DATE))
+    findings = check_structure(
+        result.canonical, resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
+    )
 
     # Assert — not silently coerced: reported as a value of the wrong type.
     assert result.canonical.facts["value"].to_list() == [0.5]
@@ -386,7 +389,7 @@ def _sa_total_in_three_cells(of02: float, of07: float):
 
 
 def _inconsistent_data_points(result) -> list[str]:
-    pack = resolve_pack(FILING_MODULE, REFERENCE_DATE)
+    pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
     return [
         finding.subject
         for finding in check_structure(result.canonical, pack)
@@ -457,14 +460,22 @@ def test_the_estate_is_filed_under_pra001_only() -> None:
         build_canonical_return(build_corep(FRAMEWORK), header(module="LVR001"))
 
 
-def test_a_reference_date_before_the_taxonomy_applies_has_no_pack() -> None:
-    with pytest.raises(PackNotFoundError):
-        build_canonical_return(build_corep(FRAMEWORK), header(reference_date=date(2026, 12, 31)))
+def test_the_reference_date_does_not_choose_the_taxonomy_release() -> None:
+    """The estate is placed in the release it is laid out for, whatever the date."""
+    # Act
+    result = build_canonical_return(
+        build_corep(FRAMEWORK, c_02_00=build_frame({"0010": {"0010": 1.0}})),
+        header(reference_date=date(2026, 12, 31)),
+    )
+
+    # Assert
+    assert result.placed_cells == 1
+    assert result.canonical.header.reference_date == date(2026, 12, 31)
 
 
 def test_a_pack_may_be_supplied_explicitly() -> None:
     # Arrange
-    pack = resolve_pack(FILING_MODULE, REFERENCE_DATE)
+    pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
 
     # Act
     result = build_canonical_return(

@@ -59,7 +59,7 @@
 {%- endmacro -%}
 
 {#- The file and header fields of a form that opens a return (Open and Compare pages). -#}
-{%- macro open_fields(values, modules) -%}
+{%- macro open_fields(values, modules, releases) -%}
 <label class="dropzone">
   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="color: var(--accent-text)"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"></path><path d="M4 15v4h16v-4"></path></svg>
   <span class="title">Choose a return to open</span>
@@ -89,6 +89,12 @@
     </label>
     <label class="field" style="flex: 1 1 100px">Currency <span class="hint">default GBP</span>
       <input type="text" name="currency" value="{{ values.currency or '' }}" maxlength="3">
+    </label>
+    <label class="field">Taxonomy release
+      <select name="taxonomy">
+        <option value="">Default: the release live for the module</option>
+        {% for release in releases %}<option value="{{ release }}"{% if values.taxonomy == release %} selected{% endif %}>{{ release }}</option>{% endfor %}
+      </select>
     </label>
   </div>
   {{ caller() }}

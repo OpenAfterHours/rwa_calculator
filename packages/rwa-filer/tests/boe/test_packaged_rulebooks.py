@@ -23,20 +23,14 @@ from __future__ import annotations
 from datetime import date
 
 import polars as pl
-import pytest
 
 from pack_builders import VALID_LEI
-from rwa_filer.boe.catalogue import (
-    Rule,
-    RuleBookNotFoundError,
-    available_rulebooks,
-    load_rulebook,
-    rulebook_for_module,
-)
+from rwa_filer.boe.catalogue import Rule, available_rulebooks, load_rulebook
 from rwa_filer.boe.engine import REASON_UNKNOWN_TABLE, REASON_UNSUPPORTED, evaluate_rules
 from rwa_filer.boe.formulas import DEFAULT_MEMBER
 from rwa_filer.boe.grammar import references
 from rwa_filer.model import FACT_SCHEMA, CanonicalReturn, ReturnHeader
+from rwa_filer.release import release_rulebook
 from rwa_filer.taxonomy.pack import TaxonomyPack, available_packs, load_packaged
 
 TAXONOMY = "4.1.1"
@@ -159,11 +153,13 @@ def test_no_rule_the_gateway_runs_is_unreadable() -> None:
     assert enforced_and_unreadable == []
 
 
-def test_a_module_is_found_whatever_its_case_and_an_unknown_one_is_not() -> None:
-    assert rulebook_for_module("pra001").framework_version == "banking_reporting"
-    assert rulebook_for_module("LVR001").framework_version == "leverage_ratio"
-    with pytest.raises(RuleBookNotFoundError, match="XYZ999"):
-        rulebook_for_module("XYZ999")
+def test_a_module_is_found_in_its_release_whatever_its_case_and_an_unknown_one_is_not() -> None:
+    pra001 = release_rulebook(TAXONOMY, "pra001")
+    lvr001 = release_rulebook(TAXONOMY, "LVR001")
+    assert pra001 is not None and pra001.framework_version == "banking_reporting"
+    assert lvr001 is not None and lvr001.framework_version == "leverage_ratio"
+    assert release_rulebook(TAXONOMY, "XYZ999") is None
+    assert release_rulebook("0.0.0", "PRA001") is None
 
 
 def test_the_same_rule_code_names_different_rules_in_different_families() -> None:
@@ -189,7 +185,7 @@ def test_every_enforced_rule_of_a_packaged_module_is_supported_by_the_engine() -
     refused: dict[tuple[str, str], str] = {}
     for info in available_packs():
         pack = load_packaged(info.key)
-        rules = rulebook_for_module(info.module).enforced(info.module)
+        rules = _rulebook(info.version, info.module).enforced(info.module)
         header = ReturnHeader(VALID_LEI, max(info.valid_from, date(2027, 3, 31)), info.module)
         empty = CanonicalReturn(
             header, pl.DataFrame(schema=FACT_SCHEMA), dict.fromkeys(pack.filing_indicators, True)
@@ -272,7 +268,7 @@ def test_the_rules_their_own_formulas_cannot_fire_are_exactly_the_registered_one
     found: dict[tuple[str, str], str] = {}
     for info in available_packs():
         pack = load_packaged(info.key)
-        for rule in rulebook_for_module(info.module).enforced(info.module):
+        for rule in _rulebook(info.version, info.module).enforced(info.module):
             if rule.parse_error is not None or not (rule.closed or rule.closed_by_variable):
                 continue
             shut = _closing_dimensions(pack, rule)
@@ -281,3 +277,10 @@ def test_the_rules_their_own_formulas_cannot_fire_are_exactly_the_registered_one
 
     # Assert — two-way against the register.
     assert found == CLOSED_BY_FORMULA
+
+
+def _rulebook(version: str, module: str):  # noqa: ANN202 - a test helper
+    """The rule book of ``module`` in release ``version``; every packaged pack has one."""
+    rulebook = release_rulebook(version, module)
+    assert rulebook is not None, f"no rule book for {module} in {version}"
+    return rulebook

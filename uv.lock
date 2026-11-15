@@ -1733,6 +1733,7 @@ dev = [
     { name = "curfew" },
     { name = "httpx" },
     { name = "hypothesis" },
+    { name = "jsonschema" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "numpy" },
     { name = "openpyxl" },
@@ -1782,6 +1783,7 @@ dev = [
     { name = "curfew", specifier = ">=0.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "hypothesis", specifier = ">=6.100.0" },
+    { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.0" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
@@ -1795,7 +1797,7 @@ dev = [
 
 [[package]]
 name = "rwa-filer"
-version = "0.1.2"
+version = "0.1.3"
 source = { editable = "packages/rwa-filer" }
 dependencies = [
     { name = "jinja2" },
@@ -1816,6 +1818,7 @@ excel = [
 [package.dev-dependencies]
 dev = [
     { name = "httpx" },
+    { name = "jsonschema" },
     { name = "openpyxl" },
     { name = "pytest" },
 ]
@@ -1835,6 +1838,7 @@ provides-extras = ["excel", "arelle"]
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pytest", specifier = ">=8.0.0" },
 ]

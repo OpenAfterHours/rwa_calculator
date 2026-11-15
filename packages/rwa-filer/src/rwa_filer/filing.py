@@ -4,6 +4,8 @@ The filing package — one return, validated, as the files a firm submits and ke
 Pipeline position:
     CanonicalReturn -> validate_return -> xbrl.write_instance
         -> <name>.xbrl (+ <name>.zip) + <name>.manifest.json
+    (with ``evidence=``)  ->  evidence.collect_evidence -> evidence.write_evidence
+        -> the evidence file, its checksum recorded in the manifest
 
 Key responsibilities:
 - Validate with the accuracy the file will state. The rules' comparisons allow
@@ -22,6 +24,10 @@ Key responsibilities:
   the file that was checked.
 - Be reproducible. Nothing in the three files depends on when or where they
   were built unless the caller passes a creation time.
+- Where asked, write the evidence behind the verdict (``rwa_filer.evidence``)
+  from the same evaluation pass — whether or not the return is written, since
+  a blocked return is when it is most needed — and record its checksum in the
+  manifest, so a sign-off of the manifest covers the evidence too.
 
 References:
 - BoE XBRL Filing Manual v1.0.1: "Submission of an XBRL file" (files over
@@ -40,6 +46,8 @@ from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer import __version__
 from rwa_filer.boe.engine import Accuracy
+from rwa_filer.evidence import collect_evidence, write_evidence
+from rwa_filer.release import choose_release
 from rwa_filer.validate.report import to_record
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.xbrl.writer import GENERATOR_ID, InstanceOptions, write_instance
@@ -50,10 +58,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from rwa_filer.boe.catalogue import RuleBook
+    from rwa_filer.evidence import EvidenceFile
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
+    from rwa_filer.validate.identity import SourceIdentity
     from rwa_filer.validate.returns import ReturnValidation
     from rwa_filer.workflow.adjustments import AppliedAdjustment
     from rwa_filer.xbrl.writer import Instance
@@ -98,6 +108,8 @@ class FilingPackage:
         instance_path: The ``.xbrl`` file, or ``None``.
         zip_path: The ``.zip`` holding it, where one was written.
         manifest_path: The manifest. Written whenever the instance is.
+        evidence: The evidence file, where one was asked for. Written whether
+            or not the instance is.
     """
 
     validation: ReturnValidation
@@ -106,6 +118,7 @@ class FilingPackage:
     instance_path: Path | None = None
     zip_path: Path | None = None
     manifest_path: Path | None = None
+    evidence: EvidenceFile | None = None
 
     @property
     def written(self) -> bool:
@@ -133,6 +146,8 @@ def build_filing(
     always_zip: bool = False,
     source_findings: Sequence[Finding] = (),
     adjustments: Sequence[AppliedAdjustment] = (),
+    evidence: Path | None = None,
+    source: SourceIdentity | None = None,
 ) -> FilingPackage:
     """Validate ``ret`` and, if it may be filed, write its filing package.
 
@@ -158,6 +173,10 @@ def build_filing(
             (``workflow.adjustments.apply_adjustments``). They are recorded in
             the manifest, with what each cell held before; they are not
             applied again here.
+        evidence: Where to write the evidence behind the verdict
+            (``rwa_filer.evidence``; ``.gz`` to compress). Its creation time is
+            ``options.created_at``.
+        source: The file the return was read from, for the identity block.
 
     Returns:
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
@@ -167,20 +186,41 @@ def build_filing(
     """
     options = options or InstanceOptions()
     accuracy = Accuracy(options.monetary_decimals, options.percentage_decimals)
-    validation = validate_return(
-        ret,
-        pack,
-        rulebook=rulebook,
+    chosen = choose_release(
+        ret.header.module,
         release=release,
+        pack=pack,
+        rulebook=rulebook,
         taxonomy=taxonomy,
         today=today,
-        accuracy=accuracy,
-        source_findings=source_findings,
     )
+    evidence_file = None
+    if evidence is not None:
+        collected = collect_evidence(
+            ret,
+            release=chosen,
+            accuracy=accuracy,
+            source_findings=source_findings,
+            source=source,
+        )
+        validation = collected.validation
+        evidence_file = write_evidence(collected, evidence, generated_at=options.created_at)
+    else:
+        validation = validate_return(
+            ret,
+            release=chosen,
+            accuracy=accuracy,
+            source_findings=source_findings,
+            source=source,
+        )
     if validation.structure:
-        return FilingPackage(validation=validation, blocked_by=BLOCKED_BY_STRUCTURE)
+        return FilingPackage(
+            validation=validation, blocked_by=BLOCKED_BY_STRUCTURE, evidence=evidence_file
+        )
     if validation.blocking and not allow_rule_breaks:
-        return FilingPackage(validation=validation, blocked_by=BLOCKED_BY_RULES)
+        return FilingPackage(
+            validation=validation, blocked_by=BLOCKED_BY_RULES, evidence=evidence_file
+        )
 
     instance = write_instance(ret, validation.pack, options=options)
     base = name or default_name(ret)
@@ -196,6 +236,7 @@ def build_filing(
     manifest_path = directory / f"{base}{MANIFEST_SUFFIX}"
     manifest = _manifest(ret, validation, instance, options, instance_path, zip_path)
     manifest["adjustments"] = [applied.as_record() for applied in adjustments]
+    manifest["evidence"] = None if evidence_file is None else _evidence_record(evidence_file)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     logger.info(
         "filing package written: %s (%d bytes, %d fact(s)); submittable=%s",
@@ -210,6 +251,7 @@ def build_filing(
         instance_path=instance_path,
         zip_path=zip_path,
         manifest_path=manifest_path,
+        evidence=evidence_file,
     )
 
 
@@ -251,6 +293,7 @@ def _manifest(
         "created_at": options.created_at.isoformat(timespec="seconds")
         if options.created_at
         else None,
+        "identity": record["identity"],
         "header": record["header"],
         "taxonomy": record["taxonomy"],
         "instance": {
@@ -273,8 +316,21 @@ def _manifest(
         },
         "upload": (zip_path or instance_path).name,
         "validation": {
+            "status": record["status"],
             "submittable": record["submittable"],
+            "completeness": record["completeness"],
             "summary": record["summary"],
             "findings": record["findings"],
         },
+    }
+
+
+def _evidence_record(evidence: EvidenceFile) -> dict[str, Any]:
+    """The evidence file as the manifest records it: by name, checksum and identity."""
+    return {
+        "file": evidence.path.name,
+        "sha256": evidence.sha256,
+        "content_sha256": evidence.content_sha256,
+        "evidence_id": evidence.evidence_id,
+        "records": dict(evidence.records),
     }

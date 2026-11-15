@@ -56,12 +56,12 @@ from rwa_filer.model import DECIMALS_EXACT, FACT_SCHEMA, CanonicalReturn, Return
 from rwa_filer.release import ReleaseNotFoundError, release_for_pack, resolve_release
 from rwa_filer.rules.catalogue import SEVERITY_ERROR
 from rwa_filer.taxonomy.pack import MEMBER_OPEN_OPTIONAL, MEMBER_TYPED_PREFIX
-from rwa_filer.validate.checker import Finding
+from rwa_filer.validate.checker import FactPosition, Finding
 from rwa_filer.validate.structure import local_name
 from rwa_filer.xbrl.writer import NS_FIND, NS_ISO4217, NS_LINK, NS_XBRLDI, NS_XBRLI, NS_XLINK
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
@@ -436,7 +436,7 @@ def _distinct_facts(document: _Document, pack: TaxonomyPack) -> tuple[list[_Fact
         return f"{prefix_of.get(uri, uri)}:{name}"
 
     distinct: dict[tuple[str, tuple[tuple[str, _Value], ...]], _Fact] = {}
-    clashes: list[str] = []
+    clashes: list[_Fact] = []
     for raw in document.facts:
         context = document.contexts.get(raw.context)
         if context is None:
@@ -457,17 +457,21 @@ def _distinct_facts(document: _Document, pack: TaxonomyPack) -> tuple[list[_Fact
         fact = _typed_fact(metric, members, raw, pack, prefix_of)
         seen = distinct.setdefault((metric, members), fact)
         if (seen.value, seen.text) != (fact.value, fact.text):
-            clashes.append(fact.label)
+            clashes.append(fact)
 
     findings = (
         [
             _finding(
                 FINDING_FILING_RULE,
                 f"{len(clashes)} fact(s) are reported more than once with different values "
-                f"(Filing Manual rule 2.16): {_examples(clashes)}.",
+                f"(Filing Manual rule 2.16): {_examples([fact.label for fact in clashes])}.",
                 subject="2.16",
                 expected="one value per fact",
                 actual=f"{len(clashes)} inconsistent duplicate(s)",
+                positions=tuple(
+                    _fact_position(fact, "an earlier fact reports another value")
+                    for fact in clashes
+                ),
             )
         ]
         if clashes
@@ -525,12 +529,12 @@ def _place(
     index = _DataPointIndex(pack)
     reported = None if indicators is None else {code for code, filed in indicators.items() if filed}
     rows: dict[tuple[object, ...], tuple[object, ...]] = {}
-    unknown: list[str] = []
-    orphaned: list[str] = []
+    unknown: list[_Fact] = []
+    orphaned: list[_Fact] = []
     for fact in facts:
         points = index.match(fact)
         if not points:
-            unknown.append(fact.label)
+            unknown.append(fact)
             continue
         placed = False
         for point in points:
@@ -542,7 +546,7 @@ def _place(
                 for cell in _cells(fact, table, row, column, sheet):
                     rows.setdefault(cell[:5], cell)
         if not placed:
-            orphaned.append(fact.label)
+            orphaned.append(fact)
 
     findings: list[Finding] = []
     if unknown:
@@ -551,10 +555,11 @@ def _place(
                 FINDING_UNKNOWN_DATAPOINT,
                 f"{len(unknown)} fact(s) are not data points of {pack.info.module} "
                 f"{pack.info.version}: no reportable cell has that metric with those dimension "
-                f"members. {_examples(unknown)}.",
+                f"members. {_examples([fact.label for fact in unknown])}.",
                 subject=pack.info.module,
                 expected="a data point of the module",
                 actual=f"{len(unknown)} fact(s)",
+                positions=tuple(_fact_position(fact) for fact in unknown),
             )
         )
     if orphaned:
@@ -562,10 +567,11 @@ def _place(
             _finding(
                 FINDING_FACT_NOT_INDICATED,
                 f"{len(orphaned)} fact(s) appear only in templates the file does not declare "
-                f"as reported (Filing Manual rule 1.7.1): {_examples(orphaned)}.",
+                f"as reported (Filing Manual rule 1.7.1): {_examples([f.label for f in orphaned])}.",
                 subject="1.7.1",
                 expected="a positive filing indicator for a template showing the fact",
                 actual=f"{len(orphaned)} fact(s)",
+                positions=tuple(_fact_position(fact) for fact in orphaned),
             )
         )
     return list(rows.values()), findings
@@ -687,19 +693,53 @@ def _filing_rule_findings(document: _Document, pack: TaxonomyPack) -> list[Findi
     }
     numeric = [fact for fact in document.facts if fact.name in numeric_names]
     foreign = sum(fact.name[0] not in prefix_of for fact in document.facts)
-    checks: list[tuple[str, str, int]] = [
+
+    def named(fact: _RawFact) -> str:
+        return (
+            f"{prefix_of.get(fact.name[0], fact.name[0])}:{fact.name[1]} in context {fact.context}"
+        )
+
+    def facts(predicate: Callable[[_RawFact], bool], among: list[_RawFact]) -> list[str]:
+        return [named(fact) for fact in among if predicate(fact)]
+
+    entity = _commonest([(c.identifier, c.scheme) for c in contexts])
+    instant = _commonest([c.instant for c in contexts if c.instant is not None])
+    # (rule, requirement, breaches, what each breach is about). The breach count
+    # is the rule's own measure — for 2.9 and 2.10, how many values there are
+    # beyond the first — and the references name every context or fact
+    # outside the commonest value, or in breach.
+    checks: list[tuple[str, str, int, list[str]]] = [
         (
             "2.9",
             "every context names the same reporting entity and identifier scheme",
             max(len({(context.identifier, context.scheme) for context in contexts}) - 1, 0),
+            [
+                f"context {name}"
+                for name, context in document.contexts.items()
+                if (context.identifier, context.scheme) != entity
+            ],
         ),
         (
             "2.10",
             "every context carries the same instant date",
             max(len({context.instant for context in contexts}) - 1, 0)
             + sum(context.instant is None for context in contexts),
+            [
+                f"context {name}"
+                for name, context in document.contexts.items()
+                if context.instant is None or context.instant != instant
+            ],
         ),
-        ("2.14", "no context uses xbrli:segment", sum(c.has_segment for c in contexts)),
+        (
+            "2.14",
+            "no context uses xbrli:segment",
+            sum(c.has_segment for c in contexts),
+            [
+                f"context {name}"
+                for name, context in document.contexts.items()
+                if context.has_segment
+            ],
+        ),
         (
             "1.6",
             "filing indicators refer to a context with no dimensions",
@@ -708,25 +748,53 @@ def _filing_rule_findings(document: _Document, pack: TaxonomyPack) -> list[Findi
                 for name in document.indicator_contexts
                 if name in document.contexts
             ),
+            [
+                f"context {name}"
+                for name in sorted(document.indicator_contexts)
+                if name in document.contexts and document.contexts[name].members
+            ],
         ),
-        ("2.7", "no context is unused", len(set(document.contexts) - used)),
+        (
+            "2.7",
+            "no context is unused",
+            len(set(document.contexts) - used),
+            [f"context {name}" for name in sorted(set(document.contexts) - used)],
+        ),
         (
             "2.7",
             "every fact refers to a context the file defines",
             sum(fact.context not in document.contexts for fact in document.facts),
+            facts(lambda fact: fact.context not in document.contexts, document.facts),
         ),
-        ("2.17", "no fact uses @precision", sum(fact.has_precision for fact in document.facts)),
-        ("2.18", "every numeric fact states @decimals", sum(f.decimals is None for f in numeric)),
-        ("2.19", "no fact is nil", sum(fact.is_nil for fact in document.facts)),
+        (
+            "2.17",
+            "no fact uses @precision",
+            sum(fact.has_precision for fact in document.facts),
+            facts(lambda fact: fact.has_precision, document.facts),
+        ),
+        (
+            "2.18",
+            "every numeric fact states @decimals",
+            sum(f.decimals is None for f in numeric),
+            facts(lambda fact: fact.decimals is None, numeric),
+        ),
+        (
+            "2.19",
+            "no fact is nil",
+            sum(fact.is_nil for fact in document.facts),
+            facts(lambda fact: fact.is_nil, document.facts),
+        ),
         (
             "2.19",
             "no fact is empty",
             sum(not fact.text.strip() and not fact.is_nil for fact in document.facts),
+            facts(lambda fact: not fact.text.strip() and not fact.is_nil, document.facts),
         ),
         (
             "2.21",
             "every numeric fact refers to a unit the file defines",
             sum(fact.unit not in document.units for fact in numeric),
+            facts(lambda fact: fact.unit not in document.units, numeric),
         ),
     ]
     if foreign:
@@ -738,10 +806,26 @@ def _filing_rule_findings(document: _Document, pack: TaxonomyPack) -> list[Findi
             subject=rule,
             expected=requirement,
             actual=f"{count} breach(es)",
+            positions=tuple(FactPosition(source_ref=ref, detail=f"rule {rule}") for ref in refs),
         )
-        for rule, requirement, count in checks
+        for rule, requirement, count, refs in checks
         if count
     ]
+
+
+def _commonest[T](values: list[T]) -> T | None:
+    """The value that occurs most often (the first seen, on a tie); ``None`` for none."""
+    counts: dict[T, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return max(counts, key=counts.__getitem__) if counts else None
+
+
+def _fact_position(fact: _Fact, detail: str = "") -> FactPosition:
+    """A fact the reader could not place, located by what it reports."""
+    return FactPosition(
+        value=fact.value, text_value=fact.text, detail=detail, source_ref=fact.label
+    )
 
 
 def _examples(labels: list[str]) -> str:
@@ -750,7 +834,15 @@ def _examples(labels: list[str]) -> str:
     return f"{shown}{more}"
 
 
-def _finding(code: str, message: str, *, subject: str, expected: str, actual: str) -> Finding:
+def _finding(  # noqa: PLR0913 - a Finding's fields
+    code: str,
+    message: str,
+    *,
+    subject: str,
+    expected: str,
+    actual: str,
+    positions: tuple[FactPosition, ...] = (),
+) -> Finding:
     return Finding(
         code=code,
         severity=SEVERITY_ERROR,
@@ -759,4 +851,5 @@ def _finding(code: str, message: str, *, subject: str, expected: str, actual: st
         subject=subject,
         expected=expected,
         actual=actual,
+        positions=positions,
     )

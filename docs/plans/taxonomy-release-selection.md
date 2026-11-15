@@ -27,8 +27,8 @@ Where the build departs from the design:
   `.taxonomy/boe-banking-<version>/`, not `--from DIR`: a path built from the
   command line is a `pythonsecurity:S8707` sink (`arch_check` check 19). The
   release is chosen by name from `releases.json`.
-- **The validation report keeps its verdict first**; the release lines follow it
-  (§5.5 said the first line). `build` (whose output is the report), `compare`
+- **The validation report keeps its verdict and the check's status first**; the
+  release lines follow them (§5.5 said the first line). `build` (whose output is the report), `compare`
   (after its verdict) and `template` show them too. **`diff` shows none**: it
   uses a release only to read an XBRL file.
 - **`STR011` is reported apart from the structure findings**, in

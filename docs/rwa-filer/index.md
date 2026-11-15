@@ -54,6 +54,7 @@ project, type `uv run rwa-filer`.
 | The EBA (CRR) and BoE v4.1.1 rule extracts, and the template-level engine `rwa-calc` uses on its own frames | Available |
 | Structure checks: every fact sits in a cell the taxonomy accepts | Available |
 | File readers (Parquet, CSV, Excel, XBRL) and `rwa-filer validate` | Available |
+| Evidence export: every rule outcome, evaluation and comparison behind a verdict, fingerprinted and versioned (`--evidence`) | Available |
 | XBRL submission file: `rwa-filer build` writes the instance, a zip where required, and a manifest | Available |
 | Preparer workflow: cell adjustments with reasons, an audit ledger, sign-off, a diff between two versions, and a comparison with another system's return that says why they differ | Available |
 | Arelle referee: `rwa-filer referee` runs an independent XBRL processor on a written file and compares its verdict on every rule with this package's own | Available (needs Arelle and the Bank's taxonomy package) |
@@ -74,7 +75,33 @@ uvx rwa-filer@latest validate return.xbrl
 ```
 
 The exit code is `0` when nothing blocks submission and `1` when something
-does. `--report` writes every finding as JSON whatever the outcome.
+does. `--report` writes the [validation report](#the-validation-report-and-the-evidence-export)
+as JSON whatever the outcome, and `--evidence FILE.jsonl` writes the evidence
+behind it.
+
+A fact table states no accuracy of its own, so the rules' rounding allowances
+come from the accuracy the file will be written with. `validate` takes the
+same `--monetary-decimals` and `--percentage-decimals` as `build`, and reaches
+the same verdict at the same setting. A rule can hold at thousands and break at
+units, so validate at the accuracy you will file at:
+
+```bash
+uvx rwa-filer@latest validate return.parquet --monetary-decimals 0 \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+```
+
+The second line of the output is the **status**, which keeps "nothing failed"
+apart from "everything was checked":
+
+| Status | Meaning |
+|--------|---------|
+| `CLEAN` | Nothing blocks submission, and every check the module requires was run. |
+| `INCOMPLETE` | Nothing blocks submission, but something was left unchecked: a linked template is not in the return, or a rule could not be evaluated. The status line names each cause. |
+| `BLOCKED` | A finding stops the return being submitted. |
+
+`--require-complete` makes an `INCOMPLETE` result exit `3`, so a pipeline can
+refuse it without reading the JSON. Without the flag the exit codes are as
+above.
 
 A return is checked in two steps. **Structure** comes first: each fact is looked
 up in the module's taxonomy pack, in the release the run uses. **Rules** follow:
@@ -104,11 +131,12 @@ the return is checked against the release asked for (to try next year's rules on
 this year's return, say), but the regulator accepts a filing only against the
 release in force on its reference date. `STR011` does not stop a build.
 
-Every run says which release it used and why, straight after the verdict, with a
-line for each other shipped release and the option that selects it:
+Every run says which release it used and why, after the verdict and the check's
+status, with a line for each other shipped release and the option that selects it:
 
 ```text
 BLOCKED: PRA001 for 5493001KJTIIGC8Y1R12 at 2027-03-31 (taxonomy 4.1.1, 2 facts, 1 tables)
+  status: BLOCKED — linked templates not reported (3 template(s), 93 rule(s))
 Taxonomy 4.1.1 (default) — PRA001 future from 1 January 2027; no live release shipped
 ```
 
@@ -292,6 +320,95 @@ for finding in result.findings:
 This one-cell return prints `False` and a single `VAL003`: the cell is valid,
 but no published rule can run on one cell, and a return nothing was checked
 against is not reported as clean.
+
+## The validation report and the evidence export
+
+`--report FILE` (or `--format json`) writes the **validation report**: one JSON
+document per return, small enough to keep with each run. `--evidence FILE`
+writes the **evidence export**: everything the validation executed, for a system
+that wants to rely on this engine's results rather than recompute them.
+
+### The validation report
+
+The report declares its shape (`"schema": {"name": "rwa-filer/validation-report", "version": "2.0"}`),
+and its JSON Schema ships in the package:
+`rwa_filer.schemas.load_schema(rwa_filer.schemas.VALIDATION_REPORT_SCHEMA)`.
+Within a major version the report only gains fields. It holds:
+
+- `identity`: what the verdict was computed from, each part by SHA-256. That is
+  the facts and header (`facts_sha256`, independent of row order and file
+  format), the source file's bytes, the taxonomy pack's files, the rule book
+  (the packaged file, plus the Bank's workbook and formula-package digests it
+  was built from), the accuracy in effect and whether it was the default, and
+  the generator version. `evidence_id` is one digest over the inputs: two runs
+  with the same `evidence_id` ran the same checks on the same figures. The
+  source file is recorded but is not part of it, so the same facts as a `.xbrl`
+  or a `.zip` share one id.
+- `status`, `submittable` and `completeness`: the verdict, and each cause of an
+  incomplete check with every rule and template it covers. The causes are
+  `no_rulebook`, `rules_unsupported`, `rules_table_not_in_taxonomy`,
+  `linked_templates_missing` and `coverage_shortfall`. A rule not run because it
+  has no data, because the taxonomy's own formula cannot fire on the return, or
+  because it reads only templates the return does not report, is not a gap: the
+  gateway does not run it either.
+- `rules`: **every** enforced rule, passes included, each with its status,
+  evaluation counts, `rule_sha256` (a digest of everything that decides how the
+  rule runs, so a changed formula under an unchanged code shows) and the first
+  five failing evaluations with their cell coordinates.
+- `findings`: every finding, each with `positions_total`, the number of facts
+  it is about.
+
+### The evidence export
+
+The evidence is a JSON Lines file (`.jsonl`, or gzip-compressed `.jsonl.gz`),
+one record per line. It is written from the same evaluation pass that reached
+the verdict, so it cannot describe a different run:
+
+| `record` | One per | Holds |
+|----------|---------|-------|
+| `header` | file | the schema (`rwa-filer/evidence` 1.0), the same `identity` as the report, the status and completeness, and how many records of each kind follow |
+| `cell` | reported cell any evaluation read | its coordinates, data point, metric and type, its value, the `decimals` it was compared at, where that came from (`stated` by the fact, the run's `accuracy`, or `integer`), and its rounding allowance |
+| `rule` | enforced rule | as in the report, plus the expression, scope, `where` and join |
+| `evaluation` | evaluation, satisfied or not, uncapped | where it was made (`place`), whether it held, the cells each side read, and every comparison it executed |
+| `finding` | finding | as in the report, with its index |
+| `structure_exception` | fact a finding is about, uncapped | the finding's index and code, the fact's coordinates or source reference, its value, and what is wrong with it |
+| `trailer` | file | the counts again, and `content_sha256` over every line before it |
+
+Each comparison records its `operator`, whether it carries the `i` prefix
+(`interval`), the branch of the rule it was in (`rule`, `rule/if`,
+`rule/then`, ...), both operands (value, allowance, the cells read and the
+cells read at their default), the `difference` (left − right), the `tolerance`
+the prefix allowed, the `excess` beyond it and whether it held. The verdict
+follows from the numbers: with `d` the difference and `t` the tolerance, `=`
+holds when `|d| ≤ t`, `<=` when `d ≤ t`, `>=` when `d ≥ −t`, and so on; `t` is
+both operands' allowances with the prefix and zero without it. A comparison
+`and`/`or` never reached, or a branch not taken, is not recorded.
+
+```python
+import polars as pl
+
+evaluations = pl.read_ndjson("evidence.jsonl").filter(pl.col("record") == "evaluation")
+```
+
+`rwa_filer.evidence.read_evidence(path)` reads a file back and refuses one that
+is cut short or altered (the trailer's digest no longer matches). Without a
+creation time (`--no-timestamp`) the same inputs give the same bytes. From
+Python:
+
+```python
+from pathlib import Path
+
+from rwa_filer.evidence import collect_evidence, write_evidence
+
+evidence = collect_evidence(ret)  # validate_return's arguments
+write_evidence(evidence, Path("evidence.jsonl.gz"))
+print(evidence.validation.status, evidence.identity["evidence_id"])
+```
+
+`build --evidence FILE` writes the evidence whether or not the return is
+written, and records its checksum and `evidence_id` in the manifest, so a
+sign-off of the manifest covers the evidence too. The dashboard's overview
+offers the same file as **Download evidence**.
 
 ## Writing the submission file
 
@@ -639,8 +756,9 @@ in the data.
 |------|----------|---------|
 | `VAL001` | Error | An Error-severity published rule is broken. The regulator rejects the return. |
 | `VAL002` | Warning | A Warning-severity published rule is broken. It must be explained. |
-| `VAL003` | Error | Coverage is insufficient: no rule could be executed at all, or a reported template that has rules had none of them executed. |
+| `VAL003` | Error | Coverage is insufficient: no rule could be executed at all, a reported template that has rules had none of them executed, or (`subject` `no_rulebook`, from `validate_return` only) no rule book covers the module. |
 | `VAL004` | Warning | A template the return does not report is one that enforced rules check a reported template against, so those rules did not run. One finding per missing template; `subject` is its filing indicator. Raised by `validate_return` only. |
+| `VAL005` | Warning | Enforced rules the engine could not evaluate: a rule that uses something it does not implement (`subject` `rules_unsupported`), or one that reads a table the taxonomy pack lacks (`rules_table_not_in_taxonomy`). They are neither passed nor failed, so the check is incomplete. Raised by `validate_return` only. |
 
 `VAL003` is what makes an empty list safe to read as "checked and clean". Without
 it, a return on which no rule could run would produce no breaks and look
@@ -658,9 +776,13 @@ The JSON report lists the same templates under `summary.templates_missing`, each
 with its rules and the reported templates they read.
 
 `validate_return` adds the structure findings. All are Errors: the regulator
-rejects a file that has any of them. It also adds `STR011`, a Warning about the
-release chosen, which is reported apart from the structure findings (in
-`release_findings`) and never blocks.
+rejects a file that has any of them. Each names the first five facts in its
+message; `Finding.positions` holds every one, uncapped, with what it holds and,
+where it differs fact by fact, what is wrong with it. A fact an XBRL instance
+holds that has no cell in the module is located by `source_ref` (its metric and
+dimension members, or the context it is in) instead of coordinates. It also adds
+`STR011`, a Warning about the release chosen, which is reported apart from the
+structure findings (in `release_findings`) and never blocks.
 
 | Code | Meaning |
 |------|---------|

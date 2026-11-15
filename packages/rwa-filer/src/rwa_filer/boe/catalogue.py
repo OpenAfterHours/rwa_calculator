@@ -26,6 +26,7 @@ References:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -122,6 +123,31 @@ class Rule:
         """How a break is treated for ``module``; an Error unless stated otherwise."""
         return self.severities.get(module, SEVERITY_ERROR)
 
+    def fingerprint(self, module: str) -> str:
+        """SHA-256 of everything that decides how this rule runs on ``module``.
+
+        The code alone does not identify a rule across releases: the same code
+        can carry a changed expression, scope or severity. Two runs whose rules
+        share a fingerprint ran the same check.
+        """
+        content = {
+            "rule_id": self.rule_id,
+            "framework_version": self.framework_version,
+            "expression": self.expression,
+            "scope": self.scope,
+            "where": self.where,
+            "join": self.join,
+            "tables": list(self.tables),
+            "severity": self.severity(module),
+            "always_execute": self.always_execute,
+            "closed": sorted(self.closed),
+            "closed_by_variable": {
+                variable: sorted(closed)
+                for variable, closed in sorted(self.closed_by_variable.items())
+            },
+        }
+        return canonical_sha256(content)
+
     @cached_property
     def parse_error(self) -> str | None:
         """Why the rule cannot be read, or ``None`` when every part parses."""
@@ -164,6 +190,11 @@ class RuleBook:
     modules: tuple[str, ...]
     source: Mapping[str, Any]
     rules: tuple[Rule, ...]
+    #: The packaged file it was loaded from; ``None`` for one built in memory.
+    file: str | None = None
+    #: SHA-256 of the rule book's content, in canonical JSON — the same for a
+    #: packaged file and the dict it was loaded from. Empty when not known.
+    content_sha256: str = ""
 
     def enforced(self, module: str) -> tuple[Rule, ...]:
         """The rules the gateway runs on a return of ``module``."""
@@ -198,11 +229,16 @@ def load_rulebook(file_name: str) -> RuleBook:
     resource = resources.files(RULEBOOKS_PACKAGE).joinpath(RULEBOOKS_DIRECTORY, file_name)
     if not resource.is_file():
         raise RuleBookNotFoundError(f"No packaged rule book named {file_name!r}")
-    return rulebook_from(json.loads(resource.read_text(encoding="utf-8")))
+    return rulebook_from(json.loads(resource.read_text(encoding="utf-8")), file=file_name)
 
 
-def rulebook_from(payload: Mapping[str, Any]) -> RuleBook:
-    """Build a ``RuleBook`` from an importer's rule-book dict."""
+def rulebook_from(payload: Mapping[str, Any], *, file: str | None = None) -> RuleBook:
+    """Build a ``RuleBook`` from an importer's rule-book dict.
+
+    Args:
+        payload: The rule book, as ``boe.importer`` writes it.
+        file: The packaged file it came from, recorded for a report to name.
+    """
     if payload.get("format") != RULEBOOK_FORMAT:
         raise ValueError(
             f"Rule book format {payload.get('format')!r} is not supported "
@@ -240,4 +276,16 @@ def rulebook_from(payload: Mapping[str, Any]) -> RuleBook:
         modules=tuple(payload.get("modules", ())),
         source=dict(payload["source"]),
         rules=rules,
+        file=file,
+        content_sha256=canonical_sha256(payload),
     )
+
+
+def canonical_sha256(content: object) -> str:
+    """SHA-256 of ``content`` as canonical JSON: sorted keys, no whitespace, UTF-8.
+
+    The one digest every identity in a validation report is taken with, so a
+    value hashed in two places gives one answer.
+    """
+    text = json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()

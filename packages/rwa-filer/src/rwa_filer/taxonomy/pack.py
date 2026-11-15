@@ -38,6 +38,7 @@ References:
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
@@ -75,6 +76,8 @@ PACK_FILE: Final = "pack.json"
 #: machine that compiled it.
 CELLS_FILE: Final = "cells.arrow"
 DATAPOINTS_FILE: Final = "datapoints.arrow"
+#: The files a pack is, in the order its digest reads them.
+_PACK_FILES: Final = (PACK_FILE, CELLS_FILE, DATAPOINTS_FILE)
 
 #: Sheet (z) axis kinds.
 AXIS_FIXED: Final = "fixed"
@@ -340,6 +343,10 @@ class TaxonomyPack:
     tables: Mapping[str, Table]
     cells: pl.DataFrame
     datapoints: tuple[DataPoint, ...]
+    #: SHA-256 over the pack's three files as loaded (see ``load_pack``), so a
+    #: report names exactly the pack it was validated against; ``None`` for a
+    #: pack built in memory.
+    content_sha256: str | None = None
 
     def table(self, code: str) -> Table | None:
         """The table with this code, or ``None`` if the module has none."""
@@ -423,14 +430,15 @@ def load_pack(directory: Traversable | Path) -> TaxonomyPack:
         ValueError: the directory holds a pack in a format this version cannot
             read. (A packaging error, not a data condition, so it raises.)
     """
-    payload = json.loads(directory.joinpath(PACK_FILE).read_text(encoding="utf-8"))
+    raw = {name: directory.joinpath(name).read_bytes() for name in _PACK_FILES}
+    payload = json.loads(raw[PACK_FILE].decode("utf-8"))
     if payload.get("format") != PACK_FORMAT:
         raise ValueError(
             f"Taxonomy pack format {payload.get('format')!r} is not supported "
             f"(this version reads format {PACK_FORMAT})"
         )
-    cells = pl.read_ipc(io.BytesIO(directory.joinpath(CELLS_FILE).read_bytes()))
-    datapoints = pl.read_ipc(io.BytesIO(directory.joinpath(DATAPOINTS_FILE).read_bytes()))
+    cells = pl.read_ipc(io.BytesIO(raw[CELLS_FILE]))
+    datapoints = pl.read_ipc(io.BytesIO(raw[DATAPOINTS_FILE]))
     return TaxonomyPack(
         info=_info_from_json(payload["info"]),
         namespaces=dict(payload["namespaces"]),
@@ -440,6 +448,7 @@ def load_pack(directory: Traversable | Path) -> TaxonomyPack:
         tables={code: _table(code, raw) for code, raw in payload["tables"].items()},
         cells=cells.select(CELL_SCHEMA.names()).cast(CELL_SCHEMA),
         datapoints=_datapoints_from_frame(datapoints),
+        content_sha256=_content_digest(raw),
     )
 
 
@@ -528,6 +537,16 @@ def write_pack(
 # =============================================================================
 
 _NUMERIC_TYPES: Final[frozenset[str]] = frozenset({"monetary", "percentage", "integer", "decimal"})
+
+
+def _content_digest(raw: Mapping[str, bytes]) -> str:
+    """SHA-256 over each file's name, length and bytes, in ``_PACK_FILES`` order."""
+    digest = hashlib.sha256()
+    for name in _PACK_FILES:
+        content = raw[name]
+        digest.update(f"{name}\0{len(content)}\0".encode())
+        digest.update(content)
+    return digest.hexdigest()
 
 
 def _info_from_json(raw: Mapping[str, Any]) -> PackInfo:

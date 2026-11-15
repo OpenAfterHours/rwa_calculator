@@ -14,26 +14,50 @@ Key responsibilities:
   the summary as well as in their ``VAL004`` findings.
 - Keep the record self-contained: a reader holding only the JSON knows which
   entity, date, module and taxonomy release it describes — the release's
-  status for the module, its dates, and whether it was the default or named.
-- Say, straight after the verdict, which taxonomy release was used and why,
-  and which other shipped releases have the module.
+  status for the module, its dates, and whether it was the default or named —
+  and, from its ``identity`` block, the fingerprint of every input the verdict
+  rests on.
+- Say, straight after the verdict and the check's status, which taxonomy
+  release was used and why, and which other shipped releases have the module.
+- List EVERY enforced rule, passes included, so the record shows the whole set
+  of checks that ran, not only the ones that broke.
+- Say whether the check was complete (``status``, ``completeness``), apart from
+  whether it passed.
+- Declare its own shape: ``schema`` names the record and its version, and
+  ``schemas/validation-report-2.schema.json`` (shipped in the wheel) is its
+  contract. Within a major version, changes only add.
 
 References:
 - rwa_filer.validate.returns — what a ``ReturnValidation`` holds
+- rwa_filer.validate.identity — the fingerprints
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer import __version__
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 from rwa_filer.release import release_lines, release_record
+from rwa_filer.validate.identity import identity_record
+from rwa_filer.validate.returns import (
+    INCOMPLETE_COVERAGE_SHORTFALL,
+    INCOMPLETE_LINKED_TEMPLATES_MISSING,
+    INCOMPLETE_NO_RULEBOOK,
+    INCOMPLETE_RULES_TABLE_NOT_IN_TAXONOMY,
+    INCOMPLETE_RULES_UNSUPPORTED,
+)
 
 if TYPE_CHECKING:
+    from rwa_filer.boe.engine import CellAddress, RuleResult
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.validate.checker import Finding
-    from rwa_filer.validate.returns import MissingTemplate, ReturnValidation
+    from rwa_filer.validate.returns import IncompleteCause, MissingTemplate, ReturnValidation
+
+#: The record's name and version (``schema``). The major version changes when
+#: a field is renamed, removed or changes meaning; the minor when one is added.
+REPORT_SCHEMA_NAME: Final = "rwa-filer/validation-report"
+REPORT_SCHEMA_VERSION: Final = "2.0"
 
 #: Not-evaluated reasons quoted in the text summary (commonest first).
 _REASONS_SHOWN = 5
@@ -44,15 +68,25 @@ _MISSING_SHOWN = 5
 def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, Any]:
     """A JSON-ready record of one validated return.
 
-    The record holds the verdict, the counts behind it, every finding, and one
-    line per rule that did not simply pass.
+    The record holds what it was computed from (``identity``), the verdict and
+    whether the check was complete, the counts behind them, every finding, and
+    one entry per enforced rule — passed, failed or not evaluated.
     """
     report = validation.report
+    info = validation.pack.info
+    module = info.module
+    rules = (
+        {rule.rule_id: rule for rule in validation.rulebook.rules} if validation.rulebook else {}
+    )
     return {
+        "schema": {"name": REPORT_SCHEMA_NAME, "version": REPORT_SCHEMA_VERSION},
         "generator": f"rwa-filer {__version__}",
+        "identity": identity_record(ret, validation),
         "header": ret.header.as_fields(),
         "taxonomy": release_record(validation.release, ret.header.reference_date),
+        "status": validation.status,
         "submittable": validation.is_submittable,
+        "completeness": [cause_record(cause) for cause in validation.completeness],
         "facts": ret.facts.height,
         "tables": list(ret.tables),
         "summary": {
@@ -76,24 +110,75 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
                 for missing in (report.templates_missing if report else ())
             ],
         },
-        "findings": [_finding_record(finding) for finding in validation.findings],
+        "findings": [finding_record(finding) for finding in validation.findings],
         "rules": [
-            {
-                "rule_id": result.rule_id,
-                "severity": result.severity,
-                "status": result.status,
-                "reason": result.reason,
-                "detail": result.detail,
-                "satisfied": result.satisfied,
-                "unsatisfied": result.unsatisfied,
-                "failures": [
-                    {"place": failure.place, "cells": list(failure.cells)}
-                    for failure in result.failures
-                ],
-            }
+            rule_record(
+                result,
+                rules[result.rule_id].fingerprint(module) if result.rule_id in rules else None,
+            )
             for result in (report.results if report else ())
-            if result.status != STATUS_PASS
         ],
+    }
+
+
+def rule_record(result: RuleResult, fingerprint: str | None) -> dict[str, Any]:
+    """One enforced rule's outcome, as the report and the evidence export record it."""
+    return {
+        "rule_id": result.rule_id,
+        "rule_sha256": fingerprint,
+        "severity": result.severity,
+        "status": result.status,
+        "reason": result.reason,
+        "detail": result.detail,
+        "evaluations": result.evaluations,
+        "satisfied": result.satisfied,
+        "unsatisfied": result.unsatisfied,
+        "tables": list(result.tables),
+        "failures": [
+            {
+                "place": failure.place,
+                "cells": list(failure.cells),
+                "addresses": [address_record(address) for address in failure.addresses],
+            }
+            for failure in result.failures
+        ],
+    }
+
+
+def address_record(address: CellAddress) -> dict[str, Any]:
+    """A cell, in the publisher's coordinates."""
+    return {
+        "table": address.table,
+        "sheet": address.sheet,
+        "open_key": address.open_key,
+        "row": address.row,
+        "column": address.column,
+        "reported": address.reported,
+    }
+
+
+def cause_record(cause: IncompleteCause) -> dict[str, Any]:
+    """One reason the check is incomplete."""
+    return {
+        "code": cause.code,
+        "rules": list(cause.rules),
+        "templates": list(cause.templates),
+        "detail": cause.detail,
+    }
+
+
+def finding_record(finding: Finding) -> dict[str, Any]:
+    """One finding. Its positions are counted; the evidence export lists them all."""
+    return {
+        "code": finding.code,
+        "severity": finding.severity,
+        "blocking": finding.is_blocking,
+        "subject": finding.subject,
+        "message": finding.message,
+        "expected": finding.expected,
+        "actual": finding.actual,
+        "reference": finding.reference,
+        "positions_total": len(finding.positions),
     }
 
 
@@ -107,6 +192,7 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
         f"{verdict}: {header.module} for {header.entity_identifier} "
         f"at {header.reference_date.isoformat()} "
         f"(taxonomy {info.version}, {ret.facts.height} facts, {len(ret.tables)} tables)",
+        f"  status: {status_line(validation)}",
         *release_lines(validation.release),
         f"  structure: {len(validation.structure)} finding(s)",
     ]
@@ -154,14 +240,24 @@ def _missing_line(missing: tuple[MissingTemplate, ...]) -> str:
     return f"{named} and {rest} more" if rest > 0 else named
 
 
-def _finding_record(finding: Finding) -> dict[str, Any]:
-    return {
-        "code": finding.code,
-        "severity": finding.severity,
-        "blocking": finding.is_blocking,
-        "subject": finding.subject,
-        "message": finding.message,
-        "expected": finding.expected,
-        "actual": finding.actual,
-        "reference": finding.reference,
-    }
+def status_line(validation: ReturnValidation) -> str:
+    """``CLEAN``, or the status with what left the check incomplete — for any display."""
+    causes = validation.completeness
+    if not causes:
+        return validation.status
+    return f"{validation.status} — " + "; ".join(_describe_cause(cause) for cause in causes)
+
+
+def _describe_cause(cause: IncompleteCause) -> str:
+    rules, templates = len(cause.rules), len(cause.templates)
+    if cause.code == INCOMPLETE_NO_RULEBOOK:
+        return "no rule book for the module, so no rule was run"
+    if cause.code == INCOMPLETE_RULES_UNSUPPORTED:
+        return f"{rules} rule(s) this engine cannot evaluate"
+    if cause.code == INCOMPLETE_RULES_TABLE_NOT_IN_TAXONOMY:
+        return f"{rules} rule(s) read a table the taxonomy pack lacks"
+    if cause.code == INCOMPLETE_LINKED_TEMPLATES_MISSING:
+        return f"linked templates not reported ({templates} template(s), {rules} rule(s))"
+    if cause.code == INCOMPLETE_COVERAGE_SHORTFALL:
+        return f"rule coverage insufficient ({cause.detail})"
+    return cause.code

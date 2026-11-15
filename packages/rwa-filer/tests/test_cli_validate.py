@@ -164,7 +164,7 @@ def test_a_reference_date_the_release_does_not_cover_is_a_warning_not_a_stop(
     assert len(warnings) == 1 and warnings[0]["blocking"] is False
 
 
-def test_the_text_report_says_which_release_was_used_straight_after_the_verdict(
+def test_the_text_report_says_which_release_was_used_after_the_verdict_and_status(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Act
@@ -173,7 +173,8 @@ def test_the_text_report_says_which_release_was_used_straight_after_the_verdict(
     # Assert
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith(("SUBMITTABLE", "BLOCKED"))
-    assert lines[1].startswith("Taxonomy 4.1.1 (default) — PRA001 ")
+    assert lines[1].startswith("  status: ")
+    assert lines[2].startswith("Taxonomy 4.1.1 (default) — PRA001 ")
 
 
 def test_a_named_release_is_used_and_said_to_be_chosen(

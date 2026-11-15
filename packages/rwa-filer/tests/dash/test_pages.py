@@ -10,6 +10,7 @@ import pytest
 
 from dash_builders import HEADER_FORM
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS
+from rwa_filer.dash.views import rules_page
 from rwa_filer.extras import MissingExtraError
 
 if TYPE_CHECKING:
@@ -329,6 +330,65 @@ def test_focusing_one_rule_leaves_the_others_cells_unmarked(
 
     assert "cell-error" in column_0040(marks_page)
     assert "cell-error" not in column_0040(focused)
+
+
+def _cell_panel(client: TestClient, broken: OpenedReturn, **params: str) -> str:
+    """The selected-cell panel of OF 07.00 r0010 c0010 on sheet 0008, unescaped."""
+    page = client.get(
+        f"/returns/{broken.return_id}/templates",
+        params={"table": "OF07.00.01.01", "sheet": "0008", "row": "0010", "col": "0010", **params},
+    ).text
+    panel = page[page.index('aria-label="Selected cell"') :]
+    return unescape(panel[: panel.index("</aside>")])
+
+
+def test_the_cell_panel_explains_each_broken_rule_without_leaving_the_page(
+    client: TestClient, broken: OpenedReturn
+) -> None:
+    # Arrange — boe_b0713, read at this cell, with the words and values a reader needs.
+    report = broken.validation.report
+    assert report is not None
+    rule = next(item for item in report.results if item.rule_id == "boe_b0713")
+    detail = rules_page(broken, rule_id=rule.rule_id).selected
+    assert detail is not None and detail.row.label and detail.expression
+    reading = next(
+        failure
+        for failure in rule.failures
+        if any((a.sheet, a.row, a.column) == ("0008", "0010", "0010") for a in failure.addresses)
+    )
+
+    # Act
+    panel = _cell_panel(client, broken)
+
+    # Assert — its label on the card, and the rule in full in a section that expands in place.
+    card = panel[panel.index(rule.rule_id) :]
+    card = card[: card.index("</details>")]
+    assert detail.row.label in card
+    assert "<details" in card and detail.expression in card
+    assert all(cell in card for cell in reading.cells)
+
+
+def test_the_cell_panel_still_links_each_rule_to_the_rules_page(
+    client: TestClient, broken: OpenedReturn
+) -> None:
+    # Act
+    panel = _cell_panel(client, broken)
+
+    # Assert
+    assert f'href="/returns/{broken.return_id}/rules?rule=boe_b0713"' in panel
+
+
+def test_the_focused_rule_opens_expanded_and_the_others_closed(
+    client: TestClient, broken: OpenedReturn
+) -> None:
+    # Act
+    panel = _cell_panel(client, broken, focus="boe_b0713")
+
+    # Assert
+    opened = re.findall(r'<details class="mark-more" data-rule="([^"]+)" open>', panel)
+    closed = re.findall(r'<details class="mark-more" data-rule="([^"]+)">', panel)
+    assert opened == ["boe_b0713"]
+    assert "boe_b0708" in closed
 
 
 # ---------------------------------------------------------------------------

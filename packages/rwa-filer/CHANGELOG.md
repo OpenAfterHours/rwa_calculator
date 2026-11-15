@@ -7,6 +7,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.3] - 2026-11-15
+
+### Added
 - **Evidence export**: `rwa-filer validate --evidence FILE` (and `build
   --evidence FILE`) writes everything a validation executed as JSON Lines
   (`.jsonl`, or `.jsonl.gz`), schema `rwa-filer/evidence` 1.0. It holds every

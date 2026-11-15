@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
     from rwa_filer.dash.context import DashContext
-    from rwa_filer.dash.workspace import FilingRecord, OpenedReturn
+    from rwa_filer.dash.workspace import FilingRecord, OpenedReturn, WorkingReturn
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,10 @@ class FilingPages:
 
     def filing(self, request: Request) -> Response:
         """The Build & sign off page."""
-        opened = self.context.opened(request)
         return self._page(
             request,
-            opened,
+            self.context.working(request),
             verify=request.query_params.get("verify") == "1",
-            preview=request.query_params.get("preview") == "1",
         )
 
     async def draft(self, request: Request) -> Response:
@@ -131,7 +129,7 @@ class FilingPages:
                 at=datetime.now(UTC),
             )
         except (ValueError, PackNotFoundError, OSError) as exc:
-            return self._page(request, opened, error=str(exc), status_code=400)
+            return self._page(request, self._working(opened), error=str(exc), status_code=400)
         return RedirectResponse(f"/returns/{opened.return_id}/filing#build", status_code=303)
 
     async def signoff(self, request: Request) -> Response:
@@ -153,7 +151,7 @@ class FilingPages:
                 acknowledge_findings=_text(form, "acknowledge") == "yes",
             )
         except ValueError as exc:
-            return self._page(request, opened, error=str(exc), status_code=400)
+            return self._page(request, self._working(opened), error=str(exc), status_code=400)
         return RedirectResponse(f"/returns/{opened.return_id}/filing#signoff", status_code=303)
 
     def download(self, request: Request) -> Response:
@@ -175,23 +173,25 @@ class FilingPages:
             raise HTTPException(status_code=404, detail="No such build of this return.")
         return builds[index]
 
-    def _page(  # noqa: PLR0913 - the page and the states it can be drawn in
+    def _working(self, opened: OpenedReturn) -> WorkingReturn:
+        return self.context.workspace.working(opened)
+
+    def _page(
         self,
         request: Request,
-        opened: OpenedReturn,
+        working: WorkingReturn,
         *,
         error: str | None = None,
         verify: bool = False,
-        preview: bool = False,
         status_code: int = 200,
     ) -> Response:
-        view = filing_page(self.context.workspace, opened, verify=verify, preview=preview)
+        view = filing_page(self.context.workspace, working, verify=verify)
         latest = view.latest
         return self.context.render(
             request,
             "filing.html",
             status_code=status_code,
-            current=opened,
+            working=working,
             section="filing",
             view=view,
             error=error,

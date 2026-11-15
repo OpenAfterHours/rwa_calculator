@@ -8,8 +8,9 @@ Pipeline position:
 Key responsibilities:
 - Open a return from an uploaded file or a path on this machine, with the
   header a fact table needs, and say plainly why one could not be opened.
-- Draw the overview, the rules and the template viewer for an opened return
-  from the validation it was opened with.
+- Draw the overview, the rules and the template viewer for an opened return as
+  a build would file it now: with the overrides drafted for it applied, and
+  validated again once per change of them (``Workspace.working``).
 - Keep every filter in the address, so a page can be bookmarked, reloaded and
   shared with whoever else is looking at the same screen.
 
@@ -82,17 +83,21 @@ class ReturnPages:
 
     def overview(self, request: Request) -> Response:
         """Whether the return is fit to file, and the counts behind the answer."""
-        opened = self.context.opened(request)
+        working = self.context.working(request)
         return self.context.render(
-            request, "overview.html", current=opened, section="overview", view=overview(opened)
+            request,
+            "overview.html",
+            working=working,
+            section="overview",
+            view=overview(working.current),
         )
 
     def rules(self, request: Request) -> Response:
         """The rules, filtered as the address says, with one picked in full."""
-        opened = self.context.opened(request)
+        working = self.context.working(request)
         query = request.query_params
         view = rules_page(
-            opened,
+            working.current,
             status=query.get("status", STATUS_FAIL),
             severity=query.get("severity", ""),
             query=query.get("q", ""),
@@ -101,16 +106,15 @@ class ReturnPages:
             page=page_number(query.get("page")),
         )
         return self.context.render(
-            request, "rules.html", current=opened, section="rules", view=view
+            request, "rules.html", working=working, section="rules", view=view
         )
 
     def templates(self, request: Request) -> Response:
         """One table of the return on its grid, with the broken rules' cells marked."""
-        opened = self.context.opened(request)
+        working = self.context.working(request)
         query = request.query_params
         grid = template_grid(
-            opened,
-            drafts=self.context.workspace.adjustments(opened.return_id),
+            working,
             table=query.get("table", ""),
             sheet=query.get("sheet", ""),
             key=query.get("key", ""),
@@ -121,10 +125,10 @@ class ReturnPages:
         return self.context.render(
             request,
             "templates.html",
-            current=opened,
+            working=working,
             section="templates",
             grid=grid,
-            flash=self.context.take_flash(opened.return_id),
+            flash=self.context.take_flash(working.opened.return_id),
         )
 
     async def theme(self, request: Request) -> Response:
@@ -157,10 +161,12 @@ class ReturnPages:
         status_code: int = 200,
     ) -> Response:
         modules = sorted({info.module for info in available_packs()})
+        workspace = self.context.workspace
         return self.context.render(
             request,
             "open.html",
             status_code=status_code,
+            listed=[workspace.working(opened) for opened in workspace.returns()],
             error=error,
             values=values or {},
             modules=modules,

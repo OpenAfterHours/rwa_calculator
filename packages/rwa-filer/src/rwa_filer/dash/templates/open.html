@@ -27,11 +27,13 @@
   <aside class="narrow">
     <section class="panel">
       <h2>Opened this session</h2>
-      {% if opened_returns %}
-      {% for item in opened_returns %}
+      {% if listed %}
+      {% for entry in listed %}
+      {% set item = entry.current %}
       <a class="rule-item" href="/returns/{{ item.return_id }}">
         <span class="top">
           {% if item.validation.is_submittable %}<span class="chip chip-pass">Submittable</span>{% elif item.validation.structure %}<span class="chip chip-fail">Blocked by structure</span>{% else %}<span class="chip chip-fail">Blocked</span>{% endif %}
+          {% if entry.adjusted %}<span class="chip chip-info">with {{ entry.applied | length }} override{{ "s" if entry.applied | length != 1 }}</span>{% endif %}
           <span class="evals">{{ item.ret.facts.height | count }} facts</span>
         </span>
         <span class="label mono">{{ item.name }}</span>

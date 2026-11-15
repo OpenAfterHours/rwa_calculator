@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from dash_builders import HEADER_ARGS_CLI
+from dash_builders import CELL, HEADER_ARGS_CLI, draft, make_fileable
 from rwa_filer.cli import main
 from rwa_filer.dash.filing import parse_value
 from rwa_filer.workflow.ledger import EVENT_ADJUSTMENT, EVENT_BUILD, EVENT_SIGNOFF, read_ledger
@@ -26,25 +26,11 @@ if TYPE_CHECKING:
 
     from rwa_filer.dash import OpenedReturn, Workspace
 
-CELL = {"table": "OF07.00.01.01", "sheet": "0008", "key": "", "row": "0010"}
-GRID = "/templates?table=OF07.00.01.01&sheet=0008&row=0010&col=0010"
 ADJUSTMENTS_CSV = (
     "table,sheet,row,column,value,reason,remove\n"
     "OF07.00.01.01,0008,0010,0010,0,Booked to the wrong class,\n"
     "OF07.00.01.01,0008,0010,0030,,Follows the exposure,yes\n"
 )
-
-
-def _draft(client: TestClient, opened: OpenedReturn, column: str, **fields: str) -> str:
-    """Post the cell panel's override form; the page it lands on."""
-    base = f"/returns/{opened.return_id}"
-    data = {**CELL, "col": column, "data_type": "monetary", "next": base + GRID, **fields}
-    return client.post(f"{base}/adjustments", data=data).text
-
-
-def _make_fileable(client: TestClient, opened: OpenedReturn) -> None:
-    _draft(client, opened, "0010", value="0", reason="Booked to the wrong class")
-    _draft(client, opened, "0030", remove="yes", reason="Follows the exposure")
 
 
 def _build(client: TestClient, opened: OpenedReturn, out: Path, **fields: str) -> str:
@@ -61,7 +47,7 @@ def test_a_drafted_override_shows_on_the_grid_and_on_the_filing_page(
     client: TestClient, broken: OpenedReturn
 ) -> None:
     # Act
-    grid = _draft(client, broken, "0010", value="0", reason="Booked to the wrong class")
+    grid = draft(client, broken, "0010", value="0", reason="Booked to the wrong class")
     filing = client.get(f"/returns/{broken.return_id}/filing").text
 
     # Assert
@@ -77,7 +63,7 @@ def test_a_value_that_is_not_a_number_is_refused_on_the_grid(
     client: TestClient, workspace: Workspace, broken: OpenedReturn
 ) -> None:
     # Act
-    page = _draft(client, broken, "0010", value="lots", reason="Typo")
+    page = draft(client, broken, "0010", value="lots", reason="Typo")
 
     # Assert
     assert 'id="flash"' in page and "is not a number" in unescape(page)
@@ -88,7 +74,7 @@ def test_removing_a_cell_the_return_does_not_report_is_refused(
     client: TestClient, workspace: Workspace, broken: OpenedReturn
 ) -> None:
     # Act — column 0040 is empty in this return.
-    page = _draft(client, broken, "0040", remove="yes", reason="Not needed")
+    page = draft(client, broken, "0040", remove="yes", reason="Not needed")
 
     # Assert
     assert 'id="flash"' in page
@@ -99,7 +85,7 @@ def test_a_drafted_override_can_be_withdrawn(
     client: TestClient, workspace: Workspace, broken: OpenedReturn
 ) -> None:
     # Arrange
-    _draft(client, broken, "0010", value="0", reason="Booked to the wrong class")
+    draft(client, broken, "0010", value="0", reason="Booked to the wrong class")
 
     # Act
     client.post(f"/returns/{broken.return_id}/adjustments/drop", data={**CELL, "col": "0010"})
@@ -112,10 +98,10 @@ def test_the_overrides_are_checked_before_anything_is_built(
     client: TestClient, broken: OpenedReturn
 ) -> None:
     # Arrange
-    _make_fileable(client, broken)
+    make_fileable(client, broken)
 
-    # Act
-    page = client.get(f"/returns/{broken.return_id}/filing?preview=1").text
+    # Act — no button to press: the page checks them as it is drawn.
+    page = client.get(f"/returns/{broken.return_id}/filing").text
 
     # Assert — blocked as opened; nothing blocks with the overrides.
     blocking = len(broken.validation.blocking)
@@ -161,7 +147,7 @@ def test_overrides_are_built_only_against_a_name(
     client: TestClient, broken: OpenedReturn, tmp_path: Path
 ) -> None:
     # Arrange
-    _make_fileable(client, broken)
+    make_fileable(client, broken)
 
     # Act
     response = client.post(
@@ -193,7 +179,7 @@ def test_the_dashboard_builds_byte_for_byte_what_the_cli_builds(
             "A. Preparer",
         ]
     )
-    _make_fileable(client, broken)
+    make_fileable(client, broken)
 
     # Act
     page = _build(client, broken, tmp_path / "dash")
@@ -212,7 +198,7 @@ def test_a_build_records_the_overrides_and_itself_in_the_ledger(
     client: TestClient, broken: OpenedReturn, tmp_path: Path
 ) -> None:
     # Arrange
-    _make_fileable(client, broken)
+    make_fileable(client, broken)
 
     # Act
     _build(client, broken, tmp_path / "out")

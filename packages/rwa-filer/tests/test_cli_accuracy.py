@@ -109,3 +109,25 @@ def test_the_report_records_the_accuracy_it_was_validated_at(
     # Assert
     accuracy = json.loads(capsys.readouterr().out)["identity"]["settings"]["accuracy"]
     assert accuracy == {"monetary_decimals": 0, "percentage_decimals": 6, "source": "given"}
+
+
+@pytest.mark.parametrize(
+    "options", [[], ["--monetary-decimals", "-3", "--percentage-decimals", "4"]]
+)
+def test_the_default_accuracy_is_recorded_as_the_default(
+    options: list[str], footing: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Asking for the defaults by name is still the default, and gives the same evidence id."""
+    # Act
+    main(["validate", str(footing), *HEADER_ARGS, "--format", "json", *options])
+    identity = json.loads(capsys.readouterr().out)["identity"]
+    main(["validate", str(footing), *HEADER_ARGS, "--format", "json", "--monetary-decimals", "0"])
+    other = json.loads(capsys.readouterr().out)["identity"]
+
+    # Assert
+    assert identity["settings"]["accuracy"] == {
+        "monetary_decimals": -3,
+        "percentage_decimals": 4,
+        "source": "default",
+    }
+    assert identity["evidence_id"] != other["evidence_id"]

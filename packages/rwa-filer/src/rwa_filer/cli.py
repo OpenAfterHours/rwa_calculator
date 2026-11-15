@@ -261,8 +261,11 @@ def _add_evidence_argument(parser: argparse.ArgumentParser) -> None:
 
 def _accuracy(args: argparse.Namespace) -> Accuracy | None:
     """The accuracy the options ask for; ``None`` when both are the defaults."""
-    accuracy = Accuracy(args.monetary_decimals, args.percentage_decimals)
-    return None if accuracy == Accuracy() else accuracy
+    asked = (args.monetary_decimals, args.percentage_decimals)
+    default = Accuracy()
+    if asked == (default.monetary_decimals, default.percentage_decimals):
+        return None
+    return Accuracy(*asked)
 
 
 def _add_header_arguments(parser: argparse.ArgumentParser) -> None:

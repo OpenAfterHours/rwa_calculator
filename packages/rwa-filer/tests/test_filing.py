@@ -1,9 +1,9 @@
 """
 The filing package: when a return is written, what is written, and what is recorded.
 
-The synthetic module has no packaged rule book, so on it only the structure
-checks can stop a return; the rule gate is exercised by handing ``build_filing``
-a small rule book of its own.
+The synthetic module has no packaged rule book. Validating it without one is a
+``VAL003`` (nothing but structure would have been checked), so each build here
+is handed a small rule book of its own: ``SOUND`` satisfies ``FOOTING``.
 """
 
 from __future__ import annotations
@@ -52,10 +52,18 @@ SOUND = (
     ("T01.00.01.01", None, None, "0030", "0010", 40.0),
 )
 
+#: ``total = part one + part two`` on T01, which ``SOUND`` satisfies.
+FOOTING = rule(
+    "tst_b0001",
+    f"{ref(T01, '0010', '0010')} i= {ref(T01, '0020', '0010')} i+ {ref(T01, '0030', '0010')}",
+    tables=(T01,),
+)
+RULES = book(FOOTING)
+
 
 def test_a_sound_return_is_written_with_its_manifest(pack: TaxonomyPack, tmp_path: Path) -> None:
     # Act
-    package = build_filing(ret(*SOUND), tmp_path / "out", pack=pack)
+    package = build_filing(ret(*SOUND), tmp_path / "out", pack=pack, rulebook=RULES)
 
     # Assert
     assert package.written and package.blocked_by is None
@@ -70,7 +78,7 @@ def test_a_sound_return_is_written_with_its_manifest(pack: TaxonomyPack, tmp_pat
 
 def test_the_written_instance_is_the_return(pack: TaxonomyPack, tmp_path: Path) -> None:
     # Act
-    package = build_filing(ret(*SOUND), tmp_path, pack=pack)
+    package = build_filing(ret(*SOUND), tmp_path, pack=pack, rulebook=RULES)
     assert package.instance_path is not None
     back = read_instance(package.instance_path, pack=pack)
 
@@ -83,7 +91,7 @@ def test_the_manifest_records_what_was_filed_and_under_which_verdict(
     pack: TaxonomyPack, tmp_path: Path
 ) -> None:
     # Act
-    package = build_filing(ret(*SOUND), tmp_path, pack=pack)
+    package = build_filing(ret(*SOUND), tmp_path, pack=pack, rulebook=RULES)
     assert package.manifest_path is not None and package.instance_path is not None
     manifest = json.loads(package.manifest_path.read_text())
     content = package.instance_path.read_bytes()
@@ -113,8 +121,8 @@ def test_the_manifest_records_what_was_filed_and_under_which_verdict(
 
 def test_building_twice_gives_identical_files(pack: TaxonomyPack, tmp_path: Path) -> None:
     # Act
-    first = build_filing(ret(*SOUND), tmp_path / "a", pack=pack, always_zip=True)
-    second = build_filing(ret(*SOUND), tmp_path / "b", pack=pack, always_zip=True)
+    first = build_filing(ret(*SOUND), tmp_path / "a", pack=pack, rulebook=RULES, always_zip=True)
+    second = build_filing(ret(*SOUND), tmp_path / "b", pack=pack, rulebook=RULES, always_zip=True)
 
     # Assert — instance, zip and manifest, byte for byte.
     for one, two in (
@@ -133,7 +141,7 @@ def test_a_creation_time_is_recorded_in_the_instance_and_the_manifest(
     options = InstanceOptions(created_at=datetime(2027, 4, 20, 9, 30, tzinfo=UTC))
 
     # Act
-    package = build_filing(ret(*SOUND), tmp_path, pack=pack, options=options)
+    package = build_filing(ret(*SOUND), tmp_path, pack=pack, rulebook=RULES, options=options)
     assert package.manifest_path is not None and package.instance_path is not None
 
     # Assert
@@ -152,7 +160,7 @@ def test_a_zip_on_request_holds_the_instance_and_nothing_else(
     pack: TaxonomyPack, tmp_path: Path
 ) -> None:
     # Act
-    package = build_filing(ret(*SOUND), tmp_path, pack=pack, always_zip=True)
+    package = build_filing(ret(*SOUND), tmp_path, pack=pack, rulebook=RULES, always_zip=True)
     assert package.zip_path is not None and package.instance_path is not None
 
     # Assert — the member keeps the .xbrl extension (Filing Manual rule 1.1).
@@ -170,7 +178,7 @@ def test_an_instance_over_the_threshold_is_zipped_unasked(
     monkeypatch.setattr(filing, "ZIP_THRESHOLD_BYTES", 100)
 
     # Act
-    package = build_filing(ret(*SOUND), tmp_path, pack=pack)
+    package = build_filing(ret(*SOUND), tmp_path, pack=pack, rulebook=RULES)
     assert package.manifest_path is not None
 
     # Assert
@@ -200,6 +208,19 @@ def test_a_structure_finding_always_stops_the_file(pack: TaxonomyPack, tmp_path:
     assert not package.written and package.blocked_by == BLOCKED_BY_STRUCTURE
     assert not (tmp_path / "out").exists()
     assert [finding.code for finding in package.validation.structure] == ["STR002"]
+
+
+def test_a_module_no_rule_book_covers_is_not_written_unchecked(
+    pack: TaxonomyPack, tmp_path: Path
+) -> None:
+    """With no rule book, only structure would have been checked: VAL003, like no rule run."""
+    # Act
+    package = build_filing(ret(*SOUND), tmp_path / "out", pack=pack)
+
+    # Assert
+    assert not package.written and package.blocked_by == BLOCKED_BY_RULES
+    assert [finding.code for finding in package.validation.rules] == ["VAL003"]
+    assert package.validation.rules[0].subject == "no_rulebook"
 
 
 def test_a_broken_rule_stops_the_file_unless_overridden(pack: TaxonomyPack, tmp_path: Path) -> None:
@@ -243,7 +264,9 @@ def test_findings_from_reading_the_source_stop_the_file(pack: TaxonomyPack, tmp_
     stray = Finding("XBR001", "ERROR", "1 fact(s) are not data points", "ref", "TST001", "", "")
 
     # Act
-    package = build_filing(ret(*SOUND), tmp_path / "out", pack=pack, source_findings=[stray])
+    package = build_filing(
+        ret(*SOUND), tmp_path / "out", pack=pack, rulebook=RULES, source_findings=[stray]
+    )
 
     # Assert
     assert package.blocked_by == BLOCKED_BY_STRUCTURE
@@ -256,7 +279,7 @@ def test_findings_from_reading_the_source_stop_the_file(pack: TaxonomyPack, tmp_
 
 
 def test_a_name_may_be_given(pack: TaxonomyPack, tmp_path: Path) -> None:
-    package = build_filing(ret(*SOUND), tmp_path, pack=pack, name="q1-return")
+    package = build_filing(ret(*SOUND), tmp_path, pack=pack, rulebook=RULES, name="q1-return")
 
     assert package.instance_path == tmp_path / "q1-return.xbrl"
 

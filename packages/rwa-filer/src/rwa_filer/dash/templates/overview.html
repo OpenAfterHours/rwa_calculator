@@ -16,6 +16,7 @@
 <section class="callout callout-pass" aria-label="Verdict" id="verdict" data-verdict="submittable">
   <div class="body">
     <div class="title">Nothing found blocks submission</div>
+    <p class="small" id="validation-status" data-status="{{ view.status }}">Validation status: {{ view.status_line }}</p>
     <p>{% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained, but do{{ "es" if view.warnings == 1 }} not block it. {% endif %}{{ view.executed | count }} of {{ view.enforced | count }} enforced rules were executed.{% if view.missing %} <a href="#missing-templates">{{ view.missing | length }} template{{ "s" if view.missing | length != 1 }} the reported ones are checked against {{ "are" if view.missing | length != 1 else "is" }} not in this return</a>, so {{ view.missing_rules | count }} rule{{ "s" if view.missing_rules != 1 }} did not run.{% endif %}</p>
   </div>
 </section>
@@ -23,6 +24,7 @@
 <section class="callout callout-fail" aria-label="Verdict" id="verdict" data-verdict="blocked">
   <div class="body">
     <div class="title">Blocked: {{ view.blocking }} finding{{ "s" if view.blocking != 1 }} would make the gateway reject this return</div>
+    <p class="small" id="validation-status" data-status="{{ view.status }}">Validation status: {{ view.status_line }}</p>
     <p>
       {% if view.structure %}{{ view.structure | length }} structure finding{{ "s" if view.structure | length != 1 }}: the taxonomy cannot express part of the return, so no XBRL file can be written until {{ "they are" if view.structure | length != 1 else "it is" }} fixed. {% else %}There are no structure findings: every fact has a cell in the taxonomy. {% endif %}
       {% if view.errors %}{{ view.errors }} Error-severity rule break{{ "s" if view.errors != 1 }} reject{{ "s" if view.errors == 1 }} a submission. {% endif %}

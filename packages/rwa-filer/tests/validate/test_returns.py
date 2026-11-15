@@ -29,6 +29,7 @@ from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
+    COVERAGE_NO_RULEBOOK,
     COVERAGE_TEMPLATE_NOT_COVERED,
     FINDING_COVERAGE_INSUFFICIENT,
     FINDING_LINKED_TEMPLATE_MISSING,
@@ -279,19 +280,28 @@ def test_nothing_executed_is_reported_as_such(pack: TaxonomyPack) -> None:
     assert not validation.is_submittable
 
 
-def test_a_module_with_no_packaged_rule_book_has_only_its_structure_checked(
+def test_a_module_with_no_packaged_rule_book_is_not_reported_as_clean(
     pack: TaxonomyPack,
 ) -> None:
-    # Arrange — adequacy: the synthetic module really has no packaged rule book.
+    """No rule ran at all, so an empty finding list would be the answer that misleads.
+
+    This used to assert ``is_submittable``: the no-rule-book path returned
+    before VAL003 was considered, and logged a WARNING instead.
+    """
+    # Arrange — adequacy: the synthetic module really has no packaged rule book,
+    # and the return is structurally sound, so nothing else could block it.
     with pytest.raises(RuleBookNotFoundError):
         rulebook_for_module(SAMPLE_MODULE)
+    ret = build_return(RETURN)
 
     # Act
-    validation = validate_return(build_return(RETURN), pack)
+    validation = validate_return(ret, pack)
 
     # Assert
-    assert validation.report is None and validation.rules == ()
-    assert validation.is_submittable
+    assert validation.structure == () and validation.report is None
+    (finding,) = validation.rules
+    assert (finding.code, finding.subject) == (FINDING_COVERAGE_INSUFFICIENT, COVERAGE_NO_RULEBOOK)
+    assert not validation.is_submittable
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +424,8 @@ def test_the_record_is_self_contained_and_json_ready(pack: TaxonomyPack) -> None
     # Act
     record = to_record(ret, validation)
 
-    # Assert — passed rules are counted; only the rest are listed.
+    # Assert — every enforced rule is listed, the passed one included.
+    assert record["schema"] == {"name": "rwa-filer/validation-report", "version": "2.0"}
     assert record["submittable"] is False
     assert record["header"]["Module"] == SAMPLE_MODULE
     assert record["taxonomy"]["version"] == "1.0.0"
@@ -426,9 +437,16 @@ def test_the_record_is_self_contained_and_json_ready(pack: TaxonomyPack) -> None
         STATUS_NOT_EVALUATED: 0,
     }
     assert [finding["code"] for finding in record["findings"]] == [FINDING_RULE_ERROR]
-    (listed,) = record["rules"]
-    assert (listed["rule_id"], listed["satisfied"], listed["unsatisfied"]) == ("tst_0002", 1, 1)
-    assert listed["failures"][0]["place"] == "sheet 0002"
+    broken, held = record["rules"]
+    assert (broken["rule_id"], broken["satisfied"], broken["unsatisfied"]) == ("tst_0002", 1, 1)
+    assert (held["rule_id"], held["status"], held["evaluations"]) == ("tst_0004", STATUS_PASS, 2)
+    assert broken["rule_sha256"] == RWEA_CAP.fingerprint(SAMPLE_MODULE)
+    (failure,) = broken["failures"]
+    assert failure["place"] == "sheet 0002"
+    assert {(cell["sheet"], cell["row"]) for cell in failure["addresses"]} == {
+        ("0002", "0010"),
+        ("0002", "0020"),
+    }
 
 
 def test_the_text_report_leads_with_the_verdict_and_the_counts(pack: TaxonomyPack) -> None:

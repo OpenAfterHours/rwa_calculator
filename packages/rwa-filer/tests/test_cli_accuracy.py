@@ -1,0 +1,111 @@
+"""
+``validate`` takes the accuracy options ``build`` takes, and reaches the same verdict.
+
+The rules' ``i``-prefixed comparisons allow for each fact's rounding, and a fact
+table states no accuracy of its own: the allowance comes from the accuracy the
+file will be written with. ``build --monetary-decimals N`` validates at N, so a
+``validate`` that could only ever run at the default could pass a return the
+build then refuses.
+
+The return here is measured, not hypothetical (docs/plans/rwa-filer-evidence-export.md,
+F1): rule ``v0174_m`` (Error) checks ``C 01.00 r0070 i= r0080 i+ r0090 i+ r0091``,
+and 9,000 against 0 + 8,000 + 3,000 is out by 2,000 — exactly four facts'
+allowance at thousands (4 x 500), and far outside it at units (4 x 0.5).
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import date
+from pathlib import Path
+
+import pytest
+
+from pack_builders import VALID_LEI
+from rwa_filer.cli import main
+from rwa_filer.filing import build_filing
+from rwa_filer.readers import HeaderFields, open_source
+from rwa_filer.xbrl.writer import InstanceOptions
+
+HEADER_ARGS = ["--entity", VALID_LEI, "--reference-date", "2027-03-31", "--module", "PRA001"]
+RULE = "v0174_m"
+FOOTING_CSV = (
+    "table,sheet,row,column,value\n"
+    "C01.00.01.01,,0070,0010,9000\n"
+    "C01.00.01.01,,0080,0010,0\n"
+    "C01.00.01.01,,0090,0010,8000\n"
+    "C01.00.01.01,,0091,0010,3000\n"
+)
+
+
+@pytest.fixture
+def footing(tmp_path: Path) -> Path:
+    path = tmp_path / "footing.csv"
+    path.write_text(FOOTING_CSV)
+    return path
+
+
+def _validated_status(path: Path, capsys: pytest.CaptureFixture[str], *options: str) -> str:
+    main(["validate", str(path), *HEADER_ARGS, "--format", "json", *options])
+    record = json.loads(capsys.readouterr().out)
+    return next(entry["status"] for entry in record["rules"] if entry["rule_id"] == RULE)
+
+
+def _built_status(path: Path, out: Path, monetary_decimals: int) -> str:
+    source = open_source(
+        path, HeaderFields(entity=VALID_LEI, reference_date=date(2027, 3, 31), module="PRA001")
+    )
+    package = build_filing(
+        source.ret, out, options=InstanceOptions(monetary_decimals=monetary_decimals)
+    )
+    assert package.validation.report is not None
+    return next(
+        result.status for result in package.validation.report.results if result.rule_id == RULE
+    )
+
+
+def test_the_measured_return_sits_on_the_rounding_boundary(
+    footing: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Adequacy: the fixture really does turn on the accuracy, in both directions."""
+    # Act
+    at_thousands = _validated_status(footing, capsys)
+    at_units = _validated_status(footing, capsys, "--monetary-decimals", "0")
+
+    # Assert
+    assert (at_thousands, at_units) == ("PASS", "FAIL")
+
+
+@pytest.mark.parametrize("decimals", [-3, 0, 2])
+def test_validate_and_build_agree_at_every_accuracy(
+    decimals: int, footing: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act
+    validated = _validated_status(footing, capsys, "--monetary-decimals", str(decimals))
+    built = _built_status(footing, tmp_path / f"out{decimals}", decimals)
+
+    # Assert
+    assert validated == built
+
+
+def test_the_report_records_the_accuracy_it_was_validated_at(
+    footing: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act
+    main(
+        [
+            "validate",
+            str(footing),
+            *HEADER_ARGS,
+            "--format",
+            "json",
+            "--monetary-decimals",
+            "0",
+            "--percentage-decimals",
+            "6",
+        ]
+    )
+
+    # Assert
+    accuracy = json.loads(capsys.readouterr().out)["identity"]["settings"]["accuracy"]
+    assert accuracy == {"monetary_decimals": 0, "percentage_decimals": 6, "source": "given"}

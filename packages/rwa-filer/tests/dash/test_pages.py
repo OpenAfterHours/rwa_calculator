@@ -80,6 +80,16 @@ def test_a_return_nothing_blocks_reads_submittable(client: TestClient, clean_csv
     assert "SUBMITTABLE" in page
 
 
+def test_an_unblocked_return_left_incomplete_says_so(client: TestClient, clean_csv: Path) -> None:
+    """Nothing blocks the clean return, but OF 07.00 alone leaves out linked templates."""
+    # Act
+    page = unescape(client.get(_open(client, clean_csv, **HEADER_FORM)).text)
+
+    # Assert
+    assert 'data-status="INCOMPLETE"' in page
+    assert "Validation status: INCOMPLETE — linked templates not reported" in page
+
+
 def test_a_fact_table_without_its_header_is_refused_with_the_reason(
     client: TestClient, broken_csv: Path
 ) -> None:

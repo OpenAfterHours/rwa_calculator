@@ -86,7 +86,7 @@ MAX_RECORDED_FAILURES: Final = 5
 #: A PEP 695 alias deliberately: its right-hand side is evaluated lazily, so
 #: ``Literal`` stays a type-only import that the ``ruff --fix`` hook cannot strip
 #: into a runtime ``NameError`` during an edit where the usage briefly vanishes.
-type CoverageShortfall = Literal["no_rule_executed", "template_not_covered"]
+type CoverageShortfall = Literal["no_rule_executed", "template_not_covered", "no_rulebook"]
 
 #: Nothing ran at all: the estate was absent or unreadable, so no finding of any
 #: kind is evidence of anything. This is the fail-open case.
@@ -94,6 +94,9 @@ COVERAGE_NO_RULE_EXECUTED: Final[CoverageShortfall] = "no_rule_executed"
 #: The estate was reachable, but specific emitted templates had no rule executed
 #: against them and would go into the submission unexamined.
 COVERAGE_TEMPLATE_NOT_COVERED: Final[CoverageShortfall] = "template_not_covered"
+#: No rule book covers the module, so no rule could run at all. Raised by
+#: ``validate_return`` only: the template-level engine always has its extract.
+COVERAGE_NO_RULEBOOK: Final[CoverageShortfall] = "no_rulebook"
 
 #: Finding codes. An Error-severity published rule is broken — the regulator
 #: rejects the return.
@@ -105,6 +108,10 @@ FINDING_COVERAGE_INSUFFICIENT: Final = "VAL003"
 #: A template the return does not report is one enforced rules check a reported
 #: template against — those rules did not run. Raised by ``validate_return``.
 FINDING_LINKED_TEMPLATE_MISSING: Final = "VAL004"
+#: Enforced rules this engine could not evaluate — a rule it does not
+#: implement, or one reading a table the taxonomy pack lacks. They are neither
+#: passed nor failed, so the result is incomplete. Raised by ``validate_return``.
+FINDING_RULES_NOT_EVALUABLE: Final = "VAL005"
 
 #: The reference quoted on a coverage finding, which no single rule owns.
 COVERAGE_REFERENCE: Final = (
@@ -197,6 +204,35 @@ def findings_for(report: ValidationReport) -> list[Finding]:
 
 
 @dataclass(frozen=True)
+class FactPosition:
+    """One fact a finding is about, where the filer can find it.
+
+    A fact in a template is located by its coordinates. A fact read from an
+    XBRL instance that has no cell — the module has no such data point — or a
+    context the file defines is located by ``source_ref`` instead.
+
+    Attributes:
+        table / sheet / open_key / row / column: The fact's coordinates, as the
+            return states them; ``None`` where the source gives none.
+        value / text_value: What the fact holds.
+        detail: What is wrong with this fact in particular, where that is more
+            than the finding says of all of them.
+        source_ref: The fact or context in the source file, e.g.
+            ``eba_met:mi53[eba_dim:BAS=eba_BA:x6] in context c12``.
+    """
+
+    table: str | None = None
+    sheet: str | None = None
+    open_key: str | None = None
+    row: str | None = None
+    column: str | None = None
+    value: float | None = None
+    text_value: str | None = None
+    detail: str = ""
+    source_ref: str | None = None
+
+
+@dataclass(frozen=True)
 class Finding:
     """One reportable result of validating a return.
 
@@ -211,6 +247,9 @@ class Finding:
             missing template's filing indicator for ``VAL004``.
         expected: The figure or state the rule requires.
         actual: The figure or state the return carries.
+        positions: Every fact a structure or reading finding is about, uncapped
+            — the message quotes the first few. Empty for a finding about a
+            rule, a header field or the return as a whole.
     """
 
     code: str
@@ -220,6 +259,7 @@ class Finding:
     subject: str
     expected: str
     actual: str
+    positions: tuple[FactPosition, ...] = ()
 
     @property
     def is_blocking(self) -> bool:

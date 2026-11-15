@@ -16,9 +16,13 @@ Key responsibilities:
 
 Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
+                       [--monetary-decimals N] [--evidence FILE] [--require-complete]
         Validate a return (.parquet / .csv / .xlsx, or an XBRL instance .xbrl /
-        .zip): structure against the taxonomy, then the published rules.
+        .zip): structure against the taxonomy, then the published rules. With
+        --evidence, also write every rule outcome, evaluation and comparison
+        behind the verdict as a JSON Lines file (.jsonl, or .jsonl.gz).
     rwa-filer build FILE --out DIR [--monetary-decimals N] [--zip] [--force]
+                    [--evidence FILE]
         Validate a return and write its filing package: the .xbrl instance, a
         .zip where required, and a manifest.
         With --adjustments FILE --author NAME, apply cell overrides first and
@@ -67,6 +71,9 @@ Exit codes:
        extract, a missing file, a file that is not what the command reads, an
        output path in the way), or it needs an extra that is not installed
     2  usage error (argparse's own convention)
+    3  ``validate --require-complete`` only: nothing blocks submission, but the
+       check was INCOMPLETE — linked templates left out, rules this engine
+       cannot evaluate, and so on (the report's ``completeness``)
 """
 
 from __future__ import annotations
@@ -84,6 +91,8 @@ from typing import Any
 from rwa_filer import __version__
 from rwa_filer.boe import importer as boe_importer
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
+from rwa_filer.boe.engine import Accuracy
+from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
 from rwa_filer.model import LEI_SCHEME
@@ -94,8 +103,9 @@ from rwa_filer.referee.differential import compare
 from rwa_filer.rules import importer
 from rwa_filer.rules.catalogue import EXTRACT_FILES, extract_resource, load_rules
 from rwa_filer.taxonomy.pack import PackNotFoundError, available_packs, resolve_pack, write_pack
+from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.report import render_text, to_record
-from rwa_filer.validate.returns import validate_return
+from rwa_filer.validate.returns import VERDICT_INCOMPLETE, validate_return
 from rwa_filer.workflow.acts import (
     ledger_beside,
     ledger_for_instance,
@@ -113,6 +123,8 @@ from rwa_filer.xbrl.writer import InstanceOptions
 
 EXIT_OK = 0
 EXIT_FAILED = 1
+#: ``validate --require-complete``: nothing blocks, but the check was incomplete.
+EXIT_INCOMPLETE = 3
 
 #: The port ``rwa-filer dash`` tries first. It listens on this machine only.
 DASH_PORT = 8765
@@ -192,11 +204,65 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     )
     validate.add_argument("file", type=Path, metavar="FILE", help="the return to validate")
     _add_header_arguments(validate)
+    _add_accuracy_arguments(validate)
     validate.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     validate.add_argument(
         "--report", type=Path, metavar="FILE", help="also write the full JSON report here"
     )
+    _add_evidence_argument(validate)
+    validate.add_argument(
+        "--require-complete",
+        action="store_true",
+        help="exit 3 when nothing blocks submission but the check was incomplete "
+        "(linked templates left out, rules that could not be evaluated)",
+    )
+    validate.add_argument(
+        "--no-timestamp",
+        action="store_true",
+        help="leave the creation time out of the evidence file, so the same inputs give "
+        "the same bytes",
+    )
     validate.set_defaults(handler=_validate)
+
+
+def _add_accuracy_arguments(parser: argparse.ArgumentParser) -> None:
+    """The accuracy options ``validate`` and ``build`` share.
+
+    One definition, so the two cannot drift: the rules' rounding allowances for
+    a fact that states no accuracy of its own come from these, and ``build``
+    writes the file with them.
+    """
+    parser.add_argument(
+        "--monetary-decimals",
+        type=int,
+        default=InstanceOptions.monetary_decimals,
+        metavar="N",
+        help="the accuracy monetary figures are stated to: -3 thousands (default), "
+        "0 units, 2 pence",
+    )
+    parser.add_argument(
+        "--percentage-decimals",
+        type=int,
+        default=InstanceOptions.percentage_decimals,
+        metavar="N",
+        help="the accuracy percentages and ratios are stated to (default 4, the minimum)",
+    )
+
+
+def _add_evidence_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--evidence",
+        type=Path,
+        metavar="FILE",
+        help="also write every rule outcome, evaluation and comparison behind the verdict "
+        "here, as JSON Lines (.jsonl; .jsonl.gz to compress)",
+    )
+
+
+def _accuracy(args: argparse.Namespace) -> Accuracy | None:
+    """The accuracy the options ask for; ``None`` when both are the defaults."""
+    accuracy = Accuracy(args.monetary_decimals, args.percentage_decimals)
+    return None if accuracy == Accuracy() else accuracy
 
 
 def _add_header_arguments(parser: argparse.ArgumentParser) -> None:
@@ -217,11 +283,30 @@ def _add_header_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _validate(args: argparse.Namespace) -> int:
     """``rwa-filer validate`` — read, validate, report."""
-    if problem := _unwritable(args.report, "--report"):
+    if problem := _unwritable(args.report, "--report") or _unwritable(args.evidence, "--evidence"):
         return _fail(problem)
     try:
         source = _load(args)
-        validation = validate_return(source.ret, source.pack, source_findings=source.findings)
+        accuracy, identity = _accuracy(args), source_identity(args.file)
+        # Tracing keeps every evaluation in memory: only when evidence is asked for.
+        evidence = None
+        if args.evidence is not None:
+            evidence = collect_evidence(
+                source.ret,
+                source.pack,
+                accuracy=accuracy,
+                source_findings=source.findings,
+                source=identity,
+            )
+            validation = evidence.validation
+        else:
+            validation = validate_return(
+                source.ret,
+                source.pack,
+                accuracy=accuracy,
+                source_findings=source.findings,
+                source=identity,
+            )
     except (ValueError, PackNotFoundError) as exc:
         return _fail(str(exc))
 
@@ -229,12 +314,24 @@ def _validate(args: argparse.Namespace) -> int:
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    if evidence is not None:
+        written = write_evidence(
+            evidence, args.evidence, generated_at=None if args.no_timestamp else datetime.now(UTC)
+        )
+        sys.stderr.write(
+            f"Wrote {written.path}: {written.records['rule']} rule(s), "
+            f"{written.records['evaluation']} evaluation(s), {written.records['cell']} cell(s)\n"
+        )
     _out(
         json.dumps(record, indent=2)
         if args.format == "json"
         else render_text(source.ret, validation)
     )
-    return EXIT_OK if validation.is_submittable else EXIT_FAILED
+    if not validation.is_submittable:
+        return EXIT_FAILED
+    if args.require_complete and validation.status == VERDICT_INCOMPLETE:
+        return EXIT_INCOMPLETE
+    return EXIT_OK
 
 
 def _load(args: argparse.Namespace) -> SourceReading:
@@ -280,21 +377,8 @@ def _add_build_command(commands: argparse._SubParsersAction[argparse.ArgumentPar
     )
     _add_header_arguments(build)
     build.add_argument("--name", metavar="NAME", help="the files' base name")
-    build.add_argument(
-        "--monetary-decimals",
-        type=int,
-        default=InstanceOptions.monetary_decimals,
-        metavar="N",
-        help="the accuracy monetary figures are stated to: -3 thousands (default), "
-        "0 units, 2 pence",
-    )
-    build.add_argument(
-        "--percentage-decimals",
-        type=int,
-        default=InstanceOptions.percentage_decimals,
-        metavar="N",
-        help="the accuracy percentages and ratios are stated to (default 4, the minimum)",
-    )
+    _add_accuracy_arguments(build)
+    _add_evidence_argument(build)
     build.add_argument(
         "--declare-unreported",
         action="store_true",

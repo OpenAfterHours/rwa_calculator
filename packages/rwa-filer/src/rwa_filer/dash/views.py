@@ -40,6 +40,7 @@ from rwa_filer.boe.engine import (
     STATUS_PASS,
 )
 from rwa_filer.validate.checker import FINDING_COVERAGE_INSUFFICIENT
+from rwa_filer.validate.report import status_line
 
 if TYPE_CHECKING:
     from rwa_filer.boe.catalogue import Rule
@@ -129,6 +130,8 @@ class Overview:
     """Whether a return is fit to file, and the counts behind the answer."""
 
     submittable: bool
+    status: str
+    status_line: str
     blocking: int
     structure: tuple[Finding, ...]
     rule_findings: tuple[Finding, ...]
@@ -195,6 +198,8 @@ def overview(opened: OpenedReturn) -> Overview:
     missing = report.templates_missing if report else ()
     return Overview(
         submittable=validation.is_submittable,
+        status=validation.status,
+        status_line=status_line(validation),
         blocking=len(validation.blocking),
         structure=validation.structure,
         rule_findings=validation.rules,

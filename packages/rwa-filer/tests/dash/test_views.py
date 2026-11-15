@@ -12,7 +12,7 @@ from rwa_filer.dash.views import RULES_PER_PAGE, overview, rule_label, rules_pag
 from rwa_filer.dash.workspace import safe_file_name
 
 if TYPE_CHECKING:
-    from rwa_filer.dash import OpenedReturn
+    from rwa_filer.dash import OpenedReturn, Workspace
 
 
 def test_the_overview_counts_are_the_reports_own(broken: OpenedReturn) -> None:
@@ -115,17 +115,17 @@ def test_every_failure_address_becomes_a_mark(broken: OpenedReturn) -> None:
     }
 
     # Act
-    marks = failure_marks(broken)
+    marks = failure_marks(broken.validation)
 
     # Assert
     assert expected and set(marks) == expected
 
 
 def test_the_grid_opens_on_a_flagged_sheet_with_a_flagged_cell_picked(
-    broken: OpenedReturn,
+    workspace: Workspace, broken: OpenedReturn
 ) -> None:
     # Act
-    grid = template_grid(broken)
+    grid = template_grid(workspace.working(broken))
 
     # Assert
     assert grid is not None
@@ -133,13 +133,17 @@ def test_the_grid_opens_on_a_flagged_sheet_with_a_flagged_cell_picked(
     assert grid.cell is not None and grid.cell.marks
 
 
-def test_the_picked_cell_carries_each_rule_that_read_it_in_full(broken: OpenedReturn) -> None:
+def test_the_picked_cell_carries_each_rule_that_read_it_in_full(
+    workspace: Workspace, broken: OpenedReturn
+) -> None:
     """The cell panel explains a rule in place, so it needs the rule's text, not just its ID."""
     # Arrange — OF 07.00 r0010 c0010 on sheet 0008, read by several broken rules.
     place = ("OF07.00.01.01", "0008", None, "0010", "0010")
 
     # Act
-    grid = template_grid(broken, table=place[0], sheet=place[1], row=place[3], column=place[4])
+    grid = template_grid(
+        workspace.working(broken), table=place[0], sheet=place[1], row=place[3], column=place[4]
+    )
 
     # Assert — one entry per mark, each with the publisher's label and expression.
     assert grid is not None
@@ -150,7 +154,9 @@ def test_the_picked_cell_carries_each_rule_that_read_it_in_full(broken: OpenedRe
     assert all(item.rule.row.label and item.rule.expression for item in rules)
 
 
-def test_the_picked_cell_keeps_only_the_breaks_that_read_it(broken: OpenedReturn) -> None:
+def test_the_picked_cell_keeps_only_the_breaks_that_read_it(
+    workspace: Workspace, broken: OpenedReturn
+) -> None:
     # Arrange — boe_b0713 breaks once per column; only its column 0010 break reads c0010.
     place = ("OF07.00.01.01", "0008", None, "0010", "0010")
     report = broken.validation.report
@@ -159,7 +165,9 @@ def test_the_picked_cell_keeps_only_the_breaks_that_read_it(broken: OpenedReturn
     assert len(every) > 1, "a rule with one break leaves nothing to narrow — this proves nothing"
 
     # Act
-    grid = template_grid(broken, table=place[0], sheet=place[1], row=place[3], column=place[4])
+    grid = template_grid(
+        workspace.working(broken), table=place[0], sheet=place[1], row=place[3], column=place[4]
+    )
 
     # Assert
     assert grid is not None
@@ -174,13 +182,13 @@ def test_the_picked_cell_keeps_only_the_breaks_that_read_it(broken: OpenedReturn
 
 
 def test_the_grid_lays_a_table_out_in_the_taxonomys_rows_and_columns(
-    broken: OpenedReturn,
+    workspace: Workspace, broken: OpenedReturn
 ) -> None:
     # Arrange
     table = broken.pack.tables["OF07.00.01.01"]
 
     # Act
-    grid = template_grid(broken, table=table.code, sheet="0008")
+    grid = template_grid(workspace.working(broken), table=table.code, sheet="0008")
 
     # Assert
     assert grid is not None

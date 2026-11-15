@@ -4,7 +4,7 @@ The dashboard's workspace — the returns opened in one ``rwa-filer dash`` sessi
 Pipeline position:
     uploaded file / local path  ->  Workspace.open
         ->  readers.open_source  ->  validate.validate_return
-        ->  OpenedReturn  ->  the dashboard's pages
+        ->  OpenedReturn  ->  Workspace.working  ->  the dashboard's pages
 
 Key responsibilities:
 - Hold each opened return with the validation it was given, so that drawing a
@@ -12,6 +12,11 @@ Key responsibilities:
 - Hold, per return, the cell overrides a preparer has drafted and the filing
   packages built from it — the session's working state, which the files on
   disk (manifest, ledger, sign-off) then record for good.
+- Work out once per change of a return's drafted overrides what the return is
+  with them applied — the return a build would file now, which the overview,
+  the rules, the grid, the Build & sign off page and the top-bar verdict draw —
+  so an override that clears a break clears it on each of them. Only the first
+  page drawn after a change validates; every later one reuses its result.
 - Compare two opened returns once per pair: a comparison evaluates every rule
   on both, and a page redrawn to filter its cells must not do that again.
 - Keep uploaded files under the one directory the session owns, under names a
@@ -29,13 +34,14 @@ import logging
 import re
 import secrets
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from rwa_filer.readers import SourceReading, open_source
 from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.returns import validate_return
+from rwa_filer.workflow.adjustments import AdjustmentError, apply_adjustments
 from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.explain import Names
 
@@ -98,6 +104,35 @@ class OpenedReturn:
 
 
 @dataclass(frozen=True)
+class WorkingReturn:
+    """A return as a build would file it now: as opened, with its drafted overrides applied.
+
+    Every page of a return draws ``current``, so the verdict, the rules and the
+    marks on the grid answer for what would be filed, not for the file alone.
+
+    Attributes:
+        opened: The return as it was opened.
+        current: ``opened`` itself while nothing is drafted or the drafts cannot
+            be applied; otherwise the same return with the drafts applied and
+            validated again, as ``rwa-filer build`` validates it.
+        drafts: The overrides drafted, in the order they were made.
+        applied: What applying them did, cell by cell; empty unless they apply.
+        problem: Why the drafts cannot be applied, or ``None``.
+    """
+
+    opened: OpenedReturn
+    current: OpenedReturn
+    drafts: tuple[Adjustment, ...] = ()
+    applied: tuple[AppliedAdjustment, ...] = ()
+    problem: str | None = None
+
+    @property
+    def adjusted(self) -> bool:
+        """Whether ``current`` differs from the return as opened."""
+        return bool(self.applied)
+
+
+@dataclass(frozen=True)
 class FilingRecord:
     """One filing package built from the dashboard.
 
@@ -125,6 +160,9 @@ class Workspace:
         self.directory = directory
         self._returns: dict[str, OpenedReturn] = {}
         self._adjustments: dict[str, dict[Cell, Adjustment]] = {}
+        #: Bumped on every change of a return's drafts; the key its working return is kept under.
+        self._revisions: dict[str, int] = {}
+        self._working: dict[str, tuple[int, WorkingReturn]] = {}
         self._builds: dict[str, list[FilingRecord]] = {}
         self._comparisons: dict[tuple[str, str], ReturnComparison] = {}
         self._lock = threading.Lock()
@@ -196,11 +234,32 @@ class Workspace:
             drafted = self._adjustments.setdefault(return_id, {})
             drafted.pop(adjustment.cell, None)
             drafted[adjustment.cell] = adjustment
+            self._revisions[return_id] = self._revisions.get(return_id, 0) + 1
 
     def drop_adjustment(self, return_id: str, cell: Cell) -> None:
         """Withdraw the override drafted for ``cell``, if there is one."""
         with self._lock:
-            self._adjustments.get(return_id, {}).pop(cell, None)
+            if self._adjustments.get(return_id, {}).pop(cell, None) is not None:
+                self._revisions[return_id] = self._revisions.get(return_id, 0) + 1
+
+    def working(self, opened: OpenedReturn) -> WorkingReturn:
+        """``opened`` with its drafted overrides applied, validated once per change of them.
+
+        A page drawn after the drafts last changed gets the same object back,
+        so only the first page drawn after a change pays for the validation.
+        """
+        return_id = opened.return_id
+        with self._lock:
+            revision = self._revisions.get(return_id, 0)
+            drafts = tuple(self._adjustments.get(return_id, {}).values())
+            kept = self._working.get(return_id)
+        if kept is not None and kept[0] == revision:
+            return kept[1]
+        made = _work_out(opened, drafts)
+        with self._lock:
+            if self._revisions.get(return_id, 0) == revision:
+                self._working[return_id] = (revision, made)
+        return made
 
     # -- builds -------------------------------------------------------------------
 
@@ -237,6 +296,27 @@ class Workspace:
         made = compare_returns(_reading(baseline), _reading(candidate), names=names)
         with self._lock:
             return self._comparisons.setdefault(key, made)
+
+
+def _work_out(opened: OpenedReturn, drafts: tuple[Adjustment, ...]) -> WorkingReturn:
+    """``opened`` with ``drafts`` applied and validated, as a build would validate it."""
+    if not drafts:
+        return WorkingReturn(opened=opened, current=opened)
+    try:
+        ret, applied = apply_adjustments(opened.ret, drafts)
+    except AdjustmentError as exc:
+        return WorkingReturn(opened=opened, current=opened, drafts=drafts, problem=str(exc))
+    validation = validate_return(
+        ret,
+        opened.pack,
+        source_findings=opened.reading.findings,
+        source=opened.validation.source,
+    )
+    current = replace(opened, reading=replace(opened.reading, ret=ret), validation=validation)
+    logger.info("validated %s with %d override(s)", opened.name, len(applied))
+    return WorkingReturn(
+        opened=opened, current=current, drafts=drafts, applied=applied, problem=None
+    )
 
 
 def _reading(opened: OpenedReturn) -> SourceReading:

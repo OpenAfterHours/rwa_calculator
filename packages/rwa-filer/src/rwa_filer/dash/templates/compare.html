@@ -7,6 +7,7 @@
   <div class="small muted">Compare</div>
   <h1>Compare two returns</h1>
   <p class="lede">Why they differ, then cell by cell and rule by rule. Either side may be any file the dashboard opens: a resubmission against the instance already filed, or this return against the one your current system produces for the same date. The earlier one is the baseline; each finding says which return the Bank's own rules point at.</p>
+  {% if working.adjusted %}<p class="small muted" id="compare-as-opened" style="margin: 8px 0 0">Compares the files as they were opened: the overrides drafted for {{ current.name }} are not applied here.</p>{% endif %}
 </div>
 
 {% if error %}

@@ -108,7 +108,7 @@ class RefereePages:
             request,
             "referee.html",
             status_code=status_code,
-            current=opened,
+            working=self.context.workspace.working(opened),
             section="referee",
             job=job,
             running=job is not None and job.status == STATUS_RUNNING,

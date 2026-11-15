@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from dash_builders import HEADER_FORM
+from dash_builders import HEADER_FORM, make_fileable
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS
 from rwa_filer.dash.views import rules_page
 from rwa_filer.extras import MissingExtraError
@@ -100,6 +100,25 @@ def test_the_evidence_behind_the_verdict_downloads_as_json_lines(
     assert lines[0]["record"] == "header" and lines[-1]["record"] == "trailer"
     assert lines[0]["status"] == "BLOCKED"
     assert lines[0]["identity"]["input"]["file"] == "broken.csv"
+
+
+def test_the_evidence_answers_for_the_return_with_its_drafted_overrides(
+    client: TestClient, broken: OpenedReturn
+) -> None:
+    """Like every page of a return, the evidence is of what a build would file now."""
+    # Arrange
+    link = f"/returns/{broken.return_id}/evidence.jsonl"
+    as_opened = json.loads(client.get(link).text.splitlines()[0])
+
+    # Act
+    make_fileable(client, broken)
+    with_drafts = json.loads(client.get(link).text.splitlines()[0])
+
+    # Assert — other figures, the same source file.
+    assert (as_opened["status"], with_drafts["status"]) == ("BLOCKED", "INCOMPLETE")
+    opened_input, drafted_input = as_opened["identity"]["input"], with_drafts["identity"]["input"]
+    assert opened_input["facts_sha256"] != drafted_input["facts_sha256"]
+    assert opened_input["file_sha256"] == drafted_input["file_sha256"] is not None
 
 
 def test_an_unblocked_return_left_incomplete_says_so(client: TestClient, clean_csv: Path) -> None:

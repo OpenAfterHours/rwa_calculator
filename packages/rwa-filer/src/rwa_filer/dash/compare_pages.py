@@ -71,7 +71,12 @@ class ComparePages:
             comparison=self.context.workspace.comparison(earlier, later),
         )
         return self.context.render(
-            request, "compare.html", current=opened, section="compare", view=view, swap=swap
+            request,
+            "compare.html",
+            working=self.context.workspace.working(opened),
+            section="compare",
+            view=view,
+            swap=swap,
         )
 
     async def open_other(self, request: Request) -> Response:
@@ -102,7 +107,7 @@ class ComparePages:
             request,
             "compare.html",
             status_code=status_code,
-            current=opened,
+            working=self.context.workspace.working(opened),
             section="compare",
             view=None,
             others=others,

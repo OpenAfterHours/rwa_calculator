@@ -22,6 +22,7 @@ import pytest
 
 from dash_builders import CELL, draft, make_fileable
 from rwa_filer.boe.engine import STATUS_FAIL
+from rwa_filer.dash.grid import template_grid
 from rwa_filer.workflow.adjustments import Adjustment
 
 if TYPE_CHECKING:
@@ -140,6 +141,36 @@ def test_the_grid_unmarks_the_cells_of_a_rule_the_overrides_fix(
     assert "cell-error" in _cell_classes(before, "0040")
     assert "cell-error" not in _cell_classes(after, "0040")
     assert "cell-adjusted" in _cell_classes(after, "0010")
+
+
+def test_the_cell_panel_explains_a_break_with_the_figures_the_overrides_put_there(
+    workspace: Workspace, broken: OpenedReturn
+) -> None:
+    # Arrange — an override that changes c0010 but leaves the rules that read it broken.
+    workspace.set_adjustment(
+        broken.return_id,
+        Adjustment(
+            table="OF07.00.01.01",
+            sheet="0008",
+            row="0010",
+            column="0010",
+            value=2_000_000.0,
+            reason="Restated",
+        ),
+    )
+
+    # Act
+    grid = template_grid(
+        workspace.working(broken), table="OF07.00.01.01", sheet="0008", row="0010", column="0010"
+    )
+
+    # Assert — each break is explained as it breaks with the override, not as opened.
+    assert grid is not None and grid.cell is not None and grid.cell.rules
+    read = " ".join(
+        text for item in grid.cell.rules for failure in item.rule.failures for text in failure.cells
+    )
+    assert "2,000,000" in read
+    assert "1,000,000" not in read
 
 
 def test_withdrawing_the_overrides_brings_back_the_return_as_opened(

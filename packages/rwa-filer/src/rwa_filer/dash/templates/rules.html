@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_chip %}
+{% from "_macros.html" import failure_card, rule_text, status_chip %}
 {% block title %}Rules · {{ current.name }} — rwa-filer dash{% endblock %}
 {% block content %}
 {% set base = "/returns/" ~ current.return_id ~ "/rules" %}
@@ -79,30 +79,11 @@
       <div class="stat" style="flex: 2 1 240px"><div class="small muted">Not evaluated because</div><div class="mono" style="color: var(--strong)">{{ rule.row.reason }}</div><div class="small muted">{{ rule.reason_text }}{% if rule.detail %}: {{ rule.detail }}{% endif %}</div></div>
       {% endif %}
     </div>
-    {% if rule.expression %}
-    <div>
-      <h3>The rule, as the Bank's workbook states it</h3>
-      <pre class="expr">{{ rule.expression }}</pre>
-      {% if rule.scope %}<h3 style="margin-top: 10px">Scope</h3><pre class="expr">{{ rule.scope }}</pre>{% endif %}
-    </div>
-    {% endif %}
+    {{ rule_text(rule) }}
     {% if rule.failures %}
     <div style="display: flex; flex-direction: column; gap: 12px">
       <h3>Where it breaks{% if rule.row.unsatisfied > rule.failures | length %} — the first {{ rule.failures | length }} of {{ rule.row.unsatisfied }}{% endif %}</h3>
-      {% for failure in rule.failures %}
-      <div class="failure">
-        <div class="place">{{ "At " ~ failure.place if failure.place else "One evaluation over the whole template" }}</div>
-        <ul>{% for cell in failure.cells %}<li>{{ cell }}</li>{% endfor %}</ul>
-        {% if failure.addresses %}
-        <div class="cells" aria-label="Cells on the template grid">
-          {% for address in failure.addresses[:24] %}
-          <a href="{{ link(grid_url, table=address.table, sheet=address.sheet or '', key=address.open_key or '', row=address.row, col=address.column, focus=rule.row.rule_id) }}"{% if not address.reported %} class="empty" title="Not reported: read at its default"{% endif %}>{{ address.table }}{% if address.sheet %} z{{ address.sheet }}{% endif %}{% if address.open_key %} {{ address.open_key }}{% endif %} r{{ address.row }} c{{ address.column }}</a>
-          {% endfor %}
-          {% if failure.addresses | length > 24 %}<span class="small muted">and {{ failure.addresses | length - 24 }} more</span>{% endif %}
-        </div>
-        {% endif %}
-      </div>
-      {% endfor %}
+      {% for failure in rule.failures %}{{ failure_card(failure, grid_url, rule.row.rule_id) }}{% endfor %}
     </div>
     {% endif %}
   </section>

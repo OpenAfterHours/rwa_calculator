@@ -178,6 +178,7 @@ nav = [
       { "Single-Lazy-Plan Refactor (superseded)" = "plans/single-lazy-plan-refactor.md" },
       { "Facility Share — Riskiest Member (implemented)" = "plans/facility-share-riskiest-member.md" },
       { "Test-Suite Runtime (proposed)" = "plans/test-suite-runtime-proposal.md" },
+      { "Taxonomy Release Selection (proposed)" = "plans/taxonomy-release-selection.md" },
     ]},
   ]},
   { "Appendix" = [

@@ -271,6 +271,14 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     )
 
 
+def rule_detail(opened: OpenedReturn, rule_id: str) -> RuleDetail | None:
+    """One rule of the return in full, or ``None`` when the report holds no result for it."""
+    report = opened.validation.report
+    results = report.results if report else ()
+    result = next((item for item in results if item.rule_id == rule_id), None)
+    return _detail(opened, _row(result, opened.pack), results) if result else None
+
+
 def rule_label(module: str, rule_id: str) -> str:
     """The publisher's short description of a rule, or empty when it gives none."""
     rule = _rule(module, rule_id)

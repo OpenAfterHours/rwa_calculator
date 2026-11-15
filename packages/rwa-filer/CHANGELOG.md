@@ -52,6 +52,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
   evidence for an opened return as **Download evidence**.
 
 ### Changed
+- `rwa-filer dash`, Templates: the selected-cell panel now explains each broken
+  rule where it stands, instead of only linking to the Rules page. Every rule
+  carries the publisher's description, and **Read the rule** expands it in
+  place: how many evaluations broke, the break that read this cell with the
+  value of each cell it read (each a link to that cell on the grid, this one
+  outlined), and the expression and scope as the Bank's workbook states them.
+  The panel widens while a rule is open; a rule opened on one cell stays open
+  on the next within the tab. The rule focused with **Show only this rule's
+  cells** opens expanded. The link to the Rules page is kept. Library:
+  `dash.grid.CellDetail.rules` (`CellRule`), `dash.views.rule_detail`.
 - **The validation report's `rules` lists every enforced rule, passes included**
   (it listed only the rules that did not pass), each with `rule_sha256`,
   `evaluations`, `tables` and, for each kept failure, its cell `addresses`. The

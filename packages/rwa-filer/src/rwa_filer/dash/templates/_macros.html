@@ -29,6 +29,35 @@
 {%- endif -%}
 {%- endmacro -%}
 
+{#- The rule's text as the Bank's workbook states it (Rules page and the cell panel). -#}
+{%- macro rule_text(rule) -%}
+{%- if rule.expression -%}
+<div>
+  <h3>The rule, as the Bank's workbook states it</h3>
+  <pre class="expr">{{ rule.expression }}</pre>
+  {% if rule.scope %}<h3 style="margin-top: 10px">Scope</h3><pre class="expr">{{ rule.scope }}</pre>{% endif %}
+</div>
+{%- endif -%}
+{%- endmacro -%}
+
+{#- One unsatisfied evaluation: where, the values it read, and each cell on the grid.
+    ``here`` is the (table, sheet, open key, row, column) of the cell being looked at, if any. -#}
+{%- macro failure_card(failure, grid_url, rule_id, here=none) -%}
+<div class="failure">
+  <div class="place">{{ "At " ~ failure.place if failure.place else "One evaluation over the whole template" }}</div>
+  <ul>{% for cell in failure.cells %}<li>{{ cell }}</li>{% endfor %}</ul>
+  {% if failure.addresses %}
+  <div class="cells" aria-label="Cells on the template grid">
+    {% for address in failure.addresses[:24] %}
+    {% set is_here = here is not none and (address.table, address.sheet, address.open_key, address.row, address.column) == here %}
+    <a href="{{ link(grid_url, table=address.table, sheet=address.sheet or '', key=address.open_key or '', row=address.row, col=address.column, focus=rule_id) }}"{% if not address.reported %} class="empty" title="Not reported: read at its default"{% endif %}{% if is_here %} aria-current="true"{% endif %}>{{ address.table }}{% if address.sheet %} z{{ address.sheet }}{% endif %}{% if address.open_key %} {{ address.open_key }}{% endif %} r{{ address.row }} c{{ address.column }}</a>
+    {% endfor %}
+    {% if failure.addresses | length > 24 %}<span class="small muted">and {{ failure.addresses | length - 24 }} more</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{%- endmacro -%}
+
 {#- The file and header fields of a form that opens a return (Open and Compare pages). -#}
 {%- macro open_fields(values, modules) -%}
 <label class="dropzone">

@@ -56,6 +56,7 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
         "facts": ret.facts.height,
         "tables": list(ret.tables),
         "summary": {
+            "release_findings": len(validation.release_findings),
             "structure_findings": len(validation.structure),
             "rule_findings": len(validation.rules),
             "blocking_findings": len(validation.blocking),

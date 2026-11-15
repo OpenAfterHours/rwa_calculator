@@ -150,7 +150,8 @@ def test_the_picked_cell_carries_each_rule_that_read_it_in_full(
     assert grid.cell is not None
     rules = grid.cell.rules
     assert [item.mark for item in rules] == list(grid.cell.marks)
-    assert all(item.rule.row.label == rule_label("PRA001", item.mark.rule_id) for item in rules)
+    info = broken.pack.info
+    assert all(item.rule.row.label == rule_label(info, item.mark.rule_id) for item in rules)
     assert all(item.rule.row.label and item.rule.expression for item in rules)
 
 

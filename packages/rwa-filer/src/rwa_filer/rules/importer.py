@@ -102,27 +102,59 @@ BOE_RETRIEVED = "2026-11-13"
 # BoE table codes carry NO space after "C" (e.g. "C34.02.01.01", "OF07.00.01.01").
 BOE_TABLE_PREFIXES = ("OF02", "OF07", "OF08", "OF09", "C08.04", "C09.04", "C34.")
 
-# 0-indexed column positions on the BoE sheet.
-BOE_COL_OWNER = 0
-BOE_COL_FRAMEWORK = 1
-BOE_COL_FRAMEWORK_VERSION = 2
-BOE_COL_RULE_CODE = 3
-BOE_COL_SCOPE = 4
-BOE_COL_WHERE = 5
-BOE_COL_JOIN = 6
-BOE_COL_EXPRESSION = 7
-BOE_COL_SIMPLE_EXPRESSION = 8
-BOE_COL_PRECONDITION = 9
-BOE_COL_SIMPLE_PRECONDITION = 10
-BOE_COL_IN_XBRL = 11
-BOE_COL_DEACTIVATED = 12
-BOE_COL_ALWAYS_EXECUTE = 13
-BOE_COL_ERROR_MESSAGE = 14
-BOE_COL_LABEL = 15
-BOE_COL_SEVERITY = 16
-BOE_COL_TABLES = range(17, 21)  # T1..T4
-#: Columns a row of the BoE sheet is read across: A to the last table column.
-BOE_WIDTH: Final = BOE_COL_TABLES.stop
+#: The BoE sheet's columns, BY HEADER NAME, in the order a row is read in. The
+#: sheet is read by these names, not by position: each row is rearranged into
+#: this order first, so a column the Bank adds or moves cannot shift a field.
+BOE_COLUMNS: Final = (
+    "Owner",
+    "Framework code",
+    "Framework version code",
+    "Rule code",
+    "Scope",
+    "Where",
+    "Join",
+    "Expression",
+    "Simplified Expression",
+    "Precondition",
+    "Simplified Precondition",
+    "Include in XBRL",
+    "Deactivated",
+    "Always execute",
+    "Error message",
+    "Label",
+    "Severity and modules",
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+)
+#: Columns a BoE sheet may lack — some layouts have no precondition columns,
+#: or fewer table columns — read as empty when absent.
+BOE_OPTIONAL_COLUMNS: Final = frozenset(
+    {"Precondition", "Simplified Precondition", "T2", "T3", "T4"}
+)
+
+# Positions in the order above (``BOE_COLUMNS``), not on the sheet.
+BOE_COL_OWNER = BOE_COLUMNS.index("Owner")
+BOE_COL_FRAMEWORK = BOE_COLUMNS.index("Framework code")
+BOE_COL_FRAMEWORK_VERSION = BOE_COLUMNS.index("Framework version code")
+BOE_COL_RULE_CODE = BOE_COLUMNS.index("Rule code")
+BOE_COL_SCOPE = BOE_COLUMNS.index("Scope")
+BOE_COL_WHERE = BOE_COLUMNS.index("Where")
+BOE_COL_JOIN = BOE_COLUMNS.index("Join")
+BOE_COL_EXPRESSION = BOE_COLUMNS.index("Expression")
+BOE_COL_SIMPLE_EXPRESSION = BOE_COLUMNS.index("Simplified Expression")
+BOE_COL_PRECONDITION = BOE_COLUMNS.index("Precondition")
+BOE_COL_SIMPLE_PRECONDITION = BOE_COLUMNS.index("Simplified Precondition")
+BOE_COL_IN_XBRL = BOE_COLUMNS.index("Include in XBRL")
+BOE_COL_DEACTIVATED = BOE_COLUMNS.index("Deactivated")
+BOE_COL_ALWAYS_EXECUTE = BOE_COLUMNS.index("Always execute")
+BOE_COL_ERROR_MESSAGE = BOE_COLUMNS.index("Error message")
+BOE_COL_LABEL = BOE_COLUMNS.index("Label")
+BOE_COL_SEVERITY = BOE_COLUMNS.index("Severity and modules")
+BOE_COL_TABLES = range(BOE_COLUMNS.index("T1"), BOE_COLUMNS.index("T4") + 1)
+#: Columns a row is read across, once rearranged into ``BOE_COLUMNS`` order.
+BOE_WIDTH: Final = len(BOE_COLUMNS)
 
 # ── Parsing patterns ─────────────────────────────────────────────────────────
 
@@ -291,13 +323,26 @@ def extract_eba(workbook: Path) -> dict[str, Any]:
     }
 
 
-def extract_boe(workbook: Path) -> dict[str, Any]:
+def extract_boe(
+    workbook: Path,
+    *,
+    version: str = BOE_VERSION,
+    archive_member: str = BOE_ARCHIVE_MEMBER,
+    retrieved: str = BOE_RETRIEVED,
+) -> dict[str, Any]:
     """Extract credit-risk rules from the BoE workbook into a JSON-ready payload.
+
+    Args:
+        workbook: The Banking Reporting validation workbook.
+        version: The taxonomy release it belongs to; it names the extract's
+            framework version and the Bank's download it came in.
+        archive_member: The workbook's name inside that download.
+        retrieved: When the download was taken (ISO date).
 
     Raises:
         ValueError: ``workbook`` is not laid out as the BoE workbook (see ``extract``).
     """
-    rows = _matching_rows(workbook, "BoE", BOE_SHEET, BOE_WIDTH, _boe_tables)
+    rows = _matching_rows(workbook, "BoE", BOE_SHEET, BOE_WIDTH, _boe_tables, columns=BOE_COLUMNS)
     rules = [_parse_boe_row(row) for row in rows]
     live = sum(1 for r in rules if r.status == ("live",))
     not_deactivated = sum(1 for r in rules if "deactivated" not in r.status)
@@ -307,11 +352,11 @@ def extract_boe(workbook: Path) -> dict[str, Any]:
             "publisher": "BoE",
             "file": workbook.name,
             "sheet": BOE_SHEET,
-            "url": BOE_URL,
-            "archive_member": BOE_ARCHIVE_MEMBER,
+            "url": boe_url(version),
+            "archive_member": archive_member,
             "landing_page": BOE_LANDING,
-            "retrieved": BOE_RETRIEVED,
-            "framework_version": BOE_VERSION,
+            "retrieved": retrieved,
+            "framework_version": version,
         },
         "filter": {
             "table_prefixes": list(BOE_TABLE_PREFIXES),
@@ -324,10 +369,27 @@ def extract_boe(workbook: Path) -> dict[str, Any]:
     }
 
 
+def boe_url(version: str) -> str:
+    """The Bank's download that holds release ``version``'s validation workbooks."""
+    return BOE_URL.replace("v411.zip", f"v{version.replace('.', '')}.zip")
+
+
+def boe_extract_name(version: str) -> str:
+    """The packaged file name of release ``version``'s Basel 3.1 template-level extract."""
+    return f"basel31-boe-v{version}-credit-risk.json"
+
+
 def write_extract(payload: dict[str, Any], path: Path) -> None:
-    """Write ``payload`` to ``path`` in the committed, deterministic form."""
+    """Write ``payload`` to ``path`` in the committed, deterministic form.
+
+    Through an open handle, not ``Path.write_text``: a payload rebuilt from an
+    extract read back (the release build keeps its provenance) otherwise
+    reaches a path-taking call's data argument, which SonarCloud's taint
+    analysis reports as path traversal (``pythonsecurity:S2083``).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(dump_json(payload), encoding="utf-8")
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(dump_json(payload))
 
 
 def is_extract_current(payload: dict[str, Any], committed: str | None) -> bool:
@@ -359,19 +421,27 @@ def _load_workbook(path: Path) -> Any:
     return load_workbook(path, needed_for="Reading a rule workbook", command="rules import")
 
 
-def _matching_rows(
+def _matching_rows(  # noqa: PLR0913 - the sheet, its layout and the filter
     path: Path,
     publisher: str,
     sheet: str,
     width: int,
     tables_of: Callable[[tuple[Any, ...]], tuple[str, ...]],
+    *,
+    columns: tuple[str, ...] | None = None,
 ) -> list[tuple[Any, ...]]:
     """Return data rows whose table codes match the source's prefix filter.
 
+    With ``columns``, the sheet is read by header name: each row is rearranged
+    into that order (an absent optional column reads as empty), so the fields
+    do not depend on where the publisher puts each column. Without it, the
+    sheet is read by position across ``width`` columns.
+
     Raises:
-        ValueError: the workbook has no ``sheet``, or it is empty, or its header
-            is narrower than the ``width`` columns a rule is read across — which
-            is what another publisher's workbook, or no rule workbook, looks like.
+        ValueError: the workbook has no ``sheet``, or it is empty, or — read by
+            name — its header lacks a required column, or — read by position —
+            it is narrower than ``width``; which is what another publisher's
+            workbook, or no rule workbook, looks like.
     """
     refused = f"{path.name} is not the {publisher} rule workbook"
     workbook = _load_workbook(path)
@@ -384,6 +454,13 @@ def _matching_rows(
         header = next(rows, None)
         if header is None:
             raise ValueError(f"{refused}: sheet {sheet!r} is empty")
+        if columns is not None:
+            order = _column_order(header, columns, refused, sheet)
+            rows = (
+                tuple(row[i] if i is not None and i < len(row) else None for i in order)
+                for row in rows
+            )
+            return [row for row in rows if row and row[0] and tables_of(row)]
         if len(header) < width:
             raise ValueError(
                 f"{refused}: sheet {sheet!r} has {len(header)} columns, "
@@ -392,6 +469,23 @@ def _matching_rows(
         return [row for row in rows if row and row[0] and tables_of(row)]
     finally:
         workbook.close()
+
+
+def _column_order(
+    header: tuple[Any, ...], columns: tuple[str, ...], refused: str, sheet: str
+) -> list[int | None]:
+    """Where on the sheet each of ``columns`` is; ``None`` for an absent optional one.
+
+    Raises:
+        ValueError: a column outside ``BOE_OPTIONAL_COLUMNS`` is not in the header.
+    """
+    names = {
+        str(cell).strip(): position for position, cell in enumerate(header) if cell is not None
+    }
+    missing = [name for name in columns if name not in names and name not in BOE_OPTIONAL_COLUMNS]
+    if missing:
+        raise ValueError(f"{refused}: sheet {sheet!r} has no column(s) {', '.join(missing)}")
+    return [names.get(name) for name in columns]
 
 
 def _eba_tables(row: tuple[Any, ...]) -> tuple[str, ...]:

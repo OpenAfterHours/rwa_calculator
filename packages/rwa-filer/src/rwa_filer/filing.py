@@ -47,17 +47,20 @@ from typing import TYPE_CHECKING, Any, Final
 from rwa_filer import __version__
 from rwa_filer.boe.engine import Accuracy
 from rwa_filer.evidence import collect_evidence, write_evidence
+from rwa_filer.release import choose_release
 from rwa_filer.validate.report import to_record
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.xbrl.writer import GENERATOR_ID, InstanceOptions, write_instance
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from datetime import date
     from pathlib import Path
 
     from rwa_filer.boe.catalogue import RuleBook
     from rwa_filer.evidence import EvidenceFile
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
     from rwa_filer.validate.identity import SourceIdentity
@@ -134,6 +137,9 @@ def build_filing(
     *,
     pack: TaxonomyPack | None = None,
     rulebook: RuleBook | None = None,
+    release: Release | None = None,
+    taxonomy: str | None = None,
+    today: date | None = None,
     options: InstanceOptions | None = None,
     name: str | None = None,
     allow_rule_breaks: bool = False,
@@ -148,9 +154,13 @@ def build_filing(
     Args:
         ret: The return.
         directory: Where the files go. Created if absent.
-        pack: The taxonomy. Defaults to the packaged pack for the return's
-            module and reference date.
-        rulebook: The rules to run. Defaults to the module's packaged rule book.
+        pack: The taxonomy pack; its rules come from the same release.
+        rulebook: The rules to run, in place of the release's own.
+        release: A release already resolved (``rwa_filer.release``).
+        taxonomy: The release to file against, by version. With none of
+            ``pack``, ``release`` and ``taxonomy``, the default release for the
+            module (see ``validate_return``).
+        today: The run date the default release is worked out for.
         options: How numbers are stated in the instance.
         name: The files' base name. Defaults to
             ``<entity>_<module>_<reference date>``.
@@ -172,16 +182,23 @@ def build_filing(
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
 
     Raises:
-        PackNotFoundError: no ``pack`` was given and none is packaged.
+        ReleaseNotFoundError: the release could not be resolved.
     """
     options = options or InstanceOptions()
     accuracy = Accuracy(options.monetary_decimals, options.percentage_decimals)
+    chosen = choose_release(
+        ret.header.module,
+        release=release,
+        pack=pack,
+        rulebook=rulebook,
+        taxonomy=taxonomy,
+        today=today,
+    )
     evidence_file = None
     if evidence is not None:
         collected = collect_evidence(
             ret,
-            pack,
-            rulebook=rulebook,
+            release=chosen,
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,
@@ -191,8 +208,7 @@ def build_filing(
     else:
         validation = validate_return(
             ret,
-            pack,
-            rulebook=rulebook,
+            release=chosen,
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,

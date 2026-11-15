@@ -41,6 +41,7 @@ from __future__ import annotations
 from rwa_calc.reporting.filing.bindings import build_template_index, derive_variant_columns
 from rwa_calc.reporting.filing.canonical import (
     FILING_MODULE,
+    FILING_TAXONOMY,
     CanonicalMapping,
     build_canonical_return,
 )
@@ -54,6 +55,7 @@ from rwa_calc.reporting.filing.sheet_maps import SHEET_INDEX_MAPS
 
 __all__ = [
     "FILING_MODULE",
+    "FILING_TAXONOMY",
     "SHEET_INDEX_MAPS",
     "CanonicalMapping",
     "FilingOutcome",

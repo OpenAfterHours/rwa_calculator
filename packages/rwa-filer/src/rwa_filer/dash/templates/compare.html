@@ -31,7 +31,7 @@
     {% endif %}
   </section>
   <form class="wide" method="post" action="/returns/{{ rid }}/compare" enctype="multipart/form-data">
-    {% call open_fields(values, modules) %}
+    {% call open_fields(values, modules, releases) %}
     <div class="btn-row"><button class="btn btn-primary" type="submit">Open and compare</button><span class="small muted">The file opened becomes the earlier version; swap the two on the next page.</span></div>
     {% endcall %}
   </form>

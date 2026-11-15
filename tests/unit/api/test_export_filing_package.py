@@ -34,7 +34,7 @@ from rwa_calc.api import rest
 from rwa_calc.api.export import ResultExporter
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
 from rwa_calc.api.results_cache import ResultsCache
-from rwa_filer.taxonomy.pack import PackNotFoundError
+from rwa_filer.validate.structure import FINDING_REFERENCE_DATE_OUTSIDE_RELEASE
 from rwa_filer.xbrl.reader import read_instance
 
 if TYPE_CHECKING:
@@ -134,13 +134,23 @@ def test_a_crr_run_has_no_filing_package(tmp_path: Path) -> None:
         )
 
 
-def test_a_reference_date_before_the_taxonomy_applies_has_no_pack(
+def test_a_reference_date_before_the_taxonomy_applies_is_warned_of_not_refused(
     basel_run: CalculationResponse, tmp_path: Path
 ) -> None:
-    with pytest.raises(PackNotFoundError):
-        ResultExporter().export_filing_package(
-            basel_run, tmp_path / "filing", entity_identifier=LEI, reference_date=date(2026, 12, 31)
-        )
+    """The release is the one the estate is laid out for; the date only draws STR011."""
+    # Act
+    outcome = ResultExporter().export_filing_package(
+        basel_run,
+        tmp_path / "filing",
+        entity_identifier=LEI,
+        reference_date=date(2026, 12, 31),
+        allow_incomplete=True,
+    )
+
+    # Assert
+    assert outcome.package is not None
+    codes = [finding.code for finding in outcome.package.validation.release_findings]
+    assert codes == [FINDING_REFERENCE_DATE_OUTSIDE_RELEASE]
 
 
 # =============================================================================

@@ -13,8 +13,12 @@ Key responsibilities:
 - Name the templates left out that the reported ones are checked against, in
   the summary as well as in their ``VAL004`` findings.
 - Keep the record self-contained: a reader holding only the JSON knows which
-  entity, date, module and taxonomy version it describes, and — from its
-  ``identity`` block — the fingerprint of every input the verdict rests on.
+  entity, date, module and taxonomy release it describes — the release's
+  status for the module, its dates, and whether it was the default or named —
+  and, from its ``identity`` block, the fingerprint of every input the verdict
+  rests on.
+- Say, straight after the verdict and the check's status, which taxonomy
+  release was used and why, and which other shipped releases have the module.
 - List EVERY enforced rule, passes included, so the record shows the whole set
   of checks that ran, not only the ones that broke.
 - Say whether the check was complete (``status``, ``completeness``), apart from
@@ -34,6 +38,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer import __version__
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
+from rwa_filer.release import release_lines, release_record
 from rwa_filer.validate.identity import identity_record
 from rwa_filer.validate.returns import (
     INCOMPLETE_COVERAGE_SHORTFALL,
@@ -78,17 +83,14 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
         "generator": f"rwa-filer {__version__}",
         "identity": identity_record(ret, validation),
         "header": ret.header.as_fields(),
-        "taxonomy": {
-            "module": info.module,
-            "version": info.version,
-            "entry_point": info.entry_point,
-        },
+        "taxonomy": release_record(validation.release, ret.header.reference_date),
         "status": validation.status,
         "submittable": validation.is_submittable,
         "completeness": [cause_record(cause) for cause in validation.completeness],
         "facts": ret.facts.height,
         "tables": list(ret.tables),
         "summary": {
+            "release_findings": len(validation.release_findings),
             "structure_findings": len(validation.structure),
             "rule_findings": len(validation.rules),
             "blocking_findings": len(validation.blocking),
@@ -191,6 +193,7 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
         f"at {header.reference_date.isoformat()} "
         f"(taxonomy {info.version}, {ret.facts.height} facts, {len(ret.tables)} tables)",
         f"  status: {status_line(validation)}",
+        *release_lines(validation.release),
         f"  structure: {len(validation.structure)} finding(s)",
     ]
     if report is None:

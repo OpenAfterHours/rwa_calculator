@@ -254,7 +254,7 @@ def build_package(
     package = build_filing(
         ret,
         options.directory,
-        pack=opened.pack,
+        release=opened.release,
         options=InstanceOptions(
             monetary_decimals=options.monetary_decimals,
             percentage_decimals=options.percentage_decimals,
@@ -314,7 +314,7 @@ def override_effect(working: WorkingReturn) -> OverrideEffect | None:
     after = working.current.validation
     was = _results(before.report)
     now = _results(after.report)
-    module = working.opened.pack.info.module
+    info = working.opened.pack.info
     effects: dict[str, list[RuleEffect]] = {CHANGE_FIXED: [], CHANGE_STOPPED: [], CHANGE_BROKEN: []}
     no_longer_run = 0
     for rule_id, result in sorted({**was, **now}.items()):
@@ -328,7 +328,7 @@ def override_effect(working: WorkingReturn) -> OverrideEffect | None:
             RuleEffect(
                 rule_id=rule_id,
                 severity=result.severity,
-                label=rule_label(module, rule_id),
+                label=rule_label(info, rule_id),
                 change=change,
                 status=holds,
                 reason=_reason(now.get(rule_id)) if holds == STATUS_NOT_EVALUATED else "",

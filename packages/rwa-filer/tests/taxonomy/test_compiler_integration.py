@@ -22,9 +22,12 @@ Run it with, for example:
     RWA_FILER_BOE_DIR=/path/to/downloads \
         uv run pytest packages/rwa-filer/tests/taxonomy/test_compiler_integration.py -q
 
-The numbers asserted below were measured on the v4.1.1 publication (taxonomy
-package dated 2026-08-17) and are specific to it: a new publication needs a new
-measurement, not an edit to make this pass.
+The headline counts are the release's measurements (``tests/releases/<version>/``,
+which ``scripts/build_filer_release.py`` writes from the same files); which
+release the downloads are, the compiled pack says. The finer findings below
+them — which tables gain linkbase-only cells, how many sample facts share a
+data point — were investigated on 4.1.1 alone, and are checked only against
+the 4.1.1 downloads: a new publication needs a new investigation, not an edit.
 """
 
 from __future__ import annotations
@@ -38,13 +41,15 @@ from typing import Any
 import pytest
 
 import taxonomy_builders as builders
+from release_measurements import measurements
 from rwa_filer.taxonomy import compiler
 
 BOE_DIR = os.environ.get("RWA_FILER_BOE_DIR")
-ENTRY_POINT = "http://www.bankofengland.co.uk/data/xbrl/fws/banking/banking_reporting/2026-08-17/mod/pra001.xsd"
+#: The release the finer findings below were investigated on.
+INVESTIGATED_ON = "4.1.1"
 
 pytestmark = pytest.mark.skipif(
-    not BOE_DIR, reason="set RWA_FILER_BOE_DIR to a directory holding the BoE v4.1.1 downloads"
+    not BOE_DIR, reason="set RWA_FILER_BOE_DIR to a directory holding a release's BoE downloads"
 )
 
 
@@ -90,20 +95,23 @@ def test_pra001_compiles_to_the_measured_tables_cells_and_data_points(pack: dict
     sources = collections.Counter(cell[4] for table in tables.values() for cell in table["cells"])
     indicators = {table["filing_indicator"] for table in tables.values()}
 
+    measured = _measured(pack)
+
     # Assert
-    assert len(tables) == 104, "PRA001 v4.1.1 has 104 tables"
-    assert len(indicators) == 83, "PRA001 v4.1.1 has 83 filing indicators for its 104 tables"
+    assert len(tables) == measured["tables"]
+    assert len(indicators) == measured["filing_indicators"]
     assert None not in indicators, "every table has a filing indicator from the taxonomy"
-    assert sources == {"workbook": 61_573, "linkbase": 42}, (
-        "61,615 reportable cells: 61,573 white in the workbook and accepted by the hypercubes, "
-        "plus 42 greyed in the workbook but accepted (40 in OF08.01.01.01, 2 in OF02.00.01.01)"
-    )
-    assert len(pack["datapoints"]) == 61_428, "61,428 distinct data points"
-    assert pack["info"]["version"] == "4.1.1"
-    assert pack["info"]["entry_point"] == ENTRY_POINT
+    assert sources == {
+        "workbook": measured["cells"] - measured["linkbase_cells"],
+        "linkbase": measured["linkbase_cells"],
+    }, "white in the workbook and accepted by the hypercubes, plus greyed but accepted"
+    assert len(pack["datapoints"]) == measured["datapoints"]
+    assert pack["info"]["entry_point"] == measured["entry_point"]
 
 
 def test_pra001_linkbase_only_cells_are_the_known_two_tables(pack: dict[str, Any]) -> None:
+    _investigated(pack)
+
     # Act
     promoted = collections.Counter(
         code
@@ -128,10 +136,24 @@ def test_every_fact_of_the_boe_sample_instance_maps_to_a_cell(pack: dict[str, An
 
     # Act
     counts = builders.map_instance(pack, instance)
+    measured = _measured(pack)
 
-    # Assert
-    assert counts["facts"] == 61_428, "the BoE PRA001 sample instance holds 61,428 facts"
-    assert counts["unmapped"] == 0, "every one of the 61,428 sample facts maps to at least one cell"
-    assert counts["one_cell"] == 61_245, "61,245 facts map to exactly one cell"
-    assert counts["many_cells"] == 183, "183 facts are a data point shared by more than one cell"
-    assert counts["cells_hit"] == 61_615, "all 61,615 pack cells are hit by a sample fact"
+    # Assert — every sample fact maps, and every pack cell is hit.
+    assert counts["facts"] == measurements(pack["info"]["version"])["samples"]["PRA001"]["facts"]
+    assert counts["unmapped"] == 0, "every sample fact maps to at least one cell"
+    assert counts["cells_hit"] == measured["cells"], "every pack cell is hit by a sample fact"
+    if pack["info"]["version"] == INVESTIGATED_ON:
+        assert counts["one_cell"] == 61_245, "61,245 facts map to exactly one cell"
+        assert counts["many_cells"] == 183, "183 facts are a data point shared by more cells"
+
+
+def _measured(pack: dict[str, Any]) -> dict[str, Any]:
+    """The compiled PRA001 pack's release's measurements of its PRA001 pack."""
+    return measurements(pack["info"]["version"])["packs"]["PRA001"]
+
+
+def _investigated(pack: dict[str, Any]) -> None:
+    """Skip a finer finding on downloads of a release it was not investigated on."""
+    if pack["info"]["version"] != INVESTIGATED_ON:
+        version = pack["info"]["version"]
+        pytest.skip(f"investigated on {INVESTIGATED_ON}; these downloads are {version}")

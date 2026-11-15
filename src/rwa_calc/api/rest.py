@@ -1354,7 +1354,7 @@ def _filing_outcome(  # noqa: PLR0913 - the endpoint's own parameters, passed th
         HTTPException: 422 where there is no such return — the run is not
             Basel 3.1, or no taxonomy is packaged for its reporting date.
     """
-    from rwa_filer.taxonomy.pack import PackNotFoundError
+    from rwa_filer.release import ReleaseNotFoundError
 
     previous_period_results = _resolve_export_inputs("corep", response, prior_run_id)
     try:
@@ -1369,7 +1369,7 @@ def _filing_outcome(  # noqa: PLR0913 - the endpoint's own parameters, passed th
             allow_rule_breaks=allow_rule_breaks,
             name=f"rwa_filing_{response.framework}_{response.reporting_date.isoformat()}",
         )
-    except (ValueError, PackNotFoundError) as exc:
+    except (ValueError, ReleaseNotFoundError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

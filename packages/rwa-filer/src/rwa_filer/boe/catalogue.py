@@ -2,7 +2,8 @@
 The Bank of England rule books — every published validation rule, per reporting module.
 
 Pipeline position:
-    data/<framework version>-<taxonomy>.json  ->  load_rulebook / rulebook_for_module
+    data/<framework version>-<taxonomy>.json  ->  load_rulebook
+        (rwa_filer.release picks the file of the run's release)
         -> RuleBook(rules)  ->  boe.engine
 
 Key responsibilities:
@@ -63,7 +64,7 @@ SEVERITY_WARNING: Final = "WARNING"
 
 
 class RuleBookNotFoundError(LookupError):
-    """No packaged rule book covers the requested module."""
+    """No rule book is packaged under the requested file name."""
 
 
 # =============================================================================
@@ -278,20 +279,6 @@ def rulebook_from(payload: Mapping[str, Any], *, file: str | None = None) -> Rul
         file=file,
         content_sha256=canonical_sha256(payload),
     )
-
-
-def rulebook_for_module(module: str) -> RuleBook:
-    """The packaged rule book that covers ``module`` (matched case-insensitively).
-
-    Raises:
-        RuleBookNotFoundError: no packaged rule book names the module.
-    """
-    wanted = module.upper()
-    for file_name in available_rulebooks():
-        rulebook = load_rulebook(file_name)
-        if wanted in (name.upper() for name in rulebook.modules):
-            return rulebook
-    raise RuleBookNotFoundError(f"No packaged rule book covers module {module!r}")
 
 
 def canonical_sha256(content: object) -> str:

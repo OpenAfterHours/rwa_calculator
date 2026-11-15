@@ -21,9 +21,7 @@ from rwa_filer.taxonomy.pack import (
     SOURCE_LINKBASE,
     DataPoint,
     PackInfo,
-    PackNotFoundError,
     load_pack,
-    select_pack,
     write_pack,
 )
 
@@ -191,22 +189,12 @@ def test_a_pack_in_an_unreadable_format_is_refused(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Resolution by reference date
+# Validity and identity (choosing a release is rwa_filer.release's job)
 # ---------------------------------------------------------------------------
 
 
 def _info(version: str, valid_from: date, valid_to: date | None = None) -> PackInfo:
     return PackInfo("PRA001", "Own funds", "boe-banking", version, "http://x", valid_from, valid_to)
-
-
-def test_a_reference_date_selects_the_release_in_force() -> None:
-    # Arrange
-    old = _info("4.0.0", date(2026, 1, 1), date(2026, 12, 31))
-    new = _info("4.1.1", date(2027, 1, 1))
-
-    # Act / Assert
-    assert select_pack([old, new], "PRA001", date(2026, 6, 30)) is old
-    assert select_pack([old, new], "pra001", date(2027, 3, 31)) is new
 
 
 def test_the_validity_window_is_inclusive_at_both_ends() -> None:
@@ -216,29 +204,6 @@ def test_the_validity_window_is_inclusive_at_both_ends() -> None:
     # Act / Assert
     assert info.applies_to(date(2026, 1, 1)) and info.applies_to(date(2026, 12, 31))
     assert not info.applies_to(date(2025, 12, 31)) and not info.applies_to(date(2027, 1, 1))
-
-
-def test_no_pack_for_the_date_names_what_is_packaged() -> None:
-    # Arrange
-    infos = [_info("4.1.1", date(2027, 1, 1))]
-
-    # Act / Assert
-    with pytest.raises(PackNotFoundError, match=r"PRA001 4\.1\.1 \(2027-01-01 to onwards\)"):
-        select_pack(infos, "PRA001", date(2026, 12, 31))
-
-
-def test_an_unknown_module_is_not_found() -> None:
-    with pytest.raises(PackNotFoundError, match="LVR001"):
-        select_pack([_info("4.1.1", date(2027, 1, 1))], "LVR001", date(2027, 3, 31))
-
-
-def test_overlapping_releases_resolve_to_the_later_one() -> None:
-    # Arrange
-    first = _info("4.1.0", date(2027, 1, 1))
-    second = _info("4.1.1", date(2027, 1, 1))
-
-    # Act / Assert
-    assert select_pack([first, second], "PRA001", date(2027, 6, 30)) is second
 
 
 def test_the_pack_key_is_module_and_version_lower_cased() -> None:

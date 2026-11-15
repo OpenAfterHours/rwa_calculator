@@ -4,7 +4,7 @@ Taxonomy packs — the supervisor's data-point model, compiled to package data.
 Pipeline position:
     BoE DPM workbooks + taxonomy package  ->  compiler.compile_pack  (offline)
         ->  taxonomy/data/<module>-<version>/  (package data)
-        ->  pack.resolve_pack(module, reference_date)  ->  TaxonomyPack
+        ->  pack.load_packaged(key)  ->  TaxonomyPack  (rwa_filer.release picks the key)
 
 Key responsibilities:
 - Hold, for every reportable cell of every table in a reporting module, the

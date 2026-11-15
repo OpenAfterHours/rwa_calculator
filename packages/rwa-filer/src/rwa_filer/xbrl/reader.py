@@ -11,8 +11,10 @@ Key responsibilities:
   put every fact back in the cell — table, sheet, row, column — the taxonomy
   shows it in. The same structure checks and published rules then run on a
   file exactly as they run on a fact table.
-- Choose the taxonomy pack from the file's own ``schemaRef``. The file says
-  which module and taxonomy version it is filed against; nothing is guessed.
+- Choose the taxonomy release from the file's own ``schemaRef``. The file says
+  which module and entry point it is filed against; among the shipped releases
+  with that entry point the default applies (``rwa_filer.release``), and a
+  release the user names must have the same entry point. Nothing is guessed.
 - Honour the file's filing indicators: a fact is placed only in templates the
   file declares as reported, and a template may be reported with no facts.
 - Report what the file contains that the module does not accept — a fact that
@@ -51,13 +53,9 @@ from xml.etree import ElementTree
 import polars as pl
 
 from rwa_filer.model import DECIMALS_EXACT, FACT_SCHEMA, CanonicalReturn, ReturnHeader
+from rwa_filer.release import ReleaseNotFoundError, release_for_pack, resolve_release
 from rwa_filer.rules.catalogue import SEVERITY_ERROR
-from rwa_filer.taxonomy.pack import (
-    MEMBER_OPEN_OPTIONAL,
-    MEMBER_TYPED_PREFIX,
-    available_packs,
-    load_packaged,
-)
+from rwa_filer.taxonomy.pack import MEMBER_OPEN_OPTIONAL, MEMBER_TYPED_PREFIX
 from rwa_filer.validate.checker import FactPosition, Finding
 from rwa_filer.validate.structure import local_name
 from rwa_filer.xbrl.writer import NS_FIND, NS_ISO4217, NS_LINK, NS_XBRLDI, NS_XBRLI, NS_XLINK
@@ -65,6 +63,7 @@ from rwa_filer.xbrl.writer import NS_FIND, NS_ISO4217, NS_LINK, NS_XBRLDI, NS_XB
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
+    from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
 
 logger = logging.getLogger(__name__)
@@ -125,33 +124,49 @@ class InstanceReading:
     Attributes:
         ret: The return: header, facts in their cells, and the filing
             indicators as the file declares them.
-        pack: The taxonomy pack the file's ``schemaRef`` selected.
+        release: The taxonomy release the file was read against — chosen from
+            its ``schemaRef``, or the pack a caller passed.
         findings: What the file holds that the module does not accept
             (``XBR001``-``XBR003``). All block submission.
         facts: XBRL facts in the file.
     """
 
     ret: CanonicalReturn
-    pack: TaxonomyPack
+    release: Release
     findings: tuple[Finding, ...]
     facts: int
 
+    @property
+    def pack(self) -> TaxonomyPack:
+        """The taxonomy pack the file was read against."""
+        return self.release.pack
 
-def read_instance(source: Path | bytes, *, pack: TaxonomyPack | None = None) -> InstanceReading:
+
+def read_instance(
+    source: Path | bytes,
+    *,
+    pack: TaxonomyPack | None = None,
+    taxonomy: str | None = None,
+    today: date | None = None,
+) -> InstanceReading:
     """Read an XBRL instance — a ``.xbrl`` file, a ``.zip`` holding one, or its bytes.
 
     Args:
         source: The file, or its content.
-        pack: The taxonomy to read it against. Defaults to the packaged pack
-            whose entry point the file's ``schemaRef`` names.
+        pack: The taxonomy pack to read it against. Give this or ``taxonomy``.
+        taxonomy: The release to read it against, by version. It must have the
+            entry point the file's ``schemaRef`` names. With neither, the
+            default among the shipped releases that have that entry point.
+        today: The run date the default release is worked out for.
 
     Raises:
         InstanceFormatError: the content is not well-formed XML, is not an XBRL
-            instance, declares a document type, or names an entry point no
-            packaged taxonomy has.
+            instance, or declares a document type; or no shipped release can
+            read it — none has its entry point, or the one named has another.
     """
     document = _parse(_content(source))
-    pack = pack or _pack_for(document.schema_refs)
+    release = _release_for(document.schema_refs, pack, taxonomy, today)
+    pack = release.pack
     header = _header(document, pack)
     findings = _filing_rule_findings(document, pack)
 
@@ -172,7 +187,7 @@ def read_instance(source: Path | bytes, *, pack: TaxonomyPack | None = None) -> 
     )
     return InstanceReading(
         ret=CanonicalReturn.from_frame(header, frame, indicators),
-        pack=pack,
+        release=release,
         findings=tuple(findings),
         facts=len(document.facts),
     )
@@ -346,20 +361,26 @@ def _clark(qname: str, prefixes: dict[str, str]) -> str:
 # =============================================================================
 
 
-def _pack_for(schema_refs: list[str]) -> TaxonomyPack:
-    """The packaged pack whose entry point the file names."""
+def _release_for(
+    schema_refs: list[str],
+    pack: TaxonomyPack | None,
+    taxonomy: str | None,
+    today: date | None,
+) -> Release:
+    """The release the file is read against: the caller's pack, else its ``schemaRef``'s."""
+    if pack is not None:
+        if taxonomy is not None:
+            raise ValueError("pass pack or taxonomy, not both")
+        return release_for_pack(pack, today=today)
     if len(schema_refs) != 1:
         raise InstanceFormatError(
             f"A filing names exactly one taxonomy entry point; this file has {len(schema_refs)} "
             "schemaRef element(s)"
         )
-    infos = [info for info in available_packs() if info.entry_point == schema_refs[0]]
-    if not infos:
-        known = ", ".join(f"{info.module} {info.version}" for info in available_packs()) or "none"
-        raise InstanceFormatError(
-            f"No packaged taxonomy has the entry point {schema_refs[0]!r}. Packaged: {known}."
-        )
-    return load_packaged(infos[-1].key)
+    try:
+        return resolve_release(None, taxonomy, entry_point=schema_refs[0], today=today)
+    except ReleaseNotFoundError as error:
+        raise InstanceFormatError(str(error)) from error
 
 
 def _header(document: _Document, pack: TaxonomyPack) -> ReturnHeader:

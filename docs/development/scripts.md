@@ -235,6 +235,26 @@ uv run python scripts/filing_mapping_report.py --update-baseline
 and what each reason means.
 
 
+### `scripts/build_filer_release.py` — Packaging an rwa-filer taxonomy release
+
+Builds, checks or re-measures one taxonomy release of `rwa-filer` from the Bank of
+England's own files, into `packages/rwa-filer`. The release must be listed in
+`packages/rwa-filer/src/rwa_filer/releases.json`; the Bank's downloads for it are
+read from `.taxonomy/boe-banking-<version>/` (git-ignored).
+
+```bash
+uv run python scripts/build_filer_release.py 4.2.0                  # build (and retire unlisted releases)
+uv run python scripts/build_filer_release.py 4.1.1 --check          # rebuild in scratch, fail on any difference
+uv run python scripts/build_filer_release.py 4.1.1 --measure-only   # re-measure without the Bank's files
+```
+
+The downloads folder is a fixed place, not an argument: a path built from the
+command line is a `pythonsecurity:S8707` sink (`arch_check` check 19). A caller
+that needs another folder imports `rwa_filer.release_build`. Every build and check
+writes `packages/rwa-filer/tests/releases/<version>/measurements.json`, the numbers
+the release's tests are held to (`tests/test_release_measurements.py`). See
+[rwa-filer → Packaging a taxonomy release](../rwa-filer/index.md#packaging-a-taxonomy-release).
+
 ### `scripts/referee_differential.py` — The referee differential
 
 Files golden returns from the calculator and asks an independent XBRL processor

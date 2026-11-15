@@ -56,7 +56,7 @@ from rwa_filer.validate.returns import trace_return
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
-    from datetime import datetime
+    from datetime import date, datetime
     from pathlib import Path
 
     from rwa_filer.boe.catalogue import Rule, RuleBook
@@ -72,6 +72,7 @@ if TYPE_CHECKING:
         RuleTrace,
     )
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import FactPosition, Finding
     from rwa_filer.validate.identity import SourceIdentity
@@ -179,27 +180,33 @@ class EvidenceDocument:
     trailer: Mapping[str, Any]
 
 
-def collect_evidence(
+def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
     ret: CanonicalReturn,
     pack: TaxonomyPack | None = None,
     *,
     rulebook: RuleBook | None = None,
+    release: Release | None = None,
+    taxonomy: str | None = None,
+    today: date | None = None,
     accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
 ) -> Evidence:
     """Validate ``ret`` as ``validate_return`` does, keeping everything it executed.
 
-    The arguments are ``validate_return``'s. Never raises for a condition in
-    the data.
+    The arguments are ``validate_return``'s, the taxonomy release included.
+    Never raises for a condition in the data.
 
     Raises:
-        PackNotFoundError: no ``pack`` was given and none is packaged.
+        ReleaseNotFoundError: the release could not be resolved.
     """
     validation, trace = trace_return(
         ret,
         pack,
         rulebook=rulebook,
+        release=release,
+        taxonomy=taxonomy,
+        today=today,
         accuracy=accuracy,
         source_findings=source_findings,
         source=source,

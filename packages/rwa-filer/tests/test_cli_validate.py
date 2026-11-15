@@ -32,14 +32,34 @@ def _csv(tmp_path: Path, text: str = GOOD_CSV) -> Path:
     return path
 
 
-def test_taxonomy_list_shows_the_packaged_pack(capsys: pytest.CaptureFixture[str]) -> None:
+def test_taxonomy_list_shows_each_modules_status_in_each_release(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     # Act
-    code = main(["taxonomy", "list"])
+    code = main(["taxonomy", "list", "--module", "pra001"])
 
     # Assert
     out = capsys.readouterr().out
+    lines = [line.split() for line in out.splitlines() if line.startswith("PRA001")]
     assert code == EXIT_OK
-    assert "PRA001" in out and "4.1.1" in out and "2027-01-01" in out
+    assert len(lines) == 1, "one line per shipped release that has PRA001"
+    module, release, status, applies_from, applies_to, default, _entry = lines[0]
+    assert (module, release, applies_from, applies_to, default) == (
+        "PRA001",
+        "4.1.1",
+        "2027-01-01",
+        "-",
+        "yes",
+    )
+    assert status in ("live", "future")
+    assert "release(s) shipped: 4.1.1" in out
+
+
+def test_taxonomy_list_refuses_a_module_no_release_has(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["taxonomy", "list", "--module", "XYZ999"]) == EXIT_FAILED
+    assert "XYZ999" in capsys.readouterr().err
 
 
 def test_validate_reports_the_verdict_and_the_counts(
@@ -127,26 +147,59 @@ def test_a_fact_table_without_a_header_is_a_failure_not_a_traceback(
     assert "--entity, --reference-date and --module" in capsys.readouterr().err
 
 
-def test_a_reference_date_with_no_pack_is_a_failure_not_a_traceback(
+def test_a_reference_date_the_release_does_not_cover_is_a_warning_not_a_stop(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The release is chosen, not the date: a 2026 return is checked against 4.1.1."""
+    # Act
+    main(["validate", str(_csv(tmp_path)), *_header("2026-06-30"), "--format", "json"])
+
+    # Assert
+    captured = capsys.readouterr()
+    record = json.loads(captured.out)
+    warnings = [item for item in record["findings"] if item["code"] == "STR011"]
+    assert captured.err == ""
+    assert record["taxonomy"]["version"] == "4.1.1"
+    assert record["taxonomy"]["covers_reference_date"] is False
+    assert len(warnings) == 1 and warnings[0]["blocking"] is False
+
+
+def test_the_text_report_says_which_release_was_used_after_the_verdict_and_status(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Act
-    code = main(
-        [
-            "validate",
-            str(_csv(tmp_path)),
-            "--entity",
-            VALID_LEI,
-            "--reference-date",
-            "2026-06-30",
-            "--module",
-            "PRA001",
-        ]
-    )
+    main(["validate", str(_csv(tmp_path)), *_header("2027-03-31")])
+
+    # Assert
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith(("SUBMITTABLE", "BLOCKED"))
+    assert lines[1].startswith("  status: ")
+    assert lines[2].startswith("Taxonomy 4.1.1 (default) — PRA001 ")
+
+
+def test_a_named_release_is_used_and_said_to_be_chosen(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act
+    main(["validate", str(_csv(tmp_path)), *_header("2027-03-31"), "--taxonomy", "4.1.1"])
+
+    # Assert
+    assert "Taxonomy 4.1.1 (--taxonomy)" in capsys.readouterr().out
+
+
+def test_a_release_that_is_not_shipped_is_a_failure_not_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act
+    code = main(["validate", str(_csv(tmp_path)), *_header("2027-03-31"), "--taxonomy", "9.9.9"])
 
     # Assert
     assert code == EXIT_FAILED
-    assert "No taxonomy pack" in capsys.readouterr().err
+    assert "Taxonomy 9.9.9 is not shipped" in capsys.readouterr().err
+
+
+def _header(reference_date: str) -> list[str]:
+    return ["--entity", VALID_LEI, "--reference-date", reference_date, "--module", "PRA001"]
 
 
 def test_a_missing_or_unsupported_file_is_a_failure(
@@ -216,3 +269,52 @@ def test_template_refuses_a_table_the_module_does_not_have(
     # Assert
     assert code == EXIT_FAILED
     assert "ZZ99" in capsys.readouterr().err
+
+
+def test_template_needs_no_reference_date_and_says_which_release_it_is_for(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act
+    code = main(
+        [
+            "template",
+            "--module",
+            "PRA001",
+            "--tables",
+            "OF02.01.01.01",
+            "--out",
+            str(tmp_path / "x.xlsx"),
+        ]
+    )
+
+    # Assert
+    out = capsys.readouterr().out
+    assert code == EXIT_OK
+    assert out.startswith("Taxonomy 4.1.1 (default) — PRA001 ")
+    assert "warning" not in out
+
+
+def test_template_warns_when_the_release_does_not_cover_the_reference_date(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act
+    code = main(
+        [
+            "template",
+            "--module",
+            "PRA001",
+            "--taxonomy",
+            "4.1.1",
+            "--reference-date",
+            "2026-12-31",
+            "--tables",
+            "OF02.01.01.01",
+            "--out",
+            str(tmp_path / "x.xlsx"),
+        ]
+    )
+
+    # Assert
+    out = capsys.readouterr().out
+    assert code == EXIT_OK
+    assert "warning: reference date 2026-12-31 is outside PRA001's dates in taxonomy 4.1.1" in out

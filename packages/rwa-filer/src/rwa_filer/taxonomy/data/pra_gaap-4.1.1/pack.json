@@ -107,7 +107,7 @@
   "sources": {
    "annotated_workbook": "Bank of England Banking Annotated Templates v4.1.1 Financial statements.xlsx",
    "dictionary_workbook": "Bank of England Banking DPM dictionary v4.1.1.xlsx",
-   "taxonomy_package": "boe411.zip"
+   "taxonomy_package": "boe-banking-v411.zip"
   },
   "taxonomy": "boe-banking",
   "title": "PRA 104, 105, 106, 107 GAAP based Balance Sheet and Profit & Loss forecasts",

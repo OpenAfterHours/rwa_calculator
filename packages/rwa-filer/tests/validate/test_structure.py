@@ -16,7 +16,7 @@ import pytest
 
 from pack_builders import build_pack, build_return
 from rwa_filer.model import CanonicalReturn
-from rwa_filer.rules.catalogue import SEVERITY_ERROR
+from rwa_filer.rules.catalogue import SEVERITY_ERROR, SEVERITY_WARNING
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.structure import (
     FINDING_CELL_NOT_REPORTABLE,
@@ -26,11 +26,13 @@ from rwa_filer.validate.structure import (
     FINDING_INCONSISTENT_DATAPOINT,
     FINDING_INDICATOR_INVALID,
     FINDING_OPEN_KEY_INVALID,
+    FINDING_REFERENCE_DATE_OUTSIDE_RELEASE,
     FINDING_SHEET_INVALID,
     FINDING_UNKNOWN_TABLE,
     FINDING_VALUE_TYPE,
     IS_KEY,
     MAX_EXAMPLES,
+    check_reference_date,
     check_structure,
     filing_indicators,
     is_valid_lei,
@@ -472,7 +474,6 @@ def test_an_empty_return_is_reported_not_passed(pack: TaxonomyPack) -> None:
         ({"entity_identifier": "NOT-AN-LEI"}, "entity_identifier"),
         ({"currency": "pounds"}, "currency"),
         ({"module": "OTHER"}, "module"),
-        ({"reference_date": date(2026, 12, 31)}, "reference_date"),
     ],
 )
 def test_a_header_the_regulator_would_reject_is_reported(
@@ -483,6 +484,44 @@ def test_a_header_the_regulator_would_reject_is_reported(
 
     # Assert
     assert [(f.code, f.subject) for f in findings] == [(FINDING_HEADER_INVALID, subject)]
+
+
+def test_a_reference_date_outside_the_packs_dates_is_not_a_structure_finding(
+    pack: TaxonomyPack,
+) -> None:
+    """It is about the release chosen, and ``check_reference_date`` reports it."""
+    findings = check_structure(build_return(CLEAN, reference_date=date(2026, 12, 31)), pack)
+
+    assert findings == []
+
+
+def test_a_reference_date_before_the_pack_applies_is_a_warning(pack: TaxonomyPack) -> None:
+    # Act
+    (finding,) = check_reference_date(build_return(CLEAN, reference_date=date(2026, 12, 31)), pack)
+
+    # Assert
+    assert (finding.code, finding.severity, finding.is_blocking) == (
+        FINDING_REFERENCE_DATE_OUTSIDE_RELEASE,
+        SEVERITY_WARNING,
+        False,
+    )
+    assert finding.expected == f"on or after {pack.info.valid_from.isoformat()}"
+    assert "--taxonomy VERSION" in finding.message
+
+
+def test_a_reference_date_after_a_superseded_pack_is_a_warning(tmp_path: Path) -> None:
+    # Arrange
+    pack = build_pack(tmp_path, valid_from=date(2027, 1, 1), valid_to=date(2027, 12, 31))
+
+    # Act
+    (finding,) = check_reference_date(build_return(CLEAN, reference_date=date(2028, 3, 31)), pack)
+
+    # Assert
+    assert finding.expected == "from 2027-01-01 to 2027-12-31"
+
+
+def test_a_reference_date_the_pack_covers_raises_nothing(pack: TaxonomyPack) -> None:
+    assert check_reference_date(build_return(CLEAN), pack) == []
 
 
 def test_a_non_lei_scheme_is_not_held_to_the_lei_format(pack: TaxonomyPack) -> None:

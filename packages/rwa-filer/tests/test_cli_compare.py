@@ -88,3 +88,37 @@ def test_a_missing_file_is_refused_in_one_line(
     assert code == EXIT_FAILED
     assert "absent.csv" in captured.err
     assert captured.out == ""
+
+
+def test_each_side_says_which_release_it_was_read_against_after_the_verdict(
+    files: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    main(["compare", files["baseline"], files["same"], *HEADER_ARGS_CLI])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("EQUIVALENT")
+    assert lines[1].startswith("Baseline: Taxonomy 4.1.1 (default) — PRA001 ")
+    assert lines[2].startswith("Candidate: Taxonomy 4.1.1 (default) — PRA001 ")
+
+
+def test_the_json_record_carries_each_sides_release(
+    files: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    main(
+        [
+            "compare",
+            files["baseline"],
+            files["same"],
+            *HEADER_ARGS_CLI,
+            "--taxonomy",
+            "4.1.1",
+            "--format",
+            "json",
+        ]
+    )
+
+    record = json.loads(capsys.readouterr().out)
+    assert {side: item["chosen_by"] for side, item in record["taxonomy"].items()} == {
+        "baseline": "version",
+        "candidate": "version",
+    }

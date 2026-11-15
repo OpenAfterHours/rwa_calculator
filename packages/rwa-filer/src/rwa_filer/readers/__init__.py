@@ -3,12 +3,17 @@ Readers — turn a file into a canonical return.
 
 Pipeline position:
     file (.parquet / .csv / .xlsx)  ->  read_return  ->  CanonicalReturn
+    any supported file  ->  open_source  ->  SourceReading (return + its release)
         ->  validate.validate_return
 
 Key responsibilities:
 - Read each supported file format into the one canonical shape
   (``rwa_filer.model``). A reader's whole job is coordinates and types; it makes
   no judgment about the figures.
+- Resolve, in ``open_source``, the taxonomy release a file is read against
+  (``rwa_filer.release``): the one the person names, else the default for the
+  return's module. An XBRL instance's release must also have the entry point
+  the file names.
 - Never lose a fact silently. A cell a reader cannot make sense of is kept, as
   text, so the structure check reports it — a reader that dropped it would turn
   a filer's typo into an unreported figure.
@@ -29,12 +34,14 @@ from typing import TYPE_CHECKING
 
 from rwa_filer.model import LEI_SCHEME, ReturnHeader
 from rwa_filer.readers.tabular import read_csv, read_parquet
+from rwa_filer.release import resolve_release
 
 if TYPE_CHECKING:
     from datetime import date
     from pathlib import Path
 
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
 
@@ -64,17 +71,23 @@ class SourceReading:
 
     Attributes:
         ret: The return.
-        pack: The taxonomy the source names for itself — an XBRL instance does,
-            in its ``schemaRef`` — or ``None`` where the source names none and
-            the pack follows from the header.
+        release: The taxonomy release the return is read against.
+            ``open_source`` always sets it; ``load_source`` sets it for an XBRL
+            instance (from its ``schemaRef``) and leaves it ``None`` for a
+            file that names no taxonomy, whose release follows from the header.
         findings: What the source holds that could not be read as part of the
             module. Empty for a fact table or workbook, whose every cell is
             checked by the structure checks instead.
     """
 
     ret: CanonicalReturn
-    pack: TaxonomyPack | None = None
+    release: Release | None = None
     findings: tuple[Finding, ...] = ()
+
+    @property
+    def pack(self) -> TaxonomyPack | None:
+        """The release's taxonomy pack, or ``None`` while no release is chosen."""
+        return self.release.pack if self.release is not None else None
 
 
 @dataclass(frozen=True)
@@ -98,15 +111,31 @@ def carries_header(path: Path) -> bool:
     return suffix == ".xlsx" or suffix in INSTANCE_SUFFIXES
 
 
-def open_source(path: Path, fields: HeaderFields | None = None) -> SourceReading:
+def open_source(
+    path: Path,
+    fields: HeaderFields | None = None,
+    *,
+    taxonomy: str | None = None,
+    today: date | None = None,
+) -> SourceReading:
     """Read a file a person named, as ``rwa-filer validate`` and the dashboard do.
 
-    Checks the file exists and is of a supported type, reads it, and applies any
-    header field given over the header the file states.
+    Checks the file exists and is of a supported type, reads it, applies any
+    header field given over the header the file states, and resolves the
+    taxonomy release the return is read against.
+
+    Args:
+        path: The file.
+        fields: Header fields given beside the file; each overrides the file's.
+        taxonomy: The release to read it against, by version; ``None`` for the
+            default (``rwa_filer.release``).
+        today: The run date the default release is worked out for.
 
     Raises:
         ValueError: the file is missing, of an unsupported type, lacks a header
             it needs, or is not readable as what its suffix says it is.
+        ReleaseNotFoundError: the release could not be resolved for the
+            return's module.
     """
     fields = fields or HeaderFields()
     suffix = path.suffix.lower()
@@ -115,7 +144,9 @@ def open_source(path: Path, fields: HeaderFields | None = None) -> SourceReading
     if suffix not in (*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES):
         accepted = ", ".join((*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES))
         raise ValueError(f"unsupported file type {path.suffix!r}; expected one of {accepted}")
-    source = load_source(path, _header(fields, required=not carries_header(path)))
+    source = load_source(
+        path, _header(fields, required=not carries_header(path)), taxonomy=taxonomy, today=today
+    )
     overrides = {
         "entity_identifier": fields.entity,
         "reference_date": fields.reference_date,
@@ -124,19 +155,32 @@ def open_source(path: Path, fields: HeaderFields | None = None) -> SourceReading
         "entity_scheme": fields.entity_scheme,
     }
     changed = {name: value for name, value in overrides.items() if value}
-    if not changed:
+    if changed:
+        ret = source.ret
+        source = replace(source, ret=replace(ret, header=replace(ret.header, **changed)))
+    if source.release is not None:
         return source
-    ret = source.ret
-    return replace(source, ret=replace(ret, header=replace(ret.header, **changed)))
+    release = resolve_release(source.ret.header.module, taxonomy, today=today)
+    return replace(source, release=release)
 
 
-def load_source(path: Path, header: ReturnHeader | None = None) -> SourceReading:
+def load_source(
+    path: Path,
+    header: ReturnHeader | None = None,
+    *,
+    taxonomy: str | None = None,
+    today: date | None = None,
+) -> SourceReading:
     """Read any supported file: a fact table, a workbook, or an XBRL instance.
 
     Args:
         path: ``.parquet`` / ``.csv`` / ``.xlsx`` (see ``read_return``), or a
             ``.xbrl`` instance, or a ``.zip`` holding one.
         header: Required for Parquet and CSV. An instance carries its own.
+        taxonomy: For an instance, the release to read it against, by version
+            (it must have the file's entry point). Unused for any other file,
+            whose release ``open_source`` resolves from the header.
+        today: The run date an instance's default release is worked out for.
 
     Raises:
         ValueError: the suffix is not supported, a tabular file was given
@@ -146,8 +190,8 @@ def load_source(path: Path, header: ReturnHeader | None = None) -> SourceReading
         return SourceReading(ret=read_return(path, header))
     from rwa_filer.xbrl.reader import read_instance
 
-    reading = read_instance(path)
-    return SourceReading(ret=reading.ret, pack=reading.pack, findings=reading.findings)
+    reading = read_instance(path, taxonomy=taxonomy, today=today)
+    return SourceReading(ret=reading.ret, release=reading.release, findings=reading.findings)
 
 
 def read_return(path: Path, header: ReturnHeader | None = None) -> CanonicalReturn:

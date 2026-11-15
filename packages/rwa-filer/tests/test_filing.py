@@ -112,6 +112,13 @@ def test_the_manifest_records_what_was_filed_and_under_which_verdict(
         "module": "TST001",
         "version": "1.0.0",
         "entry_point": pack.info.entry_point,
+        "status": manifest["taxonomy"]["status"],
+        "applies_from": pack.info.valid_from.isoformat(),
+        "applies_to": None,
+        "run_date": manifest["taxonomy"]["run_date"],
+        "chosen_by": "pack",
+        "shipped": [],
+        "covers_reference_date": True,
     }
     assert manifest["upload"] == f"{BASE}.xbrl" and manifest["zip"] is None
     assert manifest["validation"]["submittable"] is True
@@ -329,6 +336,29 @@ def test_validation_uses_the_accuracy_the_file_is_written_with(
     # Assert
     assert thousands.written and thousands.validation.is_submittable
     assert not units.written and units.blocked_by == BLOCKED_BY_RULES
+
+
+def test_a_reference_date_outside_the_release_is_warned_of_and_still_built(
+    pack: TaxonomyPack, tmp_path: Path
+) -> None:
+    """``STR011`` is about the release chosen: it never stops a build."""
+    # Arrange — the pack applies from 2027-01-01.
+    early = build_return(
+        pl.DataFrame(
+            [(*row, *([None] * (len(COLUMNS) - len(row)))) for row in SOUND],
+            schema=COLUMNS,
+            orient="row",
+        ),
+        reference_date=pack.info.valid_from.replace(year=pack.info.valid_from.year - 1),
+    )
+
+    # Act
+    package = build_filing(early, tmp_path / "out", pack=pack, rulebook=RULES)
+
+    # Assert
+    assert package.written and package.blocked_by is None
+    assert [finding.code for finding in package.validation.release_findings] == ["STR011"]
+    assert package.validation.structure == ()
 
 
 # ---------------------------------------------------------------------------

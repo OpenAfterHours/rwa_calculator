@@ -2,7 +2,7 @@
 Integrity of the packaged taxonomy packs.
 
 Pipeline position:
-    taxonomy/data/<module>-<version>/ (package data)  ->  resolve_pack  ->  everything downstream
+    taxonomy/data/<module>-<version>/ (package data)  ->  load_packaged  ->  everything downstream
 
 Why this exists: a pack is compiled from the publisher's DPM files, which are
 not redistributed and so cannot be re-derived in CI
@@ -25,6 +25,8 @@ from importlib import resources
 import polars as pl
 import pytest
 
+from release_measurements import shipped_measurements
+from rwa_filer.release import STATUS_FUTURE, STATUS_LIVE, resolve_release, status_on
 from rwa_filer.taxonomy.pack import (
     CELLS_FILE,
     DATAPOINTS_FILE,
@@ -36,19 +38,23 @@ from rwa_filer.taxonomy.pack import (
     PACKS_PACKAGE,
     SOURCE_LINKBASE,
     SOURCE_WORKBOOK,
-    PackNotFoundError,
     TaxonomyPack,
     available_packs,
-    resolve_pack,
+    load_packaged,
 )
 
-PRA001_KEY = "pra001-4.1.1"
+#: Each shipped release's measured numbers (``tests/releases/<version>/``).
+MEASURED = shipped_measurements()
+#: The PRA001 pack the content tests below read: the release a run uses by default.
+PRA001_RELEASE = resolve_release("PRA001").version
+PRA001_KEY = f"pra001-{PRA001_RELEASE}"
+_PRA001 = MEASURED[PRA001_RELEASE]["packs"]["PRA001"]
 #: (tables, cells, cells established from the linkbase alone, data points, filing indicators)
-PRA001_COUNTS = (104, 61_615, 42, 61_428, 83)
-PRA001_ENTRY_POINT = (
-    "http://www.bankofengland.co.uk/data/xbrl/fws/banking/banking_reporting/"
-    "2026-08-17/mod/pra001.xsd"
+PRA001_COUNTS = tuple(
+    _PRA001[name]
+    for name in ("tables", "cells", "linkbase_cells", "datapoints", "filing_indicators")
 )
+PRA001_ENTRY_POINT = _PRA001["entry_point"]
 #: The credit-risk tables rwa-calc's Basel 3.1 estate is filed in.
 CREDIT_RISK_TABLES = (
     "OF02.00.01.01",
@@ -63,7 +69,7 @@ CREDIT_RISK_TABLES = (
 
 @pytest.fixture(scope="module")
 def pra001() -> TaxonomyPack:
-    return resolve_pack("PRA001", date(2027, 3, 31))
+    return load_packaged(PRA001_KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -109,24 +115,18 @@ def test_pack_json_is_pure_ascii() -> None:
 
 
 def test_pra001_is_packaged_from_the_first_of_january_2027() -> None:
+    """The Basel 3.1 return starts on 1 January 2027: no PRA001 pack applies earlier."""
     # Act
     infos = [info for info in available_packs() if info.module == "PRA001"]
 
     # Assert
-    assert [(info.version, info.valid_from, info.valid_to) for info in infos] == [
-        ("4.1.1", date(2027, 1, 1), None)
-    ]
+    assert infos, "no PRA001 pack is packaged"
+    assert min(info.valid_from for info in infos) == date(2027, 1, 1)
 
 
-def test_a_2027_reference_date_resolves_to_v4_1_1(pra001: TaxonomyPack) -> None:
-    assert (pra001.info.module, pra001.info.version) == ("PRA001", "4.1.1")
+def test_the_default_pra001_pack_is_at_its_published_entry_point(pra001: TaxonomyPack) -> None:
+    assert (pra001.info.module, pra001.info.version) == ("PRA001", PRA001_RELEASE)
     assert pra001.info.entry_point == PRA001_ENTRY_POINT
-
-
-def test_a_2026_reference_date_has_no_pack() -> None:
-    """The Basel 3.1 return starts on 1 January 2027; nothing earlier is packaged."""
-    with pytest.raises(PackNotFoundError, match="PRA001"):
-        resolve_pack("PRA001", date(2026, 12, 31))
 
 
 # ---------------------------------------------------------------------------
@@ -258,26 +258,22 @@ def test_several_tables_can_share_one_filing_indicator(pra001: TaxonomyPack) -> 
 # Every packaged module
 # ---------------------------------------------------------------------------
 
-#: module -> (tables, reportable cells, data points, filing indicators, applies from).
-#: Measured on the v4.1.1 publication. A module is packaged only if EVERY fact
-#: of the Bank's own sample instance for it is a data point of its pack; the
-#: ten modules for which that does not yet hold (PRA110, PRA115, RFB001-008) are
-#: deliberately absent — a pack that rejects valid facts is worse than none.
+#: (release, module) -> (tables, reportable cells, data points, filing indicators,
+#: applies from), as each release was measured. A module is packaged only if
+#: EVERY fact of the Bank's own sample instance for it is a data point of its
+#: pack; in 4.1.1 the ten modules for which that does not yet hold (PRA110,
+#: PRA115, RFB001-008) are deliberately absent — a pack that rejects valid
+#: facts is worse than none.
 PACKAGED = {
-    "LVR001": (8, 329, 329, 8, date(2026, 2, 27)),
-    "LVR002": (5, 159, 159, 5, date(2023, 5, 11)),
-    "MRL001": (3, 277, 277, 2, date(2026, 6, 22)),
-    "MRL003": (2, 59, 59, 2, date(2026, 6, 22)),
-    "PRA001": (104, 61_615, 61_428, 83, date(2027, 1, 1)),
-    "PRA112": (6, 1_681, 1_671, 6, date(2026, 2, 27)),
-    "PRA113": (6, 788, 783, 6, date(2026, 2, 27)),
-    "PRA114": (5, 62, 62, 5, date(2026, 2, 27)),
-    "PRA116": (26, 23_165, 23_146, 22, date(2027, 1, 1)),
-    "PRA117": (5, 539, 534, 5, date(2026, 2, 27)),
-    "PRA118": (5, 41, 41, 5, date(2026, 2, 27)),
-    "PRA_GAAP": (5, 182, 182, 5, date(2021, 7, 31)),
-    "PRA_IFRS": (5, 152, 152, 5, date(2021, 7, 31)),
-    "PRA_MEM": (3, 43, 43, 2, date(2021, 7, 31)),
+    (version, module): (
+        pack["tables"],
+        pack["cells"],
+        pack["datapoints"],
+        pack["filing_indicators"],
+        date.fromisoformat(pack["applies_from"]),
+    )
+    for version, measured in MEASURED.items()
+    for module, pack in measured["packs"].items()
 }
 
 
@@ -285,8 +281,8 @@ def test_the_packaged_modules_and_their_measured_sizes() -> None:
     # Act
     measured = {}
     for info in available_packs():
-        pack = resolve_pack(info.module, info.valid_from)
-        measured[info.module] = (
+        pack = load_packaged(info.key)
+        measured[(info.version, info.module)] = (
             len(pack.tables),
             pack.cells.height,
             len(pack.datapoints),
@@ -298,11 +294,11 @@ def test_the_packaged_modules_and_their_measured_sizes() -> None:
     assert measured == PACKAGED
 
 
-@pytest.mark.parametrize("module", sorted(PACKAGED))
-def test_every_packaged_pack_is_internally_consistent(module: str) -> None:
+@pytest.mark.parametrize(("version", "module"), sorted(PACKAGED))
+def test_every_packaged_pack_is_internally_consistent(version: str, module: str) -> None:
     """Every cell names a table, a data point and a metric the pack defines."""
     # Arrange
-    pack = resolve_pack(module, PACKAGED[module][4])
+    pack = load_packaged(f"{module}-{version}".lower())
 
     # Act
     cell_tables = set(pack.cells["table"].unique().to_list())
@@ -322,9 +318,9 @@ def test_every_packaged_pack_is_internally_consistent(module: str) -> None:
     assert all(table.filing_indicator for table in pack.tables.values())
 
 
-def test_a_module_resolves_only_from_the_date_its_framework_applies() -> None:
-    # Act / Assert — the day before each pack's first date has no pack.
-    for module, (*_counts, valid_from) in PACKAGED.items():
-        assert resolve_pack(module, valid_from).info.module == module
-        with pytest.raises(PackNotFoundError):
-            resolve_pack(module, date.fromordinal(valid_from.toordinal() - 1))
+def test_a_module_goes_live_on_the_date_its_framework_applies() -> None:
+    # Act / Assert — future the day before each pack's first date, live on it.
+    for (version, module), (*_counts, valid_from) in PACKAGED.items():
+        info = load_packaged(f"{module}-{version}".lower()).info
+        assert status_on(info, date.fromordinal(valid_from.toordinal() - 1)) == STATUS_FUTURE
+        assert status_on(info, valid_from) == STATUS_LIVE

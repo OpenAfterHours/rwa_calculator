@@ -48,6 +48,8 @@ from functools import cache
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
+from rwa_filer.release import version_key
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from importlib.resources.abc import Traversable
@@ -68,9 +70,32 @@ RULES_PACKAGE: Final = "rwa_filer.rules"
 #: The plain data directory under ``RULES_PACKAGE`` (no ``__init__.py`` — it is
 #: read through ``importlib.resources``, never imported).
 RULES_DIRECTORY: Final = "data"
+#: The Basel 3.1 extract is the BoE's, of ONE taxonomy release: the newest one
+#: packaged (``basel31-boe-v<version>-credit-risk.json``), which the release
+#: build regenerates. This engine is not user-selectable by release; the
+#: return-level engine (``rwa_filer.release``) is.
+_BOE_EXTRACT: Final = re.compile(
+    r"^basel31-boe-v(?P<version>[0-9][0-9A-Za-z.\-]*)-credit-risk\.json$"
+)
+_BOE_EXTRACT_FALLBACK: Final = "basel31-boe-v4.1.1-credit-risk.json"
+
+
+def _newest_boe_extract() -> str:
+    """The packaged Basel 3.1 extract of the newest release (by version number)."""
+    root = resources.files(RULES_PACKAGE).joinpath(RULES_DIRECTORY)
+    found = [
+        (match.group("version"), entry.name)
+        for entry in (root.iterdir() if root.is_dir() else ())
+        if (match := _BOE_EXTRACT.match(entry.name)) is not None
+    ]
+    if not found:
+        return _BOE_EXTRACT_FALLBACK
+    return max(found, key=lambda item: version_key(item[0]))[1]
+
+
 EXTRACT_FILES: Final[dict[str, str]] = {
     FRAMEWORK_CRR: "crr-eba-v3.0-credit-risk.json",
-    FRAMEWORK_BASEL_3_1: "basel31-boe-v4.1.1-credit-risk.json",
+    FRAMEWORK_BASEL_3_1: _newest_boe_extract(),
 }
 
 # Severity, as normalised by the extractor (both publishers use the same two).

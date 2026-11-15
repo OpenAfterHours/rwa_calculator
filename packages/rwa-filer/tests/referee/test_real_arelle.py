@@ -31,7 +31,6 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_filer.boe.catalogue import rulebook_for_module
 from rwa_filer.boe.engine import RuleResult, evaluate_rules
 from rwa_filer.model import CanonicalReturn, ReturnHeader
 from rwa_filer.referee import (
@@ -192,9 +191,8 @@ def desk_run(
     )
     filed = read_instance(written.content, pack=sample.pack)
     wanted = set(JOIN_RULES) | set(LOG_RULES)
-    rules = [
-        rule for rule in rulebook_for_module("PRA001").enforced("PRA001") if rule.rule_id in wanted
-    ]
+    assert filed.release.rulebook is not None
+    rules = [rule for rule in filed.release.rulebook.enforced("PRA001") if rule.rule_id in wanted]
     native = {result.rule_id: result for result in evaluate_rules(filed.ret, filed.pack, rules)}
     return referee, native
 

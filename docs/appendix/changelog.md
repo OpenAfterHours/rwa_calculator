@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **The Basel 3.1 filing package names the taxonomy release it is laid out
+  for.** `rwa_calc.reporting.filing.FILING_TAXONOMY` (`"4.1.1"`) is the release
+  our sheet maps, bindings and published-cell declarations are written against;
+  the canonical mapping and the filing package use it rather than `rwa-filer`'s
+  default, so a later release going live cannot move our figures before our
+  layout follows it. A reporting date outside that release's dates is no longer
+  refused: the filing package is built and its validation carries `rwa-filer`'s
+  `STR011` warning. Needs the `rwa-filer` release that adds taxonomy-release
+  selection (see `packages/rwa-filer/CHANGELOG.md`). No figure changes.
 - **Two vendored third-party agent skills, both MIT and copied verbatim.**
   `brag-slim` (from `latent-spaces/brag`) turns this project or a website into
   a short launch/demo video with music and share copy; its output directory

@@ -37,7 +37,27 @@
       "properties": {
         "module": { "type": "string" },
         "version": { "type": "string" },
-        "entry_point": { "type": "string" }
+        "entry_point": { "type": "string" },
+        "status": {
+          "description": "The module's status in this taxonomy release on run_date.",
+          "enum": ["live", "future", "superseded"]
+        },
+        "applies_from": { "type": "string", "format": "date" },
+        "applies_to": { "type": ["string", "null"], "format": "date" },
+        "run_date": { "type": "string", "format": "date" },
+        "chosen_by": {
+          "description": "default: the release live for the module (or its only future one); version: named by the user; pack: a library caller passed the pack.",
+          "enum": ["default", "version", "pack"]
+        },
+        "shipped": {
+          "description": "Every shipped release with a pack for the module, newest first.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "covers_reference_date": {
+          "description": "Whether the release's dates for the module cover the return's reference date; when not, the report carries STR011.",
+          "type": "boolean"
+        }
       }
     },
     "status": { "$ref": "#/$defs/status" },
@@ -60,6 +80,10 @@
         "templates_missing"
       ],
       "properties": {
+        "release_findings": {
+          "description": "Findings about the taxonomy release chosen (STR011): warnings, never blocking.",
+          "type": "integer"
+        },
         "structure_findings": { "type": "integer" },
         "rule_findings": { "type": "integer" },
         "blocking_findings": { "type": "integer" },

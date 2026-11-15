@@ -17,9 +17,9 @@ import pytest
 
 from boe_builders import T01, book, ref, rule
 from pack_builders import SAMPLE_MODULE, build_pack, build_return
-from rwa_filer.boe.catalogue import available_rulebooks, canonical_sha256, rulebook_for_module
+from rwa_filer.boe.catalogue import available_rulebooks, canonical_sha256
 from rwa_filer.boe.engine import Accuracy
-from rwa_filer.taxonomy.pack import resolve_pack
+from rwa_filer.release import resolve_release
 from rwa_filer.validate.identity import facts_sha256, identity_record, source_identity
 from rwa_filer.validate.returns import validate_return
 
@@ -102,15 +102,16 @@ def test_the_pack_digest_covers_the_files_the_pack_was_loaded_from(tmp_path: Pat
 
 def test_a_packaged_rule_book_is_named_by_its_file_and_its_content() -> None:
     # Arrange
-    rulebook = rulebook_for_module("PRA001")
-    assert rulebook.file in available_rulebooks()
+    release = resolve_release("PRA001")
+    rulebook = release.rulebook
+    assert rulebook is not None and rulebook.file in available_rulebooks()
     directory = Path(__file__).parents[2] / "src" / "rwa_filer" / "boe" / "data"
     payload = json.loads((directory / str(rulebook.file)).read_text(encoding="utf-8"))
 
     # Act
     record = identity_record(
         _return([]),
-        validate_return(_return([]), resolve_pack("PRA001", date(2027, 3, 31))),
+        validate_return(_return([]), release=release),
     )["rulebook"]
 
     # Assert

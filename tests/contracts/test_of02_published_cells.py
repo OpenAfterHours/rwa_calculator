@@ -44,9 +44,14 @@ from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.reporting.corep import c02_rows
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import get_c02_00_columns, get_c02_00_row_sections
-from rwa_calc.reporting.filing.canonical import FILING_MODULE, build_canonical_return
+from rwa_calc.reporting.filing.canonical import (
+    FILING_MODULE,
+    FILING_TAXONOMY,
+    build_canonical_return,
+)
 from rwa_filer.model import ReturnHeader
-from rwa_filer.taxonomy.pack import TaxonomyPack, resolve_pack
+from rwa_filer.release import resolve_release
+from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.returns import validate_return
 
 REFERENCE_DATE = dt.date(2027, 3, 31)
@@ -71,7 +76,7 @@ LAST_CREDIT_ROW = "0470"
 
 @pytest.fixture(scope="module")
 def pack() -> TaxonomyPack:
-    return resolve_pack(FILING_MODULE, REFERENCE_DATE)
+    return resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
 
 
 @pytest.fixture(scope="module")

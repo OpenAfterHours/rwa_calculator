@@ -5,7 +5,10 @@
 <div>
   <div class="small muted"><a href="/reference">Taxonomies &amp; rules</a></div>
   <h1>{{ entry.module }}</h1>
-  <p class="lede">{% if entry.pack %}Taxonomy {{ entry.pack.version }}, in force from {{ entry.pack.valid_from | long_date }}{% if entry.pack.valid_to %} to {{ entry.pack.valid_to | long_date }}{% endif %} · <span class="mono">{{ entry.pack.entry_point }}</span>{% else %}No taxonomy pack is packaged for this module: its rules can be read but a return cannot be validated.{% endif %}</p>
+  <p class="lede">{% if entry.pack %}Taxonomy {{ entry.release }} ({{ entry.status }}), in force from {{ entry.pack.valid_from | long_date }}{% if entry.pack.valid_to %} to {{ entry.pack.valid_to | long_date }}{% endif %} · <span class="mono">{{ entry.pack.entry_point }}</span>{% else %}Taxonomy {{ entry.release }} packages no taxonomy pack for this module: its rules can be read but a return cannot be validated.{% endif %}</p>
+  {% if entries | length > 1 %}
+  <p class="small" id="releases">Other shipped releases: {% for other in entries if other.release != entry.release %}<a href="{{ base }}?release={{ other.release }}">{{ other.release }}{% if other.status %} ({{ other.status }}){% endif %}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% endif %}
 </div>
 
 <div class="split">
@@ -23,6 +26,7 @@
   <section class="wide panel" id="rules" style="flex: 3 1 480px">
     <div class="panel-head"><h2>Rules enforced ({{ entry.enforced | count }})</h2><span class="small muted mono">{{ entry.rule_book or "no rule book" }}</span></div>
     <form method="get" action="{{ base }}" class="btn-row">
+      <input type="hidden" name="release" value="{{ entry.release }}">
       <label class="visually-hidden" for="q">Search rules</label>
       <input id="q" type="search" name="q" value="{{ query }}" placeholder="Rule ID or words in its label" style="flex: 1 1 240px">
       <button class="btn" type="submit">Search</button>
@@ -39,8 +43,8 @@
     </div>
     {% if pages > 1 %}
     <div class="pager">
-      {% if page > 1 %}<a class="btn btn-small" href="{{ link(base, q=query, page=page - 1) }}">Previous</a>{% endif %}
-      {% if page < pages %}<a class="btn btn-small" href="{{ link(base, q=query, page=page + 1) }}">Next</a>{% endif %}
+      {% if page > 1 %}<a class="btn btn-small" href="{{ link(base, release=entry.release, q=query, page=page - 1) }}">Previous</a>{% endif %}
+      {% if page < pages %}<a class="btn btn-small" href="{{ link(base, release=entry.release, q=query, page=page + 1) }}">Next</a>{% endif %}
     </div>
     {% endif %}
   </section>

@@ -9,10 +9,10 @@ import pytest
 
 from compare_builders import corporate_csv
 from dash_builders import HEADER, HEADER_FORM
-from rwa_filer.boe.catalogue import rulebook_for_module
 from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.compare import compare_page
 from rwa_filer.extras import MissingExtraError
+from rwa_filer.release import resolve_release, shipped_releases
 from rwa_filer.taxonomy.pack import available_packs
 from rwa_filer.workflow.diff import diff_returns
 
@@ -225,20 +225,24 @@ def test_a_pair_is_compared_once_however_often_the_page_is_drawn(
 # ---------------------------------------------------------------------------
 
 
-def test_the_reference_lists_every_packaged_pack(client: TestClient) -> None:
+def test_the_reference_lists_every_shipped_pack_under_its_release(client: TestClient) -> None:
     # Act
     page = client.get("/reference").text
 
     # Assert
-    for info in available_packs():
-        assert f'href="/reference/{info.module}"' in page
+    shipped = shipped_releases()
+    packs = [info for info in available_packs() if info.version in shipped]
+    assert packs, "no shipped pack: the page would be checked against nothing"
+    for info in packs:
+        assert f'href="/reference/{info.module}?release={info.version}"' in page
 
 
 def test_a_module_page_lists_its_tables_and_finds_rules_by_their_words(
     client: TestClient,
 ) -> None:
     # Arrange
-    rulebook = rulebook_for_module("PRA001")
+    rulebook = resolve_release("PRA001").rulebook
+    assert rulebook is not None
     enforced = rulebook.enforced("PRA001")
     target = next(rule for rule in enforced if rule.label and "PD floor" in rule.label)
 
@@ -253,6 +257,10 @@ def test_a_module_page_lists_its_tables_and_finds_rules_by_their_words(
 
 def test_an_unknown_module_is_not_found(client: TestClient) -> None:
     assert client.get("/reference/NOPE").status_code == 404
+
+
+def test_a_release_that_does_not_ship_the_module_is_not_found(client: TestClient) -> None:
+    assert client.get("/reference/PRA001?release=0.0.0").status_code == 404
 
 
 def test_a_workbook_without_the_excel_extra_is_refused_on_compare_too(

@@ -358,7 +358,9 @@ def test_a_file_that_is_not_a_readable_instance_is_refused(content: bytes, messa
 
 def test_an_entry_point_no_packaged_taxonomy_has_is_refused() -> None:
     # Arrange — a well-formed instance for a taxonomy this package does not carry.
-    with pytest.raises(InstanceFormatError, match="No packaged taxonomy has the entry point"):
+    with pytest.raises(
+        InstanceFormatError, match="No shipped taxonomy release has the entry point"
+    ):
         read_instance(foreign())
 
 
@@ -372,3 +374,8 @@ def test_a_zip_must_hold_exactly_one_instance() -> None:
     # Act / Assert
     with pytest.raises(InstanceFormatError, match="exactly one .xbrl"):
         read_instance(buffer.getvalue())
+
+
+def test_a_named_release_that_is_not_shipped_cannot_read_a_file() -> None:
+    with pytest.raises(InstanceFormatError, match=r"Taxonomy 9\.9\.9 is not shipped"):
+        read_instance(foreign(), taxonomy="9.9.9")

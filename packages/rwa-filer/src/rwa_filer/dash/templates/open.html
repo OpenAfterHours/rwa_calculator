@@ -15,12 +15,12 @@
 
 <div class="split">
   <form class="wide" method="post" action="/open" enctype="multipart/form-data">
-    {% call open_fields(values, modules) %}
+    {% call open_fields(values, modules, releases) %}
       <div class="btn-row">
         <button class="btn btn-primary" type="submit">Validate</button>
         <span class="small muted">Structure first, then the published rules. A PRA001 return takes a few seconds.</span>
       </div>
-      <div class="command">Same check on the command line: <span class="mono">rwa-filer validate FILE --entity LEI --reference-date YYYY-MM-DD --module PRA001</span></div>
+      <div class="command">Same check on the command line: <span class="mono">rwa-filer validate FILE --entity LEI --reference-date YYYY-MM-DD --module PRA001 [--taxonomy VERSION]</span></div>
     {% endcall %}
   </form>
 
@@ -47,7 +47,7 @@
     <section class="panel">
       <h2>Start from a blank template</h2>
       <p class="small muted" style="margin: 0">A workbook in the template layout, one worksheet per table and sheet, with the cells the taxonomy does not accept shaded grey.</p>
-      <div class="command"><span class="mono">rwa-filer template --module PRA001 --reference-date 2027-03-31 --out return.xlsx</span></div>
+      <div class="command"><span class="mono">rwa-filer template --module PRA001 --out return.xlsx</span></div>
     </section>
   </aside>
 </div>

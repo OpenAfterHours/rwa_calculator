@@ -19,6 +19,7 @@ Key responsibilities:
   page drawn after a change validates; every later one reuses its result.
 - Compare two opened returns once per pair: a comparison evaluates every rule
   on both, and a page redrawn to filter its cells must not do that again.
+- Open a return again against another taxonomy release, beside the first.
 - Keep uploaded files under the one directory the session owns, under names a
   browser cannot steer outside it.
 - Be safe to call from the server's worker threads.
@@ -38,7 +39,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
-from rwa_filer.readers import SourceReading, open_source
+from rwa_filer.readers import HeaderFields, SourceReading, open_source
 from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.adjustments import AdjustmentError, apply_adjustments
@@ -50,7 +51,7 @@ if TYPE_CHECKING:
 
     from rwa_filer.filing import FilingPackage
     from rwa_filer.model import CanonicalReturn
-    from rwa_filer.readers import HeaderFields
+    from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.returns import ReturnValidation
     from rwa_filer.workflow.adjustments import Adjustment, AppliedAdjustment
@@ -96,6 +97,11 @@ class OpenedReturn:
     def ret(self) -> CanonicalReturn:
         """The return itself."""
         return self.reading.ret
+
+    @property
+    def release(self) -> Release:
+        """The taxonomy release the return was validated against, and why."""
+        return self.validation.release
 
     @property
     def pack(self) -> TaxonomyPack:
@@ -154,10 +160,15 @@ class FilingRecord:
 
 
 class Workspace:
-    """The returns opened in this session, and the directory its files live in."""
+    """The returns opened in this session, and the directory its files live in.
 
-    def __init__(self, directory: Path) -> None:
+    ``taxonomy`` is the release a return is opened against when none is named
+    for it (``rwa-filer dash --taxonomy``); ``None`` for the default release.
+    """
+
+    def __init__(self, directory: Path, *, taxonomy: str | None = None) -> None:
         self.directory = directory
+        self.taxonomy = taxonomy
         self._returns: dict[str, OpenedReturn] = {}
         self._adjustments: dict[str, dict[Cell, Adjustment]] = {}
         #: Bumped on every change of a return's drafts; the key its working return is kept under.
@@ -168,20 +179,31 @@ class Workspace:
         self._lock = threading.Lock()
 
     def open(
-        self, path: Path, fields: HeaderFields | None = None, *, name: str | None = None
+        self,
+        path: Path,
+        fields: HeaderFields | None = None,
+        *,
+        name: str | None = None,
+        taxonomy: str | None = None,
     ) -> OpenedReturn:
         """Read and validate ``path``, and keep it under a new id.
+
+        Args:
+            path: The file.
+            fields: Header fields given beside it.
+            name: The name to show it under; defaults to the file's.
+            taxonomy: The release to validate it against, by version; defaults
+                to the workspace's, else the default release for the module.
 
         Raises:
             ValueError: the file is missing, unsupported, lacks a header it
                 needs, or is not readable as what its suffix says it is.
-            PackNotFoundError: no taxonomy pack is packaged for the return's
-                module and reference date.
+            ReleaseNotFoundError: the taxonomy release could not be resolved.
         """
-        reading = open_source(path, fields)
+        reading = open_source(path, fields, taxonomy=taxonomy or self.taxonomy)
         validation = validate_return(
             reading.ret,
-            reading.pack,
+            release=reading.release,
             source_findings=reading.findings,
             source=source_identity(path),
         )
@@ -197,6 +219,28 @@ class Workspace:
             self._returns[opened.return_id] = opened
         logger.info("opened %s as %s", opened.name, opened.return_id)
         return opened
+
+    def reopen(self, opened: OpenedReturn, taxonomy: str) -> OpenedReturn:
+        """Open ``opened``'s file again, against another taxonomy release.
+
+        The return keeps its header — the one it was opened with, overrides
+        included — and is kept under a new id beside the first, so the two can
+        be compared. Drafted overrides are not carried across: a cell one
+        release accepts may not exist in another.
+
+        Raises:
+            ValueError: the file can no longer be read.
+            ReleaseNotFoundError: the release cannot read it.
+        """
+        header = opened.ret.header
+        fields = HeaderFields(
+            entity=header.entity_identifier,
+            reference_date=header.reference_date,
+            module=header.module,
+            currency=header.currency,
+            entity_scheme=header.entity_scheme,
+        )
+        return self.open(opened.path, fields, name=opened.name, taxonomy=taxonomy)
 
     def save_upload(self, filename: str, content: bytes) -> Path:
         """Write an uploaded file into the workspace and return where it went.
@@ -308,7 +352,7 @@ def _work_out(opened: OpenedReturn, drafts: tuple[Adjustment, ...]) -> WorkingRe
         return WorkingReturn(opened=opened, current=opened, drafts=drafts, problem=str(exc))
     validation = validate_return(
         ret,
-        opened.pack,
+        release=opened.release,
         source_findings=opened.reading.findings,
         source=opened.validation.source,
     )
@@ -320,8 +364,10 @@ def _work_out(opened: OpenedReturn, drafts: tuple[Adjustment, ...]) -> WorkingRe
 
 
 def _reading(opened: OpenedReturn) -> SourceReading:
-    """What reading the return established, with the pack it was validated against."""
-    return SourceReading(ret=opened.reading.ret, pack=opened.pack, findings=opened.reading.findings)
+    """What reading the return established, with the release it was validated against."""
+    return SourceReading(
+        ret=opened.reading.ret, release=opened.release, findings=opened.reading.findings
+    )
 
 
 def safe_file_name(filename: str) -> str:

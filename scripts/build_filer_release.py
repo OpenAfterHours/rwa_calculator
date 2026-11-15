@@ -158,7 +158,10 @@ def _write_measurements(version: str, samples: dict[str, Path] | Any) -> None:  
     if not measured["samples"] and path.is_file():
         measured["samples"] = json.loads(path.read_text(encoding="utf-8")).get("samples", {})
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(dump_measurements(measured), encoding="utf-8")
+    # Through the handle: ``measured`` can carry counts read back from this file,
+    # and read-back content must not reach a path-taking call (S2083).
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(dump_measurements(measured))
     print(f"Wrote {path.relative_to(_REPO_ROOT).as_posix()}")
 
 

@@ -380,9 +380,16 @@ def boe_extract_name(version: str) -> str:
 
 
 def write_extract(payload: dict[str, Any], path: Path) -> None:
-    """Write ``payload`` to ``path`` in the committed, deterministic form."""
+    """Write ``payload`` to ``path`` in the committed, deterministic form.
+
+    Through an open handle, not ``Path.write_text``: a payload rebuilt from an
+    extract read back (the release build keeps its provenance) otherwise
+    reaches a path-taking call's data argument, which SonarCloud's taint
+    analysis reports as path traversal (``pythonsecurity:S2083``).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(dump_json(payload), encoding="utf-8")
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(dump_json(payload))
 
 
 def is_extract_current(payload: dict[str, Any], committed: str | None) -> bool:

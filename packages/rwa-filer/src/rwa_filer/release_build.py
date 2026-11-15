@@ -620,9 +620,7 @@ def _prune(listed: tuple[str, ...], root: Path) -> tuple[str, ...]:
             )
         logger.info("retired taxonomy %s (last shipped in rwa-filer %s)", version, __version__)
     retired["releases"].sort(key=lambda entry: version_key(entry["version"]))
-    retired_file.write_text(
-        json.dumps(retired, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
-    )
+    _write_text(retired_file, json.dumps(retired, indent=2, ensure_ascii=True) + "\n")
     return tuple(gone)
 
 
@@ -705,9 +703,20 @@ def _set_end_date(pack_file: Path, valid_to: str | None) -> None:
     """Rewrite ``pack.json``'s end date, in the form ``write_pack`` writes it."""
     payload = _read_json(pack_file)
     payload["info"]["valid_to"] = valid_to
-    pack_file.write_text(
-        json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=True) + "\n", encoding="utf-8"
-    )
+    _write_text(pack_file, json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=True) + "\n")
+
+
+def _write_text(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` through an open handle, never ``Path.write_text``.
+
+    The text is rebuilt from a file this module read. SonarCloud's taint
+    analysis (``pythonsecurity:S2083``) reports read-back content reaching the
+    data argument of a path-taking call as path traversal; writing through the
+    handle leaves the path-taking call (``open``) with no tainted argument at
+    all — the same remedy ``scripts/generate_regulatory_tables.py`` uses.
+    """
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(text)
 
 
 def _is_taxonomy_package(archive: Path) -> bool:

@@ -289,6 +289,49 @@ def test_a_filing_manual_breach_the_reader_can_see_is_reported(
     assert all(finding.is_blocking for finding in reading.findings)
 
 
+def test_a_breach_names_every_fact_or_context_it_is_about(pack: TaxonomyPack) -> None:
+    """The message quotes a count; ``positions`` say where, for every breach."""
+    # Arrange — two numeric facts without @decimals, and a context for someone else.
+    extra = """
+  <m:mi1 contextRef="total" unitRef="pounds">1500</m:mi1>
+  <context id="other">
+    <entity><identifier scheme="http://standards.iso.org/iso/17442">SOMEONE-ELSE</identifier></entity>
+    <period><instant>2027-03-31</instant></period>
+  </context>
+  <m:mi1 contextRef="other" unitRef="pounds">7</m:mi1>"""
+
+    # Act
+    reading = read_instance(foreign(extra), pack=pack)
+    by_rule = {finding.subject: finding for finding in reading.findings}
+
+    # Assert
+    assert [p.source_ref for p in by_rule["2.18"].positions] == [
+        "tst_met:mi1 in context total",
+        "tst_met:mi1 in context other",
+    ]
+    assert [p.source_ref for p in by_rule["2.9"].positions] == ["context other"]
+
+
+def test_a_fact_that_is_no_data_point_is_located_by_what_it_reports(pack: TaxonomyPack) -> None:
+    # Arrange
+    extra = """
+  <context id="odd">
+    <entity><identifier scheme="http://standards.iso.org/iso/17442">X</identifier></entity>
+    <period><instant>2027-03-31</instant></period>
+    <scenario><xbrldi:explicitMember dimension="d:BAS">ba:x9</xbrldi:explicitMember></scenario>
+  </context>
+  <m:mi1 contextRef="odd" unitRef="pounds" decimals="0">1</m:mi1>"""
+
+    # Act
+    reading = read_instance(foreign(extra), pack=pack)
+
+    # Assert
+    (unknown,) = [f for f in reading.findings if f.code == FINDING_UNKNOWN_DATAPOINT]
+    (position,) = unknown.positions
+    assert (position.source_ref, position.value) == ("tst_met:mi1[tst_dim:BAS=tst_BA:x9]", 1.0)
+    assert position.table is None
+
+
 # ---------------------------------------------------------------------------
 # What is not an instance at all
 # ---------------------------------------------------------------------------

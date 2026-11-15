@@ -34,6 +34,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from rwa_filer.readers import SourceReading, open_source
+from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.explain import Names
@@ -140,7 +141,12 @@ class Workspace:
                 module and reference date.
         """
         reading = open_source(path, fields)
-        validation = validate_return(reading.ret, reading.pack, source_findings=reading.findings)
+        validation = validate_return(
+            reading.ret,
+            reading.pack,
+            source_findings=reading.findings,
+            source=source_identity(path),
+        )
         opened = OpenedReturn(
             return_id=secrets.token_hex(4),
             name=name or path.name,

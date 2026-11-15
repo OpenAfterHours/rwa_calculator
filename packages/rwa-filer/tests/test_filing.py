@@ -329,3 +329,49 @@ def test_validation_uses_the_accuracy_the_file_is_written_with(
     # Assert
     assert thousands.written and thousands.validation.is_submittable
     assert not units.written and units.blocked_by == BLOCKED_BY_RULES
+
+
+# ---------------------------------------------------------------------------
+# The evidence behind the verdict
+# ---------------------------------------------------------------------------
+
+
+def test_the_manifest_binds_the_evidence_the_build_wrote(
+    pack: TaxonomyPack, tmp_path: Path
+) -> None:
+    # Act
+    package = build_filing(
+        ret(*SOUND), tmp_path / "out", pack=pack, rulebook=RULES, evidence=tmp_path / "e.jsonl"
+    )
+
+    # Assert — the manifest names the file by checksum, so a sign-off covers it.
+    assert package.written and package.evidence is not None and package.manifest_path is not None
+    manifest = json.loads(package.manifest_path.read_text())
+    recorded = manifest["evidence"]
+    assert recorded["file"] == "e.jsonl"
+    assert recorded["sha256"] == hashlib.sha256((tmp_path / "e.jsonl").read_bytes()).hexdigest()
+    assert recorded["evidence_id"] == manifest["identity"]["evidence_id"]
+    assert manifest["validation"]["status"] == "CLEAN"
+
+
+def test_a_blocked_build_still_writes_its_evidence(pack: TaxonomyPack, tmp_path: Path) -> None:
+    # Arrange — a figure in a greyed cell: nothing may be written.
+    broken = ret(*SOUND, ("T01.00.01.01", None, None, "0030", "0020", 0.5))
+
+    # Act
+    package = build_filing(
+        broken, tmp_path / "out", pack=pack, rulebook=RULES, evidence=tmp_path / "e.jsonl.gz"
+    )
+
+    # Assert
+    assert not package.written and package.blocked_by == BLOCKED_BY_STRUCTURE
+    assert package.evidence is not None and package.evidence.records["structure_exception"] == 1
+
+
+def test_a_build_without_evidence_records_none(pack: TaxonomyPack, tmp_path: Path) -> None:
+    # Act
+    package = build_filing(ret(*SOUND), tmp_path / "out", pack=pack, rulebook=RULES)
+
+    # Assert
+    assert package.evidence is None and package.manifest_path is not None
+    assert json.loads(package.manifest_path.read_text())["evidence"] is None

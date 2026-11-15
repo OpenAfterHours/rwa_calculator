@@ -10,6 +10,7 @@
     <h1>{{ header.module }} return at {{ header.reference_date | long_date }}</h1>
     <p class="lede">Entity <span class="mono">{{ header.entity_identifier }}</span> · {{ header.currency }} · taxonomy {{ current.pack.info.version }} · {{ current.ret.facts.height | count }} facts in {{ current.ret.tables | length }} tables · opened {{ current.opened_at | moment }}</p>
   </div>
+  <a class="btn" id="evidence-download" href="/returns/{{ current.return_id }}/evidence.jsonl" style="align-self: center" title="Every rule outcome, evaluation and comparison behind this verdict, as JSON Lines">Download evidence</a>
 </div>
 
 {% if view.submittable %}

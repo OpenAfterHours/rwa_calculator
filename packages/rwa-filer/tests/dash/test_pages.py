@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from html import unescape
 from typing import TYPE_CHECKING
@@ -78,6 +79,26 @@ def test_a_return_nothing_blocks_reads_submittable(client: TestClient, clean_csv
     # Assert
     assert 'data-verdict="submittable"' in page
     assert "SUBMITTABLE" in page
+
+
+def test_the_evidence_behind_the_verdict_downloads_as_json_lines(
+    client: TestClient, broken_csv: Path
+) -> None:
+    # Arrange
+    overview = client.get(_open(client, broken_csv, **HEADER_FORM)).text
+    (link,) = re.findall(r'id="evidence-download" href="([^"]+)"', overview)
+
+    # Act
+    response = client.get(link)
+
+    # Assert
+    lines = [json.loads(line) for line in response.text.splitlines()]
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert "broken.evidence.jsonl" in response.headers["content-disposition"]
+    assert lines[0]["record"] == "header" and lines[-1]["record"] == "trailer"
+    assert lines[0]["status"] == "BLOCKED"
+    assert lines[0]["identity"]["input"]["file"] == "broken.csv"
 
 
 def test_an_unblocked_return_left_incomplete_says_so(client: TestClient, clean_csv: Path) -> None:

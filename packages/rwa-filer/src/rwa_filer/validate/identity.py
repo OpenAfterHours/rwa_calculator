@@ -87,8 +87,9 @@ def identity_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[
     """The ``identity`` block: every input of the verdict, fingerprinted.
 
     ``evidence_id`` covers the generator, the facts and header, the taxonomy
-    pack, the rule book and the settings — not the source file's name, format
-    or bytes, which are recorded beside it.
+    pack, the rule book and the accuracy's value — not the source file's name,
+    format or bytes, nor whether the accuracy was the default, which are
+    recorded beside it.
     """
     info = validation.pack.info
     rulebook = validation.rulebook
@@ -133,8 +134,10 @@ def identity_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[
         },
     }
     identified = {
-        **{key: record[key] for key in ("generator", "taxonomy", "rulebook", "settings")},
+        **{key: record[key] for key in ("generator", "taxonomy", "rulebook")},
         "input": {key: record["input"][key] for key in ("facts_sha256", "facts", "header")},
+        # The accuracy's value is an input; how it was chosen is not.
+        "accuracy": [accuracy.monetary_decimals, accuracy.percentage_decimals],
     }
     return {"evidence_id": canonical_sha256(identified), **record}
 

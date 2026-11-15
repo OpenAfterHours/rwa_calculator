@@ -418,7 +418,11 @@ def _build(args: argparse.Namespace) -> int:
     now = datetime.now(UTC)
     if args.adjustments is not None and not args.author:
         return _fail("--adjustments needs --author: an override is recorded against a name")
-    problem = _unwritable(args.out, "--out", directory=True) or _unwritable(args.ledger, "--ledger")
+    problem = (
+        _unwritable(args.out, "--out", directory=True)
+        or _unwritable(args.ledger, "--ledger")
+        or _unwritable(args.evidence, "--evidence")
+    )
     if problem:
         return _fail(problem)
     try:
@@ -444,12 +448,19 @@ def _build(args: argparse.Namespace) -> int:
             always_zip=args.zip,
             source_findings=source.findings,
             adjustments=applied,
+            evidence=args.evidence,
+            source=source_identity(args.file),
         )
     except (ValueError, PackNotFoundError) as exc:
         return _fail(str(exc))
     source = replace(source, ret=ret)
 
     _out(render_text(source.ret, package.validation))
+    if package.evidence is not None:
+        _out(
+            f"\nWrote {package.evidence.path}: the evidence behind this verdict "
+            f"({package.evidence.records['evaluation']} evaluation(s))."
+        )
     if not package.written:
         reason = (
             "the return cannot be expressed in the taxonomy until the structure findings are fixed"

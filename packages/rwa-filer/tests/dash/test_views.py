@@ -8,7 +8,7 @@ import pytest
 
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 from rwa_filer.dash.grid import display_value, failure_marks, template_grid
-from rwa_filer.dash.views import RULES_PER_PAGE, overview, rules_page, title_case
+from rwa_filer.dash.views import RULES_PER_PAGE, overview, rule_label, rules_page, title_case
 from rwa_filer.dash.workspace import safe_file_name
 
 if TYPE_CHECKING:
@@ -131,6 +131,46 @@ def test_the_grid_opens_on_a_flagged_sheet_with_a_flagged_cell_picked(
     assert grid is not None
     assert grid.page.marks > 0
     assert grid.cell is not None and grid.cell.marks
+
+
+def test_the_picked_cell_carries_each_rule_that_read_it_in_full(broken: OpenedReturn) -> None:
+    """The cell panel explains a rule in place, so it needs the rule's text, not just its ID."""
+    # Arrange — OF 07.00 r0010 c0010 on sheet 0008, read by several broken rules.
+    place = ("OF07.00.01.01", "0008", None, "0010", "0010")
+
+    # Act
+    grid = template_grid(broken, table=place[0], sheet=place[1], row=place[3], column=place[4])
+
+    # Assert — one entry per mark, each with the publisher's label and expression.
+    assert grid is not None
+    assert grid.cell is not None
+    rules = grid.cell.rules
+    assert [item.mark for item in rules] == list(grid.cell.marks)
+    assert all(item.rule.row.label == rule_label("PRA001", item.mark.rule_id) for item in rules)
+    assert all(item.rule.row.label and item.rule.expression for item in rules)
+
+
+def test_the_picked_cell_keeps_only_the_breaks_that_read_it(broken: OpenedReturn) -> None:
+    # Arrange — boe_b0713 breaks once per column; only its column 0010 break reads c0010.
+    place = ("OF07.00.01.01", "0008", None, "0010", "0010")
+    report = broken.validation.report
+    assert report is not None
+    every = next(result for result in report.results if result.rule_id == "boe_b0713").failures
+    assert len(every) > 1, "a rule with one break leaves nothing to narrow — this proves nothing"
+
+    # Act
+    grid = template_grid(broken, table=place[0], sheet=place[1], row=place[3], column=place[4])
+
+    # Assert
+    assert grid is not None
+    assert grid.cell is not None
+    kept = next(item for item in grid.cell.rules if item.mark.rule_id == "boe_b0713").rule.failures
+    assert kept
+    assert len(kept) < len(every)
+    assert all(
+        any((a.table, a.sheet, a.open_key, a.row, a.column) == place for a in failure.addresses)
+        for failure in kept
+    )
 
 
 def test_the_grid_lays_a_table_out_in_the_taxonomys_rows_and_columns(

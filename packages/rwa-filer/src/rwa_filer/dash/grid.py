@@ -14,6 +14,9 @@ Key responsibilities:
 - Mark every cell a broken rule read, from the addresses the engine records
   for each failing evaluation — including the empty cells a rule read at its
   default, which are often what the break is about.
+- Explain each broken rule that read the picked cell in full — its label, its
+  expression and the breaks that read the cell — so the panel beside the grid
+  can say what the rule is without sending the reader to another page.
 
 References:
 - rwa_filer.taxonomy.pack — ``Table`` (rows, columns, sheets) and ``cells``
@@ -23,24 +26,28 @@ References:
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
 import polars as pl
 
 from rwa_filer.boe.catalogue import SEVERITY_ERROR
 from rwa_filer.boe.engine import STATUS_FAIL
-from rwa_filer.dash.views import title_case
+from rwa_filer.dash.views import rule_detail, title_case
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from rwa_filer.boe.engine import CellAddress
+    from rwa_filer.dash.views import RuleDetail
     from rwa_filer.dash.workspace import OpenedReturn
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
     from rwa_filer.workflow.adjustments import Adjustment
 
 #: A cell's coordinates within one table: sheet, open-axis key, row, column.
 _Place = tuple[str | None, str | None, str, str]
+#: A cell's coordinates in the return: table, sheet, open-axis key, row, column.
+_Address = tuple[str, str | None, str | None, str, str]
 
 _PERCENTAGE: Final = "percentage"
 _INTEGER: Final = "integer"
@@ -114,6 +121,18 @@ class TableChoice:
 
 
 @dataclass(frozen=True)
+class CellRule:
+    """A broken rule that read the picked cell, as the cell panel explains it.
+
+    ``rule`` is the rule in full, as the rules page details it, except that its
+    ``failures`` are only the recorded breaks that read this cell.
+    """
+
+    mark: Mark
+    rule: RuleDetail
+
+
+@dataclass(frozen=True)
 class CellDetail:
     """The cell the person picked, in full."""
 
@@ -126,6 +145,7 @@ class CellDetail:
     reportable: bool
     marks: tuple[Mark, ...]
     override: Adjustment | None = None
+    rules: tuple[CellRule, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -207,6 +227,11 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
     picked = (row, column) if (row, column) in reportable | set(values) else None
     if picked is None and page_marks:
         picked = min(page_marks, key=lambda place: _order(rows, columns, place))
+    picked_rules = (
+        _cell_rules(opened, (table, page.sheet, page.open_key, *picked), page_marks[picked])
+        if picked in page_marks
+        else ()
+    )
     grid_rows = tuple(
         GridRow(
             code=code,
@@ -239,7 +264,9 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
         page=page,
         columns=columns,
         rows=grid_rows,
-        cell=_detail(picked, rows, columns, values, types, reportable, page_marks, overrides),
+        cell=_detail(
+            picked, rows, columns, values, types, reportable, page_marks, overrides, picked_rules
+        ),
         focus=focus,
         values=page_facts.height,
     )
@@ -394,6 +421,28 @@ def _override_text(adjustment: Adjustment | None, data_type: str) -> str | None:
     return display_value(adjustment.value, adjustment.text_value, data_type)
 
 
+def _cell_rules(
+    opened: OpenedReturn, place: _Address, marks: tuple[Mark, ...]
+) -> tuple[CellRule, ...]:
+    """Each rule marking the cell at ``place``, with only the breaks that read it."""
+    explained = []
+    for mark in marks:
+        detail = rule_detail(opened, mark.rule_id)
+        if detail is None:
+            continue
+        reading = tuple(
+            failure
+            for failure in detail.failures
+            if any(_address(item) == place for item in failure.addresses)
+        )
+        explained.append(CellRule(mark=mark, rule=replace(detail, failures=reading)))
+    return tuple(explained)
+
+
+def _address(address: CellAddress) -> _Address:
+    return address.table, address.sheet, address.open_key, address.row, address.column
+
+
 def _detail(  # noqa: PLR0913 - the parts of one cell, each from its own source
     picked: tuple[str, str] | None,
     rows: tuple[tuple[str, str], ...],
@@ -403,6 +452,7 @@ def _detail(  # noqa: PLR0913 - the parts of one cell, each from its own source
     reportable: set[tuple[str, str]],
     marks: dict[tuple[str, str], tuple[Mark, ...]],
     overrides: dict[tuple[str, str], Adjustment],
+    rules: tuple[CellRule, ...],
 ) -> CellDetail | None:
     if picked is None:
         return None
@@ -418,4 +468,5 @@ def _detail(  # noqa: PLR0913 - the parts of one cell, each from its own source
         reportable=picked in reportable,
         marks=marks.get(picked, ()),
         override=overrides.get(picked),
+        rules=rules,
     )

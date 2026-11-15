@@ -142,7 +142,8 @@ def test_the_picked_cell_carries_each_rule_that_read_it_in_full(broken: OpenedRe
     grid = template_grid(broken, table=place[0], sheet=place[1], row=place[3], column=place[4])
 
     # Assert — one entry per mark, each with the publisher's label and expression.
-    assert grid is not None and grid.cell is not None
+    assert grid is not None
+    assert grid.cell is not None
     rules = grid.cell.rules
     assert [item.mark for item in rules] == list(grid.cell.marks)
     assert all(item.rule.row.label == rule_label("PRA001", item.mark.rule_id) for item in rules)
@@ -161,9 +162,11 @@ def test_the_picked_cell_keeps_only_the_breaks_that_read_it(broken: OpenedReturn
     grid = template_grid(broken, table=place[0], sheet=place[1], row=place[3], column=place[4])
 
     # Assert
-    assert grid is not None and grid.cell is not None
+    assert grid is not None
+    assert grid.cell is not None
     kept = next(item for item in grid.cell.rules if item.mark.rule_id == "boe_b0713").rule.failures
-    assert kept and len(kept) < len(every)
+    assert kept
+    assert len(kept) < len(every)
     assert all(
         any((a.table, a.sheet, a.open_key, a.row, a.column) == place for a in failure.addresses)
         for failure in kept

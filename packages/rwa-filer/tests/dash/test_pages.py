@@ -350,7 +350,9 @@ def test_the_cell_panel_explains_each_broken_rule_without_leaving_the_page(
     assert report is not None
     rule = next(item for item in report.results if item.rule_id == "boe_b0713")
     detail = rules_page(broken, rule_id=rule.rule_id).selected
-    assert detail is not None and detail.row.label and detail.expression
+    assert detail is not None
+    assert detail.row.label
+    assert detail.expression
     reading = next(
         failure
         for failure in rule.failures
@@ -364,7 +366,8 @@ def test_the_cell_panel_explains_each_broken_rule_without_leaving_the_page(
     card = panel[panel.index(rule.rule_id) :]
     card = card[: card.index("</details>")]
     assert detail.row.label in card
-    assert "<details" in card and detail.expression in card
+    assert "<details" in card
+    assert detail.expression in card
     assert all(cell in card for cell in reading.cells)
 
 

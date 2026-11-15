@@ -8,9 +8,60 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Added
 - (Next release changes will go here)
+- **Choosing the taxonomy release.** `rwa-filer` can now ship several taxonomy
+  releases, and a run uses one: the one `--taxonomy VERSION` names, on every
+  command that reads a return (`validate`, `build`, `diff`, `compare`, `dash`,
+  `template`, `referee`), or by default the release **live** for the return's
+  module on the day of the run. A module with no live release uses its only
+  future one; with several, the run stops and asks for a version. Status
+  belongs to a module (in 4.1.1, PRA001 and PRA116 are future until 1 January
+  2027; the other twelve modules are live). Library: `rwa_filer.release`
+  (`resolve_release`, `Release`, `shipped_releases`, `ReleaseNotFoundError`),
+  and `taxonomy=` / `today=` (or `release=`) on `validate_return`,
+  `build_filing`, `write_instance`, `read_instance`, `open_source` and
+  `compare_returns`. The shipped releases are listed in `releases.json`;
+  those no longer shipped in `retired.json`, so naming one says which
+  `rwa-filer` version last shipped it.
+- **Every run says which release it used and why.** The text report (straight
+  after the verdict), `build`, `compare` and `template` print the release, how
+  it was chosen and the module's status in it, and each other shipped release
+  with the option that selects it. The JSON report and the build manifest
+  carry it in their `taxonomy` block (`status`, `applies_from`, `applies_to`,
+  `run_date`, `chosen_by`, `shipped`, `covers_reference_date`). `taxonomy list`
+  shows every shipped release's modules with their status and which one a run
+  uses by default (`--module` narrows it); `--version` lists the releases. The
+  dashboard shows the release in the top bar, offers a switch that opens the
+  return again against another release, has a release choice on its open
+  form, and lists the reference pages per release.
+- **`STR011`** (Warning): the return's reference date is outside the dates the
+  chosen release gives its module. Reported in `ReturnValidation.release_findings`;
+  it never blocks a build.
+- **Building a release from the Bank's files** (`rwa_filer.release_build`, run
+  by the repository's `scripts/build_filer_release.py`): compile every module,
+  package it only when the Bank's sample agrees, import every rule book, and
+  `--check` that a packaged release is exactly what the files give — run on the
+  4.1.1 downloads, it is byte for byte. Each release's measured numbers are
+  kept beside its tests.
 
 ### Changed
 - (Next release changes will go here)
+- **Breaking:** `taxonomy.pack.resolve_pack` / `select_pack` and
+  `boe.catalogue.rulebook_for_module` are removed; use
+  `rwa_filer.release.resolve_release`, which returns the pack and the rule book
+  of one release together. `rulebook_for_module` took the first rule book by
+  file name, so a second shipped release would have paired its pack with an
+  older release's rules. `ReturnValidation`, `InstanceReading` and
+  `SourceReading` carry the `release` (their `pack` is now read from it), and
+  lookup failures raise `ReleaseNotFoundError` in place of `PackNotFoundError`.
+- A reference date outside the release's dates is the `STR011` Warning. It was
+  a blocking `STR008` for an XBRL file and a hard stop (`PackNotFoundError`) for
+  any other input. `rwa-filer template` no longer needs `--reference-date`; given,
+  it only warns when the release does not cover it.
+- The 14 packaged `pack.json` files record the taxonomy package under the name the
+  Bank publishes it as, `boe-banking-v411.zip`; no other part of them changed.
+- The template-level engine reads the Bank's workbook by column name instead of
+  position, so a column the Bank adds or moves no longer shifts a field, and
+  finds its Basel 3.1 extract as the newest one packaged.
 - `rwa-filer dash`, Templates: the selected-cell panel now explains each broken
   rule where it stands, instead of only linking to the Rules page. Every rule
   carries the publisher's description, and **Read the rule** expands it in

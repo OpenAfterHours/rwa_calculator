@@ -1,11 +1,65 @@
 # Taxonomy release selection in rwa-filer
 
-**Status:** Proposed 2026-11-15. D2, D3, D7 and D8 were revised the same day: there is
-no cap on the number of releases, the data stays inside rwa-filer, and any release other
-than the live one is chosen by its version number. Nothing is implemented. Written against `f52dba0`
-(rwa-filer 0.1.2), which ships one release: Bank of England banking taxonomy 4.1.1.
-Scope is `packages/rwa-filer`; [§9](#9-effect-on-rwa-calc) lists the knock-on in
-rwa-calc.
+**Status:** Implemented 2026-11-15 — see [Outcome](#outcome-what-was-built) for
+what landed and where it departs from the design below. The body is left as
+proposed (decisions D2, D3, D7 and D8 were revised the same day: no cap on the
+number of releases, the data stays inside rwa-filer, and any release other than
+the live one is chosen by its version number). Written against `f52dba0`
+(rwa-filer 0.1.2), which ships one release: Bank of England banking taxonomy
+4.1.1. Scope is `packages/rwa-filer`; [§9](#9-effect-on-rwa-calc) lists the
+knock-on in rwa-calc.
+
+## Outcome — what was built
+
+All seven slices landed. Verified on the Bank's real 4.1.1 publication, downloaded
+from its banking reporting page: `scripts/build_filer_release.py 4.1.1 --check`
+reproduces the packaged release byte for byte — 14 packs, 11 rule books and the
+template-level extract — and refuses the same 10 modules as before (PRA110,
+PRA115, RFB001–008, each because the Bank's sample holds facts its compiled pack
+lacks). The opt-in suites against the Bank's files pass on it.
+
+Where the build departs from the design:
+
+- **The build logic is a package module**, `rwa_filer.release_build`, with
+  `scripts/build_filer_release.py` a thin command over it (§7.3 said a script),
+  so it is tested on the compiler tests' miniature publication.
+- **The Bank's downloads are read from a fixed folder**,
+  `.taxonomy/boe-banking-<version>/`, not `--from DIR`: a path built from the
+  command line is a `pythonsecurity:S8707` sink (`arch_check` check 19). The
+  release is chosen by name from `releases.json`.
+- **The validation report keeps its verdict first**; the release lines follow it
+  (§5.5 said the first line). `build` (whose output is the report), `compare`
+  (after its verdict) and `template` show them too. **`diff` shows none**: it
+  uses a release only to read an XBRL file.
+- **`STR011` is reported apart from the structure findings**, in
+  `ReturnValidation.release_findings`, so "blocked by structure" keeps its
+  meaning and neither the writer nor the build is held up by it. The reference-
+  date branch of `STR008` (blocking, on the XBRL path only) is gone.
+- **`chosen_by` has a third value, `pack`**, for a library caller that passes the
+  pack itself; its rule book is the shipped one of the pack's own release.
+- **The test files are** `test_release.py` (the resolver), `test_shipped_releases.py`
+  (§7.1's contract tests and the size budget), `test_release_build.py` and
+  `test_release_measurements.py` (the packaged data held to its measurement file).
+- **No command regenerates the Arelle oracles** (§7.4): it needs Arelle and about
+  3 GB per return. The oracles moved to `tests/releases/4.1.1/oracles/` and are
+  chosen by the downloads' own release; a release without them skips those tests.
+- **The finer 4.1.1 findings of the compiler's opt-in test** (which tables gain
+  linkbase-only cells, how many sample facts share a data point) stay as
+  constants, checked only against the 4.1.1 downloads; its headline counts come
+  from the measurement file.
+- **The 14 `pack.json` files changed by one field**: the taxonomy package is now
+  recorded under the name the Bank publishes it as (`boe-banking-v411.zip`); they
+  had been compiled from a local copy named `boe411.zip`.
+- **rwa-calc names the release its estate is laid out for**
+  (`FILING_TAXONOMY = "4.1.1"`) rather than taking rwa-filer's default (§9 said
+  its callers move to the resolver).
+- **The template-level extract keeps its provenance on a rebuild** (the file it
+  was read from and when it was retrieved), so a rebuild of the same release
+  reproduces it.
+
+Still open: question 1 of [§10](#10-open-questions). The build leaves a module
+whose entry point a newer release does not change open-ended in both releases,
+so `live` picks the newer; settle it before a second release ships.
 
 ## 1. The change in one paragraph
 

@@ -7,19 +7,23 @@ checkout's package source; nothing here is shipped.
 
 Usage:
     # Package a release listed in releases.json (and retire any no longer listed)
-    uv run python scripts/build_filer_release.py 4.2.0 --from ~/downloads/boe-4.2.0
+    uv run python scripts/build_filer_release.py 4.2.0
 
     # Rebuild in a scratch folder and fail on any file that differs
-    uv run python scripts/build_filer_release.py 4.1.1 --from ~/downloads/boe-4.1.1 --check
+    uv run python scripts/build_filer_release.py 4.1.1 --check
 
     # Re-measure a packaged release without the Bank's files (keeps the sample counts)
     uv run python scripts/build_filer_release.py 4.1.1 --measure-only
 
-``--from`` is a folder holding the Bank's downloads for the release — the
-taxonomy package zip, and the DPM, validations and sample-instances zips (or
-their unpacked contents). Each build and each check writes the release's
-measurement file, ``packages/rwa-filer/tests/releases/<version>/measurements.json``:
-the numbers its tests hold it to, re-measured, never typed.
+The Bank's downloads for a release are read from ``.taxonomy/boe-banking-<version>/``
+at the repository root (git-ignored, beside the referee's taxonomy package): the
+taxonomy package zip, and the DPM, validations and sample-instances zips, or
+their unpacked contents. The location is fixed on purpose — a path built from
+the command line is a ``pythonsecurity:S8707`` sink (``arch_check`` check 19);
+a caller that needs another folder imports ``rwa_filer.release_build`` and
+passes it. Each build and each check writes the release's measurement file,
+``packages/rwa-filer/tests/releases/<version>/measurements.json``: the numbers
+its tests hold it to, re-measured, never typed.
 
 Exit codes:
     0  built, checked identical, or measured
@@ -41,19 +45,30 @@ import time
 from pathlib import Path
 from typing import Any
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-PACKAGE_ROOT = _REPO_ROOT / "packages" / "rwa-filer" / "src" / "rwa_filer"
-MEASUREMENTS_ROOT = _REPO_ROOT / "packages" / "rwa-filer" / "tests" / "releases"
-
-from rwa_filer.release_build import (  # noqa: E402
+from rwa_filer.release_build import (
     BankFilesError,
     build_release,
     check_release,
     dump_measurements,
     find_bank_files,
     listed_applies_from,
+    listed_releases,
     measure_release,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+PACKAGE_ROOT = _REPO_ROOT / "packages" / "rwa-filer" / "src" / "rwa_filer"
+MEASUREMENTS_ROOT = _REPO_ROOT / "packages" / "rwa-filer" / "tests" / "releases"
+
+#: The releases releases.json lists. The command line picks one BY NAME; every
+#: path below is a constant of the release it names, not built from argv.
+RELEASES: dict[str, str] = {version: version for version in listed_releases(PACKAGE_ROOT)}
+DOWNLOADS: dict[str, Path] = {
+    version: _REPO_ROOT / ".taxonomy" / f"boe-banking-{version}" for version in RELEASES
+}
+MEASUREMENTS: dict[str, Path] = {
+    version: MEASUREMENTS_ROOT / version / "measurements.json" for version in RELEASES
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,9 +76,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Build, check or re-measure one rwa-filer taxonomy release."
     )
-    parser.add_argument("version", help="the release, as releases.json lists it, e.g. 4.2.0")
     parser.add_argument(
-        "--from", dest="source", type=Path, metavar="DIR", help="the Bank's downloads"
+        "version", choices=sorted(RELEASES), help="the release, as releases.json lists it"
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -78,22 +92,33 @@ def main(argv: list[str] | None = None) -> int:
     package_logger = logging.getLogger("rwa_filer")
     package_logger.addHandler(handler)
     package_logger.setLevel(logging.INFO)
-    if not args.measure_only and args.source is None:
-        parser.error("--from DIR is required unless --measure-only is given")
+    version = RELEASES[args.version]
+    source = DOWNLOADS[version]
 
     started = time.perf_counter()
+    if args.measure_only:
+        _write_measurements(version, None)
+        print(f"\nMeasured taxonomy {version} in {time.perf_counter() - started:.0f}s.")
+        return 0
+    if not source.is_dir():
+        print(
+            f"error: put the Bank's downloads for {version} in "
+            f"{source.relative_to(_REPO_ROOT).as_posix()}/ (the taxonomy package zip and the "
+            "DPM, validations and sample-instances zips)",
+            file=sys.stderr,
+        )
+        return 1
     try:
-        applies_from = listed_applies_from(PACKAGE_ROOT, args.version)
-        files = find_bank_files(args.source) if args.source is not None else None
+        applies_from = listed_applies_from(PACKAGE_ROOT, version)
+        files = find_bank_files(source)
     except (BankFilesError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
     if args.check:
-        assert files is not None  # noqa: S101 — --from is required above
-        differences = check_release(args.version, files, PACKAGE_ROOT, applies_from=applies_from)
-        _write_measurements(args.version, files.samples)
-        print(f"\nChecked taxonomy {args.version} in {time.perf_counter() - started:.0f}s")
+        differences = check_release(version, files, PACKAGE_ROOT, applies_from=applies_from)
+        _write_measurements(version, files.samples)
+        print(f"\nChecked taxonomy {version} in {time.perf_counter() - started:.0f}s")
         if differences:
             for difference in differences:
                 print(f"  [DIFF] {difference}")
@@ -101,10 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         print("  [OK] the packaged release is exactly what the Bank's files yield")
         return 0
 
-    if files is not None:
-        build = build_release(args.version, files, PACKAGE_ROOT, applies_from=applies_from)
-        _print_build(build)
-    _write_measurements(args.version, files.samples if files is not None else None)
+    build = build_release(version, files, PACKAGE_ROOT, applies_from=applies_from)
+    _print_build(build)
+    _write_measurements(version, files.samples)
     print(f"\nDone in {time.perf_counter() - started:.0f}s. Review the diff before committing.")
     return 0
 
@@ -129,7 +153,7 @@ def _write_measurements(version: str, samples: dict[str, Path] | Any) -> None:  
 
     Without the Bank's samples, the sample counts measured before are kept.
     """
-    path = MEASUREMENTS_ROOT / version / "measurements.json"
+    path = MEASUREMENTS[version]
     measured = measure_release(version, PACKAGE_ROOT, samples=samples)
     if not measured["samples"] and path.is_file():
         measured["samples"] = json.loads(path.read_text(encoding="utf-8")).get("samples", {})

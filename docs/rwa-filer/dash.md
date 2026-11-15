@@ -34,6 +34,7 @@ The address carries this session's token: keep it to yourself. Ctrl+C stops it.
 |--------|--------------|
 | `FILE` | A return to open as the dashboard starts: `.parquet`, `.csv`, `.xlsx`, `.xbrl` or a `.zip` holding one |
 | `--entity`, `--reference-date`, `--module`, `--currency` | The return header. Required with a fact table; with a workbook or an instance, each one given overrides the file's own |
+| `--taxonomy VERSION` | The taxonomy release every return opened in this session is validated against, unless the open form names another. The default is the release live for each return's module (see [Taxonomy releases](index.md#taxonomy-releases)) |
 | `--port N` | The port to try first (default 8765). If it is taken the next free one is used, so two dashboards can run side by side |
 | `--no-browser` | Print the address but do not open a browser |
 | `--workdir DIR` | Where the dashboard keeps files opened in it. The default is a new temporary folder |
@@ -43,7 +44,16 @@ The address carries this session's token: keep it to yourself. Ctrl+C stops it.
 **Open a return.** Choose a file, or type the path of one on this machine. A
 fact table needs its header (entity, reference date, module); a workbook or an
 XBRL instance states its own, and anything entered on the form overrides it.
-Returns you open stay listed until the dashboard is stopped.
+The form also names the taxonomy release to validate against; left at its
+default, it is the release live for the return's module. Returns you open stay
+listed until the dashboard is stopped.
+
+Every page of a return shows, in the top bar, the taxonomy release it was
+validated against, the module's status in it (live or future) and whether the
+release was the default or chosen. When another shipped release has the module,
+a switch beside it opens the same file again against that release, as a second
+return beside the first, so the two can be compared. Drafted overrides are not
+carried across: a cell one release accepts may not exist in another.
 
 One file is one return, validated on its own. Put every template of the return
 in that file: one fact table with a row per cell, one workbook (`rwa-filer
@@ -168,10 +178,11 @@ and the page shows how many workers have finished, then the verdict, Arelle's
 messages, and every rule on which the two engines part. Arelle is optional: the
 page says how to install it when it is not there.
 
-**Taxonomies & rules.** Every packaged taxonomy pack and rule book, with the
-rules each module enforces and whether a return of it can be validated (both a
-pack and a rule book), and for each module its tables and its enforced rules,
-searchable — without a return open.
+**Taxonomies & rules.** Every shipped taxonomy release's modules, each with its
+status in that release today, its pack and its rule book, the rules it enforces
+and whether a return of it can be validated (both a pack and a rule book); and
+for each module in each release its tables and its enforced rules, searchable —
+without a return open.
 
 The theme switch in the top bar swaps between the dark look (the default, as in
 `rwa-ui` and these docs) and a light one; the choice is remembered.

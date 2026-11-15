@@ -12,10 +12,10 @@ can use it the same way.
 uvx rwa-filer@latest --help
 ```
 
-`@latest` makes each run check PyPI and use the newest release, so a return is
-always checked with the newest rules and taxonomy `rwa-filer` carries. A new
-taxonomy version reaches you as a new release, and nothing else tells you one
-is out. Without `@latest`, `uvx` may run a copy it already has: one it fetched
+`@latest` makes each run check PyPI and use the newest release of `rwa-filer`,
+with every taxonomy release it carries; which of them a run uses is described in
+[Taxonomy releases](#taxonomy-releases). A new taxonomy release reaches you as a
+new `rwa-filer` release, and nothing else tells you one is out. Without `@latest`, `uvx` may run a copy it already has: one it fetched
 recently, or one installed with `uv tool install`, for as long as that stays
 installed. Extras go in quotes, so the shell leaves the brackets alone:
 `uvx "rwa-filer[excel]@latest" ...`.
@@ -77,9 +77,63 @@ The exit code is `0` when nothing blocks submission and `1` when something
 does. `--report` writes every finding as JSON whatever the outcome.
 
 A return is checked in two steps. **Structure** comes first: each fact is looked
-up in the taxonomy pack for the module and reference date. **Rules** follow: the
-Bank's published validation rules run over the same facts. A structure finding
-does not stop the rules from running, so one pass reports everything.
+up in the module's taxonomy pack, in the release the run uses. **Rules** follow:
+the same release's published validation rules run over the same facts. A
+structure finding does not stop the rules from running, so one pass reports
+everything.
+
+## Taxonomy releases
+
+`rwa-filer` ships each taxonomy release it supports (today the Bank of England
+banking taxonomy 4.1.1), and a run uses one of them. `--taxonomy VERSION` names it
+on every command that reads a return (`validate`, `build`, `diff`, `compare`,
+`dash`, `template` and `referee`); in Python, `taxonomy=` does the same. A run
+always takes the taxonomy pack and the rules from the same release.
+
+Without `--taxonomy`, a run uses the release **live** for the return's module: the
+newest shipped release whose pack for that module applies on the day of the run.
+Live, future and superseded belong to a module, not to a release. In 4.1.1, PRA001
+and PRA116 apply from 1 January 2027, so they are *future* until then, while the
+other twelve modules already apply. A module with no live release uses its only
+future release; if it has several, the run stops and asks for a version.
+`rwa-filer` never chooses between releases for you.
+
+The return's reference date never chooses the release. When it falls outside the
+dates the chosen release gives the module, the run reports `STR011`, a Warning:
+the return is checked against the release asked for (to try next year's rules on
+this year's return, say), but the regulator accepts a filing only against the
+release in force on its reference date. `STR011` does not stop a build.
+
+Every run says which release it used and why, straight after the verdict, with a
+line for each other shipped release and the option that selects it:
+
+```text
+BLOCKED: PRA001 for 5493001KJTIIGC8Y1R12 at 2027-03-31 (taxonomy 4.1.1, 2 facts, 1 tables)
+Taxonomy 4.1.1 (default) — PRA001 future from 1 January 2027; no live release shipped
+```
+
+The JSON report and the `build` manifest record the same in their `taxonomy`
+block: `version`, `status`, `applies_from`, `applies_to`, `run_date`, `chosen_by`
+(`default`; `version` when named; `pack` when a library caller passed the pack
+itself), `shipped`, and `covers_reference_date`. `diff` uses a release only to read
+an XBRL file, and prints no release line.
+
+```bash
+# Each shipped release's modules, their status today, and which a run uses
+uvx rwa-filer@latest taxonomy list --module PRA001
+
+# Validate against a named release
+uvx rwa-filer@latest validate return.xbrl --taxonomy 4.1.1
+```
+
+An XBRL file names its entry point in its `schemaRef`, and only a release with
+that entry point can read it. Without `--taxonomy` the default is chosen among
+those releases; a named release with another entry point is refused, with both
+entry points in the message.
+
+A release `rwa-filer` no longer ships is recorded with the last version that
+shipped it, and naming it says so: run that version, e.g.
+`uvx "rwa-filer@0.2.0" validate return.xbrl --taxonomy 4.1.1`.
 
 ## Modules
 
@@ -418,8 +472,8 @@ each other as the same.
 
 `rwa-filer validate` accepts an `.xbrl` file, or a `.zip` holding one, written
 by any system. Each fact is put back in the cell the taxonomy shows it in, and
-the same structure checks and rules then run. The taxonomy version comes from
-the file's own `schemaRef`.
+the same structure checks and rules then run. The release must have the entry
+point the file's own `schemaRef` names (see [Taxonomy releases](#taxonomy-releases)).
 
 Three findings are specific to a file. All are Errors.
 
@@ -525,9 +579,9 @@ All are compiled from the Bank of England banking taxonomy v4.1.1. A module is
 packaged only when every fact of the Bank's own sample file for it is a data
 point of the compiled pack.
 
-The pack is chosen by the return's module and reference date. A reference date
-before a pack applies has no pack, and validation says so and stops there:
-it does not fall back to a different version. The "applies from" dates are the
+A run uses the pack of the release it uses (see
+[Taxonomy releases](#taxonomy-releases)); the "applies from" dates say only
+whether the module is live, future or superseded in that release. They are the
 dates in each framework's taxonomy entry point, except for the two Basel 3.1
 returns, which apply from 1 January 2027.
 
@@ -604,7 +658,9 @@ The JSON report lists the same templates under `summary.templates_missing`, each
 with its rules and the reported templates they read.
 
 `validate_return` adds the structure findings. All are Errors: the regulator
-rejects a file that has any of them.
+rejects a file that has any of them. It also adds `STR011`, a Warning about the
+release chosen, which is reported apart from the structure findings (in
+`release_findings`) and never blocks.
 
 | Code | Meaning |
 |------|---------|
@@ -618,6 +674,7 @@ rejects a file that has any of them.
 | `STR008` | The header is invalid: the identifier is not a valid LEI, or the module is unknown. |
 | `STR009` | The return carries no facts. |
 | `STR010` | The return declares its filing indicators, and one of them is not a template of the module, or a fact sits in a template not declared as reported. |
+| `STR011` | Warning. The return's reference date is outside the dates the chosen taxonomy release gives its module. The return is checked against that release; to file it, choose the release in force on its date. |
 
 Each fact is reported once, against its root cause. A fact in an unknown table
 is `STR001` only; it is not also reported as an unknown cell.
@@ -680,3 +737,31 @@ extract schema and the two rule grammars.
 `rwa-filer` lives at `packages/rwa-filer` as a uv workspace member. See
 [Workspace & Packages](../development/workspace.md) for how the two packages
 share one repository and are released separately.
+
+### Packaging a taxonomy release
+
+The shipped releases are the ones `packages/rwa-filer/src/rwa_filer/releases.json`
+lists; it is the one file edited by hand. To add a release:
+
+1. Put the Bank's four downloads for it in `.taxonomy/boe-banking-<version>/` at the
+   repository root (git-ignored): the taxonomy package, and the DPM, validations
+   and sample-instances zips.
+2. Add the release to `releases.json`, with an `applies_from` date for any module
+   whose entry point does not state when it applies.
+3. Run `uv run python scripts/build_filer_release.py <version>`. It compiles every
+   module the Bank's annotated workbooks list, packages each only when the Bank's
+   sample for it agrees (and reports the ones it refuses, with the reason),
+   imports every rule book under the release's own version, regenerates the
+   template-level extract for the newest release, sets end dates where a newer
+   release changes a module's entry point, and writes the release's measurement
+   file under `packages/rwa-filer/tests/releases/<version>/`.
+4. Review the diff and release `rwa-filer`.
+
+`--check` rebuilds a packaged release in a scratch folder and fails on any file
+that differs: run against the Bank's 4.1.1 files, it reproduces the packaged
+release byte for byte. `--measure-only` re-measures a packaged release without the
+Bank's files. To retire a release, remove it from `releases.json` and rebuild the
+newest one: its data is removed and recorded in `retired.json` with the last
+`rwa-filer` version that shipped it. Tests hold the packaged data to
+`releases.json` exactly, and to a 50 MB compressed size budget in place of a cap on
+the number of releases.

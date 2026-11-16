@@ -63,6 +63,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.reporting.corep.irb_sheets import AIRB
 from rwa_calc.reporting.kernel import pick
@@ -115,6 +116,8 @@ def ccf_bucket_expr(ccf_col: str, refs: Mapping[float, str]) -> pl.Expr:
     return bucket
 
 
+@cites("PS1/26, paragraph 111")
+@cites("PS1/26, paragraph 166D")
 def of08_01_ccf_row_expr(cols: set[str]) -> pl.Expr | None:
     """Each leg's OF 08.01 conversion-factor row: ``OWN_ESTIMATE_ROW`` for an
     A-IRB own estimate, else the Table A1 row of its applied factor, else null.
@@ -131,6 +134,7 @@ def of08_01_ccf_row_expr(cols: set[str]) -> pl.Expr | None:
     return pl.when(own).then(pl.lit(OWN_ESTIMATE_ROW)).otherwise(by_value)
 
 
+@cites("PS1/26, paragraph 166D")
 def _own_estimate(cols: set[str], factor: pl.Expr) -> pl.Expr:
     """Is the leg an A-IRB exposure whose exposure value rests on an own
     estimate — of EAD (Art. 166D(3)) or, on a revolving commitment, of the

@@ -27,8 +27,8 @@ Cell semantics (recorded decisions):
   which the engine spreads over ``rwa_final``, belongs in none of those rows.
   Under CRR there is no floor and the column sums ``rwa_final``. The carrier
   is resolved by ``kernel.own_rwea``, the one resolver for COREP RWEA, so a
-  class row and the OF 08.01 sheet total it is one data point with sum the same
-  carrier (``tests/contracts/test_corep_rwea_carrier.py`` lists any template
+  class row and the OF 08.01 sheet total that is the same data point sum the
+  same carrier (``tests/contracts/test_corep_rwea_carrier.py`` lists any template
   site not yet on it). (Until 2026-11-13 the column summed ``rwa_final`` and
   row 0010 column 0030 repeated the same total, which reported the floor as its
   own result.) This template and OF 02.01 each add the legs up in their own
@@ -157,6 +157,7 @@ References:
 - CRR Art. 155 (IRB equity — ``EQUITY_IRB`` under CRR)
 - PRA PS1/26 Art. 92 para 2A/3A/5 (output floor); Art. 147A (IRB equity,
   IRB sovereigns and A-IRB institutions removed); Annex II §1.3
+- Bank of England XBRL Filing Manual v1.0.1 (30 May 2024), rule 2.19 (pp.27-28)
 - docs/plans/phase7-declarative-reporting.md §8.2 (Kind-9 pre-pass)
 """
 

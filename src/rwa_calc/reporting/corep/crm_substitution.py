@@ -229,14 +229,13 @@ class InflowBreakdown:
 # 0035 term over r:0001;0030;0031;0032;0033;0034;0035 — which is exactly the
 # OFF-BALANCE-SHEET row family (row 0030 "Off balance sheet items subject to credit
 # risk" plus its six conversion-factor rows, 0001 the 40% one). That split is not
-# arbitrary: Art. 166(3)
-# netting of loans and deposits is an on-balance-sheet effect, so it cannot reduce
-# an off-balance-sheet row. Row 0080 (slotting total) and the inert CCR
-# netting-set rows 0040/0050/0060 are in NEITHER scope; 0080 keeps the term so it
-# stays consistent with its section sibling 0070 and the 0070 + 0080 = 0010
-# approach partition still foots. C 08.02 has no such split — ``boe_b0760`` puts
-# 0035 in the waterfall on every row of OF08.02.01.01. Under CRR there is no col
-# 0035 at all, so the whole mechanism is a B31-only no-op there.
+# arbitrary: Art. 166(3) netting of loans and deposits is an on-balance-sheet effect,
+# so it cannot reduce an off-balance-sheet row. Row 0080 (slotting total) and the
+# inert CCR netting-set rows 0040/0050/0060 are in NEITHER scope; 0080 keeps the term
+# so it stays consistent with its section sibling 0070 and the 0070 + 0080 = 0010
+# approach partition still foots. C 08.02 has no such split — ``boe_b0760`` puts 0035
+# in the waterfall on every row of OF08.02.01.01. Under CRR there is no col 0035 at
+# all, so the whole mechanism is a B31-only no-op there.
 C08_01_NETTING_EXEMPT_ROWS: frozenset[str] = frozenset(
     {"0001", "0030", "0031", "0032", "0033", "0034", "0035"}
 )

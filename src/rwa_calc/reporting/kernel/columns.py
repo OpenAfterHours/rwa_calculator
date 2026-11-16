@@ -23,6 +23,7 @@ References:
 from __future__ import annotations
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.engine.materialise import materialise_frame
 
@@ -106,6 +107,7 @@ def pick(cols: set[str], *candidates: str) -> str | None:
     return None
 
 
+@cites("PS1/26, paragraph 92")
 def own_rwea(cols: set[str], *fallbacks: str) -> str | None:
     """Resolve the column carrying the own-approach RWEA a COREP template reports.
 
@@ -126,6 +128,12 @@ def own_rwea(cols: set[str], *fallbacks: str) -> str | None:
     because a ledger with no ``rwa_pre_floor`` (CRR, or a Basel 3.1 entity outside
     the floor's scope) had no floor applied, and there ``rwa_final`` IS the
     own-approach figure. Each call site keeps its own fallback ladder.
+
+    The resolution is by PRESENCE, so it rests on ``rwa_pre_floor`` staying a
+    conditional column of ``AGGREGATOR_EXIT_EDGE`` (``contracts/edges.py``:
+    ``required=False, inject=False`` — sealed only where the floor ran). Were the
+    edge ever to inject it as a typed null, every ledger would carry it and every
+    COREP RWEA would sum nulls.
 
     Every COREP RWEA read goes through here; ``tests/contracts/
     test_corep_rwea_carrier.py`` fails a template that binds ``rwa_final``

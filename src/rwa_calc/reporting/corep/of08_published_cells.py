@@ -173,7 +173,8 @@ def _on_no_sheet() -> Mapping[str, frozenset[str]]:
     - Total row 0010: every column.
     - On-balance-sheet rows 0017 / 0020: none of the "of which" breakdowns. Row
       0017 has no output-floor columns either; row 0020 no RWEA pre credit
-      derivatives (0310), which the template reports on the Total row only.
+      derivatives (0310), which the template reports on the Total row and the
+      counterparty-credit-risk rows 0040-0060 only (and on row 0017 of sheet 0010).
     - Off-balance-sheet row 0030 and its conversion-factor buckets: no "of
       which", no 0310 and no on-balance-sheet netting (0035); the buckets have
       no output-floor columns.

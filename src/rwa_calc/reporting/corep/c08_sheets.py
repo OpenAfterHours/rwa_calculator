@@ -89,8 +89,9 @@ The PD a row reports is the exposure-weighted average of the post-input-floor
 PD (``pd_floored``) over the row's legs that CARRY a PD (``pd_average``, weighted
 by ``PD_WEIGHT``); a slotting leg is left out, not averaged in as a zero, so a
 row of slotting exposure alone reports no PD. (``pd_floored`` is sealed by the
-formula-IRB path only, ``engine/irb/formulas.py``, as the larger of the input PD
-and the floor, so every F-IRB / A-IRB leg carries one and no slotting leg does.) CRR Annex II C 08.01 column 0010
+IRB formula path only — ``engine/irb/formulas.py`` and ``engine/irb/transforms.py``
+— as the larger of the input PD and the floor, so every F-IRB / A-IRB leg
+carries one and no slotting leg does.) CRR Annex II C 08.01 column 0010
 defines the aggregate ("the exposure weighted average of the PDs assigned to
 the obligor grades or pools included in the aggregation ... The exposure value
 (column 0110) shall be used"); PS1/26 Annex II gives OF 08.01 column 0010 no
@@ -515,19 +516,23 @@ def pd_weight_exprs(cols: set[str]) -> list[pl.Expr]:
     return [pl.when(pl.col(_PD).is_not_null()).then(pl.col(_EXPOSURE_VALUE)).alias(PD_WEIGHT)]
 
 
-def pd_average(cols: set[str], ead_col: str) -> WeightedAvg:
+def pd_average() -> WeightedAvg:
     """The column-0010 binding: the exposure-weighted post-input-floor PD over the
     legs that carry a PD (module docstring; CRR Annex II C 08.01 column 0010,
     PS1/26 Annex I OF 08.01 column 0010).
 
-    Weighted by ``PD_WEIGHT`` wherever ``pd_weight_exprs`` derives it from the
-    exposure value the caller weights by (``ead_col``). Otherwise the plain
-    ``ead_col`` weight: on a frame with no ``pd_floored`` the cell is empty either
-    way, and a caller weighting by another column keeps its own weight.
+    Weighted by ``PD_WEIGHT``, which ``pd_weight_exprs`` derives on a frame that
+    seals both ``pd_floored`` and ``ead_final``. On any other frame one of the two
+    columns is absent, and a ``WeightedAvg`` over an absent column is an empty cell.
     """
-    if ead_col != _EXPOSURE_VALUE or not pd_weight_exprs(cols):
-        return WeightedAvg(_PD, weight=ead_col)
     return WeightedAvg(_PD, weight=PD_WEIGHT)
+
+
+def no_figure(_cells: Mapping[str, float | None], _prior_available: bool) -> None:
+    """The ``Formula`` of a cell that reports no figure: a column a sheet does not
+    report, or one the template defines as empty. The one home for the C 08
+    family (OF 08.01's unreported cells, C 08.03, C 08.06)."""
+    return None
 
 
 # =============================================================================
@@ -573,12 +578,7 @@ _TOTAL_POLICIES: Final[dict[str, _TotalPolicy]] = {
 }
 
 
-def _no_figure(_cells: Mapping[str, float | None], _prior_available: bool) -> None:
-    """The figure of a column a sheet does not report: none."""
-    return None
-
-
-_NOT_REPORTED: Final = CellSpec(Formula(refs=(), fn=_no_figure))
+_NOT_REPORTED: Final = CellSpec(Formula(refs=(), fn=no_figure))
 
 #: Template -> its declaration of the cells each published sheet lacks.
 _UNREPORTED: Final[dict[str, Callable[[str, str], Mapping[str, frozenset[str]]]]] = {

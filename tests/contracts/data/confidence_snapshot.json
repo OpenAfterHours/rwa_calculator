@@ -5864,7 +5864,8 @@
       "article": "92",
       "code_functions": [
         "rwa_calc.engine.aggregator._floor::apply_floor_with_impact",
-        "rwa_calc.engine.aggregator.aggregator::OutputAggregator.aggregate"
+        "rwa_calc.engine.aggregator.aggregator::OutputAggregator.aggregate",
+        "rwa_calc.reporting.kernel.columns::own_rwea"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -5975,7 +5976,8 @@
       "article": "111",
       "code_functions": [
         "rwa_calc.engine.ccf::CCFCalculator._apply_uk_residential_mortgage_ccf",
-        "rwa_calc.engine.ccf::CCFCalculator._compute_ccf"
+        "rwa_calc.engine.ccf::CCFCalculator._compute_ccf",
+        "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -7888,10 +7890,13 @@
     },
     {
       "article": "166D",
-      "code_functions": [],
+      "code_functions": [
+        "rwa_calc.reporting.corep.ccf_buckets::_own_estimate",
+        "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr"
+      ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
       "pack_entries": [
         "airb_ead_floor_applies@b31",
@@ -7900,6 +7905,7 @@
       ],
       "source_files": [
         "engine/ccf.py",
+        "reporting/corep/ccf_buckets.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [

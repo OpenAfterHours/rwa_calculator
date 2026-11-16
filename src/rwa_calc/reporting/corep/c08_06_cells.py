@@ -15,15 +15,11 @@ References:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import polars as pl
 
 from rwa_calc.reporting.cellspec import CellSpec, Formula, RowPredicate, WeightedAvg
+from rwa_calc.reporting.corep.c08_sheets import no_figure
 from rwa_calc.reporting.corep.postpass import c08_06_zero_row
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 _POST_BASIS_REFS: tuple[str, ...] = ("0020", "0040", "0050", "0070", "0080")
 
@@ -88,7 +84,7 @@ def c08_06_risk_weight_cell(
     display weight, ``c08_06.py::_c08_06_empty_refs``.)
     """
     if not _reports_risk_weight(label, framework):
-        return CellSpec(Formula(refs=(), fn=_blank))
+        return CellSpec(Formula(refs=(), fn=no_figure))
     return CellSpec(
         WeightedAvg("risk_weight", weight=ead_col), predicate=predicate, empty_cell="null"
     )
@@ -118,8 +114,3 @@ def c08_06_zero_ead_fixes(
 def _reports_risk_weight(label: str, framework: str) -> bool:
     """Whether a C 08.06 row reports col 0070: every row except a CRR Total."""
     return label != "Total" or framework == "BASEL_3_1"
-
-
-def _blank(_cells: Mapping[str, float | None], _prior_available: bool) -> None:
-    """A cell the template defines as empty."""
-    return None

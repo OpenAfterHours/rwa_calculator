@@ -1117,7 +1117,8 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     **Cells the published sheet does not have** (Basel 3.1, OF 08.01). The PRA001 taxonomy
     has no data point for 279 of the template's row-by-column positions on any sheet, and
     seven more depend on the sheet. Among them: column 0310 (RWEA pre credit derivatives) is
-    published on the Total row 0010 only; the "of which" columns (large financial sector
+    published on the Total row 0010 and the counterparty-credit-risk rows 0040-0060 only (and
+    on row 0017 of sheet 0010); the "of which" columns (large financial sector
     entities, off balance sheet, defaulted) are not on the exposure-type rows; the slotting
     row 0080 has no PD, LGD, maturity, CRM-in-LGD or output-floor columns; the
     unrated-corporate rows 0190 / 0200 have no column 0104. The generator still computes

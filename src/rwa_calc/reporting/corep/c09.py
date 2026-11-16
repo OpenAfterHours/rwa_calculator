@@ -219,7 +219,7 @@ References:
 from __future__ import annotations
 
 from functools import cache
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import polars as pl
 from watchfire import cites
@@ -341,7 +341,8 @@ _OF09_02_ROW_SHEET_CODES: dict[str, tuple[str, ...]] = {
 # The class twin the OF 08 sheet keys are derived from (the IMMEDIATE obligor's).
 _ORIGIN_CLASS_COL: str = "reporting_class_origin"
 # The two bases a sheet-membership flag is derived on, in ``sheet_keys`` order.
-_SHEET_BASES: tuple[str, str] = ("origin", "post")
+type _Basis = Literal["origin", "post"]
+_SHEET_BASES: tuple[_Basis, _Basis] = ("origin", "post")
 
 _CORPORATE_FAMILY: tuple[str, ...] = ("corporate", "corporate_sme")
 
@@ -945,7 +946,15 @@ def _c09_02_prepare(
     OF 08 classification (``_of09_02_classification_exprs``); CRR keeps C 07.00's
     ``c07_sme`` ladder, where the retired non-SME anti-join KEEPS a leg with no SME
     indicator and, with no ``exposure_reference`` column, returns the base
-    UNCHANGED (SME rows included)."""
+    UNCHANGED (SME rows included).
+
+    Two Basel 3.1 consequences on a frame that lacks a column, both since
+    2026-11-16 (OF 08's reading, where the old one counted a leg twice): with no
+    ``exposure_reference``, ``c09_non_sme`` is NOT ``c09_sme`` rather than true for
+    every leg, so the non-SME rows no longer also count the SME legs; with no
+    ``property_type``, every retail real-estate leg is residential, so rows 0071 /
+    0072 take the whole mortgage base and rows 0073 / 0074 are empty, where before
+    all four rows took it."""
     exprs: list[pl.Expr] = [_defaulted_expr(cols).alias("c09_defaulted")]
     if framework == c02_rows.FRAMEWORK_BASEL_3_1:
         exprs.extend(_of09_02_classification_exprs(set(data.columns)))
@@ -990,7 +999,7 @@ def _of09_02_classification_exprs(frame_cols: set[str]) -> list[pl.Expr]:
 
 
 def _c09_02_row_pred(  # noqa: PLR0911 - the retired branch cascade, one return per row family
-    row_def: COREPRow, approach_col: str | None, basis_col: str, *, framework: str, basis: str
+    row_def: COREPRow, approach_col: str | None, basis_col: str, *, framework: str, basis: _Basis
 ) -> RowPredicate | None:
     """The retired _filter_c09_02_row branch cascade as predicates.
 
@@ -1036,7 +1045,7 @@ def _c09_02_row_pred(  # noqa: PLR0911 - the retired branch cascade, one return 
     return None
 
 
-def _of09_02_sub_class_pred(key: str, basis_col: str, basis: str) -> RowPredicate | None:
+def _of09_02_sub_class_pred(key: str, basis_col: str, basis: _Basis) -> RowPredicate | None:
     """A Basel 3.1 sub-class row on the leg classification OF 08 reads, or ``None``.
 
     The corporate rows (0048 / 0050 / 0055) key the leg's OF 08 sheet on this
@@ -1065,7 +1074,7 @@ def _of09_02_sub_class_pred(key: str, basis_col: str, basis: str) -> RowPredicat
     return None
 
 
-def _sheet_flag(row_key: str, basis: str) -> str:
+def _sheet_flag(row_key: str, basis: _Basis) -> str:
     """The derived column saying a leg is on one of ``row_key``'s OF 08 sheets."""
     return f"c09_sheet_{row_key}_{basis}"
 

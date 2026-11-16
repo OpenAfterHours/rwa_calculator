@@ -493,7 +493,11 @@ _PROVISIONS_C08: CellRequirement = _any_of(
 )
 
 # The two money ladders every template resolves by ``pick``, named once so a
-# requirement cannot restate them differently from the generator.
+# requirement cannot restate them differently from the generator. A template's
+# RWEA goes through ``kernel.own_rwea``, which tries ``rwa_pre_floor`` before this
+# ladder; that rung is not listed because no mapping can target it (the ``rwa``
+# component maps onto ``rwa_final``), so a projected ledger never carries it and
+# resolves on this ladder alone.
 _RWA: CellRequirement = _any_of("rwa_final", "rwa_post_factor", "rwa")
 _PD: CellRequirement = _any_of("pd_floored", "pd")
 

@@ -97,25 +97,30 @@ def test_an_irb_class_row_whose_sheet_has_no_legs_is_not_reported() -> None:
 
 
 @pytest.mark.parametrize(
-    "references",
+    ("references", "has_tied_class_sheet"),
     [
-        pytest.param(("F_OTH",), id="firb-non-sme-corporate"),
-        pytest.param(("F_INST", "F_OTH"), id="firb-institution-and-corporate"),
-        pytest.param(("A_OTH", "A_QRRE"), id="airb-corporate-and-qrre"),
-        pytest.param(("F_OTH", "A_OTH"), id="both-non-sme-corporate-sheets"),
-        pytest.param(("F_SL", "SL_PF"), id="firb-sl-and-slotting"),
-        pytest.param(("SL_PF",), id="slotting-only"),
-        pytest.param(tuple(leg.reference for leg in MODELLED_LEGS), id="every-modelled-leg"),
+        pytest.param(("F_OTH",), True, id="firb-non-sme-corporate"),
+        pytest.param(("F_INST", "F_OTH"), True, id="firb-institution-and-corporate"),
+        pytest.param(("A_OTH", "A_QRRE"), True, id="airb-corporate-and-qrre"),
+        pytest.param(("F_OTH", "A_OTH"), True, id="both-non-sme-corporate-sheets"),
+        pytest.param(("F_SL", "SL_PF"), False, id="firb-sl-and-slotting"),
+        pytest.param(("SL_PF",), False, id="slotting-only"),
+        pytest.param(tuple(leg.reference for leg in MODELLED_LEGS), True, id="every-modelled-leg"),
     ],
 )
 def test_of02_files_no_data_point_of_an_of08_class_sheet_of08_does_not_report(
-    references: tuple[str, ...],
+    references: tuple[str, ...], has_tied_class_sheet: bool
 ) -> None:
     """Every OF 02.00 fact that is one data point with a cell of an OF 08.01 CLASS
     sheet names a sheet the same return's OF 08.01 facts report.
 
     The every-leg book reports every sheet, so it is green whatever OF 02.00 does:
-    it is the control that the return's facts reach the shared data points."""
+    it is the control that the return's facts reach the shared data points.
+    ``has_tied_class_sheet`` says, from the legs alone, whether the book has legs
+    on a class sheet whose total IS an OF 02.00 row (every one but the slotting
+    sheet 0010, which F-IRB specialised lending shares with slotting): such a book
+    must place at least one shared fact, or a return that stopped placing the
+    class rows would leave no orphan to find and pass on nothing."""
     # Arrange
     pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
     of02_cells = pack.cells.filter(pl.col("table") == OF02_TABLE).select(
@@ -131,6 +136,8 @@ def test_of02_files_no_data_point_of_an_of08_class_sheet_of08_does_not_report(
     shared = of02.join(class_sheet_cells, on="datapoint")
     reported_sheets = set(facts.filter(pl.col("table") == OF08_TABLE)["sheet"].to_list())
     assert of02.height > 0, "OF 02.00 was not placed"
+    if has_tied_class_sheet:
+        assert shared.height > 0, "no OF 02.00 class-row fact was placed - nothing to check"
 
     # Act
     orphans = sorted(

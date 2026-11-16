@@ -548,5 +548,10 @@ def _rwea_col(cols: set[str]) -> str:
     (``kernel.own_rwea`` — ``rwa_pre_floor`` wherever the output floor ran, so a
     binding floor's add-on on the SA-CCR legs stays out, PS1/26 Art. 92(2A)/(3)),
     else ``rwa_final``. Every caller has already required ``rwa_final`` in
-    ``cols``, so the ladder always resolves."""
-    return own_rwea(cols, "rwa_final") or "rwa_final"
+    ``cols``, so the ladder always resolves; a frame without it is a caller bug,
+    not a portfolio shape, and raises."""
+    rwea_col = own_rwea(cols, "rwa_final")
+    if rwea_col is None:
+        msg = "C 34 RWEA needs rwa_pre_floor or rwa_final; callers gate on rwa_final"
+        raise ValueError(msg)
+    return rwea_col

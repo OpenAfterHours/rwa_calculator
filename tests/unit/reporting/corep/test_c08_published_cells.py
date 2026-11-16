@@ -5,7 +5,8 @@ a formula over an earlier one — and until this change it reported them all.
 Measured on the registered Basel 3.1 portfolios: 60 distinct non-zero figures in
 cells the PRA001 taxonomy does not publish on that sheet, the largest family
 column 0310 (RWEA pre credit derivatives) on the on-balance-sheet row 0020 and
-the obligor-grade row 0070, which the template has on the Total row only.
+the obligor-grade row 0070, which the template has on the Total row and the
+counterparty-credit-risk rows 0040-0060 only (and on row 0017 of sheet 0010).
 
 Which cells are grey is held to the Bank's taxonomy, sheet by sheet, by
 ``tests/contracts/test_of08_published_cells.py``; this file holds that the

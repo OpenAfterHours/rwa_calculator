@@ -595,7 +595,15 @@ class TestPostModelAdjustments:
         p.112, "This column shall not be reported for sheets relating to the FIRB
         approach or the slotting approach" (the adjustment is Art. 166D(6)'s, an
         A-IRB one). The fixture gives the F-IRB legs an adjustment anyway (7.7 +
-        30.0), so leaving it out cannot be told apart from summing a zero."""
+        30.0), so leaving it out cannot be told apart from summing a zero.
+
+        That F-IRB adjustment is a shape the engine really produces, and the output
+        it pins is inconsistent: ``engine/irb/adjustments.py`` applies
+        ``unrecognised_exposure_scalar`` to every formula-IRB leg, F-IRB included,
+        so with a non-zero scalar an F-IRB sheet's column 0260 includes an uplift
+        that columns 0251-0253 cannot account for (``boe_b0751``, ERROR). The defect is
+        the engine's (the scalar should reach A-IRB legs only) and is filed as a
+        follow-up; this test holds only that column 0254 is not reported."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
         mtg = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME].filter(pl.col("row_ref") == "0010")

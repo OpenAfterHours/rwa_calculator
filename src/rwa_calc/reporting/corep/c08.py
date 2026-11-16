@@ -344,7 +344,8 @@ Cell semantics (recorded decisions, this slice):
   over the slotting-only book, with a per-ROW two-branch policy: empty
   non-Total rows zero-fill (0070 = the fixed display risk weight from the
   row definition), live rows and both maturity-split Total rows compute on
-  data (0050/0060/0070/0031 null where the retired code reported None).
+  data (0050/0060/0070/0031 null where the retired code reported None; a CRR
+  Total's 0070 is always blank, ``c08_06_cells.c08_06_risk_weight_cell``).
   CRR's 0080 prefers ``rwa_post_factor``; the maturity fallback is
   asymmetric (no ``is_short_maturity`` column -> short band empty, long
   band absorbs the category); the "substantially stronger" sub-rows are
@@ -355,7 +356,7 @@ Cell semantics (recorded decisions, this slice):
   UNBOUND (``_c08_06_empty_refs``), so the drill-down reports the template's
   empty policy and reads its value from the reported frame rather than a
   WeightedAvg with no legs. The three value-dependent post-passes (empty-row
-  zero-fill; the live 0030/0040/0070 fixes; the provisions ladder) stay on the
+  zero-fill; the zero-EAD 0040/0070 fixes; the provisions ladder) stay on the
   reported frame.
 - C 08.07 / OF 08.07 lives in its own module (``corep/c08_07.py``): it shares
   none of the C 08.01/02 value surface, reads the FULL population rather than
@@ -394,7 +395,9 @@ from rwa_calc.reporting.corep import c08_01_rows
 from rwa_calc.reporting.corep.c08_03_cells import build_c08_03_cells
 from rwa_calc.reporting.corep.c08_06_cells import (
     c08_06_empty_row_override,
+    c08_06_risk_weight_cell,
     c08_06_sl_type_sheet,
+    c08_06_zero_ead_fixes,
 )
 from rwa_calc.reporting.corep.c08_sheets import (
     BASIS,
@@ -1866,8 +1869,8 @@ def c08_06_plans(
     so the spec leaves that one cell UNBOUND (``_c08_06_empty_refs``) — the
     drill-down then reports it as the template's empty policy and reads its value
     from the reported frame, honouring the zero-fill without a WeightedAvg that has
-    no legs. The three value-dependent post-passes (empty-row zero-fill; the 0030
-    nominal / 0040 clamp / 0070 first-non-null live fixes; the provisions ladder)
+    no legs. The three value-dependent post-passes (empty-row zero-fill; the
+    zero-EAD 0040 clamp / 0070 first-non-null fixes; the provisions ladder)
     live on the REPORTED frame (``generate_c08_06``). C 08.06 carries no
     "(-)"-labelled deduction column, so ``negative_cols`` is empty."""
     ead_col = pick(cols, "ead_final")
@@ -1916,7 +1919,8 @@ def generate_c08_06(
     Total rows); the retired two-branch row policy is preserved: an EMPTY
     non-Total row zero-fills every cell and reports the row definition's
     fixed display risk weight in 0070, while live rows (and both Total
-    rows, even when empty) compute on data with per-cell null policy. Iterates
+    rows, even when empty) compute on data with per-cell null policy; a CRR
+    Total row leaves 0070 blank (Annex II p.115, no Table 1 total weight). Iterates
     ``c08_06_plans`` and applies ``_c08_06_sheet``'s value-dependent overrides on
     each plan's reported frame, which the drill-down reads a cell's value from."""
     plans = c08_06_plans(results, cols, framework, errors)
@@ -1928,7 +1932,7 @@ def generate_c08_06(
     row_defs = _c08_06_row_defs(framework)
     row_preds = _c08_06_row_preds(row_defs, cols)
     return {
-        sl_key: _c08_06_sheet(plan.spec, plan.frame, row_defs, row_preds, cols, ead_col)
+        sl_key: _c08_06_sheet(plan.spec, plan.frame, row_defs, row_preds, cols, ead_col, framework)
         for sl_key, plan in plans.items()
     }
 
@@ -1975,7 +1979,8 @@ def _c08_06_spec(
 
     ``empty_refs`` names the non-Total rows whose subset is empty on THIS sheet:
     their col 0070 is a fixed display risk weight applied by the zero-fill
-    post-pass, so it is left UNBOUND here (see ``_c08_06_empty_refs``). Every
+    post-pass, so it is left UNBOUND here (see ``_c08_06_empty_refs``); a CRR
+    Total row's col 0070 is a constant blank (``c08_06_risk_weight_cell``). Every
     other cell is number-neutral across sheets."""
     column_refs = tuple(col.ref for col in get_c08_06_columns(framework))
     row_defs = _c08_06_row_defs(framework)
@@ -2016,13 +2021,11 @@ def _c08_06_spec(
         cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=post_pred)
         cells[(ref, "0050")] = CellSpec(Sum(ead_col), predicate=off_post, empty_cell="null")
         cells[(ref, "0060")] = CellSpec(Formula(refs=(), fn=_const(None)))
-        # Col 0070 on an EMPTY non-Total row is a fixed display risk weight from
-        # the zero-fill post-pass (not a measured weighted average), so it is left
-        # UNBOUND — the drill-down reads its value from the reported frame and
-        # reports the template's empty policy, never a WeightedAvg with no legs.
+        # Col 0070 on an EMPTY non-Total row is the zero-fill's fixed display risk
+        # weight, so it is left UNBOUND; a CRR Total reports none (Annex II p.115).
         if ref not in empty_refs:
-            cells[(ref, "0070")] = CellSpec(
-                WeightedAvg("risk_weight", weight=ead_col), predicate=post_pred, empty_cell="null"
+            cells[(ref, "0070")] = c08_06_risk_weight_cell(
+                row_def[1], framework, ead_col, post_pred
             )
         cells[(ref, "0080")] = CellSpec(Sum(rwea_col), predicate=post_pred)
         cells[(ref, "0090")] = (
@@ -2045,13 +2048,14 @@ def _c08_06_sheet(
     row_preds: dict[str, RowPredicate],
     cols: set[str],
     ead_col: str,
+    framework: str,
 ) -> pl.DataFrame:
     """Execute one SL-type sheet and apply the retired value-dependent
     branches: the zero-fill policy for empty non-Total rows (fixed display
     RW in 0070, and — where the row is empty on the POST basis only — the
-    ORIGIN cells left standing, ``c08_06_empty_row_override``), the >0 clamp
-    on 0040, the first-non-null risk weight when
-    the subset carries zero total EAD, and the SCRA/GCRA -> provision_held
+    ORIGIN cells left standing, ``c08_06_empty_row_override``), the zero-EAD
+    0040 clamp and first-non-null 0070 (none on a CRR Total,
+    ``c08_06_zero_ead_fixes``), and the SCRA/GCRA -> provision_held
     provisions ladder. Col 0030 (off-BS gross) now sums the sealed
     ``reporting_gross_off_bs`` carrier over the whole row in the spec — the
     carrier is null outside the off side, so an all-on-BS row sums 0.0
@@ -2076,15 +2080,8 @@ def _c08_06_sheet(
                 origin_populated=origin_subsets[row_ref].height > 0,
             )
             continue
-        fixes: dict[str, float | None] = {}
-        ead_sum = float(subset[ead_col].fill_null(0.0).sum())
-        if ead_sum <= 0.0:
-            fixes["0040"] = 0.0
-        if subset.height > 0 and ead_sum <= 0.0 and "risk_weight" in cols:
-            rw_vals = subset["risk_weight"].drop_nulls()
-            fixes["0070"] = float(rw_vals[0]) if len(rw_vals) > 0 else None
-        if fixes:
-            overrides[row_ref] = fixes
+        if float(subset[ead_col].fill_null(0.0).sum()) <= 0.0:
+            overrides[row_ref] = c08_06_zero_ead_fixes(subset, label, framework)
     frame = c08_06_apply_overrides(frame, overrides)
     return provisions_postfix(frame, type_df, row_preds, cols, ref="0100")
 

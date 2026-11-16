@@ -135,10 +135,12 @@ def test_a_cell_outside_the_variant_reads_as_absent_not_as_its_value() -> None:
 
 
 def test_a_sole_binding_keeps_the_whole_frame() -> None:
-    """A code that is the only binding for its member is never column-restricted.
+    """A code that is the only binding for its member is not derived-restricted.
 
     C 02.00 is not a variant of anything, so scoping it would add risk with no
-    benefit — the frame IS that table.
+    benefit — the frame IS that table. The one sole binding that IS restricted is
+    CRR C 08.06, by hand, to keep its printed information column 0070 out
+    (``test_c08_06_information_column.py``).
     """
     # Arrange
     index = build_index(c_02_00=build_frame({"0010": {"0010": 5.0, "0020": 7.0}}))

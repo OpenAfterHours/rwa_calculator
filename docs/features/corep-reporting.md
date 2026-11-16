@@ -1739,6 +1739,19 @@ SL type (project finance, object finance, etc.) acts as a filter dimension.
     | 0090 | Expected loss amount | Memorandum |
     | 0100 | (-) Value adjustments and provisions | Memorandum |
 
+    !!! note "Column 0070 is fixed information, not a reported figure"
+        Annex II (p.115) defines column 0070 as Article 153(5) Table 1: *"This is a fixed
+        column for information purposes. It shall not be altered."* Each category row shows
+        the Table 1 risk weight for its category and maturity band. The two **Total** rows
+        (0110, 0120) leave column 0070 **blank**, because Table 1 has no weight for a total.
+        The CR10 disclosure of the same grid does the same.
+
+        Column 0070 is also not a data point of the EBA taxonomy. The supervisory-validation
+        adapter therefore evaluates C 08.06 rules on columns 0010–0060 and 0080–0100 only
+        (`reporting/filing/bindings.py`). Otherwise the summation rules `v09782_m` and
+        `v09783_m`, which apply to every column, would compare a Total row with a sum of
+        fixed category weights.
+
 === "Basel 3.1 (OF 08.06)"
 
     | Ref | Column | Group | vs CRR |

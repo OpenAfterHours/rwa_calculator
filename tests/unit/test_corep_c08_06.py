@@ -481,13 +481,31 @@ class TestC0806ColumnValues:
         strong_short = pf.filter(pl.col("row_ref") == "0010")
         assert strong_short["0070"][0] == pytest.approx(0.50, rel=1e-4)
 
-    def test_col_0070_weighted_average_for_total(self):
+    def test_col_0070_is_empty_on_both_total_rows_under_crr(self):
+        """CRR col 0070 is Table 1's fixed weight per row; a Total row has none.
+
+        Annex II p.115: "This is a fixed column for information purposes. It shall
+        not be altered." Art. 153(5) Table 1 gives a weight per category x
+        maturity cell and none for a total, so both Total rows leave 0070 blank,
+        as the CR10 disclosure of the same grid does. The category rows keep
+        their Table 1 weight.
+        """
+        # Arrange
         gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_slotting_results())
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_slotting_results(), framework="CRR")
         pf = bundle.c08_06["project_finance"]
-        total_long = pf.filter(pl.col("row_ref") == "0120")
-        # Only good/long: RW 90%, EAD 2M → weighted avg = 0.90
-        assert total_long["0070"][0] == pytest.approx(0.90, rel=1e-4)
+        col_0070 = dict(zip(pf["row_ref"], pf["0070"], strict=True))
+
+        # Assert: both Totals are live (the PF sheet holds a short AND a long
+        # leg, so an average would exist on each), yet neither reports a weight.
+        assert pf.filter(pl.col("row_ref") == "0110")["0040"][0] == pytest.approx(1_000_000)
+        assert pf.filter(pl.col("row_ref") == "0120")["0040"][0] == pytest.approx(2_000_000)
+        assert col_0070["0110"] is None
+        assert col_0070["0120"] is None
+        assert col_0070["0010"] == pytest.approx(0.50)
+        assert col_0070["0040"] == pytest.approx(0.90)
 
     def test_col_0080_rwea(self):
         gen = LedgerShimCorepGenerator()
@@ -872,6 +890,40 @@ class TestC0806EdgeCases:
         pf = bundle.c08_06["project_finance"]
         strong_short = pf.filter(pl.col("row_ref") == "0010")
         assert strong_short["0040"][0] == pytest.approx(0.0)
+
+    def test_zero_ead_total_row_reports_no_risk_weight_under_crr(self):
+        """A zero-EAD Total row does not borrow its first leg's risk weight.
+
+        The zero-EAD branch writes the subset's first risk weight into col 0070
+        where no weighted average exists. On a category row that IS the row's
+        Table 1 weight; on a Total row it is a weight the template does not have
+        (Annex II p.115: col 0070 is fixed, and Table 1 has no total weight).
+        """
+        # Arrange: one strong / short leg carrying no exposure value.
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL01"],
+                "counterparty_reference": ["CP01"],
+                "approach_applied": ["slotting"],
+                "sl_type": ["project_finance"],
+                "slotting_category": ["strong"],
+                "is_short_maturity": [True],
+                "risk_weight": [0.50],
+                "ead_final": [0.0],
+                "rwa_final": [0.0],
+                "drawn_amount": [0.0],
+            }
+        )
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(lf, framework="CRR")
+        pf = bundle.c08_06["project_finance"]
+        col_0070 = dict(zip(pf["row_ref"], pf["0070"], strict=True))
+
+        # Assert
+        assert col_0070["0010"] == pytest.approx(0.50)
+        assert col_0070["0110"] is None
 
     def test_errors_list_populated_on_missing_columns(self):
         lf = pl.LazyFrame(

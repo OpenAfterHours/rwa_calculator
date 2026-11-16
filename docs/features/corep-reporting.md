@@ -882,6 +882,9 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     - A leg that moved to a retail guarantor's class while keeping its obligor's F-IRB
       approach stays on its obligor's sheet (retail exposures are A-IRB only, CRR Art. 151(4)).
 
+    OF 09.02's sub-class rows read the same definition, because the Bank ties each of them
+    to the total of these sheets (see [OF 09.02](#c-0902-of-0902-cr-gb-2-geographical-breakdown-irb)).
+
     **Supervisory slotting** is reported on row 0080 of sheet 0010 and of Total 0002, and
     nowhere else. On those two sheets row 0080 is reported as zero when the firm has no
     slotting exposure. OF 08.02, 08.03 and 08.05 exclude slotting, so their sheet 0010 holds
@@ -2094,6 +2097,31 @@ and once per material country.
     !!! warning "Removed Row"
         Row **0140** (Equity) is removed — equity is no longer an IRB exposure class under
         Basel 3.1. Total exposures (0150) equals the sum of rows 0020, 0030, and 0060.
+
+    **One classification with OF 08.01.** The Bank ties each sub-class row, all countries,
+    to the OF 08.01 sheets of that sub-class: row 0048 to sheet 0022, row 0050 to sheets
+    0023 and 0024, row 0055 to sheets 0011 and 0012, rows 0071–0074 to sheets 0020, 0021,
+    0018 and 0019, and rows 0120 and 0130 to sheets 0016 and 0017 (`boe_b1034`,
+    `boe_b0288`, `boe_b1053`, `boe_b1071`, `boe_b0297`, `boe_b0300` and their siblings, all
+    ERROR). OF 09.02 therefore places each leg with the definition OF 02.00 and OF 08 use
+    (`rwa_calc.reporting.corep.irb_sheets`):
+
+    - Rows 0048, 0050 and 0055 count the corporate legs whose OF 08 sheet is one of the
+      row's sheets, on the column's own basis (the obligor's for original exposure,
+      provisions, PD, LGD and expected loss; the guarantor's for exposure value and RWEA).
+      Row 0048 is the classifier's "financial corporates and large corporates" sub-class
+      (Art. 147(4C)), not the correlation-multiplier flag `cp_apply_fi_scalar`, which marks
+      the narrower Art. 153(2) population. An A-IRB financial or large corporate is counted
+      in row 0055, as OF 08 reports it on sheet 0011.
+    - Rows 0071–0074, 0120 and 0130 count the row's retail class split by the SME flag
+      (the classifier's sub-class, or `is_sme`) and, for real estate, by property type
+      (`commercial` / `cre` is commercial, anything else residential). They use the flags
+      rather than the sheet itself so that a leg moved to a retail guarantor's class while
+      keeping its obligor's F-IRB approach stays in the retail row its parent row 0060
+      counts it in; OF 08 keeps that leg on its obligor's sheet (plan P1.384).
+
+    CRR C 09.02 is unchanged: it has no financial-and-large row and keeps C 07.00's
+    row-0020 SME test.
 
 === "Differences Summary"
 

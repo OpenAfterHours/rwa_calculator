@@ -50,11 +50,14 @@ import polars as pl
 import pytest
 from tests.fixtures.reporting_irb_shapes_portfolio import (
     BEEL_RET_DEF,
+    DRAWN_CORP_ONB,
+    DRAWN_FINCOLL,
     DRAWN_LFSE,
     DRAWN_RET_DEF,
     IRB_SHAPES_EXPECTED_APPROACH,
     LGD_RETAIL,
     LIFE_SURRENDER_VALUE,
+    LIMIT_CORP_OC,
     LN_LFSE,
     LN_LIFE,
     LN_RET_CTRL,
@@ -409,6 +412,58 @@ class TestOfWhichSubSplitsAreTwoSided:
             "the defaulted sub-split must sit strictly inside the sheet total — "
             "equal means the live control leaked in, zero means the defaulted "
             "leg did not reach the subset at all"
+        )
+
+
+class TestOf0902SubClassRowsAreTheOf08Sheets:
+    """OF 09.02's corporate sub-class rows count the legs the OF 08.01 sheets count.
+
+    The Bank ties each OF 09.02 sub-class row, all countries, to the OF 08.01 sheets
+    of that sub-class (``boe_b1034`` / ``b1051`` / ``b1052``: row 0048 against the
+    financial-and-large sheet 0022; ``boe_b1053`` / ``b1054`` / ``b1055``: row 0055
+    against the other-general non-SME sheets 0011 and 0012). Row 0048 used to key
+    the correlation-multiplier input ``cp_apply_fi_scalar`` instead of the sub-class
+    OF 08 reads, so this book's LFSE obligor — flagged for the multiplier, an other
+    general corporate by sub-class — sat in row 0048 while sheet 0012 counted it,
+    and both ties broke by its whole leg (plan P2.67).
+
+    Basel 3.1 only: the CRR C 09.02 layout has no financial-and-large row.
+    """
+
+    def test_the_other_general_corporates_row_is_the_non_sme_firb_sheet(self) -> None:
+        _results, corep, _p3 = _run("b31")
+        row = corep.c09_02["TOTAL"]
+        sheet = corep.c08_01[_IRB_SHEET["b31"]["corporate"]]
+        # Every F-IRB corporate here is non-SME, the LFSE obligor among them:
+        # the drawn anchor, the issued guarantee, the commitment's undrawn
+        # headroom, the LFSE loan and the collateralised loan.
+        original_exposure = (
+            DRAWN_CORP_ONB
+            + NOMINAL_CORP_GTEE
+            + (LIMIT_CORP_OC - DRAWN_CORP_ONB)
+            + DRAWN_LFSE
+            + DRAWN_FINCOLL
+        )
+
+        assert _cell(sheet, "0020") == pytest.approx(original_exposure)
+        for column_09, column_08 in (("0010", "0020"), ("0105", "0110"), ("0110", "0260")):
+            assert _cell(row, column_09, "0055") == pytest.approx(_cell(sheet, column_08)), (
+                f"OF 09.02 r0055 c{column_09} is not OF 08.01 sheet 0012 r0010 "
+                f"c{column_08}: the two templates classify a corporate leg differently"
+            )
+
+    def test_the_financial_and_large_row_is_empty_with_no_financial_or_large_sheet(
+        self,
+    ) -> None:
+        _results, corep, _p3 = _run("b31")
+        row = _row(corep.c09_02["TOTAL"], "0048")
+
+        assert "corporate_financial_large_firb" not in corep.c08_01, (
+            "the book now holds a financial or large corporate: this test's premise moved"
+        )
+        reported = {column: value for column, value in row.items() if value is not None}
+        assert set(reported) == {"row_ref", "row_name"}, (
+            f"OF 09.02 r0048 reports {reported} with no sheet 0022 to tie it to"
         )
 
 

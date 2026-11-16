@@ -7300,6 +7300,7 @@
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/thresholds.py",
+        "reporting/corep/c09.py",
         "reporting/corep/irb_sheets.py",
         "reporting/pillar3/cr9.py",
         "reporting/pillar3/generator.py",

@@ -26,11 +26,12 @@ Distinctions that are load-bearing here:
   produce.
 - An all-null / all-zero comparison is VACUOUS, not a PASS. A vacuous pass is no
   evidence of correctness and is counted separately.
-- A place where NONE of the cells the rule reads is reported is not a place the
-  Bank's gateway evaluates, unless the rule is marked "always execute": an XBRL
-  processor skips an evaluation in which every variable has fallen back to its
-  default, so the zero-filled defaults there are not figures the return states
-  and nothing is compared. So when such a
+- A place where NONE of the cells the rule reads is reported is not a place a
+  supervisor's XBRL processor evaluates, unless the rule is marked "always
+  execute" (the Bank marks 35; the EBA marks none): a variable set whose fact
+  variables all evaluate to fallback values "is not deemed to have been
+  evaluated" (XBRL Variables 1.0, section 4), so the zero-filled defaults there
+  are not figures the return states and nothing is compared. So when such a
   place FAILS, it is NOT_EVALUATED (``nothing_reported``), never a break. When
   it HOLDS it stays VACUOUS — deliberately not NOT_EVALUATED — because the
   vacuity count is what the dead-cell defence reads, and a holding comparison
@@ -330,8 +331,9 @@ def evaluate_at(
     ``always_execute`` is the rule's ``ValidationRule.always_execute``. When it
     is ``False`` and none of the cells read here is reported, a failing
     comparison is ``NOT_EVALUATED`` (``nothing_reported``) rather than a break,
-    because the publisher's gateway does not evaluate the rule at such a place.
-    A holding comparison there is still ``VACUOUS``.
+    because an XBRL processor does not evaluate the rule at such a place. It is
+    ``False`` for every EBA rule and for the Bank's rules not marked "Always
+    execute". A holding comparison there is still ``VACUOUS``.
 
     Returns a ``CoordinateOutcome`` with status ``PASS`` / ``FAIL`` /
     ``VACUOUS`` / ``NOT_EVALUATED``; it never raises for a data condition.

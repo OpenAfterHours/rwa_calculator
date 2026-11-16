@@ -16,11 +16,12 @@ Key responsibilities:
   operational and settlement risk rows a credit-risk calculator does not produce.
 - Vacuity. Operands that are all null or all zero make a comparison VACUOUS, not
   PASS: a vacuous pass is no evidence of correctness.
-- Nothing reported. Where none of a Bank rule's cells is a fact, the gateway
-  does not evaluate the rule unless it is marked "always execute", so a failing
-  comparison over zero-filled blanks is a named skip, never a break; a holding
-  one stays VACUOUS, and a reported zero is still evaluated. Pinned on the
-  packaged boe_b0778, with its EBA twin v09796_m pinned as unchanged.
+- Nothing reported. Where none of a rule's cells is a fact, an XBRL processor
+  does not evaluate the rule unless it is marked "always execute" (the Bank
+  marks 35; the EBA none), so a failing comparison over zero-filled blanks is a
+  named skip, never a break; a holding one stays VACUOUS, and a reported zero
+  is still evaluated. Pinned on the packaged boe_b0778 and its EBA twin
+  v09796_m.
 
 Why: a false negative in this evaluator is worse than no evaluator, because it
 gives false confidence that a return is submittable. Each test below is one way
@@ -526,17 +527,48 @@ def test_boe_b0778_is_evaluated_on_a_row_that_reports_zero_shares() -> None:
     assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_FAIL, 1, 1)
 
 
-def test_the_eba_twin_v09796_m_keeps_its_treat_as_zero_reading_under_crr() -> None:
-    """CRR is deliberately unchanged: the EBA publishes no "always execute" column.
+def test_eba_v09796_m_is_not_broken_on_a_class_that_reports_no_share() -> None:
+    """The EBA twin of boe_b0778 has nothing to test on a class with no share either.
 
-    v09796_m (``{c0030} + {c0040} + {c0050} = 1``, treat as zero) is the same
-    check on C 08.07. Whether the EBA runs it where no share is reported is not
-    settled by the EBA's own workbook, and no EBA taxonomy package is held to
-    measure it, so every EBA rule keeps ``always_execute`` and this row still
-    breaks. Change it only with that evidence.
+    v09796_m (``{c0030} + {c0040} + {c0050} = 1``, "treat as zero") reads three
+    fact variables that each fall back to 0. Where none of the three is a fact,
+    every variable has fallen back, and XBRL Variables 1.0 (section 4, special
+    case 2) says such a variable set "is not deemed to have been evaluated".
+    Arelle on the Bank's restatement of the EBA's v09779_m — nine ``dv: 0``
+    variables, the same construct — counts no evaluation on a filed C 08.04
+    with no cell reported, and one on the same table with one cell reported 0.
     """
+    # Arrange: one class with no share reported, one class at 100 / 0 / 0.
+    cells = {"0010": _shares(None, None, None), "0020": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_CRR, "v09796_m", cells)
+
+    # Assert: the reported row is evaluated and holds; the empty one is not counted.
+    assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_PASS, 1, 0)
+
+
+def test_eba_v09796_m_records_the_empty_row_as_skipped_rather_than_dropping_it() -> None:
+    """The row the guard leaves out under CRR is still counted, as a skip."""
     # Arrange
     cells = {"0010": _shares(None, None, None), "0020": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_CRR, "v09796_m", cells)
+
+    # Assert
+    assert (outcome.evaluated, outcome.skipped) == (1, 1)
+
+
+def test_eba_v09796_m_still_breaks_where_one_share_is_reported_as_zero() -> None:
+    """The control: one reported share is a fact, so the row is evaluated and breaks.
+
+    0 + 0 + 0 = 1 fails whether the zeros are reported or fallen back; what the
+    guard keys on is whether ANY of the three is a fact. Arelle agrees on the
+    Bank's boe_b0778: a row reporting only one share, as 0, is unsatisfied.
+    """
+    # Arrange
+    cells = {"0010": _shares(None, None, 0.0), "0020": _shares(1.0, 0.0, 0.0)}
 
     # Act
     outcome = _packaged_rule_outcome(FRAMEWORK_CRR, "v09796_m", cells)

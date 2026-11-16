@@ -69,8 +69,8 @@ would and would not add, measured rather than assumed. It would NOT add a
 supervisory break: against the same portfolio with the high-risk obligor swapped
 for a second corporate, the break set is identical (Basel 3.1 ``boe_b0703`` /
 ``boe_b0710`` / ``boe_b0778``, CRR ``v09796_m``, as measured then; ``boe_b0778``
-has since left it, since the template-level engine no longer breaks a Bank rule
-where nothing is reported) and only the executed count
+and ``v09796_m`` have since left it, since the template-level engine no longer
+breaks a rule where nothing is reported) and only the executed count
 moves, 173 -> 179 under Basel 3.1 and 110 -> 115 under CRR. What it WOULD do is
 bank the P3.7 Pillar 3 stranding — a ``high_risk`` leg reaches no CR4/CR5 class
 row, so 4,000,000 of exposure and 6,000,000 of RWEA break both templates' footing

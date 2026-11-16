@@ -791,14 +791,24 @@ default value (`dv`) once for the whole rule rather than per reference, refuses
 cannot see that one data point is shown in two tables. `validate_return` does
 not use it.
 
-Like the gateway, it does not break a Bank rule at a place where none of the
-cells the rule reads is reported, unless the rule is marked "always execute"
-(35 of the Bank's 816 rules): a failing comparison there is not evaluated, with
-the reason `nothing_reported`. A reported zero is a fact and is evaluated. A
-comparison over unreported cells that holds is still counted as vacuous, so a
-template cell nothing ever fills stays visible. EBA rules carry no such flag,
-so a CRR "treat as zero" rule still breaks over a place where nothing is
-reported.
+Like the gateway, it does not break a rule at a place where none of the cells
+the rule reads is reported, unless the rule is marked "always execute" (35 of
+the Bank's 816 rules, and none of the EBA's): a failing comparison there is not
+evaluated, with the reason `nothing_reported`. A reported zero is a fact and is
+evaluated. A comparison over unreported cells that holds is still counted as
+vacuous, so a template cell nothing ever fills stays visible.
+
+This holds for the CRR (EBA) rules too. XBRL Variables 1.0, section 4, says: "If
+a variable set contains fact variables but all of the fact variables in it
+evaluate to fallback values, then the variable set is not deemed to have been
+evaluated." An EBA "treat as zero" rule is such a variable set, each cell
+falling back to 0. The Bank's own package restates 46 of those rules under the
+EBA's ids, 45 with a default on every reference and none marked "always
+execute". Arelle runs one of them, `v09779_m` (the C 08.04 flow total), on a
+filed C 08.04 and counts no evaluation where no cell is reported, but one where
+a single cell is reported as 0. So `v09796_m`
+(`{c0030} + {c0040} + {c0050} = 1` on C 08.07) is not broken on a roll-out
+class that has no exposure and reports no share.
 
 ## Findings
 

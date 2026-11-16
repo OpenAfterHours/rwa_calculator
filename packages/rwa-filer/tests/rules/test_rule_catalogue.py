@@ -281,13 +281,53 @@ def test_the_boe_always_execute_flag_is_read_from_the_extract() -> None:
     assert (loaded, len(loaded), "boe_b0778" in loaded) == (published, 35, False)
 
 
-def test_every_eba_rule_keeps_always_execute() -> None:
-    """The EBA publishes no such column, so every CRR rule keeps today's reading."""
+def test_no_eba_rule_is_always_execute() -> None:
+    """The EBA marks no rule "always execute", so none is run over an unreported place.
+
+    The EBA workbook has no such column, and XBRL needs none: a variable set
+    whose fact variables all take their fallback value "is not deemed to have
+    been evaluated" (XBRL Variables 1.0, section 4, special case 2). An EBA
+    "treat as zero" rule is such a set, and a "do not run rule" one has no
+    fallback to bind at all.
+    """
     # Arrange / Act
-    not_always = [r.rule_id for r in load_rules(FRAMEWORK_CRR).rules if not r.always_execute]
+    always = [r.rule_id for r in load_rules(FRAMEWORK_CRR).rules if r.always_execute]
 
     # Assert
-    assert not_always == []
+    assert always == []
+
+
+def test_the_bank_runs_none_of_the_eba_treat_as_zero_rules_it_restates_where_nothing_is_reported() -> (
+    None
+):
+    """The Bank's own XBRL of the EBA's "treat as zero" rules is a fallback, never always-execute.
+
+    The Bank's package carries 46 of the EBA's "treat as zero" rules under the
+    EBA's own ids (``v09779_m``, the C 08.04 flow total, is one): not one is
+    marked "Always execute", and 45 give every reference a ``dv`` default, the
+    Bank's spelling of XBRL ``@fallbackValue``. That is the publisher evidence
+    behind ``test_no_eba_rule_is_always_execute``; it reads only the two raw
+    extracts, so it cannot drift with the catalogue it supports.
+    """
+    # Arrange
+    eba = {r["id"]: r for r in raw_extract(FRAMEWORK_CRR)["rules"]}
+    boe = {r["id"]: r for r in raw_extract(FRAMEWORK_BASEL_3_1)["rules"]}
+    restated = [
+        rule_id
+        for rule_id in sorted(set(eba) & set(boe))
+        if (eba[rule_id]["if_value_missing"] or "").startswith("treat as zero")
+    ]
+
+    # Act
+    always = [rule_id for rule_id in restated if boe[rule_id]["always_execute"]]
+    defaulted = [
+        rule_id
+        for rule_id in restated
+        if all("dv:" in ref for ref in re.findall(r"\{[^{}]*\}", boe[rule_id]["expression_raw"]))
+    ]
+
+    # Assert
+    assert (len(restated), always, len(defaulted)) == (46, [], 45)
 
 
 def test_the_boe_interval_operator_is_recovered_from_the_raw_expression() -> None:

@@ -35,11 +35,20 @@ enforced Bank rules (``boe_b0383``, ``boe_b0512_2``, ``boe_b0718``,
 ``boe_b0785``) — and on the registered portfolios it changes no rule's verdict.
 The return-level engine (``rwa_filer.boe``) applies each reference's own default.
 
-Where none of a rule's cells is reported, the Bank's gateway does not evaluate
-the rule there at all, unless the rule is marked "Always execute" (a workbook
-column, carried here as ``always_execute``). The EBA workbook has no such
-column, so every EBA rule keeps ``always_execute`` set: the CRR reading is
-unchanged until the EBA's own behaviour can be measured.
+Where none of a rule's cells is reported, an XBRL processor does not evaluate
+the rule there at all: "If a variable set contains fact variables but all of
+the fact variables in it evaluate to fallback values, then the variable set is
+not deemed to have been evaluated" (XBRL Variables 1.0, section 4, special case
+2), and a fact variable with no fallback "cannot be evaluated" over an empty
+source sequence (section 4.2). The Bank's workbook marks the exceptions it runs
+regardless with an "Always execute" column, carried here as
+``always_execute``. The EBA's workbook has no such column and needs none: its
+"treat as zero/empty string" is the numeric / string fallback value, so EBA
+rules are read as not always-execute. The Bank's own package confirms that
+reading: it restates 46 of the EBA's "treat as zero" rules under the EBA's ids,
+45 with a ``dv`` default on every reference and none marked "Always execute",
+and Arelle counts no evaluation of one (``v09779_m``) on a filed C 08.04 with
+no cell reported, and one with a single cell reported as 0.
 
 Why: the published validation rules are the supervisor's own arithmetic checks
 on a submitted return. An Error-severity break rejects the whole submission, so
@@ -226,10 +235,11 @@ class ValidationRule:
             ``short_label``), quoted verbatim in a finding.
         always_execute: Whether the publisher runs the rule at a place where
             none of the cells it reads is reported. BoE: the workbook's
-            "Always execute" column (35 of the 816 Bank rules). The EBA has no
-            such column and keeps the default ``True`` — the reading this
-            engine has always taken — because whether the EBA runs a "treat as
-            zero" rule over an unreported place is not stated in its workbook.
+            "Always execute" column (35 of the 816 Bank rules). EBA: ``False``
+            for every rule — the EBA marks none, and an XBRL processor does
+            not evaluate a variable set whose fact variables have all fallen
+            back (see the module docstring). The default, ``True``, is for a
+            rule built by hand.
     """
 
     rule_id: str
@@ -390,6 +400,10 @@ def _parse_eba_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
         status=tuple(raw["status"]),
         reactivated_on=raw["reactivated_on"],
         label=raw["narrative"],
+        # The EBA publishes no "Always execute" column: no EBA rule is run where
+        # none of its cells is reported, as XBRL Variables 1.0 section 4 (special
+        # case 2) has it for a "treat as zero" rule's fallen-back variables.
+        always_execute=False,
     )
 
 

@@ -340,6 +340,207 @@ This one-cell return prints `False` and a single `VAL003`: the cell is valid,
 but no published rule can run on one cell, and a return nothing was checked
 against is not reported as clean.
 
+## Rules the Bank has switched off: the validations deny list
+
+After a taxonomy is published, the Bank of England keeps a **validations deny
+list**: the rules its gateway no longer runs, or now runs as warnings. Its
+words, from the workbook's Note sheet:
+
+> These validation execution amendments are applied post-taxonomy publication
+> and therefore override the information provided in the relevant taxonomy and
+> the taxonomy validations spreadsheet. Validation logic and scope will never be
+> altered in this document, only their execution configuration (severity).
+
+A rule can be on it in one of two ways.
+
+- **Deactivated.** "The rule will not be executed in the data collection system
+  and reporters are not expected to meet the requirements of this rule."
+- **Downgraded to Warning.** An Error the gateway now treats as a Warning:
+  "submissions that fail this rule will be accepted in the system."
+
+`rwa-filer` ships the list for each taxonomy release, beside its rule books,
+and applies it to every validation. For taxonomy 4.1.1 the Bank's November 2026
+list has these entries. Each one links to the known-issues log entry that
+explains it.
+
+| Module | Rules | What the Bank did | Applied | Known issue |
+|---|---|---|---|---|
+| PRA001 | `boe_b0710`, `boe_b0710_1`, `boe_b0710_2`, `boe_b0710_3` | deactivated | 19 October 2026 | #22 |
+| PRA001 | `boe_b0746` | deactivated | 19 October 2026 | #26 |
+| PRA001 | `boe_b0272` | deactivated | 16 November 2026 | #29 |
+| PRA001 | `boe_b0274` | deactivated | 16 November 2026 | #30 |
+| PRA116 | `boe_b0063_ss`, `boe_b0063-1_ss`, `boe_b0063-2_ss` | deactivated | 19 October 2026 | #21 |
+| PRA115 | `boe_b1014`, `boe_b1022` | deactivated | 14 May 2026 | #15 |
+| MRL001 | `boe_b4006_1`, `boe_b4006_2` | downgraded to Warning | 19 October 2026 | #23 |
+| MRL001 | `boe_b4008_1`, `boe_b4008_2` | downgraded to Warning | 19 October 2026 | #24 |
+
+`rwa-filer rulebook deny-list` prints the packaged list, and says which entries
+are in force on a date (`--on`).
+
+**What changes in a validation.** A deactivated rule is reported as not
+evaluated, with the reason `deactivated_by_publisher`. It is not a finding, and
+it is not a gap that makes the check incomplete, because the gateway would not
+run it however complete the check was. A downgraded rule that breaks is a
+`VAL002` warning, which does not block. Its message says the Bank downgraded it.
+The text report gives one line for each rule on the list, with the date, the
+known-issue number, and what the published rule finds on the return.
+
+**Which date decides.** The list is the gateway's configuration on the day a
+return is submitted. It says nothing about the return itself. So an entry
+applies from its "Date Applied" on the run date, never on the return's reference
+date. The release a run uses is chosen by the run date for the same reason. For
+a return that will be submitted later, `--submission-date` (on `validate`,
+`build` and `compare`, and `submission_date=` in Python) names the day. An entry with no date
+has been identified by the Bank but not yet applied: it is listed as pending,
+and never applied.
+
+**What does not change.**
+
+- **The rule.** Its expression, its scope and its `rule_sha256` are the
+  taxonomy's. The list changes how a rule is run, not what it checks. Each rule
+  record says which entry applied (`deny_list`). Where the entry changed the
+  outcome, the record also gives the published rule's own verdict (`formula`).
+- **The referee comparison.** Arelle runs the taxonomy's formulas, and those
+  still contain every rule on the list. The referee therefore compares Arelle's
+  verdict with the published rule's verdict, not with the configured one, and
+  says what the Bank did beside the comparison.
+- **The evidence export.** It holds no evaluations of a deactivated rule,
+  because nothing that rule found is behind the verdict. The rule's own record
+  keeps the counts of the published rule.
+- **The template-level engine.** It reads the same packaged list: a deactivated
+  rule is not enforced and a downgraded one is a warning. The DPM variant
+  columns are still derived from the published rules, because the list never
+  changes a rule's scope.
+
+**Where it comes from.** The packaged file is
+`rwa_filer/boe/data/deny/<release>.json`. It is imported from the Bank's workbook
+(`boe-banking-validations-deny-list-<month>-<year>.xlsx`, published on the
+Bank's banking reporting page beside the known-issues log) and joined to the
+log for the issue numbers. It is never edited by hand.
+
+- `rwa-filer rulebook deny-list import WORKBOOK --release 4.1.1 --known-issues LOG --out DIR`
+  builds it.
+- `... check` fails when the packaged file is not exactly what the workbook gives.
+
+Every code the workbook lists is matched to a rule of its module in that
+release, and a code that matches none is reported and kept under `unmatched`.
+One kind of typo is resolved, by a fixed rule. The Bank's rule numbers have four
+digits, so a longer number with extra leading zeros is read as the four-digit
+code, but only when the code as written names no rule and the four-digit code
+does. The November 2026 list writes `boe_b04006_1` and `boe_b04006_2`. MRL001's
+rules are `boe_b4006_1` and `boe_b4006_2`, as known issue #23 names them. The
+entry keeps the Bank's spelling as `published_code`.
+
+## Known issues with the published rules
+
+Some published rules are wrong: a return that follows the reporting
+instructions fails them, they pass figures the rules do not permit, or they
+never run. `rwa-filer` ships, for each taxonomy release, a **register** of the
+ones it knows about, with the evidence for each, and labels every result one of
+them explains. **The verdict never changes:** a rule that breaks still breaks,
+with the same severity, code and figures, and a return it blocks is still
+blocked. Only the words beside the result change, so the reader knows the break
+is the published rule's, not the return's.
+
+```bash
+# Every known issue of every shipped release, one per line
+uvx rwa-filer@latest rulebook issues
+
+# One issue in full: the rule, the instructions quoted with their page, why a
+# correct return fails, the smallest correct return, the proposed fix
+uvx rwa-filer@latest rulebook issues PI-05
+
+# The register as the write-up to share with the Bank (Markdown), or as JSON
+uvx rwa-filer@latest rulebook issues --format markdown > known-issues.md
+uvx rwa-filer@latest rulebook issues --format json --module PRA001
+```
+
+**What an issue says.** Each has an id (`PI-05`), a kind, a title, the rules it
+names (each pinned by its `rule_sha256`, so an issue never labels a changed rule
+that kept its code), the instructions and rules it rests on, quoted with the
+page of the PDF, why a correct return fails (or, for a question, what is open),
+a worked example, what the Bank could change, EBA precedent, reach, and what a
+firm can do meanwhile. Its **kind** says how sure the case is:
+
+| Kind | Meaning |
+|---|---|
+| `defect` | the published rule is wrong: a return that follows the instructions breaks it, passes figures it should not, or it never runs |
+| `clarification` | an open question with the published rule: the instructions can be read so that a correct return breaks it, and the Bank is asked which reading it intends. Its label says "Open question", and says the break "may be" the rule's, never that it is |
+| `acknowledged` | the Bank's own known-issues log records it; the log's entry is quoted word for word |
+
+Its **status** says where it stands with the Bank:
+
+| Status | Meaning |
+|---|---|
+| `draft` | identified by rwa-filer, not yet raised with the Bank of England |
+| `raised` | raised with the Bank, on the date given |
+| `acknowledged` | in the Bank's own known-issues log (the entry is quoted) |
+| `fixed` | fixed by the Bank in a later taxonomy release |
+
+A rule the Bank has **deactivated** at its gateway is told by the deny list
+above, not by a label: it is not run, so there is no break to label.
+
+**Which results are labelled.** An issue's *effect* decides:
+
+- a rule that **fails correct returns** labels a FAIL;
+- a rule that **passes wrong returns** labels a PASS ("this pass is no evidence
+  ...");
+- a rule that **never runs** labels the rule not evaluated because its formula
+  cannot fire or nothing it reads is reported;
+- an issue in the instructions or the taxonomy alone labels nothing; it is in
+  the register and the write-up only.
+
+**Where a break is explained.** An issue may apply to part of a rule only - a
+column, some rows, some sheets (its *footprint*). Every unsatisfied evaluation,
+not only the five a result keeps, is classed inside or outside it: "4 of 14
+unsatisfied evaluation(s) are where the published rule is known to be wrong; 10
+are not, and are not explained by it". A break outside every footprint is a
+break in the return, and the label says so. Where an issue cannot tell its own
+break from one in the return, the label says the break "may be" the issue.
+
+**Where the label appears.**
+
+- The finding's message gains one sentence per issue, and the finding names the
+  issues (`publisher_issues`).
+- The text report adds a line per labelled result after the counts; the verdict
+  line is unchanged.
+- The JSON report: each rule's `publisher_issues`, each finding's
+  `publisher_issues`, `summary.publisher_issues` (by issue, with the breaks
+  inside and outside), and `identity.publisher_issues` (the register's file and
+  SHA-256 - outside `evidence_id`, because a label is not a check).
+- The evidence export: each rule record's labels, and on each unsatisfied
+  evaluation of a labelled break the issues whose footprint holds it (`[]` when
+  none does).
+- The dashboard: a "Known issue" chip ("Open question" for a clarification) on
+  the rules list, the overview and the module reference page; a callout in the
+  rule detail and in the cell panel.
+- The filing manifest, which copies the report's findings and summary.
+
+There is no separate exit code: `validate`'s exit code is the verdict's. A
+script that must tell "blocked only by breaks a known issue explains" from the
+rest reads `summary.publisher_issues` (or `ReturnValidation.publisher_issues`
+in Python).
+
+**Where it comes from, and what holds it to the evidence.** The register is
+`rwa_filer/boe/data/issues/<release>.json` (schema
+`schemas/publisher-issues-1.schema.json`), curated by hand from findings, never
+imported. The package's tests hold it to the release: every rule it names is a
+rule of that module at that fingerprint and severity, every footprint names
+cells of the module's pack, and each status agrees with its fields. Each
+issue's worked example was run once through Arelle against the Bank's taxonomy
+package, and CI holds the engine to Arelle's counts and the issue to its claim -
+a defect's rules at issue unsatisfied on it, a clarification's the outcome it
+states, and every rule the write-up calls a control holding on it - so a release
+in which the Bank fixes a rule fails until the issue is closed. No issue names a
+data point by rwa-filer's own pack index, which the Bank's DPM does not know. In
+the repository,
+`tests/contracts/test_publisher_issue_quotes.py` checks every quote is on its
+page of the PDF. The write-up is generated as
+[`publisher-issues.md`](publisher-issues.md) by
+`scripts/generate_publisher_issues.py`, grouped as defects, clarification
+questions and issues the Bank has already acknowledged; it stays out of the site
+navigation until it is signed off.
+
 ## The validation report and the evidence export
 
 `--report FILE` (or `--format json`) writes the **validation report**: one JSON
@@ -349,7 +550,7 @@ that wants to rely on this engine's results rather than recompute them.
 
 ### The validation report
 
-The report declares its shape (`"schema": {"name": "rwa-filer/validation-report", "version": "2.0"}`),
+The report declares its shape (`"schema": {"name": "rwa-filer/validation-report", "version": "2.1"}`),
 and its JSON Schema ships in the package:
 `rwa_filer.schemas.load_schema(rwa_filer.schemas.VALIDATION_REPORT_SCHEMA)`.
 Within a major version the report only gains fields. It holds:
@@ -362,20 +563,29 @@ Within a major version the report only gains fields. It holds:
   the generator version. `evidence_id` is one digest over the inputs: two runs
   with the same `evidence_id` ran the same checks on the same figures. The
   source file is recorded but is not part of it, so the same facts as a `.xbrl`
-  or a `.zip` share one id.
+  or a `.zip` share one id. `deny_list` records the validations deny list
+  applied: its file, the date, and the entries in force for the module. Only
+  the entries in force count towards `evidence_id`, so a run on another day
+  has the same id unless the gateway changed in between.
 - `status`, `submittable` and `completeness`: the verdict, and each cause of an
   incomplete check with every rule and template it covers. The causes are
   `no_rulebook`, `rules_unsupported`, `rules_table_not_in_taxonomy`,
-  `linked_templates_missing` and `coverage_shortfall`. A rule not run because it
-  has no data, because the taxonomy's own formula cannot fire on the return, or
-  because it reads only templates the return does not report, is not a gap: the
-  gateway does not run it either.
+  `linked_templates_missing` and `coverage_shortfall`. Some rules that are not
+  run are not gaps, because the gateway does not run them either: a rule with
+  no data, a rule the taxonomy's own formula cannot fire on the return, a rule
+  the Bank has deactivated, and a rule that reads only templates the return does
+  not report.
 - `rules`: **every** enforced rule, passes included, each with its status,
   evaluation counts, `rule_sha256` (a digest of everything that decides how the
   rule runs, so a changed formula under an unchanged code shows) and the first
-  five failing evaluations with their cell coordinates.
+  five failing evaluations with their cell coordinates. Since 2.1 each rule
+  also has `deny_list`, the Bank's entry for it or null, and `formula`, the
+  published rule's verdict where that entry changed the outcome, or null.
+  `summary.deny_list` lists what the list deactivated, what it downgraded and
+  what it did not apply. Each rule also has `publisher_issues`: the labels known
+  issues with the published rule put on it (see above).
 - `findings`: every finding, each with `positions_total`, the number of facts
-  it is about.
+  it is about, and `publisher_issues`, the known issues that label it.
 
 ### The evidence export
 
@@ -385,10 +595,10 @@ the verdict, so it cannot describe a different run:
 
 | `record` | One per | Holds |
 |----------|---------|-------|
-| `header` | file | the schema (`rwa-filer/evidence` 1.0), the same `identity` as the report, the status and completeness, and how many records of each kind follow |
+| `header` | file | the schema (`rwa-filer/evidence` 1.1), the same `identity` as the report, the status and completeness, and how many records of each kind follow |
 | `cell` | reported cell any evaluation read | its coordinates, data point, metric and type, its value, the `decimals` it was compared at, where that came from (`stated` by the fact, the run's `accuracy`, or `integer`), and its rounding allowance |
-| `rule` | enforced rule | as in the report, plus the expression, scope, `where` and join |
-| `evaluation` | evaluation, satisfied or not, uncapped | where it was made (`place`), whether it held, the cells each side read, and every comparison it executed |
+| `rule` | enforced rule | as in the report (`deny_list` and `formula` included, since 1.1), plus the expression, scope, `where` and join |
+| `evaluation` | evaluation, satisfied or not, uncapped | where it was made (`place`), whether it held, the cells each side read, and every comparison it executed. A rule the Bank has deactivated has none: its published rule's counts are on its `rule` record, under `formula` |
 | `finding` | finding | as in the report, with its index |
 | `structure_exception` | fact a finding is about, uncapped | the finding's index and code, the fact's coordinates or source reference, its value, and what is wrong with it |
 | `trailer` | file | the counts again, and `content_sha256` over every line before it |
@@ -592,6 +802,13 @@ the comparison, never dropped: the regulator's checks would not see it either.
 Rules that break in both files are listed too: not a difference, but neither
 return satisfies them.
 
+Both returns are judged by the rules as the Bank's gateway runs them on the
+submission date, as `validate` judges one (`--submission-date`, default
+today). A rule the validations deny list switches off that day points at
+neither return. If its published formula breaks in either, it is listed as
+switched off, so the comparison never hides it. A rule the list downgrades to a
+warning still runs at the gateway, and is compared like any other.
+
 The exit code is `0` only when the two are equivalent: the same header and
 templates, nothing unplaced, no material difference, and no rule that breaks
 in one file only. `--format json` gives the whole comparison, every finding and
@@ -766,6 +983,12 @@ missing cell as a skip, sums a list of cells where the Bank's gateway would test
 each one, and uses one tolerance for a whole rule. `validate_return` does not
 use it.
 
+It honours the Bank's validations deny list, from the same packaged file, as it
+stands on the day the rules are loaded (`load_rules(framework, on=...)`,
+defaulting to today). A deactivated rule is not in `RuleSet.enforced`, and a
+downgraded one has `severity` Warning. `RuleSet.published_in_force` is the
+extract's own population, before the list.
+
 ## Findings
 
 Validation returns a list of `Finding` records. It never raises for a condition
@@ -841,8 +1064,25 @@ uvx rwa-filer@latest dash return.xbrl
 # A return beside the one your current system produces, and why they differ
 uvx rwa-filer@latest compare current-system.xbrl rwa-filer.xbrl
 
-# The packaged Bank of England rule books: modules, rules, rules enforced
+# The packaged Bank of England rule books: modules, rules, rules enforced, and
+# how many the Bank's validations deny list switches off or downgrades today
 uvx rwa-filer@latest rulebook list
+
+# The Bank's validations deny list, entry by entry, as it stands on a date
+uvx rwa-filer@latest rulebook deny-list --module PRA001 --on 2027-03-31
+
+# The known issues with the published rules: every one, one in full, or the
+# register as the write-up to share
+uvx rwa-filer@latest rulebook issues
+uvx rwa-filer@latest rulebook issues PI-05
+uvx rwa-filer@latest rulebook issues --format markdown
+
+# Rebuild a release's deny list from the Bank's workbook, joined to the
+# known-issues log; or fail if the packaged one is not what it yields
+uvx "rwa-filer[excel]@latest" rulebook deny-list import deny-list.xlsx --release 4.1.1 \
+    --known-issues known-issues.xlsx --out deny/
+uvx "rwa-filer[excel]@latest" rulebook deny-list check deny-list.xlsx --release 4.1.1 \
+    --known-issues known-issues.xlsx
 
 # Rebuild a rule book from one of the Bank's validation workbooks. With the
 # taxonomy package it also records what each rule's formula fixes, and what
@@ -897,7 +1137,16 @@ lists; it is the one file edited by hand. To add a release:
    template-level extract for the newest release, sets end dates where a newer
    release changes a module's entry point, and writes the release's measurement
    file under `packages/rwa-filer/tests/releases/<version>/`.
-4. Review the diff and release `rwa-filer`.
+4. Import the Bank's validations deny list for the release:
+   `uv run python scripts/build_filer_release.py <version> --deny-list`. It reads
+   the newest deny list and known-issues log in `docs/assets/` (git-ignored;
+   `uv run python scripts/download_docs.py` fetches them) and writes
+   `boe/data/deny/<version>.json`. Every code it cannot match to a rule is
+   printed. A release cannot ship without one. Re-run it whenever the Bank
+   publishes a new list, and `--deny-list --check` fails when the packaged file
+   is out of date. Rebuilding a release leaves its deny list alone, and retiring
+   a release removes it.
+5. Review the diff and release `rwa-filer`.
 
 `--check` rebuilds a packaged release in a scratch folder and fails on any file
 that differs: run against the Bank's 4.1.1 files, it reproduces the packaged

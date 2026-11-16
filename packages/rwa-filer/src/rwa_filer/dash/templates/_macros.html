@@ -29,6 +29,39 @@
 {%- endif -%}
 {%- endmacro -%}
 
+{#- What the Bank's validations deny list did to a rule: a chip for a list, a note for a detail. -#}
+{%- macro deny_chip(row) -%}
+{%- if row.deny -%}<span class="chip chip-info" title="{{ row.deny }}">{{ "Switched off by the Bank" if row.reason == "deactivated_by_publisher" else "Downgraded by the Bank" }}</span>{%- endif -%}
+{%- endmacro -%}
+
+{%- macro deny_note(row, published="") -%}
+{%- if row.deny -%}
+<div class="panel" role="note" style="border-color: var(--info)">
+  <div class="small muted">Validations deny list</div>
+  <p style="margin: 4px 0 0">This rule was {{ row.deny }}.{% if row.reason == "deactivated_by_publisher" %} The gateway does not run it, and firms are not expected to meet it.{% else %} A break is a warning to explain, and does not stop the submission.{% endif %}{% if published %} {{ published | capitalize }}.{% endif %}</p>
+</div>
+{%- endif -%}
+{%- endmacro -%}
+
+{#- A known issue with the published rule: a chip for a list, a callout for a detail. -#}
+{%- macro issue_chip(row) -%}
+{%- for note in row.issues -%}<span class="chip chip-issue" title="{{ note.sentence }}">{{ "Open question" if note.kind == "clarification" else "Known issue" }} {{ note.issue_id }}</span>{%- endfor -%}
+{%- endmacro -%}
+
+{%- macro issue_callout(item) -%}
+{%- set note = item.note -%}
+<div class="callout callout-issue" role="note">
+  <div class="body">
+    <div class="title">{{ note.heading }} · {{ note.issue_id }}</div>
+    <p>{{ note.title }}</p>
+    <p class="small">{{ note.status_text | capitalize }}.{% if note.inside is not none %} {% if note.inside == 0 %}None of the {{ note.unsatisfied }} break{{ "s" if note.unsatisfied != 1 }} here is where it applies: they are not explained by it.{% else %}{{ note.inside }} of {{ note.unsatisfied }} break{{ "s" if note.unsatisfied != 1 }} {{ "may be" if note.attribution == "possible" else "are" }} where the published rule {{ "is open to question" if note.kind == "clarification" else "is known to be wrong" }}{% if note.outside %}; {{ note.outside }} {{ "is" if note.outside == 1 else "are" }} not explained by it{% endif %}.{% endif %}{% endif %} The verdict is unchanged.</p>
+    {% if item.quote %}<blockquote class="small">{{ item.quote }}</blockquote>{% endif %}
+    {% if item.issue.meanwhile %}<p class="small"><strong>Meanwhile:</strong> {{ item.issue.meanwhile }}</p>{% endif %}
+    <p class="small muted">The whole issue: <code>rwa-filer rulebook issues {{ note.issue_id }}</code></p>
+  </div>
+</div>
+{%- endmacro -%}
+
 {#- The rule's text as the Bank's workbook states it (Rules page and the cell panel). -#}
 {%- macro rule_text(rule) -%}
 {%- if rule.expression -%}

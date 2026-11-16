@@ -17,6 +17,15 @@ Key responsibilities:
   or reading finding is about.
 - Never recompute: the evidence is captured inside the evaluation that reached
   the verdict (``trace_return``), so it cannot describe a different run.
+- Say what the Bank's validations deny list did: a rule record carries the
+  entry in force (``deny_list``) and, where it changed the outcome, the
+  published rule's own verdict (``formula``). A rule the Bank has deactivated
+  has no evaluation records — the gateway does not run it, so nothing it found
+  is behind the verdict; its formula's counts are on its rule record.
+- Say where a known issue with the published rule explains a result: the rule
+  record carries its labels (``publisher_issues``), and each unsatisfied
+  evaluation of a labelled break the issues whose footprint holds it — an
+  empty list where none does, so a break the issue does not explain is visible.
 - Identify itself: the header carries the same ``identity`` block as the
   validation report — fingerprints of the facts, the taxonomy pack, the rule
   book and the accuracy — and the trailer a SHA-256 over every line before it,
@@ -47,6 +56,7 @@ from dataclasses import dataclass, field
 from typing import IO, TYPE_CHECKING, Any, Final
 
 from rwa_filer.validate.identity import identity_record, source_identity
+from rwa_filer.validate.issue_labels import evaluation_issues
 from rwa_filer.validate.report import (
     cause_record,
     finding_record,
@@ -76,6 +86,7 @@ if TYPE_CHECKING:
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import FactPosition, Finding
     from rwa_filer.validate.identity import SourceIdentity
+    from rwa_filer.validate.issue_labels import IssueNote
     from rwa_filer.validate.returns import ReturnValidation
 
 __all__ = [
@@ -101,7 +112,7 @@ logger = logging.getLogger(__name__)
 #: The file's name and version (the header's ``schema``). The major version
 #: changes when a field is renamed, removed or changes meaning.
 EVIDENCE_SCHEMA_NAME: Final = "rwa-filer/evidence"
-EVIDENCE_SCHEMA_VERSION: Final = "1.0"
+EVIDENCE_SCHEMA_VERSION: Final = "1.1"
 
 RECORD_HEADER: Final = "header"
 RECORD_CELL: Final = "cell"
@@ -191,6 +202,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
     accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
+    submission_date: date | None = None,
 ) -> Evidence:
     """Validate ``ret`` as ``validate_return`` does, keeping everything it executed.
 
@@ -210,6 +222,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
         accuracy=accuracy,
         source_findings=source_findings,
         source=source,
+        submission_date=submission_date,
     )
     return Evidence(ret=ret, validation=validation, trace=trace)
 
@@ -357,11 +370,23 @@ def _records(
             if validation.rulebook
             else {}
         )
+        notes = validation.report.issue_notes if validation.report is not None else ()
+        register = validation.release.issues
         for result in trace.results:
-            yield _rule_record(result, rules.get(result.rule_id), module)
+            yield _rule_record(
+                result,
+                rules.get(result.rule_id),
+                module,
+                tuple(note for note in notes if note.rule_id == result.rule_id),
+            )
         sequence: Counter[str] = Counter()
         for evaluation in trace.evaluations:
-            yield _evaluation_record(evaluation, sequence[evaluation.rule_id], cells)
+            yield _evaluation_record(
+                evaluation,
+                sequence[evaluation.rule_id],
+                cells,
+                evaluation_issues(evaluation, notes, register, module),
+            )
             sequence[evaluation.rule_id] += 1
     for index, finding in enumerate(findings):
         yield {"record": RECORD_FINDING, "index": index, **finding_record(finding)}
@@ -410,8 +435,10 @@ def _cell_record(number: int, fact: CellFact) -> dict[str, Any]:
     }
 
 
-def _rule_record(result: RuleResult, rule: Rule | None, module: str) -> dict[str, Any]:
-    outcome = rule_record(result, rule.fingerprint(module) if rule is not None else None)
+def _rule_record(
+    result: RuleResult, rule: Rule | None, module: str, notes: tuple[IssueNote, ...]
+) -> dict[str, Any]:
+    outcome = rule_record(result, rule.fingerprint(module) if rule is not None else None, notes)
     # Every unsatisfied evaluation is an evaluation record: the first few the
     # summary report keeps would only repeat some of them here.
     del outcome["failures"]
@@ -427,7 +454,10 @@ def _rule_record(result: RuleResult, rule: Rule | None, module: str) -> dict[str
 
 
 def _evaluation_record(
-    evaluation: Evaluation, sequence: int, cells: Mapping[CellAddress, int]
+    evaluation: Evaluation,
+    sequence: int,
+    cells: Mapping[CellAddress, int],
+    issues: tuple[str, ...] | None,
 ) -> dict[str, Any]:
     return {
         "record": RECORD_EVALUATION,
@@ -441,6 +471,7 @@ def _evaluation_record(
         "left": _side(evaluation.left, cells),
         "right": _side(evaluation.right, cells),
         "comparisons": [_comparison_record(item, cells) for item in evaluation.comparisons],
+        "publisher_issues": None if issues is None else list(issues),
     }
 
 

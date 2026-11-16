@@ -24,9 +24,18 @@ Key responsibilities:
 - Regenerate the template-level engine's Basel 3.1 extract (``rwa_filer.rules``)
   from the newest listed release's Banking Reporting workbook. That engine
   holds one release, not a choice of them.
-- Remove the data of every release ``releases.json`` no longer lists, and
-  record each in ``retired.json`` with the last rwa-filer version that shipped
-  it, so an error can say where it went.
+- Remove the data of every release ``releases.json`` no longer lists — its
+  validations deny list included — and record each in ``retired.json`` with
+  the last rwa-filer version that shipped it, so an error can say where it went.
+- Leave a release's validations deny list (``boe/data/deny/<version>.json``)
+  alone when the release is rebuilt: it is not part of the Bank's publication
+  of the release, but a separate, monthly one, imported on its own
+  (``boe.deny_importer``; ``scripts/build_filer_release.py --deny-list``).
+- Leave a release's register of known issues with the published rules
+  (``boe/data/issues/<version>.json``) alone too: it is curated by hand from
+  evidence, never built. A release built for the first time gets an EMPTY
+  register, and a WARNING lists the open issues of the release before it, each
+  to carry into the new register (with its example re-measured) or close.
 - Measure a packaged release: the counts and the closed-by-formula register
   its tests are held to.
 - Check a packaged release: rebuild it in a scratch folder and report every
@@ -57,9 +66,11 @@ import polars as pl
 
 from rwa_filer import __version__
 from rwa_filer.boe.catalogue import rulebook_from
+from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
 from rwa_filer.boe.formulas import DEFAULT_MEMBER
 from rwa_filer.boe.grammar import references
 from rwa_filer.boe.importer import import_workbook, rulebook_file_name, write_rulebook
+from rwa_filer.boe.issues import ISSUES_DIRECTORY, ISSUES_FORMAT, issue_register_file
 from rwa_filer.release import RELEASES_FILE, RELEASES_FORMAT, RETIRED_FILE, version_key
 from rwa_filer.rules.importer import boe_extract_name, extract_boe, write_extract
 from rwa_filer.taxonomy import _workbook
@@ -82,6 +93,8 @@ logger = logging.getLogger(__name__)
 #: Where, under the package source folder, each kind of release data lives.
 PACKS_SUBDIR: Final = Path("taxonomy") / "data"
 RULEBOOKS_SUBDIR: Final = Path("boe") / "data"
+DENY_SUBDIR: Final = Path("boe").joinpath(*DENY_DIRECTORY)
+ISSUES_SUBDIR: Final = Path("boe").joinpath(*ISSUES_DIRECTORY)
 RULES_SUBDIR: Final = Path("rules") / "data"
 
 #: The layout of a measurement file.
@@ -224,6 +237,7 @@ def build_release(
     modules = _build_packs(version, files, packs_root, applies_from or {})
     rulebooks = _build_rulebooks(version, files, rulebooks_root)
     template_extract = _build_template_extract(version, files, root / RULES_SUBDIR, listed)
+    _start_issue_register(version, root, listed)
     retired = _prune(listed, root) if prune else ()
     end_dates = reconcile_end_dates(packs_root, listed)
     logger.info(
@@ -593,6 +607,44 @@ def _remove_release(version: str, packs_root: Path, rulebooks_root: Path) -> Non
             path.unlink()
 
 
+def _start_issue_register(version: str, root: Path, listed: tuple[str, ...]) -> None:
+    """Give a release built for the first time an empty issue register; never overwrite one."""
+    folder = root / ISSUES_SUBDIR
+    path = folder / issue_register_file(version)
+    if path.is_file():
+        return
+    folder.mkdir(parents=True, exist_ok=True)
+    empty = {
+        "format": ISSUES_FORMAT,
+        "release": version,
+        "publisher": "Bank of England",
+        "documents": {},
+        "checked_against": [],
+        "issues": [],
+        "appendices": [],
+    }
+    _write_text(path, json.dumps(empty, indent=1) + "\n")
+    ordered = sorted(listed, key=version_key)
+    older = ordered[: ordered.index(version)]
+    previous = folder / issue_register_file(older[-1]) if older else None
+    if previous is None or not previous.is_file():
+        return
+    still_open = [
+        str(issue["id"])
+        for issue in _read_json(previous).get("issues", [])
+        if issue.get("status") in ("draft", "raised", "acknowledged")
+    ]
+    if still_open:
+        logger.warning(
+            "taxonomy %s starts with an empty issue register; re-confirm the %d open issue(s) "
+            "of %s against it (carry each, re-measuring its example, or close it): %s",
+            version,
+            len(still_open),
+            older[-1],
+            ", ".join(still_open),
+        )
+
+
 def _prune(listed: tuple[str, ...], root: Path) -> tuple[str, ...]:
     """Remove every release on disk ``releases.json`` does not list; record it as retired."""
     packs_root, rulebooks_root = root / PACKS_SUBDIR, root / RULEBOOKS_SUBDIR
@@ -610,6 +662,10 @@ def _prune(listed: tuple[str, ...], root: Path) -> tuple[str, ...]:
     known = {entry["version"] for entry in retired["releases"]}
     for version in gone:
         _remove_release(version, packs_root, rulebooks_root)
+        # Only on retirement: a rebuild keeps the release's deny list and its
+        # curated issue register (see above).
+        (root / DENY_SUBDIR / deny_list_file(version)).unlink(missing_ok=True)
+        (root / ISSUES_SUBDIR / issue_register_file(version)).unlink(missing_ok=True)
         if version not in known:
             retired["releases"].append(
                 {

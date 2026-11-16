@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import failure_card, rule_text, status_chip %}
+{% from "_macros.html" import deny_chip, deny_note, failure_card, issue_callout, issue_chip, rule_text, status_chip %}
 {% block title %}Rules · {{ current.name }} — rwa-filer dash{% endblock %}
 {% block content %}
 {% set base = "/returns/" ~ current.return_id ~ "/rules" %}
@@ -45,7 +45,7 @@
     <div class="rule-list">
       {% for row in view.rows %}
       <a class="rule-item" href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page if view.page > 1 else '', rule=row.rule_id) }}"{% if view.selected and view.selected.row.rule_id == row.rule_id %} aria-current="true"{% endif %}>
-        <span class="top">{{ status_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span>
+        <span class="top">{{ status_chip(row) }}{{ deny_chip(row) }}{{ issue_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span>
           <span class="evals">{% if row.status == "FAIL" %}{{ row.unsatisfied }} of {{ row.evaluations }} break{% elif row.status == "PASS" %}{{ row.satisfied }} hold{% else %}{{ row.reason }}{% endif %}</span>
         </span>
         <span class="label">{{ row.label or "No label published" }}</span>
@@ -68,10 +68,12 @@
   {% set rule = view.selected %}
   <section class="narrow panel" aria-label="Rule detail" id="rule-detail" style="flex: 2 1 460px">
     <div class="panel-head">
-      <span style="display: flex; gap: 8px; align-items: center">{{ status_chip(rule.row) }}<span class="mono" style="color: var(--strong)">{{ rule.row.rule_id }}</span></span>
+      <span style="display: flex; gap: 8px; align-items: center">{{ status_chip(rule.row) }}{{ deny_chip(rule.row) }}<span class="mono" style="color: var(--strong)">{{ rule.row.rule_id }}</span></span>
       <span class="small muted mono">{{ rule.row.templates | join(" · ") }}</span>
     </div>
     <h2 style="font-size: 21px; line-height: 1.3">{{ rule.row.label or "No label published" }}</h2>
+    {{ deny_note(rule.row, rule.published) }}
+    {% for item in rule.issues %}{{ issue_callout(item) }}{% endfor %}
     <div class="stats">
       <div class="stat"><div class="small muted">Evaluations that hold</div><div class="value">{{ rule.row.satisfied | count }}</div></div>
       <div class="stat"><div class="small muted">Evaluations that break</div><div class="value" style="color: var({{ '--fail' if rule.row.unsatisfied else '--strong' }})">{{ rule.row.unsatisfied | count }}</div></div>

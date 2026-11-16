@@ -21,7 +21,10 @@ Key responsibilities:
 - Write a manifest: what was filed, against which taxonomy, with which checksum
   and under which validation result — and which cells a preparer overrode, with
   what each held before. It is the evidence that the file a firm uploaded is
-  the file that was checked.
+  the file that was checked. Its validation result is the report's record, so
+  it carries the labels of known issues with the published rules (each
+  finding's ``publisher_issues`` and the summary's) — beside the verdict,
+  never in place of it.
 - Be reproducible. Nothing in the three files depends on when or where they
   were built unless the caller passes a creation time.
 - Where asked, write the evidence behind the verdict (``rwa_filer.evidence``)
@@ -148,6 +151,7 @@ def build_filing(
     adjustments: Sequence[AppliedAdjustment] = (),
     evidence: Path | None = None,
     source: SourceIdentity | None = None,
+    submission_date: date | None = None,
 ) -> FilingPackage:
     """Validate ``ret`` and, if it may be filed, write its filing package.
 
@@ -177,6 +181,9 @@ def build_filing(
             (``rwa_filer.evidence``; ``.gz`` to compress). Its creation time is
             ``options.created_at``.
         source: The file the return was read from, for the identity block.
+        submission_date: The day the package will be submitted: the Bank's
+            validations deny list in force that day applies (see
+            ``validate_return``). Defaults to the run date.
 
     Returns:
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
@@ -202,6 +209,7 @@ def build_filing(
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,
+            submission_date=submission_date,
         )
         validation = collected.validation
         evidence_file = write_evidence(collected, evidence, generated_at=options.created_at)
@@ -212,6 +220,7 @@ def build_filing(
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,
+            submission_date=submission_date,
         )
     if validation.structure:
         return FilingPackage(

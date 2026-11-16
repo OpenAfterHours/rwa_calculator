@@ -3,7 +3,9 @@ Compare — two returns for the same entity and date, and why they differ.
 
 Pipeline position:
     baseline SourceReading + candidate SourceReading  ->  compare_returns
-        ->  boe.engine.trace_rules (each file)  ->  explain.explain_differences
+        ->  boe.engine.trace_rules (each file)
+        ->  validate.execution.apply_deny_list (the gateway on the submission date)
+        ->  explain.explain_differences
         ->  ReturnComparison  ->  render_text (``rwa-filer compare``) / as_record (JSON)
             / the dashboard's Compare page
 
@@ -20,6 +22,11 @@ Key responsibilities:
 - Say when the two returns are equivalent, and mean it: same header, same
   templates, nothing unplaced, no material difference, and no rule that breaks
   in one file only.
+- Judge both returns by the rules as the Bank's gateway runs them on the
+  submission date, exactly as ``validate_return`` does: a rule the Bank's
+  validations deny list switches off that day points at neither return and is
+  listed as switched off; a rule it downgrades still runs, as a warning, and is
+  compared like any other.
 
 Which return is which: the BASELINE is the one already trusted — the filing
 already made, or the return the firm's current system produces — and the
@@ -29,6 +36,7 @@ baseline. Nothing here assumes the candidate is right.
 References:
 - rwa_filer.workflow.explain — the categories and how findings are formed
 - rwa_filer.boe.engine.trace_rules — the rule evaluations both sides are judged by
+- rwa_filer.validate.execution — the Bank's deny list, applied after evaluation
 - BoE XBRL Filing Manual v1.0.1, rule 2.18 (interpretation of decimals)
 """
 
@@ -37,13 +45,21 @@ from __future__ import annotations
 import logging
 import textwrap
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, Any, Final
 
 import polars as pl
 
-from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, RuleTrace, trace_rules
+from rwa_filer.boe.engine import (
+    REASON_DEACTIVATED_BY_PUBLISHER,
+    STATUS_FAIL,
+    STATUS_NOT_EVALUATED,
+    RuleTrace,
+    trace_rules,
+)
 from rwa_filer.model import COORDINATE_COLUMNS
 from rwa_filer.release import resolve_release
+from rwa_filer.validate.execution import apply_deny_list, formula_result, trace_as_run
 from rwa_filer.validate.structure import filing_indicators
 from rwa_filer.workflow.explain import (
     CATEGORIES,
@@ -64,8 +80,6 @@ from rwa_filer.workflow.explain import (
 )
 
 if TYPE_CHECKING:
-    from datetime import date
-
     from rwa_filer.boe.engine import Evaluation
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.readers import SourceReading
@@ -126,6 +140,11 @@ class ReturnComparison:
         evaluated_only_in: ``{side: rules}`` evaluated in that return and not
             the other — one return gave them cells to read.
         rules_compared: Whether a rule book was available to judge both sides.
+        submission_date: The day whose gateway configuration both returns were
+            judged under: the Bank's deny list in force that day.
+        switched_off: Rules the deny list switches off at the gateway that day
+            whose published formula breaks in either return: neither return is
+            judged by them, and they are named so the switch is never silent.
     """
 
     names: Names
@@ -138,6 +157,8 @@ class ReturnComparison:
     shared_breaks: tuple[str, ...]
     evaluated_only_in: dict[str, tuple[str, ...]]
     rules_compared: bool
+    submission_date: date | None = None
+    switched_off: tuple[str, ...] = ()
 
     def counts(self) -> dict[str, int]:
         """Cells per category, always with every category."""
@@ -179,6 +200,10 @@ class ReturnComparison:
             "shared_breaks": list(self.shared_breaks),
             "evaluated_only_in": {side: list(ids) for side, ids in self.evaluated_only_in.items()},
             "rules_compared": self.rules_compared,
+            "submission_date": (
+                self.submission_date.isoformat() if self.submission_date is not None else None
+            ),
+            "switched_off": list(self.switched_off),
             "cells": self.cells.filter(pl.col("category") != CATEGORY_SAME).to_dicts(),
         }
 
@@ -191,6 +216,7 @@ def compare_returns(
     tolerance: float = 0.0,
     taxonomy: str | None = None,
     today: date | None = None,
+    submission_date: date | None = None,
 ) -> ReturnComparison:
     """Compare ``candidate`` with ``baseline``, cell by cell and rule by rule.
 
@@ -207,6 +233,10 @@ def compare_returns(
             (a fact table read with ``load_source``). ``None`` for the default.
             A side read with its own release keeps it.
         today: The run date the default release is worked out for.
+        submission_date: The day the return will be submitted: the Bank's
+            validations deny list in force that day decides which rules its
+            gateway runs, and as what, as for ``validate_return``. Defaults to
+            ``today``, and to the actual date when that is ``None`` too.
 
     Raises:
         ReleaseNotFoundError: a side has no release and one could not be
@@ -227,9 +257,10 @@ def compare_returns(
     differences = _categorise(
         baseline.ret, candidate.ret, candidate_pack, indicators, tolerance=tolerance
     )
+    day = submission_date or today or date.today()
     traces = {
-        SIDE_BASELINE: _trace(baseline.ret, baseline_release),
-        SIDE_CANDIDATE: _trace(candidate.ret, candidate_release),
+        SIDE_BASELINE: _trace(baseline.ret, baseline_release, day),
+        SIDE_CANDIDATE: _trace(candidate.ret, candidate_release, day),
     }
     baseline_trace, candidate_trace = traces[SIDE_BASELINE], traces[SIDE_CANDIDATE]
     rules_compared = baseline_trace is not None and candidate_trace is not None
@@ -250,6 +281,8 @@ def compare_returns(
         shared_breaks=_shared_breaks(traces) if rules_compared else (),
         evaluated_only_in=_evaluated_only_in(traces) if rules_compared else {},
         rules_compared=rules_compared,
+        submission_date=day,
+        switched_off=_switched_off(traces),
     )
     logger.info(
         "compared %s with %s: %d cell(s), %d finding(s)",
@@ -440,8 +473,13 @@ def _cell_frame(
 # =============================================================================
 
 
-def _trace(ret: CanonicalReturn, release: Release) -> RuleTrace | None:
-    """Every enforced rule of the side's own release, traced on its return."""
+def _trace(ret: CanonicalReturn, release: Release, day: date) -> RuleTrace | None:
+    """Every enforced rule of the side's own release, traced on its return as run on ``day``.
+
+    The deny list is applied after evaluation, as ``validate_return`` applies
+    it: a rule switched off that day keeps its formula's verdict on
+    ``RuleResult.formula`` but loses its evaluations, so no finding cites it.
+    """
     module = release.pack.info.module
     if release.rulebook is None:
         logger.warning(
@@ -450,7 +488,8 @@ def _trace(ret: CanonicalReturn, release: Release) -> RuleTrace | None:
             module,
         )
         return None
-    return trace_rules(ret, release.pack, release.rulebook.enforced(module))
+    traced = trace_rules(ret, release.pack, release.rulebook.enforced(module))
+    return trace_as_run(traced, apply_deny_list(traced.results, release.deny_list, module, day))
 
 
 def _shared_breaks(traces: dict[str, RuleTrace | None]) -> tuple[str, ...]:
@@ -460,6 +499,22 @@ def _shared_breaks(traces: dict[str, RuleTrace | None]) -> tuple[str, ...]:
         if trace is not None
     ]
     return tuple(sorted(set.intersection(*broken))) if len(broken) == len(traces) else ()
+
+
+def _switched_off(traces: dict[str, RuleTrace | None]) -> tuple[str, ...]:
+    """Rules the gateway does not run whose published formula breaks in either return."""
+    return tuple(
+        sorted(
+            {
+                result.rule_id
+                for trace in traces.values()
+                if trace is not None
+                for result in trace.results
+                if result.reason == REASON_DEACTIVATED_BY_PUBLISHER
+                and formula_result(result).status == STATUS_FAIL
+            }
+        )
+    )
 
 
 def _evaluated_only_in(traces: dict[str, RuleTrace | None]) -> dict[str, tuple[str, ...]]:
@@ -593,6 +648,13 @@ def _also_lines(comparison: ReturnComparison) -> list[str]:
     for rule_id in comparison.shared_breaks:
         lines.append(
             f"  {rule_id} breaks in both returns: not a difference, but neither satisfies it"
+        )
+    day = comparison.submission_date
+    on = f" on {day.isoformat()}" if day is not None else ""
+    for rule_id in comparison.switched_off:
+        lines.append(
+            f"  {rule_id} is switched off at the Bank's gateway{on} (validations deny list): "
+            "it would break, but judges neither return"
         )
     only_baseline = comparison.evaluated_only_in.get(SIDE_BASELINE, ())
     only_candidate = comparison.evaluated_only_in.get(SIDE_CANDIDATE, ())

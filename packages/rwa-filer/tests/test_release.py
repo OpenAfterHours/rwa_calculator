@@ -19,6 +19,8 @@ from boe_builders import book
 from pack_builders import SAMPLE_MODULE, build_pack
 from rwa_filer import release as release_module
 from rwa_filer.boe.catalogue import RuleBook
+from rwa_filer.boe.deny import DenyList
+from rwa_filer.boe.issues import IssueRegister
 from rwa_filer.release import (
     CHOSEN_DEFAULT,
     CHOSEN_PACK,
@@ -63,6 +65,9 @@ class Releases:
             release_module, "available_rulebooks", lambda: tuple(sorted(self.books))
         )
         monkeypatch.setattr(release_module, "load_rulebook", lambda name: self.books[name])
+        # The in-memory releases ship no validations deny list and no issue register.
+        monkeypatch.setattr(release_module, "load_deny_list", DenyList.empty)
+        monkeypatch.setattr(release_module, "load_issues", IssueRegister.empty)
 
     def add(
         self,

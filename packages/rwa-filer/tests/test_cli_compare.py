@@ -122,3 +122,41 @@ def test_the_json_record_carries_each_sides_release(
         "baseline": "version",
         "candidate": "version",
     }
+
+
+def test_rules_are_judged_as_the_gateway_runs_them_on_the_submission_date(
+    files: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The 4.1.1 deny list switches boe_b0710 off from 19 October 2026, as validate does."""
+    before = [files["baseline"], files["same"], *HEADER_ARGS_CLI, "--format", "json"]
+
+    main(["compare", *before, "--submission-date", "2026-10-18"])
+    still_run = json.loads(capsys.readouterr().out)
+    main(["compare", *before, "--submission-date", "2026-10-19"])
+    switched_off = json.loads(capsys.readouterr().out)
+
+    assert "boe_b0710" in still_run["shared_breaks"]
+    assert "boe_b0710" not in switched_off["shared_breaks"]
+    assert "boe_b0710" in switched_off["switched_off"]
+    assert switched_off["submission_date"] == "2026-10-19"
+
+
+def test_the_text_names_a_rule_the_gateway_switched_off(
+    files: dict[str, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    main(
+        [
+            "compare",
+            files["baseline"],
+            files["same"],
+            *HEADER_ARGS_CLI,
+            "--submission-date",
+            "2026-10-19",
+        ]
+    )
+
+    text = capsys.readouterr().out
+    assert (
+        "boe_b0710 is switched off at the Bank's gateway on 2026-10-19 (validations deny list)"
+        in text
+    )

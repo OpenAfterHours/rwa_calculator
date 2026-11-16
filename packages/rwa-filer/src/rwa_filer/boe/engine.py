@@ -97,6 +97,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from rwa_filer.boe.catalogue import Rule
+    from rwa_filer.boe.deny import DenyEntry
     from rwa_filer.boe.grammar import Default, Node, ScopeGroup
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
@@ -123,6 +124,12 @@ REASON_CLOSED_BY_FORMULA: Final = "closed_by_formula"
 REASON_UNKNOWN_TABLE: Final = "table_not_in_taxonomy"
 #: The rule does not parse, or uses something the engine does not implement.
 REASON_UNSUPPORTED: Final = "unsupported"
+#: The Bank has deactivated the rule at its gateway (its validations deny list,
+#: ``boe.deny``): the gateway does not run it, so a reporter is not expected to
+#: meet it. Never set by the engine itself — ``validate.execution`` sets it after
+#: evaluation, keeping what the taxonomy's formula found on ``RuleResult.formula``.
+#: Like ``closed_by_formula``, it is not a gap in the check.
+REASON_DEACTIVATED_BY_PUBLISHER: Final = "deactivated_by_publisher"
 
 #: Where the ``decimals`` a numeric fact is compared at came from: the fact's
 #: own, the run's ``Accuracy`` for its data type, or an integer's unit.
@@ -242,6 +249,12 @@ class RuleResult:
         satisfied / unsatisfied: Evaluations that held / did not hold.
         failures: Up to ``MAX_FAILURES`` unsatisfied evaluations.
         tables: The tables the rule reads.
+        deny: The Bank's deny-list entry that changed how the gateway runs the
+            rule, where one is in force (``validate.execution``); ``None``
+            otherwise. The engine never sets it.
+        formula: The result as the taxonomy's formula has it, where ``deny``
+            changed it — the verdict an XBRL processor running the formula
+            reaches, which is what the referee compares; ``None`` otherwise.
     """
 
     rule_id: str
@@ -253,6 +266,8 @@ class RuleResult:
     unsatisfied: int = 0
     failures: tuple[Failure, ...] = ()
     tables: tuple[str, ...] = ()
+    deny: DenyEntry | None = None
+    formula: RuleResult | None = None
 
     @property
     def evaluations(self) -> int:
@@ -318,6 +333,15 @@ class Evaluation:
     left_value: float | None = None
     right_value: float | None = None
     comparisons: tuple[Comparison, ...] = ()
+
+    @property
+    def cells(self) -> frozenset[CellAddress]:
+        """Every cell the evaluation read: each side's, and each comparison's operands'."""
+        found = {*self.left, *self.right}
+        for comparison in self.comparisons:
+            found.update(comparison.left.cells)
+            found.update(comparison.right.cells)
+        return frozenset(found)
 
 
 @dataclass(frozen=True)

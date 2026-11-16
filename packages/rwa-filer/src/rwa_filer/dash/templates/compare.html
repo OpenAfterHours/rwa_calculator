@@ -80,11 +80,12 @@
     {% endif %}
   </div>
   {% endfor %}
-  {% if cmp.indicators or cmp.baseline_unplaced or cmp.candidate_unplaced or cmp.shared_breaks %}
+  {% if cmp.indicators or cmp.baseline_unplaced or cmp.candidate_unplaced or cmp.shared_breaks or cmp.switched_off %}
   <div class="reasons" id="also">
     {% for code, pair in cmp.indicators.items() %}<div class="reason small"><strong>{{ code }}</strong> is {{ {True: "reported", False: "declared not reported", None: "not mentioned"}[pair[0]] }} in {{ cmp.names.baseline }} and {{ {True: "reported", False: "declared not reported", None: "not mentioned"}[pair[1]] }} in {{ cmp.names.candidate }}.</div>{% endfor %}
     {% for side_name, unplaced in [(cmp.names.baseline, cmp.baseline_unplaced), (cmp.names.candidate, cmp.candidate_unplaced)] %}{% for found in unplaced %}<div class="reason small"><strong>{{ found.code }} in {{ side_name }}</strong> — {{ found.message }}</div>{% endfor %}{% endfor %}
     {% if cmp.shared_breaks %}<div class="reason small"><strong>Broken in both</strong> — {{ cmp.shared_breaks | join(", ") }}: not a difference, but neither return satisfies {{ "it" if cmp.shared_breaks | length == 1 else "them" }}.</div>{% endif %}
+    {% if cmp.switched_off %}<div class="reason small"><strong>Switched off at the gateway</strong> — {{ cmp.switched_off | join(", ") }}: the Bank's validations deny list does not run {{ "it" if cmp.switched_off | length == 1 else "them" }} on {{ cmp.submission_date.isoformat() }}, so {{ "it judges" if cmp.switched_off | length == 1 else "they judge" }} neither return, although the published {{ "rule breaks" if cmp.switched_off | length == 1 else "rules break" }}.</div>{% endif %}
   </div>
   {% endif %}
 </section>

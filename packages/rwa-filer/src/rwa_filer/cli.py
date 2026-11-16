@@ -17,9 +17,11 @@ Key responsibilities:
 Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
                        [--monetary-decimals N] [--evidence FILE] [--require-complete]
-                       [--taxonomy VERSION]
+                       [--taxonomy VERSION] [--submission-date DATE]
         Validate a return (.parquet / .csv / .xlsx, or an XBRL instance .xbrl /
-        .zip): structure against the taxonomy, then the published rules. With
+        .zip): structure against the taxonomy, then the published rules, as the
+        Bank's gateway runs them on the submission date (default today: its
+        validations deny list switches some off, or makes them warnings). With
         --evidence, also write every rule outcome, evaluation and comparison
         behind the verdict as a JSON Lines file (.jsonl, or .jsonl.gz).
         --taxonomy names the release (default: the one live for the module);
@@ -36,10 +38,11 @@ Commands:
         Check that a package on disk is the one that was built and signed off.
     rwa-filer diff PREVIOUS CURRENT
         What changed between two versions of a return, cell by cell.
-    rwa-filer compare BASELINE CANDIDATE [--tolerance AMOUNT]
+    rwa-filer compare BASELINE CANDIDATE [--tolerance AMOUNT] [--submission-date DATE]
         A return beside the one another system (or an earlier filing) produced:
         every cell categorised, and the material differences grouped into
-        findings, each saying which return the Bank's rules point at.
+        findings, each saying which return the Bank's rules point at — the
+        rules as the gateway runs them on the submission date, as ``validate``.
     rwa-filer referee INSTANCE --taxonomy-package ZIP [--arelle-python PYTHON]
         A second opinion on a written instance: run the Arelle XBRL processor
         on it against the publisher's taxonomy package, and set its verdict on
@@ -59,6 +62,21 @@ Commands:
         Build a rule book from one of the Bank's validation-rule workbooks.
     rwa-filer rulebook check WORKBOOK [--taxonomy-version V] [--taxonomy-package ZIP]
         Fail if the packaged rule book is not exactly what the workbook yields.
+    rwa-filer rulebook deny-list [--taxonomy V] [--module CODE] [--on DATE] [--format F]
+        The Bank's validations deny list packaged for each release: the rules
+        its gateway no longer runs, or runs as warnings, from which date, and
+        the known issue behind each.
+    rwa-filer rulebook deny-list import WORKBOOK --release V [--known-issues XLSX] --out DIR
+    rwa-filer rulebook deny-list check WORKBOOK --release V [--known-issues XLSX]
+        Build a release's deny list from the Bank's workbook, or fail if the
+        packaged one is not exactly what it yields. Codes that match no rule of
+        the release are reported.
+    rwa-filer rulebook issues [ISSUE] [--taxonomy V] [--module CODE] [--format F]
+        The known issues with the published rules, packaged for each release:
+        every issue on one line, or one in full; --format markdown renders the
+        register as the write-up to share with the Bank, --format json as data.
+        A validation labels each result an issue explains; the verdict is never
+        changed by it.
     rwa-filer rules list
         The packaged rule extracts: framework, publisher, version and counts.
     rwa-filer rules import --publisher {eba,boe} WORKBOOK --out FILE
@@ -93,9 +111,12 @@ from pathlib import Path
 from typing import Any
 
 from rwa_filer import __version__
+from rwa_filer.boe import deny_importer
 from rwa_filer.boe import importer as boe_importer
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
+from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
 from rwa_filer.boe.engine import Accuracy
+from rwa_filer.boe.issues_document import render_document, render_issue, render_listing
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
@@ -107,6 +128,8 @@ from rwa_filer.referee.differential import compare
 from rwa_filer.release import (
     ReleaseNotFoundError,
     module_releases,
+    release_deny_list,
+    release_issues,
     release_lines,
     release_packs,
     release_record,
@@ -227,6 +250,7 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
         "--report", type=Path, metavar="FILE", help="also write the full JSON report here"
     )
     _add_evidence_argument(validate)
+    _add_submission_date_argument(validate)
     validate.add_argument(
         "--require-complete",
         action="store_true",
@@ -263,6 +287,17 @@ def _add_accuracy_arguments(parser: argparse.ArgumentParser) -> None:
         default=InstanceOptions.percentage_decimals,
         metavar="N",
         help="the accuracy percentages and ratios are stated to (default 4, the minimum)",
+    )
+
+
+def _add_submission_date_argument(parser: argparse.ArgumentParser) -> None:
+    """``--submission-date``: the day whose gateway configuration the rules run under."""
+    parser.add_argument(
+        "--submission-date",
+        type=date.fromisoformat,
+        metavar="YYYY-MM-DD",
+        help="the day the return will be submitted: the Bank's validations deny list in "
+        "force that day decides which rules its gateway runs, and as what (default: today)",
     )
 
 
@@ -330,6 +365,7 @@ def _validate(args: argparse.Namespace) -> int:
                 accuracy=accuracy,
                 source_findings=source.findings,
                 source=identity,
+                submission_date=args.submission_date,
             )
             validation = evidence.validation
         else:
@@ -339,6 +375,7 @@ def _validate(args: argparse.Namespace) -> int:
                 accuracy=accuracy,
                 source_findings=source.findings,
                 source=identity,
+                submission_date=args.submission_date,
             )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
@@ -413,6 +450,7 @@ def _add_build_command(commands: argparse._SubParsersAction[argparse.ArgumentPar
     build.add_argument("--name", metavar="NAME", help="the files' base name")
     _add_accuracy_arguments(build)
     _add_evidence_argument(build)
+    _add_submission_date_argument(build)
     build.add_argument(
         "--declare-unreported",
         action="store_true",
@@ -484,6 +522,7 @@ def _build(args: argparse.Namespace) -> int:
             adjustments=applied,
             evidence=args.evidence,
             source=source_identity(args.file),
+            submission_date=args.submission_date,
         )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
@@ -626,6 +665,7 @@ def _add_workflow_commands(
             "(for sources that state none, e.g. a fact table rounded to thousands)"
         ),
     )
+    _add_submission_date_argument(comparing)
     comparing.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     comparing.set_defaults(handler=_compare)
 
@@ -702,7 +742,13 @@ def _compare(args: argparse.Namespace) -> int:
         baseline = _load(argparse.Namespace(**{**vars(args), "file": args.baseline}))
         candidate = _load(argparse.Namespace(**{**vars(args), "file": args.candidate}))
         names = _names(args.baseline, args.candidate)
-        comparison = compare_returns(baseline, candidate, names=names, tolerance=args.tolerance)
+        comparison = compare_returns(
+            baseline,
+            candidate,
+            names=names,
+            tolerance=args.tolerance,
+            submission_date=args.submission_date,
+        )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
     sides = {"baseline": baseline, "candidate": candidate}
@@ -1104,18 +1150,104 @@ def _add_rulebook_commands(
                 "--out", required=True, type=Path, metavar="DIR", help="where to write it"
             )
         action.set_defaults(handler=handler)
+    _add_deny_list_commands(actions)
+    _add_issues_command(actions)
+
+
+def _add_issues_command(actions: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register ``rwa-filer rulebook issues``."""
+    issues = actions.add_parser(
+        "issues",
+        help="the known issues with the published rules: list them, show one, or render the "
+        "register as Markdown to share",
+    )
+    issues.add_argument("issue", nargs="?", metavar="ISSUE", help="one issue, e.g. PI-05")
+    issues.add_argument("--taxonomy", metavar="V", help="one release (default: every shipped one)")
+    issues.add_argument("--module", metavar="CODE", help="only issues about this module's rules")
+    issues.add_argument(
+        "--format",
+        choices=["text", "json", "markdown"],
+        default="text",
+        help="text (default), json, or markdown (the write-up to share)",
+    )
+    issues.set_defaults(handler=_issues_show)
+
+
+def _add_deny_list_commands(
+    actions: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Register ``rwa-filer rulebook deny-list ...``."""
+    deny = actions.add_parser(
+        "deny-list",
+        help="the Bank's validations deny list: rules its gateway no longer runs, or runs "
+        "as warnings",
+    )
+    deny.add_argument("--taxonomy", metavar="V", help="one release (default: every shipped one)")
+    deny.add_argument("--module", metavar="CODE", help="one module, e.g. PRA001")
+    deny.add_argument(
+        "--on",
+        type=date.fromisoformat,
+        metavar="YYYY-MM-DD",
+        help="say which entries are in force on this day (default: today)",
+    )
+    deny.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
+    deny.set_defaults(handler=_deny_list_show)
+    steps = deny.add_subparsers(dest="deny_command", metavar="<action>")
+    for name, description, handler in (
+        ("import", "build a release's deny list from the Bank's workbook", _deny_list_import),
+        (
+            "check",
+            "fail if the packaged deny list is not what the Bank's workbook yields",
+            _deny_list_check,
+        ),
+    ):
+        step = steps.add_parser(name, help=description)
+        step.add_argument("workbook", type=Path, metavar="WORKBOOK", help="the deny list (.xlsx)")
+        step.add_argument(
+            "--release", required=True, metavar="V", help="the taxonomy release, e.g. 4.1.1"
+        )
+        step.add_argument(
+            "--known-issues",
+            type=Path,
+            metavar="XLSX",
+            help="the Bank's known-issues log: give each entry the number of its issue",
+        )
+        step.add_argument("--url", help="where the workbook was published (recorded)")
+        step.add_argument(
+            "--published",
+            type=date.fromisoformat,
+            metavar="YYYY-MM-DD",
+            help="when it was published (default: the newest Date Applied it records)",
+        )
+        if name == "import":
+            step.add_argument(
+                "--out", required=True, type=Path, metavar="DIR", help="where to write it"
+            )
+        step.set_defaults(handler=handler)
 
 
 def _rulebook_list(_args: argparse.Namespace) -> int:
-    """``rwa-filer rulebook list`` — one line per packaged rule book and module."""
-    _out(f"{'framework version':<26}{'taxonomy':<10}{'rules':>7}  {'module':<10}{'enforced':>9}")
+    """``rwa-filer rulebook list`` — one line per packaged rule book and module.
+
+    ``deny-listed`` counts the module's rules the Bank's validations deny list
+    switches off or downgrades at its gateway today; ``enforced`` is what the
+    rule book publishes.
+    """
+    today = date.today()
+    _out(
+        f"{'framework version':<26}{'taxonomy':<10}{'rules':>7}  {'module':<10}"
+        f"{'enforced':>9}{'deny-listed':>13}"
+    )
     for name in available_rulebooks():
         rulebook = load_rulebook(name)
+        denied = release_deny_list(rulebook.taxonomy)
         for module in rulebook.modules:
             _out(
                 f"{rulebook.framework_version:<26}{rulebook.taxonomy:<10}"
                 f"{len(rulebook.rules):>7}  {module:<10}{len(rulebook.enforced(module)):>9}"
+                f"{len(denied.in_force(module, today)):>13}"
             )
+    _out("deny-listed: see `rwa-filer rulebook deny-list` for the rules and why")
     return EXIT_OK
 
 
@@ -1175,6 +1307,172 @@ def _rulebook_check(args: argparse.Namespace) -> int:
     return _fail(f"packaged rule book {name} is {state}: it does not match {args.workbook.name}")
 
 
+def _deny_list_show(args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook deny-list`` — the packaged deny lists, entry by entry."""
+    day: date = args.on or date.today()
+    versions = shipped_releases() if args.taxonomy is None else (args.taxonomy,)
+    if args.taxonomy is not None and args.taxonomy not in shipped_releases():
+        return _fail(
+            f"taxonomy {args.taxonomy} is not shipped (shipped: {', '.join(shipped_releases())})"
+        )
+    lists = [release_deny_list(version) for version in versions]
+    module = args.module.upper() if args.module else None
+    if args.format == "json":
+        _out(
+            json.dumps(
+                [
+                    {
+                        **item.to_payload(),
+                        "entries": [
+                            {
+                                **entry.record(),
+                                "in_force": entry.in_force_on(day),
+                                "description": entry.describe(),
+                            }
+                            for entry in item.entries
+                            if module is None or entry.module.upper() == module
+                        ],
+                        "in_force_on": day.isoformat(),
+                    }
+                    for item in lists
+                ],
+                indent=2,
+            )
+        )
+        return EXIT_OK
+    for item in lists:
+        source = item.source
+        _out(
+            f"Taxonomy {item.release}: validations deny list {source.get('file') or '(none)'}"
+            f" (published {source.get('published') or 'unknown'}), as at {day.isoformat()}"
+        )
+        entries = [
+            entry for entry in item.entries if module is None or entry.module.upper() == module
+        ]
+        if not entries:
+            _out("  no entry")
+        for entry in entries:
+            state = "" if entry.in_force_on(day) else "  [not in force on this date]"
+            _out(f"  {entry.module:<8}{entry.rule_id:<16}{entry.describe()}{state}")
+        for unmatched in item.unmatched:
+            _out(f"  UNMATCHED {unmatched.module} {unmatched.code}: {unmatched.reason}")
+    return EXIT_OK
+
+
+def _issues_show(args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook issues`` — the packaged publisher-issue registers."""
+    shipped = shipped_releases()
+    if args.taxonomy is not None and args.taxonomy not in shipped:
+        return _fail(f"taxonomy {args.taxonomy} is not shipped (shipped: {', '.join(shipped)})")
+    versions = shipped if args.taxonomy is None else (args.taxonomy,)
+    module = args.module.upper() if args.module else None
+    registers = [
+        replace(
+            register,
+            issues=tuple(
+                issue
+                for issue in register.issues
+                if module is None or any(entry.module.upper() == module for entry in issue.rules)
+            ),
+        )
+        for register in (release_issues(version) for version in versions)
+    ]
+    if args.issue is not None:
+        found = next(
+            (
+                (register, issue)
+                for register in registers
+                if (issue := register.issue(args.issue)) is not None
+            ),
+            None,
+        )
+        if found is None:
+            return _fail(f"no known issue {args.issue} in taxonomy {', '.join(versions)}")
+        register, issue = found
+        if args.format == "json":
+            _out(json.dumps({"release": register.release, **issue.record()}, indent=2))
+        else:
+            _out(render_issue(issue, register).rstrip("\n"))
+        return EXIT_OK
+    if args.format == "json":
+        _out(json.dumps([register.to_payload() for register in registers], indent=2))
+    elif args.format == "markdown":
+        _out(render_document(registers).rstrip("\n"))
+    else:
+        for register in registers:
+            for line in render_listing(register):
+                _out(line)
+    return EXIT_OK
+
+
+def _read_deny_list(args: argparse.Namespace) -> deny_importer.DenyImport:
+    """Import the command's WORKBOOK for its release.
+
+    Raises:
+        ValueError: a file is missing or unreadable, or the release is not shipped.
+    """
+    if args.release not in shipped_releases():
+        raise ValueError(
+            f"taxonomy {args.release} is not shipped (shipped: {', '.join(shipped_releases())})"
+        )
+    for path in (args.workbook, args.known_issues):
+        if path is not None and not path.is_file():
+            raise ValueError(f"file not found: {path}")
+    return deny_importer.import_deny_list(
+        args.workbook,
+        args.release,
+        known_issues=args.known_issues,
+        published=args.published,
+        url=args.url,
+    )
+
+
+def _deny_list_import(args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook deny-list import`` — write a release's deny list."""
+    if problem := _unwritable(args.out, "--out", directory=True):
+        return _fail(problem)
+    try:
+        imported = _read_deny_list(args)
+    except ValueError as exc:
+        return _fail(str(exc))
+    path = args.out / deny_list_file(args.release)
+    deny_importer.write_deny_list(imported.payload, path)
+    for line in imported.lines():
+        _out(line)
+    _out(f"wrote {path}")
+    return EXIT_OK
+
+
+def _deny_list_check(args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook deny-list check`` — compare the packaged deny list with the workbook.
+
+    The address and publication date are not in the workbook: unless given,
+    they are taken from the packaged file.
+    """
+    packaged = Path(str(deny_importer.__file__)).parent.joinpath(
+        *DENY_DIRECTORY, deny_list_file(args.release)
+    )
+    committed = packaged.read_text(encoding="utf-8") if packaged.is_file() else None
+    if committed is not None:
+        source = json.loads(committed).get("source", {})
+        if args.url is None:
+            args.url = source.get("url")
+        if args.published is None and source.get("published"):
+            args.published = date.fromisoformat(source["published"])
+    try:
+        imported = _read_deny_list(args)
+    except ValueError as exc:
+        return _fail(str(exc))
+    for line in imported.lines():
+        _out(line)
+    name = deny_list_file(args.release)
+    if deny_importer.is_deny_list_current(imported.payload, committed):
+        _out(f"ok    packaged deny list {name}")
+        return EXIT_OK
+    state = "out of date" if committed is not None else "missing"
+    return _fail(f"packaged deny list {name} is {state}: it does not match {args.workbook.name}")
+
+
 def _add_rules_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register ``rwa-filer rules ...``."""
     rules = commands.add_parser(
@@ -1220,15 +1518,27 @@ def _add_workbook_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _rules_list(_args: argparse.Namespace) -> int:
-    """``rwa-filer rules list`` — one line per packaged extract."""
+    """``rwa-filer rules list`` — one line per packaged extract, then the deny-listed rules.
+
+    ``enforced`` counts the rules in force at the gateway today: a rule the
+    Bank's validations deny list deactivates is not among them, and each rule
+    the list touches is named, with what the Bank did and when.
+    """
     _out(f"{'framework':<11}{'publisher':<11}{'version':<12}{'rules':>7}{'enforced':>10}  file")
-    for framework in sorted(EXTRACT_FILES):
-        ruleset = load_rules(framework)
+    rulesets = [load_rules(framework) for framework in sorted(EXTRACT_FILES)]
+    for ruleset in rulesets:
         version = str(ruleset.source.get("framework_version", ""))
         _out(
-            f"{framework:<11}{ruleset.publisher:<11}{version:<12}"
-            f"{len(ruleset.rules):>7}{len(ruleset.enforced):>10}  {EXTRACT_FILES[framework]}"
+            f"{ruleset.framework:<11}{ruleset.publisher:<11}{version:<12}"
+            f"{len(ruleset.rules):>7}{len(ruleset.enforced):>10}  "
+            f"{EXTRACT_FILES[ruleset.framework]}"
         )
+    for ruleset in rulesets:
+        denied = [(rule, entry) for rule in ruleset.rules if (entry := rule.deny) is not None]
+        if denied:
+            _out(f"{ruleset.framework}: the Bank's validations deny list, as at {date.today()}:")
+        for rule, entry in denied:
+            _out(f"  {rule.rule_id:<16}{entry.describe()}")
     return EXIT_OK
 
 

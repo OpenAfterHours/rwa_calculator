@@ -169,7 +169,8 @@ def test_rulebook_list_shows_every_module_and_what_it_enforces(
     # Act
     code = main(["rulebook", "list"])
 
-    # Assert
+    # Assert: each row starts with these columns; the last, deny-listed, moves with
+    # the date (tests/test_cli_deny.py).
     rows = [line.split() for line in capsys.readouterr().out.splitlines()]
     expected = [
         f"{load_rulebook(name).framework_version} {version} {book['rules']} {module} {count}".split()
@@ -179,7 +180,7 @@ def test_rulebook_list_shows_every_module_and_what_it_enforces(
     ]
     assert code == EXIT_OK
     assert expected, "no measured rule book: the listing would be checked against nothing"
-    assert [row for row in expected if row not in rows] == []
+    assert [row for row in expected if not any(line[: len(row)] == row for line in rows)] == []
 
 
 def test_rulebook_import_and_check_report_a_missing_workbook_cleanly(

@@ -31,6 +31,8 @@ from rwa_filer.dash.forms import page_number
 from rwa_filer.dash.views import title_case
 from rwa_filer.release import (
     ReleaseNotFoundError,
+    release_deny_list,
+    release_issues,
     release_packs,
     release_rulebook,
     release_rulebooks,
@@ -123,6 +125,8 @@ class ReferencePages:
         ]
         pages = max(1, math.ceil(len(matched) / RULES_PER_PAGE))
         page = min(max(page_number(request.query_params.get("page")), 1), pages)
+        today = date.today()
+        deny_list = release_deny_list(entry.release)
         return self.context.render(
             request,
             "reference_module.html",
@@ -130,6 +134,12 @@ class ReferencePages:
             entry=entry,
             entries=entries,
             tables=tables,
+            denied={
+                item.rule_id: item.describe()
+                for item in deny_list.for_module(entry.module)
+                if item.in_force_on(today)
+            },
+            issues=_issues_by_rule(entry.release, entry.module),
             rules=matched[(page - 1) * RULES_PER_PAGE : page * RULES_PER_PAGE],
             matched=len(matched),
             query=query,
@@ -186,3 +196,18 @@ def _default_release(entries: list[ModuleEntry]) -> str:
 def _enforced(version: str, module: str) -> tuple[Rule, ...]:
     rulebook = release_rulebook(version, module)
     return rulebook.enforced(module) if rulebook is not None else ()
+
+
+def _issues_by_rule(version: str, module: str) -> dict[str, list[tuple[str, str, str]]]:
+    """Each rule a known issue of the release names as its subject: id, title and chip text.
+
+    The chip says "Open question" for a clarification and "Known issue" for any
+    other kind, as the labels on a verdict do.
+    """
+    found: dict[str, list[tuple[str, str, str]]] = {}
+    for issue in release_issues(version).issues:
+        chip = "Open question" if issue.is_clarification else "Known issue"
+        for item in issue.subject_rules:
+            if item.module.upper() == module.upper():
+                found.setdefault(item.rule_id, []).append((issue.id, issue.title, chip))
+    return found

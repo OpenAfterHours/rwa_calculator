@@ -18,6 +18,8 @@ from collections import Counter
 from importlib import resources
 
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, RULEBOOKS_PACKAGE, load_rulebook
+from rwa_filer.boe.deny import available_deny_lists, load_deny_list
+from rwa_filer.boe.issues import ISSUES_DIRECTORY, ISSUES_PACKAGE, available_issue_registers
 from rwa_filer.release import (
     RELEASES_FILE,
     RELEASES_PACKAGE,
@@ -31,8 +33,10 @@ from rwa_filer.release import (
 from rwa_filer.taxonomy.pack import PACKS_DIRECTORY, PACKS_PACKAGE, available_packs
 
 #: The compressed size the packaged taxonomy data may reach. One release is
-#: about 1.6 MB today (4.1.1: 1.36 MB of packs, 0.23 MB of rule books), so this
-#: is roughly 30 releases, well below PyPI's default 100 MB limit per file.
+#: about 1.6 MB today (4.1.1: 1.36 MB of packs, 0.23 MB of rule books and its
+#: deny list and publisher-issue register, which are counted with them under
+#: boe/data/deny and boe/data/issues), so this is roughly 30 releases, well
+#: below PyPI's default 100 MB limit per file.
 #: Reaching it is a prompt to retire releases or to revisit shipping each
 #: release as its own package (plan §11) — not a number to raise quietly.
 SIZE_BUDGET_BYTES = 50 * 1024 * 1024
@@ -74,6 +78,46 @@ def test_every_packaged_rule_book_belongs_to_a_shipped_release() -> None:
     )
 
     assert stray == [], f"rule books of releases releases.json does not list: {stray}"
+
+
+def test_every_shipped_release_packages_its_validations_deny_list() -> None:
+    """A release without one would run every rule the Bank's gateway has switched off."""
+    missing = sorted(set(shipped_releases()) - set(available_deny_lists()))
+
+    assert missing == [], f"shipped releases with no packaged deny list: {missing}"
+
+
+def test_every_packaged_deny_list_belongs_to_a_shipped_release() -> None:
+    stray = sorted(set(available_deny_lists()) - set(shipped_releases()))
+
+    assert stray == [], f"deny lists of releases releases.json does not list: {stray}"
+
+
+def test_every_deny_list_entry_names_a_rule_of_its_module_in_its_release() -> None:
+    """An entry the rule book cannot match would deny nothing, silently."""
+    orphans = sorted(
+        f"{version} {entry.module} {entry.rule_id}"
+        for version in shipped_releases()
+        for entry in load_deny_list(version).entries
+        if (book := release_rulebook(version, entry.module)) is None
+        or (rule := book.rule(entry.rule_id)) is None
+        or entry.module not in rule.severities
+    )
+
+    assert orphans == []
+
+
+def test_every_shipped_release_has_an_issue_register_and_every_register_a_shipped_release() -> None:
+    """One ``<version>.json`` per shipped release in boe/data/issues, and nothing else.
+
+    A release without one would label no break a known publisher issue explains;
+    a register for a release no longer shipped is data nobody reads.
+    """
+    root = resources.files(ISSUES_PACKAGE).joinpath(*ISSUES_DIRECTORY)
+    others = sorted(entry.name for entry in root.iterdir() if not entry.name.endswith(".json"))
+
+    assert sorted(available_issue_registers()) == sorted(shipped_releases())
+    assert [name for name in others if name != "__pycache__"] == []
 
 
 def test_every_shipped_release_packages_packs_and_rule_books() -> None:

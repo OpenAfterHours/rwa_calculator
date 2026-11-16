@@ -181,6 +181,25 @@ MANIFEST: list[DocEntry] = [
         url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-known-issues-august-2026.xlsx",
         source=BOE_BANKS_REPORTING_LANDING,
     ),
+    DocEntry(
+        filename="boe-banking-known-issues-november-2026.xlsx",
+        description=(
+            "BoE banking taxonomy known-issues log (16 Nov 2026) — why rules were "
+            "downgraded or deactivated; joined to the deny list for the issue numbers"
+        ),
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-known-issues-november-2026.xlsx",
+        source=BOE_BANKS_REPORTING_LANDING,
+    ),
+    DocEntry(
+        filename="boe-banking-validations-deny-list-november-2026.xlsx",
+        description=(
+            "BoE banking validations deny list (Nov 2026) — rules the gateway no longer "
+            "runs, or runs as warnings, per taxonomy release; imported into rwa-filer by "
+            "scripts/build_filer_release.py --deny-list"
+        ),
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-validations-deny-list-november-2026.xlsx",
+        source=BOE_BANKS_REPORTING_LANDING,
+    ),
     # --- Reporting templates (manual download) ---
     # DocEntry(
     #     filename="0F07 - annex-i-of-07-00-credit-risk-sa-reporting-template.xlsx",

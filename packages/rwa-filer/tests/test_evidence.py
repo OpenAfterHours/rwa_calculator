@@ -37,6 +37,7 @@ import polars as pl
 import pytest
 
 from boe_builders import T01, book, ref, rule
+from compare_builders import corporate_return
 from pack_builders import VALID_LEI, build_pack, build_return
 from rwa_filer.boe.engine import MAX_FAILURES, Accuracy
 from rwa_filer.cli import EXIT_FAILED, main
@@ -420,3 +421,52 @@ def test_validate_with_evidence_exits_as_it_would_without(
     # Assert
     capsys.readouterr()
     assert without == with_evidence == EXIT_FAILED
+
+
+# ---------------------------------------------------------------------------
+# The Bank's validations deny list
+# ---------------------------------------------------------------------------
+
+
+def test_a_rule_the_bank_deactivated_has_its_entry_and_no_evaluation_records(
+    tmp_path: Path,
+) -> None:
+    """boe_b0710 (known issue #22): the gateway does not run it, so nothing it found is evidence.
+
+    Its rule record keeps the published rule's own counts under ``formula``.
+    """
+    # Act: the corporates return breaks boe_b0710 as published.
+    records = written(tmp_path, corporate_return(), taxonomy="4.1.1", today=date(2026, 11, 16))
+
+    # Assert
+    _independent_check(records)
+    rule_record = next(
+        item for item in records if item["record"] == "rule" and item["rule_id"] == "boe_b0710"
+    )
+    assert (rule_record["status"], rule_record["reason"]) == (
+        "NOT_EVALUATED",
+        "deactivated_by_publisher",
+    )
+    assert rule_record["deny_list"]["known_issue"] == 22
+    assert rule_record["formula"]["status"] == "FAIL"
+    assert rule_record["formula"]["unsatisfied"] >= 1
+    assert evaluations(records, "boe_b0710") == []
+    assert records[0]["schema"]["version"] == "1.1"
+
+
+def test_before_the_bank_deactivated_it_the_rule_is_evidence_like_any_other(
+    tmp_path: Path,
+) -> None:
+    """The leg that stays red: the same return, a day before the entry applied."""
+    records = written(tmp_path, corporate_return(), taxonomy="4.1.1", today=date(2026, 10, 18))
+
+    _independent_check(records)
+    rule_record = next(
+        item for item in records if item["record"] == "rule" and item["rule_id"] == "boe_b0710"
+    )
+    assert (rule_record["status"], rule_record["deny_list"], rule_record["formula"]) == (
+        "FAIL",
+        None,
+        None,
+    )
+    assert any(not item["holds"] for item in evaluations(records, "boe_b0710"))

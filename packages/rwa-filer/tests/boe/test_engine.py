@@ -855,6 +855,50 @@ def test_a_fact_without_decimals_takes_the_default_for_its_type(pack: TaxonomyPa
     assert counts(pence) == (0, 1)
 
 
+#: 100,000 against 60,000 and 39,200, each to thousands: 800 apart.
+_ROUNDED = (
+    t01("0010", "0010", 100_000, -3),
+    t01("0020", "0010", 60_000, -3),
+    t01("0030", "0010", 39_200, -3),
+)
+
+
+@pytest.mark.parametrize(("function", "expected"), [("isum", (1, 0)), ("sum", (0, 1))])
+def test_only_isum_keeps_the_allowances_of_the_facts_it_adds(
+    pack: TaxonomyPack, function: str, expected: tuple[int, int]
+) -> None:
+    """``isum`` allows 500 for each of the three facts; XPath ``sum`` returns a plain number.
+
+    So a plain sum allows only the total's own 500 — the Bank's ``boe_b0770``,
+    whose formula is ``iaf:numeric-equal($v0, sum($v1))``.
+    """
+    # Arrange
+    summed = ref(T01, "0020; 0030", "0010", dv="emptySequence()", seq=True)
+    a_rule = rule(function, f"{ref(T01, '0010', '0010')} i= {function}({summed})", tables=(T01,))
+
+    # Act
+    result = run(pack, a_rule, *_ROUNDED)
+
+    # Assert
+    assert counts(result) == expected
+
+
+@pytest.mark.parametrize(("function", "expected"), [("iabs", (1, 0)), ("abs", (0, 1))])
+def test_only_iabs_keeps_the_allowance_of_the_fact_it_reads(
+    pack: TaxonomyPack, function: str, expected: tuple[int, int]
+) -> None:
+    """The same for ``abs``: the Bank's ``boe_b0794`` adds three plain ``abs`` with ``i+``."""
+    # Arrange
+    parts = " i+ ".join(f"{function}({ref(T01, row, '0010')})" for row in ("0020", "0030"))
+    a_rule = rule(function, f"{ref(T01, '0010', '0010')} i= {parts}", tables=(T01,))
+
+    # Act
+    result = run(pack, a_rule, *_ROUNDED)
+
+    # Assert
+    assert counts(result) == expected
+
+
 def test_a_literal_and_a_default_carry_no_allowance(pack: TaxonomyPack) -> None:
     """``x i<= 100`` with x = 100,400 to thousands: within x's own 500, so it holds."""
     limit = rule("limit", f"{ref(T01, '0010', '0010')} i<= 100000", tables=(T01,))
@@ -1007,6 +1051,55 @@ def test_an_optional_open_axis_all_sheet_is_read_with_no_member(pack: TaxonomyPa
 
     # Assert — one place per sheet: the "all" sheet breaks.
     assert counts(result) == (1, 1)
+
+
+def lending(member: str | None, value: float) -> tuple[object, ...]:
+    """T07's one cell on the sheet of ``member``; ``None`` is the "all" sheet."""
+    return (T07, None, member, "0010", "0010", value)
+
+
+def test_a_sum_on_an_optional_open_axis_keeps_the_all_sheet_out_of_each_members_sum(
+    pack: TaxonomyPack,
+) -> None:
+    """A fact with no member is at the dimension's default: its own sheet, not every sheet.
+
+    Given no place on the axis, the "all" sheet's 100 was added into x1's sum
+    (140) — the Bank's ``boe_b0815`` failing on each type of OF 08.06.
+    """
+    # Arrange
+    capped = rule(
+        "capped-sum",
+        f"isum({ref(T07, '0010', '0010', dv='emptySequence()', seq=True)}) <= 50",
+        tables=(T07,),
+    )
+
+    # Act
+    result = run(pack, capped, lending(None, 100.0), lending("x1", 40.0))
+
+    # Assert — x1 holds at 40; the "all" sheet breaks at 100, and says which it
+    # is. Its cell is addressed as the return reports it: with no open key.
+    assert counts(result) == (1, 1)
+    assert result.failures[0].place == "TSL x0"
+    assert [address.open_key for address in result.failures[0].addresses] == [None]
+
+
+def test_the_all_sheet_is_a_place_beside_the_members_where_two_references_meet(
+    pack: TaxonomyPack,
+) -> None:
+    """Each sheet's figure against the sum of that sheet's own: three sheets, three holds."""
+    # Arrange
+    footing = rule(
+        "same-sheet",
+        f"{ref(T07, '0010', '0010')} i= "
+        f"isum({ref(T07, '0010', '0010', dv='emptySequence()', seq=True)})",
+        tables=(T07,),
+    )
+
+    # Act
+    result = run(pack, footing, lending(None, 100.0), lending("x1", 40.0), lending("x2", 60.0))
+
+    # Assert
+    assert counts(result) == (3, 0)
 
 
 # ---------------------------------------------------------------------------

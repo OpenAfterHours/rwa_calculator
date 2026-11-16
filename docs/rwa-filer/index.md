@@ -191,7 +191,7 @@ compactly. `rwa-filer` reads the workbook and evaluates the rule the way the
 taxonomy's formula is evaluated, so that a rule passes or fails here when it
 would pass or fail on upload.
 
-Eight things follow from that, and each changes verdicts.
+Nine things follow from that, and each changes verdicts.
 
 - **A rule runs only when every template it reads is reported.** If one is not,
   the gateway does not run the rule. It is reported as not evaluated, with the
@@ -207,6 +207,15 @@ Eight things follow from that, and each changes verdicts.
   figure stated to thousands may be off by up to 500, and a rule comparing two
   such figures allows for both. A figure stated to the penny gets no such
   allowance. The accuracy is the fact's `decimals`, or the default for its type.
+  A total written `isum(...)` allows for every figure it adds. One written
+  `sum(...)` allows for none of them: its formula uses XPath's own `sum`, whose
+  result is a plain number, not a reported figure. The same is true of `abs`
+  against `iabs`. In taxonomy 4.1.1 six enforced PRA001 rules compare a `sum`
+  with rounding allowed (`boe_b0770`, `boe_b0820` to `boe_b0823` and
+  `boe_b0829`), `boe_b0794` does the same with `abs` (in PRA001 and PRA116),
+  and so does the SDDT rule `boe_b1037_ss` with `sum`. Figures rounded to
+  thousands can break these rules where the sibling rules written with `isum`
+  hold.
 - **Codes listed inside one reference belong to that reference alone.** A rule
   may name the same four columns in two references. The taxonomy's formula then
   reads every pair of them, sixteen runs, and not four runs column by column.
@@ -219,6 +228,11 @@ Eight things follow from that, and each changes verdicts.
   same rule is then taken over every country at once, and the rule runs once.
   "The sum over all countries, less the total, equals the total" is such a
   rule.
+- **A sheet filed with no member is a sheet of its own.** OF 08.06 is filed
+  once per type of specialised lending. Its axis also accepts the dimension's
+  default, "all types", which a file reports by giving no type at all. Where a
+  return files that sheet, each rule runs on it separately, like on any other
+  sheet. Its figures are not added into any type's runs.
 - **What a sum adds up is the formula's to say, not the workbook's.** On a
   table with one row per obligor grade, per securitisation or per entity, a sum
   in a rule either adds up every row or stays on the row the rest of the rule
@@ -275,6 +289,13 @@ packaged rule books are built with both.
     with several rows, for PRA001, PRA116 and MRL003, and Arelle's counts on them
     are kept beside the others. On those returns the engine and Arelle agree on
     every one of the 28 rules whose sums the workbook alone misreads.
+
+    Every figure in those returns is exact to the unit, where `sum` and `isum`
+    allow the same, and none files an all-types OF 08.06 sheet. Three further
+    returns cover both cases: two with figures rounded to thousands, for PRA001
+    and PRA116, and one with an all-types OF 08.06 sheet beside two types. Their
+    Arelle counts are kept too, and the engine agrees with Arelle on every rule
+    they were built for.
 
 ### The fact table
 

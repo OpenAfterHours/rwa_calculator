@@ -882,6 +882,18 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     column 0250 wherever two AIRB sheets report a maturity. A Total has no drill-down of its
     own: open the same cell on a class sheet.
 
+    **Maturity in the filed return.** The PRA001 taxonomy types the exposure-weighted
+    average maturity as a whole number: OF 08.01 / OF 08.02 column 0250 in days
+    (`eba_met:ii163`) and OF 08.03 column 0080 in years (`eba_met:ii791`), both integer
+    metrics. A fraction in either is not valid XBRL. The filing adapter
+    (`reporting/filing/canonical.py`) therefore files these two columns rounded to the
+    nearest whole day or year, ties to even, as the Bank's XBRL Filing Manual v1.0.1
+    rule 2.18 requires of any rounded fact, and states them with `decimals="0"`. So
+    912.5 days files as 912, 2.5 years as 2 and 4.58 years as 5. Only the filed return
+    is rounded: the generated templates, the ledger and Pillar 3 CR6 keep the exact
+    average. Counts (number of obligors) are not rounded — a fractional count is a defect,
+    and the filing package still refuses it.
+
     **A pair with no sheet.** PS1/26 Art. 147A withdraws the IRB approaches for sovereigns
     and A-IRB for institutions. A leg that still carries such a pair is reported on a sheet
     outside the published axis, keyed by class and approach (`institution_airb`,

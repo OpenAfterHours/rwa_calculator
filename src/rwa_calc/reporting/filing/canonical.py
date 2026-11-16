@@ -25,6 +25,16 @@ Key responsibilities:
   reliably the same float. Where the cells agree to rounding the return carries
   one value; where they do not, both are kept and the structure check refuses
   the return (``STR007``) — a real disagreement is never smoothed over.
+- File an exposure-weighted average maturity in the whole units the taxonomy
+  types it in. Annex II asks for it in days on OF 08.01 / OF 08.02 column 0250
+  (p.111, p.118) and in years on OF 08.03 column 0080 (p.121); PRA001 files
+  those cells on ``eba_met:ii163`` and ``eba_met:ii791``, both
+  ``xbrli:integerItemType``, so a fraction there is not valid XBRL. The figure
+  is rounded to nearest, ties to even, as the Bank's XBRL Filing Manual v1.0.1
+  rule 2.18 requires of any rounded fact ("[IEEE-754] 4.3.1 ...
+  roundTiesToEven"; an integer is filed with decimals 0). Only the filed fact
+  is rounded: the generated templates, the ledger and Pillar 3 keep the exact
+  average.
 
 Why a cell can have no place
 - ``sheet_coarser_than_published_axis``: several published sheet codes map onto
@@ -52,6 +62,8 @@ label cells (a PD-band caption, say) carry no figure.
 References:
 - Bank of England Banking Taxonomy v4.1.1 (PRA001) — the cells that exist
 - PRA PS1/26 Annex II — the OF templates this estate generates
+- Bank of England XBRL Filing Manual v1.0.1, rule 2.18 — how a rounded fact is
+  rounded, and the decimals an integer is filed with
 - docs/development/workspace.md — the adapter boundary
 """
 
@@ -107,6 +119,19 @@ _GEOGRAPHY_TOTAL_MEMBER: Final = "x1"
 
 #: The DPM data type of a yes/no metric.
 _TYPE_BOOLEAN: Final = "boolean"
+
+#: The integer metrics that hold an AVERAGE: "Maturity value (days)" and
+#: "Maturity value (years)", the exposure-weighted average maturity of OF 08.01 /
+#: OF 08.02 c0250 and OF 08.03 c0080. Their fraction is the right figure in a
+#: unit the taxonomy makes whole, so it is rounded. Every other integer metric of
+#: the pack is a count (or a length of an exit period), where a fraction is a
+#: defect that the structure check (``STR006``) must keep refusing — so the
+#: rounding is keyed to these two metrics, never to the integer data type.
+_WHOLE_UNIT_AVERAGE_METRICS: Final = frozenset({"eba_met:ii163", "eba_met:ii791"})
+#: Float dust is snapped at this many decimal places before an average is
+#: rounded to its unit, so a tie reached through the order of summation
+#: (2.5000000000000004 from two loans at 2.5 years) files as the exact tie.
+_TIE_SNAP_DECIMALS: Final = 9
 
 #: Two cells of one data point are the SAME figure when they agree to eleven
 #: significant figures — summation-order rounding is of the order of 1e-13 of a
@@ -214,6 +239,11 @@ def build_canonical_return(
         for number, point in enumerate(pack.datapoints)
         if point.metric in pack.metrics and pack.metrics[point.metric].data_type == _TYPE_BOOLEAN
     ]
+    averages = [
+        number
+        for number, point in enumerate(pack.datapoints)
+        if point.metric in _WHOLE_UNIT_AVERAGE_METRICS
+    ]
 
     tables_of: dict[str, list[str]] = {}
     for table, binding in index.bindings.items():
@@ -238,6 +268,7 @@ def build_canonical_return(
                 sheet_map=index.sheet_maps.get(binding.sheet_map or ""),
                 pack=pack,
                 flags=flags,
+                averages=averages,
             )
             placed.append(facts)
             unplaced.append(leftover)
@@ -300,6 +331,7 @@ def _place_sheet(
     sheet_map: Mapping[str, SheetCode] | None,
     pack: TaxonomyPack,
     flags: list[int],
+    averages: list[int],
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Place one of our sheets' figures; return ``(facts, unplaced)``.
 
@@ -307,6 +339,13 @@ def _place_sheet(
     numeric throughout and carry a yes/no cell as 1 / 0; the taxonomy takes it
     as ``true`` / ``false``. Any other number in such a cell is left as it is,
     for the structure check to report.
+
+    ``averages`` are the data points of an averaged maturity
+    (``_WHOLE_UNIT_AVERAGE_METRICS``), filed in whole days or years. Unlike a
+    flag, EVERY value of theirs is converted: a 0.5 in a yes/no cell is wrong,
+    whereas 912.5 days is the right average and only its unit is fixed by the
+    taxonomy. It is snapped (``_TIE_SNAP_DECIMALS``) and then rounded to nearest
+    with ties to even (Filing Manual rule 2.18).
     """
 
     def none_placed(reason: str) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -342,13 +381,21 @@ def _place_sheet(
         cells, on=["row", "column", "sheet"], how="left", nulls_equal=True
     )
     is_flag = pl.col("datapoint").is_in(flags) & pl.col("value").is_in([0.0, 1.0])
+    whole_unit = (
+        pl.col("value").round(_TIE_SNAP_DECIMALS, mode="half_to_even").round(0, mode="half_to_even")
+    )
     facts = joined.filter(pl.col("table").is_not_null()).select(
         "table",
         "sheet",
         pl.lit(open_key, pl.String).alias("open_key"),
         "row",
         "column",
-        pl.when(is_flag).then(None).otherwise(pl.col("value")).alias("value"),
+        pl.when(is_flag)
+        .then(None)
+        .when(pl.col("datapoint").is_in(averages))
+        .then(whole_unit)
+        .otherwise(pl.col("value"))
+        .alias("value"),
         # A flag is exactly 0 or 1 here, so its boolean reads "false" or "true".
         pl.when(is_flag)
         .then(pl.col("value").cast(pl.Boolean).cast(pl.String))

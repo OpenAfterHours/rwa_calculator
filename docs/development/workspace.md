@@ -92,18 +92,25 @@ the supervisory register's matrix and ratchets two counts against
 |-------|-------:|------|
 | `placed_cells` — distinct cells that land on a taxonomy data point | 1,911 | May not fall |
 | `unplaced_figures` — distinct cells holding a non-zero figure with no place | 1,025 | May not rise, in total or for any (template, reason) |
-| `structure_findings` — placed facts that still cannot be filed | 8 | May not rise, in total or for any (finding, table) |
+| `structure_findings` — placed facts that still cannot be filed | 2 | May not rise, in total or for any (finding, table) |
 
 A zero in a cell the taxonomy lacks loses nothing and is not counted.
 
-The eight structure findings are defects in the generated estate:
+The two structure findings are one defect in the generated estate, seen from
+both of the tables that show the data point, on one portfolio
+(`facility-share-binding`, the one whose output floor binds):
 
 | Finding | Table | What is wrong |
 |---------|-------|---------------|
-| `STR007` | OF 02.00 | Rows 0050 and 0060, column 0010, are one data point in the taxonomy (with OF 07.00 total sheet, column 0220) and hold different values. |
-| `STR007` | OF 08.01 | Column 0276 (output-floor RWEA) disagrees with the OF 02.00 column 0020 cell that is the same data point. |
-| `STR007` | OF 02.01 | Row 0080, column 0030 (U-TREA) disagrees with OF 02.00 row 0010, column 0010. |
-| `STR006` | OF 08.03 | Column 0080 is an integer in the taxonomy and holds a fractional maturity. |
+| `STR007` | OF 02.00 | Row 0297, column 0010 is one data point in the taxonomy with OF 08.01 sheet 0012, row 0010, column 0260. OF 02.00 carries the un-floored RWEA, OF 08.01 the RWEA after the output-floor add-on, so the two cells hold different values (plan item P1.369). |
+| `STR007` | OF 08.01 | The same data point, from the OF 08.01 side. |
+
+An exposure-weighted average maturity is not a structure finding. OF 08.01 /
+OF 08.02 column 0250 (days) and OF 08.03 column 0080 (years) are typed integer
+in the taxonomy, so the adapter files them as whole numbers, rounded to nearest
+with ties to even as the Bank's XBRL Filing Manual (rule 2.18) requires. The
+generated templates keep the exact average. See
+[COREP reporting](../features/corep-reporting.md).
 
 The unplaced figures are the work list. The reasons, largest first:
 
@@ -142,10 +149,10 @@ RWA_FILER_ARELLE_PYTHON=/path/to/arelle-venv/bin/python \
     uv run python scripts/referee_differential.py --check
 ```
 
-Five of the thirteen Basel 3.1 portfolios qualify today. The other eight carry
-structure findings, which is the filing-mapping ratchet's business, and are not
-filed. A portfolio that joins or leaves the five must be re-banked and
-explained.
+Fourteen of the fifteen Basel 3.1 portfolios qualify. The fifteenth,
+`facility-share-binding`, carries the two structure findings above, which are
+the filing-mapping ratchet's business, and is not filed. A portfolio that joins
+or leaves the fourteen must be re-banked and explained.
 
 The gate needs Arelle and the Bank's package, neither of which is in the
 repository, and takes several minutes and about 3 GB per return. It therefore

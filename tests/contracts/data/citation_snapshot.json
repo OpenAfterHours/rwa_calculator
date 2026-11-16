@@ -463,6 +463,10 @@
   "rwa_calc.engine.sa.b31_risk_weight_tables::get_b31_combined_cqs_risk_weights": [
     "PS1/26, paragraph 122"
   ],
+  "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts": [
+    "PS1/26, paragraph 124F",
+    "PS1/26, paragraph 124H"
+  ],
   "rwa_calc.engine.sa.central_bank::ecb_rw_expr": [
     "CRR Art. 114(3)",
     "PS1/26, paragraph 114"

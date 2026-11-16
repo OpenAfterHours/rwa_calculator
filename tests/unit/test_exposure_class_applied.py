@@ -136,7 +136,7 @@ class TestAddExposureClassApplied:
     def test_residential_property_corporate_unchanged(self) -> None:
         """Residential property alone does NOT re-class a corporate.
 
-        ``_is_residential_re_class`` has no ``property_type`` limb, so such a row
+        ``is_residential_re_class`` has no ``property_type`` limb, so such a row
         keeps the counterparty risk weight — re-classing it would put it in a
         class its risk weight does not come from.
         """

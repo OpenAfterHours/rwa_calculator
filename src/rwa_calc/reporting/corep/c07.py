@@ -177,6 +177,12 @@ docs/plans/phase7-declarative-reporting.md §6):
   CCR rows their gross, in cells a return cannot carry. OF 07.00 also has no
   col 0020 (``templates.B31_C07_COLUMNS``). CRR is untouched: no EBA template is
   held to read its grey cells from.
+- A LOAN-SPLIT REAL-ESTATE EXPOSURE IS REPORTED IN ITS TWO PARTS (PS1/26 Annex
+  II p.94: Art. 124F / 124H exposures "shall be reported in two parts"): the
+  part up to the 55% cap against its 20% / 60% row, the rest against its Art.
+  124L row, off the engine's ``sa_loan_split_*`` carriers, before the sheets are
+  cut (``kernel/rw_parts.py``). On its one blended weight the loan fell to row
+  0280, which ``boe_b0445`` requires empty on sheet 0010.
 - TRANSITIONAL EQUITY IS ROWED BY ITS ARTICLE 133 WEIGHT (PS1/26 Annex II
   p.95-96): rows 0250 / 0261 with the transitional RWEA in col 0220, never row
   0280, off the sealed ``risk_weight_pre_equity_transitional`` (``_rw_band_expr``);
@@ -258,6 +264,7 @@ from rwa_calc.reporting.kernel import (
     sheet_frame,
 )
 from rwa_calc.reporting.kernel.bases import ORIGIN_APPROACH_SOURCE
+from rwa_calc.reporting.kernel.rw_parts import split_risk_weight_parts, summed_columns
 from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -634,6 +641,12 @@ def c07_plans(
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
+    # A loan-split exposure is reported in its two parts (module docstring).
+    rwea_cols = frozenset({rwa_col, "rwa_pre_factor", "c07_sf_delta"})
+    exposure_cols = (summed_columns(spec) - rwea_cols) | {_UNFUNDED_COL}
+    split = split_risk_weight_parts(sa_df, exposure_cols=exposure_cols, rwea_cols=rwea_cols)
+    if split is not sa_df:
+        sa_df = split.with_columns(_rw_band_expr(framework, data_cols).alias("c07_rw_band"))
     unreported = get_c07_unreported_cells(framework)
     defaulted_row_sheets = get_c07_defaulted_row_sheet_keys(framework)
 

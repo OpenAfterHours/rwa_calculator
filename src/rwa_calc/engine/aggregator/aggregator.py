@@ -70,7 +70,7 @@ from rwa_calc.engine.aggregator._summaries import (
 )
 from rwa_calc.engine.aggregator._supporting_factors import generate_supporting_factor_impact
 from rwa_calc.engine.aggregator._utils import collect_views, resolve_own_approach_rwa_col
-from rwa_calc.engine.sa.risk_weights import is_commercial_re_class
+from rwa_calc.engine.sa.re_class import is_commercial_re_class
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:

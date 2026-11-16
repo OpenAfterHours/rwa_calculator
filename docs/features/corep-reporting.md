@@ -756,6 +756,25 @@ flowchart TD
     | 0270 | 1,250% | |
     | 0280 | Other risk weights | |
 
+    !!! info "A loan-split real-estate exposure is reported in two rows"
+        PS1/26 Annex II (p.94): real estate exposures under Art. 124F / 124H — not
+        materially dependent on the cash flows of the property — *"shall be reported in two
+        parts, against the risk weight applied to the portion up to 55% of the value of the
+        property, and against the portion above 55% of the value of the property (if
+        applicable)"*. The part up to the cap is reported in row 0180 (20%, residential) or
+        0201 (60%, commercial), the rest in the row of its Art. 124L counterparty weight
+        (0220 for a natural person). Both parts stay on the real-estate sheet, and their
+        exposure values and RWEAs add up to the loan's own; nothing changes in the risk
+        weight or the RWEA.
+
+        A 400,000 mortgage at 60% LTV to a natural person, weighted 24.58% as a whole, is
+        reported as 366,666.67 (RWEA 73,333.33) in row 0180 and 33,333.33 (RWEA 25,000.00)
+        in row 0220. Reported on its blended weight it matched no row and fell to row 0280,
+        which the Bank's rule `boe_b0445` requires to be empty on the real-estate sheet. An
+        exposure under the Art. 123B currency mismatch multiplier is split on its weight
+        before the multiplier, and its RWEA keeps the multiplier. A loan inside the 55% cap
+        is reported whole.
+
     **Section 4 — Breakdown by CIU Approach**
 
     | Ref | Row | vs CRR |

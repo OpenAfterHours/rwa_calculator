@@ -3563,6 +3563,13 @@ CALCULATION_OUTPUT_SCHEMA = {
     "currency_mismatch_multiplier_applied": pl.Boolean,  # True if 1.5x RW multiplier applied
     "risk_weight_pre_currency_mismatch": pl.Float64,  # RW snapshot before 1.5x mismatch multiply
     # -------------------------------------------------------------------------
+    # LOAN-SPLIT PARTS (Basel 3.1 Art. 124F(1) / 124H(1); OF 07.00 Annex II p.94)
+    # Non-null only where the SA weight IS the two-part weight; absent under CRR.
+    # -------------------------------------------------------------------------
+    "sa_loan_split_secured_share": pl.Float64,  # share up to the 55% cap
+    "sa_loan_split_secured_rw": pl.Float64,  # Art. 124F(1)(a) 20% / 124H(1)(a) 60%
+    "sa_loan_split_residual_rw": pl.Float64,  # Art. 124L counterparty weight
+    # -------------------------------------------------------------------------
     # POST-MODEL ADJUSTMENTS (Basel 3.1 PRA PS1/26 Art. 153(5A), 154(4A), 158(6A))
     # -------------------------------------------------------------------------
     "rwa_pre_adjustments": pl.Float64,  # RWEA before post-model adjustments

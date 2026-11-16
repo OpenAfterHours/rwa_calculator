@@ -267,6 +267,33 @@ Approach's), but always allocated to row 0261 in Section 3.
       with a 1.25× junior-charge multiplier reports under row 0232 = 110%, but with
       RWEA = exposure × 137.5%, surfacing in row 0234 = 135% only when the base RW
       itself is the multiplier outcome).
+    - **Loan-split real estate (Art. 124F / 124H, not materially dependent)** is
+      reported *"in two parts, against the risk weight applied to the portion up to
+      55% of the value of the property, and against the portion above 55% of the
+      value of the property (if applicable)"* (Annex II p.94). **Implemented as:** the
+      Basel 3.1 SA dispatcher records the secured share and both part weights on
+      `sa_loan_split_secured_share` / `sa_loan_split_secured_rw` /
+      `sa_loan_split_residual_rw`
+      (`engine/sa/b31_risk_weight_tables.py::with_b31_loan_split_parts`; CONDITIONAL
+      columns on every calculator edge and on `AGGREGATOR_EXIT_EDGE`, never produced
+      under CRR). `reporting/kernel/rw_parts.py::split_risk_weight_parts` turns each
+      such ledger row into two report rows before OF 07.00 is cut: every column a cell
+      sums is split by the share (exposure) or by each part's share of the weight
+      (RWEA), so the parts add back to the row, and each part bands on its own weight.
+      A row is split only while the weight it is reported against still equals the
+      recorded blend — the pre-multiplier weight where Art. 123B applied, so the RWEA
+      keeps the multiplier — and a guaranteed, defaulted or otherwise re-weighted leg
+      stays whole. Both parts stay on the real-estate sheet (Art. 112(2) Table A2 ranks
+      real estate above retail and corporates; Art. 123(2)). Worked example
+      (`b31/rich`, `RP-LN-RRE`, 400,000 at 60% LTV to a natural person, 24.58% as a
+      whole): row 0180 366,666.67 / RWEA 73,333.33, row 0220 33,333.33 / RWEA
+      25,000.00, row 0280 empty, as `boe_b0445` requires on sheet 0010. No risk weight
+      or RWEA changes. **Not yet:** the CRR template (the Art. 125 / 126 blend above
+      the LTV limit), the residual leg of a loan the engine splits physically (still
+      reported on the counterparty's sheet), Pillar 3 CR5 (Annex XX carries the same
+      sentence), and banding a non-split Art. 123B or junior-charge exposure on its
+      un-multiplied weight — those two are still banded on the applied weight; no
+      registered portfolio reaches either.
     - Equity exposures under the Standardised Transitional Approach (Rules 4.1–4.10
       of the Credit Risk: General Provisions (CRR) Part) are allocated to rows 0250
       and 0261 per Art. 133, and additionally reported against memorandum rows

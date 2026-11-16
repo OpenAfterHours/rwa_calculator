@@ -1222,6 +1222,7 @@
         "engine/re_split/carriers.py",
         "engine/re_split/flagging.py",
         "engine/re_split/splitter.py",
+        "engine/sa/re_class.py",
         "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py"
       ],
@@ -1300,6 +1301,7 @@
         "tests/properties/test_source_conservation.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_re_split_features.py",
+        "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -6035,6 +6037,7 @@
       ],
       "test_files": [
         "tests/acceptance/reporting/test_c07_defaulted_row_scope.py",
+        "tests/acceptance/reporting/test_of07_loan_split_two_parts.py",
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/unit/test_b31_sa_risk_weights.py",
@@ -6609,6 +6612,7 @@
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/sa/rw_adjustments.py",
+        "reporting/kernel/rw_parts.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -6623,6 +6627,7 @@
         "tests/fixtures/p1_94e/p1_94e.py",
         "tests/fixtures/p1_94f/p1_94f.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/unit/reporting/kernel/test_rw_parts.py",
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_b31_sa_risk_weights.py"
       ],
@@ -6650,6 +6655,7 @@
         "engine/hierarchy/unify.py",
         "engine/re_split/flagging.py",
         "engine/re_split/splitter.py",
+        "engine/sa/re_class.py",
         "engine/sa/risk_weights.py"
       ],
       "test_files": [
@@ -6727,7 +6733,8 @@
     {
       "article": "124F",
       "code_functions": [
-        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
+        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split",
+        "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -6743,6 +6750,7 @@
         "sa_re_split_revised_parameters@b31"
       ],
       "source_files": [
+        "contracts/edges.py",
         "contracts/protocols.py",
         "domain/enums.py",
         "engine/re_split/carriers.py",
@@ -6750,6 +6758,7 @@
         "engine/re_split/params.py",
         "engine/re_split/splitter.py",
         "engine/sa/b31_risk_weight_tables.py",
+        "engine/sa/risk_weights.py",
         "engine/stages/re_split.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
@@ -6759,8 +6768,10 @@
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
         "tests/acceptance/basel31/test_scenario_b31_a_sa.py",
         "tests/acceptance/reporting/test_c07_row_scope.py",
+        "tests/acceptance/reporting/test_of07_loan_split_two_parts.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/contracts/test_collapse_additivity.py",
+        "tests/contracts/test_loan_split_carrier_edge.py",
         "tests/fixtures/p1_141/p1_141.py",
         "tests/fixtures/p1_142/p1_142.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
@@ -6776,6 +6787,7 @@
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_source_conservation.py",
         "tests/unit/rulebook/test_re_split_features.py",
+        "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_b31_re_junior_charges.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_re_split_carrier_classification.py",
@@ -6813,10 +6825,12 @@
     },
     {
       "article": "124H",
-      "code_functions": [],
+      "code_functions": [
+        "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts"
+      ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-069"
       ],

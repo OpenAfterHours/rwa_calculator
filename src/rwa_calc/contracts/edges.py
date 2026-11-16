@@ -1743,6 +1743,30 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "risk_weight_pre_currency_mismatch": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False
         ),
+        # The Basel 3.1 loan-split carriers (``engine/sa/b31_risk_weight_tables.py::
+        # with_b31_loan_split_parts``): the secured share and the two part weights of
+        # an Art. 124F(1) / 124H(1) weight, which OF 07.00 reports "in two parts"
+        # (PS1/26 Annex II p.94). CONDITIONAL: the SA risk-weight step writes them on
+        # every Basel 3.1 run, IRB rows included (their SA-equivalent weight), and
+        # never under CRR. Undeclared, the seal strips them with no error. They
+        # record the DISPATCHER's weight: a later step (Art. 127, CRM substitution,
+        # Art. 123B) can re-weight a row that carries them, so a reader checks the
+        # row's weight still equals the blend (``reporting/kernel/rw_parts.py``).
+        **{
+            column: EdgeColumn(
+                dtype=pl.Float64,
+                required=False,
+                inject=False,
+                citation="PS1/26 Art. 124F(1), 124H(1), 124L",
+                null_meaning="the SA dispatcher did not price the row at an Art. 124F(1) / "
+                "124H(1) two-part weight; absent = CRR run",
+            )
+            for column in (
+                "sa_loan_split_secured_share",
+                "sa_loan_split_secured_rw",
+                "sa_loan_split_residual_rw",
+            )
+        },
         "sa_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False),
         "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False),

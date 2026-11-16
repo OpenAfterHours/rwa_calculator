@@ -404,3 +404,40 @@ def test_the_files_dataclass_finds_a_sample_whatever_the_modules_underscores() -
     )
 
     assert files.sample_for("PRA_GAAP") == Path("s.xbrl")
+
+
+def test_a_new_release_gets_an_empty_issue_register_and_retirement_removes_it(
+    publication: Publication,
+) -> None:
+    """The register is curated, not built: a build never overwrites one, and starts one empty."""
+    # Arrange — 9.0.0 on disk with a curated register, no longer listed.
+    files = find_bank_files(publication.source)
+    build_release(VERSION, files, publication.root)
+    _relabel(publication.root, VERSION, "9.0.0")
+    _write_releases(publication.root, [VERSION])
+    issues = publication.root / release_build.ISSUES_SUBDIR
+    curated = issues / f"{VERSION}.json"
+    curated.write_text('{"curated": true}', encoding="utf-8")
+    (issues / "9.0.0.json").write_text("{}", encoding="utf-8")
+
+    # Act
+    build_release(VERSION, files, publication.root)
+
+    # Assert — the listed release's register is untouched; the retired one's is gone.
+    assert sorted(path.name for path in issues.iterdir()) == [f"{VERSION}.json"]
+    assert curated.read_text(encoding="utf-8") == '{"curated": true}'
+
+
+def test_a_release_built_for_the_first_time_starts_with_an_empty_issue_register(
+    publication: Publication,
+) -> None:
+    # Arrange
+    files = find_bank_files(publication.source)
+    register = publication.root / release_build.ISSUES_SUBDIR / f"{VERSION}.json"
+
+    # Act
+    build_release(VERSION, files, publication.root)
+
+    # Assert
+    payload = json.loads(register.read_text(encoding="utf-8"))
+    assert (payload["release"], payload["issues"]) == (VERSION, [])

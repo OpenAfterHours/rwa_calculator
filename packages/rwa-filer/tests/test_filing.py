@@ -405,3 +405,33 @@ def test_a_build_without_evidence_records_none(pack: TaxonomyPack, tmp_path: Pat
     # Assert
     assert package.evidence is None and package.manifest_path is not None
     assert json.loads(package.manifest_path.read_text())["evidence"] is None
+
+
+def test_the_manifest_carries_the_publisher_issue_labels(
+    pack: TaxonomyPack, tmp_path: Path
+) -> None:
+    """A break a known issue explains is filed as it is, and the manifest says which issue."""
+    # Arrange
+    from dataclasses import replace
+
+    from boe_builders import issue_register
+    from rwa_filer.release import release_for_pack
+
+    broken = ret(
+        (T01, None, None, "0010", "0010", 100_000.0, None),
+        (T01, None, None, "0020", "0010", 60_000.0, None),
+        (T01, None, None, "0030", "0010", 30_000.0, None),
+    )
+    release = replace(release_for_pack(pack, RULES), issues=issue_register(FOOTING))
+
+    # Act
+    package = build_filing(broken, tmp_path, release=release, allow_rule_breaks=True)
+    assert package.manifest_path is not None
+    manifest = json.loads(package.manifest_path.read_text())
+
+    # Assert
+    validation = manifest["validation"]
+    labelled = [item for item in validation["findings"] if item["publisher_issues"]]
+    assert validation["submittable"] is False
+    assert [item["publisher_issues"] for item in labelled] == [["PI-01"]]
+    assert [item["issue"] for item in validation["summary"]["publisher_issues"]] == ["PI-01"]

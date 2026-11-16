@@ -250,6 +250,10 @@ class Finding:
         positions: Every fact a structure or reading finding is about, uncapped
             — the message quotes the first few. Empty for a finding about a
             rule, a header field or the return as a whole.
+        publisher_issues: The known issues with the published rule that label
+            a broken rule's finding (``validate.issue_labels``), by id; the
+            message carries their sentences. Empty otherwise — and always for
+            this template-level engine, whose rules carry no fingerprint to pin.
     """
 
     code: str
@@ -260,6 +264,7 @@ class Finding:
     expected: str
     actual: str
     positions: tuple[FactPosition, ...] = ()
+    publisher_issues: tuple[str, ...] = ()
 
     @property
     def is_blocking(self) -> bool:

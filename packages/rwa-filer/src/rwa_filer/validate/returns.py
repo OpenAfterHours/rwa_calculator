@@ -7,6 +7,7 @@ Pipeline position:
         ->  structure.check_structure
         ->  boe.engine.evaluate_rules
         ->  validate.execution.apply_deny_list
+        ->  validate.issue_labels.label_results (the release's publisher issues)
         ->  ReturnValidation
     the same, keeping every evaluation  ->  trace_return
         ->  (ReturnValidation, boe.engine.RuleTrace)  ->  rwa_filer.evidence
@@ -22,6 +23,11 @@ Key responsibilities:
   submission) date: a rule the Bank's deny list deactivates is not evaluated
   (``deactivated_by_publisher``) and is no gap in the check; one it downgrades
   breaks as a Warning (``validate.execution``).
+- Then label each result a known issue with the published rule explains
+  (``validate.issue_labels``): the release's register names the issue, every
+  unsatisfied evaluation is classified inside or outside its footprint, and the
+  finding's message says so. A label never changes the verdict: status,
+  severity, counts, blocking and the finding's code are untouched.
 - Keep the two kinds of finding apart in the result — structure (the taxonomy
   rejects it) and rules (the supervisor's arithmetic does not hold) — and say
   plainly whether anything blocks submission.
@@ -54,7 +60,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import TYPE_CHECKING, Final
 
@@ -87,7 +93,8 @@ from rwa_filer.validate.checker import (
     FINDING_RULES_NOT_EVALUABLE,
     Finding,
 )
-from rwa_filer.validate.execution import apply_deny_list, trace_as_run
+from rwa_filer.validate.execution import apply_deny_list, formula_result, trace_as_run
+from rwa_filer.validate.issue_labels import label_results, needs_trace, tally
 from rwa_filer.validate.structure import check_reference_date, check_structure, filing_indicators
 
 if TYPE_CHECKING:
@@ -100,6 +107,7 @@ if TYPE_CHECKING:
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import CoverageShortfall
     from rwa_filer.validate.identity import SourceIdentity
+    from rwa_filer.validate.issue_labels import IssueNote, IssueTally
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +164,8 @@ class RuleReport:
         templates_missing: Templates the return does not report, and does not
             declare not filed, that enforced rules check a reported template
             against — by filing indicator.
+        issue_notes: The labels known issues with the published rules put on
+            the results (``validate.issue_labels``), in the results' order.
     """
 
     module: str
@@ -167,6 +177,11 @@ class RuleReport:
     templates_ruled: tuple[str, ...] = ()
     templates_covered: tuple[str, ...] = ()
     templates_missing: tuple[MissingTemplate, ...] = ()
+    issue_notes: tuple[IssueNote, ...] = ()
+
+    def notes_for(self, rule_id: str) -> tuple[IssueNote, ...]:
+        """The labels on ``rule_id``'s result; empty when no known issue explains it."""
+        return tuple(note for note in self.issue_notes if note.rule_id == rule_id)
 
     @property
     def rules_enforced(self) -> int:
@@ -360,6 +375,15 @@ class ReturnValidation:
         return self.report.completeness
 
     @property
+    def publisher_issues(self) -> tuple[IssueTally, ...]:
+        """The known issues with the published rules that label this validation, by issue.
+
+        For a script that must tell "blocked only by breaks a known issue
+        explains" from the rest: the verdict itself never says so.
+        """
+        return tally(self.report.issue_notes) if self.report is not None else ()
+
+    @property
     def status(self) -> str:
         """``BLOCKED``, else ``INCOMPLETE``, else ``CLEAN`` (see ``VERDICT_*``)."""
         if self.blocking:
@@ -547,7 +571,8 @@ def _validate(
     deny_date = on or chosen.run_date
     results = apply_deny_list(published, chosen.deny_list, module, deny_date)
     traced = trace_as_run(traced, results) if traced is not None else None
-    report = _report(ret, pack, rulebook, results)
+    notes = _issue_notes(ret, chosen, rulebook, results, traced, accuracy)
+    report = replace(_report(ret, pack, rulebook, results), issue_notes=notes)
     validation = ReturnValidation(
         release=chosen,
         structure=structure,
@@ -561,6 +586,45 @@ def _validate(
         deny_date=deny_date,
     )
     return validation, traced
+
+
+def _issue_notes(  # noqa: PLR0913 - the parts of one validation the labels read
+    ret: CanonicalReturn,
+    chosen: Release,
+    rulebook: RuleBook,
+    results: tuple[RuleResult, ...],
+    traced: RuleTrace | None,
+    accuracy: Accuracy | None,
+) -> tuple[IssueNote, ...]:
+    """The labels the release's publisher issues put on ``results``.
+
+    A broken rule an issue applies to only in part (a footprint) has every
+    unsatisfied evaluation classified, so it is traced: from the trace when
+    there is one, else by ONE more pass over just those rules. That pass is a
+    deterministic re-run, never a second verdict — its counts are checked
+    against the results, and a difference is logged.
+    """
+    register = chosen.issues
+    module = chosen.pack.info.module
+    if not register.issues:
+        return ()
+    if traced is not None:
+        return label_results(results, rulebook, register, module, evaluations=traced.evaluations)
+    wanted = needs_trace(results, register, module)
+    rules = [rule for rule in rulebook.enforced(module) if rule.rule_id in wanted]
+    evaluations = ()
+    if rules:
+        again = trace_rules(ret, chosen.pack, rules, accuracy=accuracy)
+        published = {result.rule_id: formula_result(result) for result in results}
+        for result in again.results:
+            first = published[result.rule_id]
+            if (result.satisfied, result.unsatisfied) != (first.satisfied, first.unsatisfied):
+                logger.warning(
+                    "tracing %s again for its publisher-issue label gave other counts",
+                    result.rule_id,
+                )
+        evaluations = again.evaluations
+    return label_results(results, rulebook, register, module, evaluations=evaluations)
 
 
 def _report(
@@ -669,12 +733,16 @@ def _rule_finding(result: RuleResult, report: RuleReport) -> Finding:
     cells = f": {'; '.join(first.cells)}" if first is not None and first.cells else ""
     # A downgrade says so: the published rule is an Error.
     denied = f" The rule was {result.deny.describe()}." if result.deny is not None else ""
+    # A known issue with the published rule says so too, and never changes the rest.
+    notes = report.notes_for(result.rule_id)
+    labels = "".join(f" {note.sentence}" for note in notes)
     return Finding(
         code=FINDING_RULE_ERROR if blocking else FINDING_RULE_WARNING,
         severity=result.severity,
         message=(
             f"Validation rule {result.rule_id} does not hold in {result.unsatisfied} of "
             f"{result.evaluations} evaluation(s) — {consequence}. First{where}{cells}.{denied}"
+            f"{labels}"
         ),
         reference=(
             f"Bank of England Banking Taxonomy v{report.taxonomy}, validation rule "
@@ -683,6 +751,7 @@ def _rule_finding(result: RuleResult, report: RuleReport) -> Finding:
         subject=result.rule_id,
         expected="the rule to hold in every evaluation",
         actual=f"{result.unsatisfied} unsatisfied evaluation(s)",
+        publisher_issues=tuple(note.issue_id for note in notes),
     )
 
 

@@ -14,8 +14,9 @@ Key responsibilities:
   module on the run date; a module with no live release takes its future
   release when there is exactly one. The default never chooses between
   several: with more than one candidate it stops and asks for a version.
-- Take the taxonomy pack, the rule book and the Bank's validations deny list
-  from the SAME release, always.
+- Take the taxonomy pack, the rule book, the Bank's validations deny list and
+  the register of known issues with the published rules (``boe.issues``) from
+  the SAME release, always.
 - Say what each shipped release is for a module on the run date — live, future
   or superseded — from the dates in that release's pack for the module. The
   status belongs to a module, not to a release: one release can be live for
@@ -45,6 +46,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer.boe.catalogue import available_rulebooks, load_rulebook
 from rwa_filer.boe.deny import DenyList, load_deny_list
+from rwa_filer.boe.issues import IssueRegister, load_issues
 from rwa_filer.taxonomy.pack import available_packs, load_packaged, pack_info
 
 if TYPE_CHECKING:
@@ -138,6 +140,11 @@ class Release:
             (``boe.deny``): the rules its gateway no longer runs, or runs as
             warnings. Empty for a release that ships none — a pack a library
             caller built itself. Give one of your own with ``replace``.
+        issues: The release's register of known issues with the published
+            rules (``boe.issues``): what labels a result, never what decides
+            it. Empty for a release that ships none. A caller's own rule book
+            is protected by each issue's fingerprint: a rule that is not the
+            one an issue pinned is never labelled.
     """
 
     version: str
@@ -149,6 +156,7 @@ class Release:
     run_date: date
     shipped: tuple[ModuleRelease, ...] = ()
     deny_list: DenyList = field(default_factory=DenyList.empty)
+    issues: IssueRegister = field(default_factory=IssueRegister.empty)
 
     @property
     def info(self) -> PackInfo:
@@ -235,8 +243,9 @@ def release_for_pack(
 
     The rule book defaults to the shipped one of the pack's release for its
     module — the same release, never another — and is ``None`` when the pack's
-    version is not shipped or packages none for the module. The deny list is
-    the shipped one of the pack's release, or empty when it is not shipped.
+    version is not shipped or packages none for the module. The deny list and
+    the issue register are the shipped ones of the pack's release, or empty
+    when it is not shipped.
     """
     run_date = today or date.today()
     module = pack.info.module
@@ -250,6 +259,7 @@ def release_for_pack(
         run_date=run_date,
         shipped=module_releases(module, today=run_date),
         deny_list=release_deny_list(pack.info.version),
+        issues=release_issues(pack.info.version),
     )
 
 
@@ -344,6 +354,20 @@ def release_deny_list(version: str) -> DenyList:
     if version not in shipped_releases():
         return DenyList.empty(version)
     return load_deny_list(version)
+
+
+def release_issues(version: str) -> IssueRegister:
+    """The register of known issues with release ``version``'s published rules.
+
+    Empty for a version this package does not ship. A shipped release with no
+    packaged register raises: the wheel is broken, and that must be loud.
+
+    Raises:
+        IssueRegisterNotFoundError: ``version`` is shipped but packages none.
+    """
+    if version not in shipped_releases():
+        return IssueRegister.empty(version)
+    return load_issues(version)
 
 
 def release_rulebooks(version: str) -> tuple[str, ...]:
@@ -526,6 +550,7 @@ def _release(
         run_date=run_date,
         shipped=options,
         deny_list=release_deny_list(option.version),
+        issues=release_issues(option.version),
     )
     logger.debug("taxonomy %s for %s (%s, %s)", release.version, module, release.status, chosen_by)
     return release

@@ -50,7 +50,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from functools import cache
+from functools import cache, cached_property
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
@@ -537,11 +537,15 @@ class IssueRegister:
 
     def for_rule(self, module: str, rule_id: str) -> tuple[PublisherIssue, ...]:
         """Every issue that names ``rule_id`` of ``module`` as a rule it is about."""
-        return tuple(
-            issue
-            for issue in self.issues
-            if (entry := issue.rule(module, rule_id)) is not None and entry.is_subject
-        )
+        return self._by_subject.get((module.upper(), rule_id), ())
+
+    @cached_property
+    def _by_subject(self) -> dict[tuple[str, str], tuple[PublisherIssue, ...]]:
+        found: dict[tuple[str, str], list[PublisherIssue]] = {}
+        for issue in self.issues:
+            for entry in issue.subject_rules:
+                found.setdefault((entry.module.upper(), entry.rule_id), []).append(issue)
+        return {key: tuple(items) for key, items in found.items()}
 
     def to_payload(self) -> dict[str, Any]:
         """The register as its packaged file holds it."""

@@ -15,6 +15,9 @@ Key responsibilities:
 - Say, on every rule the Bank's validations deny list touches, what the Bank
   did and when — so a rule that is not run, or only warns, is never mistaken
   for one this return passed or this engine could not read.
+- Say, on every result a known issue with the published rule explains, which
+  issue, where it stands with the Bank and how many of the breaks it explains
+  (``validate.issue_labels``) — the verdict beside it unchanged.
 - Keep paging, filtering and lookup out of the templates, so a template is
   layout and nothing else.
 
@@ -51,10 +54,12 @@ from rwa_filer.validate.report import status_line
 if TYPE_CHECKING:
     from rwa_filer.boe.catalogue import Rule
     from rwa_filer.boe.engine import Failure, RuleResult
+    from rwa_filer.boe.issues import PublisherIssue
     from rwa_filer.dash.workspace import OpenedReturn
     from rwa_filer.taxonomy.pack import PackInfo, TaxonomyPack
     from rwa_filer.validate.checker import Finding
-    from rwa_filer.validate.returns import MissingTemplate
+    from rwa_filer.validate.issue_labels import IssueNote
+    from rwa_filer.validate.returns import MissingTemplate, RuleReport
 
 #: The rule statuses, in the order the pages list them.
 STATUSES: Final = (STATUS_FAIL, STATUS_PASS, STATUS_NOT_EVALUATED)
@@ -127,6 +132,8 @@ class RuleRow:
     #: What the Bank's validations deny list did to the rule, in words; empty
     #: when it is not on the list.
     deny: str = ""
+    #: The known issues with the published rule that label its result.
+    issues: tuple[IssueNote, ...] = ()
 
     @property
     def is_error(self) -> bool:
@@ -181,6 +188,21 @@ class RuleDetail:
     reason_text: str
     failures: tuple[Failure, ...]
     published: str = ""
+    #: Each known issue that labels the result, with the issue itself.
+    issues: tuple[IssueCallout, ...] = ()
+
+
+@dataclass(frozen=True)
+class IssueCallout:
+    """A known issue's label on a rule, with the issue it comes from, for a callout."""
+
+    note: IssueNote
+    issue: PublisherIssue
+
+    @property
+    def quote(self) -> str:
+        """The first passage of the instructions the issue rests on; empty if none."""
+        return self.issue.authority[0].quote if self.issue.authority else ""
 
 
 @dataclass(frozen=True)
@@ -205,7 +227,7 @@ def overview(opened: OpenedReturn) -> Overview:
     validation = opened.validation
     report = validation.report
     results = report.results if report else ()
-    rows = [_row(result, opened.pack) for result in results]
+    rows = [_row(result, opened.pack, report) for result in results]
     breaks = sorted(
         (row for row in rows if row.status == STATUS_FAIL),
         key=lambda row: (not row.is_error, row.rule_id),
@@ -253,7 +275,7 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     report = opened.validation.report
     results = report.results if report else ()
     status = status if status in STATUSES else STATUS_FAIL
-    rows = [_row(result, opened.pack) for result in results]
+    rows = [_row(result, opened.pack, report) for result in results]
     counts = Counter(row.status for row in rows)
     needle = query.strip().lower()
     matched = [
@@ -294,7 +316,7 @@ def rule_detail(opened: OpenedReturn, rule_id: str) -> RuleDetail | None:
     report = opened.validation.report
     results = report.results if report else ()
     result = next((item for item in results if item.rule_id == rule_id), None)
-    return _detail(opened, _row(result, opened.pack), results) if result else None
+    return _detail(opened, _row(result, opened.pack, report), results) if result else None
 
 
 def rule_label(info: PackInfo, rule_id: str) -> str:
@@ -327,7 +349,7 @@ def title_case(title: str) -> str:
 # =============================================================================
 
 
-def _row(result: RuleResult, pack: TaxonomyPack) -> RuleRow:
+def _row(result: RuleResult, pack: TaxonomyPack, report: RuleReport | None = None) -> RuleRow:
     return RuleRow(
         rule_id=result.rule_id,
         severity=result.severity,
@@ -346,6 +368,7 @@ def _row(result: RuleResult, pack: TaxonomyPack) -> RuleRow:
         unsatisfied=result.unsatisfied,
         reason=result.reason,
         deny=result.deny.describe() if result.deny is not None else "",
+        issues=report.notes_for(result.rule_id) if report is not None else (),
     )
 
 
@@ -360,6 +383,11 @@ def _detail(opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...])
         reason_text=REASON_TEXT.get(result.reason, result.reason),
         failures=result.failures,
         published=published_finding(result.formula) if result.formula is not None else "",
+        issues=tuple(
+            IssueCallout(note=note, issue=issue)
+            for note in row.issues
+            if (issue := opened.release.issues.issue(note.issue_id)) is not None
+        ),
     )
 
 

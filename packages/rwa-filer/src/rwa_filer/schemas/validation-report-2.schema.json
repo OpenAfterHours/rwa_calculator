@@ -109,6 +109,11 @@
         "deny_list": {
           "description": "Since 2.1. Null when no rule ran.",
           "oneOf": [{ "$ref": "#/$defs/deny_summary" }, { "type": "null" }]
+        },
+        "publisher_issues": {
+          "description": "Since 2.1: each known issue with the published rules that labels a result, with the rules it labels and the breaks inside and outside its footprint. Labels never change the verdict.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/issue_tally" }
         }
       }
     },
@@ -117,6 +122,52 @@
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "issue_note": {
+      "description": "Since 2.1: a known issue with the published rule, labelling this result (rwa_filer.validate.issue_labels). breaks_inside / breaks_outside are null on a label that is not about a break.",
+      "type": "object",
+      "required": ["issue", "title", "status", "status_text", "effect", "attribution", "unsatisfied", "breaks_inside", "breaks_outside", "fixed_in", "sentence"],
+      "properties": {
+        "issue": { "type": "string", "pattern": "^PI-[0-9]{2}[a-z]?$" },
+        "title": { "type": "string" },
+        "status": { "enum": ["draft", "raised", "acknowledged", "fixed", "withdrawn"] },
+        "status_text": { "type": "string" },
+        "effect": { "enum": ["fails_correct_returns", "passes_wrong_returns", "never_runs"] },
+        "attribution": { "enum": ["certain", "possible"] },
+        "unsatisfied": { "type": "integer", "minimum": 0 },
+        "breaks_inside": { "type": ["integer", "null"], "minimum": 0 },
+        "breaks_outside": { "type": ["integer", "null"], "minimum": 0 },
+        "fixed_in": { "type": ["string", "null"] },
+        "sentence": { "type": "string" }
+      }
+    },
+    "issue_tally": {
+      "type": "object",
+      "required": ["issue", "status", "effect", "rules", "breaks_inside", "breaks_outside"],
+      "properties": {
+        "issue": { "type": "string" },
+        "status": { "type": "string" },
+        "effect": { "type": "string" },
+        "rules": { "type": "array", "items": { "type": "string" } },
+        "breaks_inside": { "type": "integer", "minimum": 0 },
+        "breaks_outside": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "issue_register": {
+      "description": "Since 2.1: the publisher-issue register the labels came from. Outside evidence_id: labels are not checks.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["release", "file", "sha256", "issues"],
+          "properties": {
+            "release": { "type": "string" },
+            "file": { "type": ["string", "null"] },
+            "sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+            "issues": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ]
+    },
     "deny_entry": {
       "description": "A Bank of England validations deny-list entry in force for the rule (since 2.1): the gateway no longer runs it (deactivated), or runs it as a warning (downgraded), from date_applied.",
       "type": "object",
@@ -249,7 +300,8 @@
               }
             }
           ]
-        }
+        },
+        "publisher_issues": { "$ref": "#/$defs/issue_register" }
       }
     },
     "cause": {
@@ -292,7 +344,12 @@
         "expected": { "type": "string" },
         "actual": { "type": "string" },
         "reference": { "type": "string" },
-        "positions_total": { "type": "integer", "minimum": 0 }
+        "positions_total": { "type": "integer", "minimum": 0 },
+        "publisher_issues": {
+          "description": "Since 2.1: the ids of the known issues with the published rule that label a broken rule's finding; the message carries their sentences.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     },
     "address": {
@@ -352,6 +409,11 @@
         "formula": {
           "description": "Since 2.1: the published rule's verdict where the deny list changed it, or null.",
           "oneOf": [{ "$ref": "#/$defs/formula" }, { "type": "null" }]
+        },
+        "publisher_issues": {
+          "description": "Since 2.1: the known issues with the published rule that label this result.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/issue_note" }
         }
       }
     }

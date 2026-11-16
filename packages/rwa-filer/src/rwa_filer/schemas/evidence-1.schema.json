@@ -228,6 +228,11 @@
               }
             }
           ]
+        },
+        "publisher_issues": {
+          "description": "Since 1.1: the known issues with the published rule that label this result - the validation report's issue_note records (validation-report-2.schema.json $defs/issue_note).",
+          "type": "array",
+          "items": { "type": "object", "required": ["issue", "status", "effect", "sentence"] }
         }
       }
     },
@@ -257,7 +262,11 @@
         "right_value": { "$ref": "#/$defs/number" },
         "left": { "$ref": "#/$defs/side" },
         "right": { "$ref": "#/$defs/side" },
-        "comparisons": { "type": "array", "items": { "$ref": "#/$defs/comparison" } }
+        "comparisons": { "type": "array", "items": { "$ref": "#/$defs/comparison" } },
+        "publisher_issues": {
+          "description": "Since 1.1: for an unsatisfied evaluation of a break a known issue labels, the issues whose footprint holds it (empty: none explains it); null otherwise.",
+          "oneOf": [{ "type": "array", "items": { "type": "string" } }, { "type": "null" }]
+        }
       }
     },
     "finding": {
@@ -286,7 +295,12 @@
         "expected": { "type": "string" },
         "actual": { "type": "string" },
         "reference": { "type": "string" },
-        "positions_total": { "type": "integer", "minimum": 0 }
+        "positions_total": { "type": "integer", "minimum": 0 },
+        "publisher_issues": {
+          "description": "Since 1.1: the ids of the known issues with the published rule that label the finding.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     },
     "structure_exception": {

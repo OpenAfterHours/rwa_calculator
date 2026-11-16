@@ -70,6 +70,12 @@ Commands:
         Build a release's deny list from the Bank's workbook, or fail if the
         packaged one is not exactly what it yields. Codes that match no rule of
         the release are reported.
+    rwa-filer rulebook issues [ISSUE] [--taxonomy V] [--module CODE] [--format F]
+        The known issues with the published rules, packaged for each release:
+        every issue on one line, or one in full; --format markdown renders the
+        register as the write-up to share with the Bank, --format json as data.
+        A validation labels each result an issue explains; the verdict is never
+        changed by it.
     rwa-filer rules list
         The packaged rule extracts: framework, publisher, version and counts.
     rwa-filer rules import --publisher {eba,boe} WORKBOOK --out FILE
@@ -109,6 +115,7 @@ from rwa_filer.boe import importer as boe_importer
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
 from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
 from rwa_filer.boe.engine import Accuracy
+from rwa_filer.boe.issues_document import render_document, render_issue, render_listing
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
@@ -121,6 +128,7 @@ from rwa_filer.release import (
     ReleaseNotFoundError,
     module_releases,
     release_deny_list,
+    release_issues,
     release_lines,
     release_packs,
     release_record,
@@ -1135,6 +1143,26 @@ def _add_rulebook_commands(
             )
         action.set_defaults(handler=handler)
     _add_deny_list_commands(actions)
+    _add_issues_command(actions)
+
+
+def _add_issues_command(actions: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register ``rwa-filer rulebook issues``."""
+    issues = actions.add_parser(
+        "issues",
+        help="the known issues with the published rules: list them, show one, or render the "
+        "register as Markdown to share",
+    )
+    issues.add_argument("issue", nargs="?", metavar="ISSUE", help="one issue, e.g. PI-15a")
+    issues.add_argument("--taxonomy", metavar="V", help="one release (default: every shipped one)")
+    issues.add_argument("--module", metavar="CODE", help="only issues about this module's rules")
+    issues.add_argument(
+        "--format",
+        choices=["text", "json", "markdown"],
+        default="text",
+        help="text (default), json, or markdown (the write-up to share)",
+    )
+    issues.set_defaults(handler=_issues_show)
 
 
 def _add_deny_list_commands(
@@ -1320,6 +1348,52 @@ def _deny_list_show(args: argparse.Namespace) -> int:
             _out(f"  {entry.module:<8}{entry.rule_id:<16}{entry.describe()}{state}")
         for unmatched in item.unmatched:
             _out(f"  UNMATCHED {unmatched.module} {unmatched.code}: {unmatched.reason}")
+    return EXIT_OK
+
+
+def _issues_show(args: argparse.Namespace) -> int:
+    """``rwa-filer rulebook issues`` — the packaged publisher-issue registers."""
+    shipped = shipped_releases()
+    if args.taxonomy is not None and args.taxonomy not in shipped:
+        return _fail(f"taxonomy {args.taxonomy} is not shipped (shipped: {', '.join(shipped)})")
+    versions = shipped if args.taxonomy is None else (args.taxonomy,)
+    module = args.module.upper() if args.module else None
+    registers = [
+        replace(
+            register,
+            issues=tuple(
+                issue
+                for issue in register.issues
+                if module is None or any(entry.module.upper() == module for entry in issue.rules)
+            ),
+        )
+        for register in (release_issues(version) for version in versions)
+    ]
+    if args.issue is not None:
+        found = next(
+            (
+                (register, issue)
+                for register in registers
+                if (issue := register.issue(args.issue)) is not None
+            ),
+            None,
+        )
+        if found is None:
+            return _fail(f"no known issue {args.issue} in taxonomy {', '.join(versions)}")
+        register, issue = found
+        if args.format == "json":
+            _out(json.dumps({"release": register.release, **issue.record()}, indent=2))
+        else:
+            _out(render_issue(issue, register).rstrip("\n"))
+        return EXIT_OK
+    if args.format == "json":
+        _out(json.dumps([register.to_payload() for register in registers], indent=2))
+    elif args.format == "markdown":
+        _out(render_document(registers).rstrip("\n"))
+    else:
+        for register in registers:
+            for line in render_listing(register):
+                _out(line)
     return EXIT_OK
 
 

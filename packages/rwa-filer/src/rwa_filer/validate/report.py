@@ -27,6 +27,10 @@ Key responsibilities:
   for: which rules its gateway no longer runs, or runs as warnings — in the
   summary, on each rule (with the published rule's own verdict) and, in the
   text, one line per rule with its date and known-issue number.
+- Say which results a known issue with the published rule explains — on each
+  labelled rule, on each labelled finding, in the summary by issue and, in the
+  text, one line per label after the counts — without changing a word of the
+  verdict (``validate.issue_labels``).
 - Declare its own shape: ``schema`` names the record and its version, and
   ``schemas/validation-report-2.schema.json`` (shipped in the wheel) is its
   contract. Within a major version, changes only add.
@@ -46,6 +50,7 @@ from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 from rwa_filer.release import release_lines, release_record
 from rwa_filer.validate.execution import published_finding
 from rwa_filer.validate.identity import identity_record
+from rwa_filer.validate.issue_labels import note_record
 from rwa_filer.validate.returns import (
     INCOMPLETE_COVERAGE_SHORTFALL,
     INCOMPLETE_LINKED_TEMPLATES_MISSING,
@@ -55,9 +60,12 @@ from rwa_filer.validate.returns import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from rwa_filer.boe.engine import CellAddress, RuleResult
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.validate.checker import Finding
+    from rwa_filer.validate.issue_labels import IssueNote
     from rwa_filer.validate.returns import IncompleteCause, MissingTemplate, ReturnValidation
 
 #: The record's name and version (``schema``). The major version changes when
@@ -116,24 +124,30 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
                 for missing in (report.templates_missing if report else ())
             ],
             "deny_list": deny_record(validation),
+            "publisher_issues": [item.record() for item in validation.publisher_issues],
         },
         "findings": [finding_record(finding) for finding in validation.findings],
         "rules": [
             rule_record(
                 result,
                 rules[result.rule_id].fingerprint(module) if result.rule_id in rules else None,
+                report.notes_for(result.rule_id) if report else (),
             )
             for result in (report.results if report else ())
         ],
     }
 
 
-def rule_record(result: RuleResult, fingerprint: str | None) -> dict[str, Any]:
+def rule_record(
+    result: RuleResult, fingerprint: str | None, notes: Sequence[IssueNote] = ()
+) -> dict[str, Any]:
     """One enforced rule's outcome, as the report and the evidence export record it.
 
     ``deny_list`` is the Bank's deny-list entry in force for the rule, or
     ``None``; ``formula`` is the published rule's own verdict where that entry
     changed it, or ``None``. ``rule_sha256`` is the published rule's either way.
+    ``publisher_issues`` are the labels known issues with the published rule put
+    on the result: words beside it, never a change to it.
     """
     formula = result.formula
     return {
@@ -170,6 +184,7 @@ def rule_record(result: RuleResult, fingerprint: str | None) -> dict[str, Any]:
             if formula is not None
             else None
         ),
+        "publisher_issues": [note_record(note) for note in notes],
     }
 
 
@@ -216,6 +231,7 @@ def finding_record(finding: Finding) -> dict[str, Any]:
         "actual": finding.actual,
         "reference": finding.reference,
         "positions_total": len(finding.positions),
+        "publisher_issues": list(finding.publisher_issues),
     }
 
 
@@ -253,6 +269,7 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
                 f"  linked templates not reported: {_missing_line(report.templates_missing)}"
             )
         lines.extend(_deny_lines(validation))
+        lines.extend(_issue_lines(validation))
     if validation.findings:
         lines.append("")
         lines.extend(
@@ -290,6 +307,28 @@ def _deny_lines(validation: ReturnValidation) -> list[str]:
         + ("" if item.is_pending else f" — after {day.isoformat()}, so not applied here")
         for item in waiting
     )
+    return lines
+
+
+def _issue_lines(validation: ReturnValidation) -> list[str]:
+    """One line per result a known issue with the published rule labels."""
+    report = validation.report
+    if report is None or not report.issue_notes:
+        return []
+    lines = [
+        f"  known issues with the published rules (taxonomy {validation.release.version}): "
+        f"{len(validation.publisher_issues)} issue(s) label {len(report.issue_notes)} result(s) "
+        "— the verdict is unchanged; see `rwa-filer rulebook issues`"
+    ]
+    for note in report.issue_notes:
+        if note.inside is None:
+            what = "a pass, no evidence" if note.effect == "passes_wrong_returns" else "never runs"
+        elif note.inside == 0:
+            what = f"none of {note.unsatisfied} break(s) where it applies"
+        else:
+            hedge = " may be" if note.attribution == "possible" else ""
+            what = f"{note.inside} of {note.unsatisfied} break(s){hedge} where it applies"
+        lines.append(f"    {note.rule_id} {note.issue_id} ({note.status}): {what}")
     return lines
 
 

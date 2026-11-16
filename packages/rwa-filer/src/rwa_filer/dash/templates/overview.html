@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import deny_chip, severity_chip %}
+{% from "_macros.html" import deny_chip, issue_chip, severity_chip %}
 {% block title %}Overview · {{ current.name }} — rwa-filer dash{% endblock %}
 {% block content %}
 {% set header = current.ret.header %}
@@ -141,7 +141,7 @@
   <div class="rule-list">
   {% for row in view.breaks %}
     <a class="rule-item" href="{{ link(rules_url, rule=row.rule_id) }}">
-      <span class="top">{{ severity_chip(row.severity) }}{{ deny_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span><span class="evals">{{ row.unsatisfied }} of {{ row.evaluations }} evaluation{{ "s" if row.evaluations != 1 }} break</span></span>
+      <span class="top">{{ severity_chip(row.severity) }}{{ deny_chip(row) }}{{ issue_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span><span class="evals">{{ row.unsatisfied }} of {{ row.evaluations }} evaluation{{ "s" if row.evaluations != 1 }} break</span></span>
       <span class="label">{{ row.label or "No label published" }}</span>
     </a>
   {% endfor %}

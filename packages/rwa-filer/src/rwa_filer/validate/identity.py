@@ -17,7 +17,9 @@ Key responsibilities:
   the id: the same facts re-exported to another format are the same input. Nor
   is the date the deny list was applied for, nor its file: what the id covers
   is the entries in force for the module, so a run a day later is the same run
-  unless the Bank's gateway changed in between.
+  unless the Bank's gateway changed in between. Nor is the register of known
+  issues with the published rules: its labels are words beside the verdict,
+  not checks, so it is recorded beside the id (``publisher_issues``).
 - Keep every digest one function (``boe.catalogue.canonical_sha256``), so a
   value hashed in two places gives one answer.
 
@@ -138,6 +140,7 @@ def identity_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[
             }
         },
         "deny_list": _deny_identity(validation),
+        "publisher_issues": _issues_identity(validation),
     }
     identified = {
         **{key: record[key] for key in ("generator", "taxonomy", "rulebook")},
@@ -188,6 +191,19 @@ def _deny_identity(validation: ReturnValidation) -> dict[str, Any] | None:
         "sha256": deny_list.content_sha256 or None,
         "applied_on": day.isoformat(),
         "in_force": [in_force[rule_id].record() for rule_id in sorted(in_force)],
+    }
+
+
+def _issues_identity(validation: ReturnValidation) -> dict[str, Any] | None:
+    """The publisher-issue register the labels came from; ``None`` when it is empty."""
+    register = validation.release.issues
+    if not register.issues:
+        return None
+    return {
+        "release": register.release,
+        "file": register.file,
+        "sha256": register.content_sha256 or None,
+        "issues": len(register.issues),
     }
 
 

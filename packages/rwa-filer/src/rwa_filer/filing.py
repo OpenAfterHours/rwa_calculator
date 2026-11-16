@@ -21,7 +21,10 @@ Key responsibilities:
 - Write a manifest: what was filed, against which taxonomy, with which checksum
   and under which validation result — and which cells a preparer overrode, with
   what each held before. It is the evidence that the file a firm uploaded is
-  the file that was checked.
+  the file that was checked. Its validation result is the report's record, so
+  it carries the labels of known issues with the published rules (each
+  finding's ``publisher_issues`` and the summary's) — beside the verdict,
+  never in place of it.
 - Be reproducible. Nothing in the three files depends on when or where they
   were built unless the caller passes a creation time.
 - Where asked, write the evidence behind the verdict (``rwa_filer.evidence``)

@@ -602,3 +602,54 @@ def test_the_reference_page_marks_the_rules_on_the_banks_deny_list(client: TestC
 
     assert "On the Bank's deny list" in page
     assert "deactivated by the Bank of England on 19 October 2026" in page
+
+
+# ---------------------------------------------------------------------------
+# Known issues with the published rules
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def known_issue(workspace: Workspace, tmp_path: Path) -> OpenedReturn:
+    """PI-16a's own minimal return: it breaks boe_b0779 on OF 08.07 column 0050."""
+    from rwa_filer.boe.issues import load_issues
+
+    issue = load_issues("4.1.1").issue("PI-16a")
+    assert issue is not None
+    assert issue.example is not None
+    lines = ["table,sheet,row,column,value"]
+    for table, sheet, _key, row, column, value, _text, _decimals in issue.example.facts:
+        lines.append(f"{table},{sheet or ''},{row},{column},{value}")
+    path = tmp_path / "pi16a.csv"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return workspace.open(path, HEADER)
+
+
+def test_a_known_issue_is_called_out_on_the_rules_page_and_in_the_cell_panel(
+    client: TestClient, known_issue: OpenedReturn
+) -> None:
+    # Arrange
+    report = known_issue.validation.report
+    assert report is not None
+    assert [note.issue_id for note in report.notes_for("boe_b0779")] == ["PI-16a"]
+    base = f"/returns/{known_issue.return_id}"
+
+    # Act
+    rules = unescape(client.get(f"{base}/rules?rule=boe_b0779").text)
+    cell = unescape(client.get(f"{base}/templates?table=OF08.07.01.01&row=0260&col=0050").text)
+    overview = unescape(client.get(base).text)
+
+    # Assert
+    detail = rules[rules.index('id="rule-detail"') :]
+    assert "Known issue PI-16a" in rules
+    assert "Known issue with the published rule" in detail
+    assert "rwa-filer rulebook issues PI-16a" in detail
+    assert "Known issue with the published rule" in cell
+    assert "PI-16a" in cell
+    assert "Known issue PI-16a" in overview
+
+
+def test_the_reference_page_marks_the_rules_a_known_issue_names(client: TestClient) -> None:
+    page = unescape(client.get("/reference/PRA001?release=4.1.1&q=boe_b0779").text)
+
+    assert "Known issue PI-16a" in page

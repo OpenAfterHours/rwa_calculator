@@ -26,8 +26,12 @@ How a rule is evaluated
    rows, columns and sheets. An axis it leaves open — or for which the rule's
    scope lists several codes — is ITERATED: the rule is run once per value,
    and references that share an open axis are read at the same value. A
-   ``seq: True`` reference instead takes ALL the cells it lists (and all the
-   rows of an open-row table) at once, for a sum or a count. An evaluation
+   ``seq: True`` reference instead takes ALL the cells it lists at once, for a
+   sum or a count — and of an open-row table's rows, or an open sheet axis's
+   members, all those its formula's variable COVERS (``spans_by_variable``).
+   A row or member it leaves uncovered is iterated and lined up with the rest
+   of the rule, as for a single cell; the text alone cannot tell the two
+   apart, and is read only where the rule book does not say. An evaluation
    exists wherever at least one of the rule's cells is reported; a coordinate
    where nothing is reported is not evaluated — unless the rule is marked
    "always execute", which runs it once regardless.
@@ -1056,9 +1060,26 @@ class _Evaluation:
                     f"a filter on {filtered.dimension}, which is not {table.code}'s open axis"
                 )
             member, excluded = filtered.member, filtered.negated
+        # What a summed reference spans, in the formula's word; ``None`` where
+        # the rule book does not say (built without a taxonomy package), and the
+        # text alone decides. The text cannot: ``isum({.., seq: True})`` is the
+        # same whether the formula's variable covers an open dimension — and so
+        # takes every row or member of it at once — or leaves it uncovered, to
+        # be lined up with the rest of the rule (implicit filtering).
+        spans = (
+            self._rule.spans_by_variable.get(reference.variable)
+            if reference.sequence and reference.variable
+            else None
+        )
         if open_axis is not None and (member is None or excluded):
             shared = f"{_AXIS_OPEN}{open_axis.dimension}"
-            if open_axis.dimension not in self._named_dimensions:
+            if spans is not None:
+                # Every member at once where the variable covers the dimension
+                # (the Bank's ``boe_b0816``: all of OF 08.06's sheets, though no
+                # member is named); otherwise one member at a time, shared.
+                if open_axis.dimension not in spans:
+                    free.add(shared)
+            elif open_axis.dimension not in self._named_dimensions:
                 # The rule never mentions the dimension: every reference is read
                 # at the same member, one member at a time.
                 free.add(shared)
@@ -1073,11 +1094,17 @@ class _Evaluation:
             # the total equals the total" — the Bank's ``boe_b0904``.)
 
         key_axes: dict[str, str] = {}
-        if table.open_rows and not reference.sequence:
-            for key in table.open_keys:
-                name = f"{_AXIS_KEY}{self._aliases.get((table.code, key.dimension), key.dimension)}"
-                key_axes[name] = key.dimension
-                free.add(name)
+        for key in table.open_keys if table.open_rows else ():
+            if reference.sequence and (spans is None or key.dimension in spans):
+                # The sum takes every row at once: "the class total equals the
+                # sum over all grades" (``boe_b0752``). A row key the formula
+                # leaves uncovered is instead read row by row, at the row the
+                # rest of the rule is read at — "each grade's total outflow
+                # equals the sum of its own parts" (``boe_b0761``).
+                continue
+            name = f"{_AXIS_KEY}{self._aliases.get((table.code, key.dimension), key.dimension)}"
+            key_axes[name] = key.dimension
+            free.add(name)
         return _Selector(
             reference=reference,
             data=data,

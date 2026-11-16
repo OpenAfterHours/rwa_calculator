@@ -180,6 +180,16 @@ Two traps in the simplified form:
 - The `Precondition` columns are **empty for every matched credit-risk rule** — a rule's guard,
   where it has one, is the inline `if (…) then … else true()` in the expression itself.
 
+And one trap in the raw form as well: **`seq: True` does not say what a sum adds up.** On a table
+with open rows (OF 08.02's obligor grades, C 14's securitisations) or an open axis (OF 08.06's
+types of specialised lending), `isum({t: OF08.02.01.01, c: 0040; 0050; 0060, seq: True})` may
+add up every row or only the row the rest of the rule is read at. `boe_b0752_8` (OF 08.01's class
+total equals the sum over every grade) does the first. `boe_b0761` (each grade's 0070 equals its own
+0040 + 0050 + 0060) does the second. The text is the same shape in both. The taxonomy's XBRL formula
+decides: the summed variable either covers the dimension or leaves it to implicit filtering.
+`rwa-filer` reads that from the formula into the rule book's `spans` (`Rule.spans_by_variable`).
+Read from the text alone, 28 rules come out wrong. See `docs/development/escape-log.md`, 2026-11-16.
+
 **Scope expansion.** When the expression names a table with no row/column (e.g. `{t: OF08.01.01.01}
 <= 0`), the `Scope` column supplies the expansion:
 

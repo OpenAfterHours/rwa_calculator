@@ -454,6 +454,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **The filing package's validation no longer fails OF 08.02 rules the Bank's
+  gateway passes.** `boe_b0761` asks that each obligor grade's total outflow
+  (column 0070) equal that grade's guarantees, credit derivatives and other
+  funded protection (0040 + 0050 + 0060). The rule engine compared each grade's
+  0070 with those columns summed over every grade on the sheet, so any OF 08.02
+  sheet with more than one grade failed it, and `boe_b0760`, `boe_b0762` and
+  `boe_b0763` the same way. The figures were right. Our C 08 generator writes
+  0070 as each grade's own subtotal. The cause was in `rwa-filer`'s rule
+  engine, which also misread 24 more rules in C 14, C 06.02, OF 08.06 and the
+  SDDT and MREL modules (see `packages/rwa-filer/CHANGELOG.md`). Needs the
+  `rwa-filer` release that records what each rule's sums cover. No figure
+  changes.
 - **An installed `rwa-calc` can be imported again: `watchfire` is a runtime
   dependency.** Every release from 0.2.24 to 0.3.34 installed cleanly and then
   failed on first use — `from rwa_calc.api import CreditRiskCalc`, and `rwa-ui`

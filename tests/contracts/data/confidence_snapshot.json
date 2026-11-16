@@ -265,6 +265,25 @@
       "watchfire_index_gap": false
     },
     {
+      "article": "108",
+      "code_functions": [
+        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "CRR",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "contracts/errors.py",
+        "engine/crm/guarantor_eligibility.py"
+      ],
+      "test_files": [
+        "tests/unit/crm/test_p1_384_art_201_natural_person_guarantor.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
       "article": "109",
       "code_functions": [
         "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate"
@@ -569,6 +588,7 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/classify/approach.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/eu_sovereign.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/unify.py",
@@ -1980,7 +2000,6 @@
         "tests/acceptance/crr/test_p1_197_crr_slotting_obs_ead_firb_ccf.py",
         "tests/conformance/portfolios.py",
         "tests/fixtures/p1_197/p1_197.py",
-        "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/properties/test_template_row_axis.py"
       ],
       "watchfire_index_gap": false
@@ -2048,7 +2067,7 @@
         "engine/classify/attributes.py",
         "engine/classify/permissions.py",
         "engine/classify/subtypes.py",
-        "engine/crm/guarantees.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/equity/calculator.py",
         "engine/fx_rate_sync.py",
         "engine/irb/__init__.py",
@@ -2090,6 +2109,7 @@
         "tests/acceptance/reporting/test_cms1_ccr.py",
         "tests/acceptance/reporting/test_irb_shapes_template_coverage.py",
         "tests/acceptance/reporting/test_of02_output_floor.py",
+        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/acceptance/stress/test_stress_pipeline.py",
         "tests/acceptance/test_percent_scale_pd_feed.py",
         "tests/contracts/test_aggregated_bundle_validation.py",
@@ -2418,7 +2438,7 @@
         "engine/classify/subtypes.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
-        "engine/crm/guarantees.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/crm/min_collateralisation.py",
         "engine/irb/__init__.py",
         "engine/irb/calculator.py",
@@ -2904,6 +2924,7 @@
     {
       "article": "194",
       "code_functions": [
+        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach",
         "rwa_calc.engine.crm.processor::CRMProcessor._apply_own_issue_collateral_gate",
         "rwa_calc.engine.crm.processor::CRMProcessor.get_crm_unified_bundle"
       ],
@@ -2913,12 +2934,15 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "contracts/errors.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/crm/processor.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/crr/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",
+        "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/unit/crm/test_p1_270_own_issue_collateral.py"
       ],
       "watchfire_index_gap": false
@@ -3112,7 +3136,7 @@
     {
       "article": "201",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach"
+        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -3130,16 +3154,17 @@
       ],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantees.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/crm/processor.py",
-        "reporting/corep/c02.py",
-        "reporting/corep/irb_sheets.py"
+        "reporting/corep/c02.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_227_art_201_guarantor_eligibility.py",
+        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/fixtures/p1_227/p1_227.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
-        "tests/oracle/derivations/crm_sa.py"
+        "tests/oracle/derivations/crm_sa.py",
+        "tests/unit/crm/test_p1_384_art_201_natural_person_guarantor.py"
       ],
       "watchfire_index_gap": false
     },
@@ -7553,6 +7578,7 @@
         "tests/acceptance/basel31/test_p1_251_b31_firb_uk_resi_commitment_ccf.py",
         "tests/acceptance/basel31/test_scenario_b31_e_slotting.py",
         "tests/acceptance/basel31/test_scenario_b31_k_defaulted.py",
+        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/fixtures/lfse_fi_scalar/lfse_fi_scalar.py",
         "tests/fixtures/p1_117/p1_117.py",
         "tests/fixtures/p1_159/p1_159.py",
@@ -7752,6 +7778,7 @@
         "tests/acceptance/basel31/test_p2_43_psm_lgd_source_switch.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
         "tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py",
+        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_130/p1_130.py",
@@ -8079,16 +8106,22 @@
     },
     {
       "article": "194",
-      "code_functions": [],
-      "confidence": "GAP",
+      "code_functions": [
+        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "contracts/errors.py",
+        "engine/crm/guarantor_eligibility.py"
+      ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_270_art_194_own_issue_collateral.py",
-        "tests/acceptance/basel31/test_p1_274_art_218_credit_linked_note.py"
+        "tests/acceptance/basel31/test_p1_274_art_218_credit_linked_note.py",
+        "tests/fixtures/reporting_crm_substitution_portfolio.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8187,7 +8220,7 @@
     {
       "article": "201",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach"
+        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -8195,11 +8228,12 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantees.py"
+        "engine/crm/guarantor_eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_227_art_201_guarantor_eligibility.py",
-        "tests/fixtures/p1_227/p1_227.py"
+        "tests/fixtures/p1_227/p1_227.py",
+        "tests/fixtures/reporting_crm_substitution_portfolio.py"
       ],
       "watchfire_index_gap": false
     },

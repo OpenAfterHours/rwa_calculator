@@ -39,8 +39,8 @@ Package version `0.3.34`. Resolved packs:
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
-| CRR (Capital Requirements Regulation) | 35 | 58 | 10 | 37 | 14 | 154 |
-| PS1/26 (PRA Policy Statement) | 27 | 29 | 7 | 28 | 16 | 107 |
+| CRR (Capital Requirements Regulation) | 35 | 59 | 10 | 37 | 14 | 155 |
+| PS1/26 (PRA Policy Statement) | 27 | 31 | 7 | 27 | 15 | 107 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -57,12 +57,13 @@ Package version `0.3.34`. Resolved packs:
 | 92 | 0 | 3 | 18 | 0 | 14 | MEDIUM |
 | 99 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 107 | 1 | 0 | 11 | 0 | 9 | MEDIUM |
+| 108 | 1 | 0 | 2 | 0 | 1 | MEDIUM |
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
 | 111 | 6 | 8 | 20 | 0 | 39 | MEDIUM |
-| 112 | 4 | 3 | 19 | 0 | 41 | MEDIUM |
+| 112 | 4 | 3 | 19 | 0 | 42 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
-| 114 | 8 | 6 | 14 | 14 | 33 | HIGH |
+| 114 | 8 | 6 | 15 | 14 | 33 | HIGH |
 | 115 | 6 | 10 | 8 | 3 | 9 | HIGH |
 | 116 | 4 | 8 | 7 | 9 | 8 | HIGH |
 | 117 | 3 | 2 | 9 | 3 | 18 | HIGH |
@@ -72,8 +73,8 @@ Package version `0.3.34`. Resolved packs:
 | 121 | 4 | 3 | 8 | 9 | 20 | HIGH |
 | 122 | 2 | 4 | 6 | 11 | 74 | HIGH |
 | 123 | 3 | 7 | 13 | 2 | 27 | HIGH |
-| 124 | 1 | 2 | 8 | 2 | 13 | HIGH |
-| 125 | 1 | 3 | 17 | 2 | 22 | HIGH |
+| 124 | 1 | 2 | 9 | 2 | 13 | HIGH |
+| 125 | 1 | 3 | 17 | 2 | 23 | HIGH |
 | 126 | 2 | 4 | 11 | 2 | 15 | HIGH |
 | 127 | 1 | 4 | 3 | 2 | 8 | HIGH |
 | 128 | 0 | 3 | 6 | 0 | 5 | MEDIUM |
@@ -92,12 +93,12 @@ Package version `0.3.34`. Resolved packs:
 | 140 | 3 | 0 | 4 | 0 | 6 | MEDIUM |
 | 141 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 142 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
-| 143 | 1 | 0 | 7 | 0 | 8 | MEDIUM |
+| 143 | 2 | 0 | 8 | 0 | 8 | MEDIUM |
 | 147 | 5 | 5 | 22 | 0 | 26 | MEDIUM |
 | 148 | 2 | 0 | 8 | 0 | 5 | MEDIUM |
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
-| 151 | 1 | 0 | 2 | 0 | 5 | MEDIUM |
-| 153 | 13 | 11 | 30 | 15 | 71 | HIGH |
+| 151 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
+| 153 | 14 | 11 | 31 | 15 | 72 | HIGH |
 | 154 | 5 | 0 | 6 | 4 | 23 | HIGH |
 | 155 | 7 | 4 | 10 | 3 | 22 | HIGH |
 | 158 | 0 | 4 | 11 | 0 | 17 | MEDIUM |
@@ -118,13 +119,13 @@ Package version `0.3.34`. Resolved packs:
 | 191A | 0 | 0 | 2 | 0 | 3 | UNCITED |
 | 192 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 193 | 1 | 0 | 12 | 1 | 6 | HIGH |
-| 194 | 2 | 0 | 1 | 0 | 4 | MEDIUM |
+| 194 | 3 | 0 | 3 | 0 | 5 | MEDIUM |
 | 195 | 1 | 1 | 8 | 0 | 16 | MEDIUM |
 | 197 | 4 | 0 | 7 | 19 | 19 | HIGH |
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
 | 200 | 0 | 0 | 4 | 0 | 5 | UNCITED |
-| 201 | 1 | 0 | 4 | 9 | 4 | HIGH |
+| 201 | 1 | 0 | 3 | 9 | 6 | HIGH |
 | 203 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 205 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
 | 207 | 1 | 0 | 2 | 0 | 7 | MEDIUM |
@@ -151,7 +152,7 @@ Package version `0.3.34`. Resolved packs:
 | 233 | 1 | 2 | 5 | 1 | 14 | HIGH |
 | 233A | 0 | 0 | 0 | 0 | 3 | GAP |
 | 234 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
-| 235 | 10 | 1 | 15 | 7 | 18 | HIGH |
+| 235 | 12 | 1 | 15 | 7 | 18 | HIGH |
 | 236 | 0 | 0 | 0 | 0 | 4 | GAP |
 | 237 | 2 | 0 | 5 | 0 | 29 | MEDIUM |
 | 238 | 2 | 0 | 3 | 0 | 12 | MEDIUM |
@@ -205,14 +206,14 @@ Package version `0.3.34`. Resolved packs:
 
 | para. | Code fns | Pack | Src | Oracle | Tests | Confidence |
 |---|---|---|---|---|---|---|
-| 1 | 16 | 0 | 8 | 0 | 0 | LOW |
-| 4 | 4 | 11 | 4 | 0 | 0 | LOW |
+| 1 | 18 | 0 | 9 | 0 | 0 | LOW |
+| 4 | 7 | 11 | 4 | 0 | 0 | LOW |
 | 36 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 62 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 92 | 3 | 4 | 26 | 0 | 39 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
 | 111 | 3 | 2 | 12 | 1 | 20 | HIGH |
-| 112 | 0 | 0 | 7 | 0 | 5 | UNCITED |
+| 112 | 1 | 0 | 8 | 0 | 8 | MEDIUM |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 24 | HIGH |
 | 115 | 2 | 0 | 3 | 3 | 6 | HIGH |
@@ -227,26 +228,26 @@ Package version `0.3.34`. Resolved packs:
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 123 | 1 | 4 | 3 | 5 | 15 | HIGH |
 | 123A | 1 | 1 | 5 | 0 | 14 | MEDIUM |
-| 123B | 1 | 5 | 7 | 0 | 12 | MEDIUM |
-| 124 | 2 | 1 | 9 | 0 | 8 | MEDIUM |
+| 123B | 1 | 5 | 8 | 0 | 13 | MEDIUM |
+| 124 | 2 | 1 | 10 | 0 | 8 | MEDIUM |
 | 124A | 0 | 0 | 0 | 0 | 4 | GAP |
 | 124C | 0 | 0 | 5 | 0 | 1 | UNCITED |
 | 124E | 1 | 2 | 2 | 0 | 2 | MEDIUM |
-| 124F | 1 | 4 | 10 | 2 | 25 | HIGH |
+| 124F | 2 | 4 | 12 | 2 | 29 | HIGH |
 | 124G | 0 | 3 | 1 | 2 | 6 | HIGH |
-| 124H | 0 | 5 | 6 | 1 | 5 | HIGH |
+| 124H | 1 | 5 | 6 | 1 | 5 | HIGH |
 | 124I | 0 | 4 | 2 | 2 | 3 | HIGH |
 | 124J | 0 | 2 | 1 | 0 | 3 | MEDIUM |
 | 124K | 0 | 2 | 1 | 2 | 4 | HIGH |
 | 124L | 0 | 4 | 3 | 1 | 7 | HIGH |
 | 126 | 0 | 0 | 0 | 0 | 2 | GAP |
-| 127 | 1 | 5 | 3 | 2 | 7 | HIGH |
+| 127 | 2 | 5 | 4 | 2 | 9 | HIGH |
 | 128 | 1 | 1 | 4 | 1 | 8 | HIGH |
 | 129 | 2 | 3 | 5 | 2 | 4 | HIGH |
 | 132 | 3 | 0 | 3 | 0 | 3 | MEDIUM |
 | 132A | 0 | 0 | 0 | 0 | 1 | GAP |
 | 132a | 0 | 0 | 0 | 0 | 3 | GAP |
-| 133 | 2 | 4 | 8 | 1 | 18 | HIGH |
+| 133 | 4 | 4 | 10 | 2 | 22 | HIGH |
 | 134 | 0 | 0 | 2 | 1 | 2 | UNCITED |
 | 136 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 138 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -256,13 +257,13 @@ Package version `0.3.34`. Resolved packs:
 | 147A | 2 | 2 | 18 | 0 | 31 | MEDIUM |
 | 147B | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 150 | 0 | 0 | 0 | 0 | 1 | GAP |
-| 153 | 1 | 9 | 13 | 11 | 29 | HIGH |
+| 153 | 1 | 9 | 13 | 11 | 30 | HIGH |
 | 154 | 0 | 2 | 1 | 6 | 9 | HIGH |
 | 155 | 0 | 0 | 0 | 0 | 3 | GAP |
 | 158 | 0 | 3 | 0 | 0 | 3 | MEDIUM |
 | 159 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 160 | 1 | 1 | 4 | 2 | 17 | HIGH |
-| 161 | 2 | 4 | 6 | 5 | 43 | HIGH |
+| 161 | 2 | 4 | 6 | 5 | 44 | HIGH |
 | 162 | 1 | 6 | 7 | 1 | 9 | HIGH |
 | 163 | 2 | 4 | 3 | 2 | 11 | HIGH |
 | 164 | 4 | 1 | 2 | 3 | 4 | HIGH |
@@ -275,13 +276,13 @@ Package version `0.3.34`. Resolved packs:
 | 180 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 181 | 0 | 0 | 4 | 0 | 2 | UNCITED |
 | 191A | 0 | 0 | 4 | 0 | 3 | UNCITED |
-| 194 | 0 | 0 | 0 | 0 | 2 | GAP |
+| 194 | 1 | 0 | 2 | 0 | 3 | MEDIUM |
 | 195 | 0 | 1 | 1 | 0 | 2 | MEDIUM |
 | 197 | 0 | 0 | 0 | 0 | 5 | GAP |
 | 198 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 199 | 1 | 0 | 2 | 0 | 5 | MEDIUM |
 | 200 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 201 | 1 | 0 | 1 | 0 | 2 | MEDIUM |
+| 201 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
 | 205 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
@@ -335,7 +336,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | PS1/26 236 | 1 | 0 | 7 | — | — |
 | CRR 6 | 8 | 0 | 6 | — | — |
 | CRR 280b | 1 | 0 | 6 | — | — |
-| PS1/26 112 | 7 | 0 | 5 | — | CRR Art. 112 |
 | CRR 200 | 4 | 0 | 5 | — | — |
 | CRR 4 | 10 | 0 | 4 | — | PS1/26 para. 4 |
 | PS1/26 239 | 1 | 0 | 4 | — | — |
@@ -405,7 +405,6 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 | CRR 132A | 0 | 2 | — |
 | CRR 169 | 0 | 2 | — |
 | PS1/26 180 | 0 | 2 | — |
-| PS1/26 194 | 0 | 2 | CRR Art. 194 |
 | PS1/26 220 | 0 | 2 | CRR Art. 220 |
 | CRR 281 | 0 | 2 | — |
 | CRR 282 | 0 | 2 | — |

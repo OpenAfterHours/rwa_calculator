@@ -13,7 +13,8 @@ Key responsibilities:
   ``ValidationRule``: the EBA's spreadsheet scope columns and ``If value
   missing`` / ``Arithmetic approach`` cells, and the BoE's inline
   ``scope(...)`` expression, ``dv:`` default values and ``i=`` interval
-  operators — the last of which the SIMPLIFIED expression drops entirely.
+  operators — the last of which the SIMPLIFIED expression drops entirely — and
+  its "Always execute" column, which the EBA does not publish.
 
 Both mapping families are asserted pairwise against the raw extract across the
 whole population, not on a hand-picked rule, so a normalisation that regresses
@@ -260,6 +261,33 @@ def test_every_boe_rule_without_a_default_value_normalises_to_skip() -> None:
 
     # Assert
     assert mismatched == []
+
+
+def test_the_boe_always_execute_flag_is_read_from_the_extract() -> None:
+    """The workbook's "Always execute" column decides whether an empty place is evaluated.
+
+    Asserted against the raw extract across the whole population, and on its
+    size: 35 of the 816 Bank rules are run where none of their cells is
+    reported. boe_b0778, the OF 08.07 share total, is not one of them.
+    """
+    # Arrange
+    raw = raw_extract(FRAMEWORK_BASEL_3_1)["rules"]
+    published = {r["id"] for r in raw if r["always_execute"]}
+
+    # Act
+    loaded = {rule.rule_id for rule in load_rules(FRAMEWORK_BASEL_3_1).rules if rule.always_execute}
+
+    # Assert
+    assert (loaded, len(loaded), "boe_b0778" in loaded) == (published, 35, False)
+
+
+def test_every_eba_rule_keeps_always_execute() -> None:
+    """The EBA publishes no such column, so every CRR rule keeps today's reading."""
+    # Arrange / Act
+    not_always = [r.rule_id for r in load_rules(FRAMEWORK_CRR).rules if not r.always_execute]
+
+    # Assert
+    assert not_always == []
 
 
 def test_the_boe_interval_operator_is_recovered_from_the_raw_expression() -> None:

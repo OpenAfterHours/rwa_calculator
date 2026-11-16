@@ -26,6 +26,16 @@ Distinctions that are load-bearing here:
   produce.
 - An all-null / all-zero comparison is VACUOUS, not a PASS. A vacuous pass is no
   evidence of correctness and is counted separately.
+- A place where NONE of the cells the rule reads is reported is not a place the
+  Bank's gateway evaluates, unless the rule is marked "always execute": an XBRL
+  processor skips an evaluation in which every variable has fallen back to its
+  default, so the zero-filled defaults there are not figures the return states
+  and nothing is compared. So when such a
+  place FAILS, it is NOT_EVALUATED (``nothing_reported``), never a break. When
+  it HOLDS it stays VACUOUS — deliberately not NOT_EVALUATED — because the
+  vacuity count is what the dead-cell defence reads, and a holding comparison
+  over unreported cells is exactly a dead cell. "Reported" means a fact,
+  zero included: a reported ``0.0`` is evaluated and can break.
 
 References:
 - EBA DPM validation rules; BoE Banking Taxonomy validation rules (the two
@@ -83,6 +93,9 @@ SKIP_AMBIGUOUS_AXIS: Final = "ambiguous_axis"
 SKIP_NON_FINITE_VALUE: Final = "non_finite_value"
 SKIP_PRECONDITION_UNSUPPORTED: Final = "precondition_unsupported"
 SKIP_WHERE_UNSUPPORTED: Final = "where_unsupported"
+#: A failing comparison at a place where none of the rule's cells is reported,
+#: on a rule the publisher does not "always execute": no evaluation exists there.
+SKIP_NOTHING_REPORTED: Final = "nothing_reported"
 
 #: Constructs this evaluator deliberately does not implement, each mapped to the
 #: reason recorded on the skipped rule. Evaluating any of them approximately
@@ -310,8 +323,15 @@ def evaluate_at(
     *,
     missing_value: str,
     arithmetic: str,
+    always_execute: bool = True,
 ) -> CoordinateOutcome:
     """Evaluate one parsed rule at one coordinate.
+
+    ``always_execute`` is the rule's ``ValidationRule.always_execute``. When it
+    is ``False`` and none of the cells read here is reported, a failing
+    comparison is ``NOT_EVALUATED`` (``nothing_reported``) rather than a break,
+    because the publisher's gateway does not evaluate the rule at such a place.
+    A holding comparison there is still ``VACUOUS``.
 
     Returns a ``CoordinateOutcome`` with status ``PASS`` / ``FAIL`` /
     ``VACUOUS`` / ``NOT_EVALUATED``; it never raises for a data condition.
@@ -333,6 +353,15 @@ def evaluate_at(
             coordinate, STATUS_NOT_EVALUATED, lhs, rhs, SKIP_NON_FINITE_VALUE, "NaN/inf operand"
         )
     if not _compare(root.op, lhs, rhs, arithmetic):
+        if not context.reported and not always_execute:
+            return CoordinateOutcome(
+                coordinate,
+                STATUS_NOT_EVALUATED,
+                lhs,
+                rhs,
+                SKIP_NOTHING_REPORTED,
+                "none of the cells the rule reads here is reported",
+            )
         return CoordinateOutcome(coordinate, STATUS_FAIL, lhs, rhs)
     if context.vacuous:
         return CoordinateOutcome(coordinate, STATUS_VACUOUS, lhs, rhs)
@@ -594,15 +623,20 @@ class _Context:
     coordinate: Coordinate
     missing_value: str
     vacuous: bool = True
+    reported: bool = False
 
     def observe(self, value: float) -> None:
-        """Record a contributing cell; a non-zero one makes the rule non-vacuous.
+        """Record a REPORTED contributing cell; a non-zero one makes the rule non-vacuous.
+
+        Called only for a cell that carries a value (zero included), never for a
+        zero-filled blank, so ``reported`` says whether any fact was read here.
 
         Vacuity is an exact-zero property — a rule over cells that are all
         precisely 0.0 proves nothing — so this tests the float's own truthiness
         rather than comparing against a tolerance, which would silently declare
         a rule vacuous over small but real numbers.
         """
+        self.reported = True
         if value:
             self.vacuous = False
 

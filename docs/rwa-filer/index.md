@@ -784,8 +784,21 @@ calculator's sheets map onto the published sheet codes.
 
 This engine works on whole template frames rather than on facts. It treats a
 missing cell as a skip, sums a list of cells where the Bank's gateway would test
-each one, and uses one tolerance for a whole rule. `validate_return` does not
-use it.
+each one, and uses one tolerance for a whole rule. It also reads a Bank rule's
+default value (`dv`) once for the whole rule rather than per reference, refuses
+67 of the 800 Bank rules in force on their grammar (`isNull`, `if`/`then`,
+`and`/`or`, dimensional filters other than the all-geographies total), and
+cannot see that one data point is shown in two tables. `validate_return` does
+not use it.
+
+Like the gateway, it does not break a Bank rule at a place where none of the
+cells the rule reads is reported, unless the rule is marked "always execute"
+(35 of the Bank's 816 rules): a failing comparison there is not evaluated, with
+the reason `nothing_reported`. A reported zero is a fact and is evaluated. A
+comparison over unreported cells that holds is still counted as vacuous, so a
+template cell nothing ever fills stays visible. EBA rules carry no such flag,
+so a CRR "treat as zero" rule still breaks over a place where nothing is
+reported.
 
 ## Findings
 

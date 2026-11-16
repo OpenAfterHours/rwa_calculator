@@ -444,6 +444,23 @@ References are keyed maps rather than positional:
 `scope(...)` wraps the same reference syntax with multi-valued `r:`/`c:`/`z:` lists and defines
 the domain the rule iterates over — the BoE analogue of the EBA row/column scope columns.
 
+`dv` belongs to one reference, not to the rule: the workbook's `Note` sheet calls it "a prefix
+to define a default value for a variable, that will be used, if no data will be found", and a
+reference without one "may return no results". The return-level engine (`rwa_filer.boe`) applies
+each reference's own default. The template-level engine reduces it to one policy per rule —
+zero-fill if any reference carries a `dv`, skip otherwise — which differs only on the four
+enforced rules that mix references with and without a default (`boe_b0383`, `boe_b0512_2`,
+`boe_b0718`, `boe_b0785`).
+
+`always_execute` is the workbook's `Always execute` column. Where none of a rule's cells is
+reported, the rule is not evaluated there unless this is set: an XBRL processor skips an
+evaluation whose variables have all fallen back to their defaults (Arelle logs "skipped
+evaluation, all fact variables have fallen back"), and `rwa_filer.boe`, whose verdicts are pinned
+to Arelle's, does the same. Both engines follow it:
+the template-level engine reports such a place as not evaluated (`nothing_reported`) when the
+comparison fails and as vacuous when it holds. The EBA workbook has no equivalent column, so
+every EBA rule is treated as always executed.
+
 !!! danger "The expression is not self-contained — apply `scope` first"
     **79 of the 816 BoE rules have an expression with no `r:`/`c:` binding at all**; the row,
     column and sheet coordinates live entirely in `scope`. All 79 have `scope` populated.

@@ -349,6 +349,20 @@ and [Step 2 from F-IRB Capital Formula](firb-calculation.md#capital-formula-art-
 for retail guarantors the Art. 154(1) fixed / decay correlations apply (R = 0.15
 mortgage, R = 0.04 QRRE, decay form for retail-other).
 
+!!! note "Which retail-class providers can exist"
+    PS1/26 Art. 201(1) lists the eligible providers under the Risk-Weight and Parameter
+    Substitution Methods, and Art. 201(2) adds *"other corporate entities that are
+    internally rated by the institution"* for the Parameter Substitution Method. No limb
+    names a natural person, and Art. 194(6)(c) admits unfunded protection *"only where
+    ... the protection provider is of a kind that is included in the list of eligible
+    protection providers set out in Article 201"*. So a retail-class provider under
+    Art. 236(1)(a)(ii) can only be an SME corporate entity eligible under Art. 201(2). The
+    engine maps only natural persons to a retail guarantor class, and declines their
+    guarantees on SA, slotting and F-IRB beneficiaries with a CRM013 warning (P1.384).
+    It still recognises them on an A-IRB beneficiary, as under CRR Art. 108(2). Whether
+    PS1/26 should decline them there too is an open owner decision: the LGD Adjustment
+    Method that admits retail guarantors (Art. 183(1)(c)) is not implemented.
+
 The FI scalar (Art. 153(2), 1.25× correlation multiplier) re-applies if the
 guarantor is itself a large or unregulated FSE — see
 [FI Scalar (Art. 153(2))](firb-calculation.md#fi-scalar-art-1532).

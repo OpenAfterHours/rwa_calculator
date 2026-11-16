@@ -13,6 +13,11 @@ Covers:
 - Edge cases: LR (both 0%), FR (both 100%), MLR (75% vs 20%)
 - A-IRB modelled CCF + SA guarantor
 - Mixed batch with SA and FIRB exposures
+
+The "SA guarantor" throughout is an unrated institution with no internal PD — an
+eligible provider under Art. 201(1)(f) that routes to SA risk-weight substitution.
+These tests used an ``individual`` until P1.384: a natural person is in no limb of
+Art. 201, so the gate now rejects it and no cross-approach CCF would be applied.
 """
 
 from __future__ import annotations
@@ -224,7 +229,7 @@ class TestFIRBWithSAGuarantor:
             [_base_exposure()],
             [_base_guarantee()],
             [
-                _base_counterparty("GUARANTOR01", "individual"),  # SA entity type
+                _base_counterparty("GUARANTOR01", "institution"),  # no internal PD -> SA
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -253,7 +258,7 @@ class TestFIRBWithSAGuarantor:
             [_base_exposure(risk_type="MLR")],
             [_base_guarantee()],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -282,7 +287,7 @@ class TestFIRBWithSAGuarantor:
             [_base_exposure(risk_type="FR")],
             [_base_guarantee()],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -308,7 +313,7 @@ class TestFIRBWithSAGuarantor:
             [_base_exposure(risk_type="LR")],
             [_base_guarantee()],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -415,7 +420,7 @@ class TestSAWithSAGuarantor:
             [_base_exposure(approach="standardised", exposure_class="retail_other")],
             [_base_guarantee()],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "individual"),
             ],
         )
@@ -448,7 +453,7 @@ class TestFullyDrawnExposure:
             [_base_exposure(nominal=0.0)],
             [_base_guarantee()],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -475,7 +480,7 @@ class TestAIRBWithSAGuarantor:
     ) -> None:
         """
         A-IRB exposure with ccf_modelled=0.65, MR risk_type.
-        Guaranteed by SA counterparty (individual → retail_other, SA-only under firb_config).
+        Guaranteed by SA counterparty (an institution with no internal PD routes SA).
         Guaranteed portion gets SA CCF (0.50), unguaranteed keeps modelled (0.65).
         """
         exp = _base_exposure(approach="advanced_irb")
@@ -487,9 +492,7 @@ class TestAIRBWithSAGuarantor:
             [exp],
             [_base_guarantee(pct=0.6, guarantor="GUARANTOR01")],
             [
-                _base_counterparty(
-                    "GUARANTOR01", "individual"
-                ),  # SA (retail_other under firb_config)
+                _base_counterparty("GUARANTOR01", "institution"),  # no internal PD -> SA
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -537,7 +540,7 @@ class TestMixedBatch:
                 _base_guarantee(beneficiary="FIRB_EXP", guarantor="GUARANTOR01"),
             ],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER_SA", "individual"),
                 _base_counterparty("BORROWER_FIRB", "corporate"),
             ],
@@ -575,7 +578,7 @@ class TestGuaranteeRatio:
             [_base_exposure()],
             [_base_guarantee(amount=99999.0, pct=0.0)],  # Huge guarantee amount
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -595,7 +598,7 @@ class TestGuaranteeRatio:
             [_base_exposure()],
             [_base_guarantee(pct=1.0)],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )
@@ -625,7 +628,7 @@ class TestGuaranteeRatio:
             [_base_exposure(drawn=-100.0, interest=10.0, nominal=300.0)],
             [_base_guarantee(pct=0.6)],
             [
-                _base_counterparty("GUARANTOR01", "individual"),
+                _base_counterparty("GUARANTOR01", "institution"),
                 _base_counterparty("BORROWER01", "corporate"),
             ],
         )

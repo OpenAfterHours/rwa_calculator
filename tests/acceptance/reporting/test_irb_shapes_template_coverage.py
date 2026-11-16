@@ -306,6 +306,23 @@ class TestOffBalanceSheetColumnsArePopulated:
         )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_c08_03_retail_sheet_reports_no_maturity(self, regime_key: str) -> None:
+        """Annex II excludes maturity (col 0080) from every retail C 08.03 sheet.
+
+        Moved here from ``test_crm_substitution_flows.py`` (P1.384): that
+        portfolio's only retail sheet was the CRR inflow-only one an ineligible
+        natural-person guarantee created. This portfolio's retail legs are real
+        A-IRB other-retail exposures, in both regimes.
+        """
+        _results, corep, _p3 = _run(regime_key)
+
+        sheet = corep.c08_03[_IRB_SHEET[regime_key]["retail_other"]]
+        assert sheet.filter(pl.col("0040") > 0.0).height > 0, (
+            "no PD band of the retail sheet carries exposure - this would prove nothing"
+        )
+        assert sheet["0080"].null_count() == sheet.height
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_the_slotting_sheet_carries_its_own_off_balance_sheet_leg(
         self, regime_key: str
     ) -> None:

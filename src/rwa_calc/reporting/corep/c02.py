@@ -86,8 +86,9 @@ Cell semantics (recorded decisions):
   the 2026-07-12 fix (whose stated purpose was that tie) rather than
   reversing it, why the IRB half followed one commit later, why Art. 92 is
   unaffected, and — recorded there rather than fixed here — the
-  ``(foundation_irb, retail_other)`` pair that has no row, which is
-  downstream evidence of a missing CRR Art. 201 eligibility gate. The SA class
+  ``(foundation_irb, retail_other)`` pair that has no row, which was
+  downstream evidence of a missing CRR Art. 201 eligibility gate (closed in
+  the engine by P1.384; the pair is unreachable from accepted input). The SA class
   rows route through the many-to-one ACCUMULATING ``C02_00_SA_CLASS_MAP``; they
   are "See CR SA template", so the map's groupings ARE the C 07.00 sheet
   groupings (recorded fix 2026-08-01: the map had been keyed on a vocabulary
@@ -286,20 +287,23 @@ def generate_c02_00(
     # exist. Measured on the CRM-substitution portfolio: 2,028,365.78 (CRR) /
     # 1,700,935.66 (B31).
     #
-    # THE CAUSE IS NOT THIS KEY, AND MUST NOT BE PAPERED OVER HERE. The single leg
-    # producing it is an F-IRB corporate loan whose covered part is guaranteed by a
-    # RETAIL counterparty. CRR Art. 201(1) is an exhaustive list of eligible
-    # providers of unfunded credit protection — (a) central governments/banks,
-    # (b) RGLAs, (c) MDBs, (d) 0%-RW international organisations, (e) PSEs,
-    # (f) institutions, (g) other CORPORATE entities, (h) QCCPs — and it has NO
-    # retail limb, while Art. 201(2) additionally requires an IRB guarantor to be
-    # internally rated. So the guarantee is ineligible and should never have
-    # migrated the class at all; the impossible pair is DOWNSTREAM EVIDENCE of a
-    # missing Art. 201 eligibility gate in ``engine/crm/``, not a reporting-layer
-    # keying problem. Re-measured with such a gate applied, stranding is 0.00 in
-    # both regimes. Normalising the pair into an adjacent row here would launder an
-    # ineligible guarantee into a valid-looking disclosure, so it is deliberately
-    # NOT done. Do not "fix" this by remapping the class or the approach.
+    # THE CAUSE WAS NOT THIS KEY, AND MUST NOT BE PAPERED OVER HERE. The single leg
+    # producing it was an F-IRB corporate loan whose covered part was guaranteed by
+    # a NATURAL PERSON. CRR Art. 201(1) is an exhaustive list of eligible providers
+    # of unfunded credit protection — (a) central governments/banks, (b) RGLAs,
+    # (c) MDBs, (d) 0%-RW international organisations, (e) PSEs, (f) institutions,
+    # (g) other CORPORATE entities, (h) QCCPs — with NO natural-person limb, and
+    # Art. 201(2) extends it only to internally rated corporate entities. So the
+    # guarantee was ineligible and should never have migrated the class at all;
+    # the impossible pair was DOWNSTREAM EVIDENCE of a missing Art. 201 eligibility
+    # gate in ``engine/crm/``, not a reporting-layer keying problem. P1.384 closed
+    # it (``engine/crm/guarantor_eligibility.py``): stranding is 0.00 in both
+    # regimes and the pair is unreachable from accepted input — only a natural
+    # person maps to a retail guarantor class, and it now keeps parameter
+    # substitution only on an A-IRB beneficiary. Normalising the pair into an
+    # adjacent row here would launder an ineligible guarantee into a valid-looking
+    # disclosure, so it is deliberately NOT done. Do not "fix" this by remapping
+    # the class or the approach.
     #
     # The 2026-07-12 note also said "identical values for IRB rows (raw ==
     # applied for the IRB book)". That is NO LONGER TRUE, and it is the defect

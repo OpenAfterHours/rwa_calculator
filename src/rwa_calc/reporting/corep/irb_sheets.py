@@ -455,7 +455,7 @@ def placeable_irb_class(post_ec_col: str, origin_ec_col: str, approach_col: str)
     A post class key against the obligor's RETAINED approach can name a pair
     neither template has a row for: the aggregator moves the class to the
     guarantor's but keeps the obligor's approach whenever the guarantor is not
-    SA, so an F-IRB corporate loan covered by a RETAIL guarantor emits
+    SA, so an F-IRB corporate loan covered by a RETAIL-class guarantor emits
     ``(foundation_irb, retail_other)``. CRR Art. 151(4) makes that impossible —
     retail exposures are A-IRB only, so both layouts have retail rows under A-IRB
     and none under F-IRB. Its RWEA then fell out of the F-IRB class rows while the
@@ -464,15 +464,18 @@ def placeable_irb_class(post_ec_col: str, origin_ec_col: str, approach_col: str)
     rules only check rows that exist. Reverting the class keeps the "of which"
     breakdown a true partition of the F-IRB total.
 
-    THIS IS A REPORTING GUARD, NOT THE FIX. The engine should never have
-    recognised the guarantee: CRR Art. 201(1) is an exhaustive list of eligible
-    unfunded-protection providers — central governments/banks, RGLAs, MDBs,
-    0%-RW international organisations, PSEs, institutions, other corporates,
-    QCCPs — and has NO retail limb. Closing that gap is a separate, capital-
-    affecting change with its own regulatory review. Until it lands, C 02.00
-    must not silently drop RWEA it is required to break down, and reverting to
-    the origin class puts the leg exactly where a declined guarantee would have
-    left it. Deliberately narrow: only the Art. 151(4) pair is reverted, so a
+    THIS IS A REPORTING GUARD, NOT THE FIX — AND THE FIX HAS LANDED. The only
+    guarantor the engine maps to a retail class is a natural person, and the
+    engine should never have recognised it: Art. 201(1) is an exhaustive list of
+    eligible unfunded-protection providers — central governments/banks, RGLAs,
+    MDBs, 0%-RW international organisations, PSEs, institutions, other
+    corporates, QCCPs — with NO natural-person limb. P1.384 closed that gap
+    (``engine/crm/guarantor_eligibility.py``): an F-IRB beneficiary's natural-
+    person guarantee is now declined, so the pair is unreachable from accepted
+    input. The guard stays as a net: C 02.00 must not silently drop RWEA it is
+    required to break down, and reverting to the origin class puts the leg
+    exactly where a declined guarantee leaves it. Deliberately narrow: only the
+    Art. 151(4) pair is reverted, so a
     genuinely new impossible pair strands visibly rather than being absorbed —
     ``c02._warn_if_a_breakdown_strands`` is the net that catches it on OF 02.00,
     and on OF 08 it keys an off-axis sheet (``sheet_key_expr``).

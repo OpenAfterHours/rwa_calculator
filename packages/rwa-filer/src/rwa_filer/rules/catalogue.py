@@ -33,6 +33,30 @@ presence: the vocabulary is visible in ``boe_b0076``, which carries
 ``dv: false()`` on a boolean cell alongside ``dv: 0`` on numeric ones. ``dv: 0``
 is therefore the direct analogue of the EBA "treat as zero".
 
+The publisher's default belongs to ONE reference (the workbook's "Note" sheet:
+"dv prefix is a prefix to define a default value for a variable"), but this
+catalogue reduces it to one policy per RULE: zero-fill if any reference
+carries a ``dv``. That is a simplification. It differs from the publisher's
+reading only on a rule that mixes references with and without a default — four
+enforced Bank rules (``boe_b0383``, ``boe_b0512_2``, ``boe_b0718``,
+``boe_b0785``) — and on the registered portfolios it changes no rule's verdict.
+The return-level engine (``rwa_filer.boe``) applies each reference's own default.
+
+Where none of a rule's cells is reported, an XBRL processor does not evaluate
+the rule there at all: "If a variable set contains fact variables but all of
+the fact variables in it evaluate to fallback values, then the variable set is
+not deemed to have been evaluated" (XBRL Variables 1.0, section 4, special case
+2), and a fact variable with no fallback "cannot be evaluated" over an empty
+source sequence (section 4.2). The Bank's workbook marks the exceptions it runs
+regardless with an "Always execute" column, carried here as
+``always_execute``. The EBA's workbook has no such column and needs none: its
+"treat as zero/empty string" is the numeric / string fallback value, so EBA
+rules are read as not always-execute. The Bank's own package confirms that
+reading: it restates 46 of the EBA's "treat as zero" rules under the EBA's ids,
+45 with a ``dv`` default on every reference and none marked "Always execute",
+and Arelle counts no evaluation of one (``v09779_m``) on a filed C 08.04 with
+no cell reported, and one with a single cell reported as 0.
+
 Why: the published validation rules are the supervisor's own arithmetic checks
 on a submitted return. An Error-severity break rejects the whole submission, so
 they are the most precise available oracle for a return — but only if the
@@ -223,6 +247,13 @@ class ValidationRule:
             the day the extract was loaded for, or ``None``. A deactivation
             takes the rule out of ``is_currently_enforced``; a downgrade has
             already made ``severity`` a Warning. ``status`` is the extract's.
+        always_execute: Whether the publisher runs the rule at a place where
+            none of the cells it reads is reported. BoE: the workbook's
+            "Always execute" column (35 of the 816 Bank rules). EBA: ``False``
+            for every rule — the EBA marks none, and an XBRL processor does
+            not evaluate a variable set whose fact variables have all fallen
+            back (see the module docstring). The default, ``True``, is for a
+            rule built by hand.
     """
 
     rule_id: str
@@ -243,6 +274,7 @@ class ValidationRule:
     reactivated_on: str | None
     label: str | None
     deny: DenyEntry | None = None
+    always_execute: bool = True
 
     def scope_for(self, table: str) -> TableScope:
         """Return the iteration domain bound to ``table`` (empty when unscoped)."""
@@ -443,6 +475,10 @@ def _parse_eba_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
         status=tuple(raw["status"]),
         reactivated_on=raw["reactivated_on"],
         label=raw["narrative"],
+        # The EBA publishes no "Always execute" column: no EBA rule is run where
+        # none of its cells is reported, as XBRL Variables 1.0 section 4 (special
+        # case 2) has it for a "treat as zero" rule's fallen-back variables.
+        always_execute=False,
     )
 
 
@@ -461,7 +497,9 @@ def _parse_boe_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
         table_scopes=_parse_boe_scope(raw["scope"]),
         # ``dv`` is the XBRL formula default value for an unreported fact — the
         # taxonomy's own statement of the missing-value policy, standing in for
-        # the EBA's dedicated column (see the module docstring). Absent ``dv``,
+        # the EBA's dedicated column. The publisher sets it per REFERENCE; this
+        # reads it per rule, a simplification that differs on four enforced
+        # rules and moves no verdict (see the module docstring). Absent ``dv``,
         # skip rather than invent a zero.
         missing_value=MISSING_ZERO if "dv:" in (expression_raw or "") else MISSING_SKIP,
         arithmetic=_boe_arithmetic(expression_raw),
@@ -471,6 +509,7 @@ def _parse_boe_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
         status=tuple(raw["status"]),
         reactivated_on=None,
         label=raw["short_label"],
+        always_execute=bool(raw["always_execute"]),
     )
 
 

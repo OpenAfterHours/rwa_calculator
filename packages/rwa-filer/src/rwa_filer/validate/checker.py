@@ -28,6 +28,11 @@ What is deliberately NOT reported:
   operational and settlement risk rows a credit-risk return does not carry.
 - A rule whose operands are all null or zero is VACUOUS. It is not counted as a
   pass, because a vacuous pass is no evidence of correctness.
+- A rule not marked "always execute" is not broken at a place where none of the
+  cells it reads is reported: an XBRL processor does not evaluate it there, so
+  a failing comparison over zero-filled blanks is NOT_EVALUATED
+  (``nothing_reported``). A reported zero is still evaluated. The Bank marks 35
+  rules "always execute"; the EBA marks none, so this holds for every EBA rule.
 
 ``Finding`` is this package's own record. A host application maps it onto its
 own error channel (``rwa-calc`` maps it to ``CalculationError`` in
@@ -421,6 +426,7 @@ def _evaluate_rule(rule: ValidationRule, index: TemplateIndex) -> RuleOutcome:
             index,
             missing_value=rule.missing_value,
             arithmetic=rule.arithmetic,
+            always_execute=rule.always_execute,
         )
         for coordinate in expansion.coordinates
     ]

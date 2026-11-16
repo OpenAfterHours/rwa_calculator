@@ -42,10 +42,21 @@ How a rule is evaluated
 
 4. *How are numbers compared?* An operator with the ``i`` prefix carries a
    rounding allowance: each fact's is ``10^(-decimals) / 2``, a literal's and a
-   default's is zero; sums add allowances, products and quotients propagate
-   them. ``a i= b`` holds when ``|a - b|`` is within the two allowances
-   together. An operator without the prefix compares the reported values
-   exactly.
+   default's is zero; ``isum`` and ``i+`` add allowances, products and
+   quotients propagate them. ``a i= b`` holds when ``|a - b|`` is within the
+   two allowances together. An operator without the prefix compares the
+   reported values exactly. ``sum`` and ``abs`` without it are XPath's, and
+   their result is a plain number with NO allowance: ``sum(...)`` allows
+   nothing for the facts it adds, where ``isum(...)`` allows each one's, and
+   ``abs`` likewise against ``iabs`` — measured against Arelle on the Bank's
+   ``boe_b0770``, ``boe_b0794`` and their siblings. Plain ``max`` and ``min``
+   are not measured, because no packaged rule calls them; they are read as
+   ``imax`` and ``imin`` are, and the chosen fact keeps its allowance.
+
+5. *Where is a fact with no member on an open sheet axis?* At the dimension's
+   default member. On an axis that accepts the default (OF 08.06's "all types"
+   sheet) that is a sheet like any other: the rule is evaluated there once,
+   and the sheet's cells are not read into any other member's evaluation.
 
 References:
 - Bank of England Banking Taxonomy v4.1.1 — validation workbooks ("Note"
@@ -521,6 +532,10 @@ class _TableData:
     """One table's reported cells, indexed the ways a reference selects them."""
 
     table: Table
+    #: The member of the table's open sheet axis that a fact reported with no
+    #: member is at: the dimension's default, where the axis accepts it as a
+    #: sheet of its own (OF 08.06's "all types", ``eba_TA:x0``); else ``None``.
+    default_member: str | None = None
     cells: dict[_CellKey, object] = field(default_factory=dict)
     #: The data point each reported cell holds. Two cells of one data point —
     #: some figures are shown twice — are ONE fact to the gateway.
@@ -637,15 +652,30 @@ class _Store:
     def _data(self, table: Table) -> _TableData:
         holder = self.tables.get(table.code)
         if holder is None:
-            holder = self.tables[table.code] = _TableData(table)
+            holder = self.tables[table.code] = _TableData(table, self._default_member(table))
         return holder
 
-    @staticmethod
-    def _member(table: Table, open_key: str | None) -> str | None:
-        """An open-axis key as the member's QName."""
+    def _default_member(self, table: Table) -> str | None:
+        """The default member of ``table``'s open sheet axis, where it is a sheet of its own."""
         axis = table.open_axis
-        if axis is None or open_key is None:
+        if axis is None or not axis.default_allowed or axis.dimension is None:
             return None
+        dimension = self.pack.dimensions.get(axis.dimension)
+        return None if dimension is None else dimension.default
+
+    def _member(self, table: Table, open_key: str | None) -> str | None:
+        """An open-axis key as the member's QName.
+
+        A fact with no key is at the dimension's DEFAULT member (XBRL
+        Dimensions), which is written by leaving the dimension out: on an axis
+        that accepts it, that is a sheet like any other, so the fact is given
+        the default's QName — the place the gateway evaluates it at.
+        """
+        axis = table.open_axis
+        if axis is None:
+            return None
+        if open_key is None:
+            return self._data(table).default_member
         if open_key in axis.members:
             return open_key
         return next((m for m in axis.members if local_name(m) == open_key), open_key)
@@ -1009,6 +1039,10 @@ class _Evaluation:
                     return None
                 place[axis] = sheet
             elif axis.startswith(_AXIS_OPEN):
+                # No member on an axis with no default sheet: a fact the axis
+                # cannot hold (the structure check's STR finding). It is read
+                # wherever the rest of the rule is; one at the default sheet
+                # has the default's member (``_Store._member``), and a place.
                 if member is None:
                     continue
                 place[axis] = member
@@ -1313,16 +1347,26 @@ class _Evaluation:
         if name == "dim":
             return self._dimension_of(arguments, env)
         values = [self._value(argument, env) for argument in arguments]
+        # ``isum`` / ``iabs`` are the interval functions (``iaf:sum``): they keep
+        # the allowances of the facts they read. ``sum`` / ``abs`` are XPath's,
+        # whose result is a plain number — not a fact — and carries none
+        # (``iaf:splitValueThreshold``). Measured against Arelle on boe_b0770,
+        # boe_b0794, boe_b0820-b0823, boe_b0829 and boe_b1037_ss.
         if name in ("isum", "sum"):
             items = [_amount(item) for item in _sequence(values[0])]
             present = [item for item in items if item is not None]
-            return _Amount(
-                math.fsum(item.value for item in present),
-                math.fsum(item.allowance for item in present),
-            )
+            allowance = math.fsum(item.allowance for item in present) if name == "isum" else 0.0
+            return _Amount(math.fsum(item.value for item in present), allowance)
         if name in ("iabs", "abs"):
             operand = _amount(values[0])
-            return None if operand is None else _Amount(abs(operand.value), operand.allowance)
+            if operand is None:
+                return None
+            return _Amount(abs(operand.value), operand.allowance if name == "iabs" else 0.0)
+        # Plain ``max`` / ``min`` are deliberately read as ``imax`` / ``imin``, the
+        # chosen fact keeping its allowance, and that reading is UNMEASURED: no
+        # packaged rule calls them, so Arelle cannot be asked through a Bank
+        # formula. test_no_packaged_rule_calls_plain_max_or_min fails on the first
+        # release that adds one; measure it with Arelle before trusting this.
         if name in ("imax", "max", "imin", "min"):
             items = [
                 item
@@ -1487,7 +1531,7 @@ class _Evaluation:
             if key is not None and key in selector.data.cells and self._accepts(selector, key):
                 read[self._register(selector, key)] = None
             elif reference.default is not None:
-                cell = None if key is None else _address(selector.table.code, key, reported=False)
+                cell = None if key is None else _address(selector.data, key, reported=False)
                 defaulted.append(_defaulted(reference, cell))
         if isinstance(value, _Amount):
             shown: float | str | bool | None = value.value
@@ -1499,7 +1543,7 @@ class _Evaluation:
 
     def _register(self, selector: _Selector, key: _CellKey) -> CellAddress:
         """A reported cell's address, recorded in the trace's cells if tracing."""
-        address = _address(selector.table.code, key, reported=True)
+        address = _address(selector.data, key, reported=True)
         if self._cells_out is not None and address not in self._cells_out:
             self._cells_out[address] = self._store.fact(selector.data, key, address)
         return address
@@ -1514,7 +1558,6 @@ class _Evaluation:
     def _addresses(self, reference: Reference, env: Mapping[str, str]) -> list[CellAddress]:
         """The cells one reference reads at ``env``; a cell read at its default is unreported."""
         selector = self._selectors[id(reference)]
-        table = selector.table.code
         if reference.sequence:
             keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
             return [self._register(selector, key) for key in keys]
@@ -1523,7 +1566,7 @@ class _Evaluation:
             return []
         if key in selector.data.cells:
             return [self._register(selector, key)]
-        return [_address(table, key, reported=False)]
+        return [_address(selector.data, key, reported=False)]
 
     def _figure(self, node: Node, env: Mapping[str, str]) -> float | None:
         """``node``'s value as a number, or ``None`` where it is not one."""
@@ -1725,13 +1768,17 @@ def _defaulted(reference: Reference, address: CellAddress | None) -> DefaultedCe
     return DefaultedCell(_describe(reference), default.kind, default.value, address)
 
 
-def _address(table: str, key: _CellKey, *, reported: bool) -> CellAddress:
-    """A cell key as the address a failure records."""
+def _address(data: _TableData, key: _CellKey, *, reported: bool) -> CellAddress:
+    """A cell key as the address a failure records, in the return's own coordinates.
+
+    A cell on the default sheet is reported with no open key, so it is
+    addressed with none.
+    """
     sheet, member, row, column = key
     return CellAddress(
-        table=table,
+        table=data.table.code,
         sheet=sheet,
-        open_key=None if member is None else local_name(member),
+        open_key=None if member is None or member == data.default_member else local_name(member),
         row=row,
         column=column,
         reported=reported,

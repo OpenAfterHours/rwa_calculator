@@ -473,8 +473,9 @@ class TestC0807CoverageAreFractions:
         Act:     generate C 08.07 / OF 08.07.
         Assert:  the three shares partition each populated row exactly.
 
-        Rows with a zero denominator are excluded: 0/0 admits no partition, and
-        the published rule has no emptiness guard (a recorded residual break).
+        Rows with a zero denominator are excluded: 0/0 admits no partition, so
+        such a row reports no share and the published rule (v09796_m /
+        boe_b0778) is not evaluated there.
         """
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_scope_of_use_results(), framework=framework).c08_07

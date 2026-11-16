@@ -191,7 +191,7 @@ compactly. `rwa-filer` reads the workbook and evaluates the rule the way the
 taxonomy's formula is evaluated, so that a rule passes or fails here when it
 would pass or fail on upload.
 
-Eight things follow from that, and each changes verdicts.
+Nine things follow from that, and each changes verdicts.
 
 - **A rule runs only when every template it reads is reported.** If one is not,
   the gateway does not run the rule. It is reported as not evaluated, with the
@@ -207,6 +207,15 @@ Eight things follow from that, and each changes verdicts.
   figure stated to thousands may be off by up to 500, and a rule comparing two
   such figures allows for both. A figure stated to the penny gets no such
   allowance. The accuracy is the fact's `decimals`, or the default for its type.
+  A total written `isum(...)` allows for every figure it adds. One written
+  `sum(...)` allows for none of them: its formula uses XPath's own `sum`, whose
+  result is a plain number, not a reported figure. The same is true of `abs`
+  against `iabs`. In taxonomy 4.1.1 six enforced PRA001 rules compare a `sum`
+  with rounding allowed (`boe_b0770`, `boe_b0820` to `boe_b0823` and
+  `boe_b0829`), `boe_b0794` does the same with `abs` (in PRA001 and PRA116),
+  and so does the SDDT rule `boe_b1037_ss` with `sum`. Figures rounded to
+  thousands can break these rules where the sibling rules written with `isum`
+  hold.
 - **Codes listed inside one reference belong to that reference alone.** A rule
   may name the same four columns in two references. The taxonomy's formula then
   reads every pair of them, sixteen runs, and not four runs column by column.
@@ -219,6 +228,11 @@ Eight things follow from that, and each changes verdicts.
   same rule is then taken over every country at once, and the rule runs once.
   "The sum over all countries, less the total, equals the total" is such a
   rule.
+- **A sheet filed with no member is a sheet of its own.** OF 08.06 is filed
+  once per type of specialised lending. Its axis also accepts the dimension's
+  default, "all types", which a file reports by giving no type at all. Where a
+  return files that sheet, each rule runs on it separately, like on any other
+  sheet. Its figures are not added into any type's runs.
 - **What a sum adds up is the formula's to say, not the workbook's.** On a
   table with one row per obligor grade, per securitisation or per entity, a sum
   in a rule either adds up every row or stays on the row the rest of the rule
@@ -275,6 +289,14 @@ packaged rule books are built with both.
     with several rows, for PRA001, PRA116 and MRL003, and Arelle's counts on them
     are kept beside the others. On those returns the engine and Arelle agree on
     every one of the 28 rules whose sums the workbook alone misreads.
+
+    Every figure in those returns is exact to the unit, where `sum` and `isum`
+    allow the same, and none files an all-types OF 08.06 sheet. Four further
+    returns cover both cases: two with figures rounded to thousands, for PRA001
+    and PRA116, and two with an all-types OF 08.06 sheet beside two types, one
+    where that sheet has its own category rows and one where it has only its
+    total. Their Arelle counts are kept too, and the engine agrees with Arelle
+    on every rule they were built for.
 
 ### The fact table
 
@@ -980,8 +1002,31 @@ calculator's sheets map onto the published sheet codes.
 
 This engine works on whole template frames rather than on facts. It treats a
 missing cell as a skip, sums a list of cells where the Bank's gateway would test
-each one, and uses one tolerance for a whole rule. `validate_return` does not
-use it.
+each one, and uses one tolerance for a whole rule. It also reads a Bank rule's
+default value (`dv`) once for the whole rule rather than per reference, refuses
+67 of the 800 Bank rules in force on their grammar (`isNull`, `if`/`then`,
+`and`/`or`, dimensional filters other than the all-geographies total), and
+cannot see that one data point is shown in two tables. `validate_return` does
+not use it.
+
+Like the gateway, it does not break a rule at a place where none of the cells
+the rule reads is reported, unless the rule is marked "always execute" (35 of
+the Bank's 816 rules, and none of the EBA's): a failing comparison there is not
+evaluated, with the reason `nothing_reported`. A reported zero is a fact and is
+evaluated. A comparison over unreported cells that holds is still counted as
+vacuous, so a template cell nothing ever fills stays visible.
+
+This holds for the CRR (EBA) rules too. XBRL Variables 1.0, section 4, says: "If
+a variable set contains fact variables but all of the fact variables in it
+evaluate to fallback values, then the variable set is not deemed to have been
+evaluated." An EBA "treat as zero" rule is such a variable set, each cell
+falling back to 0. The Bank's own package restates 46 of those rules under the
+EBA's ids, 45 with a default on every reference and none marked "always
+execute". Arelle runs one of them, `v09779_m` (the C 08.04 flow total), on a
+filed C 08.04 and counts no evaluation where no cell is reported, but one where
+a single cell is reported as 0. So `v09796_m`
+(`{c0030} + {c0040} + {c0050} = 1` on C 08.07) is not broken on a roll-out
+class that has no exposure and reports no share.
 
 It honours the Bank's validations deny list, from the same packaged file, as it
 stands on the day the rules are loaded (`load_rules(framework, on=...)`,

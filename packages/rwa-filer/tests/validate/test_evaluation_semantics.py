@@ -1,5 +1,5 @@
 """
-Evaluation semantics: the four distinctions a submission gate cannot collapse.
+Evaluation semantics: the five distinctions a submission gate cannot collapse.
 
 Pipeline position:
     Expression + Coordinate + TemplateIndex -> evaluate_at -> CoordinateOutcome
@@ -16,6 +16,12 @@ Key responsibilities:
   operational and settlement risk rows a credit-risk calculator does not produce.
 - Vacuity. Operands that are all null or all zero make a comparison VACUOUS, not
   PASS: a vacuous pass is no evidence of correctness.
+- Nothing reported. Where none of a rule's cells is a fact, an XBRL processor
+  does not evaluate the rule unless it is marked "always execute" (the Bank
+  marks 35; the EBA none), so a failing comparison over zero-filled blanks is a
+  named skip, never a break; a holding one stays VACUOUS, and a reported zero
+  is still evaluated. Pinned on the packaged boe_b0778 and its EBA twin
+  v09796_m.
 
 Why: a false negative in this evaluator is worse than no evaluator, because it
 gives false confidence that a return is submittable. Each test below is one way
@@ -28,6 +34,7 @@ References:
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from filer_builders import (
     build_frame,
@@ -40,27 +47,38 @@ from rwa_filer.rules.catalogue import (
     ARITHMETIC_NOT_APPLICABLE,
     ARITHMETIC_POINT,
     FRAMEWORK_BASEL_3_1,
+    FRAMEWORK_CRR,
     MISSING_SKIP,
     MISSING_ZERO,
+    RuleSet,
     load_rules,
 )
+from rwa_filer.validate.checker import evaluate_index
 from rwa_filer.validate.evaluate import (
     SKIP_CELL_NOT_EMITTED,
     SKIP_COLUMN_NOT_EMITTED,
     SKIP_MISSING_VALUE_DO_NOT_RUN,
     SKIP_NON_FINITE_VALUE,
+    SKIP_NOTHING_REPORTED,
     SKIP_ROW_NOT_EMITTED,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
     STATUS_VACUOUS,
+    evaluate_at,
     parse_expression,
 )
 from rwa_filer.validate.index import (
+    SINGLE_SHEET,
     SKIP_SHEET_NOT_EMITTED,
     Coordinate,
     expand_rule,
 )
+
+if TYPE_CHECKING:
+    from filer_builders import Cells
+    from rwa_filer.validate.checker import RuleOutcome
+    from rwa_filer.validate.evaluate import CoordinateOutcome
 
 # A cell reported as blank, against two cells that foot without it.
 _ONE_NULL_OPERAND = {"0010": {"0090": 30.0, "0050": 30.0, "0060": None}}
@@ -416,3 +434,187 @@ def test_a_coordinate_with_no_row_is_described_without_one() -> None:
 
     # Assert
     assert described == "C 02.00"
+
+
+# ---------------------------------------------------------------------------
+# Nothing reported
+# ---------------------------------------------------------------------------
+#
+# These run the PACKAGED rules through ``evaluate_index``, so each one fails on
+# an assertion about the published rule rather than on a hand-built stand-in.
+# boe_b0778 reads ``isum({t: OF08.07.01.01, c: 0030; 0040; 0050, dv:
+# emptySequence(), seq: True}) i= 1`` over rows 0180-0260 and is not marked
+# "always execute". Its reference carries a default, so the engine zero-fills an
+# unreported share; the guard is what stops that zero being compared with 1.
+
+
+def _packaged_rule_outcome(framework: str, rule_id: str, cells: Cells) -> RuleOutcome:
+    """Run one packaged rule over a single-sheet roll-out table built from ``cells``."""
+    rules = load_rules(framework)
+    rule = next(rule for rule in rules.enforced if rule.rule_id == rule_id)
+    ruleset = RuleSet(framework=framework, publisher=rules.publisher, source={}, rules=(rule,))
+    index = build_index(framework, c08_07=build_frame(cells))
+    return evaluate_index(index, ruleset).outcomes[0]
+
+
+def _shares(*shares: float | None) -> dict[str, float | None]:
+    """One roll-out row's three share columns (0030 / 0040 / 0050)."""
+    return dict(zip(("0030", "0040", "0050"), shares, strict=True))
+
+
+def test_boe_b0778_is_not_broken_on_a_roll_out_class_that_reports_no_share() -> None:
+    """A class with no exposure reports no share, so the Bank's rule has nothing to test there.
+
+    The gateway evaluates boe_b0778 only where one of its three share cells is
+    a fact. Row 0180 reports none of them: it is not an evaluation, and reading
+    it as 0 + 0 + 0 against 1 is a break the gateway never raises.
+    """
+    # Arrange: one class with no share reported, one class and the total at 100 / 0 / 0.
+    cells = {
+        "0180": _shares(None, None, None),
+        "0210": _shares(1.0, 0.0, 0.0),
+        "0260": _shares(1.0, 0.0, 0.0),
+    }
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_BASEL_3_1, "boe_b0778", cells)
+
+    # Assert: the two reported rows are evaluated and hold; the empty one is not counted.
+    assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_PASS, 2, 0)
+
+
+def test_boe_b0778_records_the_empty_row_as_skipped_rather_than_dropping_it() -> None:
+    """The row the guard leaves out is still counted, as a skip, never silently absent."""
+    # Arrange
+    cells = {"0180": _shares(None, None, None), "0210": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_BASEL_3_1, "boe_b0778", cells)
+
+    # Assert
+    assert (outcome.evaluated, outcome.skipped) == (1, 1)
+
+
+def test_boe_b0778_still_breaks_where_the_reported_shares_do_not_total_one() -> None:
+    """The control: a real break survives the guard, and the empty row is not a second one."""
+    # Arrange
+    cells = {
+        "0180": _shares(None, None, None),
+        "0210": _shares(0.5, 0.2, 0.2),
+        "0260": _shares(1.0, 0.0, 0.0),
+    }
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_BASEL_3_1, "boe_b0778", cells)
+
+    # Assert
+    assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_FAIL, 1, 1)
+
+
+def test_boe_b0778_is_evaluated_on_a_row_that_reports_zero_shares() -> None:
+    """A reported 0.0 is a fact: the guard keys on REPORTED, not on non-zero.
+
+    Pins the guard against being widened to "every operand is zero", which
+    would let a return that reports 0 / 0 / 0 for a class with exposure pass.
+    """
+    # Arrange
+    cells = {"0180": _shares(0.0, 0.0, 0.0), "0210": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_BASEL_3_1, "boe_b0778", cells)
+
+    # Assert
+    assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_FAIL, 1, 1)
+
+
+def test_eba_v09796_m_is_not_broken_on_a_class_that_reports_no_share() -> None:
+    """The EBA twin of boe_b0778 has nothing to test on a class with no share either.
+
+    v09796_m (``{c0030} + {c0040} + {c0050} = 1``, "treat as zero") reads three
+    fact variables that each fall back to 0. Where none of the three is a fact,
+    every variable has fallen back, and XBRL Variables 1.0 (section 4, special
+    case 2) says such a variable set "is not deemed to have been evaluated".
+    Arelle on the Bank's restatement of the EBA's v09779_m — nine ``dv: 0``
+    variables, the same construct — counts no evaluation on a filed C 08.04
+    with no cell reported, and one on the same table with one cell reported 0.
+    """
+    # Arrange: one class with no share reported, one class at 100 / 0 / 0.
+    cells = {"0010": _shares(None, None, None), "0020": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_CRR, "v09796_m", cells)
+
+    # Assert: the reported row is evaluated and holds; the empty one is not counted.
+    assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_PASS, 1, 0)
+
+
+def test_eba_v09796_m_records_the_empty_row_as_skipped_rather_than_dropping_it() -> None:
+    """The row the guard leaves out under CRR is still counted, as a skip."""
+    # Arrange
+    cells = {"0010": _shares(None, None, None), "0020": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_CRR, "v09796_m", cells)
+
+    # Assert
+    assert (outcome.evaluated, outcome.skipped) == (1, 1)
+
+
+def test_eba_v09796_m_still_breaks_where_one_share_is_reported_as_zero() -> None:
+    """The control: one reported share is a fact, so the row is evaluated and breaks.
+
+    0 + 0 + 0 = 1 fails whether the zeros are reported or fallen back; what the
+    guard keys on is whether ANY of the three is a fact. Arelle agrees on the
+    Bank's boe_b0778: a row reporting only one share, as 0, is unsatisfied.
+    """
+    # Arrange
+    cells = {"0010": _shares(None, None, 0.0), "0020": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_CRR, "v09796_m", cells)
+
+    # Assert
+    assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_FAIL, 1, 1)
+
+
+def _evaluate_on_blanks(expression: str, *, always_execute: bool) -> CoordinateOutcome:
+    """Evaluate ``expression`` on C 02.00 row 0010, where 0090 and 0050 are reported blank."""
+    return evaluate_at(
+        parse_expression(expression),
+        Coordinate("C 02.00", SINGLE_SHEET, "0010", None),
+        build_index(c_02_00=build_frame({"0010": {"0090": None, "0050": None}})),
+        missing_value=MISSING_ZERO,
+        arithmetic=ARITHMETIC_INTERVAL,
+        always_execute=always_execute,
+    )
+
+
+def test_an_unreported_place_that_fails_is_skipped_as_nothing_reported() -> None:
+    """At coordinate level the place left out carries its own reason, not a generic skip."""
+    # Arrange / Act: ``0 = 1`` over a blank, on a rule that is not always-execute.
+    outcome = _evaluate_on_blanks("{c0090} = 1", always_execute=False)
+
+    # Assert
+    assert (outcome.status, outcome.reason) == (STATUS_NOT_EVALUATED, SKIP_NOTHING_REPORTED)
+
+
+def test_an_unreported_place_that_holds_stays_vacuous_under_the_guard() -> None:
+    """The guard only removes a FAILING empty place; one that holds is still VACUOUS.
+
+    The vacuity count is what the dead-cell defence reads, so a comparison over
+    unreported cells that holds must keep reporting as VACUOUS rather than vanish.
+    """
+    # Arrange / Act: ``0 = 0`` over two blanks, on a rule that is not always-execute.
+    outcome = _evaluate_on_blanks("{c0090} = {c0050}", always_execute=False)
+
+    # Assert
+    assert outcome.status == STATUS_VACUOUS
+
+
+def test_an_always_execute_rule_still_breaks_where_nothing_is_reported() -> None:
+    """A rule the publisher runs regardless keeps its zero-filled break."""
+    # Arrange / Act
+    outcome = _evaluate_on_blanks("{c0090} = 1", always_execute=True)
+
+    # Assert
+    assert outcome.status == STATUS_FAIL

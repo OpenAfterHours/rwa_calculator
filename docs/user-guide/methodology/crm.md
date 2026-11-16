@@ -192,12 +192,37 @@ flowchart LR
 
 ### Eligible Guarantors
 
-| Guarantor Type | Eligibility |
-|----------------|-------------|
-| Sovereigns | CQS1-3 |
-| Institutions | CQS1-3 |
-| Corporates | Rated corporates with lower RW |
-| Parent Companies | Under certain conditions |
+Art. 201(1) is an exhaustive list of the parties that may provide unfunded credit
+protection, in both regimes (CRR Art. 201; PS1/26 Credit Risk Mitigation (CRR) Part
+Art. 201). CRR Art. 194(5) and PS1/26 Art. 194(6)(c) make the list a precondition: a
+guarantee from anyone else is not recognised.
+
+| Guarantor type | Art. 201 limb | Eligible | Condition |
+|----------------|---------------|----------|-----------|
+| Central governments and central banks | (1)(a) | Yes | — |
+| Regional governments and local authorities | (1)(b) | Yes | — |
+| Multilateral development banks | (1)(c) | Yes | — |
+| International organisations with a 0% risk weight | (1)(d) | Yes | — |
+| Public sector entities | (1)(e) | Yes | — |
+| Institutions (and financial institutions treated as institutions under Art. 119(5)) | (1)(f) | Yes | — |
+| Other corporates, including parents, subsidiaries and affiliates | (1)(g), (2) | Yes | An ECAI credit assessment; or, for an F-IRB / A-IRB beneficiary, an internal rating |
+| Qualifying central counterparties | (1)(h) | Yes | — |
+| Natural persons (`entity_type` `individual`, `natural_person` or `retail`) | none | **No** | Not recognised; CRM013 |
+
+A guarantee from an ineligible provider is not recognised: the covered part keeps the
+borrower's own risk weight (or PD and LGD), no exposure moves to the guarantor's class
+in COREP, and a CRM013 warning names the guarantor and the reason.
+
+!!! note "A-IRB beneficiaries keep a natural person's guarantee"
+    Under CRR an exposure for which the firm uses its own LGD estimates takes credit
+    risk mitigation under Chapter 3, not Chapter 4 (CRR Art. 108(2)). Recognition is
+    then governed by Art. 161(3), 164(2) and 183, under which the firm sets the types of
+    guarantor it recognises. The Art. 201 list does not apply. The engine therefore
+    keeps parameter substitution for a natural person's guarantee of an A-IRB exposure.
+    It does the same under Basel 3.1 for now. Whether PS1/26 Art. 194(A1), which binds
+    the Parameter Substitution Method to Art. 201, should decline it is an open
+    question. The PS1/26 method that admits retail guarantors, the LGD Adjustment Method
+    (Art. 183(1)(c)), is not implemented.
 
 ### Qualifying CCP (QCCP) Guarantor Override (CRR Art. 306)
 

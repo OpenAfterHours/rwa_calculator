@@ -3,8 +3,8 @@ Generate P1.227 fixtures: CRR/PS1-26 Art. 201 guarantor-eligibility gate.
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/crm/guarantees.py: gate the SA fallback in
-    ``_assign_guarantor_approach`` with
+    (now engine/crm/guarantor_eligibility.py: gate the SA fallback in
+    ``assign_guarantor_approach`` with
     ``guarantor_eligible = ~is_corporate | (guarantor_cqs not null) |
     (beneficiary_is_irb & guarantor_internal_pd not null)``; ineligible ->
     ``guarantor_approach=""`` (no substitution, borrower basis) + a new
@@ -33,13 +33,14 @@ Key responsibilities:
         beneficiary, Art. 201(2) internal-rating limb) and G4 (SA
         beneficiary, where an internal-only rating is NOT an eligible
         external assessment).
-    CP_P227_G5: individual (retail), no ratings of any kind -- the
-        review-addendum probe. Art. 201(1) does not list retail persons as
-        eligible protection providers; P1.227's engine change will NOT gate
-        this (falls through ``_assign_guarantor_approach``'s
-        ``.then("sa")`` branch today, out of scope for this item's fix) --
-        this fixture only RECORDS today's baseline as evidence for a
-        possible separate plan item.
+    CP_P227_G5: individual (a natural person), no ratings of any kind --
+        the review-addendum probe. Art. 201(1)/(2) list no natural person.
+        P1.227's own change did not gate it (it fell through the SA
+        fallback branch of what is now
+        ``engine/crm/guarantor_eligibility.py::assign_guarantor_approach``);
+        P1.384 added the natural-person limb, so it is now declined with a
+        CRM013. Its RWA never moved: on this SA beneficiary the null SA
+        guarantor RW declined it by accident before P1.384.
 - Produce five GBP 1,000,000 loans, one per guarantee scenario (G1-G5), all
   senior, 3-year maturity, no facilities/facility_mappings.
 - Produce four rating rows (RTG_P227_B / _B_IRB / _G2 / _G34) -- CP_P227_G1
@@ -65,10 +66,10 @@ Scenario rows:
     | G2  | CP_P227_G2       | external CQS 2 corporate | CP_P227_B (SA) | eligible SA control |
     | G3  | CP_P227_G34      | internal-only corporate  | CP_P227_B_IRB (F-IRB) | Art. 201(2) IRB limb -- eligible |
     | G4  | CP_P227_G34      | internal-only corporate  | CP_P227_B (SA) | internal-only invisible to SA ECAI lookup -- ineligible |
-    | G5  | CP_P227_G5       | UNRATED individual       | CP_P227_B (SA) | retail-class probe -- evidence only, NOT gated by this item |
+    | G5  | CP_P227_G5       | UNRATED individual       | CP_P227_B (SA) | natural person -- ineligible (P1.384 limb), RWA unchanged |
 
 Defect under test (pre-fix):
-    ``_assign_guarantor_approach`` (engine/crm/guarantees.py:396-449) routes
+    ``assign_guarantor_approach`` (then engine/crm/guarantees.py:396-449) routed
     ANY corporate-class guarantor with a resolved ``guarantor_exposure_class``
     to ``"sa"`` approach unconditionally (the final
     ``.when(pl.col("guarantor_exposure_class") != "").then(pl.lit("sa"))``
@@ -96,9 +97,8 @@ Post-fix assertion (primary):
     G4: guarantor_approach reverts to "" -> RW = borrower basis (150%) +
         CRM013 warning -- same shape as G1, different root cause (internal-
         only rating insufficient for an SA beneficiary).
-    G5: OUT OF SCOPE for this item's fix -- pipeline-run baseline recorded
-        as evidence only; test-writer may pin today's behaviour with an
-        explanatory comment rather than an inversion.
+    G5: guarantor_approach "" + CRM013 since P1.384 (natural person, no
+        Art. 201 limb). The RWA is the borrower basis before and after.
 
 Hand-calculation:
     CP_P227_B baseline (unguaranteed, CQS 5, Art. 122 Table 5 / Table 6,
@@ -126,8 +126,8 @@ Hand-calculation:
     G4 (post-fix): guarantee dropped (internal-only rating insufficient for
         an SA beneficiary) -> RW = 1.50 -> RWA = 1,500,000.
 
-    G5: PIPELINE-REPORTED below (evidence only, not asserted against an
-        expected post-fix value by this item).
+    G5: PIPELINE-REPORTED below -- borrower basis, RW = 1.50, both before
+        and after P1.384.
 
 References:
     - CRR Art. 201(1)(g) / PS1/26 Art. 201(1)(g): corporate guarantors must
@@ -138,9 +138,10 @@ References:
       -> 50%, identical both regimes (verified in the design sketch pass).
     - docs/plans/compliance-audit-crr-111-241-rectification.md (P1.227
       finding).
-    - src/rwa_calc/engine/crm/guarantees.py:356-393 (_join_guarantor_ratings
-      -- guarantor_cqs / guarantor_internal_pd provenance), :396-449
-      (_assign_guarantor_approach -- the SA-fallback branch this item gates).
+    - src/rwa_calc/engine/crm/guarantees.py (_join_guarantor_ratings
+      -- guarantor_cqs / guarantor_internal_pd provenance) and
+      src/rwa_calc/engine/crm/guarantor_eligibility.py
+      (assign_guarantor_approach -- the SA-fallback branch this item gates).
     - src/rwa_calc/engine/hierarchy/ratings.py:88-101 (internal_pd
       promotion -- no model_id/permission dependency).
     - tests/fixtures/p1_183/p1_183.py: model_permission builder pattern
@@ -227,16 +228,15 @@ EXPECTED_RW_G1_G4_PRE_FIX: float = 1.00
 EXPECTED_RW_G3_CRR: float = 1.034401
 EXPECTED_RW_G3_B31: float = 0.867422
 
-# G5: pipeline-confirmed -- the retail-guarantor substitution resolves to a
-# NULL guarantor_rw (RETAIL_OTHER is not a key in the CQS-driven SA
-# risk-weight lookup table at all -- grepped risk_weights.py, zero hits for
-# "RETAIL_OTHER"). engine/sa/rw_adjustments.py:230-237's
-# ``is_guarantee_beneficial`` check requires guarantor_rw to be non-null, so
-# a null guarantor_rw is correctly treated as non-beneficial and the
-# substitution is skipped -- the exposure reverts to the borrower's own
-# pre-CRM risk weight. NOT a capital understatement today: this is
-# EVIDENCE that the existing null-guard already neutralises a retail-class
-# guarantor, independent of any Art. 201-specific eligibility gate.
+# G5: pipeline-confirmed borrower basis. Since P1.384 the Art. 201
+# natural-person limb declines the guarantee outright. Before it, on THIS SA
+# beneficiary only, the retail-guarantor substitution resolved to a NULL
+# guarantor_rw (RETAIL_OTHER is not a key in the CQS-driven SA risk-weight
+# lookup), and ``is_guarantee_beneficial`` treated that as non-beneficial.
+# That accident was scoped to SA (and slotting) beneficiaries: an F-IRB
+# beneficiary with an internally rated natural-person guarantor WAS
+# substituted at the person's retail PD -- a capital understatement
+# (crm-substitution S2) until P1.384.
 EXPECTED_RW_G5_TODAY: float = 1.50  # == EXPECTED_RW_B_BASELINE, both regimes
 
 EXPECTED_RWA_B_BASELINE: float = DRAWN_AMOUNT * EXPECTED_RW_B_BASELINE  # 1,500,000

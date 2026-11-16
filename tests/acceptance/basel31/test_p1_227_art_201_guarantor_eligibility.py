@@ -29,10 +29,11 @@ Hand-calculation (Basel 3.1, CalculationConfig.basel_3_1(), PermissionMode.IRB
     G4 (CP_P227_G34, SAME internal-only guarantor, SA beneficiary CP_P227_B):
         pre-fix:  RW = 1.00 -> RWA = 1,000,000
         post-fix: guarantee dropped, RW = 1.50 -> RWA = 1,500,000, + CRM013
-    G5 (CP_P227_G5, retail individual, review-addendum probe):
-        RW = 1.50 -> RWA = 1,500,000, both pre- and post-fix — NOT gated
-        by this item (see the CRR sibling's docstring for the full
-        null-guard rationale).
+    G5 (CP_P227_G5, natural person ``individual``, review-addendum probe):
+        RW = 1.50 -> RWA = 1,500,000, both pre- and post-fix — declined by
+        the P1.384 Art. 201 natural-person limb (+ CRM013); see the CRR
+        sibling's docstring for why it never substituted on this SA
+        beneficiary even before that.
 
     Portfolio total rwa_final (pipeline-observed, reporting_date=2027-02-01):
         pre-fix:  1,000,000 (G1) + 500,000 (G2) + 867,421.9277 (G3)
@@ -370,58 +371,54 @@ class TestP1227Art201GuarantorEligibilityB31:
         )
 
     # -------------------------------------------------------------------------
-    # Item 5 — G5 retail-guarantor invariant + CRM013 scope control.
+    # Item 5 — G5 natural-person guarantor invariant + CRM013 count.
     # -------------------------------------------------------------------------
 
     def test_p1_227_g5_retail_guarantor_no_substitution_invariant(
         self, results: pl.DataFrame
     ) -> None:
         """
-        P1.227: G5 (retail individual guarantor) never substitutes, both
-        pre- and post-fix — see the CRR sibling's docstring for the full
-        null-guard rationale. OUT OF SCOPE for this item's fix.
+        P1.227 / P1.384: G5 (natural-person ``individual`` guarantor) never
+        substitutes — PS1/26 Art. 201(1)/(2) list no natural person. See the
+        CRR sibling's docstring for why the RWA never moved on this SA
+        beneficiary even before P1.384.
 
         Arrange: LN_P227_G5, 100% guaranteed by CP_P227_G5 (unrated
                  individual).
         Act:     full B31 pipeline.
         Assert:  total rwa_final == 1,500,000 (== the borrower's own
                  unguaranteed basis).
-
-        Should PASS today and MUST still pass after.
         """
         totals = _loan_total(results, LOAN_G5_REF)
 
         assert totals["rwa_final"] == pytest.approx(EXPECTED_RWA_G5_TODAY, rel=1e-4), (
             f"P1.227 (B31): expected G5 total rwa_final="
-            f"{EXPECTED_RWA_G5_TODAY:,.0f} (retail guarantor never "
-            f"substitutes — pre-existing null-guard, not gated by this item), "
-            f"got {totals['rwa_final']:,.2f}"
+            f"{EXPECTED_RWA_G5_TODAY:,.0f} (a natural person is not an "
+            f"Art. 201 provider), got {totals['rwa_final']:,.2f}"
         )
 
-    def test_p1_227_crm013_count_over_whole_book_is_exactly_two(
+    def test_p1_227_crm013_count_over_whole_book_is_exactly_three(
         self, pipeline_results: AggregatedResultBundle
     ) -> None:
         """
-        P1.227 DISCRIMINATING: exactly two CRM013 warnings are raised
-        across the whole five-guarantee book — one for G1, one for G4.
-        G5 (the retail guarantor) does NOT get a CRM013 — the accepted
-        design gates only the CORPORATE limb (see the CRR sibling's
-        docstring for the full rationale).
+        P1.227 / P1.384 DISCRIMINATING: exactly three CRM013 warnings are
+        raised across the whole five-guarantee book — G1 and G4 (corporate,
+        Art. 201(1)(g)/(2)) and G5 (a natural person, in no limb of
+        Art. 201(1)/(2)). "Exactly two" until P1.384 pinned G5 out of the gate.
 
         Arrange: all five P1.227 guarantees in one pipeline run.
         Act:     full B31 pipeline.
-        Assert:  len(CRM013 warnings) == 2 (G1 + G4 only).
-
-        FAILS today: zero CRM013 warnings exist.
+        Assert:  len(CRM013 warnings) == 3; G5's names the natural person.
         """
         crm013 = _crm013_errors(pipeline_results.errors)
+        g5 = [e for e in crm013 if e.exposure_reference == LOAN_G5_REF]
 
-        assert len(crm013) == 2, (
-            f"P1.227 (B31): expected exactly 2 CRM013 warnings (G1 + G4 — "
-            f"the corporate-guarantor eligibility failures; G5's retail "
-            f"guarantor is out of scope for this item), got {len(crm013)}. "
+        assert len(crm013) == 3, (
+            f"P1.227 (B31): expected exactly 3 CRM013 warnings (G1 + G4 "
+            f"corporate, G5 natural person), got {len(crm013)}. "
             f"All errors: {[(e.code, e.message) for e in pipeline_results.errors]}"
         )
+        assert len(g5) == 1 and "natural person" in g5[0].message, [e.message for e in g5]
 
     # -------------------------------------------------------------------------
     # Item 6 — portfolio total. DISCRIMINATING: FAILS today.

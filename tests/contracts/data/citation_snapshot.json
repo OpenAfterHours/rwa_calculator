@@ -227,7 +227,10 @@
   ],
   "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach": [
     "CRR Art. 201",
-    "PS1/26, paragraph 201"
+    "CRR Art. 194",
+    "CRR Art. 108",
+    "PS1/26, paragraph 201",
+    "PS1/26, paragraph 194"
   ],
   "rwa_calc.engine.crm.haircut_tables::get_haircut_table": [
     "CRR Art. 224"

@@ -863,6 +863,9 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
       the published axis has no sheet for it.
     - A leg that moved to a retail guarantor's class while keeping its obligor's F-IRB
       approach stays on its obligor's sheet (retail exposures are A-IRB only, CRR Art. 151(4)).
+      Accepted input no longer produces such a leg: the only retail-class guarantor is a
+      natural person, and the engine declines a natural person's guarantee of an F-IRB
+      exposure (Art. 201, P1.384). The rule stays as a safety net.
 
     **Supervisory slotting** is reported on row 0080 of sheet 0010 and of Total 0002, and
     nowhere else. On those two sheets row 0080 is reported as zero when the firm has no

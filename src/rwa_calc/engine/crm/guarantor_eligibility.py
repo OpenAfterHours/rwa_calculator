@@ -10,8 +10,9 @@ Pipeline position:
 Key responsibilities:
 - Route each guaranteed leg to IRB parameter substitution, SA risk-weight
   substitution, or no substitution (``guarantor_approach``)
-- Apply the Art. 201 eligible-provider gate, clearing the guarantor class of a
-  rejected leg so it reverts to the borrower's own basis
+- Apply the Art. 201 eligible-provider gate (unrated corporates and natural
+  persons), clearing the guarantor class and approach of a rejected leg so it
+  reverts to the borrower's own basis
 - Name every rejected guarantor in one CRM013 warning per leg
 
 Kept out of ``guarantees.py``, following ``min_collateralisation.py``: that module
@@ -21,8 +22,12 @@ there.
 
 References:
     CRR Art. 201: eligibility of protection providers under all approaches
+    CRR Art. 194(5): only an Art. 201 provider is an eligible protection provider
+    CRR Art. 108(2): own-LGD (A-IRB) exposures take CRM under Chapter 3 instead
     PS1/26 Credit Risk Mitigation (CRR) Part Art. 201: eligible providers under
         the Risk-Weight Substitution and Parameter Substitution Methods
+    PS1/26 Credit Risk Mitigation (CRR) Part Art. 194(6)(c): the provider must be
+        of a kind listed in Art. 201
     CRR Art. 114(4)/(7), Art. 235(3): domestic-currency CGCB guarantor short-circuit
 """
 
@@ -35,6 +40,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import ERROR_INELIGIBLE_GUARANTOR, crm_warning
+from rwa_calc.data.schemas import NATURAL_PERSON_ENTITY_TYPES
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
@@ -50,7 +56,10 @@ logger = logging.getLogger(__name__)
 
 
 @cites("CRR Art. 201")
+@cites("CRR Art. 194")
+@cites("CRR Art. 108")
 @cites("PS1/26, paragraph 201")
+@cites("PS1/26, paragraph 194")
 def assign_guarantor_approach(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -72,15 +81,32 @@ def assign_guarantor_approach(
        actively rates this counterparty under its IRB model.
     Counterparties with only external ratings (CQS) are treated under SA.
 
-    CRR/PS1-26 Art. 201(1)(g)/(2) eligibility gate: a CORPORATE guarantor is an
-    eligible protection provider only if it has an ECAI credit assessment
-    (``guarantor_cqs``) or — Art. 201(2), IRB-beneficiary-only — an internal
-    rating (``guarantor_internal_pd``) when the beneficiary is itself IRB. An
-    ineligible corporate guarantor is rejected: its ``guarantor_exposure_class``
-    is cleared so the SA guarantor-RW lookup returns null (non-beneficial), the
-    covered leg reverts to the borrower's own basis, and the leg is flagged on
+    CRR/PS1-26 Art. 201 eligibility gate — two limbs, one flag:
+
+    - CORPORATE (Art. 201(1)(g)/(2)): eligible only if it has an ECAI credit
+      assessment (``guarantor_cqs``) or — Art. 201(2), IRB-beneficiary-only — an
+      internal rating (``guarantor_internal_pd``) when the beneficiary is itself
+      IRB.
+    - NATURAL PERSON (``guarantor_entity_type`` in
+      ``data.schemas.NATURAL_PERSON_ENTITY_TYPES``): in no limb of Art. 201(1) or
+      (2) in either regime, so never eligible — on an SA, slotting or F-IRB
+      beneficiary alike. CRR Art. 194(5) and PS1/26 Art. 194(6)(c) make the
+      Art. 201 list a precondition for recognising unfunded protection. The one
+      carve-out is an A-IRB (own-LGD) beneficiary: CRR Art. 108(2) routes its CRM
+      to Chapter 3 (Art. 161(3) / 164(2) / 183, firm-specified guarantor types),
+      outside the Art. 201 list, so it keeps parameter substitution. The engine
+      applies the same carve-out under Basel 3.1 pending an owner decision on the
+      PS1/26 reading (Art. 194(A1) binds the Parameter Substitution Method to
+      Art. 201; the LGD Adjustment Method that admits retail guarantors,
+      Art. 183(1)(c), is not implemented).
+
+    A rejected guarantor takes guarantor approach ``""`` — on BOTH the SA fallback
+    and the IRB branch, since clearing the class alone would leave parameter
+    substitution running — and its ``guarantor_exposure_class`` is cleared, so the
+    covered leg reverts to the borrower's own basis. The leg is flagged on
     ``_guarantor_ineligible`` for :func:`record_ineligible_guarantors` (CRM013).
-    Non-corporate classes are governed by other Art. 201 limbs and not gated here.
+    The other listed classes (sovereign, RGLA, MDB, international organisation,
+    PSE, institution, CCP) are not gated here.
     """
     # irb_permissions is derived non-None in CalculationConfig.__post_init__.
     irb_exposure_class_values = {
@@ -91,25 +117,30 @@ def assign_guarantor_approach(
 
     irb_beneficiary_approaches = [ApproachType.FIRB.value, ApproachType.AIRB.value]
     schema_names = list(present) if present is not None else exposures.collect_schema().names()
-    beneficiary_is_irb = (
-        pl.col("approach").fill_null("").is_in(irb_beneficiary_approaches)
-        if "approach" in schema_names
-        else pl.lit(False)
+    beneficiary_approach = (
+        pl.col("approach").fill_null("") if "approach" in schema_names else pl.lit("")
     )
+    beneficiary_is_irb = beneficiary_approach.is_in(irb_beneficiary_approaches)
 
     is_domestic_cgcb_guarantor = _build_domestic_cgcb_flag(schema_names)
 
-    # Art. 201(1)(g)/(2) gate. All inputs are non-null booleans (is_not_null /
-    # == on the default-"" class), so no Kleene-null leaks into the gate. The
-    # class column can only ever say "corporate" (never "corporate_sme" — the
-    # entity->SA-class map has no such entity_type; SME-ness is derived later).
+    # Art. 201 gate. All inputs are non-null booleans (is_not_null / == on the
+    # default-"" class and approach / is_in on the entity type apply_guarantees
+    # fills with ""), so no Kleene-null leaks into the gate. The class column can
+    # only ever say "corporate" (never "corporate_sme" — the entity->SA-class map
+    # has no such entity_type; SME-ness is derived later).
     is_corporate_guarantor = pl.col("guarantor_exposure_class") == "corporate"
     corporate_eligible = pl.col("guarantor_cqs").is_not_null() | (
         beneficiary_is_irb & pl.col("guarantor_internal_pd").is_not_null()
     )
-    guarantor_ineligible = (
-        is_corporate_guarantor & corporate_eligible.not_() & (pl.col("guaranteed_portion") > 0)
+    is_natural_person_guarantor = pl.col("guarantor_entity_type").is_in(
+        list(NATURAL_PERSON_ENTITY_TYPES)
     )
+    outside_art_201 = beneficiary_approach == ApproachType.AIRB.value
+    guarantor_ineligible = (
+        (is_corporate_guarantor & corporate_eligible.not_())
+        | (is_natural_person_guarantor & outside_art_201.not_())
+    ) & (pl.col("guaranteed_portion") > 0)
 
     return exposures.with_columns(
         pl.when(is_domestic_cgcb_guarantor)
@@ -119,10 +150,11 @@ def assign_guarantor_approach(
             & (pl.col("guarantor_exposure_class") != "")
             & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
             & pl.col("guarantor_internal_pd").is_not_null()
+            & guarantor_ineligible.not_()
         )
         .then(pl.lit("irb"))
-        # SA fallback — gated: an ineligible corporate guarantor takes "" (the
-        # existing no-substitution value) rather than "sa".
+        # SA fallback — gated: an ineligible guarantor takes "" (the existing
+        # no-substitution value) rather than "sa".
         .when((pl.col("guarantor_exposure_class") != "") & guarantor_ineligible.not_())
         .then(pl.lit("sa"))
         .otherwise(pl.lit(""))
@@ -136,7 +168,7 @@ def assign_guarantor_approach(
         .otherwise(pl.lit(None).cast(pl.String))
         .alias("guarantor_rating_type"),
         # Explicit revert (Art. 201): clear the guarantor class for an ineligible
-        # corporate so ``build_guarantor_rw_expr`` returns null -> non-beneficial
+        # guarantor so ``build_guarantor_rw_expr`` returns null -> non-beneficial
         # -> the covered leg reverts to the borrower's own basis. Mirrors the
         # existing unmapped-guarantor (class "") no-substitution path.
         pl.when(guarantor_ineligible)
@@ -152,32 +184,47 @@ def record_ineligible_guarantors(
     exposures: pl.LazyFrame,
     errors: list[CalculationError],
 ) -> None:
-    """Append one CRM013 warning per Art. 201-ineligible corporate guarantor leg.
+    """Append one CRM013 warning per Art. 201-ineligible guarantor leg, naming the cause.
 
     Reads the ``_guarantor_ineligible`` flag ``assign_guarantor_approach`` sets.
     The CRM processor calls this on the materialised ``crm_exit`` frame — an
     in-memory scan, where the flag's own site re-executed the guarantee split
     (23 ms of a 150-row run). Nothing is appended to ``errors`` between the two
     points, so CRM013 keeps its place in the list; the exit seal strips the flag.
+    The cause is read off ``guarantor_entity_type``: a natural person is outside
+    the Art. 201 list altogether, a corporate lacks the rating Art. 201(1)(g)/(2)
+    requires.
     """
     dropped = (
         exposures.filter(pl.col("_guarantor_ineligible"))
-        .select("parent_exposure_reference", "guarantor_reference")
+        .select("parent_exposure_reference", "guarantor_reference", "guarantor_entity_type")
         .collect()
     )
     for row in dropped.iter_rows(named=True):
         loan_ref = row.get("parent_exposure_reference")
         guar_ref = row.get("guarantor_reference")
+        entity_type = row.get("guarantor_entity_type")
+        if entity_type in NATURAL_PERSON_ENTITY_TYPES:
+            cause = (
+                f"a natural person (entity_type '{entity_type}') is not an eligible "
+                "provider of unfunded credit protection under Art. 201(1)/(2)"
+            )
+            reference = "CRR Art. 201(1)"
+        else:
+            cause = (
+                "a corporate guarantor without an ECAI credit assessment (or, for an "
+                "IRB-approach beneficiary, an internal rating) is not eligible under "
+                "Art. 201(1)(g)/(2)"
+            )
+            reference = "CRR Art. 201(1)(g)"
         errors.append(
             crm_warning(
                 ERROR_INELIGIBLE_GUARANTOR,
                 f"Guarantor '{guar_ref}' is an ineligible protection provider for "
-                f"exposure '{loan_ref}': a corporate guarantor without an ECAI credit "
-                "assessment (or, for an IRB-approach beneficiary, an internal rating) "
-                "is not eligible under Art. 201(1)(g)/(2); the guarantee is not "
-                "recognised and the exposure reverts to the borrower's own basis.",
+                f"exposure '{loan_ref}': {cause}; the guarantee is not recognised and "
+                "the exposure reverts to the borrower's own basis.",
                 exposure_reference=loan_ref,
-                regulatory_reference="CRR Art. 201(1)(g)",
+                regulatory_reference=reference,
             )
         )
 

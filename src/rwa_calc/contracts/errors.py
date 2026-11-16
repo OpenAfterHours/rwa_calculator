@@ -200,10 +200,13 @@ ERROR_COLLATERAL_LINK_DUPLICATE = "CRM011"
 # guarantee the provider can unilaterally cancel (both regimes) or unilaterally
 # change (Basel 3.1 only) is dropped and the exposure flows unguaranteed.
 ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
-# Ineligible guarantor (CRR/PS1-26 Art. 201(1)(g)/(2)): a corporate guarantor
-# without an ECAI credit assessment (or, for an IRB-approach beneficiary, an
-# internal rating) is not an eligible protection provider — the covered exposure
-# reverts to the borrower's own basis.
+# Ineligible guarantor (CRR/PS1-26 Art. 201(1)/(2), with CRR Art. 194(5) /
+# PS1/26 Art. 194(6)(c)): a corporate guarantor without an ECAI credit
+# assessment (or, for an IRB-approach beneficiary, an internal rating), or a
+# natural person of any rating (no Art. 201 limb names one; an A-IRB beneficiary
+# is outside the list, CRR Art. 108(2)), is not an eligible protection provider —
+# the covered exposure reverts to the borrower's own basis. The message names
+# which cause applied.
 ERROR_INELIGIBLE_GUARANTOR = "CRM013"
 # Ineligible IRB/FCM non-financial collateral (CRR/PS1-26 Art. 199(2)/(5)/(6)):
 # real-estate / receivables / other-physical collateral is recognised on the

@@ -596,6 +596,14 @@ Last generated: 2026-11-16.
     ```
 
 
+### CRR Art. 108 — Use of credit risk mitigation technique under the Standardised Approach and the IRB Approach
+
+??? quote "`assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantor_eligibility.py:60"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantor_eligibility.py:58:180"
+    ```
+
+
 ### CRR Art. 109 — Treatment of securitisation positions
 
 ??? quote "`allocate` — src/rwa_calc/engine/securitisation/allocator.py:116"
@@ -877,6 +885,11 @@ Last generated: 2026-11-16.
 
 ### CRR Art. 194 — Principles governing the eligibility of credit risk mitigation techniques
 
+??? quote "`assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantor_eligibility.py:59"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantor_eligibility.py:58:180"
+    ```
+
 ??? quote "`get_crm_unified_bundle` — src/rwa_calc/engine/crm/processor.py:576"
     ```python
     --8<-- "src/rwa_calc/engine/crm/processor.py:576:809"
@@ -937,9 +950,9 @@ Last generated: 2026-11-16.
 
 ### CRR Art. 201 — Eligibility of protection providers under all approaches
 
-??? quote "`assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantor_eligibility.py:52"
+??? quote "`assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantor_eligibility.py:58"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantor_eligibility.py:52:148"
+    --8<-- "src/rwa_calc/engine/crm/guarantor_eligibility.py:58:180"
     ```
 
 
@@ -1829,11 +1842,19 @@ Last generated: 2026-11-16.
     ```
 
 
+### PS1/26, paragraph 194 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantor_eligibility.py:62"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantor_eligibility.py:58:180"
+    ```
+
+
 ### PS1/26, paragraph 201 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantor_eligibility.py:53"
+??? quote "`assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantor_eligibility.py:61"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantor_eligibility.py:52:148"
+    --8<-- "src/rwa_calc/engine/crm/guarantor_eligibility.py:58:180"
     ```
 
 

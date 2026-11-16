@@ -7628,6 +7628,7 @@
         "tests/acceptance/basel31/test_p1_159_art_236_psm_correlation_guarantor_class.py",
         "tests/acceptance/basel31/test_p1_220_pse_institution_sa_only.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
+        "tests/acceptance/reporting/test_of0801_pd_column.py",
         "tests/fixtures/p1_151/p1_151.py",
         "tests/fixtures/p1_157/p1_157.py",
         "tests/fixtures/p1_220/p1_220.py",

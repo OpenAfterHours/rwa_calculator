@@ -821,7 +821,7 @@ _C07_00_CELLS: Mapping[str, CellRequirement] = {
 
 #: C 08.01: column ref -> the ledger columns its binding reads.
 _C08_01_CELLS: Mapping[str, CellRequirement] = {
-    "0010": _needs("pd_floored", "ead_final"),  # CRR only; binds pd_floored by name
+    "0010": _needs("pd_floored", "ead_final"),  # both regimes; binds pd_floored by name
     "0020": _both(_ON_BS_GROSS, _OFF_BS_GROSS),
     "0030": _both(_ON_BS_GROSS, _OFF_BS_GROSS, _needs("cp_apply_fi_scalar")),
     "0035": _needs("on_bs_netting_amount"),  # Basel 3.1 only

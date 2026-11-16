@@ -473,9 +473,14 @@ class TestCRRC08ColumnDefinitions:
 class TestB31C08ColumnDefinitions:
     """Tests for Basel 3.1 OF 08.01 column definitions."""
 
-    def test_b31_c08_no_pd_column(self) -> None:
-        refs = {col.ref for col in B31_C08_COLUMNS}
-        assert "0010" not in refs
+    def test_b31_c08_has_pd_column_first(self) -> None:
+        """OF 08.01 keeps column 0010 (PD): PS1/26 Annex I and the PRA001
+        taxonomy (306 cells on ``OF08.01.01.01``). This test used to assert the
+        column absent, on the false premise that PD moved to OF 08.02 only;
+        ``tests/contracts/test_of08_published_sheets.py`` holds the whole axis
+        to the taxonomy."""
+        refs = [col.ref for col in B31_C08_COLUMNS]
+        assert refs[0] == "0010"
 
     def test_b31_c08_no_double_default(self) -> None:
         refs = {col.ref for col in B31_C08_COLUMNS}

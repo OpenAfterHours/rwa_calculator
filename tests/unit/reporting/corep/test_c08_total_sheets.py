@@ -209,7 +209,7 @@ def test_the_lgd_of_a_total_is_an_exposure_weighted_average_not_a_sum(
 def test_the_pd_of_a_grade_total_is_an_exposure_weighted_average(
     bundle: COREPTemplateBundle, total_code: str, codes: tuple[str, ...]
 ) -> None:
-    """OF 08.02 column 0010 (OF 08.01 has no PD column in this layout). Every
+    """OF 08.02 column 0010 (OF 08.01's is ``test_c08_01_pd_column.py``). Every
     leg of the book sits in the one "0.75% - 2.50%" band."""
     # Arrange
     legs = _graded(_covered(codes))

@@ -211,7 +211,7 @@ Cell semantics (recorded decisions, this slice):
   the after-all-CRM total 0104 (= 0090 + 0101 + 0102 on the REPORTED signs,
   ``_c08_after_all_crm``; another post-execute pass because the executor refuses a
   formula that references a formula and all three inputs are ``Formula`` cells),
-  EAD-weighted PD/LGD, maturity
+  EAD-weighted PD over legs carrying one (``c08_sheets.pd_average``)/LGD, maturity
   in DAYS (x365 — ``irb_maturity_m`` is years despite the suffix), LFSE
   sub-splits gated on ``cp_apply_fi_scalar`` presence, defaulted sub-splits
   via the retired detection ladder, CRR supporting-factor deltas (the
@@ -389,6 +389,8 @@ from rwa_calc.reporting.corep.c08_sheets import (
     inflow_sheet_key,
     irb_population,
     non_slotting,
+    pd_average,
+    pd_weight_exprs,
     sheet_keys,
     with_total_sheets,
 )
@@ -593,8 +595,8 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
             .alias("c08_bs")
         )
 
-    # The col 0256 disjointness flag, on its own source-column gate (see c07.py).
-    exprs.extend(sf_infra_flag_exprs(cols))
+    # The col 0256 disjointness flag (see c07.py) and the col 0010 PD weight (c08_sheets).
+    exprs.extend([*sf_infra_flag_exprs(cols), *pd_weight_exprs(cols)])
 
     # Supporting-factor RWEA delta (CRR cols 0256/0257).
     if "rwa_pre_factor" in cols:
@@ -754,9 +756,7 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
     gp_col = "c08_prot_guaranteed" if "guaranteed_portion" in cols else "guaranteed_portion"
     prot_cols = tuple(f"c08_prot_{col}" if col in cols else col for col in IRB_OFCP_CARRIERS)
     cells: dict[str, CellSpec] = {
-        "0010": CellSpec(
-            WeightedAvg("pd_floored", weight=ead_col), predicate=member, empty_cell="null"
-        ),
+        "0010": CellSpec(pd_average(cols, ead_col), predicate=member, empty_cell="null"),
         "0020": CellSpec(
             SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")), predicate=member
         ),

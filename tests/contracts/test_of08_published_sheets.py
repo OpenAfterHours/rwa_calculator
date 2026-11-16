@@ -59,6 +59,7 @@ from tests.unit.reporting.corep._c02_frames import (
 
 from rwa_calc.reporting.corep import c02_rows, irb_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import get_c08_columns
 from rwa_calc.reporting.filing.canonical import (
     FILING_MODULE,
     FILING_TAXONOMY,
@@ -186,6 +187,29 @@ def test_the_declared_sheets_are_exactly_the_published_sheet_codes(
     # Assert
     assert sorted(published_codes - declared) == [], f"{table}: published sheets with no key"
     assert sorted(declared - published_codes) == [], f"{table}: keys with no published sheet"
+
+
+def test_of0801_column_axis_is_the_published_one(pack: TaxonomyPack) -> None:
+    """OF 08.01's columns are the columns of its two published tables, in both
+    directions. ``.01`` and ``.02`` partition one template's columns (``.02``
+    holds 0100 / 0120 / 0130); we generate them as one frame.
+
+    Column 0010 (PD assigned to the obligor grade or pool) was left out of our
+    layout on the premise that Basel 3.1 moved PD to OF 08.02 only - a premise
+    the unit test that pinned it shared. The Annex I template and the taxonomy
+    both carry the column, on every sheet, and ``boe_b0356`` / ``boe_b0410``
+    read it."""
+    # Arrange
+    published = set(pack.tables["OF08.01.01.01"].column_codes) | set(
+        pack.tables["OF08.01.01.02"].column_codes
+    )
+
+    # Act
+    ours = {col.ref for col in get_c08_columns(FRAMEWORK)}
+
+    # Assert
+    assert sorted(published - ours) == [], "published OF 08.01 columns we do not generate"
+    assert sorted(ours - published) == [], "generated OF 08.01 columns with no published cell"
 
 
 def test_each_declared_sheet_carries_the_published_label(published: dict[str, Sheet]) -> None:

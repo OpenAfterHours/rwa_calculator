@@ -124,9 +124,9 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 | **Added** | 0251–0254 | Post-model adjustment columns (pre-adj RWEA, post-model adj, mortgage RW floor, unrecognised exposure adj) |
 | **Added** | 0275–0276 | Output floor columns (SA-equivalent exposure value and RWEA) |
 | **Added** | 0281–0282 | Post-model adjustments to expected loss |
-| **Removed** | 0010 | PD column — moved to OF 08.02 only |
 | **Removed** | 0220 | Double default treatment (removed in Basel 3.1) |
 | **Removed** | 0255–0257 | Supporting factor columns (SME and infrastructure factors removed) |
+| **Unchanged** | 0010 | PD column — kept on every sheet (PS1/26 Annex I, PRA001 taxonomy); no cell on rows 0080 (slotting) and 0170 (free deliveries). Both regimes report the exposure-weighted post-input-floor PD of the legs that carry one |
 
 ### Row Changes
 
@@ -146,7 +146,7 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 
 | Change | Description |
 |--------|-------------|
-| **PD column** | Retained in OF 08.02 (removed from OF 08.01 totals only) |
+| **PD column** | Column 0010, as in OF 08.01 and as under CRR |
 | **CCF breakdown** | New columns 0001, 0101–0105 for off-BS items by CCF bucket |
 | **PD ordering** | Basel 3.1 uses PDs without input floor adjustments |
 | **Slotting excluded** | Slotting exposures reported separately in OF 08.06 |

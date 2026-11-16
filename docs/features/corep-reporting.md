@@ -985,7 +985,7 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
 
     | Ref | Column | Group | vs CRR |
     |-----|--------|-------|--------|
-    | ~~0010~~ | ~~PD assigned to obligor grade or pool~~ | | **Removed** (PD only in OF 08.02) |
+    | 0010 | PD assigned to obligor grade or pool (%) | Internal Rating | No cell on rows 0080 / 0170 |
     | 0020 | Original exposure pre conversion factors | Exposure | |
     | 0030 | &emsp;Of which: large financial sector entities | Exposure | |
     | ==0035== | ==(-) Adjustment due to on-balance sheet netting== | ==Exposure== | ==**New**== |
@@ -1056,9 +1056,30 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     | **Added** | 0251-0254 | Post-model adjustment columns (pre-adj RWEA, post-model adj, mortgage RW floor, unrecognised exposure adj) |
     | **Added** | 0275-0276 | Output floor columns (SA-equivalent exposure value and RWEA) |
     | **Added** | 0281-0282 | Post-model adjustments to expected loss |
-    | **Removed** | 0010 | PD column — moved to OF 08.02 only |
     | **Removed** | 0220 | Double default treatment (removed in Basel 3.1) |
     | **Removed** | 0255-0257 | Supporting factor columns (SME and infrastructure factors removed) |
+    | **Kept** | 0010 | PD column — Annex I and the PRA001 taxonomy keep it on every sheet; greyed (no cell) on rows 0080 and 0170 |
+
+!!! note "Column 0010 — what the PD is, both regimes"
+    Column 0010 reports the **exposure-weighted average of the post-input-floor PD**
+    (`pd_floored`, a decimal fraction) over the row's legs that **carry a PD**, weighted
+    by the exposure value — the CRR Annex II C 08.01 definition ("the exposure weighted
+    average of the PDs assigned to the obligor grades or pools included in the
+    aggregation ... The exposure value (column 0110) shall be used"). PS1/26 Annex II
+    gives OF 08.01 column 0010 no instruction of its own (its column table starts at
+    0020) but defines OF 08.02 column 0010 and OF 09.02 column 0080 by reference to it.
+
+    - **Slotting legs are left out, not averaged in as zero.** A slotting exposure has
+      no PD, so a row made of slotting exposure alone — row 0080, and rows 0010 / 0020 /
+      0030 of a specialised-lending sheet with no F-IRB legs — reports **no** PD. Under
+      CRR such a row used to report 0.0. The Total sheets apply the same rule.
+    - **Post-floor**, because that is what OF 08.02 column 0010 and OF 09.02 column 0080
+      report and what `boe_b0356` ("PD floor for these exposures is 0.05%") checks.
+    - **Known limits.** `boe_b0356` (Warning) still fails on rows 0010 / 0020 / 0030 of
+      sheet 0010 when they hold slotting exposure only: the rule asks for a PD the
+      exposure does not have (a limit of the published rule). A defaulted obligor is
+      averaged at the PD the ledger carries, not 100% (plan P1.381) — the same figure
+      OF 08.02, 08.03 and 09.02 report.
 
 ### Row Structure
 
@@ -1205,7 +1226,7 @@ an obligor grade identifier column.
 === "Basel 3.1 (OF 08.02)"
 
     - **Column 0005**: Obligor grade row identifier
-    - **Columns 0020-0310**: Identical to OF 08.01 (PD column 0010 is retained here, unlike OF 08.01)
+    - **Columns 0010-0310**: Identical to OF 08.01 (including PD in column 0010)
     - ==**New columns 0001, 0101-0105**==: Off-balance sheet CCF breakdown columns per obligor grade
     - PD ordering uses PDs **without** input floor adjustments
     - Excludes slotting approach exposures (slotting has its own template OF 08.03)
@@ -1214,7 +1235,7 @@ an obligor grade identifier column.
 
     | Change | Description |
     |--------|-------------|
-    | **PD column** | Retained in OF 08.02 (removed from OF 08.01 totals only) |
+    | **PD column** | Column 0010 in both OF 08.01 and OF 08.02, as under CRR |
     | **CCF breakdown** | New columns 0001, 0101-0105 for off-BS items by CCF bucket |
     | **PD ordering** | Basel 3.1 uses PDs without input floor adjustments |
     | **Slotting excluded** | Slotting exposures reported separately (new OF 08.03) |
@@ -2143,7 +2164,7 @@ and once per material country.
 | **SA columns** | 24 columns (0010-0240) | 22 columns — adds 0035, 0171, 0235; removes 0215-0217 |
 | **SA risk weight rows** | 15 (0%-1250% + Other) | 29 — adds 15 new granular weights, removes 370% |
 | **SA "of which" rows** | 8 | 26+ — adds specialised lending and detailed RE breakdowns |
-| **IRB columns** | 33 columns (0010-0310) | 40+ columns — adds netting, slotting CRM, defaults, post-model adj, output floor; removes PD (totals), double default, supporting factors |
+| **IRB columns** | 33 columns (0010-0310) | 40+ columns — adds netting, slotting CRM, defaults, post-model adj, output floor; removes double default, supporting factors |
 | **IRB approach filter** | Binary (Foundation / Advanced) | Three-way (FIRB / AIRB / Slotting) |
 | **Supporting factors** | SME (Art 501) + Infrastructure (Art 501a) | **Removed** |
 | **Double default** | Column 0220 | **Removed** |

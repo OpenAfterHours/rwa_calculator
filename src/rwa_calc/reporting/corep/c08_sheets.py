@@ -76,6 +76,25 @@ kinds of cell are not a sum:
 - A RATE DERIVED FROM OTHER CELLS (OF 08.05 column 0040, the observed default
   rate) is re-derived from the Total's own counts.
 
+COLUMN 0010 ON A CLASS SHEET FOLLOWS THE SAME RULE (recorded fix 2026-11-16).
+The PD a row reports is the exposure-weighted average of the post-input-floor
+PD (``pd_floored``) over the row's legs that CARRY a PD (``pd_average``, weighted
+by ``PD_WEIGHT``); a slotting leg is left out, not averaged in as a zero, so a
+row of slotting exposure alone reports no PD. (``pd_floored`` is sealed by the
+formula-IRB path only, ``engine/irb/formulas.py``, as the larger of the input PD
+and the floor, so every F-IRB / A-IRB leg carries one and no slotting leg does.) CRR Annex II C 08.01 column 0010
+defines the aggregate ("the exposure weighted average of the PDs assigned to
+the obligor grades or pools included in the aggregation ... The exposure value
+(column 0110) shall be used"); PS1/26 Annex II gives OF 08.01 column 0010 no
+instruction of its own (its column table starts at 0020) and defines OF 08.02's
+and OF 09.02's PD columns by reference to it. Post-floor because that is what
+OF 08.02 column 0010 and OF 09.02 column 0080 report and what ``boe_b0356``
+("PD floor for these exposures is 0.05%") checks. The PS1/26 Annex I template
+shades column 0010 on rows 0080 (slotting) and 0170 (free deliveries), and the
+PRA001 taxonomy has no cell there: a PD filed on row 0080 is refused. One
+definition for both regimes — under CRR a slotting-only row used to report a
+PD of 0.0, which is not a PD.
+
 The obligor count (0300) is summed on both Totals: an obligor with exposures on
 two sheets is counted on each, as the sheets count it. ``boe_b0748`` lists it;
 ``boe_b0749`` does not, and the FIRB-and-slotting Total is summed the same way
@@ -97,10 +116,11 @@ A Total sheet has no execution plan: it is built from its sheets, and
 ``lineage.summed_sheet_reason`` tells a reader so.
 
 References:
-- PRA PS1/26 Annex II §3.3.1-§3.3.5, §3.3.7 (OF 08.01 / 08.02 / 08.03 / 08.05)
+- PRA PS1/26 Annex I OF 08.01 (column 0010); Annex II §3.3.1-§3.3.5, §3.3.7
+  (OF 08.01 / 08.02 / 08.03 / 08.05)
 - Reg (EU) 2021/451 Annex II §3.3 (C 08.01-08.05, the CRR sheets)
-- Bank of England Banking Taxonomy v4.1.1: ``boe_b0206``, ``boe_b0748``,
-  ``boe_b0749``, ``boe_b0749_1``, ``boe_b1041``
+- Bank of England Banking Taxonomy v4.1.1: ``boe_b0206``, ``boe_b0356``,
+  ``boe_b0410``, ``boe_b0748``, ``boe_b0749``, ``boe_b0749_1``, ``boe_b1041``
 """
 
 from __future__ import annotations
@@ -160,6 +180,15 @@ REPORTED_ROWS: Final[dict[str, frozenset[str]]] = {
     irb_sheets.SLOTTING_SHEET_KEY: frozenset({"0080"}),
     irb_sheets.TOTAL_FIRB_SLOTTING_KEY: frozenset({"0080"}),
 }
+
+#: The weight of the column-0010 PD average: a leg's exposure value where it
+#: carries a PD, else null, so a leg with no PD weighs nothing (module docstring).
+PD_WEIGHT: Final = "c08_pd_weight"
+
+#: The PD the column reports (post-input-floor) and the exposure value it is
+#: weighted by — the source of ``PD_WEIGHT``.
+_PD: Final = "pd_floored"
+_EXPOSURE_VALUE: Final = "ead_final"
 
 _TOTAL_KEYS: Final[tuple[str, ...]] = tuple(
     key for _code, key, _label, _tab in irb_sheets.B31_TOTAL_SHEETS
@@ -335,6 +364,37 @@ def with_total_sheets(
                 zero_rows=policy.reported_rows.get(total_key, frozenset()),
             )
     return {**totals, **sheets}
+
+
+# =============================================================================
+# The PD column (0010)
+# =============================================================================
+
+
+def pd_weight_exprs(cols: set[str]) -> list[pl.Expr]:
+    """The derived ``PD_WEIGHT`` column — a leg's exposure value where it carries
+    a PD, else null — on a frame that seals both; nothing otherwise.
+
+    ``cols`` is the frame's columns before the derived ones are added.
+    """
+    if _PD not in cols or _EXPOSURE_VALUE not in cols:
+        return []
+    return [pl.when(pl.col(_PD).is_not_null()).then(pl.col(_EXPOSURE_VALUE)).alias(PD_WEIGHT)]
+
+
+def pd_average(cols: set[str], ead_col: str) -> WeightedAvg:
+    """The column-0010 binding: the exposure-weighted post-input-floor PD over the
+    legs that carry a PD (module docstring; CRR Annex II C 08.01 column 0010,
+    PS1/26 Annex I OF 08.01 column 0010).
+
+    Weighted by ``PD_WEIGHT`` wherever ``pd_weight_exprs`` derives it from the
+    exposure value the caller weights by (``ead_col``). Otherwise the plain
+    ``ead_col`` weight: on a frame with no ``pd_floored`` the cell is empty either
+    way, and a caller weighting by another column keeps its own weight.
+    """
+    if ead_col != _EXPOSURE_VALUE or not pd_weight_exprs(cols):
+        return WeightedAvg(_PD, weight=ead_col)
+    return WeightedAvg(_PD, weight=PD_WEIGHT)
 
 
 # =============================================================================

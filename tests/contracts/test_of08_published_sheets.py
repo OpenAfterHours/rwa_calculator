@@ -337,8 +337,14 @@ def test_each_sheet_takes_the_size_and_property_its_dimension_members_name(
 def test_each_sheet_total_is_one_data_point_with_its_of02_row(
     pack: TaxonomyPack, of02_column: str, of08_column: str
 ) -> None:
+    """``IrbSheet.total_is_the_slot`` is the generator's word for "this sheet's
+    total IS the OF 02.00 row's data point" - OF 02.00 leaves the row empty when
+    the sheet has no legs on that word. Held to the taxonomy here: True exactly
+    on the sheets tied below, False exactly on the slotting sheet, which
+    ``test_the_sheets_that_carry_slotting_are_no_of02_row`` shows is no row."""
     # Arrange
-    tied = [sheet for sheet in irb_sheets.B31_CLASS_SHEETS if sheet.code != SLOTTING_SHEET_CODE]
+    tied = [sheet for sheet in irb_sheets.B31_CLASS_SHEETS if sheet.total_is_the_slot]
+    untied = {sheet.code for sheet in irb_sheets.B31_CLASS_SHEETS if not sheet.total_is_the_slot}
 
     # Act
     apart = [
@@ -349,6 +355,7 @@ def test_each_sheet_total_is_one_data_point_with_its_of02_row(
     ]
 
     # Assert
+    assert untied == {SLOTTING_SHEET_CODE}
     assert len(tied) == 14
     assert apart == []
 

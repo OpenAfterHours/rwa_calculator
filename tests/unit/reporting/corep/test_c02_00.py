@@ -1075,19 +1075,19 @@ class TestOF0200IRBSubRowSplits:
 
     def test_firb_corp_sub_rows_sum_to_total(self) -> None:
         """Was: 0290+0295+0296+0297 == row 0260 "F-IRB corporates". OF 02.00 has no
-        corporate subtotal; the rows foot to the F-IRB total, row 0250, with 0271."""
+        corporate subtotal; they foot to row 0250. 0271 has no legs here: empty."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         assert bundle.c_02_00 is not None
         df = bundle.c_02_00
         r0250 = float(df.filter(pl.col("row_ref") == "0250")["0010"][0])
-        r0271 = float(df.filter(pl.col("row_ref") == "0271")["0010"][0])
+        assert df.filter(pl.col("row_ref") == "0271")["0010"][0] is None  # OF 08 sheet 0006
         r0290 = float(df.filter(pl.col("row_ref") == "0290")["0010"][0])
         r0295 = float(df.filter(pl.col("row_ref") == "0295")["0010"][0])
         r0296 = float(df.filter(pl.col("row_ref") == "0296")["0010"][0])
         r0297 = float(df.filter(pl.col("row_ref") == "0297")["0010"][0])
         assert r0250 == pytest.approx(800.0 + 300.0 + 1600.0)
-        assert r0250 == pytest.approx(r0271 + r0290 + r0295 + r0296 + r0297)
+        assert r0250 == pytest.approx(r0290 + r0295 + r0296 + r0297)
 
     def test_airb_sme_row_0355(self) -> None:
         """Row 0355: A-IRB other general corporates SME."""
@@ -1204,8 +1204,8 @@ class TestOF0200IRBSubRowSplits:
         assert r0295 == pytest.approx(800.0)
         r0297 = float(df.filter(pl.col("row_ref") == "0297")["0010"][0])
         assert r0297 == pytest.approx(1900.0)
-        r0296 = float(df.filter(pl.col("row_ref") == "0296")["0010"][0])
-        assert r0296 == pytest.approx(0.0)
+        r0296 = df.filter(pl.col("row_ref") == "0296")["0010"][0]
+        assert r0296 is None  # no SME leg, so no OF 08.01 sheet 0024: not reported
 
 
 def _c02_crr_equity_irb_results() -> pl.LazyFrame:

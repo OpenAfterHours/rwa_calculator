@@ -212,6 +212,23 @@ and the EBA validation rules with the PRA's rendering of the template for C 02.0
     on such an (approach, class) pair is neither dropped nor reported in a neighbouring row:
     its RWEA stays in the approach total and the shortfall of the detail rows is logged.
 
+    **An IRB class row with no exposures is left empty, not zero.** Fourteen of the IRB
+    class rows (0271, 0295–0297, 0350, 0355, 0356, 0382–0385, 0390, 0400, 0410) are, in
+    the taxonomy, the same data point as the total of an
+    [OF 08.01 class sheet](#c-0801-of-0801-cr-irb-totals) — row 0010, column 0260 for
+    column 0010 and column 0276 for column 0020. OF 08 reports no sheet for a class the
+    firm has no exposures in, so a zero in the OF 02.00 row would file a figure on a sheet
+    the return otherwise leaves out, and the Bank's per-sheet rules would run on it
+    (`boe_b1055` compared the OF 09.02 country total with that zero and failed). The Bank
+    of England XBRL Filing Manual v1.0.1, rule 2.19, treats a missing numeric fact of a
+    reported template as zero, allows inapplicable facts to be omitted and asks that
+    "uninteresting zeros" not be reported. The test is whether the class has exposures,
+    not its amount: a class whose exposures carry no RWEA still reports 0.0. Row 0290
+    (F-IRB specialised lending), the approach totals (0050, 0060, 0240, 0250, 0310, 0411),
+    the slotting-type rows, the Art. 112 class rows and every CRR C 02.00 row are still
+    reported as zero when empty — row 0290 because its sheet's total also counts slotting,
+    so it is no OF 08.01 data point.
+
 !!! info "The output-floor rows need the run's floor summary"
     `x` is read from the `OutputFloorSummary` or, without one, from the ledger's sealed
     `output_floor_pct`. **OF-ADJ is a portfolio figure the ledger does not carry**, so
@@ -855,8 +872,9 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     leg with one definition (`rwa_calc.reporting.corep.irb_sheets`): by approach, by exposure
     class, by SME (the classifier's sub-class, or `is_sme`), by financial-or-large corporate
     (the classifier's sub-class) and, for retail real estate, by property type
-    (`commercial` / `cre` is commercial, anything else residential). Two choices carried over
-    from OF 02.00:
+    (`commercial` / `cre` is commercial, anything else residential). And OF 02.00 reports one
+    of those rows only when its sheet is reported here — a class with no exposures has
+    neither. Two choices carried over from OF 02.00:
 
     - An A-IRB financial or large corporate is reported on sheet 0011 (other general
       corporates, non-SME, AIRB). PS1/26 Art. 147A permits no A-IRB for that sub-class, and

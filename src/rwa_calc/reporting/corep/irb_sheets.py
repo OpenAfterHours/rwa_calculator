@@ -151,7 +151,10 @@ class IrbSheet:
         slot: The OF 02.00 figure that is the legs of ``limbs[0].approach`` on
             this sheet. Its Basel 3.1 row is one data point with the sheet's
             total — except on the slotting sheet, whose total also counts the
-            slotting legs OF 02.00 reports in rows of their own.
+            slotting legs OF 02.00 reports in rows of their own
+            (``total_is_the_slot``). Where it is that data point, OF 02.00
+            reports the row only when the sheet has legs, as OF 08 reports the
+            sheet only then.
     """
 
     code: str
@@ -166,6 +169,18 @@ class IrbSheet:
     def approach(self) -> str:
         """The approach of the sheet as published (F-IRB or A-IRB)."""
         return self.limbs[0].approach
+
+    @property
+    def total_is_the_slot(self) -> bool:
+        """Whether the sheet's total IS the OF 02.00 row of ``slot``.
+
+        True when every limb is the sheet's own approach, so the legs the sheet
+        totals are exactly the legs the row counts — the taxonomy then gives the
+        two cells one data point. False on the slotting sheet, whose total also
+        counts slotting. ``tests/contracts/test_of08_published_sheets.py`` holds
+        this to the taxonomy pack.
+        """
+        return all(limb.approach == self.approach for limb in self.limbs)
 
 
 #: The fifteen class-and-approach sheets, in published code order. Codes and

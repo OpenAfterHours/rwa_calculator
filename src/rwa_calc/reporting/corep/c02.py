@@ -109,6 +109,8 @@ Cell semantics (recorded decisions):
   are grouped by the very sheet key OF 08 keys its sheets by
   (``corep/irb_sheets.py``): a leg cannot be counted in one row and reported on
   another sheet. The leg classification this module used to hold lives there.
+  It also means a row is reported exactly when its sheet is: OF 08 emits no
+  sheet for a class with no legs, so neither does the row (the last bullet).
 - A-IRB folds a financial/large corporate into "other general corporates
   non-SME" while F-IRB reports it separately — asymmetric, preserved: Art. 147A
   permits no A-IRB for that sub-class, so the engine should emit none.
@@ -128,7 +130,23 @@ Cell semantics (recorded decisions):
   OF 08 reports the same legs on a sheet outside its published axis and in the
   same approach's Total (``corep/c08_sheets.py``).
 - Rows this calculator computes zero-fill; the rows it does not (the other risk
-  types, rows 0450 / 0460 / 0470) stay empty.
+  types, rows 0450 / 0460 / 0470) stay empty. ONE EXCEPTION, Basel 3.1 only: an
+  IRB class row that IS its OF 08.01 sheet's total
+  (``IrbSheet.total_is_the_slot`` — fourteen rows, every class sheet but the
+  slotting one) is EMPTY when the sheet has no legs under the row's approach. A
+  zero there would be a fact on a sheet OF 08 does not report, and the gateway
+  evaluates every per-sheet rule on it: ``boe_b1055`` compared the OF 09.02
+  country total with that phantom zero and failed (recorded fix 2026-11-16,
+  P2.68). The Bank of England XBRL Filing Manual v1.0.1, rule 2.19, allows it —
+  a missing numeric fact of a reported template "is treated as equivalent to
+  zero", "inapplicable facts MAY be omitted", and "uninteresting zeros" SHOULD
+  NOT be reported. The test is the LEGS, never the amount: a class whose legs
+  weigh nothing still reports 0.0. Still zero-filled: row 0290 (sheet 0010's
+  total also counts slotting, so it is no OF 08.01 data point, and
+  ``boe_b0618`` / ``boe_b2290`` read it), the approach totals
+  (``tieouts.credit_risk_rollup_c02`` reads rows 0050 and 0240 and skips
+  silently on an empty one), the slotting-type and SA class rows, and every CRR
+  row.
 
 References:
 - CRR Art. 92 (own funds requirements)
@@ -659,11 +677,16 @@ def _irb_class_amounts(ledger: _Ledger, *, is_b31: bool) -> dict[rows.Slot, _Amo
         # One definition with OF 08 (module docstring): each row is the legs of
         # its sheet under the sheet's own approach — which, on the sheet F-IRB
         # specialised lending shares with slotting, leaves the slotting legs to
-        # the slotting rows.
-        return {
-            sheet.slot: ledger.irb_sheet.get((sheet.approach, sheet.key), _NOTHING)
-            for sheet in irb_sheets.B31_CLASS_SHEETS
-        }
+        # the slotting rows. A row that IS its sheet's total is left out when the
+        # sheet has no legs, as OF 08 leaves the sheet out: keyed on the legs,
+        # never on the amount, so a class weighing nothing still reports its 0.
+        amounts: dict[rows.Slot, _Amount] = {}
+        for sheet in irb_sheets.B31_CLASS_SHEETS:
+            amount = ledger.irb_sheet.get((sheet.approach, sheet.key))
+            if amount is None and sheet.total_is_the_slot:
+                continue
+            amounts[sheet.slot] = _NOTHING if amount is None else amount
+        return amounts
 
     def of_class(approach: str, exposure_class: str) -> _Amount:
         return ledger.irb_class.get((approach, exposure_class), _NOTHING)

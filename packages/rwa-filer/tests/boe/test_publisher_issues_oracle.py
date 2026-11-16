@@ -21,6 +21,9 @@ should not, or never runs it). The claim is only as good as its evidence, so:
   closed (``fixed_in``), not carried silently;
 - the example is adequate (``.claude/LESSONS.md`` C11): beside the break, some
   rule of the issue holds, so the return is not simply wrong everywhere;
+- every rule the write-up calls a control ("holds on the example") is measured
+  on the example and holds there in Arelle's counts - an issue without an
+  example has no control rule;
 - every unsatisfied evaluation of a subject rule is inside the issue's
   footprint, so the footprint does not leave the issue's own example unexplained;
 - the oracle holds one entry per example, no more, no fewer;
@@ -91,6 +94,7 @@ def _examples() -> list[tuple[str, str]]:
 
 
 EXAMPLES = _examples()
+ISSUES = [(version, issue.id) for version in RELEASES for issue in load_issues(version).issues]
 
 
 @pytest.fixture(scope="module")
@@ -281,6 +285,33 @@ def test_the_example_is_adequate_some_rule_of_the_issue_holds_on_it(
     assert not controls & set(arelle) or controls & set(holding), (
         f"{issue_id}: every control rule measured on the example fails"
     )
+
+
+@pytest.mark.parametrize(("version", "issue_id"), ISSUES)
+def test_every_control_rule_is_measured_on_the_example_and_holds_there(
+    version: str, issue_id: str, oracles: dict[str, Any]
+) -> None:
+    """The write-up says a control rule "holds on the example": Arelle must have said so.
+
+    So an issue with a control rule has an example, the rule is one the example
+    is measured on, and Arelle counts it satisfied and never unsatisfied there.
+    A rule the example cannot speak to (not evaluated, not measured, or no
+    example at all) is "related", not a control.
+    """
+    # Arrange
+    issue = _issue(version, issue_id)
+    controls = [entry.rule_id for entry in issue.rules if entry.role == ROLE_CONTROL]
+    arelle = _arelle(oracles, version, issue_id) if issue.example is not None else {}
+
+    # Act
+    unshown = [
+        rule
+        for rule in controls
+        if arelle.get(rule, [0, 0])[0] < 1 or arelle.get(rule, [0, 0])[1] > 0
+    ]
+
+    # Assert
+    assert unshown == [], f"{issue_id}: Arelle does not show these controls holding"
 
 
 @pytest.mark.parametrize(("version", "issue_id"), EXAMPLES)

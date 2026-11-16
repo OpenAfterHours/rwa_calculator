@@ -530,8 +530,10 @@ cells of the module's pack, and each status agrees with its fields. Each
 issue's worked example was run once through Arelle against the Bank's taxonomy
 package, and CI holds the engine to Arelle's counts and the issue to its claim -
 a defect's rules at issue unsatisfied on it, a clarification's the outcome it
-states - so a release in which the Bank fixes a rule fails until the issue is
-closed. In the repository,
+states, and every rule the write-up calls a control holding on it - so a release
+in which the Bank fixes a rule fails until the issue is closed. No issue names a
+data point by rwa-filer's own pack index, which the Bank's DPM does not know. In
+the repository,
 `tests/contracts/test_publisher_issue_quotes.py` checks every quote is on its
 page of the PDF. The write-up is generated as
 [`publisher-issues.md`](publisher-issues.md) by

@@ -19,7 +19,9 @@ book and the taxonomy pack, which a hand edit cannot drift with):
   the Bank's own log, fixed in a later release);
 - every issue that labels a result has a subject rule and a minimal example;
 - every quote names a document the register lists, with a page where the
-  document is a PDF.
+  document is a PDF;
+- no issue names a data point by rwa-filer's own pack index, which the Bank's
+  DPM does not know.
 
 The quotes themselves are checked against the PDFs by the root
 ``tests/contracts/test_publisher_issue_quotes.py`` (the PDFs are not in the
@@ -32,6 +34,7 @@ References:
 from __future__ import annotations
 
 import json
+import re
 from importlib import resources
 
 import jsonschema
@@ -58,6 +61,11 @@ from rwa_filer.schemas import PUBLISHER_ISSUES_SCHEMA, load_schema
 from rwa_filer.taxonomy.pack import load_packaged
 
 RELEASES = shipped_releases()
+
+#: rwa-filer's own index of a data point in its compiled pack (``cells.datapoint``,
+#: a position 0..N): written as "data point N", or as a bare number of five or
+#: more digits (an amount in the text carries thousands separators).
+_PACK_INDEX = re.compile(r"\bdata ?points? \d+\b|(?<![\d,.])\b\d{5,}\b(?![,.]\d)")
 
 
 def _payload(version: str) -> dict[str, object]:
@@ -246,6 +254,40 @@ def test_every_appendix_row_has_a_cell_per_column(version: str) -> None:
 
     # Assert
     assert ragged == []
+
+
+@pytest.mark.parametrize("version", RELEASES)
+def test_no_issue_names_a_data_point_by_the_packs_own_index(version: str) -> None:
+    """A reader at the Bank looks a data point up in the DPM; our pack's index is not in it.
+
+    The write-up names a data point by what makes it one - its metric and
+    dimension members - or by the cells that share it, never by its position in
+    rwa-filer's compiled pack, which the Bank's DPM does not know.
+    """
+    # Arrange
+    register = load_issues(version)
+
+    # Act
+    found = [
+        f"{issue.id}: {match.group(0)!r}"
+        for issue in register.issues
+        for text in (
+            issue.title,
+            issue.requirement,
+            issue.why_correct_return_fails,
+            issue.alternatives_considered,
+            issue.proposed_fix,
+            issue.eba_precedent,
+            issue.reach,
+            issue.meanwhile,
+            issue.example.description if issue.example is not None else "",
+            *(item.locator for item in issue.authority),
+        )
+        for match in _PACK_INDEX.finditer(text)
+    ]
+
+    # Assert
+    assert found == []
 
 
 @pytest.mark.parametrize("version", RELEASES)

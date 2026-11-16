@@ -26,7 +26,7 @@ import pytest
 from compare_builders import corporate_csv
 from pack_builders import VALID_LEI
 from rwa_filer.boe.issues import load_issues
-from rwa_filer.boe.issues_document import render_document
+from rwa_filer.boe.issues_document import CAUSE_TEXT, EFFECT_TEXT, render_document
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 
 if TYPE_CHECKING:
@@ -111,6 +111,15 @@ def test_a_rule_label_markdown_would_read_as_a_link_is_rendered_as_code() -> Non
     line = next(item for item in text.splitlines() if item.startswith("boe_b0903, as published"))
     assert "(label: `[boe_b0903];[matches(" in line
     assert line.endswith("`):")
+
+
+def test_no_cause_is_worded_as_an_effect() -> None:
+    """An issue's status line must not read "Effect: X. Cause: X." - the cause says why."""
+    # Act
+    shared = set(CAUSE_TEXT.values()) & set(EFFECT_TEXT.values())
+
+    # Assert
+    assert shared == set()
 
 
 def test_rulebook_issues_json_round_trips(capsys: pytest.CaptureFixture[str]) -> None:

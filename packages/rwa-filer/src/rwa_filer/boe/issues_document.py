@@ -87,7 +87,7 @@ CAUSE_TEXT: Final = {
     "instructions_gap": "the instructions leave a gap",
     "taxonomy_data_type": "a data type in the taxonomy contradicts the instructions",
     "taxonomy_cells_missing": "the taxonomy lacks cells the instructions ask for",
-    "too_permissive": "it accepts figures the rules do not permit",
+    "too_permissive": "the rule allows more values than the requirement it checks",
     "rounding_allowance": "the rounding allowance the rule gives",
     "restates_deactivated_eba_rule": "it restates an EBA rule the EBA has deactivated",
 }
@@ -103,8 +103,9 @@ KIND_GROUP: Final = {
     KIND_DEFECT: (
         "Defects",
         "A return that follows the reporting instructions and the PRA Rulebook fails the rule, "
-        "the rule accepts figures the rules do not permit, or it never runs. Each issue "
-        "proposes a change.",
+        "the rule accepts figures the rules do not permit, or it never runs; or, where no rule "
+        "result shows it, the published taxonomy or rule workbook is wrong. Each issue proposes "
+        "a change.",
     ),
     KIND_CLARIFICATION: (
         "Clarification questions",
@@ -152,7 +153,12 @@ that are satisfied and unsatisfied: a rule is evaluated once for each set of
 cells it applies to, so "1 unsatisfied" is one failing check. In the text the
 same pair is written [satisfied, unsatisfied]: [0,2] is two failing checks and
 none passing. "What the example shows" is the outcome the issue states, which
-Arelle's counts confirm."""
+Arelle's counts confirm.
+
+Each example is the smallest return that shows its issue, and Arelle evaluated it
+on the rules listed with it, not on the whole rule book: an example need not carry
+every template that other rules tie it to, and its description says where it is a
+complete return."""
 
 
 # =============================================================================

@@ -24,7 +24,8 @@ Key responsibilities:
 - Say each status in words one way, for every surface that labels a rule.
 - Say what KIND of issue each is, which is how the write-up groups it and how a
   label words it: a ``defect`` (a return that follows the instructions cannot
-  pass, or the rule cannot fail, or never runs), a ``clarification`` (the rule
+  pass, or the rule cannot fail, or never runs; or, with no rule effect, the
+  published taxonomy or rule workbook is wrong), a ``clarification`` (the rule
   or the text is unclear or inconsistent, but a compliant return can pass: an
   open question for the Bank, so a break inside its footprint only "may be"
   the issue), or ``acknowledged`` (the Bank's own known-issues log records it).

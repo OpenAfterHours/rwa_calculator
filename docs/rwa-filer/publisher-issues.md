@@ -33,6 +33,11 @@ same pair is written [satisfied, unsatisfied]: [0,2] is two failing checks and
 none passing. "What the example shows" is the outcome the issue states, which
 Arelle's counts confirm.
 
+Each example is the smallest return that shows its issue, and Arelle evaluated it
+on the rules listed with it, not on the whole rule book: an example need not carry
+every template that other rules tie it to, and its description says where it is a
+complete return.
+
 ## Summary
 
 **Defects** (32)
@@ -50,7 +55,7 @@ Arelle's counts confirm.
 | [PI-11](#pi-11) | boe_b0834, boe_b0831 | ERROR | OF 34.07 band totals sum average maturity and RWEA density, contradicting boe_b0759 |
 | [PI-12](#pi-12) | boe_b0873, boe_b0877, boe_b0855, boe_b0859, boe_b0837, boe_b0841 | ERROR | OF 34.07 total tied to OF 08.01 CCR rows on the FIRB-or-slotting sheets, where slotting CCR has no PD band |
 | [PI-14](#pi-14) | - | - | Data types that contradict the instructions |
-| [PI-15](#pi-15) | boe_b0300, boe_b0301, boe_b0302, boe_b1053, boe_b1054, boe_b1055 | ERROR | OF 09.02 purchased-receivables rows 0105 and 0049 cannot be populated |
+| [PI-15](#pi-15) | boe_b0300, boe_b0301, boe_b0302, boe_b1053, boe_b1054, boe_b1055 | ERROR | OF 09.02 purchased-receivables rows 0105 and 0049 cannot carry original exposure, exposure value or RWEA on the all-countries sheet |
 | [PI-16](#pi-16) | boe_b1043, boe_b1042 | ERROR | boe_b1043 ties the slotting FCCM change to off-balance-sheet exposure; boe_b1042 equates exposure value with a pre-conversion-factor amount |
 | [PI-17](#pi-17) | boe_b0555, boe_b1036 | ERROR, WARNING | boe_b0555 / boe_b1036 treat the volatility and maturity adjustment as a subset of Cvam |
 | [PI-18](#pi-18) | boe_b1075 | WARNING | boe_b1075 builds the all-approaches CVA total from the standardised-only BA-CVA cell |
@@ -95,7 +100,7 @@ Appendix B: [Checked and found sound](#appendix-b).
 
 ## Defects
 
-A return that follows the reporting instructions and the PRA Rulebook fails the rule, the rule accepts figures the rules do not permit, or it never runs. Each issue proposes a change.
+A return that follows the reporting instructions and the PRA Rulebook fails the rule, the rule accepts figures the rules do not permit, or it never runs; or, where no rule result shows it, the published taxonomy or rule workbook is wrong. Each issue proposes a change.
 
 <a id="pi-01"></a>
 
@@ -227,7 +232,7 @@ Annex II p.95 fixes both halves: the ROW is the Article 133 weight 'disregarding
 
 #### Worked example
 
-A firm with no IRB permission on 31 December 2026, reference date 31 March 2027, all positions on-balance-sheet, unrated, no CRM or provisions (c0010 = c0040 = c0110 = c0150 = c0200). (1) Listed equity 1,000,000: Rule 4.2(1) 160% -> RWEA 1,600,000, reported in row 0250 of sheet 0016 and of the Total sheet 0001 (Annex II p.95-96), and in memorandum row 0372 of OF07.00.01.04. (2) Higher-risk equity 500,000: Rule 4.3(1) 220% -> RWEA 1,100,000, row 0261 on both sheets and memorandum row 0371. (3) Control legs: subordinated debt 200,000 at 150% (Art. 133(5)) -> RWEA 300,000 in row 0240 of sheets 0016 and 0001; an unrated corporate loan 2,000,000 at 100% -> row 0230 of sheets 0008 and 0001. Rows 0010 and 0070 carry the totals on each sheet (Total: exposure value 3,700,000, RWEA 5,000,000); c0235 (RWEA without an ECAI assessment) = c0220, although Annex II p.87 gives columns 0230/0235 the legal reference Article 112(1)(a-d, f, g, l, o, q), which omits class (p): without it the four rules give the same verdicts, and boe_b0703 (WARNING) fails. 97 facts, no structure findings, Arelle completed with no errors.
+A firm with no IRB permission on 31 December 2026, reference date 31 March 2027, all positions on-balance-sheet, unrated, no CRM or provisions (c0010 = c0040 = c0110 = c0150 = c0200). (1) Listed equity 1,000,000: Rule 4.2(1) 160% -> RWEA 1,600,000, reported in row 0250 of sheet 0016 and of the Total sheet 0001 (Annex II p.95-96), and in memorandum row 0372 of OF07.00.01.04. (2) Higher-risk equity 500,000: Rule 4.3(1) 220% -> RWEA 1,100,000, row 0261 on both sheets and memorandum row 0371. (3) Control legs: subordinated debt 200,000 at 150% (Art. 133(5)) -> RWEA 300,000 in row 0240 of sheets 0016 and 0001; an unrated corporate loan 2,000,000 at 100% -> row 0230 of sheets 0008 and 0001. Rows 0010 and 0070 carry the totals on each sheet (Total: exposure value 3,700,000, RWEA 5,000,000); c0235 (RWEA without an ECAI assessment) = c0220, although Annex II pp.86-87 gives columns 0230/0235 the legal reference Article 112(1)(a-d, f, g, l, o, q), which omits class (p): without it the four rules give the same verdicts, and boe_b0703 (WARNING) fails. 97 facts, no structure findings, Arelle completed with no errors.
 
 Arelle's result on it:
 
@@ -354,11 +359,11 @@ Arelle's result on it:
 
 #### Other ways of reporting considered
 
-None is Annex-II-compliant and passes. (1) Row 0280 'Other risk weights' on both sheets: the four rules do not evaluate, but boe_b0458 fails [0,5] on sheet 0016 and it contradicts p.95 ('reported against the risk weights set out in Article 133 ... disregarding the transitional provisions'). (2) Rows 0250 / 0261 on sheet 0016 but row 0280 on the Total sheet only: avoids boe_b1016 / boe_b1031 (not evaluated; boe_b0713 [3,0]; boe_b0719 [12,0] with c0235 populated on row 0280) because no rule ties Total r0250 / r0261 to the class sheets - though across all 213 OF 07.00 rules the same return still fails boe_b0710 and boe_b0710_2 (ERROR), for the unrelated PI-22; boe_b0491 / boe_b0506 still fail [0,1] as WARNINGs. It is a gateway workaround, not compliant reporting: the Total sheet's risk-weight breakdown stops being the total across classes (para 47) and p.95 applies to the Total sheet too. (3) The row of the actual weight: no 160 / 190 / 220 / 280 / 340% row exists. (4) Reporting RWEA at 2.5x / 4x in rows 0250 / 0261 (numerically the control return B): passes, but p.95 says 'the RWEA shall still reflect the transitional provisions' and it overstates RWEA against Rules 4.2 / 4.3. (5) Leaving out the memorandum rows changes nothing: none of the four rules reads them. (6) No precondition, filing indicator, grey cell or default helps: the rules have no precondition, every cell involved is reportable, and Arelle evaluates them at a 2027 reference date. No opt-out was found for a firm without IRB permission in Rules 4.1-4.10 (Rule 4.9 replaces only 4.5, 4.6 and 4.8).
+None is Annex-II-compliant and passes. (1) Row 0280 'Other risk weights' on both sheets: the four rules do not evaluate, but boe_b0458 fails [0,6] on sheet 0016 (one per reported cell of row 0280; [0,5] if c0235 is left empty) and it contradicts p.95 ('reported against the risk weights set out in Article 133 ... disregarding the transitional provisions'). (2) Rows 0250 / 0261 on sheet 0016 but row 0280 on the Total sheet only: avoids boe_b1016 / boe_b1031 (not evaluated; boe_b0713 [3,0]; boe_b0719 [12,0] with c0235 populated on row 0280) because no rule ties Total r0250 / r0261 to the class sheets - though across all 213 OF 07.00 rules the same return still fails boe_b0710 and boe_b0710_2 (ERROR, as published; both are deactivated at the gateway since 19 October 2026, known-issues log #22), for the unrelated PI-22; boe_b0491 / boe_b0506 still fail [0,1] as WARNINGs. It is a gateway workaround, not compliant reporting: the Total sheet's risk-weight breakdown stops being the total across classes (para 47) and p.95 applies to the Total sheet too. (3) The row of the actual weight: no 160 / 190 / 220 / 280 / 340% row exists. (4) Reporting the RWEA at 2.5x / 4x instead of the transitional amount (the same return with RWEA at 250% / 400% of exposure value in rows 0250 / 0261 and in the totals): passes, but p.95 says 'the RWEA shall still reflect the transitional provisions' and it overstates RWEA against Rules 4.2 / 4.3. (5) Leaving out the memorandum rows changes nothing: none of the four rules reads them. (6) No precondition, filing indicator, grey cell or default helps: the rules have no precondition, every cell involved is reportable, and Arelle evaluates them at a 2027 reference date. No opt-out was found for a firm without IRB permission in Rules 4.1-4.10 (Rule 4.9 replaces only 4.5, 4.6 and 4.8). (7) The hybrid layout - rows 0250 / 0261 at 250% / 400% of exposure value, with only the total rows 0010 and 0070 carrying the transitional RWEA: boe_b1016, boe_b1031, boe_b0491 and boe_b0506 then hold [1,0] each, and only the WARNING boe_b0719 fails [8,4], because the risk-weight rows no longer add up to row 0010. It is the reply the Bank is most likely to make, but it is not compliant: p.95 says of the equity reported against the Article 133 weight that 'the RWEA shall still reflect the transitional provisions', in the same construction as the currency-mismatch sentence on p.94 ('the RWEA shall still reflect the currency mismatch multiplier'), which the '>=' rules accept on the risk-weight row itself; and the Bank's own boe_b0491 / boe_b0506 labels ('RWEA shall only exceed 250% [400%] of exposure value if an Equities Transitional Approach is being applied') expect the row's RWEA to move with the transitional approach.
 
 #### Proposed change
 
-Preferred (keeps the check, uses the memorandum rows the template already collects). boe_b1016, scope reduced to sheet 0001: {t: OF07.00.01.01, r: 0250, c: 0220, z: 0001, dv: 0} i- {t: OF07.00.01.04, r: 0372, c: 0220, z: 0016, dv: 0} i- {t: OF07.00.01.04, r: 0374, c: 0220, z: 0016, dv: 0} i>= ({t: OF07.00.01.01, r: 0250, c: 0200, z: 0001, dv: 0} i- {t: OF07.00.01.04, r: 0372, c: 0200, z: 0016, dv: 0} i- {t: OF07.00.01.04, r: 0374, c: 0200, z: 0016, dv: 0}) i* 2.5. boe_b1031: the same with row 0261, memorandum rows 0371 and 0373, factor 4. boe_b0491 / boe_b0506: remove sheet 0016 from the scope and add a sheet-0016 twin with 'i=' netted off the same way (rows 0372 + 0374, and 0371 + 0373). This fix needs boe_b0710_2 corrected at the same time, because on-balance-sheet equity in rows 0371-0374 fails it today. It also assumes rows 0371-0374 are a subset of sheet 0016 rows 0250 / 0261, which Annex II does not settle: para 55C (p.79) speaks of exposures subject to Rules 4.4 to 4.8 (4.7 and 4.8 are CIU underlyings, which para 63 puts on the CIU sheet), the row instructions (p.98) of Rules 4.4 to 4.6. Simpler alternatives, of which (a) has neither dependency and is the safer first recommendation: (a) for reference dates up to 31 December 2029 lower the bounds to the smallest transitional weight - row 0250 c0220 >= c0200 x 1.6 and row 0261 c0220 >= c0200 x 2.2 - which holds for both transitional approaches in all three years; or (b) deactivate boe_b1016 and boe_b1031, or downgrade them to WARNING as was done for boe_b0491 / boe_b0506, until 1 January 2030. In every case correct the boe_b0491 / boe_b0506 labels: under the Standardised Transitional Approach RWEA is BELOW 250% / 400% of exposure value, not above.
+Preferred (keeps the check, uses the memorandum rows the template already collects). boe_b1016, scope reduced to sheet 0001: {t: OF07.00.01.01, r: 0250, c: 0220, z: 0001, dv: 0} i- {t: OF07.00.01.04, r: 0372, c: 0220, z: 0016, dv: 0} i- {t: OF07.00.01.04, r: 0374, c: 0220, z: 0016, dv: 0} i>= ({t: OF07.00.01.01, r: 0250, c: 0200, z: 0001, dv: 0} i- {t: OF07.00.01.04, r: 0372, c: 0200, z: 0016, dv: 0} i- {t: OF07.00.01.04, r: 0374, c: 0200, z: 0016, dv: 0}) i* 2.5. boe_b1031: the same with row 0261, memorandum rows 0371 and 0373, factor 4. boe_b0491 / boe_b0506: remove sheet 0016 from the scope and add a sheet-0016 twin with 'i=' netted off the same way (rows 0372 + 0374, and 0371 + 0373). This fix needs boe_b0710_2 corrected at the same time, because on-balance-sheet equity in rows 0371-0374 fails it as published (it is deactivated at the gateway since 19 October 2026, and the Bank's announced fix restricts the family to row 0080). It also assumes rows 0371-0374 are a subset of sheet 0016 rows 0250 / 0261, which Annex II does not settle: para 55C (p.79) speaks of exposures subject to Rules 4.4 to 4.8 (4.7 and 4.8 are CIU underlyings, which para 63 puts on the CIU sheet), the row instructions (p.98) of Rules 4.4 to 4.6. Simpler alternatives, of which (a) has neither dependency and is the safer first recommendation: (a) for reference dates up to 31 December 2029 lower the bounds to the smallest transitional weight - row 0250 c0220 >= c0200 x 1.6 and row 0261 c0220 >= c0200 x 2.2 - which holds for both transitional approaches in all three years; or (b) deactivate boe_b1016 and boe_b1031, or downgrade them to WARNING as was done for boe_b0491 / boe_b0506, until 1 January 2030. In every case correct the boe_b0491 / boe_b0506 labels: under the Standardised Transitional Approach RWEA is BELOW 250% / 400% of exposure value, not above.
 
 #### EBA precedent
 
@@ -696,15 +701,15 @@ Arelle's result on it:
 
 #### Proposed change
 
-**Expected loss and provisions compared per type of specialised lending (boe_b0823, boe_b0829).** Sum the OF 08.06 side over the type sheets, as boe_b0822 does. boe_b0823: isum({t: OF08.06.01.01, r: 0095, c: 0090, dv: emptySequence(), seq: True, id: v0}) i= isum({t: OF08.01.01.01, r: 0080, c: 0280, z: 0002; 0010, dv: emptySequence(), seq: True, id: v1}) i/ 2 - the minimal fix, keeping column 0280; with c0282 in place of c0280 if the Bank accepts the point on post-model adjustments below. boe_b0829: isum({t: OF08.06.01.01, r: 0095, c: 0100, dv: emptySequence(), seq: True, id: v0}) i= isum({t: OF08.01.01.01, r: 0080, c: 0290, z: 0002; 0010, dv: emptySequence(), seq: True, id: v1}) i/ 2. In the formula files: bindAsSequence="true" and fallbackValue="()" on $v0, and iaf:sum($v0) in the test, as in vr-boe_b0822.xml. Correct boe_b0829's label to name '(-) Value adjustments and provisions'. Also say whether an all-types OF 08.06 sheet (TSL = eba_TA:x0, the dimension default) may be filed. If not, take x0 out of the summed variable's member list in boe_b0816-b0823, b0829 and b1043 (or make it unusable on the table). If it may, those rules should read the x0 sheet alone and not add it to the five types.
+**Expected loss and provisions compared per type of specialised lending (boe_b0823, boe_b0829).** Sum the OF 08.06 side over the type sheets, as boe_b0822 does. boe_b0823: isum({t: OF08.06.01.01, r: 0095, c: 0090, dv: emptySequence(), seq: True, id: v0}) i= isum({t: OF08.01.01.01, r: 0080, c: 0280, z: 0002; 0010, dv: emptySequence(), seq: True, id: v1}) i/ 2 - the minimal fix, keeping column 0280; with c0282 in place of c0280 if the Bank accepts the point on post-model adjustments below. boe_b0829: isum({t: OF08.06.01.01, r: 0095, c: 0100, dv: emptySequence(), seq: True, id: v0}) i= isum({t: OF08.01.01.01, r: 0080, c: 0290, z: 0002; 0010, dv: emptySequence(), seq: True, id: v1}) i/ 2. In the formula files: bindAsSequence="true" and fallbackValue="()" on $v0, and iaf:sum($v0) in the test, as in vr-boe_b0822.xml. Both published rules read the OF 08.01 side with plain sum() (vr-boe_b0822.xml: iaf:numeric-equal(iaf:sum($v0),iaf:numeric-divide(sum($v1),2))); the isum above changes that deliberately, so that the summed OF 08.01 facts get their rounding allowance (see PI-10). Correct boe_b0829's label to name '(-) Value adjustments and provisions'. Also say whether an all-types OF 08.06 sheet (TSL = eba_TA:x0, the dimension default) may be filed. If not, take x0 out of the summed variable's member list in boe_b0816-b0823, b0829 and b1043 (or make it unusable on the table). If it may, those rules should read the x0 sheet alone and not add it to the five types.
 
 **Expected loss read before post-model adjustments (boe_b0823).** In boe_b0823 read OF 08.01 column 0282 instead of 0280. Combined with the per-type change above: isum({t: OF08.06.01.01, r: 0095, c: 0090, dv: emptySequence(), seq: True, id: v0}) i= isum({t: OF08.01.01.01, r: 0080, c: 0282, z: 0002; 0010, dv: emptySequence(), seq: True, id: v1}) i/ 2. Alternatively, if the pre-adjustment amount is what OF 08.06 should show, change the Annex II instruction for OF 08.06 column 0090 to refer to column 0280.
 
 #### EBA precedent
 
-**Expected loss and provisions compared per type of specialised lending (boe_b0823, boe_b0829).** The v4.0.0 rule list maps boe_b0823 to EBA v09794_m and boe_b0829 to v09795_m. v09794_m: "sum({C 08.06, r0110, c0090, (sNNN)}) + sum({C 08.06, r0120, c0090, (sNNN)}) = sum({C 08.01.a, r0080, c0280, (sNNN)})"; v09795_m is the same for c0100 against c0290. Both sum the C 08.06 side over all sheets, both are WARNING, and both were deactivated by the EBA on 2021-06-10 and not reactivated. The Bank's versions are ERROR and do not sum.
+**Expected loss and provisions compared per type of specialised lending (boe_b0823, boe_b0829).** The v4.0.0 rule list maps boe_b0823 to EBA v09794_m and boe_b0829 to v09795_m. v09794_m: "sum({C 08.06, r0110, c0090, (sNNN)}) + sum({C 08.06, r0120, c0090, (sNNN)}) = sum({C 08.01.a, r0080, c0280, (sNNN)})"; v09795_m is the same for c0100 against c0290. Both sum the C 08.06 side over all sheets and are WARNING. In the v3.0 / v3.1 sheets of the EBA list they have no divisor and are deactivated on 2021-06-10. In framework release 3.2.0 they were changed and reactivated as "sum({C 08.06, r0110, c0090, (sNNN)}) + sum({C 08.06, r0120, c0090, (sNNN)}) = sum({C 08.01.a, r0080, c0280, (sNNN)}) / 2" (v09795_m: c0100 against c0290), and were deactivated again on 2025-06-10 (sheets 3.2 to 3.5). The Bank's versions are ERROR and do not sum.
 
-**Expected loss read before post-model adjustments (boe_b0823).** EBA v09794_m: "sum({C 08.06, r0110, c0090, (sNNN)}) + sum({C 08.06, r0120, c0090, (sNNN)}) = sum({C 08.01.a, r0080, c0280, (sNNN)})", WARNING, deactivated 2021-06-10. C 08.01 has a single expected loss column (0280); the split into 0280 / 0281 / 0282 is the Bank's.
+**Expected loss read before post-model adjustments (boe_b0823).** EBA v09794_m: "sum({C 08.06, r0110, c0090, (sNNN)}) + sum({C 08.06, r0120, c0090, (sNNN)}) = sum({C 08.01.a, r0080, c0280, (sNNN)})", WARNING. In the v3.0 / v3.1 sheets of the EBA list it has no divisor and is deactivated on 2021-06-10; in framework release 3.2.0 it was changed (the C 08.01 side divided by 2) and reactivated, and it was deactivated again on 2025-06-10 (sheets 3.2 to 3.5). Every form reads column 0280. C 08.01 has a single expected loss column (0280); the split into 0280 / 0281 / 0282 is the Bank's.
 
 #### Who is affected
 
@@ -956,7 +961,7 @@ Report the figures the instructions require; do not change correct figures to sa
 | boe_b0439 | PRA001 | WARNING | holds on the example (control) | - | run as published |
 | boe_b0439_1 | PRA001 | WARNING | holds on the example (control) | - | run as published |
 | boe_b0458 | PRA001 | WARNING | holds on the example (control) | - | run as published |
-| boe_b1013 | PRA001 | ERROR | holds on the example (control) | - | run as published |
+| boe_b1013 | PRA001 | ERROR | related | - | run as published |
 | boe_b0445_1 | PRA001 | WARNING | related | - | run as published |
 | boe_b1028 | PRA001 | ERROR | related | - | run as published |
 | boe_b1014 | PRA001 | ERROR | related | - | run as published |
@@ -1142,6 +1147,7 @@ Arelle's result on it:
 | boe_b0430_1 | 1 | 0 | - |
 | boe_b0434 | 1 | 0 | holds |
 | boe_b0439 | 1 | 0 | holds |
+| boe_b0439_1 | 1 | 0 | holds |
 | boe_b0440 | 0 | 5 | fails |
 | boe_b0440_1 | 0 | 1 | fails |
 | boe_b0441 | 0 | 5 | fails |
@@ -1150,6 +1156,7 @@ Arelle's result on it:
 | boe_b0442_1 | 1 | 0 | - |
 | boe_b0445 | 0 | 6 | fails |
 | boe_b0445_1 | 1 | 0 | - |
+| boe_b0458 | 1 | 0 | holds |
 | boe_b0459 | 1 | 0 | - |
 | boe_b0491 | 1 | 0 | - |
 | boe_b0529 | 3 | 0 | - |
@@ -1358,7 +1365,7 @@ Re-derive the row lists of the 'risk weights applicable for exposure class' fami
 
 #### EBA precedent
 
-The EBA equivalents named in the Bank's v4.0.0 workbook are live and narrower; the Bank added each of the four rows. e4897_n (real estate, sheet 0010) lists CRR rows 0140-0180 and 0250-0270, and the EBA list never contained a weight the CRR assigns to exposures secured by property. e4894_n (Institutions; deactivated 2017-06-09, reactivated 2017-11-15) closes rows 0170, 0190, 0220, 0260 and 0280, and e4895_n (Corporates; deactivated 2020-09-10, reactivated 2020-12-21) rows 0170, 0220, 0250, 0260 and 0280: neither closes the 0% row. e4896_n (Retail; same dates as e4895_n) leaves 35% (0190) open. e4891_n (government sheets 0002-0004, live, WARNING) lists only CRR rows 0190, 0220 and 0260 (35%, 75%, 370%), not 250%; EBA v6291_m (ERROR, live) closes row 0250 on the public-sector-entity sheet 0004 only.
+The EBA equivalents named in the Bank's v4.0.0 workbook are live and narrower; the Bank added each of the four rows. e4897_n (real estate, sheet 0010) lists CRR rows 0140-0180 and 0250-0270, and the EBA list never contained a weight the CRR assigns to exposures secured by property. e4894_n (Institutions; deactivated 2017-06-09, reactivated 2017-11-15) closes rows 0170, 0190, 0220, 0260 and 0280, and e4895_n (Corporates; deactivated 2020-09-10, reactivated 2020-12-21) rows 0170, 0220, 0250, 0260 and 0280: neither closes the 0% row. e4896_n (Retail; same dates as e4895_n) leaves 35% (0190) open. e4891_n (government sheets 0002-0004, live, WARNING) lists only CRR rows 0190, 0220 and 0260 (35%, 75%, 370%), not 250%; EBA v6291_m (WARNING since framework 3.2, ERROR before; live) closes row 0250 on the public-sector-entity sheet 0004 only.
 
 #### Who is affected
 
@@ -1369,7 +1376,7 @@ WARNING severity, from the first return under PS1/26 (reference dates from 1 Jan
 - **250%:** any firm on the standardised approach that holds deferred tax assets arising from temporary differences below the Own Funds Article 48 threshold, which is common among UK banks and building societies.
 - **35%:** credit institutions only (Art. 123(4) applies to loans 'granted by a credit institution') with salary- or pension-assigned loans meeting its conditions, which is uncommon in the UK.
 
-Neither of the Bank's known-issues logs (27 August and 16 November 2026) nor its November 2026 deny list mentions any of these rules. (boe_b1014, which holds on the example, is on the deny list for module PRA115 only, where the code names a different rule; it is enforced in PRA001.)
+Neither of the Bank's known-issues logs (27 August and 16 November 2026) nor its November 2026 deny list mentions any of these rules. (boe_b1014 - which the example does not evaluate, as it reads row 0230 - is on the deny list for module PRA115 only, where the code names a different rule; it is enforced in PRA001.)
 
 #### What a firm can do meanwhile
 
@@ -1771,7 +1778,7 @@ scope({t: OF08.03.01.01, c:0010;0020;0030;0040;0060;0090;0100;0110,z:0001;0002;0
 
 #### What the rule requires
 
-The 10 to <100 PD band must equal the sum of its three sub-bands on eight columns. In the Bank's interval-arithmetic functions a reported fact carries a threshold of 0.5 x 10^-decimals and anything that is not a fact carries 0 (interval-arithmetics.xml, iaf:splitValueThreshold: 'if (not($item instance of element()) and empty($item[2]) and not(contains(string($item), ";"))) then ($item, 0)'), and iaf:numeric-equal is 'abs($itemA[1] - $itemB[1]) le ($itemA[2] + $itemB[2])'. XPath sum($v1) returns a plain number, so boe_b0770 allows only the parent row's own threshold, where boe_b0767-b0769 (iaf:sum) allow the parent's plus every sub-band's.
+The 10 to <100 PD band must equal the sum of its three sub-bands on eight columns. In the interval-arithmetic functions shipped in the Bank's package (Eurofiling's interval-arithmetics.xml, www.eurofiling.info/eu/fr/xbrl/func/) a reported fact carries a threshold of 0.5 x 10^-decimals and anything that is not a fact carries 0 (iaf:splitValueThreshold: 'if (not($item instance of element()) and empty($item[2]) and not(contains(string($item), ";"))) then ($item, 0)'), and iaf:numeric-equal is 'abs($itemA[1] - $itemB[1]) le ($itemA[2] + $itemB[2])'. XPath sum($v1) returns a plain number, so boe_b0770 allows only the parent row's own threshold, where boe_b0767-b0769 (iaf:sum) allow the parent's plus every sub-band's.
 
 #### What the instructions and rules say
 
@@ -2211,9 +2218,9 @@ Report the figures the instructions require; do not change correct figures to sa
 
 | Rule | Module | Severity | Part in the issue | Where the issue applies | At the gateway |
 |---|---|---|---|---|---|
-| boe_b0317 | PRA001 | WARNING | holds on the example (control) | - | run as published |
-| boe_b0322 | PRA001 | WARNING | holds on the example (control) | - | run as published |
-| v10322_s | PRA001 | WARNING | holds on the example (control) | - | run as published |
+| boe_b0317 | PRA001 | WARNING | related | - | run as published |
+| boe_b0322 | PRA001 | WARNING | related | - | run as published |
+| v10322_s | PRA001 | WARNING | related | - | run as published |
 | boe_b0314_1_1 | PRA001 | ERROR | related | - | run as published |
 | boe_b0314_1_10 | PRA001 | ERROR | related | - | run as published |
 | boe_b0314_1_11 | PRA001 | ERROR | related | - | run as published |
@@ -2271,9 +2278,9 @@ Report the figures the instructions require; do not change correct figures to sa
 >
 > - PRA PS1/26, Annex II: reporting instructions for the credit risk templates, OF 34.07 column 0050, PDF page 207
 
-> Integer 0 Must be reported without any decimal part 126
+> Integer 0 Must be reported without any decimal part
 >
-> - Bank of England XBRL Filing Manual v1.0.1, rule 2.18, Accuracy Requirements table, PDF page 25
+> - Bank of England XBRL Filing Manual v1.0.1, rule 2.18, Accuracy Requirements table, row 'Integer' (columns Data Type, Decimals setting and Note; the Example column is not quoted), PDF page 25
 
 > Integers must be reported as whole numbers and without any decimals (rule 2.18).
 >
@@ -2341,7 +2348,7 @@ Report the figures the instructions require; do not change correct figures to sa
 
 **Ratios typed as monetary amounts.** It does not. Arelle (filing rules on) accepts <eba_met:mi796 unitRef=GBP decimals="4">0.4</> and <eba_met:mi784 unitRef=GBP decimals="2">1.4</> with no message; the same facts with the pure unit are XBRL-invalid (xbrl.4.8.2:monetaryFactUnit-notMonetaryMeasure, ERROR, plus the WARNING EBA.2.23). So a firm must file a conversion factor of 0.38 as 'GBP 0.38' and alpha as 'GBP 1.4'. The only published alpha cell is C 34.02 row 0040 (IMM), where alpha may be an own estimate (Article 284(4) and (9)), which is why v10633_m tests it as at least 1.2: alpha 1.4 at decimals=-3 satisfies it and 1.19 at decimals=-3 does not. Two consequences need stating precisely: (a) a +/-500 rounding allowance makes the conversion-factor rules vacuous only when the fact is stated at decimals=-3 (the filing manual's minimum for monetary, and a house default applied to every monetary fact): r0070 = 0.38 against r0080 + r0090 = 0.30 + 0.50 satisfies boe_b0768 at decimals=-3 [2,0] and breaks it at decimals=2 [1,1]; (b) v10633_m is a plain '>=' and is unaffected by the type - alpha 1.0 is unsatisfied at decimals=-3 and at 2 alike. The real cost of the typing is that the stated accuracy of a ratio is governed by money conventions: footnote 11 calls more than 2 decimals 'generally inappropriate' for a calculated monetary value, which discourages stating an average conversion factor more precisely than +/-0.005 (the SHOULD is in rule 2.18(c); the footnote is an example, and Arelle accepts decimals=4 on the fact with no message).
 
-**The same outside the credit-risk tables.** OF16.00.01.05 c0110 rows 0020/0040/0070/0090 use boe_met:ii10043/ii10045 (xbrli:integerItemType), the same metric as the yearly counts. The exact mean of ten counts cannot be filed. Arelle confirms that 3.9 raises 'xmlSchema:valueError ... type integer value error: 3.9' and err:FORG0001 inside boe_b0805, so the firm must round, and Annex II gives no rounding convention. A rounded value passes the interval comparison. OF25.03.01.01 r0070 c0030 (mCVA, a pure multiplier fixed at 1) uses boe_met:mi10009 (monetaryItemType), so it needs a currency unit. C14.00.01.01 c0204 (a maturity) uses eba_met:mi663 and C14.01.01.01 c0351/c0361 (a % RW) use eba_met:mi640, both monetaryItemType in the EBA dictionary shipped in the Bank's package. None of these makes a correctly rounded or united value fail a rule. They are typing defects.
+**The same outside the credit-risk tables.** OF16.00.01.05 c0110 rows 0020/0040/0070/0090 use boe_met:ii10043/ii10045 (xbrli:integerItemType), the same metric as the yearly counts. The exact mean of ten counts cannot be filed. Arelle confirms that 3.9 raises 'xmlSchema:valueError ... type integer value error: 3.9' and err:FORG0001 inside boe_b0805, so the firm must round, and Annex II gives no rounding convention. A rounded value passes the interval comparison. OF25.03.01.01 r0070 c0030 (mCVA, a pure multiplier fixed at 1) uses boe_met:mi10009 (monetaryItemType), so it needs a currency unit. C14.00.01.01 c0204 (a maturity) uses eba_met:mi663 and C14.01.01.01 c0351/c0361 (a % RW) use eba_met:mi640, both monetaryItemType in the EBA dictionary shipped in the Bank's package. None of these makes a correctly rounded or united value fail a rule. They are typing defects, and that is why this issue is listed with the defects rather than as a clarification question although no rule result shows it: nothing in the text is open to two readings - the taxonomy declares a type the instructions contradict, so a figure the instructions ask for (an average in days or years, a ratio) cannot be filed as they describe it, and only the Bank can correct the dictionary.
 
 #### Other ways of reporting considered
 
@@ -2381,7 +2388,7 @@ No validation result shows this issue. Report as the instructions require, and k
 
 <a id="pi-15"></a>
 
-### PI-15 - OF 09.02 purchased-receivables rows 0105 and 0049 cannot be populated
+### PI-15 - OF 09.02 purchased-receivables rows 0105 and 0049 cannot carry original exposure, exposure value or RWEA on the all-countries sheet
 
 **Status:** identified by rwa-filer, not yet raised with the Bank of England.
 
@@ -2574,7 +2581,7 @@ boe_b1055, as published in taxonomy 4.1.1 (label: "Total Risk-weighted exposure 
 
 #### Worked example
 
-A firm with AIRB retail and FIRB corporates, all obligors in one country (reference date 31 March 2027). Retail, AIRB: qualifying revolving 500,000 original exposure / 400,000 exposure value / 120,000 RWEA (OF 08.01 sheet 0015); other retail non-SME 1,000,000 / 1,000,000 / 400,000 (sheet 0017), of which 100,000 / 100,000 / 60,000 are purchased retail receivables - 'other retail' because they are neither qualifying revolving nor secured by residential property (Art. 147(5A)-(5C)); row 0175 shows them on sheet 0017 and on the AIRB total sheet 0001 (1,500,000 / 1,400,000 / 520,000). Corporates, FIRB: financial and large corporates 500,000 / 450,000 / 300,000 (sheet 0022); other general corporates non-SME 1,000,000 / 1,000,000 / 700,000 (sheet 0012), of which 100,000 / 100,000 / 80,000 are purchased corporate receivables (Art. 153(6)); FIRB total sheet 0002 1,500,000 / 1,450,000 / 1,000,000. OF 09.02 all countries, columns 0010 / 0105 / 0110, as Annex II rows 0049, 0055, 0105 and 0130 are written: r0030 = 1,500,000 / 1,450,000 / 1,000,000; r0048 = 500,000 / 450,000 / 300,000; r0049 = 100,000 / 100,000 / 80,000; r0055 = 900,000 / 900,000 / 620,000 (what is 'not reported in 0042-0050'); r0060 = 1,500,000 / 1,400,000 / 520,000; r0100 = 500,000 / 400,000 / 120,000; r0105 = 100,000 / 100,000 / 60,000; r0130 = 900,000 / 900,000 / 340,000 (other retail net of the receivables in row 0105); r0150 = 3,000,000 / 2,850,000 / 1,520,000. Only sheet 0012 of the two other-general-corporate sheets is populated, so the per-sheet comparison of PI-02 plays no part. Every roll-up and cross-template rule holds except the three retail and the three corporate row ties.
+A firm with AIRB retail and FIRB corporates, all obligors in one country (reference date 31 March 2027). Retail, AIRB: qualifying revolving 500,000 original exposure / 400,000 exposure value / 120,000 RWEA (OF 08.01 sheet 0015); other retail non-SME 1,000,000 / 1,000,000 / 400,000 (sheet 0017), of which 100,000 / 100,000 / 60,000 are purchased retail receivables - 'other retail' because they are neither qualifying revolving nor secured by residential property (Art. 147(5A)-(5C)); row 0175 shows them on sheet 0017 and on the AIRB total sheet 0001 (1,500,000 / 1,400,000 / 520,000). Corporates, FIRB: financial and large corporates 500,000 / 450,000 / 300,000 (sheet 0022); other general corporates non-SME 1,000,000 / 1,000,000 / 700,000 (sheet 0012), of which 100,000 / 100,000 / 80,000 are purchased corporate receivables (Art. 153(6)); FIRB total sheet 0002 1,500,000 / 1,450,000 / 1,000,000. OF 09.02 all countries, columns 0010 / 0105 / 0110, as Annex II rows 0049 and 0055 are written, and with row 0130 reported net of row 0105 on the separate-row reading (row 0130's own instruction carves out only row 0120; read literally, row 0130 is gross and boe_b0783 fails instead, alternative (B)): r0030 = 1,500,000 / 1,450,000 / 1,000,000; r0048 = 500,000 / 450,000 / 300,000; r0049 = 100,000 / 100,000 / 80,000; r0055 = 900,000 / 900,000 / 620,000 (what is 'not reported in 0042-0050'); r0060 = 1,500,000 / 1,400,000 / 520,000; r0100 = 500,000 / 400,000 / 120,000; r0105 = 100,000 / 100,000 / 60,000; r0130 = 900,000 / 900,000 / 340,000 (other retail net of the receivables in row 0105); r0150 = 3,000,000 / 2,850,000 / 1,520,000. Only sheet 0012 of the two other-general-corporate sheets is populated, so the per-sheet comparison of PI-02 plays no part. Every roll-up and cross-template rule holds except the three retail and the three corporate row ties.
 
 Arelle's result on it:
 
@@ -2705,9 +2712,9 @@ Arelle's result on it:
 
 #### Other ways of reporting considered
 
-**Retail purchased receivables, row 0105 (boe_b0300-b0302).** Four other ways to report the same position, each run through Arelle. (B) Row 0105 as an 'of which' of other retail - r0130 = 1,000 gross, r0105 = 100, r0060 = 1,500: boe_b0783 [0,3], everything else satisfied. (C) As B with r0060 raised to 1,600 / 1,500 / 580 so the rows add up: boe_b0291, b0292, b0293 [0,1] each. (D) Receivables kept out of every OF 08.01 retail class sheet (sheet 0017 = 900, only the AIRB total sheet carries them): boe_b0291-b0293 [0,1] each, and it is not what para 76 or row 0175 describe. (Z) Row 0105 left empty: passes, but omits the figure Annex II asks for in row 0105. Reporting row 0105 only on country sheets, or only in the nine columns without a sheet tie, would leave original exposure, exposure value and RWEA at zero on the all-countries sheet for a row that has exposure. The same algebra applies if the receivables qualify as qualifying revolving or property-secured retail (sheets 0015, 0018-0021): the tie that breaks is then boe_b0294-b0296 or the b1056-b1066 / b1071 family. None of the alternatives is both Annex-II-compliant and rule-satisfying.
+**Retail purchased receivables, row 0105 (boe_b0300-b0302).** (Figures in thousands.) Four other ways to report the same position, each run through Arelle. (B) Row 0105 as an 'of which' of other retail - r0130 = 1,000 gross, r0105 = 100, r0060 = 1,500: boe_b0783 [0,3], everything else satisfied. (C) As B with r0060 raised to 1,600 / 1,500 / 580 so the rows add up: boe_b0291, b0292, b0293 [0,1] each. (D) Receivables kept out of every OF 08.01 retail class sheet (sheet 0017 = 900, only the AIRB total sheet carries them): boe_b0291-b0293 [0,1] each, and it is not what para 76 or row 0175 describe. (Z) Row 0105 left empty: passes, but omits the figure Annex II asks for in row 0105. Reporting row 0105 only on country sheets, or only in the nine columns without a sheet tie, would leave original exposure, exposure value and RWEA at zero on the all-countries sheet for a row that has exposure. The same algebra applies if the receivables qualify as qualifying revolving or property-secured retail (sheets 0015, 0018-0021): the tie that breaks is then boe_b0294-b0296 or the b1056-b1066 / b1071 family. None of the alternatives is both Annex-II-compliant and rule-satisfying.
 
-**Corporate purchased receivables, row 0049 (boe_b1053-b1055).** Five other ways to report the same position, each run through Arelle. (B) Row 0049 as an 'of which' of row 0055 - r0055 = 1,000 gross, r0049 = 100, r0030 = 1,500: boe_b0785 [0,3], everything else satisfied. (C) As B with r0030 raised to 1,600 / 1,550 / 1,080: boe_b0282, b0283, b0284 [0,1] each. (D) Receivables kept out of every OF 08.01 corporate class sheet (sheet 0012 = 900, only the FIRB total sheet carries them): boe_b0282-b0284 [0,1] each, and not what para 76 or row 0175 describe. (E1) The firm also has 300 / 300 / 240 of slotting specialised lending on sheet 0010, reported truthfully as r0045, with r0049 = 100 beside r0055 = 1,000: boe_b0785 [0,3] - having specialised lending does not create room. (E2) As E1 but r0045 understated to 200 / 200 / 160: every rule satisfied. This is the 'cap' - it passes only by misstating specialised lending by the receivables amount, and still counts the receivables in both row 0049 and row 0055. (Z) Row 0049 left empty: passes, but omits the figure Annex II asks for. None of the alternatives is both Annex-II-compliant and rule-satisfying.
+**Corporate purchased receivables, row 0049 (boe_b1053-b1055).** (Figures in thousands.) Five other ways to report the same position, each run through Arelle. (B) Row 0049 as an 'of which' of row 0055 - r0055 = 1,000 gross, r0049 = 100, r0030 = 1,500: boe_b0785 [0,3], everything else satisfied. (C) As B with r0030 raised to 1,600 / 1,550 / 1,080: boe_b0282, b0283, b0284 [0,1] each. (D) Receivables kept out of every OF 08.01 corporate class sheet (sheet 0012 = 900, only the FIRB total sheet carries them): boe_b0282-b0284 [0,1] each, and not what para 76 or row 0175 describe. (E1) The firm also has 300 / 300 / 240 of slotting specialised lending on sheet 0010, reported truthfully as r0045, with r0049 = 100 beside r0055 = 1,000: boe_b0785 [0,3] - having specialised lending does not create room. (E2) As E1 but r0045 understated to 200 / 200 / 160: every rule satisfied. This is the 'cap' - it passes only by misstating specialised lending by the receivables amount, and still counts the receivables in both row 0049 and row 0055. (Z) Row 0049 left empty: passes, but omits the figure Annex II asks for. None of the alternatives is both Annex-II-compliant and rule-satisfying.
 
 #### Proposed change
 
@@ -2717,9 +2724,9 @@ Arelle's result on it:
 
 #### EBA precedent
 
-**Retail purchased receivables, row 0105 (boe_b0300-b0302).** The EBA's C 09.02 has no purchased-receivables row (CRR COREP Annex II pp.123-124, rows 0010 to 0150). In the BoE v4.0.0 extract, boe_b0783 is mapped to EBA v2245_h ({r0060} = +{r0110} + {r0100} + {r0070}), which the EBA list marks deactivated (2014-05-19); boe_b0291 and boe_b0300 are mapped to v0440_m and v0475_m, which the EBA list shows with both deactivation and reactivation dates (their current status was not confirmed); boe_b0336 is mapped to v4778_m ({r0060} >= {r0110}, the EBA 'other retail' row); boe_b1056-b1066 and b1071 have no EBA equivalent. The picture is of row 0105 added to an inherited roll-up without the inherited sheet ties being adjusted - an inference, not something the Bank has stated. Not on the Bank's known-issues logs of 27 August and 16 November 2026.
+**Retail purchased receivables, row 0105 (boe_b0300-b0302).** The EBA's C 09.02 has no purchased-receivables row (CRR COREP Annex II pp.123-124, rows 0010 to 0150). In the BoE v4.0.0 extract, boe_b0783 is mapped to EBA v2245_h ({r0060} = +{r0110} + {r0100} + {r0070}), deactivated 2014-05-19 and reactivated 2015-02-27, so live (Error) in the EBA list up to 3.5; boe_b0291 and boe_b0300 are mapped to v0440_m and v0475_m, both deactivated 2014-04-16 and reactivated 2015-02-27 (live); boe_b0336 is mapped to v4778_m ({r0060} >= {r0110}, the EBA 'other retail' row); boe_b1056-b1066 and b1071 have no EBA equivalent. The picture is of row 0105 added to an inherited roll-up without the inherited sheet ties being adjusted - an inference, not something the Bank has stated. Not on the Bank's known-issues logs of 27 August and 16 November 2026.
 
-**Corporate purchased receivables, row 0049 (boe_b1053-b1055).** The EBA's C 09.02 has no corporate purchased-receivables row (CRR COREP Annex II p.123: corporate rows 0030, 0042, 0045, 0050 only). In the BoE v4.0.0 extract, boe_b0785, boe_b1034 and boe_b1050-b1055 have no EBA equivalent (rules the Bank wrote); boe_b0282, boe_b0288 and boe_b0285 are mapped to EBA v0425_m, v0435_m and v0430_m, which the EBA list shows with deactivation and reactivation dates (their current status was not confirmed). Not on the Bank's known-issues logs of 27 August and 16 November 2026.
+**Corporate purchased receivables, row 0049 (boe_b1053-b1055).** The EBA's C 09.02 has no corporate purchased-receivables row (CRR COREP Annex II p.123: corporate rows 0030, 0042, 0045, 0050 only). In the BoE v4.0.0 extract, boe_b0785, boe_b1034 and boe_b1050-b1055 have no EBA equivalent (rules the Bank wrote); boe_b0282, boe_b0288 and boe_b0285 are mapped to EBA v0425_m (deactivated 2015-09-09, reactivated 2018-04-17), v0435_m (2014-04-16 / 2015-02-27) and v0430_m (2015-09-09 / 2017-04-27), all live. (The EBA list's Explanation sheet: a reactivated rule applies again 'for that taxonomy version onwards'.) Not on the Bank's known-issues logs of 27 August and 16 November 2026.
 
 #### Who is affected
 
@@ -3043,7 +3050,7 @@ Arelle's result on it:
 
 #### Other ways of reporting considered
 
-(1) Report the adjustment as a positive number (+80.4): boe_b0555 becomes [4,0] but boe_b0733 fails [4,4]; on OF 08.01 boe_b1036 becomes [6,0] but boe_b1038, an ERROR, fails [0,6]; and paragraph 9 expects no positive figure under a '(-)' label. (2) Leave the 'of which' column blank: both rules pass because the missing cell defaults to 0 (boe_b0555 [4,0]; boe_b1036 [6,0]) - but that omits a figure Annex II asks for whenever a haircut or maturity mismatch applies; the rule rewards not reporting it. (3) Report Cvam before the cap, or scale the adjustment down with the cap: no instruction supports either, and an uncapped c0130 breaks boe_b0699 on an over-collateralised exposure. (4) Positive c0130: breaks boe_b0699 / b1040 and the sign rules. No compliant reporting of a position with Cvam below C/2 satisfies the rules.
+(1) Report the adjustment as a positive number (+80,000): boe_b0555 becomes [1,0] but boe_b0733 fails [1,1]; on OF 08.01 boe_b1036 becomes [1,0] but boe_b1038, an ERROR, fails [0,1]; and paragraph 9 expects no positive figure under a '(-)' label. (2) Leave the 'of which' column blank: both rules pass because the missing cell defaults to 0 (boe_b0555 [1,0]; boe_b1036 [1,0]) - but that omits a figure Annex II asks for whenever a haircut or maturity mismatch applies; the rule rewards not reporting it. (3) Report Cvam before the cap, or scale the adjustment down with the cap: no instruction supports either, and an uncapped c0130 breaks boe_b0699 on an over-collateralised exposure. (4) Positive c0130: breaks boe_b0699 / b1040 and the sign rules. No compliant reporting of a position with Cvam below C/2 satisfies the rules.
 
 #### Proposed change
 
@@ -3210,7 +3217,7 @@ Report the figures the instructions require; do not change correct figures to sa
 | Rule | Module | Severity | Part in the issue | Where the issue applies | At the gateway |
 |---|---|---|---|---|---|
 | boe_b0718 | PRA001 | ERROR | the rule at issue | every evaluation | run as published |
-| boe_b0793 | PRA001 | ERROR | holds on the example (control) | - | run as published |
+| boe_b0793 | PRA001 | ERROR | related | - | run as published |
 | boe_b0706 | PRA001 | WARNING | holds on the example (control) | - | run as published |
 | boe_b1091 | PRA001 | WARNING | related | - | run as published |
 
@@ -3571,7 +3578,7 @@ scope({t: C34.03.01.01, c:0030;0040;0050;0060;0070,z:0001;0002, f: banking, fv: 
 
 **Expressions cut short in the workbook.** It does not fail at the gateway. The harm is on the firm's side: a firm or vendor that builds the allowed list from the workbook's Expression (286 codes, unparseable) or Simplified Expression (336 codes) will reject values the gateway accepts. Measured: C 06.02 c0050 = eba_GA:XK (Kosovo, named in the rule's own Label, absent from both expression cells) and = eba_GA:_6P are accepted by Arelle with no message; eba_GA:x29, a GA member outside hierarchy GA4_1, is rejected with enumie:InvalidFactValue. (C 06.02 was run in Arelle; C 14.00 c0190 under v4011_a rests on the identical declaration.)
 
-**Rules the package does not carry, and boe_b0756 as written.** At the gateway nothing fails, because nothing runs. Two consequences. (1) Firms and vendors that implement the workbook as published will run checks the gateway does not, and one of them is wrong as written. boe_b0756's right-hand side subtracts raw exposure, isum(c0140), from an LGD-weighted sum; the identity that matches Annex II p.111 is c0230(r0070) x (sum c0110 - sum c0140) = sum(c0230 x (c0110 - c0140)). Two grades (exposure 600 and 400, of which large financial sector entities 100 each, LGD 40% and 30%): Annex II gives r0070 c0230 = 36.25%; left side 0.3625 x 800 = 290; right side as published 0.40 x 600 + 0.30 x 400 - 200 = 160; with the corrected right side 290. So boe_b0756 applied literally fails every sheet that holds a large or unregulated financial sector entity. boe_b0755, b0757 and b0758, which have the sums-of-products form, hold whenever the OF 08.01 averages are computed as Annex II defines them. This algebra is hand-worked; it cannot be run in Arelle because no formula exists. (2) For six allowed-value rules the gateway accepts values the workbook says are not allowed, e.g. C 34.06 c0050 = eba_ZZ:x427 'No CCP' passes Arelle although v10564_a lists only QCCP and NON-QCCP.
+**Rules the package does not carry, and boe_b0756 as written.** At the gateway nothing fails, because nothing runs. Two consequences. (1) Firms and vendors that implement the workbook as published will run checks the gateway does not, and one of them is wrong as written. boe_b0756's right-hand side subtracts raw exposure, isum(c0140), from an LGD-weighted sum; the identity that matches Annex II p.111 is c0230(r0070) x (sum c0110 - sum c0140) = sum(c0230 x (c0110 - c0140)). Two grades (exposure 600 and 400, of which large financial sector entities 100 each, LGD 40% and 30%): Annex II gives r0070 c0230 = 36.25%; left side 0.3625 x 800 = 290; right side as published 0.40 x 600 + 0.30 x 400 - 200 = 160; with the corrected right side 290. So boe_b0756 applied literally fails every sheet that holds a large or unregulated financial sector entity. boe_b0757 and boe_b0758, which have the sums-of-products form, hold whenever columns 0240 and 0250 are the exposure-weighted averages Annex II defines (pp.110-111). boe_b0755 holds if OF 08.01 column 0010 is the exposure-weighted average PD of the CRR instruction that PS1/26 did not carry over (PI-29). (EBA Q&A 2026_7840 argues that v10667_m, boe_b0758's counterpart, cannot be met exactly because maturity is reported in whole days.) This algebra is hand-worked; it cannot be run in Arelle because no formula exists. (2) For six allowed-value rules the gateway accepts values the workbook says are not allowed, e.g. C 34.06 c0050 = eba_ZZ:x427 'No CCP' passes Arelle although v10564_a lists only QCCP and NON-QCCP.
 
 #### Other ways of reporting considered
 
@@ -3583,13 +3590,13 @@ scope({t: C34.03.01.01, c:0030;0040;0050;0060;0070,z:0001;0002, f: banking, fv: 
 
 **Expressions cut short in the workbook.** Publish the complete rule text: split the expression so it is not cut at 32,700 characters, or replace the disjunction with a reference to the hierarchy the taxonomy already uses (GA4_1). Bring the three cells into line with each other and with the taxonomy: Expression (286 complete alternatives), Simplified Expression (336) and Label (359) should all carry the 359 members of GA4_1. State in the workbook's Note sheet what 'Include in XBRL: no' means and that allowed-value (_a) rules are enforced by the enumerated data type.
 
-**Rules the package does not carry, and boe_b0756 as written.** (1) Define the 'Include in XBRL' column in the Note sheet and say whether a rule marked 'no' is applied by any other means. (2) For the 15 checks with no formula: either serialise them or mark them Deactivated / informational so they are not read as binding ERROR rules. (3) Correct boe_b0756 before it is ever serialised: {t: OF08.01.01.01, r: 0070, c: 0230, dv: 0} i* (isum({t: OF08.02.01.01, c: 0110, dv: emptySequence(), seq: True}) i- isum({t: OF08.02.01.01, c: 0140, dv: emptySequence(), seq: True})) i= isum({t: OF08.02.01.01, c: 0230, dv: 0} * ({t: OF08.02.01.01, c: 0110, dv: 0} - {t: OF08.02.01.01, c: 0140, dv: 0})). (4) Reconcile the six allowed-value lists that are narrower than the taxonomy's enumeration (v4011_a, v4023_a, v4021_a, v6520_a, v7668_a, v10564_a): either narrow the hierarchy or widen the list.
+**Rules the package does not carry, and boe_b0756 as written.** (1) Define the 'Include in XBRL' column in the Note sheet and say whether a rule marked 'no' is applied by any other means. (2) For the 15 checks with no formula: either serialise them or mark them Deactivated / informational so they are not read as binding ERROR rules. (3) Correct boe_b0756 before it is ever serialised: {t: OF08.01.01.01, r: 0070, c: 0230, dv: 0} i* (isum({t: OF08.02.01.01, c: 0110, dv: emptySequence(), seq: True}) i- isum({t: OF08.02.01.01, c: 0140, dv: emptySequence(), seq: True})) i= isum({t: OF08.02.01.01, c: 0230, dv: 0} * ({t: OF08.02.01.01, c: 0110, dv: 0} - {t: OF08.02.01.01, c: 0140, dv: 0})). (4) Reconcile the six allowed-value lists that are narrower than the taxonomy's enumeration (v4011_a, v4023_a, v4021_a, v6520_a, v7668_a, v10564_a): either narrow the hierarchy or widen the list; the EBA itself widened v10564_a to {x425, x426, x427} on 2022-03-10.
 
 #### EBA precedent
 
-**Expressions cut short in the workbook.** These are EBA allowed-value (_a) rules carried into the Bank's workbook. Their status in the EBA list was not checked. Not in the Bank's known-issues logs.
+**Expressions cut short in the workbook.** These are EBA allowed-value (_a) rules carried into the Bank's workbook. In the EBA list (10 June 2026, up to framework 3.5) v4011_a is live (ERROR); v4023_a was deactivated on 2020-03-10 and reactivated on 2020-12-21. Not in the Bank's known-issues logs.
 
-**Rules the package does not carry, and boe_b0756 as written.** boe_b0755-b0758 descend from EBA v10664_m-v10667_m (C 08.01.a / C 08.02, WARNING), which the EBA deactivated on 2021-03-10 and never reactivated. In v4.0.0 the Bank carried them as ERROR and in XBRL with the EBA's right-hand side (sum(c0010) * sum(c0110) and so on); in v4.1.1 it rewrote the right-hand sides as sums of products and marked all four 'Include in XBRL: no'. The stray '- sum(c0140)' in boe_b0756 comes from that rewrite (v4.0.0: sum(c0230) * (sum(c0110) - sum(c0140))). The v4.0.0 forms were not weighted-average identities either - each reduced to r0070 equalling the sum of the grade values - and the v4.1.1 rewrite corrected three of the four. Known-issues log issues 18 and 19 show the Bank records rules that fail to serialise; none of these 45 is listed.
+**Rules the package does not carry, and boe_b0756 as written.** boe_b0755-b0758 descend from EBA v10664_m-v10667_m (C 08.01.a / C 08.02, WARNING). The EBA deactivated all four on 2021-03-10. It reactivated v10664_m, v10666_m and v10667_m on 2022-03-10 (framework 3.2.0) with sums-of-products right-hand sides, flagged Not implemented in XBRL. v10665_m (the original of boe_b0756) was deactivated again on 2024-06-13 and is not active in the 3.5 sheet. In v4.0.0 the Bank carried them as ERROR and in XBRL with the EBA's pre-3.2 right-hand side (sum(c0010) * sum(c0110) and so on); in v4.1.1 it rewrote the right-hand sides as sums of products and marked all four 'Include in XBRL: no', which matches the EBA's 3.2.0 correction and its 'Not implemented in XBRL' flag. The stray '- sum(c0140)' in boe_b0756 comes from that rewrite (v4.0.0: sum(c0230) * (sum(c0110) - sum(c0140))). The v4.0.0 forms were not weighted-average identities either - each reduced to r0070 equalling the sum of the grade values - and the v4.1.1 rewrite corrected three of the four. v10564_a, which the Bank carries with QCCP and NON-QCCP only (eba_ZZ:x425, x426), had that form in the EBA's v3.0 / v3.1 sheets and was deactivated on 2021-06-10; the EBA reactivated it on 2022-03-10 (framework 3.2.0) with x427 added, so the Bank carries the EBA's withdrawn form. Known-issues log issues 18 and 19 show the Bank records rules that fail to serialise; none of these 45 is listed.
 
 #### Who is affected
 
@@ -3684,7 +3691,7 @@ scope({t: OF08.07.01.01, r:0180;0190;0200;0210;0220;0230;0240;0250;0260, f: bank
 
 **The share column summed down the roll-out classes (boe_b0779).** A share does not add down rows. With class shares s_i and class weights w_i = class exposure value / total exposure value (w_i > 0, sum of w_i = 1), the total row's IRB share is sum(w_i x s_i); the rule demands sum(s_i). They are equal only if sum((1 - w_i) x s_i) = 0, i.e. when a single class holds all the exposure or no class has any IRB exposure. For any IRB firm with exposure in two or more roll-out classes the equality is false. The instruction's own row-0260 sum stops at columns 0060-0150 and does not reach column 0050. Example: s = (0.8, 1.0), w = (0.25, 0.75): the total is 0.95, the rule demands 1.8.
 
-**Shares must equal 100% where the label says 'shall not exceed' (boe_b0778).** The three shares are defined by the basis on which an exposure is treated: under an Article 150(1) permission (c0030), under an Article 148(1) roll-out plan (c0040), under the IRB approach (c0050). Annex II itself describes a fourth population in the class: exposures on the standardised approach with neither permission yet, whose RWEA goes in column 0140. Those exposures are in the denominator (column 0020, all exposures of the class) and in none of the three numerators, so the shares total less than 100% and the equality fails. The PS1/26 instructions no longer say the three percentage columns total 100%: paragraph 84 now makes that statement about the RWEA columns 0070-0150 (which boe_b1045 checks and which include column 0140). The rule's own label asks only that the percentages not exceed 100%.
+**Shares must equal 100% where the label says 'shall not exceed' (boe_b0778).** The three shares are defined by the basis on which an exposure is treated: under an Article 150(1) permission (c0030), under an Article 148(1) roll-out plan (c0040), under the IRB approach (c0050). Annex II itself describes a fourth population in the class: exposures on the standardised approach with neither permission yet, whose RWEA goes in column 0140. Those exposures are in the denominator (column 0020, all exposures of the class) and in none of the three numerators, so the shares total less than 100% and the equality fails. The PS1/26 instructions no longer say the three percentage columns total 100%: paragraph 84 now makes that statement about the RWEA columns 0070-0150 (which boe_b1045 checks and which include column 0140). The rule's own label asks only that the percentages not exceed 100%. The Bank may answer that Art. 147C(1) does not permit such exposures. But Annex II (pp.133-134) instructs firms to report exactly this position in column 0140, and a rule should not make an instructed figure unfilable at ERROR; if the position is to be flagged, a WARNING on c0140 > 0 does it directly.
 
 **The two rules together.** Arelle accepts a return that satisfies both: total IRB share 1.8 (the row sum) and total PPU share -0.8. So the pair is satisfiable, but only by figures that are not shares. For a return whose percentages are true shares (each between 0 and 1, the total row computed on the totals) the two rules hold together only when sum(s_i) = sum(w_i x s_i), the single-class case above. The defect is boe_b0779's column 0050 on its own; boe_b0778 is what stops a firm from simply filing the row sum, and the absence of any bound on the percentage cells is what leaves the nonsense solution open.
 
@@ -3739,7 +3746,7 @@ Arelle's result on it:
 
 #### Other ways of reporting considered
 
-**The share column summed down the roll-out classes (boe_b0779).** (a) Report the row sum (1.8, i.e. 180%) as the total IRB share: boe_b0779 [6,0] but boe_b0778 fails on r0260 [2,1] (0.05 + 0 + 1.8). (b) As (a) and a total PPU share of -0.8: both rules pass, with a 180% and a -80% share that mean nothing. (c) Leave the three share cells of r0260 blank, reading the row-0260 instruction literally: boe_b0779 still fails on column 0050 [5,1] because the blank total defaults to 0 against a row sum of 1.8. (d) Leave c0050 blank on the class rows: boe_b0778 then fails on every class with an IRB share. No compliant alternative.
+**The share column summed down the roll-out classes (boe_b0779).** On the two-class return of the paragraph above (class IRB shares 0.8 and 1.0, all shares true): (a) Report the row sum (1.8, i.e. 180%) as the total IRB share: boe_b0779 [6,0] but boe_b0778 fails on r0260 [2,1] (0.05 + 0 + 1.8). (b) As (a) and a total PPU share of -0.8: both rules pass, with a 180% and a -80% share that mean nothing. (c) Leave the three share cells of r0260 blank, reading the row-0260 instruction literally: boe_b0779 still fails on column 0050 [5,1] because the blank total defaults to 0 against a row sum of 1.8. (d) Leave c0050 blank on the class rows: boe_b0778 then fails on every class with an IRB share. No compliant alternative.
 
 **Shares must equal 100% where the label says 'shall not exceed' (boe_b0778).** (a) Count the acquired exposures in c0030: contradicts the column definition (no Article 150(1) permission exists) and is inconsistent with their RWEA sitting in column 0140 instead of 0070-0120. (b) Count them in c0040: contradicts 'subject to a roll-out plan under Article 148(1)'. (c) Count them in c0050: they are not under the IRB approach. (d) Leave the shares blank on the row: the instruction requires them where the class has exposure. None is compliant; (a) is what a firm would do in practice to get through the gateway.
 
@@ -3749,15 +3756,15 @@ Arelle's result on it:
 
 **The share column summed down the roll-out classes (boe_b0779).** Remove 0050 from the column scope of boe_b0779: scope({t: OF08.07.01.01, c:0010;0020;0060;0070;0080;0090;0100;0110;0120;0130;0140;0150}). boe_b0778 already checks the three shares on row 0260.
 
-**Shares must equal 100% where the label says 'shall not exceed' (boe_b0778).** Make the formula match its label: isum({t: OF08.07.01.01, c: 0030; 0040; 0050}) i<= 1 on the same rows (this also accepts a zero-filled empty class; see Appendix B). Alternatively keep the equality as a WARNING, as the EBA's v09796_m is, or amend Annex II to say in which share column exposures reported in column 0140 are counted.
+**Shares must equal 100% where the label says 'shall not exceed' (boe_b0778).** Make the formula match its label: isum({t: OF08.07.01.01, c: 0030; 0040; 0050}) i<= 1 on the same rows (this also accepts a zero-filled empty class; see Appendix B). Alternatively deactivate it, as the EBA did with v09796_m on 10 June 2025, or at least downgrade it to WARNING, or amend Annex II to say in which share column exposures reported in column 0140 are counted.
 
 **The two rules together.** As above (remove 0050 from boe_b0779's column scope). Optionally add the EBA's bounds for OF 08.07 columns 0030, 0040 and 0050 (each >= 0 and <= 1 on rows 0180-0260) so that an out-of-range share cannot satisfy boe_b0778.
 
 #### EBA precedent
 
-**The share column summed down the roll-out classes (boe_b0779).** The Bank's v4.0.0 extract names EBA v09797_m as the equivalent: '{r0170} = {r0010} + {r0040} + {r0050} + {r0090} + {r0150} + {r0160}' on all columns of C 08.07, a WARNING the EBA deactivated on 2021-06-30. The Bank itself withdrew the same pattern elsewhere in v4.1.1: boe_b0752_1 (PD), _22/_23 (LGD) and _24 (maturity), which summed averaged OF 08.02 columns into OF 08.01 row 0070, are in the v4.0.0 workbook and absent from the v4.1.1 workbook and rule book.
+**The share column summed down the roll-out classes (boe_b0779).** The Bank's v4.0.0 extract names EBA v09797_m as the equivalent: '{r0170} = {r0010} + {r0040} + {r0050} + {r0090} + {r0150} + {r0160}' (WARNING). The EBA deactivated it on 2021-06-30, when it applied to all columns of C 08.07, and reactivated it on 2022-03-10 (framework 3.2.0) on columns 0010 and 0020 only. The EBA thus dropped the percentage columns that boe_b0779 keeps. The Bank itself withdrew the same pattern elsewhere in v4.1.1: boe_b0752_1 (PD), _22/_23 (LGD) and _24 (maturity), which summed averaged OF 08.02 columns into OF 08.01 row 0070, are in the v4.0.0 workbook and absent from the v4.1.1 workbook and rule book.
 
-**Shares must equal 100% where the label says 'shall not exceed' (boe_b0778).** EBA v09796_m, the same equality on C 08.07, is a WARNING; the Bank carried it over as an ERROR. CRR Annex II paragraph 84 reads 'Columns 0020 to 0040 should cover the full spectrum of exposures, so the sum of each row for those three columns should be 100%', an apparent misnumbering of the three percentage columns 0030-0050 (that reading is an interpretation); PS1/26 paragraph 84 makes the 100% statement about the RWEA columns 0070-0150 instead, and adds column 0140.
+**Shares must equal 100% where the label says 'shall not exceed' (boe_b0778).** EBA v09796_m, the same equality on C 08.07 (WARNING), was deactivated by the EBA on 10 June 2025; the Bank carries it as an ERROR. CRR Annex II paragraph 84 reads 'Columns 0020 to 0040 should cover the full spectrum of exposures, so the sum of each row for those three columns should be 100%', an apparent misnumbering of the three percentage columns 0030-0050 (that reading is an interpretation); PS1/26 paragraph 84 makes the 100% statement about the RWEA columns 0070-0150 instead, and adds column 0140.
 
 **The two rules together.** The EBA bounds every C 08.07 share: v09769_m '{c0030} <= 1', v09770_m '{c0040} <= 1', v09771_m '{c0050} <= 1' and v10300_s '{C 08.07} >= 0' on columns 0010-0050 (all live WARNINGs). None of the four has a PRA001 counterpart for OF 08.07, which is why the out-of-range solution passes the Bank's rules.
 
@@ -3794,7 +3801,7 @@ Report the figures the instructions require; do not change correct figures to sa
 | boe_b0740 | PRA001 | ERROR | the rule at issue | OF08.01.01.01 sheets 0002, 0010; OF08.01.01.02 sheets 0002, 0010 (a break there may also be the return's own) | run as published |
 | boe_b0737 | PRA001 | ERROR | the rule at issue | OF08.01.01.01 sheets 0002, 0010; OF08.01.01.02 sheets 0002, 0010 (a break there may also be the return's own) | run as published |
 | boe_b0618 | PRA001 | WARNING | cannot hold together with it | - | run as published |
-| boe_b0752_29 | PRA001 | ERROR | holds on the example (control) | - | run as published |
+| boe_b0752_29 | PRA001 | ERROR | related | - | run as published |
 | boe_b0752_36 | PRA001 | ERROR | holds on the example (control) | - | run as published |
 
 boe_b0735, as published in taxonomy 4.1.1 (label: "OFF-Balance sheet items pre-CFs should be consistent across templates for the relevant exposure classes|"):
@@ -3881,13 +3888,13 @@ scope({t: OF08.01.01.01, z:0001;0002;0006;0009;0010;0011;0012;0015;0016;0017;001
 
 #### Why a correct return fails
 
-**Exposure, RWEA, expected loss and provisions (boe_b0735, boe_b0736, boe_b0738-b0740).** On sheets 0002 and 0010, OF 08.01 row 0010 includes row 0080 (slotting) as well as row 0070 (exposures assigned to obligor grades); in the example row 0010 = row 0070 + row 0080, because rows 0170, 0175 and 0180 are empty. Paragraph 77 keeps slotting out of OF 08.03, so the OF 08.03 PD rows add up to the non-CCR part of row 0070 only. Left side minus right side is therefore row 0080 in the rule's column. In the example, sheet 0010: exposure value 36,000,000 against 12,000,000 (gap 24,000,000 = r0080 c0110); RWEA 29,790,000 against 8,190,000 (gap 21,600,000); expected loss 222,000 against 30,000 (gap 192,000); provisions -80,000 against -30,000 (gap -50,000); off-balance-sheet pre-conversion-factor amount 15,000,000 against 5,000,000 (gap 10,000,000 = OF 08.01.01.02 r0080 c0100). At this scale the gaps far exceed any rounding allowance, whatever decimals the filer states. Each rule breaks whenever the slotting figure in its own column is non-zero beyond the rounding allowance. So boe_b0735 needs the slotting book to have undrawn or other off-balance-sheet items (with fully drawn slotting loans it holds), and boe_b0740 needs provisions on slotting exposures. A book whose specialised lending is all on slotting breaks too: row 0010 on sheets 0010 and 0002 carries the slotting amounts, OF 08.03 has nothing to report for them, and the empty sum is read as zero. Paragraph 76, 'The Total template must be reported for the FIRB and the slotting approaches and, separately for the AIRB approach', read alone is the best counter-argument: that the OF 08.03 Total sheet includes slotting. But the same sentence covers OF CR IRB 2, which paragraph 76 itself defines as the exposures of row 0070 of OF CR IRB 1, so it cannot hold slotting either: 'FIRB and slotting' names the sheet, and paragraph 77 is the specific instruction.
+**Exposure, RWEA, expected loss and provisions (boe_b0735, boe_b0736, boe_b0738-b0740).** On sheets 0002 and 0010, OF 08.01 row 0010 includes row 0080 (slotting) as well as row 0070 (exposures assigned to obligor grades); in the example row 0010 = row 0070 + row 0080, because rows 0170, 0175 and 0180 are empty. Paragraph 77 keeps slotting out of OF 08.03, so the OF 08.03 PD rows add up to the non-CCR part of row 0070 only. Left side minus right side is therefore row 0080 in the rule's column. In the example, sheet 0010: exposure value 36,000,000 against 12,000,000 (gap 24,000,000 = r0080 c0110); RWEA 29,790,000 against 8,190,000 (gap 21,600,000); expected loss 222,000 against 30,000 (gap 192,000); provisions -80,000 against -30,000 (gap -50,000); off-balance-sheet pre-conversion-factor amount 15,000,000 against 5,000,000 (gap 10,000,000 = OF 08.01.01.02 r0080 c0100). At this scale the gaps far exceed any rounding allowance, at any decimals the Filing Manual permits for monetary facts (rule 2.18: decimals >= -3). Each rule breaks whenever the slotting figure in its own column is non-zero beyond the rounding allowance. So boe_b0735 needs the slotting book to have undrawn or other off-balance-sheet items (with fully drawn slotting loans it holds), and boe_b0740 needs provisions on slotting exposures. A book whose specialised lending is all on slotting breaks too: row 0010 on sheets 0010 and 0002 carries the slotting amounts, OF 08.03 has nothing to report for them, and the empty sum is read as zero. Paragraph 76, 'The Total template must be reported for the FIRB and the slotting approaches and, separately for the AIRB approach', read alone is the best counter-argument: that the OF 08.03 Total sheet includes slotting. But the same sentence covers OF CR IRB 2, which paragraph 76 itself defines as the exposures of row 0070 of OF CR IRB 1, so it cannot hold slotting either: 'FIRB and slotting' names the sheet, and paragraph 77 is the specific instruction.
 
 **Obligor counts (boe_b0737).** The gap is the number of slotting obligors (row 0080 c0300), as for the monetary rules. When counts are filed with decimals 0 (the Filing Manual's setting for integers), each count carries an allowance of 0.5 and the interval arithmetic adds them up; filed with decimals INF ('exact as written', which the Manual accepts for every numeric type), there is no allowance. At decimals 0 the rule tolerates a gap of 0.5 times the number of count facts it reads on the sheet (row 0010, each reported CCR row, each reported OF 08.03 PD row). It breaks only when the slotting obligors exceed that. Measured in Arelle: one populated PD row and 1 slotting obligor, 2 against 1, satisfied (at decimals INF the same position is unsatisfied [1,1]); the same with 2 slotting obligors, 3 against 1, unsatisfied (the example); three populated PD rows and 2 slotting obligors, 5 against 3, allowance 2.0, satisfied; a sheet holding only slotting with 1 obligor and no OF 08.03 fact, 1 against an exact 0, allowance 0.5, unsatisfied. So whether one slotting obligor breaks the rule depends on the decimals and on the number of count facts; the rule is wrong on sheets 0002 and 0010 and breaks for any firm whose slotting obligors outnumber half the count facts involved.
 
 #### Worked example
 
-Sheet 0010 (Corporates - Specialised Lending, FIRB approach or slotting approach), reference date 31 March 2027. One F-IRB object-finance obligor: drawn 10,000,000 plus an undrawn commitment of 5,000,000 at a 40% conversion factor, exposure value 12,000,000, PD 0.625% (OF 08.03 row 0060, 0.50 to <0.75), LGD 40%, maturity 2.5 years, RWEA 8,190,000, expected loss 30,000, provisions -30,000. Two slotting project-finance obligors, graded Good with 2.5 years or more remaining (Art. 153(5): 90%; Art. 158(6): 0.8% expected loss): drawn 20,000,000 plus undrawn 10,000,000 at 40%, exposure value 24,000,000, RWEA 21,600,000, expected loss 192,000, provisions -50,000. Annex II asks for: OF 08.01 row 0010 = 36,000,000 / 29,790,000 / 222,000 / -80,000 / 3 (c0110 / c0260 / c0282 / c0290 / c0300); row 0070 = 12,000,000 / 8,190,000 / 30,000 / -30,000 / 1; row 0080 = 24,000,000 / 21,600,000 / 192,000 / -50,000 / 2; OF 08.01.01.02 c0100: row 0010 = 15,000,000, row 0070 = 5,000,000, row 0080 = 10,000,000; OF 08.02 one grade with 1 obligor; OF 08.03 sheet 0010 row 0060 = the F-IRB obligor alone (c0020 5,000,000, c0040 12,000,000, c0060 1, c0090 8,190,000, c0100 30,000, c0110 -30,000). In the same return, sheet 0012 (Corporates - Other general corporates - non-SME, FIRB) holds one F-IRB obligor (8,000,000 drawn, PD 0.3125%, LGD 40%, RWEA 3,948,000) in OF 08.01 and OF 08.03 row 0050, where every tie holds, and OF 02.00 r0290 c0010 = 8,190,000 for boe_b0618, which subtracts row 0080 and holds. Counts are stated with decimals 0.
+Sheet 0010 (Corporates - Specialised Lending, FIRB approach or slotting approach), reference date 31 March 2027. One F-IRB object-finance obligor: drawn 10,000,000 plus an undrawn commitment of 5,000,000 at a 40% conversion factor, exposure value 12,000,000, PD 0.625% (OF 08.03 row 0060, 0.50 to <0.75), LGD 40%, maturity 2.5 years, RWEA 8,190,000 (8,190,357 by the Article 153(1) formula, rounded to thousands for readability), expected loss 30,000, provisions -30,000. Two slotting project-finance obligors, graded Good with 2.5 years or more remaining (Art. 153(5): 90%; Art. 158(6): 0.8% expected loss): drawn 20,000,000 plus undrawn 10,000,000 at 40%, exposure value 24,000,000, RWEA 21,600,000, expected loss 192,000, provisions -50,000. Annex II asks for: OF 08.01 row 0010 = 36,000,000 / 29,790,000 / 222,000 / -80,000 / 3 (c0110 / c0260 / c0282 / c0290 / c0300); row 0070 = 12,000,000 / 8,190,000 / 30,000 / -30,000 / 1; row 0080 = 24,000,000 / 21,600,000 / 192,000 / -50,000 / 2; OF 08.01.01.02 c0100: row 0010 = 15,000,000, row 0070 = 5,000,000, row 0080 = 10,000,000; OF 08.02 one grade with 1 obligor; OF 08.03 sheet 0010 row 0060 = the F-IRB obligor alone (c0020 5,000,000, c0040 12,000,000, c0060 1, c0090 8,190,000, c0100 30,000, c0110 -30,000). In the same return, sheet 0012 (Corporates - Other general corporates - non-SME, FIRB) holds one F-IRB obligor (8,000,000 drawn, PD 0.3125%, LGD 40%, RWEA 3,948,000; 3,948,145 by the formula, rounded likewise) in OF 08.01 and OF 08.03 row 0050, where every tie holds, and OF 02.00 r0290 c0010 = 8,190,000 for boe_b0618, which subtracts row 0080 and holds. Counts are stated with decimals 0.
 
 Arelle's result on it:
 
@@ -4255,7 +4262,7 @@ RWEA = RW x exposure value, and nothing in the IRB approach caps RW at 100%. The
 
 #### Worked example
 
-A slotting book reported on the total sheet eba_GA:x1: income-producing real estate, exposure value 10,000,000, every exposure graded 'Satisfactory' (115%), so RWEA = 11,500,000. Rows 0045 (specialised lending under the slotting approach), 0030 (corporates) and 0150 (total) each report col 0105 = 10,000,000 and col 0110 = 11,500,000. No model figure is involved - the 115% is the rule's own table. Arelle: boe_b0908 unsatisfied on all three rows. In a mixed book with exposure value 20,000,000, of which 1,000,000 defaulted and risk-weighted at 0 under FIRB (Art. 153(1)(b)), and RWEA 21,691,708 (19,000,000 x 114.17%), boe_b0908 is [3, 3]: rows 0045, 0055 and 0030 fail; the retail and total rows pass.
+A slotting book reported on the total sheet eba_GA:x1: income-producing real estate, exposure value 10,000,000, every exposure graded 'Satisfactory' (115%), so RWEA = 11,500,000. Rows 0045 (specialised lending under the slotting approach), 0030 (corporates) and 0150 (total) each report col 0105 = 10,000,000 and col 0110 = 11,500,000. No model figure is involved - the 115% is the rule's own table. Arelle: boe_b0908 unsatisfied on all three rows. In a mixed book (the slotting book above, FIRB other general corporates on row 0055 with exposure value 20,000,000, of which 1,000,000 defaulted and weighted 0 under FIRB (Art. 153(1)(b)), RWEA 21,691,708 = 19,000,000 x 114.17%, plus AIRB residential mortgages), boe_b0908 is [3, 3]: rows 0045, 0055 and 0030 fail; the retail and total rows pass.
 
 Arelle's result on it:
 
@@ -4322,8 +4329,8 @@ Report the figures the instructions require; do not change correct figures to sa
 | boe_b0263 | PRA001 | WARNING | cannot hold together with it | - | run as published |
 | boe_b0237 | PRA001 | WARNING | cannot hold together with it | - | run as published |
 | boe_b0987 | PRA001 | WARNING | cannot hold together with it | - | run as published |
-| boe_b0348 | PRA001 | WARNING | holds on the example (control) | - | run as published |
-| boe_b0349 | PRA001 | WARNING | holds on the example (control) | - | run as published |
+| boe_b0348 | PRA001 | WARNING | related | - | run as published |
+| boe_b0349 | PRA001 | WARNING | related | - | run as published |
 | boe_b0262 | PRA001 | ERROR | holds on the example (control) | - | run as published |
 | boe_b0222 | PRA001 | WARNING | related | - | run as published |
 
@@ -4686,7 +4693,7 @@ Arelle's result on it:
 
 #### Proposed change
 
-**Average maturity, column 0250.** Remove 0250 (and, depending on the answer to the question below, 0300) from the scope of boe_b0748 (new scope: c:0020;0030;0035;0040;0050;0060;0070;0080;0090;0101;0102;0103;0104;0110;0125;0140;0150;0160;0170;0171;0172;0173;0180;0190;0200;0210;0251;0252;0253;0254;0260;0265;0270;0275;0276;0280;0281;0282;0290;0310), matching boe_b0749.
+**Average maturity, column 0250.** Remove 0250 (and, depending on the answer to the question below, 0300) from the scope of boe_b0748 (new scope with both 0250 and 0300 removed: c:0020;0030;0035;0040;0050;0060;0070;0080;0090;0101;0102;0103;0104;0110;0125;0140;0150;0160;0170;0171;0172;0173;0180;0190;0200;0210;0251;0252;0253;0254;0260;0265;0270;0275;0276;0280;0281;0282;0290;0310; if the answer on 0300 is 'sum', keep 0300), leaving out 0250 and 0300, as boe_b0749 does.
 
 **Number of obligors, column 0300: a question.** Remove 0300 from boe_b0748's scope together with 0250 (so that it matches boe_b0749), or state in Annex II that the Total sheet's number of obligors is the sum of the class sheets.
 
@@ -4832,7 +4839,7 @@ Report the figures the instructions require; do not change correct figures to sa
 
 **Severity:** ERROR (boe_b0359).
 
-**Effect:** it accepts figures the rules do not permit. **Cause:** it accepts figures the rules do not permit.
+**Effect:** it accepts figures the rules do not permit. **Cause:** the rule allows more values than the requirement it checks.
 
 #### The rules
 
@@ -4870,11 +4877,11 @@ OF 02.00 row 0035 column 0030 (output floor multiplier, metric boe_met:pi10061, 
 
 #### Why a wrong return passes
 
-It cannot. The four values the rules allow - 60%, 65%, 70% (Article 92(5), optional, by year) and 72.5% (Article 92(2A)) - are all accepted; an entity outside the floor reports nothing and the rule does not run (tested: not evaluated). The defect is only that 0.55 is also accepted: a search of the Required Level of Own Funds Part (pp.11-16) finds 72.5% on p.13 and 60%, 65%, 70% on p.15 and no 55% anywhere. The rule is also not date-aware (0.60 would be accepted in 2030), which is likewise permissive.
+A correct return never fails: the four values the rules allow - 60%, 65%, 70% (Article 92(5), optional, by year) and 72.5% (Article 92(2A)) - are all accepted, and an entity outside the floor reports nothing and the rule does not run (tested: not evaluated). A wrong one passes: 0.55 is also accepted; a search of the Required Level of Own Funds Part (pp.11-16) finds 72.5% on p.13 and 60%, 65%, 70% on p.15 and no 55% anywhere. The rule is also not date-aware (0.60 would be accepted in 2030), which is likewise permissive.
 
 #### Worked example
 
-A firm reporting for 2027 files multiplier 0.60: satisfied. A firm that wrongly files 0.55: also satisfied (ERROR-severity rule lets it through). 0.50: unsatisfied.
+A firm reporting for 2027 files multiplier 0.60: satisfied. A firm that wrongly files 0.55: also satisfied (ERROR-severity rule lets it through). 0.50: unsatisfied. The return below files 0.55, the value Article 92 does not give; Arelle accepts it.
 
 Arelle's result on it:
 
@@ -4954,7 +4961,7 @@ if ({t: OF25.01.01.04, r: 0020, c: 0010, dv: false(), seq: False, id: v0, f: ban
 
 #### What the rule requires
 
-For a firm that has chosen the rule 7.1(2) transitional (OF 25.01.01.04 row 0020 = true), boe_b0946 requires OF 25.01 row 0020 column 0030 (the SA-CVA capital requirement) to equal OF 25.03 row 0080 column 0040 (the SA-CVA total AFTER the discount scalar); boe_b0947 and boe_b0948 require the same for full BA-CVA (OF 25.01 row 0030 = OF 25.02.01.01 row 0100) and reduced BA-CVA (OF 25.01 row 0040 = OF 25.02.01.02 row 0050). In the Bank's taxonomy the OF 25.01 cells are the same data points as the methodology totals BEFORE the scalar: OF 25.01.01.03 r0020 c0030 and OF 25.03.01.01 r0070 c0040 are data point 55630 (eba_met:mi184, APR = boe_eba_AP:x10003); r0030 c0030 and OF 25.02.01.01 r0090 c0010 are 55634 (APR = x10005); r0040 c0030 and OF 25.02.01.02 r0040 c0010 are 55638 (APR = x10004). The Bank's table linkbases (tab/of25.01.01.03-rend.xml, of25.03.01.01-rend.xml, of25.02.01.01-rend.xml and of25.02.01.02-rend.xml) give identical coordinates for the shared cells. The after-scalar cells are separate facts: 55669 and 55653 add eba_dim:APE = boe_eba_AP:x10039, and 55654 (reduced BA-CVA) also has no APR member, which boe_b0948's second variable matches by filtering APR = eba_AP:x0. Each rule therefore requires 'total before the scalar' = 'total after the scalar'. Arelle binds the shared fact: a return that writes the SA-CVA figure only in the OF 25.03 row 0070 cell still evaluates boe_b0946, and it fails.
+For a firm that has chosen the rule 7.1(2) transitional (OF 25.01.01.04 row 0020 = true), boe_b0946 requires OF 25.01 row 0020 column 0030 (the SA-CVA capital requirement) to equal OF 25.03 row 0080 column 0040 (the SA-CVA total AFTER the discount scalar); boe_b0947 and boe_b0948 require the same for full BA-CVA (OF 25.01 row 0030 = OF 25.02.01.01 row 0100) and reduced BA-CVA (OF 25.01 row 0040 = OF 25.02.01.02 row 0050). In the Bank's taxonomy the OF 25.01 cells are the same data points as the methodology totals BEFORE the scalar: OF 25.01.01.03 r0020 c0030 and OF 25.03.01.01 r0070 c0040 are one data point (eba_met:mi184; APR boe_eba_AP:x10003; BAS x9, MCY x110, PRP x10, TMA x5, TRI x7); r0030 c0030 and OF 25.02.01.01 r0090 c0010 are one data point (the same, with APR x10005); r0040 c0030 and OF 25.02.01.02 r0040 c0010 are one data point (the same, with APR x10004). The Bank's table linkbases (tab/of25.01.01.03-rend.xml, of25.03.01.01-rend.xml, of25.02.01.01-rend.xml and of25.02.01.02-rend.xml) give identical coordinates for the shared cells. The after-scalar cells are separate facts: OF 25.03.01.01 r0080 c0040 and OF 25.02.01.01 r0100 c0010 add eba_dim:APE = boe_eba_AP:x10039, and OF 25.02.01.02 r0050 c0010 (reduced BA-CVA) adds it as well and has no APR member, which boe_b0948's second variable matches by filtering APR = eba_AP:x0. Each rule therefore requires 'total before the scalar' = 'total after the scalar'. Arelle binds the shared fact: a return that writes the SA-CVA figure only in the OF 25.03 row 0070 cell still evaluates boe_b0946, and it fails.
 
 #### What the instructions and rules say
 
@@ -5156,7 +5163,7 @@ if {t: OF25.01.01.01, r: 0020, c: 0010, dv: false(), seq: False, id: v2, f: bank
 
 #### What the rule requires
 
-For a full BA-CVA firm that files OF 25.02.01.02, b0205 requires K-reduced (r0010 c0010) to equal r0020 c0020 + r0030 c0020. OF25.02.01.02 r0010/r0020/r0030 are the same data points (55645/55646/55647: boe_met:mi10012/mi10013/mi10014, APR x10004) as OF25.02.01.01 r0010/r0020/r0030. On those data points b0076 requires K-reduced = sqrt(r0020 + r0030). Both hold only if the sum S satisfies S = sqrt(S), i.e. S is 0 or 1.
+For a full BA-CVA firm that files OF 25.02.01.02, b0205 requires K-reduced (r0010 c0010) to equal r0020 c0020 + r0030 c0020. OF25.02.01.02 r0010/r0020/r0030 are the same data points (metrics boe_met:mi10012 / mi10013 / mi10014, APR boe_eba_AP:x10004) as OF25.02.01.01 r0010/r0020/r0030. On those data points b0076 requires K-reduced = sqrt(r0020 + r0030). Both hold only if the sum S satisfies S = sqrt(S), i.e. S is 0 or 1.
 
 #### What the instructions and rules say
 
@@ -5174,7 +5181,7 @@ For a full BA-CVA firm that files OF 25.02.01.02, b0205 requires K-reduced (r001
 
 #### Why a correct return fails
 
-The rule runs only for a full BA-CVA firm that also files the reduced BA-CVA table, and such a firm can avoid it by not filing that table (below); where it does run, it is wrong as written. Rule 4.2 and Annex II p.276 make K-reduced the square root of r0020 + r0030. b0205 asserts the sum itself. For any realistic portfolio (S far from 0 and 1), a correct K-reduced fails b0205. The firm cannot satisfy both rules, because b0076 asserts the square root on the same three facts.
+The rule runs only for a full BA-CVA firm that also files the reduced BA-CVA table, and such a firm can avoid it by not filing that table (below); where it does run, it is wrong as written. Rule 4.2 and Annex II p.276 make K-reduced the square root of r0020 + r0030. b0205 asserts the sum itself. Its label ('Under the full BA-CVA approach, the capital requirements are equal to 0.65 times K-full', the same as boe_b0273's) does not describe its expression either. For any realistic portfolio (S far from 0 and 1), a correct K-reduced fails b0205. The firm cannot satisfy both rules, because b0076 asserts the square root on the same three facts.
 
 #### Worked example
 
@@ -5487,11 +5494,11 @@ Arelle's result on it:
 
 #### Other ways of reporting considered
 
-Reporting r0583 = 100,000 (the requirement in own-funds units) fails [0,1]. With the most recent figure the higher one (100,000 against an average of 80,000) and r0583 = 1,250,000 as a risk exposure amount, the rule fails [0,1] too, so under the risk-exposure-amount reading the rule fails even when the most recent figure is the higher one. The only passing value is r0583 = c0120, the most recent figure in own-funds units. That contradicts Art. 325ba(2) whenever the average is higher, and contradicts the cell's metric always. One piece of contrary evidence on units: data point 7935 is shared by OF 02.00 r0584 and OF 24.01 c0210 (a capital surcharge, described as an own-funds item) under metric mi235. The taxonomy is therefore internally inconsistent on the unit of rows 0581-0585, but the rule fails under either unit.
+Reporting r0583 = 100,000 (the requirement in own-funds units) fails [0,1]. With the most recent figure the higher one (100,000 against an average of 80,000) and r0583 = 1,250,000 as a risk exposure amount, the rule fails [0,1] too, so under the risk-exposure-amount reading the rule fails even when the most recent figure is the higher one. The only passing value is r0583 = c0120, the most recent figure in own-funds units. That contradicts Art. 325ba(2) whenever the average is higher, and contradicts the cell's metric always. One piece of contrary evidence on units: OF 02.00 r0584 c0010 and OF 24.01 r0010 c0210 (a capital surcharge, described as an own-funds item) are one data point (metric eba_met:mi235). The taxonomy is therefore internally inconsistent on the unit of rows 0581-0585, but the rule fails under either unit.
 
 #### Proposed change
 
-Replace b0920 with {OF02.00.01.01 r0583 c0010} i= 12.5 i* imax({OF24.02.01.01 r0010 c0110}, {OF24.02.01.01 r0010 c0120}), consistent with mi235 'Total risk exposure amount' and the parent row 0580. If the Bank instead intends rows 0581-0585 in own-funds units, drop the 12.5, change those rows' metric to mi184 and reword Annex II p.35. Either way, resolve the same unit conflict on data point 7935 (OF 02.00 r0584 = OF 24.01 c0210).
+Replace b0920 with {OF02.00.01.01 r0583 c0010} i= 12.5 i* imax({OF24.02.01.01 r0010 c0110}, {OF24.02.01.01 r0010 c0120}), consistent with mi235 'Total risk exposure amount' and the parent row 0580. If the Bank instead intends rows 0581-0585 in own-funds units, drop the 12.5, change those rows' metric to mi184 and reword Annex II p.35. Either way, resolve the same unit conflict on the data point OF 02.00 r0584 c0010 and OF 24.01 r0010 c0210 share (metric eba_met:mi235).
 
 #### EBA precedent
 
@@ -6274,7 +6281,7 @@ On 26 rows of OF 07.00.01.01 (the total row 0010, its of-which rows, the off-bal
 >
 > - PRA PS1/26, Annex II: reporting instructions for the credit risk templates, OF 07.00 row 0080, PDF page 93
 
-> The exposure value of: (a) an asset item shall be its accounting value remaining after specific credit risk adjustments
+> The exposure value of: (a) an asset item shall be its accounting value remaining after specific credit risk adjustments [...]
 >
 > - PRA PS1/26, Appendix 1: the PRA Rulebook instruments (Basel 3.1), Credit Risk: Standardised Approach (CRR) Part, Article 111(1)(a), PDF page 29
 
@@ -6318,30 +6325,36 @@ Two points the log does not cover. (1) The memorandum rows of boe_b0710_1, _2 an
 
 #### Worked example
 
-A firm with no off-balance-sheet business at all, so no cell of columns 0160-0190 is reported anywhere: on OF 07.00.01.01, a real-estate exposure of 1,200,000 on sheet 0010 (rows 0010, 0070, 0330, 0331 and its risk-weight row 0180) and an SME corporate loan of 500,000 on sheet 0008 (rows 0010, 0020, 0070 and risk-weight row 0230); one defaulted loan on OF 07.00.01.03 row 0300 (sheet 0008), one equity holding on OF 07.00.01.04 row 0372 (sheet 0016) and one currency-mismatch mortgage on OF 07.00.01.05 row 0380 (sheet 0010). boe_b0710 is unsatisfied on every one of the five populated rows in its scope, and boe_b0710_1, _2 and _3 once each, while the sibling rules hold (boe_b0471, its _2 and _3, boe_b0556_1 and _2, boe_b0655, boe_b0656, boe_b0657_1 and _2, boe_b0717). With an off-balance-sheet item as well (a loan of 1,000,000 and an undrawn commitment of 400,000 at 40%, Total sheet only), boe_b0710 fails on row 0010 (1,400,000 against 400,000) and holds on row 0080 (400,000 = 400,000).
+A complete standardised-approach return of a firm with no off-balance-sheet business at all, so no cell of columns 0160-0190 is reported anywhere (reference date 31 March 2027; unrated, no CRM; c0010 = c0040 = c0110 = c0150 = c0200 except where provisions are stated). Sheet 0010 (real estate): regulatory residential real estate of 1,200,000 at 20% (rows 0010, 0070, 0330, 0331 and risk-weight row 0180), of which a 200,000 mortgage to a natural person whose income is in another currency, weighted 20% x 1.5 = 30% under Article 123B and, as p.94 instructs, reported against the 20% row with its RWEA reflecting the multiplier: RWEA 1,000,000 x 20% + 200,000 x 30% = 260,000; the mortgage is also in memorandum row 0380 of OF 07.00.01.05 (RWEA 60,000). Sheet 0008 (corporates): an SME loan of 500,000 at 100% (rows 0010, 0020, 0070 and 0230). Sheet 0011 (exposures in default): a corporate loan of 100,000 with 30,000 of specific provisions (c0030 = -30,000), at 100% under Article 127 (rows 0010, 0070 and 0230), also in memorandum row 0300 of OF 07.00.01.03 on the corporates sheet 0008. Sheet 0016: listed equity of 50,000 under Rule 4.2(1) at 160% (RWEA 80,000), in row 0250 (pp.95-96) and memorandum row 0372 of OF 07.00.01.04. The Total sheet 0001 is the sum of the class sheets (original exposure 1,850,000, exposure value 1,820,000, RWEA 910,000) and repeats memorandum rows 0300 and 0380. Column 0235 (RWEA without an ECAI assessment) = column 0220 on every row that has the cell, as boe_b0703 expects, although Annex II pp.86-87 gives columns 0230/0235 the legal reference Article 112(1)(a-d, f, g, l, o, q). boe_b0710 is unsatisfied on each of the 11 populated rows in its scope (rows 0010, 0020, 0330 and 0331 of the Total sheet and of the class sheets), boe_b0710_1 and _3 on both of their sheets and boe_b0710_2 once, while the sibling rules (boe_b0471 and its _2 and _3, boe_b0556_1 and _2, boe_b0655, boe_b0656, boe_b0657_1 and _2, boe_b0717) and the rules that tie the sheets and rows together (boe_b0713, boe_b0719, boe_b0721, boe_b0703) hold. Run in Arelle against every PRA001 rule (213 run on a return that files only OF 07.00; 99 evaluate), the return breaks only the boe_b0710 family and boe_b1016 / boe_b0491, which any equity under the Standardised Transitional Approach fails in 2027 (PI-01). With an off-balance-sheet item as well (a loan of 1,000,000 and an undrawn commitment of 400,000 at 40%, Total sheet only), boe_b0710 fails on row 0010 (1,400,000 against 400,000) and holds on row 0080 (400,000 = 400,000).
 
 Arelle's result on it:
 
 | Rule | Satisfied | Unsatisfied | What the example shows |
 |---|---|---|---|
-| boe_b0471 | 7 | 0 | holds |
-| boe_b0471_2 | 1 | 0 | - |
-| boe_b0471_3 | 1 | 0 | - |
-| boe_b0556_1 | 1 | 0 | - |
-| boe_b0556_2 | 1 | 0 | - |
-| boe_b0655 | 18 | 0 | - |
-| boe_b0656 | 2 | 0 | - |
+| boe_b0471 | 18 | 0 | holds |
+| boe_b0471_2 | 2 | 0 | - |
+| boe_b0471_3 | 2 | 0 | - |
+| boe_b0491 | 0 | 1 | - |
+| boe_b0556_1 | 2 | 0 | - |
+| boe_b0556_2 | 2 | 0 | - |
+| boe_b0655 | 46 | 0 | - |
+| boe_b0656 | 4 | 0 | - |
 | boe_b0657_1 | 2 | 0 | - |
-| boe_b0657_2 | 2 | 0 | - |
-| boe_b0710 | 0 | 5 | fails |
-| boe_b0710_1 | 0 | 1 | fails |
+| boe_b0657_2 | 4 | 0 | - |
+| boe_b0703 | 14 | 0 | holds |
+| boe_b0710 | 0 | 11 | fails |
+| boe_b0710_1 | 0 | 2 | fails |
 | boe_b0710_2 | 0 | 1 | fails |
-| boe_b0710_3 | 0 | 1 | fails |
-| boe_b0717 | 4 | 0 | - |
+| boe_b0710_3 | 0 | 2 | fails |
+| boe_b0713 | 4 | 0 | holds |
+| boe_b0717 | 10 | 0 | - |
+| boe_b0719 | 20 | 0 | holds |
+| boe_b0721 | 12 | 0 | - |
 | boe_b0765 | 0 | 0 | - |
+| boe_b1016 | 0 | 1 | - |
 
 <details>
-<summary>The return's 68 facts</summary>
+<summary>The return's 178 facts</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -6351,6 +6364,7 @@ Arelle's result on it:
 | OF07.00.01.01 | 0010 |  | 0010 | 0150 | 1,200,000 |
 | OF07.00.01.01 | 0010 |  | 0010 | 0200 | 1,200,000 |
 | OF07.00.01.01 | 0010 |  | 0010 | 0220 | 260,000 |
+| OF07.00.01.01 | 0010 |  | 0010 | 0235 | 260,000 |
 | OF07.00.01.01 | 0010 |  | 0070 | 0010 | 1,200,000 |
 | OF07.00.01.01 | 0010 |  | 0070 | 0040 | 1,200,000 |
 | OF07.00.01.01 | 0010 |  | 0070 | 0110 | 1,200,000 |
@@ -6374,18 +6388,21 @@ Arelle's result on it:
 | OF07.00.01.01 | 0010 |  | 0180 | 0150 | 1,200,000 |
 | OF07.00.01.01 | 0010 |  | 0180 | 0200 | 1,200,000 |
 | OF07.00.01.01 | 0010 |  | 0180 | 0220 | 260,000 |
+| OF07.00.01.01 | 0010 |  | 0180 | 0235 | 260,000 |
 | OF07.00.01.01 | 0008 |  | 0010 | 0010 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0010 | 0040 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0010 | 0110 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0010 | 0150 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0010 | 0200 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0010 | 0220 | 500,000 |
+| OF07.00.01.01 | 0008 |  | 0010 | 0235 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0020 | 0010 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0020 | 0040 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0020 | 0110 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0020 | 0150 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0020 | 0200 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0020 | 0220 | 500,000 |
+| OF07.00.01.01 | 0008 |  | 0020 | 0235 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0070 | 0010 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0070 | 0040 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0070 | 0110 | 500,000 |
@@ -6397,12 +6414,113 @@ Arelle's result on it:
 | OF07.00.01.01 | 0008 |  | 0230 | 0150 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0230 | 0200 | 500,000 |
 | OF07.00.01.01 | 0008 |  | 0230 | 0220 | 500,000 |
+| OF07.00.01.01 | 0008 |  | 0230 | 0235 | 500,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0010 | 100,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0030 | -30,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0040 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0110 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0150 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0200 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0220 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0010 | 0235 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0070 | 0010 | 100,000 |
+| OF07.00.01.01 | 0011 |  | 0070 | 0030 | -30,000 |
+| OF07.00.01.01 | 0011 |  | 0070 | 0040 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0070 | 0110 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0070 | 0150 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0070 | 0200 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0070 | 0220 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0230 | 0010 | 100,000 |
+| OF07.00.01.01 | 0011 |  | 0230 | 0030 | -30,000 |
+| OF07.00.01.01 | 0011 |  | 0230 | 0040 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0230 | 0150 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0230 | 0200 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0230 | 0220 | 70,000 |
+| OF07.00.01.01 | 0011 |  | 0230 | 0235 | 70,000 |
+| OF07.00.01.01 | 0016 |  | 0010 | 0010 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0010 | 0040 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0010 | 0110 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0010 | 0150 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0010 | 0200 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0010 | 0220 | 80,000 |
+| OF07.00.01.01 | 0016 |  | 0010 | 0235 | 80,000 |
+| OF07.00.01.01 | 0016 |  | 0070 | 0010 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0070 | 0040 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0070 | 0110 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0070 | 0150 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0070 | 0200 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0070 | 0220 | 80,000 |
+| OF07.00.01.01 | 0016 |  | 0250 | 0010 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0250 | 0040 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0250 | 0150 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0250 | 0200 | 50,000 |
+| OF07.00.01.01 | 0016 |  | 0250 | 0220 | 80,000 |
+| OF07.00.01.01 | 0016 |  | 0250 | 0235 | 80,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0010 | 1,850,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0030 | -30,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0040 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0110 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0150 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0200 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0220 | 910,000 |
+| OF07.00.01.01 | 0001 |  | 0010 | 0235 | 910,000 |
+| OF07.00.01.01 | 0001 |  | 0070 | 0010 | 1,850,000 |
+| OF07.00.01.01 | 0001 |  | 0070 | 0030 | -30,000 |
+| OF07.00.01.01 | 0001 |  | 0070 | 0040 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0070 | 0110 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0070 | 0150 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0070 | 0200 | 1,820,000 |
+| OF07.00.01.01 | 0001 |  | 0070 | 0220 | 910,000 |
+| OF07.00.01.01 | 0001 |  | 0020 | 0010 | 500,000 |
+| OF07.00.01.01 | 0001 |  | 0020 | 0040 | 500,000 |
+| OF07.00.01.01 | 0001 |  | 0020 | 0110 | 500,000 |
+| OF07.00.01.01 | 0001 |  | 0020 | 0150 | 500,000 |
+| OF07.00.01.01 | 0001 |  | 0020 | 0200 | 500,000 |
+| OF07.00.01.01 | 0001 |  | 0020 | 0220 | 500,000 |
+| OF07.00.01.01 | 0001 |  | 0020 | 0235 | 500,000 |
+| OF07.00.01.01 | 0001 |  | 0330 | 0010 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0330 | 0040 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0330 | 0110 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0330 | 0150 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0330 | 0200 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0330 | 0220 | 260,000 |
+| OF07.00.01.01 | 0001 |  | 0331 | 0010 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0331 | 0040 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0331 | 0110 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0331 | 0150 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0331 | 0200 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0331 | 0220 | 260,000 |
+| OF07.00.01.01 | 0001 |  | 0180 | 0010 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0180 | 0040 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0180 | 0150 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0180 | 0200 | 1,200,000 |
+| OF07.00.01.01 | 0001 |  | 0180 | 0220 | 260,000 |
+| OF07.00.01.01 | 0001 |  | 0180 | 0235 | 260,000 |
+| OF07.00.01.01 | 0001 |  | 0230 | 0010 | 600,000 |
+| OF07.00.01.01 | 0001 |  | 0230 | 0030 | -30,000 |
+| OF07.00.01.01 | 0001 |  | 0230 | 0040 | 570,000 |
+| OF07.00.01.01 | 0001 |  | 0230 | 0150 | 570,000 |
+| OF07.00.01.01 | 0001 |  | 0230 | 0200 | 570,000 |
+| OF07.00.01.01 | 0001 |  | 0230 | 0220 | 570,000 |
+| OF07.00.01.01 | 0001 |  | 0230 | 0235 | 570,000 |
+| OF07.00.01.01 | 0001 |  | 0250 | 0010 | 50,000 |
+| OF07.00.01.01 | 0001 |  | 0250 | 0040 | 50,000 |
+| OF07.00.01.01 | 0001 |  | 0250 | 0150 | 50,000 |
+| OF07.00.01.01 | 0001 |  | 0250 | 0200 | 50,000 |
+| OF07.00.01.01 | 0001 |  | 0250 | 0220 | 80,000 |
+| OF07.00.01.01 | 0001 |  | 0250 | 0235 | 80,000 |
 | OF07.00.01.03 | 0008 |  | 0300 | 0010 | 100,000 |
 | OF07.00.01.03 | 0008 |  | 0300 | 0030 | -30,000 |
 | OF07.00.01.03 | 0008 |  | 0300 | 0040 | 70,000 |
 | OF07.00.01.03 | 0008 |  | 0300 | 0150 | 70,000 |
 | OF07.00.01.03 | 0008 |  | 0300 | 0200 | 70,000 |
 | OF07.00.01.03 | 0008 |  | 0300 | 0220 | 70,000 |
+| OF07.00.01.03 | 0001 |  | 0300 | 0010 | 100,000 |
+| OF07.00.01.03 | 0001 |  | 0300 | 0030 | -30,000 |
+| OF07.00.01.03 | 0001 |  | 0300 | 0040 | 70,000 |
+| OF07.00.01.03 | 0001 |  | 0300 | 0150 | 70,000 |
+| OF07.00.01.03 | 0001 |  | 0300 | 0200 | 70,000 |
+| OF07.00.01.03 | 0001 |  | 0300 | 0220 | 70,000 |
 | OF07.00.01.04 | 0016 |  | 0372 | 0010 | 50,000 |
 | OF07.00.01.04 | 0016 |  | 0372 | 0040 | 50,000 |
 | OF07.00.01.04 | 0016 |  | 0372 | 0150 | 50,000 |
@@ -6413,6 +6531,11 @@ Arelle's result on it:
 | OF07.00.01.05 | 0010 |  | 0380 | 0150 | 200,000 |
 | OF07.00.01.05 | 0010 |  | 0380 | 0200 | 200,000 |
 | OF07.00.01.05 | 0010 |  | 0380 | 0220 | 60,000 |
+| OF07.00.01.05 | 0001 |  | 0380 | 0010 | 200,000 |
+| OF07.00.01.05 | 0001 |  | 0380 | 0040 | 200,000 |
+| OF07.00.01.05 | 0001 |  | 0380 | 0150 | 200,000 |
+| OF07.00.01.05 | 0001 |  | 0380 | 0200 | 200,000 |
+| OF07.00.01.05 | 0001 |  | 0380 | 0220 | 60,000 |
 
 </details>
 
@@ -6454,9 +6577,9 @@ Nothing to change for a submission from 19 October 2026: the gateway no longer r
 
 | Rule | Module | Severity | Part in the issue | Where the issue applies | At the gateway |
 |---|---|---|---|---|---|
-| boe_b0656 | PRA001 | ERROR | holds on the example (control) | - | run as published |
-| boe_b0556_2 | PRA001 | ERROR | holds on the example (control) | - | run as published |
-| boe_b0665 | PRA001 | WARNING | holds on the example (control) | - | run as published |
+| boe_b0656 | PRA001 | ERROR | related | - | run as published |
+| boe_b0556_2 | PRA001 | ERROR | related | - | run as published |
+| boe_b0665 | PRA001 | WARNING | related | - | run as published |
 
 #### What the rule requires
 
@@ -6502,11 +6625,11 @@ Report a defaulted real-estate exposure on the Retail or Corporates memorandum s
 
 #### Proposed change
 
-Decide which is intended and align the other. Either add sheet 0010 (Real estate exposures) - and 0005 / 0006 if 'Article 112(1)(a) to (i)' on p.97 is meant - to table OF07.00.01.03 and to the seven-sheet scopes of its 11 rules (boe_b0471_2, b0556_2, b0656, b0660, b0665, b0670, b0672_1, b0673, b0708_1, b0710_1, b0733_1; boe_b0710_1 is deactivated at the gateway from 19 October 2026, see PI-22); or correct Annex II: delete para 52(g) and 'Real estate' from para 54, replace 'Article 112 (1)(a) to (i)' on p.97 with the para 52 list, and reword para 55 ('in the total and in the exposure class in default') to say the Total sheet and the sheet of the original class.
+For real estate, the Bank has said it will add sheet 0010 (known issue 27); please add it to the seven-sheet scopes of the 11 rules on the table too (boe_b0471_2, b0556_2, b0656, b0660, b0665, b0670, b0672_1, b0673, b0708_1, b0710_1, b0733_1; boe_b0710_1 is deactivated at the gateway from 19 October 2026, see PI-22). For multilateral development banks and international organisations (p.97 'Article 112(1)(a) to (i)' against para 52), either add sheets 0005 / 0006 or replace '(a) to (i)' on p.97 with the para 52 list; and reword para 55 ('in the total and in the exposure class in default') to say the Total sheet and the sheet of the original class.
 
 #### EBA precedent
 
-The six-class list is the EBA's (CRR Annex II para 52: central governments, regional governments, PSEs, institutions, corporates, retail). The sentence 'in the total and in the exposure class in default' is also inherited from CRR Annex II para 55 and was never a sheet in the EBA taxonomy either. The additions of real estate (paras 52(g), 54) and of '(a) to (i)' (p.97) are the PRA's own.
+The six-class list is the EBA's (CRR Annex II para 52: central governments, regional governments, PSEs, institutions, corporates, retail). The sentence 'in the total and in the exposure class in default' is also inherited from CRR Annex II para 55, and the EBA's rules on these memorandum rows are scoped to the same seven sheets (the EBA table linkbase itself was not checked). The additions of real estate (paras 52(g), 54) and of '(a) to (i)' (p.97) are the PRA's own.
 
 #### Who is affected
 
@@ -6524,7 +6647,7 @@ Follow the PRA's interim instruction in the Bank's known-issues log entry 27: "A
 
 **Severity:** WARNING (boe_b0272).
 
-**Effect:** it accepts figures the rules do not permit. **Cause:** it accepts figures the rules do not permit.
+**Effect:** it accepts figures the rules do not permit. **Cause:** the rule allows more values than the requirement it checks.
 
 **The Bank's known-issues log, entry 29** (published 11 November 2026; records this issue):
 
@@ -6557,7 +6680,7 @@ K-full = 0.25 × K-reduced + 0.75 × K-hedged, but only when the firm reports th
 
 #### Why a wrong return passes
 
-It does not: this is a missed error, not a false failure. The Bank's log records it. For a firm whose only CVA method is full BA-CVA, the guard is false, so a wrong K-full passes b0272 vacuously. b0273 only ties row 0090 to row 0080, and b0076/b0077 check the two square roots, so a mis-stated K-full passes every rule.
+A correct return does not fail: this is a missed error, not a false failure. The Bank's log records it. For a firm whose only CVA method is full BA-CVA, the guard is false, so a wrong K-full passes b0272 vacuously. b0273 only ties row 0090 to row 0080, and b0076/b0077 check the two square roots, so a mis-stated K-full passes every rule.
 
 #### Worked example
 

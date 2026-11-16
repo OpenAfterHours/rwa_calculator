@@ -63,6 +63,7 @@ from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.collateral_type_check import record_unrecognised_collateral_type
+from rwa_calc.engine.crm.guarantor_eligibility import record_ineligible_guarantors
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
@@ -760,7 +761,7 @@ class CRMProcessor:
         # error is appended between the two points, so the list order is unchanged;
         # the seal below strips the ``_guarantor_ineligible`` flag it reads.
         if guarantees_applied:
-            guarantees_mod.record_ineligible_guarantors(exposures, errors)
+            record_ineligible_guarantors(exposures, errors)
 
         # CRR Art. 230(2) Table 5 C*: diagnose the collateral the minimum-
         # collateralisation threshold dropped. Emitted here, on the materialised frame,

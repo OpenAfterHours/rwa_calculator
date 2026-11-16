@@ -568,6 +568,7 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/classify/approach.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/eu_sovereign.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/unify.py",
@@ -2042,7 +2043,7 @@
         "engine/classify/attributes.py",
         "engine/classify/permissions.py",
         "engine/classify/subtypes.py",
-        "engine/crm/guarantees.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/fx_rate_sync.py",
         "engine/irb/__init__.py",
         "engine/irb/adjustments.py",
@@ -2408,7 +2409,7 @@
         "engine/classify/subtypes.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
-        "engine/crm/guarantees.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/crm/min_collateralisation.py",
         "engine/irb/__init__.py",
         "engine/irb/calculator.py",
@@ -3102,7 +3103,7 @@
     {
       "article": "201",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach"
+        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -3120,7 +3121,7 @@
       ],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantees.py",
+        "engine/crm/guarantor_eligibility.py",
         "engine/crm/processor.py",
         "reporting/corep/c02.py",
         "reporting/corep/irb_sheets.py"
@@ -8119,7 +8120,7 @@
     {
       "article": "201",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach"
+        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -8127,7 +8128,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantees.py"
+        "engine/crm/guarantor_eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_227_art_201_guarantor_eligibility.py",

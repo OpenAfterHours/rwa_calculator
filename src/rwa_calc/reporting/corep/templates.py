@@ -535,6 +535,25 @@ C07_00_SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
 # sheets, built by ``corep/c07.py::c07_total_sheet``. Never an exposure class.
 C07_00_TOTAL_SHEET_KEY: str = "total"
 
+# The classes row 0015 "of which: Defaulted exposures" is reported in: the ones
+# that KEEP a defaulted exposure, by ``ExposureClass`` value (read back through
+# ``C07_00_SA_SHEET_MAP`` by ``get_c07_defaulted_row_sheet_keys``). CRR COREP
+# Annex II p.91: "This row shall only be reported in exposure classes 'Items
+# associated with a particular high risk' and 'Equity exposures'". PS1/26 Annex
+# II p.88 adds CIUs: "Only exposures in exposure classes 'exposures associated
+# with particularly high risk', 'subordinated debt, equity and other own funds
+# instruments', and 'exposures in the form of units or shares in collective
+# investment undertakings ('CIUs')' shall be reported in this row if they are in
+# default." Every other class sheet — the "in default" one first — leaves the row
+# blank: EBA ``v4721_m`` / ``v4722_m`` and the Bank's ``boe_b0431`` / ``boe_b1069``
+# list them, and ``tests/contracts/test_c07_defaulted_row_published_sheets.py``
+# holds this to those lists. The taxonomy publishes the row on every sheet, so it
+# cannot anchor the scope.
+_C07_DEFAULTED_ROW_CLASSES: dict[str, tuple[str, ...]] = {
+    "CRR": ("high_risk", "equity"),
+    "BASEL_3_1": ("high_risk", "equity", "ciu"),
+}
+
 # The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
 # report under the IRB umbrella: Art. 155(2) simple-RW and Art. 155(3) PD/LGD.
 # Under Basel 3.1 no equity leg carries these (Art. 147A removes IRB equity —
@@ -1811,6 +1830,16 @@ C09_01_SA_CLASS_MAP: dict[str, str] = {
 def get_c07_columns(framework: str = "CRR") -> list[COREPColumn]:
     """Return the C 07.00 / OF 07.00 column definitions for the given framework."""
     return B31_C07_COLUMNS if framework == "BASEL_3_1" else CRR_C07_COLUMNS
+
+
+def get_c07_defaulted_row_sheet_keys(framework: str = "CRR") -> frozenset[str]:
+    """The C 07.00 / OF 07.00 class sheets row 0015 is reported on (Annex II row 0015).
+
+    High risk and equity under CRR; high risk, equity and CIUs under Basel 3.1
+    (``_C07_DEFAULTED_ROW_CLASSES``). Never the Total, which adds these sheets up.
+    """
+    classes = _C07_DEFAULTED_ROW_CLASSES["BASEL_3_1" if framework == "BASEL_3_1" else "CRR"]
+    return frozenset(C07_00_SA_SHEET_MAP[name] for name in classes)
 
 
 def get_c08_columns(framework: str = "CRR") -> list[COREPColumn]:

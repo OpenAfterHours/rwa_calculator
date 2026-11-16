@@ -153,7 +153,9 @@ docs/plans/phase7-declarative-reporting.md §6):
   the CCF bucket, the substitution flag, on/off-balance-sheet). A row
   whose subset is EMPTY (or whose discriminators are absent) renders
   ALL-NULL — the retired ``_null_row`` contract — via a module post-step
-  that re-applies each row's predicate.
+  that re-applies each row's predicate. A row Annex II confines to some
+  classes carries a sheet term too, so it is all-null on every other sheet:
+  row 0015 (defaulted) on the high-risk / equity (+ CIU, Basel 3.1) sheets.
 - Cells whose sources are never produced render None via constant
   Formulas (0240; 0210/0211 when no ``risk_type`` / ``cp_entity_type``
   carrier is sealed; the CCF buckets and supporting-factor adjustments
@@ -243,6 +245,7 @@ from rwa_calc.reporting.corep.templates import (
     C07_00_TOTAL_SHEET_KEY,
     EQUITY_IRB_METHODS,
     get_c07_columns,
+    get_c07_defaulted_row_sheet_keys,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
@@ -303,6 +306,12 @@ _ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
 # The published rule set enforces the scope: ``v7477_m`` (live, WARNING) is
 # ``{r0040} = empty`` on every C 07.00 z-code except the Total and 0010.
 _SHEET_KEY_COL: str = "c07_sheet"
+
+# The same mechanism for a row Annex II allows on SEVERAL sheets: row 0015 is
+# reported on the high-risk and equity sheets (plus CIU under Basel 3.1) alone
+# (``templates.get_c07_defaulted_row_sheet_keys``), and a tolerant-equals term
+# names one value, so the membership is a per-sheet constant BOOLEAN instead.
+_DEFAULTED_ROW_SHEET_COL: str = "c07_defaulted_row_sheet"
 
 # Article 112(1)(i) — read back from the sheet map so the scope cannot drift
 # from the z-axis it scopes against.
@@ -626,6 +635,7 @@ def c07_plans(
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
     unreported = get_c07_unreported_cells(framework)
+    defaulted_row_sheets = get_c07_defaulted_row_sheet_keys(framework)
 
     plans: dict[str, SheetPlan] = {}
     # Sealed-ledger rule: the class columns always exist; a null key (no source
@@ -654,9 +664,11 @@ def c07_plans(
         plans[ec] = SheetPlan(
             spec=spec,
             # Tagged with its own sheet key so a row Annex II scopes to one
-            # exposure class can say so as a membership term (_SHEET_KEY_COL).
+            # exposure class can say so as a membership term (_SHEET_KEY_COL),
+            # and with whether row 0015 may report here (_DEFAULTED_ROW_SHEET_COL).
             frame=sheet_frame(_BASIS, sa_df, ec).with_columns(
-                pl.lit(ec, dtype=pl.String).alias(_SHEET_KEY_COL)
+                pl.lit(ec, dtype=pl.String).alias(_SHEET_KEY_COL),
+                pl.lit(ec in defaulted_row_sheets).alias(_DEFAULTED_ROW_SHEET_COL),
             ),
             ctx=ReportingContext(
                 substitution_inflow=inflows.total.get(ec, 0.0),
@@ -1738,7 +1750,9 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
         if ref == "0010":
             return _terms()
         if ref == "0015":
-            return _terms(("c07_defaulted", True))
+            # "of which: Defaulted exposures" in the classes that keep them —
+            # never the "in default" class itself (_DEFAULTED_ROW_SHEET_COL).
+            return _terms(("c07_defaulted", True), (_DEFAULTED_ROW_SHEET_COL, True))
         if ref == "0020":
             return _terms(("c07_sme", True))
         if ref in _SL_TYPE_MAP:

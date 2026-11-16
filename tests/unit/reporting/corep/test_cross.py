@@ -566,25 +566,22 @@ class TestExposureTypeRows:
 class TestOfWhichDetailRows:
     """Tests for C 07.00 'of which' detail rows 0015 (defaulted) and 0020 (SME)."""
 
-    def test_c07_defaulted_row_populated(self) -> None:
-        """Row 0015 (defaulted) is populated when default_status column exists."""
+    def test_c07_defaulted_row_blank_on_the_corporate_sheet(self) -> None:
+        """Row 0015 is null on the corporate sheet even with a defaulted leg there.
+
+        Annex II reports row 0015 in the high-risk and equity classes (+ CIU
+        under Basel 3.1) only; the reported-sheet cases live in
+        test_c07_defaulted_row_scope.py. SA_DEF_1 (EAD 800, defaulted) is on
+        this sheet, so the blank is the scope and not an empty book.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
         corp = bundle.c07_00["corporate"]
+        assert corp.filter(pl.col("row_ref") == "0010")["0200"][0] == pytest.approx(4550.0)
         defaulted = corp.filter(pl.col("row_ref") == "0015")
-        # SA_DEF_1: EAD=800, default_status=True
-        assert defaulted["0200"][0] == pytest.approx(800.0)
-
-    def test_c07_defaulted_row_rwea(self) -> None:
-        """Row 0015 RWEA matches defaulted exposures only."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
-
-        corp = bundle.c07_00["corporate"]
-        defaulted = corp.filter(pl.col("row_ref") == "0015")
-        # SA_DEF_1: rwa_final=1200
-        assert defaulted["0220"][0] == pytest.approx(1200.0)
+        assert defaulted["0200"][0] is None
+        assert defaulted["0220"][0] is None
 
     def test_c07_sme_row_populated(self) -> None:
         """Row 0020 (SME) is populated when sme columns exist."""
@@ -599,12 +596,15 @@ class TestOfWhichDetailRows:
         assert sme_row["0200"][0] == pytest.approx(550.0)
 
     def test_c07_defaulted_row_null_without_flag(self) -> None:
-        """Row 0015 is null when no defaulted identification columns exist."""
+        """Row 0015 is null on a sheet that may carry it when no default flag exists."""
         gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results())  # no default_status
+        # no default_status; every leg on the high-risk sheet, where row 0015 is allowed
+        frame = _sa_results().with_columns(pl.lit("high_risk").alias("exposure_class"))
+        bundle = gen.generate_from_lazyframe(frame)
 
-        corp = bundle.c07_00["corporate"]
-        defaulted = corp.filter(pl.col("row_ref") == "0015")
+        high_risk = bundle.c07_00["high_risk"]
+        assert high_risk.filter(pl.col("row_ref") == "0010")["0200"][0] is not None
+        defaulted = high_risk.filter(pl.col("row_ref") == "0015")
         assert defaulted["0200"][0] is None
 
     def test_c0801_defaulted_ead_col_0125(self) -> None:

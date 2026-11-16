@@ -455,6 +455,7 @@
         "tests/acceptance/ccr/test_ccr_ls_long_settlement_inert.py",
         "tests/acceptance/crr/test_p1_154_art_118_international_organisation_class.py",
         "tests/acceptance/reporting/test_c07_art112_class_axis.py",
+        "tests/acceptance/reporting/test_c07_defaulted_row_scope.py",
         "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/conformance/portfolios.py",
@@ -6033,6 +6034,7 @@
         "reporting/filing/sheet_maps.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_c07_defaulted_row_scope.py",
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/unit/test_b31_sa_risk_weights.py",

@@ -584,13 +584,21 @@ flowchart TD
     | Ref | Row |
     |-----|-----|
     | 0010 | **TOTAL EXPOSURES** |
-    | 0015 | of which: Defaulted exposures |
+    | 0015 | of which: Defaulted exposures — high-risk and equity sheets, and the Total, only |
     | 0020 | of which: SME |
     | 0030 | of which: Exposures subject to SME-supporting factor |
     | 0035 | of which: Exposures subject to infrastructure supporting factor |
     | 0040 | of which: Secured by mortgages on immovable property — Residential |
     | 0050 | of which: Exposures under permanent partial use of SA |
     | 0060 | of which: Exposures under sequential IRB implementation |
+
+    !!! note "Row 0015 is not reported on the \"exposures in default\" sheet"
+        Annex II reports row 0015 only in the classes that keep a defaulted exposure:
+        high risk and equity under CRR, plus CIUs under Basel 3.1. A defaulted exposure
+        of any other class moves to the "exposures in default" class (j), where row
+        0010 carries it and row 0015 stays blank; the Total adds up the allowed sheets
+        only. The published rules `v4721_m` / `v4722_m` (EBA) and `boe_b0431` /
+        `boe_b1069` (Bank of England) require the row blank everywhere else.
 
     **Section 2 — Breakdown by Exposure Types**
 
@@ -673,7 +681,7 @@ flowchart TD
     | Ref | Row | vs CRR |
     |-----|-----|--------|
     | 0010 | **TOTAL EXPOSURES** | |
-    | 0015 | of which: Defaulted exposures | |
+    | 0015 | of which: Defaulted exposures — high-risk, equity and CIU sheets, and the Total, only | Adds CIU |
     | 0020 | of which: SME | |
     | ==0021== | ==of which: Specialised lending — Object finance== | ==**New**== |
     | ==0022== | ==of which: Specialised lending — Commodities finance== | ==**New**== |

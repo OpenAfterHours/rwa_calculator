@@ -35,7 +35,11 @@ Scope: Basel 3.1 only. The CRR layout declares nothing: no EBA template or
 taxonomy is held to read its grey cells from, and a guess would blank real
 figures. Sheet scope is declared for the Total sheet alone
 (``get_c07_rows_not_on_total``): which CLASS sheets carry the memorandum rows
-is the open question recorded as P1.377.
+is the open question recorded as P1.377. Row 0015's sheet scope is not here
+either: the taxonomy publishes that row on all sixteen sheets, and the
+restriction to the high-risk, equity and CIU classes comes from the Annex II
+instructions and the rules that enforce them, so it is declared in
+``templates.get_c07_defaulted_row_sheet_keys``.
 
 References:
 - PRA PS1/26 Annex I (OF 07.00 template); Annex II §3.2.2 ¶48, §3.2.5

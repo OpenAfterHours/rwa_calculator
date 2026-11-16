@@ -120,5 +120,13 @@ def _blank_sheet_codes(rule: ValidationRule) -> set[str]:
 
 
 def _sheet_keys(map_name: str, codes: set[str]) -> frozenset[str]:
+    """Our sheet keys for the published ``codes``; a code we hold no sheet for is a failure.
+
+    An empty ``bundle_keys`` (CRR z0014 today) would otherwise drop out of the
+    expected side, and the equality with the declaration could still hold over
+    a sheet the rules allow and we can never report.
+    """
     entries = SHEET_INDEX_MAPS[map_name]
+    unkeyed = sorted(code for code in codes if not entries[code].bundle_keys)
+    assert not unkeyed, f"{map_name}: allowed sheet codes {unkeyed} map to no bundle key"
     return frozenset(key for code in codes for key in entries[code].bundle_keys)

@@ -276,7 +276,8 @@ Approach's), but always allocated to row 0261 in Section 3.
       `sa_loan_split_residual_rw`
       (`engine/sa/b31_risk_weight_tables.py::with_b31_loan_split_parts`; named once as
       `contracts/edges.py::LOAN_SPLIT_CARRIERS`; CONDITIONAL columns on every
-      calculator edge and on `AGGREGATOR_EXIT_EDGE`, never produced under CRR). `reporting/kernel/rw_parts.py::split_risk_weight_parts` turns each
+      calculator edge and on `AGGREGATOR_EXIT_EDGE`, never produced under CRR).
+      `reporting/kernel/rw_parts.py::split_risk_weight_parts` turns each
       such ledger row into two report rows before OF 07.00 is cut: every column a cell
       sums is split by the share (exposure) or by each part's share of the weight
       (RWEA), so the parts add back to the row, and each part bands on its own weight.
@@ -285,8 +286,9 @@ Approach's), but always allocated to row 0261 in Section 3.
       keeps the multiplier — and a guaranteed, defaulted or otherwise re-weighted leg
       stays whole: Art. 127 and CRM substitution run after the dispatcher and leave
       its record on the row, so the reader, not the engine, is what keeps a defaulted
-      mortgage out of the 20% / 75% rows. Both parts stay on the real-estate sheet (Art. 112(2) Table A2 ranks
-      real estate above retail and corporates; Art. 123(2)). Worked example
+      mortgage out of the 20% / 75% rows. Both parts stay on the real-estate sheet
+      (Art. 112(2) Table A2 ranks real estate above retail and corporates;
+      Art. 123(2)). Worked example
       (`b31/rich`, `RP-LN-RRE`, 400,000 at 60% LTV to a natural person, 24.58% as a
       whole): row 0180 366,666.67 / RWEA 73,333.33, row 0220 33,333.33 / RWEA
       25,000.00, row 0280 empty, as `boe_b0445` requires on sheet 0010. No risk weight

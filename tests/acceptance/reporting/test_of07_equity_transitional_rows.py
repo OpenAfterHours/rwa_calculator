@@ -232,7 +232,10 @@ def test_the_band_rows_foot_to_row_0010(b31: tuple, equity_sheet: str, column: s
 def test_the_total_sheet_carries_the_same_equity_rows(
     b31: tuple, equity_sheet: str, total_sheet: str, row_ref: str, column: str
 ) -> None:
-    """Annex II ¶47: the Total sheet is the total across classes; only class (p) is in these rows."""
+    """Annex II ¶47: the Total sheet is the total across classes.
+
+    Only class (p) is in these rows.
+    """
     corep = b31[1]
 
     assert _cell(corep, total_sheet, row_ref, column) == pytest.approx(
@@ -265,18 +268,24 @@ def test_the_standardised_transitional_memorandum_rows_carry_the_moved_legs(
 def test_the_irb_transitional_memorandum_rows_stay_empty(
     b31: tuple, equity_sheet: str, row_ref: str, column: str
 ) -> None:
-    """¶55C: rows 0373 / 0374 are rules 4.4-4.8, for a firm WITH IRB permission. This firm has none."""
+    """¶55C: rows 0373 / 0374 are rules 4.4-4.8, for a firm WITH IRB permission.
+
+    This firm has none.
+    """
     assert _cell(b31[1], equity_sheet, row_ref, column) is None
 
 
-def test_the_memorandum_rows_are_on_sheet_0016_alone(b31: tuple, equity_sheet: str) -> None:
+@pytest.mark.parametrize("column", ["0010", "0200", "0220"])
+def test_the_memorandum_rows_are_on_sheet_0016_alone(
+    b31: tuple, equity_sheet: str, column: str
+) -> None:
     corep = b31[1]
     for sheet, frame in corep.c07_00.items():
         if sheet == equity_sheet:
             continue
         memo = frame.filter(pl.col("row_ref").is_in(_MEMO_ROWS))
-        populated = memo.select(pl.col("0200").is_not_null().sum()).item()
-        assert populated == 0, f"sheet {sheet!r} carries an equity memorandum figure"
+        populated = memo.select(pl.col(column).is_not_null().sum()).item()
+        assert populated == 0, f"sheet {sheet!r} carries an equity memorandum figure in {column}"
 
 
 # ---------------------------------------------------------------------------

@@ -262,10 +262,13 @@ class EquityTransitionalConfig:
       exposures are ASSIGNED 160% / 190% / 220% (higher risk 220% / 280% / 340%)
       in 2027 / 2028 / 2029 in place of the Art. 133(3) / (4) 250% / 400%. These
       replace the end-state weights; they are not a floor under them.
-    - With it (rules 4.4-4.6), each equity exposure takes the higher of its
-      legacy Art. 155 weight and the rule 4.2 / 4.3 weight. The engine does not
-      implement this: such a firm keeps the Art. 133 weights (the rule 4.9
-      election) and the run carries a CFG003 warning unless ``opt_out`` is set.
+    - With it (rules 4.4-4.6), equity the firm held under Standardised
+      permission on that date takes the rule 4.2 / 4.3 weights (rule 4.5(1)),
+      and equity it held under the IRB Approach the higher of its legacy
+      Art. 155 weight and the rule 4.2 / 4.3 weight (rules 4.5(2), 4.6). The
+      engine implements neither: such a firm keeps the Art. 133 weights (the
+      rule 4.9 election) and the run carries a CFG003 warning unless
+      ``opt_out`` is set.
 
     ``opt_out`` is the rule 4.9 election, notified under rule 4.10. It exists
     only for a firm that had IRB permission: rule 4.9 replaces "the alternative
@@ -288,9 +291,10 @@ class EquityTransitionalConfig:
     irb_permission_at_2026_year_end: bool | None = None
     # Rule 4.1's firm fact: "permission to use the Internal Ratings Based Approach
     # under Article 143 of CRR on 31 December 2026" (rule 4.4 is its converse).
-    # None derives it from the run's own permissions (any F-IRB / A-IRB); state
-    # it when they differ from that date's — a Standardised shadow run of an IRB
-    # firm, or a permission granted after it.
+    # None derives it from the run's own permissions (any F-IRB, A-IRB or
+    # slotting: Art. 143(2A) names all three as IRB Approaches); state it when
+    # they differ from that date's — a Standardised shadow run of an IRB firm,
+    # or a permission granted after it.
 
     def get_transitional_rw(
         self,

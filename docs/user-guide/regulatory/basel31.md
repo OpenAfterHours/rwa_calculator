@@ -790,8 +790,11 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
     **assigns** the schedule above to equity in the dedicated equity input table,
     in place of 250% / 400%, from 1 January 2027 to 31 December 2029. Subordinated
     debt (150%), CIUs, the central-bank type and Art. 133(6)(c) significant
-    investments (`is_significant_investment`) keep their own weights. For a firm
-    with IRB permission the Rules 4.5–4.6 "higher of" is not implemented: equity
+    investments (`is_significant_investment`) keep their own weights. A firm
+    with IRB permission — F-IRB, A-IRB **or slotting** — is outside this
+    schedule, and its own Rules 4.5–4.6 are not implemented (neither the
+    schedule for equity it held under Standardised permission, Rule 4.5(1), nor
+    the "higher of" for equity it held under the IRB Approach, Rule 4.6): equity
     keeps the Art. 133 weights and, unless `opt_out` is set, the run reports a
     `CFG003` warning. See [Configuration — `EquityTransitionalConfig`](../../api/configuration.md#equitytransitionalconfig).
 

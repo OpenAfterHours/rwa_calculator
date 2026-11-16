@@ -240,9 +240,16 @@ alternative approaches set out in 4.5, 4.6 and 4.8". A run that sets
 direct equity and carries a `CFG003` warning.
 
 **The firm fact.** The engine derives "had IRB permission on 31 December 2026"
-from the run's permissions (any F-IRB / A-IRB permission, the test that puts CRR
-equity on Art. 155). Where that differs from the position on that date — a
-Standardised shadow run of an IRB firm, or a permission granted later — set
+from the run's permissions: any F-IRB, A-IRB **or slotting** permission. Slotting
+counts because it is one of the IRB Approaches — Art. 143(2A) has an application
+name "one or more of the following IRB Approaches instead of the Standardised
+Approach: (a) the Slotting Approach; (b) the Foundation IRB Approach; or (c) the
+Advanced IRB Approach", and Art. 153(5) applies the Slotting Approach within the
+IRB Part — so a firm whose only IRB permission is slotting is outside Rules
+4.2–4.3. (This is wider than the CRR routing test that puts equity on Art. 155,
+which reads F-IRB / A-IRB only and is unchanged.) Where the run's permissions
+differ from the position on that date — a Standardised shadow run of an IRB
+firm, or a permission granted later — set
 `EquityTransitionalConfig.irb_permission_at_2026_year_end`.
 
 **Reporting carriers.** On each leg whose weight Rule 4.2 / 4.3 set, the
@@ -285,9 +292,15 @@ those are higher.
     the Art. 133 weights (250% / 400%) — the treatment of the Rule 4.9 election,
     not the default — carries no transitional label, and, unless
     `equity_transitional.opt_out` is set, the run carries a `CFG003` warning.
-    Implementing the higher of needs inputs the engine does not have (which
-    equity was on the IRB approach on 31 December 2026, and its legacy Art. 155
-    method).
+    The warning names both rules it does not apply — Rule 4.5(1) (the Rule
+    4.2 / 4.3 weights for equity held under Art. 148 / 150 Standardised
+    permission) and Rule 4.6 (the higher of) — and is raised for any run of such
+    a firm with an equity table inside 2027–2029, whatever the table holds: the
+    error list is built before the equity frame is materialised, so the message
+    reads "if the firm holds Art. 133 equity" instead of being gated on an
+    in-scope leg. Implementing the two rules needs inputs the engine does not
+    have (which equity was on the IRB approach on 31 December 2026, and its
+    legacy Art. 155 method).
 
 ### CIU Transitional (Rules 4.7–4.8) — Firms With IRB Permission
 

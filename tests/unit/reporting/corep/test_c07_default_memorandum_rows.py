@@ -92,8 +92,10 @@ def _leg(  # noqa: PLR0913 - one ledger row, every field named
     }
 
 
-#: Five in-default legs and one performing corporate. ``D-INST`` is the only
-#: institution exposure, so its sheet exists for the memorandum row alone.
+#: Five in-default legs, one performing corporate and one performing mortgage.
+#: ``D-INST`` is the only institution exposure, so its sheet exists for the
+#: memorandum row alone; ``LIVE-RRE`` opens the real-estate sheet, so the test
+#: that nothing is reported there in rows 0300 / 0320 has a sheet to look at.
 LEGS: tuple[dict[str, object], ...] = (
     _leg("D-CORP", "corporate", "corporate", 1.5, 1_000.0),
     _leg("D-RET", "corporate_sme", "retail_other", 1.0, 400.0),
@@ -101,6 +103,7 @@ LEGS: tuple[dict[str, object], ...] = (
     _leg("D-RRE", "residential_mortgage", "residential_mortgage", 1.0, 200.0),
     _leg("D-CRE", "corporate", "commercial_mortgage", 1.5, 500.0),
     _leg("LIVE-CORP", "corporate", "corporate", 1.0, 2_000.0, defaulted=False),
+    _leg("LIVE-RRE", "residential_mortgage", "residential_mortgage", 0.2, 600.0, defaulted=False),
 )
 
 
@@ -177,9 +180,42 @@ def test_nothing_is_reported_on_a_sheet_the_template_publishes_no_memorandum_row
     sheets = _sheets(_frame())
 
     # Assert
-    if sheet in sheets:
-        row = sheets[sheet].filter(pl.col("row_ref") == row_ref).drop("row_ref", "row_name")
-        assert row.null_count().row(0) == (1,) * row.width, f"{sheet} r{row_ref}: {row}"
+    assert sheet in sheets, f"sheet {sheet!r} not emitted - nothing to assert on"
+    row = sheets[sheet].filter(pl.col("row_ref") == row_ref).drop("row_ref", "row_name")
+    assert row.null_count().row(0) == (1,) * row.width, f"{sheet} r{row_ref}: {row}"
+
+
+@pytest.mark.parametrize(("risk_weight", "row_ref"), [(1.0, "0300"), (1.5, "0320")])
+def test_a_defaulted_high_risk_leg_is_in_neither_memorandum_row(
+    risk_weight: float, row_ref: str
+) -> None:
+    """A defaulted high-risk exposure stays in class (k): it is not in "exposures in default".
+
+    Art. 112(2) Table A2 ranks items of particularly high risk above exposures in
+    default, so the aggregator keeps such a leg's applied class ``high_risk``. Rows
+    0300 / 0320 report exposures "included in the exposure class 'exposures in
+    default'" (p.97), and the Total's data point is that class, so the leg is in
+    neither row on its own sheet nor on the Total — although it is defaulted and
+    weighted at an Art. 127 rung. (Row 0015, "of which: defaulted", is where it
+    does show, on the high-risk sheet.)
+    """
+    # Arrange
+    high_risk = {
+        **_leg("D-HR", "high_risk", "high_risk", risk_weight, 700.0),
+        "exposure_class_applied": "high_risk",
+    }
+    in_default = ("D-RET", "D-RRE") if row_ref == "0300" else ("D-CORP", "D-INST", "D-CRE")
+
+    # Act
+    sheets = _sheets(_frame((*LEGS, high_risk)))
+
+    # Assert
+    assert _cell(sheets, "high_risk", ROW_TOTAL, COL_EXPOSURE_VALUE) == pytest.approx(700.0)
+    assert _cell(sheets, "high_risk", "0015", COL_EXPOSURE_VALUE) == pytest.approx(700.0)
+    assert _cell(sheets, "high_risk", row_ref, COL_EXPOSURE_VALUE) is None
+    assert _cell(sheets, C07_00_TOTAL_SHEET_KEY, row_ref, COL_EXPOSURE_VALUE) == pytest.approx(
+        _amount(*in_default)
+    )
 
 
 @pytest.mark.parametrize(

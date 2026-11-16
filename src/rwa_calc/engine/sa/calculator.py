@@ -231,8 +231,9 @@ class SACalculator:
         equity risk weights (250% Basel 3.1, 100% CRR) but miss full equity
         treatment available via the dedicated equity_exposures input table:
         CIU look-through/mandate-based approaches, the PS1/26 General Provisions
-        rules 4.2 / 4.3 transitional weights (2027-2029), type-specific weights (central_bank 0%, subordinated_debt 150%,
-        speculative 400%), and IRB Simple method (CRR).
+        rules 4.2 / 4.3 transitional weights (2027-2029), type-specific weights
+        (central_bank 0%, subordinated_debt 150%, speculative 400%), and IRB
+        Simple method (CRR).
 
         The check is based on the approach column containing equity values,
         which is set by the classifier for equity-class rows.

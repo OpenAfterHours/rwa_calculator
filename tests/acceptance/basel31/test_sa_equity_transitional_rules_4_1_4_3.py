@@ -73,11 +73,11 @@ from typing import Any
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.contracts.errors import ERROR_EQUITY_TRANSITIONAL_CONFIG
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA, EQUITY_EXPOSURE_SCHEMA, LOAN_SCHEMA
-from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.raw_bundle import make_raw_bundle
@@ -282,11 +282,13 @@ class TestExcludedExposuresKeepTheirWeight:
 
 
 class TestRule41FirmWithIrbPermission:
-    """A firm that had IRB permission is outside rules 4.2 / 4.3 (rule 4.1).
+    """A firm that had IRB permission (F-IRB, A-IRB or slotting) is outside rules 4.2 / 4.3.
 
-    Its own rules (4.5 / 4.6: the higher of the legacy Art. 155 weight and the
-    4.2 / 4.3 weight) are not implemented, so it keeps the Art. 133 weights —
-    which is the rule 4.9 election — and the run says so with a warning.
+    Its own rules (4.5(1): the 4.2 / 4.3 weights for equity it held under
+    Standardised permission; 4.6: the higher of the legacy Art. 155 weight and
+    the 4.2 / 4.3 weight for equity it held under the IRB Approach) are not
+    implemented, so it keeps the Art. 133 weights — which is the rule 4.9
+    election — and the run says so with a warning.
     """
 
     def test_irb_firm_keeps_the_article_133_weights(self) -> None:
@@ -313,6 +315,58 @@ class TestRule41FirmWithIrbPermission:
         assert len(warnings) == 1
         assert "4.6" in warnings[0].message
         assert "4.9" in warnings[0].message
+
+    def test_the_warning_names_both_rules_the_engine_does_not_apply(self) -> None:
+        """Rule 4.5(1) (4.2 / 4.3 weights for equity under SA permission) and 4.6 (higher-of).
+
+        p.21, 4.5: "(1) apply the approaches in 4.2 and 4.3 for equity exposures
+        for which, on 31 December 2026, the institution had permission to apply
+        the Standardised Approach under Article 148 of CRR or Article 150 of CRR;
+        and (2) apply the approach in 4.6 for equity exposures for which [...] the
+        institution had permission to apply the Internal Ratings Based Approach".
+        The message is built before the equity frame is materialised, so it is
+        conditional on the firm holding Art. 133 equity rather than gated on it.
+        """
+        # Arrange
+        config = _config(date(2027, 6, 30), permission_mode=PermissionMode.IRB)
+
+        # Act
+        message = _bundle_errors(config)[0].message
+
+        # Assert
+        assert "4.5(1)" in message
+        assert "Article 148" in message
+        assert "if the firm holds Art. 133 equity" in message
+
+    def test_a_slotting_only_firm_had_irb_permission(self) -> None:
+        """A firm whose only IRB permission is slotting is outside rule 4.1.
+
+        p.81, Art. 143(2A): an application names "one or more of the following IRB
+        Approaches instead of the Standardised Approach: (a) the Slotting
+        Approach; (b) the Foundation IRB Approach; or (c) the Advanced IRB
+        Approach"; p.102, Art. 153(5): "The Slotting Approach applies as follows
+        for specialised lending exposures". Weighting such a firm's listed equity
+        at 160% would understate it by 36% against the Art. 133 weight it keeps.
+        """
+        # Arrange
+        slotting_only = IRBPermissions(
+            permissions={
+                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING},
+            }
+        )
+        config = dataclasses.replace(
+            _config(date(2027, 6, 30), permission_mode=PermissionMode.IRB),
+            irb_permissions=slotting_only,
+        )
+
+        # Act
+        result = _branch(config)
+        warnings = _bundle_errors(config)
+
+        # Assert
+        assert result["listed"]["risk_weight"] == pytest.approx(END_STATE_RW)
+        assert result["listed"]["equity_transitional_approach"] is None
+        assert len(warnings) == 1
 
     def test_irb_firm_that_made_the_rule_4_9_election_is_not_warned(self) -> None:
         # Arrange

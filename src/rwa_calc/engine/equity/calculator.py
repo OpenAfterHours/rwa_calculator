@@ -30,9 +30,11 @@ Basel 3.1 key changes from CRR:
 - A firm without IRB permission on 31 December 2026 is ASSIGNED 160% / 190% /
   220% (higher risk 220% / 280% / 340%) in 2027 / 2028 / 2029 in place of the
   Art. 133(3) / (4) 250% / 400% (rules 4.1-4.3); the end state applies from
-  1 January 2030. A firm that had IRB permission keeps the Art. 133 weights:
-  its rules 4.5 / 4.6 (the higher of the legacy Art. 155 weight and the
-  4.2 / 4.3 weight) are not implemented, and the run is warned (CFG003)
+  1 January 2030. A firm that had IRB permission (F-IRB, A-IRB or slotting)
+  keeps the Art. 133 weights: its rules 4.5 / 4.6 (4.5(1): the 4.2 / 4.3
+  weights for equity it held under Standardised permission; 4.6: the higher of
+  the legacy Art. 155 weight and the 4.2 / 4.3 weight for equity it held under
+  the IRB Approach) are not implemented, and the run is warned (CFG003)
 
 References:
 - CRR Art. 133: Equity exposures under SA
@@ -1031,11 +1033,16 @@ class EquityCalculator:
         Not applied, weights untouched, carriers null:
         - outside 1 January 2027 - 31 December 2029 (the schedule's last step
           is the end state; Annex II: no values in rows 0371-0374 from 2030);
-        - a firm that HAD IRB permission on 31 December 2026 (rule 4.1). Its
-          own rules 4.5 / 4.6 (the higher of the legacy Art. 155 weight and the
-          4.2 / 4.3 weight) are not implemented, so it keeps the Art. 133
+        - a firm that HAD IRB permission on 31 December 2026 (rule 4.1; F-IRB,
+          A-IRB or slotting, see ``_had_irb_permission_at_2026_year_end``). Its
+          own rules are not implemented: 4.5(1), the 4.2 / 4.3 weights for
+          equity it held under Art. 148 / 150 Standardised permission, and 4.6,
+          the higher of the legacy Art. 155 weight and the 4.2 / 4.3 weight for
+          equity it held under the IRB Approach. So it keeps the Art. 133
           weights, which is the rule 4.9 election; unless it has made that
-          election (``opt_out``) the run is warned (CFG003).
+          election (``opt_out``) the run is warned (CFG003), on any equity table
+          (the warning is not gated on an in-scope leg, see
+          ``_irb_firm_transitional_warning``).
 
         ``opt_out`` has no effect for a firm without IRB permission: rule 4.9
         replaces only "the alternative approaches set out in 4.5, 4.6 and
@@ -1193,20 +1200,37 @@ def _has_irb_model_permission(config: CalculationConfig) -> bool:
     )
 
 
+@cites("CRR Art. 143")
+@cites("CRR Art. 153(5)")
 @cites("PS1/26, paragraph 4.1")
 def _had_irb_permission_at_2026_year_end(config: CalculationConfig) -> bool:
     """Rule 4.1's firm fact: IRB permission under Art. 143 of CRR on 31 December 2026.
 
-    ``EquityTransitionalConfig.irb_permission_at_2026_year_end`` states it when
-    the run's permissions do not (a Standardised shadow run of an IRB firm, or
-    a permission granted after that date). Left as None, it is derived from the
-    run: any F-IRB / A-IRB permission — the same test that puts CRR equity on
-    Art. 155 in ``EquityCalculator._determine_approach``.
+    Rule 4.1 (ps126app1.pdf p.20): "4.2 and 4.3 only apply to an institution
+    that did not have permission to use the Internal Ratings Based Approach
+    under Article 143 of CRR on 31 December 2026." Slotting is one of those
+    approaches: Art. 143(2A) (p.81) has an application name "one or more of the
+    following IRB Approaches instead of the Standardised Approach: (a) the
+    Slotting Approach; (b) the Foundation IRB Approach; or (c) the Advanced IRB
+    Approach", and Art. 153(5) (p.102), "The Slotting Approach applies as
+    follows for specialised lending exposures", sits in the IRB Part. So a firm
+    whose only IRB permission is slotting HAD IRB permission and is outside
+    rules 4.2 / 4.3.
+
+    ``EquityTransitionalConfig.irb_permission_at_2026_year_end`` states the fact
+    when the run's permissions do not (a Standardised shadow run of an IRB firm,
+    or a permission granted after that date). Left as None, it is derived from
+    the run: any F-IRB, A-IRB or slotting permission. That is deliberately wider
+    than ``_has_irb_model_permission``, which ``EquityCalculator._determine_approach``
+    reads to route CRR equity to Art. 155 and which this fact does not change.
     """
     stated = config.equity_transitional.irb_permission_at_2026_year_end
     if stated is not None:
         return stated
-    return _has_irb_model_permission(config)
+    # irb_permissions is derived non-None in CalculationConfig.__post_init__.
+    permissions = config.irb_permissions.permissions  # ty: ignore[unresolved-attribute]
+    irb_approaches = {ApproachType.FIRB, ApproachType.AIRB, ApproachType.SLOTTING}
+    return any(not irb_approaches.isdisjoint(approaches) for approaches in permissions.values())
 
 
 def _standardised_transitional_weights(
@@ -1316,17 +1340,30 @@ def _with_null_transitional_carriers(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def _irb_firm_transitional_warning() -> CalculationError:
-    """CFG003: a firm with IRB permission at end-2026 receives the rule 4.9 treatment."""
+    """CFG003: a firm with IRB permission at end-2026 receives the rule 4.9 treatment.
+
+    Raised, unless ``opt_out`` is set, for every run of such a firm inside
+    2027-2029 whose equity table is present, whatever it holds — even an empty
+    table, or one holding only legs outside the rules 4.2 / 4.3 scope (CIUs,
+    subordinated debt, the central-bank type, significant investments). Gating
+    it on an in-scope leg would mean collecting the equity frame here, where
+    the error list is built while the frame is still lazy and nothing else in
+    the stage materialises it; so the message is conditional ("if the firm
+    holds Art. 133 equity") instead.
+    """
     return CalculationError(
         code=ERROR_EQUITY_TRANSITIONAL_CONFIG,
         message=(
             "Equity transitional: the firm had IRB permission on 31 December 2026, so "
-            "PS1/26 Credit Risk: General Provisions rules 4.5 and 4.6 apply to its "
-            "equity during 2027-2029 (the higher of the legacy Art. 155 weight and the "
-            "rule 4.2 / 4.3 weight). The engine does not implement rules 4.5 / 4.6: "
-            "equity is weighted under Art. 133 (250% / 400%), which is the treatment of "
-            "the rule 4.9 election, not the default. Set equity_transitional.opt_out if "
-            "the firm has given the PRA notice of that election under rule 4.10."
+            "PS1/26 Credit Risk: General Provisions rules 4.4-4.6 govern its Art. 133 "
+            "equity during 2027-2029: rule 4.5(1) assigns the rule 4.2 / 4.3 weights to "
+            "equity it then held under Standardised Approach permission (Article 148 or "
+            "150 of CRR), and rule 4.6 the higher of the legacy Art. 155 weight and the "
+            "rule 4.2 / 4.3 weight to equity it then held under the IRB Approach. The "
+            "engine applies neither: if the firm holds Art. 133 equity, it is weighted "
+            "under Art. 133 (250% / 400%), which is the treatment of the rule 4.9 "
+            "election, not the default. Set equity_transitional.opt_out if the firm has "
+            "given the PRA notice of that election under rule 4.10."
         ),
         severity=ErrorSeverity.WARNING,
         category=ErrorCategory.CONFIGURATION,

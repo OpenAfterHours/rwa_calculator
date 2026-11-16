@@ -1803,7 +1803,8 @@
     {
       "article": "143",
       "code_functions": [
-        "rwa_calc.engine.classify.permissions::resolve_model_permissions"
+        "rwa_calc.engine.classify.permissions::resolve_model_permissions",
+        "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1815,6 +1816,7 @@
         "data/schemas.py",
         "domain/branch_reasons.py",
         "engine/classify/permissions.py",
+        "engine/equity/calculator.py",
         "engine/irb/transforms.py",
         "engine/stages/_ccr_shared.py",
         "reporting/corep/c08_07.py"
@@ -1988,6 +1990,7 @@
       "code_functions": [
         "rwa_calc.engine.classify.attributes::_build_is_defaulted_expr",
         "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end",
         "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params",
         "rwa_calc.engine.irb.formulas::_correlation_expr_from_pd",
         "rwa_calc.engine.irb.formulas::_double_default_multiplier_expr",
@@ -2046,6 +2049,7 @@
         "engine/classify/permissions.py",
         "engine/classify/subtypes.py",
         "engine/crm/guarantees.py",
+        "engine/equity/calculator.py",
         "engine/fx_rate_sync.py",
         "engine/irb/__init__.py",
         "engine/irb/adjustments.py",
@@ -6793,6 +6797,7 @@
         "tests/properties/test_collapse_conservation.py",
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_source_conservation.py",
+        "tests/unit/reporting/corep/test_c07_loan_split_gate.py",
         "tests/unit/rulebook/test_re_split_features.py",
         "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_b31_re_junior_charges.py",

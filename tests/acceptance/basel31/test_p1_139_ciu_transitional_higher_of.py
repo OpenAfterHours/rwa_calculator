@@ -12,8 +12,9 @@ Scenario:
     reporting_date=2027-06-30 (transitional Year 1)
 
 Bug under test (pre-fix):
-    _apply_transitional_floor sets is_ciu_non_fallback=True for look_through CIUs
-    and zeroes the transitional floor for the WRAPPER row — but the EQUITY underlying
+    the direct-equity transitional (then _apply_transitional_floor, since replaced
+    by _apply_standardised_equity_transitional, which leaves every CIU outside
+    rules 4.2 / 4.3) skipped the WRAPPER row of a look_through CIU — but the EQUITY underlying
     inside the look-through also gets no higher-of applied in _resolve_look_through_rw.
     H1-EQ falls back to _DEFAULT_HOLDING_RW=1.00 (no IRB simple / higher-of applied).
     Buggy weighted_sum: 600,000 × 1.00 + 400,000 × 0.75 = 900,000
@@ -130,8 +131,9 @@ class TestP1139CiuTransitionalHigherOf:
     to Art. 132a means the transitional floor applies to the EQUITY UNDERLYING,
     not to the aggregated fund RW.
 
-    Bug: _apply_transitional_floor correctly excludes the CIU wrapper from the
-    floor via is_ciu_non_fallback, but _resolve_look_through_rw uses a plain CQS
+    Bug: the direct-equity transitional (then _apply_transitional_floor, now
+    _apply_standardised_equity_transitional) correctly excludes the CIU wrapper,
+    but _resolve_look_through_rw used a plain CQS
     table lookup for holding_rw and never applies the higher-of to EQUITY class
     holdings — they fall back to _DEFAULT_HOLDING_RW=1.00 (100%).
 
@@ -224,7 +226,8 @@ class TestP1139CiuTransitionalHigherOf:
         P1.139 negative: the CIU wrapper risk_weight is NOT directly floored by Rule 4.1.
 
         The wrapper's risk_weight == ciu_look_through_rw (the aggregated fund RW)
-        because _apply_transitional_floor correctly excludes look_through CIUs.
+        because _apply_standardised_equity_transitional leaves every CIU outside
+        rules 4.2 / 4.3 (_standardised_transitional_scope_expr).
         The floor instead applies to the EQUITY UNDERLYING inside the fund.
 
         Post-fix: risk_weight == ciu_look_through_rw == 2.52 (no additional wrapper floor).

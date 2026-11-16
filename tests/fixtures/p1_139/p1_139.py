@@ -18,8 +18,10 @@ Scenario rationale (PRA PS1/26 Rules 4.7-4.8, CRR Art. 155(2)):
   reporting_date = 2027-06-30: Rule 4.2 standard band = 160% for calendar year 2027.
 
   Buggy behaviour (pre-fix):
-    _apply_transitional_floor zeroes the transitional floor for CIU look_through /
-    mandate_based exposures — both the wrapper AND its EQUITY underlyings.
+    the direct-equity transitional (then ``_apply_transitional_floor``, since
+    replaced by ``_apply_standardised_equity_transitional``, which leaves every
+    CIU outside rules 4.2 / 4.3) skipped CIU look_through / mandate_based
+    exposures — both the wrapper AND its EQUITY underlyings.
     The equity holding (exposure_class="EQUITY", cqs=null) falls through to
     _DEFAULT_HOLDING_RW = 1.00 (100%). Combined RW = 1.00, RWA = 1,000,000.
 

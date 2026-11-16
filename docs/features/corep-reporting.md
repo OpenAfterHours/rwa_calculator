@@ -600,6 +600,14 @@ flowchart TD
         only. The published rules `v4721_m` / `v4722_m` (EBA) and `boe_b0431` /
         `boe_b1069` (Bank of England) require the row blank everywhere else.
 
+        **Under UK CRR the row cannot carry a figure today.** UK CRR has no high-risk
+        class (Art. 128 was omitted by SI 2021/1078), so the engine folds high-risk
+        exposures into "other items" (pack Feature `b31_high_risk_class_applicable` is
+        off), and equity and CIU holdings carry no default flag: the equity input table
+        has no `is_defaulted`, and a counterparty's `default_status` does not reach
+        them. Under Basel 3.1 the same holds for equity and CIUs, so a defaulted
+        high-risk exposure is the only leg that populates the row.
+
     **Section 2 — Breakdown by Exposure Types**
 
     | Ref | Row |
@@ -819,7 +827,14 @@ flowchart TD
           interim request: report such exposures "in the total sheet s0001 for rows 0300 and
           0320 but do not report such exposures separately to this, until the missing sheet
           0010 is provided in the next taxonomy update". The same holds for an MDB or
-          international-organisation exposure, which no table sheet carries either.
+          international-organisation exposure, which no table sheet carries either;
+        - a defaulted **high-risk** exposure is in **neither** row, on the high-risk sheet or on
+          the Total, even at 100% / 150%. Art. 112(2) Table A2 ranks items of particularly high
+          risk above exposures in default, so it stays in class (k) and never enters the
+          "exposures in default" class these rows report (it shows in row 0015, "of which:
+          defaulted", on the high-risk sheet instead). Before rows 0300 / 0320 were keyed on
+          the class before default, such a leg was counted in both rows of its own sheet and
+          of the Total.
 
         The class before default is the sealed `reporting_class_pre_default` column: the
         applied class with the default reassignment left out, so a defaulted SME managed as

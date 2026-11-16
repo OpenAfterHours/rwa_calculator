@@ -52,8 +52,11 @@ Deliberately NOT asserted here:
   submission — sealing the side carriers on the equity leg, or widening
   ``c07.py``'s own ``c07_ccr_gross`` fallback — and the regulation constrains
   the template, not the carrier. Every assertion is on the rendered cell.
-- OF 07.00 memorandum rows 0371-0374 as POPULATED. They are declared and they
-  stay dark; ``TestEquityTransitionalMemoRowsStayDark`` records why.
+- OF 07.00 memorandum rows 0371-0374 as POPULATED. This firm has IRB
+  permission, so they are empty here;
+  ``TestEquityTransitionalMemoRowsOnAnIrbPermissionFirm`` records why, and
+  ``test_of07_equity_transitional_rows.py`` asserts them populated on the
+  standardised-firm book.
 
 References:
 - CRR Art. 112(1)(p) equity exposures; Art. 133 (SA); Art. 155(2)/(3) (IRB)
@@ -617,33 +620,34 @@ class TestCrrExcludesIrbMethodEquity:
 
 
 # ---------------------------------------------------------------------------
-# OF 07.00 rows 0371-0374 — declared, and still dark
+# OF 07.00 rows 0371-0374 — sealed, and empty for THIS firm
 # ---------------------------------------------------------------------------
 
 
-class TestEquityTransitionalMemoRowsStayDark:
+class TestEquityTransitionalMemoRowsOnAnIrbPermissionFirm:
     """PS1/26 Annex II ¶55A-¶55D: rows 0371-0374 are reportable for class (p)
-    ALONE, so they become reachable the moment this sheet exists — and they
-    still cannot be filled.
+    ALONE, and on ``b31/rich`` they are correctly empty.
 
     ¶55B scopes 0371/0372 to exposures under Rules 4.1-4.3 of the Credit Risk:
     General Provisions (CRR) Part and ¶55C scopes 0373/0374 to Rules 4.4-4.8
-    (the IRB Transitional Approach). ``corep/c07.py`` already declares the rows
-    and keys them on ``equity_transitional_approach`` / ``equity_higher_risk``,
-    which ``engine/equity/calculator.py`` produces — but NEITHER is an
-    ``AGGREGATOR_EXIT`` edge column, so neither survives to the reporting frame.
-    The rows are therefore structurally null, not empty-because-measured, and
-    the ERROR rule ``boe_b0710_2`` (scoped to r0371-0374, z:0016 alone) scores
-    VACUOUS rather than PASS.
+    (the IRB Transitional Approach). The carriers the rows key
+    (``equity_transitional_approach`` / ``equity_higher_risk``) are sealed on the
+    ``AGGREGATOR_EXIT`` edge and reach this frame. They are NULL on every leg
+    here because ``rich`` runs under an IRB permission: rule 4.1 ("4.2 and 4.3
+    only apply to an institution that did not have permission to use the
+    Internal Ratings Based Approach") keeps rows 0371/0372 off it, and its own
+    rules 4.5 / 4.6 are not implemented, so it keeps the Article 133 weights (the
+    rule 4.9 election; warned CFG003) and rows 0373/0374 stay empty too.
 
-    Recorded as assertions so this is a known gap rather than an assumed fix.
-    Sealing either carrier makes the last test below RED — when that happens,
-    wire the rows; do not relax the assertion.
+    The populated case is ``tests/acceptance/reporting/
+    test_of07_equity_transitional_rows.py``, on the registered standardised-firm
+    book ``equity-transitional``. When rules 4.4-4.6 land, the rows below light
+    on this firm and the null assertions are the ones to move.
     """
 
     def test_the_rows_are_declared_on_the_sheet(self) -> None:
-        """The template half IS done. Asserted separately from the values so a
-        future reader does not read "null" as "not implemented"."""
+        """Asserted separately from the values so a future reader does not read
+        "null" as "not implemented"."""
         sheet = _equity_sheet_key("b31")
         corep = _run("b31")[1]
 
@@ -664,17 +668,25 @@ class TestEquityTransitionalMemoRowsStayDark:
 
         assert _cell(_run("b31")[1], sheet, row_ref, column) is None
 
-    def test_neither_transitional_carrier_survives_to_the_reporting_frame(self) -> None:
-        """The reason, stated where it can be checked rather than in prose.
+    def test_the_carriers_reach_the_reporting_frame_and_are_null_on_this_firm(self) -> None:
+        """The reason the rows are empty, stated where it can be checked.
 
-        This is the gap that keeps rows 0371-0374 dark, and it is the one thing
-        a future change can fix. If this test goes red, the carrier has been
-        sealed — light the rows.
+        Present (the seal no longer strips them) and null on every leg (no leg
+        of an IRB-permission firm is weighted under rules 4.2 / 4.3). Absent
+        would be the old seal defect; non-null would mean rule 4.1 stopped
+        being honoured for this firm.
         """
         results, _corep, _report = _run("b31")
+        carriers = (
+            "equity_transitional_approach",
+            "equity_higher_risk",
+            "risk_weight_pre_equity_transitional",
+        )
 
-        absent = {"equity_transitional_approach", "equity_higher_risk"} - set(results.columns)
-        assert absent == {"equity_transitional_approach", "equity_higher_risk"}, (
-            "an equity transitional carrier now reaches the reporting frame; OF 07.00 "
-            f"rows 0371-0374 are populatable and should be wired (present: {absent})"
+        missing = set(carriers) - set(results.columns)
+        assert not missing, f"stripped by the aggregator-exit seal: {sorted(missing)}"
+        labelled = results.filter(pl.col("equity_transitional_approach").is_not_null())
+        assert labelled.is_empty(), (
+            "a leg of an IRB-permission firm is labelled transitional: "
+            f"{labelled['exposure_reference'].to_list()}"
         )

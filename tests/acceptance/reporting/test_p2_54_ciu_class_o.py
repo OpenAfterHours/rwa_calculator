@@ -263,14 +263,17 @@ _CLASS_MAPS: dict[str, dict[str, str]] = {
 #: with its parent on the exposure columns and not on the RWEA.
 _MONEY_COLUMNS: tuple[str, ...] = ("0010", "0040", "0110", "0150", "0200", "0220")
 
-#: Rows COREP Annex II reserves for the "particularly high risk" and "equity"
-#: classes, so a CIU sheet must leave them EMPTY. Row 0040 exists in the CRR
-#: layout only.
+#: Rows the CIU sheet leaves EMPTY on these books. Under CRR both are reserved for
+#: other classes: COREP Annex II reports row 0015 in the high-risk and equity
+#: classes only, row 0040 in the real-estate class only (CRR layout only). PS1/26
+#: Annex II p.88 NAMES CIUs for row 0015, so under Basel 3.1 the row is blank here
+#: only because no CIU leg is in default (an equity-table leg carries no default
+#: flag), not because the sheet may not carry it.
 _MUST_BE_EMPTY_ROWS: tuple[str, ...] = ("0015", "0040")
 
 #: The four live EBA guards over those two rows — ``{r0015} = empty``,
-#: ``{r0015} = 0``, ``{r0040} = empty`` twice, across C 07.00.a and .b. None of
-#: them carries a z-code scope, so each applies to EVERY emitted sheet.
+#: ``{r0015} = 0``, ``{r0040} = empty`` twice, across C 07.00.a and .b. Each lists
+#: every class sheet but the ones Annex II names for its row, z0015 (CIU) included.
 _EMPTY_GUARD_RULES: tuple[str, ...] = ("v4721_m", "v4722_m", "v7477_m", "v7478_m")
 
 #: The EBA twin of ``boe_b0728``: ``{r0010} = {r0281} + {r0282} + {r0283}``, scoped
@@ -841,24 +844,27 @@ class TestTheCiuApproachRows:
 
 
 class TestTheCiuSheetLeavesTheReservedRowsEmpty:
-    """Rows 0015 and 0040 belong to other classes, so the (o) sheet leaves them blank.
+    """Rows 0015 and 0040 are blank on the (o) sheet of these books.
 
-    COREP Annex II restricts row 0015 ("of which: items associated with
-    particularly high risk") and row 0040 to the high-risk and equity classes, and
-    four live EBA rules encode that as must-be-empty guards: ``v4721_m``
+    COREP Annex II restricts row 0015 ("of which: defaulted exposures") to the
+    high-risk and equity classes and row 0040 to the real-estate class, and four
+    live EBA rules encode that as must-be-empty guards: ``v4721_m``
     (``{r0015} = empty``, C 07.00.a), ``v4722_m`` (``{r0015} = 0``, C 07.00.b),
-    ``v7477_m`` and ``v7478_m`` (``{r0040} = empty``, .a and .b).
+    ``v7477_m`` and ``v7478_m`` (``{r0040} = empty``, .a and .b). Each lists every
+    class sheet but the ones Annex II names, z0015 among them. PS1/26 Annex II
+    DOES name CIUs for row 0015 (the Bank's ``boe_b0431`` leaves z0015 off its
+    must-be-blank list), so under Basel 3.1 the row is blank on these books
+    because no CIU leg is in default, and the assertion is about the data, not
+    the scope.
 
     **A must-be-empty guard can never score PASS**, and that is the point of
     asserting the cells here as well as the verdicts. It has no satisfiable
     operand: it is VACUOUS while the row is blank and FAIL the moment a figure
     appears, so "it went green" is not evidence of anything and "it stayed
-    VACUOUS" is the positive result. Measured, none of the four carries a z-code
-    scope at all, so each applies to EVERY emitted sheet — which is why
-    ``v4721_m`` FAILs on ``crr/rich`` (the ``defaulted`` sheet publishes
-    1,000,000 on row 0015, a banked break with nothing to do with the CIU) while
-    all four are VACUOUS on ``crr/off-bs``. Reading the rule verdict alone would
-    therefore tell you nothing about CIU placement; the cells do.
+    VACUOUS" is the positive result. The guards span every listed sheet, so a
+    break on another class's sheet would fail them just as a CIU placement
+    would; reading the rule verdict alone tells you nothing about CIU
+    placement, and the cells do.
     """
 
     @pytest.mark.parametrize(("portfolio", "regime"), _CIU_SHEET_CASES)
@@ -890,9 +896,9 @@ class TestTheCiuSheetLeavesTheReservedRowsEmpty:
             }
             assert not populated, (
                 f"[{portfolio}/{regime}] the Article 112(1)(o) sheet publishes on row "
-                f"{row_ref}, which COREP Annex II reserves for the high-risk and equity "
-                f"classes: {populated}. This is what v4721_m / v4722_m / v7477_m / "
-                "v7478_m FAIL on"
+                f"{row_ref}: {populated}. Under CRR that row is reserved for other classes "
+                "(v4721_m / v4722_m / v7477_m / v7478_m FAIL on it); under Basel 3.1 row "
+                "0015 may carry a DEFAULTED CIU leg, and these books hold none"
             )
 
     @pytest.mark.parametrize("rule_id", _EMPTY_GUARD_RULES)

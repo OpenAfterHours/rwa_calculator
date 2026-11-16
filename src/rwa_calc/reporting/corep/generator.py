@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.reporting.corep.c02 import generate_c02_00
-from rwa_calc.reporting.corep.c07 import c07_total_sheet, generate_c07
+from rwa_calc.reporting.corep.c07 import generate_c07_with_total
 from rwa_calc.reporting.corep.c08 import (
     generate_c08_01,
     generate_c08_02,
@@ -667,16 +667,18 @@ class COREPGenerator:
         run through the one ``cellspec.execute`` executor.
 
         The Total sheet (Annex II ¶47, published z-code 0001) is added HERE and
-        not in ``generate_c07``: it is the sum of the class sheets and has no
+        not by ``generate_c07``: it is the sum of the class sheets and has no
         execution plan of its own, and the lineage drill-down requires
-        ``c07_plans`` and ``generate_c07`` to key identically. A reader that
-        adds the sheets up must add the CLASS sheets — ``c07_class_sheets``.
+        ``c07_plans`` and ``generate_c07`` to key identically. It is summed
+        before the memorandum rows' sheet scope is applied
+        (``corep/c07_sheet_scope.py``), so it carries every exposure in default
+        once. A reader that adds the sheets up must add the CLASS sheets —
+        ``c07_class_sheets``.
 
         References:
             CRR Art. 111-113; COREP Annex II C 07.00; PRA PS1/26 App. 17.
         """
-        sheets = generate_c07(results, cols, framework, errors)
-        total = c07_total_sheet(sheets, framework)
+        sheets, total = generate_c07_with_total(results, cols, framework, errors)
         return sheets if total is None else {C07_00_TOTAL_SHEET_KEY: total, **sheets}
 
     def _generate_all_c08_01(

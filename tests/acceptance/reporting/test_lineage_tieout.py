@@ -53,6 +53,11 @@ _ATOL = 1e-6
 # CMS pair (CMS1/CMS2 are None under CRR, so they have nothing to tie out there).
 _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     ("c07_00", "corporate", "CRR"),
+    # The Basel 3.1 corporate sheet carries memorandum row 0320 for RP-LN-DEFAULT,
+    # a leg of the 'in default' class read through the sheet's memorandum flags
+    # (corep/c07_sheet_scope.py): every reported cell must still reconcile to legs
+    # in the plan, so a figure spliced in without legs behind it cannot pass.
+    ("c07_00", "corporate", "BASEL_3_1"),
     # R20 — four single-frame Pillar 3 templates (sheet = None per the harness's
     # single-frame convention). cr8 is the first PriorPeriod template through the
     # sweep (row 1 prior_period, row 8 formula — neither row-backed).

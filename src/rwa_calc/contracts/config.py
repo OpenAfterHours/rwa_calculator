@@ -252,23 +252,49 @@ class OutputFloorConfig:
 @dataclass(frozen=True)
 class EquityTransitionalConfig:
     """
-    Equity transitional configuration for Basel 3.1 (PRA Rules 4.1-4.10).
+    Equity transitional configuration for Basel 3.1 (PS1/26 Credit Risk: General
+    Provisions rules 4.1-4.10).
 
-    Firms transitioning from CRR to Basel 3.1 equity weights use a phase-in
-    schedule. Firms with prior IRB equity permission use the higher of the
-    IRB model RW and the transitional SA RW (Rules 4.4-4.6).
+    Two regimes, split by one firm fact — whether the firm had IRB permission
+    under Art. 143 of CRR on 31 December 2026:
 
-    Per Rules 4.9-4.10 a firm may irrevocably opt out of the transitional
-    regime. When ``opt_out`` is True the opt-out applies jointly to direct
-    equity (the transitional floor is skipped) and to CIU underlyings (the
-    Rule 4.8 higher-of is suppressed), so both end-state RWs apply directly.
+    - Without it (rules 4.1-4.3, the Standardised Transitional Approach), equity
+      exposures are ASSIGNED 160% / 190% / 220% (higher risk 220% / 280% / 340%)
+      in 2027 / 2028 / 2029 in place of the Art. 133(3) / (4) 250% / 400%. These
+      replace the end-state weights; they are not a floor under them.
+    - With it (rules 4.4-4.6), equity the firm held under Standardised
+      permission on that date takes the rule 4.2 / 4.3 weights (rule 4.5(1)),
+      and equity it held under the IRB Approach the higher of its legacy
+      Art. 155 weight and the rule 4.2 / 4.3 weight (rules 4.5(2), 4.6). The
+      engine implements neither: such a firm keeps the Art. 133 weights (the
+      rule 4.9 election) and the run carries a CFG003 warning unless
+      ``opt_out`` is set.
+
+    ``opt_out`` is the rule 4.9 election, notified under rule 4.10. It exists
+    only for a firm that had IRB permission: rule 4.9 replaces "the alternative
+    approaches set out in 4.5, 4.6 and 4.8". For direct equity it selects the
+    Art. 133 weights (the treatment the engine already gives such a firm); it
+    also suppresses the Rule 4.8 higher-of on CIU underlyings. A firm without
+    IRB permission has nothing to elect: setting it leaves the rule 4.2 / 4.3
+    weights on direct equity in place and is warned (CFG003).
+
+    The VALUES of the schedule are read from the rulepack (Schedules
+    ``equity_transitional_std_rw`` / ``equity_transitional_hr_rw``); ``schedule``
+    here mirrors them for ``get_transitional_rw``.
     """
 
     enabled: bool = False
     schedule: dict[date, tuple[Decimal, Decimal]] = field(default_factory=dict)
     # (standard_rw, higher_risk_rw) keyed by effective date
     opt_out: bool = False
-    # PRA Rules 4.9-4.10: irrevocable joint opt-out from the equity transitional regime.
+    # Rules 4.9-4.10: the irrevocable election, for a firm that had IRB permission.
+    irb_permission_at_2026_year_end: bool | None = None
+    # Rule 4.1's firm fact: "permission to use the Internal Ratings Based Approach
+    # under Article 143 of CRR on 31 December 2026" (rule 4.4 is its converse).
+    # None derives it from the run's own permissions (any F-IRB, A-IRB or
+    # slotting: Art. 143(2A) names all three as IRB Approaches); state it when
+    # they differ from that date's — a Standardised shadow run of an IRB firm,
+    # or a permission granted after it.
 
     def get_transitional_rw(
         self,

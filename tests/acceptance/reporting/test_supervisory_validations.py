@@ -256,6 +256,9 @@ from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_crm_substitution_portfolio import (
     build_reporting_crm_substitution_bundle,
 )
+from tests.fixtures.reporting_equity_transitional_portfolio import (
+    build_reporting_equity_transitional_bundle,
+)
 from tests.fixtures.reporting_funded_protection_portfolio import (
     build_reporting_art199_bundle,
 )
@@ -482,6 +485,27 @@ REGISTER_NOTES: dict[str, str] = {
         "which is inherent to covering IRB off-balance-sheet exposure at all. BoE taxonomy "
         "v4.1.1 (Aug 2026) withdrew the rule this was measured on, boe_b0744, together with its "
         "IRB-axis twin boe_b0745; the EBA restatement v0338_m still binds the CRR template."
+    ),
+    "pattern_standardised_equity_transitional_below_the_row_weight": (
+        "PUBLISHER ISSUE PI-01, not our defect (LESSONS C5). PS1/26 Annex II p.95 puts equity "
+        "under the Credit Risk: General Provisions rules 4.1-4.10 transitional on the row of its "
+        "Article 133 weight - 'reported against the risk weights set out in Article 133 [...] "
+        "disregarding the transitional provisions. However, the RWEA shall still reflect the "
+        "transitional provisions' - and p.96 names rows 0250 / 0261. Rules 4.2 / 4.3 assign a "
+        "firm without IRB permission 160/190/220% and 220/280/340% in 2027/2028/2029, every one "
+        "BELOW the row weight. So on b31/equity-transitional (the first registered book with such "
+        "equity) a correct return breaks boe_b1016 / boe_b1031 (ERROR, Total sheet: RWEA >= 2.5x "
+        "/ 4x exposure value on rows 0250 / 0261) and boe_b0491 / boe_b0506 (WARNING, class "
+        "sheets incl. 0016: RWEA = 2.5x / 4x); the boe_b0491 label ('RWEA shall only exceed 250% "
+        "of exposure value if an Equities Transitional Approach is being applied') shows the "
+        "rules expected the transitional to RAISE RWEA only. Arelle agrees with rwa_filer.boe on "
+        "all four. boe_b0710_2 (ERROR, rows 0371-0374: c0150 = the sum of the off-balance-sheet "
+        "conversion-factor columns 0160-0190) also fails there: an equity holding is "
+        "on-balance-sheet, so a filled memorandum row has c0150 and nothing to break it down "
+        "into - the boe_b0710 rule limit (P2.63) on the rows p.97 says firms 'shall report'. The "
+        "only placement that passes the four is row 0280 'Other risk weights', which contradicts "
+        "p.95-96 and fails the Bank's own boe_b0458 on sheet 0016. Do NOT move figures to "
+        "satisfy any of the five; the fix belongs to the publisher."
     ),
 }
 
@@ -931,6 +955,29 @@ RUNS: tuple[GateInput, ...] = (
         "BASEL_3_1",
         "row-scope",
         build_reporting_row_scope_bundle,
+        lambda: _sa_config("BASEL_3_1"),
+    ),
+    # Class (p) equity of a firm WITHOUT IRB permission in 2027 — LESSONS B5. The
+    # first registered book whose equity takes the PS1/26 Credit Risk: General
+    # Provisions rule 4.2 / 4.3 weights (160% / 220%) instead of its Article 133
+    # weight, so the first in which OF 07.00 rows 0250 / 0261 carry a
+    # transitional RWEA (Annex II p.95: reported against the Article 133 row,
+    # "the RWEA shall still reflect the transitional provisions"), row 0280 must
+    # stay empty on sheet 0016 (``boe_b0458``), and memorandum rows 0371 / 0372
+    # are populated. Every earlier run held no direct equity or held it under an
+    # IRB permission, so ``boe_b0710_2`` sat VACUOUS and rows 0371-0374 were null
+    # estate-wide. Two legs move (listed; unlisted under five years) and two
+    # must not (Art. 133(5) subordinated debt; an Art. 133(6)(c) holding).
+    #
+    # Basel 3.1 only: CRR has no transitional. SA-only, no prior frame. A
+    # CORRECT return of this book breaks four Bank rules the register banks as
+    # rule limits, never figures to bend — see REGISTER_NOTES
+    # ``pattern_standardised_equity_transitional_below_the_row_weight``.
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "equity-transitional",
+        build_reporting_equity_transitional_bundle,
         lambda: _sa_config("BASEL_3_1"),
     ),
 )

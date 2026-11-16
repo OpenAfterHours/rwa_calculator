@@ -91,7 +91,7 @@ class TestB31EquityCalculatorSAWeights:
 
     Tests weight assignment in isolation by calling _apply_b31_equity_weights_sa
     directly, then testing end-to-end via calculate_branch which includes
-    transitional floor.
+    the rules 4.1-4.3 transitional.
     """
 
     def test_listed_equity_250_percent(self) -> None:
@@ -150,7 +150,7 @@ class TestB31EquityCalculatorSAWeights:
 
 
 class TestB31EquityEndToEnd:
-    """End-to-end tests for B31 equity via calculate_branch (includes transitional floor)."""
+    """End-to-end tests for B31 equity via calculate_branch (includes the transitional)."""
 
     def test_listed_equity_rwa(self) -> None:
         """B31: Listed equity = 250%, RWA = EAD x 2.50."""
@@ -212,15 +212,19 @@ class TestB31EquityEndToEnd:
 
 
 # =============================================================================
-# Transitional Floor Tests via get_equity_result_bundle
+# Standardised Transitional Approach via get_equity_result_bundle
 # =============================================================================
 
 
-class TestEquityTransitionalFloorInBundle:
-    """Tests that get_equity_result_bundle applies the transitional floor.
+class TestStandardisedEquityTransitionalInBundle:
+    """get_equity_result_bundle applies PS1/26 General Provisions rules 4.1-4.3.
 
-    Prior to P1.43 fix, get_equity_result_bundle skipped _apply_transitional_floor.
-    Both calculate_branch and get_equity_result_bundle should produce consistent results.
+    Rule 4.2 (ps126app1.pdf p.20): equity exposures of a firm without IRB
+    permission on 31 December 2026 "shall be assigned the following risk
+    weights: (1) 160% [...] 2027; (2) 190% [...] 2028; and (3) 220% [...]
+    2029" in place of the Art. 133(3) 250%. Prior to P1.43 the bundle path
+    skipped the transitional; both entry points must agree, and on the rule's
+    figure rather than merely on each other.
     """
 
     def _make_bundle(self, equity_type: str = "listed") -> pl.LazyFrame:
@@ -236,8 +240,8 @@ class TestEquityTransitionalFloorInBundle:
             }
         ).lazy()
 
-    def test_bundle_path_applies_transitional_floor(self) -> None:
-        """get_equity_result_bundle should apply transitional floor for 2027."""
+    def test_bundle_path_assigns_the_rule_4_2_weight(self) -> None:
+        """get_equity_result_bundle assigns the rule 4.2(1) 160% in 2027."""
 
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2027, 6, 30),
@@ -254,9 +258,8 @@ class TestEquityTransitionalFloorInBundle:
         result = calculator.get_equity_result_bundle(bundle, config)
         row = result.results.collect().to_dicts()[0]
 
-        # 2027: B31 SA listed = 250%, transitional floor std = 160%
-        # max(250%, 160%) = 250%
-        assert row["risk_weight"] == pytest.approx(2.50)
+        # 2027, Standardised firm: rule 4.2(1) assigns 160% (not max(250%, 160%)).
+        assert row["risk_weight"] == pytest.approx(1.60)
 
     def test_bundle_and_branch_produce_same_results(self) -> None:
         """Both entry points should produce identical risk weights."""
@@ -282,3 +285,6 @@ class TestEquityTransitionalFloorInBundle:
         bundle_rw = bundle_result.results.collect()["risk_weight"][0]
 
         assert branch_rw == pytest.approx(bundle_rw)
+        # Absolute, so the comparison cannot pass with both paths wrong:
+        # rule 4.2(2) assigns 190% in 2028.
+        assert bundle_rw == pytest.approx(1.90)

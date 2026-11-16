@@ -338,6 +338,15 @@ ERROR_SEC_FULLY_SECURITISED = "SEC005"
 # Configuration error codes
 ERROR_INVALID_CONFIG = "CFG001"
 ERROR_MISSING_PERMISSION = "CFG002"
+# PS1/26 Credit Risk: General Provisions rules 4.1-4.10 (equity transitional).
+# A WARNING, never an RWA change: the configured firm fact and election lead to
+# a treatment the engine does not apply. Two cases share it — a firm that had
+# IRB permission on 31 December 2026 and has not made the rule 4.9 election
+# (rules 4.5 / 4.6 are not implemented, so the Art. 133 weights it receives are
+# the 4.9 election's), and a firm without that permission that set ``opt_out``
+# (rule 4.9 replaces only 4.5, 4.6 and 4.8, so there is nothing to elect and the
+# rule 4.2 / 4.3 weights still apply to its direct equity).
+ERROR_EQUITY_TRANSITIONAL_CONFIG = "CFG003"
 
 # Aggregated output bound error codes (validate_aggregated_bundle)
 ERROR_RW_ABOVE_CAP = "OUT001"

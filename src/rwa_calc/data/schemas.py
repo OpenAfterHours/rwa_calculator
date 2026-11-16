@@ -3527,8 +3527,13 @@ CALCULATION_OUTPUT_SCHEMA = {
     "sl_risk_weight": pl.Float64,  # Slotting RW
     "equity_type": pl.String,  # Equity category if applicable
     "equity_risk_weight": pl.Float64,  # Equity RW
-    "equity_transitional_approach": pl.String,  # "sa_transitional" or "irb_transitional" (B3.1)
-    "equity_higher_risk": pl.Boolean,  # True if 400%+ RW (speculative, venture capital)
+    # B3.1 equity transitional carriers (PS1/26 General Provisions rules 4.1-4.3).
+    # Non-null ONLY on a leg whose weight the rules set; null otherwise (sub
+    # debt, CIUs, central bank, Art. 133(6), IRB-permission firms, dates outside
+    # 2027-2029); absent under CRR. Only "sa_transitional" is produced today.
+    "equity_transitional_approach": pl.String,  # "sa_transitional" / "irb_transitional"
+    "equity_higher_risk": pl.Boolean,  # Art. 133(4) higher risk equity (the 400% rung)
+    "risk_weight_pre_equity_transitional": pl.Float64,  # Art. 133(3)/(4) weight replaced
     # -------------------------------------------------------------------------
     # REAL ESTATE SPECIFIC
     # -------------------------------------------------------------------------
@@ -3557,6 +3562,16 @@ CALCULATION_OUTPUT_SCHEMA = {
     "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income
     "currency_mismatch_multiplier_applied": pl.Boolean,  # True if 1.5x RW multiplier applied
     "risk_weight_pre_currency_mismatch": pl.Float64,  # RW snapshot before 1.5x mismatch multiply
+    # -------------------------------------------------------------------------
+    # LOAN-SPLIT PARTS (Basel 3.1 Art. 124F(1) / 124H(1); OF 07.00 Annex II p.94)
+    # Non-null only where the SA dispatcher priced the row at the two-part weight; a
+    # later step (Art. 127, CRM substitution, Art. 123B) may re-weight such a row and
+    # leave them stale, so a reader re-checks the weight. Absent under CRR. Named once
+    # in contracts/edges.py::LOAN_SPLIT_CARRIERS (this layer cannot import it).
+    # -------------------------------------------------------------------------
+    "sa_loan_split_secured_share": pl.Float64,  # share up to the 55% cap
+    "sa_loan_split_secured_rw": pl.Float64,  # Art. 124F(1)(a) 20% / 124H(1)(a) 60%
+    "sa_loan_split_residual_rw": pl.Float64,  # Art. 124L counterparty weight
     # -------------------------------------------------------------------------
     # POST-MODEL ADJUSTMENTS (Basel 3.1 PRA PS1/26 Art. 153(5A), 154(4A), 158(6A))
     # -------------------------------------------------------------------------

@@ -283,6 +283,10 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "memorandum rows 0290/0310 under CRR. The QRRE split returns on no row "
             "in either regime, and Specialised lending returns on no row under CRR, "
             "because the template declares none — a sheet total covers them",
+            "Under Basel 3.1 the memorandum rows 0300/0320 of a class sheet read the "
+            "exposures in default whose class before default is that sheet's class "
+            "(reporting_class_pre_default); they are not reported on the 'in default' "
+            "or real-estate sheets, and the Total carries every exposure in default once",
         ),
         sheet_label="obligor class",
     ),
@@ -1161,7 +1165,7 @@ def summed_sheet_reason(template_id: str, sheet: str | None) -> str | None:
     """Why a sheet has no drill-down of its own, when it is a sum of other sheets.
 
     The C 07.00 / OF 07.00 Total sheet is the cell-by-cell sum of the
-    exposure-class sheets (``corep/c07.py::c07_total_sheet``), and the two
+    exposure-class sheets (``corep/c07_sheet_scope.py::c07_total_sheet``), and the two
     OF 08.01 / 08.02 / 08.03 / 08.05 Total sheets are built from their class
     sheets likewise (``corep/c08_sheets.py::with_total_sheets``). None has an
     execution plan — there is no population to select — so ``sheet_lineage``

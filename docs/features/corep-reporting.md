@@ -584,13 +584,29 @@ flowchart TD
     | Ref | Row |
     |-----|-----|
     | 0010 | **TOTAL EXPOSURES** |
-    | 0015 | of which: Defaulted exposures |
+    | 0015 | of which: Defaulted exposures — high-risk and equity sheets, and the Total, only |
     | 0020 | of which: SME |
     | 0030 | of which: Exposures subject to SME-supporting factor |
     | 0035 | of which: Exposures subject to infrastructure supporting factor |
     | 0040 | of which: Secured by mortgages on immovable property — Residential |
     | 0050 | of which: Exposures under permanent partial use of SA |
     | 0060 | of which: Exposures under sequential IRB implementation |
+
+    !!! note "Row 0015 is not reported on the \"exposures in default\" sheet"
+        Annex II reports row 0015 only in the classes that keep a defaulted exposure:
+        high risk and equity under CRR, plus CIUs under Basel 3.1. A defaulted exposure
+        of any other class moves to the "exposures in default" class (j), where row
+        0010 carries it and row 0015 stays blank; the Total adds up the allowed sheets
+        only. The published rules `v4721_m` / `v4722_m` (EBA) and `boe_b0431` /
+        `boe_b1069` (Bank of England) require the row blank everywhere else.
+
+        **Under UK CRR the row cannot carry a figure today.** UK CRR has no high-risk
+        class (Art. 128 was omitted by SI 2021/1078), so the engine folds high-risk
+        exposures into "other items" (pack Feature `b31_high_risk_class_applicable` is
+        off), and equity and CIU holdings carry no default flag: the equity input table
+        has no `is_defaulted`, and a counterparty's `default_status` does not reach
+        them. Under Basel 3.1 the same holds for equity and CIUs, so a defaulted
+        high-risk exposure is the only leg that populates the row.
 
     **Section 2 — Breakdown by Exposure Types**
 
@@ -673,7 +689,7 @@ flowchart TD
     | Ref | Row | vs CRR |
     |-----|-----|--------|
     | 0010 | **TOTAL EXPOSURES** | |
-    | 0015 | of which: Defaulted exposures | |
+    | 0015 | of which: Defaulted exposures — high-risk, equity and CIU sheets, and the Total, only | Adds CIU |
     | 0020 | of which: SME | |
     | ==0021== | ==of which: Specialised lending — Object finance== | ==**New**== |
     | ==0022== | ==of which: Specialised lending — Commodities finance== | ==**New**== |
@@ -748,6 +764,43 @@ flowchart TD
     | 0270 | 1,250% | |
     | 0280 | Other risk weights | |
 
+    !!! info "A loan-split real-estate exposure is reported in two rows"
+        PS1/26 Annex II (p.94): real estate exposures under Art. 124F / 124H — not
+        materially dependent on the cash flows of the property — *"shall be reported in two
+        parts, against the risk weight applied to the portion up to 55% of the value of the
+        property, and against the portion above 55% of the value of the property (if
+        applicable)"*. The part up to the cap is reported in row 0180 (20%, residential) or
+        0201 (60%, commercial), the rest in the row of its Art. 124L counterparty weight
+        (0220 for a natural person). Both parts stay on the real-estate sheet, and their
+        exposure values and RWEAs add up to the loan's own; nothing changes in the risk
+        weight or the RWEA.
+
+        A 400,000 mortgage at 60% LTV to a natural person, weighted 24.58% as a whole, is
+        reported as 366,666.67 (RWEA 73,333.33) in row 0180 and 33,333.33 (RWEA 25,000.00)
+        in row 0220. Reported on its blended weight it matched no row and fell to row 0280,
+        which the Bank's rule `boe_b0445` requires to be empty on the real-estate sheet. An
+        exposure under the Art. 123B currency mismatch multiplier is split on its weight
+        before the multiplier, and its RWEA keeps the multiplier. A loan inside the 55% cap
+        is reported whole.
+
+    !!! info "A guaranteed exposure is reported in two risk-weight rows"
+        When the calculator applies a guarantee or credit derivative (Art. 235
+        substitution), the covered part's **original exposure** (cols 0010–0150) stays in
+        the borrower's own risk-weight row on the borrower's sheet, and its **exposure
+        value and RWEA** (cols 0160–0235, and the col 0100 inflow) move to the protection
+        provider's row on the provider's sheet. Annex II (p.84) makes cols 0090 / 0100 the
+        covered part "deducted from the obligor's exposure class" and (p.94) the rows "the
+        allocation of risk weights within the respective exposure class".
+
+        An unrated corporate loan of 8,000,000 with 2,800,000 covered by a CQS 2 bank is
+        reported with 8,000,000 in the corporates sheet's 100% row (cols 0010 / 0040) and
+        5,200,000 there from col 0150 on; the 2,800,000 arrives in the institutions sheet's
+        30% row. The corporates sheet's 30% row is empty, as the Bank's rules
+        `boe_b0441` / `boe_b0441_1` require. A guarantee from a borrower's own class puts
+        the one loan in two rows of the same sheet. A guaranteed loan-split mortgage
+        reports its covered part's original exposure in the two loan-split rows. Nothing
+        changes in the risk weight or the RWEA.
+
     **Section 4 — Breakdown by CIU Approach**
 
     | Ref | Row | vs CRR |
@@ -762,8 +815,8 @@ flowchart TD
 
     | Ref | Row | vs CRR |
     |-----|-----|--------|
-    | 0300 | Exposures in default subject to RW of 100% | |
-    | 0320 | Exposures in default subject to RW of 150% | |
+    | 0300 | Exposures in default subject to RW of 100% — Total and the six class sheets below | Class before default |
+    | 0320 | Exposures in default subject to RW of 150% — Total and the six class sheets below | Class before default |
     | ==0371== | ==Equity transitional: SA higher risk== | ==**New**== |
     | ==0372== | ==Equity transitional: SA other equity== | ==**New**== |
     | ==0373== | ==Equity transitional: IRB higher risk== | ==**New**== |
@@ -773,6 +826,39 @@ flowchart TD
     !!! warning "Removed Memorandum Rows"
         Rows **0290** (secured by commercial RE) and **0310** (secured by residential RE) are
         removed — replaced by the detailed real estate breakdown in Section 1 (rows 0330-0360).
+
+    !!! info "Rows 0300 / 0320: the exposure class before default"
+        Rows 0300 and 0320 report exposures in the "in default" class (Art. 112(1)(j)) at the
+        Art. 127 100% / 150% weights, split by the class each exposure "would otherwise have
+        been assigned to ... if they were not in default" (PS1/26 Annex II row 0320, p.97;
+        ¶54). The Bank's taxonomy (table OF07.00.01.03) publishes them on the **Total** and on
+        six class sheets: central governments or central banks, regional governments or local
+        authorities, public sector entities, institutions, corporates and retail. So:
+
+        - a defaulted corporate loan at 150% appears in row 0320 of the Total and of the
+          **corporates** sheet;
+        - nothing is reported in these rows on the **"in default"** sheet — the Total's data
+          point already is the "exposures in default" figure;
+        - an exposure whose class before default is **real estate** appears on the **Total
+          only**. Annex II ¶52 lists real estate, but the table has no real-estate sheet; the
+          Bank's known-issues log (November 2026, issue #27) records the gap and the PRA's
+          interim request: report such exposures "in the total sheet s0001 for rows 0300 and
+          0320 but do not report such exposures separately to this, until the missing sheet
+          0010 is provided in the next taxonomy update". The same holds for an MDB or
+          international-organisation exposure, which no table sheet carries either;
+        - a defaulted **high-risk** exposure is in **neither** row, on the high-risk sheet or on
+          the Total, even at 100% / 150%. Art. 112(2) Table A2 ranks items of particularly high
+          risk above exposures in default, so it stays in class (k) and never enters the
+          "exposures in default" class these rows report (it shows in row 0015, "of which:
+          defaulted", on the high-risk sheet instead). Before rows 0300 / 0320 were keyed on
+          the class before default, such a leg was counted in both rows of its own sheet and
+          of the Total.
+
+        The class before default is the sealed `reporting_class_pre_default` column: the
+        applied class with the default reassignment left out, so a defaulted SME managed as
+        retail is retail and a defaulted corporate secured on commercial property is real
+        estate. A class sheet with no exposure of its own is still emitted for its memorandum
+        row. The CRR C 07.00 rows 0290-0320 are unchanged.
 
 === "Differences Summary"
 

@@ -67,9 +67,12 @@ have to undo them:
 
 - **Rows 0290 / 0300 / 0310 / 0320 are not asserted as a family, and nothing here
   says where they must NOT appear.** They are Annex II ¶51-55 memorandum items
-  with their own class list, which genuinely differs by regime, and rows
-  0300/0320 on the ``defaulted`` sheet are *required* by ¶55's worked example.
-  That is P1.377. The one exception is the single 0310 assertion in
+  with their own class list, which genuinely differs by regime. Under Basel 3.1
+  rows 0300/0320 are placed by the class before default and are NOT on the
+  ``defaulted`` sheet (table OF07.00.01.03 has no cell there; ¶55's "in the
+  total and in the exposure class 'in default'" is the Total's data point) —
+  ``test_of07_default_memorandum_rows.py`` holds that; the CRR half is P1.377.
+  The one exception is the single 0310 assertion in
   ``TestRowScopeUnderCRR``, which is safe because ¶52 lists ``(e) Corporates``
   explicitly — see that test's own docstring.
 - **Row 0040 == row 0310 on the real-estate sheet.** It holds today, and ¶52 does

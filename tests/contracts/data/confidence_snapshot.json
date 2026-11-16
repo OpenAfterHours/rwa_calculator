@@ -265,25 +265,6 @@
       "watchfire_index_gap": false
     },
     {
-      "article": "108",
-      "code_functions": [
-        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
-      ],
-      "confidence": "MEDIUM",
-      "framework": "CRR",
-      "layer_count": 3,
-      "oracle_cases": [],
-      "pack_entries": [],
-      "source_files": [
-        "contracts/errors.py",
-        "engine/crm/guarantor_eligibility.py"
-      ],
-      "test_files": [
-        "tests/unit/crm/test_p1_384_art_201_natural_person_guarantor.py"
-      ],
-      "watchfire_index_gap": false
-    },
-    {
       "article": "109",
       "code_functions": [
         "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate"
@@ -474,6 +455,7 @@
         "tests/acceptance/ccr/test_ccr_ls_long_settlement_inert.py",
         "tests/acceptance/crr/test_p1_154_art_118_international_organisation_class.py",
         "tests/acceptance/reporting/test_c07_art112_class_axis.py",
+        "tests/acceptance/reporting/test_c07_defaulted_row_scope.py",
         "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/conformance/portfolios.py",
@@ -587,7 +569,6 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/classify/approach.py",
-        "engine/crm/guarantor_eligibility.py",
         "engine/eu_sovereign.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/unify.py",
@@ -1241,6 +1222,7 @@
         "engine/re_split/carriers.py",
         "engine/re_split/flagging.py",
         "engine/re_split/splitter.py",
+        "engine/sa/re_class.py",
         "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py"
       ],
@@ -1319,6 +1301,7 @@
         "tests/properties/test_source_conservation.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_re_split_features.py",
+        "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -1820,7 +1803,8 @@
     {
       "article": "143",
       "code_functions": [
-        "rwa_calc.engine.classify.permissions::resolve_model_permissions"
+        "rwa_calc.engine.classify.permissions::resolve_model_permissions",
+        "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1832,6 +1816,7 @@
         "data/schemas.py",
         "domain/branch_reasons.py",
         "engine/classify/permissions.py",
+        "engine/equity/calculator.py",
         "engine/irb/transforms.py",
         "engine/stages/_ccr_shared.py",
         "reporting/corep/c08_07.py"
@@ -1995,6 +1980,7 @@
         "tests/acceptance/crr/test_p1_197_crr_slotting_obs_ead_firb_ccf.py",
         "tests/conformance/portfolios.py",
         "tests/fixtures/p1_197/p1_197.py",
+        "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/properties/test_template_row_axis.py"
       ],
       "watchfire_index_gap": false
@@ -2004,6 +1990,7 @@
       "code_functions": [
         "rwa_calc.engine.classify.attributes::_build_is_defaulted_expr",
         "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end",
         "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params",
         "rwa_calc.engine.irb.formulas::_correlation_expr_from_pd",
         "rwa_calc.engine.irb.formulas::_double_default_multiplier_expr",
@@ -2061,7 +2048,8 @@
         "engine/classify/attributes.py",
         "engine/classify/permissions.py",
         "engine/classify/subtypes.py",
-        "engine/crm/guarantor_eligibility.py",
+        "engine/crm/guarantees.py",
+        "engine/equity/calculator.py",
         "engine/fx_rate_sync.py",
         "engine/irb/__init__.py",
         "engine/irb/adjustments.py",
@@ -2101,7 +2089,6 @@
         "tests/acceptance/reporting/test_cms1_ccr.py",
         "tests/acceptance/reporting/test_irb_shapes_template_coverage.py",
         "tests/acceptance/reporting/test_of02_output_floor.py",
-        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/acceptance/stress/test_stress_pipeline.py",
         "tests/acceptance/test_percent_scale_pd_feed.py",
         "tests/contracts/test_aggregated_bundle_validation.py",
@@ -2428,7 +2415,7 @@
         "engine/classify/subtypes.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
-        "engine/crm/guarantor_eligibility.py",
+        "engine/crm/guarantees.py",
         "engine/crm/min_collateralisation.py",
         "engine/irb/__init__.py",
         "engine/irb/calculator.py",
@@ -2914,7 +2901,6 @@
     {
       "article": "194",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach",
         "rwa_calc.engine.crm.processor::CRMProcessor._apply_own_issue_collateral_gate",
         "rwa_calc.engine.crm.processor::CRMProcessor.get_crm_unified_bundle"
       ],
@@ -2924,15 +2910,12 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "contracts/errors.py",
-        "engine/crm/guarantor_eligibility.py",
         "engine/crm/processor.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/crr/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",
-        "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/unit/crm/test_p1_270_own_issue_collateral.py"
       ],
       "watchfire_index_gap": false
@@ -3126,7 +3109,7 @@
     {
       "article": "201",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
+        "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -3144,17 +3127,16 @@
       ],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantor_eligibility.py",
+        "engine/crm/guarantees.py",
         "engine/crm/processor.py",
-        "reporting/corep/c02.py"
+        "reporting/corep/c02.py",
+        "reporting/corep/irb_sheets.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_227_art_201_guarantor_eligibility.py",
-        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/fixtures/p1_227/p1_227.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
-        "tests/oracle/derivations/crm_sa.py",
-        "tests/unit/crm/test_p1_384_art_201_natural_person_guarantor.py"
+        "tests/oracle/derivations/crm_sa.py"
       ],
       "watchfire_index_gap": false
     },
@@ -4081,7 +4063,9 @@
         "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa",
         "rwa_calc.engine.sa.guarantor_rw::build_guarantor_rw_expr",
         "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution",
-        "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution"
+        "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution",
+        "rwa_calc.reporting.kernel.bases::origin_risk_weight",
+        "rwa_calc.reporting.kernel.bases::substituted_leg"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -5786,8 +5770,10 @@
       "code_functions": [
         "rwa_calc.reporting.corep.c02::generate_c02_00",
         "rwa_calc.reporting.corep.c07::c07_plans",
-        "rwa_calc.reporting.corep.c07::c07_total_sheet",
         "rwa_calc.reporting.corep.c07::generate_c07",
+        "rwa_calc.reporting.corep.c07::generate_c07_with_total",
+        "rwa_calc.reporting.corep.c07_sheet_scope::c07_total_sheet",
+        "rwa_calc.reporting.corep.c07_sheet_scope::publish_sheets",
         "rwa_calc.reporting.corep.c08::generate_c08_01",
         "rwa_calc.reporting.corep.c08::generate_c08_02",
         "rwa_calc.reporting.corep.c08::generate_c08_03",
@@ -5809,6 +5795,7 @@
       "source_files": [
         "reporting/corep/c02.py",
         "reporting/corep/c07.py",
+        "reporting/corep/c07_sheet_scope.py",
         "reporting/corep/c08.py",
         "reporting/corep/c08_07.py",
         "reporting/corep/c08_sheets.py",
@@ -5822,7 +5809,10 @@
     {
       "article": "4",
       "code_functions": [
+        "rwa_calc.engine.equity.calculator::EquityCalculator._apply_standardised_equity_transitional",
         "rwa_calc.engine.equity.calculator::EquityCalculator._equity_holding_higher_of_rw",
+        "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end",
+        "rwa_calc.engine.equity.calculator::_standardised_transitional_scope_expr",
         "rwa_calc.reporting.corep.c34::generate_c34_04",
         "rwa_calc.reporting.pillar3.ccr::generate_ccr2",
         "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_ccr2"
@@ -6039,10 +6029,12 @@
     },
     {
       "article": "112",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.reporting.corep.c07_sheet_scope::memo_key_exprs"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
@@ -6051,10 +6043,14 @@
         "domain/enums.py",
         "engine/aggregator/_equity_prep.py",
         "engine/aggregator/aggregator.py",
+        "reporting/corep/c07_sheet_scope.py",
         "reporting/corep/sheet_labels.py",
         "reporting/filing/sheet_maps.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_c07_defaulted_row_scope.py",
+        "tests/acceptance/reporting/test_of07_default_memorandum_rows.py",
+        "tests/acceptance/reporting/test_of07_loan_split_two_parts.py",
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/unit/test_b31_sa_risk_weights.py",
@@ -6629,6 +6625,7 @@
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/sa/rw_adjustments.py",
+        "reporting/kernel/rw_parts.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -6643,6 +6640,7 @@
         "tests/fixtures/p1_94e/p1_94e.py",
         "tests/fixtures/p1_94f/p1_94f.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/unit/reporting/kernel/test_rw_parts.py",
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_b31_sa_risk_weights.py"
       ],
@@ -6670,6 +6668,7 @@
         "engine/hierarchy/unify.py",
         "engine/re_split/flagging.py",
         "engine/re_split/splitter.py",
+        "engine/sa/re_class.py",
         "engine/sa/risk_weights.py"
       ],
       "test_files": [
@@ -6747,7 +6746,8 @@
     {
       "article": "124F",
       "code_functions": [
-        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
+        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split",
+        "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -6763,6 +6763,7 @@
         "sa_re_split_revised_parameters@b31"
       ],
       "source_files": [
+        "contracts/edges.py",
         "contracts/protocols.py",
         "domain/enums.py",
         "engine/re_split/carriers.py",
@@ -6770,6 +6771,7 @@
         "engine/re_split/params.py",
         "engine/re_split/splitter.py",
         "engine/sa/b31_risk_weight_tables.py",
+        "engine/sa/risk_weights.py",
         "engine/stages/re_split.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
@@ -6779,8 +6781,10 @@
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
         "tests/acceptance/basel31/test_scenario_b31_a_sa.py",
         "tests/acceptance/reporting/test_c07_row_scope.py",
+        "tests/acceptance/reporting/test_of07_loan_split_two_parts.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/contracts/test_collapse_additivity.py",
+        "tests/contracts/test_loan_split_carrier_edge.py",
         "tests/fixtures/p1_141/p1_141.py",
         "tests/fixtures/p1_142/p1_142.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
@@ -6795,7 +6799,9 @@
         "tests/properties/test_collapse_conservation.py",
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_source_conservation.py",
+        "tests/unit/reporting/corep/test_c07_loan_split_gate.py",
         "tests/unit/rulebook/test_re_split_features.py",
+        "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_b31_re_junior_charges.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_re_split_carrier_classification.py",
@@ -6833,10 +6839,12 @@
     },
     {
       "article": "124H",
-      "code_functions": [],
+      "code_functions": [
+        "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts"
+      ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-069"
       ],
@@ -6986,7 +6994,8 @@
     {
       "article": "127",
       "code_functions": [
-        "rwa_calc.engine.sa.risk_weights::_crr_defaulted_re_secured_share"
+        "rwa_calc.engine.sa.risk_weights::_crr_defaulted_re_secured_share",
+        "rwa_calc.reporting.corep.c07_sheet_scope::memo_key_exprs"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -7005,14 +7014,17 @@
       "source_files": [
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
+        "reporting/corep/c07_sheet_scope.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_120_art_127_1_provision_ratio_denominator.py",
         "tests/acceptance/basel31/test_scenario_b31_k_defaulted.py",
+        "tests/acceptance/reporting/test_of07_default_memorandum_rows.py",
         "tests/fixtures/p1_120/p1_120.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/corpus.py",
+        "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_defaulted_secured_split.py"
       ],
@@ -7141,13 +7153,16 @@
       "article": "133",
       "code_functions": [
         "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa",
-        "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt"
+        "rwa_calc.engine.equity.calculator::_b31_higher_risk_expr",
+        "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt",
+        "rwa_calc.reporting.corep.c07_rw_bands::rw_band_expr"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
       "layer_count": 5,
       "oracle_cases": [
-        "ORC-080"
+        "ORC-080",
+        "ORC-284"
       ],
       "pack_entries": [
         "b31_subordinated_debt_rw@b31",
@@ -7156,12 +7171,14 @@
         "equity_sa_risk_weights@b31"
       ],
       "source_files": [
+        "contracts/edges.py",
         "data/schemas.py",
         "engine/aggregator/_equity_prep.py",
         "engine/crm/simple_method.py",
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/sa/risk_weights.py",
+        "reporting/corep/c07_rw_bands.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
       ],
@@ -7171,15 +7188,19 @@
         "tests/acceptance/basel31/test_p2_15_equity_transitional_optout.py",
         "tests/acceptance/basel31/test_p2_19_unlisted_young_equity_higher_risk.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
+        "tests/acceptance/reporting/test_of07_equity_transitional_rows.py",
         "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/conformance/test_cell_rederivation.py",
+        "tests/contracts/test_equity_transitional_edge.py",
         "tests/fixtures/p1_182/p1_182.py",
         "tests/fixtures/p2_19/p2_19.py",
+        "tests/fixtures/reporting_equity_transitional_portfolio.py",
         "tests/integration/test_facility_share_equity_exit.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
         "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
+        "tests/unit/reporting/corep/test_c07_equity_transitional_band.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
         "tests/unit/test_equity_routing.py",
@@ -7516,7 +7537,6 @@
         "tests/acceptance/basel31/test_p1_251_b31_firb_uk_resi_commitment_ccf.py",
         "tests/acceptance/basel31/test_scenario_b31_e_slotting.py",
         "tests/acceptance/basel31/test_scenario_b31_k_defaulted.py",
-        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/fixtures/lfse_fi_scalar/lfse_fi_scalar.py",
         "tests/fixtures/p1_117/p1_117.py",
         "tests/fixtures/p1_159/p1_159.py",
@@ -7714,7 +7734,6 @@
         "tests/acceptance/basel31/test_p2_43_psm_lgd_source_switch.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
         "tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py",
-        "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_130/p1_130.py",
@@ -8038,22 +8057,16 @@
     },
     {
       "article": "194",
-      "code_functions": [
-        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
-      ],
-      "confidence": "MEDIUM",
+      "code_functions": [],
+      "confidence": "GAP",
       "framework": "PS1/26",
-      "layer_count": 3,
+      "layer_count": 1,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [
-        "contracts/errors.py",
-        "engine/crm/guarantor_eligibility.py"
-      ],
+      "source_files": [],
       "test_files": [
         "tests/acceptance/basel31/test_p1_270_art_194_own_issue_collateral.py",
-        "tests/acceptance/basel31/test_p1_274_art_218_credit_linked_note.py",
-        "tests/fixtures/reporting_crm_substitution_portfolio.py"
+        "tests/acceptance/basel31/test_p1_274_art_218_credit_linked_note.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8152,7 +8165,7 @@
     {
       "article": "201",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach"
+        "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -8160,12 +8173,11 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantor_eligibility.py"
+        "engine/crm/guarantees.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_227_art_201_guarantor_eligibility.py",
-        "tests/fixtures/p1_227/p1_227.py",
-        "tests/fixtures/reporting_crm_substitution_portfolio.py"
+        "tests/fixtures/p1_227/p1_227.py"
       ],
       "watchfire_index_gap": false
     },

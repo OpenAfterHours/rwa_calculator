@@ -136,7 +136,7 @@ class TestAddExposureClassApplied:
     def test_residential_property_corporate_unchanged(self) -> None:
         """Residential property alone does NOT re-class a corporate.
 
-        ``_is_residential_re_class`` has no ``property_type`` limb, so such a row
+        ``is_residential_re_class`` has no ``property_type`` limb, so such a row
         keeps the counterparty risk weight — re-classing it would put it in a
         class its risk weight does not come from.
         """
@@ -259,6 +259,111 @@ class TestGuaranteedLegAppliedClass:
             ]
         )
         assert result[0] == ExposureClass.RETAIL_OTHER.value
+
+
+# =============================================================================
+# The class before default (reporting_class_pre_default)
+# =============================================================================
+
+
+def _overlay(rows: list[dict[str, object]]) -> pl.DataFrame:
+    """Run ``_add_exposure_class_applied`` over ``rows`` and return the frame."""
+    lf = pl.LazyFrame(
+        rows,
+        schema={
+            "approach_applied": pl.String,
+            "exposure_class": pl.String,
+            "is_defaulted": pl.Boolean,
+            "cp_is_managed_as_retail": pl.Boolean,
+            "qualifies_as_retail": pl.Boolean,
+            "property_type": pl.String,
+        },
+    )
+    return _add_exposure_class_applied(lf).collect()
+
+
+class TestReportingClassPreDefault:
+    """``reporting_class_pre_default``: the applied class the exposure would have had
+    were it not in default — the class OF 07.00 memorandum rows 0300 / 0320 split the
+    "in default" class by (PS1/26 Annex II ¶54: "where the obligors would have been
+    reported in the exposure classes ... if those exposures were not assigned to the
+    exposure classes 'in default'"; Art. 112(1)(j), Art. 127).
+
+    It is the overlay with the default limb left out, so a defaulted SME managed as
+    retail is retail and a defaulted corporate on commercial property is real estate:
+    the treatment, not the counterparty, decides the class in both cases.
+    """
+
+    @pytest.mark.parametrize(
+        ("row", "expected"),
+        [
+            (_row(ec="corporate", defaulted=True), ExposureClass.CORPORATE.value),
+            (
+                _row(ec="corporate_sme", defaulted=True, managed_as_retail=True, qualifies=True),
+                ExposureClass.RETAIL_OTHER.value,
+            ),
+            (
+                _row(ec="corporate", defaulted=True, property_type="commercial"),
+                ExposureClass.COMMERCIAL_MORTGAGE.value,
+            ),
+            (_row(ec="retail_mortgage", defaulted=True), ExposureClass.RETAIL_MORTGAGE.value),
+            (_row(ec=ExposureClass.HIGH_RISK.value, defaulted=True), ExposureClass.HIGH_RISK.value),
+            (
+                _row(approach="foundation_irb", ec="corporate", defaulted=True),
+                ExposureClass.CORPORATE.value,
+            ),
+        ],
+        ids=["corporate", "sme-as-retail", "commercial-property", "mortgage", "high-risk", "irb"],
+    )
+    def test_a_defaulted_row_keeps_the_class_it_would_otherwise_have(
+        self, row: dict[str, object], expected: str
+    ) -> None:
+        # Arrange / Act
+        frame = _overlay([row])
+
+        # Assert
+        assert frame["reporting_class_pre_default"].to_list() == [expected]
+
+    def test_the_applied_class_of_a_defaulted_sa_row_is_still_in_default(self) -> None:
+        """The new column is beside the applied class, not instead of it."""
+        # Arrange / Act
+        frame = _overlay([_row(ec="corporate", defaulted=True)])
+
+        # Assert
+        assert frame["exposure_class_applied"].to_list() == [ExposureClass.DEFAULTED.value]
+
+    def test_off_default_it_is_the_applied_class(self) -> None:
+        """Wherever a row is not in default the two columns agree, row for row."""
+        # Arrange
+        rows = [
+            _row(approach=approach, ec=ec, defaulted=defaulted, **flags)
+            for approach in ("standardised", "foundation_irb", "slotting", "equity")
+            for ec in (
+                "corporate",
+                "corporate_sme",
+                "retail_other",
+                "retail_mortgage",
+                ExposureClass.HIGH_RISK.value,
+                ExposureClass.EQUITY.value,
+            )
+            for defaulted in (False, True)
+            for flags in (
+                {},
+                {"managed_as_retail": True, "qualifies": True},
+                {"property_type": "commercial"},
+            )
+        ]
+
+        # Act
+        frame = _overlay(rows)
+        performing = frame.filter(pl.col("is_defaulted").not_())
+        differs = performing.filter(
+            pl.col("reporting_class_pre_default") != pl.col("exposure_class_applied")
+        )
+
+        # Assert
+        assert performing.height == len(rows) // 2, "the grid holds no performing row"
+        assert differs.height == 0, differs
 
 
 # =============================================================================

@@ -392,7 +392,7 @@ def _band_split(
     """Per destination class, the inflow split by risk-weight band label.
 
     ``band_expr`` is supplied by the CALLER because the band ladder is that
-    template's own regime-shaped axis (``corep/c07.py::_rw_band_expr`` over
+    template's own regime-shaped axis (``corep/c07_rw_bands.py::rw_band_expr`` over
     ``get_sa_risk_weight_bands``) — the same expression its own rows key on, so a
     banded inflow lands on a row that exists. The ladder ends in an "Other risk
     weights" catch-all, so no leg can be silently dropped.

@@ -38,13 +38,15 @@ Scenario rationale (PRA PS1/26 Rules 4.9-4.10, CRR Art. 155(2)):
 
   EQ-CONTROL-001 (control — direct LISTED equity):
     B31 Art. 133(3): standard equity → 250% (2.50)
-    _apply_transitional_floor: max(2.50, 1.60 [Rule 4.2 2027]) = 2.50 (end-state wins)
-    RWA = 1,000,000 x 2.50 = 2,500,000  under BOTH configs (opted_out flag irrelevant)
+    The run carries IRB permission, so rule 4.1 keeps direct equity outside the
+    rules 4.2 / 4.3 weights; rule 4.6 (higher of legacy Art. 155 and 4.2 / 4.3)
+    is not implemented, so the Art. 133 weight applies under both configs.
+    RWA = 1,000,000 x 2.50 = 2,500,000  under BOTH configs
 
     Note: is_exchange_traded=True, business_age_years=10 — NOT higher-risk (Art. 133(4)).
     is_speculative=False.  These flags ensure the control stays on the standard 250% path.
-    The transitional floor for direct LISTED equity (2.50) exceeds the 2027 band (1.60)
-    so the floor does not bind and the RWA is 2,500,000 regardless of opted_out.
+    (A Standardised-only firm would be assigned the rule 4.2(1) 160% here; this
+    control is about the IRB-permission firm the P2.15 configs describe.)
 
 Hand-calculation (reporting_date=2027-06-30):
 
@@ -70,7 +72,7 @@ References:
     - CRR Art. 155(2): IRB simple method "other" equity RW = 370%.
     - PRA PS1/26 Art. 132a / Art. 133(3): CIU look-through; standard equity = 250%.
     - src/rwa_calc/engine/equity/calculator.py: _equity_holding_higher_of_rw,
-      _resolve_look_through_rw, _apply_transitional_floor
+      _resolve_look_through_rw, _apply_standardised_equity_transitional
     - src/rwa_calc/contracts/config.py: EquityTransitionalConfig
 
 Usage:

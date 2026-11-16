@@ -56,7 +56,9 @@
 | Art. 166C–166D | Revised CCF: SA-aligned, full-facility EAD for revolving | Done |
 | Art. 191A–241 | Revised CRM: 5-band haircuts, equity 20%/30% | Done |
 | Art. 92(2A)–(2D) | Output floor (PRA 4-year: 60%–72.5%, 2027–2030) | Done |
-| Rules 4.1–4.8 | Equity transitional schedule (2027–2030) | Done |
+| Rules 4.1–4.3 | Standardised Transitional Approach for equities — firms without IRB permission assigned 160%/190%/220% (higher risk 220%/280%/340%), 2027–2029 | Done |
+| Rules 4.4–4.6 | IRB Transitional Approach, direct equity — higher of legacy Art. 155 and Rules 4.2/4.3 weight | Not implemented (Art. 133 weights + CFG003 warning) |
+| Rules 4.7–4.8 | CIU underlyings — higher of legacy Art. 155(2) and Rules 4.2/4.3 weight | Partial (applied without the Rule 4.7 firm fact) |
 | — | Removal of SME supporting factor | Done |
 | — | Removal of equity IRB (all equity → SA) | Done |
 | — | Removal of 1.06 scaling factor | Done |

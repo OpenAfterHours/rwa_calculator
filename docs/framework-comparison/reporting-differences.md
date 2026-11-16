@@ -133,7 +133,7 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 | Change | Ref(s) | Description |
 |--------|--------|-------------|
 | **Added** | 0017 | Revolving loan commitments breakdown |
-| **Added** | 0031–0035 | Off-balance sheet CCF bucket breakdown rows |
+| **Added** | 0031, 0032, 0001, 0033, 0034, 0035 | Off-balance sheet items by conversion factor (10%, 20%, 40%, 50%, 100%, own estimate) |
 | **Added** | 0175 | Purchased receivables (explicit row) |
 | **Added** | 0190, 0200 | Corporates without ECAI / investment grade (output floor) |
 | **Removed** | 0015 | SME supporting factor |

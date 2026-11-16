@@ -575,14 +575,11 @@ class TestIRBRowSections:
         refs = [r.ref for r in total_section.rows]
         assert "0017" in refs
 
-    def test_b31_irb_has_ccf_breakdown_rows(self) -> None:
-        exp_section = B31_IRB_ROW_SECTIONS[1]
-        refs = [r.ref for r in exp_section.rows]
-        assert "0031" in refs
-        assert "0032" in refs
-        assert "0033" in refs
-        assert "0034" in refs
-        assert "0035" in refs
+    # The conversion-factor breakdown rows (0031, 0032, 0001, 0033, 0034, 0035)
+    # are held to the PRA001 taxonomy, in published order and by bucket, in
+    # tests/contracts/test_of08_01_published_rows.py. The five-ref check that
+    # stood here was written from the same list as the layout and passed while
+    # row 0001 was missing.
 
     def test_b31_irb_no_alt_re_treatment(self) -> None:
         calc_section = B31_IRB_ROW_SECTIONS[2]

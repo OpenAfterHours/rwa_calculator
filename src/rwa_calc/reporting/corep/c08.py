@@ -241,7 +241,9 @@ Cell semantics (recorded decisions, this slice):
   ``c08_after_all_crm``) and the two-basis discriminators into
   ``kernel/bases.py``. Splitting c08.py per-TEMPLATE is still the honest
   long-term answer — recorded as a deferred follow-up (shared value surface,
-  its own risky item); the pass extraction is one coherent slice of it.
+  its own risky item); the pass extraction is one coherent slice of it, and the
+  C 08.01 row axis (``corep/c08_01_rows.py`` — the row terms, the Basel 3.1
+  conversion-factor rows and the per-row inflow) is another.
 - The EL memo columns 0280 (pre post-model adjustment) and its B31 twin 0282
   (after post-model adjustments) coalesce PER LEG (R10a): they read the
   formula-IRB ``el_pre_adjustment`` / ``el_after_adjustment`` where non-null
@@ -378,6 +380,7 @@ from rwa_calc.reporting.cellspec import (
     execute,
     subset_rows,
 )
+from rwa_calc.reporting.corep import c08_01_rows
 from rwa_calc.reporting.corep.c08_03_cells import build_c08_03_cells
 from rwa_calc.reporting.corep.c08_06_cells import (
     c08_06_empty_row_override,
@@ -399,7 +402,6 @@ from rwa_calc.reporting.corep.crm_substitution import (
     IRB_BLOCK_COL,
     IRB_OFCP_CARRIERS,
     OFCP_LGD_CARRIERS,
-    InflowBreakdown,
     crm_waterfall,
     irb_origin_inflows,
     irb_protection_exprs,
@@ -457,25 +459,6 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0035", "0040", "0050", "0060", "0070", "0102", "0103", "0256", "0257", "0290"}
 )
 
-# Which ``ReportingContext`` inflow component each C 08.01 row's col 0080 takes.
-# The Total row 0010 takes the whole inflow; rows 0020/0030 take its balance-sheet
-# split. Both are needed: row 0010 is decomposed TWICE over the same columns — the
-# balance-sheet axis (r0020+r0030+r0040+r0050+r0060, BoE ``boe_b0744``) and the IRB
-# treatment axis (r0070+r0080+r0170+r0180, EBA ``v0338_m``, live ERROR; BoE
-# ``boe_b0745``, both BoE rules withdrawn in v4.1.1) — and a Total-row-only inflow
-# breached BOTH by exactly the inflow on cols 0080/0090/0104 (measured on the
-# CRM-substitution portfolio). The balance-sheet split is unambiguous: the side is
-# a property of the asset, not of substitution.
-#
-# ROWS 0070/0080 CARRY THE TREATMENT SPLIT, and binding them is only coherent
-# BECAUSE C 08.02 now carries the inflow too. Four live ERROR rules —
-# ``boe_b0752_8`` / ``boe_b0814_07`` (col 0080) and ``boe_b0752_9`` /
-# ``boe_b0814_08`` (col 0090), two distinct identities each stated twice in the
-# pack — require ``{OF08.01 r0070} = sum({OF08.02})`` on those columns. So the
-# published set jointly demands that the inflow reach row 0070 AND that the
-# C 08.02 grade rows sum to it: binding row 0070 alone would fix ``v0338_m`` (and
-# v4.0.0's ``boe_b0745``) and break both identities. See ``_C08_02_INFLOW_ROW``.
-
 # The C 08.02 row the substitution inflow lands on — the residual "Unassigned"
 # grade bucket ``_c08_02_keyed`` already emits for legs with no rating grade.
 #
@@ -493,14 +476,6 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 # null ``cp_internal_rating_grade``. A destination class with no unassigned-grade
 # legs of its own has the row added for the inflow (``c08_02_plans``).
 _C08_02_INFLOW_ROW: str = "Unassigned"
-
-_C08_01_INFLOW_KEYS: dict[str, str] = {
-    "0010": "substitution_inflow",
-    "0020": "substitution_inflow_on_bs",
-    "0030": "substitution_inflow_off_bs",
-    "0070": "substitution_inflow_graded",
-    "0080": "substitution_inflow_slotting",
-}
 
 
 _Terms = tuple[tuple[str, str | bool], ...]
@@ -915,80 +890,31 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
 # =============================================================================
 
 
-def _c08_01_row_terms(framework: str, cols: set[str]) -> dict[str, _Terms | None]:
-    """Membership terms per C 08.01 row ref (None = inert all-null row).
-
-    Ports the retired section dispatch: section 1's "of which" rows are
-    hardwired null; section 2 splits on/off-BS (B31's CCF-bucket and
-    netting-set rows are inert); section 3 splits the origin approach
-    (F-IRB/A-IRB vs slotting) plus the B31 unrated-corporate memo rows.
-    """
-    terms: dict[str, _Terms | None] = {}
-    for section_index, section in enumerate(get_irb_row_sections(framework)):
-        for row in section.rows:
-            ref = row.ref
-            if section_index == 0:
-                terms[ref] = () if ref == "0010" else None
-            elif section_index == 1:
-                if ref == "0020":
-                    terms[ref] = (("c08_bs", "on"),)
-                elif ref == "0030":
-                    terms[ref] = (("c08_bs", "off"),)
-                else:
-                    terms[ref] = None
-            elif ref == "0070":
-                terms[ref] = None  # composed via any_of below
-            elif ref == "0080":
-                terms[ref] = (("reporting_approach_origin", "slotting"),)
-            elif ref == "0190":
-                terms[ref] = (("c08_unrated_corp", True),)
-            elif ref == "0200":
-                terms[ref] = (("c08_unrated_ig", True),)
-            else:
-                terms[ref] = None
-    return terms
-
-
-def _c08_01_grades_pred() -> RowPredicate:
-    """Row 0070 (obligor grades/pools) — the F-IRB/A-IRB non-slotting union.
-
-    A two-limb ``any_of`` over ``reporting_approach_origin`` (slotting reports on
-    row 0080). Defined once and shared by ``_c08_01_spec`` (merges it into every
-    0070 cell) and ``_c08_01_row_preds`` (rebuilds it for the generate post-passes),
-    so the drill-down's spec and the generator's predicate never drift."""
-    return RowPredicate(
-        any_of=(
-            RowPredicate(equals=(("reporting_approach_origin", "foundation_irb"),)),
-            RowPredicate(equals=(("reporting_approach_origin", "advanced_irb"),)),
-        )
-    )
-
-
 def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> TemplateSpec:
     """The C 08.01 TemplateSpec for one run (built cols-aware).
 
     Shared by ``c08_01_plans`` and ``generate_c08_01`` so the drill-down re-runs
     the exact predicate the generator executed. Row 0070 merges the F-IRB/A-IRB
-    union into every value cell; other rows carry their ``_c08_01_row_terms``, and
+    union into every value cell; other rows carry their ``c08_01_rows.row_terms``, and
     the Total row (0010) carries the ``SideContext`` inflow (col 0080). ``cols`` is
     the PRE-``_prepare`` base-column set (``_value_cells`` reads it for base-column
     membership only, binding derived columns by name for the executor to resolve)."""
     column_refs = tuple(col.ref for col in get_c08_columns(framework))
     rows = tuple(row for section in get_irb_row_sections(framework) for row in section.rows)
-    row_terms = _c08_01_row_terms(framework, cols)
+    row_terms = c08_01_rows.row_terms(framework, cols)
     cells: dict[tuple[str, str], CellSpec] = {}
     for row in rows:
         terms = row_terms.get(row.ref)
         netting = row.ref not in C08_01_NETTING_EXEMPT_ROWS
         if row.ref == "0070":
-            pred = _c08_01_grades_pred()
+            pred = c08_01_rows.grades_pred()
             for col_ref, cell in _value_cells(
                 (),
                 cols,
                 ead_col,
                 rwa_col,
                 column_refs,
-                inflow_key=_C08_01_INFLOW_KEYS.get("0070"),
+                inflow_key=c08_01_rows.INFLOW_KEYS.get("0070"),
                 netting_in_waterfall=True,
                 basis=BASIS,
             ).items():
@@ -1011,7 +937,7 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
             ead_col,
             rwa_col,
             column_refs,
-            inflow_key=_C08_01_INFLOW_KEYS.get(row.ref),
+            inflow_key=c08_01_rows.INFLOW_KEYS.get(row.ref),
             netting_in_waterfall=netting,
             basis=BASIS,
         ).items():
@@ -1019,25 +945,6 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
     return TemplateSpec(
         name="c08_01", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
     )
-
-
-def _c08_01_row_preds(row_terms: dict[str, _Terms | None]) -> dict[str, RowPredicate | None]:
-    """Rebuild the C 08.01 per-row predicates from the plan's row terms.
-
-    The three generate post-passes need each row's ``RowPredicate`` — including row
-    0070's ``any_of`` union, which simple equals-terms cannot express — so it is
-    rebuilt from the same ``row_terms`` the plan carries (deterministic, so
-    identical to the retired inline set). ``None`` = an inert (all-null) row;
-    ``()`` = the constraint-free Total row."""
-    preds: dict[str, RowPredicate | None] = {}
-    for ref, terms in row_terms.items():
-        if ref == "0070":
-            preds[ref] = _c08_01_grades_pred()
-        elif terms is None:
-            preds[ref] = None
-        else:
-            preds[ref] = RowPredicate(equals=terms) if terms else RowPredicate()
-    return preds
 
 
 def c08_01_plans(
@@ -1085,7 +992,11 @@ def c08_01_plans(
     # inflow comes entirely from legs outside this template would lose it to the
     # early exit, which is the same dropped-inflow defect one level up.
     inflow_map = irb_origin_inflows(
-        results, cols, destination="irb", destination_key=inflow_sheet_key(cols, ec_col, framework)
+        results,
+        cols,
+        destination="irb",
+        destination_key=inflow_sheet_key(cols, ec_col, framework),
+        ccf_row_expr=c08_01_rows.ccf_row_expr(cols, framework),
     )
     if len(irb_df) == 0 and not inflow_map:
         return {}
@@ -1093,51 +1004,24 @@ def c08_01_plans(
     # 3.1, the exposure class under CRR (``c08_sheets.sheet_keys``).
     irb_df = irb_df.with_columns(sheet_keys(set(irb_df.columns), ec_col, framework))
     data_cols = set(irb_df.columns)
-    irb_df = _prepare(irb_df, data_cols)
+    irb_df = _prepare(irb_df, data_cols).with_columns(
+        c08_01_rows.ccf_row_exprs(data_cols, framework)
+    )
+    c08_01_rows.warn_if_unbucketed(irb_df, framework)
     spec = _c08_01_spec(framework, data_cols, ead_col, rwa_col)
-    row_terms = _c08_01_row_terms(framework, data_cols)
+    row_terms = c08_01_rows.row_terms(framework, data_cols)
     plans: dict[str, SheetPlan] = {}
     for ec in sorted(sheet_axis(BASIS, irb_df) | set(inflow_map)):
         inflow = inflow_map.get(ec)
         plans[ec] = SheetPlan(
             spec=spec,
             frame=sheet_frame(BASIS, irb_df, ec),
-            ctx=ReportingContext(
-                substitution_inflow=inflow.total if inflow else 0.0,
-                substitution_inflow_on_bs=inflow.on_bs if inflow else 0.0,
-                substitution_inflow_off_bs=inflow.off_bs if inflow else 0.0,
-                substitution_inflow_graded=inflow.graded if inflow else 0.0,
-                substitution_inflow_slotting=inflow.slotting if inflow else 0.0,
-            ),
+            ctx=c08_01_rows.inflow_context(inflow),
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
-            inflow_rows=_inflow_rows(inflow),
+            inflow_rows=c08_01_rows.inflow_rows(inflow),
         )
     return sheet_plans("C08.01", plans, framework)
-
-
-def _inflow_rows(inflow: InflowBreakdown | None) -> frozenset[str]:
-    """The C 08.01 rows carrying a NON-ZERO inflow component on this sheet.
-
-    ``_null_empty_rows`` renders a row all-null when its subset is empty, which is
-    right for a row with nothing in it — but a row that receives an inflow is not
-    empty, it is made entirely of money that lives in other sheets. Nulling it
-    would delete the very component the published row sums need (and does, on an
-    inflow-only sheet, where every constrained subset is empty). So the rows with
-    a live inflow component are exempted."""
-    if inflow is None:
-        return frozenset()
-    parts = {
-        "0010": inflow.total,
-        "0020": inflow.on_bs,
-        "0030": inflow.off_bs,
-        "0070": inflow.graded,
-        "0080": inflow.slotting,
-    }
-    # Gated on the bound key set, so a row whose component exists but is not bound
-    # (rows 0070/0080 today — see ``_C08_01_INFLOW_KEYS``) keeps the ordinary
-    # empty-row policy rather than being exempted from a pass it does not need.
-    return frozenset(ref for ref, value in parts.items() if value and ref in _C08_01_INFLOW_KEYS)
 
 
 @cites("PS1/26, paragraph 1.3")
@@ -1161,7 +1045,7 @@ def generate_c08_01(
     result: dict[str, pl.DataFrame] = {}
     plans = c08_01_plans(results, cols, framework, errors)
     for ec, plan in plans.items():
-        row_preds = _c08_01_row_preds(plan.row_terms)
+        row_preds = c08_01_rows.row_preds(plan.row_terms)
         origin_preds = _origin_preds(row_preds)
         data_cols = set(plan.frame.columns)
         frame = execute(plan.spec, plan.frame, plan.ctx)

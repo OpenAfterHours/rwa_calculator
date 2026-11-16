@@ -1158,16 +1158,48 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     | | **BREAKDOWN BY EXPOSURE TYPES** | |
     | 0020 | On balance sheet items subject to credit risk | |
     | 0030 | Off balance sheet items subject to credit risk | |
-    | ==0031-0035== | ==Breakdown of off-BS by CCF buckets== | ==**New**== |
+    | ==0031== | ==&emsp;of which: conversion factor 10%== | ==**New**== |
+    | ==0032== | ==&emsp;of which: conversion factor 20%== | ==**New**== |
+    | ==0001== | ==&emsp;of which: conversion factor 40%== | ==**New**== |
+    | ==0033== | ==&emsp;of which: conversion factor 50%== | ==**New**== |
+    | ==0034== | ==&emsp;of which: conversion factor 100%== | ==**New**== |
+    | ==0035== | ==&emsp;of which: own estimate (conversion factor or EAD)== | ==**New**== |
     | 0040 | SFT netting sets | |
     | 0050 | Derivatives & Long Settlement Transactions netting sets | |
     | 0060 | From Contractual Cross Product netting sets | |
 
-    !!! warning "Null Rows — CCR and CCF Buckets"
+    !!! info "Rows 0031, 0032, 0001, 0033, 0034, 0035 — off-balance-sheet items by conversion factor"
+        Row 0030 is broken down by the conversion factor each item is reported at, in the
+        published order — **row 0001 is the 40% bucket** and sits between 0032 and 0033
+        (PRA001 v4.1.1 table `OF08.01.01.01`). PS1/26 Annex II p.116: slotting, F-IRB, and
+        A-IRB items where *"neither conversion factors nor EADs are estimated"* go in the row of
+        their Art. 111 Table A1 factor; A-IRB items *"for which conversion factors are
+        estimated, or where EADs are estimated directly"* go in row **0035**.
+
+        - Each leg is placed by `corep/ccf_buckets.py`: row 0035 when its origin approach is
+          A-IRB and it carries an own estimate of EAD (`ead_modelled`, Art. 166D(3)) or is a
+          revolving commitment whose own estimate of conversion factor was applied
+          (`ccf_modelled`, Art. 166D(1)(a)); otherwise the Table A1 row its applied `ccf`
+          equals (rounded to four places). The own-estimate test wins: an own estimate floored
+          at half of a 40% item is 0.20 and still goes in row 0035, not the 20% row.
+        - An own estimate of exactly 100% is filed in row 0034 with identical figures: the
+          engine's eligibility flag is not sealed per leg, so "applied" is read as "below 100%".
+        - Every additive column of row 0030 is the sum of the six rows (`boe_b0741`,
+          `boe_b0742`), the column-0080 substitution inflow included (split by the bucket of
+          the leg it came from). An empty bucket is reported empty, not zero; the thirteen
+          columns the taxonomy does not publish on these rows (`0030`, `0035`, `0100`, `0120`,
+          `0125`, `0130`, `0140`, `0240`, `0265`, `0270`, `0275`, `0276`, `0310`) are left out.
+        - `boe_b0742` also adds the rows on column **0250** (an exposure-weighted average
+          maturity) and **0300** (a count of obligors), which do not add: two buckets carrying
+          the same maturity break it (1,673 against 1,673 + 1,673 on `irb-shapes`). That is a
+          limit of the published rule, recorded in the supervisory register, not a figure to
+          change.
+        - Off-balance-sheet money that falls in no bucket (a factor that is no Table A1 factor
+          and no own estimate) stays in row 0030 and is logged as a WARNING with its amount.
+
+    !!! warning "Null Rows — CCR"
         Rows **0040–0060** are null — the CCR book is SA-risk-weighted and reports in OF 07.00
-        rows 0090–0130 (see CRR tab). Additionally, rows **0031–0035** (off-BS breakdown by CCF
-        buckets) are null — CCF bucket data exists in the pipeline but is not yet disaggregated
-        for C 08.01 (available in C 07.00 only).
+        rows 0090–0130 (see CRR tab).
 
     | | **CALCULATION APPROACHES** | |
     | 0070 | Exposures assigned to obligor grades or pools: Total | |
@@ -1219,7 +1251,7 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     | Change | Ref(s) | Description |
     |--------|--------|-------------|
     | **Added** | 0017 | Revolving loan commitments breakdown |
-    | **Added** | 0031-0035 | Off-balance sheet CCF bucket breakdown rows |
+    | **Added** | 0031, 0032, 0001, 0033, 0034, 0035 | Off-balance sheet items by conversion factor (10%, 20%, 40%, 50%, 100%, own estimate) |
     | **Added** | 0175 | Purchased receivables (explicit row) |
     | **Added** | 0190, 0200 | Corporates without ECAI / investment grade (output floor) |
     | **Removed** | 0015 | SME supporting factor |

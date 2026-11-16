@@ -51,8 +51,9 @@ FRAMEWORK = "BASEL_3_1"
 TABLE_PREFIX = "OF08.01.01."
 
 #: Published rows our layout does not generate, each with its owning plan item.
-#: Row 0001 is the 40% conversion-factor bucket (P2.1).
-ROWS_NOT_IN_LAYOUT = {"0001"}
+#: Empty since row 0001 (the 40% conversion-factor bucket, P2.1) joined the
+#: layout; ``test_of08_01_published_rows.py`` holds the row ORDER too.
+ROWS_NOT_IN_LAYOUT: set[str] = set()
 
 #: The positions published on some sheets and not others: (row, column) -> the
 #: sheet codes that HAVE the cell (module docstring).

@@ -19,7 +19,8 @@ conditional at all) and not the gateway's Error-break count - so without this
 the residual could grow unseen:
 
 - Sheet 0010 rows 0010 / 0020 / 0030 on a book whose specialised lending there is
-  all slotting. Slotting exposure has no PD: the taxonomy has no c0010 cell on
+  all slotting, and the conversion-factor row its off-balance-sheet slotting
+  item is filed in (0034, 100%). Slotting exposure has no PD: the taxonomy has no c0010 cell on
   the slotting row 0080 (a PD filed there is refused, STR002) and Annex II
   §3.3.4 ¶77A keeps slotting out of OF 08.02. The rule asks every in-scope row
   with exposure for a PD, and these rows hold exposure that has none - a limit
@@ -99,6 +100,7 @@ RESIDUAL: dict[str, dict[tuple[str, str], str]] = {
         ("0010", "0010"): SLOTTING_ONLY,
         ("0010", "0020"): SLOTTING_ONLY,
         ("0010", "0030"): SLOTTING_ONLY,
+        ("0010", "0034"): SLOTTING_ONLY,
     },
     "crm-substitution": {
         ("0010", "0010"): SLOTTING_ONLY,

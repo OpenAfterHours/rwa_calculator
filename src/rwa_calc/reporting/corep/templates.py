@@ -775,11 +775,14 @@ B31_IRB_ROW_SECTIONS: list[RowSection] = [
         [
             COREPRow("0020", "On balance sheet items subject to credit risk"),
             COREPRow("0030", "Off balance sheet items subject to credit risk"),
-            COREPRow("0031", "  of which: off-BS by CCF 10%"),  # New in B3.1
+            # New in B3.1: the breakdown of row 0030 by conversion factor, in the
+            # published order (0001 is the 40% bucket) — corep/ccf_buckets.py.
+            COREPRow("0031", "  of which: off-BS by CCF 10%"),
             COREPRow("0032", "  of which: off-BS by CCF 20%"),
-            COREPRow("0033", "  of which: off-BS by CCF 40%"),
-            COREPRow("0034", "  of which: off-BS by CCF 50%"),
-            COREPRow("0035", "  of which: off-BS by CCF 100%"),
+            COREPRow("0001", "  of which: off-BS by CCF 40%"),
+            COREPRow("0033", "  of which: off-BS by CCF 50%"),
+            COREPRow("0034", "  of which: off-BS by CCF 100%"),
+            COREPRow("0035", "  of which: off-BS by own estimate of CCF or EAD"),
             COREPRow("0040", _LBL_ROW_SFT_NETTING),
             COREPRow("0050", _LBL_ROW_DERIV_LST_NETTING),
             COREPRow("0060", _LBL_ROW_CCP_NETTING),

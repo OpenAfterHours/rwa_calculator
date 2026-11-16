@@ -25,6 +25,16 @@ The label grammar (also in the register's own ``notes``,
   ``rwa_filer.validate.issue_labels`` puts a label on a result for. Citing an
   issue against a rule it names only as a control, a contradiction or a related
   rule would label a break the issue itself says a correct return does not have.
+  On a BREAK (``known_broken_rules``, ``known_gateway_breaks``) the issue's effect
+  must also be ``fails_correct_returns``, as ``issue_labels`` requires before it
+  labels a FAIL: an issue saying the rule passes wrong returns, or never runs,
+  cannot be why it fails.
+- ``publisher issue PI-nn, in part`` is the same attribution for a pair whose
+  places have two causes — some the issue's case, the rest ours. The register is
+  keyed per (rule, portfolio) and holds one reason per pair, so such a pair cites
+  the issue (a grep for the Bank's share finds it) and names "our defect", with
+  its plan item, for the rest in the same reason (nothing of ours hides behind the
+  citation either).
 - ``not PI-nn - <cause>`` (``not PI-aa, PI-bb - ...`` for several) at the START
   of a reason REBUTS the issue: the issue names the rule, and this break is not
   it — ours, our engine's, or (rarely) another issue's cited in the same reason. The issue must name the rule as its SUBJECT (it
@@ -39,8 +49,11 @@ The label grammar (also in the register's own ``notes``,
   entry (an EBA rule) cites no issue.
 
 And the requirement, Basel 3.1 breaks only (``known_broken_rules`` and
-``known_gateway_breaks``): a break on a rule that an open issue with the effect
+``known_gateway_breaks``): a break on a rule that an issue with the effect
 ``fails_correct_returns`` names as its SUBJECT must cite that issue or rebut it.
+Open or fixed alike — the register is release 4.1.1's, and a rule the Bank fixes
+in a later release is as wrong under 4.1.1 as before; only a withdrawn issue
+(no longer considered one) is owed nothing.
 Plus the converse for prose: a Basel 3.1 reason that calls its break a "limit of
 the published rule" must cite the issue that documents it.
 
@@ -54,6 +67,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +76,7 @@ from rwa_filer.boe.issues import (
     EFFECT_FAILS_CORRECT_RETURNS,
     ROLE_CONTROL,
     ROLE_SUBJECT,
+    STATUS_FIXED,
     STATUS_WITHDRAWN,
     IssueRegister,
     load_issues,
@@ -88,13 +103,21 @@ LABEL_NOTE = "reading_publisher_issue_labels"
 
 ISSUE_ID = r"PI-[0-9]{2}[a-z]?"
 CITATION = re.compile(rf"\bpublisher issue ({ISSUE_ID})\b")
+#: A citation of an issue that is only part of the cause: a pair whose places
+#: have two causes cites the issue this way and names our share beside it.
+PARTIAL_CITATION = re.compile(rf"\bpublisher issue ({ISSUE_ID}), in part\b")
 REBUTTAL = re.compile(rf"^not ({ISSUE_ID}(?:, {ISSUE_ID})*) - ")
 MENTION = re.compile(rf"\b({ISSUE_ID})\b")
 #: How a reason says its cause is the published rule.
 BLAMES_THE_RULE = re.compile(r"limit(?:ation)? of the published rule", re.IGNORECASE)
+#: How a reason names the share of a mixed-cause pair that is ours.
+OUR_SHARE = re.compile(r"\bour defect\b")
 
 ATTRIBUTION_ROLES = (ROLE_SUBJECT,)
 REBUTTAL_ROLES = (ROLE_SUBJECT, ROLE_CONTROL)
+#: The effect an issue must have to be the cause of a BREAK: it is the only one
+#: ``rwa_filer.validate.issue_labels`` labels a FAIL with.
+BREAK_EFFECTS = (EFFECT_FAILS_CORRECT_RETURNS,)
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +163,15 @@ def citation_problems(section: str, entry: dict[str, Any], register: IssueRegist
         *((issue_id, REBUTTAL_ROLES, "rebutted") for issue_id in sorted(rebuts)),
     ):
         problems += _role_problems(where, issue_id, entry["rule_id"], roles, form, register)
+    if section in BREAK_SECTIONS:
+        problems += _effect_problems(where, attributed, register)
+    problems += [
+        f"{where}: cites {issue_id} in part but does not name the rest of the cause - a "
+        "mixed-cause pair says which of its places are 'our defect' (with the plan item) "
+        "in the same reason"
+        for issue_id in sorted(set(PARTIAL_CITATION.findall(reason)))
+        if not OUR_SHARE.search(reason)
+    ]
     return problems
 
 
@@ -152,7 +184,9 @@ def requirement_problems(entry: dict[str, Any], register: IssueRegister) -> list
     owed = [
         issue.id
         for issue in register.for_rule(FILING_MODULE, entry["rule_id"])
-        if issue.effect == EFFECT_FAILS_CORRECT_RETURNS and issue.labels and issue.is_open
+        # Not only the open ones: an issue the Bank fixes in a LATER release
+        # leaves this release's rule as wrong as it was.
+        if issue.effect == EFFECT_FAILS_CORRECT_RETURNS and issue.labels
     ]
     return [
         f"{entry['regime']}/{entry['rule_id']}: the rule is the subject of {issue_id} "
@@ -209,7 +243,7 @@ def test_every_basel_3_1_break_on_the_subject_of_a_failing_issue_is_labelled() -
 
     Arrange: the Basel 3.1 entries of known_broken_rules and known_gateway_breaks.
     Act:     find each issue that names the entry's rule as subject with the effect
-             fails_correct_returns, and is open.
+             fails_correct_returns, and is not withdrawn.
     Assert:  each is cited or rebutted by the entry's reason.
     """
     # Arrange
@@ -425,6 +459,77 @@ def test_the_check_rejects_an_issue_cited_on_a_crr_entry() -> None:
     assert len(problems) == 1 and "CRR" in problems[0]
 
 
+def test_the_check_rejects_citing_an_issue_that_does_not_fail_correct_returns() -> None:
+    """PI-33 says boe_b0359 PASSES wrong returns: it cannot be the cause of a break.
+
+    ``rwa_filer.validate.issue_labels`` labels a FAIL only with an issue whose
+    effect is ``fails_correct_returns``; a citation on a break is held to the same.
+
+    Arrange: a gateway break on PI-33's subject, attributed to PI-33.
+    Act:     check its citations.
+    Assert:  rejected for the effect.
+    """
+    # Arrange
+    entry = _entry("boe_b0359", "publisher issue PI-33: the range check is too wide")
+
+    # Act
+    problems = citation_problems("known_gateway_breaks", entry, _issues())
+
+    # Assert
+    assert len(problems) == 1 and "passes_wrong_returns" in problems[0]
+
+
+def test_the_check_still_owes_a_label_for_an_issue_fixed_in_a_later_release() -> None:
+    """A rule the Bank fixes in a later taxonomy is still wrong under 4.1.1.
+
+    Arrange: the 4.1.1 register with PI-23 marked fixed in a later release, and an
+             unlabelled break on its subject boe_b0779.
+    Act:     check the requirement.
+    Assert:  PI-23 is still owed.
+    """
+    # Arrange
+    issues = _issues()
+    pi23 = issues.issue("PI-23")
+    assert pi23 is not None
+    fixed = IssueRegister(
+        release=issues.release,
+        issues=(replace(pi23, status=STATUS_FIXED, fixed_in="9.9.9"),),
+    )
+    entry = _entry("boe_b0779", "our defect: the share column is summed down the rows")
+
+    # Act
+    problems = requirement_problems(entry, fixed)
+
+    # Assert
+    assert len(problems) == 1 and "PI-23" in problems[0]
+
+
+def test_the_check_wants_our_share_named_beside_a_partial_citation() -> None:
+    """A pair with two causes cites the issue 'in part' and names our share too.
+
+    Arrange: a partial PI-29 citation on boe_b0356 that names no defect of ours,
+             and the same citation followed by ours.
+    Act:     check both entries' citations.
+    Assert:  the first is rejected for the missing share; the second passes.
+    """
+    # Arrange
+    issues = _issues()
+    bare = _entry("boe_b0356", "publisher issue PI-29, in part: slotting rows have no PD")
+    both = _entry(
+        "boe_b0356",
+        "publisher issue PI-29, in part: slotting rows have no PD; the other places are "
+        "our defect, plan item P2.70",
+    )
+
+    # Act
+    problems = citation_problems("known_gateway_breaks", bare, issues)
+    accepted = citation_problems("known_gateway_breaks", both, issues)
+
+    # Assert
+    assert len(problems) == 1 and "in part" in problems[0]
+    assert accepted == []
+
+
 def test_the_check_rejects_a_blamed_rule_with_no_issue() -> None:
     """The old wording, 'limit of the published rule' with no evidence, is not a label.
 
@@ -457,6 +562,19 @@ def _issues() -> IssueRegister:
 
 def _entry(rule_id: str, reason: str, *, regime: str = ISSUE_REGIME) -> dict[str, Any]:
     return {"regime": regime, "rule_id": rule_id, "reason": reason}
+
+
+def _effect_problems(where: str, attributed: set[str], register: IssueRegister) -> list[str]:
+    """Cited issues on a break whose effect cannot cause one."""
+    problems = []
+    for issue_id in sorted(attributed):
+        issue = register.issue(issue_id)
+        if issue is not None and issue.effect not in BREAK_EFFECTS:
+            problems.append(
+                f"{where}: {issue_id}'s effect is {issue.effect}, so it cannot be the cause "
+                f"of a break; only an issue that {' or '.join(BREAK_EFFECTS)} can"
+            )
+    return problems
 
 
 def _role_problems(

@@ -1,8 +1,8 @@
 {
   "notes": {
     "what_this_is": "Known supervisory validation breaks, coverage holes and VACUOUS rules of the template-level engine, and the gateway engine's breaks and the two engines' disagreements on each filed Basel 3.1 return, ratcheted by tests/acceptance/reporting/test_supervisory_validations.py. An entry is a LIABILITY, not a waiver: an ERROR-severity break rejects the entire return at submission.",
-    "reading_the_two_engines": "Two engines read the Bank's rules here. known_broken_rules, known_uncovered_templates and known_vacuous_rules come from rwa-filer's TEMPLATE-LEVEL engine (rwa_filer.validate) reading our template frames, under both regimes. known_gateway_breaks comes from the GATEWAY engine (rwa_filer.boe, pinned to Arelle rule by rule) reading the canonical return filed from the same Basel 3.1 COREP, with the Bank's validations deny list as it stands on the run date: it is what export_filing_package blocks on and what the Bank's gateway runs, so on anything the canonical return carries it is the authority, and an ERROR there is a rejected return. A rule the deny list deactivates is not evaluated and never appears; a downgraded one appears at WARNING. known_engine_disagreements lists every (rule, portfolio) on which one engine breaks a rule the other holds. The template-level engine differs from the gateway in six measured ways (design record O-03): it evaluates a place where none of the rule's cells is reported; it skips where a row, column or sheet is absent instead of applying each reference's default; it refuses 67 Bank rules on grammar (isNull, if/then, and/or, dimensional filters); it adds up a multi-cell reference the formula tests one cell at a time; it cannot see one data point shown in two tables; and it sets the missing-value policy per rule rather than per reference. So a break only the gateway shows is usually one the template-level engine cannot see (each gateway entry's by_portfolio.template_level says why), and a disagreement is triaged before it is blamed on our output. The template-level engine remains the only reading under CRR, the only one of what the canonical return does not carry (OF 08.02, C 08.04, OF08.05.01.01, OF 08.06, C 34.02), and the only source of the vacuity register. Both gateway sections are keyed per (rule, portfolio), so a rule that breaks on one more portfolio is a new entry. The ERROR half of known_gateway_breaks equals scripts/filing_mapping_baseline.json error_rules_by_rule rule for rule (tests/contracts/test_gateway_break_registers_agree.py): re-bank the two together.",
-    "reading_publisher_issue_labels": "A Bank rule can itself be wrong. rwa-filer's publisher-issue register (rwa_filer.boe.issues, release 4.1.1; shared as docs/rwa-filer/publisher-issues.md) holds each known case with its evidence, and a Basel 3.1 entry here says in its reason whether that is its cause. 'publisher issue PI-nn: ...' means the published rule is the cause: a return that follows the instructions breaks it, so the fix is the Bank's and our figures stay as they are; PI-nn names the entry's rule as its SUBJECT. A reason that STARTS 'not PI-nn - ...' says the issue names this rule but this break is not that issue, and what follows says whose it is: ours or our engine's, fixed here, or rarely another issue's, cited in the same reason (boe_b0737: not PI-08, publisher issue PI-24); PI-nn names the rule as its subject (the issue would otherwise explain the break) or as a control (the issue's evidence is that a correct return satisfies the rule). Every Basel 3.1 break on a rule that an open fails_correct_returns issue names as its subject carries one of the two, and no reason may call its break a limit of the published rule without citing the issue: tests/contracts/test_register_publisher_issues.py enforces both on this file. Grep 'publisher issue PI-' for the Bank's share of the register and '^not PI-' for breaks on its rules that are not the issue named. An entry with neither label is on a rule no issue names: ours, or 'unattributed - needs investigation'. CRR entries are EBA rules and carry no PI label. A label never changes a verdict: an ERROR labelled with an issue still rejects the return at the gateway until the Bank changes or deactivates the rule.",
+    "reading_the_two_engines": "Two engines read the Bank's rules here. known_broken_rules, known_uncovered_templates and known_vacuous_rules come from rwa-filer's TEMPLATE-LEVEL engine (rwa_filer.validate) reading our template frames, under both regimes. known_gateway_breaks comes from the GATEWAY engine (rwa_filer.boe, pinned to Arelle rule by rule) reading the canonical return filed from the same Basel 3.1 COREP, with the Bank's validations deny list as it stands on the run date: it is what export_filing_package blocks on and what the Bank's gateway runs, so on anything the canonical return carries it is the authority, and an ERROR there is a rejected return. A rule the deny list deactivates is not evaluated and never appears; a downgraded one appears at WARNING. known_engine_disagreements lists every (rule, portfolio) on which one engine breaks a rule the other holds. The template-level engine differs from the gateway in six measured ways (design record O-03): it evaluates a place where none of the rule's cells is reported; it skips where a row, column or sheet is absent instead of applying each reference's default; it refuses 67 Bank rules on grammar (isNull, if/then, and/or, dimensional filters); it adds up a multi-cell reference the formula tests one cell at a time; it cannot see one data point shown in two tables; and it sets the missing-value policy per rule rather than per reference. So a break only the gateway shows is usually one the template-level engine cannot see (each gateway entry's by_portfolio.template_level says why), and a disagreement is triaged before it is blamed on our output. The template-level engine remains the only reading under CRR, the only one of what the canonical return does not carry (OF 08.02, C 08.04, OF08.05.01.01, OF 08.06, C 34.02), and the only source of the vacuity register. Both gateway sections are keyed per (rule, portfolio), so a rule that breaks on one more portfolio is a new entry; known_gateway_breaks is keyed on the severity too, so a break the deny list moves to another severity is a new entry and its reason is written again. The ERROR half of known_gateway_breaks equals scripts/filing_mapping_baseline.json error_rules_by_rule rule for rule (tests/contracts/test_gateway_break_registers_agree.py): re-bank the two together.",
+    "reading_publisher_issue_labels": "A Bank rule can itself be wrong. rwa-filer's publisher-issue register (rwa_filer.boe.issues, release 4.1.1; shared as docs/rwa-filer/publisher-issues.md) holds each known case with its evidence, and a Basel 3.1 entry here says in its reason whether that is its cause. 'publisher issue PI-nn: ...' means the published rule is the cause: a return that follows the instructions breaks it, so the fix is the Bank's and our figures stay as they are; PI-nn names the entry's rule as its SUBJECT. A reason that STARTS 'not PI-nn - ...' says the issue names this rule but this break is not that issue, and what follows says whose it is: ours or our engine's, fixed here, or rarely another issue's, cited in the same reason (boe_b0737: not PI-08, publisher issue PI-24); PI-nn names the rule as its subject (the issue would otherwise explain the break) or as a control (the issue's evidence is that a correct return satisfies the rule). On a break, a cited issue's effect is fails_correct_returns: an issue saying a rule passes wrong returns or never runs cannot be why it fails. A (rule, portfolio) pair whose places have two causes - some the issue's case, the rest ours - has one reason, so it reads 'publisher issue PI-nn, in part: <the issue's places> ...; <the rest> our defect, plan item ...': the citation keeps the Bank's share findable, and naming ours in the same reason keeps it from hiding behind the citation. Every Basel 3.1 break on a rule that a fails_correct_returns issue names as its subject carries one of the labels - open or fixed in a later release alike, since this register is release 4.1.1's - and no reason may call its break a limit of the published rule without citing the issue: tests/contracts/test_register_publisher_issues.py enforces all of it on this file. To read the labels: grep -n 'publisher issue PI-' lists the Bank's share (whole, or ', in part'); grep -n 'reason.: .not PI-' lists the breaks on a rule an issue names that are not that issue (a reason sits after the reason key in the JSON, so a bare '^not PI-' matches nothing). An entry with neither label is on a rule no issue names: ours, or 'unattributed - needs investigation'. CRR entries are EBA rules and carry no PI label. A label never changes a verdict: an ERROR labelled with an issue still rejects the return at the gateway until the Bank changes or deactivates the rule.",
     "what_a_vacuity_entry_MEANS": "known_vacuous_rules lists rules that REACH a verdict on at least one registered run and reach it only VACUOUSLY - every operand was null or exactly zero, so the comparison held at 0 = 0 and asserted nothing about our figures. It is not a break and not a coverage hole; it is a check we are not getting. Membership is the union over portfolios: a rule PASSing or FAILing anywhere is NOT here, which also makes this list disjoint from known_broken_rules. It is ratcheted BOTH ways, exactly like a break - a rule that falls to vacuous outside this list fails the gate (the PASS -> VACUOUS regression, which moves neither the break set nor template coverage and was invisible before), and a listed rule that stops being vacuous on every run must be REMOVED from the list.",
     "what_the_vacuity_ratchet_does_NOT_catch": "Two limits, both measured, both stated because a green leg is otherwise read as more than it is. (1) UNION: a change that empties a column on one portfolio while another still gets a real verdict out of the same rule moves nothing here, and 221 rules (130 ERROR) currently hold a real verdict on exactly ONE run. Same masking on the removal leg: crr/v3332_i is vacuous on both rich and crm-substitution, so darkening it on rich leaves the entry standing. (2) STATUS SCOPE: these legs see VACUOUS only, so PASS -> NOT_EVALUATED escapes every leg of this gate - dropping one emitted row (C 02.00 r0160) from crr/rich darkens two ERROR rules, one of them (v3335_i) passing on rich alone, and the whole gate stays green. scripts/coverage_report.py --check mitigates that by ratcheting never_evaluated_rules (max 785) and union_binding_rules (min 257/289), but those are counts in a different gate, so one rule going dark nets against another activating. The NOT_EVALUATED half is owed work, not a property of this register.",
     "binding_output_floor_add_on_has_no_home_in_the_ir_templates": "boe_b0751 (OF08.01.01.01) and boe_b0763 (OF08.02.01.01) are ONE published identity restated per template (LESSONS C6): RWEA after adjustments (col 0260) must equal the sum of RWEA before adjustments, PMAs, unrecognised-exposure adjustments and the mortgage RW-floor adjustment (cols 0251-0254). They FAIL on b31/facility-share-binding by exactly OutputFloorSummary.shortfall, because the pro-rata output-floor add-on lives inside rwa_final and the reporting projection mirrors it into col 0260 while cols 0251-0254 have no column for it. Every portfolio registered before 2026-09-05 had a NON-binding floor, so the pair had never been evaluated in the binding state (LESSONS B5, a portfolio STATE no fixture reached). Pre-existing: the values are byte-identical at the commit before the facility-share fan-out landed. The reporting-basis decision - un-floored RWEA in the IRB templates with the floor at the total level (OF 02.01 / C 02.00), or an adjustment column - is OWNER: P1.369 and is NOT made here. Banked as an ERROR-severity liability, not a waiver.",
@@ -515,7 +515,7 @@
       "regime": "b31",
       "rule_id": "boe_b0990",
       "severity": "WARNING",
-      "reason": "OF 09.01 r0095 c0010 (geographic breakdown, original exposure pre-CCF) reports 825,000.00 where OF 07.00 sheet 0010 r0020 c0010 reports 0.00. Cross-template class-row mapping defect between the geographic breakdown and the SA template: one side attributes the real-estate split's secured leg to a class row the other leaves empty. PRE-EXISTING and newly REACHABLE, not newly broken -- it fires identically on the unfixed engine, and became visible only when the re-split and funded-protection portfolios were registered in RUNS. WARNING severity, so it does not reject a submission. Filed as a plan item; not caused by the carrier-conservation batch.",
+      "reason": "OF 09.01 r0095 c0010 (geographic breakdown, original exposure pre-CCF) reports 825,000.00 where OF 07.00 sheet 0010 r0020 c0010 reports 0.00. Cross-template class-row mapping defect between the geographic breakdown and the SA template: one side attributes the real-estate split's secured leg to a class row the other leaves empty. PRE-EXISTING and newly REACHABLE, not newly broken -- it fires identically on the unfixed engine, and became visible only when the re-split and funded-protection portfolios were registered in RUNS. WARNING severity, so it does not reject a submission. Not caused by the carrier-conservation batch. No plan item yet: none in IMPLEMENTATION_PLAN.md names the boe_b0990 family (checked 2026-11-16).",
       "portfolios": [
         "re-split"
       ],
@@ -529,7 +529,7 @@
       "regime": "b31",
       "rule_id": "boe_b0991",
       "severity": "WARNING",
-      "reason": "As boe_b0990 on the exposure-value axis: OF 09.01 r0095 c0075 reports 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 at 0.00. Same cross-template class-row mapping defect, same pre-existing-and-newly-reachable status (fires on the unfixed engine), WARNING severity. Filed with boe_b0990 as one item -- the three are one defect seen on three columns, so they must be fixed and un-banked together.",
+      "reason": "As boe_b0990 on the exposure-value axis: OF 09.01 r0095 c0075 reports 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 at 0.00. Same cross-template class-row mapping defect, same pre-existing-and-newly-reachable status (fires on the unfixed engine), WARNING severity. One defect with boe_b0990 seen on three columns, so the three must be fixed and un-banked together. No plan item yet: none in IMPLEMENTATION_PLAN.md names the boe_b0990 family (checked 2026-11-16).",
       "portfolios": [
         "re-split"
       ],
@@ -543,7 +543,7 @@
       "regime": "b31",
       "rule_id": "boe_b0992",
       "severity": "WARNING",
-      "reason": "As boe_b0990 on the RWEA axis: OF 09.01 r0095 c0090 reports 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 at 0.00. Same cross-template class-row mapping defect, pre-existing (fires on the unfixed engine), WARNING severity. The RWEA is 60% of the exposure value, consistent with an Art. 124L residual leg at the counterparty weight, which is a hint at where the mapping diverges. Filed with boe_b0990/0991 as one item.",
+      "reason": "As boe_b0990 on the RWEA axis: OF 09.01 r0095 c0090 reports 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 at 0.00. Same cross-template class-row mapping defect, pre-existing (fires on the unfixed engine), WARNING severity. The RWEA is 60% of the exposure value, consistent with an Art. 124L residual leg at the counterparty weight, which is a hint at where the mapping diverges. One defect with boe_b0990/0991. No plan item yet: none in IMPLEMENTATION_PLAN.md names the boe_b0990 family (checked 2026-11-16).",
       "portfolios": [
         "re-split"
       ],
@@ -4689,7 +4689,7 @@
       "regime": "b31",
       "rule_id": "boe_b0356",
       "severity": "WARNING",
-      "reason": "not PI-29 - our defect, plan item P2.70 (design record O-09): OF 08.01 column 0010 (PD) is never produced under Basel 3.1, so wherever the exposure value is positive the rule reads PD 0 < 0.05% (rich 21 places, irb-shapes 19, crm-substitution 14). O-09 measured a residue on these three once the column is filled: sheet 0010 rows 0010/0020 (and 0030 on irb-shapes) holding only slotting exposure, which has no PD - that residue is the case PI-29 describes, and this entry's reason must then be rewritten to cite it - and on crm-substitution one more place (sheet 0006 row 0190, substituted-in legs only), which stays ours. The template-level engine cannot see it (it refuses if/then). WARNING.",
+      "reason": "publisher issue PI-29, in part: on sheet 0010 the rows holding only slotting exposure (rows 0010 and 0020, and 0030 on irb-shapes) have no PD, so a correct return leaves c0010 empty there too and the rule reads PD 0 < 0.05% - O-09 measured them still failing once the column is filled (Arelle-confirmed): rich 2 of its 21 places, irb-shapes 3 of 19, crm-substitution 2 of 14. The rest are our defect, plan item P2.70 (design record O-09): OF 08.01 column 0010 (PD) is never produced under Basel 3.1, so every row with a positive exposure value (c0110) reads PD 0. O-09 measured those passing once the column is filled, except crm-substitution sheet 0006 row 0190 (substituted-in legs only, PD on the obligor basis), which stays ours (owner P2.81 per O-09). When O-09 lands: rich and irb-shapes become 'publisher issue PI-29: ...'; crm-substitution keeps this form. The template-level engine cannot see it (it refuses if/then). WARNING.",
       "portfolios": [
         "crm-substitution",
         "irb-shapes",
@@ -5120,25 +5120,7 @@
       "regime": "b31",
       "rule_id": "boe_b0742",
       "severity": "ERROR",
-      "reason": "not PI-07 - our defect, plan item P2.1 (design record O-11): the conversion-factor rows are never produced (as boe_b0741), so row 0030 is compared column by column with an empty breakdown (26 places, on the additive columns 0020, 0090, 0110, ...). O-11 measured a residue here once the rows are filled: column 0250 on sheets 0002 and 0012, 1,673 against 1,673 + 1,673 - the averaged-column case PI-07 describes; this entry's reason must then be rewritten to cite it. The template-level engine cannot see it (row_not_emitted).",
-      "portfolios": [
-        "irb-shapes"
-      ],
-      "by_portfolio": {
-        "irb-shapes": {
-          "satisfied": 65,
-          "unsatisfied": 26,
-          "template_level": "NOT_EVALUATED (row_not_emitted)",
-          "place": "column 0020, sheet 0002"
-        }
-      },
-      "example": "irb-shapes: column 0020, sheet 0002 :: OF08.01.01.01 r0030 = 11,400,000 | OF08.01.01.01 r0001;0031;0032;.. = 0 cell(s), sum 0"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0742",
-      "severity": "ERROR",
-      "reason": "not PI-07 - our defect, plan item P2.1 (design record O-11): the conversion-factor rows are never produced (as boe_b0741), so row 0030 is compared column by column with an empty breakdown, on the additive columns (0020, 0090, 0110, ...), not PI-07's averaged and count columns 0250 / 0300. Leaves with O-11 (measured PASS). The template-level engine cannot see it (row_not_emitted).",
+      "reason": "not PI-07 - our defect, plan item P2.1 (design record O-11): the conversion-factor rows are never produced (as boe_b0741), so every column of row 0030 is compared with an empty breakdown - 14 places on sheets 0002 and 0012, columns 0020, 0090, 0110, 0251 and 0260, and also 0250 and 0300. Those 4 on 0250/0300 are inside PI-07's footprint (rwa-filer's own note on this result: 4 inside, 10 outside), but they read 912 days and 1 obligor against an empty breakdown (0), not against a sum over several buckets, and PI-07's case needs two buckets carrying a maturity: O-11 measured the rule PASS 58/0 (Arelle [58, 0]) once the rows are filled, because this return's one off-balance-sheet leg sits in one bucket, so 912.5 = 912.5 and 1 = 1. Leaves with O-11. The template-level engine cannot see it (row_not_emitted).",
       "portfolios": [
         "facility-share-binding"
       ],
@@ -5154,9 +5136,27 @@
     },
     {
       "regime": "b31",
+      "rule_id": "boe_b0742",
+      "severity": "ERROR",
+      "reason": "publisher issue PI-07, in part: 2 of the 26 places, column 0250 on sheets 0002 and 0012, fail on a correct return too - O-11 measured them still failing once the rows are filled (89/2, Arelle [89, 2]: 1,673 against 1,673 + 1,673), the averaged-column case PI-07 describes. The other 24 are our defect, plan item P2.1 (design record O-11): the conversion-factor rows are never produced (as boe_b0741), so every column of row 0030 is compared with an empty breakdown - 21 places on additive columns (0020, 0090, 0110, 0251, 0260, 0280, 0282 on sheets 0002, 0010 and 0012) and 3 on column 0300, which is inside PI-07's footprint (rwa-filer's note: 5 inside, 21 outside) but holds on a correct return (1 against 1 + 1 is within the formula's rounding allowance, O-11). When O-11 lands only the 2 PI-07 places remain: rewrite as 'publisher issue PI-07: ...'. The template-level engine cannot see it (row_not_emitted).",
+      "portfolios": [
+        "irb-shapes"
+      ],
+      "by_portfolio": {
+        "irb-shapes": {
+          "satisfied": 65,
+          "unsatisfied": 26,
+          "template_level": "NOT_EVALUATED (row_not_emitted)",
+          "place": "column 0020, sheet 0002"
+        }
+      },
+      "example": "irb-shapes: column 0020, sheet 0002 :: OF08.01.01.01 r0030 = 11,400,000 | OF08.01.01.01 r0001;0031;0032;.. = 0 cell(s), sum 0"
+    },
+    {
+      "regime": "b31",
       "rule_id": "boe_b0748",
       "severity": "ERROR",
-      "reason": "not PI-31 - our defect, plan item P2.69 (design record O-10): we report an average maturity (c0250) on a retail sheet (rich sheet 0017, irb-classes sheet 0021), where Annex II p.111 has none, so the rule adds a retail sheet's 1,673 days to the other AIRB sheets' and the sum exceeds the Total sheet's 1,673. O-10 measured the rule holding on both once the retail cell is empty, so PI-31's case (two non-retail AIRB sheets with maturities) does not arise on these returns. Leaves with O-10. The template-level engine cannot see it (sheet_not_emitted).",
+      "reason": "not PI-31 - our defect, plan item P2.69 (design record O-10): we report an average maturity (c0250) on retail sheets, where Annex II p.111 says the column 'shall therefore not be filled in for the exposure class retail', and average the retail legs into the A-IRB Total; the rule then adds the class sheets' averages and the sum exceeds the Total's 1,673. rich: 1,673 (retail sheet 0017) + 1,673 (sheet 0023, corporate SME) = 3,346. irb-classes: 1,673 (retail sheet 0015) + 1,673 (retail sheet 0021) = 3,346, two retail sheets and no non-retail A-IRB sheet at all. O-10 measured the rule holding on both once the retail cells are empty (rich 39/0, irb-classes 38/0), so PI-31's case (two non-retail A-IRB sheets, each with a maturity) does not arise on these returns. Leaves with O-10. The template-level engine cannot see it (sheet_not_emitted).",
       "portfolios": [
         "irb-classes",
         "rich"
@@ -5323,7 +5323,7 @@
       "regime": "b31",
       "rule_id": "boe_b0990",
       "severity": "WARNING",
-      "reason": "our defect: OF 09.01 r0095 c0010 (other real estate, original exposure) reports 825,000.00 where OF 07.00 real-estate sheet 0010 r0020 c0010 reports nothing - a cross-template class-row mapping defect for the real-estate split's secured leg. Pre-existing, reachable since re-split was registered. WARNING. The template-level engine breaks it too; boe_b0991 / boe_b0992 are the same defect on two more columns.",
+      "reason": "our defect, no plan item yet: OF 09.01 r0095 c0010 (other real estate, original exposure) reports 825,000.00 where OF 07.00 real-estate sheet 0010 r0020 c0010 reports nothing - a cross-template class-row mapping defect for the real-estate split's secured leg. Pre-existing, reachable since re-split was registered. WARNING. The template-level engine breaks it too; boe_b0991 / boe_b0992 are the same defect on two more columns. No plan item yet: none in IMPLEMENTATION_PLAN.md names the boe_b0990 family (checked 2026-11-16).",
       "portfolios": [
         "re-split"
       ],
@@ -5341,7 +5341,7 @@
       "regime": "b31",
       "rule_id": "boe_b0991",
       "severity": "WARNING",
-      "reason": "our defect: as boe_b0990 on exposure value - OF 09.01 r0095 c0075 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 not reported. WARNING. Fixed and un-banked with boe_b0990.",
+      "reason": "our defect, no plan item yet: as boe_b0990 on exposure value - OF 09.01 r0095 c0075 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 not reported. WARNING. Fixed and un-banked with boe_b0990. No plan item yet: none in IMPLEMENTATION_PLAN.md names the boe_b0990 family (checked 2026-11-16).",
       "portfolios": [
         "re-split"
       ],
@@ -5359,7 +5359,7 @@
       "regime": "b31",
       "rule_id": "boe_b0992",
       "severity": "WARNING",
-      "reason": "our defect: as boe_b0990 on RWEA - OF 09.01 r0095 c0090 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 not reported. WARNING. Fixed and un-banked with boe_b0990.",
+      "reason": "our defect, no plan item yet: as boe_b0990 on RWEA - OF 09.01 r0095 c0090 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 not reported. WARNING. Fixed and un-banked with boe_b0990. No plan item yet: none in IMPLEMENTATION_PLAN.md names the boe_b0990 family (checked 2026-11-16).",
       "portfolios": [
         "re-split"
       ],

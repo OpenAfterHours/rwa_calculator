@@ -57,7 +57,8 @@ Why there is a GATEWAY leg, (h)-(k), and why it keys on (rule, portfolio):
     - ``known_gateway_breaks`` — every (rule, portfolio) the gateway engine
       FAILs, ERROR and WARNING. Keyed on the PAIR, not the rule: under a
       rule-only key ``boe_b1055`` spread from two portfolios to seven and
-      nothing noticed. ``tests/contracts/test_gateway_break_registers_agree.py``
+      nothing noticed. The severity is part of the key too, so a deny-list
+      downgrade of a banked ERROR is a move the legs see, not a silent edit. ``tests/contracts/test_gateway_break_registers_agree.py``
       holds the ERROR pairs equal, rule for rule, to
       ``scripts/filing_mapping_baseline.json``'s ``error_rules_by_rule``, so the
       two ratchets move together or not at all.
@@ -80,10 +81,12 @@ Publisher-issue labels:
     (``rwa_filer.boe.issues``, rendered as ``docs/rwa-filer/publisher-issues.md``)
     records each one with its evidence, and a register entry whose cause is the
     published rule says so by citing it: a reason containing ``publisher issue
-    PI-nn``. A Basel 3.1 break on a rule an open issue names as its SUBJECT, with
-    the effect ``fails_correct_returns``, must either cite that issue or START
-    with a rebuttal, ``not PI-nn - <our defect>``, so a limit of the Bank's rule
-    can never sit here under an "our defect" reason, nor the reverse silently.
+    PI-nn`` (``publisher issue PI-nn, in part`` where some of the pair's places
+    are the issue's case and the rest are ours, named in the same reason). A
+    Basel 3.1 break on a rule an issue names as its SUBJECT, with the effect
+    ``fails_correct_returns``, must either cite that issue or START with a
+    rebuttal, ``not PI-nn - <our defect>``, so a limit of the Bank's rule can
+    never sit here under an "our defect" reason, nor the reverse silently.
     ``tests/contracts/test_register_publisher_issues.py`` enforces both
     directions on the committed JSON (fast; it runs no pipeline).
 
@@ -207,10 +210,12 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
 Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: fifteen portfolios x two
     regimes, plus a prior-period run for each of the fourteen IRB ones, is
-    FORTY-FOUR full pipeline runs, about 38 s on a 2-thread budget. The gateway leg adds one
+    FORTY-FOUR full pipeline runs, about 34 s on a 2-thread budget. The gateway leg adds one
     canonical return and one ``validate_return`` per Basel 3.1 run (fifteen) and
     no pipeline run: the pack is loaded once per process and the COREP bundle is
-    the one the template leg already generated. That is a standing temptation to trim the run set, so
+    the one the template leg already generated. Timed directly (2026-11-16, 4-core
+    box): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
+    each) of a 39.4 s gate, about 15%. That is a standing temptation to trim the run set, so
     the justification lives here rather than only in a commit message. Each run
     is the SOLE reachability route for a family of published rules, and
     dropping one does not make those rules pass — it makes them NOT_EVALUATED,
@@ -309,7 +314,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date
 from functools import partial
 from pathlib import Path
@@ -437,7 +442,9 @@ REGISTER_NOTES: dict[str, str] = {
         "remains the only reading under CRR, the only one of what the canonical return does not "
         "carry (OF 08.02, C 08.04, OF08.05.01.01, OF 08.06, C 34.02), and the only source of the "
         "vacuity register. Both gateway sections are keyed per (rule, portfolio), so a rule that "
-        "breaks on one more portfolio is a new entry. The ERROR half of known_gateway_breaks "
+        "breaks on one more portfolio is a new entry; known_gateway_breaks is keyed on the "
+        "severity too, so a break the deny list moves to another severity is a new entry and "
+        "its reason is written again. The ERROR half of known_gateway_breaks "
         "equals scripts/filing_mapping_baseline.json error_rules_by_rule rule for rule "
         "(tests/contracts/test_gateway_break_registers_agree.py): re-bank the two together."
     ),
@@ -453,15 +460,24 @@ REGISTER_NOTES: dict[str, str] = {
         "another issue's, cited in the same reason (boe_b0737: not PI-08, publisher issue "
         "PI-24); PI-nn names the rule as its subject (the issue would otherwise explain the "
         "break) or as a control (the issue's evidence is that a correct return satisfies the "
-        "rule). Every Basel 3.1 break on a rule "
-        "that an open fails_correct_returns issue names as its subject carries one of the two, "
-        "and no reason may call its break a limit of the published rule without citing the "
-        "issue: tests/contracts/test_register_publisher_issues.py enforces both on this file. "
-        "Grep 'publisher issue PI-' for the Bank's share of the register and '^not PI-' for "
-        "breaks on its rules that are not the issue named. An entry with neither label is on a rule no issue names: ours, or "
-        "'unattributed - needs investigation'. CRR entries are EBA rules and carry no PI label. "
-        "A label never changes a verdict: an ERROR labelled with an issue still rejects the "
-        "return at the gateway until the Bank changes or deactivates the rule."
+        "rule). On a break, a cited issue's effect is fails_correct_returns: an issue saying a "
+        "rule passes wrong returns or never runs cannot be why it fails. A (rule, portfolio) "
+        "pair whose places have two causes - some the issue's case, the rest ours - has one "
+        "reason, so it reads 'publisher issue PI-nn, in part: <the issue's places> ...; <the "
+        "rest> our defect, plan item ...': the citation keeps the Bank's share findable, and "
+        "naming ours in the same reason keeps it from hiding behind the citation. Every Basel "
+        "3.1 break on a rule that a fails_correct_returns issue names as its subject carries "
+        "one of the labels - open or fixed in a later release alike, since this register is "
+        "release 4.1.1's - and no reason may call its break a limit of the published rule "
+        "without citing the issue: tests/contracts/test_register_publisher_issues.py enforces "
+        "all of it on this file. To read the labels: grep -n 'publisher issue PI-' lists the "
+        "Bank's share (whole, or ', in part'); grep -n 'reason.: .not PI-' lists the breaks on a "
+        "rule an issue names that are not that issue (a reason sits after the reason key in "
+        "the JSON, so a bare '^not PI-' matches nothing). An entry with neither label "
+        "is on a rule no issue names: ours, or 'unattributed - needs investigation'. CRR entries "
+        "are EBA rules and carry no PI label. A label never changes a verdict: an ERROR "
+        "labelled with an issue still rejects the return at the gateway until the Bank changes "
+        "or deactivates the rule."
     ),
     "what_a_vacuity_entry_MEANS": (
         "known_vacuous_rules lists rules that REACH a verdict on at least one registered run and "
@@ -1159,15 +1175,20 @@ class GatewayKey(NamedTuple):
 
     Keyed on the PAIR, not the rule: a rule that starts breaking on one more
     portfolio is a new break (``boe_b1055`` went from two portfolios to seven
-    under a rule-only key, unseen).
+    under a rule-only key, unseen). And on the severity the gateway runs it at:
+    a banked ERROR the Bank downgrades (or a WARNING it upgrades) is a new break
+    and the old one gone, because a reason written for "rejects the return" is
+    wrong for one that does not, and the filing-mapping ratchet, which counts
+    Error breaks only, would see a downgrade merely as a fix.
     """
 
     rule_id: str
     portfolio: str
+    severity: str
 
     def describe(self) -> str:
         """Compact human address for an assertion message."""
-        return f"{GATEWAY_REGIME}/{self.portfolio}: {self.rule_id}"
+        return f"{GATEWAY_REGIME}/{self.portfolio}: {self.rule_id} [{self.severity}]"
 
 
 class GatewayFact(NamedTuple):
@@ -1392,14 +1413,31 @@ def _gateway_leg(
         "no PRA001 rule book is packaged: the gateway leg would check nothing and read as clean"
     )
     template = {outcome.rule_id: outcome for outcome in report.outcomes}
+    return _gateway_findings(portfolio, validation.report.results, template)
+
+
+def _gateway_findings(
+    portfolio: str,
+    results: Iterable[RuleResult],
+    template: Mapping[str, RuleOutcome],
+) -> tuple[dict[GatewayKey, GatewayFact], dict[DisagreementKey, DisagreementFact]]:
+    """The gateway's results on one return, as register keys and facts.
+
+    ``results`` are as the gateway runs the rules (after the deny list), so a
+    downgraded rule's break carries WARNING here; ``template`` is the
+    template-level engine's outcome per rule on the same return. Separate from
+    ``_gateway_leg`` so a synthetic result (a downgraded rule, which no packaged
+    PRA001 deny list holds today) can be fed through the recording path
+    without a pipeline run.
+    """
     breaks: dict[GatewayKey, GatewayFact] = {}
     opposed: dict[DisagreementKey, DisagreementFact] = {}
-    for result in validation.report.results:
+    for result in results:
         outcome = template.get(result.rule_id)
         template_status = outcome.status if outcome is not None else STATUS_NOT_EVALUATED
         if result.status == GATEWAY_FAIL:
             first = result.failures[0] if result.failures else None
-            breaks[GatewayKey(result.rule_id, portfolio)] = GatewayFact(
+            breaks[GatewayKey(result.rule_id, portfolio, result.severity)] = GatewayFact(
                 severity=result.severity,
                 satisfied=result.satisfied,
                 unsatisfied=result.unsatisfied,
@@ -1504,7 +1542,7 @@ def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
         for entry in payload.get("known_vacuous_rules", [])
     }
     gateway = {
-        GatewayKey(entry["rule_id"], portfolio): entry["reason"]
+        GatewayKey(entry["rule_id"], portfolio, entry["severity"]): entry["reason"]
         for entry in payload.get("known_gateway_breaks", [])
         for portfolio in entry["portfolios"]
     }
@@ -1578,24 +1616,26 @@ def _write_baseline(run: GateRun) -> None:
 def _gateway_entries(
     measured: Mapping[GatewayKey, GatewayFact], reasons: Mapping[GatewayKey, str]
 ) -> list[dict[str, Any]]:
-    """``known_gateway_breaks``: one entry per (rule, reason), with its portfolios.
+    """``known_gateway_breaks``: one entry per (rule, severity, reason), with its portfolios.
 
     Grouping by reason as well as rule keeps each reason to ONE cause: a rule
     that breaks for one reason on two portfolios and another on a third is two
     entries, and when the third is fixed its entry goes without touching the
-    other's text.
+    other's text. Severity is part of the key (``GatewayKey``), so a pair whose
+    severity changed arrives ``unclassified`` in an entry of its own.
     """
-    grouped: dict[tuple[str, str], list[GatewayKey]] = {}
+    grouped: dict[tuple[str, str, str], list[GatewayKey]] = {}
     for key in sorted(measured):
-        grouped.setdefault((key.rule_id, reasons.get(key, UNCLASSIFIED)), []).append(key)
+        group = (key.rule_id, key.severity, reasons.get(key, UNCLASSIFIED))
+        grouped.setdefault(group, []).append(key)
     entries: list[dict[str, Any]] = []
-    for (rule_id, reason), keys in sorted(grouped.items()):
+    for (rule_id, severity, reason), keys in sorted(grouped.items()):
         first = measured[keys[0]]
         entries.append(
             {
                 "regime": GATEWAY_REGIME,
                 "rule_id": rule_id,
-                "severity": first.severity,
+                "severity": severity,
                 "reason": reason,
                 "portfolios": [key.portfolio for key in keys],
                 "by_portfolio": {key.portfolio: measured[key].record() for key in keys},
@@ -1990,8 +2030,9 @@ def test_no_gateway_break_outside_the_baseline(gate_run: GateRun) -> None:
 
     The gateway engine (``rwa_filer.boe``, pinned to Arelle) on the canonical
     return filed from each Basel 3.1 run, with the Bank's deny list in force on
-    the run date. Keyed on (rule, portfolio): a banked rule breaking on one more
-    portfolio is a new break.
+    the run date. Keyed on (rule, portfolio, severity): a banked rule breaking on
+    one more portfolio is a new break, and so is a banked break the Bank's deny
+    list moves to another severity (leg (i) then reports the old one gone).
 
     Arrange: the committed register plus the gateway breaks of the fifteen
              Basel 3.1 returns.
@@ -2008,10 +2049,9 @@ def test_no_gateway_break_outside_the_baseline(gate_run: GateRun) -> None:
     new_breaks = _gateway_breaks_added(gate_run.gateway, baseline)
 
     # Assert
-    blocking = [key for key in new_breaks if gate_run.gateway[key].severity == "ERROR"]
+    blocking = [key for key in new_breaks if key.severity == "ERROR"]
     detail = "\n".join(
-        f"  {key.describe()}  [{gate_run.gateway[key].severity}] "
-        f"{gate_run.gateway[key].figures()}\n"
+        f"  {key.describe()}  {gate_run.gateway[key].figures()}\n"
         f"      template-level engine: {gate_run.gateway[key].template_level}"
         for key in new_breaks
     )
@@ -2029,8 +2069,10 @@ def test_no_baseline_gateway_break_has_been_fixed_without_being_removed(gate_run
 
     Read the failure before deleting: a pair also leaves when the rule stops
     being evaluated at all (a template no longer filed, a table the canonical
-    return no longer places, a rule the Bank deactivates). The gateway engine's
-    NOT_EVALUATED reason says which.
+    return no longer places, a rule the Bank deactivates), and when the Bank
+    changes its severity — the pair is then in leg (h) at the new severity, and
+    its reason must be rewritten for it. The gateway engine's NOT_EVALUATED
+    reason says which.
 
     Arrange: the committed register plus the current gateway breaks.
     Act:     find banked (rule, portfolio) pairs that no longer break.
@@ -2048,9 +2090,11 @@ def test_no_baseline_gateway_break_has_been_fixed_without_being_removed(gate_run
     # Assert
     detail = "\n".join(f"  {key.describe()}\n      was: {baseline[key]}" for key in gone)
     assert not gone, (
-        f"{len(gone)} banked gateway break(s) no longer break. Remove each from "
-        f"known_gateway_breaks in {BASELINE_PATH.name} - and, for an Error, re-bank "
-        f"scripts/filing_mapping_baseline.json in the same change:\n{detail}"
+        f"{len(gone)} banked gateway break(s) no longer break at the banked severity. "
+        f"Remove each from known_gateway_breaks in {BASELINE_PATH.name} (a pair the deny "
+        "list moved to another severity is in leg (h) too: re-write its reason) - and, for "
+        "an Error, re-bank scripts/filing_mapping_baseline.json in the same change:\n"
+        f"{detail}"
     )
 
 

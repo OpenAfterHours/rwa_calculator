@@ -35,7 +35,12 @@ ratchet WITHOUT one. Verdicts are identical today because C 08.04 is not placed
 The four gateway predicates are driven here too, with synthetic pairs: watching
 legs (h)-(k) fail through the acceptance file costs thirty pipeline runs, while
 each predicate is a set difference these tests can feed directly, including the
-``boe_b1055`` shape (a banked rule breaking on one more portfolio).
+``boe_b1055`` shape (a banked rule breaking on one more portfolio). So is the
+path that records a gateway result (``_gateway_findings``), with results passed
+through the Bank's deny list (``apply_deny_list``): a downgraded rule is recorded
+at WARNING, a deactivated one not at all, and a banked ERROR the Bank downgrades
+moves legs (h) and (i). No packaged PRA001 deny list downgrades a rule today, so
+no registered portfolio exercises that path.
 
 References:
 - tests/acceptance/reporting/test_supervisory_validations.py — the register and its legs
@@ -46,6 +51,7 @@ References:
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -58,11 +64,18 @@ from tests.acceptance.reporting.test_supervisory_validations import (
     RUNS,
     DisagreementKey,
     GatewayKey,
+    _baseline_from,
     _disagreements_added,
     _disagreements_removed,
     _gateway_breaks_added,
     _gateway_breaks_removed,
+    _gateway_findings,
 )
+
+from rwa_calc.reporting.filing.canonical import FILING_MODULE
+from rwa_filer.boe.deny import DENY_DEACTIVATED, DENY_DOWNGRADED, DenyEntry, DenyList
+from rwa_filer.boe.engine import STATUS_FAIL, RuleResult
+from rwa_filer.validate.execution import apply_deny_list
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FILING_BASELINE_PATH = REPO_ROOT / "scripts" / "filing_mapping_baseline.json"
@@ -204,20 +217,20 @@ def test_a_gateway_break_on_one_more_portfolio_is_new() -> None:
     """
     # Arrange
     baseline = {
-        GatewayKey("boe_b1055", "crm-substitution"): "a reason",
-        GatewayKey("boe_b1055", "irb-shapes"): "a reason",
+        GatewayKey("boe_b1055", "crm-substitution", "ERROR"): "a reason",
+        GatewayKey("boe_b1055", "irb-shapes", "ERROR"): "a reason",
     }
     measured = {
-        GatewayKey("boe_b1055", "crm-substitution"): None,
-        GatewayKey("boe_b1055", "irb-shapes"): None,
-        GatewayKey("boe_b1055", "rich"): None,
+        GatewayKey("boe_b1055", "crm-substitution", "ERROR"): None,
+        GatewayKey("boe_b1055", "irb-shapes", "ERROR"): None,
+        GatewayKey("boe_b1055", "rich", "ERROR"): None,
     }
 
     # Act
     added = _gateway_breaks_added(measured, baseline)
 
     # Assert
-    assert added == (GatewayKey("boe_b1055", "rich"),)
+    assert added == (GatewayKey("boe_b1055", "rich", "ERROR"),)
 
 
 def test_a_gateway_break_that_has_gone_is_reported_as_removed() -> None:
@@ -229,17 +242,17 @@ def test_a_gateway_break_that_has_gone_is_reported_as_removed() -> None:
     """
     # Arrange
     baseline = {
-        GatewayKey("boe_b0742", "facility-share-binding"): "a reason",
-        GatewayKey("boe_b0742", "irb-shapes"): "a reason",
+        GatewayKey("boe_b0742", "facility-share-binding", "ERROR"): "a reason",
+        GatewayKey("boe_b0742", "irb-shapes", "ERROR"): "a reason",
     }
-    measured = {GatewayKey("boe_b0742", "irb-shapes"): None}
+    measured = {GatewayKey("boe_b0742", "irb-shapes", "ERROR"): None}
 
     # Act
     removed = _gateway_breaks_removed(measured, baseline)
     added = _gateway_breaks_added(measured, baseline)
 
     # Assert
-    assert (removed, added) == ((GatewayKey("boe_b0742", "facility-share-binding"),), ())
+    assert (removed, added) == ((GatewayKey("boe_b0742", "facility-share-binding", "ERROR"),), ())
 
 
 def test_a_disagreement_that_changes_direction_is_new_and_the_old_one_gone() -> None:
@@ -262,6 +275,79 @@ def test_a_disagreement_that_changes_direction_is_new_and_the_old_one_gone() -> 
     assert (added, removed) == ((after,), (before,))
 
 
+def test_a_downgraded_rule_is_recorded_at_its_downgraded_severity() -> None:
+    """The gateway leg records a break as the gateway runs it, after the deny list.
+
+    No packaged PRA001 deny list downgrades a rule today, so no registered
+    portfolio exercises this path; a synthetic result does.
+
+    Arrange: an ERROR break, and a deny list downgrading its rule before the run date.
+    Act:     apply the deny list and record the result as the gateway leg does.
+    Assert:  one break, at WARNING.
+    """
+    # Arrange
+    results = _as_the_gateway_runs([_error_break("boe_b0742")], DENY_DOWNGRADED)
+
+    # Act
+    breaks, _opposed = _gateway_findings("irb-shapes", results, {})
+
+    # Assert
+    assert [fact.severity for fact in breaks.values()] == ["WARNING"]
+
+
+def test_a_deactivated_rule_never_enters_the_gateway_section() -> None:
+    """A rule the Bank switched off is NOT_EVALUATED at the gateway: no break, no entry.
+
+    Arrange: an ERROR break, and a deny list deactivating its rule before the run date.
+    Act:     apply the deny list and record the result.
+    Assert:  nothing is recorded.
+    """
+    # Arrange
+    results = _as_the_gateway_runs([_error_break("boe_b0710")], DENY_DEACTIVATED)
+
+    # Act
+    breaks, opposed = _gateway_findings("rich", results, {})
+
+    # Assert
+    assert (breaks, opposed) == ({}, {})
+
+
+def test_a_banked_error_the_bank_downgrades_is_a_new_break_and_the_old_one_gone() -> None:
+    """Severity is part of the gateway key, so a downgrade cannot pass unnoticed.
+
+    A reason written for an ERROR ("rejects the return") is wrong for a WARNING,
+    and the filing-mapping ratchet counts Error breaks only, so legs (h)/(i) are
+    the gate that must see the move; REGEN then brings the pair back unclassified.
+
+    Arrange: a register holding boe_b0742/irb-shapes at ERROR; the same break
+             measured after a downgrade.
+    Act:     ask legs (h)/(i)'s predicates for the added and removed pairs.
+    Assert:  the WARNING pair is added and the ERROR pair removed.
+    """
+    # Arrange
+    banked = _baseline_from(
+        {
+            "known_gateway_breaks": [
+                {
+                    "rule_id": "boe_b0742",
+                    "severity": "ERROR",
+                    "reason": "a reason",
+                    "portfolios": ["irb-shapes"],
+                }
+            ]
+        }
+    ).gateway
+    results = _as_the_gateway_runs([_error_break("boe_b0742")], DENY_DOWNGRADED)
+    measured, _opposed = _gateway_findings("irb-shapes", results, {})
+
+    # Act
+    added = _gateway_breaks_added(measured, banked)
+    removed = _gateway_breaks_removed(measured, banked)
+
+    # Assert
+    assert (added, removed) == (tuple(measured), tuple(banked))
+
+
 def test_an_unchanged_estate_moves_no_predicate() -> None:
     """The control: a measurement equal to the baseline reports nothing either way.
 
@@ -273,7 +359,7 @@ def test_an_unchanged_estate_moves_no_predicate() -> None:
     Assert:  each returns nothing.
     """
     # Arrange
-    breaks = {GatewayKey("boe_b0793", "rich"): "a reason"}
+    breaks = {GatewayKey("boe_b0793", "rich", "ERROR"): "a reason"}
     opposed = {DisagreementKey("boe_b1055", "rich", "PASS", "FAIL"): "a reason"}
 
     # Act
@@ -286,3 +372,30 @@ def test_an_unchanged_estate_moves_no_predicate() -> None:
 
     # Assert
     assert moved == ((), (), (), ())
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+#: The day the synthetic deny-list entries take effect, and the run date after it.
+_APPLIED = date(2026, 1, 1)
+_RUN_DATE = date(2026, 11, 16)
+
+
+def _error_break(rule_id: str) -> RuleResult:
+    """An ERROR-severity rule the formula breaks twice and holds once."""
+    return RuleResult(
+        rule_id=rule_id, severity="ERROR", status=STATUS_FAIL, satisfied=1, unsatisfied=2
+    )
+
+
+def _as_the_gateway_runs(results: list[RuleResult], deny_type: str) -> tuple[RuleResult, ...]:
+    """``results`` after a deny list that applies ``deny_type`` to each of their rules."""
+    deny_list = DenyList(
+        release="4.1.1",
+        entries=tuple(
+            DenyEntry(result.rule_id, FILING_MODULE, deny_type, _APPLIED) for result in results
+        ),
+    )
+    return apply_deny_list(results, deny_list, FILING_MODULE, _RUN_DATE)

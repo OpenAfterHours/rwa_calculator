@@ -151,7 +151,8 @@ returns.
 
 Two sections hold what it finds, each two-way ratcheted and keyed per
 (rule, portfolio), so a rule that starts breaking on one more portfolio is a
-new entry:
+new entry. A gateway break is keyed on its severity too, so a break the deny
+list moves from Error to Warning is a new entry whose reason is written again:
 
 | Section | Holds |
 |---------|-------|
@@ -172,8 +173,11 @@ A reason says whose the break is. `publisher issue PI-nn: ...` means the Bank's
 rule is the cause, as recorded in the publisher-issue register
 ([known issues with the published validation rules](../rwa-filer/publisher-issues.md));
 a reason that starts `not PI-nn - ...` says the issue names the rule but this
-break is not that issue, and goes on to say whose it is (usually ours). A Basel 3.1 break on a rule an open `fails_correct_returns`
-issue names as its subject must carry one of the two
+break is not that issue, and goes on to say whose it is (usually ours). A pair
+whose places have both causes reads `publisher issue PI-nn, in part: ...` and
+names our defect, with its plan item, for the rest in the same reason. A Basel
+3.1 break on a rule a `fails_correct_returns` issue names as its subject must
+carry one of the labels, and a cited issue must have that effect
 (`tests/contracts/test_register_publisher_issues.py`, fast).
 
 ## The referee differential

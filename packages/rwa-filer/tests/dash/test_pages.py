@@ -570,3 +570,35 @@ def test_a_return_reopened_against_a_named_release_is_kept_beside_the_first(
     assert (first.release.chosen_by, second.release.chosen_by) == ("default", "version")
     assert second.ret.header == first.ret.header
     assert {item.return_id for item in workspace.returns()} >= {first.return_id, second.return_id}
+
+
+def test_the_rules_page_says_the_bank_switched_a_rule_off_and_when(
+    client: TestClient, broken: OpenedReturn
+) -> None:
+    """boe_b0710 is on the Bank's validations deny list (known issue #22) from 19 October 2026."""
+    # Arrange
+    report = broken.validation.report
+    assert report is not None
+    result = next(item for item in report.results if item.rule_id == "boe_b0710")
+    assert result.deny is not None, "the dashboard validates on today's date, after 2026-10-19"
+
+    # Act
+    page = unescape(
+        client.get(f"/returns/{broken.return_id}/rules?status=NOT_EVALUATED&rule=boe_b0710").text
+    )
+
+    # Assert — on the list, and in the detail, with the date and the known issue.
+    detail = page[page.index('id="rule-detail"') :]
+    assert "Switched off by the Bank" in page
+    assert (
+        "This rule was deactivated by the Bank of England on 19 October 2026 "
+        "(validations deny list; known issues log #22)."
+    ) in detail
+    assert "deactivated_by_publisher" in detail
+
+
+def test_the_reference_page_marks_the_rules_on_the_banks_deny_list(client: TestClient) -> None:
+    page = unescape(client.get("/reference/PRA001?release=4.1.1&q=boe_b0710").text)
+
+    assert "On the Bank's deny list" in page
+    assert "deactivated by the Bank of England on 19 October 2026" in page

@@ -14,7 +14,8 @@ Key responsibilities:
   module on the run date; a module with no live release takes its future
   release when there is exactly one. The default never chooses between
   several: with more than one candidate it stops and asks for a version.
-- Take the taxonomy pack and the rule book from the SAME release, always.
+- Take the taxonomy pack, the rule book and the Bank's validations deny list
+  from the SAME release, always.
 - Say what each shipped release is for a module on the run date — live, future
   or superseded — from the dates in that release's pack for the module. The
   status belongs to a module, not to a release: one release can be live for
@@ -23,7 +24,8 @@ Key responsibilities:
 Why the run date and not the return's reference date: the user picks the
 release, and the reference date never does. A reference date the chosen release
 does not cover for the module is reported by the structure check (``STR011``),
-not used to choose.
+not used to choose. The deny list is read on the same date, for the same
+reason: it is the gateway's configuration when the return is submitted.
 
 References:
 - docs/plans/taxonomy-release-selection.md — the decisions this module implements
@@ -35,13 +37,14 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date
 from functools import cache
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer.boe.catalogue import available_rulebooks, load_rulebook
+from rwa_filer.boe.deny import DenyList, load_deny_list
 from rwa_filer.taxonomy.pack import available_packs, load_packaged, pack_info
 
 if TYPE_CHECKING:
@@ -131,6 +134,10 @@ class Release:
         shipped: Every shipped release with a pack for the module, newest
             first, with its status on ``run_date`` — this one included when it
             is shipped.
+        deny_list: The Bank's validations deny list for the release
+            (``boe.deny``): the rules its gateway no longer runs, or runs as
+            warnings. Empty for a release that ships none — a pack a library
+            caller built itself. Give one of your own with ``replace``.
     """
 
     version: str
@@ -141,6 +148,7 @@ class Release:
     chosen_by: str
     run_date: date
     shipped: tuple[ModuleRelease, ...] = ()
+    deny_list: DenyList = field(default_factory=DenyList.empty)
 
     @property
     def info(self) -> PackInfo:
@@ -227,7 +235,8 @@ def release_for_pack(
 
     The rule book defaults to the shipped one of the pack's release for its
     module — the same release, never another — and is ``None`` when the pack's
-    version is not shipped or packages none for the module.
+    version is not shipped or packages none for the module. The deny list is
+    the shipped one of the pack's release, or empty when it is not shipped.
     """
     run_date = today or date.today()
     module = pack.info.module
@@ -240,6 +249,7 @@ def release_for_pack(
         chosen_by=CHOSEN_PACK,
         run_date=run_date,
         shipped=module_releases(module, today=run_date),
+        deny_list=release_deny_list(pack.info.version),
     )
 
 
@@ -320,6 +330,20 @@ def release_rulebook(version: str, module: str) -> RuleBook | None:
         if rulebook.taxonomy == version and wanted in (name.upper() for name in rulebook.modules):
             return rulebook
     return None
+
+
+def release_deny_list(version: str) -> DenyList:
+    """The Bank's validations deny list of release ``version``.
+
+    Empty for a version this package does not ship. A shipped release with no
+    packaged list raises: the wheel is broken, and that must be loud.
+
+    Raises:
+        DenyListNotFoundError: ``version`` is shipped but packages no deny list.
+    """
+    if version not in shipped_releases():
+        return DenyList.empty(version)
+    return load_deny_list(version)
 
 
 def release_rulebooks(version: str) -> tuple[str, ...]:
@@ -501,6 +525,7 @@ def _release(
         chosen_by=chosen_by,
         run_date=run_date,
         shipped=options,
+        deny_list=release_deny_list(option.version),
     )
     logger.debug("taxonomy %s for %s (%s, %s)", release.version, module, release.status, chosen_by)
     return release

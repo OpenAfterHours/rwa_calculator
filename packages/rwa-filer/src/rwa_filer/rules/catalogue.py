@@ -16,6 +16,13 @@ Key responsibilities:
   is ``live`` **or** carries a ``reactivated_on`` date, in both cases excluding
   ``deleted``. Filtering on ``status`` alone silently drops the 153 EBA rules
   that were deactivated and later switched back on.
+- Honour the Bank of England's validations deny list for the Basel 3.1 (BoE)
+  extract — the same packaged list the return-level engine reads
+  (``rwa_filer.boe.deny``), for the extract's own release, as it stands on the
+  day the extract is loaded for: a rule the Bank has deactivated at its gateway
+  is not enforced, and one it has downgraded is a Warning. The extract's own
+  ``status`` and scope stay the taxonomy's (``RuleSet.published_in_force``):
+  the deny list changes how a rule is run, never what it checks.
 
 Missing-value policy, and where each publisher states it: the EBA sheet has a
 dedicated ``If value missing`` column. The BoE sheet has NO equivalent column —
@@ -43,16 +50,19 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import date
 from functools import cache
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
-from rwa_filer.release import version_key
+from rwa_filer.release import release_deny_list, version_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from importlib.resources.abc import Traversable
+
+    from rwa_filer.boe.deny import DenyEntry, DenyList
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +219,10 @@ class ValidationRule:
         reactivated_on: ISO date a deactivated rule was switched back on.
         label: The publisher's human description (EBA ``narrative`` / BoE
             ``short_label``), quoted verbatim in a finding.
+        deny: The Bank's validations deny-list entry in force for the rule on
+            the day the extract was loaded for, or ``None``. A deactivation
+            takes the rule out of ``is_currently_enforced``; a downgrade has
+            already made ``severity`` a Warning. ``status`` is the extract's.
     """
 
     rule_id: str
@@ -228,6 +242,7 @@ class ValidationRule:
     status: tuple[str, ...]
     reactivated_on: str | None
     label: str | None
+    deny: DenyEntry | None = None
 
     def scope_for(self, table: str) -> TableScope:
         """Return the iteration domain bound to ``table`` (empty when unscoped)."""
@@ -248,8 +263,18 @@ class RuleSet:
 
     @property
     def enforced(self) -> tuple[ValidationRule, ...]:
-        """The rules currently in force (see ``is_currently_enforced``)."""
+        """The rules currently in force at the gateway (see ``is_currently_enforced``)."""
         return tuple(rule for rule in self.rules if is_currently_enforced(rule))
+
+    @property
+    def published_in_force(self) -> tuple[ValidationRule, ...]:
+        """The rules the taxonomy publishes as in force, before the Bank's deny list.
+
+        The scope and logic of these are the taxonomy's, which the deny list
+        never alters — so this, not ``enforced``, is what anything derived from
+        the rules' SCOPE reads (``validate.index.derive_variant_columns``).
+        """
+        return tuple(rule for rule in self.rules if is_published_in_force(rule))
 
 
 # =============================================================================
@@ -257,28 +282,26 @@ class RuleSet:
 # =============================================================================
 
 
-@cache
-def load_rules(framework: str) -> RuleSet:
+def load_rules(framework: str, *, on: date | None = None) -> RuleSet:
     """Load and normalise the packaged rule extract for ``framework``.
 
     Args:
         framework: ``"CRR"`` or ``"BASEL_3_1"``.
+        on: The day the Bank's validations deny list is read for (BoE extract
+            only): its entries applied on or before it are honoured. Defaults
+            to today — the gateway's configuration now.
 
     Returns:
-        The parsed ``RuleSet``. Cached — the extracts are immutable package data.
+        The parsed ``RuleSet``. Cached per framework and day — the extracts and
+        the deny lists are immutable package data.
 
     Raises:
         ValueError: ``framework`` is not one of the two supported frameworks.
             (A programming error, not a data-quality issue, so it raises.)
+        DenyListNotFoundError: the BoE extract's release is shipped but its
+            deny list is not packaged (a broken wheel).
     """
-    extract = extract_resource(framework)
-    payload = json.loads(extract.read_text(encoding="utf-8"))
-    source = payload["source"]
-    publisher = source["publisher"]
-    parse = _parse_eba_rule if publisher == "EBA" else _parse_boe_rule
-    rules = tuple(parse(raw, framework) for raw in payload["rules"])
-    logger.debug("loaded %d %s validation rules from %s", len(rules), publisher, extract.name)
-    return RuleSet(framework=framework, publisher=publisher, source=source, rules=rules)
+    return _load_rules(framework, on or date.today())
 
 
 def extract_resource(framework: str) -> Traversable:
@@ -297,7 +320,21 @@ def extract_resource(framework: str) -> Traversable:
 
 
 def is_currently_enforced(rule: ValidationRule) -> bool:
-    """Whether a rule is in force today.
+    """Whether a rule is in force at the gateway: published in force, and not deny-listed.
+
+    See ``is_published_in_force`` for the publisher's own liveness. On top of
+    it, a rule the Bank of England has deactivated at its gateway (its
+    validations deny list) is not enforced: "The rule will not be executed in
+    the data collection system and reporters are not expected to meet the
+    requirements of this rule."
+    """
+    if rule.deny is not None and rule.deny.is_deactivation:
+        return False
+    return is_published_in_force(rule)
+
+
+def is_published_in_force(rule: ValidationRule) -> bool:
+    """Whether the publisher's extract has the rule in force.
 
     ``live`` alone is not the answer for the EBA: 153 matched rules were
     deactivated and later reactivated, so they report as ``deactivated`` while
@@ -339,6 +376,44 @@ def build_rule_reference(publisher: str, tables: Iterable[str]) -> str:
 # =============================================================================
 # Private helpers — per-publisher normalisation
 # =============================================================================
+
+
+@cache
+def _load_rules(framework: str, day: date) -> RuleSet:
+    """The extract for ``framework``, with the BoE deny list in force on ``day`` honoured."""
+    extract = extract_resource(framework)
+    payload = json.loads(extract.read_text(encoding="utf-8"))
+    source = payload["source"]
+    publisher = source["publisher"]
+    if publisher == "EBA":
+        rules = tuple(_parse_eba_rule(raw, framework) for raw in payload["rules"])
+    else:
+        deny_list = release_deny_list(str(source.get("framework_version", "")))
+        rules = tuple(
+            _denied(raw, _parse_boe_rule(raw, framework), deny_list, day)
+            for raw in payload["rules"]
+        )
+    logger.debug("loaded %d %s validation rules from %s", len(rules), publisher, extract.name)
+    return RuleSet(framework=framework, publisher=publisher, source=source, rules=rules)
+
+
+def _denied(
+    raw: dict[str, Any], rule: ValidationRule, deny_list: DenyList, day: date
+) -> ValidationRule:
+    """``rule`` with the deny-list entry in force on ``day`` for any of its modules."""
+    entry = next(
+        (
+            found
+            for module in raw.get("severity_modules") or ()
+            if (found := deny_list.in_force(module, day).get(rule.rule_id)) is not None
+        ),
+        None,
+    )
+    if entry is None:
+        return rule
+    if not entry.is_deactivation and rule.severity == SEVERITY_ERROR:
+        return replace(rule, deny=entry, severity=SEVERITY_WARNING)
+    return replace(rule, deny=entry)
 
 
 def _parse_eba_rule(raw: dict[str, Any], framework: str) -> ValidationRule:

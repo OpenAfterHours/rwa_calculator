@@ -12,6 +12,9 @@ Key responsibilities:
   ran, how many could not, and why — the same rule ``render_text`` keeps.
 - Name the templates the return leaves out that its reported templates are
   checked against, so loading only some templates is never silent.
+- Say, on every rule the Bank's validations deny list touches, what the Bank
+  did and when — so a rule that is not run, or only warns, is never mistaken
+  for one this return passed or this engine could not read.
 - Keep paging, filtering and lookup out of the templates, so a template is
   layout and nothing else.
 
@@ -31,6 +34,7 @@ from typing import TYPE_CHECKING, Final
 from rwa_filer.boe.catalogue import SEVERITY_ERROR
 from rwa_filer.boe.engine import (
     REASON_CLOSED_BY_FORMULA,
+    REASON_DEACTIVATED_BY_PUBLISHER,
     REASON_NO_DATA,
     REASON_NOT_REPORTED,
     REASON_UNKNOWN_TABLE,
@@ -41,6 +45,7 @@ from rwa_filer.boe.engine import (
 )
 from rwa_filer.release import release_rulebook
 from rwa_filer.validate.checker import FINDING_COVERAGE_INSUFFICIENT
+from rwa_filer.validate.execution import published_finding
 from rwa_filer.validate.report import status_line
 
 if TYPE_CHECKING:
@@ -65,6 +70,9 @@ REASON_TEXT: Final = {
     REASON_CLOSED_BY_FORMULA: "the taxonomy's own formula cannot bind the cells reported here",
     REASON_UNKNOWN_TABLE: "it reads a table this module's taxonomy does not have",
     REASON_UNSUPPORTED: "it uses something this engine does not implement",
+    REASON_DEACTIVATED_BY_PUBLISHER: (
+        "the Bank of England has switched it off at its gateway: firms are not expected to meet it"
+    ),
 }
 #: Rules listed per page of the rules list.
 RULES_PER_PAGE: Final = 100
@@ -116,6 +124,9 @@ class RuleRow:
     satisfied: int
     unsatisfied: int
     reason: str
+    #: What the Bank's validations deny list did to the rule, in words; empty
+    #: when it is not on the list.
+    deny: str = ""
 
     @property
     def is_error(self) -> bool:
@@ -156,7 +167,12 @@ class Overview:
 
 @dataclass(frozen=True)
 class RuleDetail:
-    """One rule in full: what it says, and where it broke."""
+    """One rule in full: what it says, and where it broke.
+
+    ``published`` is what the published rule found on this return where the
+    Bank's deny list changed its outcome (e.g. ``the published rule breaks 3 of
+    7 evaluation(s) here``); empty otherwise.
+    """
 
     row: RuleRow
     expression: str
@@ -164,6 +180,7 @@ class RuleDetail:
     detail: str
     reason_text: str
     failures: tuple[Failure, ...]
+    published: str = ""
 
 
 @dataclass(frozen=True)
@@ -328,6 +345,7 @@ def _row(result: RuleResult, pack: TaxonomyPack) -> RuleRow:
         satisfied=result.satisfied,
         unsatisfied=result.unsatisfied,
         reason=result.reason,
+        deny=result.deny.describe() if result.deny is not None else "",
     )
 
 
@@ -341,6 +359,7 @@ def _detail(opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...])
         detail=result.detail,
         reason_text=REASON_TEXT.get(result.reason, result.reason),
         failures=result.failures,
+        published=published_finding(result.formula) if result.formula is not None else "",
     )
 
 

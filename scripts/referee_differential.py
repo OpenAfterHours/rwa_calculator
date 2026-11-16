@@ -22,6 +22,10 @@ XBRL formulas — what the Bank's gateway runs. For each golden return:
   verdict of rwa-filer's native engine. That is the engine, refereed. A
   disagreement means one of the two has misread a rule; the three found while
   building this gate were one in each direction and one in the taxonomy.
+  Arelle runs the taxonomy's formulas and knows nothing of the Bank's
+  validations deny list, so a rule the list deactivates or downgrades is
+  compared as its formula evaluates it (``RuleResult.formula``, read by
+  ``rwa_filer.referee.differential.compare``), never as the gateway now runs it.
 
 A golden return is every Basel 3.1 portfolio of the supervisory register's
 matrix (``RUNS``, imported and never re-declared) whose generated estate has no

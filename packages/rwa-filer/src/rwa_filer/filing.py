@@ -148,6 +148,7 @@ def build_filing(
     adjustments: Sequence[AppliedAdjustment] = (),
     evidence: Path | None = None,
     source: SourceIdentity | None = None,
+    submission_date: date | None = None,
 ) -> FilingPackage:
     """Validate ``ret`` and, if it may be filed, write its filing package.
 
@@ -177,6 +178,9 @@ def build_filing(
             (``rwa_filer.evidence``; ``.gz`` to compress). Its creation time is
             ``options.created_at``.
         source: The file the return was read from, for the identity block.
+        submission_date: The day the package will be submitted: the Bank's
+            validations deny list in force that day applies (see
+            ``validate_return``). Defaults to the run date.
 
     Returns:
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
@@ -202,6 +206,7 @@ def build_filing(
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,
+            submission_date=submission_date,
         )
         validation = collected.validation
         evidence_file = write_evidence(collected, evidence, generated_at=options.created_at)
@@ -212,6 +217,7 @@ def build_filing(
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,
+            submission_date=submission_date,
         )
     if validation.structure:
         return FilingPackage(

@@ -225,6 +225,27 @@ def test_a_release_no_longer_listed_is_removed_and_recorded_as_retired(
     ]
 
 
+def test_a_rebuild_keeps_the_releases_deny_list_and_retirement_removes_it(
+    publication: Publication,
+) -> None:
+    """The deny list is the Bank's separate, monthly publication: a rebuild cannot remake it."""
+    # Arrange — 9.0.0 on disk, no longer listed; both releases with a deny list.
+    files = find_bank_files(publication.source)
+    build_release(VERSION, files, publication.root)
+    _relabel(publication.root, VERSION, "9.0.0")
+    _write_releases(publication.root, [VERSION])
+    deny = publication.root / release_build.DENY_SUBDIR
+    deny.mkdir(parents=True)
+    for version in (VERSION, "9.0.0"):
+        (deny / f"{version}.json").write_text("{}", encoding="utf-8")
+
+    # Act
+    build_release(VERSION, files, publication.root)
+
+    # Assert
+    assert sorted(path.name for path in deny.iterdir()) == [f"{VERSION}.json"]
+
+
 # ---------------------------------------------------------------------------
 # End dates
 # ---------------------------------------------------------------------------

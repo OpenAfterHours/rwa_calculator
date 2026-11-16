@@ -1,0 +1,134 @@
+{
+  "format": 1,
+  "release": "4.1.1",
+  "source": {
+    "publisher": "Bank of England",
+    "file": "boe-banking-validations-deny-list-november-2026.xlsx",
+    "sha256": "b563aac3a7e517213c646b098d63cde652a8aaaac1dab38220d12e22bf1035ee",
+    "sheet": "Version 4.1.1",
+    "published": "2026-11-16",
+    "url": "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-validations-deny-list-november-2026.xlsx",
+    "known_issues": {
+      "file": "boe-banking-known-issues-november-2026.xlsx",
+      "sha256": "bde89aa2523f8938aa97ce3f22a51c710c05e1f56aedc62ca1dd33d0e75db2e0",
+      "last_updated": "2026-11-16"
+    }
+  },
+  "entries": [
+    {
+      "rule_id": "boe_b4006_1",
+      "module": "MRL001",
+      "deny_type": "downgraded",
+      "date_applied": "2026-10-19",
+      "known_issue": 23,
+      "published_code": "boe_b04006_1"
+    },
+    {
+      "rule_id": "boe_b4006_2",
+      "module": "MRL001",
+      "deny_type": "downgraded",
+      "date_applied": "2026-10-19",
+      "known_issue": 23,
+      "published_code": "boe_b04006_2"
+    },
+    {
+      "rule_id": "boe_b4008_1",
+      "module": "MRL001",
+      "deny_type": "downgraded",
+      "date_applied": "2026-10-19",
+      "known_issue": 24
+    },
+    {
+      "rule_id": "boe_b4008_2",
+      "module": "MRL001",
+      "deny_type": "downgraded",
+      "date_applied": "2026-10-19",
+      "known_issue": 24
+    },
+    {
+      "rule_id": "boe_b0272",
+      "module": "PRA001",
+      "deny_type": "deactivated",
+      "date_applied": "2026-11-16",
+      "known_issue": 29
+    },
+    {
+      "rule_id": "boe_b0274",
+      "module": "PRA001",
+      "deny_type": "deactivated",
+      "date_applied": "2026-11-16",
+      "known_issue": 30
+    },
+    {
+      "rule_id": "boe_b0710",
+      "module": "PRA001",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 22
+    },
+    {
+      "rule_id": "boe_b0710_1",
+      "module": "PRA001",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 22
+    },
+    {
+      "rule_id": "boe_b0710_2",
+      "module": "PRA001",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 22
+    },
+    {
+      "rule_id": "boe_b0710_3",
+      "module": "PRA001",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 22
+    },
+    {
+      "rule_id": "boe_b0746",
+      "module": "PRA001",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 26
+    },
+    {
+      "rule_id": "boe_b1014",
+      "module": "PRA115",
+      "deny_type": "deactivated",
+      "date_applied": "2026-05-14",
+      "known_issue": 15
+    },
+    {
+      "rule_id": "boe_b1022",
+      "module": "PRA115",
+      "deny_type": "deactivated",
+      "date_applied": "2026-05-14",
+      "known_issue": 15
+    },
+    {
+      "rule_id": "boe_b0063-1_ss",
+      "module": "PRA116",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 21
+    },
+    {
+      "rule_id": "boe_b0063-2_ss",
+      "module": "PRA116",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 21
+    },
+    {
+      "rule_id": "boe_b0063_ss",
+      "module": "PRA116",
+      "deny_type": "deactivated",
+      "date_applied": "2026-10-19",
+      "known_issue": 21
+    }
+  ],
+  "unmatched": []
+}

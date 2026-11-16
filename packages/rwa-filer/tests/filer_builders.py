@@ -233,7 +233,7 @@ SAMPLE_TABLES: dict[str, dict[str, TableBinding]] = {
 def sample_bindings(framework: str) -> Mapping[str, TableBinding]:
     """The sample table map with each DPM variant restricted to its own columns."""
     base = SAMPLE_TABLES[framework]
-    variant_columns = derive_variant_columns(load_rules(framework).enforced, base)
+    variant_columns = derive_variant_columns(load_rules(framework).published_in_force, base)
     return {
         table: (
             binding

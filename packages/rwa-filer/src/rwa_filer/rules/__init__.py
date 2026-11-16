@@ -35,6 +35,7 @@ from rwa_filer.rules.catalogue import (
     build_rule_reference,
     extract_resource,
     is_currently_enforced,
+    is_published_in_force,
     load_rules,
     rules_for_tables,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "build_rule_reference",
     "extract_resource",
     "is_currently_enforced",
+    "is_published_in_force",
     "load_rules",
     "rules_for_tables",
 ]

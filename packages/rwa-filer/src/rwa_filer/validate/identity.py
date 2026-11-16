@@ -8,12 +8,16 @@ Pipeline position:
 
 Key responsibilities:
 - Name every input a verdict depends on — the return's facts, the taxonomy pack,
-  the rule book, the accuracy the comparisons allowed for, and the engine
-  version — by a SHA-256 a second run can reproduce.
+  the rule book, the Bank's deny-list entries in force, the accuracy the
+  comparisons allowed for, and the engine version — by a SHA-256 a second run
+  can reproduce.
 - Give the whole a single ``evidence_id``: two runs with the same id ran the
   same checks on the same figures, so their results can be compared before any
   detail is read. The file a return came from is recorded but is not part of
-  the id: the same facts re-exported to another format are the same input.
+  the id: the same facts re-exported to another format are the same input. Nor
+  is the date the deny list was applied for, nor its file: what the id covers
+  is the entries in force for the module, so a run a day later is the same run
+  unless the Bank's gateway changed in between.
 - Keep every digest one function (``boe.catalogue.canonical_sha256``), so a
   value hashed in two places gives one answer.
 
@@ -87,9 +91,10 @@ def identity_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[
     """The ``identity`` block: every input of the verdict, fingerprinted.
 
     ``evidence_id`` covers the generator, the facts and header, the taxonomy
-    pack, the rule book and the accuracy's value — not the source file's name,
-    format or bytes, nor whether the accuracy was the default, which are
-    recorded beside it.
+    pack, the rule book, the deny-list entries in force and the accuracy's
+    value — not the source file's name, format or bytes, nor whether the
+    accuracy was the default, nor the deny list's file and the date it was
+    applied for, which are recorded beside it.
     """
     info = validation.pack.info
     rulebook = validation.rulebook
@@ -132,6 +137,7 @@ def identity_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[
                 "source": ACCURACY_GIVEN if validation.accuracy_given else ACCURACY_DEFAULT,
             }
         },
+        "deny_list": _deny_identity(validation),
     }
     identified = {
         **{key: record[key] for key in ("generator", "taxonomy", "rulebook")},
@@ -139,6 +145,9 @@ def identity_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[
         # The accuracy's value is an input; how it was chosen is not.
         "accuracy": [accuracy.monetary_decimals, accuracy.percentage_decimals],
     }
+    if record["deny_list"] is not None:
+        # What the gateway ran is an input; the day it was worked out on is not.
+        identified["deny_list"] = record["deny_list"]["in_force"]
     return {"evidence_id": canonical_sha256(identified), **record}
 
 
@@ -164,6 +173,22 @@ def facts_sha256(ret: CanonicalReturn) -> str:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _deny_identity(validation: ReturnValidation) -> dict[str, Any] | None:
+    """The deny list applied: its file, the date, and the entries in force for the module."""
+    day = validation.deny_date
+    if day is None:
+        return None
+    deny_list = validation.release.deny_list
+    in_force = deny_list.in_force(validation.pack.info.module, day)
+    return {
+        "release": deny_list.release,
+        "file": deny_list.file,
+        "sha256": deny_list.content_sha256 or None,
+        "applied_on": day.isoformat(),
+        "in_force": [in_force[rule_id].record() for rule_id in sorted(in_force)],
+    }
 
 
 def _line(content: object) -> bytes:

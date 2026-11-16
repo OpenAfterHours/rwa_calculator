@@ -17,6 +17,11 @@ Key responsibilities:
   or reading finding is about.
 - Never recompute: the evidence is captured inside the evaluation that reached
   the verdict (``trace_return``), so it cannot describe a different run.
+- Say what the Bank's validations deny list did: a rule record carries the
+  entry in force (``deny_list``) and, where it changed the outcome, the
+  published rule's own verdict (``formula``). A rule the Bank has deactivated
+  has no evaluation records — the gateway does not run it, so nothing it found
+  is behind the verdict; its formula's counts are on its rule record.
 - Identify itself: the header carries the same ``identity`` block as the
   validation report — fingerprints of the facts, the taxonomy pack, the rule
   book and the accuracy — and the trailer a SHA-256 over every line before it,
@@ -101,7 +106,7 @@ logger = logging.getLogger(__name__)
 #: The file's name and version (the header's ``schema``). The major version
 #: changes when a field is renamed, removed or changes meaning.
 EVIDENCE_SCHEMA_NAME: Final = "rwa-filer/evidence"
-EVIDENCE_SCHEMA_VERSION: Final = "1.0"
+EVIDENCE_SCHEMA_VERSION: Final = "1.1"
 
 RECORD_HEADER: Final = "header"
 RECORD_CELL: Final = "cell"
@@ -191,6 +196,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
     accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
+    submission_date: date | None = None,
 ) -> Evidence:
     """Validate ``ret`` as ``validate_return`` does, keeping everything it executed.
 
@@ -210,6 +216,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
         accuracy=accuracy,
         source_findings=source_findings,
         source=source,
+        submission_date=submission_date,
     )
     return Evidence(ret=ret, validation=validation, trace=trace)
 

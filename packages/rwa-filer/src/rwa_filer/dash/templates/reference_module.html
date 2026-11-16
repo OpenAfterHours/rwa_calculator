@@ -35,8 +35,9 @@
     <div class="rule-list">
       {% for rule in rules %}
       <div class="rule-item">
-        <span class="top">{% if rule.severities.get(entry.module) == "ERROR" %}<span class="chip chip-fail">Error</span>{% else %}<span class="chip chip-warn">Warning</span>{% endif %}<span class="mono small muted">{{ rule.rule_id }}</span></span>
+        <span class="top">{% if rule.severities.get(entry.module) == "ERROR" %}<span class="chip chip-fail">Error</span>{% else %}<span class="chip chip-warn">Warning</span>{% endif %}{% if rule.rule_id in denied %}<span class="chip chip-info" title="{{ denied[rule.rule_id] }}">On the Bank's deny list</span>{% endif %}<span class="mono small muted">{{ rule.rule_id }}</span></span>
         <span class="label">{{ (rule.label or "No label published") | replace("|", "") }}</span>
+        {% if rule.rule_id in denied %}<span class="small muted">Today: {{ denied[rule.rule_id] }}</span>{% endif %}
         <span class="where">{{ rule.tables | join(" · ") }}</span>
       </div>
       {% endfor %}

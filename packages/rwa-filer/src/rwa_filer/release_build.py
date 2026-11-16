@@ -24,9 +24,13 @@ Key responsibilities:
 - Regenerate the template-level engine's Basel 3.1 extract (``rwa_filer.rules``)
   from the newest listed release's Banking Reporting workbook. That engine
   holds one release, not a choice of them.
-- Remove the data of every release ``releases.json`` no longer lists, and
-  record each in ``retired.json`` with the last rwa-filer version that shipped
-  it, so an error can say where it went.
+- Remove the data of every release ``releases.json`` no longer lists — its
+  validations deny list included — and record each in ``retired.json`` with
+  the last rwa-filer version that shipped it, so an error can say where it went.
+- Leave a release's validations deny list (``boe/data/deny/<version>.json``)
+  alone when the release is rebuilt: it is not part of the Bank's publication
+  of the release, but a separate, monthly one, imported on its own
+  (``boe.deny_importer``; ``scripts/build_filer_release.py --deny-list``).
 - Measure a packaged release: the counts and the closed-by-formula register
   its tests are held to.
 - Check a packaged release: rebuild it in a scratch folder and report every
@@ -57,6 +61,7 @@ import polars as pl
 
 from rwa_filer import __version__
 from rwa_filer.boe.catalogue import rulebook_from
+from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
 from rwa_filer.boe.formulas import DEFAULT_MEMBER
 from rwa_filer.boe.grammar import references
 from rwa_filer.boe.importer import import_workbook, rulebook_file_name, write_rulebook
@@ -82,6 +87,7 @@ logger = logging.getLogger(__name__)
 #: Where, under the package source folder, each kind of release data lives.
 PACKS_SUBDIR: Final = Path("taxonomy") / "data"
 RULEBOOKS_SUBDIR: Final = Path("boe") / "data"
+DENY_SUBDIR: Final = Path("boe").joinpath(*DENY_DIRECTORY)
 RULES_SUBDIR: Final = Path("rules") / "data"
 
 #: The layout of a measurement file.
@@ -610,6 +616,8 @@ def _prune(listed: tuple[str, ...], root: Path) -> tuple[str, ...]:
     known = {entry["version"] for entry in retired["releases"]}
     for version in gone:
         _remove_release(version, packs_root, rulebooks_root)
+        # Only on retirement: a rebuild keeps the release's deny list (see above).
+        (root / DENY_SUBDIR / deny_list_file(version)).unlink(missing_ok=True)
         if version not in known:
             retired["releases"].append(
                 {

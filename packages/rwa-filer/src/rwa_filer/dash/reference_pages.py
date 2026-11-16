@@ -31,6 +31,7 @@ from rwa_filer.dash.forms import page_number
 from rwa_filer.dash.views import title_case
 from rwa_filer.release import (
     ReleaseNotFoundError,
+    release_deny_list,
     release_packs,
     release_rulebook,
     release_rulebooks,
@@ -123,6 +124,8 @@ class ReferencePages:
         ]
         pages = max(1, math.ceil(len(matched) / RULES_PER_PAGE))
         page = min(max(page_number(request.query_params.get("page")), 1), pages)
+        today = date.today()
+        deny_list = release_deny_list(entry.release)
         return self.context.render(
             request,
             "reference_module.html",
@@ -130,6 +133,11 @@ class ReferencePages:
             entry=entry,
             entries=entries,
             tables=tables,
+            denied={
+                item.rule_id: item.describe()
+                for item in deny_list.for_module(entry.module)
+                if item.in_force_on(today)
+            },
             rules=matched[(page - 1) * RULES_PER_PAGE : page * RULES_PER_PAGE],
             matched=len(matched),
             query=query,

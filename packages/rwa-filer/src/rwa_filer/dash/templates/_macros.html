@@ -29,6 +29,20 @@
 {%- endif -%}
 {%- endmacro -%}
 
+{#- What the Bank's validations deny list did to a rule: a chip for a list, a note for a detail. -#}
+{%- macro deny_chip(row) -%}
+{%- if row.deny -%}<span class="chip chip-info" title="{{ row.deny }}">{{ "Switched off by the Bank" if row.reason == "deactivated_by_publisher" else "Downgraded by the Bank" }}</span>{%- endif -%}
+{%- endmacro -%}
+
+{%- macro deny_note(row, published="") -%}
+{%- if row.deny -%}
+<div class="panel" role="note" style="border-color: var(--info)">
+  <div class="small muted">Validations deny list</div>
+  <p style="margin: 4px 0 0">This rule was {{ row.deny }}.{% if row.reason == "deactivated_by_publisher" %} The gateway does not run it, and firms are not expected to meet it.{% else %} A break is a warning to explain, and does not stop the submission.{% endif %}{% if published %} {{ published | capitalize }}.{% endif %}</p>
+</div>
+{%- endif -%}
+{%- endmacro -%}
+
 {#- The rule's text as the Bank's workbook states it (Rules page and the cell panel). -#}
 {%- macro rule_text(rule) -%}
 {%- if rule.expression -%}

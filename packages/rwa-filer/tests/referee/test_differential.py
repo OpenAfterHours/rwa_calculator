@@ -12,9 +12,18 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
-from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS, RuleResult
+from rwa_filer.boe.deny import DENY_DEACTIVATED, DenyEntry
+from rwa_filer.boe.engine import (
+    REASON_DEACTIVATED_BY_PUBLISHER,
+    STATUS_FAIL,
+    STATUS_NOT_EVALUATED,
+    STATUS_PASS,
+    RuleResult,
+)
 from rwa_filer.referee.differential import (
     AGREE,
     COUNT_DIFFERS,
@@ -248,3 +257,41 @@ class TestTheRecord:
         assert [item["rule"] for item in record["count_differences"]] == ["c"]
         assert [item["rule"] for item in record["not_compared"]] == ["d"]
         assert record["is_clean"] is False
+
+
+class TestTheBanksDenyList:
+    """Arelle runs the taxonomy's formulas, which know nothing of the Bank's deny list.
+
+    A rule the deny list deactivated is NOT_EVALUATED in the native report, but
+    the comparison is with what the formula found — or every deny-listed rule
+    that breaks would read as a disagreement, and the referee would stop being
+    a check on the engine.
+    """
+
+    @staticmethod
+    def _deactivated(held: int, broken: int) -> RuleResult:
+        formula = _native("boe_b0710", held, broken)
+        return RuleResult(
+            rule_id="boe_b0710",
+            severity="ERROR",
+            status=STATUS_NOT_EVALUATED,
+            reason=REASON_DEACTIVATED_BY_PUBLISHER,
+            deny=DenyEntry("boe_b0710", "PRA001", DENY_DEACTIVATED, date(2026, 10, 19), 22),
+            formula=formula,
+        )
+
+    def test_a_deactivated_rule_is_compared_as_its_formula_reached_it(self) -> None:
+        # Act
+        diff = compare([self._deactivated(4, 3)], _referee({"boe_b0710": (4, 3)}))
+
+        # Assert
+        (item,) = diff.comparisons
+        assert (item.outcome, item.native, item.native_counts) == (AGREE, STATUS_FAIL, (4, 3))
+        assert "deactivated by the Bank of England on 19 October 2026" in item.note
+        assert diff.is_clean
+
+    def test_a_formula_the_referee_reads_differently_is_still_a_disagreement(self) -> None:
+        """The deny list must not hide an engine defect on a rule it happens to list."""
+        diff = compare([self._deactivated(7, 0)], _referee({"boe_b0710": (4, 3)}))
+
+        assert [item.outcome for item in diff.comparisons] == [DISAGREE]

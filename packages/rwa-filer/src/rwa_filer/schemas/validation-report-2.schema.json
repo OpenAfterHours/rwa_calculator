@@ -105,6 +105,10 @@
               "linked_from": { "type": "array", "items": { "type": "string" } }
             }
           }
+        },
+        "deny_list": {
+          "description": "Since 2.1. Null when no rule ran.",
+          "oneOf": [{ "$ref": "#/$defs/deny_summary" }, { "type": "null" }]
         }
       }
     },
@@ -113,6 +117,45 @@
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "deny_entry": {
+      "description": "A Bank of England validations deny-list entry in force for the rule (since 2.1): the gateway no longer runs it (deactivated), or runs it as a warning (downgraded), from date_applied.",
+      "type": "object",
+      "required": ["rule_id", "module", "deny_type", "date_applied", "known_issue"],
+      "properties": {
+        "rule_id": { "type": "string" },
+        "module": { "type": "string" },
+        "deny_type": { "enum": ["deactivated", "downgraded"] },
+        "date_applied": { "type": ["string", "null"], "format": "date" },
+        "known_issue": { "type": ["integer", "null"] },
+        "published_code": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "formula": {
+      "description": "The published rule's own verdict, where the deny list changed the rule's outcome (since 2.1).",
+      "type": "object",
+      "required": ["severity", "status", "satisfied", "unsatisfied"],
+      "properties": {
+        "severity": { "enum": ["ERROR", "WARNING"] },
+        "status": { "enum": ["PASS", "FAIL", "NOT_EVALUATED"] },
+        "satisfied": { "type": "integer", "minimum": 0 },
+        "unsatisfied": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "deny_summary": {
+      "description": "What the release's validations deny list did for the module on the date it was applied for (since 2.1).",
+      "type": "object",
+      "required": ["release", "file", "sha256", "applied_on", "deactivated", "downgraded", "not_applied"],
+      "properties": {
+        "release": { "type": "string" },
+        "file": { "type": ["string", "null"] },
+        "sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "applied_on": { "type": "string", "format": "date" },
+        "deactivated": { "type": "array", "items": { "type": "string" } },
+        "downgraded": { "type": "array", "items": { "type": "string" } },
+        "not_applied": { "type": "array", "items": { "$ref": "#/$defs/deny_entry" } }
+      }
+    },
     "status": { "enum": ["CLEAN", "INCOMPLETE", "BLOCKED"] },
     "identity": {
       "type": "object",
@@ -189,6 +232,23 @@
               }
             }
           }
+        },
+        "deny_list": {
+          "description": "Since 2.1: the validations deny list applied. evidence_id covers in_force, not the file or the date.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["release", "file", "sha256", "applied_on", "in_force"],
+              "properties": {
+                "release": { "type": "string" },
+                "file": { "type": ["string", "null"] },
+                "sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+                "applied_on": { "type": "string", "format": "date" },
+                "in_force": { "type": "array", "items": { "$ref": "#/$defs/deny_entry" } }
+              }
+            }
+          ]
         }
       }
     },
@@ -284,6 +344,14 @@
               "addresses": { "type": "array", "items": { "$ref": "#/$defs/address" } }
             }
           }
+        },
+        "deny_list": {
+          "description": "Since 2.1: the deny-list entry in force for the rule, or null.",
+          "oneOf": [{ "$ref": "#/$defs/deny_entry" }, { "type": "null" }]
+        },
+        "formula": {
+          "description": "Since 2.1: the published rule's verdict where the deny list changed it, or null.",
+          "oneOf": [{ "$ref": "#/$defs/formula" }, { "type": "null" }]
         }
       }
     }

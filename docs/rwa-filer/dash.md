@@ -99,11 +99,13 @@ the values they held. Each of those cells links to the template grid.
 **Known issues with the published rules.** A result a known issue explains (see
 [Known issues with the published rules](index.md#known-issues-with-the-published-rules))
 carries a "Known issue PI-nn" chip on the rules list, the overview's breaks and
-the module reference page. Picking the rule, or a cell a labelled break read in
-the template grid, shows a callout: the issue's title, where it stands with the
-Bank, how many of the breaks here are where it applies (and how many are not,
-and so are not explained by it), the first passage of the instructions it rests
-on, what a firm can do meanwhile, and the command that prints the whole issue.
+the module reference page, or an "Open question PI-nn" chip where the issue is a
+question to the Bank about how the rule is meant to be read. Picking the rule,
+or a cell a labelled break read in the template grid, shows a callout: the
+issue's title, where it stands with the Bank, how many of the breaks here are
+where it applies (and how many are not, and so are not explained by it), the
+first passage of the instructions it rests on, what a firm can do meanwhile, and
+the command that prints the whole issue.
 The verdict beside it is unchanged.
 
 **Templates.** One table of the return, laid out in the publisher's own rows,

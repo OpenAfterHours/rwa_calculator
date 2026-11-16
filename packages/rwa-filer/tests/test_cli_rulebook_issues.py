@@ -54,24 +54,25 @@ def test_rulebook_issues_lists_every_issue_of_the_release(
     out = capsys.readouterr().out
     assert code == EXIT_OK
     assert all(issue.id in out for issue in load_issues("4.1.1").issues)
-    assert "PI-15a" in out
+    assert "PI-22" in out
     assert "acknowledged" in out
+    assert "clarification" in out
 
 
 def test_rulebook_issues_shows_one_issue_in_full(capsys: pytest.CaptureFixture[str]) -> None:
     # Arrange
-    issue = load_issues("4.1.1").issue("PI-15a")
+    issue = load_issues("4.1.1").issue("PI-22")
     assert issue is not None
 
     # Act
-    code = main(["rulebook", "issues", "PI-15a"])
+    code = main(["rulebook", "issues", "PI-22"])
 
     # Assert
     out = capsys.readouterr().out
     assert code == EXIT_OK
     assert issue.title in out
     assert issue.authority[0].quote in out
-    assert "PI-16a" not in out
+    assert "PI-23 -" not in out
 
 
 def test_an_unknown_issue_or_release_exits_1_with_one_line(
@@ -101,6 +102,17 @@ def test_rulebook_issues_markdown_is_the_shareable_rendering(
     assert capsys.readouterr().out == render_document([load_issues("4.1.1")])
 
 
+def test_a_rule_label_markdown_would_read_as_a_link_is_rendered_as_code() -> None:
+    """boe_b0903's label is an expression: left as prose, '[/](0[1-9]|1[012])' is a link."""
+    # Act
+    text = render_document([load_issues("4.1.1")])
+
+    # Assert
+    line = next(item for item in text.splitlines() if item.startswith("boe_b0903, as published"))
+    assert "(label: `[boe_b0903];[matches(" in line
+    assert line.endswith("`):")
+
+
 def test_rulebook_issues_json_round_trips(capsys: pytest.CaptureFixture[str]) -> None:
     # Act
     code = main(["rulebook", "issues", "--format", "json", "--module", "PRA001"])
@@ -117,7 +129,7 @@ def test_rulebook_issues_json_round_trips(capsys: pytest.CaptureFixture[str]) ->
 def test_a_known_publisher_issue_is_named_in_the_text_and_does_not_change_the_exit_code(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Before the Bank deactivated boe_b0710, a break of it blocks - and says it is PI-15a."""
+    """Before the Bank deactivated boe_b0710, a break of it blocks - and says it is PI-22."""
     # Arrange
     path = tmp_path / "corporates.csv"
     path.write_text(corporate_csv(ecai_columns=True), encoding="utf-8")
@@ -129,5 +141,5 @@ def test_a_known_publisher_issue_is_named_in_the_text_and_does_not_change_the_ex
     out = capsys.readouterr().out
     assert code == EXIT_FAILED
     assert out.startswith("BLOCKED:")
-    assert "Known issue with the published rule (PI-15a" in out
-    assert "acknowledged by the Bank of England (known issues log #22" in out
+    assert "Known issue with the published rule (PI-22" in out
+    assert "acknowledged by the Bank of England: known issue 22" in out

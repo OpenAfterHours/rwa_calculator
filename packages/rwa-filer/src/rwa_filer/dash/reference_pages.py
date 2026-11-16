@@ -198,11 +198,16 @@ def _enforced(version: str, module: str) -> tuple[Rule, ...]:
     return rulebook.enforced(module) if rulebook is not None else ()
 
 
-def _issues_by_rule(version: str, module: str) -> dict[str, list[tuple[str, str]]]:
-    """Each rule a known issue of the release names as its subject: the issues' ids and titles."""
-    found: dict[str, list[tuple[str, str]]] = {}
+def _issues_by_rule(version: str, module: str) -> dict[str, list[tuple[str, str, str]]]:
+    """Each rule a known issue of the release names as its subject: id, title and chip text.
+
+    The chip says "Open question" for a clarification and "Known issue" for any
+    other kind, as the labels on a verdict do.
+    """
+    found: dict[str, list[tuple[str, str, str]]] = {}
     for issue in release_issues(version).issues:
+        chip = "Open question" if issue.is_clarification else "Known issue"
         for item in issue.subject_rules:
             if item.module.upper() == module.upper():
-                found.setdefault(item.rule_id, []).append((issue.id, issue.title))
+                found.setdefault(item.rule_id, []).append((issue.id, issue.title, chip))
     return found

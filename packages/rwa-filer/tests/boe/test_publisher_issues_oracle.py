@@ -14,7 +14,9 @@ should not, or never runs it). The claim is only as good as its evidence, so:
 - the engine counts every rule exactly as Arelle did, on every example;
 - the claim holds in ARELLE's counts: every subject rule of an issue that fails
   correct returns is unsatisfied at least once, one that passes wrong returns
-  is satisfied and never unsatisfied, one that never runs is never evaluated.
+  is satisfied and never unsatisfied, one that never runs is never evaluated;
+  and every outcome an example states - a clarification's included - is the
+  outcome Arelle measured.
   A release whose Bank fixes the rule turns this red — the issue must then be
   closed (``fixed_in``), not carried silently;
 - the example is adequate (``.claude/LESSONS.md`` C11): beside the break, some
@@ -46,6 +48,9 @@ from rwa_filer.boe.issues import (
     EFFECT_FAILS_CORRECT_RETURNS,
     EFFECT_NEVER_RUNS,
     EFFECT_PASSES_WRONG_RETURNS,
+    OUTCOME_NOT_EVALUATED,
+    OUTCOME_SATISFIED,
+    OUTCOME_UNSATISFIED,
     ROLE_CONTROL,
     STATUS_FIXED,
     load_issues,
@@ -68,9 +73,9 @@ RELEASES = shipped_releases()
 #: example, with why. Each is xfail(strict): it fails the suite the day the
 #: engine agrees, so the entry is removed rather than left to rot.
 KNOWN_DISAGREEMENTS: dict[tuple[str, str, str], str] = {
-    ("4.1.1", "PI-07f", "boe_b0770"): (
+    ("4.1.1", "PI-10", "boe_b0770"): (
         "boe_b0770 is written 'i= sum(...)', which gives the summed rows no rounding "
-        "allowance; the engine reads sum() as isum() and allows for them (PI-07f's own "
+        "allowance; the engine reads sum() as isum() and allows for them (PI-10's own "
         "finding about this engine)"
     ),
 }
@@ -219,6 +224,41 @@ def test_arelle_shows_what_the_issue_claims_on_every_subject_rule(
         assert {rule for rule, (sat, unsat) in counts.items() if unsat or not sat} == set()
     elif issue.effect == EFFECT_NEVER_RUNS:
         assert {rule for rule, pair in counts.items() if pair != [0, 0]} == set()
+
+
+@pytest.mark.parametrize(("version", "issue_id"), EXAMPLES)
+def test_arelle_confirms_the_outcome_each_example_states(
+    version: str, issue_id: str, oracles: dict[str, Any]
+) -> None:
+    """Every issue's example says what it shows - a clarification's as much as a defect's.
+
+    A defect's subject rules are unsatisfied on its example (or satisfied / never
+    evaluated, by its effect); a clarification's example shows the outcome of the
+    reading it asks about; a control holds. Arelle's counts must agree, rule by rule.
+    """
+    # Arrange
+    issue = _issue(version, issue_id)
+    assert issue.example is not None
+    arelle = _arelle(oracles, version, issue_id)
+
+    # Act
+    measured = {
+        rule: (
+            OUTCOME_UNSATISFIED
+            if arelle.get(rule, [0, 0])[1]
+            else OUTCOME_SATISFIED
+            if arelle.get(rule, [0, 0])[0]
+            else OUTCOME_NOT_EVALUATED
+        )
+        for rule in issue.example.outcome
+    }
+
+    # Assert
+    assert issue.example.outcome, f"{issue_id}: the example states no outcome"
+    assert {entry.rule_id for entry in issue.subject_rules} <= set(issue.example.outcome), (
+        f"{issue_id}: a subject rule has no stated outcome"
+    )
+    assert measured == dict(issue.example.outcome)
 
 
 @pytest.mark.parametrize(("version", "issue_id"), EXAMPLES)

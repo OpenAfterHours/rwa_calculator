@@ -4,7 +4,7 @@
   "title": "rwa-filer publisher-issue register",
   "description": "One taxonomy release's known issues with the published validation rules (rwa_filer/boe/data/issues/<release>.json), curated by hand from evidence. Read by rwa_filer.boe.issues; rendered by rwa_filer.boe.issues_document. Format 1.",
   "type": "object",
-  "required": ["format", "release", "publisher", "documents", "checked_against", "issues"],
+  "required": ["format", "release", "publisher", "documents", "checked_against", "issues", "appendices"],
   "additionalProperties": false,
   "properties": {
     "format": {"const": 1},
@@ -24,7 +24,12 @@
         "properties": {"document": {"$ref": "#/$defs/code"}, "as_at": {"$ref": "#/$defs/date"}}
       }
     },
-    "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}}
+    "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}},
+    "appendices": {
+      "description": "What the write-up publishes beside the issues, labelling no result: a table (columns and rows) with the text that explains it.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/appendix"}
+    }
   },
   "$defs": {
     "code": {"type": "string", "minLength": 1},
@@ -103,12 +108,30 @@
     },
     "example": {
       "type": "object",
-      "required": ["description", "rules", "facts"],
+      "required": ["description", "rules", "facts", "outcome"],
       "additionalProperties": false,
       "properties": {
         "description": {"type": "string", "minLength": 1},
         "rules": {"type": "string", "minLength": 1, "description": "A pattern over rule codes: the rules the example is measured on."},
-        "facts": {"type": "array", "items": {"$ref": "#/$defs/fact"}, "minItems": 1}
+        "facts": {"type": "array", "items": {"$ref": "#/$defs/fact"}, "minItems": 1},
+        "outcome": {
+          "description": "What the example shows on each rule it states a result for; Arelle's counts are held to it.",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"enum": ["unsatisfied", "satisfied", "not_evaluated"]}
+        }
+      }
+    },
+    "appendix": {
+      "type": "object",
+      "required": ["id", "title", "text", "columns", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Z]$"},
+        "title": {"type": "string", "minLength": 1},
+        "text": {"$ref": "#/$defs/text"},
+        "columns": {"type": "array", "items": {"type": "string"}},
+        "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}}
       }
     },
     "log_entry": {
@@ -125,7 +148,7 @@
     "issue": {
       "type": "object",
       "required": [
-        "id", "title", "status", "raised", "publisher_reference", "publisher_log", "fixed_in",
+        "id", "title", "kind", "status", "raised", "publisher_reference", "publisher_log", "fixed_in",
         "effect", "causes", "rules", "requirement", "authority", "why_correct_return_fails",
         "example", "alternatives_considered", "proposed_fix", "eba_precedent", "reach", "meanwhile"
       ],
@@ -133,6 +156,10 @@
       "properties": {
         "id": {"type": "string", "pattern": "^PI-[0-9]{2}[a-z]?$"},
         "title": {"type": "string", "minLength": 1},
+        "kind": {
+          "description": "defect: a return that follows the instructions cannot pass (or the rule cannot fail, or never runs); clarification: the rule or text is unclear or inconsistent but a compliant return can pass - an open question; acknowledged: the Bank's own known-issues log records it.",
+          "enum": ["defect", "clarification", "acknowledged"]
+        },
         "status": {"enum": ["draft", "raised", "acknowledged", "fixed", "withdrawn"]},
         "raised": {
           "oneOf": [

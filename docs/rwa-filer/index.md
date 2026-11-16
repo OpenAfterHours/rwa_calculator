@@ -448,19 +448,27 @@ uvx rwa-filer@latest rulebook issues
 
 # One issue in full: the rule, the instructions quoted with their page, why a
 # correct return fails, the smallest correct return, the proposed fix
-uvx rwa-filer@latest rulebook issues PI-15a
+uvx rwa-filer@latest rulebook issues PI-05
 
 # The register as the write-up to share with the Bank (Markdown), or as JSON
 uvx rwa-filer@latest rulebook issues --format markdown > known-issues.md
 uvx rwa-filer@latest rulebook issues --format json --module PRA001
 ```
 
-**What an issue says.** Each has an id (`PI-15a`), a title, the rules it names
-(each pinned by its `rule_sha256`, so an issue never labels a changed rule that
-kept its code), the instructions and rules it rests on, quoted with the page of
-the PDF, why a correct return fails, a minimal correct return, what the Bank
-could change, EBA precedent, reach, and what a firm can do meanwhile. Its
-**status** says where it stands with the Bank:
+**What an issue says.** Each has an id (`PI-05`), a kind, a title, the rules it
+names (each pinned by its `rule_sha256`, so an issue never labels a changed rule
+that kept its code), the instructions and rules it rests on, quoted with the
+page of the PDF, why a correct return fails (or, for a question, what is open),
+a worked example, what the Bank could change, EBA precedent, reach, and what a
+firm can do meanwhile. Its **kind** says how sure the case is:
+
+| Kind | Meaning |
+|---|---|
+| `defect` | the published rule is wrong: a return that follows the instructions breaks it, passes figures it should not, or it never runs |
+| `clarification` | an open question with the published rule: the instructions can be read so that a correct return breaks it, and the Bank is asked which reading it intends. Its label says "Open question", and says the break "may be" the rule's, never that it is |
+| `acknowledged` | the Bank's own known-issues log records it; the log's entry is quoted word for word |
+
+Its **status** says where it stands with the Bank:
 
 | Status | Meaning |
 |---|---|
@@ -503,8 +511,9 @@ break from one in the return, the label says the break "may be" the issue.
 - The evidence export: each rule record's labels, and on each unsatisfied
   evaluation of a labelled break the issues whose footprint holds it (`[]` when
   none does).
-- The dashboard: a "Known issue" chip on the rules list, the overview and the
-  module reference page; a callout in the rule detail and in the cell panel.
+- The dashboard: a "Known issue" chip ("Open question" for a clarification) on
+  the rules list, the overview and the module reference page; a callout in the
+  rule detail and in the cell panel.
 - The filing manifest, which copies the report's findings and summary.
 
 There is no separate exit code: `validate`'s exit code is the verdict's. A
@@ -518,15 +527,17 @@ in Python).
 imported. The package's tests hold it to the release: every rule it names is a
 rule of that module at that fingerprint and severity, every footprint names
 cells of the module's pack, and each status agrees with its fields. Each
-issue's minimal correct return was run once through Arelle against the Bank's
-taxonomy package, and CI holds the engine to Arelle's counts and the issue to
-its claim - every rule at issue unsatisfied on it - so a release in which the
-Bank fixes a rule fails until the issue is closed. In the repository,
+issue's worked example was run once through Arelle against the Bank's taxonomy
+package, and CI holds the engine to Arelle's counts and the issue to its claim -
+a defect's rules at issue unsatisfied on it, a clarification's the outcome it
+states - so a release in which the Bank fixes a rule fails until the issue is
+closed. In the repository,
 `tests/contracts/test_publisher_issue_quotes.py` checks every quote is on its
 page of the PDF. The write-up is generated as
 [`publisher-issues.md`](publisher-issues.md) by
-`scripts/generate_publisher_issues.py`; it stays out of the site navigation
-until it is signed off.
+`scripts/generate_publisher_issues.py`, grouped as defects, clarification
+questions and issues the Bank has already acknowledged; it stays out of the site
+navigation until it is signed off.
 
 ## The validation report and the evidence export
 
@@ -1054,7 +1065,7 @@ uvx rwa-filer@latest rulebook deny-list --module PRA001 --on 2027-03-31
 # The known issues with the published rules: every one, one in full, or the
 # register as the write-up to share
 uvx rwa-filer@latest rulebook issues
-uvx rwa-filer@latest rulebook issues PI-15a
+uvx rwa-filer@latest rulebook issues PI-05
 uvx rwa-filer@latest rulebook issues --format markdown
 
 # Rebuild a release's deny list from the Bank's workbook, joined to the

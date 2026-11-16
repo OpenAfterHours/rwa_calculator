@@ -38,8 +38,12 @@ import jsonschema
 import pytest
 
 from rwa_filer.boe.issues import (
+    ATTRIBUTION_POSSIBLE,
     ISSUES_DIRECTORY,
     ISSUES_PACKAGE,
+    KIND_ACKNOWLEDGED,
+    KIND_CLARIFICATION,
+    KINDS,
     LABELLING_EFFECTS,
     LOG_ACKNOWLEDGES,
     ROLE_SUBJECT,
@@ -200,6 +204,48 @@ def test_every_labelling_issue_has_a_subject_and_a_minimal_example(version: str)
 
     # Assert
     assert short == []
+
+
+@pytest.mark.parametrize("version", RELEASES)
+def test_each_kind_agrees_with_what_the_issue_records(version: str) -> None:
+    """A clarification only ever 'may be' the break; an acknowledged issue quotes the Bank's log."""
+    # Arrange
+    register = load_issues(version)
+    wrong: list[str] = []
+
+    # Act
+    for issue in register.issues:
+        if issue.kind == KIND_CLARIFICATION:
+            wrong += [
+                f"{issue.id} {entry.rule_id}: a clarification's subject is certain"
+                for entry in issue.subject_rules
+                if entry.attribution != ATTRIBUTION_POSSIBLE
+            ]
+        if issue.kind == KIND_ACKNOWLEDGED and not any(
+            entry.relation == LOG_ACKNOWLEDGES and entry.statement for entry in issue.publisher_log
+        ):
+            wrong.append(f"{issue.id}: acknowledged, but no log entry of the Bank's records it")
+
+    # Assert
+    assert wrong == []
+    assert {issue.kind for issue in register.issues} <= set(KINDS)
+
+
+@pytest.mark.parametrize("version", RELEASES)
+def test_every_appendix_row_has_a_cell_per_column(version: str) -> None:
+    # Arrange
+    register = load_issues(version)
+
+    # Act
+    ragged = [
+        f"appendix {appendix.id} row {index}"
+        for appendix in register.appendices
+        for index, row in enumerate(appendix.rows)
+        if len(row) != len(appendix.columns)
+    ]
+
+    # Assert
+    assert ragged == []
 
 
 @pytest.mark.parametrize("version", RELEASES)

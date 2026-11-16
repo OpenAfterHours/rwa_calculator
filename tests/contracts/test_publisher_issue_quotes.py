@@ -11,7 +11,9 @@ wrong page, is the error a reader at the Bank is best placed to catch. This
 reads each quoted PDF with pymupdf (``.claude/LESSONS.md`` A2) and requires
 every quote, whitespace- and typography-normalised, on its ``pdf_page`` — or,
 for one that runs over a page break, starting on ``pdf_page`` and ending on
-``pdf_page_end``. A quote with an ellipsis must have its parts in order.
+``pdf_page_end``. A quote with an ellipsis must have its parts in order. Every
+entry of the Bank's known-issues log an issue quotes is checked against the
+log itself (its 'Issue description', 'Solution' and publication date).
 
 The PDFs are git-ignored (``docs/assets``), so each document's quotes skip when
 its PDF is absent: this is a local and pre-share gate, not a CI one.
@@ -107,9 +109,75 @@ def test_each_quote_is_on_the_page_it_names(  # noqa: PLR0913 - one parameter pe
     assert placed, f"{version} {issue_id}: not on page {page} of {file}: {quote[:120]!r}"
 
 
+def _log_entries() -> list[tuple[str, str, int, str, str]]:
+    found = []
+    for version in shipped_releases():
+        for issue in load_issues(version).issues:
+            for entry in issue.publisher_log:
+                found.append(
+                    (version, issue.id, entry.entry, entry.published.isoformat(), entry.statement)
+                )
+    return found
+
+
+LOG_ENTRIES = _log_entries()
+KNOWN_ISSUES_LOG = "boe-banking-known-issues-november-2026.xlsx"
+
+
+@pytest.mark.parametrize(
+    ("version", "issue_id", "entry", "published", "statement"),
+    LOG_ENTRIES,
+    ids=[f"{issue}-log{entry}" for _v, issue, entry, _p, _s in LOG_ENTRIES],
+)
+def test_each_known_issues_log_entry_is_quoted_verbatim(  # noqa: PLR0913 - one per entry field
+    version: str, issue_id: str, entry: int, published: str, statement: str
+) -> None:
+    """What the write-up says the Bank's log says is what the log says (whitespace normalised).
+
+    An acknowledged issue rests on the Bank's own words, so the 'Issue description'
+    and 'Solution' it quotes, and the publication date, are checked against the
+    log's cells - the workbook is git-ignored, so this skips without it.
+    """
+    # Arrange
+    path = ASSETS / KNOWN_ISSUES_LOG
+    if not path.is_file():
+        pytest.skip(f"{KNOWN_ISSUES_LOG} is not in docs/assets (git-ignored)")
+    log = _known_issues(path)
+
+    # Act
+    row = log.get(entry)
+
+    # Assert
+    assert row is not None, f"{version} {issue_id}: the log has no entry {entry}"
+    expected = f"Issue description: {row['Issue description']}\n\nSolution: {row['Solution']}"
+    assert _normalised(statement) == _normalised(expected)
+    day, month, year = row["Publication date of the issue"].split(".")
+    assert published == f"{year}-{month}-{day}"
+
+
 def test_quotes_to_check_were_found() -> None:
     """The parametrisation is not empty: a register with no quote would check nothing."""
     assert QUOTES
+
+
+@cache
+def _known_issues(path: Path) -> dict[int, dict[str, str]]:
+    """The log's 'Known Issues' sheet: each entry's cells, by number."""
+    openpyxl = pytest.importorskip("openpyxl")
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    header: tuple[object, ...] | None = None
+    found: dict[int, dict[str, str]] = {}
+    for row in workbook["Known Issues"].iter_rows(values_only=True):
+        if row and row[0] == "#":
+            header = row
+            continue
+        if header is not None and isinstance(row[0], int | float):
+            found[int(row[0])] = {
+                str(name): "" if value is None else str(value)
+                for name, value in zip(header, row, strict=False)
+                if name is not None
+            }
+    return found
 
 
 @cache

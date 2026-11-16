@@ -23,7 +23,10 @@ Key responsibilities:
   inside or outside the issue's footprint, so a break the issue does not
   explain is never excused by it: "4 of 14 are where the published rule is
   known to be wrong; 10 are not, and are not explained by it".
-- Word it one way for every surface (``IssueNote.sentence``).
+- Word it one way for every surface (``IssueNote.sentence``), by the issue's
+  kind: a defect is a "known issue with the published rule", a clarification
+  an "open question with the published rule" whose breaks only "may be" it,
+  and an acknowledged issue says where the Bank's own log records it.
 
 References:
 - rwa_filer.boe.issues — the register, its effects and footprints
@@ -48,6 +51,7 @@ from rwa_filer.boe.issues import (
     EFFECT_FAILS_CORRECT_RETURNS,
     EFFECT_NEVER_RUNS,
     EFFECT_PASSES_WRONG_RETURNS,
+    KIND_CLARIFICATION,
 )
 
 if TYPE_CHECKING:
@@ -66,6 +70,10 @@ NEVER_RUNS_REASONS: Final = (REASON_CLOSED_BY_FORMULA, REASON_NO_DATA)
 #: Where a reader finds the whole issue.
 _COMMAND: Final = "rwa-filer rulebook issues"
 
+#: How a label names the issue, by kind: an open question is not a defect.
+KNOWN_ISSUE: Final = "Known issue with the published rule"
+OPEN_QUESTION: Final = "Open question with the published rule"
+
 
 # =============================================================================
 # Public entry point
@@ -78,8 +86,9 @@ class IssueNote:
 
     Attributes:
         rule_id: The rule.
-        issue_id: The issue, e.g. ``PI-15a``.
+        issue_id: The issue, e.g. ``PI-22``.
         title: What is wrong, in one line.
+        kind: ``defect``, ``clarification`` or ``acknowledged`` (``boe.issues.KINDS``).
         status: Where the issue stands with the Bank (``boe.issues.STATUSES``).
         status_text: The same, in words.
         effect: What the issue does to a result (``boe.issues.EFFECTS``).
@@ -95,6 +104,7 @@ class IssueNote:
     rule_id: str
     issue_id: str
     title: str
+    kind: str
     status: str
     status_text: str
     effect: str
@@ -104,6 +114,11 @@ class IssueNote:
     outside: int | None
     fixed_in: str | None
     sentence: str
+
+    @property
+    def heading(self) -> str:
+        """What the label calls the issue: a known issue, or an open question."""
+        return OPEN_QUESTION if self.kind == KIND_CLARIFICATION else KNOWN_ISSUE
 
     @property
     def explains_a_break(self) -> bool:
@@ -233,6 +248,7 @@ def note_record(note: IssueNote) -> dict[str, Any]:
     return {
         "issue": note.issue_id,
         "title": note.title,
+        "kind": note.kind,
         "status": note.status,
         "status_text": note.status_text,
         "effect": note.effect,
@@ -298,6 +314,7 @@ def _note(
         rule_id=result.rule_id,
         issue_id=issue.id,
         title=issue.title,
+        kind=issue.kind,
         status=issue.status,
         status_text=issue.status_text,
         effect=issue.effect,
@@ -317,7 +334,8 @@ def _sentence(
     inside: int | None,
     outside: int | None,
 ) -> str:
-    lead = f"Known issue with the published rule ({issue.id}, {issue.status_text}): {issue.title}."
+    heading = OPEN_QUESTION if issue.is_clarification else KNOWN_ISSUE
+    lead = f"{heading} ({issue.id}, {issue.status_text}): {issue.title}."
     see = f"See `{_COMMAND} {issue.id}`."
     if issue.effect == EFFECT_PASSES_WRONG_RETURNS:
         return f"{lead} This pass is no evidence that the return is right on what the rule checks. {see}"
@@ -335,10 +353,11 @@ def _sentence(
             "breaks are not explained by it."
         )
     elif entry.attribution == ATTRIBUTION_POSSIBLE:
+        where = "is open to question" if issue.is_clarification else "is known to be wrong"
         counts = (
-            f"{inside} of {total} unsatisfied evaluation(s) may be where the published rule is "
-            "known to be wrong, or may be the return's own - the issue cannot tell them apart, "
-            "so check them" + (f"; {outside} are not explained by it." if outside else ".")
+            f"{inside} of {total} unsatisfied evaluation(s) may be where the published rule "
+            f"{where}, or may be the return's own - the issue cannot tell them apart, so check "
+            "them" + (f"; {outside} are not explained by it." if outside else ".")
         )
     elif outside == 0:
         counts = (

@@ -125,10 +125,11 @@
     "issue_note": {
       "description": "Since 2.1: a known issue with the published rule, labelling this result (rwa_filer.validate.issue_labels). breaks_inside / breaks_outside are null on a label that is not about a break.",
       "type": "object",
-      "required": ["issue", "title", "status", "status_text", "effect", "attribution", "unsatisfied", "breaks_inside", "breaks_outside", "fixed_in", "sentence"],
+      "required": ["issue", "title", "kind", "status", "status_text", "effect", "attribution", "unsatisfied", "breaks_inside", "breaks_outside", "fixed_in", "sentence"],
       "properties": {
         "issue": { "type": "string", "pattern": "^PI-[0-9]{2}[a-z]?$" },
         "title": { "type": "string" },
+        "kind": { "enum": ["defect", "clarification", "acknowledged"] },
         "status": { "enum": ["draft", "raised", "acknowledged", "fixed", "withdrawn"] },
         "status_text": { "type": "string" },
         "effect": { "enum": ["fails_correct_returns", "passes_wrong_returns", "never_runs"] },

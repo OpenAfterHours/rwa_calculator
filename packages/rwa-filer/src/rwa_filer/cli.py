@@ -1153,7 +1153,7 @@ def _add_issues_command(actions: argparse._SubParsersAction[argparse.ArgumentPar
         help="the known issues with the published rules: list them, show one, or render the "
         "register as Markdown to share",
     )
-    issues.add_argument("issue", nargs="?", metavar="ISSUE", help="one issue, e.g. PI-15a")
+    issues.add_argument("issue", nargs="?", metavar="ISSUE", help="one issue, e.g. PI-05")
     issues.add_argument("--taxonomy", metavar="V", help="one release (default: every shipped one)")
     issues.add_argument("--module", metavar="CODE", help="only issues about this module's rules")
     issues.add_argument(

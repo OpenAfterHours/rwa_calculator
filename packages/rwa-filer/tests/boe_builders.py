@@ -86,6 +86,7 @@ def issue_register(
     sha: str | None = None,
     status: str = "draft",
     attribution: str = "certain",
+    kind: str = "defect",
 ) -> IssueRegister:
     """One issue, PI-01, naming ``target`` as its subject for the synthetic module."""
     return issues_from(
@@ -99,6 +100,7 @@ def issue_register(
                 {
                     "id": "PI-01",
                     "title": "The total is not the sum of its parts",
+                    "kind": kind,
                     "status": status,
                     "raised": None,
                     "publisher_reference": None,

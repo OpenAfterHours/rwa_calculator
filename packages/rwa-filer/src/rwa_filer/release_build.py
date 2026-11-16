@@ -621,6 +621,7 @@ def _start_issue_register(version: str, root: Path, listed: tuple[str, ...]) -> 
         "documents": {},
         "checked_against": [],
         "issues": [],
+        "appendices": [],
     }
     _write_text(path, json.dumps(empty, indent=1) + "\n")
     ordered = sorted(listed, key=version_key)

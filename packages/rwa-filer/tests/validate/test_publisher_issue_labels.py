@@ -59,6 +59,7 @@ from rwa_filer.boe.issues import (
     EFFECT_PASSES_WRONG_RETURNS,
     STATUS_WITHDRAWN,
     IssueRegister,
+    issues_from,
 )
 from rwa_filer.evidence import collect_evidence, read_evidence, write_evidence
 from rwa_filer.model import DECIMALS_EXACT
@@ -293,6 +294,52 @@ def test_a_possible_attribution_says_may_be(pack: TaxonomyPack) -> None:
     assert validation.report is not None
     (note,) = validation.report.notes_for("tst_0001")
     assert "may be" in note.sentence
+
+
+def test_a_clarification_is_worded_as_an_open_question_that_may_explain_the_break(
+    pack: TaxonomyPack,
+) -> None:
+    # Arrange
+    register = issue_register(FOOTING, kind="clarification", attribution="possible")
+
+    # Act
+    validation = validate_return(
+        build_return(BROKEN_T01), release=_release(pack, register), accuracy=EXACT
+    )
+
+    # Assert
+    assert validation.report is not None
+    (note,) = validation.report.notes_for("tst_0001")
+    assert note.kind == "clarification"
+    assert note.sentence.startswith("Open question with the published rule (PI-01")
+    assert "may be where the published rule is open to question" in note.sentence
+    assert "known to be wrong" not in note.sentence
+    assert note.heading == "Open question with the published rule"
+
+
+def test_an_acknowledged_issue_says_where_the_banks_log_records_it(pack: TaxonomyPack) -> None:
+    # Arrange
+    register = issue_register(FOOTING, kind="acknowledged", status="acknowledged")
+    payload = register.to_payload()
+    payload["issues"][0]["publisher_reference"] = "known issue 22 (published 2 October 2026)"
+    payload["issues"][0]["publisher_log"] = [
+        {"entry": 22, "published": "2026-10-02", "relation": "acknowledges", "statement": "x"}
+    ]
+    register = issues_from(payload, file="1.0.0.json")
+
+    # Act
+    validation = validate_return(
+        build_return(BROKEN_T01), release=_release(pack, register), accuracy=EXACT
+    )
+
+    # Assert
+    assert validation.report is not None
+    (note,) = validation.report.notes_for("tst_0001")
+    assert (note.kind, note.status) == ("acknowledged", "acknowledged")
+    assert note.sentence.startswith(
+        "Known issue with the published rule (PI-01, acknowledged by the Bank of England: "
+        "known issue 22 (published 2 October 2026))"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,14 @@ Key responsibilities:
   inside the footprint when any cell it read matches any selector; an issue
   with no footprint covers the whole rule.
 - Say each status in words one way, for every surface that labels a rule.
+- Say what KIND of issue each is, which is how the write-up groups it and how a
+  label words it: a ``defect`` (a return that follows the instructions cannot
+  pass, or the rule cannot fail, or never runs), a ``clarification`` (the rule
+  or the text is unclear or inconsistent, but a compliant return can pass: an
+  open question for the Bank, so a break inside its footprint only "may be"
+  the issue), or ``acknowledged`` (the Bank's own known-issues log records it).
+- Carry the register's appendices: the material the write-up publishes beside
+  the issues without labelling any result with it.
 
 What an issue's EFFECT means, and so which results it labels:
 - ``fails_correct_returns``: a return that follows the instructions breaks
@@ -78,6 +86,13 @@ ISSUES_SUFFIX: Final = ".json"
 
 #: An issue's id: stable across releases, never reused.
 ISSUE_ID_PATTERN: Final = re.compile(r"^PI-[0-9]{2}[a-z]?$")
+
+#: What kind of issue it is (see the module docstring): how the write-up
+#: groups it, and how a label words it.
+KIND_DEFECT: Final = "defect"
+KIND_CLARIFICATION: Final = "clarification"
+KIND_ACKNOWLEDGED: Final = "acknowledged"
+KINDS: Final = (KIND_DEFECT, KIND_CLARIFICATION, KIND_ACKNOWLEDGED)
 
 #: Where an issue stands with the Bank.
 STATUS_DRAFT: Final = "draft"
@@ -143,6 +158,13 @@ ROLES: Final = (ROLE_SUBJECT, ROLE_CONTRADICTS, ROLE_CONTROL, ROLE_RELATED)
 ATTRIBUTION_CERTAIN: Final = "certain"
 ATTRIBUTION_POSSIBLE: Final = "possible"
 ATTRIBUTIONS: Final = (ATTRIBUTION_CERTAIN, ATTRIBUTION_POSSIBLE)
+
+#: What an issue's example shows on a rule it is measured on: the rule is
+#: broken there, holds there, or is not evaluated at all.
+OUTCOME_UNSATISFIED: Final = "unsatisfied"
+OUTCOME_SATISFIED: Final = "satisfied"
+OUTCOME_NOT_EVALUATED: Final = "not_evaluated"
+OUTCOMES: Final = (OUTCOME_UNSATISFIED, OUTCOME_SATISFIED, OUTCOME_NOT_EVALUATED)
 
 #: How a publisher-log entry bears on an issue.
 LOG_ACKNOWLEDGES: Final = "acknowledges"
@@ -330,17 +352,22 @@ class IssueExample:
         rules: A pattern over rule codes: the rules the example is measured on.
         facts: One row per fact: ``table, sheet, open_key, row, column, value,
             text_value, decimals`` — the canonical return's columns.
+        outcome: What the example shows, by rule: ``unsatisfied`` (broken at
+            least once), ``satisfied`` (evaluated and never broken) or
+            ``not_evaluated``. The stated result Arelle's counts are held to.
     """
 
     description: str
     rules: str
     facts: tuple[tuple[Any, ...], ...]
+    outcome: Mapping[str, str] = field(default_factory=dict)
 
     def record(self) -> dict[str, Any]:
         return {
             "description": self.description,
             "rules": self.rules,
             "facts": [list(fact) for fact in self.facts],
+            "outcome": dict(self.outcome),
         }
 
 
@@ -395,6 +422,34 @@ class Document:
 
 
 @dataclass(frozen=True)
+class Appendix:
+    """Material the write-up publishes beside the issues, labelling no result.
+
+    Attributes:
+        id: Its letter, e.g. ``A``.
+        title: Its heading.
+        text: What it is and how to read it (paragraphs).
+        columns: The table's column headings; empty for an appendix of text.
+        rows: The table's rows, one cell per column.
+    """
+
+    id: str
+    title: str
+    text: str = ""
+    columns: tuple[str, ...] = ()
+    rows: tuple[tuple[str, ...], ...] = ()
+
+    def record(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "text": self.text,
+            "columns": list(self.columns),
+            "rows": [list(row) for row in self.rows],
+        }
+
+
+@dataclass(frozen=True)
 class CheckedAgainst:
     """A publication of the Bank's every issue of a register was checked against.
 
@@ -415,6 +470,7 @@ class PublisherIssue:
     id: str
     title: str
     status: str
+    kind: str
     effect: str
     causes: tuple[str, ...]
     rules: tuple[IssueRule, ...]
@@ -444,6 +500,11 @@ class PublisherIssue:
         return self.status in OPEN_STATUSES
 
     @property
+    def is_clarification(self) -> bool:
+        """Whether the issue is an open question for the Bank, not a defect it asserts."""
+        return self.kind == KIND_CLARIFICATION
+
+    @property
     def labels(self) -> bool:
         """Whether the issue puts a label on a rule's result at all."""
         return self.effect in LABELLING_EFFECTS and self.status != STATUS_WITHDRAWN
@@ -455,7 +516,7 @@ class PublisherIssue:
         if self.status == STATUS_RAISED and self.raised is not None:
             return f"raised with {bank} on {long_date(self.raised.date)}"
         if self.status == STATUS_ACKNOWLEDGED:
-            reference = f" ({self.publisher_reference})" if self.publisher_reference else ""
+            reference = f": {self.publisher_reference}" if self.publisher_reference else ""
             return f"acknowledged by {bank}{reference}"
         if self.status == STATUS_FIXED:
             return (
@@ -483,6 +544,7 @@ class PublisherIssue:
         return {
             "id": self.id,
             "title": self.title,
+            "kind": self.kind,
             "status": self.status,
             "raised": self.raised.record() if self.raised is not None else None,
             "publisher_reference": self.publisher_reference,
@@ -513,6 +575,7 @@ class IssueRegister:
         documents: The documents the issues quote, by key.
         checked_against: The Bank's publications every issue was checked against.
         publisher: Who publishes the rules.
+        appendices: What the write-up publishes beside the issues.
         file: The packaged file it was loaded from; ``None`` for one built in
             memory or for an empty register.
         content_sha256: SHA-256 of the file's content in canonical JSON.
@@ -523,6 +586,7 @@ class IssueRegister:
     documents: Mapping[str, Document] = field(default_factory=dict)
     checked_against: tuple[CheckedAgainst, ...] = ()
     publisher: str = "Bank of England"
+    appendices: tuple[Appendix, ...] = ()
     file: str | None = None
     content_sha256: str = ""
 
@@ -556,6 +620,7 @@ class IssueRegister:
             "documents": {key: item.record() for key, item in self.documents.items()},
             "checked_against": [item.record() for item in self.checked_against],
             "issues": [issue.record() for issue in self.issues],
+            "appendices": [item.record() for item in self.appendices],
         }
 
 
@@ -597,9 +662,11 @@ def issues_from(payload: Mapping[str, Any], *, file: str | None = None) -> Issue
     """Build an ``IssueRegister`` from a register file's content.
 
     Raises:
-        ValueError: the format is not one this version reads; an id, status,
-            effect, cause, role or attribution is not one it knows; two issues
-            share an id; one issue names a rule twice; a selector has no table.
+        ValueError: the format is not one this version reads; an id, kind,
+            status, effect, cause, role, attribution or example outcome is not
+            one it knows; an issue's kind and status disagree; a clarification
+            is certain of a break; two issues share an id; one issue names a
+            rule twice; a selector has no table.
     """
     if payload.get("format") != ISSUES_FORMAT:
         raise ValueError(
@@ -633,6 +700,16 @@ def issues_from(payload: Mapping[str, Any], *, file: str | None = None) -> Issue
             for item in payload.get("checked_against", ())
         ),
         publisher=publisher,
+        appendices=tuple(
+            Appendix(
+                id=str(item["id"]),
+                title=str(item["title"]),
+                text=str(item.get("text", "")),
+                columns=tuple(str(column) for column in item.get("columns", ())),
+                rows=tuple(tuple(str(cell) for cell in row) for row in item.get("rows", ())),
+            )
+            for item in payload.get("appendices", ())
+        ),
         file=file,
         content_sha256=canonical_sha256(payload),
     )
@@ -693,10 +770,14 @@ def _issue(item: Mapping[str, Any], publisher: str) -> PublisherIssue:
         raise ValueError(f"{issue_id} names {', '.join(twice)} more than once")
     raised = item.get("raised")
     example = item.get("example")
+    status = _one_of(item["status"], STATUSES, "status", issue_id)
+    kind = _one_of(item.get("kind"), KINDS, "kind", issue_id)
+    _check_kind(issue_id, kind, status, rules)
     return PublisherIssue(
         id=issue_id,
         title=str(item["title"]),
-        status=_one_of(item["status"], STATUSES, "status", issue_id),
+        status=status,
+        kind=kind,
         effect=_one_of(item["effect"], EFFECTS, "effect", issue_id),
         causes=tuple(_one_of(cause, CAUSES, "cause", issue_id) for cause in item["causes"]),
         rules=rules,
@@ -717,6 +798,10 @@ def _issue(item: Mapping[str, Any], publisher: str) -> PublisherIssue:
                 description=str(example.get("description", "")),
                 rules=str(example.get("rules", "")),
                 facts=tuple(tuple(fact) for fact in example.get("facts", ())),
+                outcome={
+                    str(rule_id): _one_of(outcome, OUTCOMES, "example outcome", issue_id)
+                    for rule_id, outcome in example.get("outcome", {}).items()
+                },
             )
             if example
             else None
@@ -744,6 +829,29 @@ def _issue(item: Mapping[str, Any], publisher: str) -> PublisherIssue:
         fixed_in=item.get("fixed_in"),
         publisher=publisher,
     )
+
+
+def _check_kind(issue_id: str, kind: str, status: str, rules: tuple[IssueRule, ...]) -> None:
+    """An issue's kind agrees with its status and with how sure its labels are.
+
+    The Bank's own log is what makes an issue ``acknowledged``, so the two go
+    together while the issue is open; a clarification is an open question, so
+    a break inside its footprint can only ever be "possibly" the issue.
+    """
+    if (status == STATUS_ACKNOWLEDGED) != (kind == KIND_ACKNOWLEDGED) and status in OPEN_STATUSES:
+        raise ValueError(
+            f"{issue_id}: kind {kind!r} and status {status!r} disagree - an open issue is "
+            "acknowledged if and only if the Bank's log records it"
+        )
+    certain = [
+        entry.rule_id
+        for entry in rules
+        if entry.is_subject and entry.attribution == ATTRIBUTION_CERTAIN
+    ]
+    if kind == KIND_CLARIFICATION and certain:
+        raise ValueError(
+            f"{issue_id}: a clarification cannot be certain of a break on {', '.join(certain)}"
+        )
 
 
 def _rule(entry: Mapping[str, Any], issue_id: str) -> IssueRule:

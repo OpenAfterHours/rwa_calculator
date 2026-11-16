@@ -24,6 +24,10 @@ Cell semantics (recorded decisions):
   PS1/26 Annex II §3.3.10.2 rows: "0260 TOTAL — Institutions shall report the sum
   of the values reported in rows 0180-0250 for each of columns 0060-0150";
   boe_b0779 states the same identity.
+- RWEA (cols 0060 / 0150, and B31 0140 = 0060 - 0150) is the own-approach amount
+  (``kernel.own_rwea``): "the total risk-weighted exposure amount ... in
+  accordance with the approach applied" (PS1/26 Annex II p.131), so a binding
+  output floor's add-on, which the engine spreads over ``rwa_final``, stays out.
 - Cols 0030/0040/0050 are DPM FRACTIONS, not 0-100 percentages — see
   ``_pct_ppu`` for the instruction text and the published bounds.
 - Col 0040 ("% subject to a roll-out plan", CRR Art. 148) carves the roll-out
@@ -79,7 +83,7 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_07_row_unions,
     get_c08_07_rows,
 )
-from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.kernel import own_rwea, pick
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -187,7 +191,7 @@ def _c08_07_prepared(
                 "c0807_rollout"
             )
         )
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
     row_defs = get_c08_07_rows(framework)
     spec, null_rows = _c08_07_spec(row_defs, ec_col, ead_col, rwa_col, framework)
     return spec, data, null_rows

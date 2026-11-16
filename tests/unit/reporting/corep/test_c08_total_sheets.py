@@ -24,6 +24,7 @@ import pytest
 
 from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+from rwa_calc.reporting.corep.irb_sheets import RETAIL_CLASSES
 from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
 from rwa_calc.reporting.lineage import summed_sheet_reason
 from rwa_calc.reporting.tieouts import check_cross_template_consistency
@@ -209,7 +210,7 @@ def test_the_lgd_of_a_total_is_an_exposure_weighted_average_not_a_sum(
 def test_the_pd_of_a_grade_total_is_an_exposure_weighted_average(
     bundle: COREPTemplateBundle, total_code: str, codes: tuple[str, ...]
 ) -> None:
-    """OF 08.02 column 0010 (OF 08.01 has no PD column in this layout). Every
+    """OF 08.02 column 0010 (OF 08.01's is ``test_c08_01_pd_column.py``). Every
     leg of the book sits in the one "0.75% - 2.50%" band."""
     # Arrange
     legs = _graded(_covered(codes))
@@ -229,9 +230,12 @@ def test_the_maturity_of_a_total_is_an_exposure_weighted_average(
     """Column 0250 is LISTED by ``boe_b0748`` as a sum over the AIRB sheets
     (``boe_b0749`` does not list it). Annex II defines it as an exposure-weighted
     average ("The exposure value (column 0110) shall be used for the calculation
-    of the exposure-weighted averages"), and a sum of averages is not one."""
+    of the exposure-weighted averages"), and a sum of averages is not one. The
+    retail sheets report no maturity ("This column shall therefore not be filled
+    in for the exposure class 'retail'", PS1/26 Annex II p.111), so the A-IRB
+    Total averages the non-retail legs (``test_c08_retail_maturity.py``)."""
     # Arrange
-    legs = _covered(codes)
+    legs = tuple(leg for leg in _covered(codes) if leg.exposure_class not in RETAIL_CLASSES)
 
     # Act
     total = bundle.c08_01[sheet_key(total_code)]

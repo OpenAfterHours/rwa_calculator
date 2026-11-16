@@ -1,5 +1,5 @@
 """
-The IRB class-and-approach breakdown — one definition for OF 02.00 and OF 08.
+The IRB class-and-approach breakdown — one definition for OF 02.00, OF 08 and OF 09.02.
 
 Pipeline position:
     sealed aggregator-exit ledger
@@ -7,6 +7,7 @@ Pipeline position:
         -> corep/c02.py (the OF 02.00 IRB class rows)
         -> corep/c08_sheets.py -> corep/c08.py (the OF 08.01 / 08.02 / 08.03 /
            08.05 sheets)
+        -> corep/c08_sheets.py -> corep/c09.py (the OF 09.02 sub-class rows)
         -> filing/sheet_maps.py (published sheet code -> our sheet key)
 
 Key responsibilities:
@@ -16,10 +17,11 @@ Key responsibilities:
   population it takes, the Total sheet it adds into and the OF 02.00 row whose
   figure it is.
 - Compile that table into the per-leg sheet key (``sheet_key_expr``), which
-  ``c02.py`` groups its IRB class rows by and ``c08_sheets.py`` keys the OF 08
-  sheets by. One expression, so the two templates cannot disagree.
-- Hold the leg classification both read (SME, financial or large corporate,
-  commercial property, and the Art. 151(4) class revert).
+  ``c02.py`` groups its IRB class rows by, ``c08_sheets.py`` keys the OF 08
+  sheets by and ``c09.py`` keys the OF 09.02 corporate sub-class rows by. One
+  expression, so the templates cannot disagree.
+- Hold the leg classification all three read (SME, financial or large
+  corporate, commercial property, and the Art. 151(4) class revert).
 
 Why one definition. The taxonomy makes each OF 02.00 IRB class row ONE data
 point with the total of an OF 08.01 sheet — row 0271 column 0010 is sheet 0006
@@ -28,7 +30,13 @@ column 0020 is column 0276 likewise. A leg counted in one row and reported on
 another sheet is one data point with two values, which a return cannot carry.
 Until 2026-11-13 the OF 08 sheets were keyed by exposure class alone — coarser
 than the published axis, so no figure on them could be filed at all — and
-``c02.py`` held this classification privately.
+``c02.py`` held this classification privately. OF 09.02 is the third reader:
+the Bank ties each of its Basel 3.1 sub-class rows, all countries, to the total
+of the OF 08.01 sheets of that sub-class (``boe_b1034``, ``boe_b1053``,
+``boe_b0297`` and their siblings), and until 2026-11-16 it split them on carriers
+of its own (the correlation-multiplier input for "financial or large", the class
+name for SME), so one leg could sit in an OF 09.02 row and on an OF 08 sheet of
+different sub-classes.
 
 Recorded decisions:
 
@@ -151,7 +159,10 @@ class IrbSheet:
         slot: The OF 02.00 figure that is the legs of ``limbs[0].approach`` on
             this sheet. Its Basel 3.1 row is one data point with the sheet's
             total — except on the slotting sheet, whose total also counts the
-            slotting legs OF 02.00 reports in rows of their own.
+            slotting legs OF 02.00 reports in rows of their own
+            (``total_is_the_slot``). Where it is that data point, OF 02.00
+            reports the row only when the sheet has legs, as OF 08 reports the
+            sheet only then.
     """
 
     code: str
@@ -166,6 +177,18 @@ class IrbSheet:
     def approach(self) -> str:
         """The approach of the sheet as published (F-IRB or A-IRB)."""
         return self.limbs[0].approach
+
+    @property
+    def total_is_the_slot(self) -> bool:
+        """Whether the sheet's total IS the OF 02.00 row of ``slot``.
+
+        True when every limb is the sheet's own approach, so the legs the sheet
+        totals are exactly the legs the row counts — the taxonomy then gives the
+        two cells one data point. False on the slotting sheet, whose total also
+        counts slotting. ``tests/contracts/test_of08_published_sheets.py`` holds
+        this to the taxonomy pack.
+        """
+        return all(limb.approach == self.approach for limb in self.limbs)
 
 
 #: The fifteen class-and-approach sheets, in published code order. Codes and

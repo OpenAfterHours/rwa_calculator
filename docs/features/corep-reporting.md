@@ -162,9 +162,24 @@ and the EBA validation rules with the PRA's rendering of the template for C 02.0
     `docs/plans/c07-ccr-derivatives.md`). When its floor binds on a book that also holds
     standardised exposures, its post-floor total — the figure Pillar 3 OV1 row 29 discloses
     — exceeds `max(row 0010 col 0010, col 0030)`. OF 02.00 reports the template's figures
-    and logs the difference; it does not hide it. For the same reason OF 07.00 and OF 08.01,
-    which still sum `rwa_final`, disagree with OF 02.00's class rows on a run whose floor
-    binds.
+    and logs the difference; it does not hide it.
+
+!!! note "Template RWEA is the own-approach amount; the floor is reported once"
+    Under Basel 3.1 the engine spreads a binding floor's shortfall pro rata over
+    `rwa_final` on every floor-eligible exposure and keeps the un-floored figure on
+    `rwa_pre_floor`. The templates do not report that add-on: their risk-weighted
+    exposure amounts — OF 08.01 / 08.02 cols 0251 (slotting rows), 0260, 0265, 0270 and
+    0310, OF 08.03 col 0090, C 08.04, OF 08.06 col 0080, OF 08.07 cols 0060 / 0150,
+    OF 09.01 / 09.02 and C 34 — sum the amount the exposure's own approach produces
+    (Art. 92(3)(a)), resolved by one helper, `reporting.kernel.own_rwea`:
+    `rwa_pre_floor` wherever the floor ran, else `rwa_final`, which then has no floor in
+    it. Annex II defines OF 08.01 col 0260 as col 0251 adjusted for cols 0252 – 0254
+    only, the taxonomy makes each OF 08.01 class sheet total one data point with an
+    un-floored OF 02.00 class row, and the floor's one home is OF 02.00 row 0010
+    column 0030. `tests/contracts/test_corep_rwea_carrier.py` fails any template that
+    binds `rwa_final` directly, and lists the sites not yet moved (OF 07.00 col 0220,
+    pending). Total reported RWA does not change: TREA is still
+    `max(row 0010 col 0010, col 0030)`.
 
 ### Row Structure
 
@@ -211,6 +226,23 @@ and the EBA validation rules with the PRA's rendering of the template for C 02.0
     institutions, so OF 02.00 has **no** rows for them. An exposure that nevertheless arrives
     on such an (approach, class) pair is neither dropped nor reported in a neighbouring row:
     its RWEA stays in the approach total and the shortfall of the detail rows is logged.
+
+    **An IRB class row with no exposures is left empty, not zero.** Fourteen of the IRB
+    class rows (0271, 0295–0297, 0350, 0355, 0356, 0382–0385, 0390, 0400, 0410) are, in
+    the taxonomy, the same data point as the total of an
+    [OF 08.01 class sheet](#c-0801-of-0801-cr-irb-totals) — row 0010, column 0260 for
+    column 0010 and column 0276 for column 0020. OF 08 reports no sheet for a class the
+    firm has no exposures in, so a zero in the OF 02.00 row would file a figure on a sheet
+    the return otherwise leaves out, and the Bank's per-sheet rules would run on it
+    (`boe_b1055` compared the OF 09.02 country total with that zero and failed). The Bank
+    of England XBRL Filing Manual v1.0.1, rule 2.19, treats a missing numeric fact of a
+    reported template as zero, allows inapplicable facts to be omitted and asks that
+    "uninteresting zeros" not be reported. The test is whether the class has exposures,
+    not its amount: a class whose exposures carry no RWEA still reports 0.0. Row 0290
+    (F-IRB specialised lending), the approach totals (0050, 0060, 0240, 0250, 0310, 0411),
+    the slotting-type rows, the Art. 112 class rows and every CRR C 02.00 row are still
+    reported as zero when empty — row 0290 because its sheet's total also counts slotting,
+    so it is no OF 08.01 data point.
 
 !!! info "The output-floor rows need the run's floor summary"
     `x` is read from the `OutputFloorSummary` or, without one, from the ledger's sealed
@@ -941,8 +973,9 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     leg with one definition (`rwa_calc.reporting.corep.irb_sheets`): by approach, by exposure
     class, by SME (the classifier's sub-class, or `is_sme`), by financial-or-large corporate
     (the classifier's sub-class) and, for retail real estate, by property type
-    (`commercial` / `cre` is commercial, anything else residential). Two choices carried over
-    from OF 02.00:
+    (`commercial` / `cre` is commercial, anything else residential). And OF 02.00 reports one
+    of those rows only when its sheet is reported here — a class with no exposures has
+    neither. Two choices carried over from OF 02.00:
 
     - An A-IRB financial or large corporate is reported on sheet 0011 (other general
       corporates, non-SME, AIRB). PS1/26 Art. 147A permits no A-IRB for that sub-class, and
@@ -953,6 +986,9 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
       natural person, and the engine declines a natural person's guarantee of an F-IRB
       exposure (Art. 201, P1.384). The rule stays as a safety net.
 
+    OF 09.02's sub-class rows read the same definition, because the Bank ties each of them
+    to the total of these sheets (see [OF 09.02](#c-0902-of-0902-cr-gb-2-geographical-breakdown-irb)).
+
     **Supervisory slotting** is reported on row 0080 of sheet 0010 and of Total 0002, and
     nowhere else. On those two sheets row 0080 is reported as zero when the firm has no
     slotting exposure. OF 08.02, 08.03 and 08.05 exclude slotting, so their sheet 0010 holds
@@ -962,11 +998,12 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     slotting sheets, and a firm on one approach reports one Total. Amounts and counts are the
     sum of the sheets (the Bank's rules `boe_b0748` and `boe_b0749`). An exposure-weighted
     average (PD, LGD, maturity) is the average over the exposures the Total covers that carry
-    the parameter — a slotting exposure has no maturity and does not dilute it. The OF 08.05
-    observed default rate is re-derived from the Total's own counts. `boe_b0748` also lists
-    column 0250 (maturity) as a sum; the Total reports the average, so that rule breaks on
-    column 0250 wherever two AIRB sheets report a maturity. A Total has no drill-down of its
-    own: open the same cell on a class sheet.
+    the parameter — a slotting exposure has no maturity and does not dilute it, and a retail
+    sheet reports none, so the AIRB Total's maturity is the average over its non-retail
+    legs. The OF 08.05 observed default rate is re-derived from the Total's own counts.
+    `boe_b0748` also lists column 0250 (maturity) as a sum; the Total reports the average,
+    so that rule breaks on column 0250 wherever two non-retail AIRB sheets report a
+    maturity. A Total has no drill-down of its own: open the same cell on a class sheet.
 
     **Maturity in the filed return.** The PRA001 taxonomy types the exposure-weighted
     average maturity as a whole number: OF 08.01 / OF 08.02 column 0250 in days
@@ -1065,7 +1102,7 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
 
     | Ref | Column | Group | vs CRR |
     |-----|--------|-------|--------|
-    | ~~0010~~ | ~~PD assigned to obligor grade or pool~~ | | **Removed** (PD only in OF 08.02) |
+    | 0010 | PD assigned to obligor grade or pool (%) | Internal Rating | No cell on rows 0080 / 0170 |
     | 0020 | Original exposure pre conversion factors | Exposure | |
     | 0030 | &emsp;Of which: large financial sector entities | Exposure | |
     | ==0035== | ==(-) Adjustment due to on-balance sheet netting== | ==Exposure== | ==**New**== |
@@ -1136,9 +1173,66 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     | **Added** | 0251-0254 | Post-model adjustment columns (pre-adj RWEA, post-model adj, mortgage RW floor, unrecognised exposure adj) |
     | **Added** | 0275-0276 | Output floor columns (SA-equivalent exposure value and RWEA) |
     | **Added** | 0281-0282 | Post-model adjustments to expected loss |
-    | **Removed** | 0010 | PD column — moved to OF 08.02 only |
     | **Removed** | 0220 | Double default treatment (removed in Basel 3.1) |
     | **Removed** | 0255-0257 | Supporting factor columns (SME and infrastructure factors removed) |
+    | **Kept** | 0010 | PD column — Annex I and the PRA001 taxonomy keep it on every sheet; greyed (no cell) on rows 0080 and 0170 |
+
+!!! note "Column 0010 — what the PD is, both regimes"
+    Column 0010 reports the **exposure-weighted average of the post-input-floor PD**
+    (`pd_floored`, a decimal fraction) over the row's legs that **carry a PD**, weighted
+    by the exposure value — the CRR Annex II C 08.01 definition ("the exposure weighted
+    average of the PDs assigned to the obligor grades or pools included in the
+    aggregation ... The exposure value (column 0110) shall be used"). PS1/26 Annex II
+    gives OF 08.01 column 0010 no instruction of its own (its column table starts at
+    0020) but defines OF 08.02 column 0010 and OF 09.02 column 0080 by reference to it.
+
+    - **Slotting legs are left out, not averaged in as zero.** A slotting exposure has
+      no PD, so a row made of slotting exposure alone — row 0080, and rows 0010 / 0020 /
+      0030 of a specialised-lending sheet with no F-IRB legs — reports **no** PD. Under
+      CRR such a row used to report 0.0. The Total sheets apply the same rule.
+    - **Post-floor**, because that is what OF 08.02 column 0010 and OF 09.02 column 0080
+      report and what `boe_b0356` ("PD floor for these exposures is 0.05%") checks.
+    - **Known limits.** `boe_b0356` (Warning) still fails on rows 0010 / 0020 / 0030 of
+      sheet 0010 when they hold slotting exposure only: the rule asks for a PD the
+      exposure does not have (a limit of the published rule). A defaulted obligor is
+      averaged at the PD the ledger carries, not 100% (plan P1.381) — the same figure
+      OF 08.02, 08.03 and 09.02 report.
+
+!!! info "Not every row carries every column, and not every sheet every column"
+    Two kinds of cell are left empty on purpose.
+
+    **Columns Annex II says not to fill on a sheet** (both bound to no figure on that
+    sheet, so a Total adds up or averages only what its sheets report):
+
+    - **Column 0250 (maturity) on a retail sheet**, C / OF 08.01 and 08.02, **both
+      regimes** — *"This column shall therefore not be filled in for the exposure class
+      'retail' or for exposures subject to the slotting approach"* (PS1/26 Annex II p.111;
+      CRR Annex II says the same of C 08.01). C / OF 08.03 column 0080 already did this.
+      Before 2026-11-16 retail sheets reported the legs' maturity and the AIRB Total
+      averaged it in.
+    - **Column 0254 (unrecognised exposure adjustments) on an F-IRB or slotting sheet**
+      (0002, 0006, 0010, 0012, 0022, 0024 and any F-IRB sheet off the published axis),
+      OF 08.01 and 08.02 — *"This column shall not be reported for sheets relating to the
+      FIRB approach or the slotting approach"* (p.112). These sheets used to report 0.0.
+
+    **Cells the published sheet does not have** (Basel 3.1, OF 08.01). The PRA001 taxonomy
+    has no data point for 279 of the template's row-by-column positions on any sheet, and
+    seven more depend on the sheet. Among them: column 0310 (RWEA pre credit derivatives) is
+    published on the Total row 0010 and the counterparty-credit-risk rows 0040-0060 only (and
+    on row 0017 of sheet 0010); the "of which" columns (large financial sector
+    entities, off balance sheet, defaulted) are not on the exposure-type rows; the slotting
+    row 0080 has no PD, LGD, maturity, CRM-in-LGD or output-floor columns; the
+    unrated-corporate rows 0190 / 0200 have no column 0104. The generator still computes
+    them — column 0090 is a waterfall over columns that some rows do not publish, and each
+    Total is the sum of its sheets — and then leaves them empty on every sheet, Totals
+    included. The list is held to the taxonomy sheet by sheet
+    (`corep/of08_published_cells.py`).
+
+    One family is the Bank's open issue: rows 0017 and 0020 column 0035 (on-balance-sheet
+    netting) are missing on sheet 0019 (retail, commercial immovable property, non-SME)
+    only. The Bank's known-issues log (item 25) asks firms to *"report this data in the total
+    AIRB sheet s0001 but do not report it separately until the next taxonomy update"* — so
+    that netting is in Total 0001 and not on sheet 0019. The CRR layout is unchanged.
 
 ### Row Structure
 
@@ -1181,16 +1275,48 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     | | **BREAKDOWN BY EXPOSURE TYPES** | |
     | 0020 | On balance sheet items subject to credit risk | |
     | 0030 | Off balance sheet items subject to credit risk | |
-    | ==0031-0035== | ==Breakdown of off-BS by CCF buckets== | ==**New**== |
+    | ==0031== | ==&emsp;of which: conversion factor 10%== | ==**New**== |
+    | ==0032== | ==&emsp;of which: conversion factor 20%== | ==**New**== |
+    | ==0001== | ==&emsp;of which: conversion factor 40%== | ==**New**== |
+    | ==0033== | ==&emsp;of which: conversion factor 50%== | ==**New**== |
+    | ==0034== | ==&emsp;of which: conversion factor 100%== | ==**New**== |
+    | ==0035== | ==&emsp;of which: own estimate (conversion factor or EAD)== | ==**New**== |
     | 0040 | SFT netting sets | |
     | 0050 | Derivatives & Long Settlement Transactions netting sets | |
     | 0060 | From Contractual Cross Product netting sets | |
 
-    !!! warning "Null Rows — CCR and CCF Buckets"
+    !!! info "Rows 0031, 0032, 0001, 0033, 0034, 0035 — off-balance-sheet items by conversion factor"
+        Row 0030 is broken down by the conversion factor each item is reported at, in the
+        published order — **row 0001 is the 40% bucket** and sits between 0032 and 0033
+        (PRA001 v4.1.1 table `OF08.01.01.01`). PS1/26 Annex II p.116: slotting, F-IRB, and
+        A-IRB items where *"neither conversion factors nor EADs are estimated"* go in the row of
+        their Art. 111 Table A1 factor; A-IRB items *"for which conversion factors are
+        estimated, or where EADs are estimated directly"* go in row **0035**.
+
+        - Each leg is placed by `corep/ccf_buckets.py`: row 0035 when its origin approach is
+          A-IRB and it carries an own estimate of EAD (`ead_modelled`, Art. 166D(3)) or is a
+          revolving commitment whose own estimate of conversion factor was applied
+          (`ccf_modelled`, Art. 166D(1)(a)); otherwise the Table A1 row its applied `ccf`
+          equals (rounded to four places). The own-estimate test wins: an own estimate floored
+          at half of a 40% item is 0.20 and still goes in row 0035, not the 20% row.
+        - An own estimate of exactly 100% is filed in row 0034 with identical figures: the
+          engine's eligibility flag is not sealed per leg, so "applied" is read as "below 100%".
+        - Every additive column of row 0030 is the sum of the six rows (`boe_b0741`,
+          `boe_b0742`), the column-0080 substitution inflow included (split by the bucket of
+          the leg it came from). An empty bucket is reported empty, not zero; the thirteen
+          columns the taxonomy does not publish on these rows (`0030`, `0035`, `0100`, `0120`,
+          `0125`, `0130`, `0140`, `0240`, `0265`, `0270`, `0275`, `0276`, `0310`) are left out.
+        - `boe_b0742` also adds the rows on column **0250** (an exposure-weighted average
+          maturity) and **0300** (a count of obligors), which do not add: two buckets carrying
+          the same maturity break it (1,673 against 1,673 + 1,673 on `irb-shapes`). That is a
+          limit of the published rule, recorded in the supervisory register, not a figure to
+          change.
+        - Off-balance-sheet money that falls in no bucket (a factor that is no Table A1 factor
+          and no own estimate) stays in row 0030 and is logged as a WARNING with its amount.
+
+    !!! warning "Null Rows — CCR"
         Rows **0040–0060** are null — the CCR book is SA-risk-weighted and reports in OF 07.00
-        rows 0090–0130 (see CRR tab). Additionally, rows **0031–0035** (off-BS breakdown by CCF
-        buckets) are null — CCF bucket data exists in the pipeline but is not yet disaggregated
-        for C 08.01 (available in C 07.00 only).
+        rows 0090–0130 (see CRR tab).
 
     | | **CALCULATION APPROACHES** | |
     | 0070 | Exposures assigned to obligor grades or pools: Total | |
@@ -1242,7 +1368,7 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     | Change | Ref(s) | Description |
     |--------|--------|-------------|
     | **Added** | 0017 | Revolving loan commitments breakdown |
-    | **Added** | 0031-0035 | Off-balance sheet CCF bucket breakdown rows |
+    | **Added** | 0031, 0032, 0001, 0033, 0034, 0035 | Off-balance sheet items by conversion factor (10%, 20%, 40%, 50%, 100%, own estimate) |
     | **Added** | 0175 | Purchased receivables (explicit row) |
     | **Added** | 0190, 0200 | Corporates without ECAI / investment grade (output floor) |
     | **Removed** | 0015 | SME supporting factor |
@@ -1285,7 +1411,7 @@ an obligor grade identifier column.
 === "Basel 3.1 (OF 08.02)"
 
     - **Column 0005**: Obligor grade row identifier
-    - **Columns 0020-0310**: Identical to OF 08.01 (PD column 0010 is retained here, unlike OF 08.01)
+    - **Columns 0010-0310**: Identical to OF 08.01 (including PD in column 0010)
     - ==**New columns 0001, 0101-0105**==: Off-balance sheet CCF breakdown columns per obligor grade
     - PD ordering uses PDs **without** input floor adjustments
     - Excludes slotting approach exposures (slotting has its own template OF 08.03)
@@ -1294,7 +1420,7 @@ an obligor grade identifier column.
 
     | Change | Description |
     |--------|-------------|
-    | **PD column** | Retained in OF 08.02 (removed from OF 08.01 totals only) |
+    | **PD column** | Column 0010 in both OF 08.01 and OF 08.02, as under CRR |
     | **CCF breakdown** | New columns 0001, 0101-0105 for off-BS items by CCF bucket |
     | **PD ordering** | Basel 3.1 uses PDs without input floor adjustments |
     | **Slotting excluded** | Slotting exposures reported separately (new OF 08.03) |
@@ -1714,6 +1840,19 @@ SL type (project finance, object finance, etc.) acts as a filter dimension.
     | 0080 | Risk-weighted exposure amount after supporting factors | RWEA |
     | 0090 | Expected loss amount | Memorandum |
     | 0100 | (-) Value adjustments and provisions | Memorandum |
+
+    !!! note "Column 0070 is fixed information, not a reported figure"
+        Annex II (p.115) defines column 0070 as Article 153(5) Table 1: *"This is a fixed
+        column for information purposes. It shall not be altered."* Each category row shows
+        the Table 1 risk weight for its category and maturity band. The two **Total** rows
+        (0110, 0120) leave column 0070 **blank**, because Table 1 has no weight for a total.
+        The CR10 disclosure of the same grid does the same.
+
+        Column 0070 is also not a data point of the EBA taxonomy. The supervisory-validation
+        adapter therefore evaluates C 08.06 rules on columns 0010–0060 and 0080–0100 only
+        (`reporting/filing/bindings.py`). Otherwise the summation rules `v09782_m` and
+        `v09783_m`, which apply to every column, would compare a Total row with a sum of
+        fixed category weights.
 
 === "Basel 3.1 (OF 08.06)"
 
@@ -2178,6 +2317,31 @@ and once per material country.
         Row **0140** (Equity) is removed — equity is no longer an IRB exposure class under
         Basel 3.1. Total exposures (0150) equals the sum of rows 0020, 0030, and 0060.
 
+    **One classification with OF 08.01.** The Bank ties each sub-class row, all countries,
+    to the OF 08.01 sheets of that sub-class: row 0048 to sheet 0022, row 0050 to sheets
+    0023 and 0024, row 0055 to sheets 0011 and 0012, rows 0071–0074 to sheets 0020, 0021,
+    0018 and 0019, and rows 0120 and 0130 to sheets 0016 and 0017 (`boe_b1034`,
+    `boe_b0288`, `boe_b1053`, `boe_b1071`, `boe_b0297`, `boe_b0300` and their siblings, all
+    ERROR). OF 09.02 therefore places each leg with the definition OF 02.00 and OF 08 use
+    (`rwa_calc.reporting.corep.irb_sheets`):
+
+    - Rows 0048, 0050 and 0055 count the corporate legs whose OF 08 sheet is one of the
+      row's sheets, on the column's own basis (the obligor's for original exposure,
+      provisions, PD, LGD and expected loss; the guarantor's for exposure value and RWEA).
+      Row 0048 is the classifier's "financial corporates and large corporates" sub-class
+      (Art. 147(4C)), not the correlation-multiplier flag `cp_apply_fi_scalar`, which marks
+      the narrower Art. 153(2) population. An A-IRB financial or large corporate is counted
+      in row 0055, as OF 08 reports it on sheet 0011.
+    - Rows 0071–0074, 0120 and 0130 count the row's retail class split by the SME flag
+      (the classifier's sub-class, or `is_sme`) and, for real estate, by property type
+      (`commercial` / `cre` is commercial, anything else residential). They use the flags
+      rather than the sheet itself so that a leg moved to a retail guarantor's class while
+      keeping its obligor's F-IRB approach stays in the retail row its parent row 0060
+      counts it in; OF 08 keeps that leg on its obligor's sheet (plan P1.384).
+
+    CRR C 09.02 is unchanged: it has no financial-and-large row and keeps C 07.00's
+    row-0020 SME test.
+
 === "Differences Summary"
 
     | Area | CRR | Basel 3.1 |
@@ -2198,7 +2362,7 @@ and once per material country.
 | **SA columns** | 24 columns (0010-0240) | 22 columns — adds 0035, 0171, 0235; removes 0215-0217 |
 | **SA risk weight rows** | 15 (0%-1250% + Other) | 29 — adds 15 new granular weights, removes 370% |
 | **SA "of which" rows** | 8 | 26+ — adds specialised lending and detailed RE breakdowns |
-| **IRB columns** | 33 columns (0010-0310) | 40+ columns — adds netting, slotting CRM, defaults, post-model adj, output floor; removes PD (totals), double default, supporting factors |
+| **IRB columns** | 33 columns (0010-0310) | 40+ columns — adds netting, slotting CRM, defaults, post-model adj, output floor; removes double default, supporting factors |
 | **IRB approach filter** | Binary (Foundation / Advanced) | Three-way (FIRB / AIRB / Slotting) |
 | **Supporting factors** | SME (Art 501) + Infrastructure (Art 501a) | **Removed** |
 | **Double default** | Column 0220 | **Removed** |

@@ -211,6 +211,10 @@
     "CRR Art. 237",
     "PS1/26, paragraph 237"
   ],
+  "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach": [
+    "CRR Art. 201",
+    "PS1/26, paragraph 201"
+  ],
   "rwa_calc.engine.crm.guarantees::_build_guarantor_sub_rows": [
     "CRR Art. 235"
   ],
@@ -224,13 +228,6 @@
   "rwa_calc.engine.crm.guarantees::apply_guarantees": [
     "CRR Art. 213",
     "CRR Art. 217"
-  ],
-  "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach": [
-    "CRR Art. 201",
-    "CRR Art. 194",
-    "CRR Art. 108",
-    "PS1/26, paragraph 201",
-    "PS1/26, paragraph 194"
   ],
   "rwa_calc.engine.crm.haircut_tables::get_haircut_table": [
     "CRR Art. 224"
@@ -299,11 +296,6 @@
     "CRR Art. 155(3)",
     "CRR Art. 165"
   ],
-  "rwa_calc.engine.equity.calculator::EquityCalculator._apply_standardised_equity_transitional": [
-    "PS1/26, paragraph 4.1",
-    "PS1/26, paragraph 4.2",
-    "PS1/26, paragraph 4.3"
-  ],
   "rwa_calc.engine.equity.calculator::EquityCalculator._determine_approach": [
     "CRR Art. 155(3)"
   ],
@@ -325,20 +317,8 @@
   "rwa_calc.engine.equity.calculator::_append_ciu_branches": [
     "PS1/26, paragraph 132"
   ],
-  "rwa_calc.engine.equity.calculator::_b31_higher_risk_expr": [
-    "PS1/26, paragraph 133"
-  ],
   "rwa_calc.engine.equity.calculator::_ciu_computed_rw_expr": [
     "PS1/26, paragraph 132"
-  ],
-  "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end": [
-    "CRR Art. 143",
-    "CRR Art. 153(5)",
-    "PS1/26, paragraph 4.1"
-  ],
-  "rwa_calc.engine.equity.calculator::_standardised_transitional_scope_expr": [
-    "PS1/26, paragraph 4.2",
-    "PS1/26, paragraph 4.3"
   ],
   "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr": [
     "CRR Art. 114",
@@ -467,10 +447,6 @@
   ],
   "rwa_calc.engine.sa.b31_risk_weight_tables::get_b31_combined_cqs_risk_weights": [
     "PS1/26, paragraph 122"
-  ],
-  "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts": [
-    "PS1/26, paragraph 124F",
-    "PS1/26, paragraph 124H"
   ],
   "rwa_calc.engine.sa.central_bank::ecb_rw_expr": [
     "CRR Art. 114(3)",
@@ -695,23 +671,10 @@
   "rwa_calc.reporting.corep.c07::c07_population": [
     "PS1/26"
   ],
+  "rwa_calc.reporting.corep.c07::c07_total_sheet": [
+    "PS1/26, paragraph 1.3"
+  ],
   "rwa_calc.reporting.corep.c07::generate_c07": [
-    "PS1/26, paragraph 1.3"
-  ],
-  "rwa_calc.reporting.corep.c07::generate_c07_with_total": [
-    "PS1/26, paragraph 1.3"
-  ],
-  "rwa_calc.reporting.corep.c07_rw_bands::rw_band_expr": [
-    "PS1/26 Art. 133"
-  ],
-  "rwa_calc.reporting.corep.c07_sheet_scope::c07_total_sheet": [
-    "PS1/26, paragraph 1.3"
-  ],
-  "rwa_calc.reporting.corep.c07_sheet_scope::memo_key_exprs": [
-    "PS1/26 Art. 112",
-    "PS1/26 Art. 127"
-  ],
-  "rwa_calc.reporting.corep.c07_sheet_scope::publish_sheets": [
     "PS1/26, paragraph 1.3"
   ],
   "rwa_calc.reporting.corep.c08::generate_c08_01": [
@@ -760,14 +723,18 @@
   "rwa_calc.reporting.corep.c34::generate_c34_08": [
     "CRR Art. 306"
   ],
+  "rwa_calc.reporting.corep.ccf_buckets::_own_estimate": [
+    "PS1/26, paragraph 166D"
+  ],
+  "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr": [
+    "PS1/26, paragraph 111",
+    "PS1/26, paragraph 166D"
+  ],
   "rwa_calc.reporting.corep.of02::generate_of_02_01": [
     "PS1/26, paragraph 1.3"
   ],
-  "rwa_calc.reporting.kernel.bases::origin_risk_weight": [
-    "CRR Art. 235"
-  ],
-  "rwa_calc.reporting.kernel.bases::substituted_leg": [
-    "CRR Art. 235"
+  "rwa_calc.reporting.kernel.columns::own_rwea": [
+    "PS1/26, paragraph 92"
   ],
   "rwa_calc.reporting.pillar3.ccr::generate_ccr1": [
     "CRR Art. 274"

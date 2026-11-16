@@ -25,20 +25,20 @@
 {"row_ref":"0250","row_name":"Exposures subject to the FIRB approach","0010":68875533.81922278,"0020":59350000.0,"0030":null}
 {"row_ref":"0271","row_name":"Institutions","0010":4198445.904632194,"0020":8250000.0,"0030":null}
 {"row_ref":"0290","row_name":"Corporates - Specialised lending exposures","0010":0.0,"0020":0.0,"0030":null}
-{"row_ref":"0295","row_name":"Corporates - Financial corporates and large corporates","0010":0.0,"0020":0.0,"0030":null}
-{"row_ref":"0296","row_name":"Corporates - Other general corporates SME","0010":0.0,"0020":0.0,"0030":null}
+{"row_ref":"0295","row_name":"Corporates - Financial corporates and large corporates","0010":null,"0020":null,"0030":null}
+{"row_ref":"0296","row_name":"Corporates - Other general corporates SME","0010":null,"0020":null,"0030":null}
 {"row_ref":"0297","row_name":"Corporates - Other general corporates non-SME","0010":64677087.91459059,"0020":51100000.0,"0030":null}
 {"row_ref":"0310","row_name":"Exposures subject to the AIRB approach","0010":80755.65861009869,"0020":368958.3333333333,"0030":null}
-{"row_ref":"0350","row_name":"Corporates - Specialised lending exposures","0010":0.0,"0020":0.0,"0030":null}
-{"row_ref":"0355","row_name":"Corporates - Other general corporates SME","0010":0.0,"0020":0.0,"0030":null}
-{"row_ref":"0356","row_name":"Corporates - Other general corporates non-SME","0010":0.0,"0020":0.0,"0030":null}
-{"row_ref":"0382","row_name":"Retail - Secured by residential immovable property SME","0010":0.0,"0020":0.0,"0030":null}
+{"row_ref":"0350","row_name":"Corporates - Specialised lending exposures","0010":null,"0020":null,"0030":null}
+{"row_ref":"0355","row_name":"Corporates - Other general corporates SME","0010":null,"0020":null,"0030":null}
+{"row_ref":"0356","row_name":"Corporates - Other general corporates non-SME","0010":null,"0020":null,"0030":null}
+{"row_ref":"0382","row_name":"Retail - Secured by residential immovable property SME","0010":null,"0020":null,"0030":null}
 {"row_ref":"0383","row_name":"Retail - Secured by residential immovable property non-SME","0010":64848.06124025501,"0020":335208.3333333333,"0030":null}
-{"row_ref":"0384","row_name":"Retail - Secured by commercial immovable property SME","0010":0.0,"0020":0.0,"0030":null}
-{"row_ref":"0385","row_name":"Retail - Secured by commercial immovable property non-SME","0010":0.0,"0020":0.0,"0030":null}
+{"row_ref":"0384","row_name":"Retail - Secured by commercial immovable property SME","0010":null,"0020":null,"0030":null}
+{"row_ref":"0385","row_name":"Retail - Secured by commercial immovable property non-SME","0010":null,"0020":null,"0030":null}
 {"row_ref":"0390","row_name":"Retail - Qualifying revolving","0010":15907.59736984368,"0020":33750.0,"0030":null}
-{"row_ref":"0400","row_name":"Retail - Other SME","0010":0.0,"0020":0.0,"0030":null}
-{"row_ref":"0410","row_name":"Retail - Other non-SME","0010":0.0,"0020":0.0,"0030":null}
+{"row_ref":"0400","row_name":"Retail - Other SME","0010":null,"0020":null,"0030":null}
+{"row_ref":"0410","row_name":"Retail - Other non-SME","0010":null,"0020":null,"0030":null}
 {"row_ref":"0411","row_name":"Exposures subject to the slotting approach","0010":0.0,"0020":0.0,"0030":null}
 {"row_ref":"0412","row_name":"Project finance exposures","0010":0.0,"0020":0.0,"0030":null}
 {"row_ref":"0413","row_name":"Object finance exposures","0010":0.0,"0020":0.0,"0030":null}

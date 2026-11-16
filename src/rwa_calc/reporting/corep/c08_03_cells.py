@@ -48,8 +48,6 @@ available here and not there.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from rwa_calc.reporting.cellspec import (
     CellSpec,
     Count,
@@ -59,11 +57,8 @@ from rwa_calc.reporting.cellspec import (
     Sum,
     WeightedAvg,
 )
+from rwa_calc.reporting.corep.c08_sheets import no_figure
 from rwa_calc.reporting.corep.irb_sheets import place_of
-
-
-def _null(_cells: Mapping[str, float | None], _prior_available: bool) -> None:
-    return None
 
 
 def build_c08_03_cells(  # noqa: PLR0913 - the complete C 08.03 column surface
@@ -125,10 +120,10 @@ def build_c08_03_cells(  # noqa: PLR0913 - the complete C 08.03 column surface
                 empty_cell="null",
             )
             if lgd_col is not None
-            else CellSpec(Formula(refs=(), fn=_null))
+            else CellSpec(Formula(refs=(), fn=no_figure))
         )
         cells[(ref, "0080")] = (
-            CellSpec(Formula(refs=(), fn=_null))
+            CellSpec(Formula(refs=(), fn=no_figure))
             if place_of(sheet_key).retail
             else CellSpec(
                 WeightedAvg("irb_maturity_m", weight=ead_col),

@@ -226,12 +226,14 @@ from rwa_calc.data.schemas import (
     VALID_SLOTTING_CATEGORIES,
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.reporting.corep.ccf_buckets import OF08_01_CCF_ROWS
 from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_c08_03_columns,
     get_c08_06_columns,
     get_c08_06_rows,
     get_c08_columns,
+    get_irb_row_sections,
     get_sa_row_sections,
 )
 
@@ -491,7 +493,11 @@ _PROVISIONS_C08: CellRequirement = _any_of(
 )
 
 # The two money ladders every template resolves by ``pick``, named once so a
-# requirement cannot restate them differently from the generator.
+# requirement cannot restate them differently from the generator. A template's
+# RWEA goes through ``kernel.own_rwea``, which tries ``rwa_pre_floor`` before this
+# ladder; that rung is not listed because no mapping can target it (the ``rwa``
+# component maps onto ``rwa_final``), so a projected ledger never carries it and
+# resolves on this ladder alone.
 _RWA: CellRequirement = _any_of("rwa_final", "rwa_post_factor", "rwa")
 _PD: CellRequirement = _any_of("pd_floored", "pd")
 
@@ -661,6 +667,12 @@ def _slotting_rows(framework: str) -> tuple[str, ...]:
     return tuple(row_ref for row_ref, _label, _is_short, _rw in get_c08_06_rows(framework))
 
 
+def _ccf_rows(framework: str) -> tuple[str, ...]:
+    """C 08.01's conversion-factor rows — on the Basel 3.1 layout only."""
+    layout = {row.ref for section in get_irb_row_sections(framework) for row in section.rows}
+    return tuple(ref for ref in OF08_01_CCF_ROWS if ref in layout)
+
+
 #: Section index of C 07.00's risk-weight band rows, mirroring the dispatch in
 #: ``corep/c07.py::_terms_for_row`` (``section_index == 2``).
 _SA_BAND_SECTION: int = 2
@@ -729,6 +741,15 @@ LEDGER_ROW_AXIS: Mapping[str, tuple[RowAxisRequirement, ...]] = {
     ),
     "c08_01": (
         RowAxisRequirement(("0020", "0030"), _BS_SIDE, "on/off balance sheet"),
+        # corep/ccf_buckets.py keys these on the applied conversion factor (the
+        # own-estimate limbs read ccf_modelled / ead_modelled / is_revolving only
+        # where present, so a projection without them files every leg by value).
+        RowAxisRequirement(
+            (),
+            _both(_any_of("ccf", "ccf_applied"), _BS_SIDE),
+            "off-balance-sheet conversion-factor rows (B31)",
+            rows_for=_ccf_rows,
+        ),
         RowAxisRequirement(
             ("0070", "0080"),
             _needs("reporting_approach_origin"),
@@ -821,7 +842,7 @@ _C07_00_CELLS: Mapping[str, CellRequirement] = {
 
 #: C 08.01: column ref -> the ledger columns its binding reads.
 _C08_01_CELLS: Mapping[str, CellRequirement] = {
-    "0010": _needs("pd_floored", "ead_final"),  # CRR only; binds pd_floored by name
+    "0010": _needs("pd_floored", "ead_final"),  # both regimes; binds pd_floored by name
     "0020": _both(_ON_BS_GROSS, _OFF_BS_GROSS),
     "0030": _both(_ON_BS_GROSS, _OFF_BS_GROSS, _needs("cp_apply_fi_scalar")),
     "0035": _needs("on_bs_netting_amount"),  # Basel 3.1 only

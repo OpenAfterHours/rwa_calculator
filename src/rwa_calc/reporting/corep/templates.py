@@ -672,11 +672,15 @@ CRR_C08_COLUMNS: list[COREPColumn] = [
     COREPColumn("0310", "Pre-credit derivatives RWEA", "Memorandum"),
 ]
 
-# Basel 3.1 OF 08.01: 40+ columns — removes PD (totals), double default,
-# supporting factors; adds on-BS netting, slotting FCCM, defaulted breakdowns,
-# post-model adjustments, output floor columns.
+# Basel 3.1 OF 08.01: 40+ columns — removes double default and supporting
+# factors; adds on-BS netting, slotting FCCM, defaulted breakdowns, post-model
+# adjustments, output floor columns. Column 0010 (PD) stays: PS1/26 Annex I and
+# the PRA001 taxonomy carry it on every sheet and every row but 0080 (slotting)
+# and 0170 (free deliveries); ``boe_b0356`` / ``boe_b0410`` read it. Annex II
+# gives it no instruction of its own — OF 08.02 and OF 09.02 define their PD
+# columns by reference to it.
 B31_C08_COLUMNS: list[COREPColumn] = [
-    # 0010 removed: PD only in OF 08.02
+    COREPColumn("0010", "PD assigned to obligor grade or pool (%)", _GRP_INTERNAL_RATING),
     COREPColumn("0020", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0030", _LBL_COL_OF_WHICH_LARGE_FSE, "Exposure"),
     COREPColumn(
@@ -790,11 +794,14 @@ B31_IRB_ROW_SECTIONS: list[RowSection] = [
         [
             COREPRow("0020", "On balance sheet items subject to credit risk"),
             COREPRow("0030", "Off balance sheet items subject to credit risk"),
-            COREPRow("0031", "  of which: off-BS by CCF 10%"),  # New in B3.1
+            # New in B3.1: the breakdown of row 0030 by conversion factor, in the
+            # published order (0001 is the 40% bucket) — corep/ccf_buckets.py.
+            COREPRow("0031", "  of which: off-BS by CCF 10%"),
             COREPRow("0032", "  of which: off-BS by CCF 20%"),
-            COREPRow("0033", "  of which: off-BS by CCF 40%"),
-            COREPRow("0034", "  of which: off-BS by CCF 50%"),
-            COREPRow("0035", "  of which: off-BS by CCF 100%"),
+            COREPRow("0001", "  of which: off-BS by CCF 40%"),
+            COREPRow("0033", "  of which: off-BS by CCF 50%"),
+            COREPRow("0034", "  of which: off-BS by CCF 100%"),
+            COREPRow("0035", "  of which: off-BS by own estimate of CCF or EAD"),
             COREPRow("0040", _LBL_ROW_SFT_NETTING),
             COREPRow("0050", _LBL_ROW_DERIV_LST_NETTING),
             COREPRow("0060", _LBL_ROW_CCP_NETTING),
@@ -845,8 +852,6 @@ CRR_C08_02_COLUMNS: list[COREPColumn] = [
 
 B31_C08_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0005", "Obligor grade row identifier", _GRP_INTERNAL_RATING),
-    # PD column 0010 is retained in OF 08.02 (removed from OF 08.01 totals only)
-    COREPColumn("0010", "PD assigned to obligor grade or pool (%)", _GRP_INTERNAL_RATING),
     *B31_C08_COLUMNS,
 ]
 

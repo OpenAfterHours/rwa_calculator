@@ -12,7 +12,10 @@ Key responsibilities:
   through, from whatever a run actually produced: our frames, these bindings and
   the cited sheet maps (``sheet_maps.SHEET_INDEX_MAPS``).
 - Restrict each DPM variant to its own columns, derived from the rule extract
-  rather than hand-written (``derive_variant_columns``).
+  rather than hand-written (``derive_variant_columns``). The one hand-written
+  restriction is CRR ``C 08.06``, a sole binding whose frame also carries the
+  printed Table 1 risk weights in column 0070, which is not a data point
+  (``_C08_06_DATA_POINT_COLUMNS``).
 
 This module is the adapter boundary. Everything that knows about this
 calculator's bundles, sheet names or exposure classes is on this side of it;
@@ -46,6 +49,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: CRR C 08.06's reported columns: every column of the template except 0070.
+#: Column 0070 is Art. 153(5) Table 1 printed onto the template. Annex II (p.115)
+#: says: "This is a fixed column for information purposes. It shall not be
+#: altered." It is therefore not a DPM data point, and the EBA's ``(All)``-column
+#: rules never reach it. The evidence is indirect, because the EBA DPM is not
+#: held here: the EBA's generated sign rules on C 08.06 (``v10309_s`` >= 0,
+#: ``v10310_s`` <= 0) list every column except 0070, while the same rule family
+#: covers percentage and parameter columns on other templates, and no EBA rule
+#: in any release addresses C 08.06 c0070. Left in, it made ``v09782_m`` and
+#: ``v09783_m`` compare a Total row against a sum of fixed weights (4.85 / 5.25),
+#: which no Total value can meet. ``derive_variant_columns`` scopes only shared
+#: frames, so this sole binding carries its set by hand.
+_C08_06_DATA_POINT_COLUMNS: Final = frozenset(
+    {"0010", "0020", "0030", "0040", "0050", "0060", "0080", "0090", "0100"}
+)
+
 #: The CRR (EBA) table codes. C 07.00 is split a/b/c/d and C 08.01 a/b in the
 #: DPM purely as row/column partitions of ONE template (a: the main body; b: the
 #: pre-supporting-factor columns 0210/0211; c/d: the memorandum rows 0290-0320),
@@ -62,7 +81,7 @@ _CRR_TABLES: Final[Mapping[str, TableBinding]] = {
     "C 08.03": TableBinding("c08_03", per_sheet=True, sheet_map="c08"),
     "C 08.04": TableBinding("c08_04", per_sheet=True, sheet_map="c08"),
     "C 08.05": TableBinding("c08_05", per_sheet=True, sheet_map="c08"),
-    "C 08.06": TableBinding("c08_06", per_sheet=True),
+    "C 08.06": TableBinding("c08_06", per_sheet=True, columns=_C08_06_DATA_POINT_COLUMNS),
     "C 08.07": TableBinding("c08_07", per_sheet=False),
     "C 09.01.a": TableBinding("c09_01", per_sheet=True),
     "C 09.01.b": TableBinding("c09_01", per_sheet=True),
@@ -186,7 +205,10 @@ def _base_bindings(framework: str) -> Mapping[str, TableBinding]:
 
 @cache
 def _bindings_for(framework: str) -> Mapping[str, TableBinding]:
-    """The table map with each variant restricted to its own derived columns."""
+    """The table map with each variant restricted to its own derived columns.
+
+    A binding the derivation does not scope keeps its literal ``columns`` (None,
+    or the hand-written ``_C08_06_DATA_POINT_COLUMNS``)."""
     variant_columns = derive_variant_columns(framework)
     return {
         table: (

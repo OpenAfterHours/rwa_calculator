@@ -216,6 +216,10 @@ class InflowBreakdown:
     # substituted amount is reported at on the destination sheet. Empty unless the
     # caller supplied a band expression (C 08.01 has no risk-weight row axis).
     by_rw_band: dict[str, float] = field(default_factory=dict)
+    # OF 08.01's breakdown of row 0030: the OFF-balance-sheet part split by the
+    # conversion-factor row of the leg it came from (``corep/ccf_buckets.py``), so
+    # it sums to ``off_bs``. Empty unless the caller supplied a row expression.
+    off_bs_by_ccf_row: dict[str, float] = field(default_factory=dict)
 
 
 # C 08.01 rows whose col 0090 waterfall EXCLUDES the B31 col 0035 on-balance-sheet
@@ -224,16 +228,16 @@ class InflowBreakdown:
 # r:0010;0017;0020;0070;0170;0175;0180;0190;0200, while ``boe_b0746_1`` drops the
 # 0035 term over r:0001;0030;0031;0032;0033;0034;0035 — which is exactly the
 # OFF-BALANCE-SHEET row family (row 0030 "Off balance sheet items subject to credit
-# risk" plus its five CCF sub-rows). That split is not arbitrary: Art. 166(3)
-# netting of loans and deposits is an on-balance-sheet effect, so it cannot reduce
-# an off-balance-sheet row. Row 0080 (slotting total) and the inert CCR
-# netting-set rows 0040/0050/0060 are in NEITHER scope; 0080 keeps the term so it
-# stays consistent with its section sibling 0070 and the 0070 + 0080 = 0010
-# approach partition still foots. C 08.02 has no such split — ``boe_b0760`` puts
-# 0035 in the waterfall on every row of OF08.02.01.01. Under CRR there is no col
-# 0035 at all, so the whole mechanism is a B31-only no-op there.
+# risk" plus its six conversion-factor rows, 0001 the 40% one). That split is not
+# arbitrary: Art. 166(3) netting of loans and deposits is an on-balance-sheet effect,
+# so it cannot reduce an off-balance-sheet row. Row 0080 (slotting total) and the
+# inert CCR netting-set rows 0040/0050/0060 are in NEITHER scope; 0080 keeps the term
+# so it stays consistent with its section sibling 0070 and the 0070 + 0080 = 0010
+# approach partition still foots. C 08.02 has no such split — ``boe_b0760`` puts 0035
+# in the waterfall on every row of OF08.02.01.01. Under CRR there is no col 0035 at
+# all, so the whole mechanism is a B31-only no-op there.
 C08_01_NETTING_EXEMPT_ROWS: frozenset[str] = frozenset(
-    {"0030", "0031", "0032", "0033", "0034", "0035"}
+    {"0001", "0030", "0031", "0032", "0033", "0034", "0035"}
 )
 
 
@@ -280,6 +284,7 @@ def irb_origin_inflows(
     destination: Destination,
     band_expr: pl.Expr | None = None,
     destination_key: Callable[[str], pl.Expr] | None = None,
+    ccf_row_expr: pl.Expr | None = None,
 ) -> dict[str, InflowBreakdown]:
     """CRM substitution inflows arising from IRB-ORIGIN legs, per destination class.
 
@@ -330,6 +335,11 @@ def irb_origin_inflows(
     so the covered part lands on the sheet its exposure value and RWEA land on. A
     leg it keys to null is dropped, as a leg with no destination class is.
 
+    ``ccf_row_expr`` splits the off-balance-sheet part by the conversion-factor
+    row of the SOURCE leg (OF 08.01 rows 0031-0035 and 0001): the conversion
+    factor is a property of the item, which substitution does not change, so the
+    covered part arrives in the bucket it left — the ``_off_bs`` reasoning.
+
     Returns ``{guarantor exposure class: covered amount}`` as POSITIVE magnitudes
     measured on the CAPPED carrier (see :data:`IRB_UNFUNDED_COL`), empty when the
     frame carries no substitution carriers. Legs with no destination class are
@@ -362,6 +372,11 @@ def irb_origin_inflows(
         return {}
     covered = pl.col(IRB_UNFUNDED_COL)
     bands = _band_split(migrated, covered, band_expr)
+    ccf_rows = (
+        {}
+        if ccf_row_expr is None
+        else _band_split(migrated.filter(_off_bs(cols)), covered, ccf_row_expr)
+    )
     grouped = (
         migrated.group_by(_DESTINATION_CLASS_COL)
         .agg(
@@ -381,6 +396,7 @@ def irb_origin_inflows(
             graded=float(row["graded"] or 0.0),
             slotting=float(row["slotting"] or 0.0),
             by_rw_band=bands.get(row[_DESTINATION_CLASS_COL], {}),
+            off_bs_by_ccf_row=ccf_rows.get(row[_DESTINATION_CLASS_COL], {}),
         )
         for row in grouped.iter_rows(named=True)
     }
@@ -390,6 +406,11 @@ def _band_split(
     migrated: pl.LazyFrame, covered: pl.Expr, band_expr: pl.Expr | None
 ) -> dict[str, dict[str, float]]:
     """Per destination class, the inflow split by risk-weight band label.
+
+    OF 08.01 reuses it with its conversion-factor row as the label, over the
+    off-balance-sheet legs only (``irb_origin_inflows``'s ``ccf_row_expr``); a
+    leg with no label is in no row, so its amount is left out of the split as
+    the leg is left out of the rows.
 
     ``band_expr`` is supplied by the CALLER because the band ladder is that
     template's own regime-shaped axis (``corep/c07_rw_bands.py::rw_band_expr`` over
@@ -418,7 +439,7 @@ def _band_split(
     out: dict[str, dict[str, float]] = {}
     for row in grouped.iter_rows(named=True):
         amount = float(row["inflow"] or 0.0)
-        if amount:
+        if amount and row["_rw_band"] is not None:
             out.setdefault(row[_DESTINATION_CLASS_COL], {})[row["_rw_band"]] = amount
     return out
 

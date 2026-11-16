@@ -11,7 +11,7 @@ Key responsibilities:
 - Emit the Annex II §1.3 "(-)"-labelled deduction columns as negative figures
   (``negate_deduction_cols``).
 - Leave out the cells the published template greys out
-  (``blank_unreported_cells``, OF 07.00).
+  (``blank_unreported_cells``, OF 07.00 and OF 08.01).
 - Swap a provisions cell to the best available carrier when its base sum nets
   to ~0 (``provisions_postfix``, C 08.01/02/03/06).
 - Fill the two C 08.01/02 columns the executor cannot bind — the off-balance-
@@ -144,12 +144,14 @@ def blank_unreported_cells(
     deliberately a pass rather than a property of the cell specs: a greyed cell
     is often an intermediate another cell is a formula over — OF 07.00 col 0150
     on a risk-weight row is reached through the col 0100 inflow and col 0110 —
-    so it has to be computed, and then not reported.
+    so it has to be computed, and then not reported. On OF 08.01 it runs after
+    the Total sheets are summed (``c08_sheets.reported_sheets``).
 
     A cell is blanked whatever it holds. That is what "the template has no cell
-    here" means, and it is safe only because the declaration is held exactly to
-    the Bank's taxonomy (``tests/contracts/test_of07_published_cells.py``) — a
-    declaration wider than the template would silently drop real figures.
+    here" means, and it is safe only because each declaration is held exactly
+    to the Bank's taxonomy (``tests/contracts/test_of07_published_cells.py``,
+    ``tests/contracts/test_of08_published_cells.py``) — a declaration wider than
+    the template would silently drop real figures.
     Columns the frame does not carry are skipped; an empty mapping is a no-op.
     """
     by_column: dict[str, list[str]] = {}

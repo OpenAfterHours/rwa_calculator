@@ -27,12 +27,18 @@ golden fixture and is pinned by the CVA-A1 unit estate + a seeded lineage unit
 pin):
 
 - **C 34.01 (SA-CCR analysis by approach).** One row (0010, "SA-CCR"): col 0010
-  sums ``ead_final`` and col 0020 ``rwa_final`` over the SA-CCR netting-set
+  sums ``ead_final`` and col 0020 the own-approach RWEA over the SA-CCR netting-set
   population — the synthetic ``ccr__``-prefixed rows, with FCCM SFTs EXCLUDED
   (``risk_type == "CCR_SFT"`` reports on C 07.00 row 0090, not the SA-CCR
   templates; PS1/26 App. 17). The plan frame IS that pre-filtered population (the
   CR8 pattern), so both cells sum the whole frame. None when the portfolio has no
   such rows (the ``generate_of_02_01`` gated precedent).
+- **RWEA is the own-approach amount** (``kernel.own_rwea`` via ``_rwea_col``):
+  ``rwa_pre_floor`` wherever the output floor ran, else ``rwa_final``. The
+  engine puts a binding floor's add-on on the SA-CCR legs' ``rwa_final``
+  (they are floor-eligible), and PS1/26 Annex II ties C 34.02 col 0210 to
+  C 07.00 col 0220 (p.194), which is the own-approach figure (Art. 92(3)(a));
+  the floor is reported once, in OF 02.00 row 0010 col 0030.
 - **C 34.02 (SA-CCR EAD per netting set).** ONE sheet per netting set, keyed on
   the ``netting_set_id`` stripped from the ``ccr__`` reference prefix. Each
   sheet's single row (0010) sums ``ead_final`` (col 0010) over that netting
@@ -91,7 +97,7 @@ from rwa_calc.reporting.corep.templates import (
     C34_08_COLUMN_REFS,
     C34_08_ROWS,
 )
-from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.kernel import own_rwea, pick
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -125,7 +131,7 @@ def generate_c34_01(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | Non
     ccr = collect_ccr_rows(results, cols)
     if ccr is None or len(ccr) == 0:
         return None
-    return execute(_c34_01_spec(), ccr)
+    return execute(_c34_01_spec(_rwea_col(cols)), ccr)
 
 
 def c34_01_plans(
@@ -147,7 +153,7 @@ def c34_01_plans(
         return {}
     return {
         _C34_01_KEY: SheetPlan(
-            spec=_c34_01_spec(),
+            spec=_c34_01_spec(_rwea_col(cols)),
             frame=ccr,
             ctx=ReportingContext(),
             negative_cols=frozenset(),
@@ -166,17 +172,17 @@ def c34_01_frames(
     return {_C34_01_KEY: frame} if frame is not None else {}
 
 
-def _c34_01_spec() -> TemplateSpec:
-    """The C 34.01 spec: one SA-CCR row summing EAD (0010) and RWEA (0020) over
-    the pre-filtered netting-set population. Shared by the reported generator and
-    the lineage plan."""
+def _c34_01_spec(rwea_col: str) -> TemplateSpec:
+    """The C 34.01 spec: one SA-CCR row summing EAD (0010) and RWEA (0020, the
+    own-approach carrier ``rwea_col``) over the pre-filtered netting-set
+    population. Shared by the reported generator and the lineage plan."""
     return TemplateSpec(
         name="c34_01",
         rows=tuple(C34_01_ROWS),
         column_refs=tuple(C34_01_COLUMN_REFS),
         cells={
             ("0010", "0010"): CellSpec(Sum("ead_final")),
-            ("0010", "0020"): CellSpec(Sum("rwa_final")),
+            ("0010", "0020"): CellSpec(Sum(rwea_col)),
         },
         empty_cell="zero",
     )
@@ -367,7 +373,7 @@ def generate_c34_08(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | Non
     """
     if not _c34_08_emits(results, cols):
         return None
-    return execute(_c34_08_spec(), _prepare_c34_08(results, cols))
+    return execute(_c34_08_spec(_rwea_col(cols)), _prepare_c34_08(results, cols))
 
 
 def c34_08_plans(
@@ -388,7 +394,7 @@ def c34_08_plans(
         return {}
     return {
         _C34_08_KEY: SheetPlan(
-            spec=_c34_08_spec(),
+            spec=_c34_08_spec(_rwea_col(cols)),
             frame=_prepare_c34_08(results, cols).collect(),
             ctx=ReportingContext(),
             negative_cols=frozenset(),
@@ -407,11 +413,12 @@ def c34_08_frames(
     return {_C34_08_KEY: frame} if frame is not None else {}
 
 
-def _c34_08_spec() -> TemplateSpec:
+def _c34_08_spec(rwea_col: str) -> TemplateSpec:
     """The C 34.08 spec: rows 0010/0020 partition the CCP subset of the SA-CCR
     population by the derived ``c34_qccp`` flag; row 0030 keys the
-    ``CCR_DEFAULT_FUND`` risk type. Shared by the reported generator and the
-    lineage plan."""
+    ``CCR_DEFAULT_FUND`` risk type. RWEA (col 0020) sums the own-approach
+    carrier ``rwea_col``. Shared by the reported generator and the lineage
+    plan."""
     ccp_qccp = RowPredicate(equals=((_IS_CCR, True), ("cp_entity_type", "ccp"), (_QCCP, True)))
     ccp_non_qccp = RowPredicate(equals=((_IS_CCR, True), ("cp_entity_type", "ccp"), (_QCCP, False)))
     default_fund = RowPredicate(equals=(("risk_type", "CCR_DEFAULT_FUND"),))
@@ -421,11 +428,11 @@ def _c34_08_spec() -> TemplateSpec:
         column_refs=tuple(C34_08_COLUMN_REFS),
         cells={
             ("0010", "0010"): CellSpec(Sum("ead_final"), predicate=ccp_qccp),
-            ("0010", "0020"): CellSpec(Sum("rwa_final"), predicate=ccp_qccp),
+            ("0010", "0020"): CellSpec(Sum(rwea_col), predicate=ccp_qccp),
             ("0020", "0010"): CellSpec(Sum("ead_final"), predicate=ccp_non_qccp),
-            ("0020", "0020"): CellSpec(Sum("rwa_final"), predicate=ccp_non_qccp),
+            ("0020", "0020"): CellSpec(Sum(rwea_col), predicate=ccp_non_qccp),
             ("0030", "0010"): CellSpec(Sum("ead_final"), predicate=default_fund),
-            ("0030", "0020"): CellSpec(Sum("rwa_final"), predicate=default_fund),
+            ("0030", "0020"): CellSpec(Sum(rwea_col), predicate=default_fund),
         },
         empty_cell="zero",
     )
@@ -528,9 +535,23 @@ def collect_default_fund(results: pl.LazyFrame, cols: set[str]) -> tuple[float, 
     )
     stats = (
         results.filter(pl.col("risk_type") == "CCR_DEFAULT_FUND")
-        .select(ead_expr, pl.col("rwa_final").fill_null(0.0).sum().alias("_rwea"))
+        .select(ead_expr, pl.col(_rwea_col(cols)).fill_null(0.0).sum().alias("_rwea"))
         .collect()
     )
     if len(stats) == 0:
         return 0.0, 0.0
     return float(stats["_ead"][0]), float(stats["_rwea"][0])
+
+
+def _rwea_col(cols: set[str]) -> str:
+    """The RWEA column every C 34 cell sums: the own-approach carrier
+    (``kernel.own_rwea`` — ``rwa_pre_floor`` wherever the output floor ran, so a
+    binding floor's add-on on the SA-CCR legs stays out, PS1/26 Art. 92(2A)/(3)),
+    else ``rwa_final``. Every caller has already required ``rwa_final`` in
+    ``cols``, so the ladder always resolves; a frame without it is a caller bug,
+    not a portfolio shape, and raises."""
+    rwea_col = own_rwea(cols, "rwa_final")
+    if rwea_col is None:
+        msg = "C 34 RWEA needs rwa_pre_floor or rwa_final; callers gate on rwa_final"
+        raise ValueError(msg)
+    return rwea_col

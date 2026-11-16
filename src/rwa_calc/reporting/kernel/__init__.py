@@ -6,7 +6,8 @@ Pipeline position:
     (both generators import their column/filter/sum primitives from here)
 
 Key responsibilities:
-- Column discovery and candidate-name resolution (``columns``)
+- Column discovery and candidate-name resolution (``columns``), including the
+  own-approach RWEA carrier every COREP RWEA figure reads (``own_rwea``)
 - Approach and balance-sheet-side row filters (``filters``)
 - The origin / post-substitution two-basis discriminators (``bases``)
 - Null-safe column summation primitives (``sums``)
@@ -40,7 +41,9 @@ from rwa_calc.reporting.kernel.columns import (
     gross_carrier,
     gross_carriers,
     materialise_results,
+    own_rwea,
     pick,
+    with_own_rwea_as,
 )
 from rwa_calc.reporting.kernel.excel import (
     column_name_map,
@@ -71,6 +74,7 @@ __all__ = [
     "gross_carriers",
     "materialise_results",
     "null_row",
+    "own_rwea",
     "pick",
     "population_flags",
     "safe_sum",
@@ -78,6 +82,7 @@ __all__ = [
     "sanitise_sheet_name",
     "sheet_axis",
     "sheet_frame",
+    "with_own_rwea_as",
     "write_metadata_sheet",
     "write_template_sheet",
 ]

@@ -473,9 +473,14 @@ class TestCRRC08ColumnDefinitions:
 class TestB31C08ColumnDefinitions:
     """Tests for Basel 3.1 OF 08.01 column definitions."""
 
-    def test_b31_c08_no_pd_column(self) -> None:
-        refs = {col.ref for col in B31_C08_COLUMNS}
-        assert "0010" not in refs
+    def test_b31_c08_has_pd_column_first(self) -> None:
+        """OF 08.01 keeps column 0010 (PD): PS1/26 Annex I and the PRA001
+        taxonomy (306 cells on ``OF08.01.01.01``). This test used to assert the
+        column absent, on the false premise that PD moved to OF 08.02 only;
+        ``tests/contracts/test_of08_published_sheets.py`` holds the whole axis
+        to the taxonomy."""
+        refs = [col.ref for col in B31_C08_COLUMNS]
+        assert refs[0] == "0010"
 
     def test_b31_c08_no_double_default(self) -> None:
         refs = {col.ref for col in B31_C08_COLUMNS}
@@ -569,15 +574,6 @@ class TestIRBRowSections:
         total_section = B31_IRB_ROW_SECTIONS[0]
         refs = [r.ref for r in total_section.rows]
         assert "0017" in refs
-
-    def test_b31_irb_has_ccf_breakdown_rows(self) -> None:
-        exp_section = B31_IRB_ROW_SECTIONS[1]
-        refs = [r.ref for r in exp_section.rows]
-        assert "0031" in refs
-        assert "0032" in refs
-        assert "0033" in refs
-        assert "0034" in refs
-        assert "0035" in refs
 
     def test_b31_irb_no_alt_re_treatment(self) -> None:
         calc_section = B31_IRB_ROW_SECTIONS[2]

@@ -44,6 +44,10 @@ if TYPE_CHECKING:
 # (C 07.00 rows 0140-0280), and a band the sheet did not receive resolves to 0.0
 # rather than raising, because every band row is bound on every sheet.
 SUBSTITUTION_INFLOW_RW_PREFIX = "substitution_inflow_rw::"
+# The same namespace for the off-balance-sheet inflow split by conversion-factor
+# row (OF 08.01 rows 0031, 0032, 0001, 0033, 0034, 0035 — ``corep/ccf_buckets.py``):
+# the suffix is a row ref, and a row the sheet did not receive resolves to 0.0.
+SUBSTITUTION_INFLOW_CCF_PREFIX = "substitution_inflow_ccf::"
 
 
 class ResultsSource(Protocol):
@@ -89,6 +93,10 @@ class ReportingContext:
         substitution_inflow_graded / _slotting: That same inflow split by the
             post-substitution IRB treatment of the legs it came from, for
             C 08.01 rows 0070 and 0080.
+        substitution_inflow_by_ccf: The off-balance-sheet part split by the
+            conversion-factor row of the legs it came from, for OF 08.01's
+            breakdown of row 0030 (rows 0031-0035 and 0001), so ``boe_b0742``
+            (row 0030 = the sum of those rows) holds on columns 0080 / 0090.
 
     WHY THE INFLOW NEEDS FOUR SPLITS AS WELL AS A TOTAL. C 08.01 decomposes its
     total row TWICE over the same columns, and both decompositions were published
@@ -114,6 +122,7 @@ class ReportingContext:
     substitution_inflow_graded: float | None = None
     substitution_inflow_slotting: float | None = None
     substitution_inflow_by_rw: Mapping[str, float] | None = None
+    substitution_inflow_by_ccf: Mapping[str, float] | None = None
 
     def side_value(self, key: str) -> float | None:
         """Resolve a named out-of-frame scalar for a ``SideContext`` binding.
@@ -139,4 +148,7 @@ class ReportingContext:
         if key.startswith(SUBSTITUTION_INFLOW_RW_PREFIX):
             band = key[len(SUBSTITUTION_INFLOW_RW_PREFIX) :]
             return (self.substitution_inflow_by_rw or {}).get(band, 0.0)
+        if key.startswith(SUBSTITUTION_INFLOW_CCF_PREFIX):
+            row = key[len(SUBSTITUTION_INFLOW_CCF_PREFIX) :]
+            return (self.substitution_inflow_by_ccf or {}).get(row, 0.0)
         raise KeyError(f"unknown ReportingContext side value: {key!r}")

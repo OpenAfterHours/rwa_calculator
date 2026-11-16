@@ -389,8 +389,8 @@ known-issue number, and what the published rule finds on the return.
 return is submitted. It says nothing about the return itself. So an entry
 applies from its "Date Applied" on the run date, never on the return's reference
 date. The release a run uses is chosen by the run date for the same reason. For
-a return that will be submitted later, `--submission-date` (on `validate` and
-`build`, and `submission_date=` in Python) names the day. An entry with no date
+a return that will be submitted later, `--submission-date` (on `validate`,
+`build` and `compare`, and `submission_date=` in Python) names the day. An entry with no date
 has been identified by the Bank but not yet applied: it is listed as pending,
 and never applied.
 
@@ -799,6 +799,13 @@ place in the module, such as a member from an older template, is listed beside
 the comparison, never dropped: the regulator's checks would not see it either.
 Rules that break in both files are listed too: not a difference, but neither
 return satisfies them.
+
+Both returns are judged by the rules as the Bank's gateway runs them on the
+submission date, as `validate` judges one (`--submission-date`, default
+today). A rule the validations deny list switches off that day points at
+neither return. If its published formula breaks in either, it is listed as
+switched off, so the comparison never hides it. A rule the list downgrades to a
+warning still runs at the gateway, and is compared like any other.
 
 The exit code is `0` only when the two are equivalent: the same header and
 templates, nothing unplaced, no material difference, and no rule that breaks

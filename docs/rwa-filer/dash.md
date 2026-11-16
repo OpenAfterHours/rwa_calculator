@@ -170,9 +170,11 @@ First, why they differ, as `rwa-filer compare` says it. Every cell is counted
 by category (the same, within the files' rounding, a zero against a blank, a
 template only one side files, material), and the material differences are
 grouped into findings. Each finding says which return the Bank's rules point
-at, with each rule's standing in both, and links to its cells. Then every cell
-that changed, was added or was removed, by table, filterable by kind, by
-category and by finding, with the difference in each figure. After that come
+at, with each rule's standing in both, and links to its cells. Rules are judged
+as the Bank's gateway runs them today: one its validations deny list switches
+off is named as switched off, never as broken. Then every cell that changed,
+was added or was removed, by table, filterable by kind, by category and by
+finding, with the difference in each figure. After that come
 any header field that differs, and what the change did to the verdict: the
 broken rules the later version fixed, the ones it newly breaks, and the
 blocking findings before and after. Swap the two to read the change the other

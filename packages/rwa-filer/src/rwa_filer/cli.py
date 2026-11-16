@@ -38,10 +38,11 @@ Commands:
         Check that a package on disk is the one that was built and signed off.
     rwa-filer diff PREVIOUS CURRENT
         What changed between two versions of a return, cell by cell.
-    rwa-filer compare BASELINE CANDIDATE [--tolerance AMOUNT]
+    rwa-filer compare BASELINE CANDIDATE [--tolerance AMOUNT] [--submission-date DATE]
         A return beside the one another system (or an earlier filing) produced:
         every cell categorised, and the material differences grouped into
-        findings, each saying which return the Bank's rules point at.
+        findings, each saying which return the Bank's rules point at — the
+        rules as the gateway runs them on the submission date, as ``validate``.
     rwa-filer referee INSTANCE --taxonomy-package ZIP [--arelle-python PYTHON]
         A second opinion on a written instance: run the Arelle XBRL processor
         on it against the publisher's taxonomy package, and set its verdict on
@@ -664,6 +665,7 @@ def _add_workflow_commands(
             "(for sources that state none, e.g. a fact table rounded to thousands)"
         ),
     )
+    _add_submission_date_argument(comparing)
     comparing.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     comparing.set_defaults(handler=_compare)
 
@@ -740,7 +742,13 @@ def _compare(args: argparse.Namespace) -> int:
         baseline = _load(argparse.Namespace(**{**vars(args), "file": args.baseline}))
         candidate = _load(argparse.Namespace(**{**vars(args), "file": args.candidate}))
         names = _names(args.baseline, args.candidate)
-        comparison = compare_returns(baseline, candidate, names=names, tolerance=args.tolerance)
+        comparison = compare_returns(
+            baseline,
+            candidate,
+            names=names,
+            tolerance=args.tolerance,
+            submission_date=args.submission_date,
+        )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
     sides = {"baseline": baseline, "candidate": candidate}

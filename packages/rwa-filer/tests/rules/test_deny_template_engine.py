@@ -19,18 +19,37 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
+
+import pytest
 
 from filer_builders import build_frame, build_index
-from rwa_filer.boe.deny import DENY_DEACTIVATED, load_deny_list
+from rwa_filer.boe.deny import (
+    DENY_DEACTIVATED,
+    DENY_DOWNGRADED,
+    DenyEntry,
+    DenyList,
+    load_deny_list,
+)
+from rwa_filer.rules import catalogue
 from rwa_filer.rules.catalogue import (
     FRAMEWORK_BASEL_3_1,
     FRAMEWORK_CRR,
+    SEVERITY_WARNING,
     RuleSet,
     is_currently_enforced,
     load_rules,
 )
-from rwa_filer.validate.checker import FINDING_RULE_ERROR, evaluate_index, findings_for
+from rwa_filer.validate.checker import (
+    FINDING_RULE_ERROR,
+    FINDING_RULE_WARNING,
+    evaluate_index,
+    findings_for,
+)
 from rwa_filer.validate.evaluate import STATUS_FAIL
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 BEFORE = date(2026, 10, 18)
 AFTER = date(2026, 11, 16)
@@ -131,3 +150,60 @@ def test_the_eba_extract_has_no_deny_list() -> None:
 
     assert all(rule.deny is None for rule in ruleset.rules)
     assert ruleset.enforced == ruleset.published_in_force
+
+
+@pytest.fixture
+def downgraded_b0710(monkeypatch: pytest.MonkeyPatch) -> Iterator[date]:
+    """A deny list that DOWNGRADES boe_b0710 for PRA001 (no shipped entry downgrades a B31 extract rule).
+
+    The extract is cached per (framework, day), so the cache is cleared on the way
+    in and out: no other test sees the synthetic list.
+    """
+    applied = date(2026, 10, 19)
+    synthetic = DenyList(
+        release="4.1.1",
+        entries=(
+            DenyEntry(
+                rule_id="boe_b0710",
+                module="PRA001",
+                deny_type=DENY_DOWNGRADED,
+                date_applied=applied,
+                known_issue=None,
+            ),
+        ),
+    )
+    monkeypatch.setattr(catalogue, "release_deny_list", lambda _release: synthetic)
+    catalogue._load_rules.cache_clear()
+    yield applied
+    catalogue._load_rules.cache_clear()
+
+
+def test_a_downgraded_rule_is_still_enforced_as_a_warning(downgraded_b0710: date) -> None:
+    """DENY-01 follow-up: 'submissions that fail this rule will be accepted' - a warning, not an error."""
+    # Arrange
+    ruleset = _only(load_rules(FRAMEWORK_BASEL_3_1, on=AFTER), "boe_b0710")
+    rule = ruleset.rules[0]
+
+    # Act
+    report = evaluate_index(_breaking_b0710(), ruleset)
+    findings = [item for item in findings_for(report) if item.subject == "boe_b0710"]
+
+    # Assert
+    assert rule.deny is not None and rule.deny.deny_type == DENY_DOWNGRADED
+    assert (rule.severity, is_currently_enforced(rule)) == (SEVERITY_WARNING, True)
+    assert [(item.rule_id, item.status) for item in report.outcomes] == [("boe_b0710", STATUS_FAIL)]
+    assert [item.code for item in findings] == [FINDING_RULE_WARNING]
+
+
+def test_a_downgrade_applies_only_from_its_date(downgraded_b0710: date) -> None:
+    # Arrange
+    before = _only(load_rules(FRAMEWORK_BASEL_3_1, on=date(2026, 10, 18)), "boe_b0710")
+
+    # Act
+    report = evaluate_index(_breaking_b0710(), before)
+
+    # Assert
+    assert before.rules[0].deny is None
+    assert [item.code for item in findings_for(report) if item.subject == "boe_b0710"] == [
+        FINDING_RULE_ERROR
+    ]

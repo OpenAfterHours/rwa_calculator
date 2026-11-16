@@ -210,6 +210,26 @@ def test_two_equivalent_returns_are_called_equivalent(
     assert "<h2>Equivalent</h2>" in page
 
 
+def test_a_rule_the_gateway_has_switched_off_is_named_on_the_page(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    """The 4.1.1 deny list has switched boe_b0710 off since 19 October 2026.
+
+    Both returns break its published formula; the page judges them as the
+    gateway runs them today, so it is named as switched off, not broken in both.
+    """
+    earlier, later = _pair(workspace, tmp_path, risk_weight_row="0200", ecai_columns=True)
+
+    page = client.get(f"/returns/{later.return_id}/compare?against={earlier.return_id}").text
+    also = page[page.index('id="also"') :]
+
+    switched = re.search(r"Switched off at the gateway</strong> — ([^:]*):", also)
+    assert switched is not None
+    assert "boe_b0710" in switched.group(1).split(", ")
+    broken = re.search(r"Broken in both</strong> — ([^:]*):", also)
+    assert broken is None or "boe_b0710" not in broken.group(1).split(", ")
+
+
 def test_a_pair_is_compared_once_however_often_the_page_is_drawn(
     workspace: Workspace, tmp_path: Path
 ) -> None:

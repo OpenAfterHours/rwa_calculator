@@ -65,12 +65,6 @@ ALLOWED_SITES: dict[Site, str] = {
         "final_col feeds the engine-total log line only (the banked P1.367 caveat); "
         "column 0010 reads own_rwea"
     ),
-    # OWNED BY ANOTHER LANE (2026-11-16): c07.py is edited by the OF 07.00 items, so
-    # O-12 left these two picks for the orchestrator. Replace each with
-    # ``own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")`` and DELETE both
-    # entries — the stale-entry test below fails until you do.
-    Site("c07.py", "c07_plans"): "OF 07.00 col 0220 - pending the c07.py owner (O-12)",
-    Site("c07.py", "_prepare"): "OF 07.00 cols 0216/0217 delta - pending the c07.py owner (O-12)",
 }
 
 

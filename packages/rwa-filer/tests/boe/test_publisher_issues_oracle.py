@@ -75,13 +75,7 @@ RELEASES = shipped_releases()
 #: Where the engine is KNOWN to count a rule differently from Arelle on an
 #: example, with why. Each is xfail(strict): it fails the suite the day the
 #: engine agrees, so the entry is removed rather than left to rot.
-KNOWN_DISAGREEMENTS: dict[tuple[str, str, str], str] = {
-    ("4.1.1", "PI-10", "boe_b0770"): (
-        "boe_b0770 is written 'i= sum(...)', which gives the summed rows no rounding "
-        "allowance; the engine reads sum() as isum() and allows for them (PI-10's own "
-        "finding about this engine)"
-    ),
-}
+KNOWN_DISAGREEMENTS: dict[tuple[str, str, str], str] = {}
 
 
 def _examples() -> list[tuple[str, str]]:

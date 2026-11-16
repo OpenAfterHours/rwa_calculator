@@ -196,13 +196,6 @@ FORCED = (
     pytest.param(
         _Forced("ccr", 400_000.0, frozenset({"boe_b0475", "boe_b0495"})),
         id="ccr",
-        # OF 07.00 col 0220 is the only template the add-on still reaches on this
-        # book, and c07.py is owned by another lane: the orchestrator applies
-        # own_rwea to its two picks (see tests/contracts/test_corep_rwea_carrier.py
-        # ALLOWED_SITES). Strict, so the marker fails the moment it is not needed.
-        marks=pytest.mark.xfail(
-            strict=True, reason="OF 07.00 still reads rwa_final until c07.py takes own_rwea"
-        ),
     ),
 )
 

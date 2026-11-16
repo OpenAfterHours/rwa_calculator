@@ -6,6 +6,7 @@ Pipeline position:
     ``is_revolving``, ``reporting_approach_origin``)
         -> here (which bucket a leg's conversion factor falls in)
         -> corep/c08_01_rows.py (OF 08.01 rows 0031, 0032, 0001, 0033, 0034, 0035)
+        -> corep/c07.py (OF 07.00 columns 0160, 0170, 0171, 0180, 0190)
 
 Key responsibilities:
 - Name the applied-conversion-factor carrier ladder (``CCF_CARRIERS``).
@@ -16,9 +17,8 @@ Key responsibilities:
   name the own-estimate row, and decide each IRB leg's row
   (``of08_01_ccf_row_expr``).
 
-OF 07.00 (``corep/c07.py``, columns 0160-0190) still declares its own carrier
-ladder and bucket expression, the same rule; it is pointed at ``CCF_CARRIERS``
-and ``ccf_bucket_expr`` here once the parallel rewrite of that module merges.
+OF 07.00 (``corep/c07.py``, columns 0160-0190) reads the same carrier ladder
+and bucket rule from here, with its own factor-to-column maps.
 
 THE OF 08.01 ROWS. PS1/26 Annex II p.116, rows "0031, 0032, 0001, 0033, 0035
 BREAKDOWN OF OFF-BALANCE SHEET ITEMS BY CONVERSION FACTORS": "For exposures
@@ -74,7 +74,9 @@ if TYPE_CHECKING:
 #: Applied-conversion-factor carriers, in preference order. ``ccf`` is what the
 #: aggregator exit seals; ``ccf_applied`` is the synthetic COREP / Pillar 3
 #: unit-frame spelling (LESSONS B1: a bucket on a name no run produces reports
-#: nothing, forever).
+#: nothing, forever - C 07.00 read only ``ccf_applied`` until 2026-08 and published
+#: structurally null buckets). Converging the synthetic estate onto ``ccf`` is a
+#: recorded follow-up.
 CCF_CARRIERS: Final[tuple[str, ...]] = ("ccf", "ccf_applied")
 
 #: PS1/26 Art. 111(1) Table A1 conversion factor -> the OF 08.01 row it is

@@ -260,6 +260,7 @@ from rwa_calc.reporting.corep.c07_sheet_scope import (
     publish_sheets,
     sheet_unreported,
 )
+from rwa_calc.reporting.corep.ccf_buckets import CCF_CARRIERS, ccf_bucket_expr
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols
 from rwa_calc.reporting.corep.supporting_factors import (
@@ -278,6 +279,7 @@ from rwa_calc.reporting.corep.templates import (
 from rwa_calc.reporting.kernel import (
     TwoBasis,
     class_keys,
+    own_rwea,
     pick,
     population_flags,
     rw_parts,
@@ -361,15 +363,6 @@ _CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0
 _CCF_MAP_B31: dict[float, str] = {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
 _CCF_REFS: tuple[str, ...] = ("0160", "0170", "0171", "0180", "0190")
 
-# Applied-CCF carriers, in preference order. ``ccf`` is the sealed
-# aggregator-exit name the pipeline really produces (and the one C 08.01 / CR5 /
-# CR6 already read); ``ccf_applied`` is the synthetic COREP/Pillar 3 unit-frame
-# spelling, kept so the shim estate keeps working. C 07.00 read ONLY the latter
-# until 2026-08, so every real submission published structurally-null CCF buckets
-# and four supervisory rules were unevaluable — hence the resolution is a single
-# named ladder and its absence is logged, never silently tolerated. Converging
-# the synthetic estate onto ``ccf`` is a recorded follow-up, not done here.
-_CCF_CARRIERS: tuple[str, ...] = ("ccf", "ccf_applied")
 
 # Pre-conversion off-balance-sheet gross: what the CCF buckets break down, and
 # the same carrier col 0010 sums on the off-side (so 0150 decomposes into the
@@ -625,7 +618,7 @@ def c07_plans(
     # (== the retired exposure_class_applied/exposure_class ladder).
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
     if ec_col is None or ead_col is None or rwa_col is None:
         if ead_col is None or rwa_col is None:
             errors.append("C07: Missing EAD or RWA columns in results")
@@ -917,7 +910,7 @@ def _warn_if_ccf_buckets_unreportable(data: pl.DataFrame, cols: set[str]) -> Non
     This exists because the carrier-name defect (C 07.00 read ``ccf_applied``,
     which no pipeline run produces) failed silently for the life of the template.
     """
-    if pick(cols, *_CCF_CARRIERS) is not None or _OFF_BS_GROSS_COL not in cols:
+    if pick(cols, *CCF_CARRIERS) is not None or _OFF_BS_GROSS_COL not in cols:
         return
     off_bs_total = float(data[_OFF_BS_GROSS_COL].fill_null(0.0).sum())
     if off_bs_total <= 0.0:
@@ -926,7 +919,7 @@ def _warn_if_ccf_buckets_unreportable(data: pl.DataFrame, cols: set[str]) -> Non
         "C 07.00: no applied-CCF carrier (tried %s) but %.0f of off-balance-sheet "
         "gross exposure is in scope — columns 0160-0190 will report null and the "
         "CCF-breakdown validation rules cannot be evaluated",
-        ", ".join(_CCF_CARRIERS),
+        ", ".join(CCF_CARRIERS),
         off_bs_total,
     )
 
@@ -1022,19 +1015,10 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     exprs.extend(rw_band_exprs(framework, cols))
 
     # CCF bucket ref (retired _c07_ccf_cols map), off the resolved carrier.
-    ccf_col = pick(cols, *_CCF_CARRIERS)
+    ccf_col = pick(cols, *CCF_CARRIERS)
     if ccf_col is not None:
         ccf_map = _CCF_MAP_B31 if framework == "BASEL_3_1" else _CCF_MAP_CRR
-        bucket_expr: pl.Expr = pl.lit(None, dtype=pl.String)
-        for ccf_value, ref in ccf_map.items():
-            bucket_expr = (
-                pl.when(
-                    pl.col(ccf_col).cast(pl.Float64, strict=False).round(4) == round(ccf_value, 4)
-                )
-                .then(pl.lit(ref))
-                .otherwise(bucket_expr)
-            )
-        exprs.append(bucket_expr.alias("c07_ccf_bucket"))
+        exprs.append(ccf_bucket_expr(ccf_col, ccf_map).alias("c07_ccf_bucket"))
 
     # Materially-dependent ladder (exact field keeps nulls-excluded; proxies
     # fill null to False — retired _filter_re_materially_dependent).
@@ -1116,7 +1100,7 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
 
     # Supporting-factor RWEA delta (cols 0216/0217 = pre - post per row).
     if "rwa_pre_factor" in cols:
-        rwa_source = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+        rwa_source = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
         if rwa_source is not None:
             exprs.append(
                 (pl.col("rwa_pre_factor").fill_null(0.0) - pl.col(rwa_source).fill_null(0.0)).alias(
@@ -2098,7 +2082,7 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     # origin basis while col 0200 moved would break that identity the other way.
     ccf_refs = [ref for ref in _CCF_REFS if ref in column_refs]
     for ref in ccf_refs:
-        if pick(cols, *_CCF_CARRIERS) is not None and _OFF_BS_GROSS_COL in cols:
+        if pick(cols, *CCF_CARRIERS) is not None and _OFF_BS_GROSS_COL in cols:
             bucket_terms: _Terms = (*post_terms, ("c07_ccf_bucket", ref))
             if _has_bs_side(cols):
                 bucket_terms = (*bucket_terms, ("c07_bs", "off"))

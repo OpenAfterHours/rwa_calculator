@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwa-filer/schemas/publisher-issues-1.schema.json",
+  "title": "rwa-filer publisher-issue register",
+  "description": "One taxonomy release's known issues with the published validation rules (rwa_filer/boe/data/issues/<release>.json), curated by hand from evidence. Read by rwa_filer.boe.issues; rendered by rwa_filer.boe.issues_document. Format 1.",
+  "type": "object",
+  "required": ["format", "release", "publisher", "documents", "checked_against", "issues"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {"const": 1},
+    "release": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)*$"},
+    "publisher": {"type": "string", "minLength": 1},
+    "documents": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/document"}
+    },
+    "checked_against": {
+      "description": "The Bank's own publications every issue was checked against, as at a date: an issue with no publisher_log entry is not in them.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["document", "as_at"],
+        "additionalProperties": false,
+        "properties": {"document": {"$ref": "#/$defs/code"}, "as_at": {"$ref": "#/$defs/date"}}
+      }
+    },
+    "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}}
+  },
+  "$defs": {
+    "code": {"type": "string", "minLength": 1},
+    "codes": {"type": "array", "items": {"$ref": "#/$defs/code"}, "minItems": 1},
+    "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "text": {"type": "string"},
+    "document": {
+      "type": "object",
+      "required": ["title", "file", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "file": {"type": ["string", "null"], "description": "The file's name under docs/assets, where the repository keeps a copy."},
+        "url": {"type": ["string", "null"]}
+      }
+    },
+    "selector": {
+      "type": "object",
+      "required": ["table"],
+      "additionalProperties": false,
+      "properties": {
+        "table": {"$ref": "#/$defs/code"},
+        "rows": {"$ref": "#/$defs/codes"},
+        "columns": {"$ref": "#/$defs/codes"},
+        "sheets": {"$ref": "#/$defs/codes"},
+        "rows_except": {"$ref": "#/$defs/codes"},
+        "columns_except": {"$ref": "#/$defs/codes"},
+        "sheets_except": {"$ref": "#/$defs/codes"}
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["module", "rule_id", "role", "severity", "rule_sha256", "footprint", "attribution"],
+      "additionalProperties": false,
+      "properties": {
+        "module": {"$ref": "#/$defs/code"},
+        "rule_id": {"$ref": "#/$defs/code"},
+        "role": {"enum": ["subject", "contradicts", "control", "related"]},
+        "severity": {"enum": ["ERROR", "WARNING"]},
+        "rule_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "footprint": {
+          "oneOf": [
+            {"type": "array", "items": {"$ref": "#/$defs/selector"}, "minItems": 1},
+            {"type": "null"}
+          ]
+        },
+        "attribution": {"enum": ["certain", "possible"]}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "required": ["document", "pdf_page", "locator", "quote"],
+      "additionalProperties": false,
+      "properties": {
+        "document": {"$ref": "#/$defs/code"},
+        "pdf_page": {"type": ["integer", "null"], "minimum": 1},
+        "pdf_page_end": {"type": "integer", "minimum": 1},
+        "locator": {"type": "string"},
+        "quote": {"type": "string", "minLength": 1}
+      }
+    },
+    "fact": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"$ref": "#/$defs/code"},
+        {"type": ["string", "null"]},
+        {"type": ["string", "null"]},
+        {"$ref": "#/$defs/code"},
+        {"$ref": "#/$defs/code"},
+        {"type": ["number", "null"]},
+        {"type": ["string", "null"]},
+        {"type": ["integer", "null"]}
+      ]
+    },
+    "example": {
+      "type": "object",
+      "required": ["description", "rules", "facts"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {"type": "string", "minLength": 1},
+        "rules": {"type": "string", "minLength": 1, "description": "A pattern over rule codes: the rules the example is measured on."},
+        "facts": {"type": "array", "items": {"$ref": "#/$defs/fact"}, "minItems": 1}
+      }
+    },
+    "log_entry": {
+      "type": "object",
+      "required": ["entry", "published", "relation", "statement"],
+      "additionalProperties": false,
+      "properties": {
+        "entry": {"type": "integer", "minimum": 1},
+        "published": {"$ref": "#/$defs/date"},
+        "relation": {"enum": ["acknowledges", "related"]},
+        "statement": {"type": "string", "minLength": 1}
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": [
+        "id", "title", "status", "raised", "publisher_reference", "publisher_log", "fixed_in",
+        "effect", "causes", "rules", "requirement", "authority", "why_correct_return_fails",
+        "example", "alternatives_considered", "proposed_fix", "eba_precedent", "reach", "meanwhile"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^PI-[0-9]{2}[a-z]?$"},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["draft", "raised", "acknowledged", "fixed", "withdrawn"]},
+        "raised": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["date", "channel"],
+              "additionalProperties": false,
+              "properties": {"date": {"$ref": "#/$defs/date"}, "channel": {"type": "string", "minLength": 1}}
+            },
+            {"type": "null"}
+          ]
+        },
+        "publisher_reference": {"type": ["string", "null"]},
+        "publisher_log": {"type": "array", "items": {"$ref": "#/$defs/log_entry"}},
+        "fixed_in": {"type": ["string", "null"]},
+        "effect": {"enum": ["fails_correct_returns", "passes_wrong_returns", "never_runs", "no_rule_effect"]},
+        "causes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "contradicts_instructions", "contradicts_ps126_rules", "contradicts_other_rule",
+              "contradicts_template", "plausibility_not_identity", "text_differs_from_formula",
+              "instructions_gap", "taxonomy_data_type", "taxonomy_cells_missing", "too_permissive",
+              "rounding_allowance", "restates_deactivated_eba_rule"
+            ]
+          }
+        },
+        "rules": {"type": "array", "items": {"$ref": "#/$defs/rule"}, "minItems": 1},
+        "requirement": {"$ref": "#/$defs/text"},
+        "authority": {"type": "array", "items": {"$ref": "#/$defs/authority"}},
+        "why_correct_return_fails": {"$ref": "#/$defs/text"},
+        "example": {"oneOf": [{"$ref": "#/$defs/example"}, {"type": "null"}]},
+        "alternatives_considered": {"$ref": "#/$defs/text"},
+        "proposed_fix": {"$ref": "#/$defs/text"},
+        "eba_precedent": {"$ref": "#/$defs/text"},
+        "reach": {"$ref": "#/$defs/text"},
+        "meanwhile": {"$ref": "#/$defs/text"}
+      }
+    }
+  }
+}

@@ -334,6 +334,15 @@ class Evaluation:
     right_value: float | None = None
     comparisons: tuple[Comparison, ...] = ()
 
+    @property
+    def cells(self) -> frozenset[CellAddress]:
+        """Every cell the evaluation read: each side's, and each comparison's operands'."""
+        found = {*self.left, *self.right}
+        for comparison in self.comparisons:
+            found.update(comparison.left.cells)
+            found.update(comparison.right.cells)
+        return frozenset(found)
+
 
 @dataclass(frozen=True)
 class RuleTrace:

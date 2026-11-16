@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from datetime import date
 
     from rwa_filer.boe.deny import DenyEntry, DenyList
-    from rwa_filer.boe.engine import CellAddress, Evaluation, RuleResult
+    from rwa_filer.boe.engine import RuleResult
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def trace_as_run(trace: RuleTrace, results: tuple[RuleResult, ...]) -> RuleTrace
     if not switched_off:
         return replace(trace, results=results)
     kept = tuple(item for item in trace.evaluations if item.rule_id not in switched_off)
-    read = {address for evaluation in kept for address in _cells_read(evaluation)}
+    read = {address for evaluation in kept for address in evaluation.cells}
     return RuleTrace(
         results=results,
         evaluations=kept,
@@ -166,11 +166,3 @@ def _deactivated_detail(result: RuleResult, entry: DenyEntry) -> str:
         f"{entry.describe()}: the gateway does not run it and reporters are not expected to "
         f"meet it; {published_finding(result)}"
     )
-
-
-def _cells_read(evaluation: Evaluation) -> set[CellAddress]:
-    cells = {*evaluation.left, *evaluation.right}
-    for comparison in evaluation.comparisons:
-        cells.update(comparison.left.cells)
-        cells.update(comparison.right.cells)
-    return cells

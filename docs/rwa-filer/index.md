@@ -109,6 +109,31 @@ the same release's published validation rules run over the same facts. A
 structure finding does not stop the rules from running, so one pass reports
 everything.
 
+### Seeing how far a check has got
+
+A full PRA001 return takes tens of seconds to validate, nearly all of it spent
+evaluating the published rules one by one. `validate`, `build` and `dash FILE`
+say on stderr which step they are on and how many rules are done:
+
+```text
+Evaluating the published rules: 612 of 1,441 (42%) - 8s
+```
+
+In a terminal this is one line, rewritten as the work goes and cleared before
+the result is printed. Anywhere else (a log, a CI job, a pipe) nothing is shown
+unless asked for, so scripts that read stderr see what they always did.
+
+| Option | Effect |
+|--------|--------|
+| `--progress` | Always show it. Outside a terminal, one line per step and per tenth of the rules, so a log reads top to bottom. |
+| `--no-progress` | Never show it, even in a terminal. |
+
+Progress never goes to stdout, so `--format json` piped into another program
+is unaffected. The steps are reading the file, checking its structure,
+evaluating the rules and, for `build`, writing the package. Only the rules are
+counted: the others are single steps, reported as they start. The count moves
+unevenly, since a few rules that read whole templates take seconds each.
+
 ## Taxonomy releases
 
 `rwa-filer` ships each taxonomy release it supports (today the Bank of England
@@ -340,6 +365,24 @@ This one-cell return prints `False` and a single `VAL003`: the cell is valid,
 but no published rule can run on one cell, and a return nothing was checked
 against is not reported as clean.
 
+To follow a long validation, pass `progress=`: a callable that receives a
+`rwa_filer.progress.Progress` for each step, and for each rule as it is
+evaluated. `validate_return`, `collect_evidence`, `build_filing` and
+`open_source` all take it. It is called on the thread doing the work, so keep it
+quick:
+
+```python
+from rwa_filer.progress import Progress
+
+def show(event: Progress) -> None:
+    print(event.describe())  # "Evaluating the published rules: 612 of 1,441 (42%)"
+
+result = validate_return(ret, progress=show)
+```
+
+`rwa_filer.progress.StreamProgress(sys.stderr, live=True)` is the printer the
+command line uses, and can be passed as `progress=` directly.
+
 ## The validation report and the evidence export
 
 `--report FILE` (or `--format json`) writes the **validation report**: one JSON
@@ -458,6 +501,7 @@ in the exit code and in the manifest.
 | `--zip` | Write a zip whatever the size. |
 | `--force` | Write the instance even though a rule check fails. |
 | `--no-timestamp` | Leave out the creation time, so the same return always gives byte-identical files. |
+| `--progress` / `--no-progress` | Show, or never show, how far the build has got on stderr (see [Seeing how far a check has got](#seeing-how-far-a-check-has-got)). Shown by default in a terminal. |
 
 The file follows the Bank of England XBRL Filing Manual. Each data point is
 written once, even where the templates show it in two tables. Values are

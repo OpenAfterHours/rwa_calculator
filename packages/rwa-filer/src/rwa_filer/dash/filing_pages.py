@@ -12,6 +12,10 @@ Key responsibilities:
   files a build recorded — never a path the browser names.
 - Keep every refusal on the page it was made from: an override refused on the
   template grid is reported there, not on another page.
+- Run what validates the whole return — a build, and the re-validation a
+  drafted or withdrawn override calls for — as a dashboard task, so a return
+  that takes more than a moment shows its progress instead of a page that does
+  not answer.
 
 References:
 - rwa_filer.cli — ``build``, ``signoff`` and ``verify``, which these mirror
@@ -24,7 +28,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse, RedirectResponse
 from starlette.routing import Route
@@ -38,7 +41,8 @@ from rwa_filer.dash.filing import (
     draft_adjustment,
     filing_page,
 )
-from rwa_filer.release import ReleaseNotFoundError
+from rwa_filer.dash.task_pages import follow
+from rwa_filer.progress import PHASE_RULES, PHASE_STRUCTURE, PHASE_WRITING
 from rwa_filer.workflow.acts import ledger_beside, record_signoff
 
 if TYPE_CHECKING:
@@ -48,11 +52,16 @@ if TYPE_CHECKING:
 
     from rwa_filer.dash.context import DashContext
     from rwa_filer.dash.workspace import FilingRecord, OpenedReturn, WorkingReturn
+    from rwa_filer.progress import ProgressCallback
 
 logger = logging.getLogger(__name__)
 
 #: The accuracies the build form offers for monetary figures.
 MONETARY_DECIMALS: Final = (-3, 0, 2)
+#: The steps of validating the return again with its drafted overrides.
+REVALIDATION_PHASES: Final = (PHASE_STRUCTURE, PHASE_RULES)
+#: The steps of a build: validate as the file will be written, then write it.
+BUILD_PHASES: Final = (PHASE_STRUCTURE, PHASE_RULES, PHASE_WRITING)
 
 
 # =============================================================================
@@ -105,7 +114,8 @@ class FilingPages:
             )
         except ValueError as exc:
             self.context.flash(opened.return_id, str(exc))
-        return RedirectResponse(back, status_code=303)
+            return RedirectResponse(back, status_code=303)
+        return await self._revalidate(request, opened, back)
 
     async def drop(self, request: Request) -> Response:
         """Withdraw a drafted override."""
@@ -113,24 +123,36 @@ class FilingPages:
         form = await request.form()
         self.context.workspace.drop_adjustment(opened.return_id, _cell(form))
         back = _local(_text(form, "next"), f"/returns/{opened.return_id}/filing")
-        return RedirectResponse(back, status_code=303)
+        return await self._revalidate(request, opened, back)
 
     async def build(self, request: Request) -> Response:
-        """Build the filing package, as ``rwa-filer build`` would."""
+        """Build the filing package, as ``rwa-filer build`` would.
+
+        A form that cannot be a build is refused at once; the build itself runs
+        as a task, whose progress is shown if it takes a while.
+        """
         opened = self.context.opened(request)
         form = await request.form()
         try:
             options = _build_options(form)
-            await run_in_threadpool(
-                build_package,
-                self.context.workspace,
-                opened,
-                options,
-                at=datetime.now(UTC),
-            )
-        except (ValueError, ReleaseNotFoundError, OSError) as exc:
+        except ValueError as exc:
             return self._page(request, self._working(opened), error=str(exc), status_code=400)
-        return RedirectResponse(f"/returns/{opened.return_id}/filing#build", status_code=303)
+        workspace, at = self.context.workspace, datetime.now(UTC)
+
+        def work(progress: ProgressCallback) -> str:
+            build_package(workspace, opened, options, at=at, progress=progress)
+            return f"/returns/{opened.return_id}/filing#build"
+
+        def refused(request: Request, error: str, status_code: int) -> Response:
+            return self._page(request, self._working(opened), error=error, status_code=status_code)
+
+        task = self.context.tasks.start(
+            f"Building the filing package for {opened.name}",
+            work,
+            phases=BUILD_PHASES,
+            refused=refused,
+        )
+        return await follow(self.context, request, task)
 
     async def signoff(self, request: Request) -> Response:
         """Record an approval of a written package, bound to its checksum."""
@@ -165,6 +187,36 @@ class FilingPages:
         return FileResponse(path, filename=path.name)
 
     # -- helpers ----------------------------------------------------------------
+
+    async def _revalidate(self, request: Request, opened: OpenedReturn, back: str) -> Response:
+        """Validate ``opened`` again with its drafts as they now stand, then go ``back``.
+
+        The validation is what the page ``back`` would otherwise run while it
+        is drawn (``Workspace.working``); run as a task, it shows its progress
+        when it takes a while, and the page is then drawn from its result.
+        """
+        workspace = self.context.workspace
+
+        def work(progress: ProgressCallback) -> str:
+            workspace.working(opened, progress=progress)
+            return back
+
+        def refused(request: Request, error: str, status_code: int) -> Response:
+            return self.context.render(
+                request,
+                "error.html",
+                status_code=status_code,
+                title="The return could not be validated with its overrides",
+                message=error,
+            )
+
+        task = self.context.tasks.start(
+            f"Validating {opened.name} with its drafted overrides",
+            work,
+            phases=REVALIDATION_PHASES,
+            refused=refused,
+        )
+        return await follow(self.context, request, task)
 
     def _record(self, request: Request, opened: OpenedReturn) -> FilingRecord:
         builds = self.context.workspace.builds(opened.return_id)

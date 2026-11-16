@@ -38,6 +38,7 @@ The address carries this session's token: keep it to yourself. Ctrl+C stops it.
 | `--port N` | The port to try first (default 8765). If it is taken the next free one is used, so two dashboards can run side by side |
 | `--no-browser` | Print the address but do not open a browser |
 | `--workdir DIR` | Where the dashboard keeps files opened in it. The default is a new temporary folder |
+| `--progress` / `--no-progress` | Whether to show how far opening `FILE` has got before the dashboard starts. Shown by default in a terminal (see [Seeing how far a check has got](index.md#seeing-how-far-a-check-has-got)) |
 
 ## The pages
 
@@ -47,6 +48,19 @@ XBRL instance states its own, and anything entered on the form overrides it.
 The form also names the taxonomy release to validate against; left at its
 default, it is the release live for the return's module. Returns you open stay
 listed until the dashboard is stopped.
+
+**While a return is validated.** A small return opens straight onto its
+overview. If the work is still going after a second, which a full PRA001 return
+always is, a progress page replaces the frozen form. It shows each step
+(reading the file, checking its structure, evaluating the published rules), a
+bar with how many of the rules are done, and how long the work has run. The page
+updates every second and moves on to the overview by itself. If the file
+cannot be opened, the reason appears on the Open page with the form still
+filled in. You can leave the page meanwhile: the work is listed under **Under
+way** in the side navigation until it ends. The same progress page appears when
+a return is opened against another release, when another version is opened on
+the Compare page, after an override is drafted or withdrawn (the return is
+validated again with it), and while a package is built.
 
 Every page of a return shows, in the top bar, the taxonomy release it was
 validated against, the module's status in it (live or future) and whether the

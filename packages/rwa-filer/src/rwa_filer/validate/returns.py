@@ -68,6 +68,7 @@ from rwa_filer.boe.engine import (
     evaluate_rules,
     trace_rules,
 )
+from rwa_filer.progress import PHASE_STRUCTURE, Progress, notify
 from rwa_filer.release import choose_release
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
@@ -89,6 +90,7 @@ if TYPE_CHECKING:
     from rwa_filer.boe.catalogue import RuleBook
     from rwa_filer.boe.engine import RuleResult, RuleTrace
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import CoverageShortfall
@@ -367,6 +369,7 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
     accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
+    progress: ProgressCallback | None = None,
 ) -> ReturnValidation:
     """Validate ``ret``: structure against the taxonomy, then the published rules.
 
@@ -393,6 +396,9 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
             reported first, with the structure findings.
         source: The file the return was read from (``identity.source_identity``),
             for the report to fingerprint.
+        progress: Told which step the validation is on — the structure, then
+            the rules, counted one by one (``rwa_filer.progress``) — so a
+            person waiting on a large return can see it is moving.
 
     Returns:
         A ``ReturnValidation``. Never raises for a condition in the data.
@@ -409,7 +415,9 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
         taxonomy=taxonomy,
         today=today,
     )
-    validation, _trace = _validate(ret, chosen, accuracy, source_findings, source, trace=False)
+    validation, _trace = _validate(
+        ret, chosen, accuracy, source_findings, source, trace=False, progress=progress
+    )
     return validation
 
 
@@ -424,6 +432,7 @@ def trace_return(  # noqa: PLR0913 - validate_return's arguments
     accuracy: Accuracy | None = None,
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
+    progress: ProgressCallback | None = None,
 ) -> tuple[ReturnValidation, RuleTrace | None]:
     """``validate_return``, keeping every evaluation the verdict was reached by.
 
@@ -439,7 +448,7 @@ def trace_return(  # noqa: PLR0913 - validate_return's arguments
         taxonomy=taxonomy,
         today=today,
     )
-    return _validate(ret, chosen, accuracy, source_findings, source, trace=True)
+    return _validate(ret, chosen, accuracy, source_findings, source, trace=True, progress=progress)
 
 
 def findings_for(report: RuleReport) -> list[Finding]:
@@ -482,8 +491,10 @@ def _validate(
     source: SourceIdentity | None,
     *,
     trace: bool,
+    progress: ProgressCallback | None,
 ) -> tuple[ReturnValidation, RuleTrace | None]:
     pack = chosen.pack
+    notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version))
     structure = (*source_findings, *check_structure(ret, pack))
     release_findings = tuple(check_reference_date(ret, pack))
     module = pack.info.module
@@ -509,11 +520,13 @@ def _validate(
         return unchecked, None
 
     enforced = rulebook.enforced(module)
-    traced = trace_rules(ret, pack, enforced, accuracy=accuracy) if trace else None
+    traced = (
+        trace_rules(ret, pack, enforced, accuracy=accuracy, progress=progress) if trace else None
+    )
     results = (
         traced.results
         if traced is not None
-        else tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy))
+        else tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy, progress=progress))
     )
     report = _report(ret, pack, rulebook, results)
     validation = ReturnValidation(

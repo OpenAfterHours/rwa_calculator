@@ -51,6 +51,7 @@ if TYPE_CHECKING:
 
     from rwa_filer.filing import FilingPackage
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.returns import ReturnValidation
@@ -185,6 +186,7 @@ class Workspace:
         *,
         name: str | None = None,
         taxonomy: str | None = None,
+        progress: ProgressCallback | None = None,
     ) -> OpenedReturn:
         """Read and validate ``path``, and keep it under a new id.
 
@@ -194,18 +196,20 @@ class Workspace:
             name: The name to show it under; defaults to the file's.
             taxonomy: The release to validate it against, by version; defaults
                 to the workspace's, else the default release for the module.
+            progress: Told how far the reading and the validation have got.
 
         Raises:
             ValueError: the file is missing, unsupported, lacks a header it
                 needs, or is not readable as what its suffix says it is.
             ReleaseNotFoundError: the taxonomy release could not be resolved.
         """
-        reading = open_source(path, fields, taxonomy=taxonomy or self.taxonomy)
+        reading = open_source(path, fields, taxonomy=taxonomy or self.taxonomy, progress=progress)
         validation = validate_return(
             reading.ret,
             release=reading.release,
             source_findings=reading.findings,
             source=source_identity(path),
+            progress=progress,
         )
         opened = OpenedReturn(
             return_id=secrets.token_hex(4),
@@ -220,7 +224,13 @@ class Workspace:
         logger.info("opened %s as %s", opened.name, opened.return_id)
         return opened
 
-    def reopen(self, opened: OpenedReturn, taxonomy: str) -> OpenedReturn:
+    def reopen(
+        self,
+        opened: OpenedReturn,
+        taxonomy: str,
+        *,
+        progress: ProgressCallback | None = None,
+    ) -> OpenedReturn:
         """Open ``opened``'s file again, against another taxonomy release.
 
         The return keeps its header — the one it was opened with, overrides
@@ -240,7 +250,9 @@ class Workspace:
             currency=header.currency,
             entity_scheme=header.entity_scheme,
         )
-        return self.open(opened.path, fields, name=opened.name, taxonomy=taxonomy)
+        return self.open(
+            opened.path, fields, name=opened.name, taxonomy=taxonomy, progress=progress
+        )
 
     def save_upload(self, filename: str, content: bytes) -> Path:
         """Write an uploaded file into the workspace and return where it went.
@@ -286,11 +298,14 @@ class Workspace:
             if self._adjustments.get(return_id, {}).pop(cell, None) is not None:
                 self._revisions[return_id] = self._revisions.get(return_id, 0) + 1
 
-    def working(self, opened: OpenedReturn) -> WorkingReturn:
+    def working(
+        self, opened: OpenedReturn, *, progress: ProgressCallback | None = None
+    ) -> WorkingReturn:
         """``opened`` with its drafted overrides applied, validated once per change of them.
 
         A page drawn after the drafts last changed gets the same object back,
         so only the first page drawn after a change pays for the validation.
+        ``progress`` is told how far that validation has got, when one is run.
         """
         return_id = opened.return_id
         with self._lock:
@@ -299,7 +314,7 @@ class Workspace:
             kept = self._working.get(return_id)
         if kept is not None and kept[0] == revision:
             return kept[1]
-        made = _work_out(opened, drafts)
+        made = _work_out(opened, drafts, progress)
         with self._lock:
             if self._revisions.get(return_id, 0) == revision:
                 self._working[return_id] = (revision, made)
@@ -342,7 +357,11 @@ class Workspace:
             return self._comparisons.setdefault(key, made)
 
 
-def _work_out(opened: OpenedReturn, drafts: tuple[Adjustment, ...]) -> WorkingReturn:
+def _work_out(
+    opened: OpenedReturn,
+    drafts: tuple[Adjustment, ...],
+    progress: ProgressCallback | None = None,
+) -> WorkingReturn:
     """``opened`` with ``drafts`` applied and validated, as a build would validate it."""
     if not drafts:
         return WorkingReturn(opened=opened, current=opened)
@@ -355,6 +374,7 @@ def _work_out(opened: OpenedReturn, drafts: tuple[Adjustment, ...]) -> WorkingRe
         release=opened.release,
         source_findings=opened.reading.findings,
         source=opened.validation.source,
+        progress=progress,
     )
     current = replace(opened, reading=replace(opened.reading, ret=ret), validation=validation)
     logger.info("validated %s with %d override(s)", opened.name, len(applied))

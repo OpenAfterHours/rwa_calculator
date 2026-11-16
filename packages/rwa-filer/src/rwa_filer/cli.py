@@ -13,17 +13,21 @@ Key responsibilities:
 - Report an input that is not what the command reads (``rwa_filer.inputs``
   raises a ``ValueError`` naming it) as one line, and refuse an output path
   that writing would certainly fail on before the command does its work.
+- Say, on stderr, how far a long validation has got (``rwa_filer.progress``):
+  a full return takes tens of seconds, and silence reads as a hang.
 
 Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
                        [--monetary-decimals N] [--evidence FILE] [--require-complete]
-                       [--taxonomy VERSION]
+                       [--taxonomy VERSION] [--progress | --no-progress]
         Validate a return (.parquet / .csv / .xlsx, or an XBRL instance .xbrl /
         .zip): structure against the taxonomy, then the published rules. With
         --evidence, also write every rule outcome, evaluation and comparison
         behind the verdict as a JSON Lines file (.jsonl, or .jsonl.gz).
         --taxonomy names the release (default: the one live for the module);
-        every command that reads a return takes it.
+        every command that reads a return takes it. --progress says on stderr
+        which step the check is on and how many rules are done; it is on by
+        default when stderr is a terminal (``validate``, ``build``, ``dash``).
     rwa-filer build FILE --out DIR [--monetary-decimals N] [--zip] [--force]
                     [--evidence FILE]
         Validate a return and write its filing package: the .xbrl instance, a
@@ -83,6 +87,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 import tempfile
@@ -100,6 +105,7 @@ from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
 from rwa_filer.model import LEI_SCHEME
+from rwa_filer.progress import StreamProgress
 from rwa_filer.readers import HeaderFields, SourceReading, load_source, open_source
 from rwa_filer.referee import RefereePlanError, RefereeUnavailableError, run_referee
 from rwa_filer.referee import report as referee_report
@@ -239,6 +245,7 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
         help="leave the creation time out of the evidence file, so the same inputs give "
         "the same bytes",
     )
+    _add_progress_argument(validate)
     validate.set_defaults(handler=_validate)
 
 
@@ -274,6 +281,32 @@ def _add_evidence_argument(parser: argparse.ArgumentParser) -> None:
         help="also write every rule outcome, evaluation and comparison behind the verdict "
         "here, as JSON Lines (.jsonl; .jsonl.gz to compress)",
     )
+
+
+def _add_progress_argument(parser: argparse.ArgumentParser) -> None:
+    """``--progress`` / ``--no-progress``: whether to say how far the check has got."""
+    parser.add_argument(
+        "--progress",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="say on stderr which step the check is on and how many rules are done "
+        "(default: when stderr is a terminal)",
+    )
+
+
+def _watching(args: argparse.Namespace) -> contextlib.AbstractContextManager[StreamProgress | None]:
+    """The progress printer the command's ``--progress`` asks for, or none.
+
+    Asked for or not, it writes to stderr only — stdout carries the result, and
+    is often piped into a file or another program. On a terminal it is one line
+    rewritten in place and cleared before the result is printed; anywhere else
+    (``--progress`` into a log) it is one line per step.
+    """
+    terminal = _is_terminal(sys.stderr)
+    wanted = terminal if args.progress is None else args.progress
+    if not wanted:
+        return contextlib.nullcontext()
+    return StreamProgress(sys.stderr, live=terminal)
 
 
 def _accuracy(args: argparse.Namespace) -> Accuracy | None:
@@ -319,27 +352,30 @@ def _validate(args: argparse.Namespace) -> int:
     if problem := _unwritable(args.report, "--report") or _unwritable(args.evidence, "--evidence"):
         return _fail(problem)
     try:
-        source = _load(args)
-        accuracy, identity = _accuracy(args), source_identity(args.file)
-        # Tracing keeps every evaluation in memory: only when evidence is asked for.
-        evidence = None
-        if args.evidence is not None:
-            evidence = collect_evidence(
-                source.ret,
-                release=source.release,
-                accuracy=accuracy,
-                source_findings=source.findings,
-                source=identity,
-            )
-            validation = evidence.validation
-        else:
-            validation = validate_return(
-                source.ret,
-                release=source.release,
-                accuracy=accuracy,
-                source_findings=source.findings,
-                source=identity,
-            )
+        with _watching(args) as progress:
+            source = _load(args, progress=progress)
+            accuracy, identity = _accuracy(args), source_identity(args.file)
+            # Tracing keeps every evaluation in memory: only when evidence is asked for.
+            evidence = None
+            if args.evidence is not None:
+                evidence = collect_evidence(
+                    source.ret,
+                    release=source.release,
+                    accuracy=accuracy,
+                    source_findings=source.findings,
+                    source=identity,
+                    progress=progress,
+                )
+                validation = evidence.validation
+            else:
+                validation = validate_return(
+                    source.ret,
+                    release=source.release,
+                    accuracy=accuracy,
+                    source_findings=source.findings,
+                    source=identity,
+                    progress=progress,
+                )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
 
@@ -367,7 +403,7 @@ def _validate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _load(args: argparse.Namespace) -> SourceReading:
+def _load(args: argparse.Namespace, *, progress: StreamProgress | None = None) -> SourceReading:
     """Read the command's FILE, applying any header option given with it.
 
     Raises:
@@ -375,7 +411,7 @@ def _load(args: argparse.Namespace) -> SourceReading:
             it needs, or is not readable as what its suffix says it is.
         ReleaseNotFoundError: the taxonomy release could not be resolved.
     """
-    return open_source(args.file, _header_fields(args), taxonomy=args.taxonomy)
+    return open_source(args.file, _header_fields(args), taxonomy=args.taxonomy, progress=progress)
 
 
 def _header_fields(args: argparse.Namespace) -> HeaderFields:
@@ -444,6 +480,7 @@ def _add_build_command(commands: argparse._SubParsersAction[argparse.ArgumentPar
         help="the audit ledger to append to (default: <name>.ledger.jsonl beside the files, "
         "when --author is given)",
     )
+    _add_progress_argument(build)
     build.set_defaults(handler=_build)
 
 
@@ -459,32 +496,34 @@ def _build(args: argparse.Namespace) -> int:
     )
     if problem:
         return _fail(problem)
+    if args.adjustments is not None and not args.adjustments.is_file():
+        return _fail(f"file not found: {args.adjustments}")
     try:
-        source = _load(args)
-        ret, applied = source.ret, ()
-        if args.adjustments is not None:
-            if not args.adjustments.is_file():
-                return _fail(f"file not found: {args.adjustments}")
-            ret, applied = apply_adjustments(ret, read_adjustments(args.adjustments))
-        options = InstanceOptions(
-            monetary_decimals=args.monetary_decimals,
-            percentage_decimals=args.percentage_decimals,
-            created_at=None if args.no_timestamp else now,
-            declare_unreported=args.declare_unreported,
-        )
-        package = build_filing(
-            ret,
-            args.out,
-            release=source.release,
-            options=options,
-            name=args.name,
-            allow_rule_breaks=args.force,
-            always_zip=args.zip,
-            source_findings=source.findings,
-            adjustments=applied,
-            evidence=args.evidence,
-            source=source_identity(args.file),
-        )
+        with _watching(args) as progress:
+            source = _load(args, progress=progress)
+            ret, applied = source.ret, ()
+            if args.adjustments is not None:
+                ret, applied = apply_adjustments(ret, read_adjustments(args.adjustments))
+            options = InstanceOptions(
+                monetary_decimals=args.monetary_decimals,
+                percentage_decimals=args.percentage_decimals,
+                created_at=None if args.no_timestamp else now,
+                declare_unreported=args.declare_unreported,
+            )
+            package = build_filing(
+                ret,
+                args.out,
+                release=source.release,
+                options=options,
+                name=args.name,
+                allow_rule_breaks=args.force,
+                always_zip=args.zip,
+                source_findings=source.findings,
+                adjustments=applied,
+                evidence=args.evidence,
+                source=source_identity(args.file),
+                progress=progress,
+            )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
     source = replace(source, ret=ret)
@@ -828,6 +867,7 @@ def _add_dash_command(commands: argparse._SubParsersAction[argparse.ArgumentPars
         metavar="DIR",
         help="where the dashboard keeps the files opened in it (default: a new temporary folder)",
     )
+    _add_progress_argument(dash)
     dash.set_defaults(handler=_dash)
 
 
@@ -842,7 +882,10 @@ def _dash(args: argparse.Namespace) -> int:
     start = "/"
     if args.file is not None:
         try:
-            opened = workspace.open(args.file, _header_fields(args), taxonomy=args.taxonomy)
+            with _watching(args) as progress:
+                opened = workspace.open(
+                    args.file, _header_fields(args), taxonomy=args.taxonomy, progress=progress
+                )
         except (ValueError, ReleaseNotFoundError) as exc:
             return _fail(str(exc))
         start = f"/returns/{opened.return_id}"
@@ -1284,6 +1327,15 @@ def _print_help(parser: argparse.ArgumentParser) -> int:
     """Print a subcommand group's help when it is invoked with no action."""
     parser.print_help(sys.stdout)
     return EXIT_OK
+
+
+def _is_terminal(stream: object) -> bool:
+    """Whether ``stream`` is a terminal a person is watching (not a file, pipe or capture)."""
+    isatty = getattr(stream, "isatty", None)
+    try:
+        return bool(isatty()) if callable(isatty) else False
+    except ValueError:  # a closed stream
+        return False
 
 
 def _out(line: str) -> None:

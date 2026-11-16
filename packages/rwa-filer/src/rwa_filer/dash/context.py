@@ -29,6 +29,7 @@ from starlette.templating import Jinja2Templates
 
 from rwa_filer import __version__
 from rwa_filer.dash.referee_jobs import JobBoard
+from rwa_filer.dash.tasks import TaskBoard
 from rwa_filer.release import shipped_releases
 
 if TYPE_CHECKING:
@@ -46,6 +47,10 @@ THEME_COOKIE: Final = "rwa_filer_theme"
 THEMES: Final = ("dark", "light")
 #: The look a session starts in: the dark slate of ``rwa-ui`` and the docs.
 DEFAULT_THEME: Final = "dark"
+#: Seconds a form that starts long work waits for it before sending the person
+#: to its progress page. Work quicker than this is answered as if it were not
+#: in the background at all; slower work shows its progress within a second.
+PROGRESS_AFTER_SECONDS: Final = 1.0
 
 
 @dataclass(frozen=True)
@@ -74,11 +79,20 @@ SECTIONS: Final = (
 
 
 class DashContext:
-    """The workspace and templates a running dashboard renders its pages from."""
+    """The workspace and templates a running dashboard renders its pages from.
 
-    def __init__(self, workspace: Workspace) -> None:
+    ``tasks`` holds the long work its forms start — opening, re-validating and
+    building a return — and ``progress_after`` is how long a form waits for
+    that work before showing its progress page instead.
+    """
+
+    def __init__(
+        self, workspace: Workspace, *, progress_after: float = PROGRESS_AFTER_SECONDS
+    ) -> None:
         self.workspace = workspace
         self.jobs = JobBoard(workspace.directory)
+        self.tasks = TaskBoard()
+        self.progress_after = progress_after
         self._flashes: dict[str, str] = {}
         self.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
         self.templates.env.filters["count"] = format_count
@@ -107,6 +121,7 @@ class DashContext:
         values = {
             "theme": theme_of(request),
             "opened_returns": self.workspace.returns(),
+            "running_tasks": self.tasks.running(),
             "shipped_releases": shipped_releases(),
             "current": working.current if working else None,
             "working": working,

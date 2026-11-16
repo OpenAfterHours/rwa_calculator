@@ -33,6 +33,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from rwa_filer.model import LEI_SCHEME, ReturnHeader
+from rwa_filer.progress import PHASE_READING, Progress, notify
 from rwa_filer.readers.tabular import read_csv, read_parquet
 from rwa_filer.release import resolve_release
 
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
@@ -117,6 +119,7 @@ def open_source(
     *,
     taxonomy: str | None = None,
     today: date | None = None,
+    progress: ProgressCallback | None = None,
 ) -> SourceReading:
     """Read a file a person named, as ``rwa-filer validate`` and the dashboard do.
 
@@ -130,6 +133,8 @@ def open_source(
         taxonomy: The release to read it against, by version; ``None`` for the
             default (``rwa_filer.release``).
         today: The run date the default release is worked out for.
+        progress: Told when the reading starts (``rwa_filer.progress``): a
+            large workbook or instance takes seconds to read.
 
     Raises:
         ValueError: the file is missing, of an unsupported type, lacks a header
@@ -144,6 +149,7 @@ def open_source(
     if suffix not in (*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES):
         accepted = ", ".join((*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES))
         raise ValueError(f"unsupported file type {path.suffix!r}; expected one of {accepted}")
+    notify(progress, Progress(PHASE_READING, subject=path.name))
     source = load_source(
         path, _header(fields, required=not carries_header(path)), taxonomy=taxonomy, today=today
     )

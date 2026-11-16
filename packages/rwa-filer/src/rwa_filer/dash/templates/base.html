@@ -63,6 +63,12 @@
     {% endfor %}
     {% endif %}
     {% block nav_extra %}{% endblock %}
+    {% if running_tasks %}
+    <div class="group">Under way</div>
+    {% for running in running_tasks %}
+    <a href="/tasks/{{ running.task_id }}" class="small" id="task-link-{{ running.task_id }}"{% if task and task.task_id == running.task_id %} aria-current="page"{% endif %}>{{ icon("file") }}<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ running.title }}{% if running.progress and running.progress.counted %} · {{ running.progress.percent }}%{% endif %}</span></a>
+    {% endfor %}
+    {% endif %}
     {% set others = opened_returns | rejectattr("return_id", "equalto", current.return_id if current else "") | list %}
     {% if others %}
     <div class="group">Opened this session</div>

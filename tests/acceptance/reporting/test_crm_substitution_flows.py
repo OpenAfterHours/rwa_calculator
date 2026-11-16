@@ -51,7 +51,12 @@ from datetime import date
 import polars as pl
 import pytest
 from tests.fixtures.reporting_crm_substitution_portfolio import (
+    AMOUNT_COVERED_S4,
     B31_C08_01_DESTINATION_SHEET,
+    DRAWN_S4,
+    DRAWN_S4_GTOR_OWN,
+    GTOR_S4,
+    LN_S4,
     LOAN_EXPECTED_ORIGIN_SHEET_B31,
     LOAN_EXPECTED_ORIGIN_SHEET_CRR,
     SUBSTITUTION_INFLOW_DESIGN,
@@ -66,7 +71,18 @@ from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBund
 from rwa_calc.reporting.corep.templates import (
     C08_03_PD_PARENT_REFS,
     get_c08_03_pd_ranges,
+    get_sa_risk_weight_bands,
+    get_sa_row_sections,
 )
+from rwa_calc.reporting.filing.canonical import (
+    FILING_MODULE,
+    FILING_TAXONOMY,
+    build_canonical_return,
+)
+from rwa_filer.boe.engine import STATUS_PASS
+from rwa_filer.model import ReturnHeader
+from rwa_filer.release import resolve_release
+from rwa_filer.validate.returns import validate_return
 
 _REGIMES: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 _ORIGIN_SHEETS: dict[str, dict[str, tuple[str, str]]] = {
@@ -487,6 +503,149 @@ class TestC0803PostCrmBasis:
         assert corep.c08_03["retail_other"]["0080"].null_count() == len(
             corep.c08_03["retail_other"]
         )
+
+
+#: S4's covered leg: the engine splits the guaranteed loan into this leg and a remainder.
+_S4_COVERED_LEG: str = f"{LN_S4}__G_{GTOR_S4}"
+
+#: The OF 07.00 / C 07.00 risk-weight block is the third row section (Annex II rows
+#: 0140-0280 under Basel 3.1, 0140-0290 under CRR); each row is named by its band.
+_RW_SECTION_INDEX: int = 2
+
+#: A checksum-valid LEI, as the filing-mapping ratchet uses; the rules do not depend on it.
+_ENTITY_IDENTIFIER: str = "5493001KJTIIGC8Y1R12"
+
+
+def _s4_covered_leg(results: pl.DataFrame) -> dict[str, object]:
+    matched = results.filter(pl.col("exposure_reference") == _S4_COVERED_LEG)
+    assert matched.height == 1, f"{_S4_COVERED_LEG}: expected one leg, got {matched.height}"
+    return matched.row(0, named=True)
+
+
+def _band_row(regime_key: str, weight: float) -> str:
+    """The risk-weight row a weight is reported in, read off the template's own band list."""
+    framework = _REGIMES[regime_key]
+    labels = [
+        label
+        for rung, label in get_sa_risk_weight_bands(framework)
+        if round(rung, 4) == round(weight, 4)
+    ]
+    assert len(labels) == 1, f"{regime_key}: weight {weight} is on no published rung"
+    section = get_sa_row_sections(framework)[_RW_SECTION_INDEX]
+    refs = [row.ref for row in section.rows if row.name == labels[0]]
+    assert len(refs) == 1, f"{regime_key}: band {labels[0]!r} names {refs}"
+    return refs[0]
+
+
+def _row(sheet: pl.DataFrame, row_ref: str) -> dict[str, object]:
+    matched = sheet.filter(pl.col("row_ref") == row_ref)
+    assert matched.height == 1, f"expected one row {row_ref}, got {matched.height}"
+    return matched.row(0, named=True)
+
+
+def _value_cells(row: dict[str, object]) -> dict[str, object]:
+    return {ref: value for ref, value in row.items() if ref not in ("row_ref", "row_name")}
+
+
+class TestRiskWeightRowsOfASubstitutedLeg:
+    """A substituted covered part is reported in TWO risk-weight rows, one per basis.
+
+    PS1/26 Annex II (ps1-26-annex-ii-reporting-instructions.pdf), and the C 07.00
+    text it repeats:
+
+    - p.94, rows 0140-0280: "Institutions shall report the information on the
+      allocation of risk weights within the respective exposure class".
+    - p.84, cols 0090 / 0100: "Outflows shall correspond to the covered part of the
+      Original Exposure pre-conversion factors that is deducted from the obligor's
+      exposure class and subsequently assigned to the protection provider's exposure
+      class. That amount shall be considered as an inflow into the protection
+      provider's exposure class."
+    - p.81, col 0010: "... without taking into account ... the effect of credit risk
+      mitigation techniques".
+    - EBA Q&A 2014_1636 (same C 07.00 text): "Decisive for the reporting of exposures
+      in column 010 ... is not only the risk weight, but also the exposure class";
+      the guaranteed parts "are substituted to the exposure class of the protection
+      provider where the secured exposure is assigned to the risk weight 0% included
+      from column 100 and reported explicitly from column 150 onwards".
+
+    So cols 0010-0040 of the WHOLE S4 loan sit at the obligor's own weight on the
+    obligor's sheet; from col 0150 on (and the col 0100 inflow) the covered part sits
+    at the provider's weight on the provider's sheet. Banded on its post-substitution
+    weight for every column, the covered part's original exposure sat in the
+    PROVIDER's row of the obligor's sheet: Basel 3.1 corporates r0182 (30%), which
+    the Bank's ``boe_b0441`` / ``boe_b0441_1`` require empty; CRR corporates r0200.
+    """
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_original_exposure_is_reported_at_the_obligors_own_risk_weight(
+        self, regime_key: str
+    ) -> None:
+        results, corep = _run(regime_key)
+        leg = _s4_covered_leg(results)
+        # Adequacy (LESSONS C11): the protection was applied, and the two weights
+        # band on different rows, or this test could not see the defect.
+        assert leg["is_guarantee_beneficial"] is True
+        own_row = _band_row(regime_key, float(leg["pre_crm_risk_weight"]))
+        provider_row = _band_row(regime_key, float(leg["risk_weight"]))
+        assert own_row != provider_row
+
+        corporate = corep.c07_00["corporate"]
+        own = _row(corporate, own_row)
+        provider = _row(corporate, provider_row)
+
+        assert own["0010"] == pytest.approx(DRAWN_S4)
+        assert own["0040"] == pytest.approx(DRAWN_S4)
+        assert _value_cells(provider) == dict.fromkeys(_value_cells(provider))
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_exposure_value_and_rwea_stay_at_the_providers_risk_weight(
+        self, regime_key: str
+    ) -> None:
+        """CONTROL, green before and after: the survivor leg of LESSONS B5's two-leg shape.
+
+        Its mutation is banding the post-basis cells (or the col 0100 inflow) on the
+        obligor's weight too: the institution row then loses the 2,800,000 covered
+        part and the corporate row gains it.
+        """
+        results, corep = _run(regime_key)
+        leg = _s4_covered_leg(results)
+        own_row = _band_row(regime_key, float(leg["pre_crm_risk_weight"]))
+        provider_row = _band_row(regime_key, float(leg["risk_weight"]))
+        arrived = DRAWN_S4_GTOR_OWN + AMOUNT_COVERED_S4
+        stayed = DRAWN_S4 - AMOUNT_COVERED_S4
+
+        provider = _row(corep.c07_00["institution"], provider_row)
+        own = _row(corep.c07_00["corporate"], own_row)
+
+        assert provider["0150"] == pytest.approx(arrived)
+        assert provider["0200"] == pytest.approx(arrived)
+        assert provider["0220"] == pytest.approx(arrived * float(leg["risk_weight"]))
+        assert own["0150"] == pytest.approx(stayed)
+        assert own["0200"] == pytest.approx(stayed)
+        assert own["0220"] == pytest.approx(stayed * float(leg["pre_crm_risk_weight"]))
+
+    def test_bank_row_availability_rules_hold_on_the_corporates_sheet(self) -> None:
+        """``boe_b0441`` / ``boe_b0441_1``: no figure in a row Art. 122 gives no corporate.
+
+        The rule names the corporates sheet (z0008) rows that are not corporate risk
+        weights, row 0182 (30%) among them, over cols 0010-0240 of OF07.00.01.01 and
+        col 0210 of OF07.00.01.02. Anchored on the Bank's published rule, which cannot
+        drift with our generator (LESSONS B3).
+        """
+        _results, corep = _run("b31")
+        header = ReturnHeader(_ENTITY_IDENTIFIER, date(2027, 3, 31), FILING_MODULE)
+        pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
+        validation = validate_return(
+            build_canonical_return(corep, header, pack=pack).canonical, pack
+        )
+        assert validation.report is not None
+
+        verdicts = {
+            result.rule_id: result.status
+            for result in validation.report.results
+            if result.rule_id in ("boe_b0441", "boe_b0441_1")
+        }
+        assert verdicts == {"boe_b0441": STATUS_PASS, "boe_b0441_1": STATUS_PASS}
 
 
 class TestFixtureIntegrity:

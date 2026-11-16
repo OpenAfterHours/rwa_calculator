@@ -2259,7 +2259,7 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         # run, never injected). OF 07.00 reads all three: the risk-weight row is
         # the Article 133 weight the rules replaced (Annex II p.95, "reported
         # against the risk weights set out in Article 133 [...] disregarding the
-        # transitional provisions"; ``corep/c07.py::_rw_band_expr``) and
+        # transitional provisions"; ``corep/c07_rw_bands.py::rw_band_expr``) and
         # memorandum rows 0371-0374 key the label and the higher-risk flag.
         # Undeclared, the seal stripped them and those rows published null.
         "equity_transitional_approach": EdgeColumn(

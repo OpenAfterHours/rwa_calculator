@@ -12,6 +12,8 @@ Key responsibilities:
   cap at its secured weight, the rest at its Art. 124L weight — with every
   exposure column split by the share and every RWEA column by its part's share
   of the weight, so the two parts sum to the row.
+- Do the same for a substituted covered leg on the obligor's own weight, which
+  is the weight its ORIGINAL exposure is reported at (below).
 - Say whether a frame has any such row (``has_two_part_rows``), so a template
   resolves what to split only when there is something to split.
 - Name the columns a template's cells sum (``summed_columns``), so a template
@@ -39,9 +41,20 @@ WHY THE ENGINE RECORDS THE PARTS. The residual weight is the Art. 124L
 counterparty weight, which only the SA dispatcher computes; reporting cannot
 re-derive it without restating the dispatcher. The engine writes three carriers
 (``engine/sa/b31_risk_weight_tables.py::with_b31_loan_split_parts``), and a row is
-split only while its reported weight still EQUALS the recorded blend: a
-guaranteed leg at its guarantor's weight, a defaulted leg, any leg a later step
-re-weighted keeps carriers that no longer describe it and is left whole.
+split only while its reported weight still EQUALS the recorded blend: a defaulted
+leg, or any leg a later step re-weighted, keeps carriers that no longer describe it
+and is left whole.
+
+A SUBSTITUTED COVERED LEG IS SPLIT ON THE OBLIGOR'S OWN WEIGHT. Art. 235 moves the
+covered part's exposure value to the protector's weight, but its original exposure
+stays the obligor's (Annex II p.81 col 0010, p.84 cols 0090 / 0100), and the
+obligor's own weight — ``pre_crm_risk_weight``, kept by the engine with the
+carriers — is still the blend. So such a leg (``kernel/bases.py::substituted_leg``)
+is split where that weight equals the blend: each part's own weight goes to
+``pre_crm_risk_weight``, ``risk_weight`` keeps the protector's weight on both, and
+its RWEA — at the protector's weight throughout — is split with its exposure. A
+template banding its origin cells on ``bases.origin_risk_weight`` then reports the
+original exposure in the two parts and the exposure value whole.
 
 References:
 - PS1/26 Art. 123B, 124F, 124H, 124L; Annex II OF 07.00 rows 0140-0280 (p.94)
@@ -49,7 +62,7 @@ References:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import polars as pl
 
@@ -60,6 +73,7 @@ from rwa_calc.contracts.edges import (
     LOAN_SPLIT_SECURED_SHARE_COL,
 )
 from rwa_calc.reporting.cellspec import Formula, SafeSum, SideContext, Sum
+from rwa_calc.reporting.kernel.bases import PRE_SUBSTITUTION_RW_SOURCE, substituted_leg
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -102,7 +116,10 @@ def split_risk_weight_parts(
     frame has one), its label in ``RW_PART_COL``, ``share`` / ``1 - share`` of every
     ``exposure_cols`` column and ``share x secured / blend`` / the rest of every
     ``rwea_cols`` column. The residual part is the row less the secured part, so
-    the two add back to the row. Every other row is kept, in place and unchanged.
+    the two add back to the row. A substituted leg is split on its own
+    ``pre_crm_risk_weight`` instead, and its parts take their weights there and
+    ``share`` / ``1 - share`` of its RWEA (module docstring). Every other row is
+    kept, in place and unchanged.
 
     Args:
         frame: A template's frame of ledger rows.
@@ -121,33 +138,34 @@ def split_risk_weight_parts(
     if overlap:
         msg = f"columns cannot be split as both exposure and RWEA: {sorted(overlap)}"
         raise ValueError(msg)
-    is_two_part = _two_part_mask(frame)
-    if is_two_part is None:
+    routes = _routes(set(frame.columns))
+    if routes is None:
         return frame
     indexed = frame.with_row_index(_ORDER)
-    two_part = indexed.filter(is_two_part)
-    if two_part.is_empty():
+    is_two_part = pl.any_horizontal([route.mask for route in routes])
+    if indexed.filter(is_two_part).is_empty():
         return frame
 
     share = pl.col(LOAN_SPLIT_SECURED_SHARE_COL)
-    rwea_share = share * pl.col(LOAN_SPLIT_SECURED_RW_COL) / _reported_weight(set(frame.columns))
-    secured_amounts = {
-        **{col: pl.col(col) * share for col in exposure_cols if col in frame.columns},
-        **{col: pl.col(col) * rwea_share for col in rwea_cols if col in frame.columns},
-    }
-    residual_amounts = {col: pl.col(col) - amount for col, amount in secured_amounts.items()}
+    parts: list[pl.DataFrame] = []
+    for route in routes:
+        rows = indexed.filter(route.mask)
+        if rows.is_empty():
+            continue
+        secured_amounts = {
+            **{col: pl.col(col) * share for col in exposure_cols if col in frame.columns},
+            **{col: pl.col(col) * route.rwea_share for col in rwea_cols if col in frame.columns},
+        }
+        residual_amounts = {col: pl.col(col) - amount for col, amount in secured_amounts.items()}
+        parts += [
+            _part(rows, "secured", 0, LOAN_SPLIT_SECURED_RW_COL, secured_amounts, route.targets),
+            _part(rows, "residual", 1, LOAN_SPLIT_RESIDUAL_RW_COL, residual_amounts, route.targets),
+        ]
     whole = indexed.filter(~is_two_part).with_columns(
         pl.lit(None, dtype=pl.String).alias(RW_PART_COL), pl.lit(0).alias(_PART_ORDER)
     )
     return (
-        pl.concat(
-            [
-                whole,
-                _part(two_part, "secured", 0, LOAN_SPLIT_SECURED_RW_COL, secured_amounts),
-                _part(two_part, "residual", 1, LOAN_SPLIT_RESIDUAL_RW_COL, residual_amounts),
-            ],
-            how="vertical_relaxed",
-        )
+        pl.concat([whole, *parts], how="vertical_relaxed")
         .sort(_ORDER, _PART_ORDER)
         .drop(_ORDER, _PART_ORDER)
     )
@@ -161,8 +179,11 @@ def has_two_part_rows(frame: pl.DataFrame) -> bool:
     a CRR frame (no carriers), nor on a Basel 3.1 frame whose carriers all went
     stale or null.
     """
-    is_two_part = _two_part_mask(frame)
-    return is_two_part is not None and bool(frame.select(is_two_part.any()).item())
+    routes = _routes(set(frame.columns))
+    if routes is None:
+        return False
+    is_two_part = pl.any_horizontal([route.mask for route in routes])
+    return bool(frame.select(is_two_part.any()).item())
 
 
 def summed_columns(spec: TemplateSpec) -> frozenset[str]:
@@ -200,20 +221,43 @@ def _reported_weight(cols: set[str]) -> pl.Expr:
     )
 
 
-def _two_part_mask(frame: pl.DataFrame) -> pl.Expr | None:
-    """Which rows are two-part; ``None`` when ``frame`` carries no carriers at all.
+class _Route(NamedTuple):
+    """One way a row is two-part: which rows, where their part weights go, how RWEA splits."""
+
+    mask: pl.Expr
+    targets: tuple[str, ...]
+    rwea_share: pl.Expr
+
+
+def _routes(cols: set[str]) -> tuple[_Route, ...] | None:
+    """The two-part routes of a frame; ``None`` when it carries no carriers at all.
 
     A row is two-part when its carriers are non-null, its share is a genuine second
-    part, and its reported weight is still the recorded blend.
+    part, and the weight it is reported at is still the recorded blend: its reported
+    weight, or — on a substituted leg (module docstring) — the obligor's own weight.
     """
-    cols = set(frame.columns)
     if not set(LOAN_SPLIT_CARRIERS) <= cols:
         return None
+    share = pl.col(LOAN_SPLIT_SECURED_SHARE_COL)
+    reported = _reported_weight(cols)
+    targets = (_RISK_WEIGHT, _PRE_MISMATCH_RW) if _PRE_MISMATCH_RW in cols else (_RISK_WEIGHT,)
+    rwea_share = share * pl.col(LOAN_SPLIT_SECURED_RW_COL) / reported
+    substituted = substituted_leg(cols)
+    if substituted is None:
+        return (_Route(_is_blend(reported), targets, rwea_share),)
+    own = pl.col(PRE_SUBSTITUTION_RW_SOURCE)
+    return (
+        _Route(~substituted & _is_blend(reported), targets, rwea_share),
+        _Route(substituted & _is_blend(own), (PRE_SUBSTITUTION_RW_SOURCE,), share),
+    )
+
+
+def _is_blend(weight: pl.Expr) -> pl.Expr:
+    """Whether ``weight`` is the recorded two-part weight of a row with a second part."""
     share = pl.col(LOAN_SPLIT_SECURED_SHARE_COL)
     blend = pl.col(LOAN_SPLIT_SECURED_RW_COL) * share + pl.col(LOAN_SPLIT_RESIDUAL_RW_COL) * (
         1.0 - share
     )
-    weight = _reported_weight(cols)
     return (
         (share > 0.0)
         & (share < 1.0)
@@ -222,20 +266,22 @@ def _two_part_mask(frame: pl.DataFrame) -> pl.Expr | None:
     ).fill_null(value=False)
 
 
-def _part(
-    rows: pl.DataFrame, label: str, rank: int, weight_col: str, amounts: dict[str, pl.Expr]
+def _part(  # noqa: PLR0913 - one part: its rows, label, rank, weight and where it goes
+    rows: pl.DataFrame,
+    label: str,
+    rank: int,
+    weight_col: str,
+    amounts: dict[str, pl.Expr],
+    targets: tuple[str, ...],
 ) -> pl.DataFrame:
     """One part of ``rows``: its amounts, and its own weight in place of the blend.
 
     Every expression reads ``rows`` as it was, so the RWEA share is taken off the
     reported weight the row came in with, not the part weight written beside it.
     """
-    weights = [pl.col(weight_col).alias(_RISK_WEIGHT)]
-    if _PRE_MISMATCH_RW in rows.columns:
-        weights.append(pl.col(weight_col).alias(_PRE_MISMATCH_RW))
     return rows.with_columns(
         *(amount.alias(col) for col, amount in amounts.items()),
-        *weights,
+        *(pl.col(weight_col).alias(target) for target in targets),
         pl.lit(label).alias(RW_PART_COL),
         pl.lit(rank).alias(_PART_ORDER),
     )

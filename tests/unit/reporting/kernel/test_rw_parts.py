@@ -207,6 +207,65 @@ def test_a_mismatch_flag_without_the_multiplier_reads_the_applied_weight() -> No
     assert _split(_frame(row))[RW_PART_COL].to_list() == ["secured", "residual"]
 
 
+#: An institution guarantor's 20%, below the loan's own blended weight: Art. 235 applies.
+_PROVIDER_RW = 0.20
+
+
+def _covered(reference: str, **overrides: Any) -> dict[str, Any]:
+    """A beneficially substituted covered leg: the provider's weight, the obligor's blend kept."""
+    return (
+        _row(
+            reference,
+            risk_weight=_PROVIDER_RW,
+            rwa_final=400_000.0 * _PROVIDER_RW,
+            pre_crm_risk_weight=_BLEND,
+            is_guarantee_beneficial=True,
+        )
+        | overrides
+    )
+
+
+def test_a_substituted_row_is_split_on_the_obligors_own_weight() -> None:
+    """The covered part's ORIGINAL exposure is the obligor's, so it is reported in the two
+    parts of the obligor's own (pre-substitution) weight: the part weights go to
+    ``pre_crm_risk_weight``, while ``risk_weight`` keeps the provider's weight on both."""
+    parts = _split(_frame(_covered("RRE__G_INST")))
+
+    assert parts[RW_PART_COL].to_list() == ["secured", "residual"]
+    assert parts["pre_crm_risk_weight"].to_list() == [0.20, 0.75]
+    assert parts["risk_weight"].to_list() == [_PROVIDER_RW, _PROVIDER_RW]
+
+
+def test_a_substituted_rows_rwea_is_split_with_its_exposure() -> None:
+    """Both parts are at the provider's weight, so each takes its exposure share of the RWEA."""
+    parts = _split(_frame(_covered("RRE__G_INST")))
+    assert parts.height == 2, "the row was not split - this test would prove nothing"
+
+    assert parts["rwa_final"].sum() == pytest.approx(400_000.0 * _PROVIDER_RW, rel=1e-15)
+    for row in parts.iter_rows(named=True):
+        assert row["rwa_final"] == pytest.approx(row["ead_final"] * _PROVIDER_RW)
+
+
+@pytest.mark.parametrize(
+    ("case", "overrides"),
+    [
+        # Art. 127 re-weighted the obligor first: its own weight is no longer the blend.
+        ("stale-own-weight", {"pre_crm_risk_weight": 1.0}),
+        # An unknown benefit is not a substitution (null-safe), and the provider's
+        # weight is not the blend either.
+        ("unknown-benefit", {"is_guarantee_beneficial": None}),
+        ("declined", {"is_guarantee_beneficial": False}),
+    ],
+)
+def test_a_covered_row_that_is_not_split_on_its_own_weight_stays_whole(
+    case: str, overrides: dict[str, Any]
+) -> None:
+    covered = _frame(_covered("RRE__G_INST", **overrides))
+
+    assert _split(covered).equals(covered), case
+    assert not has_two_part_rows(covered), case
+
+
 def test_null_carriers_are_a_no_op() -> None:
     nulls = _frame(
         _row(
@@ -235,6 +294,7 @@ def test_a_frame_without_the_carriers_is_returned_unchanged() -> None:
         ("stale", _frame(_row("RRE-DEFAULTED", risk_weight=1.0, rwa_final=400_000.0)), False),
         ("null", _frame(_row("RRE-50", sa_loan_split_secured_share=None)), False),
         ("absent", _frame(_row("CRR")).drop(LOAN_SPLIT_CARRIERS), False),
+        ("substituted", _frame(_covered("RRE__G_INST")), True),
     ],
 )
 def test_has_two_part_rows_agrees_with_the_split(

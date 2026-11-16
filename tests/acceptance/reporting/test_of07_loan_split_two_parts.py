@@ -38,13 +38,15 @@ References:
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
-from tests.fixtures.reporting_portfolio import LN_RRE, build_reporting_bundle
+from tests.fixtures.raw_bundle import seal_raw_table
+from tests.fixtures.reporting_portfolio import CP_SOV, LN_RRE, build_reporting_bundle
 from tests.fixtures.reporting_row_scope_portfolio import (
     DRAWN_RRE as ROW_SCOPE_DRAWN_RRE,
 )
@@ -55,7 +57,10 @@ from tests.fixtures.reporting_row_scope_portfolio import (
     build_reporting_row_scope_bundle,
 )
 
+from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import GUARANTEE_SCHEMA
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.c07 import c07_plans
@@ -111,8 +116,10 @@ def _run(book: str, *, carriers: bool = True) -> tuple[pl.DataFrame, COREPTempla
     ``carriers=False`` drops the engine's loan-split carriers from the ledger before
     generating: the reporting split is then a no-op, which is the unsplit control.
     """
-    if book == "rich":
+    if book in ("rich", "rich-guaranteed"):
         bundle = build_reporting_bundle()
+        if book == "rich-guaranteed":
+            bundle = _with_sovereign_guarantee_on_the_mortgage(bundle)
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2027, 6, 1),
             permission_mode=PermissionMode.IRB,
@@ -131,6 +138,40 @@ def _run(book: str, *, carriers: bool = True) -> tuple[pl.DataFrame, COREPTempla
         results, framework=_FRAMEWORK, output_floor_summary=result.output_floor_summary
     )
     return result.results.collect(), corep
+
+
+#: The share of the rich mortgage a domestic sovereign guarantees (Art. 114(4): 0%).
+_GUARANTEED_SHARE = 0.25
+
+
+def _with_sovereign_guarantee_on_the_mortgage(bundle: RawDataBundle) -> RawDataBundle:
+    """The rich book with a quarter of ``RP-LN-RRE`` guaranteed by the UK sovereign.
+
+    The guarantee split gives the covered quarter its own leg; the engine prices it at
+    the sovereign's 0% (beneficial against the loan's 24.58% blend) and keeps the loan's
+    loan-split carriers and blend on it as ``pre_crm_risk_weight``.
+    """
+    guarantee = pl.DataFrame(
+        [
+            {
+                "guarantee_reference": "RP-GUAR-RRE-SOV",
+                "guarantor": CP_SOV,
+                "currency": "GBP",
+                "maturity_date": date(2035, 1, 1),
+                "amount_covered": 400_000.0 * _GUARANTEED_SHARE,
+                "percentage_covered": _GUARANTEED_SHARE,
+                "beneficiary_type": "loan",
+                "beneficiary_reference": LN_RRE,
+                "protection_type": "guarantee",
+                "includes_restructuring": True,
+                "guarantor_seniority": "senior",
+                "is_unilaterally_cancellable": False,
+                "is_unilaterally_changeable": False,
+            }
+        ],
+        schema_overrides=dtypes_of(GUARANTEE_SCHEMA),
+    )
+    return dataclasses.replace(bundle, guarantees=seal_raw_table(guarantee, "guarantees"))
 
 
 def _sheet_key(z_code: str) -> str:
@@ -311,3 +352,84 @@ def test_the_risk_weight_rows_foot_to_row_0010(
         )[column].sum()
 
         assert banded == pytest.approx(_cell(corep, sheet, "0010", column)), sheet
+
+
+class TestASubstitutedLoanSplitLeg:
+    """A guaranteed loan-split mortgage: its covered part's ORIGINAL exposure is in two parts.
+
+    PS1/26 Annex II p.94 puts a loan-split exposure in two parts, and pp.81/84 keep a
+    covered part's original exposure (cols 0010-0040) on the obligor's sheet at the
+    obligor's own weight, which for this loan is the blend. So the covered leg is split
+    on the origin basis like the rest of the loan, while its exposure value (col 0200 on)
+    goes whole to the sovereign's 0% row on the sovereign's sheet. Banded on its post-
+    substitution weight it sat in the real-estate sheet's 0% row (r0140); banded whole on
+    its own weight it would fall to row 0280, which ``boe_b0445`` requires empty.
+    """
+
+    @pytest.fixture(scope="class")
+    def guaranteed(self) -> tuple[pl.DataFrame, COREPTemplateBundle]:
+        return _run("rich-guaranteed")
+
+    def test_the_covered_leg_keeps_the_loans_two_part_weight_as_its_own(
+        self, guaranteed: tuple[pl.DataFrame, COREPTemplateBundle]
+    ) -> None:
+        """Adequacy (LESSONS C11): the engine shape the reporting split relies on."""
+        results = guaranteed[0]
+        covered = results.filter(pl.col("exposure_reference").str.starts_with(f"{LN_RRE}__G_")).row(
+            0, named=True
+        )
+        whole = _leg(_run("rich")[0], LN_RRE)
+
+        assert covered["is_guarantee_beneficial"] is True
+        assert covered["risk_weight"] == pytest.approx(0.0)
+        assert covered["pre_crm_risk_weight"] == pytest.approx(whole["risk_weight"])
+        for carrier in _LOAN_SPLIT_CARRIERS:
+            assert covered[carrier] == pytest.approx(whole[carrier]), carrier
+
+    @pytest.mark.parametrize("column", ["0010", "0040"])
+    def test_the_original_exposure_is_in_the_same_two_rows_as_without_the_guarantee(
+        self,
+        guaranteed: tuple[pl.DataFrame, COREPTemplateBundle],
+        real_estate_sheet: str,
+        column: str,
+    ) -> None:
+        unguaranteed = _run("rich")[1]
+        rows = (_FIRST_RW_ROW, _ROW_SECURED, _ROW_RESIDUAL, _ROW_OTHER)
+
+        cells = {row: _cell(guaranteed[1], real_estate_sheet, row, column) for row in rows}
+        expected = {row: _cell(unguaranteed, real_estate_sheet, row, column) for row in rows}
+
+        assert expected[_ROW_SECURED] is not None  # adequacy: the unguaranteed loan is split
+        assert cells == pytest.approx(expected)
+
+    def test_the_exposure_value_of_the_covered_part_is_on_the_sovereign_sheet(
+        self, guaranteed: tuple[pl.DataFrame, COREPTemplateBundle], real_estate_sheet: str
+    ) -> None:
+        """CONTROL, green before and after. Its mutation is banding the post-basis cells
+        on the obligor's weight too (observed red)."""
+        corep = guaranteed[1]
+        covered = 400_000.0 * _GUARANTEED_SHARE
+        secured_share = _CAP / 0.60
+
+        assert _cell(corep, real_estate_sheet, _ROW_SECURED, "0200") == pytest.approx(
+            (400_000.0 - covered) * secured_share
+        )
+        assert _cell(corep, _sheet_key("0002"), _FIRST_RW_ROW, "0200") == pytest.approx(
+            1_000_000.0 + covered  # the sovereign's own loan, and the covered part
+        )
+
+    @pytest.mark.parametrize("rule_id", ["boe_b0445", "boe_b0445_1"])
+    def test_the_real_estate_row_availability_rules_hold(
+        self, guaranteed: tuple[pl.DataFrame, COREPTemplateBundle], rule_id: str
+    ) -> None:
+        """CONTROL, green before and after (the Bank's rule leaves row 0140 open). Its
+        mutation is banding the covered leg whole on its own blend, which falls to row
+        0280 (observed red with the substituted route taken out of ``rw_parts``)."""
+        header = ReturnHeader(_ENTITY_IDENTIFIER, date(2027, 3, 31), FILING_MODULE)
+        pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
+        mapping = build_canonical_return(guaranteed[1], header, pack=pack)
+        validation, _trace = trace_return(mapping.canonical, pack)
+
+        verdicts = [result for result in validation.report.results if result.rule_id == rule_id]
+        assert len(verdicts) == 1, f"expected one {rule_id} verdict, got {len(verdicts)}"
+        assert verdicts[0].status == STATUS_PASS, f"{rule_id}: {verdicts[0]}"

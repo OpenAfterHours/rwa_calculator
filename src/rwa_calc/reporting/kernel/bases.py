@@ -12,6 +12,7 @@ Key responsibilities:
 - Derive the two SHEET keys (the obligor's class, and the guarantor's).
 - Build the sheet AXIS as the union of both bases, and tag one sheet's frame
   with which basis each leg sits on.
+- Say which risk weight the ORIGIN basis reports a substituted leg at.
 
 WHY EVERY SHEET IS TWO POPULATIONS. Annex II makes the front of C 07.00 /
 C 08.01 and the back of them answer different questions. The gross exposure and
@@ -35,11 +36,23 @@ degrade: it would either raise on the missing column or (as a tolerant
 ``equals``) silently zero the exposure-value and RWEA columns of every synthetic
 unit frame in the COREP / Pillar 3 estate.
 
+THE RISK WEIGHT IS PER BASIS TOO. A leg Art. 235 substitution moved carries the
+PROTECTOR's weight in ``risk_weight``, and the obligor's own weight before
+substitution in ``pre_crm_risk_weight`` (``engine/sa/rw_adjustments.py::
+apply_guarantee_substitution``). The origin basis reports the obligor's own book,
+so a template that rows its origin cells by risk weight (C 07.00 rows 0140-0280)
+reads the obligor's weight there and the protector's on the post basis:
+``origin_risk_weight``. Gated on the protection having been APPLIED
+(``is_guarantee_beneficial``, null-safe) rather than on the two weights merely
+differing: ``pre_crm_risk_weight`` is captured before the Art. 123B currency
+mismatch multiplier, so on an unprotected multiplied leg the two differ too.
+
 References:
 - Reg (EU) 2021/451 Annex II: C 07.00 cols 0090/0100/0200, C 08.01 cols
   0070/0080/0110/0260
 - PRA PS1/26 Annex II: OF 07.00 / OF 08.01, same column blocks
 - CRR Art. 235 (risk-weight substitution), Art. 161 (parameter substitution)
+- PRA PS1/26 Annex II OF 07.00 cols 0010 / 0090-0100 and rows 0140-0280 (pp.81, 84, 94)
 """
 
 from __future__ import annotations
@@ -48,6 +61,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -58,6 +72,12 @@ if TYPE_CHECKING:
 POST_CLASS_SOURCE: str = "reporting_class"
 POST_APPROACH_SOURCE: str = "reporting_approach"
 ORIGIN_APPROACH_SOURCE: str = "reporting_approach_origin"
+
+# The obligor's own risk weight before Art. 235 substitution, and the flag saying
+# the substitution was applied. Both CONDITIONAL on the aggregator exit (present
+# only where the guarantee step ran), so every read is presence-guarded.
+PRE_SUBSTITUTION_RW_SOURCE: str = "pre_crm_risk_weight"
+SUBSTITUTION_APPLIED_SOURCE: str = "is_guarantee_beneficial"
 
 
 @dataclass(frozen=True)
@@ -198,6 +218,34 @@ def sheet_frame(
     if keep is not None:
         on_sheet = on_sheet | pl.col(keep)
     return tagged.filter(on_sheet)
+
+
+@cites("CRR Art. 235")
+def substituted_leg(cols: set[str]) -> pl.Expr | None:
+    """True on a leg Art. 235 substitution was applied to, with its own weight recorded.
+
+    ``None`` on a frame that seals either column (a run with no guarantee, a
+    synthetic unit frame): nothing on it was substituted. Null-safe: an unknown
+    benefit is not a substitution, and a leg with no recorded own weight has no
+    other weight to report at.
+    """
+    if not {SUBSTITUTION_APPLIED_SOURCE, PRE_SUBSTITUTION_RW_SOURCE} <= cols:
+        return None
+    applied = pl.col(SUBSTITUTION_APPLIED_SOURCE).fill_null(value=False)
+    return (applied & pl.col(PRE_SUBSTITUTION_RW_SOURCE).is_not_null()).fill_null(value=False)
+
+
+@cites("CRR Art. 235")
+def origin_risk_weight(cols: set[str], post_weight: pl.Expr) -> pl.Expr:
+    """The risk weight the ORIGIN basis reports a leg at (module docstring).
+
+    The obligor's own pre-substitution weight on a ``substituted_leg``;
+    ``post_weight`` — the weight the post basis reports it at — on every other.
+    """
+    substituted = substituted_leg(cols)
+    if substituted is None:
+        return post_weight
+    return pl.when(substituted).then(pl.col(PRE_SUBSTITUTION_RW_SOURCE)).otherwise(post_weight)
 
 
 def _in_approaches(cols: set[str], approach_col: str, approaches: tuple[str, ...]) -> pl.Expr:

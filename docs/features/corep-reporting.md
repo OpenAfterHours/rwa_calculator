@@ -783,6 +783,24 @@ flowchart TD
         before the multiplier, and its RWEA keeps the multiplier. A loan inside the 55% cap
         is reported whole.
 
+    !!! info "A guaranteed exposure is reported in two risk-weight rows"
+        When the calculator applies a guarantee or credit derivative (Art. 235
+        substitution), the covered part's **original exposure** (cols 0010–0150) stays in
+        the borrower's own risk-weight row on the borrower's sheet, and its **exposure
+        value and RWEA** (cols 0160–0235, and the col 0100 inflow) move to the protection
+        provider's row on the provider's sheet. Annex II (p.84) makes cols 0090 / 0100 the
+        covered part "deducted from the obligor's exposure class" and (p.94) the rows "the
+        allocation of risk weights within the respective exposure class".
+
+        An unrated corporate loan of 8,000,000 with 2,800,000 covered by a CQS 2 bank is
+        reported with 8,000,000 in the corporates sheet's 100% row (cols 0010 / 0040) and
+        5,200,000 there from col 0150 on; the 2,800,000 arrives in the institutions sheet's
+        30% row. The corporates sheet's 30% row is empty, as the Bank's rules
+        `boe_b0441` / `boe_b0441_1` require. A guarantee from a borrower's own class puts
+        the one loan in two rows of the same sheet. A guaranteed loan-split mortgage
+        reports its covered part's original exposure in the two loan-split rows. Nothing
+        changes in the risk weight or the RWEA.
+
     **Section 4 — Breakdown by CIU Approach**
 
     | Ref | Row | vs CRR |

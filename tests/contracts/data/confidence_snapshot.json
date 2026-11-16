@@ -4063,7 +4063,9 @@
         "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa",
         "rwa_calc.engine.sa.guarantor_rw::build_guarantor_rw_expr",
         "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution",
-        "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution"
+        "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution",
+        "rwa_calc.reporting.kernel.bases::origin_risk_weight",
+        "rwa_calc.reporting.kernel.bases::substituted_leg"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -7152,7 +7154,8 @@
       "code_functions": [
         "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa",
         "rwa_calc.engine.equity.calculator::_b31_higher_risk_expr",
-        "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt"
+        "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt",
+        "rwa_calc.reporting.corep.c07_rw_bands::rw_band_expr"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -7175,6 +7178,7 @@
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/sa/risk_weights.py",
+        "reporting/corep/c07_rw_bands.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
       ],

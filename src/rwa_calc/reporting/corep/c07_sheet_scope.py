@@ -82,7 +82,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.edges import REPORTING_CLASS_PRE_DEFAULT_COL
-from rwa_calc.reporting.cellspec import RowPredicate
+from rwa_calc.reporting.corep.c07_rw_bands import band_row_presence
 from rwa_calc.reporting.corep.of07_published_cells import (
     get_c07_memo_default_sheet_keys,
     get_c07_rows_not_on_sheet,
@@ -257,10 +257,11 @@ def null_empty_rows_by_population(
 
     Rows 0300 / 0320 are counted over the whole sheet frame, memorandum legs
     included; every other row over the sheet's own legs. Without memorandum legs
-    the two are one frame and this is the ordinary pass.
+    the two are one frame and this is the ordinary pass. A risk-weight row counts a
+    leg on a basis at that basis's band (``c07_rw_bands.band_row_presence``).
     """
     preds = {
-        ref: None if terms is None else RowPredicate(equals=terms)
+        ref: None if terms is None else band_row_presence(terms, *basis_flags(terms, basis))
         for ref, terms in plan.row_terms.items()
     }
     memo = {ref for ref, terms in plan.row_terms.items() if terms and MEMO_TERM in terms}

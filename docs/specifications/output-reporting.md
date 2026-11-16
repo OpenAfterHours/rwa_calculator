@@ -283,10 +283,13 @@ Approach's), but always allocated to row 0261 in Section 3.
       (RWEA), so the parts add back to the row, and each part bands on its own weight.
       A row is split only while the weight it is reported against still equals the
       recorded blend — the pre-multiplier weight where Art. 123B applied, so the RWEA
-      keeps the multiplier — and a guaranteed, defaulted or otherwise re-weighted leg
-      stays whole: Art. 127 and CRM substitution run after the dispatcher and leave
-      its record on the row, so the reader, not the engine, is what keeps a defaulted
-      mortgage out of the 20% / 75% rows. Both parts stay on the real-estate sheet
+      keeps the multiplier — and a defaulted or otherwise re-weighted leg stays
+      whole: Art. 127 runs after the dispatcher and leaves its record on the row, so
+      the reader, not the engine, is what keeps a defaulted mortgage out of the
+      20% / 75% rows. A covered leg Art. 235 substitution was applied to is split on
+      the OBLIGOR's own weight (`pre_crm_risk_weight`, still the blend): its original
+      exposure goes to the two part rows of the real-estate sheet, its exposure value
+      whole to the protection provider's row (see the next note). Both parts stay on the real-estate sheet
       (Art. 112(2) Table A2 ranks real estate above retail and corporates;
       Art. 123(2)). Worked example
       (`b31/rich`, `RP-LN-RRE`, 400,000 at 60% LTV to a natural person, 24.58% as a
@@ -298,13 +301,39 @@ Approach's), but always allocated to row 0261 in Section 3.
       sentence), and banding a non-split Art. 123B or junior-charge exposure on its
       un-multiplied weight — those two are still banded on the applied weight; no
       registered portfolio reaches either.
+    - **A substituted covered part is reported in two risk-weight rows, one per
+      basis.** Cols 0010-0040 are the original exposure "deducted from the
+      obligor's exposure class" (Annex II p.84, cols 0090 / 0100) and the rows give
+      "the allocation of risk weights within the respective exposure class" (p.94),
+      so cols 0010-0150 of a covered part sit at the **obligor's own** risk weight on
+      the obligor's sheet; from col 0150 on — cols 0160-0235, and the col 0100 inflow
+      — they sit at the **protection provider's** weight on the provider's sheet (EBA
+      Q&A 2014_1636 reads the identical C 07.00 text the same way). **Implemented
+      as:** `reporting/corep/c07_rw_bands.py` derives two bands, `c07_rw_band` (the
+      post weight) and `c07_rw_band_origin` (the obligor's `pre_crm_risk_weight`
+      wherever `is_guarantee_beneficial` is true — the protection was applied — else
+      the post weight; `reporting/kernel/bases.py::origin_risk_weight`); a
+      risk-weight row's origin cells key the second, its post cells the first, and
+      the row is non-empty when a leg is on the sheet under a basis at that basis's
+      band. A same-class substitution therefore reports one leg in two rows of one
+      sheet. Worked example (`crm-substitution`, S4: an unrated corporate loan of
+      8,000,000, 2,800,000 covered by a CQS 2 institution): corporates row 0230
+      (100%) c0010 = c0040 = 8,000,000 and c0150 = c0200 = c0220 = 5,200,000;
+      corporates row 0182 (30% under Basel 3.1; row 0200, 50%, under CRR) empty, as
+      the Bank's `boe_b0441` / `boe_b0441_1` require; institutions row 0182
+      c0150 = c0200 = 4,300,000 (its own 1,500,000 and the 2,800,000 inflow),
+      c0220 = 1,290,000. No risk weight or RWEA changes. **Not yet:** the Financial
+      Collateral Simple Method and the Art. 232 other-funded methods still weight
+      the covered part inside one blended row (P1.347), and a covered leg the due
+      diligence override or the Art. 113(6) intra-group 0% re-weights after
+      substitution is banded on its own weight as it stood before those steps.
     - Equity exposures under the Standardised Transitional Approach (Rules 4.1–4.10
       of the Credit Risk: General Provisions (CRR) Part) are allocated to rows 0250
       and 0261 per Art. 133, and additionally reported against memorandum rows
       0371–0374 for the transitional period (expiring 1 January 2030). The
       memorandum reporting in 0371–0374 does **not** affect the primary allocation
       to 0250 / 0261.
-    - **Implemented as:** `reporting/corep/c07.py::_rw_band_expr` bands a leg on
+    - **Implemented as:** `reporting/corep/c07_rw_bands.py::rw_band_expr` bands a leg on
       `risk_weight_pre_equity_transitional` (the Article 133 weight the rules
       4.2 / 4.3 weight replaced) where it is set, and on `risk_weight` otherwise,
       so a 160% leg reports in row 0250 and a 220% leg in row 0261 with col 0220

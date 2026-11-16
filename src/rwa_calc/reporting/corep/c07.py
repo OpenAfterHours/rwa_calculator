@@ -175,6 +175,10 @@ docs/plans/phase7-declarative-reporting.md §6):
   CCR rows their gross, in cells a return cannot carry. OF 07.00 also has no
   col 0020 (``templates.B31_C07_COLUMNS``). CRR is untouched: no EBA template is
   held to read its grey cells from.
+- TRANSITIONAL EQUITY IS ROWED BY ITS ARTICLE 133 WEIGHT (PS1/26 Annex II
+  p.95-96): rows 0250 / 0261 with the transitional RWEA in col 0220, never row
+  0280, off the sealed ``risk_weight_pre_equity_transitional`` (``_rw_band_expr``);
+  memorandum rows 0371-0374 repeat those legs on the class (p) sheet alone.
 - The CCF buckets (0160-0190) are a breakdown of the **fully adjusted
   exposure value of off-balance-sheet items** — Annex II heads that block
   "BREAKDOWN OF THE FULLY ADJUSTED EXPOSURE VALUE OF OFF-BALANCE SHEET
@@ -514,6 +518,13 @@ _EQUITY_TRANSITIONAL_FILTERS: dict[str, tuple[str, bool]] = {
     "0373": ("irb_transitional", True),
     "0374": ("irb_transitional", False),
 }
+# The equity calculator's sealed transitional carriers. Rows 0371-0374 key the
+# first two on the class (p) sheet alone (PS1/26 Annex II ¶55A; the Bank
+# publishes OF 07.00.01.04 on sheet 0016 only); the band rows read the third.
+_EQUITY_TRANSITIONAL_COL: str = "equity_transitional_approach"
+_EQUITY_HIGHER_RISK_COL: str = "equity_higher_risk"
+_EQUITY_ART133_RW_COL: str = "risk_weight_pre_equity_transitional"
+_EQUITY_SHEET_KEY: str = C07_00_SA_SHEET_MAP["equity"]
 
 _Terms = tuple[tuple[str, str | bool], ...]
 
@@ -997,7 +1008,7 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
 
     # RW band label (retired _compute_rw_section_rows assignment).
     if "risk_weight" in cols:
-        exprs.append(_rw_band_expr(framework).alias("c07_rw_band"))
+        exprs.append(_rw_band_expr(framework, cols).alias("c07_rw_band"))
 
     # CCF bucket ref (retired _c07_ccf_cols map), off the resolved carrier.
     ccf_col = pick(cols, *_CCF_CARRIERS)
@@ -1321,7 +1332,7 @@ def _netting_reduction_expr(cols: set[str]) -> pl.Expr:
     return reduction.alias(_NETTING_REDUCTION_COL)
 
 
-def _rw_band_expr(framework: str) -> pl.Expr:
+def _rw_band_expr(framework: str, cols: set[str]) -> pl.Expr:
     """The risk-weight band LABEL for one row — the C 07.00 section-2 row axis.
 
     One definition, used twice: ``_prepare`` derives ``c07_rw_band`` from it for the
@@ -1330,15 +1341,25 @@ def _rw_band_expr(framework: str) -> pl.Expr:
     is regime-shaped (``get_sa_risk_weight_bands``; Basel 3.1 adds 15/25/30/40/45/
     60/65/80/85/105/110/130/135% sub-bands) and ends in the "Other risk weights"
     catch-all, so a weight matching no band is reported, never dropped.
+
+    TRANSITIONAL EQUITY is banded on the Article 133 weight the transitional
+    replaced, not the applied one. PS1/26 Annex II p.95: such exposures "shall be
+    reported against the risk weights set out in Article 133 [...] disregarding the
+    transitional provisions. However, the RWEA shall still reflect the transitional
+    provisions"; p.96 names rows 0250 / 0261 for them. None of the rules 4.2 / 4.3
+    weights (160-340%) is a rung, so banded on ``risk_weight`` the leg fell to
+    "Other risk weights", which ``boe_b0458`` requires empty on sheet 0016. The
+    carrier is coalesced INTO the ladder rather than mapped to a row name, so the
+    catch-all still holds whatever it says; it is null off the transitional legs
+    and absent on CRR and equity-free runs, where the ladder reads as before.
     """
+    weight = pl.col("risk_weight").cast(pl.Float64, strict=False)
+    if _EQUITY_ART133_RW_COL in cols:
+        weight = pl.coalesce(pl.col(_EQUITY_ART133_RW_COL), weight)
     band_expr: pl.Expr = pl.lit("Other risk weights")
     for rw_value, label in reversed(get_sa_risk_weight_bands(framework)):
         band_expr = (
-            pl.when(
-                pl.col("risk_weight").cast(pl.Float64, strict=False).round(4) == round(rw_value, 4)
-            )
-            .then(pl.lit(label))
-            .otherwise(band_expr)
+            pl.when(weight.round(4) == round(rw_value, 4)).then(pl.lit(label)).otherwise(band_expr)
         )
     return band_expr
 
@@ -1548,7 +1569,7 @@ def _sa_inflows(results: pl.LazyFrame, cols: set[str], framework: str) -> _Inflo
     # inflow now reaches (col 0150 through 0110, and col 0200 through the post
     # basis). ``risk_weight`` is absent on a frame too thin to band; the router
     # then returns no split and the band rows keep their ordinary empty policy.
-    band_expr = _rw_band_expr(framework) if "risk_weight" in cols else None
+    band_expr = _rw_band_expr(framework, cols) if "risk_weight" in cols else None
     for exposure_class, inflow in irb_origin_inflows(
         results, cols, destination="standardised", band_expr=band_expr
     ).items():
@@ -1786,9 +1807,11 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
     # Section 5: memorandum items
     if ref in _EQUITY_TRANSITIONAL_FILTERS:
         approach, higher_risk = _EQUITY_TRANSITIONAL_FILTERS[ref]
-        base: _Terms = _terms(("equity_transitional_approach", approach))
-        if "equity_higher_risk" in cols:
-            return _terms(*base, ("equity_higher_risk", higher_risk))
+        base: _Terms = _terms(
+            (_SHEET_KEY_COL, _EQUITY_SHEET_KEY), (_EQUITY_TRANSITIONAL_COL, approach)
+        )
+        if _EQUITY_HIGHER_RISK_COL in cols:
+            return _terms(*base, (_EQUITY_HIGHER_RISK_COL, higher_risk))
         if higher_risk:
             return None
         return base

@@ -273,6 +273,28 @@ Approach's), but always allocated to row 0261 in Section 3.
       0371–0374 for the transitional period (expiring 1 January 2030). The
       memorandum reporting in 0371–0374 does **not** affect the primary allocation
       to 0250 / 0261.
+    - **Implemented as:** `reporting/corep/c07.py::_rw_band_expr` bands a leg on
+      `risk_weight_pre_equity_transitional` (the Article 133 weight the rules
+      4.2 / 4.3 weight replaced) where it is set, and on `risk_weight` otherwise,
+      so a 160% leg reports in row 0250 and a 220% leg in row 0261 with col 0220
+      at the transitional RWEA; row 0280 stays empty on the class (p) sheet, as
+      the Bank's `boe_b0458` requires. Rows 0371–0374 key the
+      `equity_transitional_approach` / `equity_higher_risk` carriers on the class
+      (p) sheet only (¶55A; the Bank publishes OF 07.00.01.04 on sheet 0016
+      alone). The three carriers are sealed on `AGGREGATOR_EXIT_EDGE`; the
+      equity calculator sets them only on legs whose weight rules 4.2 / 4.3
+      assigned (firms without IRB permission, 2027–2029). Rows 0373 / 0374 stay
+      empty until rules 4.4–4.6 (IRB permission) are implemented. Registered
+      book: `tests/fixtures/reporting_equity_transitional_portfolio.py`
+      (`b31/equity-transitional`).
+    - **Bank-rule conflict (publisher issue PI-01).** A correct return of such
+      equity fails `boe_b1016` / `boe_b1031` (ERROR, Total sheet: RWEA ≥ 2.5× /
+      4× exposure value on rows 0250 / 0261) and `boe_b0491` / `boe_b0506`
+      (WARNING, sheet 0016: RWEA = 2.5× / 4×), because every rules 4.2 / 4.3
+      weight is below the row weight; and `boe_b0710_2` (ERROR) on rows 0371 /
+      0372, because an on-balance-sheet holding has no conversion-factor
+      breakdown. These are banked in the supervisory register as rule limits;
+      the figures are not altered to satisfy them.
     - Source: PS1/26 Annex II §3.2.5, pp. 95–96 of
       `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf`.
 

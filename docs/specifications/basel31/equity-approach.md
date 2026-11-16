@@ -250,7 +250,11 @@ calculator writes `equity_transitional_approach = "sa_transitional"`,
 `equity_higher_risk` and `risk_weight_pre_equity_transitional` (the Art. 133
 weight), for OF 07.00's risk-weight rows and memorandum rows 0371 / 0372. All
 three are null on every other leg and on every date outside the window, and
-are not emitted under CRR.
+are not emitted under CRR. They are sealed on the aggregator exit, and OF 07.00
+reports such a leg on the row of its Art. 133 weight (0250 / 0261) with the
+transitional RWEA, plus memorandum row 0372 / 0371 on the class (p) sheet — see
+[Output Reporting](../output-reporting.md) for the row rule and the Bank
+validation rules a correct return of this equity fails (publisher issue PI-01).
 
 ### IRB Transitional (Rules 4.4–4.6) — Firms With IRB Permission
 

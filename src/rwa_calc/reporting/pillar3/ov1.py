@@ -78,8 +78,11 @@ Cell semantics (golden-gated):
   exposure, not "other", and is silently excluded here.
 - Rows 11-14 (Basel 3.1 equity sub-approaches): equity-origin legs narrowed
   by the presence-TOLERANT discriminators (``equity_transitional_approach``
-  / ``ciu_approach`` — F6 columns the seal strips today, so these cells are
-  recorded permanently-null in production).
+  / ``ciu_approach``, both sealed on the aggregator exit; absent on an
+  equity-free run, which leaves the rows null). Row 11 keys
+  ``irb_transitional``, which no leg carries until the IRB Transitional
+  Approach (PS1/26 Credit Risk: General Provisions rules 4.4-4.6) is
+  implemented, so it is null in production today.
 - Row 26: output-floor multiplier (first non-null ``output_floor_pct``).
 - Row 27: OF-ADJ from the output-floor summary (SideContext).
 - Column b (T-1) stays null throughout; column c = a x 0.08 except the
@@ -182,7 +185,8 @@ _APPROACH_REFS: dict[str, tuple[str, ...]] = {
 _EQUITY_SIMPLE_MEMBERSHIP: dict[str, bool] = {"2": False, "UK4a": True}
 
 # Basel 3.1 equity sub-approach memo rows: origin equity legs narrowed by a
-# presence-tolerant discriminator column == value (F6-stripped today).
+# presence-tolerant discriminator column == value (sealed; absent on an
+# equity-free run).
 _EQUITY_SUBAPPROACH_REFS: dict[str, tuple[str, str]] = {
     "11": ("equity_transitional_approach", "irb_transitional"),
     "12": ("ciu_approach", "look_through"),

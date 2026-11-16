@@ -252,7 +252,7 @@ class RowPredicate:
     subclass: str | None = None
     # Presence-TOLERANT column == value conditions for the audited F6 columns
     # (e.g. the OV1 equity sub-approach discriminators ciu_approach /
-    # equity_transitional_approach, which the seal strips today) and for
+    # equity_transitional_approach, sealed but absent on equity-free runs) and for
     # template-owned derived discriminator columns (Boolean values compare
     # against derived flags like C07's substitution/band columns): an absent
     # column yields an EMPTY subset — the recorded permanently-null-cell

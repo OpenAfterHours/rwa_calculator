@@ -2205,6 +2205,40 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
             citation="PS1/26 Art. 132",
             null_meaning="null = non-CIU leg; absent = equity-free run; never an approach",
         ),
+        # The PS1/26 Credit Risk: General Provisions rules 4.2 / 4.3 carriers the
+        # equity calculator writes (``_apply_standardised_equity_transitional``):
+        # non-null ONLY on a leg whose weight those rules set; typed nulls on every
+        # other equity-table leg under Basel 3.1; not produced under CRR. Same
+        # CONDITIONAL terms as ``equity_method`` (absent on an equity-free or CRR
+        # run, never injected). OF 07.00 reads all three: the risk-weight row is
+        # the Article 133 weight the rules replaced (Annex II p.95, "reported
+        # against the risk weights set out in Article 133 [...] disregarding the
+        # transitional provisions"; ``corep/c07.py::_rw_band_expr``) and
+        # memorandum rows 0371-0374 key the label and the higher-risk flag.
+        # Undeclared, the seal stripped them and those rows published null.
+        "equity_transitional_approach": EdgeColumn(
+            dtype=pl.String,
+            required=False,
+            inject=False,
+            citation="PS1/26 Credit Risk: General Provisions rules 4.1-4.3",
+            null_meaning=(
+                "null = leg not weighted under rules 4.2/4.3; absent = equity-free or CRR run"
+            ),
+        ),
+        "equity_higher_risk": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            inject=False,
+            citation="PS1/26 Art. 133(4)",
+            null_meaning="null = leg not under the transitional rules; never 'not higher risk'",
+        ),
+        "risk_weight_pre_equity_transitional": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            inject=False,
+            citation="PS1/26 Art. 133(3)-(4)",
+            null_meaning="null = the applied risk_weight is already the Article 133 weight",
+        ),
         "expected_loss": EdgeColumn(dtype=pl.Float64),
         # Applied reporting class: SA rows carry the SME-managed-as-retail /
         # defaulted applied-treatment class; every other approach keeps

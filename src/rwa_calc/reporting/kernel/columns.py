@@ -11,10 +11,13 @@ Key responsibilities:
 - Resolve the first present column name from an ordered candidate list
   (pipeline results expose the same quantity under historical aliases,
   e.g. ``ead_final`` / ``final_ead`` / ``ead``)
+- Resolve the own-approach (un-floored) RWEA carrier every COREP RWEA figure
+  reads (``own_rwea``), and alias it across frames (``with_own_rwea_as``)
 
 References:
 - Regulation (EU) 2021/451, Annex I/II (COREP templates)
 - CRR Part 8 (Pillar 3 disclosure templates)
+- PRA PS1/26 Appendix 1, Art. 92(2A) / 92(3) (output floor; U-TREA)
 """
 
 from __future__ import annotations
@@ -22,6 +25,10 @@ from __future__ import annotations
 import polars as pl
 
 from rwa_calc.engine.materialise import materialise_frame
+
+#: The un-floored own-approach RWEA the output floor seals beside ``rwa_final``
+#: (``engine/aggregator/_floor.py``); absent wherever the floor never ran.
+OWN_RWEA_CARRIER = "rwa_pre_floor"
 
 #: exposure_type values inside the on/off-balance-sheet credit-risk gross scope
 #: (CRR Art. 111 SA / Art. 166 IRB). CCR / settlement legs sit outside it.
@@ -97,6 +104,56 @@ def pick(cols: set[str], *candidates: str) -> str | None:
         if c in cols:
             return c
     return None
+
+
+def own_rwea(cols: set[str], *fallbacks: str) -> str | None:
+    """Resolve the column carrying the own-approach RWEA a COREP template reports.
+
+    The output floor is an entity-level maximum — PS1/26 Art. 92(2A)(a): "TREA =
+    max {U-TREA; x . S-TREA + OF-ADJ}" — and Art. 92(3)(a) makes the credit-risk
+    part of U-TREA the risk-weighted exposure amounts "calculated in accordance
+    with Title II of Part Three", i.e. what each exposure's own approach produces.
+    Nothing allocates the floor to an exposure, a class or a template row: Annex
+    II reports it once, in OF 02.00 row 0010 column 0030, and defines OF 08.01
+    col 0260 as col 0251 adjusted for the three Art. 153(5A) / 154(4A) amounts
+    (cols 0252-0254) only.
+
+    The engine, however, spreads a binding floor's shortfall pro rata over
+    ``rwa_final`` on every floor-eligible leg (``engine/aggregator/_floor.py``)
+    and keeps the un-floored figure on ``rwa_pre_floor``. So this returns
+    ``rwa_pre_floor`` wherever the ledger seals it (the floor ran), and otherwise
+    the first of *fallbacks* present — ``rwa_final`` and its historical aliases —
+    because a ledger with no ``rwa_pre_floor`` (CRR, or a Basel 3.1 entity outside
+    the floor's scope) had no floor applied, and there ``rwa_final`` IS the
+    own-approach figure. Each call site keeps its own fallback ladder.
+
+    Every COREP RWEA read goes through here; ``tests/contracts/
+    test_corep_rwea_carrier.py`` fails a template that binds ``rwa_final``
+    directly.
+    """
+    return pick(cols, OWN_RWEA_CARRIER, *fallbacks)
+
+
+def with_own_rwea_as(
+    frame: pl.LazyFrame, cols: set[str], target: str | None, *fallbacks: str
+) -> pl.LazyFrame:
+    """Write *frame*'s own-approach RWEA (:func:`own_rwea`) under the name *target*.
+
+    For a template that binds a carrier name resolved from ONE frame and reads it
+    from ANOTHER — C 08.04 resolves its RWEA column from the current period and
+    reads the opening from the prior period's frame. The two periods need not
+    seal the same carriers: a prior the floor never ran on (a CRR prior at the
+    1 January 2027 transition, an entity outside the floor's scope) has no
+    ``rwa_pre_floor``, and a prior the floor did run on carries the add-on in
+    ``rwa_final``. Either way the opening must be the prior's OWN own-approach
+    figure, written under whatever column the current spec binds. The frame is
+    returned unchanged when *target* is None, when *frame* carries none of the
+    candidates, or when its own carrier already is *target*.
+    """
+    source = own_rwea(cols, *fallbacks)
+    if target is None or source is None or source == target:
+        return frame
+    return frame.with_columns(pl.col(source).alias(target))
 
 
 #: Raw gross-exposure carrier -> its floored ``reporting_gross_*`` twin. The

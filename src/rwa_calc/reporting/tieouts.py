@@ -57,10 +57,18 @@ findings on a consistent estate, each off by exactly the IRB equity. The premise
 behind it ("C 07.00 has no equity sheet") stopped being true when the
 Art. 112(1)(p) sheet was added.
 
-WHERE THE BASEL 3.1 FLOOR BINDS, ``irb_rwea_c08_01_vs_c02`` FIRES, AND THAT IS A
-FINDING ABOUT OF 08.01. OF 02.00 column 0010 is the un-floored RWEA; C 07.00 and
-C 08.01 still sum ``rwa_final``, which carries the engine's pro-rata floor
-add-on. The two agree on every run whose floor does not bind.
+WHERE THE BASEL 3.1 FLOOR BINDS, ``irb_rwea_c08_01_vs_ov1`` FIRES, AND THAT IS A
+FINDING ABOUT OV1. Every COREP RWEA figure is the own-approach amount
+(``kernel.own_rwea``: ``rwa_pre_floor`` wherever the floor ran) — OF 08.01 col
+0260 is col 0251 adjusted for cols 0252-0254 only (PS1/26 Annex II p.112), and
+the floor is reported once, in OF 02.00 row 0010 column 0030 — so
+``irb_rwea_c08_01_vs_c02`` holds on a binding floor (2026-11-16; until then it
+was this tie that fired, OF 08.01 summing ``rwa_final``). Pillar 3 OV1 rows 3-5
+still sum ``rwa_final``, which carries the engine's pro-rata floor add-on:
+measured on b31/facility-share-binding, Σ C 08.01 = 1,105,491.29 against OV1
+1,559,200.00, a difference of exactly the shortfall (-453,708.71). The two
+agree on every run whose floor does not bind. Neither tie is weakened; the OV1
+side is owed to the Pillar 3 carrier item.
 
 THE TWO IRB TIES SPANNED A BASIS MIGRATION, AND BOTH SIDES HAVE NOW CROSSED.
 Their right-hand sides (C 02.00 row 0220, OV1 rows 3/4/5) moved to the

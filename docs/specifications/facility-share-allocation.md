@@ -429,7 +429,7 @@ Reading the four rows:
 ## Known findings
 
 Recorded here because they bound what this page claims, and filed for separate
-decisions. None is fixed by this design.
+decisions. None is fixed by this design; the third has since been closed.
 
 1. **The engine floors the modelled subset, not the firm.** The floor `max` is
    taken over floor-eligible rows with the standardised book added outside it,
@@ -441,11 +441,14 @@ decisions. None is fixed by this design.
    not declared on the hierarchy edge contract, so they are dropped silently
    before classification and the `SA004` warning fires on every Basel 3.1 run
    regardless of input.
-3. **The binding-floor add-on has no reported home in the internal-ratings
-   templates.** The pro-rata floor add-on lives inside `rwa_final` and the
-   reporting projection mirrors it into the after-adjustments column, which then
-   exceeds the sum of its stated components by exactly the floor shortfall. The
-   fix is a reporting-basis decision, not a calculation one.
+3. **Closed 2026-11-16: the binding-floor add-on is no longer reported in the
+   internal-ratings templates.** The pro-rata floor add-on still lives inside
+   `rwa_final`, but every COREP RWEA figure now reads the own-approach carrier
+   `rwa_pre_floor` (`reporting.kernel.own_rwea`), so OF 08.01 col 0260 equals
+   the sum of cols 0251 – 0254 and the floor is reported once, in OF 02.00
+   row 0010 column 0030. It was never a reporting-basis decision: PS1/26 Annex II
+   defines col 0260 without the floor and the taxonomy has no column for it.
+   Pillar 3 OV1 rows 3 – 5 still sum `rwa_final` and are a separate item.
 
 ---
 

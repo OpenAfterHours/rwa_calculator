@@ -25,12 +25,16 @@ Cell semantics (recorded decisions):
   OF02.01.01.03 r0080 c0030), ``boe_b1092`` sums it from the rows beneath it,
   and ``boe_b0383`` compares it with the floor — so a binding floor's add-on,
   which the engine spreads over ``rwa_final``, belongs in none of those rows.
-  Under CRR there is no floor and the column sums ``rwa_final``. (Until
-  2026-11-13 the column summed ``rwa_final`` and row 0010 column 0030 repeated
-  the same total, which reported the floor as its own result.) This template
-  and OF 02.01 each add the legs up in their own order, so the two cells can
-  differ in the last binary place; the filing adapter gives a data point shown
-  in several cells one value (``filing/canonical.py``).
+  Under CRR there is no floor and the column sums ``rwa_final``. The carrier
+  is resolved by ``kernel.own_rwea``, the one resolver for COREP RWEA, so a
+  class row and the OF 08.01 sheet total it is one data point with sum the same
+  carrier (``tests/contracts/test_corep_rwea_carrier.py`` lists any template
+  site not yet on it). (Until 2026-11-13 the column summed ``rwa_final`` and
+  row 0010 column 0030 repeated the same total, which reported the floor as its
+  own result.) This template and OF 02.01 each add the legs up in their own
+  order, so the two cells can differ in the last binary place; the filing
+  adapter gives a data point shown in several cells one value
+  (``filing/canonical.py``).
 - COLUMN 0020 (Basel 3.1) is the standardised-approach RWEA (``sa_rwa``) of the
   SAME legs a modelled row counts in column 0010 — "risk exposure amounts
   calculated under standardised approaches per exposure class" (PS1/26 Annex II
@@ -173,7 +177,7 @@ from rwa_calc.reporting.corep.templates import (
     CRR_C02_00_COLUMN_REFS,
     EQUITY_IRB_METHODS,
 )
-from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.kernel import own_rwea, pick
 
 logger = logging.getLogger(__name__)
 
@@ -249,17 +253,18 @@ def generate_c02_00(
     slotting, equity); the other risk types are laid out and left empty.
     """
     ead_col = pick(cols, "ead_final")
+    # ``final_col`` (the post-floor ledger figure) feeds only the engine-total log
+    # line below; column 0010 sums the own-approach carrier every COREP RWEA
+    # figure reads (``own_rwea``, module docstring): ``rwa_pre_floor`` wherever the
+    # floor ran, else ``rwa_final``, which then IS the un-floored figure.
     final_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
-    if ead_col is None or final_col is None:
+    own_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
+    if ead_col is None or final_col is None or own_col is None:
         errors.append("C 02.00 skipped: missing EAD or RWA columns in results")
         return None
 
     is_b31 = framework == rows.FRAMEWORK_BASEL_3_1
     column_refs = B31_C02_00_COLUMN_REFS if is_b31 else CRR_C02_00_COLUMN_REFS
-    # Column 0010's carrier: the UN-floored RWEA under Basel 3.1 (module
-    # docstring). A frame the floor never ran on seals no ``rwa_pre_floor``, and
-    # there ``rwa_final`` IS the un-floored figure.
-    own_col = "rwa_pre_floor" if is_b31 and "rwa_pre_floor" in cols else final_col
 
     # THREE keys, because C 02.00's breakdowns tie to THREE different templates
     # and each must key the basis of the one it ties to (the two-basis discipline

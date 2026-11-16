@@ -464,7 +464,8 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "approaches; slotting (supervisory-slotting specialised lending) is "
             "excluded — it discloses on C 08.06 (reporting_approach_origin in "
             "{foundation_irb, advanced_irb})",
-            "Row 0090 (closing RWEA) sums the current period's rwa_final; the "
+            "Row 0090 (closing RWEA) sums the current period's own-approach RWEA "
+            "(rwa_pre_floor where the output floor ran, else rwa_final); the "
             "opening (row 0010) and residual (row 0080) rows need a prior-period "
             "frame the drill-down does not carry, so they are out of the "
             "current-period view",
@@ -545,8 +546,9 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "SA-CCR templates; PS1/26 App. 17). Admitted by exposure reference (not "
             "the approach label the output floor relabels), and the plan frame IS "
             "that pre-filtered population, so both cells sum the whole frame",
-            "The single SA-CCR row sums ead_final (col 0010) and rwa_final (col "
-            "0020) over the population — CRR Art. 274(2) SA-CCR EAD = "
+            "The single SA-CCR row sums ead_final (col 0010) and the own-approach "
+            "RWEA (col 0020; rwa_pre_floor where the output floor ran, else "
+            "rwa_final) over the population — CRR Art. 274(2) SA-CCR EAD = "
             "alpha * (RC + PFE), and the RWEA the netting sets carry. None when the "
             "portfolio has no such rows (a clean no-lineage, the reported None)",
         ),
@@ -624,7 +626,8 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "counterparty is NEITHER row, disclosing on C 34.01/02 instead — the R5 "
             "fix). Row 0030 (default fund) keys the CCR_DEFAULT_FUND risk type "
             "(Art. 308/309), its OWN population, not the CCP subset",
-            "Each row sums ead_final (col 0010) and rwa_final (col 0020) over its subset",
+            "Each row sums ead_final (col 0010) and the own-approach RWEA (col 0020; "
+            "rwa_pre_floor where the output floor ran, else rwa_final) over its subset",
         ),
         sheet_label="",
         single_frame=True,

@@ -162,9 +162,24 @@ and the EBA validation rules with the PRA's rendering of the template for C 02.0
     `docs/plans/c07-ccr-derivatives.md`). When its floor binds on a book that also holds
     standardised exposures, its post-floor total — the figure Pillar 3 OV1 row 29 discloses
     — exceeds `max(row 0010 col 0010, col 0030)`. OF 02.00 reports the template's figures
-    and logs the difference; it does not hide it. For the same reason OF 07.00 and OF 08.01,
-    which still sum `rwa_final`, disagree with OF 02.00's class rows on a run whose floor
-    binds.
+    and logs the difference; it does not hide it.
+
+!!! note "Template RWEA is the own-approach amount; the floor is reported once"
+    Under Basel 3.1 the engine spreads a binding floor's shortfall pro rata over
+    `rwa_final` on every floor-eligible exposure and keeps the un-floored figure on
+    `rwa_pre_floor`. The templates do not report that add-on: their risk-weighted
+    exposure amounts — OF 08.01 / 08.02 cols 0251 (slotting rows), 0260, 0265, 0270 and
+    0310, OF 08.03 col 0090, C 08.04, OF 08.06 col 0080, OF 08.07 cols 0060 / 0150,
+    OF 09.01 / 09.02 and C 34 — sum the amount the exposure's own approach produces
+    (Art. 92(3)(a)), resolved by one helper, `reporting.kernel.own_rwea`:
+    `rwa_pre_floor` wherever the floor ran, else `rwa_final`, which then has no floor in
+    it. Annex II defines OF 08.01 col 0260 as col 0251 adjusted for cols 0252 – 0254
+    only, the taxonomy makes each OF 08.01 class sheet total one data point with an
+    un-floored OF 02.00 class row, and the floor's one home is OF 02.00 row 0010
+    column 0030. `tests/contracts/test_corep_rwea_carrier.py` fails any template that
+    binds `rwa_final` directly, and lists the sites not yet moved (OF 07.00 col 0220,
+    pending). Total reported RWA does not change: TREA is still
+    `max(row 0010 col 0010, col 0030)`.
 
 ### Row Structure
 

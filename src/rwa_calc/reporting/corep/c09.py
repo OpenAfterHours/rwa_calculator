@@ -151,7 +151,11 @@ Cell semantics (recorded decisions, this slice):
   UNWEIGHTED-mean fallback when the subset carries zero total EAD (a
   module post-step — the WeightedAvg verb has no such fallback).
 - The POST-SF RWEA ladder is the retired one, narrower than C 07/C 08:
-  pick(rwa_final, rwa) (NO rwa_post_factor).
+  own_rwea(rwa_final, rwa) (NO rwa_post_factor) — the own-approach carrier
+  ``rwa_pre_floor`` first wherever the output floor ran, so a binding floor's
+  add-on (spread over ``rwa_final`` by the engine) stays out of OF 09.01 col
+  0090 and OF 09.02 cols 0110/0120 exactly as it stays out of OF 08.01 col
+  0260, which OF 09.02's country total ties to (PS1/26 Art. 92(2A)/(3)).
   The CRR "RWEA pre supporting factors" columns (C 09.01 col 0080,
   C 09.02 col 0110) key ``rwa_pre_factor`` — the pre-Art. 501/501a RWA
   snapshot, falling back to the post-SF ladder when it is not sealed —
@@ -243,7 +247,14 @@ from rwa_calc.reporting.corep.templates import (
     get_c09_02_columns,
     get_c09_02_rows,
 )
-from rwa_calc.reporting.kernel import TwoBasis, pick, population_flags, sheet_axis, sheet_frame
+from rwa_calc.reporting.kernel import (
+    TwoBasis,
+    own_rwea,
+    pick,
+    population_flags,
+    sheet_axis,
+    sheet_frame,
+)
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -495,7 +506,7 @@ def _c09_01_prepared(
     if sa_df.height == 0:
         return None
     sa_cols = set(sa_df.columns)
-    rwa_col = pick(sa_cols, "rwa_final", "rwa")
+    rwa_col = own_rwea(sa_cols, "rwa_final", "rwa")
     data = sa_df.with_columns(_c09_01_derived_exprs(sa_cols, rwa_col))
     data = data.with_columns(_geo_keys(sa_cols, _C07_BASIS))
     spec, row_preds = _c09_01_spec(set(data.columns), framework, rwa_col)
@@ -832,7 +843,7 @@ def _c09_02_prepared(
     if irb_df.height == 0:
         return None
     approach_col = pick(cols, "reporting_approach_origin", "approach")
-    rwa_col = pick(cols, "rwa_final", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa")
     data = _c09_02_prepare(irb_df, cols, framework, approach_col, rwa_col)
     data = data.with_columns(_geo_keys(set(irb_df.columns), _C09_BASIS))
     spec, row_preds = _c09_02_spec(cols, framework, approach_col, rwa_col)

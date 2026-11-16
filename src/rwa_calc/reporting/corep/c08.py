@@ -10,6 +10,14 @@ Pipeline position:
 
 Cell semantics (recorded decisions, this slice):
 
+- EVERY RWEA FIGURE IS THE OWN-APPROACH AMOUNT (``kernel.own_rwea``):
+  ``rwa_pre_floor`` wherever the output floor ran, else ``rwa_final``. A binding
+  floor's add-on, which the engine spreads over ``rwa_final``, is not an
+  Art. 153(5A)/154(4A) adjustment, and OF 08.01 col 0260 is "the value reported
+  in column 0251 ... adjust[ed] for values reported in columns 0252 to 0254"
+  (PS1/26 Annex II p.112); the floor's one home is OF 02.00 row 0010 col 0030
+  (Art. 92(2A)). Each class sheet's r0010 c0260 is one data point with an
+  un-floored OF 02.00 class row.
 - The pre-CRM surfaces key the sealed ``reporting_class_origin`` (== raw
   ``exposure_class`` for IRB rows — the obligor basis, number-neutral
   convergence; no applied-class ladder and NO specialised-lending merge,
@@ -323,7 +331,9 @@ Cell semantics (recorded decisions, this slice):
   cols 0010/0020 need none.
 - C 08.04 is the CR8-clone flow: only the closing-RWEA cell (row 0090) is
   populated — note its DELIBERATELY two-wide RWA ladder (``rwa_final``,
-  ``rwa`` — no ``rwa_post_factor``). Lineage-instrumented (R22): ``c08_04_plans``
+  ``rwa`` — no ``rwa_post_factor``) behind the own-approach carrier, which the
+  prior period's frame is read on too (its OWN carrier, aliased to the column the
+  current spec binds — ``_c08_04_prior``). Lineage-instrumented (R22): ``c08_04_plans``
   exposes the per-class current-period plans (no prior frame), so its opening
   (row 0010, a ``PriorPeriod`` cell) and residual (row 0080, a ``Formula``
   deriving from it) rows are refused by the drill-down exactly as CR8 refuses
@@ -436,7 +446,14 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_columns,
     get_irb_row_sections,
 )
-from rwa_calc.reporting.kernel import available_columns, pick, sheet_axis, sheet_frame
+from rwa_calc.reporting.kernel import (
+    available_columns,
+    own_rwea,
+    pick,
+    sheet_axis,
+    sheet_frame,
+    with_own_rwea_as,
+)
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -476,6 +493,11 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 # null ``cp_internal_rating_grade``. A destination class with no unassigned-grade
 # legs of its own has the row added for the inflow (``c08_02_plans``).
 _C08_02_INFLOW_ROW: str = "Unassigned"
+
+# C 08.04's RWEA fallback ladder, behind the own-approach carrier (``own_rwea``):
+# DELIBERATELY two-wide (no ``rwa_post_factor``) — the retired ladder. One home,
+# because the current period's spec and the prior frame's alias both resolve it.
+_C08_04_RWA_LADDER: tuple[str, ...] = ("rwa_final", "rwa")
 
 
 _Terms = tuple[tuple[str, str | bool], ...]
@@ -575,7 +597,7 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
 
     # Supporting-factor RWEA delta (CRR cols 0256/0257).
     if "rwa_pre_factor" in cols:
-        rwa_source = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+        rwa_source = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
         if rwa_source is not None:
             exprs.append(
                 (pl.col("rwa_pre_factor").fill_null(0.0) - pl.col(rwa_source).fill_null(0.0)).alias(
@@ -636,8 +658,10 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     # adjustments cols 0252-0254 report (PS1/26 Annex II makes this explicit for col
     # 0254 — "This column shall not be reported for sheets relating to the FIRB
     # approach or the slotting approach"), so their 0260 == 0251 by construction.
+    # The leg's own RWEA is the OWN-APPROACH one (``own_rwea``): a binding output
+    # floor's add-on is not an Art. 153(5A)/154(4A) adjustment and has no column here.
     if "rwa_pre_adjustments" in cols:
-        rwa_fallback = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+        rwa_fallback = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
         exprs.append(
             (
                 pl.coalesce("rwa_pre_adjustments", rwa_fallback)
@@ -980,7 +1004,7 @@ def c08_01_plans(
     template silently."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
     if ec_col is None or ead_col is None or rwa_col is None:
         if ead_col is None or rwa_col is None:
             errors.append("C08.01: Missing EAD or RWA columns")
@@ -1141,7 +1165,7 @@ def c08_02_plans(
     passed explicitly (0256 still negates on C 08.02)."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
     pd_col = pick(cols, "pd_floored", "pd")
     grade_col = pick(cols, "cp_internal_rating_grade")
     if ec_col is None or ead_col is None or rwa_col is None:
@@ -1331,7 +1355,7 @@ def c08_03_plans(
     side, so an empty side sums 0.0 naturally)."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
     if ec_col is None or ead_col is None or rwa_col is None:
         errors.append("C08.03: Missing required columns (exposure_class/ead/rwa)")
         return {}
@@ -1575,10 +1599,9 @@ def _c08_04_spec(cols: set[str], framework: str) -> TemplateSpec:
     0080, a ``Formula`` deriving from both). Shared by the reported generator
     (which threads a prior-period frame) and the lineage plan (the
     current-period view — no prior, so the opening/residual rows stay null and
-    are refused by the drill-down exactly as CR8 refuses its rows 1/8). The RWA
-    ladder is deliberately two-wide (no ``rwa_post_factor``) — the retired
-    ladder."""
-    rwa_col = pick(cols, "rwa_final", "rwa")
+    are refused by the drill-down exactly as CR8 refuses its rows 1/8). RWEA is
+    the own-approach carrier over ``_C08_04_RWA_LADDER``."""
+    rwa_col = own_rwea(cols, *_C08_04_RWA_LADDER)
     column_refs = tuple(col.ref for col in get_c08_04_columns(framework))
     rows = tuple(C08_04_ROWS)
     cells: dict[tuple[str, str], CellSpec] = {}
@@ -1668,11 +1691,14 @@ def generate_c08_04(
     need. With NO prior period every row but the closing stays null (unchanged
     behaviour; PS1/26 Annex XXII paragraph 11).
 
-    ``prior_results`` must be a prior run of the SAME sealed shape as
-    ``results`` (an aggregator-exit frame): ``rwa_col`` is resolved from the
-    CURRENT frame's columns and reused verbatim over the prior — safe only
-    under that same-shape precondition (a prior frame missing that column
-    yields a null opening, never a raise).
+    ``prior_results`` is a prior run sealed like ``results`` (an aggregator-exit
+    frame). Both periods report the own-approach RWEA (``own_rwea``), and the two
+    need not seal the same carrier: ``rwa_col`` is resolved from the CURRENT
+    frame, and ``_c08_04_prior`` writes the prior's OWN own-approach figure under
+    that name — so a prior the floor never ran on (no ``rwa_pre_floor``: a CRR
+    prior at the 1 January 2027 transition) still opens, and a prior whose floor
+    bound opens without its add-on. A prior carrying none of the candidates
+    yields a null opening, never a raise.
 
     Prior-only-class limitation (recorded, deliberate — NOT a bug): the sheet
     loop iterates the CURRENT period's classes only. A class that carried RWEA
@@ -1691,7 +1717,8 @@ def generate_c08_04(
     if len(irb_df) == 0:
         return {}
     data_cols = set(irb_df.columns)
-    prior_irb_df, prior_ec_col = _c08_04_prior(prior_results)
+    rwa_col = own_rwea(data_cols, *_C08_04_RWA_LADDER)
+    prior_irb_df, prior_ec_col = _c08_04_prior(prior_results, rwa_col)
     spec = _c08_04_spec(data_cols, framework)
     result: dict[str, pl.DataFrame] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
@@ -1706,6 +1733,7 @@ def generate_c08_04(
 
 def _c08_04_prior(
     prior_results: pl.LazyFrame | None,
+    rwa_col: str | None,
 ) -> tuple[pl.DataFrame | None, str | None]:
     """Collect and IRB-filter the prior-period frame for the opening RWEA.
 
@@ -1713,7 +1741,9 @@ def _c08_04_prior(
     prior frame lacks the ``reporting_class_origin`` key the current sheets
     are keyed on — the opening then stays null (graceful degradation, never a
     raise). The prior frame is IRB non-slotting filtered exactly as the
-    current one, so its per-class RWEA sum is the like-for-like opening.
+    current one, so its per-class RWEA sum is the like-for-like opening, and
+    carries its OWN own-approach RWEA under ``rwa_col`` — the column the
+    current period's spec binds (``with_own_rwea_as``).
     """
     if prior_results is None:
         return None, None
@@ -1721,7 +1751,10 @@ def _c08_04_prior(
     prior_ec_col = pick(prior_cols, "reporting_class_origin")
     if prior_ec_col is None:
         return None, None
-    return non_slotting(prior_results, prior_cols).collect(), prior_ec_col
+    prior = with_own_rwea_as(
+        non_slotting(prior_results, prior_cols), prior_cols, rwa_col, *_C08_04_RWA_LADDER
+    )
+    return prior.collect(), prior_ec_col
 
 
 # =============================================================================
@@ -1838,7 +1871,7 @@ def c08_06_plans(
     live on the REPORTED frame (``generate_c08_06``). C 08.06 carries no
     "(-)"-labelled deduction column, so ``negative_cols`` is empty."""
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
     if ead_col is None or rwa_col is None:
         errors.append("C08.06: Missing required columns (ead/rwa)")
         return {}

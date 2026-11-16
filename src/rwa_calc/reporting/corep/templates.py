@@ -532,7 +532,7 @@ C07_00_SA_SHEET_MAP: dict[str, str] = {
 C07_00_SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
 
 # The Total sheet (published z-code 0001, Annex II ¶47): the sum of the class
-# sheets, built by ``corep/c07.py::c07_total_sheet``. Never an exposure class.
+# sheets, built by ``corep/c07_sheet_scope.py::c07_total_sheet``. Never a class.
 C07_00_TOTAL_SHEET_KEY: str = "total"
 
 # The classes row 0015 "of which: Defaulted exposures" is reported in: the ones

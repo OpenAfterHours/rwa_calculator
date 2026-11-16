@@ -37,6 +37,7 @@ from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.edges import (
     AGGREGATOR_EXIT_EDGE,
     FLOOR_IMPACT_EDGE,
+    REPORTING_CLASS_PRE_DEFAULT_COL,
     SUMMARY_BY_APPROACH_EDGE,
     SUMMARY_BY_CLASS_EDGE,
     SUMMARY_BY_CLASS_METHOD_EDGE,
@@ -645,7 +646,8 @@ def _facility_share_trea(
 @cites("CRR Art. 123")
 @cites("CRR Art. 126")
 def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
-    """Add ``exposure_class_applied`` — the approach-agnostic applied class.
+    """Add ``exposure_class_applied`` — the approach-agnostic applied class — and
+    ``reporting_class_pre_default``, the class it would be were it not in default.
 
     The routing ``exposure_class`` records origination + guarantee substitution
     but omits three SA-only applied-treatment movements, so the reconciliation and
@@ -709,6 +711,18 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
     ("Exposures in default" / Retail) and the guaranteed portion leaves as an
     outflow. Gating the overlay on ``~is_guaranteed`` would wrongly drop the
     guaranteed portion out of that class and understate it.
+
+    THE CLASS BEFORE DEFAULT. ``reporting_class_pre_default`` is the same overlay
+    with the default limb left out, and ``exposure_class_applied`` is derived from
+    it, so the two cannot drift: they differ only on a defaulted SA row that is not
+    high-risk, where the applied class is "Exposures in default" and the new column
+    keeps what that row would otherwise have been — including the real-estate and
+    SME-as-retail movements the default limb would have overwritten. PS1/26 Annex
+    II memorandum rows 0300 / 0320 report exposures in default by exactly that
+    class: "Exposures shall be reported in these rows where the obligors would have
+    been reported in the exposure classes [...] if those exposures were not
+    assigned to the exposure classes 'in default'" (¶54); the Bank's taxonomy names
+    the dimension "Exposure class before reassignment".
     """
     is_sa = pl.col("approach_applied") == ApproachType.SA.value
     upper_class = pl.col("exposure_class").str.to_uppercase()
@@ -743,13 +757,9 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
     commercial_real_estate = (
         is_commercial_re_class(upper_class) & ~outranks_real_estate & ~already_real_estate
     )
-    return lf.with_columns(
+    pre_default = (
         pl.when(~is_sa)
         .then(pl.col("exposure_class"))
-        # A null is_defaulted falls through the when() (treated as not defaulted),
-        # so no fill_null is needed — keep the applied class off origination.
-        .when((pl.col("is_defaulted") == True) & ~is_high_risk)  # noqa: E712
-        .then(pl.lit(ExposureClass.DEFAULTED.value))
         # Art. 112(1)(i) outranks corporates and retail in both frameworks, so
         # this limb must precede the retail one below.
         .when(commercial_real_estate)
@@ -757,6 +767,15 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
         .when(sme_managed_as_retail)
         .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
         .otherwise(pl.col("exposure_class"))
+    )
+    return lf.with_columns(pre_default.alias(REPORTING_CLASS_PRE_DEFAULT_COL)).with_columns(
+        pl.when(~is_sa)
+        .then(pl.col(REPORTING_CLASS_PRE_DEFAULT_COL))
+        # A null is_defaulted falls through the when() (treated as not defaulted),
+        # so no fill_null is needed — keep the applied class off origination.
+        .when((pl.col("is_defaulted") == True) & ~is_high_risk)  # noqa: E712
+        .then(pl.lit(ExposureClass.DEFAULTED.value))
+        .otherwise(pl.col(REPORTING_CLASS_PRE_DEFAULT_COL))
         .alias("exposure_class_applied")
     )
 

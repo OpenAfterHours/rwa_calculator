@@ -183,6 +183,11 @@ docs/plans/phase7-declarative-reporting.md §6):
   124L row, off the engine's ``sa_loan_split_*`` carriers, before the sheets are
   cut (``kernel/rw_parts.py``). On its one blended weight the loan fell to row
   0280, which ``boe_b0445`` requires empty on sheet 0010.
+- MEMORANDUM ROWS 0300 / 0320 (Basel 3.1) ARE THE "IN DEFAULT" CLASS ON THE
+  SHEET OF THE CLASS BEFORE DEFAULT (Annex II ¶54, p.97), read off the sealed
+  ``reporting_class_pre_default``; real-estate-origin defaults on the Total alone
+  (known-issues log #27); the Total summed before that scope is applied. All of
+  it: ``corep/c07_sheet_scope.py``.
 - TRANSITIONAL EQUITY IS ROWED BY ITS ARTICLE 133 WEIGHT (PS1/26 Annex II
   p.95-96): rows 0250 / 0261 with the transitional RWEA in col 0220, never row
   0280, off the sealed ``risk_weight_pre_equity_transitional`` (``_rw_band_expr``);
@@ -231,16 +236,18 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.corep.c07_sheet_scope import (
+    basis_flags,
+    memo_axis,
+    memo_key_exprs,
+    memo_sheet_frame,
+    memo_terms,
+    null_empty_rows_by_population,
+    publish_sheets,
+    sheet_unreported,
+)
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
-from rwa_calc.reporting.corep.of07_published_cells import (
-    get_c07_rows_not_on_total,
-    get_c07_unreported_cells,
-)
-from rwa_calc.reporting.corep.postpass import (
-    blank_unreported_cells,
-    negate_deduction_cols,
-    null_empty_rows,
-)
+from rwa_calc.reporting.corep.postpass import negate_deduction_cols
 from rwa_calc.reporting.corep.supporting_factors import (
     sf_adjustment_terms,
     sf_infra_flag_exprs,
@@ -262,7 +269,6 @@ from rwa_calc.reporting.kernel import (
     population_flags,
     rw_parts,
     sheet_axis,
-    sheet_frame,
 )
 from rwa_calc.reporting.kernel.bases import ORIGIN_APPROACH_SOURCE
 from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, ReportingContext
@@ -276,7 +282,6 @@ logger = logging.getLogger(__name__)
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute.
 # 0216/0217 are the CRR-only "(-) SME/Infrastructure supporting factor adjustment"
 # columns (Art. 501/501a) — reported negative so 0215 + 0216 + 0217 = 0220 foots.
-_LABEL_COLS: tuple[str, str] = ("row_ref", "row_name")
 _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
@@ -286,8 +291,6 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 # the only shape the post basis can DEGRADE in — lives in
 # ``reporting/kernel/bases.py``, shared with C 08.01.
 _BASIS: TwoBasis = TwoBasis("c07")
-_BASIS_ORIGIN_COL: str = _BASIS.basis_origin
-_BASIS_POST_COL: str = _BASIS.basis_post
 _ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
 
 # THE ROW-LEVEL SHEET SCOPE. Annex II scopes a few rows to ONE exposure class —
@@ -629,9 +632,10 @@ def c07_plans(
     # degrades to the origin key on a frame that seals no ``reporting_class``,
     # which is what makes the two-basis split number-neutral wherever nothing
     # substitutes.
-    sa_df = sa_df.with_columns(
-        class_keys(_BASIS, set(sa_df.columns), ec_col, key=_art112_sheet_key_expr)
-    )
+    # Rows 0300 / 0320 read a third key, the class before default (c07_sheet_scope).
+    present = set(sa_df.columns)
+    keys = class_keys(_BASIS, present, ec_col, key=_art112_sheet_key_expr)
+    sa_df = sa_df.with_columns(keys + memo_key_exprs(framework, present, _art112_sheet_key_expr))
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
     _warn_if_ccf_buckets_unreportable(sa_df, data_cols)
@@ -649,7 +653,6 @@ def c07_plans(
             sa_df, exposure_cols=exposure_cols, rwea_cols=rwea_cols
         )
         sa_df = split.with_columns(_rw_band_expr(framework, data_cols).alias("c07_rw_band"))
-    unreported = get_c07_unreported_cells(framework)
     defaulted_row_sheets = get_c07_defaulted_row_sheet_keys(framework)
 
     plans: dict[str, SheetPlan] = {}
@@ -663,7 +666,7 @@ def c07_plans(
     # without it a leg whose inflow the block cap shed to zero would drop its
     # exposure value and RWEA out of the template silently. An inflow-only sheet
     # keeps its constraint-free total row 0010 and reports 0110 = 0100.
-    axis = sheet_axis(_BASIS, sa_df) | set(inflows.total)
+    axis = sheet_axis(_BASIS, sa_df) | set(inflows.total) | memo_axis(_BASIS, sa_df)
     # A key the map does not hold reached the axis by ``_art112_sheet_key``'s
     # pass-through limb: it keeps its exposure (folding it into "other" would
     # hide it) but it opens a sheet the z-axis has no code for, so it is a data
@@ -681,7 +684,7 @@ def c07_plans(
             # Tagged with its own sheet key so a row Annex II scopes to one
             # exposure class can say so as a membership term (_SHEET_KEY_COL),
             # and with whether row 0015 may report here (_DEFAULTED_ROW_SHEET_COL).
-            frame=sheet_frame(_BASIS, sa_df, ec).with_columns(
+            frame=memo_sheet_frame(_BASIS, sa_df, ec).with_columns(
                 pl.lit(ec, dtype=pl.String).alias(_SHEET_KEY_COL),
                 pl.lit(ec in defaulted_row_sheets).alias(_DEFAULTED_ROW_SHEET_COL),
             ),
@@ -694,7 +697,7 @@ def c07_plans(
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
             inflow_rows=_inflow_rows(row_terms, sides, bands),
-            unreported=unreported,
+            unreported=sheet_unreported(framework, ec),
         )
     return plans
 
@@ -719,25 +722,33 @@ def generate_c07(
     framework: str,
     errors: list[str],
 ) -> dict[str, pl.DataFrame]:
-    """Execute C 07.00 per obligor-class sheet over the sealed ledger.
+    """The C 07.00 class sheets of ``generate_c07_with_total``, keyed as ``c07_plans``."""
+    return generate_c07_with_total(results, cols, framework, errors)[0]
 
-    The last pass leaves out the cells the published template greys out (module
-    docstring, "ONLY THE CELLS THE TEMPLATE HAS") — after the waterfall, the
-    empty-row rule and the sign convention have all read them.
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c07_with_total(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> tuple[dict[str, pl.DataFrame], pl.DataFrame | None]:
+    """Execute C 07.00 per obligor-class sheet over the sealed ledger, and its Total.
+
+    The last pass leaves out the cells the published template does not have
+    (module docstring, "ONLY THE CELLS THE TEMPLATE HAS") — after the waterfall,
+    the empty-row rule and the sign convention have all read them, and after the
+    Total has been summed (``c07_sheet_scope.publish_sheets``).
     """
-    result: dict[str, pl.DataFrame] = {}
-    for ec, plan in c07_plans(results, cols, framework, errors).items():
-        frame = execute(plan.spec, plan.frame, plan.ctx)
-        # ``row_terms`` -> predicates: ``None`` is an inert row, ``()`` the
-        # constraint-free Total row (never nulled), anything else constrained.
-        preds = {
-            ref: None if terms is None else RowPredicate(equals=terms)
-            for ref, terms in plan.row_terms.items()
-        }
-        frame = null_empty_rows(frame, plan.frame, preds, plan.inflow_rows)
-        frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
-        result[ec] = blank_unreported_cells(frame, plan.unreported)
-    return result
+    plans = c07_plans(results, cols, framework, errors)
+    computed = {
+        ec: negate_deduction_cols(
+            null_empty_rows_by_population(execute(plan.spec, plan.frame, plan.ctx), plan, _BASIS),
+            _NEGATIVE_COLS,
+        )
+        for ec, plan in plans.items()
+    }
+    return publish_sheets(computed, plans, framework)
 
 
 def c07_class_sheets(sheets: Mapping[str, pl.DataFrame]) -> dict[str, pl.DataFrame]:
@@ -748,45 +759,6 @@ def c07_class_sheets(sheets: Mapping[str, pl.DataFrame]) -> dict[str, pl.DataFra
     read this view; adding the whole template counts every exposure twice.
     """
     return {key: sheet for key, sheet in sheets.items() if key != C07_00_TOTAL_SHEET_KEY}
-
-
-@cites("PS1/26, paragraph 1.3")
-def c07_total_sheet(sheets: Mapping[str, pl.DataFrame], framework: str) -> pl.DataFrame | None:
-    """The Total sheet (published z-code 0001): the class sheets, added up.
-
-    Annex II §3.2.2 ¶47: "The information in OF CR SA is required for the total
-    exposure across all exposure classes and individually for each of the
-    exposure classes ... The total figures as well as the information of each
-    exposure class shall be reported in a separate dimension." ``sheets`` is
-    ``generate_c07``'s output; ``None`` when it is empty.
-
-    A CELL-BY-CELL SUM OF THE REPORTED SHEETS, not a second execution over the
-    whole population. Every row is evaluated per sheet over that sheet's own
-    population — the real-estate rows exist on the real-estate sheet alone, an
-    inflow lands on the protection provider's sheet, each cell reads its own
-    basis — so the sum of the sheets is the only total consistent with them, and
-    it is what the published rule states (``boe_b0713``: sheet 0001 equals the
-    sum of sheets 0002-0017). A cell no sheet reports is EMPTY on the Total, not
-    zero: a sum over nothing is not a measured figure, and a grey cell stays
-    grey. A sheet outside the published axis (``c07_plans`` records it as an
-    error) is still part of the total exposure and is included.
-
-    The rows the published Total does not carry are blanked
-    (``get_c07_rows_not_on_total``).
-    """
-    if not sheets:
-        return None
-    stacked = pl.concat(list(sheets.values()), how="vertical_relaxed")
-    value_cols = [col for col in stacked.columns if col not in _LABEL_COLS]
-    total = stacked.group_by("row_ref", maintain_order=True).agg(
-        pl.col("row_name").first(),
-        *(
-            pl.when(pl.col(col).count() > 0).then(pl.col(col).sum()).alias(col)
-            for col in value_cols
-        ),
-    )
-    not_on_total = {ref: frozenset(value_cols) for ref in get_c07_rows_not_on_total(framework)}
-    return blank_unreported_cells(total.select(stacked.columns), not_on_total)
 
 
 @cites("PS1/26")
@@ -1846,8 +1818,9 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
         return base
     if ref == "0380":
         return _terms(("currency_mismatch_multiplier_applied", True))
-    if ref in _MEMO_DEFAULTED_RW:
-        return _terms(("c07_defaulted", True), ("c07_rw_band", _MEMO_DEFAULTED_RW[ref]))
+    if ref in _MEMO_DEFAULTED_RW:  # by the class before default where sealed (c07_sheet_scope)
+        band = ("c07_rw_band", _MEMO_DEFAULTED_RW[ref])
+        return _terms(*memo_terms(cols), ("c07_defaulted", True), band)
     if ref in _MEMO_RE_SECURED:
         return _terms(("property_type", _MEMO_RE_SECURED[ref]))
     return None
@@ -1882,10 +1855,8 @@ def _re_terms(
     row — a row added to ``_RE_ROW_FILTERS`` is scoped by construction, which is
     what stops the next RE row repeating this defect.
 
-    NOT applied to the memorandum rows 0290/0300/0310/0320, which are a
-    different question with a different answer (¶52/¶54-55 scope them to the
-    OBLIGOR classes, the two Annex IIs' lists differ, and ¶55 positively
-    REQUIRES 0300/0320 on the 'in default' sheet). See P1.377.
+    NOT applied to the memorandum rows 0290/0300/0310/0320, which ¶52/¶54-55
+    scope to the class BEFORE default instead (``c07_sheet_scope.py``).
     """
     terms: list[tuple[str, str | bool]] = [(_SHEET_KEY_COL, _RE_SHEET_KEY)]
     if property_type is not None:
@@ -1963,7 +1934,7 @@ def _inflow_key_for(ref: str, terms: _Terms) -> str | None:
     RISK-WEIGHT BAND row each take the share of it reported on their side / at
     their band. Both are recognised by their own single membership term rather
     than by a hardcoded ref ladder, so the regime-specific band axis (Basel 3.1
-    adds thirteen sub-bands) and the two-term memo rows 0300/0320 (defaulted AND
+    adds thirteen sub-bands) and the multi-term memo rows 0300/0320 (defaulted AND
     banded, which are "of which" memos and NOT part of the row-0010
     decomposition) both fall out correctly.
     """
@@ -2010,8 +1981,9 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     # own book, cols 0160-0235 read the post-substitution population. Every
     # predicate carries its basis flag, INCLUDING the total row's (whose ``terms``
     # are empty) — an unflagged predicate would silently sum both populations.
-    origin_terms: _Terms = ((_BASIS_ORIGIN_COL, True), *terms)
-    post_terms: _Terms = ((_BASIS_POST_COL, True), *terms, *_post_sl_terms(terms, cols))
+    origin_flag, post_flag = basis_flags(terms, _BASIS)
+    origin_terms: _Terms = ((origin_flag, True), *terms)
+    post_terms: _Terms = ((post_flag, True), *terms, *_post_sl_terms(terms, cols))
     member = RowPredicate(equals=origin_terms)
     post_member = RowPredicate(equals=post_terms)
 

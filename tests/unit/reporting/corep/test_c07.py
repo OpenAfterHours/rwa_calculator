@@ -930,6 +930,11 @@ class TestC0700MemorandumRows:
     always null, misrepresenting the institution's defaulted exposure
     distribution and RE-secured positions.
 
+    The frames here put a defaulted leg in its counterparty's class, a shape the
+    aggregator cannot produce (it moves every defaulted standardised leg to the
+    "in default" class), so they pin CRR only. Basel 3.1 rows 0300 / 0320 are
+    pinned on sealed-shape frames in ``test_c07_default_memorandum_rows.py``.
+
     References:
         CRR Art. 127: Defaulted exposure risk weights
         CRR Art. 124-126: Exposures secured by immovable property
@@ -985,23 +990,6 @@ class TestC0700MemorandumRows:
         row = retail.filter(pl.col("row_ref") == "0300")
         # No defaulted retail exposures at RW 100%
         assert row["0200"][0] is None
-
-    def test_b31_rows_0300_0320_present(self) -> None:
-        """Basel 3.1 OF 07.00 also has rows 0300 and 0320."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="BASEL_3_1")
-        corp = bundle.c07_00["corporate"]
-        row_refs = corp["row_ref"].to_list()
-        assert "0300" in row_refs
-        assert "0320" in row_refs
-
-    def test_b31_row_0300_populated(self) -> None:
-        """B31 row 0300 is populated from defaulted exposures at RW 100%."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="BASEL_3_1")
-        corp = bundle.c07_00["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0300")
-        assert row["0200"][0] == pytest.approx(1000.0)
 
     def test_row_0290_crr_commercial_re(self) -> None:
         """CRR row 0290: commercial immovable property secured exposures."""

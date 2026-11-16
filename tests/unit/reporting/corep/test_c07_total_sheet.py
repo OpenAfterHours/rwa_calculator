@@ -26,7 +26,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.reporting.corep.c07 import c07_class_sheets, c07_total_sheet
+from rwa_calc.reporting.corep.c07 import c07_class_sheets
+from rwa_calc.reporting.corep.c07_sheet_scope import c07_total_sheet
 from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.lineage import summed_sheet_reason
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator

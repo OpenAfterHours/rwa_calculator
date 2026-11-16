@@ -5764,8 +5764,10 @@
       "code_functions": [
         "rwa_calc.reporting.corep.c02::generate_c02_00",
         "rwa_calc.reporting.corep.c07::c07_plans",
-        "rwa_calc.reporting.corep.c07::c07_total_sheet",
         "rwa_calc.reporting.corep.c07::generate_c07",
+        "rwa_calc.reporting.corep.c07::generate_c07_with_total",
+        "rwa_calc.reporting.corep.c07_sheet_scope::c07_total_sheet",
+        "rwa_calc.reporting.corep.c07_sheet_scope::publish_sheets",
         "rwa_calc.reporting.corep.c08::generate_c08_01",
         "rwa_calc.reporting.corep.c08::generate_c08_02",
         "rwa_calc.reporting.corep.c08::generate_c08_03",
@@ -5787,6 +5789,7 @@
       "source_files": [
         "reporting/corep/c02.py",
         "reporting/corep/c07.py",
+        "reporting/corep/c07_sheet_scope.py",
         "reporting/corep/c08.py",
         "reporting/corep/c08_07.py",
         "reporting/corep/c08_sheets.py",
@@ -6020,10 +6023,12 @@
     },
     {
       "article": "112",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.reporting.corep.c07_sheet_scope::memo_key_exprs"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
@@ -6032,11 +6037,13 @@
         "domain/enums.py",
         "engine/aggregator/_equity_prep.py",
         "engine/aggregator/aggregator.py",
+        "reporting/corep/c07_sheet_scope.py",
         "reporting/corep/sheet_labels.py",
         "reporting/filing/sheet_maps.py"
       ],
       "test_files": [
         "tests/acceptance/reporting/test_c07_defaulted_row_scope.py",
+        "tests/acceptance/reporting/test_of07_default_memorandum_rows.py",
         "tests/acceptance/reporting/test_of07_loan_split_two_parts.py",
         "tests/acceptance/reporting/test_p2_54_ciu_class_o.py",
         "tests/contracts/test_high_risk_sheet_addressability.py",
@@ -6980,7 +6987,8 @@
     {
       "article": "127",
       "code_functions": [
-        "rwa_calc.engine.sa.risk_weights::_crr_defaulted_re_secured_share"
+        "rwa_calc.engine.sa.risk_weights::_crr_defaulted_re_secured_share",
+        "rwa_calc.reporting.corep.c07_sheet_scope::memo_key_exprs"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -6999,11 +7007,13 @@
       "source_files": [
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
+        "reporting/corep/c07_sheet_scope.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_120_art_127_1_provision_ratio_denominator.py",
         "tests/acceptance/basel31/test_scenario_b31_k_defaulted.py",
+        "tests/acceptance/reporting/test_of07_default_memorandum_rows.py",
         "tests/fixtures/p1_120/p1_120.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/corpus.py",

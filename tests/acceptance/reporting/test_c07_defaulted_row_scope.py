@@ -30,8 +30,11 @@ and ``v4721_m`` in the register.
 Two books:
 
 1. ``rich`` (the registered golden portfolio, both regimes). Its one defaulted
-   leg is a 1,000,000 corporate loan at 150%. The control is memorandum row 0320
-   on the same sheet, which Annex II ¶55 REQUIRES there and which must not move.
+   leg is a 1,000,000 corporate loan at 150%. The control is memorandum row 0320,
+   which the row 0015 scope must not touch: on the default sheet under CRR, and
+   under Basel 3.1 on the Total and the corporates sheet — the class before default
+   (Annex II ¶54-55; table OF07.00.01.03 has no row 0320 on sheet 0011; O-15,
+   ``corep/c07_sheet_scope.py``).
 2. A three-loan book this file owns, SA config: a performing corporate
    (5,000,000), a defaulted corporate (1,000,000 at 150%) and a defaulted
    high-risk obligor (2,000,000 at 150%). No registered portfolio emits a
@@ -44,7 +47,7 @@ Two books:
 
 References:
 - CRR Art. 112(1)(j)/(k)/(p), Art. 127; PS1/26 Art. 112(2) Table A2
-- COREP Annex II C 07.00 row 0015; PS1/26 Annex II OF 07.00 row 0015, ¶55
+- COREP Annex II C 07.00 row 0015; PS1/26 Annex II OF 07.00 row 0015, ¶54-55
 """
 
 from __future__ import annotations
@@ -92,6 +95,13 @@ _LABEL_COLS: frozenset[str] = frozenset({"row_ref", "row_name"})
 _Z_TOTAL: str = "0001"
 _Z_DEFAULTED: str = "0011"
 _Z_HIGH_RISK: str = "0012"
+_Z_CORPORATE: str = "0008"
+
+# Where ``rich``'s memorandum row 0320 is reported (see the module docstring).
+_MEMO_Z_CODES: dict[str, tuple[str, ...]] = {
+    "crr": (_Z_DEFAULTED,),
+    "b31": (_Z_TOTAL, _Z_CORPORATE),
+}
 
 # ``rich``: its one defaulted leg (RP-LN-DEFAULT), a corporate loan at 150%.
 _RICH_DEFAULTED_EAD: float = 1_000_000.0
@@ -137,11 +147,15 @@ def test_rich_default_sheet_reports_its_leg_on_row_0010_and_not_on_row_0015(regi
 
 
 @pytest.mark.parametrize("regime", sorted(_FRAMEWORKS))
-def test_rich_default_sheet_keeps_memorandum_row_0320(regime: str) -> None:
-    """Annex II ¶55 requires the defaulted memorandum rows on this sheet: untouched."""
-    sheet = _sheet(_rich(regime), regime, _Z_DEFAULTED)
+def test_rich_memorandum_row_0320_is_untouched_by_the_row_0015_scope(regime: str) -> None:
+    """The control: the defaulted leg's row 0320 is still reported where it belongs."""
+    corep = _rich(regime)
 
-    assert _cell(sheet, _MEMO_DEFAULTED_ROW, "0200") == pytest.approx(_RICH_DEFAULTED_EAD)
+    for z_code in _MEMO_Z_CODES[regime]:
+        sheet = _sheet(corep, regime, z_code)
+        assert _cell(sheet, _MEMO_DEFAULTED_ROW, "0200") == pytest.approx(_RICH_DEFAULTED_EAD), (
+            z_code
+        )
 
 
 @pytest.mark.parametrize("regime", sorted(_FRAMEWORKS))

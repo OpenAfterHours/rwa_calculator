@@ -72,6 +72,13 @@ LOAN_SPLIT_CARRIERS: tuple[str, str, str] = (
     LOAN_SPLIT_RESIDUAL_RW_COL,
 )
 
+# The applied exposure class an exposure would have had were it not in default,
+# named once for its two sites: the aggregator writes it beside the applied class
+# (``engine/aggregator/aggregator.py::_add_exposure_class_applied``) and OF 07.00
+# reads it to put memorandum rows 0300 / 0320 on the sheet of that class
+# (``reporting/corep/c07_sheet_scope.py``; PS1/26 Annex II ¶54).
+REPORTING_CLASS_PRE_DEFAULT_COL: str = "reporting_class_pre_default"
+
 
 class EdgeContractViolation(Exception):
     """A frame failed its edge contract, or a bundle field lacks its brand.
@@ -2001,6 +2008,11 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_approach_origin": EdgeColumn(dtype=pl.String),
         "reporting_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
         "reporting_class_origin": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        # The applied class with the Art. 112(1)(j) default limb left out: what an
+        # exposure in default "would otherwise have been assigned to" (PS1/26 Annex
+        # II rows 0300 / 0320). Equal to reporting_class_origin on every row not in
+        # default. Computed by the aggregator (_add_exposure_class_applied).
+        REPORTING_CLASS_PRE_DEFAULT_COL: EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
         # The geographical mirror of the class pair (PS1/26 Annex II §3.4
         # ¶86/¶87): the origin twin is the obligor's own cp_country_code, the
         # post twin the guarantor's country on a BENEFICIALLY guaranteed leg.
@@ -2368,6 +2380,7 @@ REPORTING_SURFACE: frozenset[str] = frozenset(
         "reporting_approach_origin",
         "reporting_class",
         "reporting_class_origin",
+        REPORTING_CLASS_PRE_DEFAULT_COL,
         "reporting_country",
         "reporting_country_origin",
         "reporting_ead",

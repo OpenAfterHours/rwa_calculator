@@ -789,8 +789,8 @@ flowchart TD
 
     | Ref | Row | vs CRR |
     |-----|-----|--------|
-    | 0300 | Exposures in default subject to RW of 100% | |
-    | 0320 | Exposures in default subject to RW of 150% | |
+    | 0300 | Exposures in default subject to RW of 100% — Total and the six class sheets below | Class before default |
+    | 0320 | Exposures in default subject to RW of 150% — Total and the six class sheets below | Class before default |
     | ==0371== | ==Equity transitional: SA higher risk== | ==**New**== |
     | ==0372== | ==Equity transitional: SA other equity== | ==**New**== |
     | ==0373== | ==Equity transitional: IRB higher risk== | ==**New**== |
@@ -800,6 +800,32 @@ flowchart TD
     !!! warning "Removed Memorandum Rows"
         Rows **0290** (secured by commercial RE) and **0310** (secured by residential RE) are
         removed — replaced by the detailed real estate breakdown in Section 1 (rows 0330-0360).
+
+    !!! info "Rows 0300 / 0320: the exposure class before default"
+        Rows 0300 and 0320 report exposures in the "in default" class (Art. 112(1)(j)) at the
+        Art. 127 100% / 150% weights, split by the class each exposure "would otherwise have
+        been assigned to ... if they were not in default" (PS1/26 Annex II row 0320, p.97;
+        ¶54). The Bank's taxonomy (table OF07.00.01.03) publishes them on the **Total** and on
+        six class sheets: central governments or central banks, regional governments or local
+        authorities, public sector entities, institutions, corporates and retail. So:
+
+        - a defaulted corporate loan at 150% appears in row 0320 of the Total and of the
+          **corporates** sheet;
+        - nothing is reported in these rows on the **"in default"** sheet — the Total's data
+          point already is the "exposures in default" figure;
+        - an exposure whose class before default is **real estate** appears on the **Total
+          only**. Annex II ¶52 lists real estate, but the table has no real-estate sheet; the
+          Bank's known-issues log (November 2026, issue #27) records the gap and the PRA's
+          interim request: report such exposures "in the total sheet s0001 for rows 0300 and
+          0320 but do not report such exposures separately to this, until the missing sheet
+          0010 is provided in the next taxonomy update". The same holds for an MDB or
+          international-organisation exposure, which no table sheet carries either.
+
+        The class before default is the sealed `reporting_class_pre_default` column: the
+        applied class with the default reassignment left out, so a defaulted SME managed as
+        retail is retail and a defaulted corporate secured on commercial property is real
+        estate. A class sheet with no exposure of its own is still emitted for its memorandum
+        row. The CRR C 07.00 rows 0290-0320 are unchanged.
 
 === "Differences Summary"
 

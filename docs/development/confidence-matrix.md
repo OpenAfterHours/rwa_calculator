@@ -40,7 +40,7 @@ Package version `0.3.34`. Resolved packs:
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
 | CRR (Capital Requirements Regulation) | 35 | 58 | 10 | 37 | 14 | 154 |
-| PS1/26 (PRA Policy Statement) | 27 | 29 | 7 | 28 | 16 | 107 |
+| PS1/26 (PRA Policy Statement) | 27 | 30 | 7 | 27 | 16 | 107 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -205,14 +205,14 @@ Package version `0.3.34`. Resolved packs:
 
 | para. | Code fns | Pack | Src | Oracle | Tests | Confidence |
 |---|---|---|---|---|---|---|
-| 1 | 16 | 0 | 8 | 0 | 0 | LOW |
+| 1 | 18 | 0 | 9 | 0 | 0 | LOW |
 | 4 | 7 | 11 | 4 | 0 | 0 | LOW |
 | 36 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 62 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 92 | 2 | 4 | 23 | 0 | 36 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
 | 111 | 2 | 2 | 11 | 1 | 17 | HIGH |
-| 112 | 0 | 0 | 7 | 0 | 7 | UNCITED |
+| 112 | 1 | 0 | 8 | 0 | 8 | MEDIUM |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 24 | HIGH |
 | 115 | 2 | 0 | 3 | 3 | 6 | HIGH |
@@ -240,7 +240,7 @@ Package version `0.3.34`. Resolved packs:
 | 124K | 0 | 2 | 1 | 2 | 4 | HIGH |
 | 124L | 0 | 4 | 3 | 1 | 7 | HIGH |
 | 126 | 0 | 0 | 0 | 0 | 2 | GAP |
-| 127 | 1 | 5 | 3 | 2 | 8 | HIGH |
+| 127 | 2 | 5 | 4 | 2 | 9 | HIGH |
 | 128 | 1 | 1 | 4 | 1 | 8 | HIGH |
 | 129 | 2 | 3 | 5 | 2 | 4 | HIGH |
 | 132 | 3 | 0 | 3 | 0 | 3 | MEDIUM |
@@ -332,7 +332,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 62 | 5 | 0 | 10 | — | — |
 | CRR 159 | 8 | 0 | 10 | — | — |
 | CRR 280c | 2 | 0 | 9 | — | — |
-| PS1/26 112 | 7 | 0 | 7 | — | CRR Art. 112 |
 | PS1/26 236 | 1 | 0 | 7 | — | — |
 | CRR 6 | 8 | 0 | 6 | — | — |
 | CRR 280b | 1 | 0 | 6 | — | — |

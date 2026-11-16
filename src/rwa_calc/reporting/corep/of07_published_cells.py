@@ -33,17 +33,33 @@ the template altogether.
 
 Scope: Basel 3.1 only. The CRR layout declares nothing: no EBA template or
 taxonomy is held to read its grey cells from, and a guess would blank real
-figures. Sheet scope is declared for the Total sheet alone
-(``get_c07_rows_not_on_total``): which CLASS sheets carry the memorandum rows
-is the open question recorded as P1.377. Row 0015's sheet scope is not here
-either: the taxonomy publishes that row on all sixteen sheets, and the
+figures. Sheet scope is declared for the Total sheet
+(``get_c07_rows_not_on_total``) and, on the class sheets, for memorandum rows
+0300 / 0320 (``get_c07_rows_not_on_sheet``). Row 0015's sheet scope is not
+here: the taxonomy publishes that row on all sixteen sheets, and the
 restriction to the high-risk, equity and CIU classes comes from the Annex II
 instructions and the rules that enforce them, so it is declared in
-``templates.get_c07_defaulted_row_sheet_keys``.
+``templates.get_c07_defaulted_row_sheet_keys``. Rows 0371-0374 (equity sheet)
+and 0380 (Total, retail, real estate) are still scoped by their data terms in
+``c07.py`` rather than declared here.
+
+Rows 0300 / 0320 (table OF07.00.01.03) are published on the Total and on six
+class sheets: central governments or central banks, regional governments or
+local authorities, public sector entities, institutions, corporates and retail.
+That is PS1/26 Annex II ¶52's list (p.78) less (g) real estate, for which the
+table has no sheet 0010. The Bank's known-issues log (November 2026, issue #27,
+19.10.2026) records the gap and its interim answer: "As a temporary solution,
+the PRA requests that firms report exposures assigned to the real estate
+exposure class in the total sheet s0001 for rows 0300 and 0320 but do not
+report such exposures separately to this, until the missing sheet 0010 is
+provided in the next taxonomy update." The rows are not published on the "in
+default" sheet either: the Total's data point already IS the "exposures in
+default" figure. Placing the figures is ``c07_sheet_scope.py``'s job.
 
 References:
-- PRA PS1/26 Annex I (OF 07.00 template); Annex II §3.2.2 ¶48, §3.2.5
-- Bank of England Banking Taxonomy v4.1.1, module PRA001
+- PRA PS1/26 Annex I (OF 07.00 template); Annex II §3.2.2 ¶48, §3.2.5 ¶52-55
+- Bank of England Banking Taxonomy v4.1.1, module PRA001; known-issues log
+  (November 2026), issue #27
 """
 
 from __future__ import annotations
@@ -51,7 +67,7 @@ from __future__ import annotations
 from functools import cache
 from typing import TYPE_CHECKING
 
-from rwa_calc.reporting.corep.templates import B31_SA_ROW_SECTIONS
+from rwa_calc.reporting.corep.templates import B31_SA_ROW_SECTIONS, C07_00_SA_SHEET_MAP
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -103,6 +119,20 @@ _MEMORANDUM_SECTION: int = 4
 
 _ROWS_NOT_ON_TOTAL: frozenset[str] = frozenset({"0371", "0372", "0373", "0374"})
 
+# Memorandum rows 0300 / 0320 and the classes they are published for, by
+# ``ExposureClass`` value (read back through ``C07_00_SA_SHEET_MAP`` so the sheet
+# keys cannot drift from the z-axis): Annex II ¶52 (a)-(f). Not (g) real estate:
+# the table has no sheet for it (module docstring, known-issues log #27).
+_MEMO_DEFAULT_ROWS: frozenset[str] = frozenset({"0300", "0320"})
+_MEMO_DEFAULT_ROW_CLASSES: tuple[str, ...] = (
+    "central_govt_central_bank",  # (a)
+    "rgla",  # (b)
+    "pse",  # (c)
+    "institution",  # (d), Art. 112(1)(f)
+    "corporate",  # (e), Art. 112(1)(g)
+    "retail_other",  # (f), Art. 112(1)(h)
+)
+
 _NOTHING: Mapping[str, frozenset[str]] = {}
 
 
@@ -116,6 +146,31 @@ def get_c07_rows_not_on_total(framework: str = "CRR") -> frozenset[str]:
     cell for them. Empty for CRR (module docstring, "Scope").
     """
     return _ROWS_NOT_ON_TOTAL if framework == "BASEL_3_1" else frozenset()
+
+
+def get_c07_memo_default_sheet_keys(framework: str = "CRR") -> frozenset[str]:
+    """The class sheets the published template carries rows 0300 / 0320 on.
+
+    Annex II ¶52: "Those memorandum items in rows 0300 and 0320 shall only be
+    reported for the following exposure classes", (a)-(g); the taxonomy has a
+    sheet for (a)-(f). Empty for CRR (module docstring, "Scope").
+    """
+    if framework != "BASEL_3_1":
+        return frozenset()
+    return frozenset(C07_00_SA_SHEET_MAP[name] for name in _MEMO_DEFAULT_ROW_CLASSES)
+
+
+def get_c07_rows_not_on_sheet(framework: str, sheet_key: str) -> frozenset[str]:
+    """Row refs the published template does not carry on one CLASS sheet.
+
+    Rows 0300 / 0320 on every class sheet outside
+    ``get_c07_memo_default_sheet_keys`` — the "in default" and real-estate sheets
+    among them. The Total is not a class sheet (``get_c07_rows_not_on_total``).
+    Empty for CRR.
+    """
+    if framework != "BASEL_3_1" or sheet_key in get_c07_memo_default_sheet_keys(framework):
+        return frozenset()
+    return _MEMO_DEFAULT_ROWS
 
 
 def get_c07_unreported_cells(framework: str = "CRR") -> Mapping[str, frozenset[str]]:

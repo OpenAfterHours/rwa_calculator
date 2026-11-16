@@ -172,12 +172,19 @@ def sheet_axis(basis: TwoBasis, data: pl.DataFrame) -> set[str]:
     return keys
 
 
-def sheet_frame(basis: TwoBasis, data: pl.DataFrame, exposure_class: str) -> pl.DataFrame:
+def sheet_frame(
+    basis: TwoBasis, data: pl.DataFrame, exposure_class: str, *, keep: str | None = None
+) -> pl.DataFrame:
     """One sheet's frame: the legs on it under EITHER basis, each tagged with which.
 
     A leg on neither basis is dropped, so the frame is never wider than the
     sheet, and every cell predicate carries its own basis flag — an unflagged
     predicate would silently sum both populations.
+
+    ``keep`` names a boolean column of ``data`` whose legs the sheet also keeps
+    although neither basis puts them on it: C 07.00's memorandum legs
+    (``corep/c07_sheet_scope.py``), read only by the cells whose predicate names
+    their own flag. Both basis flags are False on such a leg.
     """
     tagged = data.with_columns(
         (pl.col(basis.pop_origin) & (pl.col(basis.class_origin) == exposure_class))
@@ -187,7 +194,10 @@ def sheet_frame(basis: TwoBasis, data: pl.DataFrame, exposure_class: str) -> pl.
         .fill_null(value=False)
         .alias(basis.basis_post),
     )
-    return tagged.filter(pl.col(basis.basis_origin) | pl.col(basis.basis_post))
+    on_sheet = pl.col(basis.basis_origin) | pl.col(basis.basis_post)
+    if keep is not None:
+        on_sheet = on_sheet | pl.col(keep)
+    return tagged.filter(on_sheet)
 
 
 def _in_approaches(cols: set[str], approach_col: str, approaches: tuple[str, ...]) -> pl.Expr:

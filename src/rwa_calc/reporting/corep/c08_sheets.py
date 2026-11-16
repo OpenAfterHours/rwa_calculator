@@ -54,7 +54,7 @@ approach". The Bank's rules say what that is wherever a figure can be added up:
 ``boe_b0749`` for the FIRB-and-slotting Total, each over a listed set of
 columns (``boe_b0749``'s list is the shorter: it omits seventeen of
 ``boe_b0748``'s, among them 0250 and 0300). So a Total is the CELL-BY-CELL SUM OF ITS
-CLASS SHEETS (the C 07.00 decision, ``c07.c07_total_sheet``, for the same
+CLASS SHEETS (the C 07.00 decision, ``c07_sheet_scope.c07_total_sheet``, for the same
 reason: every row is evaluated per sheet over that sheet's own population and
 basis, so the sum of the sheets is the only total consistent with them). Three
 kinds of cell are not a sum:

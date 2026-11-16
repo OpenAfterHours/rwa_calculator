@@ -8,6 +8,8 @@ Pipeline position:
 Key responsibilities:
 - Open a return from an uploaded file or a path on this machine, with the
   header a fact table needs, and say plainly why one could not be opened.
+  The reading and validating run as a dashboard task (``dash.tasks``): a
+  return that takes more than a moment shows its progress meanwhile.
 - Draw the overview, the rules and the template viewer for an opened return as
   a build would file it now: with the overrides drafted for it applied, and
   validated again once per change of them (``Workspace.working``).
@@ -23,29 +25,33 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
-from starlette.concurrency import run_in_threadpool
 from starlette.responses import FileResponse, RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.context import THEME_COOKIE, THEMES
-from rwa_filer.dash.forms import form_values, open_from_form, page_number
+from rwa_filer.dash.forms import form_values, page_number, read_open_form
 from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
+from rwa_filer.dash.task_pages import follow
 from rwa_filer.dash.views import overview, rules_page
 from rwa_filer.evidence import collect_evidence, write_evidence
-from rwa_filer.extras import MissingExtraError
-from rwa_filer.release import ReleaseNotFoundError, release_packs, shipped_releases
+from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
+from rwa_filer.release import release_packs, shipped_releases
 
 if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
     from rwa_filer.dash.context import DashContext
+    from rwa_filer.progress import ProgressCallback
 
 logger = logging.getLogger(__name__)
+
+#: The steps of opening a return: read the file, then validate it.
+OPENING_PHASES: Final = (PHASE_READING, PHASE_STRUCTURE, PHASE_RULES)
 
 
 # =============================================================================
@@ -84,13 +90,29 @@ class ReturnPages:
         return self._home(request)
 
     async def open_return(self, request: Request) -> Response:
-        """Open the uploaded file, or the file at the given path, and show its overview."""
+        """Open the uploaded file, or the file at the given path, and show its overview.
+
+        What the form itself gets wrong is refused at once; the reading and the
+        validation run as a task, whose progress is shown if it takes a while.
+        """
         form = await request.form()
+        values = form_values(form)
         try:
-            opened = await open_from_form(self.context.workspace, form)
-        except (ValueError, ReleaseNotFoundError, MissingExtraError) as exc:
-            return self._home(request, error=str(exc), values=form_values(form), status_code=400)
-        return RedirectResponse(f"/returns/{opened.return_id}", status_code=303)
+            asked = await read_open_form(self.context.workspace, form)
+        except ValueError as exc:
+            return self._home(request, error=str(exc), values=values, status_code=400)
+        workspace = self.context.workspace
+
+        def work(progress: ProgressCallback) -> str:
+            return f"/returns/{asked.open(workspace, progress).return_id}"
+
+        def refused(request: Request, error: str, status_code: int) -> Response:
+            return self._home(request, error=error, values=values, status_code=status_code)
+
+        task = self.context.tasks.start(
+            f"Validating {asked.name}", work, phases=OPENING_PHASES, refused=refused
+        )
+        return await follow(self.context, request, task)
 
     async def switch_taxonomy(self, request: Request) -> Response:
         """Open the return again against the release the form names, and show it."""
@@ -99,17 +121,27 @@ class ReturnPages:
         version = str(form.get("taxonomy") or "").strip()
         if not version or version == opened.release.version:
             return RedirectResponse(f"/returns/{opened.return_id}", status_code=303)
-        try:
-            other = await run_in_threadpool(self.context.workspace.reopen, opened, version)
-        except (ValueError, ReleaseNotFoundError) as exc:
+        workspace = self.context.workspace
+
+        def work(progress: ProgressCallback) -> str:
+            return f"/returns/{workspace.reopen(opened, version, progress=progress).return_id}"
+
+        def refused(request: Request, error: str, status_code: int) -> Response:
             return self.context.render(
                 request,
                 "error.html",
-                status_code=400,
+                status_code=status_code,
                 title="The return could not be opened against that release",
-                message=str(exc),
+                message=error,
             )
-        return RedirectResponse(f"/returns/{other.return_id}", status_code=303)
+
+        task = self.context.tasks.start(
+            f"Validating {opened.name} against taxonomy {version}",
+            work,
+            phases=OPENING_PHASES,
+            refused=refused,
+        )
+        return await follow(self.context, request, task)
 
     def overview(self, request: Request) -> Response:
         """Whether the return is fit to file, and the counts behind the answer."""

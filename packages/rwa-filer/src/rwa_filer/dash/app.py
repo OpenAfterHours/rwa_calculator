@@ -5,7 +5,8 @@ Pipeline position:
     serve()  ->  create_app(workspace)  ->  Starlette  ->  dash.pages handlers
 
 Key responsibilities:
-- Assemble the pages each part of the dashboard contributes into one app.
+- Assemble the pages each part of the dashboard contributes into one app,
+  the progress page of long work among them.
 - Put the session gate, the same-origin check and the host allowlist in front
   of every route.
 - Answer an unknown address with the dashboard's own page, not a stack trace.
@@ -31,8 +32,9 @@ from rwa_filer.dash import (
     pages,
     referee_pages,
     reference_pages,
+    task_pages,
 )
-from rwa_filer.dash.context import STATIC_DIR, DashContext
+from rwa_filer.dash.context import PROGRESS_AFTER_SECONDS, STATIC_DIR, DashContext
 from rwa_filer.dash.security import LOOPBACK_HOSTS, SameOriginGate, SessionGate
 
 if TYPE_CHECKING:
@@ -49,6 +51,7 @@ def create_app(
     *,
     token: str | None = None,
     allowed_hosts: Sequence[str] = LOOPBACK_HOSTS,
+    progress_after: float = PROGRESS_AFTER_SECONDS,
 ) -> Starlette:
     """The dashboard over ``workspace``.
 
@@ -58,8 +61,11 @@ def create_app(
             app open (tests, or an app mounted inside one that checks itself).
         allowed_hosts: The ``Host`` headers answered — the loopback names unless
             the server was bound elsewhere on purpose.
+        progress_after: Seconds a form that starts long work — opening,
+            re-validating or building a return — waits for it before sending
+            the person to its progress page.
     """
-    context = DashContext(workspace)
+    context = DashContext(workspace, progress_after=progress_after)
 
     async def not_found(request: Request, exc: Exception) -> Response:
         detail = exc.detail if isinstance(exc, HTTPException) else "Not found."
@@ -72,6 +78,7 @@ def create_app(
             *compare_pages.routes(context),
             *referee_pages.routes(context),
             *reference_pages.routes(context),
+            *task_pages.routes(context),
             Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
         ],
         middleware=[

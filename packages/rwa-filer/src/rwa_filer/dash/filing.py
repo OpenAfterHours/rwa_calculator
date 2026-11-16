@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
     from rwa_filer.boe.engine import RuleResult
     from rwa_filer.dash.workspace import OpenedReturn, WorkingReturn, Workspace
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.validate.returns import RuleReport
     from rwa_filer.workflow.adjustments import AppliedAdjustment
     from rwa_filer.workflow.ledger import LedgerEntry
@@ -235,12 +236,18 @@ def parse_value(text: str, data_type: str) -> tuple[float | None, str | None]:
 
 
 def build_package(
-    workspace: Workspace, opened: OpenedReturn, options: BuildOptions, *, at: datetime
+    workspace: Workspace,
+    opened: OpenedReturn,
+    options: BuildOptions,
+    *,
+    at: datetime,
+    progress: ProgressCallback | None = None,
 ) -> int:
     """Build a filing package from ``opened`` and its drafted overrides; the build's index.
 
     The package is written only as ``rwa-filer build`` would write it; a build
-    that is refused is kept too, so the page can say why.
+    that is refused is kept too, so the page can say why. ``progress`` is told
+    how far the build's validation, then its writing, has got.
 
     Raises:
         ValueError: overrides are drafted but no author is given — an override
@@ -267,6 +274,7 @@ def build_package(
         source_findings=opened.reading.findings,
         adjustments=applied,
         source=opened.validation.source,
+        progress=progress,
     )
     ledger = None
     if package.written and author is not None and package.instance_path is not None:

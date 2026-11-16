@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any, Final
 from rwa_filer import __version__
 from rwa_filer.boe.engine import Accuracy
 from rwa_filer.evidence import collect_evidence, write_evidence
+from rwa_filer.progress import PHASE_WRITING, Progress, notify
 from rwa_filer.release import choose_release
 from rwa_filer.validate.report import to_record
 from rwa_filer.validate.returns import validate_return
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
     from rwa_filer.boe.catalogue import RuleBook
     from rwa_filer.evidence import EvidenceFile
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
@@ -148,6 +150,7 @@ def build_filing(
     adjustments: Sequence[AppliedAdjustment] = (),
     evidence: Path | None = None,
     source: SourceIdentity | None = None,
+    progress: ProgressCallback | None = None,
 ) -> FilingPackage:
     """Validate ``ret`` and, if it may be filed, write its filing package.
 
@@ -177,6 +180,8 @@ def build_filing(
             (``rwa_filer.evidence``; ``.gz`` to compress). Its creation time is
             ``options.created_at``.
         source: The file the return was read from, for the identity block.
+        progress: Told which step the build is on: the validation's steps
+            (``validate_return``), then writing the package when it is written.
 
     Returns:
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
@@ -202,6 +207,7 @@ def build_filing(
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,
+            progress=progress,
         )
         validation = collected.validation
         evidence_file = write_evidence(collected, evidence, generated_at=options.created_at)
@@ -212,6 +218,7 @@ def build_filing(
             accuracy=accuracy,
             source_findings=source_findings,
             source=source,
+            progress=progress,
         )
     if validation.structure:
         return FilingPackage(
@@ -222,6 +229,7 @@ def build_filing(
             validation=validation, blocked_by=BLOCKED_BY_RULES, evidence=evidence_file
         )
 
+    notify(progress, Progress(PHASE_WRITING))
     instance = write_instance(ret, validation.pack, options=options)
     base = name or default_name(ret)
     directory.mkdir(parents=True, exist_ok=True)

@@ -141,15 +141,23 @@ PROBES: dict[str, InstallProbe] = {
     ),
     "rwa-filer": InstallProbe(
         import_name="rwa_filer",
-        # Every shipped release's validations deny list is package data in a
-        # subdirectory of boe/data: a wheel that dropped it would run every rule
-        # the Bank's gateway has switched off, and ``load_deny_list`` raises.
+        # Every shipped release's validations deny list and publisher-issue
+        # register are package data in subdirectories of boe/data: a wheel that
+        # dropped either would run every rule the Bank's gateway has switched
+        # off, or label nothing, and ``load_deny_list`` / ``load_issues`` raise.
         statements=(
             "from rwa_filer.boe.deny import load_deny_list",
+            "from rwa_filer.boe.issues import load_issues",
             "from rwa_filer.release import shipped_releases",
             "assert all(load_deny_list(version).file for version in shipped_releases())",
+            # The curated publisher-issue register, a second subdirectory of boe/data.
+            "assert all(load_issues(version).issues for version in shipped_releases())",
         ),
-        commands=(("rwa-filer", "--version"), ("rwa-filer", "rulebook", "deny-list")),
+        commands=(
+            ("rwa-filer", "--version"),
+            ("rwa-filer", "rulebook", "deny-list"),
+            ("rwa-filer", "rulebook", "issues"),
+        ),
     ),
 }
 

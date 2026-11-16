@@ -431,6 +431,103 @@ does. The November 2026 list writes `boe_b04006_1` and `boe_b04006_2`. MRL001's
 rules are `boe_b4006_1` and `boe_b4006_2`, as known issue #23 names them. The
 entry keeps the Bank's spelling as `published_code`.
 
+## Known issues with the published rules
+
+Some published rules are wrong: a return that follows the reporting
+instructions fails them, they pass figures the rules do not permit, or they
+never run. `rwa-filer` ships, for each taxonomy release, a **register** of the
+ones it knows about, with the evidence for each, and labels every result one of
+them explains. **The verdict never changes:** a rule that breaks still breaks,
+with the same severity, code and figures, and a return it blocks is still
+blocked. Only the words beside the result change, so the reader knows the break
+is the published rule's, not the return's.
+
+```bash
+# Every known issue of every shipped release, one per line
+uvx rwa-filer@latest rulebook issues
+
+# One issue in full: the rule, the instructions quoted with their page, why a
+# correct return fails, the smallest correct return, the proposed fix
+uvx rwa-filer@latest rulebook issues PI-15a
+
+# The register as the write-up to share with the Bank (Markdown), or as JSON
+uvx rwa-filer@latest rulebook issues --format markdown > known-issues.md
+uvx rwa-filer@latest rulebook issues --format json --module PRA001
+```
+
+**What an issue says.** Each has an id (`PI-15a`), a title, the rules it names
+(each pinned by its `rule_sha256`, so an issue never labels a changed rule that
+kept its code), the instructions and rules it rests on, quoted with the page of
+the PDF, why a correct return fails, a minimal correct return, what the Bank
+could change, EBA precedent, reach, and what a firm can do meanwhile. Its
+**status** says where it stands with the Bank:
+
+| Status | Meaning |
+|---|---|
+| `draft` | identified by rwa-filer, not yet raised with the Bank of England |
+| `raised` | raised with the Bank, on the date given |
+| `acknowledged` | in the Bank's own known-issues log (the entry is quoted) |
+| `fixed` | fixed by the Bank in a later taxonomy release |
+
+A rule the Bank has **deactivated** at its gateway is told by the deny list
+above, not by a label: it is not run, so there is no break to label.
+
+**Which results are labelled.** An issue's *effect* decides:
+
+- a rule that **fails correct returns** labels a FAIL;
+- a rule that **passes wrong returns** labels a PASS ("this pass is no evidence
+  ...");
+- a rule that **never runs** labels the rule not evaluated because its formula
+  cannot fire or nothing it reads is reported;
+- an issue in the instructions or the taxonomy alone labels nothing; it is in
+  the register and the write-up only.
+
+**Where a break is explained.** An issue may apply to part of a rule only - a
+column, some rows, some sheets (its *footprint*). Every unsatisfied evaluation,
+not only the five a result keeps, is classed inside or outside it: "4 of 14
+unsatisfied evaluation(s) are where the published rule is known to be wrong; 10
+are not, and are not explained by it". A break outside every footprint is a
+break in the return, and the label says so. Where an issue cannot tell its own
+break from one in the return, the label says the break "may be" the issue.
+
+**Where the label appears.**
+
+- The finding's message gains one sentence per issue, and the finding names the
+  issues (`publisher_issues`).
+- The text report adds a line per labelled result after the counts; the verdict
+  line is unchanged.
+- The JSON report: each rule's `publisher_issues`, each finding's
+  `publisher_issues`, `summary.publisher_issues` (by issue, with the breaks
+  inside and outside), and `identity.publisher_issues` (the register's file and
+  SHA-256 - outside `evidence_id`, because a label is not a check).
+- The evidence export: each rule record's labels, and on each unsatisfied
+  evaluation of a labelled break the issues whose footprint holds it (`[]` when
+  none does).
+- The dashboard: a "Known issue" chip on the rules list, the overview and the
+  module reference page; a callout in the rule detail and in the cell panel.
+- The filing manifest, which copies the report's findings and summary.
+
+There is no separate exit code: `validate`'s exit code is the verdict's. A
+script that must tell "blocked only by breaks a known issue explains" from the
+rest reads `summary.publisher_issues` (or `ReturnValidation.publisher_issues`
+in Python).
+
+**Where it comes from, and what holds it to the evidence.** The register is
+`rwa_filer/boe/data/issues/<release>.json` (schema
+`schemas/publisher-issues-1.schema.json`), curated by hand from findings, never
+imported. The package's tests hold it to the release: every rule it names is a
+rule of that module at that fingerprint and severity, every footprint names
+cells of the module's pack, and each status agrees with its fields. Each
+issue's minimal correct return was run once through Arelle against the Bank's
+taxonomy package, and CI holds the engine to Arelle's counts and the issue to
+its claim - every rule at issue unsatisfied on it - so a release in which the
+Bank fixes a rule fails until the issue is closed. In the repository,
+`tests/contracts/test_publisher_issue_quotes.py` checks every quote is on its
+page of the PDF. The write-up is generated as
+[`publisher-issues.md`](publisher-issues.md) by
+`scripts/generate_publisher_issues.py`; it stays out of the site navigation
+until it is signed off.
+
 ## The validation report and the evidence export
 
 `--report FILE` (or `--format json`) writes the **validation report**: one JSON
@@ -472,9 +569,10 @@ Within a major version the report only gains fields. It holds:
   also has `deny_list`, the Bank's entry for it or null, and `formula`, the
   published rule's verdict where that entry changed the outcome, or null.
   `summary.deny_list` lists what the list deactivated, what it downgraded and
-  what it did not apply.
+  what it did not apply. Each rule also has `publisher_issues`: the labels known
+  issues with the published rule put on it (see above).
 - `findings`: every finding, each with `positions_total`, the number of facts
-  it is about.
+  it is about, and `publisher_issues`, the known issues that label it.
 
 ### The evidence export
 
@@ -952,6 +1050,12 @@ uvx rwa-filer@latest rulebook list
 
 # The Bank's validations deny list, entry by entry, as it stands on a date
 uvx rwa-filer@latest rulebook deny-list --module PRA001 --on 2027-03-31
+
+# The known issues with the published rules: every one, one in full, or the
+# register as the write-up to share
+uvx rwa-filer@latest rulebook issues
+uvx rwa-filer@latest rulebook issues PI-15a
+uvx rwa-filer@latest rulebook issues --format markdown
 
 # Rebuild a release's deny list from the Bank's workbook, joined to the
 # known-issues log; or fail if the packaged one is not what it yields

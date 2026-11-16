@@ -8,7 +8,10 @@ and evaluates them as the Bank's gateway does, for 14 reporting modules
 (`PRA001`, `PRA116`, Capital+, leverage, MREL and financial statements). That
 includes the Bank's validations deny list: the rules its gateway has stopped
 running, or runs only as warnings, since the taxonomy was published
-(`rwa-filer rulebook deny-list`).
+(`rwa-filer rulebook deny-list`). It also carries a register of the published
+rules known to be wrong, with the evidence for each, and labels every result one
+of them explains without changing the verdict (`rwa-filer rulebook issues`;
+`--format markdown` renders the write-up to share with the Bank).
 
 **Documentation:** <https://openafterhours.github.io/rwa_calculator/rwa-filer/>
 

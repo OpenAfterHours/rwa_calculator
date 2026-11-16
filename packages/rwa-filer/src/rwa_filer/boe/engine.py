@@ -45,10 +45,13 @@ How a rule is evaluated
    default's is zero; ``isum`` and ``i+`` add allowances, products and
    quotients propagate them. ``a i= b`` holds when ``|a - b|`` is within the
    two allowances together. An operator without the prefix compares the
-   reported values exactly. A function without it is XPath's, and its result
-   is a plain number with NO allowance: ``sum(...)`` allows nothing for the
-   facts it adds, where ``isum(...)`` allows each one's, and ``abs`` likewise
-   against ``iabs`` (the Bank's ``boe_b0770``, ``boe_b0794``).
+   reported values exactly. ``sum`` and ``abs`` without it are XPath's, and
+   their result is a plain number with NO allowance: ``sum(...)`` allows
+   nothing for the facts it adds, where ``isum(...)`` allows each one's, and
+   ``abs`` likewise against ``iabs`` — measured against Arelle on the Bank's
+   ``boe_b0770``, ``boe_b0794`` and their siblings. Plain ``max`` and ``min``
+   are not measured, because no packaged rule calls them; they are read as
+   ``imax`` and ``imin`` are, and the chosen fact keeps its allowance.
 
 5. *Where is a fact with no member on an open sheet axis?* At the dimension's
    default member. On an axis that accepts the default (OF 08.06's "all types"
@@ -1335,6 +1338,11 @@ class _Evaluation:
             if operand is None:
                 return None
             return _Amount(abs(operand.value), operand.allowance if name == "iabs" else 0.0)
+        # Plain ``max`` / ``min`` are deliberately read as ``imax`` / ``imin``, the
+        # chosen fact keeping its allowance, and that reading is UNMEASURED: no
+        # packaged rule calls them, so Arelle cannot be asked through a Bank
+        # formula. test_no_packaged_rule_calls_plain_max_or_min fails on the first
+        # release that adds one; measure it with Arelle before trusting this.
         if name in ("imax", "max", "imin", "min"):
             items = [
                 item

@@ -291,11 +291,12 @@ packaged rule books are built with both.
     every one of the 28 rules whose sums the workbook alone misreads.
 
     Every figure in those returns is exact to the unit, where `sum` and `isum`
-    allow the same, and none files an all-types OF 08.06 sheet. Three further
+    allow the same, and none files an all-types OF 08.06 sheet. Four further
     returns cover both cases: two with figures rounded to thousands, for PRA001
-    and PRA116, and one with an all-types OF 08.06 sheet beside two types. Their
-    Arelle counts are kept too, and the engine agrees with Arelle on every rule
-    they were built for.
+    and PRA116, and two with an all-types OF 08.06 sheet beside two types, one
+    where that sheet has its own category rows and one where it has only its
+    total. Their Arelle counts are kept too, and the engine agrees with Arelle
+    on every rule they were built for.
 
 ### The fact table
 

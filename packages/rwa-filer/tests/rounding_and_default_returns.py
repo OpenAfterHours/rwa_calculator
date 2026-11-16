@@ -36,6 +36,9 @@ the one that differs), so a verdict alone cannot hide a wrong count
 - ``rounded_sddt`` (PRA116): the same for SC 34.00 and SC 16.00.
 - ``all_types`` (PRA001): project finance and IPRE on their own OF 08.06
   sheets, and the all-types sheet beside them with its own category rows.
+- ``all_types_total_only`` (PRA001): the same, with only the total row (0095)
+  on the all-types sheet. The two readings differ on other counts here: the
+  all-types sheet's total no longer foots on category rows of its own.
 
 Arelle's counts on these returns are pinned in
 ``tests/releases/4.1.1/oracles/rounding_and_default_oracle.json``; regenerate
@@ -65,10 +68,15 @@ from typing import Any, Final
 
 from rwa_filer.model import CanonicalReturn
 from rwa_filer.taxonomy.pack import load_packaged
-from summed_returns import RELEASE, _arelle_version, _return
+from summed_returns import RELEASE, arelle_version, canonical_return
 
 #: Each return's module, and the pack it is written against.
-MODULES: Final = {"rounded": "PRA001", "rounded_sddt": "PRA116", "all_types": "PRA001"}
+MODULES: Final = {
+    "rounded": "PRA001",
+    "rounded_sddt": "PRA116",
+    "all_types": "PRA001",
+    "all_types_total_only": "PRA001",
+}
 PACKS: Final = {"PRA001": "pra001-4.1.1", "PRA116": "pra116-4.1.1"}
 
 #: The rules each return exists for, and the controls beside them.
@@ -76,6 +84,9 @@ RULES: Final = {
     "rounded": r"^(boe_b076[89]|boe_b0770|boe_b0794|boe_b081[679]|boe_b082[0-3]|boe_b0829)$",
     "rounded_sddt": r"^(boe_b0794|boe_b1037_ss)$",
     "all_types": r"^(boe_b081[5-9]|boe_b082[0-3]|boe_b0829|boe_b063[2-6]|boe_b1042|boe_b0743)$",
+    "all_types_total_only": (
+        r"^(boe_b081[5-9]|boe_b082[0-3]|boe_b0829|boe_b063[2-6]|boe_b1042|boe_b0743)$"
+    ),
 }
 
 #: Thousands, as the Filing Manual allows a monetary figure to be rounded; and
@@ -133,9 +144,10 @@ _SC34_TOTALS: Final = {"0010": 15_001_000, "0020": 15_000_000}
 
 # OF 08.06 with two types and the all-types sheet (no member): project finance
 # in "Good / other" (row 0055), IPRE in "Satisfactory" (row 0065), each
-# repeated in its sheet's total (0095), and both on the all-types sheet. The
-# columns: original exposure, after CRM substitution, exposure value, RWEA,
-# expected loss, (-) provisions. OF 08.01 r0080 carries the class figures.
+# repeated in its sheet's total (0095), and both on the all-types sheet (in
+# its category rows and total, or in its total alone). The columns: original
+# exposure, after CRM substitution, exposure value, RWEA, expected loss, (-)
+# provisions. OF 08.01 r0080 carries the class figures.
 _TYPE_COLUMNS: Final = ("0010", "0020", "0040", "0080", "0090", "0100")
 _PROJECT_FINANCE: Final = (1000.0, 1000.0, 1000.0, 900.0, 8.0, -5.0)
 _IPRE: Final = (2000.0, 2000.0, 2000.0, 2300.0, 56.0, -20.0)
@@ -143,11 +155,12 @@ _CLASS_COLUMNS: Final = ("0020", "0090", "0110", "0260", "0280", "0290")
 
 
 def build_returns() -> dict[str, CanonicalReturn]:
-    """The three returns, by name (see ``MODULES`` for each one's module)."""
+    """The four returns, by name (see ``MODULES`` for each one's module)."""
     return {
-        "rounded": _return("PRA001", [*_pd_bands(), *_three_years("OF"), *_slotting()]),
-        "rounded_sddt": _return("PRA116", [*_sc34(), *_three_years("SC")]),
-        "all_types": _return("PRA001", _all_types()),
+        "rounded": canonical_return("PRA001", [*_pd_bands(), *_three_years("OF"), *_slotting()]),
+        "rounded_sddt": canonical_return("PRA116", [*_sc34(), *_three_years("SC")]),
+        "all_types": canonical_return("PRA001", _all_types(category_rows=True)),
+        "all_types_total_only": canonical_return("PRA001", _all_types(category_rows=False)),
     }
 
 
@@ -209,15 +222,17 @@ def _sc34() -> list[tuple[Any, ...]]:
     return rows
 
 
-def _all_types() -> list[tuple[Any, ...]]:
+def _all_types(*, category_rows: bool) -> list[tuple[Any, ...]]:
+    """The two type sheets, and the all-types sheet with or without category rows."""
     both = tuple(a + b for a, b in zip(_PROJECT_FINANCE, _IPRE, strict=True))
+    all_categories = {"0055": _PROJECT_FINANCE, "0065": _IPRE} if category_rows else {}
     rows: list[tuple[Any, ...]] = []
-    for member, category_rows, totals in (
+    for member, categories, totals in (
         ("x129", {"0055": _PROJECT_FINANCE}, _PROJECT_FINANCE),
         ("x10001", {"0065": _IPRE}, _IPRE),
-        (None, {"0055": _PROJECT_FINANCE, "0065": _IPRE}, both),
+        (None, all_categories, both),
     ):
-        for row, figures in (*category_rows.items(), ("0095", totals)):
+        for row, figures in (*categories.items(), ("0095", totals)):
             rows += [
                 ("OF08.06.01.01", None, member, row, column, value, None, 0)
                 for column, value in zip(_TYPE_COLUMNS, figures, strict=True)
@@ -283,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             "under plain sum() and abs(), and an all-types OF 08.06 sheet beside two "
             "types. Regenerate with that module's main, never by hand."
         ),
-        "processor": _arelle_version(args.arelle_python),
+        "processor": arelle_version(args.arelle_python),
         "taxonomy": f"Bank of England Banking Taxonomy v{RELEASE}",
         "returns": _measure(args.taxonomy_package, args.arelle_python),
     }

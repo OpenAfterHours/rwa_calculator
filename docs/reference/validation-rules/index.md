@@ -445,9 +445,9 @@ References are keyed maps rather than positional:
 the domain the rule iterates over — the BoE analogue of the EBA row/column scope columns.
 
 `dv` belongs to one reference, not to the rule: the workbook's `Note` sheet calls it "a prefix
-to define a default value for a variable, that will be used, if no data will be found", and a
-reference without one "may return no results". The return-level engine (`rwa_filer.boe`) applies
-each reference's own default. The template-level engine reduces it to one policy per rule —
+to define a default value for a variable, that will be used, if no data will be found", and adds:
+"If the default value will not be specified, an evaluation may return no results". The
+return-level engine (`rwa_filer.boe`) applies each reference's own default. The template-level engine reduces it to one policy per rule —
 zero-fill if any reference carries a `dv`, skip otherwise — which differs only on the four
 enforced rules that mix references with and without a default (`boe_b0383`, `boe_b0512_2`,
 `boe_b0718`, `boe_b0785`).
@@ -456,9 +456,9 @@ enforced rules that mix references with and without a default (`boe_b0383`, `boe
 reported, the rule is not evaluated there unless this is set: an XBRL processor skips an
 evaluation whose variables have all fallen back to their defaults (Arelle logs "skipped
 evaluation, all fact variables have fallen back"), and `rwa_filer.boe`, whose verdicts are pinned
-to Arelle's, does the same. Both engines follow it:
-the template-level engine reports such a place as not evaluated (`nothing_reported`) when the
-comparison fails and as vacuous when it holds. The EBA workbook has no equivalent column, and no
+to Arelle's, does the same. Both engines follow it: the template-level engine reports such a
+place as not evaluated (`nothing_reported`) when the comparison fails and as vacuous when it
+holds. The EBA workbook has no equivalent column, and no
 EBA rule is treated as always executed: XBRL Variables 1.0 (section 4) does not evaluate a
 variable set whose fact variables all fall back, and an EBA "treat as zero" rule's cells fall back
 to 0. The Bank's package gives the 46 EBA "treat as zero" rules it restates a `dv` default (45 on

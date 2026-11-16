@@ -13,7 +13,9 @@ other oracles hold:
 - A fact with no member on OF 08.06's type-of-lending axis is on the all-types
   sheet (the dimension default), one place among the types. Given no place on
   the axis, its cells were read into every type's evaluation: ``boe_b0815`` and
-  ``boe_b1042`` failed on each type sheet where Arelle passes every sheet.
+  ``boe_b1042`` failed on each type sheet where Arelle passes every sheet. Two
+  returns pin it, an all-types sheet with category rows and one with its total
+  alone: the old reading gets different counts wrong on each.
 
 These tests hold the engine to Arelle's counts, rule by rule, on the returns
 ``rounding_and_default_returns.py`` builds. They run in CI: the counts were
@@ -59,7 +61,11 @@ MISREAD: dict[str, frozenset[str]] = {
     ),
     "rounded_sddt": frozenset({"boe_b0794", "boe_b1037_ss"}),
     "all_types": frozenset({"boe_b0815", "boe_b1042", "boe_b0823", "boe_b0829"}),
+    "all_types_total_only": frozenset({"boe_b0815", "boe_b1042", "boe_b0823", "boe_b0829"}),
 }
+
+#: The returns that file an all-types OF 08.06 sheet; the rest file rounded figures.
+ALL_TYPES_RETURNS = frozenset({"all_types", "all_types_total_only"})
 
 #: The open sheet axis whose default member is the all-types sheet.
 ALL_TYPES_TABLE = "OF08.06.01.01"
@@ -157,7 +163,7 @@ def test_read_the_old_way_every_misread_rule_is_counted_differently(
     # Arrange
     ret, pack, rules, _facts = filed[name]
     arelle = oracle["returns"][name]["rules"]
-    if name == "all_types":
+    if name in ALL_TYPES_RETURNS:
         pack = _without_default_sheet(pack, ALL_TYPES_TABLE)
     else:
         rules = [

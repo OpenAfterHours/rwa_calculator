@@ -589,13 +589,19 @@ class TestPostModelAdjustments:
             total = mtg.filter(pl.col("row_ref") == "0010")
             assert total["0253"][0] == pytest.approx(100.0)
 
-    def test_b31_col_0254_unrecognised(self) -> None:
-        """Col 0254: Unrecognised exposure adjustment."""
+    def test_b31_col_0254_unrecognised_on_airb_sheets_only(self) -> None:
+        """Col 0254: Unrecognised exposure adjustment — reported on the A-IRB
+        mortgage sheet, and not on the F-IRB corporate sheet: PS1/26 Annex II
+        p.112, "This column shall not be reported for sheets relating to the FIRB
+        approach or the slotting approach" (the adjustment is Art. 166D(6)'s, an
+        A-IRB one). The fixture gives the F-IRB legs an adjustment anyway (7.7 +
+        30.0), so leaving it out cannot be told apart from summing a zero."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
-        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB]
-        total = corp.filter(pl.col("row_ref") == "0010")
-        assert total["0254"][0] == pytest.approx(7.7 + 30.0)
+        mtg = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME].filter(pl.col("row_ref") == "0010")
+        corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0010")
+        assert mtg["0254"][0] == pytest.approx(40.0)
+        assert corp["0254"][0] is None
 
     def test_b31_col_0280_el_pre_adjustment(self) -> None:
         """Col 0280: EL pre-adjustment equals sum of el_pre_adjustment."""

@@ -385,14 +385,14 @@ from rwa_calc.reporting.corep.c08_06_cells import (
 )
 from rwa_calc.reporting.corep.c08_sheets import (
     BASIS,
-    REPORTED_ROWS,
     inflow_sheet_key,
     irb_population,
     non_slotting,
     pd_average,
     pd_weight_exprs,
+    reported_sheets,
     sheet_keys,
-    with_total_sheets,
+    sheet_plans,
 )
 from rwa_calc.reporting.corep.crm_substitution import (
     C08_01_NETTING_EXEMPT_ROWS,
@@ -1111,9 +1111,9 @@ def c08_01_plans(
             ),
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
-            inflow_rows=_inflow_rows(inflow) | REPORTED_ROWS.get(ec, frozenset()),
+            inflow_rows=_inflow_rows(inflow),
         )
-    return plans
+    return sheet_plans("C08.01", plans, framework)
 
 
 def _inflow_rows(inflow: InflowBreakdown | None) -> frozenset[str]:
@@ -1156,8 +1156,8 @@ def generate_c08_01(
     the all-null inert rows, the provisions ladder 0290, the Annex II §1.3 "(-)"
     negation) — the drill-down reads a cell's value from HERE, so it honours every
     pass. The per-row predicates the passes need are rebuilt from the plan's
-    ``row_terms``. ``totals`` adds the published Total sheets, which have no plan
-    (``c08_sheets.with_total_sheets``); lineage reads the plan-keyed default."""
+    ``row_terms``. ``totals`` adds the published Total sheets, which have no plan,
+    before every sheet loses its grey cells (``c08_sheets.reported_sheets``)."""
     result: dict[str, pl.DataFrame] = {}
     plans = c08_01_plans(results, cols, framework, errors)
     for ec, plan in plans.items():
@@ -1170,7 +1170,7 @@ def generate_c08_01(
         frame = null_empty_rows(frame, plan.frame, row_preds, plan.inflow_rows)
         frame = provisions_postfix(frame, plan.frame, origin_preds, data_cols, ref="0290")
         result[ec] = negate_deduction_cols(frame, _NEGATIVE_COLS)
-    return with_total_sheets("C08.01", result, plans, framework, errors) if totals else result
+    return reported_sheets("C08.01", result, plans, framework, errors, totals=totals)
 
 
 def _origin_preds(
@@ -1299,7 +1299,7 @@ def c08_02_plans(
             ctx=ReportingContext(substitution_inflow_graded=graded.get(ec, 0.0)),
             negative_cols=_NEGATIVE_COLS,
         )
-    return plans
+    return sheet_plans("C08.02", plans, framework)
 
 
 @cites("PS1/26, paragraph 1.3")
@@ -1338,7 +1338,7 @@ def generate_c08_02(
         frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
         frame = frame.with_columns(pl.col("row_name").alias("0005"))
         result[ec] = frame.select(["row_ref", "row_name", *column_refs])
-    return with_total_sheets("C08.02", result, plans, framework, errors) if totals else result
+    return reported_sheets("C08.02", result, plans, framework, errors, totals=totals)
 
 
 def _c08_02_keyed(
@@ -1535,7 +1535,7 @@ def generate_c08_03(
         frame = execute(plan.spec, banded)
         frame = provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
         result[ec] = frame
-    return with_total_sheets("C08.03", result, plans, framework, errors) if totals else result
+    return reported_sheets("C08.03", result, plans, framework, errors, totals=totals)
 
 
 def _c08_05_cells(  # noqa: PLR0913 - the full C 08.05 PD-backtesting column surface
@@ -1666,7 +1666,7 @@ def generate_c08_05(
         result[ec] = (
             _empty_frame(column_refs) if not plan.spec.rows else execute(plan.spec, plan.frame)
         )
-    return with_total_sheets("C08.05", result, plans, framework, errors) if totals else result
+    return reported_sheets("C08.05", result, plans, framework, errors, totals=totals)
 
 
 def _c08_05_prepare(data: pl.DataFrame, cols: set[str], report_pd_col: str) -> pl.DataFrame:

@@ -894,11 +894,12 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     slotting sheets, and a firm on one approach reports one Total. Amounts and counts are the
     sum of the sheets (the Bank's rules `boe_b0748` and `boe_b0749`). An exposure-weighted
     average (PD, LGD, maturity) is the average over the exposures the Total covers that carry
-    the parameter — a slotting exposure has no maturity and does not dilute it. The OF 08.05
-    observed default rate is re-derived from the Total's own counts. `boe_b0748` also lists
-    column 0250 (maturity) as a sum; the Total reports the average, so that rule breaks on
-    column 0250 wherever two AIRB sheets report a maturity. A Total has no drill-down of its
-    own: open the same cell on a class sheet.
+    the parameter — a slotting exposure has no maturity and does not dilute it, and a retail
+    sheet reports none, so the AIRB Total's maturity is the average over its non-retail
+    legs. The OF 08.05 observed default rate is re-derived from the Total's own counts.
+    `boe_b0748` also lists column 0250 (maturity) as a sum; the Total reports the average,
+    so that rule breaks on column 0250 wherever two non-retail AIRB sheets report a
+    maturity. A Total has no drill-down of its own: open the same cell on a class sheet.
 
     **A pair with no sheet.** PS1/26 Art. 147A withdraws the IRB approaches for sovereigns
     and A-IRB for institutions. A leg that still carries such a pair is reported on a sheet
@@ -1080,6 +1081,41 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
       exposure does not have (a limit of the published rule). A defaulted obligor is
       averaged at the PD the ledger carries, not 100% (plan P1.381) — the same figure
       OF 08.02, 08.03 and 09.02 report.
+
+!!! info "Not every row carries every column, and not every sheet every column"
+    Two kinds of cell are left empty on purpose.
+
+    **Columns Annex II says not to fill on a sheet** (both bound to no figure on that
+    sheet, so a Total adds up or averages only what its sheets report):
+
+    - **Column 0250 (maturity) on a retail sheet**, C / OF 08.01 and 08.02, **both
+      regimes** — *"This column shall therefore not be filled in for the exposure class
+      'retail' or for exposures subject to the slotting approach"* (PS1/26 Annex II p.111;
+      CRR Annex II says the same of C 08.01). C / OF 08.03 column 0080 already did this.
+      Before 2026-11-16 retail sheets reported the legs' maturity and the AIRB Total
+      averaged it in.
+    - **Column 0254 (unrecognised exposure adjustments) on an F-IRB or slotting sheet**
+      (0002, 0006, 0010, 0012, 0022, 0024 and any F-IRB sheet off the published axis),
+      OF 08.01 and 08.02 — *"This column shall not be reported for sheets relating to the
+      FIRB approach or the slotting approach"* (p.112). These sheets used to report 0.0.
+
+    **Cells the published sheet does not have** (Basel 3.1, OF 08.01). The PRA001 taxonomy
+    has no data point for 279 of the template's row-by-column positions on any sheet, and
+    seven more depend on the sheet. Among them: column 0310 (RWEA pre credit derivatives) is
+    published on the Total row 0010 only; the "of which" columns (large financial sector
+    entities, off balance sheet, defaulted) are not on the exposure-type rows; the slotting
+    row 0080 has no PD, LGD, maturity, CRM-in-LGD or output-floor columns; the
+    unrated-corporate rows 0190 / 0200 have no column 0104. The generator still computes
+    them — column 0090 is a waterfall over columns that some rows do not publish, and each
+    Total is the sum of its sheets — and then leaves them empty on every sheet, Totals
+    included. The list is held to the taxonomy sheet by sheet
+    (`corep/of08_published_cells.py`).
+
+    One family is the Bank's open issue: rows 0017 and 0020 column 0035 (on-balance-sheet
+    netting) are missing on sheet 0019 (retail, commercial immovable property, non-SME)
+    only. The Bank's known-issues log (item 25) asks firms to *"report this data in the total
+    AIRB sheet s0001 but do not report it separately until the next taxonomy update"* — so
+    that netting is in Total 0001 and not on sheet 0019. The CRR layout is unchanged.
 
 ### Row Structure
 

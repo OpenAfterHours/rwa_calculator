@@ -78,9 +78,11 @@ class SheetPlan:
     ``boe_b0745``) require.
 
     ``unreported`` maps a row ref to the column refs the PUBLISHED template has
-    no cell for (OF 07.00's grey cells — ``corep/of07_published_cells.py``). The
-    spec still binds them, because a reported cell can be a formula over one,
-    but the generator blanks them as its last pass and they are NOT cells of the
+    no cell for — OF 07.00's grey cells (``corep/of07_published_cells.py``) and,
+    per published sheet, OF 08.01's (``corep/of08_published_cells.py``). The
+    spec still binds them, because a reported cell can be a formula over one
+    (and an OF 08.01 Total is the sum of its sheets' unblanked cells), but the
+    generator blanks them as its last pass and they are NOT cells of the
     sheet: a consumer explaining or tying out a sheet must skip them, which
     ``lineage.describe_cell`` does by describing them as kind ``unreported``.
     Empty for a template that reports every cell it binds.

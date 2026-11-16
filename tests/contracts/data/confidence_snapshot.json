@@ -2184,6 +2184,7 @@
         "tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py",
         "tests/unit/classifier/test_p1_320_qrre_leg_multiplication.py",
         "tests/unit/crr/test_irb_defaulted.py",
+        "tests/unit/reporting/corep/test_c08_retail_maturity.py",
         "tests/unit/test_p6_26_qrre_coupling_constant.py"
       ],
       "watchfire_index_gap": false
@@ -7506,6 +7507,7 @@
         "tests/unit/crr/test_crr_slotting.py",
         "tests/unit/crr/test_slotting_transforms.py",
         "tests/unit/irb/test_irb_formulas.py",
+        "tests/unit/reporting/corep/test_c08_unrecognised_exposure_column.py",
         "tests/unit/rulebook/test_audit.py",
         "tests/unit/rulebook/test_irb_correlation_features.py",
         "tests/unit/rulebook/test_slotting_features.py",

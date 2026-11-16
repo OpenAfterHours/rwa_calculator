@@ -1538,27 +1538,35 @@ citation = "CRR Annex II C 08.01 r0080 x c0260 (pp. 104, 107); CRR Art. 153(5)"
 basis = "As c0801-corporate-0010-0260, on the slotting category table rather than a formula."
 
 [[cell]]
-id = "c0801-sl-0080-0276"
+id = "c0801-sl-0010-0276"
 template = "C0801"
 member = "specialised_lending_firb_slotting"
-row = "0080"
+row = "0010"
 column = "0276"
 regimes = ["B31"]
 metric = "sum"
 carrier = "sa_rwa"
 scale = 1.0
 where = [
-  { column = "reporting_approach", op = "equals", value = "slotting" },
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "slotting"] },
   { column = "reporting_class", op = "equals", value = "specialised_lending" },
 ]
-citation = "PS1/26 Annex II OF 08.01 r0080 x c0276 (pp. 113, 117); PS1/26 Art. 92(3a), Art. 122A/122B"
+citation = "PS1/26 Annex II OF 08.01 r0010 x c0276 (pp. 113, 115); PS1/26 Art. 92(3a), Art. 122A/122B"
 basis = """
-The SA-equivalent of a slotting leg is its PS1/26 Art. 122B specialised-lending
-weight, which is a different table from the slotting one, so this cell is the only
-place the two are asserted to differ.
+The SA-equivalent of the whole sheet: its F-IRB specialised lending and its
+slotting legs, on the post-substitution basis column 0276 is reported on (the
+output floor's twin of column 0260). A slotting leg's SA-equivalent is its PS1/26
+Art. 122B specialised-lending weight, a different table from the slotting one, so
+this is the cell that asserts the two differ.
 
 RE-ANCHORED 2026-11-13 onto published sheet 0010 (was the class sheet
 `specialised_lending`, every approach) — see the OF 08 sheet-axis section.
+RE-ANCHORED 2026-11-16 from row 0080 to row 0010 (was `c0801-sl-0080-0276`): the
+PRA001 v4.1.1 taxonomy publishes no column 0276 on the slotting row 0080 (nor
+0275), so the generator no longer reports it there
+(`corep/of08_published_cells.py`). Whether Annex II p.113 — the column "applies
+to all credit risk exposures within the scope of the output floor" — means the
+Bank should publish it is a question for the Bank, not a cell to keep.
 """
 
 [[cell]]

@@ -191,7 +191,7 @@ compactly. `rwa-filer` reads the workbook and evaluates the rule the way the
 taxonomy's formula is evaluated, so that a rule passes or fails here when it
 would pass or fail on upload.
 
-Seven things follow from that, and each changes verdicts.
+Eight things follow from that, and each changes verdicts.
 
 - **A rule runs only when every template it reads is reported.** If one is not,
   the gateway does not run the rule. It is reported as not evaluated, with the
@@ -219,6 +219,17 @@ Seven things follow from that, and each changes verdicts.
   same rule is then taken over every country at once, and the rule runs once.
   "The sum over all countries, less the total, equals the total" is such a
   rule.
+- **What a sum adds up is the formula's to say, not the workbook's.** On a
+  table with one row per obligor grade, per securitisation or per entity, a sum
+  in a rule either adds up every row or stays on the row the rest of the rule
+  is read at, and the workbook writes both the same way. "OF 08.01's class total
+  equals the sum over every grade of OF 08.02" adds up every row. "Each grade's
+  total outflow equals the sum of its guarantees, credit derivatives and other
+  funded protection" (`boe_b0761`) stays on the grade. The formula says which:
+  it either covers the grade on the summed term or leaves it to be matched.
+  The same holds for a table filed once per type of specialised lending, where
+  OF 08.06's sums take every type at once although the rule names none. Read
+  from the workbook alone, 28 rules come out wrong.
 - **A rule the taxonomy's own formula cannot fire is not run.** The formula
   fixes most dimensions to "not applicable". If it does that to a dimension the
   rule's own cells carry, no reported fact can ever match, and the gateway never
@@ -231,9 +242,9 @@ The fourth point means the verdict depends on the accuracy the file will state.
 `rwa-filer build --monetary-decimals` sets it, and the validation that decides
 whether the file is written uses the same value.
 
-The last point needs the taxonomy package as well as the workbook, because the
-workbook does not say what a formula fixes. The packaged rule books are built
-with both.
+The last two points need the taxonomy package as well as the workbook, because
+the workbook does not say what a formula fixes or what its sums cover. The
+packaged rule books are built with both.
 
 !!! note "How the engine is checked"
     Arelle is an independent XBRL processor that executes the Bank's own formula
@@ -256,6 +267,14 @@ with both.
 
     Arelle has not completed the Bank's whole 61,428-fact PRA001 sample within
     ordinary memory, which is why that module is checked on a carve.
+
+    The Bank's samples have one row in each table with a row per grade,
+    securitisation or entity, and no type of specialised lending on OF 08.06. On
+    them, a sum over every row and a sum over one row give the same count, so
+    they cannot show which one the engine takes. Three more returns are built
+    with several rows, for PRA001, PRA116 and MRL003, and Arelle's counts on them
+    are kept beside the others. On those returns the engine and Arelle agree on
+    every one of the 28 rules whose sums the workbook alone misreads.
 
 ### The fact table
 
@@ -826,7 +845,8 @@ uvx rwa-filer@latest compare current-system.xbrl rwa-filer.xbrl
 uvx rwa-filer@latest rulebook list
 
 # Rebuild a rule book from one of the Bank's validation workbooks. With the
-# taxonomy package it also records what each rule's formula fixes
+# taxonomy package it also records what each rule's formula fixes, and what
+# each of its sums covers
 uvx "rwa-filer[excel]@latest" rulebook import "Validations Banking Reporting v4.1.1.xlsx" \
     --out rulebooks/ --taxonomy-package boe-banking-v411.zip
 

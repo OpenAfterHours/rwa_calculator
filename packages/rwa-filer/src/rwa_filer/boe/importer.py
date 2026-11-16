@@ -38,6 +38,7 @@ from rwa_filer.boe.formulas import (
     KEY_DIMENSIONS,
     KEY_FORMULAS,
     KEY_OPEN,
+    KEY_SPANS,
     read_formula_reach,
 )
 from rwa_filer.inputs import load_workbook
@@ -222,7 +223,7 @@ def without_formula_reach(rulebook: dict[str, Any]) -> dict[str, Any]:
         key: value for key, value in rulebook["source"].items() if key != KEY_FORMULAS
     }
     stripped["rules"] = [
-        {key: value for key, value in rule.items() if key not in (KEY_OPEN, KEY_CLOSED)}
+        {key: value for key, value in rule.items() if key not in (KEY_OPEN, KEY_CLOSED, KEY_SPANS)}
         for rule in rulebook["rules"]
     ]
     return stripped
@@ -240,11 +241,13 @@ def rulebook_file_name(rulebook: dict[str, Any]) -> str:
 
 
 def _record_formula_reach(rulebook: dict[str, Any], package: Path) -> None:
-    """Add to ``rulebook`` what each rule's formula closes, read from ``package``.
+    """Add to ``rulebook`` what each rule's formula closes and spans, read from ``package``.
 
     Nearly every formula closes the same hundred-odd dimensions and leaves a
     handful open, so the file states the whole set once (``formula_dimensions``)
-    and, per rule, only the ones that rule leaves OPEN.
+    and, per rule, only the ones that rule leaves OPEN. ``spans`` lists every
+    variable the formula binds as a sequence, with what it covers — an empty
+    list included, which says "the formula was read: it covers nothing".
     """
     reach = read_formula_reach(
         package, [rule["id"] for rule in rulebook["rules"] if rule["in_xbrl"]]
@@ -266,6 +269,10 @@ def _record_formula_reach(rulebook: dict[str, Any], package: Path) -> None:
         if found.closed_by_variable:
             rule[KEY_CLOSED] = {
                 variable: sorted(closed) for variable, closed in found.closed_by_variable.items()
+            }
+        if found.spans_by_variable:
+            rule[KEY_SPANS] = {
+                variable: sorted(spans) for variable, spans in found.spans_by_variable.items()
             }
 
 

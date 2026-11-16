@@ -1,10 +1,12 @@
 """
-Formula reach — the dimensions each rule's XBRL formula closes.
+Formula reach — the dimensions each rule's XBRL formula closes, and those each
+of its summed variables spans.
 
 Pipeline position:
     taxonomy package (.zip)  ->  read_formula_reach  ->  importer.import_workbook
-        ->  rule book (.json: ``formula_dimensions``, per rule ``open`` / ``closed``)
-        ->  catalogue.Rule.closed / closed_by_variable  ->  engine
+        ->  rule book (.json: ``formula_dimensions``, per rule ``open`` /
+            ``closed`` / ``spans``)
+        ->  catalogue.Rule.closed / closed_by_variable / spans_by_variable  ->  engine
 
 Every published rule exists twice: as a row of the validation workbook, which
 the engine reads, and as an XBRL formula assertion in the taxonomy package,
@@ -18,6 +20,12 @@ Key responsibilities:
   carries a closed dimension can never bind in that formula.
 - Keep the two levels apart: a dimension closed for the whole variable set, and
   one closed for a single variable.
+- Read, for every variable bound AS A SEQUENCE (the operand of a sum or a
+  count), which dimensions its own filters COVER. It takes every value of those
+  at once; every dimension it leaves uncovered is matched, fact by fact, to the
+  rest of the rule (implicit filtering). A filter hung off the variable SET
+  covers nothing, and a filter nested in a boolean filter covers what that
+  filter covers.
 - Read nothing else. Which member a formula fixes an OPEN dimension to is the
   cell's own data point and is already what the rule text names.
 
@@ -27,8 +35,20 @@ reported fact of that table can bind and seven rules never fire — measured
 with Arelle on the Bank's sample instance. Evaluated from the workbook text
 alone, those rules would run, and could block a return the gateway accepts.
 
+Why the spans exist: the text of a sum cannot say what it adds up.
+``isum({t: OF08.02.01.01, c: 0040; 0050; 0060, seq: True})`` is the same text
+whether the formula covers the obligor-grade dimension (the sum runs over every
+grade, as in ``boe_b0752``) or leaves it uncovered (it runs over the grade the
+rest of the rule is read at, as in ``boe_b0761``). Read from the text alone, the
+engine summed every grade in ``boe_b0760``-``b0763`` and failed each grade of
+every OF 08.02 sheet with more than one, where Arelle passes them — and 24 more
+rules in three rule books were misread the same way, in one direction or the
+other (escape log, 2026-11-16).
+
 References:
 - XBRL Formula 1.0; Dimension Filters 1.0 (explicit and typed dimension filters)
+- XBRL Variables 1.0 — bind as sequence, covered aspects, implicit filtering;
+  Boolean Filters 1.0
 - Bank of England Banking Taxonomy v4.1.1 — ``fws/**/val/vr-*.xml``
 """
 
@@ -54,11 +74,13 @@ logger = logging.getLogger(__name__)
 
 #: Rule-book keys. ``formula_dimensions`` (the file) lists every dimension some
 #: formula closes; a rule's ``open`` lists those of them ITS formula leaves
-#: open, and its ``closed`` the ones closed for a single variable only.
+#: open, its ``closed`` the ones closed for a single variable only, and its
+#: ``spans`` what each variable bound as a sequence covers.
 KEY_FORMULAS: Final = "formulas"
 KEY_DIMENSIONS: Final = "formula_dimensions"
 KEY_OPEN: Final = "open"
 KEY_CLOSED: Final = "closed"
+KEY_SPANS: Final = "spans"
 
 #: The local name of a domain's default member in the DPM architecture
 #: ("not applicable / all members"). A formula that fixes a dimension to it
@@ -67,12 +89,15 @@ DEFAULT_MEMBER: Final = "x0"
 
 _XLINK: Final = "{http://www.w3.org/1999/xlink}"
 _DIMENSION_FILTER: Final = "{http://xbrl.org/2008/filter/dimension}"
+_BOOLEAN_FILTER: Final = "{http://xbrl.org/2008/filter/boolean}"
 _VARIABLE: Final = "{http://xbrl.org/2008/variable}"
 _EXPLICIT: Final = f"{_DIMENSION_FILTER}explicitDimension"
 _TYPED: Final = f"{_DIMENSION_FILTER}typedDimension"
 _SET_FILTER_ARC: Final = f"{_VARIABLE}variableSetFilterArc"
 _VARIABLE_FILTER_ARC: Final = f"{_VARIABLE}variableFilterArc"
 _VARIABLE_ARC: Final = f"{_VARIABLE}variableArc"
+_FACT_VARIABLE: Final = f"{_VARIABLE}factVariable"
+_BOOLEAN_FILTERS: Final = (f"{_BOOLEAN_FILTER}andFilter", f"{_BOOLEAN_FILTER}orFilter")
 
 #: ``<folder>/val/vr-<rule>.xml`` — a rule's formula, not its message files
 #: (``vr-<rule>-err-en.xml`` and the like sit beside it).
@@ -92,16 +117,20 @@ class FormulaPackageError(ValueError):
 
 @dataclass(frozen=True)
 class RuleReach:
-    """What one rule's formula closes.
+    """What one rule's formula closes, and what each of its summed variables spans.
 
     Attributes:
         closed: Dimensions closed for every variable of the rule.
         closed_by_variable: Dimensions closed for one variable only, by the
             variable's name (``v0``).
+        spans_by_variable: For EVERY variable bound as a sequence, by name, the
+            dimensions its own filters cover and admit facts for — possibly
+            none. Dimensions it closes are left out: it spans nothing there.
     """
 
     closed: frozenset[str] = frozenset()
     closed_by_variable: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    spans_by_variable: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -193,6 +222,9 @@ def _reach(content: bytes, name: str) -> RuleReach:
     }
     closed: set[str] = set()
     by_variable: dict[str, set[str]] = {}
+    filter_arcs: dict[str, list[ET.Element]] = {}
+    for arc in root.iter(_VARIABLE_FILTER_ARC):
+        filter_arcs.setdefault(arc.get(f"{_XLINK}from", ""), []).append(arc)
     for arc in root.iter():
         if arc.tag not in (_SET_FILTER_ARC, _VARIABLE_FILTER_ARC):
             continue
@@ -207,14 +239,51 @@ def _reach(content: bytes, name: str) -> RuleReach:
         # off a variable: it is one alternative, and closes nothing by itself.
         elif (variable := variables.get(arc.get(f"{_XLINK}from", ""))) is not None:
             by_variable.setdefault(variable, set()).add(dimension)
+    closed_by_variable = {
+        variable: frozenset(dimensions - closed)
+        for variable, dimensions in sorted(by_variable.items())
+        if dimensions - closed
+    }
+    spans: dict[str, frozenset[str]] = {}
+    for element in root.iter(_FACT_VARIABLE):
+        label = element.get(f"{_XLINK}label", "")
+        name_ = variables.get(label)
+        if name_ is None or element.get("bindAsSequence") != "true":
+            continue
+        covered = _covered(label, filter_arcs, resources)
+        spans[name_] = frozenset(covered - closed_by_variable.get(name_, frozenset()))
     return RuleReach(
         closed=frozenset(closed),
-        closed_by_variable={
-            variable: frozenset(dimensions - closed)
-            for variable, dimensions in sorted(by_variable.items())
-            if dimensions - closed
-        },
+        closed_by_variable=closed_by_variable,
+        spans_by_variable=dict(sorted(spans.items())),
     )
+
+
+def _covered(
+    source: str,
+    filter_arcs: Mapping[str, list[ET.Element]],
+    resources: Mapping[str, ET.Element],
+    seen: frozenset[str] = frozenset(),
+) -> set[str]:
+    """The dimensions the filters hung off ``source`` with ``cover="true"`` cover.
+
+    ``source`` is a fact variable or a boolean filter: a boolean filter covers
+    what its own covering sub-filters cover. Complemented or not, a dimension
+    filter covers its dimension. ``seen`` stops a malformed, cyclic filter graph.
+    """
+    dimensions: set[str] = set()
+    for arc in filter_arcs.get(source, ()):
+        target = arc.get(f"{_XLINK}to", "")
+        resource = resources.get(target)
+        if arc.get("cover") != "true" or resource is None or target in seen:
+            continue
+        if resource.tag in (_EXPLICIT, _TYPED):
+            qname = resource.find(f"{_DIMENSION_FILTER}dimension/{_DIMENSION_FILTER}qname")
+            if qname is not None and qname.text:
+                dimensions.add(qname.text.strip())
+        elif resource.tag in _BOOLEAN_FILTERS:
+            dimensions |= _covered(target, filter_arcs, resources, seen | {source})
+    return dimensions
 
 
 def _closed_dimension(resource: ET.Element | None, *, complement: bool) -> str | None:

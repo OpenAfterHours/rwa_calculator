@@ -34,7 +34,7 @@ from functools import cache, cached_property
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
-from rwa_filer.boe.formulas import KEY_CLOSED, KEY_DIMENSIONS, KEY_OPEN
+from rwa_filer.boe.formulas import KEY_CLOSED, KEY_DIMENSIONS, KEY_OPEN, KEY_SPANS
 from rwa_filer.boe.grammar import (
     GrammarError,
     JoinEquality,
@@ -97,6 +97,14 @@ class Rule:
             point carries one cannot bind in the formula, whatever the text
             above says. Empty for a rule book built without a taxonomy package.
         closed_by_variable: The same, for one variable (``v0``) only.
+        spans_by_variable: For each variable the formula binds AS A SEQUENCE
+            (a sum or a count), the dimensions its own filters cover: it takes
+            every row or member of those at once, and is read at the same row
+            or member as the rest of the rule on any open dimension it does not
+            cover — the formula's implicit filtering. The text cannot say
+            which: ``isum({.., c: 0040; 0050; 0060, seq: True})`` reads the same
+            either way. A variable absent here is read from the text alone, as
+            is every variable of a rule book built without a taxonomy package.
     """
 
     rule_id: str
@@ -114,6 +122,7 @@ class Rule:
     truncated: bool = False
     closed: frozenset[str] = frozenset()
     closed_by_variable: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    spans_by_variable: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
     def is_enforced(self, module: str) -> bool:
         """Whether the gateway runs this rule on a return of ``module``."""
@@ -130,7 +139,7 @@ class Rule:
         can carry a changed expression, scope or severity. Two runs whose rules
         share a fingerprint ran the same check.
         """
-        content = {
+        content: dict[str, Any] = {
             "rule_id": self.rule_id,
             "framework_version": self.framework_version,
             "expression": self.expression,
@@ -146,6 +155,13 @@ class Rule:
                 for variable, closed in sorted(self.closed_by_variable.items())
             },
         }
+        # Stated only where a formula binds a sequence, so a rule without one
+        # keeps the fingerprint it has always had.
+        if self.spans_by_variable:
+            content["spans_by_variable"] = {
+                variable: sorted(spans)
+                for variable, spans in sorted(self.spans_by_variable.items())
+            }
         return canonical_sha256(content)
 
     @cached_property
@@ -266,6 +282,9 @@ def rulebook_from(payload: Mapping[str, Any], *, file: str | None = None) -> Rul
             closed_by_variable={
                 variable: frozenset(closed)
                 for variable, closed in entry.get(KEY_CLOSED, {}).items()
+            },
+            spans_by_variable={
+                variable: frozenset(spans) for variable, spans in entry.get(KEY_SPANS, {}).items()
             },
         )
         for entry in payload["rules"]

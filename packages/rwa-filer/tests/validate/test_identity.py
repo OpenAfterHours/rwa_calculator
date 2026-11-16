@@ -128,6 +128,8 @@ def test_a_packaged_rule_book_is_named_by_its_file_and_its_content() -> None:
         {"expression": f"{ref(T01, '0010', '0010')} i>= 0"},
         {"severities": {SAMPLE_MODULE: "WARNING"}},
         {"scope": "scope({t: T01.00.01.01, c:0010, f: test, fv: test})"},
+        # What a summed variable spans decides what the sum adds up.
+        {"spans_by_variable": {"v1": frozenset({"tst_dim:OGR"})}},
     ],
 )
 def test_a_rule_fingerprint_changes_with_anything_that_changes_the_check(

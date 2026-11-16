@@ -643,6 +643,160 @@ def test_count_counts_the_rows_reported(pack: TaxonomyPack) -> None:
 
 
 # ---------------------------------------------------------------------------
+# What a summed reference spans: the formula's word, not the text's
+# ---------------------------------------------------------------------------
+#
+# The rule text cannot say whether a summed reference adds up every row (or
+# every member) or only the cells on the row the rest of the rule is read at:
+# ``isum({t: OF08.02.01.01, c: 0040; 0050; 0060, seq: True})`` reads the same
+# in the Bank's ``boe_b0761`` (per obligor grade) and, with another column, in
+# ``boe_b0752_8`` (all grades). The XBRL formula says it: a variable's own
+# filters COVER the dimensions it spans, and implicit filtering lines up every
+# dimension it leaves uncovered with the other variables. ``spans_by_variable``
+# carries that from the formula (``boe.formulas``).
+
+#: The total of a grade equals the sum of its parts: 0010 = 0020 on each row.
+_ROW_FOOTS = (
+    f"{ref(T04, c='0010', var='v0')} i= "
+    f"isum({ref(T04, c='0020', dv='emptySequence()', seq=True, var='v1')})"
+)
+#: Two grades that foot on their own row, one that does not — and no row whose
+#: total equals the sum over every grade (12 + 5 + 6 = 23).
+_FOOTING_GRADES = (
+    grade("a", "0005", 1.0),
+    grade("a", "0010", 12.0),
+    grade("a", "0020", 12.0),
+    grade("b", "0005", 2.0),
+    grade("b", "0010", 5.0),
+    grade("b", "0020", 5.0),
+    grade("c", "0005", 3.0),
+    grade("c", "0010", 7.0),
+    grade("c", "0020", 6.0),
+)
+
+
+def test_a_sum_whose_formula_does_not_span_the_rows_stays_on_each_row(
+    pack: TaxonomyPack,
+) -> None:
+    """The shape of the Bank's ``boe_b0760``-``b0763`` on OF 08.02: per grade.
+
+    Read over every row, each grade's total is compared with 23 and all three
+    break; the gateway compares each with its own row, and only grade 3 does.
+    """
+    # Arrange — the formula leaves the obligor-grade dimension uncovered on v1.
+    per_row = rule("per-row", _ROW_FOOTS, tables=(T04,), spans_by_variable={"v1": frozenset()})
+
+    # Act
+    result = run(pack, per_row, *_FOOTING_GRADES)
+
+    # Assert
+    assert counts(result) == (2, 1)
+    assert result.failures[0].place == "OGR 3"
+    assert result.failures[0].cells[1].endswith("1 cell(s), sum 6")
+
+
+def test_a_sum_whose_formula_spans_the_rows_takes_every_row_beside_a_single_cell(
+    pack: TaxonomyPack,
+) -> None:
+    """The same text, with the formula covering the grade dimension on v1."""
+    # Arrange
+    every_row = rule(
+        "every-row", _ROW_FOOTS, tables=(T04,), spans_by_variable={"v1": frozenset({"tst_dim:OGR"})}
+    )
+
+    # Act
+    result = run(pack, every_row, *_FOOTING_GRADES)
+
+    # Assert — no grade's total is 23.
+    assert counts(result) == (0, 3)
+
+
+def test_a_count_whose_formula_does_not_span_the_rows_counts_each_row(
+    pack: TaxonomyPack,
+) -> None:
+    """The shape of the Bank's MREL ``boe_b4102``: every row reports both columns."""
+    # Arrange
+    both = rule(
+        "both",
+        f"count({ref(T04, c='0010; 0020', dv='emptySequence()', seq=True, var='v0')}) = 2",
+        tables=(T04,),
+        spans_by_variable={"v0": frozenset()},
+    )
+
+    # Act — grade 2 reports one of the two.
+    result = run(pack, both, *GRADES[:3], grade("b", "0005", 2.0), grade("b", "0010", 250.0))
+
+    # Assert
+    assert counts(result) == (1, 1)
+    assert result.failures[0].place == "OGR 2"
+
+
+def test_a_cross_table_sum_whose_formula_spans_the_rows_is_unchanged(pack: TaxonomyPack) -> None:
+    """The Bank's ``boe_b0752``/``b0814`` family: a total equals the sum over all grades."""
+    # Arrange
+    summed = rule(
+        "grades-total",
+        f"{ref(T05A, '0010', '0010', var='v0')} i= "
+        f"isum({ref(T04, c='0010', dv='emptySequence()', seq=True, var='v1')})",
+        tables=(T05A, T04),
+        spans_by_variable={"v1": frozenset({"tst_dim:OGR"})},
+    )
+
+    # Act
+    result = run(pack, summed, *GRADES, (T05A, None, None, "0010", "0010", 750.0))
+
+    # Assert
+    assert counts(result) == (1, 0)
+
+
+#: Every country's exposure together equals the shared figure — the shape of the
+#: Bank's ``boe_b0816``-``b0822``/``b1043``: OF 08.06's sheets summed, no member named.
+_ALL_COUNTRIES = (
+    f"isum({ref(T03, '0010', '0010', dv='emptySequence()', seq=True, var='v0')}) i= "
+    f"{ref(T05A, '0010', '0010', var='v1')}"
+)
+_COUNTRIES = (
+    geo("GB", "0010", 70),
+    geo("FR", "0010", 30),
+    (T05A, None, None, "0010", "0010", 100.0),
+)
+
+
+def test_a_sum_whose_formula_spans_an_open_axis_takes_every_member_at_once(
+    pack: TaxonomyPack,
+) -> None:
+    """No member is named, so the text alone reads one country at a time (70, then 30)."""
+    # Arrange
+    spanned = rule(
+        "all-countries",
+        _ALL_COUNTRIES,
+        tables=(T03, T05A),
+        spans_by_variable={"v0": frozenset({"eba_dim:CEG"})},
+    )
+
+    # Act
+    result = run(pack, spanned, *_COUNTRIES)
+
+    # Assert — one evaluation, 70 + 30 = 100.
+    assert counts(result) == (1, 0)
+
+
+def test_a_sum_whose_formula_does_not_span_an_open_axis_is_read_member_by_member(
+    pack: TaxonomyPack,
+) -> None:
+    # Arrange
+    per_member = rule(
+        "per-country", _ALL_COUNTRIES, tables=(T03, T05A), spans_by_variable={"v0": frozenset()}
+    )
+
+    # Act
+    result = run(pack, per_member, *_COUNTRIES)
+
+    # Assert — 70 and 30, each against 100.
+    assert counts(result) == (0, 2)
+
+
+# ---------------------------------------------------------------------------
 # Rounding allowances
 # ---------------------------------------------------------------------------
 

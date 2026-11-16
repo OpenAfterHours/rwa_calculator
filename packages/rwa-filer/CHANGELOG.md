@@ -65,6 +65,29 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ---
 
+### Fixed
+- **A sum in a published rule adds up what the rule's formula says, not what
+  its text suggests.** On a table with one row per obligor grade, securitisation
+  or entity, a summed reference either adds up every row or stays on the row
+  the rest of the rule is read at, and the workbook writes both the same way.
+  `rwa_filer.boe` always added up every row, so `boe_b0760`-`boe_b0763` on
+  OF 08.02 (each grade's total outflow, exposure after CRM, expected loss after
+  PMAs and RWEA after adjustments against its own parts) failed every grade of
+  every sheet with more than one grade, where the Bank's gateway passes them.
+  The same misreading hit `v7372_m`-`v7377_m` (C 14.01 against C 14.00, per
+  securitisation), `v11871_m` (C 06.02, per entity), their SDDT twins
+  `boe_b0117_ss`-`boe_b0122_ss` and `v11871_m`, and MREL's `boe_b4101` and
+  `boe_b4102` (BR 01.00, per instrument). On OF 08.06, which is filed once per
+  type of specialised lending, the opposite: `boe_b0816`-`boe_b0822` and
+  `boe_b1043` add up every type, and were read one type at a time. 28 rules in
+  all. The packaged rule books now record, for each summed variable of each
+  rule's XBRL formula, the dimensions it covers (`spans`, read by
+  `rulebook import --taxonomy-package`; `Rule.spans_by_variable`), and the
+  engine reads the sum from that. A rule book built without the taxonomy
+  package is read from the text, as before. On returns built to have several
+  rows, the engine and Arelle now agree on all 28; before, they disagreed on
+  all 28 (`tests/releases/4.1.1/oracles/summed_references_oracle.json`).
+
 ## [0.1.3] - 2026-11-15
 
 ### Added

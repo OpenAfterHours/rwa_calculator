@@ -44,6 +44,7 @@ from rwa_filer.model import DECIMALS_EXACT
 from rwa_filer.validate.returns import validate_return
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from rwa_filer.boe.catalogue import Rule
@@ -93,19 +94,19 @@ def set_arc(to: str, *, complement: bool = False) -> str:
     )
 
 
-def variable(name: str) -> str:
+def variable(name: str, *, sequence: bool = False) -> str:
     return (
         f'<variable:factVariable xlink:type="resource" xlink:label="rule.{name}" '
-        'bindAsSequence="false"/>'
+        f'bindAsSequence="{str(sequence).lower()}"/>'
         f'<variable:variableArc xlink:type="arc" xlink:from="rule" xlink:to="rule.{name}" '
         f'name="{name}"/>'
     )
 
 
-def variable_arc(source: str, to: str, *, complement: bool = False) -> str:
+def variable_arc(source: str, to: str, *, complement: bool = False, cover: bool = True) -> str:
     return (
         f'<variable:variableFilterArc xlink:type="arc" xlink:from="{source}" xlink:to="{to}" '
-        f'complement="{str(complement).lower()}" cover="true"/>'
+        f'complement="{str(complement).lower()}" cover="{str(cover).lower()}"/>'
     )
 
 
@@ -148,6 +149,37 @@ SHAPES = formula(
     variable_arc("rule.v1", "or"),
     explicit("nested", "tst_dim:MCY", "tst_MC:x0"),
     variable_arc("or", "nested"),
+)
+
+
+#: The shapes of a SUM's variables, as the Bank publishes them. The obligor-grade
+#: dimension ``tst_dim:OGR`` is required present for the whole set (which covers
+#: nothing); ``v0`` is a single cell; ``v1`` covers OGR itself (``boe_b0752``'s
+#: sum over all grades) and closes TRI; ``v2`` covers only CRM, through an
+#: ``or`` of ``and`` filters (``boe_b0761``'s three columns); ``v3`` has no
+#: filter of its own; ``v4`` filters EXC without covering it.
+SUMMED = formula(
+    typed("f0", "tst_dim:OGR"),
+    set_arc("f0"),
+    variable("v0"),
+    typed("v0f0", "tst_dim:OGR"),
+    variable_arc("rule.v0", "v0f0"),
+    variable("v1", sequence=True),
+    typed("v1f0", "tst_dim:OGR"),
+    variable_arc("rule.v1", "v1f0"),
+    explicit("v1f1", "tst_dim:TRI", "tst_TR:x0"),
+    variable_arc("rule.v1", "v1f1"),
+    variable("v2", sequence=True),
+    '<bf:orFilter xlink:type="resource" xlink:label="v2or"/>',
+    variable_arc("rule.v2", "v2or"),
+    '<bf:andFilter xlink:type="resource" xlink:label="v2and"/>',
+    variable_arc("v2or", "v2and"),
+    explicit("v2crm", "tst_dim:CRM", "tst_CP:x22"),
+    variable_arc("v2and", "v2crm"),
+    variable("v3", sequence=True),
+    variable("v4", sequence=True),
+    explicit("v4f0", "tst_dim:EXC", "tst_EC:x1"),
+    variable_arc("rule.v4", "v4f0", cover=False),
 )
 
 
@@ -201,6 +233,52 @@ class TestWhatAFormulaCloses:
 
         # Assert
         assert reach.rules["r1"].closed == frozenset()
+
+
+class TestWhatASummedVariableSpans:
+    """What a variable bound as a sequence covers is what a sum over it adds up."""
+
+    @pytest.fixture
+    def spans(self, tmp_path: Path) -> Mapping[str, frozenset[str]]:
+        path = package(tmp_path / "t.zip", {"r1": SUMMED})
+        return read_formula_reach(path, ["r1"]).rules["r1"].spans_by_variable
+
+    def test_a_summed_variable_spans_the_dimension_its_own_filter_covers(
+        self, spans: Mapping[str, frozenset[str]]
+    ) -> None:
+        """``boe_b0752``: the class total is the sum over every grade."""
+        assert spans["v1"] == frozenset({"tst_dim:OGR"})
+
+    def test_a_filter_on_the_variable_set_covers_nothing(
+        self, spans: Mapping[str, frozenset[str]]
+    ) -> None:
+        """``boe_b0761``: OGR is filtered for the set, so the sum stays on each grade."""
+        assert spans["v3"] == frozenset()
+
+    def test_a_boolean_filter_covers_what_its_sub_filters_cover(
+        self, spans: Mapping[str, frozenset[str]]
+    ) -> None:
+        assert spans["v2"] == frozenset({"tst_dim:CRM"})
+
+    def test_a_filter_that_does_not_cover_spans_nothing(
+        self, spans: Mapping[str, frozenset[str]]
+    ) -> None:
+        assert spans["v4"] == frozenset()
+
+    def test_a_dimension_the_variable_closes_is_not_spanned(
+        self, spans: Mapping[str, frozenset[str]]
+    ) -> None:
+        """TRI is pinned to its default member on v1: no fact carrying it binds."""
+        assert "tst_dim:TRI" not in spans["v1"]
+
+    def test_only_variables_bound_as_a_sequence_are_listed(
+        self, spans: Mapping[str, frozenset[str]]
+    ) -> None:
+        assert sorted(spans) == ["v1", "v2", "v3", "v4"]
+
+    def test_a_formula_with_no_summed_variable_spans_nothing(self, tmp_path: Path) -> None:
+        reach = read_formula_reach(package(tmp_path / "t.zip", {"r1": SHAPES}), ["r1"])
+        assert reach.rules["r1"].spans_by_variable == {}
 
 
 class TestWhichFolderIsRead:
@@ -305,6 +383,31 @@ class TestTheRuleBookRecordsReach:
         assert rules["r1"].closed == frozenset({"tst_dim:EXC", "tst_dim:UDI"})
         assert rules["r1"].closed_by_variable == {"v0": frozenset({"tst_dim:TRI"})}
         assert rules["r2"].closed == frozenset({"tst_dim:BAS"})
+
+    def test_each_summed_variable_is_written_with_what_it_spans_none_included(
+        self, tmp_path: Path
+    ) -> None:
+        """An empty list is a statement — the formula was read and covers nothing."""
+        # Arrange
+        path = workbook(tmp_path / WORKBOOK_NAME, "r1", "r2")
+        zipped = package(tmp_path / "taxonomy.zip", {"r1": SUMMED, "r2": SHAPES})
+
+        # Act
+        imported = import_workbook(path, taxonomy_package=zipped)
+
+        # Assert
+        by_id = {entry["id"]: entry for entry in imported["rules"]}
+        assert by_id["r1"]["spans"] == {
+            "v1": ["tst_dim:OGR"],
+            "v2": ["tst_dim:CRM"],
+            "v3": [],
+            "v4": [],
+        }
+        assert "spans" not in by_id["r2"]
+        rules = {entry.rule_id: entry for entry in rulebook_from(imported).rules}
+        assert rules["r1"].spans_by_variable["v1"] == frozenset({"tst_dim:OGR"})
+        assert rules["r1"].spans_by_variable["v3"] == frozenset()
+        assert "spans" not in without_formula_reach(imported)["rules"][0]
 
     def test_a_rule_book_built_without_a_package_closes_nothing(self, tmp_path: Path) -> None:
         # Act

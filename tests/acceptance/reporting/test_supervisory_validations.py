@@ -4,7 +4,11 @@ Supervisory validation gate — the published rules, ratcheted against a baselin
 Pipeline position:
     reporting portfolios -> PipelineOrchestrator -> COREP + Pillar 3 bundles
         -> evaluate_all (EBA rules under CRR, BoE rules under Basel 3.1)
-        -> known-breaks + known-uncovered baseline
+        -> known-breaks + known-uncovered + known-vacuous baseline
+    Basel 3.1 only, from the SAME COREP bundle:
+        -> build_canonical_return -> validate_return (the gateway engine, with
+           the Bank's deny list as it stands on the run date)
+        -> known-gateway-breaks + known-engine-disagreements baseline
 
 Why this is not a plain "no failures" assertion: the estate currently breaks a
 known set of published rules, leaves a known set of templates unchecked, and
@@ -19,12 +23,71 @@ register, applied to ALL THREE populations:
   (d) no baseline template that is now covered      — closing one must shrink it;
   (e) every entry carries a written reason          — a register, not a hash;
   (f) no rule falls to vacuous outside the baseline — a PASS -> VACUOUS fails;
-  (g) no baseline vacuous rule that now asserts     — activation must shrink it.
+  (g) no baseline vacuous rule that now asserts     — activation must shrink it;
+  (h) no gateway break outside the baseline         — Basel 3.1, the Bank's reading;
+  (i) no baseline gateway break that has gone       — a fix must shrink it;
+  (j) no engine disagreement outside the baseline   — the two readings part company;
+  (k) no baseline disagreement that has gone        — agreement must shrink it.
 
 An Error-severity break rejects the entire return at submission, so every
 ``ERROR`` line in the register is a blocking filing defect.
 
-All seven legs share ONE set-diff (P5.41):
+Why there is a GATEWAY leg, (h)-(k), and why it keys on (rule, portfolio):
+    Legs (a)-(g) read our template frames through rwa-filer's TEMPLATE-LEVEL
+    engine (``rwa_filer.validate``). The Bank's gateway does not: it runs each
+    rule on the filed return the way the taxonomy's XBRL formula reads it, and
+    ``rwa_filer.boe`` is our implementation of that, pinned to Arelle rule by
+    rule. The two read a Bank rule differently in six measured ways (design
+    record O-03): the template-level engine evaluates a place where none of the
+    rule's cells is reported; it skips where a row, column or sheet is absent
+    instead of applying each reference's default; it refuses 67 Bank rules on
+    grammar; it adds up a multi-cell reference the formula tests one cell at a
+    time; it cannot see one data point shown in two tables; and it sets the
+    missing-value policy per rule rather than per reference. PR #548 and
+    ``boe_b1055`` showed the two disagreeing where legs (a)-(g) could not see it.
+
+    So for every Basel 3.1 run the gateway leg files the SAME generated COREP
+    the template leg read — ``scripts/filing_mapping_report.py::file_on_gateway``,
+    the one definition both ratchets use — and validates it with the Bank's
+    validations deny list as it stands on the run date, which is
+    ``export_filing_package``'s default too. A rule the Bank deactivated is
+    NOT_EVALUATED and never enters the section; a downgraded one is recorded at
+    its downgraded severity. It records:
+
+    - ``known_gateway_breaks`` — every (rule, portfolio) the gateway engine
+      FAILs, ERROR and WARNING. Keyed on the PAIR, not the rule: under a
+      rule-only key ``boe_b1055`` spread from two portfolios to seven and
+      nothing noticed. ``tests/contracts/test_gateway_break_registers_agree.py``
+      holds the ERROR pairs equal, rule for rule, to
+      ``scripts/filing_mapping_baseline.json``'s ``error_rules_by_rule``, so the
+      two ratchets move together or not at all.
+    - ``known_engine_disagreements`` — every (rule, portfolio) on which the two
+      engines reach OPPOSITE verdicts: one FAILs while the other PASSes or holds
+      vacuously. NOT_EVALUATED on either side is not a disagreement. Keyed on
+      the two verdicts too, so a disagreement that flips direction is new.
+
+    Which engine is authoritative where: the gateway engine on everything the
+    canonical return carries — it is what ``export_filing_package`` blocks on.
+    The template-level engine is the only reading under CRR, the only reading
+    of what the canonical return does not carry (OF 08.02, C 08.04,
+    OF08.05.01.01, OF 08.06 and C 34.02 as measured for O-03), and the only
+    source of the vacuity legs (f)/(g), which the gateway engine has no notion
+    of. Its six differences above are why a disagreement is triaged, not
+    assumed to be our output's fault.
+
+Publisher-issue labels:
+    A Bank rule can itself be wrong. The release's publisher-issue register
+    (``rwa_filer.boe.issues``, rendered as ``docs/rwa-filer/publisher-issues.md``)
+    records each one with its evidence, and a register entry whose cause is the
+    published rule says so by citing it: a reason containing ``publisher issue
+    PI-nn``. A Basel 3.1 break on a rule an open issue names as its SUBJECT, with
+    the effect ``fails_correct_returns``, must either cite that issue or START
+    with a rebuttal, ``not PI-nn - <our defect>``, so a limit of the Bank's rule
+    can never sit here under an "our defect" reason, nor the reverse silently.
+    ``tests/contracts/test_register_publisher_issues.py`` enforces both
+    directions on the committed JSON (fast; it runs no pipeline).
+
+All eleven legs share ONE set-diff (P5.41):
     The arithmetic behind "new" and "gone" is ``scripts/tolerated_findings.py``
     ``::diff``, extracted from this file so that this register and the two
     DECLARED ones — ``tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`` and
@@ -142,9 +205,12 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     coverage for those four is owed work too.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: ten portfolios x two
-    regimes, plus a prior-period run for each of the ten IRB ones, is
-    THIRTY full pipeline runs. That is a standing temptation to trim the run set, so
+    This file is the most expensive test in the suite: fifteen portfolios x two
+    regimes, plus a prior-period run for each of the fourteen IRB ones, is
+    FORTY-FOUR full pipeline runs, about 38 s on a 2-thread budget. The gateway leg adds one
+    canonical return and one ``validate_return`` per Basel 3.1 run (fifteen) and
+    no pipeline run: the pack is loaded once per process and the COREP bundle is
+    the one the template leg already generated. That is a standing temptation to trim the run set, so
     the justification lives here rather than only in a commit message. Each run
     is the SOLE reachability route for a family of published rules, and
     dropping one does not make those rules pass — it makes them NOT_EVALUATED,
@@ -201,15 +267,20 @@ Baseline format:
     ``tests/expected_outputs/reporting/validation_known_breaks.json`` — a JSON
     object with ``notes`` (how to read the register), ``summary`` (per-run
     outcome counts; descriptive, and the only part of the file nothing asserts
-    entry-by-entry), ``known_broken_rules``, ``known_uncovered_templates`` and
-    ``known_vacuous_rules``.
+    entry-by-entry), ``known_broken_rules``, ``known_uncovered_templates``,
+    ``known_vacuous_rules``, ``known_gateway_breaks`` and
+    ``known_engine_disagreements``. The last two are written one entry per
+    (rule, reason) with the portfolios it covers, so a rule that breaks for two
+    causes on two portfolios is two entries, each with one cause.
 
 Regenerating the baseline:
     Set ``REGEN_VALIDATION_BASELINE=1`` and run this file. Hand-written
     ``reason`` text is PRESERVED — regeneration refreshes the population and the
     recorded coordinates, never the curation. An entry nobody has written about
     gets the ``unclassified`` placeholder and must be given a real reason before
-    the register is committed; where the mechanism is visible but the defect is
+    the register is committed. In the two gateway sections a reason is kept per
+    (rule, portfolio): a rule that breaks on ONE MORE portfolio arrives
+    unclassified, because a spread is a new break until someone says why; where the mechanism is visible but the defect is
     not established, the honest reason is the greppable ``unattributed - needs
     investigation``, not a guess. Never bulk-regen to make a red gate green: a
     new break is a new filing defect until someone has said otherwise in writing.
@@ -238,11 +309,11 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import pytest
 from scripts.tolerated_findings import diff
@@ -278,6 +349,8 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.filing.checks import evaluate_all
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+from rwa_filer.boe.engine import STATUS_FAIL as GATEWAY_FAIL
+from rwa_filer.boe.engine import STATUS_PASS as GATEWAY_PASS
 from rwa_filer.validate.evaluate import (
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
@@ -287,6 +360,9 @@ from rwa_filer.validate.evaluate import (
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import RawDataBundle
+    from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+    from rwa_filer.boe.engine import RuleResult
+    from rwa_filer.validate.checker import RuleOutcome, ValidationReport
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -312,6 +388,15 @@ MAX_RECORDED_COORDINATES = 5
 RULE_KEY_FIELDS = ("regime", "rule_id")
 TEMPLATE_KEY_FIELDS = ("regime", "portfolio", "template")
 
+#: The regime the gateway leg runs under: PRA001 is the Basel 3.1 return, so a
+#: CRR run has nothing to file. Written on every gateway entry for the reader.
+GATEWAY_REGIME = "b31"
+GATEWAY_FRAMEWORK = "BASEL_3_1"
+
+#: Cells quoted per gateway break, from the first unsatisfied evaluation. For
+#: triage only — the ratchet keys on (rule, portfolio).
+MAX_RECORDED_CELLS = 4
+
 #: Sample cells recorded per vacuous rule. A vacuous rule has NO failing
 #: coordinate — that is the whole point of it — so the tables it addresses and
 #: the count of coordinates it held over vacuously are the only triage handles
@@ -323,9 +408,60 @@ MAX_RECORDED_TABLES = 5
 #: rather than hand-added to the JSON, which a regeneration would discard.
 REGISTER_NOTES: dict[str, str] = {
     "what_this_is": (
-        "Known supervisory validation breaks, coverage holes and VACUOUS rules, ratcheted by "
+        "Known supervisory validation breaks, coverage holes and VACUOUS rules of the "
+        "template-level engine, and the gateway engine's breaks and the two engines' "
+        "disagreements on each filed Basel 3.1 return, ratcheted by "
         "tests/acceptance/reporting/test_supervisory_validations.py. An entry is a LIABILITY, "
         "not a waiver: an ERROR-severity break rejects the entire return at submission."
+    ),
+    "reading_the_two_engines": (
+        "Two engines read the Bank's rules here. known_broken_rules, known_uncovered_templates "
+        "and known_vacuous_rules come from rwa-filer's TEMPLATE-LEVEL engine (rwa_filer.validate) "
+        "reading our template frames, under both regimes. known_gateway_breaks comes from the "
+        "GATEWAY engine (rwa_filer.boe, pinned to Arelle rule by rule) reading the canonical "
+        "return filed from the same Basel 3.1 COREP, with the Bank's validations deny list as it "
+        "stands on the run date: it is what export_filing_package blocks on and what the Bank's "
+        "gateway runs, so on anything the canonical return carries it is the authority, and an "
+        "ERROR there is a rejected return. A rule the deny list deactivates is not evaluated and "
+        "never appears; a downgraded one appears at WARNING. known_engine_disagreements lists "
+        "every (rule, portfolio) on which one engine breaks a rule the other holds. The "
+        "template-level engine differs from the gateway in six measured ways (design record "
+        "O-03): it evaluates a place where none of the rule's cells is reported; it skips where a "
+        "row, column or sheet is absent instead of applying each reference's default; it refuses "
+        "67 Bank rules on grammar (isNull, if/then, and/or, dimensional filters); it adds up a "
+        "multi-cell reference the formula tests one cell at a time; it cannot see one data point "
+        "shown in two tables; and it sets the missing-value policy per rule rather than per "
+        "reference. So a break only the gateway shows is usually one the template-level engine "
+        "cannot see (each gateway entry's by_portfolio.template_level says why), and a "
+        "disagreement is triaged before it is blamed on our output. The template-level engine "
+        "remains the only reading under CRR, the only one of what the canonical return does not "
+        "carry (OF 08.02, C 08.04, OF08.05.01.01, OF 08.06, C 34.02), and the only source of the "
+        "vacuity register. Both gateway sections are keyed per (rule, portfolio), so a rule that "
+        "breaks on one more portfolio is a new entry. The ERROR half of known_gateway_breaks "
+        "equals scripts/filing_mapping_baseline.json error_rules_by_rule rule for rule "
+        "(tests/contracts/test_gateway_break_registers_agree.py): re-bank the two together."
+    ),
+    "reading_publisher_issue_labels": (
+        "A Bank rule can itself be wrong. rwa-filer's publisher-issue register "
+        "(rwa_filer.boe.issues, release 4.1.1; shared as docs/rwa-filer/publisher-issues.md) "
+        "holds each known case with its evidence, and a Basel 3.1 entry here says in its reason "
+        "whether that is its cause. 'publisher issue PI-nn: ...' means the published rule is the "
+        "cause: a return that follows the instructions breaks it, so the fix is the Bank's and "
+        "our figures stay as they are; PI-nn names the entry's rule as its SUBJECT. A reason that "
+        "STARTS 'not PI-nn - ...' says the issue names this rule but this break is not that "
+        "issue, and what follows says whose it is: ours or our engine's, fixed here, or rarely "
+        "another issue's, cited in the same reason (boe_b0737: not PI-08, publisher issue "
+        "PI-24); PI-nn names the rule as its subject (the issue would otherwise explain the "
+        "break) or as a control (the issue's evidence is that a correct return satisfies the "
+        "rule). Every Basel 3.1 break on a rule "
+        "that an open fails_correct_returns issue names as its subject carries one of the two, "
+        "and no reason may call its break a limit of the published rule without citing the "
+        "issue: tests/contracts/test_register_publisher_issues.py enforces both on this file. "
+        "Grep 'publisher issue PI-' for the Bank's share of the register and '^not PI-' for "
+        "breaks on its rules that are not the issue named. An entry with neither label is on a rule no issue names: ours, or "
+        "'unattributed - needs investigation'. CRR entries are EBA rules and carry no PI label. "
+        "A label never changes a verdict: an ERROR labelled with an issue still rejects the "
+        "return at the gateway until the Bank changes or deactivates the rule."
     ),
     "what_a_vacuity_entry_MEANS": (
         "known_vacuous_rules lists rules that REACH a verdict on at least one registered run and "
@@ -441,8 +577,11 @@ REGISTER_NOTES: dict[str, str] = {
         "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. "
         "'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, "
         "including exposure-weighted averages, where it cannot hold unless there is exactly "
-        "one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's "
-        "risk-weight column. Recognise it before re-deriving it a fourth time. PUBLISHER "
+        "one grade row. Same shape as boe_b0779 on OF 08.07 c0050 (publisher issue PI-23). "
+        "Recognise it before re-deriving it again. (This note once also counted the CRR C 08.06 "
+        "risk-weight column as an instance; it is not one: column 0070 is not a data point, the "
+        "EBA's rules never reach it, and only our binding evaluated it - design record O-14.) "
+        "PUBLISHER "
         "CONFIRMATION (BoE taxonomy v4.1.1, Aug 2026): of the 35 boe_b0752_* members the BoE "
         "withdrew exactly the four on averaged columns - _1 (c0010 PD), _22/_23 (c0230/c0240 "
         "LGD), _24 (c0250 maturity) - and rewrote the weighted restatements boe_b0755-0758 into "
@@ -453,10 +592,14 @@ REGISTER_NOTES: dict[str, str] = {
         "is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own "
         "subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the "
         "evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number "
-        "reads false however correct that negative figure is. Same shape as the zero-exposure "
-        "ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' — see the caution "
-        "on unattributed entries above before assuming the parent's negative figure is itself "
-        "the bug, as it genuinely was in the boe_b0378 worked example there). PUBLISHER "
+        "reads false however correct that negative figure is. See the caution on unattributed "
+        "entries above before assuming the parent's negative figure is itself the bug, as it "
+        "genuinely was in the boe_b0378 worked example there. This note once named a "
+        "'zero-exposure ratio family' as the same shape; that family was not the publisher's: "
+        "the OF 08.07 share rule broke on empty roll-out rows only because the template-level "
+        "engine reads a share nobody reported as 0.0 (known_engine_disagreements, design record "
+        "O-03), and the CRR C 08.06 total rows only because our binding evaluated a column that "
+        "is not a data point (design record O-14). PUBLISHER "
         "CONFIRMATION (BoE taxonomy v4.1.1, Aug 2026): boe_b0378/boe_b0379 were each split into "
         "a _1 rule (of-which <= total on the positive columns) and a _2 rule (total <= of-which "
         "on the '(-)' deduction columns), and both _2 rules PASS on real coordinates on "
@@ -481,7 +624,11 @@ REGISTER_NOTES: dict[str, str] = {
         "in the estate where a single obligor spans both the on- and off-balance-sheet rows, "
         "which is inherent to covering IRB off-balance-sheet exposure at all. BoE taxonomy "
         "v4.1.1 (Aug 2026) withdrew the rule this was measured on, boe_b0744, together with its "
-        "IRB-axis twin boe_b0745; the EBA restatement v0338_m still binds the CRR template."
+        "IRB-axis twin boe_b0745; the EBA restatement v0338_m still binds the CRR template. Live "
+        "members in v4.1.1, each with its evidence in the publisher-issue register: boe_b0742 "
+        "across the conversion-factor rows (PI-07), boe_b0748 across the AIRB class sheets "
+        "(PI-31; on our returns that break is ours, a maturity reported on a retail sheet - "
+        "design record O-10) and obligor counts across exposure-type rows (PI-08)."
     ),
 }
 
@@ -787,9 +934,9 @@ RUNS: tuple[GateInput, ...] = (
     # The builder takes the reporting date because its maturities are stated
     # relative to it, so each run binds its own with ``functools.partial`` (which
     # keeps the builder's name for the registration check). SA-only, no prior
-    # frame. It introduces NO new supervisory break — measured, every rule it
-    # breaks (``v09796_m`` under CRR; ``boe_b0703`` / ``boe_b0710`` /
-    # ``boe_b0778`` under Basel 3.1) is already an estate-wide register entry.
+    # frame. It introduced NO new supervisory break when registered — measured
+    # then, every rule it broke was already an estate-wide register entry; read
+    # the register, not this comment, for what each of them is now.
     GateInput(
         "crr",
         "CRR",
@@ -919,10 +1066,10 @@ RUNS: tuple[GateInput, ...] = (
     #
     # SA-only and no prior frame, like ``off-bs`` / ``sa-classes`` / ``netting``:
     # the portfolio supplies no model permissions at all, so no permission mode
-    # could route a leg to IRB and leave the SA template empty. It introduces NO
-    # new supervisory break — measured, every rule it breaks
-    # (``v09796_m`` under CRR; ``boe_b0703`` / ``boe_b0710`` / ``boe_b0778`` under
-    # Basel 3.1) is already in the register as an estate-wide pattern entry.
+    # could route a leg to IRB and leave the SA template empty. It introduced NO
+    # new supervisory break when registered — measured then, every rule it broke
+    # was already in the register as an estate-wide pattern entry; read the
+    # register, not this comment, for what each of them is now.
     GateInput(
         "crr", "CRR", "row-scope", build_reporting_row_scope_bundle, lambda: _sa_config("CRR")
     ),
@@ -1007,19 +1154,101 @@ class VacuityFact(NamedTuple):
         )
 
 
+class GatewayKey(NamedTuple):
+    """A Basel 3.1 rule the gateway engine breaks on one portfolio's filed return.
+
+    Keyed on the PAIR, not the rule: a rule that starts breaking on one more
+    portfolio is a new break (``boe_b1055`` went from two portfolios to seven
+    under a rule-only key, unseen).
+    """
+
+    rule_id: str
+    portfolio: str
+
+    def describe(self) -> str:
+        """Compact human address for an assertion message."""
+        return f"{GATEWAY_REGIME}/{self.portfolio}: {self.rule_id}"
+
+
+class GatewayFact(NamedTuple):
+    """What the gateway engine says about one broken (rule, portfolio).
+
+    ``severity`` is as the gateway runs the rule on the run date: a rule the
+    Bank's deny list downgraded is a WARNING here. ``template_level`` is the
+    template-level engine's verdict on the same rule and return, so a reader
+    sees at once whether legs (a)-(g) can see the break at all.
+    """
+
+    severity: str
+    satisfied: int
+    unsatisfied: int
+    place: str
+    cells: tuple[str, ...]
+    template_level: str
+
+    def figures(self) -> str:
+        """Where and what, formatted for a failure message."""
+        return (
+            f"{self.unsatisfied} unsatisfied / {self.satisfied} satisfied; first at "
+            f"{self.place or '(no place)'}: {' | '.join(self.cells)}"
+        )
+
+    def record(self) -> dict[str, Any]:
+        """The per-portfolio facts as the register file holds them."""
+        return {
+            "satisfied": self.satisfied,
+            "unsatisfied": self.unsatisfied,
+            "template_level": self.template_level,
+            "place": self.place,
+        }
+
+
+class DisagreementKey(NamedTuple):
+    """A (rule, portfolio) on which the two engines reach opposite verdicts.
+
+    The verdicts are part of the key, so a disagreement that changes direction
+    is a new entry and the old one is gone.
+    """
+
+    rule_id: str
+    portfolio: str
+    template_level: str
+    gateway: str
+
+    def describe(self) -> str:
+        """Compact human address for an assertion message."""
+        return (
+            f"{GATEWAY_REGIME}/{self.portfolio}: {self.rule_id} "
+            f"(template-level {self.template_level}, gateway {self.gateway})"
+        )
+
+
+class DisagreementFact(NamedTuple):
+    """The figures behind a disagreement, for triage."""
+
+    severity: str
+    template_detail: str
+    gateway_detail: str
+
+
 class GateRun(NamedTuple):
-    """Everything the twenty runs produced.
+    """Everything the thirty runs produced.
 
     ``summary`` is per-run outcome counts, kept descriptive: nothing asserts an
     individual count, only that the four statuses are all reported and account
     for the enforced population. Vacuity used to live ONLY there, which is why it
     was invisible — the ratcheted population is ``vacuous``, at rule granularity.
+
+    ``gateway`` and ``disagreements`` are the Basel 3.1 gateway leg, keyed per
+    (rule, portfolio): see "Why there is a GATEWAY leg" in the module docstring.
     """
 
     broken: dict[RuleKey, RuleFact]
     uncovered: dict[TemplateKey, int]
     summary: dict[str, dict[str, int]]
     vacuous: dict[RuleKey, VacuityFact]
+    gateway: dict[GatewayKey, GatewayFact]
+    disagreements: dict[DisagreementKey, DisagreementFact]
 
 
 # ---------------------------------------------------------------------------
@@ -1040,6 +1269,10 @@ def _run_gate() -> GateRun:
     ``summary`` keeps PASS, FAIL, VACUOUS and NOT_EVALUATED apart. Conflating the
     last two with PASS is how a coverage hole hides.
 
+    ``gateway`` and ``disagreements`` come from ``_gateway_leg`` on each Basel 3.1
+    run, keyed per (rule, portfolio) — never unioned, because a rule reaching one
+    more portfolio is the event they exist to catch.
+
     ``vacuous`` is the union too, and is the set of rules that reached a verdict
     ONLY vacuously — vacuous on at least one run and never PASS or FAIL on any.
     A rule vacuous here and passing there is still being checked somewhere, so it
@@ -1052,6 +1285,8 @@ def _run_gate() -> GateRun:
     summary: dict[str, dict[str, int]] = {}
     vacuous: dict[RuleKey, VacuityFact] = {}
     real_verdict: set[RuleKey] = set()
+    gateway: dict[GatewayKey, GatewayFact] = {}
+    disagreements: dict[DisagreementKey, DisagreementFact] = {}
     for regime, framework, portfolio, build_bundle, build_config, build_prior in RUNS:
         result = PipelineOrchestrator().run_with_data(build_bundle(), build_config())
         prior = (
@@ -1069,6 +1304,10 @@ def _run_gate() -> GateRun:
         pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)
 
         report = evaluate_all(corep, pillar3, framework)
+        if framework == GATEWAY_FRAMEWORK:
+            breaks, opposed = _gateway_leg(portfolio, corep, report)
+            gateway.update(breaks)
+            disagreements.update(opposed)
         summary[f"{regime}/{portfolio}"] = {
             **report.status_counts(),
             "rules_enforced": report.rules_enforced,
@@ -1126,12 +1365,91 @@ def _run_gate() -> GateRun:
         uncovered,
         summary,
         {key: fact for key, fact in vacuous.items() if key not in real_verdict},
+        gateway,
+        disagreements,
     )
+
+
+def _gateway_leg(
+    portfolio: str, corep: COREPTemplateBundle, report: ValidationReport
+) -> tuple[dict[GatewayKey, GatewayFact], dict[DisagreementKey, DisagreementFact]]:
+    """File ``corep`` as the gateway would and compare its verdicts with ``report``'s.
+
+    ``corep`` is the bundle the template leg read, prior frame and all, so the
+    two engines judge one return. Every gateway FAIL is recorded, ERROR and
+    WARNING; a rule the Bank's deny list deactivates is NOT_EVALUATED there and
+    so never recorded. A disagreement is a rule one engine breaks while the other
+    holds it (``_opposed``).
+    """
+    # Imported here, not at the top: scripts/filing_mapping_report.py imports
+    # RUNS from this module, so a module-level import would be a cycle. The
+    # helper is the filing-mapping ratchet's own, so both ratchets file the same
+    # return (same header, same pack, same deny-list date).
+    from scripts.filing_mapping_report import file_on_gateway
+
+    _mapping, validation = file_on_gateway(corep)
+    assert validation.report is not None, (
+        "no PRA001 rule book is packaged: the gateway leg would check nothing and read as clean"
+    )
+    template = {outcome.rule_id: outcome for outcome in report.outcomes}
+    breaks: dict[GatewayKey, GatewayFact] = {}
+    opposed: dict[DisagreementKey, DisagreementFact] = {}
+    for result in validation.report.results:
+        outcome = template.get(result.rule_id)
+        template_status = outcome.status if outcome is not None else STATUS_NOT_EVALUATED
+        if result.status == GATEWAY_FAIL:
+            first = result.failures[0] if result.failures else None
+            breaks[GatewayKey(result.rule_id, portfolio)] = GatewayFact(
+                severity=result.severity,
+                satisfied=result.satisfied,
+                unsatisfied=result.unsatisfied,
+                place=first.place if first is not None else "",
+                cells=first.cells[:MAX_RECORDED_CELLS] if first is not None else (),
+                template_level=_template_verdict(outcome),
+            )
+        if _opposed(template_status, result.status):
+            key = DisagreementKey(result.rule_id, portfolio, template_status, result.status)
+            opposed[key] = DisagreementFact(
+                severity=result.severity,
+                template_detail=_template_verdict(outcome),
+                gateway_detail=_gateway_verdict(result),
+            )
+    return breaks, opposed
+
+
+def _opposed(template_status: str, gateway_status: str) -> bool:
+    """Whether the two engines reach OPPOSITE verdicts on one rule and return.
+
+    One breaks it while the other holds it — a template-level VACUOUS holds too,
+    at ``0 = 0``. A rule either engine does not evaluate is no disagreement: an
+    absence of verdict is not a verdict.
+    """
+    if gateway_status == GATEWAY_FAIL:
+        return template_status in (STATUS_PASS, STATUS_VACUOUS)
+    if gateway_status == GATEWAY_PASS:
+        return template_status == STATUS_FAIL
+    return False
+
+
+def _template_verdict(outcome: RuleOutcome | None) -> str:
+    """The template-level verdict in words: status, and why where it reached none."""
+    if outcome is None:
+        return f"{STATUS_NOT_EVALUATED} (not in the template-level rule set)"
+    if outcome.status == STATUS_NOT_EVALUATED:
+        return f"{STATUS_NOT_EVALUATED} ({outcome.reason})" if outcome.reason else outcome.status
+    if outcome.status == STATUS_FAIL:
+        return f"{STATUS_FAIL} ({outcome.failed} failing coordinate(s))"
+    return outcome.status
+
+
+def _gateway_verdict(result: RuleResult) -> str:
+    """The gateway verdict in words: status and the formula's counts."""
+    return f"{result.status} ({result.unsatisfied} unsatisfied / {result.satisfied} satisfied)"
 
 
 @pytest.fixture(scope="module")
 def gate_run() -> GateRun:
-    """The twenty runs, executed once for this file.
+    """The thirty runs (and the gateway leg on the fifteen Basel 3.1 ones), executed once.
 
     ``--dist=loadfile`` pins this file to one worker, so the pipeline runs happen
     once per session rather than once per test.
@@ -1145,23 +1463,34 @@ def gate_run() -> GateRun:
 
 
 class Baseline(NamedTuple):
-    """The committed register, as three ``{key: reason}`` maps.
+    """The committed register, as five ``{key: reason}`` maps.
 
-    Named rather than a bare tuple because there are three populations now and a
-    positional unpack (``_, baseline = _read_baseline()``) silently reads the
-    wrong one the moment a fourth is added.
+    Named rather than a bare tuple because a positional unpack
+    (``_, baseline = _read_baseline()``) silently reads the wrong population the
+    moment another is added — which is what the gateway leg just did.
     """
 
     rules: dict[RuleKey, str]
     templates: dict[TemplateKey, str]
     vacuous: dict[RuleKey, str]
+    gateway: dict[GatewayKey, str]
+    disagreements: dict[DisagreementKey, str]
 
 
 def _read_baseline() -> Baseline:
-    """Load the committed register as three ``{key: reason}`` maps."""
+    """Load the committed register as five ``{key: reason}`` maps."""
     if not BASELINE_PATH.exists():
-        return Baseline({}, {}, {})
-    payload = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+        return Baseline({}, {}, {}, {}, {})
+    return _baseline_from(json.loads(BASELINE_PATH.read_text(encoding="utf-8")))
+
+
+def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
+    """The ``{key: reason}`` maps of a register's content.
+
+    The two gateway sections hold one entry per (rule, reason) with the
+    portfolios it covers; each is exploded back into its (rule, portfolio)
+    pairs here, because the pair is what the legs compare.
+    """
     rules = {
         RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)): entry["reason"]
         for entry in payload.get("known_broken_rules", [])
@@ -1174,16 +1503,30 @@ def _read_baseline() -> Baseline:
         RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)): entry["reason"]
         for entry in payload.get("known_vacuous_rules", [])
     }
-    return Baseline(rules, templates, vacuous)
+    gateway = {
+        GatewayKey(entry["rule_id"], portfolio): entry["reason"]
+        for entry in payload.get("known_gateway_breaks", [])
+        for portfolio in entry["portfolios"]
+    }
+    disagreements = {
+        DisagreementKey(
+            entry["rule_id"], portfolio, entry["template_level"], entry["gateway"]
+        ): entry["reason"]
+        for entry in payload.get("known_engine_disagreements", [])
+        for portfolio in entry["portfolios"]
+    }
+    return Baseline(rules, templates, vacuous, gateway, disagreements)
 
 
 def _write_baseline(run: GateRun) -> None:
     """Rewrite the register, PRESERVING every hand-written reason that still applies.
 
     Only the reason is curated. Severity, coordinates, portfolios and the summary
-    are facts about the current estate and are always refreshed.
+    are facts about the current estate and are always refreshed. In the two
+    gateway sections the reason is kept per (rule, portfolio), so a rule that
+    starts breaking on one more portfolio arrives ``unclassified``.
     """
-    existing_rules, existing_templates, existing_vacuous = _read_baseline()
+    existing = _read_baseline()
     payload = {
         "notes": REGISTER_NOTES,
         "summary": run.summary,
@@ -1192,7 +1535,7 @@ def _write_baseline(run: GateRun) -> None:
                 "regime": key.regime,
                 "rule_id": key.rule_id,
                 "severity": fact.severity,
-                "reason": existing_rules.get(key, UNCLASSIFIED),
+                "reason": existing.rules.get(key, UNCLASSIFIED),
                 "portfolios": sorted(set(fact.portfolios)),
                 "failing_coordinates": fact.failing_coordinates,
                 "coordinates": list(fact.coordinates),
@@ -1205,7 +1548,7 @@ def _write_baseline(run: GateRun) -> None:
                 "regime": key.regime,
                 "portfolio": key.portfolio,
                 "template": key.template,
-                "reason": existing_templates.get(key, UNCLASSIFIED),
+                "reason": existing.templates.get(key, UNCLASSIFIED),
                 "rules_executed_on_this_run": executed,
             }
             for key, executed in sorted(run.uncovered.items())
@@ -1215,7 +1558,7 @@ def _write_baseline(run: GateRun) -> None:
                 "regime": key.regime,
                 "rule_id": key.rule_id,
                 "severity": fact.severity,
-                "reason": existing_vacuous.get(key, UNCLASSIFIED),
+                "reason": existing.vacuous.get(key, UNCLASSIFIED),
                 "portfolios": sorted(set(fact.portfolios)),
                 "vacuous_coordinates": fact.vacuous_coordinates,
                 "tables": list(fact.tables),
@@ -1223,9 +1566,72 @@ def _write_baseline(run: GateRun) -> None:
             }
             for key, fact in sorted(run.vacuous.items())
         ],
+        "known_gateway_breaks": _gateway_entries(run.gateway, existing.gateway),
+        "known_engine_disagreements": _disagreement_entries(
+            run.disagreements, existing.disagreements
+        ),
     }
     BASELINE_PATH.parent.mkdir(parents=True, exist_ok=True)
     BASELINE_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _gateway_entries(
+    measured: Mapping[GatewayKey, GatewayFact], reasons: Mapping[GatewayKey, str]
+) -> list[dict[str, Any]]:
+    """``known_gateway_breaks``: one entry per (rule, reason), with its portfolios.
+
+    Grouping by reason as well as rule keeps each reason to ONE cause: a rule
+    that breaks for one reason on two portfolios and another on a third is two
+    entries, and when the third is fixed its entry goes without touching the
+    other's text.
+    """
+    grouped: dict[tuple[str, str], list[GatewayKey]] = {}
+    for key in sorted(measured):
+        grouped.setdefault((key.rule_id, reasons.get(key, UNCLASSIFIED)), []).append(key)
+    entries: list[dict[str, Any]] = []
+    for (rule_id, reason), keys in sorted(grouped.items()):
+        first = measured[keys[0]]
+        entries.append(
+            {
+                "regime": GATEWAY_REGIME,
+                "rule_id": rule_id,
+                "severity": first.severity,
+                "reason": reason,
+                "portfolios": [key.portfolio for key in keys],
+                "by_portfolio": {key.portfolio: measured[key].record() for key in keys},
+                "example": f"{keys[0].portfolio}: {first.place} :: {' | '.join(first.cells)}",
+            }
+        )
+    return entries
+
+
+def _disagreement_entries(
+    measured: Mapping[DisagreementKey, DisagreementFact], reasons: Mapping[DisagreementKey, str]
+) -> list[dict[str, Any]]:
+    """``known_engine_disagreements``: one entry per (rule, verdicts, reason)."""
+    grouped: dict[tuple[str, str, str, str], list[DisagreementKey]] = {}
+    for key in sorted(measured):
+        group = (key.rule_id, key.template_level, key.gateway, reasons.get(key, UNCLASSIFIED))
+        grouped.setdefault(group, []).append(key)
+    return [
+        {
+            "regime": GATEWAY_REGIME,
+            "rule_id": rule_id,
+            "template_level": template_level,
+            "gateway": gateway,
+            "severity": measured[keys[0]].severity,
+            "reason": reason,
+            "portfolios": [key.portfolio for key in keys],
+            "by_portfolio": {
+                key.portfolio: {
+                    "template_level": measured[key].template_detail,
+                    "gateway": measured[key].gateway_detail,
+                }
+                for key in keys
+            },
+        }
+        for (rule_id, template_level, gateway, reason), keys in sorted(grouped.items())
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1261,6 +1667,44 @@ def _rules_no_longer_vacuous(
     measured: dict[RuleKey, VacuityFact], baseline: dict[RuleKey, str]
 ) -> tuple[RuleKey, ...]:
     """Register entries whose rule has started reaching a real verdict again."""
+    return diff(measured, baseline).removed
+
+
+# ---------------------------------------------------------------------------
+# The gateway legs, as four named predicates
+# ---------------------------------------------------------------------------
+# Named for the same reason as the vacuity pair: watching legs (h)-(k) fail
+# through the tests costs thirty pipeline runs and a fixture change, while these
+# can be driven with a synthetic measured-vs-baseline pair in milliseconds —
+# tests/contracts/test_gateway_break_registers_agree.py does exactly that,
+# including the boe_b1055 shape (one more portfolio for a banked rule).
+
+
+def _gateway_breaks_added(
+    measured: Mapping[GatewayKey, object], baseline: Mapping[GatewayKey, str]
+) -> tuple[GatewayKey, ...]:
+    """(rule, portfolio) pairs the gateway breaks that the register does not admit to."""
+    return diff(measured, baseline).added
+
+
+def _gateway_breaks_removed(
+    measured: Mapping[GatewayKey, object], baseline: Mapping[GatewayKey, str]
+) -> tuple[GatewayKey, ...]:
+    """Banked (rule, portfolio) pairs the gateway no longer breaks."""
+    return diff(measured, baseline).removed
+
+
+def _disagreements_added(
+    measured: Mapping[DisagreementKey, object], baseline: Mapping[DisagreementKey, str]
+) -> tuple[DisagreementKey, ...]:
+    """Opposite verdicts the register does not admit to."""
+    return diff(measured, baseline).added
+
+
+def _disagreements_removed(
+    measured: Mapping[DisagreementKey, object], baseline: Mapping[DisagreementKey, str]
+) -> tuple[DisagreementKey, ...]:
+    """Banked disagreements the two engines no longer have."""
     return diff(measured, baseline).removed
 
 
@@ -1409,8 +1853,10 @@ def test_every_baseline_entry_carries_a_written_reason() -> None:
     records that the mechanism is visible but the defect is not established. What
     is not acceptable is the capture placeholder, which records nothing.
 
-    All THREE populations are checked. A vacuity entry without a reason is the
-    worst of the three to leave lying around: it looks like a passing rule.
+    All FIVE populations are checked. A vacuity entry without a reason is the
+    worst to leave lying around: it looks like a passing rule. A gateway entry
+    without one is an Error the Bank rejects the return for, with no account of
+    whose it is.
 
     Arrange: the committed register.
     Act:     find entries still carrying the capture placeholder.
@@ -1420,15 +1866,29 @@ def test_every_baseline_entry_carries_a_written_reason() -> None:
         pytest.skip("REGEN_VALIDATION_BASELINE=1 - reasons are written by hand after capture")
 
     # Arrange
-    rules, templates, vacuous = _read_baseline()
+    baseline = _read_baseline()
 
     # Act
-    untriaged = sorted(key.describe() for key, reason in rules.items() if reason == UNCLASSIFIED)
-    untriaged += sorted(
-        key.describe() for key, reason in templates.items() if reason == UNCLASSIFIED
+    untriaged = sorted(
+        key.describe() for key, reason in baseline.rules.items() if reason == UNCLASSIFIED
     )
     untriaged += sorted(
-        f"{key.describe()} (vacuous)" for key, reason in vacuous.items() if reason == UNCLASSIFIED
+        key.describe() for key, reason in baseline.templates.items() if reason == UNCLASSIFIED
+    )
+    untriaged += sorted(
+        f"{key.describe()} (vacuous)"
+        for key, reason in baseline.vacuous.items()
+        if reason == UNCLASSIFIED
+    )
+    untriaged += sorted(
+        f"{key.describe()} (gateway)"
+        for key, reason in baseline.gateway.items()
+        if reason == UNCLASSIFIED
+    )
+    untriaged += sorted(
+        f"{key.describe()} (disagreement)"
+        for key, reason in baseline.disagreements.items()
+        if reason == UNCLASSIFIED
     )
 
     # Assert
@@ -1522,6 +1982,136 @@ def test_no_baseline_vacuous_rule_asserts_again_without_being_removed(gate_run: 
         "or FAIL they are being CHECKED again - bank it and remove the entry from "
         f"{BASELINE_PATH.name}. If they went NOT_EVALUATED instead, the cell or the run went away "
         f"and the estate got WORSE - fix that instead of deleting the entry:\n{detail}"
+    )
+
+
+def test_no_gateway_break_outside_the_baseline(gate_run: GateRun) -> None:
+    """Every rule the Bank's gateway would break is one already recorded — leg (h).
+
+    The gateway engine (``rwa_filer.boe``, pinned to Arelle) on the canonical
+    return filed from each Basel 3.1 run, with the Bank's deny list in force on
+    the run date. Keyed on (rule, portfolio): a banked rule breaking on one more
+    portfolio is a new break.
+
+    Arrange: the committed register plus the gateway breaks of the fifteen
+             Basel 3.1 returns.
+    Act:     find (rule, portfolio) pairs the register does not admit to.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().gateway
+
+    # Act
+    new_breaks = _gateway_breaks_added(gate_run.gateway, baseline)
+
+    # Assert
+    blocking = [key for key in new_breaks if gate_run.gateway[key].severity == "ERROR"]
+    detail = "\n".join(
+        f"  {key.describe()}  [{gate_run.gateway[key].severity}] "
+        f"{gate_run.gateway[key].figures()}\n"
+        f"      template-level engine: {gate_run.gateway[key].template_level}"
+        for key in new_breaks
+    )
+    assert not new_breaks, (
+        f"{len(new_breaks)} NEW gateway break(s) on a filed Basel 3.1 return, {len(blocking)} "
+        "of them Error-severity (the Bank rejects the return for those):\n"
+        f"{detail}\nFix the defect. Only if the break is accepted, add it to "
+        f"{BASELINE_PATH.name} under known_gateway_breaks with a written reason - citing "
+        "the publisher issue (PI-nn) if the published rule is the cause."
+    )
+
+
+def test_no_baseline_gateway_break_has_been_fixed_without_being_removed(gate_run: GateRun) -> None:
+    """A gateway break that has gone must leave the register deliberately — leg (i).
+
+    Read the failure before deleting: a pair also leaves when the rule stops
+    being evaluated at all (a template no longer filed, a table the canonical
+    return no longer places, a rule the Bank deactivates). The gateway engine's
+    NOT_EVALUATED reason says which.
+
+    Arrange: the committed register plus the current gateway breaks.
+    Act:     find banked (rule, portfolio) pairs that no longer break.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().gateway
+
+    # Act
+    gone = _gateway_breaks_removed(gate_run.gateway, baseline)
+
+    # Assert
+    detail = "\n".join(f"  {key.describe()}\n      was: {baseline[key]}" for key in gone)
+    assert not gone, (
+        f"{len(gone)} banked gateway break(s) no longer break. Remove each from "
+        f"known_gateway_breaks in {BASELINE_PATH.name} - and, for an Error, re-bank "
+        f"scripts/filing_mapping_baseline.json in the same change:\n{detail}"
+    )
+
+
+def test_the_two_engines_disagree_nowhere_the_register_does_not_say(gate_run: GateRun) -> None:
+    """A new disagreement between the template-level and the gateway engine fails — leg (j).
+
+    One engine breaking a rule the other holds, on the same return, is exactly
+    the shape of ``boe_b0778``: a false Error break the template-level engine
+    reported on every Basel 3.1 return, banked under a reason that blamed the
+    Bank's rule, while the gateway's own reading never broke it.
+
+    Arrange: the committed register plus both engines' verdicts on each return.
+    Act:     find opposite verdicts the register does not admit to.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().disagreements
+
+    # Act
+    new = _disagreements_added(gate_run.disagreements, baseline)
+
+    # Assert
+    detail = "\n".join(
+        f"  {key.describe()}\n"
+        f"      template-level: {gate_run.disagreements[key].template_detail}\n"
+        f"      gateway:        {gate_run.disagreements[key].gateway_detail}"
+        for key in new
+    )
+    assert not new, (
+        f"{len(new)} NEW disagreement(s) between the two engines. Establish which reading is "
+        "right before anything else - the gateway engine is pinned to Arelle, the "
+        "template-level engine has six known differences (module docstring):\n"
+        f"{detail}\nOnly once explained, add each to known_engine_disagreements in "
+        f"{BASELINE_PATH.name} with a written reason."
+    )
+
+
+def test_no_baseline_disagreement_has_gone_without_being_removed(gate_run: GateRun) -> None:
+    """Two engines that have come to agree must shrink the register — leg (k).
+
+    Arrange: the committed register plus both engines' verdicts.
+    Act:     find banked disagreements the engines no longer have.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().disagreements
+
+    # Act
+    gone = _disagreements_removed(gate_run.disagreements, baseline)
+
+    # Assert
+    detail = "\n".join(f"  {key.describe()}\n      was: {baseline[key]}" for key in gone)
+    assert not gone, (
+        f"{len(gone)} banked disagreement(s) between the two engines are gone. Remove each "
+        f"from known_engine_disagreements in {BASELINE_PATH.name}:\n{detail}"
     )
 
 

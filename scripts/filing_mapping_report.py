@@ -39,7 +39,11 @@ cell to the taxonomy's coordinates, and counts:
   submission, so this is the count that stands between a return that can be
   written and one that would be accepted. The rules are evaluated as the
   Bank's gateway evaluates them (``rwa_filer.boe``), which the referee
-  differential holds to Arelle's verdicts.
+  differential holds to Arelle's verdicts. The supervisory register files the
+  same returns through the same function (``file_on_gateway``) and holds each
+  of these breaks per (rule, portfolio) with a written reason
+  (``known_gateway_breaks``); ``tests/contracts/test_gateway_break_registers_agree.py``
+  keeps its Error half equal to ``error_rules_by_rule``, so re-bank both together.
 
 All are absolute counts of the thing that matters (LESSONS B8): a ratio would
 improve by deleting a template. A zero in a cell the taxonomy lacks loses
@@ -82,8 +86,9 @@ import json
 import sys
 import time
 from datetime import date
+from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -104,6 +109,12 @@ from rwa_filer.model import ReturnHeader  # noqa: E402
 from rwa_filer.release import resolve_release  # noqa: E402
 from rwa_filer.rules.catalogue import FRAMEWORK_BASEL_3_1  # noqa: E402
 from rwa_filer.validate.returns import validate_return  # noqa: E402
+
+if TYPE_CHECKING:
+    from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+    from rwa_calc.reporting.filing.canonical import CanonicalMapping
+    from rwa_filer.taxonomy.pack import TaxonomyPack
+    from rwa_filer.validate.returns import ReturnValidation
 
 BASELINE_PATH = _REPO_ROOT / "scripts" / "filing_mapping_baseline.json"
 
@@ -185,8 +196,7 @@ def measure() -> dict[str, Any]:
     populate counts once: the numbers are properties of the estate's layout, not
     of how many portfolios happen to exercise it.
     """
-    header = ReturnHeader(ENTITY_IDENTIFIER, REFERENCE_DATE, FILING_MODULE)
-    pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
+    pack = filing_pack()
     runs = filed_runs()
     placed: set[tuple[str, str | None, str | None, str, str]] = set()
     unplaced: dict[tuple[str, str], set[tuple[str | None, str, str]]] = {}
@@ -204,7 +214,7 @@ def measure() -> dict[str, Any]:
             framework=run.framework,
             output_floor_summary=result.output_floor_summary,
         )
-        mapping = build_canonical_return(corep, header, pack=pack)
+        mapping, validation = file_on_gateway(corep, pack)
 
         placed.update(
             mapping.canonical.facts.select(
@@ -215,7 +225,6 @@ def measure() -> dict[str, Any]:
             "template", "sheet", "row", "column", "reason"
         ).iter_rows():
             unplaced.setdefault((template, reason), set()).add((sheet, row, column))
-        validation = validate_return(mapping.canonical, pack)
         for finding in validation.structure:
             key = f"{finding.code}|{finding.subject}"
             structure[key] = max(structure.get(key, 0), _offending_facts(finding.actual))
@@ -241,6 +250,35 @@ def measure() -> dict[str, Any]:
         "error_rules_by_rule": dict(sorted(rule_breaks.items())),
         "provenance": provenance(),
     }
+
+
+def file_on_gateway(
+    corep: COREPTemplateBundle, pack: TaxonomyPack | None = None
+) -> tuple[CanonicalMapping, ReturnValidation]:
+    """Place a generated COREP bundle on the taxonomy and validate it as the gateway does.
+
+    The one place a measured return is built and judged, shared with the
+    supervisory register's gateway leg
+    (``tests/acceptance/reporting/test_supervisory_validations.py``) so the two
+    ratchets cannot measure different returns: ``filing_header()`` for who and
+    when, the ``FILING_TAXONOMY`` pack, and ``validate_return`` with no
+    submission date — so the Bank's deny list applies as it stands on the run
+    date, which is ``export_filing_package``'s default too.
+    """
+    chosen = pack if pack is not None else filing_pack()
+    mapping = build_canonical_return(corep, filing_header(), pack=chosen)
+    return mapping, validate_return(mapping.canonical, chosen)
+
+
+def filing_header() -> ReturnHeader:
+    """Who is reporting, for which date: fixed, so nothing measured drifts with the clock."""
+    return ReturnHeader(ENTITY_IDENTIFIER, REFERENCE_DATE, FILING_MODULE)
+
+
+@cache
+def filing_pack() -> TaxonomyPack:
+    """The ``FILING_TAXONOMY`` pack, loaded once per process (package data never changes)."""
+    return resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
 
 
 def _offending_facts(actual: str) -> int:

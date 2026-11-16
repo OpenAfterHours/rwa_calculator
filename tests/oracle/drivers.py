@@ -541,6 +541,9 @@ _EQUITY_DEFAULTS: dict[str, Any] = {
     "ciu_third_party_calc": None,
     "ciu_look_through_rw": None,
     "ciu_unrestricted_access": None,
+    # Glossary "higher risk equity exposure" limb (2): years the underlying
+    # business has existed. Null is the engine contract's own default.
+    "business_age_years": None,
 }
 
 _EQUITY_SCHEMA: dict[str, pl.DataType] = {
@@ -551,6 +554,7 @@ _EQUITY_SCHEMA: dict[str, pl.DataType] = {
     "ciu_third_party_calc": pl.Boolean(),
     "ciu_look_through_rw": pl.Float64(),
     "ciu_unrestricted_access": pl.Boolean(),
+    "business_age_years": pl.Float64(),
 }
 
 

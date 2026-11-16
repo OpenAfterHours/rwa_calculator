@@ -230,8 +230,8 @@ class SACalculator:
         Equity exposures in the main loan/contingent tables receive correct SA
         equity risk weights (250% Basel 3.1, 100% CRR) but miss full equity
         treatment available via the dedicated equity_exposures input table:
-        CIU look-through/mandate-based approaches, transitional floor schedule,
-        type-specific weights (central_bank 0%, subordinated_debt 150%,
+        CIU look-through/mandate-based approaches, the PS1/26 General Provisions
+        rules 4.2 / 4.3 transitional weights (2027-2029), type-specific weights (central_bank 0%, subordinated_debt 150%,
         speculative 400%), and IRB Simple method (CRR).
 
         The check is based on the approach column containing equity values,
@@ -259,7 +259,8 @@ class SACalculator:
                         "These receive default SA equity risk weights (250% Basel 3.1 "
                         "Art. 133(3), 100% CRR Art. 133(2)). For type-specific weights "
                         "(central_bank 0%, subordinated_debt 150%, speculative 400%), "
-                        "CIU approaches, transitional floor, or IRB Simple, "
+                        "CIU approaches, the rules 4.2 / 4.3 transitional weights "
+                        "(2027-2029), or IRB Simple, "
                         "use the dedicated equity_exposures input table."
                     ),
                     severity=ErrorSeverity.WARNING,

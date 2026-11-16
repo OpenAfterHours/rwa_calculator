@@ -1320,8 +1320,8 @@ def _apply_b31_risk_weight_overrides(
         .then(_leased_residual_rw_expr())
         .when(uc == "OTHER")
         .then(pl.lit(_SA_SHARED_RW["other_default"]))
-        # Equity (Art. 133(3)): 250% — full equity treatment (CIU,
-        # transitional floor) lives in the dedicated equity table.
+        # Equity (Art. 133(3)): 250% end state. CIU and the rules 4.2/4.3 2027-29
+        # transitional live in the dedicated equity table; SA005 flags this leg.
         .when(uc == "EQUITY")
         .then(pl.lit(_SA_B31_RW["equity"]))
         # CIU (o): DEFENCE-IN-DEPTH, unreachable — the equity file never reaches

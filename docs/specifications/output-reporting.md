@@ -217,8 +217,8 @@ LTV bands (Art. 124F–124I), corporate sub-categories (Art. 122), institution E
 
 The previous CRR row 0260 (370%) is **removed** and replaced by row **0261 (400%)**
 for higher-risk equity exposures under Art. 133(4) — reported during the Standardised
-Transitional Approach period via memorandum row 0374, but always allocated to row 0261
-in Section 3.
+Transitional Approach period via memorandum row 0371 (row 0373 is the IRB Transitional
+Approach's), but always allocated to row 0261 in Section 3.
 
 | Row ID | Risk Weight | Basel 3.1 / CRR Article(s) | Typical Source |
 |--------|-------------|----------------------------|----------------|

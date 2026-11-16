@@ -960,14 +960,57 @@ PS1/26 reinstates it.
 **Regulation:** Art. 134(1) — 100%.
 **Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
 
-## ORC-080 — SA equity (PS1/26)
+## ORC-080 — SA equity, Standardised Transitional Approach year 1 (PS1/26)
 
-**Inputs:** EAD £1,000,000; exchange-traded equity.
-**Regulation:** Art. 133(3) — an equity exposure is assigned **250%** unless it
-is a higher risk equity exposure (400% under Art. 133(4)) or falls in
-Art. 133(6). CRR Art. 133(2) assigned 100%, so this is a 2.5× regime change on
-the same instrument.
-**Arithmetic:** `RW = 2.50`; `RWA = 2,500,000.00`.
+**Inputs:** EAD £1,000,000; exchange-traded equity; a firm that is
+Standardised-only (no IRB permission on 31 December 2026); reporting date
+30 June 2027.
+**Regulation:** Art. 133(3) (p.68) — "An equity exposure shall be assigned a
+risk weight of 250%, unless the exposure is a higher risk equity exposure [...]
+or is within scope of paragraph 6". That is the **end-state** weight. For
+2027–2029 the Credit Risk: General Provisions (CRR) Part modifies it:
+
+- Rule 4.1 (p.20) — "4.2 and 4.3 only apply to an institution that did not have
+  permission to use the Internal Ratings Based Approach under Article 143 of CRR
+  on 31 December 2026."
+- Rule 4.2 (p.20) — "This rule modifies paragraph 3 of Credit Risk: Standardised
+  Approach (CRR) Part Article 133 for a transitional period beginning with
+  1 January 2027 and ending with 31 December 2029, in which equity exposures
+  that are not higher risk equity exposures or within the scope of paragraph 6
+  [...] shall be assigned the following risk weights: (1) 160% during the period
+  beginning with 1 January 2027 and ending with 31 December 2027; (2) 190% [...]
+  2028; and (3) 220% [...] 2029."
+
+The rule **assigns** the weight ("shall be assigned", the same verb Art. 133(3)
+uses for 250%); it is not a floor under 250%. "Higher of" appears in the chapter
+only in Rules 4.6 and 4.8, which apply to firms that did have IRB permission.
+**Arithmetic:** Rule 4.2(1) → `RW = 1.60`; `RWA = 1,000,000 × 1.60 =
+1,600,000.00`. (From 1 January 2030, Art. 133(3) 250%.)
+
+This case was first derived from Art. 133(3) alone as 250% / 2,500,000.00. That
+reading left out the General Provisions Part that modifies Art. 133 for the
+reporting date the oracle runs on; it was corrected on the rule text quoted
+above, not to agree with the engine (the engine returned 2.50 when the
+correction was made).
+
+## ORC-284 — SA higher risk equity, Standardised Transitional Approach year 1 (PS1/26)
+
+**Inputs:** EAD £1,000,000; equity not listed on a recognised exchange in an
+undertaking whose business has existed for 2 years; a Standardised-only firm;
+reporting date 30 June 2027.
+**Regulation:** Glossary (p.5) — "higher risk equity exposure means an equity
+exposure that is: (1) not listed on a recognised exchange; and (2) to an
+undertaking ('A') whose business has existed for a period of less than five
+years". Art. 133(4) (p.68) — "A higher risk equity exposure shall be assigned a
+risk weight of 400%" (end state). Rule 4.3 (p.21) — "This rule modifies
+paragraph 4 of [...] Article 133 for a transitional period between 1 January
+2027 and 31 December 2029, in which equity exposures that are higher risk
+equity exposures and are not within scope of paragraph 6 [...] shall be assigned
+the following risk weights: (1) 220% during the period beginning with 1 January
+2027 and ending with 31 December 2027; (2) 280% [...] 2028; and (3) 340% [...]
+2029." Rule 4.1 limits it to a firm without IRB permission on 31 December 2026.
+**Arithmetic:** Rule 4.3(1) → `RW = 2.20`; `RWA = 1,000,000 × 2.20 =
+2,200,000.00`. (From 1 January 2030, Art. 133(4) 400%.)
 
 ---
 

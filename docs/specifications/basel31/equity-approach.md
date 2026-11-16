@@ -14,11 +14,11 @@ approaches, transitional phase-in schedule, and CIU treatment.
 |----|-------------|----------|--------|
 | FR-9.1 | SA equity risk weights by sub-category (Art. 133) | P0 | Done |
 | FR-9.2 | IRB equity approaches removed (Art. 147A(1)(h)) | P0 | Done |
-| FR-9.3 | Transitional phase-in schedule (Rules 4.1–4.10, 3-year window 1 Jan 2027 – 31 Dec 2029) | P0 | Done |
+| FR-9.3 | Transitional phase-in schedule (Rules 4.1–4.10, 3-year window 1 Jan 2027 – 31 Dec 2029) | P0 | Partial — Rules 4.1–4.3 (firms without IRB permission) done; Rules 4.5–4.6 direct-equity "higher of" for firms with IRB permission not implemented (Art. 133 weights + CFG003 warning) |
 | FR-9.4 | CIU fallback treatment (Art. 132(2)) | P0 | Done |
 | FR-9.5 | CIU mandate-based treatment (Art. 132(4)) | P0 | Done |
 | FR-9.6 | CIU look-through treatment (Art. 132a) | P0 | Done |
-| FR-9.7 | Transitional exclusions (central bank, subordinated debt, CIU non-fallback) | P0 | Done |
+| FR-9.7 | Transitional exclusions (subordinated debt, all CIUs, Art. 133(6)(c) significant investments, central-bank type) | P0 | Done |
 | FR-9.8 | Higher-risk classification (unlisted + business < 5 years) | P0 | Done |
 
 ---
@@ -163,44 +163,94 @@ in PS1/26 Appendix 1, Chapter 4, and apply to different populations of firms.
 
 ### Phase-In Schedule (Rules 4.2–4.3)
 
-The Rule 4.2/4.3 schedule below is the *operative* phase-in for the SA-only
-track and is also the floor leg of the IRB-track "higher of" tests in
+The Rule 4.2/4.3 schedule below is the *operative* weight for the SA-only
+track (Rule 4.1) and is also one leg of the IRB-track "higher of" tests in
 Rules 4.6 and 4.8.
 
-| Year | Standard RW Floor (Rule 4.2) | Higher-Risk RW Floor (Rule 4.3) |
-|------|------------------------------|--------------------------------|
+| Year | Standard equity (Rule 4.2) | Higher risk equity (Rule 4.3) |
+|------|----------------------------|-------------------------------|
 | 2027 | **160%** | **220%** |
 | 2028 | **190%** | **280%** |
 | 2029 | **220%** | **340%** |
 | 2030+ (steady state, Art. 133) | **250%** | **400%** |
 
-The transitional works as a **floor**:
+For a firm **without** IRB permission on 31 December 2026 the schedule is
+**assigned** — it replaces the Art. 133(3) / (4) weight for the year:
 
 ```
-final_rw = max(assigned_rw, transitional_floor_rw)
+final_rw = rule_4_3_rw   if the leg is higher risk equity (the Art. 133(4) rung)
+           rule_4_2_rw   otherwise                           (the Art. 133(3) rung)
 ```
 
-During the transitional period, the floor ensures exposures receive at least the
-phase-in weight, even if the calculator would assign a lower weight.
+Rule 4.2 "modifies paragraph 3 of [...] Article 133 [...] in which equity
+exposures [...] **shall be assigned** the following risk weights", the same verb
+Art. 133(3) uses for 250%. It is not a floor: a floor of 160% under 250% would
+never bind. "Higher of" appears in the chapter only in Rules 4.6 and 4.8, both
+for firms that **had** IRB permission. The PRA's reporting instructions confirm
+the reading: Annex II (p.95) has these exposures reported against the Art. 133
+risk-weight rows, "However, the RWEA shall still reflect the transitional
+provisions".
+
+The engine reads "higher risk" from the same predicate that assigned the 400%
+rung (`_b31_higher_risk_expr`: the `is_speculative` flag, the `speculative`
+type, or the Glossary unlisted-and-under-five-years test), so a leg weighted
+at 400% takes the Rule 4.3 weight and nothing else does.
+
+!!! note "Implementation — 2026-11"
+    Until November 2026 the engine applied the schedule as
+    `max(assigned_rw, transitional_rw)`, which never changed a weight: a firm
+    without IRB permission was weighted 250% / 400% throughout 2027–2029. It now
+    assigns the Rule 4.2 / 4.3 weight (`EquityCalculator.
+    _apply_standardised_equity_transitional`). This lowers RWA for those firms
+    (36% on standard and 45% on higher risk equity in 2027).
 
 ### Transitional Exclusions
 
-The following equity sub-categories are **excluded** from the transitional floor
-(their weights apply directly without a phase-in floor):
+Rules 4.2 / 4.3 modify only Art. 133(3) / (4). These legs keep their own
+weight on every date and carry no transitional label:
 
-- **Central bank** (0%) — already below the floor, exclusion is moot
-- **Subordinated debt / non-equity own funds** (150%) — fixed rate (Art. 133(5))
-- **CIU look-through** — weight derives from underlying assets, not Art. 133
-- **CIU mandate-based** — weight derives from fund mandate, not Art. 133
+- **Subordinated debt / non-equity own funds** (150%) — Art. 133(5) weights an
+  instrument "not classified as an equity exposure"
+- **Art. 133(6) items** — both rules exclude exposures "within scope of
+  paragraph 6" by name. The engine recognises Art. 133(6)(c) through
+  `is_significant_investment` (a holding weighted 250% under Own Funds
+  Art. 48(4)); 133(6)(a) / (b) have no input carrier
+- **CIUs, every approach** (fall-back 1,250%, mandate-based, look-through) —
+  weighted under Arts. 132–132C, not Art. 133. Under an assignment, an
+  unexcluded fall-back CIU would drop from 1,250% to 160%, so the exclusion is
+  load-bearing, not moot
+- **Central bank** (0%) — the engine's central-bank equity type is not an
+  Art. 133(3) weight
+
+Government-supported equity is ordinary Art. 133(3) equity under Basel 3.1
+(there is no CRR Art. 133(3)(c) carve-out) and takes the Rule 4.2 weight.
 
 ### SA Transitional (Rules 4.1–4.3) — Firms Without IRB Permission
 
 Rule 4.1 restricts Rules 4.2–4.3 to firms that **did not** have permission to use the
-IRB Approach (Art. 143 of CRR) on 31 December 2026. These firms apply the phase-in
-schedule above directly to all equity exposures over the **three-year window
-1 January 2027 – 31 December 2029** (Rule 4.2 chapeau, Rule 4.3 chapeau). From
-1 January 2030 the steady-state Art. 133(3)/(4) weights (250%/400%) apply
-without any transitional modification.
+IRB Approach (Art. 143 of CRR) on 31 December 2026. These firms are assigned the
+phase-in schedule above in place of the Art. 133(3)/(4) weights over the
+**three-year window 1 January 2027 – 31 December 2029** (Rule 4.2 chapeau,
+Rule 4.3 chapeau). From 1 January 2030 the steady-state Art. 133(3)/(4) weights
+(250%/400%) apply without any transitional modification.
+
+These firms have no Rule 4.9 election to make: Rule 4.9 replaces only "the
+alternative approaches set out in 4.5, 4.6 and 4.8". A run that sets
+`equity_transitional.opt_out` for such a firm keeps the Rule 4.2 / 4.3 weights on
+direct equity and carries a `CFG003` warning.
+
+**The firm fact.** The engine derives "had IRB permission on 31 December 2026"
+from the run's permissions (any F-IRB / A-IRB permission, the test that puts CRR
+equity on Art. 155). Where that differs from the position on that date — a
+Standardised shadow run of an IRB firm, or a permission granted later — set
+`EquityTransitionalConfig.irb_permission_at_2026_year_end`.
+
+**Reporting carriers.** On each leg whose weight Rule 4.2 / 4.3 set, the
+calculator writes `equity_transitional_approach = "sa_transitional"`,
+`equity_higher_risk` and `risk_weight_pre_equity_transitional` (the Art. 133
+weight), for OF 07.00's risk-weight rows and memorandum rows 0371 / 0372. All
+three are null on every other leg and on every date outside the window, and
+are not emitted under CRR.
 
 ### IRB Transitional (Rules 4.4–4.6) — Firms With IRB Permission
 
@@ -225,6 +275,15 @@ These firms bifurcate their equity portfolio per Rule 4.5:
 This "higher of" test provides a floor-based transition — IRB firms cannot produce risk
 weights below the transitional SA schedule, but retain their legacy IRB weights where
 those are higher.
+
+!!! warning "Not implemented — Rules 4.5–4.6 for direct equity"
+    The engine does not apply Rules 4.5–4.6. A firm that had IRB permission keeps
+    the Art. 133 weights (250% / 400%) — the treatment of the Rule 4.9 election,
+    not the default — carries no transitional label, and, unless
+    `equity_transitional.opt_out` is set, the run carries a `CFG003` warning.
+    Implementing the higher of needs inputs the engine does not have (which
+    equity was on the IRB approach on 31 December 2026, and its legacy Art. 155
+    method).
 
 ### CIU Transitional (Rules 4.7–4.8) — Firms With IRB Permission
 
@@ -388,21 +447,23 @@ CIU equity underlyings (Rule 4.9(2)) — the Rule 4.9 chapeau requires the
 institution to "calculate **both**" categories under steady-state Art. 133 /
 Art. 132A / Art. 152 if it elects out of the transitional regime.
 
-!!! warning "Not yet implemented — SA transitional (Rules 4.2/4.3)"
-    The calculator currently applies the steady-state 250%/400% weights from day one
-    for all firms. Rules 4.2/4.3 phase-in (160%→190%→220% / 220%→280%→340%) is
-    not wired into the equity calculator. See **IMPLEMENTATION_PLAN.md P1.137**
-    (SA equity transitional phase-in).
+!!! success "Implemented — SA transitional (Rules 4.1–4.3)"
+    A firm without IRB permission on 31 December 2026 is assigned the Rules 4.2 /
+    4.3 weights (160%→190%→220% / 220%→280%→340%) for direct equity in
+    2027–2029, in place of 250% / 400%. Pinned by
+    `tests/acceptance/basel31/test_sa_equity_transitional_rules_4_1_4_3.py`,
+    `tests/unit/test_equity_transitional_carriers.py` and oracle cases ORC-080 /
+    ORC-284.
 
-!!! warning "Not yet implemented — IRB legacy-Art. 155 max (Rules 4.6/4.8)"
+!!! warning "Not yet implemented — IRB legacy-Art. 155 max (Rule 4.6); CIU firm fact (Rule 4.8)"
     The "higher of legacy Art. 155 weight and Rule 4.2/4.3 transitional" logic for
-    firms holding IRB equity permission on 31 Dec 2026 (Rule 4.6) and the same
-    logic for CIU look-through / mandate-based equity underlyings (Rule 4.8) are
-    not yet implemented. Implementing these requires (a) capturing the legacy
-    Art. 155 methodology weight per exposure, and (b) storing a firm-level flag
-    indicating whether IRB equity permission existed on 31 Dec 2026. See
-    **IMPLEMENTATION_PLAN.md P1.138** (IRB equity transitional max, Rule 4.6)
-    and **IMPLEMENTATION_PLAN.md P1.139** (CIU equity transitional max, Rule 4.8).
+    direct equity of firms holding IRB permission on 31 Dec 2026 (Rule 4.6) is not
+    implemented: such a firm keeps the Art. 133 weights and the run is warned
+    (`CFG003`). Implementing it requires capturing which equity was on the IRB
+    approach on 31 December 2026 and its legacy Art. 155 methodology. The CIU
+    look-through higher of (Rule 4.8) is applied, but without reading the firm
+    fact Rule 4.7 imposes, so a firm without IRB permission receives it too —
+    a known gap in the CIU path, filed separately.
 
 ---
 
@@ -455,12 +516,12 @@ When neither look-through nor mandate-based is available:
 
 The approach is determined by the `ciu_approach` input column:
 
-| Value | Approach | Transitional Floor |
-|-------|----------|-------------------|
-| `look_through` | Look-through (Art. 132a) | Excluded |
-| `mandate_based` | Mandate-based (Art. 132b) | Excluded |
-| `fallback` | Fallback (Art. 132(2)) | Applied |
-| null / unset | Defaults to fallback | Applied |
+| Value | Approach | Rules 4.2 / 4.3 transitional |
+|-------|----------|------------------------------|
+| `look_through` | Look-through (Art. 132a) | Not applied (Arts. 132–132C, not Art. 133) |
+| `mandate_based` | Mandate-based (Art. 132b) | Not applied |
+| `fallback` | Fallback (Art. 132(2)) | Not applied — stays 1,250% |
+| null / unset | Defaults to fallback | Not applied — stays 1,250% |
 
 ---
 
@@ -673,17 +734,17 @@ higher-risk definition receives standard 250% (Art. 133(3)).
 | B31-L10 | CIU mandate-based with third-party calc | Mandate RW × 1.2 |
 | B31-L11 | CIU fallback (listed) | 1,250% |
 | B31-L12 | CIU fallback (unlisted) | 1,250% |
-| B31-L13 | 2027 transitional: standard equity | max(250%, 160%) = 250% |
-| B31-L14 | 2027 transitional: higher-risk equity | max(400%, 220%) = 400% |
-| B31-L15 | 2027 transitional: standard below floor | Floor binds at 160% |
-| B31-L16 | Central bank excluded from transitional | 0% (no floor) |
-| B31-L17 | Government-supported subject to transitional | 250% (exceeds all floors) |
-| B31-L18 | CIU look-through excluded from transitional | Look-through RW (no floor) |
+| B31-L13 | 2027 transitional, firm without IRB permission: standard equity | 160% (Rule 4.2(1)) |
+| B31-L14 | 2027 transitional, firm without IRB permission: higher-risk equity | 220% (Rule 4.3(1)) |
+| B31-L15 | 2027 transitional, firm with IRB permission | 250% (Rule 4.1 excludes; Rules 4.5–4.6 not implemented, `CFG003`) |
+| B31-L16 | Central bank excluded from transitional | 0% |
+| B31-L17 | Government-supported subject to transitional | 160% in 2027, 220% in 2029 (Rule 4.2) |
+| B31-L18 | CIU look-through excluded from transitional | Look-through RW |
 | B31-L19 | PE diversified (higher risk — business < 5yr) | 400% |
 | B31-L20 | Other equity (catch-all) | 250% |
 | B31-L21 | Leveraged fund look-through | RW grossed up by leverage |
 | B31-L22 | Listed equity (standard) | 250% |
-| B31-L23 | 2028 transitional: standard equity floor | max(assigned, 190%) |
+| B31-L23 | 2028 transitional, firm without IRB permission: standard equity | 190% (Rule 4.2(2)) |
 
 ## Acceptance Tests
 

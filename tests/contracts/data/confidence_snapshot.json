@@ -5797,7 +5797,10 @@
     {
       "article": "4",
       "code_functions": [
+        "rwa_calc.engine.equity.calculator::EquityCalculator._apply_standardised_equity_transitional",
         "rwa_calc.engine.equity.calculator::EquityCalculator._equity_holding_higher_of_rw",
+        "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end",
+        "rwa_calc.engine.equity.calculator::_standardised_transitional_scope_expr",
         "rwa_calc.reporting.corep.c34::generate_c34_04",
         "rwa_calc.reporting.pillar3.ccr::generate_ccr2",
         "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_ccr2"
@@ -7116,13 +7119,15 @@
       "article": "133",
       "code_functions": [
         "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa",
+        "rwa_calc.engine.equity.calculator::_b31_higher_risk_expr",
         "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
       "layer_count": 5,
       "oracle_cases": [
-        "ORC-080"
+        "ORC-080",
+        "ORC-284"
       ],
       "pack_entries": [
         "b31_subordinated_debt_rw@b31",

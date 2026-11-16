@@ -293,6 +293,41 @@ untouched, preserving the immutability contract.
     `rwa_calc.rulebook.resolve.resolve(regime_id, reporting_date)`. To vary one
     of these values, author or override a pack entry — not a config field.
 
+### `EquityTransitionalConfig`
+
+The equity transitional of PS1/26 Credit Risk: General Provisions rules 4.1–4.10,
+set to `EquityTransitionalConfig.basel_3_1()` by `CalculationConfig.basel_3_1()`.
+The weights themselves are rulepack Schedules (`equity_transitional_std_rw`,
+`equity_transitional_hr_rw`); the config carries the firm's facts and election.
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `enabled` | `False` (`True` from `basel_3_1()`) | Mirrors the `equity_transitional` pack Feature |
+| `schedule` | `{}` | Mirror of the pack schedule, for `get_transitional_rw` |
+| `opt_out` | `False` | The rule 4.9 election (notified under rule 4.10). Only a firm that had IRB permission on 31 Dec 2026 can make it; set on any other firm it is ignored for direct equity and warned (`CFG003`) |
+| `irb_permission_at_2026_year_end` | `None` | Rule 4.1's firm fact. `None` derives it from the run's permissions (any F-IRB / A-IRB permission); set it when they differ from 31 Dec 2026's |
+
+A firm **without** IRB permission on 31 December 2026 is assigned 160% / 190% /
+220% (higher risk 220% / 280% / 340%) for direct equity in 2027 / 2028 / 2029,
+in place of the Art. 133(3) / (4) 250% / 400%. A firm **with** it keeps the
+Art. 133 weights (rules 4.5–4.6 are not implemented) and, unless `opt_out` is
+set, the run carries a `CFG003` warning. For a Standardised shadow run of an IRB
+firm:
+
+```python
+from dataclasses import replace
+from datetime import date
+from rwa_calc.contracts.config import CalculationConfig
+
+config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+config = replace(
+    config,
+    equity_transitional=replace(
+        config.equity_transitional, irb_permission_at_2026_year_end=True
+    ),
+)
+```
+
 ### `OutputFloorConfig`
 
 Output floor configuration for Basel 3.1. The output floor (CRE99.1-8, PS1/26 Ch.12)

@@ -296,6 +296,11 @@
     "CRR Art. 155(3)",
     "CRR Art. 165"
   ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator._apply_standardised_equity_transitional": [
+    "PS1/26, paragraph 4.1",
+    "PS1/26, paragraph 4.2",
+    "PS1/26, paragraph 4.3"
+  ],
   "rwa_calc.engine.equity.calculator::EquityCalculator._determine_approach": [
     "CRR Art. 155(3)"
   ],
@@ -317,8 +322,18 @@
   "rwa_calc.engine.equity.calculator::_append_ciu_branches": [
     "PS1/26, paragraph 132"
   ],
+  "rwa_calc.engine.equity.calculator::_b31_higher_risk_expr": [
+    "PS1/26, paragraph 133"
+  ],
   "rwa_calc.engine.equity.calculator::_ciu_computed_rw_expr": [
     "PS1/26, paragraph 132"
+  ],
+  "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end": [
+    "PS1/26, paragraph 4.1"
+  ],
+  "rwa_calc.engine.equity.calculator::_standardised_transitional_scope_expr": [
+    "PS1/26, paragraph 4.2",
+    "PS1/26, paragraph 4.3"
   ],
   "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr": [
     "CRR Art. 114",

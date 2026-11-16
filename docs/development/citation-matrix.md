@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-14.
+Last generated: 2026-11-16.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -375,14 +375,14 @@ Last generated: 2026-11-14.
 
 ### CRR Art. 133 — Equity exposures
 
-??? quote "`calculate_branch` — src/rwa_calc/engine/equity/calculator.py:218"
+??? quote "`calculate_branch` — src/rwa_calc/engine/equity/calculator.py:244"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:218:250"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:244:276"
     ```
 
-??? quote "`get_equity_result_bundle` — src/rwa_calc/engine/equity/calculator.py:252"
+??? quote "`get_equity_result_bundle` — src/rwa_calc/engine/equity/calculator.py:278"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:252:317"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:278:345"
     ```
 
 
@@ -702,34 +702,34 @@ Last generated: 2026-11-14.
 
 ### CRR Art. 155 — Risk-weighted exposure amounts for equity exposures
 
-??? quote "`get_equity_result_bundle` — src/rwa_calc/engine/equity/calculator.py:253"
+??? quote "`get_equity_result_bundle` — src/rwa_calc/engine/equity/calculator.py:279"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:252:317"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:278:345"
     ```
 
-??? quote "`_determine_approach` — src/rwa_calc/engine/equity/calculator.py:319"
+??? quote "`_determine_approach` — src/rwa_calc/engine/equity/calculator.py:347"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:319:366"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:347:388"
     ```
 
-??? quote "`_equity_holding_higher_of_rw` — src/rwa_calc/engine/equity/calculator.py:537"
+??? quote "`_equity_holding_higher_of_rw` — src/rwa_calc/engine/equity/calculator.py:562"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:537:576"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:562:601"
     ```
 
-??? quote "`_apply_equity_weights_irb_simple` — src/rwa_calc/engine/equity/calculator.py:739"
+??? quote "`_apply_equity_weights_irb_simple` — src/rwa_calc/engine/equity/calculator.py:712"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:739:816"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:712:789"
     ```
 
-??? quote "`_net_short_positions` — src/rwa_calc/engine/equity/calculator.py:818"
+??? quote "`_net_short_positions` — src/rwa_calc/engine/equity/calculator.py:791"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:818:884"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:791:857"
     ```
 
-??? quote "`_apply_equity_weights_pd_lgd` — src/rwa_calc/engine/equity/calculator.py:886"
+??? quote "`_apply_equity_weights_pd_lgd` — src/rwa_calc/engine/equity/calculator.py:859"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:886:1011"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:859:984"
     ```
 
 
@@ -840,9 +840,9 @@ Last generated: 2026-11-14.
 
 ### CRR Art. 165 — Equity exposures subject to the PD/LGD method
 
-??? quote "`_apply_equity_weights_pd_lgd` — src/rwa_calc/engine/equity/calculator.py:887"
+??? quote "`_apply_equity_weights_pd_lgd` — src/rwa_calc/engine/equity/calculator.py:860"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:886:1011"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:859:984"
     ```
 
 
@@ -1400,19 +1400,58 @@ Last generated: 2026-11-14.
 
 ## PS1/26 (PRA Policy Statement)
 
+### PS1/26, paragraph 4.1 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_apply_standardised_equity_transitional` — src/rwa_calc/engine/equity/calculator.py:986"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:986:1088"
+    ```
+
+??? quote "`_had_irb_permission_at_2026_year_end` — src/rwa_calc/engine/equity/calculator.py:1196"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:1196:1209"
+    ```
+
+
+### PS1/26, paragraph 4.2 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_apply_standardised_equity_transitional` — src/rwa_calc/engine/equity/calculator.py:987"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:986:1088"
+    ```
+
+??? quote "`_standardised_transitional_scope_expr` — src/rwa_calc/engine/equity/calculator.py:1289"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:1289:1306"
+    ```
+
+
+### PS1/26, paragraph 4.3 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_apply_standardised_equity_transitional` — src/rwa_calc/engine/equity/calculator.py:988"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:986:1088"
+    ```
+
+??? quote "`_standardised_transitional_scope_expr` — src/rwa_calc/engine/equity/calculator.py:1290"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:1289:1306"
+    ```
+
+
 ### PS1/26, paragraph 4.8 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_equity_holding_higher_of_rw` — src/rwa_calc/engine/equity/calculator.py:538"
+??? quote "`_equity_holding_higher_of_rw` — src/rwa_calc/engine/equity/calculator.py:563"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:537:576"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:562:601"
     ```
 
 
 ### PS1/26, paragraph 4.9 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_equity_holding_higher_of_rw` — src/rwa_calc/engine/equity/calculator.py:539"
+??? quote "`_equity_holding_higher_of_rw` — src/rwa_calc/engine/equity/calculator.py:564"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:537:576"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:562:601"
     ```
 
 
@@ -1623,22 +1662,27 @@ Last generated: 2026-11-14.
 
 ### PS1/26, paragraph 132 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_ciu_computed_rw_expr` — src/rwa_calc/engine/equity/calculator.py:133"
+??? quote "`_ciu_computed_rw_expr` — src/rwa_calc/engine/equity/calculator.py:159"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:133:171"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:159:197"
     ```
 
-??? quote "`_append_ciu_branches` — src/rwa_calc/engine/equity/calculator.py:174"
+??? quote "`_append_ciu_branches` — src/rwa_calc/engine/equity/calculator.py:200"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:174:194"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:200:220"
     ```
 
 
 ### PS1/26, paragraph 133 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_b31_equity_weights_sa` — src/rwa_calc/engine/equity/calculator.py:635"
+??? quote "`_apply_b31_equity_weights_sa` — src/rwa_calc/engine/equity/calculator.py:660"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:635:737"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:660:710"
+    ```
+
+??? quote "`_b31_higher_risk_expr` — src/rwa_calc/engine/equity/calculator.py:1229"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:1229:1286"
     ```
 
 ??? quote "`_is_b31_subordinated_debt` — src/rwa_calc/engine/sa/risk_weights.py:1583"

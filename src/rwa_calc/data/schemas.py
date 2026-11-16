@@ -3527,8 +3527,13 @@ CALCULATION_OUTPUT_SCHEMA = {
     "sl_risk_weight": pl.Float64,  # Slotting RW
     "equity_type": pl.String,  # Equity category if applicable
     "equity_risk_weight": pl.Float64,  # Equity RW
-    "equity_transitional_approach": pl.String,  # "sa_transitional" or "irb_transitional" (B3.1)
-    "equity_higher_risk": pl.Boolean,  # True if 400%+ RW (speculative, venture capital)
+    # B3.1 equity transitional carriers (PS1/26 General Provisions rules 4.1-4.3).
+    # Non-null ONLY on a leg whose weight the rules set; null otherwise (sub
+    # debt, CIUs, central bank, Art. 133(6), IRB-permission firms, dates outside
+    # 2027-2029); absent under CRR. Only "sa_transitional" is produced today.
+    "equity_transitional_approach": pl.String,  # "sa_transitional" / "irb_transitional"
+    "equity_higher_risk": pl.Boolean,  # Art. 133(4) higher risk equity (the 400% rung)
+    "risk_weight_pre_equity_transitional": pl.Float64,  # Art. 133(3)/(4) weight replaced
     # -------------------------------------------------------------------------
     # REAL ESTATE SPECIFIC
     # -------------------------------------------------------------------------

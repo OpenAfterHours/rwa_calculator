@@ -753,13 +753,20 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "4.1", "PRA equity transitional regime (Rules 4.1-4.10)"),
     ),
-    # PRA Rules 4.2/4.3 transitional SA equity risk weights (2027-2030), the VALUES
-    # gated by the equity_transitional Feature above. Two Schedules — standard and
-    # higher-risk — mirror EquityTransitionalConfig.basel_3_1()'s
-    # {date: (standard_rw, higher_risk_rw)} schedule field-for-field. before_first=0.0
-    # marks "before the first step": the engine accessor maps that to None (no
-    # transition) so the floor is skipped, byte-identical with get_transitional_rw.
-    # Consumed in engine/equity/calculator.py::_equity_transitional_rw.
+    # PS1/26 Credit Risk: General Provisions rules 4.2/4.3 — the Standardised
+    # Transitional Approach weights a firm WITHOUT IRB permission on 31 December
+    # 2026 is ASSIGNED (rule 4.1) in place of the Art. 133(3)/(4) 250%/400%, gated
+    # by the equity_transitional Feature above. They replace the end-state weights;
+    # they are not a floor under them. Two Schedules — standard and higher-risk —
+    # mirror EquityTransitionalConfig.basel_3_1()'s {date: (standard_rw,
+    # higher_risk_rw)} schedule field-for-field. The FINAL step (1 January 2030) is
+    # the Art. 133 end state, not a transitional weight: the transitional period is
+    # first step <= date < last step (rule 4.2: "beginning with 1 January 2027 and
+    # ending with 31 December 2029"; Annex II: no values in OF 07.00 rows 0371-0374
+    # from 1 January 2030). before_first=0.0 marks "before the first step"; the
+    # engine never reads it as a weight. Consumed in engine/equity/calculator.py
+    # (_standardised_transitional_weights for direct equity; _equity_transitional_rw
+    # for the rule 4.8 CIU look-through higher-of).
     "equity_transitional_std_rw": Schedule(
         name="equity_transitional_std_rw",
         steps=(
@@ -804,9 +811,12 @@ ENTRIES: dict[str, RuleEntry] = {
     # Chapter 2 would assign a direct exposure to the collateral instrument, so
     # under Basel 3.1 it follows PS1/26 Art. 133's 250% listed-equity weight
     # rather than CRR Art. 133(2)'s 100%. Overrides the CRR scalar of the same
-    # name. The PRA Rules 4.2/4.3 transitional does NOT apply here: that is a
-    # firm-specific grandfathering for firms coming off IRB equity permission,
-    # not a Chapter 2 weight. Tied to ``equity_sa_risk_weights`` by
+    # name. Whether the PS1/26 General Provisions rules 4.2/4.3 weights (which a
+    # firm without IRB permission is assigned for direct equity in 2027-2029,
+    # rule 4.1) also reach this Art. 222(3) "direct exposure" weight is an open
+    # plan item; the earlier note here, that 4.2/4.3 are a grandfathering for
+    # firms coming off IRB permission, inverted rule 4.1. Tied to
+    # ``equity_sa_risk_weights`` by
     # tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py.
     "fcsm_equity_collateral_rw": ScalarParam(
         name="fcsm_equity_collateral_rw",

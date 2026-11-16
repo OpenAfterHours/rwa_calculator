@@ -144,7 +144,7 @@ class ResolvedRulepack:
 
         The entry-returning sibling of :meth:`schedule_value` (which resolves at
         ``self.reporting_date``), for callers that need the step structure — e.g.
-        the equity transitional floor, which distinguishes "before the first step"
+        the equity transitional window, which distinguishes "before the first step"
         (no transition → None) from "resolved to the before-first value".
         """
         return self._typed(name, Schedule)

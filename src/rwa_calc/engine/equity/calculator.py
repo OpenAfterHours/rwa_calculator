@@ -12,7 +12,11 @@ Pipeline position:
 Key responsibilities:
 - Determine equity risk weights based on equity type and framework
 - Handle diversified portfolio treatment for private equity
-- Apply transitional floor (PRA Rules 4.1-4.10) during phase-in
+- Assign the Standardised Transitional Approach weights (PS1/26 Credit Risk:
+  General Provisions rules 4.1-4.3) to a firm without IRB permission on
+  31 December 2026, for reporting dates in 2027-2029, and mark those legs with
+  the carriers OF 07.00 needs (``equity_transitional_approach``,
+  ``equity_higher_risk``, ``risk_weight_pre_equity_transitional``)
 - Calculate RWA = EAD x RW
 - Tag the CRR method actually applied (``equity_method``: ``sa`` / ``irb_simple``
   / ``pd_lgd``) so the reporting ledger can disclose Art. 155(2) simple-RW
@@ -23,13 +27,18 @@ Basel 3.1 key changes from CRR:
 - All standard equity (incl. government-supported): 100% -> 250% (Art. 133(3))
 - CIU fallback: 1,250% (Art. 132(2), unchanged from CRR)
 - IRB equity removed (Art. 147A) — all equity uses SA
-- Transitional floor phases from 160%/220% (2027) to 250%/400% (2030)
+- A firm without IRB permission on 31 December 2026 is ASSIGNED 160% / 190% /
+  220% (higher risk 220% / 280% / 340%) in 2027 / 2028 / 2029 in place of the
+  Art. 133(3) / (4) 250% / 400% (rules 4.1-4.3); the end state applies from
+  1 January 2030. A firm that had IRB permission keeps the Art. 133 weights:
+  its rules 4.5 / 4.6 (the higher of the legacy Art. 155 weight and the
+  4.2 / 4.3 weight) are not implemented, and the run is warned (CFG003)
 
 References:
 - CRR Art. 133: Equity exposures under SA
 - CRR Art. 155: Simple risk weight approach under IRB
 - PRA PS1/26 Art. 133(3)-(6): Basel 3.1 SA equity weights
-- PRA Rules 4.1-4.10: Equity transitional schedule
+- PRA PS1/26 Credit Risk: General Provisions rules 4.1-4.10: equity transitional
 """
 
 from __future__ import annotations
@@ -42,9 +51,16 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
-from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.contracts.errors import ERROR_EQUITY_TRANSITIONAL_CONFIG, CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType, ExposureClass
+from rwa_calc.domain.enums import (
+    ApproachType,
+    EquityApproach,
+    EquityType,
+    ErrorCategory,
+    ErrorSeverity,
+    ExposureClass,
+)
 from rwa_calc.engine.irb.formulas import (
     _capital_k_expr_from_params,
     _correlation_expr_from_pd,
@@ -55,6 +71,7 @@ from rwa_calc.rulebook.compile import formula_float_map, lookup_float_map, scala
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from decimal import Decimal
 
     from polars.expr.whenthen import ChainedThen, Then
@@ -117,7 +134,16 @@ _EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     # CRR Art. 155(3): True -> firm has Art. 178 default-definition data so the
     # 1.5x PD/LGD scaling does NOT apply; False/null -> 1.5x scaling applies.
     "has_default_definition_info": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PS1/26 Art. 133(6)(c): a holding weighted 250% under Own Funds Art. 48(4)
+    # (a significant investment) is "within scope of paragraph 6", which the
+    # transitional rules 4.2 / 4.3 exclude by name. Read only by the
+    # transitional; absent or null means not such a holding.
+    "is_significant_investment": ColumnSpec(pl.Boolean, default=False, required=False),
 }
+
+# The OF 07.00 label of a leg weighted under the Standardised Transitional
+# Approach for equities (Annex II rows 0371 / 0372, rules 4.1-4.3).
+_SA_TRANSITIONAL_LABEL = "sa_transitional"
 
 # Sentinel for null CQS in join operations (data processing convention)
 _NULL_CQS_SENTINEL = -1
@@ -236,7 +262,7 @@ class EquityCalculator:
         exposures = self._prepare_columns(exposures, config)
 
         # Art. 155(3) PD/LGD computes RWEA inside the branch (K formula) and
-        # bypasses both the IRB Simple transitional floor and _calculate_rwa.
+        # bypasses both the transitional and _calculate_rwa (CRR only).
         if approach == EquityApproach.PD_LGD:
             return self._apply_equity_weights_pd_lgd(exposures, config)
 
@@ -245,7 +271,7 @@ class EquityCalculator:
         else:
             exposures = self._apply_equity_weights_sa(exposures, config)
 
-        exposures = self._apply_transitional_floor(exposures, config)
+        exposures = self._apply_standardised_equity_transitional(exposures, config)
 
         return self._calculate_rwa(exposures)
 
@@ -295,7 +321,7 @@ class EquityCalculator:
         exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config, pack=pack)
 
         # Art. 155(3) PD/LGD computes RWEA inside the branch and bypasses both
-        # the IRB Simple transitional floor and _calculate_rwa.
+        # the transitional and _calculate_rwa (CRR only).
         if approach == EquityApproach.PD_LGD:
             exposures = self._apply_equity_weights_pd_lgd(exposures, config, pack=pack)
         else:
@@ -304,7 +330,9 @@ class EquityCalculator:
             else:
                 exposures = self._apply_equity_weights_sa(exposures, config, pack=pack)
 
-            exposures = self._apply_transitional_floor(exposures, config, pack=pack)
+            exposures = self._apply_standardised_equity_transitional(
+                exposures, config, pack=pack, errors=errors
+            )
             exposures = self._calculate_rwa(exposures)
 
         audit = self._build_audit(exposures, approach)
@@ -349,21 +377,15 @@ class EquityCalculator:
         if not resolved_pack.feature("equity_irb_approaches_available"):
             return EquityApproach.SA
 
-        # CRR: Check if firm has any IRB permissions beyond SA
-        # If permissions dict is empty, it's SA-only
-        # irb_permissions is derived non-None in CalculationConfig.__post_init__.
-        if not config.irb_permissions.permissions:  # ty: ignore[unresolved-attribute]
+        # CRR: a firm with FIRB or AIRB permission for any exposure class takes
+        # an Art. 155 approach; an SA-only firm takes Art. 133.
+        if not _has_irb_model_permission(config):
             return EquityApproach.SA
 
-        # Check if any exposure class has FIRB or AIRB permission
-        for _exposure_class, approaches in config.irb_permissions.permissions.items():  # ty: ignore[unresolved-attribute]
-            if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
-                # Art. 155(3): PD/LGD approach when the firm has elected it
-                if config.equity_pd_lgd:
-                    return EquityApproach.PD_LGD
-                return EquityApproach.IRB_SIMPLE
-
-        return EquityApproach.SA
+        # Art. 155(3): PD/LGD approach when the firm has elected it
+        if config.equity_pd_lgd:
+            return EquityApproach.PD_LGD
+        return EquityApproach.IRB_SIMPLE
 
     def _prepare_columns(
         self,
@@ -446,9 +468,12 @@ class EquityCalculator:
         # join misses and risk_weight is null. When the Basel 3.1 equity
         # transitional regime is active for the reporting date, such holdings
         # take max(legacy Art. 155(2) simple RW, Rule 4.2/4.3 transitional SA
-        # RW) instead of the _DEFAULT_HOLDING_RW fallback (the transitional
-        # regime only applies to firms that held IRB equity permission, so
-        # equity_transitional.enabled is the correct proxy here).
+        # RW) instead of the _DEFAULT_HOLDING_RW fallback. Rule 4.7 confines
+        # 4.8 to a firm that HAD IRB permission on 31 December 2026; this path
+        # does not yet read that firm fact (direct equity does, in
+        # _apply_standardised_equity_transitional), so a firm without IRB
+        # permission also receives the higher-of here — a known gap, left
+        # unchanged by the direct-equity fix and filed as its own item.
         equity_holding_fallback_rw = self._equity_holding_higher_of_rw(config, pack=resolved_pack)
         if equity_holding_fallback_rw is not None:
             holding_rw_expr = (
@@ -547,15 +572,15 @@ class EquityCalculator:
         active for the reporting date, else ``None`` (no override — holdings keep
         the _DEFAULT_HOLDING_RW fallback).
 
-        The transitional regime only applies to firms that held IRB equity
-        permission, so ``equity_transitional.enabled`` (plus a transitional RW
-        existing for the reporting date) is the gate.
+        The gate is the ``equity_transitional`` Feature plus a transitional RW
+        existing for the reporting date. Rule 4.7 confines rule 4.8 to a firm
+        that had IRB permission on 31 December 2026; this helper does not read
+        that firm fact (see the note in ``_resolve_look_through_rw``).
 
         Per Rule 4.9-4.10, a firm that has irrevocably opted out of the
         transitional regime (``equity_transitional.opt_out``) suppresses the
         higher-of: ``None`` is returned so the holding falls back to the
-        ``_DEFAULT_HOLDING_RW`` standard treatment. The opt-out applies jointly
-        with the direct-equity transitional floor (Rule 4.9).
+        ``_DEFAULT_HOLDING_RW`` standard treatment.
 
         References:
         - CRR Art. 155(2): IRB simple method equity RW ("other" = 370%).
@@ -658,60 +683,13 @@ class EquityCalculator:
         Note: B31 Art. 133(6) is an exclusion clause (own funds deductions,
         Art. 89(3), Art. 48(4)) — NOT a risk weight assignment. CRR's 100%
         legislative equity (Art. 133(3)(c)) has no equivalent in B31.
+
+        Rows 3 and 4 are one predicate, ``_b31_higher_risk_expr``, which the
+        rules 4.2 / 4.3 transitional reads too: the leg the transitional
+        treats as higher risk is exactly the leg this chain put on the
+        Art. 133(4) rung.
         """
-        # Art. 133(4) / Glossary p.5 higher-risk test — unlisted equity whose
-        # underlying business has existed < 5 years. Two routings combine:
-        #
-        #   (1) PE/VC legacy routing: unlisted PE/VC with business age < 5y OR
-        #       unknown -> 400%. Null/missing age is treated conservatively as
-        #       <5y (a firm cannot claim the long-established carve-out without
-        #       evidence of business age >= 5), preserving the prior behaviour
-        #       for callers that supply no business_age_years.
-        #
-        #   (2) Generalised routing: ANY other equity that is NOT
-        #       central-bank (0%), subordinated-debt (150%, Art. 133(5)), CIU
-        #       (Art. 132 look-through/mandate/fallback) or government-supported
-        #       (standard 250%, Art. 133(3)) is higher-risk only when it has an
-        #       *evidenced* young business age (non-null AND < 5.0). Absent age
-        #       data, such equity stays at the standard 250% — listed/unlisted/
-        #       other without business-age evidence is not uplifted.
-        schema_names = exposures.collect_schema().names()
-        is_pe_or_pe_div = (
-            pl.col("equity_type")
-            .str.to_lowercase()
-            .is_in([EquityType.PRIVATE_EQUITY, EquityType.PRIVATE_EQUITY_DIVERSIFIED])
-        )
-        is_dedicated_treatment = (
-            pl.col("equity_type")
-            .str.to_lowercase()
-            .is_in(
-                [
-                    EquityType.CENTRAL_BANK,
-                    EquityType.SUBORDINATED_DEBT,
-                    EquityType.CIU,
-                    EquityType.GOVERNMENT_SUPPORTED,
-                ]
-            )
-        )
-        is_unlisted = (
-            ~pl.col("is_exchange_traded").fill_null(False)
-            if "is_exchange_traded" in schema_names
-            else pl.lit(True)
-        )
-        has_age = "business_age_years" in schema_names
-        is_young_or_unknown = (
-            pl.col("business_age_years").is_null() | (pl.col("business_age_years") < 5.0)
-            if has_age
-            else pl.lit(True)
-        )
-        is_young_evidenced = (
-            pl.col("business_age_years").is_not_null() & (pl.col("business_age_years") < 5.0)
-            if has_age
-            else pl.lit(False)
-        )
-        is_higher_risk = is_unlisted & (
-            (is_pe_or_pe_div & is_young_or_unknown) | (~is_dedicated_treatment & is_young_evidenced)
-        )
+        is_higher_risk = _b31_higher_risk_expr(exposures.collect_schema().names())
 
         return exposures.with_columns(
             [
@@ -720,15 +698,10 @@ class EquityCalculator:
                 # Art. 133(5): subordinated debt / non-equity own funds = 150%
                 .when(pl.col("equity_type").str.to_lowercase() == "subordinated_debt")
                 .then(pl.lit(_B31_SA_RW[EquityType.SUBORDINATED_DEBT]))
-                .when(pl.col("is_speculative") == True)  # noqa: E712
-                .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
-                .when(pl.col("equity_type").str.to_lowercase() == "speculative")
-                .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
-                # Art. 133(4) + Glossary p.5: unlisted equity with business age
-                # < 5y (or unknown) is higher-risk (400%); long-established or
-                # exchange-traded equity falls through to standard 250%.
+                # Art. 133(4): higher risk equity = 400% (speculative flag or
+                # type, or the Glossary unlisted-and-under-five-years test).
                 .when(is_higher_risk)
-                .then(pl.lit(_B31_SA_RW[EquityType.PRIVATE_EQUITY]))
+                .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .pipe(_append_ciu_branches)
                 .otherwise(pl.lit(_B31_SA_RW[EquityType.OTHER]))
@@ -914,8 +887,8 @@ class EquityCalculator:
         institution lacks Art. 178 default-definition data
         (has_default_definition_info == False).
 
-        The IRB Simple transitional floor (PRA Rules 4.1-4.10) does NOT apply —
-        it is Simple-approach machinery.
+        The PS1/26 rules 4.1-4.3 transitional does NOT apply: PD/LGD is a CRR
+        approach, and the transitional modifies Basel 3.1 Art. 133.
         """
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
@@ -1010,109 +983,108 @@ class EquityCalculator:
             pl.lit(EquityApproach.PD_LGD.value).alias("equity_method"),
         )
 
-    def _apply_transitional_floor(
+    @cites("PS1/26, paragraph 4.1")
+    @cites("PS1/26, paragraph 4.2")
+    @cites("PS1/26, paragraph 4.3")
+    def _apply_standardised_equity_transitional(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
         *,
         pack: ResolvedRulepack | None = None,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
-        Apply equity transitional risk weight floor (PRA Rules 4.1-4.10).
+        Assign the Standardised Transitional Approach weights (PS1/26 rules 4.1-4.3).
 
-        During the transitional period (2027-2029), equity risk weights phase
-        in from CRR levels to full Basel 3.1 levels. The transitional RW acts
-        as a floor: final_rw = max(assigned_rw, transitional_rw).
+        Rule 4.1: "4.2 and 4.3 only apply to an institution that did not have
+        permission to use the Internal Ratings Based Approach under Article 143
+        of CRR on 31 December 2026." Rule 4.2 "modifies paragraph 3 of [...]
+        Article 133 for a transitional period beginning with 1 January 2027 and
+        ending with 31 December 2029, in which equity exposures that are not
+        higher risk equity exposures or within the scope of paragraph 6 [...]
+        shall be assigned the following risk weights": 160% / 190% / 220%.
+        Rule 4.3 does the same for higher risk equity under paragraph 4:
+        220% / 280% / 340% (ps126app1.pdf pp.20-21).
 
-        For firms with prior IRB equity permission (Rules 4.4-4.6), the floor
-        is the higher of the IRB model RW and the transitional SA RW.
+        The weights REPLACE the Art. 133(3) / (4) 250% / 400% ("shall be
+        assigned", the verb Art. 133 itself uses); they are not a floor under
+        them. For such a firm, inside the period, each leg in scope takes the
+        rule 4.3 weight when ``_b31_higher_risk_expr`` — the predicate that put
+        it on the Art. 133(4) rung — holds, else the rule 4.2 weight.
 
-        Per Rules 4.9-4.10, a firm that has irrevocably opted out
-        (``equity_transitional.opt_out``) keeps its end-state assigned RW: the
-        floor comparison is skipped. The opt-out applies jointly with the CIU
-        underlying higher-of suppression (Rule 4.9).
+        In scope: equity exposures weighted under Art. 133(3) / (4). Out of
+        scope, weight untouched: subordinated debt (Art. 133(5), not an equity
+        exposure), CIUs (Arts. 132-132C), the 0% central-bank type, and an
+        Art. 133(6)(c) significant investment (``is_significant_investment``).
+
+        Carriers, for OF 07.00 (Annex II p.95: report "against the risk weights
+        set out in Article 133 [...] disregarding the transitional provisions.
+        However, the RWEA shall still reflect the transitional provisions"):
+        ``equity_transitional_approach`` ("sa_transitional"),
+        ``equity_higher_risk`` and ``risk_weight_pre_equity_transitional`` (the
+        Art. 133 weight) are non-null ONLY on a leg whose weight this method
+        set. Under Basel 3.1 all three are always emitted, as typed nulls when
+        nothing is in scope; under CRR (no ``equity_transitional`` Feature)
+        none is.
+
+        Not applied, weights untouched, carriers null:
+        - outside 1 January 2027 - 31 December 2029 (the schedule's last step
+          is the end state; Annex II: no values in rows 0371-0374 from 2030);
+        - a firm that HAD IRB permission on 31 December 2026 (rule 4.1). Its
+          own rules 4.5 / 4.6 (the higher of the legacy Art. 155 weight and the
+          4.2 / 4.3 weight) are not implemented, so it keeps the Art. 133
+          weights, which is the rule 4.9 election; unless it has made that
+          election (``opt_out``) the run is warned (CFG003).
+
+        ``opt_out`` has no effect for a firm without IRB permission: rule 4.9
+        replaces only "the alternative approaches set out in 4.5, 4.6 and
+        4.8", so there is nothing for it to elect, and setting it is warned.
         """
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
-        eq_config = config.equity_transitional
-        if not resolved_pack.feature("equity_transitional") or eq_config.opt_out:
+        if not resolved_pack.feature("equity_transitional"):
             return exposures
 
-        std_rw = _equity_transitional_rw(resolved_pack, config.reporting_date, is_higher_risk=False)
-        hr_rw = _equity_transitional_rw(resolved_pack, config.reporting_date, is_higher_risk=True)
+        weights = _standardised_transitional_weights(resolved_pack, config.reporting_date)
+        if weights is None:
+            return _with_null_transitional_carriers(exposures)
 
-        if std_rw is None or hr_rw is None:
-            return exposures
+        opt_out = config.equity_transitional.opt_out
+        if _had_irb_permission_at_2026_year_end(config):
+            if errors is not None and not opt_out:
+                errors.append(_irb_firm_transitional_warning())
+            return _with_null_transitional_carriers(exposures)
+        if errors is not None and opt_out:
+            errors.append(_opt_out_without_irb_permission_warning())
 
-        schema = exposures.collect_schema()
-        is_hr_speculative = (
-            pl.col("is_speculative").fill_null(False)
-            if "is_speculative" in schema.names()
-            else pl.lit(False)
+        std_rw, hr_rw = weights
+        in_scope = _standardised_transitional_scope_expr()
+        # A null predicate takes the otherwise arm, exactly as it does in the
+        # Art. 133 weight chain, so a leg is higher risk here iff it got 400%.
+        is_higher_risk = (
+            pl.when(_b31_higher_risk_expr(exposures.collect_schema().names()))
+            .then(pl.lit(value=True))
+            .otherwise(pl.lit(value=False))
         )
-        # PE/VC is higher-risk under Art. 133(4) only when unlisted AND business
-        # age < 5y (or unknown — null treated conservatively per Glossary p.5).
-        # Long-established / exchange-traded PE/VC is standard equity (250%).
-        eq_type_for_hr = pl.col("equity_type").str.to_lowercase()
-        is_pe_or_pe_div_hr = (eq_type_for_hr == "private_equity") | (
-            eq_type_for_hr == "private_equity_diversified"
-        )
-        is_unlisted_hr = (
-            ~pl.col("is_exchange_traded").fill_null(False)
-            if "is_exchange_traded" in schema.names()
-            else pl.lit(True)
-        )
-        is_young_or_unknown_hr = (
-            pl.col("business_age_years").is_null() | (pl.col("business_age_years") < 5.0)
-            if "business_age_years" in schema.names()
-            else pl.lit(True)
-        )
-        is_hr_pe = is_pe_or_pe_div_hr & is_unlisted_hr & is_young_or_unknown_hr
-        is_hr = is_hr_speculative | is_hr_pe
-
-        # PRA Rule 4.2/4.3: transitional does NOT apply to exposures within
-        # scope of Art. 133(6) (own funds deductions) or subordinated debt (150%).
-        # CIU look-through/mandate-based RWs are derived from underlying assets
-        # (Art. 132a/132b), not from Art. 133 equity weights — exclude from floor.
-        # CIU fallback (1,250%) is far above transitional max, so exclusion is moot.
-        # Note: government-supported equity IS subject to transitional floor under
-        # B31 (it's standard 250% equity, Art. 133(3); there is no 100% legislative
-        # carve-out in B31 — CRR Art. 133(3)(c) was removed).
-        eq_type_lower = pl.col("equity_type").str.to_lowercase()
-        is_ciu_non_fallback = (eq_type_lower == "ciu") & (
-            (pl.col("ciu_approach") == "look_through") | (pl.col("ciu_approach") == "mandate_based")
-        )
-        is_excluded = (
-            (eq_type_lower == "central_bank")
-            | (eq_type_lower == "subordinated_debt")
-            | is_ciu_non_fallback
-        )
-
-        transitional_rw = (
-            pl.when(is_excluded)
-            .then(pl.lit(0.0))  # No floor for excluded types
-            .when(is_hr)
-            .then(pl.lit(float(hr_rw)))
-            .otherwise(pl.lit(float(std_rw)))
-        )
-
-        # Determine transitional approach type for COREP reporting (OF 07.00
-        # rows 0371-0374).  CRR firms with prior IRB equity permission use
-        # "irb_transitional"; all others use "sa_transitional".
-        approach_label = (
-            "irb_transitional"
-            if resolved_pack.feature("equity_irb_approaches_available")
-            and any(
-                ApproachType.FIRB in a or ApproachType.AIRB in a
-                for a in config.irb_permissions.permissions.values()  # ty: ignore[unresolved-attribute]
-            )
-            else "sa_transitional"
-        )
-
         return exposures.with_columns(
-            pl.max_horizontal(pl.col("risk_weight"), transitional_rw).alias("risk_weight"),
-            # Annotation columns for COREP OF 07.00 equity transitional rows
-            pl.lit(approach_label).alias("equity_transitional_approach"),
-            is_hr.alias("equity_higher_risk"),
+            pl.when(in_scope)
+            .then(pl.col("risk_weight"))
+            .otherwise(pl.lit(None, dtype=pl.Float64))
+            .alias("risk_weight_pre_equity_transitional"),
+            pl.when(in_scope)
+            .then(pl.lit(_SA_TRANSITIONAL_LABEL))
+            .otherwise(pl.lit(None, dtype=pl.String))
+            .alias("equity_transitional_approach"),
+            pl.when(in_scope)
+            .then(is_higher_risk)
+            .otherwise(pl.lit(None, dtype=pl.Boolean))
+            .alias("equity_higher_risk"),
+            pl.when(in_scope & is_higher_risk)
+            .then(pl.lit(hr_rw))
+            .when(in_scope)
+            .then(pl.lit(std_rw))
+            .otherwise(pl.col("risk_weight"))
+            .alias("risk_weight"),
         )
 
     def _calculate_rwa(
@@ -1209,3 +1181,173 @@ def _equity_transitional_rw(
     if on < sched.steps[0][0]:
         return None
     return sched.resolve(on)
+
+
+def _has_irb_model_permission(config: CalculationConfig) -> bool:
+    """True when the firm holds F-IRB or A-IRB permission for any exposure class."""
+    # irb_permissions is derived non-None in CalculationConfig.__post_init__.
+    permissions = config.irb_permissions.permissions  # ty: ignore[unresolved-attribute]
+    return any(
+        ApproachType.FIRB in approaches or ApproachType.AIRB in approaches
+        for approaches in permissions.values()
+    )
+
+
+@cites("PS1/26, paragraph 4.1")
+def _had_irb_permission_at_2026_year_end(config: CalculationConfig) -> bool:
+    """Rule 4.1's firm fact: IRB permission under Art. 143 of CRR on 31 December 2026.
+
+    ``EquityTransitionalConfig.irb_permission_at_2026_year_end`` states it when
+    the run's permissions do not (a Standardised shadow run of an IRB firm, or
+    a permission granted after that date). Left as None, it is derived from the
+    run: any F-IRB / A-IRB permission — the same test that puts CRR equity on
+    Art. 155 in ``EquityCalculator._determine_approach``.
+    """
+    stated = config.equity_transitional.irb_permission_at_2026_year_end
+    if stated is not None:
+        return stated
+    return _has_irb_model_permission(config)
+
+
+def _standardised_transitional_weights(
+    pack: ResolvedRulepack, on: date
+) -> tuple[float, float] | None:
+    """Rules 4.2 / 4.3 (standard, higher risk) weights for ``on``, or None outside the period.
+
+    The period is the ``equity_transitional_std_rw`` Schedule's first step
+    (1 January 2027) up to, not including, its last step (1 January 2030), which
+    is the Art. 133(3) / (4) end state rather than a transitional weight.
+    """
+    standard = pack.schedule("equity_transitional_std_rw")
+    first_day, end_state_day = standard.steps[0][0], standard.steps[-1][0]
+    if not first_day <= on < end_state_day:
+        return None
+    higher_risk = pack.schedule("equity_transitional_hr_rw")
+    return float(standard.resolve(on)), float(higher_risk.resolve(on))
+
+
+@cites("PS1/26, paragraph 133")
+def _b31_higher_risk_expr(schema_names: Collection[str]) -> pl.Expr:
+    """Art. 133(4): the one predicate that puts a Basel 3.1 equity leg on the 400% rung.
+
+    True for the ``is_speculative`` flag, the ``speculative`` type, and the
+    Glossary "higher risk equity exposure" test (p.5: "not listed on a
+    recognised exchange; and [...] whose business has existed for a period of
+    less than five years"), routed two ways:
+
+    - unlisted private equity (diversified or not) whose business age is under
+      five years OR unknown — a firm cannot claim the long-established
+      carve-out without evidence of age;
+    - any other unlisted equity that is not central-bank, subordinated debt, a
+      CIU or government-supported, when its business age is evidenced (non-null)
+      and under five years.
+
+    Read by the Art. 133 weight chain and by the rules 4.2 / 4.3 transitional,
+    so the transitional treats as higher risk exactly the legs that were
+    weighted as such. Callers outside the input contract may lack
+    ``is_exchange_traded`` / ``business_age_years``; absent means unlisted /
+    unknown age.
+    """
+    eq_type = pl.col("equity_type").str.to_lowercase()
+    is_pe_or_pe_div = eq_type.is_in(
+        [EquityType.PRIVATE_EQUITY, EquityType.PRIVATE_EQUITY_DIVERSIFIED]
+    )
+    is_dedicated_treatment = eq_type.is_in(
+        [
+            EquityType.CENTRAL_BANK,
+            EquityType.SUBORDINATED_DEBT,
+            EquityType.CIU,
+            EquityType.GOVERNMENT_SUPPORTED,
+        ]
+    )
+    is_unlisted = (
+        ~pl.col("is_exchange_traded").fill_null(False)
+        if "is_exchange_traded" in schema_names
+        else pl.lit(True)
+    )
+    has_age = "business_age_years" in schema_names
+    is_young_or_unknown = (
+        pl.col("business_age_years").is_null() | (pl.col("business_age_years") < 5.0)
+        if has_age
+        else pl.lit(True)
+    )
+    is_young_evidenced = (
+        pl.col("business_age_years").is_not_null() & (pl.col("business_age_years") < 5.0)
+        if has_age
+        else pl.lit(False)
+    )
+    is_glossary_higher_risk = is_unlisted & (
+        (is_pe_or_pe_div & is_young_or_unknown) | (~is_dedicated_treatment & is_young_evidenced)
+    )
+    return (
+        pl.col("is_speculative").eq_missing(True)
+        | eq_type.eq_missing(EquityType.SPECULATIVE.value)
+        | is_glossary_higher_risk
+    )
+
+
+@cites("PS1/26, paragraph 4.2")
+@cites("PS1/26, paragraph 4.3")
+def _standardised_transitional_scope_expr() -> pl.Expr:
+    """Legs rules 4.2 / 4.3 reach: equity exposures weighted under Art. 133(3) / (4).
+
+    Excluded: subordinated debt (Art. 133(5) — "not classified as an equity
+    exposure"), CIUs (weighted under Arts. 132-132C), the central-bank type
+    (not an Art. 133(3) weight), and an Art. 133(6)(c) significant investment,
+    which both rules exclude by name ("within the scope of paragraph 6"). A
+    null type or flag excludes nothing: such a leg took the 250% / 400% weight.
+    """
+    eq_type = pl.col("equity_type").str.to_lowercase()
+    is_not_article_133_3_or_4 = (
+        eq_type.eq_missing(EquityType.CENTRAL_BANK.value)
+        | eq_type.eq_missing(EquityType.SUBORDINATED_DEBT.value)
+        | eq_type.eq_missing(EquityType.CIU.value)
+    )
+    return ~is_not_article_133_3_or_4 & pl.col("is_significant_investment").ne_missing(True)
+
+
+def _with_null_transitional_carriers(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Emit the three transitional carriers as typed nulls (nothing weighted under 4.2 / 4.3)."""
+    return exposures.with_columns(
+        pl.lit(None, dtype=pl.String).alias("equity_transitional_approach"),
+        pl.lit(None, dtype=pl.Boolean).alias("equity_higher_risk"),
+        pl.lit(None, dtype=pl.Float64).alias("risk_weight_pre_equity_transitional"),
+    )
+
+
+def _irb_firm_transitional_warning() -> CalculationError:
+    """CFG003: a firm with IRB permission at end-2026 receives the rule 4.9 treatment."""
+    return CalculationError(
+        code=ERROR_EQUITY_TRANSITIONAL_CONFIG,
+        message=(
+            "Equity transitional: the firm had IRB permission on 31 December 2026, so "
+            "PS1/26 Credit Risk: General Provisions rules 4.5 and 4.6 apply to its "
+            "equity during 2027-2029 (the higher of the legacy Art. 155 weight and the "
+            "rule 4.2 / 4.3 weight). The engine does not implement rules 4.5 / 4.6: "
+            "equity is weighted under Art. 133 (250% / 400%), which is the treatment of "
+            "the rule 4.9 election, not the default. Set equity_transitional.opt_out if "
+            "the firm has given the PRA notice of that election under rule 4.10."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.CONFIGURATION,
+        regulatory_reference="PS1/26 Credit Risk: General Provisions rules 4.4-4.6, 4.9-4.10",
+        field_name="equity_transitional.opt_out",
+    )
+
+
+def _opt_out_without_irb_permission_warning() -> CalculationError:
+    """CFG003: ``opt_out`` set by a firm that has no rule 4.9 election to make."""
+    return CalculationError(
+        code=ERROR_EQUITY_TRANSITIONAL_CONFIG,
+        message=(
+            "Equity transitional: equity_transitional.opt_out is set, but the firm did "
+            "not have IRB permission on 31 December 2026. PS1/26 Credit Risk: General "
+            "Provisions rule 4.9 replaces only rules 4.5, 4.6 and 4.8, which apply to a "
+            "firm that had that permission, so the election is not available and the "
+            "rule 4.2 / 4.3 weights are applied to direct equity regardless."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.CONFIGURATION,
+        regulatory_reference="PS1/26 Credit Risk: General Provisions rules 4.1-4.3, 4.9",
+        field_name="equity_transitional.opt_out",
+    )

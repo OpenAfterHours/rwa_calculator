@@ -206,7 +206,7 @@ Package version `0.3.34`. Resolved packs:
 | para. | Code fns | Pack | Src | Oracle | Tests | Confidence |
 |---|---|---|---|---|---|---|
 | 1 | 16 | 0 | 8 | 0 | 0 | LOW |
-| 4 | 4 | 11 | 4 | 0 | 0 | LOW |
+| 4 | 7 | 11 | 4 | 0 | 0 | LOW |
 | 36 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 62 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 92 | 2 | 4 | 23 | 0 | 36 | MEDIUM |
@@ -246,7 +246,7 @@ Package version `0.3.34`. Resolved packs:
 | 132 | 3 | 0 | 3 | 0 | 3 | MEDIUM |
 | 132A | 0 | 0 | 0 | 0 | 1 | GAP |
 | 132a | 0 | 0 | 0 | 0 | 3 | GAP |
-| 133 | 2 | 4 | 8 | 1 | 18 | HIGH |
+| 133 | 3 | 4 | 8 | 2 | 18 | HIGH |
 | 134 | 0 | 0 | 2 | 1 | 2 | UNCITED |
 | 136 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 138 | 0 | 0 | 1 | 0 | 0 | UNCITED |

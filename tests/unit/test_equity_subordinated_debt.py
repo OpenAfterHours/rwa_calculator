@@ -4,13 +4,16 @@ Unit tests for EquityType.SUBORDINATED_DEBT (PRA PS1/26 Art. 133(1)).
 Under Basel 3.1, subordinated debt / non-equity own funds instruments held as
 equity exposures receive a flat 150% risk weight (Art. 133(1)). This weight:
 - Takes priority after central_bank in the classification decision tree
-- Is EXCLUDED from the transitional floor (PRA Rule 4.3)
+- Is outside the Standardised Transitional Approach (PS1/26 General Provisions
+  rules 4.2 / 4.3 modify only Art. 133(3) / (4); Art. 133(5) weights an
+  instrument "not classified as an equity exposure")
 - Under CRR, subordinated debt equity gets flat 100% (Art. 133(2))
 - Under CRR IRB Simple, gets 370% (OTHER category)
 
 References:
 - PRA PS1/26 Art. 133(1): 150% for subordinated debt
-- PRA Rule 4.3: transitional does not apply to subordinated debt
+- PRA PS1/26 Art. 133(5): 150% for an instrument not classified as equity, so
+  General Provisions rules 4.2 / 4.3 do not reach it
 - CRR Art. 133(2): 100% flat for all equity
 """
 
@@ -150,13 +153,15 @@ class TestCRRSubordinatedDebtCalculator:
 # =============================================================================
 
 
-class TestTransitionalFloorExclusion:
-    """Tests for transitional risk weight floor per PRA Rules 4.2-4.3.
+class TestStandardisedTransitionalScope:
+    """Which legs PS1/26 General Provisions rules 4.2 / 4.3 reach (Standardised firm).
 
-    Transitional floor for 2027: standard=160%, higher-risk=220%.
-    Subordinated debt (150%) is excluded from the floor per Rule 4.2/4.3.
-    Government-supported equity is standard 250% equity under B31 Art. 133(3)
-    — subject to the floor, but 250% already exceeds all transitional floors.
+    Rule 4.2 (p.20): equity exposures that are not higher risk "shall be
+    assigned" 160% in 2027 and 220% in 2029; rule 4.3 (p.21): higher risk
+    equity 220% in 2027. Both modify Art. 133(3) / (4) only, so subordinated
+    debt (Art. 133(5), 150%) and the 0% central-bank type keep their weights.
+    Government-supported equity is ordinary Art. 133(3) equity under B31 and
+    takes the rule 4.2 weight.
     """
 
     @staticmethod
@@ -166,7 +171,7 @@ class TestTransitionalFloorExclusion:
         is_speculative: bool = False,
         is_government_supported: bool = False,
     ) -> float:
-        """Calculate equity RW through full pipeline including transitional floor."""
+        """Calculate equity RW through calculate_branch, including the transitional."""
         config = CalculationConfig.basel_3_1(
             reporting_date=reporting_date,
             permission_mode=PermissionMode.STANDARDISED,
@@ -183,58 +188,50 @@ class TestTransitionalFloorExclusion:
         return result["risk_weight"]
 
     def test_subordinated_debt_not_floored_in_2027(self) -> None:
-        """PRA Rule 4.3: subordinated debt 150% should NOT be raised to 160% in 2027."""
+        """Art. 133(5): subordinated debt stays 150% in 2027 (not moved to 160%)."""
         rw = self._calculate_with_transitional("subordinated_debt", date(2027, 6, 30))
         assert rw == pytest.approx(1.50)
 
     def test_subordinated_debt_not_floored_in_2028(self) -> None:
-        """PRA Rule 4.3: subordinated debt 150% should NOT be raised to 190% in 2028."""
+        """Art. 133(5): subordinated debt stays 150% in 2028 (not moved to 190%)."""
         rw = self._calculate_with_transitional("subordinated_debt", date(2028, 6, 30))
         assert rw == pytest.approx(1.50)
 
     def test_subordinated_debt_not_floored_in_2029(self) -> None:
-        """PRA Rule 4.3: subordinated debt 150% should NOT be raised to 220% in 2029."""
+        """Art. 133(5): subordinated debt stays 150% in 2029 (not moved to 220%)."""
         rw = self._calculate_with_transitional("subordinated_debt", date(2029, 6, 30))
         assert rw == pytest.approx(1.50)
 
-    def test_government_supported_floored_in_2027(self) -> None:
-        """B31 Art. 133(3): government-supported = 250% (standard equity, subject to floor).
-
-        250% > 160% transitional floor, so result is 250% regardless.
-        """
+    def test_government_supported_takes_rule_4_2_weight_in_2027(self) -> None:
+        """Government-supported is Art. 133(3) equity: rule 4.2(1) assigns 160%."""
         rw = self._calculate_with_transitional(
             "government_supported", date(2027, 6, 30), is_government_supported=True
         )
-        assert rw == pytest.approx(2.50)
+        assert rw == pytest.approx(1.60)
 
-    def test_government_supported_floored_in_2029(self) -> None:
-        """B31 Art. 133(3): government-supported = 250% (standard equity, subject to floor).
-
-        250% > 220% transitional floor, so result is 250% regardless.
-        """
+    def test_government_supported_takes_rule_4_2_weight_in_2029(self) -> None:
+        """Government-supported is Art. 133(3) equity: rule 4.2(3) assigns 220%."""
         rw = self._calculate_with_transitional(
             "government_supported", date(2029, 6, 30), is_government_supported=True
         )
-        assert rw == pytest.approx(2.50)
+        assert rw == pytest.approx(2.20)
 
     def test_central_bank_not_floored_in_2027(self) -> None:
-        """Central bank equity 0% should NOT be raised by transitional floor."""
+        """Central bank equity 0% is not an Art. 133(3) weight; rule 4.2 leaves it."""
         rw = self._calculate_with_transitional("central_bank", date(2027, 6, 30))
         assert rw == pytest.approx(0.00)
 
-    def test_listed_still_floored_in_2027(self) -> None:
-        """Standard equity should still be subject to transitional floor."""
+    def test_listed_takes_rule_4_2_weight_in_2027(self) -> None:
+        """Standard equity takes the rule 4.2(1) 160% in place of Art. 133(3) 250%."""
         rw = self._calculate_with_transitional("listed", date(2027, 6, 30))
-        # B31 listed = 250%, transitional std 2027 = 160%, max(250%, 160%) = 250%
-        assert rw == pytest.approx(2.50)
+        assert rw == pytest.approx(1.60)
 
-    def test_speculative_still_floored_in_2027(self) -> None:
-        """Higher risk equity should still be subject to transitional floor."""
+    def test_speculative_takes_rule_4_3_weight_in_2027(self) -> None:
+        """Higher risk equity takes the rule 4.3(1) 220% in place of Art. 133(4) 400%."""
         rw = self._calculate_with_transitional(
             "speculative", date(2027, 6, 30), is_speculative=True
         )
-        # B31 speculative = 400%, transitional hr 2027 = 220%, max(400%, 220%) = 400%
-        assert rw == pytest.approx(4.00)
+        assert rw == pytest.approx(2.20)
 
     def test_post_transitional_subordinated_unchanged(self) -> None:
         """After transitional period, subordinated debt still 150%."""

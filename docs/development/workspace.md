@@ -134,6 +134,52 @@ The gate is its own CI job, `Filing Mapping Ratchet`. It is not part of
 runs the measurement. Bank a deliberate move with `--update-baseline` and say
 why in the baseline's `_note`.
 
+## The gateway leg of the supervisory register
+
+The supervisory register (`tests/acceptance/reporting/test_supervisory_validations.py`,
+banked in `tests/expected_outputs/reporting/validation_known_breaks.json`) reads
+our template frames through the template-level engine. That engine reads a
+Bank rule differently from the gateway in six measured ways, so for every
+Basel 3.1 run the register also files the same generated COREP as a canonical
+return and validates it with `rwa_filer.boe`, the engine the gateway and
+`export_filing_package` use. The Bank's validations deny list applies as it
+stands on the run date, as `export_filing_package` applies it: a deactivated
+rule is not evaluated, a downgraded one breaks as a Warning. The filing itself
+is `scripts/filing_mapping_report.py::file_on_gateway`, the same function the
+filing-mapping ratchet measures through, so the two cannot file different
+returns.
+
+Two sections hold what it finds, each two-way ratcheted and keyed per
+(rule, portfolio), so a rule that starts breaking on one more portfolio is a
+new entry. A gateway break is keyed on its severity too, so a break the deny
+list moves from Error to Warning is a new entry whose reason is written again:
+
+| Section | Holds |
+|---------|-------|
+| `known_gateway_breaks` | Every rule the gateway engine breaks on a filed return, Error and Warning, with a written reason per (rule, portfolio) |
+| `known_engine_disagreements` | Every (rule, portfolio) where one engine breaks a rule the other holds |
+
+The Error half of `known_gateway_breaks` must equal the filing-mapping
+baseline's `error_rules_by_rule`, rule for rule and portfolio count for
+portfolio count (`tests/contracts/test_gateway_break_registers_agree.py`, fast).
+Re-bank the two in the same change:
+
+```bash
+REGEN_VALIDATION_BASELINE=1 uv run pytest tests/acceptance/reporting/test_supervisory_validations.py -n 0
+uv run python scripts/filing_mapping_report.py --update-baseline
+```
+
+A reason says whose the break is. `publisher issue PI-nn: ...` means the Bank's
+rule is the cause, as recorded in the publisher-issue register
+([known issues with the published validation rules](../rwa-filer/publisher-issues.md));
+a reason that starts `not PI-nn - ...` says the issue names the rule but this
+break is not that issue, and goes on to say whose it is (usually ours). A pair
+whose places have both causes reads `publisher issue PI-nn, in part: ...` and
+names our defect, with its plan item, for the rest in the same reason. A Basel
+3.1 break on a rule a `fails_correct_returns` issue names as its subject must
+carry one of the labels, and a cited issue must have that effect
+(`tests/contracts/test_register_publisher_issues.py`, fast).
+
 ## The referee differential
 
 Every other check on the filing package is this repository checking its own

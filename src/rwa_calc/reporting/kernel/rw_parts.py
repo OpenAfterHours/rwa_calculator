@@ -12,6 +12,8 @@ Key responsibilities:
   cap at its secured weight, the rest at its Art. 124L weight — with every
   exposure column split by the share and every RWEA column by its part's share
   of the weight, so the two parts sum to the row.
+- Say whether a frame has any such row (``has_two_part_rows``), so a template
+  resolves what to split only when there is something to split.
 - Name the columns a template's cells sum (``summed_columns``), so a template
   can scale exactly what it reports and nothing a future cell adds is inherited
   whole by both parts.
@@ -51,22 +53,18 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.edges import (
+    LOAN_SPLIT_CARRIERS,
+    LOAN_SPLIT_RESIDUAL_RW_COL,
+    LOAN_SPLIT_SECURED_RW_COL,
+    LOAN_SPLIT_SECURED_SHARE_COL,
+)
 from rwa_calc.reporting.cellspec import Formula, SafeSum, SideContext, Sum
 
 if TYPE_CHECKING:
     from collections.abc import Collection
 
     from rwa_calc.reporting.cellspec import TemplateSpec
-
-#: The engine's loan-split carriers (``contracts/edges.py``, CONDITIONAL; absent under CRR).
-LOAN_SPLIT_SHARE: str = "sa_loan_split_secured_share"
-LOAN_SPLIT_SECURED_RW: str = "sa_loan_split_secured_rw"
-LOAN_SPLIT_RESIDUAL_RW: str = "sa_loan_split_residual_rw"
-LOAN_SPLIT_CARRIERS: tuple[str, str, str] = (
-    LOAN_SPLIT_SHARE,
-    LOAN_SPLIT_SECURED_RW,
-    LOAN_SPLIT_RESIDUAL_RW,
-)
 
 #: The label each part carries (``"secured"`` / ``"residual"``; null on an unsplit row).
 RW_PART_COL: str = "rw_part"
@@ -123,16 +121,16 @@ def split_risk_weight_parts(
     if overlap:
         msg = f"columns cannot be split as both exposure and RWEA: {sorted(overlap)}"
         raise ValueError(msg)
-    if not set(LOAN_SPLIT_CARRIERS) <= set(frame.columns):
+    is_two_part = _two_part_mask(frame)
+    if is_two_part is None:
         return frame
     indexed = frame.with_row_index(_ORDER)
-    is_two_part = _is_two_part(set(frame.columns)).fill_null(value=False)
     two_part = indexed.filter(is_two_part)
     if two_part.is_empty():
         return frame
 
-    share = pl.col(LOAN_SPLIT_SHARE)
-    rwea_share = share * pl.col(LOAN_SPLIT_SECURED_RW) / _reported_weight(set(frame.columns))
+    share = pl.col(LOAN_SPLIT_SECURED_SHARE_COL)
+    rwea_share = share * pl.col(LOAN_SPLIT_SECURED_RW_COL) / _reported_weight(set(frame.columns))
     secured_amounts = {
         **{col: pl.col(col) * share for col in exposure_cols if col in frame.columns},
         **{col: pl.col(col) * rwea_share for col in rwea_cols if col in frame.columns},
@@ -145,14 +143,26 @@ def split_risk_weight_parts(
         pl.concat(
             [
                 whole,
-                _part(two_part, "secured", 0, LOAN_SPLIT_SECURED_RW, secured_amounts),
-                _part(two_part, "residual", 1, LOAN_SPLIT_RESIDUAL_RW, residual_amounts),
+                _part(two_part, "secured", 0, LOAN_SPLIT_SECURED_RW_COL, secured_amounts),
+                _part(two_part, "residual", 1, LOAN_SPLIT_RESIDUAL_RW_COL, residual_amounts),
             ],
             how="vertical_relaxed",
         )
         .sort(_ORDER, _PART_ORDER)
         .drop(_ORDER, _PART_ORDER)
     )
+
+
+def has_two_part_rows(frame: pl.DataFrame) -> bool:
+    """Whether ``split_risk_weight_parts`` would split any row of ``frame``.
+
+    Lets a template resolve what to split (``summed_columns``, which refuses a
+    spec a split would corrupt) only when a row will actually be split: never on
+    a CRR frame (no carriers), nor on a Basel 3.1 frame whose carriers all went
+    stale or null.
+    """
+    is_two_part = _two_part_mask(frame)
+    return is_two_part is not None and bool(frame.select(is_two_part.any()).item())
 
 
 def summed_columns(spec: TemplateSpec) -> frozenset[str]:
@@ -190,17 +200,26 @@ def _reported_weight(cols: set[str]) -> pl.Expr:
     )
 
 
-def _is_two_part(cols: set[str]) -> pl.Expr:
-    """Carriers present, a genuine second part, and still the row's reported weight."""
-    share = pl.col(LOAN_SPLIT_SHARE)
-    blend = pl.col(LOAN_SPLIT_SECURED_RW) * share + pl.col(LOAN_SPLIT_RESIDUAL_RW) * (1.0 - share)
+def _two_part_mask(frame: pl.DataFrame) -> pl.Expr | None:
+    """Which rows are two-part; ``None`` when ``frame`` carries no carriers at all.
+
+    A row is two-part when its carriers are non-null, its share is a genuine second
+    part, and its reported weight is still the recorded blend.
+    """
+    cols = set(frame.columns)
+    if not set(LOAN_SPLIT_CARRIERS) <= cols:
+        return None
+    share = pl.col(LOAN_SPLIT_SECURED_SHARE_COL)
+    blend = pl.col(LOAN_SPLIT_SECURED_RW_COL) * share + pl.col(LOAN_SPLIT_RESIDUAL_RW_COL) * (
+        1.0 - share
+    )
     weight = _reported_weight(cols)
     return (
         (share > 0.0)
         & (share < 1.0)
         & (weight > 0.0)
         & ((weight - blend).abs() <= _BLEND_TOLERANCE)
-    )
+    ).fill_null(value=False)
 
 
 def _part(

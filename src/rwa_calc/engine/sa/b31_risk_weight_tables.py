@@ -49,6 +49,11 @@ import polars as pl
 import polars.selectors as cs
 from watchfire import cites
 
+from rwa_calc.contracts.edges import (
+    LOAN_SPLIT_RESIDUAL_RW_COL,
+    LOAN_SPLIT_SECURED_RW_COL,
+    LOAN_SPLIT_SECURED_SHARE_COL,
+)
 from rwa_calc.domain.enums import PropertyType
 from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
 from rwa_calc.rulebook.resolve import resolve
@@ -56,12 +61,6 @@ from rwa_calc.rulebook.resolve import resolve
 # Basel 3.1 SA risk-weight values now live in packs/b31.py; the int-keyed CQS
 # dicts below are read back from the pack so it is the single source of truth.
 _RW_PACK_B31 = resolve("b31", date(2027, 1, 1))
-
-# The Art. 124F(1) / 124H(1) loan-split carriers ``with_b31_loan_split_parts``
-# writes (declared CONDITIONAL on every calculator edge, ``contracts/edges.py``).
-LOAN_SPLIT_SECURED_SHARE_COL: str = "sa_loan_split_secured_share"
-LOAN_SPLIT_SECURED_RW_COL: str = "sa_loan_split_secured_rw"
-LOAN_SPLIT_RESIDUAL_RW_COL: str = "sa_loan_split_residual_rw"
 
 
 def _int_cqs_rw_from_pack(name: str) -> dict[int | None, Decimal]:

@@ -35,6 +35,7 @@ from typing import Any
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.edges import LOAN_SPLIT_CARRIERS
 from rwa_calc.reporting.cellspec import (
     CellSpec,
     Count,
@@ -46,8 +47,8 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
 )
 from rwa_calc.reporting.kernel.rw_parts import (
-    LOAN_SPLIT_CARRIERS,
     RW_PART_COL,
+    has_two_part_rows,
     split_risk_weight_parts,
     summed_columns,
 )
@@ -128,11 +129,30 @@ def test_rows_that_are_not_two_part_keep_their_place_and_values() -> None:
     assert parts.row(0, named=True) | {RW_PART_COL: None} == plain | {RW_PART_COL: None}
 
 
-def test_a_row_whose_weight_has_moved_since_stays_whole() -> None:
-    """A guaranteed leg at its guarantor's 0%: the carriers are stale, the leg is not split."""
-    guaranteed = _frame(_row("RRE__G_1", risk_weight=0.0, rwa_final=0.0))
+@pytest.mark.parametrize(
+    ("reference", "moved_weight"),
+    [
+        # Art. 127: a defaulted mortgage takes 100% on the whole exposure.
+        ("RRE-DEFAULTED", 1.0),
+        # Art. 235: a guaranteed leg at an institution guarantor's 50%.
+        ("RRE__G_INST", 0.5),
+        # Art. 235: a guaranteed leg at a sovereign guarantor's 0%.
+        ("RRE__G_CGCB", 0.0),
+    ],
+)
+def test_a_row_whose_weight_has_moved_since_stays_whole(
+    reference: str, moved_weight: float
+) -> None:
+    """A later step re-weighted the row: its carriers are stale, so it is not split.
 
-    assert _split(guaranteed).equals(guaranteed)
+    The dispatcher writes the carriers; Art. 127 and CRM substitution run after it
+    and leave them on the row. Only the blend-equality check tells a stale carrier
+    from a live one — the non-zero weights are what pin it, since a 0% weight is
+    also refused by the separate ``weight > 0`` gate.
+    """
+    moved = _frame(_row(reference, risk_weight=moved_weight, rwa_final=400_000.0 * moved_weight))
+
+    assert _split(moved).to_dicts() == moved.to_dicts()
 
 
 @pytest.mark.parametrize("share", [1.0, 0.0])
@@ -206,6 +226,23 @@ def test_a_frame_without_the_carriers_is_returned_unchanged() -> None:
     assert not set(LOAN_SPLIT_CARRIERS) & set(absent.columns)
 
     assert _split(absent) is absent
+
+
+@pytest.mark.parametrize(
+    ("case", "frame", "expected"),
+    [
+        ("two-part", _frame(_row("RRE")), True),
+        ("stale", _frame(_row("RRE-DEFAULTED", risk_weight=1.0, rwa_final=400_000.0)), False),
+        ("null", _frame(_row("RRE-50", sa_loan_split_secured_share=None)), False),
+        ("absent", _frame(_row("CRR")).drop(LOAN_SPLIT_CARRIERS), False),
+    ],
+)
+def test_has_two_part_rows_agrees_with_the_split(
+    case: str, frame: pl.DataFrame, *, expected: bool
+) -> None:
+    """The gate a template reads before resolving what to split, on the split's own rule."""
+    assert has_two_part_rows(frame) is expected, case
+    assert (_split(frame).height > frame.height) is expected, case
 
 
 def test_a_column_cannot_be_both_an_exposure_and_an_rwea() -> None:

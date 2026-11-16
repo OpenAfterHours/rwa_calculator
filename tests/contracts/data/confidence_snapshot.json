@@ -7007,6 +7007,7 @@
         "tests/fixtures/p1_120/p1_120.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/corpus.py",
+        "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_defaulted_secured_split.py"
       ],

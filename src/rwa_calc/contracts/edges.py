@@ -58,6 +58,20 @@ _CITE_CRR_159 = "CRR Art. 159"
 _CITE_CRR_501 = "CRR Art. 501"
 _CITE_PS126_92 = "PS1/26 Art. 92"
 
+# The Basel 3.1 loan-split carriers, named once for all three of their sites: the
+# SA dispatcher writes them (``engine/sa/b31_risk_weight_tables.py::
+# with_b31_loan_split_parts``), the calculation edges below declare them, and OF
+# 07.00 reads them (``reporting/kernel/rw_parts.py``). The secured share, the Art.
+# 124F(1)(a) / 124H(1)(a) secured weight, and the Art. 124L residual weight.
+LOAN_SPLIT_SECURED_SHARE_COL: str = "sa_loan_split_secured_share"
+LOAN_SPLIT_SECURED_RW_COL: str = "sa_loan_split_secured_rw"
+LOAN_SPLIT_RESIDUAL_RW_COL: str = "sa_loan_split_residual_rw"
+LOAN_SPLIT_CARRIERS: tuple[str, str, str] = (
+    LOAN_SPLIT_SECURED_SHARE_COL,
+    LOAN_SPLIT_SECURED_RW_COL,
+    LOAN_SPLIT_RESIDUAL_RW_COL,
+)
+
 
 class EdgeContractViolation(Exception):
     """A frame failed its edge contract, or a bundle field lacks its brand.
@@ -1761,11 +1775,7 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
                 null_meaning="the SA dispatcher did not price the row at an Art. 124F(1) / "
                 "124H(1) two-part weight; absent = CRR run",
             )
-            for column in (
-                "sa_loan_split_secured_share",
-                "sa_loan_split_secured_rw",
-                "sa_loan_split_residual_rw",
-            )
+            for column in LOAN_SPLIT_CARRIERS
         },
         "sa_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False),

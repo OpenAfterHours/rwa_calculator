@@ -260,11 +260,11 @@ from rwa_calc.reporting.kernel import (
     class_keys,
     pick,
     population_flags,
+    rw_parts,
     sheet_axis,
     sheet_frame,
 )
 from rwa_calc.reporting.kernel.bases import ORIGIN_APPROACH_SOURCE
-from rwa_calc.reporting.kernel.rw_parts import split_risk_weight_parts, summed_columns
 from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -642,10 +642,12 @@ def c07_plans(
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
     # A loan-split exposure is reported in its two parts (module docstring).
-    rwea_cols = frozenset({rwa_col, "rwa_pre_factor", "c07_sf_delta"})
-    exposure_cols = (summed_columns(spec) - rwea_cols) | {_UNFUNDED_COL}
-    split = split_risk_weight_parts(sa_df, exposure_cols=exposure_cols, rwea_cols=rwea_cols)
-    if split is not sa_df:
+    if rw_parts.has_two_part_rows(sa_df):
+        rwea_cols = frozenset({rwa_col, "rwa_pre_factor", "c07_sf_delta"})
+        exposure_cols = (rw_parts.summed_columns(spec) - rwea_cols) | {_UNFUNDED_COL}
+        split = rw_parts.split_risk_weight_parts(
+            sa_df, exposure_cols=exposure_cols, rwea_cols=rwea_cols
+        )
         sa_df = split.with_columns(_rw_band_expr(framework, data_cols).alias("c07_rw_band"))
     unreported = get_c07_unreported_cells(framework)
     defaulted_row_sheets = get_c07_defaulted_row_sheet_keys(framework)

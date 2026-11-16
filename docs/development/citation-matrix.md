@@ -1556,9 +1556,9 @@ Last generated: 2026-11-16.
 
 ### PS1/26, paragraph 122 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`get_b31_combined_cqs_risk_weights` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:465"
+??? quote "`get_b31_combined_cqs_risk_weights` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:464"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:465:496"
+    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:464:495"
     ```
 
 ??? quote "`_prepare_risk_weight_lookup` — src/rwa_calc/engine/sa/risk_weights.py:946"
@@ -1630,17 +1630,17 @@ Last generated: 2026-11-16.
     --8<-- "src/rwa_calc/engine/re_split/splitter.py:203:254"
     ```
 
-??? quote "`with_b31_loan_split_parts` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:542"
+??? quote "`with_b31_loan_split_parts` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:541"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:542:609"
+    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:541:608"
     ```
 
 
 ### PS1/26, paragraph 124H — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`with_b31_loan_split_parts` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:543"
+??? quote "`with_b31_loan_split_parts` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:542"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:542:609"
+    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:541:608"
     ```
 
 
@@ -1662,9 +1662,9 @@ Last generated: 2026-11-16.
 
 ### PS1/26, paragraph 129 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_create_b31_covered_bond_df` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:443"
+??? quote "`_create_b31_covered_bond_df` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:442"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:443:453"
+    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:442:452"
     ```
 
 ??? quote "`b31_unrated_cb_rw_expr` — src/rwa_calc/engine/sa/covered_bond.py:89"

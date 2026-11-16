@@ -19,9 +19,11 @@ weight IS that two-part weight:
 - ``sa_loan_split_residual_rw`` — the Art. 124L counterparty weight
 
 Every leg that takes another branch (ADC, Art. 124J non-qualifying, income-
-producing, Art. 124H(3) other counterparty, a loan short of the cap, or a
-non-real-estate row whose weight happens to equal a blend) carries nulls. The
-risk weight itself must not move on any row.
+producing, Art. 124H(3) other counterparty, a loan short of the cap, an earlier
+dispatcher branch such as subordinated debt, or a non-real-estate row whose weight
+happens to equal a blend) carries nulls. The risk weight itself must not move on
+any row. A later step that re-weights a carrying row (Art. 127) leaves the
+carriers stale, and the OF 07.00 reader keeps that row whole.
 
 References:
 - PS1/26 Art. 124F, 124H, 124J, 124K, 124L (ps126app1.pdf pp.55-58)
@@ -38,6 +40,7 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.sa.risk_weights import apply_risk_weights
+from rwa_calc.reporting.kernel.rw_parts import split_risk_weight_parts
 
 _SHARE = "sa_loan_split_secured_share"
 _SECURED_RW = "sa_loan_split_secured_rw"
@@ -108,6 +111,23 @@ _NOT_TWO_PART: list[tuple[str, dict[str, Any]]] = [
     ("ADC", {"is_adc": True}),
     # Art. 124J: fails Art. 124A, whole.
     ("NON-QUALIFYING", {"is_qualifying_re": False}),
+    # Art. 112 Table A2 priority 3 ahead of real estate: subordinated debt to an SME,
+    # secured on commercial property, takes the Art. 133 150% flat. The route's own
+    # predicates DO reach the Art. 124H(1) split here (SME, commercial, 0 < share < 1);
+    # only the ``risk_weight == blend`` gate sees that an earlier branch priced it.
+    (
+        "CRE-SUB-DEBT",
+        {
+            "exposure_class": "corporate",
+            "property_type": "commercial",
+            "ltv": 0.80,
+            "cp_is_natural_person": False,
+            "is_sme": True,
+            "qualifies_as_retail": False,
+            "cp_entity_type": "corporate",
+            "seniority": "subordinated",
+        },
+    ),
     # Measured false positives of an equality-only detector: 20% non-real-estate rows.
     (
         "COVERED-BOND-20",
@@ -212,9 +232,31 @@ def test_the_controls_take_other_weights_than_a_two_part_one(b31_weighted: pl.Da
     """
     assert _row(b31_weighted, "COVERED-BOND-20")["risk_weight"] == pytest.approx(0.20)
     assert _row(b31_weighted, "MDB-20")["risk_weight"] == pytest.approx(0.20)
+    # Priced by the earlier sub-debt branch, not the Art. 124H(1) blend it would also reach.
+    assert _row(b31_weighted, "CRE-SUB-DEBT")["risk_weight"] == pytest.approx(1.50)
     two_part = _row(b31_weighted, "RRE-60")["risk_weight"]
     for reference in ("CRE-CORP", "RRE-INCOME", "ADC", "NON-QUALIFYING"):
         assert _row(b31_weighted, reference)["risk_weight"] != pytest.approx(two_part), reference
+
+
+def test_a_defaulted_mortgage_is_reported_whole_at_its_article_127_weight() -> None:
+    """Art. 127 re-weights the row AFTER the dispatcher recorded its two parts.
+
+    PS1/26 Art. 127(3): a defaulted residential exposure not materially dependent on
+    the property's cash flows takes 100% on the whole exposure. The carriers the
+    dispatcher wrote no longer describe that weight, so the OF 07.00 reader must keep
+    the row whole: splitting it would report a 100% loan as 20% / 75% parts.
+    """
+    defaulted = _frame([("RRE-60-DEFAULTED", {"is_defaulted": True})])
+    config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+
+    weighted = apply_risk_weights(defaulted, config).collect()
+    reported = split_risk_weight_parts(
+        weighted, exposure_cols=("ead_final",), rwea_cols=("rwa_final",)
+    )
+
+    assert weighted["risk_weight"].to_list() == [pytest.approx(1.0)]
+    assert reported.to_dicts() == weighted.to_dicts()
 
 
 def test_crr_writes_no_carrier() -> None:

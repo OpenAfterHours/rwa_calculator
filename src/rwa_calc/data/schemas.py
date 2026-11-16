@@ -3564,7 +3564,10 @@ CALCULATION_OUTPUT_SCHEMA = {
     "risk_weight_pre_currency_mismatch": pl.Float64,  # RW snapshot before 1.5x mismatch multiply
     # -------------------------------------------------------------------------
     # LOAN-SPLIT PARTS (Basel 3.1 Art. 124F(1) / 124H(1); OF 07.00 Annex II p.94)
-    # Non-null only where the SA weight IS the two-part weight; absent under CRR.
+    # Non-null only where the SA dispatcher priced the row at the two-part weight; a
+    # later step (Art. 127, CRM substitution, Art. 123B) may re-weight such a row and
+    # leave them stale, so a reader re-checks the weight. Absent under CRR. Named once
+    # in contracts/edges.py::LOAN_SPLIT_CARRIERS (this layer cannot import it).
     # -------------------------------------------------------------------------
     "sa_loan_split_secured_share": pl.Float64,  # share up to the 55% cap
     "sa_loan_split_secured_rw": pl.Float64,  # Art. 124F(1)(a) 20% / 124H(1)(a) 60%

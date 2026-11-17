@@ -4650,6 +4650,21 @@ requires every register reason on such a rule to cite the issue or rebut it.
 - **Lesson**: OF 07.00's risk-weight rows ask for the weight Annex II names,
   which is often not the weight the engine finally applied. (LESSONS E2,
   amended.)
+- **Knock-on, found by the adversarial review (2026-11-17)**: the two-part rows
+  broke the return reconciliation, and the new placement carriers broke the
+  legacy-ledger coverage. Each part carried the whole leg's `rwa_final`, and
+  `return_recon._group_legs` priced a key by `.first()`, so on `b31/rich`
+  `row_migration(money_column="ead_final")` gave 10,366,666.67 for real-estate
+  group 0200 against 10,400,000 reported; `LEDGER_ROW_AXIS["c07_00"]` named none
+  of the Basel 3.1 rows that read `reporting_class_pre_default`,
+  `sa_loan_split_*` or `risk_weight_pre_equity_transitional`. Class
+  `no-gate-exists`: no test held the recon's conservation identity or the
+  ledger's row coverage on a two-part or equity-transitional book, so the
+  knock-on was not gated. Gate: `tests/integration/test_return_recon_loan_split.py`
+  and `tests/integration/test_legacy_ledger_b31_carriers.py` (`6c1a0f6`),
+  observed red before the fix: `4 failed` (`assert 10366666.666666666 ==
+  10400000.0`) and `2 failed` ("a projection moves 54 OF 07.00 cell(s) on rows
+  coverage does not name"); 7 failed when re-run against the pre-fix source.
 
 ## 2026-11-16 — OF 07.00 memorandum rows 0300/0320 sat on the "in default" sheet, where the taxonomy has no cell, and not on the obligor's class sheet
 

@@ -789,7 +789,10 @@ LEDGER_ROW_AXIS: Mapping[str, tuple[RowAxisRequirement, ...]] = {
         # A loan-split exposure is reported in two parts (kernel/rw_parts.py): the
         # secured part on its 20% / 60% row, the residual on its Art. 124L
         # counterparty weight, which can be any band. Without the carriers the
-        # whole loan bands on its blended weight (row 0280 on b31/rich).
+        # whole loan bands on its blended weight (row 0280 on b31/rich). So EVERY
+        # band row is named unavailable whenever the carriers are absent - on a
+        # projection always, whether or not the book holds a split loan: coverage
+        # sees which columns exist, not which legs would have used them.
         RowAxisRequirement(
             (),
             _needs(*LOAN_SPLIT_CARRIERS),

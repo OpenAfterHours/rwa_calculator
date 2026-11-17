@@ -142,7 +142,12 @@ and released independently of `rwa-calc`; its release tags are prefixed
   merged in plan order, so a verdict, a message's order and the lost rules do
   not depend on which worker finishes first. Several instances can share one
   pool: `prepare_referee` each, then `run_referees` them all, a result each.
-  An interrupt kills the workers that are running.
+  An interrupt kills the workers that are running, within about half a second:
+  the pool is waited on half a second at a time, as a signal delivered to
+  another thread (polars keeps several) does not wake an unbounded wait. New
+  `interrupt_on_sigterm()` makes SIGTERM do the same — `rwa-filer referee`
+  runs inside it — since a worker runs in a session of its own and SIGTERM's
+  default action would leave every running worker behind.
 - **A referee worker ends as soon as its result is written.** It used to close
   the Arelle session and tear the interpreter down first, freeing a model of
   several GB object by object: about 13 seconds of a minute-long worker on

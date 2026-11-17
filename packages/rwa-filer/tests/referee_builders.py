@@ -11,7 +11,7 @@ was handed, canned messages, or a failure: a non-zero exit, no result, a sleep
 past the timeout, more memory than the cap. What a worker does is keyed by
 ``"every"``, by ``"chunk<N>"`` and by ``"<instance stem>/chunk<N>"``, the more
 specific winning; every launch is appended to ``launches.txt`` beside the
-script, as ``<instance stem>/chunk<N>``.
+script, as ``<instance stem>/chunk<N>``, and its process id to ``pids.txt``.
 
 The module, ``tst001``, files against templates T01 and T02 and has four rules:
 - ``boe_b0001`` (400 bytes of XML) needs T01 — the workers report 3 satisfied.
@@ -82,7 +82,7 @@ SINGLE_CURRENCY = {"code": "EBA.3.1", "level": "ERROR", "text": "only one curren
 
 FAKE_WORKER = '''
 """A stand-in for the referee worker: reads the same spec, needs no Arelle."""
-import json, re, sys, time, zipfile
+import json, os, re, sys, time, zipfile
 from pathlib import Path
 
 if not sys.flags.isolated:
@@ -96,6 +96,8 @@ launch = f"{Path(spec['instance']).stem}/{chunk}"
 behaviour = {**script.get("every", {}), **script.get(chunk, {}), **script.get(launch, {})}
 with Path(__file__).with_name("launches.txt").open("a", encoding="utf-8") as log:
     log.write(launch + "\\n")
+with Path(__file__).with_name("pids.txt").open("a", encoding="utf-8") as log:
+    log.write(f"{os.getpid()}\\n")
 
 # The assertions handed over: the ones the overlay's preconditions name or,
 # against the official entry point, all of them (less a run-id restriction).

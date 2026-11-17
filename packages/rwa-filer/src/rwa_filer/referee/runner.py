@@ -82,7 +82,7 @@ import tempfile
 import threading
 import time
 import zipfile
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -96,7 +96,7 @@ from rwa_filer.referee.plan import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +192,7 @@ _IDENTITY_PROBE: Final = (
 _LOCALE_VARIABLES: Final = ("LANG", "LC_ALL", "LC_MESSAGES")
 _HASH_BLOCK: Final = 1 << 20
 _POLL_SECONDS: Final = 0.5
+_INTERRUPTED: Final = "killed: run interrupted"
 _KB_PER_GB: Final = 1024 * 1024
 _BYTES_PER_MB: Final = 1e6
 _STATUS_TAIL_CHARS: Final = 300
@@ -417,8 +418,11 @@ def run_referees(
         RefereeUnavailableError: no interpreter with Arelle could be located.
         ValueError: ``jobs`` is less than one.
 
-    An interrupt, or any other exception, kills the workers that are running
-    before it propagates.
+    An interrupt (SIGINT; SIGTERM too, inside ``interrupt_on_sigterm``), or
+    any other exception, kills the workers that are running and starts no
+    other before it propagates: the pool is waited on half a second at a time,
+    so a signal is acted on within about that, and each worker's guard sees
+    the cancellation at its next sample.
     """
     interpreter = find_arelle_python(python)
     guard = _guard(max_rss_gb, timeout)
@@ -443,11 +447,17 @@ def run_referees(
                     _run_chunk, prepared[which], index, interpreter, guard, cancel, cache
                 )
                 futures[future] = (which, index)
-            for future in as_completed(futures):
-                which, index = futures[future]
-                finished[which][index] = future.result()
-                # Survive an interrupted run: what has been measured so far is on disk.
-                _write_progress(prepared[which], finished[which])
+            pending = set(futures)
+            while pending:
+                # Never an unbounded wait: a signal handler runs only when this
+                # thread runs Python, and a signal the kernel hands to another
+                # thread (polars keeps several) does not wake a blocked wait.
+                done, pending = wait(pending, timeout=_POLL_SECONDS, return_when=FIRST_COMPLETED)
+                for future in sorted(done, key=futures.__getitem__):
+                    which, index = futures[future]
+                    finished[which][index] = future.result()
+                    # Survive an interrupted run: what has been measured so far is on disk.
+                    _write_progress(prepared[which], finished[which])
         except BaseException:
             cancel.set()
             for future in futures:
@@ -491,6 +501,30 @@ def resolve_jobs(jobs: int | None, max_rss_gb: float) -> int:
         return 1
     fit = math.floor((available - MEMORY_HEADROOM_GB) / max_rss_gb)
     return max(1, min(_cpu_count(), fit))
+
+
+@contextlib.contextmanager
+def interrupt_on_sigterm() -> Iterator[None]:
+    """While inside, SIGTERM ends a run as an interrupt does: its workers are killed.
+
+    A worker runs in a session of its own, so no signal to the run reaches it,
+    and SIGTERM's default action ends the run at once and leaves every worker
+    it was running — several GB each — behind. Inside this block SIGTERM
+    raises ``SystemExit(128 + SIGTERM)`` instead, which ``run_referees`` meets
+    as any other exception: it kills its workers and propagates. CI's cancel
+    sends SIGINT and then SIGTERM, so both must be heard.
+
+    A no-op off the main thread, where a handler cannot be installed, and
+    where there is no SIGTERM. The previous handler is restored on the way out.
+    """
+    if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "SIGTERM"):
+        yield
+        return
+    previous = signal.signal(signal.SIGTERM, _exit_on_signal)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def referee_cache_dir(default: Path) -> Path:
@@ -872,9 +906,12 @@ def _run_guarded(
     killed, which also means an interrupt of this process does not reach it:
     whatever ends the wait, a worker still running is killed on the way out.
     Run on a pool thread, the wait is ended by ``cancel``, which the thread
-    that is interrupted sets.
+    that is interrupted sets; a worker whose turn comes after that is never
+    launched.
     """
     started = time.monotonic()
+    if cancel is not None and cancel.is_set():
+        return _WorkerRun(wall_s=0.0, peak_rss_mb=None, returncode=None, killed=_INTERRUPTED)
     peak_kb = 0
     killed: str | None = None
     with (
@@ -903,7 +940,7 @@ def _run_guarded(
                 if killed is None and time.monotonic() - started > guard.timeout:
                     killed = f"killed: timeout {guard.timeout:g}s"
                 if killed is None and cancel is not None and cancel.is_set():
-                    killed = "killed: run interrupted"
+                    killed = _INTERRUPTED
         finally:
             if process.poll() is None:
                 _kill(process)
@@ -913,6 +950,11 @@ def _run_guarded(
         returncode=process.returncode,
         killed=killed,
     )
+
+
+def _exit_on_signal(signum: int, _frame: object) -> None:
+    """A signal handler: end the run as ``SystemExit`` with the shell's status for it."""
+    raise SystemExit(128 + signum)
 
 
 def _kill(process: subprocess.Popen[bytes]) -> None:

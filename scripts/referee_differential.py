@@ -122,6 +122,7 @@ from rwa_filer.model import ReturnHeader  # noqa: E402
 from rwa_filer.referee import (  # noqa: E402
     PreparedReferee,
     find_arelle_python,
+    interrupt_on_sigterm,
     prepare_referee,
     referee_cache_dir,
     resolve_jobs,
@@ -225,15 +226,18 @@ def main() -> int:
         parser.error(f"{cache_dir} is the run directory, which every run clears")
     clear_run_directory(keep=(CACHE_DIRECTORY, *(() if cache_dir is None else (cache_dir,))))
     timings: dict[str, Any] = {}
-    measured = measure(
-        TAXONOMY_PACKAGE,
-        workdir=RUN_DIRECTORY,
-        only=frozenset(args.portfolio or ()),
-        max_rss_gb=args.max_rss_gb,
-        jobs=args.jobs,
-        cache_dir=cache_dir,
-        timings=timings,
-    )
+    # SIGTERM (CI's cancel, after SIGINT) kills the running Arelle workers too:
+    # each runs in a session of its own, so no signal to this process reaches it.
+    with interrupt_on_sigterm():
+        measured = measure(
+            TAXONOMY_PACKAGE,
+            workdir=RUN_DIRECTORY,
+            only=frozenset(args.portfolio or ()),
+            max_rss_gb=args.max_rss_gb,
+            jobs=args.jobs,
+            cache_dir=cache_dir,
+            timings=timings,
+        )
     timings["total_s"] = round(time.perf_counter() - started, 1)
     print_report(measured, timings["total_s"])
     print_timings(timings)

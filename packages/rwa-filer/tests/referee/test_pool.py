@@ -18,7 +18,11 @@ What is pinned here, with the stand-in worker of ``referee_builders``:
 - that workers do run at once, and that the result does not depend on the
   order they finish in;
 - that a worker killed in a pool loses its own rules and nobody else's;
-- that an interrupted pool kills the workers it is running.
+- that a real SIGINT, or a SIGTERM under ``interrupt_on_sigterm``, ends a run
+  in seconds and kills the workers it is running — in a process that has
+  imported polars, as every real caller has, and in which a signal can land on
+  a thread other than the one waiting on the pool;
+- that any other exception in the pool kills its workers too.
 
 References:
 - packages/rwa-filer/src/rwa_filer/referee/runner.py — ``resolve_jobs``,
@@ -28,8 +32,14 @@ References:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import signal
+import subprocess
 import sys
+import textwrap
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -271,12 +281,12 @@ def test_a_worker_killed_in_a_pool_loses_its_own_rules_only(
     assert counts(second) == {"boe_b0002": (1, 2), "v0003_m": (0, 0)}
 
 
-def test_an_interrupted_pool_kills_the_workers_it_is_running(
+def test_an_exception_in_the_pool_kills_the_workers_it_is_running(
     trimmed: Referee, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An interrupt while a minute-long worker runs ends the run in seconds, not a minute."""
+    """An exception while a minute-long worker runs ends the run in seconds, not a minute."""
 
-    # Arrange — the interrupt arrives as the first worker's progress is written.
+    # Arrange — raised as the first worker's progress is written.
     def interrupt(*_args: object) -> None:
         raise KeyboardInterrupt
 
@@ -299,3 +309,144 @@ def test_run_referee_takes_the_number_of_jobs(trimmed: Referee) -> None:
     # Assert
     assert result.complete is True
     assert time.monotonic() - started < 3.5
+
+
+# ---------------------------------------------------------------------------
+# A real signal, in a process that has imported polars
+# ---------------------------------------------------------------------------
+
+TESTS_DIR = Path(__file__).resolve().parent.parent
+
+#: A caller of the referee, in a process of its own so that a signal can be sent
+#: to it: two stand-in workers that would sleep a minute each, at jobs=2.
+DRIVER = textwrap.dedent(
+    """
+    import json, sys
+    from pathlib import Path
+
+    import polars  # noqa: F401 - every real caller has it loaded
+
+    sys.path.insert(0, sys.argv[2])
+    from referee_builders import (
+        CHUNK_MB, EXAMPLES, FAKE_WORKER, VERDICTS, build_package, write_instance,
+    )
+    from rwa_filer.referee import interrupt_on_sigterm, runner
+
+    root = Path(sys.argv[1])
+    fake = root / "fake_worker.py"
+    fake.write_text(FAKE_WORKER, encoding="utf-8")
+    runner.WORKER_SCRIPT = fake
+    runner.AUTO_FULL_LIMIT_MB = 0.0
+    script = {"verdicts": VERDICTS, "examples": EXAMPLES, "every": {"sleep": 60}}
+    (root / "script.json").write_text(json.dumps(script), encoding="utf-8")
+    prepared = runner.prepare_referee(
+        write_instance(root / "instance.xbrl"),
+        build_package(root / "taxonomy.zip"),
+        workdir=root / "work",
+        chunk_mb=CHUNK_MB,
+    )
+    with interrupt_on_sigterm():
+        runner.run_referees([prepared], python=Path(sys.executable), jobs=2)
+    """
+)
+
+
+def _alive(pid: int) -> bool:
+    """Whether stand-in worker ``pid`` is still running (a zombie has ended)."""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    return b"fake_worker" in cmdline and stat.rsplit(")", 1)[1].split()[0] != "Z"
+
+
+@needs_proc
+@pytest.mark.parametrize(
+    ("signum", "exit_status"),
+    [(signal.SIGINT, None), (signal.SIGTERM, 128 + signal.SIGTERM)],
+    ids=["SIGINT", "SIGTERM"],
+)
+def test_a_real_signal_ends_the_run_in_seconds_and_kills_its_workers(
+    tmp_path: Path, signum: int, exit_status: int | None
+) -> None:
+    """CI's cancel sends SIGINT, then SIGTERM; neither may leave 4 GB workers behind.
+
+    A worker runs in a session of its own, so a signal to the run never reaches
+    it: the run itself must kill it, and must hear the signal to do so — which
+    it does not while its main thread waits on the pool without a timeout and
+    the signal is delivered to one of polars' threads.
+    """
+    # Arrange — both workers started.
+    driver = tmp_path / "driver.py"
+    driver.write_text(DRIVER, encoding="utf-8")
+    process = subprocess.Popen(
+        [sys.executable, str(driver), str(tmp_path), str(TESTS_DIR)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    pids_file = tmp_path / "pids.txt"
+    pids: list[int] = []
+    try:
+        deadline = time.monotonic() + 60
+        while len(pids) < 2 and time.monotonic() < deadline and process.poll() is None:
+            time.sleep(0.1)
+            if pids_file.exists():
+                pids = [int(line) for line in pids_file.read_text(encoding="utf-8").split()]
+        assert len(pids) == 2, process.stderr.read().decode() if process.stderr else ""
+        time.sleep(1.0)  # past the first guard sample
+
+        # Act
+        sent = time.monotonic()
+        process.send_signal(signum)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=20)
+        elapsed = time.monotonic() - sent
+        left = [pid for pid in pids if _alive(pid)]
+
+        # Assert
+        assert elapsed < 5, f"the run took {elapsed:.1f} s to end after the signal"
+        assert left == [], f"workers left running: {left}"
+        if exit_status is not None:
+            assert process.returncode == exit_status
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        for pid in pids:
+            if _alive(pid):
+                os.kill(pid, signal.SIGKILL)
+
+
+def test_interrupt_on_sigterm_restores_the_handler_it_replaced() -> None:
+    # Arrange
+    before = signal.getsignal(signal.SIGTERM)
+
+    # Act
+    with runner.interrupt_on_sigterm():
+        inside = signal.getsignal(signal.SIGTERM)
+
+    # Assert
+    assert inside is not before
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
+def test_interrupt_on_sigterm_is_a_no_op_off_the_main_thread() -> None:
+    """A handler can be installed from the main thread only; elsewhere nothing is tried."""
+    # Arrange
+    raised: list[BaseException] = []
+
+    def enter() -> None:
+        try:
+            with runner.interrupt_on_sigterm():
+                pass
+        except BaseException as exc:  # noqa: BLE001 - the assertion is that nothing is raised
+            raised.append(exc)
+
+    # Act
+    thread = threading.Thread(target=enter)
+    thread.start()
+    thread.join()
+
+    # Assert
+    assert raised == []

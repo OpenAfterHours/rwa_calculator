@@ -122,7 +122,12 @@ from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
 from rwa_filer.model import LEI_SCHEME
 from rwa_filer.readers import HeaderFields, SourceReading, load_source, open_source
-from rwa_filer.referee import RefereePlanError, RefereeUnavailableError, run_referee
+from rwa_filer.referee import (
+    RefereePlanError,
+    RefereeUnavailableError,
+    interrupt_on_sigterm,
+    run_referee,
+)
 from rwa_filer.referee import report as referee_report
 from rwa_filer.referee.differential import compare
 from rwa_filer.release import (
@@ -1082,18 +1087,20 @@ def _referee(args: argparse.Namespace) -> int:
     if instance.suffix.lower() != ".xbrl":
         return _fail(f"the referee reads an .xbrl instance, not {instance.suffix!r}: {instance}")
     try:
-        result = run_referee(
-            instance,
-            package,
-            python=args.arelle_python,
-            chunk_mb=args.chunk_mb,
-            max_rss_gb=args.max_rss_gb,
-            jobs=args.jobs,
-            timeout=args.timeout,
-            workdir=args.workdir,
-            filing_rules=not args.no_filing_rules,
-            rules=args.rules,
-        )
+        # A SIGTERM kills the running workers too, as Ctrl-C does.
+        with interrupt_on_sigterm():
+            result = run_referee(
+                instance,
+                package,
+                python=args.arelle_python,
+                chunk_mb=args.chunk_mb,
+                max_rss_gb=args.max_rss_gb,
+                jobs=args.jobs,
+                timeout=args.timeout,
+                workdir=args.workdir,
+                filing_rules=not args.no_filing_rules,
+                rules=args.rules,
+            )
         differential = None
         if not args.no_compare:
             source = load_source(instance, taxonomy=args.taxonomy)

@@ -8,6 +8,66 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Added
 - (Next release changes will go here)
+- **The Bank of England's validations deny list, per release.** The Bank changes
+  how its gateway runs some rules after a taxonomy is published: it deactivates
+  a rule, or downgrades it to a warning. `rwa-filer` now ships that list for each
+  taxonomy release (`boe/data/deny/<release>.json`; 4.1.1 is built from the
+  November 2026 workbook, 16 entries) and applies it.
+  - `validate_return` (`rwa-filer validate`, `build`) applies it after the rules
+    are evaluated, on the run date; `submission_date=` / `--submission-date`
+    sets another date. The return's reference date never decides: the list is
+    the gateway's configuration on the day of submission. An entry with no date,
+    a later date or another module is listed and not applied.
+  - A deactivated rule is `NOT_EVALUATED` with reason `deactivated_by_publisher`.
+    Like `closed_by_formula`, it is not an evaluability gap and does not count
+    against template coverage. A downgraded rule keeps running, as a Warning
+    (`VAL002`), and its message says so.
+  - The published verdict is kept on the new `RuleResult.formula`.
+    `Rule.fingerprint` does not change.
+  - `compare` (`compare_returns(submission_date=...)`, `--submission-date`)
+    judges both returns by the list in force. A rule switched off that day is
+    not a shared break; if its published formula breaks in either return it is
+    listed in `ReturnComparison.switched_off`, so the switch is never silent.
+  - The referee compares Arelle with the published verdict, since Arelle runs the
+    taxonomy's formulas, which still contain the deny-listed rules.
+  - Every surface that lists rules says what the Bank did, with the date and the
+    known-issue number: the text report, the JSON report and the evidence
+    (`deny_list` and `formula` on rules, `summary.deny_list`,
+    `identity.deny_list`), `rules list`, `rulebook list` (a deny-listed column),
+    and the dashboard's rules, overview, reference and compare pages.
+    `evidence_id` covers the entries in force, not the date or the file.
+  - New `rulebook deny-list [import|check]`: imports the Bank's workbook by
+    column name, matches each code to a rule of its module, reports and keeps any
+    code that matches none, and joins the known-issues log for the issue number.
+    One typo in the November 2026 list is resolved by a stated rule
+    (`boe_b04006_1/_2` is MRL001 `boe_b4006_1/_2`, which known issue #23
+    corroborates); the Bank's spelling is kept as `published_code`. `check`
+    compares a packaged list with the workbook.
+  - Building a release (`rwa_filer.release_build`) keeps a release's list on
+    rebuild and removes it when the release is retired.
+- **A register of known issues with the Bank's published rules, and a label on
+  every result one explains.** `boe/data/issues/4.1.1.json` holds 40 issues
+  (PI-01 to PI-40): 32 defects, 4 clarification questions and 4 the Bank has
+  already acknowledged in its known-issues log. Each names its rules, pinned by
+  `Rule.fingerprint` and severity, quotes the instructions and the rules with
+  their PDF page, and carries a worked example whose result Arelle 2.47.5
+  measured against the Bank's v4.1.1 package.
+  - **No verdict changes.** A finding inside an issue's footprint carries
+    `publisher_issues` and a sentence saying what the issue is. A draft issue
+    reads "identified by rwa-filer, not yet raised with the Bank of England"; a
+    clarification reads "Open question with the published rule". The labels are
+    in the JSON report, the text report, the evidence, the filing manifest and
+    the dashboard (a chip and a callout), and outside `evidence_id`.
+  - `rwa-filer rulebook issues [ISSUE] --format text|json|markdown`.
+  - Library: `rwa_filer.boe.issues.issues_for(release, module, rule_id)`, which
+    returns a tuple of issues (several issues can name one rule).
+  - Schema: `publisher-issues-1.schema.json`. A new release gets an empty
+    register and a WARNING; retiring a release removes its register.
+  - The repository's `docs/rwa-filer/publisher-issues.md` is generated from the
+    register and is the copy to send to the Bank.
+- `ValidationRule.always_execute`, read from the Bank's extract ("Always
+  execute"); `False` for every EBA rule, as for the Bank's own restatements
+  of EBA rules, none of which is always-execute.
 - **Choosing the taxonomy release.** `rwa-filer` can now ship several taxonomy
   releases, and a run uses one: the one `--taxonomy VERSION` names, on every
   command that reads a return (`validate`, `build`, `diff`, `compare`, `dash`,
@@ -45,6 +105,14 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Changed
 - (Next release changes will go here)
+- **The template-level engine's enforced population moves with the date.**
+  `load_rules(framework, on=...)` reads the same packaged deny list for the BoE
+  extract's release: a deactivated rule is not enforced, and a downgraded one is
+  a Warning. `RuleSet.enforced` is therefore 795 BoE rules on 16 November 2026,
+  not 800. `RuleSet.published_in_force` keeps the extract's own population. The
+  extract's `status` field is not changed.
+- JSON report schema 2.0 → 2.1 and evidence schema 1.0 → 1.1. Every new field is
+  optional.
 - **Breaking:** `taxonomy.pack.resolve_pack` / `select_pack` and
   `boe.catalogue.rulebook_for_module` are removed; use
   `rwa_filer.release.resolve_release`, which returns the pack and the rule book
@@ -66,6 +134,36 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ---
 
 ### Fixed
+- **Rules the Bank has switched off at its gateway are no longer enforced.**
+  Before this release, `boe_b0710`, `_1`, `_2`, `_3` and `boe_b0746` (deactivated
+  19 October 2026; known issue #22), `boe_b0272` and `boe_b0274` (16 November
+  2026), the PRA116 `boe_b0063_ss` family and PRA115 `boe_b1014` / `boe_b1022`
+  failed returns the gateway accepts, and MRL001 `boe_b4006_1/_2` and
+  `boe_b4008_1/_2` blocked where the gateway only warns. `compare` reported
+  `boe_b0710` as a break in both returns.
+- **A plain `sum()` or `abs()` in a rule carries no rounding allowance.** The
+  engine read them as `isum()` / `iabs()`, so the summed facts kept their
+  allowances and a rounded return passed where the gateway fails it. Affected:
+  PRA001 `boe_b0770`, `boe_b0794`, `boe_b0820`–`boe_b0823`, `boe_b0829`; PRA116
+  `boe_b0794`, `boe_b1037_ss`. Measured against Arelle on returns built with
+  rounded figures (`tests/releases/4.1.1/oracles/rounding_and_default_oracle.json`).
+  Plain `max` / `min` are unchanged: no published rule calls them, so Arelle
+  cannot be asked.
+- **OF 08.06's "all types" sheet is its own sheet.** A fact with no member on
+  OF 08.06's open axis is the axis default (`eba_TA:x0`). The engine gave it no
+  place, so it was added into every type's sums, and `boe_b0815` and
+  `boe_b1042` failed a correct return. A failure on that sheet is reported with
+  no open key, as the return reports it.
+- **The template-level engine no longer fails a Bank rule where none of its cells
+  is reported.** It read every unreported cell as zero, so `boe_b0778` (an
+  OF 08.07 roll-out class's three shares total 1) failed every class with no
+  exposure, where the shares are rightly empty. For a BoE rule that is not
+  always-execute, a failing place whose cells are all unreported is now
+  `NOT_EVALUATED` with reason `nothing_reported` (`SKIP_NOTHING_REPORTED`), as the
+  gateway skips it (XBRL Variables 1.0 §4: a variable set whose fact variables
+  have all fallen back is not evaluated); a place that holds stays `VACUOUS`.
+  EBA rules read the same way, so `v09796_m`, the EBA twin of `boe_b0778`, no
+  longer fails an empty C 08.07 roll-out class either.
 - **A sum in a published rule adds up what the rule's formula says, not what
   its text suggests.** On a table with one row per obligor grade, securitisation
   or entity, a summed reference either adds up every row or stays on the row

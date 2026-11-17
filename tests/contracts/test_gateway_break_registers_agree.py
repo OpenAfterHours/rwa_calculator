@@ -32,10 +32,12 @@ prior-period frame (it is the bundle the template leg reads), the filing-mapping
 ratchet WITHOUT one. Verdicts are identical today because C 08.04 is not placed
 (P2.73); when it is, this test is where the difference first shows.
 
-The four gateway predicates are driven here too, with synthetic pairs: watching
-legs (h)-(k) fail through the acceptance file costs thirty pipeline runs, while
-each predicate is a set difference these tests can feed directly, including the
-``boe_b1055`` shape (a banked rule breaking on one more portfolio). So is the
+The six gateway predicates are driven here too, with synthetic pairs: watching
+legs (h)-(l) fail through the acceptance file costs thirty pipeline runs, while
+four predicates are a set difference and two a count comparison that these tests
+can feed directly, including the ``boe_b1055`` shape (a banked rule breaking on
+one more portfolio) and leg (l)'s (a banked pair failing in one more place: the
+key does not move, the ``by_portfolio`` unsatisfied count does). So is the
 path that records a gateway result (``_gateway_findings``), with results passed
 through the Bank's deny list (``apply_deny_list``): a downgraded rule is recorded
 at WARNING, a deactivated one not at all, and a banked ERROR the Bank downgrades
@@ -45,7 +47,8 @@ no registered portfolio exercises that path.
 And the register must read back whole: ``_baseline_from`` refuses a key held by
 two entries (one (rule, portfolio, severity) under two reasons), which a hand
 edit of one entry's reason can leave behind and a plain dict would resolve by
-silently keeping the last reason.
+silently keeping the last reason; and every committed gateway pair must carry
+its banked count, or leg (l) is blind to that pair.
 
 References:
 - tests/acceptance/reporting/test_supervisory_validations.py — the register and its legs
@@ -68,6 +71,7 @@ from tests.acceptance.reporting.test_supervisory_validations import (
     GATEWAY_FRAMEWORK,
     GATEWAY_REGIME,
     RUNS,
+    CountMove,
     DisagreementKey,
     GatewayKey,
     _baseline_from,
@@ -75,6 +79,8 @@ from tests.acceptance.reporting.test_supervisory_validations import (
     _disagreements_removed,
     _gateway_breaks_added,
     _gateway_breaks_removed,
+    _gateway_counts_fallen,
+    _gateway_counts_risen,
     _gateway_findings,
 )
 
@@ -210,7 +216,7 @@ def test_the_gateway_section_is_banked_at_all() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The predicates behind legs (h)-(k), driven synthetically
+# The predicates behind legs (h)-(l), driven synthetically
 # ---------------------------------------------------------------------------
 
 
@@ -354,19 +360,78 @@ def test_a_banked_error_the_bank_downgrades_is_a_new_break_and_the_old_one_gone(
     assert (added, removed) == (tuple(measured), tuple(banked))
 
 
+def test_a_banked_pair_failing_in_one_more_place_has_risen() -> None:
+    """Leg (l): the pair's key is unchanged, so (h)/(i) see nothing; its count rose.
+
+    Arrange: a banked pair at 2 unsatisfied; the same pair measured at 3.
+    Act:     ask legs (h), (i) and (l)'s predicates.
+    Assert:  (h) and (i) report nothing; (l) reports the rise with both counts.
+    """
+    # Arrange
+    key = GatewayKey("boe_b0793", "rich", "ERROR")
+    banked, measured = {key: 2}, {key: 3}
+
+    # Act
+    moved = (_gateway_breaks_added(measured, banked), _gateway_breaks_removed(measured, banked))
+    risen = _gateway_counts_risen(measured, banked)
+
+    # Assert
+    assert moved == ((), ())
+    assert risen == (CountMove(key, banked=2, measured=3),)
+    assert risen[0].describe() == "b31/rich: boe_b0793 [ERROR]: 2 -> 3 unsatisfied"
+
+
+def test_a_banked_pair_failing_in_fewer_places_has_fallen_and_not_risen() -> None:
+    """A fall is progress: leg (l) passes on it and reports it for REGEN to bank.
+
+    Arrange: a banked pair at 4 unsatisfied; the same pair measured at 1.
+    Act:     ask for the risen and the fallen counts.
+    Assert:  nothing has risen; the fall is reported with both counts.
+    """
+    # Arrange
+    key = GatewayKey("boe_b0356", "irb-shapes", "WARNING")
+    banked, measured = {key: 4}, {key: 1}
+
+    # Act
+    risen = _gateway_counts_risen(measured, banked)
+    fallen = _gateway_counts_fallen(measured, banked)
+
+    # Assert
+    assert (risen, fallen) == ((), (CountMove(key, banked=4, measured=1),))
+
+
+def test_a_pair_on_one_side_only_is_not_a_count_move() -> None:
+    """A new or a gone pair is (h)'s or (i)'s finding, never (l)'s.
+
+    Arrange: one pair banked only, another measured only.
+    Act:     ask for the risen and the fallen counts.
+    Assert:  neither reports anything.
+    """
+    # Arrange
+    banked = {GatewayKey("boe_b0742", "irb-shapes", "ERROR"): 2}
+    measured = {GatewayKey("boe_b1055", "rich", "ERROR"): 5}
+
+    # Act
+    moved = (_gateway_counts_risen(measured, banked), _gateway_counts_fallen(measured, banked))
+
+    # Assert
+    assert moved == ((), ())
+
+
 def test_an_unchanged_estate_moves_no_predicate() -> None:
     """The control: a measurement equal to the baseline reports nothing either way.
 
-    Without it the three tests above would pass on predicates that always report
+    Without it the tests above would pass on predicates that always report
     everything.
 
-    Arrange: identical measured and banked pairs for both sections.
-    Act:     run all four predicates.
+    Arrange: identical measured and banked pairs for both sections, and counts.
+    Act:     run all six predicates.
     Assert:  each returns nothing.
     """
     # Arrange
     breaks = {GatewayKey("boe_b0793", "rich", "ERROR"): "a reason"}
     opposed = {DisagreementKey("boe_b1055", "rich", "PASS", "FAIL"): "a reason"}
+    counts = {GatewayKey("boe_b0793", "rich", "ERROR"): 3}
 
     # Act
     moved = (
@@ -374,10 +439,12 @@ def test_an_unchanged_estate_moves_no_predicate() -> None:
         _gateway_breaks_removed(breaks, breaks),
         _disagreements_added(opposed, opposed),
         _disagreements_removed(opposed, opposed),
+        _gateway_counts_risen(counts, counts),
+        _gateway_counts_fallen(counts, counts),
     )
 
     # Assert
-    assert moved == ((), (), (), ())
+    assert moved == ((), (), (), (), (), ())
 
 
 # ---------------------------------------------------------------------------
@@ -455,6 +522,54 @@ def test_one_rule_on_two_portfolios_in_two_entries_is_read_whole() -> None:
         GatewayKey("boe_b0356", "irb-shapes", "WARNING"): "one cause",
         GatewayKey("boe_b0356", "rich", "WARNING"): "another cause",
     }
+
+
+def test_the_banked_count_is_read_back_per_pair() -> None:
+    """Leg (l) compares what REGEN wrote: each portfolio's by_portfolio unsatisfied.
+
+    Arrange: one entry on two portfolios with different counts.
+    Act:     read the register content.
+    Assert:  each pair carries its own count.
+    """
+    # Arrange
+    entry = _gateway_entry("boe_b0356", "WARNING", "a cause", ["irb-shapes", "rich"])
+    entry["by_portfolio"] = {"irb-shapes": {"unsatisfied": 4}, "rich": {"unsatisfied": 2}}
+
+    # Act
+    counts = _baseline_from({GATEWAY_SECTION: [entry]}).unsatisfied
+
+    # Assert
+    assert counts == {
+        GatewayKey("boe_b0356", "irb-shapes", "WARNING"): 4,
+        GatewayKey("boe_b0356", "rich", "WARNING"): 2,
+    }
+
+
+def test_every_committed_gateway_pair_carries_a_banked_count() -> None:
+    """A pair with no banked count is a pair leg (l) cannot see.
+
+    Arrange: the committed register.
+    Act:     read its pairs and its counts as the acceptance legs do.
+    Assert:  the two key sets are equal, and every count is a positive integer
+             (a FAIL has at least one unsatisfied evaluation).
+    """
+    # Arrange
+    baseline = _baseline_from(_register())
+
+    # Act
+    uncounted = sorted(key.describe() for key in set(baseline.gateway) - set(baseline.unsatisfied))
+    stray = sorted(key.describe() for key in set(baseline.unsatisfied) - set(baseline.gateway))
+    not_positive = sorted(
+        key.describe()
+        for key, count in baseline.unsatisfied.items()
+        if not isinstance(count, int) or count < 1
+    )
+
+    # Assert
+    assert (uncounted, stray, not_positive) == ([], [], []), (
+        f"{REGISTER_PATH.name}: pairs with no banked count {uncounted}, counts for no pair "
+        f"{stray}, non-positive counts {not_positive}.\n{REBANK}"
+    )
 
 
 def test_the_committed_register_holds_each_pair_once() -> None:

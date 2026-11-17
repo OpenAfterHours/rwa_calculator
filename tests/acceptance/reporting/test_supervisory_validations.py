@@ -27,12 +27,13 @@ register, applied to ALL THREE populations:
   (h) no gateway break outside the baseline         — Basel 3.1, the Bank's reading;
   (i) no baseline gateway break that has gone       — a fix must shrink it;
   (j) no engine disagreement outside the baseline   — the two readings part company;
-  (k) no baseline disagreement that has gone        — agreement must shrink it.
+  (k) no baseline disagreement that has gone        — agreement must shrink it;
+  (l) no banked gateway break failing in more places — its count may not rise.
 
 An Error-severity break rejects the entire return at submission, so every
 ``ERROR`` line in the register is a blocking filing defect.
 
-Why there is a GATEWAY leg, (h)-(k), and why it keys on (rule, portfolio):
+Why there is a GATEWAY leg, (h)-(l), and why it keys on (rule, portfolio):
     Legs (a)-(g) read our template frames through rwa-filer's TEMPLATE-LEVEL
     engine (``rwa_filer.validate``). The Bank's gateway does not: it runs each
     rule on the filed return the way the taxonomy's XBRL formula reads it, and
@@ -60,10 +61,17 @@ Why there is a GATEWAY leg, (h)-(k), and why it keys on (rule, portfolio):
       FAILs, ERROR and WARNING. Keyed on the PAIR, not the rule: under a
       rule-only key ``boe_b1055`` spread from two portfolios to seven and
       nothing noticed. The severity is part of the key too, so a deny-list
-      downgrade of a banked ERROR is a move the legs see, not a silent edit. ``tests/contracts/test_gateway_break_registers_agree.py``
-      holds the ERROR pairs equal, rule for rule, to
-      ``scripts/filing_mapping_baseline.json``'s ``error_rules_by_rule``, so the
-      two ratchets move together or not at all.
+      downgrade of a banked ERROR is a move the legs see, not a silent edit.
+      ``tests/contracts/test_gateway_break_registers_agree.py`` holds the ERROR
+      pairs equal, rule for rule, to ``scripts/filing_mapping_baseline.json``'s
+      ``error_rules_by_rule``, so the two ratchets move together or not at all.
+      The key says WHETHER a pair breaks, not where, so leg (l) also holds each
+      pair's ``by_portfolio`` unsatisfied count to may-not-rise: a banked pair
+      failing in one more place fails the gate, naming the pair and the new
+      count, and one failing in fewer passes with a warning so that REGEN banks
+      the lower count. Without it a new defect could sit behind a banked reason
+      (a ``publisher issue PI-nn`` one included) on every pair that no focused
+      acceptance test pins place by place.
     - ``known_engine_disagreements`` — every (rule, portfolio) on which the two
       engines reach OPPOSITE verdicts: one FAILs while the other PASSes or holds
       vacuously. NOT_EVALUATED on either side is not a disagreement. Keyed on
@@ -92,7 +100,8 @@ Publisher-issue labels:
     ``tests/contracts/test_register_publisher_issues.py`` enforces both
     directions on the committed JSON (fast; it runs no pipeline).
 
-All eleven legs share ONE set-diff (P5.41):
+The eleven set legs share ONE set-diff (P5.41); leg (l) compares counts on the
+pairs both sides hold, and a pair on one side only is (h)'s or (i)'s:
     The arithmetic behind "new" and "gone" is ``scripts/tolerated_findings.py``
     ``::diff``, extracted from this file so that this register and the two
     DECLARED ones — ``tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`` and
@@ -318,6 +327,7 @@ from __future__ import annotations
 
 import json
 import os
+import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date
 from functools import partial
@@ -454,7 +464,11 @@ REGISTER_NOTES: dict[str, str] = {
         "vacuity register. Both gateway sections are keyed per (rule, portfolio), so a rule that "
         "breaks on one more portfolio is a new entry; known_gateway_breaks is keyed on the "
         "severity too, so a break the deny list moves to another severity is a new entry and "
-        "its reason is written again. The ERROR half of known_gateway_breaks "
+        "its reason is written again. Each known_gateway_breaks pair's by_portfolio "
+        "unsatisfied count may not rise: a banked pair that fails in more places fails the "
+        "gate, naming the pair and the new count, and one that fails in fewer passes with a "
+        "warning so that a regeneration banks the lower count as the new ceiling (the reason "
+        "is kept, so read it against the new places). The ERROR half of known_gateway_breaks "
         "equals scripts/filing_mapping_baseline.json error_rules_by_rule rule for rule "
         "(tests/contracts/test_gateway_break_registers_agree.py): re-bank the two together."
     ),
@@ -1550,11 +1564,15 @@ def gate_run() -> GateRun:
 
 
 class Baseline(NamedTuple):
-    """The committed register, as five ``{key: reason}`` maps.
+    """The committed register, as five ``{key: reason}`` maps and one of counts.
 
     Named rather than a bare tuple because a positional unpack
     (``_, baseline = _read_baseline()``) silently reads the wrong population the
     moment another is added — which is what the gateway leg just did.
+
+    ``unsatisfied`` is each banked gateway pair's ``by_portfolio`` unsatisfied
+    count, which leg (l) holds to may-not-rise. A pair whose entry carries no
+    count (a synthetic payload) has none here.
     """
 
     rules: dict[RuleKey, str]
@@ -1562,17 +1580,18 @@ class Baseline(NamedTuple):
     vacuous: dict[RuleKey, str]
     gateway: dict[GatewayKey, str]
     disagreements: dict[DisagreementKey, str]
+    unsatisfied: dict[GatewayKey, int]
 
 
 def _read_baseline() -> Baseline:
-    """Load the committed register as five ``{key: reason}`` maps."""
+    """Load the committed register as five ``{key: reason}`` maps and the gateway counts."""
     if not BASELINE_PATH.exists():
-        return Baseline({}, {}, {}, {}, {})
+        return Baseline({}, {}, {}, {}, {}, {})
     return _baseline_from(json.loads(BASELINE_PATH.read_text(encoding="utf-8")))
 
 
 def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
-    """The ``{key: reason}`` maps of a register's content.
+    """The ``{key: reason}`` maps of a register's content, and its gateway counts.
 
     The two gateway sections hold one entry per (rule, reason) with the
     portfolios it covers; each is exploded back into its (rule, portfolio)
@@ -1625,7 +1644,12 @@ def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
             for portfolio in entry["portfolios"]
         ),
     )
-    return Baseline(rules, templates, vacuous, gateway, disagreements)
+    unsatisfied = {
+        GatewayKey(entry["rule_id"], portfolio, entry["severity"]): facts["unsatisfied"]
+        for entry in payload.get("known_gateway_breaks", [])
+        for portfolio, facts in entry.get("by_portfolio", {}).items()
+    }
+    return Baseline(rules, templates, vacuous, gateway, disagreements, unsatisfied)
 
 
 def _keyed_reasons[K: tuple[str, ...]](
@@ -1802,13 +1826,14 @@ def _rules_no_longer_vacuous(
 
 
 # ---------------------------------------------------------------------------
-# The gateway legs, as four named predicates
+# The gateway legs, as six named predicates
 # ---------------------------------------------------------------------------
-# Named for the same reason as the vacuity pair: watching legs (h)-(k) fail
+# Named for the same reason as the vacuity pair: watching legs (h)-(l) fail
 # through the tests costs the whole run matrix and a fixture change, while these
 # can be driven with a synthetic measured-vs-baseline pair in milliseconds —
 # tests/contracts/test_gateway_break_registers_agree.py does exactly that,
-# including the boe_b1055 shape (one more portfolio for a banked rule).
+# including the boe_b1055 shape (one more portfolio for a banked rule) and a
+# banked pair failing in one more place (leg (l)).
 
 
 def _gateway_breaks_added(
@@ -1823,6 +1848,43 @@ def _gateway_breaks_removed(
 ) -> tuple[GatewayKey, ...]:
     """Banked (rule, portfolio) pairs the gateway no longer breaks."""
     return diff(measured, baseline).removed
+
+
+class CountMove(NamedTuple):
+    """A banked gateway pair whose unsatisfied count moved: leg (l)'s finding."""
+
+    key: GatewayKey
+    banked: int
+    measured: int
+
+    def describe(self) -> str:
+        """The pair and both counts, for an assertion message or a report."""
+        return f"{self.key.describe()}: {self.banked} -> {self.measured} unsatisfied"
+
+
+def _gateway_counts_risen(
+    measured: Mapping[GatewayKey, int], banked: Mapping[GatewayKey, int]
+) -> tuple[CountMove, ...]:
+    """Banked pairs that now fail in MORE places than the register holds - leg (l) fails."""
+    return tuple(move for move in _count_moves(measured, banked) if move.measured > move.banked)
+
+
+def _gateway_counts_fallen(
+    measured: Mapping[GatewayKey, int], banked: Mapping[GatewayKey, int]
+) -> tuple[CountMove, ...]:
+    """Banked pairs that now fail in FEWER places - leg (l) passes and reports them."""
+    return tuple(move for move in _count_moves(measured, banked) if move.measured < move.banked)
+
+
+def _count_moves(
+    measured: Mapping[GatewayKey, int], banked: Mapping[GatewayKey, int]
+) -> tuple[CountMove, ...]:
+    """Every pair held on both sides whose count differs; a pair on one side is (h)/(i)'s."""
+    return tuple(
+        CountMove(key, banked[key], measured[key])
+        for key in sorted(set(measured) & set(banked))
+        if measured[key] != banked[key]
+    )
 
 
 def _disagreements_added(
@@ -2186,6 +2248,55 @@ def test_no_baseline_gateway_break_has_been_fixed_without_being_removed(gate_run
         "list moved to another severity is in leg (h) too: re-write its reason) - and, for "
         "an Error, re-bank scripts/filing_mapping_baseline.json in the same change:\n"
         f"{detail}"
+    )
+
+
+def test_no_banked_gateway_break_fails_in_more_places(gate_run: GateRun) -> None:
+    """A banked pair's unsatisfied count may not rise — leg (l).
+
+    Legs (h)/(i) compare the SET of (rule, portfolio, severity) pairs, so a pair
+    already banked could fail in any number of new places — a new defect of
+    ours behind a reason written for the old ones, a ``publisher issue PI-nn``
+    label among them — and neither leg would move. This leg holds each banked
+    pair's ``by_portfolio`` unsatisfied count: a rise fails, naming the pair and
+    the new count. A fall passes, because fewer failing places is progress, and
+    is reported as a warning so that ``REGEN_VALIDATION_BASELINE=1`` banks the
+    lower count (which then becomes the new ceiling); the reasons are preserved
+    as for every other section, so read the reason against the new places.
+
+    Arrange: the committed register's banked counts plus the current gateway breaks.
+    Act:     compare the counts on the pairs both hold.
+    Assert:  none has risen; any that fell is reported.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline()
+    measured = {key: fact.unsatisfied for key, fact in gate_run.gateway.items()}
+
+    # Act
+    risen = _gateway_counts_risen(measured, baseline.unsatisfied)
+    fallen = _gateway_counts_fallen(measured, baseline.unsatisfied)
+
+    # Assert
+    if fallen:
+        warnings.warn(
+            f"{len(fallen)} banked gateway break(s) now fail in fewer places; bank the lower "
+            "count with REGEN_VALIDATION_BASELINE=1 so it becomes the ceiling:\n  "
+            + "\n  ".join(move.describe() for move in fallen),
+            stacklevel=1,
+        )
+    detail = "\n".join(
+        f"  {move.describe()}\n      now {gate_run.gateway[move.key].figures()}\n"
+        f"      reason: {baseline.gateway[move.key]}"
+        for move in risen
+    )
+    assert not risen, (
+        f"{len(risen)} banked gateway break(s) fail in MORE places than "
+        f"{BASELINE_PATH.name} holds - a new defect can sit behind a banked reason:\n"
+        f"{detail}\nFix the new places. Only if the reason still accounts for every one, "
+        "re-bank the count with REGEN_VALIDATION_BASELINE=1."
     )
 
 

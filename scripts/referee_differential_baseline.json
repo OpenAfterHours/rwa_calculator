@@ -1,13 +1,13 @@
 {
   "_comment": "Referee differential baseline (scripts/referee_differential.py --check). For each golden return: disagreements, arelle_errors and count_differences are held EXACTLY (a new entry fails, and so does one that went away unrecorded); rules_compared may not DECREASE. Re-measure with --update-baseline after a deliberate change and say why in _note; never type the entries.",
-  "_note": "Re-banked 2026-11-17 after the PRA001 rule-review lanes merged: the golden returns changed. Six more returns are golden (10 -> 16): b31/art199, irb-classes, crm-substitution, irb-shapes and both facility-share books had structure findings until the filing adapter typed the average maturity in the whole units PRA001 requires (b347728, O-17: structure_findings 47 -> 0), and b31/equity-transitional is new (ee96beb, O-02). The returns that were already golden changed content through the OF 02.00 / 07.00 / 08.01 / 09.02 output fixes of the same merge. Arelle 2.47.5 on boe-banking-v411.zip (checksum as banked): every golden return loads with 0 error-level messages and every compared rule agrees, 1441 of 1441 on each of the 16, with no count difference and nothing lost. Full run 2962 s, workers one at a time.",
+  "_note": "Re-banked 2026-11-17, second time: O-18 (a4c636d) stopped C / OF 08.01 filing column 0230 / 0250 for slotting legs, so b31/rich (2211 -> 2207 facts), crm-substitution (1249 -> 1245) and irb-shapes (1372 -> 1364) file fewer facts; Arelle's satisfied counts fall on boe_b0381, boe_b0314_1_5 and boe_b0742 there and no verdict changes. Every one of the 16 golden returns loads with 0 error-level messages and every compared rule agrees, 1441 of 1441, no count difference, nothing lost (Arelle 2.47.5, boe-banking-v411.zip as banked). Measured with the pooled, cached runner: the 51 worker results were reused from the content-addressed cache, every one produced by a full Arelle run on byte-identical inputs. The first re-bank today (c8e699a) brought the set from 10 to 16 golden returns: six joined when O-17 typed the average maturity in whole units (structure findings 47 -> 0) and b31/equity-transitional is new (O-02).",
   "measured_with": {
     "arelle": "2.47.5",
     "taxonomy_package_sha256": "b414cf871ad2986f83fdf7495655bab88de38679e8ff6eced61f1033cdac41d0"
   },
   "portfolios": {
     "b31/rich": {
-      "facts": 2211,
+      "facts": 2207,
       "referee_complete": true,
       "rules_evaluated_by_arelle": 566,
       "rules_compared": 1441,
@@ -67,7 +67,7 @@
       "lost": []
     },
     "b31/crm-substitution": {
-      "facts": 1249,
+      "facts": 1245,
       "referee_complete": true,
       "rules_evaluated_by_arelle": 566,
       "rules_compared": 1441,
@@ -103,7 +103,7 @@
       "lost": []
     },
     "b31/irb-shapes": {
-      "facts": 1372,
+      "facts": 1364,
       "referee_complete": true,
       "rules_evaluated_by_arelle": 245,
       "rules_compared": 1441,

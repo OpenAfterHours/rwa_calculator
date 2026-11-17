@@ -692,10 +692,11 @@ def _differences(version: str, packaged: Path, rebuilt: Path) -> list[str]:
     ):
         ours = {path.relative_to(packaged): path for path in (packaged / subdir).glob(pattern)}
         theirs = {path.relative_to(rebuilt): path for path in (rebuilt / subdir).glob(pattern)}
-        found += [f"only packaged: {name}" for name in sorted(set(ours) - set(theirs))]
-        found += [f"only rebuilt: {name}" for name in sorted(set(theirs) - set(ours))]
+        # Named with "/" on every platform: the report is the same wherever it runs.
+        found += [f"only packaged: {name.as_posix()}" for name in sorted(set(ours) - set(theirs))]
+        found += [f"only rebuilt: {name.as_posix()}" for name in sorted(set(theirs) - set(ours))]
         found += [
-            f"differs: {name}"
+            f"differs: {name.as_posix()}"
             for name in sorted(set(ours) & set(theirs))
             if not filecmp.cmp(ours[name], theirs[name], shallow=False)
         ]

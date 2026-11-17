@@ -585,9 +585,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   holding only slotting exposure now reports both columns empty, not 0.0: on the
   specialised-lending sheet (Basel 3.1 sheet 0010, CRR `specialised_lending`),
   that is rows 0010 and 0020 in every portfolio with slotting. A row holding F-IRB
-  specialised lending beside slotting reports the F-IRB figure, no longer diluted;
-  so does the CRR corporate sheet, which keeps corporate slotting beside corporate
-  F-IRB. PS1/26 Annex II p.111 excludes slotting from both columns; CRR Annex II
+  specialised lending beside slotting on the same sheet reports the F-IRB figure,
+  no longer diluted (no test portfolio holds that mix yet). PS1/26 Annex II
+  p.111 excludes slotting from both columns; CRR Annex II
   excludes it from column 0230 only, and the CRR maturity cell is left empty
   because no maturity is carried for slotting. The FIRB-and-slotting Total is
   unchanged. No RWA changes; anything that reads these cells from the export must

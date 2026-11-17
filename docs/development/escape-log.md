@@ -5118,8 +5118,12 @@ requires every register reason on such a rule to cite the issue or rebut it.
   (`rich`, `crm-substitution`, `irb-shapes`) the specialised-lending sheet is
   slotting-only: 16 filed 0.0 facts on Basel 3.1 OF08.01.01.01 sheet 0010 (rows
   0010 / 0020, and 0030 / 0034 on `irb-shapes`, c0230 and c0250), and 0.0 on
-  CRR `specialised_lending` rows 0010 / 0020 / 0030 / 0080. CRR's corporate
-  sheet, which keeps corporate slotting beside corporate F-IRB, was diluted.
+  CRR `specialised_lending` rows 0010 / 0020 / 0030 / 0080. A sheet holding
+  F-IRB specialised lending beside slotting would have filed a diluted average.
+  That shape is reachable in both regimes: a specialised-lending leg whose model
+  permits F-IRB but not slotting goes to F-IRB. No registered portfolio holds it
+  (P2.105). Slotting is assigned to exposure class specialised lending only
+  (`engine/classify/approach.py`), so no other class sheet holds a slotting leg.
 - **Rule**: PS1/26 Annex II §3.3.3 p.111, column 0250: *"This column shall
   therefore not be filled in for the exposure class 'retail' or for exposures
   subject to the slotting approach"*; column 0230: *"Data shall not be reported
@@ -5143,23 +5147,38 @@ requires every register reason on such a rule to cite the issue or rebut it.
   — a mixed specialised-lending sheet in both regimes (an F-IRB leg whose LGD and
   maturity must survive beside a slotting leg whose weight must leave, with an
   adequacy assertion that the diluted average differs), a slotting-only sheet,
-  the CRR corporate sheet, and a structural check that every `WeightedAvg` the
-  shared C / OF 08.01-08.02 spec binds is weighted by `parameter_weight` of its
-  own parameter, so an average added later with a raw exposure weight fails;
-  `tests/acceptance/reporting/test_of0801_slotting_parameters.py` on the three
-  registered portfolios in both regimes (no c0230 / c0250 on the sheet, none
-  filed on sheet 0010; Total 0002 held to the ledger).
-- **Verified red** (against `c8e699a`, the parent): unit `10 failed, 2 passed` —
-  `assert 597.2727272727274 == 1314.0` (c0250, mixed sheet, both regimes),
-  `assert 0.17272727272727273 == 0.38` (c0230), `assert 0.0 is None`
-  (slotting-only sheet), `assert 790.8333333333333 == 976.9117647058823` (CRR
-  corporate); acceptance `9 failed, 6 passed` — `assert {('0010', '02...0'):
-  0.0, ...} == {}` on all six sheets and filed facts `assert 4 == 0` (`rich`,
-  `crm-substitution`) and `assert 8 == 0` (`irb-shapes`). The structural check
-  (added after) is red under the one-change mutation that restores c0250's raw
-  `ead_final` weight (`('specialised_lending', ('0010', '0250')): 'ead_final'`
-  and the other c0250 places, on C 08.01 and C 08.02 in both regimes), beside
-  the five value tests for c0250.
+  the FIRB-and-slotting Total as a guard, and a structural check that every
+  `WeightedAvg` the shared C / OF 08.01-08.02 spec binds is weighted by
+  `parameter_weight` of its own parameter, so an average added later with a raw
+  exposure weight fails. Every frame in that module is a shape the ledger can
+  carry. And `tests/acceptance/reporting/test_of0801_slotting_parameters.py` on
+  the three registered portfolios in both regimes (no c0230 / c0250 on the
+  sheet, none filed on sheet 0010; Total 0002 held to the ledger).
+- **Verified red** (the committed tests against `c8e699a`, the parent; re-measured
+  after review): unit `8 failed, 2 passed` (the structural check cannot be
+  collected there, since `parameter_weight` does not exist yet, so it was run
+  without it) — `assert 597.2727272727274 == 1314.0` (c0250, mixed sheet, both
+  regimes), `assert 0.17272727272727273 == 0.38` (c0230, both regimes),
+  `assert 0.0 is None` (slotting-only sheet, both regimes, both columns). The
+  two passes are the Total 0002 guards. Acceptance `9 failed, 6 passed` —
+  `AssertionError: assert {('0010', '02...0'): 0.0, ...} == {}` on all six
+  sheets, and on the filed facts
+  `AssertionError: assert {('0010', '02...020', '0250')} == set()` (`rich`,
+  `crm-substitution`: extra items `('0010', '0230')`, `('0010', '0250')`,
+  `('0020', '0230')`, `('0020', '0250')`) and
+  `AssertionError: assert {('0010', '02... '0250'), ...} == set()`
+  (`irb-shapes`: rows 0010 / 0020 / 0030 / 0034 x both columns). The six
+  passes are the Total 0002 guards. The structural check (added after) is red
+  under the one-change mutation that restores c0250's raw `ead_final` weight
+  (`('specialised_lending', ('0010', '0250')): 'ead_final'` and the other c0250
+  places, on C 08.01 and C 08.02 in both regimes), beside the value tests for
+  c0250.
+- **Corrected after review (same day)**: as first committed (`a4c636d`), this
+  entry quoted the filed-facts red as `assert 4 == 0` / `assert 8 == 0`, which
+  came from a draft of the test and not the committed one. It also claimed that
+  the CRR corporate sheet keeps corporate slotting and had been diluted, and the
+  unit module had a test for it. That shape came only from a synthetic frame;
+  the classifier cannot produce it. The claim and the test are gone.
 - **What the fix moved**: no RWA. Goldens: b31 `specialised_lending_firb_slotting`
   rows 0010 / 0020 c0230 / c0250 and crr `specialised_lending` rows 0010 / 0020 /
   0080 c0230 / c0250, 0.0 → empty (10 cells). Register: `boe_b0742` on

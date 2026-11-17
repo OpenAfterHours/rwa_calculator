@@ -91,8 +91,9 @@ exposure-weighted average of its parameter over the row's legs that CARRY it
 where the leg carries the parameter, else null); a slotting leg is left out,
 not averaged in as a zero, so a row of slotting exposure alone reports none of
 the three, and a row that holds F-IRB specialised lending beside slotting (both
-are on Basel 3.1 sheet 0010, and CRR keeps corporate slotting on its corporate
-sheet) reports the F-IRB legs' figure, not a diluted one.
+are on Basel 3.1 sheet 0010 and on the CRR ``specialised_lending`` sheet; the
+classifier slots only exposure class specialised lending) reports the F-IRB
+legs' figure, not a diluted one.
 
 The PD a row reports is the post-input-floor PD (``pd_floored``,
 ``pd_average``). (``pd_floored`` is sealed by the
@@ -125,7 +126,7 @@ means that this column shall not be filled in for the exposure class
 'retail'"). The CRR cell is left out all the same, because the engine seals no
 Article 162 maturity on a slotting leg — one definition for both regimes, as
 column 0010 has; whether CRR C 08.01 should report a slotting maturity is open
-(IMPLEMENTATION_PLAN.md P2.74). The exclusion is per LEG, not per sheet: sheet
+(IMPLEMENTATION_PLAN.md P2.104). The exclusion is per LEG, not per sheet: sheet
 0010 also holds F-IRB specialised lending, whose LGD and maturity are reported,
 so binding the column to no figure on the sheet (``sheet_spec``, the retail
 mechanism below) would blank them.

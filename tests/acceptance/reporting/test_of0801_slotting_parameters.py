@@ -25,8 +25,12 @@ The FIRB-and-slotting Total (sheet 0002) already averaged only the legs that
 carry the parameter and does not move; it is held here against the ledger.
 
 The mixed case - F-IRB specialised lending beside slotting on one sheet, where
-the defect filed a diluted figure rather than a zero - is in no registered
-portfolio and is held by the unit test.
+the defect filed a diluted figure rather than a zero - is reachable in both
+regimes and in no registered portfolio. A specialised-lending leg whose model
+permits F-IRB but not slotting goes to F-IRB (``engine/classify/approach.py``;
+Basel 3.1 forces only IPRE / HVCRE to slotting) and lands on the same sheet as
+slotting legs: Basel 3.1 sheet 0010, CRR ``specialised_lending``. It is held by
+the unit test until a portfolio registers it (IMPLEMENTATION_PLAN.md P2.105).
 
 References:
 - PRA PS1/26 Annex II §3.3.3 columns 0230 and 0250 (p.111)

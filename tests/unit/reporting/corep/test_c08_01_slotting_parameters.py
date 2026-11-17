@@ -4,13 +4,19 @@ Why this file exists: a class sheet averaged LGD and maturity over EVERY leg's
 exposure value, a leg with no value counting as zero. A slotting leg carries
 neither (the engine seals ``lgd_floored`` and ``irb_maturity_m`` null on it), so
 the specialised-lending sheet - Basel 3.1 sheet 0010 "Specialised Lending (FIRB
-approach or slotting approach)", the CRR ``specialised_lending`` sheet, and the
-CRR ``corporate`` sheet, which keeps corporate slotting beside corporate F-IRB -
+approach or slotting approach)" and the CRR ``specialised_lending`` sheet -
 reported 0.0 on a row of slotting exposure alone, and on a row that also holds
 F-IRB specialised lending a diluted average: not the F-IRB legs' figure and not
 anything else. The Totals already averaged only the legs that carry the
 parameter (``corep/c08_sheets.py``); the class sheets now do the same, as column
 0010 (PD) does since ``e8cb71c``.
+
+Every frame here is a shape the sealed ledger can carry (LESSONS C11(c)): legs
+of exposure class specialised lending only, because the classifier assigns
+slotting to that class alone (``engine/classify/approach.py``), and an F-IRB
+specialised-lending leg is what a model permitting F-IRB but not slotting
+produces. No registered portfolio holds that mix yet (IMPLEMENTATION_PLAN.md
+P2.105).
 
 The instruction, Basel 3.1 (PS1/26 Annex II §3.3.3, OF 08.01):
 - column 0250, p.111: "This data shall not be reported for the exposure values
@@ -28,7 +34,7 @@ remaining maturity is an element of CRR slotting RWEA (Art. 153(5) Table 1). The
 CRR cell is left empty all the same, on the ground that the engine carries no
 Article 162 maturity for a slotting leg - one definition for both regimes, as
 column 0010 has. Whether CRR C 08.01 should report a slotting maturity is a
-separate, open question (IMPLEMENTATION_PLAN.md P2.74).
+separate, open question (IMPLEMENTATION_PLAN.md P2.104).
 
 References:
 - PRA PS1/26 Annex II §3.3.3 columns 0230 and 0250 (p.111)
@@ -53,7 +59,6 @@ from tests.unit.reporting.corep._irb_sheet_frames import (
     cell,
     irb_sheet,
 )
-from tests.unit.reporting.corep.test_c08_01 import _irb_results_with_slotting
 from tests.unit.reporting.corep.test_c08_01_pd_column import _mixed_specialised_lending
 
 if TYPE_CHECKING:
@@ -127,11 +132,13 @@ def test_a_slotting_leg_is_left_out_of_the_sheets_average(framework: str, column
 @pytest.mark.parametrize("column", sorted(PARAMETERS))
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_a_slotting_only_sheet_reports_no_lgd_and_no_maturity(framework: str, column: str) -> None:
-    # Arrange
+    # Arrange - the mixed book's slotting leg alone, the shape of every
+    # registered portfolio's specialised-lending sheet.
+    slotting_only = _mixed_book().filter(pl.col("approach_applied") == "slotting")
     generator = LedgerShimCorepGenerator()
 
     # Act
-    bundle = generator.generate_from_lazyframe(_irb_results_with_slotting(), framework=framework)
+    bundle = generator.generate_from_lazyframe(slotting_only, framework=framework)
     sheet = bundle.c08_01[
         irb_sheet(framework, "specialised_lending", OF08_SPECIALISED_LENDING_FIRB_SLOTTING)
     ]
@@ -143,40 +150,18 @@ def test_a_slotting_only_sheet_reports_no_lgd_and_no_maturity(framework: str, co
 
 
 @pytest.mark.parametrize("column", sorted(PARAMETERS))
-def test_crr_corporate_sheet_averages_its_f_irb_legs_beside_corporate_slotting(
-    column: str,
-) -> None:
-    """CRR keeps corporate slotting on the corporate sheet (it keys sheets by
-    exposure class), so that sheet mixes the two approaches on every registered
-    shape that has corporate slotting."""
-    # Arrange
-    carrier, scale = PARAMETERS[column]
-    legs = _irb_results_with_slotting().collect().filter(pl.col("exposure_class") == "corporate")
-    due, diluted = _averages(legs, carrier, scale)
-    assert due != pytest.approx(diluted), "no corporate slotting leg: nothing could dilute it"
-
-    # Act
-    bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
-        _irb_results_with_slotting(), framework="CRR"
-    )
-
-    # Assert
-    assert cell(bundle.c08_01["corporate"], "0010", column) == pytest.approx(due, rel=1e-12)
-
-
-@pytest.mark.parametrize("column", sorted(PARAMETERS))
 def test_b31_firb_and_slotting_total_is_unchanged_by_the_class_sheets(column: str) -> None:
     """GUARD, green before and after the fix: Total 0002 already averaged only
     the legs that carry the parameter (``c08_sheets._averaged_cells``), so a
     class sheet that stops averaging slotting in moves nothing on it."""
     # Arrange - every leg of the book is F-IRB or slotting, so all are on the Total.
     carrier, scale = PARAMETERS[column]
-    legs = _irb_results_with_slotting().collect()
+    legs = _mixed_book().collect()
     due, _diluted = _averages(legs, carrier, scale)
 
     # Act
     bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
-        _irb_results_with_slotting(), framework="BASEL_3_1"
+        _mixed_book(), framework="BASEL_3_1"
     )
 
     # Assert

@@ -30,7 +30,8 @@ Module map:
 - ``runner`` — ``run_referee``: plan the run, launch one guarded worker per
   chunk, merge the workers' results into a ``RefereeResult``; and, for many
   instances at once, ``prepare_referee`` each, then ``run_referees`` them all
-  through one pool of workers (``resolve_jobs`` says how many run at once)
+  through one pool of workers (``resolve_jobs`` says how many run at once;
+  inside ``interrupt_on_sigterm`` a SIGTERM kills them as Ctrl-C does)
 - ``plan`` — pure standard library: read an entry point out of the taxonomy
   package, select the assertions an instance can fire, chunk them, and write
   the overlay package that trims the entry point to one chunk

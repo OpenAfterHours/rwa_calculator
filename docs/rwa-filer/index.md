@@ -907,10 +907,11 @@ A large module is slow and heavy. PRA001 is 741 MB of taxonomy XML, so the
 referee trims the entry point to the rules the file can trigger and runs them
 in several workers, each held to a memory limit (`--max-rss-gb`, default 9 GB).
 Expect a few minutes and up to 3.9 GB per worker for a credit-risk return.
-Workers run as many at once as fit in the memory available at that limit, one
-per CPU at most; `--jobs N` sets the number. A worker that is killed, or that
-returns no verdict for a rule, makes the run incomplete, and an incomplete run
-never counts as agreement.
+Workers run as many at once as fit in the memory available at that limit (or
+under a container's memory limit, where that is less), one per CPU at most;
+`--jobs N` sets the number. Ctrl-C or SIGTERM kills the running workers. A
+worker that is killed, or that returns no verdict for a rule, makes the run
+incomplete, and an incomplete run never counts as agreement.
 
 The referee changes Arelle's behaviour in two places, both measured on
 arelle-release 2.47.5 and both stated in every result.

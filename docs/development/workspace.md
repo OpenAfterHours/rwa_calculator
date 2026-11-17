@@ -201,7 +201,7 @@ the filing-mapping ratchet's business, and is not filed. A portfolio that joins
 or leaves the fourteen must be re-banked and explained.
 
 The gate needs Arelle and the Bank's package, neither of which is in the
-repository. A full run is about 17 minutes on a 16 GB, 4-core machine with
+repository. A full run is about 16 minutes on a 16 GB, 4-core machine with
 nothing cached and under a minute when no return changed: Arelle's workers run
 several at once, and a worker's result is reused while nothing it reads has
 changed (see [Scripts](scripts.md)). It runs in its own workflow, `Referee

@@ -70,8 +70,9 @@ files, the measurement and the timings are left in ``.referee-run/``
 
 A worker's result is cached, keyed by a SHA-256 over everything it depends on
 (the instance's bytes, the taxonomy package's, the overlay's members, the
-filing-rule plug-in, the spec's settings, the Arelle release and the referee's
-own code) and never over a path; see ``rwa_filer.referee.runner``. A hit skips
+filing-rule plug-in, the spec's settings, every distribution installed in the
+Arelle environment and the referee's own code) and never over a path; see
+``rwa_filer.referee.runner``. A hit skips
 that Arelle worker only: every return is still built, filed, merged and set
 beside the native engine. The cache is ``.referee-run/cache/``, or the folder
 ``RWA_FILER_REFEREE_CACHE`` names (read by ``rwa_filer.referee``, not here:

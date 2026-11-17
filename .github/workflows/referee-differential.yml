@@ -17,7 +17,7 @@ name: Referee Differential
 # See scripts/referee_differential.py for what is held and how, and
 # scripts/referee_differential_baseline.json for the banked state.
 #
-# WHY IT IS NOT IN ci.yml: a full run is ~17 minutes of Arelle with nothing
+# WHY IT IS NOT IN ci.yml: a full run is ~16 minutes of Arelle with nothing
 # cached (two 3-4 GB workers at once), the taxonomy package is a 60 MB download
 # from the Bank's site, and Arelle is a tool this project does not otherwise
 # install. So it runs where it can find something: on a change to the code it

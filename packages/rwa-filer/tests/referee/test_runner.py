@@ -1163,7 +1163,8 @@ def test_the_worker_reads_its_spec_from_stdin_and_writes_only_its_result_to_stdo
     spec = {"instance": "instance.xbrl", "chunk": 0}
     seen: list[dict[str, Any]] = []
 
-    def session(handed: dict[str, Any]) -> dict[str, Any]:
+    def session(handed: dict[str, Any], *, close: bool = True) -> dict[str, Any]:
+        assert close is True, "in-process, main closes the session it opened"
         seen.append(handed)
         print("arelle chatter")  # noqa: T201 - stands in for a processor that prints
         return {"assertions": {"boe_a": [1, 0]}}
@@ -1298,11 +1299,8 @@ def test_the_session_is_given_the_filing_plugin_and_the_function_plugins(
             seen.update(options)
 
     class Session:
-        def __enter__(self) -> Session:
-            return self
-
-        def __exit__(self, *_exc: object) -> None:
-            return None
+        def close(self) -> None:
+            seen["closed"] = True
 
         def run(self, _options: object, logHandler: object = None) -> None:  # noqa: N803
             seen["ran"] = True
@@ -1338,4 +1336,5 @@ def test_the_session_is_given_the_filing_plugin_and_the_function_plugins(
     # Assert
     assert seen["plugins"] == expected
     assert seen["ran"] is True
+    assert seen["closed"] is True
     assert result["assertions"] == {}

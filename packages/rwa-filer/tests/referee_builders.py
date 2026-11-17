@@ -7,8 +7,8 @@ Pipeline position:
 ``runner.WORKER_SCRIPT`` names the script each worker process runs. Tests point
 it at ``FAKE_WORKER``, which reads its spec exactly as the real worker does and
 answers from a script the test wrote — canned verdicts for the assertions it
-was handed, canned messages, or a failure: a non-zero exit, no result, a sleep
-past the timeout, more memory than the cap. What a worker does is keyed by
+was handed, canned messages, or a failure: a non-zero exit, no result, a
+result cut short, a sleep past the timeout, more memory than the cap. What a worker does is keyed by
 ``"every"``, by ``"chunk<N>"`` and by ``"<instance stem>/chunk<N>"``, the more
 specific winning; every launch is appended to ``launches.txt`` beside the
 script, as ``<instance stem>/chunk<N>``, and its process id to ``pids.txt``.
@@ -116,7 +116,9 @@ else:
 ballast = bytearray(b"x") * (behaviour.get("allocate_mb", 0) << 20)
 time.sleep(behaviour.get("sleep", 0))
 sys.stderr.write(behaviour.get("stderr", ""))
-if behaviour.get("exit", 0) == 0 and not behaviour.get("silent"):
+if behaviour.get("garbage"):
+    sys.stdout.write('{"assertions": {"cut short')
+elif behaviour.get("exit", 0) == 0 and not behaviour.get("silent"):
     omitted = set(behaviour.get("omit", []))
     counted = {a: c for a, c in script["verdicts"].items() if a in handed and a not in omitted}
     result = {

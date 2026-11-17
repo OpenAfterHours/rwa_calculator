@@ -26,8 +26,9 @@ Key responsibilities:
   (Arelle's own dependencies are not pinned by its release), the Python
   version and locale, and this package's worker, planner and runner, and never
   over a path. A hit skips the worker
-  only; a worker that did not finish is never stored, and an entry that does
-  not read back as a result is ignored and recomputed.
+  only. A worker that did not finish is never stored, nor one that finished
+  with an assertion unanswered or an error or exception logged; an entry that
+  does not read back whole, as a result, is ignored and recomputed.
 - Merge what the workers report into one result: a verdict per published rule
   id, the processor's other messages (de-duplicated, known noise removed), the
   rules that were not run because the instance does not file their templates,
@@ -199,6 +200,9 @@ _IDENTITY_PROBE: Final = (
 )
 #: The environment the workers inherit that can change the text Arelle writes.
 _LOCALE_VARIABLES: Final = ("LANG", "LC_ALL", "LC_MESSAGES")
+#: A cache entry's file: a digest line, then the worker's raw result.
+_ENTRY_SUFFIX: Final = ".entry"
+_DIGEST_PREFIX: Final = b"sha256:"
 _HASH_BLOCK: Final = 1 << 20
 _POLL_SECONDS: Final = 0.5
 _INTERRUPTED: Final = "killed: run interrupted"
@@ -839,7 +843,8 @@ def _run_chunk(
     its standard output, and names no file itself. The result file is opened
     afresh, so a result an earlier run left behind is never read. With a
     cache, a stored result for the same key is written to the result file in
-    the worker's place, and a worker that finished has its result stored.
+    the worker's place, and a worker that finished has its result stored —
+    unless ``_not_storable`` finds a reason not to.
     """
     files = prepared.plan.chunks[index]
     module = prepared.module
@@ -863,8 +868,8 @@ def _run_chunk(
     elif out.stat().st_size == 0:
         status = "worker wrote no result"
     else:
-        result = json.loads(out.read_text(encoding="utf-8"))
-        status = CHUNK_OK
+        result = _read_result(out)
+        status = CHUNK_OK if result is not None else "worker wrote an unreadable result"
     timings = result["timings"] if result is not None else {}
     stat = ChunkStat(
         index=index,
@@ -887,8 +892,12 @@ def _run_chunk(
             stat.wall_s,
             stat.peak_rss_mb,
         )
+        refused = _not_storable(result, prepared, index) if result is not None else "no result"
         if cache is not None and key is not None:
-            cache.write(key, out.read_bytes())
+            if refused is None:
+                cache.write(key, out.read_bytes())
+            else:
+                logger.info("referee cache: worker %d not stored: %s", index, refused)
     else:
         logger.warning(
             "referee: worker %d lost with its %d assertion(s): %s",
@@ -1003,6 +1012,15 @@ def _tree_rss_kb(root: int) -> int:
     return total
 
 
+def _read_result(path: Path) -> Mapping[str, Any] | None:
+    """A worker's result file, if it reads as a result; None if it does not."""
+    try:
+        result = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+    return result if _is_result(result) else None
+
+
 def _last_line(path: Path) -> str:
     """The last non-blank line a worker wrote to stderr — usually its exception."""
     lines = path.read_text(encoding="utf-8", errors="replace").strip().splitlines()
@@ -1080,7 +1098,11 @@ def _reused(
 
 
 class _ResultCache:
-    """Workers' raw results by key, one file each, under ``folder/<2 hex>/<key>.json``.
+    """Workers' raw results by key, one file each, under ``folder/<2 hex>/<key>.entry``.
+
+    An entry is a line ``sha256:<digest of the rest>`` and then the result,
+    byte for byte (``_seal``): an entry whose digest does not match what
+    follows — cut short, edited — is never read back.
 
     The key is a SHA-256 over what a worker's result depends on — the bytes of
     every file it reads (instance, packages, plug-in), the spec's other
@@ -1116,11 +1138,11 @@ class _ResultCache:
         """The stored result for ``key``, if there is one and it reads back as a result."""
         path = self._path(key)
         try:
-            content = path.read_bytes()
+            content = _unseal(path.read_bytes())
         except OSError:
             return None
         try:
-            readable = _is_result(json.loads(content))
+            readable = content is not None and _is_result(json.loads(content))
         except ValueError:
             readable = False
         if not readable:
@@ -1140,7 +1162,7 @@ class _ResultCache:
                 dir=path.parent, prefix=f".{key[:12]}.", suffix=".tmp"
             )
             with os.fdopen(handle, "wb") as stream:
-                stream.write(content)
+                stream.write(_seal(content))
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, path)
@@ -1153,7 +1175,7 @@ class _ResultCache:
                     os.unlink(temporary)
 
     def _path(self, key: str) -> Path:
-        return self.folder / key[:2] / f"{key}.json"
+        return self.folder / key[:2] / f"{key}{_ENTRY_SUFFIX}"
 
     def _package_sha256(self, package: Path) -> str:
         """A taxonomy package's digest; read once per run, as every worker names it."""
@@ -1162,6 +1184,18 @@ class _ResultCache:
             if name not in self._package_digests:
                 self._package_digests[name] = _file_sha256(package)
             return self._package_digests[name]
+
+
+def _seal(content: bytes) -> bytes:
+    """A cache entry as stored: a line with the SHA-256 of ``content``, then ``content``."""
+    return _DIGEST_PREFIX + hashlib.sha256(content).hexdigest().encode("ascii") + b"\n" + content
+
+
+def _unseal(entry: bytes) -> bytes | None:
+    """The content of a cache entry, if its digest line matches it; else None."""
+    header, newline, content = entry.partition(b"\n")
+    expected = _DIGEST_PREFIX + hashlib.sha256(content).hexdigest().encode("ascii")
+    return content if newline and header == expected else None
 
 
 def _open_cache(cache_dir: Path | None, interpreter: Path) -> _ResultCache | None:
@@ -1269,7 +1303,49 @@ def _is_result(value: Any) -> bool:
         and all(isinstance(message.get(field), str) for field in ("code", "level", "text"))
         for message in messages
     )
-    return counts_ok and messages_ok and all(isinstance(v, list) for v in examples.values())
+    examples_ok = all(
+        isinstance(items, list) and all(_is_example(item) for item in items)
+        for items in examples.values()
+    )
+    return counts_ok and messages_ok and examples_ok
+
+
+def _is_example(value: Any) -> bool:
+    """Whether ``value`` has the shape of one evaluation example, as the merge reads it."""
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("level"), str)
+        and isinstance(value.get("text"), str)
+        and isinstance(value.get("facts"), list)
+        and all(isinstance(fact, dict) for fact in value["facts"])
+    )
+
+
+def _not_storable(result: Mapping[str, Any], prepared: PreparedReferee, index: int) -> str | None:
+    """Why a finished worker's result must not be stored, or None if it may be.
+
+    Stored, a result is replayed by every run until a keyed input changes, so
+    anything that may not happen again is refused: an assertion the worker was
+    given and returned nothing for (the merge loses the rule), and a message at
+    an error level or naming an exception — the form in which Arelle reports
+    what it caught, a ``MemoryError`` among them. What the merge drops as noise
+    or as a known false positive cannot change a result, and does not count.
+    """
+    assertions = prepared.module.assertions
+    unanswered = sum(
+        1
+        for file in prepared.plan.chunks[index]
+        if assertions[file].assertion_id not in result["assertions"]
+    )
+    if unanswered:
+        return f"{unanswered} assertion(s) without a verdict"
+    for message in result["messages"]:
+        code, level = message["code"], message["level"]
+        if code in NOISE_CODES or code in KNOWN_FALSE_POSITIVE_CODES:
+            continue
+        if level in ERROR_LEVELS or "exception" in code.lower():
+            return f"[{code}] at {level}"
+    return None
 
 
 # =============================================================================

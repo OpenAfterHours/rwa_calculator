@@ -171,8 +171,12 @@ and released independently of `rwa-calc`; its release tags are prefixed
   and of no path. A run that
   finds the key reuses the result, byte for byte, and launches no worker
   (`ChunkStat.cached`); the merge and any comparison run as before. Only a
-  worker that finished is stored, an entry is written whole or not at all,
-  and one that does not read back as a result is recomputed.
+  worker that finished is stored, and not even one of those that left an
+  assertion unanswered or logged an error-level or exception message — a
+  stored result is replayed by every later run, so nothing that may not
+  happen again is kept. An entry is a digest line and the raw result, written
+  whole or not at all; one whose digest does not match, or that does not read
+  back as a result, is recomputed.
   `referee_cache_dir` reads the folder from `RWA_FILER_REFEREE_CACHE`. The
   library default is no cache.
 

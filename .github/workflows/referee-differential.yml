@@ -167,7 +167,8 @@ jobs:
         run: uv run python scripts/referee_differential.py --max-rss-gb 5 --check
 
       # Saved whether the gate passed or not: an entry is stored only for a
-      # worker that finished, and whole or not at all.
+      # worker that finished with every assertion answered and no error or
+      # exception logged, and whole or not at all.
       - name: Save the referee cache
         if: always() && steps.referee-cache.outputs.prefix != ''
         uses: actions/cache/save@v4

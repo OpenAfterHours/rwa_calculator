@@ -17,8 +17,11 @@ What is pinned here, with the stand-in worker of ``referee_builders``:
   result is the worker's raw result;
 - each keyed input, changed alone, misses — a new release of one of Arelle's
   dependencies included; a path changed alone hits;
-- a corrupt or truncated entry is ignored, recomputed and replaced;
-- a worker that failed, wrote nothing or was killed is never stored;
+- a corrupt or truncated entry, or one whose digest line does not match its
+  content, is ignored, recomputed and replaced;
+- a worker that failed, wrote nothing or was killed is never stored, and nor
+  is a finished one that left an assertion unanswered or logged an error or
+  an exception;
 - a cache that cannot be written, or an Arelle release that cannot be named,
   costs the reuse and nothing else.
 
@@ -39,7 +42,14 @@ from typing import Any
 
 import pytest
 
-from referee_builders import FAKE_WORKER, Referee, counts
+from referee_builders import (
+    FAKE_WORKER,
+    INVALID_FACT,
+    REWRITE_OVERLAP,
+    SINGLE_CURRENCY,
+    Referee,
+    counts,
+)
 from rwa_filer.referee import runner
 
 IDENTITY = "arelle-release 2.47.5 / python 3.13"
@@ -71,7 +81,12 @@ def launches(referee: Referee) -> list[str]:
 
 
 def entries(cache: Path) -> list[Path]:
-    return sorted(cache.rglob("*.json"))
+    return sorted(cache.rglob(f"*{runner._ENTRY_SUFFIX}"))
+
+
+def body(entry: Path) -> bytes:
+    """What an entry holds after its digest line: the worker's raw result."""
+    return entry.read_bytes().split(b"\n", 1)[1]
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +120,7 @@ def test_a_cached_result_is_the_workers_raw_result(trimmed: Referee, cache: Path
     raw = sorted((trimmed.workdir / f"chunk{index}.json").read_bytes() for index in (0, 1))
 
     # Assert — stored byte for byte, and handed back byte for byte on a hit.
-    assert sorted(path.read_bytes() for path in entries(cache)) == raw
+    assert sorted(body(path) for path in entries(cache)) == raw
     trimmed.run(cache_dir=cache)
     assert sorted((trimmed.workdir / f"chunk{index}.json").read_bytes() for index in (0, 1)) == raw
 
@@ -307,9 +322,10 @@ def test_the_cache_key_reads_no_path(trimmed: Referee, tmp_path: Path) -> None:
     [
         ({"exit": 1, "stderr": "Traceback ...\nMemoryError\n"}, {}),
         ({"silent": True}, {}),
+        ({"garbage": True}, {}),
         ({"sleep": 60}, {"timeout": 0.5}),
     ],
-    ids=["failed", "wrote-nothing", "killed"],
+    ids=["failed", "wrote-nothing", "wrote-no-result", "killed"],
 )
 def test_a_worker_that_did_not_finish_is_never_stored(
     trimmed: Referee, cache: Path, behaviour: dict[str, Any], options: dict[str, Any]
@@ -326,28 +342,41 @@ def test_a_worker_that_did_not_finish_is_never_stored(
     assert again.complete is True
 
 
-@pytest.mark.parametrize(
-    "damage",
-    [
-        lambda raw: raw[: len(raw) // 2],
-        lambda _raw: b"",
-        lambda _raw: b"not json",
-        lambda _raw: json.dumps({"assertions": {}}).encode(),
-        lambda _raw: json.dumps(
-            {"assertions": {"a": "x"}, "examples": {}, "messages": [], "timings": {}}
-        ).encode(),
-        lambda _raw: json.dumps([1, 2]).encode(),
-    ],
-    ids=["truncated", "empty", "not-json", "missing-keys", "bad-counts", "not-an-object"],
-)
+def _result(**fields: Any) -> bytes:
+    """A worker result of the right outline, with ``fields`` in place of the defaults."""
+    shape: dict[str, Any] = {"assertions": {}, "examples": {}, "messages": [], "timings": {}}
+    return json.dumps(shape | fields).encode()
+
+
+#: Damage to an entry's content. Each is re-sealed with a valid digest, so that
+#: it is the shape check that has to refuse it.
+DAMAGE = {
+    "truncated": lambda raw: raw[: len(raw) // 2],
+    "empty": lambda _raw: b"",
+    "not-json": lambda _raw: b"not json",
+    "missing-keys": lambda _raw: json.dumps({"assertions": {}}).encode(),
+    "bad-counts": lambda _raw: _result(assertions={"a": "x"}),
+    "not-an-object": lambda _raw: json.dumps([1, 2]).encode(),
+    "example-not-an-object": lambda _raw: _result(examples={"a": ["text"]}),
+    "example-without-facts": lambda _raw: _result(
+        examples={"a": [{"level": "ERROR", "text": "t"}]}
+    ),
+    "fact-not-an-object": lambda _raw: _result(
+        examples={"a": [{"level": "ERROR", "text": "t", "facts": [1]}]}
+    ),
+}
+
+
+@pytest.mark.parametrize("damage", list(DAMAGE.values()), ids=list(DAMAGE))
 def test_a_corrupt_entry_is_ignored_recomputed_and_replaced(
     trimmed: Referee, cache: Path, damage: Any
 ) -> None:
     # Arrange — worker 0's entry damaged after a good run.
     first = trimmed.run(cache_dir=cache)
     raw = (trimmed.workdir / "chunk0.json").read_bytes()
-    entry = next(path for path in entries(cache) if path.read_bytes() == raw)
-    entry.write_bytes(damage(raw))
+    entry = next(path for path in entries(cache) if body(path) == raw)
+    stored = entry.read_bytes()
+    entry.write_bytes(runner._seal(damage(raw)))
 
     # Act
     second = trimmed.run(cache_dir=cache)
@@ -356,7 +385,86 @@ def test_a_corrupt_entry_is_ignored_recomputed_and_replaced(
     assert launches(trimmed)[2:] == ["instance/chunk0"]
     assert [chunk.cached for chunk in second.chunks] == [False, True]
     assert counts(second) == counts(first)
-    assert entry.read_bytes() == raw
+    assert entry.read_bytes() == stored
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        lambda stored: stored.replace(b"[3, 0]", b"[3, 1]"),
+        lambda stored: stored.split(b"\n", 1)[1],
+    ],
+    ids=["content-edited", "no-digest-line"],
+)
+def test_an_entry_whose_digest_does_not_match_is_never_trusted(
+    trimmed: Referee, cache: Path, tamper: Any
+) -> None:
+    """Still a well-formed result — a count changed by hand — but not what was stored."""
+    # Arrange
+    first = trimmed.run(cache_dir=cache)
+    entry = next(path for path in entries(cache) if b"[3, 0]" in path.read_bytes())
+    stored = entry.read_bytes()
+    entry.write_bytes(tamper(stored))
+
+    # Act
+    second = trimmed.run(cache_dir=cache)
+
+    # Assert
+    assert launches(trimmed)[2:] == ["instance/chunk0"]
+    assert counts(second) == counts(first)
+    assert entry.read_bytes() == stored
+
+
+def test_a_result_that_left_an_assertion_unanswered_is_never_stored(
+    trimmed: Referee, cache: Path
+) -> None:
+    """Silence is a lost rule, and one bad run must not be replayed on every run after it."""
+    # Act — worker 1 finishes but says nothing of boe_b0002; then the same run, healthy.
+    failed = trimmed.run({"chunk1": {"omit": ["boe_boe_b0002"]}}, cache_dir=cache)
+    again = trimmed.run(cache_dir=cache)
+
+    # Assert
+    assert failed.lost == ("boe_b0002",)
+    assert launches(trimmed)[2:] == ["instance/chunk1"]
+    assert [chunk.cached for chunk in again.chunks] == [True, False]
+    assert again.complete is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        INVALID_FACT,
+        {"code": "xbrl:internalError", "level": "CRITICAL", "text": "unexpected"},
+        {"code": "exception:MemoryError", "level": "WARNING", "text": "while evaluating"},
+    ],
+    ids=["error", "critical", "exception"],
+)
+def test_a_result_with_an_error_or_an_exception_is_never_stored(
+    trimmed: Referee, cache: Path, message: dict[str, str]
+) -> None:
+    """An exception Arelle caught and logged can be transient; a stored one is forever."""
+    # Act
+    trimmed.run({"chunk1": {"messages": [message]}}, cache_dir=cache)
+    again = trimmed.run({"chunk1": {"messages": [message]}}, cache_dir=cache)
+
+    # Assert — worker 1 ran both times; worker 0, clean, was reused.
+    assert launches(trimmed) == ["instance/chunk0", "instance/chunk1", "instance/chunk1"]
+    assert [chunk.cached for chunk in again.chunks] == [True, False]
+
+
+def test_a_message_the_merge_drops_does_not_stop_a_result_being_stored(
+    trimmed: Referee, cache: Path
+) -> None:
+    """Package-overlap noise and the known false EBA.3.1 cannot change a result."""
+    # Arrange
+    script = {"every": {"messages": [REWRITE_OVERLAP, SINGLE_CURRENCY]}}
+
+    # Act
+    trimmed.run(script, cache_dir=cache)
+    again = trimmed.run(script, cache_dir=cache)
+
+    # Assert
+    assert [chunk.cached for chunk in again.chunks] == [True, True]
 
 
 def test_a_cache_that_cannot_be_written_costs_the_reuse_only(

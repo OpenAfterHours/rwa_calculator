@@ -8,7 +8,9 @@ Pipeline position:
 
 Key responsibilities:
 - Hold each opened return with the validation it was given, so that drawing a
-  page never re-validates.
+  page never re-validates. The validation records every break of every rule,
+  not the first few a report shows: the template grid marks each cell a broken
+  evaluation read, and a cell left unmarked would read as one no rule faults.
 - Hold, per return, the cell overrides a preparer has drafted and the filing
   packages built from it — the session's working state, which the files on
   disk (manifest, ledger, sign-off) then record for good.
@@ -63,6 +65,9 @@ Cell = tuple[str, str | None, str | None, str, str]
 
 logger = logging.getLogger(__name__)
 
+#: How many of each rule's breaks a validation here records: all of them
+#: (``validate_return``'s ``max_failures``), so the grid can mark every one.
+_EVERY_FAILURE: Final = None
 #: Characters an uploaded file's name may keep; any other run becomes ``_``.
 _UNSAFE: Final = re.compile(r"[^A-Za-z0-9._-]+")
 #: The name an upload is given when nothing of its own name survives.
@@ -210,6 +215,7 @@ class Workspace:
             source_findings=reading.findings,
             source=source_identity(path),
             progress=progress,
+            max_failures=_EVERY_FAILURE,
         )
         opened = OpenedReturn(
             return_id=secrets.token_hex(4),
@@ -375,6 +381,7 @@ def _work_out(
         source_findings=opened.reading.findings,
         source=opened.validation.source,
         progress=progress,
+        max_failures=_EVERY_FAILURE,
     )
     current = replace(opened, reading=replace(opened.reading, ret=ret), validation=validation)
     logger.info("validated %s with %d override(s)", opened.name, len(applied))

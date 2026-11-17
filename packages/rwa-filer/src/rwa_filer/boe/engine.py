@@ -150,7 +150,9 @@ DECIMALS_STATED: Final = "stated"
 DECIMALS_ACCURACY: Final = "accuracy"
 DECIMALS_INTEGER: Final = "integer"
 
-#: Failing evaluations recorded per rule.
+#: Failing evaluations recorded per rule, by default: enough for a report to
+#: show where a rule breaks. A viewer marking every broken cell on a template
+#: asks for them all (``max_failures=None``).
 MAX_FAILURES: Final = 5
 #: Cell addresses recorded per failing evaluation. A summed sequence can read
 #: hundreds of cells; a viewer marking them needs the first screenful, not all.
@@ -260,7 +262,8 @@ class RuleResult:
         reason: Why a rule was not evaluated; empty otherwise.
         detail: Free text expanding on ``reason``.
         satisfied / unsatisfied: Evaluations that held / did not hold.
-        failures: Up to ``MAX_FAILURES`` unsatisfied evaluations.
+        failures: The first unsatisfied evaluations, in place order — up to
+            ``MAX_FAILURES`` unless the caller asked for another limit.
         tables: The tables the rule reads.
         deny: The Bank's deny-list entry that changed how the gateway runs the
             rule, where one is in force (``validate.execution``); ``None``
@@ -287,23 +290,30 @@ class RuleResult:
         return self.satisfied + self.unsatisfied
 
 
-def evaluate_rules(
+def evaluate_rules(  # noqa: PLR0913 - the return, its rules, and how to report them
     ret: CanonicalReturn,
     pack: TaxonomyPack,
     rules: Iterable[Rule],
     *,
     accuracy: Accuracy | None = None,
     progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
 ) -> list[RuleResult]:
     """Evaluate ``rules`` over ``ret``. One result per rule, in the order given.
 
     Never raises for a condition in the return or in a rule: a rule that cannot
     be evaluated is a result with a reason. ``progress``, when given, hears how
     many of the rules are done: once before the first, then after each one.
+    ``max_failures`` is how many unsatisfied evaluations each result records,
+    the first in place order; ``None`` records every one. Every one is counted
+    either way.
     """
     store = _Store(ret, pack, accuracy or Accuracy())
     module = pack.info.module
-    results = [_evaluate_rule(rule, store, module) for rule in _counted(tuple(rules), progress)]
+    results = [
+        _evaluate_rule(rule, store, module, max_failures=max_failures)
+        for rule in _counted(tuple(rules), progress)
+    ]
     logger.info(
         "evaluated %d rule(s) for %s: %d failed, %d not evaluated",
         len(results),
@@ -372,27 +382,29 @@ class RuleTrace:
     cells: Mapping[CellAddress, CellFact] = field(default_factory=dict)
 
 
-def trace_rules(
+def trace_rules(  # noqa: PLR0913 - evaluate_rules's arguments
     ret: CanonicalReturn,
     pack: TaxonomyPack,
     rules: Iterable[Rule],
     *,
     accuracy: Accuracy | None = None,
     progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
 ) -> RuleTrace:
     """Evaluate ``rules`` as ``evaluate_rules`` does, keeping every evaluation.
 
     The results are exactly ``evaluate_rules``'s. Each evaluation the engine
     made — satisfied or not, unlike ``RuleResult.failures``, which keeps the
-    first few unsatisfied ones — is kept with every cell it read, uncapped.
-    ``progress`` hears how many rules are done, as for ``evaluate_rules``.
+    first ``max_failures`` unsatisfied ones — is kept with every cell it read,
+    uncapped. ``progress`` hears how many rules are done, as for
+    ``evaluate_rules``.
     """
     store = _Store(ret, pack, accuracy or Accuracy())
     module = pack.info.module
     evaluations: list[Evaluation] = []
     cells: dict[CellAddress, CellFact] = {}
     results = tuple(
-        _evaluate_rule(rule, store, module, evaluations, cells)
+        _evaluate_rule(rule, store, module, evaluations, cells, max_failures=max_failures)
         for rule in _counted(tuple(rules), progress)
     )
     return RuleTrace(results=results, evaluations=tuple(evaluations), cells=cells)
@@ -815,12 +827,14 @@ class _Selector:
         return self.own_axes.get(kind, kind)
 
 
-def _evaluate_rule(
+def _evaluate_rule(  # noqa: PLR0913 - the rule, where it runs, and what to keep of it
     rule: Rule,
     store: _Store,
     module: str,
     trace: list[Evaluation] | None = None,
     cells: dict[CellAddress, CellFact] | None = None,
+    *,
+    max_failures: int | None = MAX_FAILURES,
 ) -> RuleResult:
     severity = rule.severity(module)
 
@@ -840,7 +854,7 @@ def _evaluate_rule(
 
     try:
         evaluation = _Evaluation(rule, store, cells)
-        satisfied, failures, unsatisfied = evaluation.run(trace)
+        satisfied, failures, unsatisfied = evaluation.run(trace, max_failures)
     except _Unsupported as unsupported:
         return not_evaluated(REASON_UNSUPPORTED, str(unsupported))
     except GrammarError as error:
@@ -909,8 +923,13 @@ class _Evaluation:
 
     # -- the evaluations -----------------------------------------------------
 
-    def run(self, trace: list[Evaluation] | None = None) -> tuple[int, list[Failure], int]:
-        """Every evaluation: counted, the first failures kept, each traced if asked."""
+    def run(
+        self, trace: list[Evaluation] | None = None, max_failures: int | None = MAX_FAILURES
+    ) -> tuple[int, list[Failure], int]:
+        """Every evaluation: counted, the first failures kept, each traced if asked.
+
+        ``max_failures`` is how many failures are kept; ``None`` keeps them all.
+        """
         satisfied = unsatisfied = 0
         failures: list[Failure] = []
         seen: set[tuple[object, ...]] = set()
@@ -929,7 +948,7 @@ class _Evaluation:
                 satisfied += 1
                 continue
             unsatisfied += 1
-            if len(failures) < MAX_FAILURES:
+            if max_failures is None or len(failures) < max_failures:
                 failures.append(self._failure(dict(env)))
         return satisfied, failures, unsatisfied
 

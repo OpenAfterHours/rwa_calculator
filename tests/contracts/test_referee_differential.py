@@ -489,3 +489,29 @@ def test_the_workflow_caches_worker_results_keyed_on_what_they_depend_on() -> No
     assert "uv pip freeze --python .arelle-venv/bin/python" in live
     for source in ("worker.py", "plan.py", "runner.py", "boe_shim.py"):
         assert f"rwa_filer/referee/{source}'" in live, f"the cache key does not hash {source}"
+
+
+def test_the_workflow_prunes_the_entries_a_full_run_did_not_use_before_saving() -> None:
+    """Each save would otherwise carry every entry since the prefix last changed.
+
+    The prune keys on modification time: a hit refreshes it and a store writes
+    the entry new (``rwa_filer``'s ``test_a_hit_refreshes_the_entrys_time``),
+    so an entry older than the marker touched as the run starts went unused.
+    """
+    # Act
+    live = without_comments(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    commands = run_commands(live)
+    gate_run = next(index for index, command in enumerate(commands) if INVOCATION.search(command))
+    prune = next(
+        (index for index, command in enumerate(commands) if "find .referee-run/cache" in command),
+        None,
+    )
+
+    # Assert
+    assert 'touch "${RUNNER_TEMP}/referee-started"' in commands[gate_run]
+    assert commands[gate_run].index("referee-started") < commands[gate_run].index("--check")
+    assert prune is not None and prune > gate_run, "no prune after the gate run"
+    for part in ("-name '*.entry'", '! -newer "${RUNNER_TEMP}/referee-started"', "-delete"):
+        assert part in commands[prune], f"the prune lost {part}"
+    assert "[ -f .referee-run/timings.json ]" in commands[prune], "prunes after a cut-short run"
+    assert live.index("Prune the referee cache") < live.index("Save the referee cache")

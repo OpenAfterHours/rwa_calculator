@@ -36,6 +36,7 @@ import logging
 import os
 import shutil
 import sys
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -123,6 +124,22 @@ def test_a_cached_result_is_the_workers_raw_result(trimmed: Referee, cache: Path
     assert sorted(body(path) for path in entries(cache)) == raw
     trimmed.run(cache_dir=cache)
     assert sorted((trimmed.workdir / f"chunk{index}.json").read_bytes() for index in (0, 1)) == raw
+
+
+def test_a_hit_refreshes_the_entrys_time(trimmed: Referee, cache: Path) -> None:
+    """CI prunes by modification time what a run did not use; a used entry must look used."""
+    # Arrange — two good entries, aged a day.
+    trimmed.run(cache_dir=cache)
+    day_ago = time.time() - 86_400
+    for entry in entries(cache):
+        os.utime(entry, (day_ago, day_ago))
+    started = time.time()
+
+    # Act
+    trimmed.run(cache_dir=cache)
+
+    # Assert
+    assert all(entry.stat().st_mtime >= started - 1 for entry in entries(cache))
 
 
 def test_without_a_cache_dir_nothing_is_stored_or_reused(trimmed: Referee, tmp_path: Path) -> None:

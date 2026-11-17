@@ -161,10 +161,27 @@ jobs:
       # - 1.5 GB) / cap))). On ubuntu-latest (16 GB, 4 cores) 5 GB gives two at
       # once; the 10 GB this used to pass gave one. The largest worker measured
       # peaks at 3.9 GB.
+      # The marker dates the run's start, for the prune below.
       - name: Referee differential
         env:
           RWA_FILER_ARELLE_PYTHON: ${{ github.workspace }}/.arelle-venv/bin/python
-        run: uv run python scripts/referee_differential.py --max-rss-gb 5 --check
+        run: |
+          touch "${RUNNER_TEMP}/referee-started"
+          uv run python scripts/referee_differential.py --max-rss-gb 5 --check
+
+      # Without this, every save carries forward every entry since the prefix
+      # last changed: each changed return adds ~40 KB per worker that no run
+      # will read again. A hit refreshes an entry's modification time and a
+      # store writes it new, so an entry older than the marker is one this run
+      # did not use. Only after a run that reached the end (timings.json is
+      # written once the whole estate has been through the pool): a run cut
+      # short has not yet used what it would have.
+      - name: Prune the referee cache
+        if: always()
+        run: |
+          if [ -f .referee-run/timings.json ] && [ -d .referee-run/cache ]; then
+            find .referee-run/cache -type f -name '*.entry' ! -newer "${RUNNER_TEMP}/referee-started" -print -delete
+          fi
 
       # Saved whether the gate passed or not: an entry is stored only for a
       # worker that finished with every assertion answered and no error or

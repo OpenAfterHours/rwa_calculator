@@ -19,6 +19,15 @@ instruction says there is none. The leg below carries a non-zero adjustment
 deliberately, so that leaving the column out cannot be told apart from summing
 a zero.
 
+Since P1.399 the engine writes 0.0 there on every F-IRB leg (Art. 166D(6) is an
+Advanced IRB adjustment, so ``engine/irb/adjustments.py`` applies the scalar to
+A-IRB legs only), and the slotting calculator writes none. A non-zero F-IRB or
+slotting carrier is therefore not a shape a pipeline run produces: it is kept
+here so the blanking is held independently of the engine. The engine half, and
+the column 0260 identity it keeps on a filed return, are held in
+``tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py`` and
+``tests/acceptance/reporting/test_of08_01_unrecognised_exposure_scalar.py``.
+
 References:
 - PRA PS1/26 Annex II §3.3.3 column 0254 (p.112), §3.3.4 (p.118)
 - PRA PS1/26 Art. 153(5A)(b), Art. 154(4A)(c), Art. 166D(6)

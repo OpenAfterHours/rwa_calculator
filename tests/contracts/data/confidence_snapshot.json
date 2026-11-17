@@ -7529,7 +7529,8 @@
     {
       "article": "153",
       "code_functions": [
-        "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes"
+        "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -7581,6 +7582,7 @@
         "tests/acceptance/basel31/test_p1_251_b31_firb_uk_resi_commitment_ccf.py",
         "tests/acceptance/basel31/test_scenario_b31_e_slotting.py",
         "tests/acceptance/basel31/test_scenario_b31_k_defaulted.py",
+        "tests/acceptance/reporting/test_of08_01_unrecognised_exposure_scalar.py",
         "tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py",
         "tests/fixtures/lfse_fi_scalar/lfse_fi_scalar.py",
         "tests/fixtures/p1_117/p1_117.py",
@@ -7596,6 +7598,7 @@
         "tests/unit/crr/test_crr_slotting.py",
         "tests/unit/crr/test_slotting_transforms.py",
         "tests/unit/irb/test_irb_formulas.py",
+        "tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py",
         "tests/unit/reporting/corep/test_c08_total_sheets.py",
         "tests/unit/reporting/corep/test_c08_unrecognised_exposure_column.py",
         "tests/unit/rulebook/test_audit.py",
@@ -7611,10 +7614,12 @@
     },
     {
       "article": "154",
-      "code_functions": [],
+      "code_functions": [
+        "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments"
+      ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-098",
         "ORC-100",
@@ -7628,6 +7633,7 @@
         "post_model_adjustments@b31"
       ],
       "source_files": [
+        "engine/irb/adjustments.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
@@ -7968,6 +7974,7 @@
     {
       "article": "166D",
       "code_functions": [
+        "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments",
         "rwa_calc.reporting.corep.ccf_buckets::_own_estimate",
         "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr"
       ],
@@ -7982,10 +7989,12 @@
       ],
       "source_files": [
         "engine/ccf.py",
+        "engine/irb/adjustments.py",
         "reporting/corep/ccf_buckets.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py",
         "tests/unit/test_ccf.py",
         "tests/unit/test_p6_32_airb_floors_hoisted.py"
       ],

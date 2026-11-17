@@ -4989,12 +4989,51 @@ requires every register reason on such a rule to cite the issue or rebut it.
   `unplaced_figures` 523 → 457; `boe_b0748` 2 → 0. Coverage `cells_live`
   10301 → 10038 — a **deliberate fall**: the addresses were never cells of the
   template.
-- **Not fixed here**: the engine applies `unrecognised_exposure_scalar` to F-IRB
-  legs too; with a non-zero scalar an F-IRB sheet now carries an uplift in c0260
-  that c0251–c0254 cannot show, and `boe_b0751` breaks. The updated
-  `test_b31_col_0254_unrecognised_on_airb_sheets_only` pins that inconsistent
-  output and, since `47dbaae`, says so (P1.399). OF 08.02's and OF 08.06's
-  layouts are not yet held to the taxonomy (P2.71, P2.72, P5.84).
+- **Knock-on, closed 2026-11-17 (P1.399, CAPITAL)**: F3 exposed an engine
+  defect it did not fix. `engine/irb/adjustments.py` multiplied
+  `unrecognised_exposure_scalar` into every formula-IRB leg's RWEA, F-IRB
+  included, although Art. 166D(6)(a)(ii) confines the adjustment to facilities
+  where *"the institution would have applied the Advanced IRB Approach in
+  accordance with Article 147A"*. With c0254 now empty on F-IRB sheets, any run
+  with a non-zero scalar filed an F-IRB c0260 above c0251–c0254 and failed
+  `boe_b0751` (ERROR): measured on `irb-classes` at 5%, sheet 0002 out by
+  3,443,776.69 and the rule 9 satisfied / 11 unsatisfied, every break on
+  sheet 0002, 0006 or 0012. Fixed in the engine: the scalar reaches legs whose
+  sealed `approach` is `advanced_irb` only.
+  - **Escape class**: `path-never-exercised` for the engine half (the scalar
+    defaults to 0.0 and no registered run sets it, so the register and both
+    ratchets read an F-IRB uplift of zero) and `caught-and-parked` for the
+    filing break (found with F3, filed as P1.399 and pinned by
+    `test_b31_col_0254_unrecognised_on_airb_sheets_only` with a docstring
+    saying so).
+  - **Gate change**: `tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py`
+    (an F-IRB leg's RWEA is unchanged by a non-zero scalar, an A-IRB leg is still
+    uplifted, both in one frame, and the general PMA still reaches F-IRB);
+    `tests/acceptance/reporting/test_of08_01_unrecognised_exposure_scalar.py`
+    (`irb-classes` from `RUNS` at a 5% scalar, filed and traced on
+    `rwa_filer.boe`: no F-IRB uplift in the ledger, the F-IRB Total's c0260 foots
+    to c0251–c0253, `boe_b0751` evaluated on sheets 0002 / 0006 / 0012 with no
+    unsatisfied evaluation); and the c0260 identity added to
+    `test_b31_col_0254_unrecognised_on_airb_sheets_only`, whose fixture now
+    carries the engine's shape (no F-IRB adjustment). The non-zero-scalar run is
+    a dedicated module, not a `RUNS` entry, so the register still sees the
+    default only.
+  - **Verified red** (against `95be6f1`): unit `assert 50.0 == 0.0 ± 1.0e-12`
+    and `assert [50.0, 50.0] == approx([0.0 ±....0 ± 5.0e-05])` (3 failed,
+    2 passed — the A-IRB uplift and per-leg footing hold either way);
+    acceptance `assert 3443776.6909611393 == 0.0 ± 1.0e-12`,
+    `assert 72319310.51018392 == 68875533.8192228 ± 68.8755` and 11 unsatisfied
+    `boe_b0751` evaluations, first `(('r', '0010'), ('z', '0002'))` (3 failed,
+    1 passed); the c08 identity on the old fixture `assert 5970.0 == 5932.5`.
+  - **What the fix moved**: RWA down, only where the scalar is non-zero — by
+    the F-IRB part of the old uplift (`irb-classes` at 5%: F-IRB RWEA
+    72,319,310.51 → 68,875,533.82, total RWEA 93,403,407.40 → 89,959,630.71,
+    output floor not binding; A-IRB unchanged). `boe_b0751` 9 / 11 → 20 / 0
+    there. At the default 0.0 nothing moved: goldens, register, coverage and
+    filing-mapping ratchets unchanged.
+- **Not fixed here**: OF 08.02's and OF 08.06's layouts are not yet held to the
+  taxonomy (P2.71, P2.72, P5.84). `boe_b0763` (the OF 08.02 twin of
+  `boe_b0751`) is not evaluated on `irb-classes`, which files no OF 08.02.
 - **Lesson**: which cells exist is a property of the published sheet, not of the
   template. A declaration held to the taxonomy, applied after the Totals are
   summed, is the shape that worked for OF 07.00 and now OF 08.01.

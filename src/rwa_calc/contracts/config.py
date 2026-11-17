@@ -339,13 +339,17 @@ class PostModelAdjustmentConfig:
     These adjustments increase RWEA and EL to compensate for model limitations.
 
     Components:
-    - General PMAs: Firm-level scalar applied to post-floor RWEA/EL (supervisory add-on)
+    - General PMAs: Firm-level scalar applied to the modelled RWEA/EL (supervisory add-on)
     - Mortgage RW floor: Minimum risk weight for residential mortgage IRB exposures
-    - Unrecognised exposure adjustment: Scalar for exposures not fully captured by model
+    - Unrecognised exposure adjustment: Scalar for exposures not captured in exposure
+      values (Art. 166D(6)); applied to **Advanced IRB legs only**, because the
+      paragraph covers facilities where the firm "would have applied the Advanced
+      IRB Approach" — an F-IRB leg's RWEA is not uplifted by it (P1.399)
 
-    Adjustment sequencing per Art. 154(4A):
-        (b) Mortgage RW floor applied first — establishes post-floor RWEA base
-        (a) General PMA and unrecognised scalars applied to post-floor RWEA
+    Adjustment sequencing per Art. 154(4A) (see
+    ``engine/irb/adjustments.py::apply_post_model_adjustments``): limbs (a), (b)
+    and (c) are three additive increases to one common modelled base; the
+    mortgage floor (b) is tested against the base plus limb (a) only (P1.325).
 
     Art. 158(6A): PMA EL adjustments can only increase EL, never decrease.
     Negative scalars are rejected at construction time.
@@ -354,10 +358,10 @@ class PostModelAdjustmentConfig:
     """
 
     enabled: bool = False
-    pma_rwa_scalar: Decimal = Decimal("0.0")  # Additive % of post-floor RWEA (e.g., 0.05 = 5%)
+    pma_rwa_scalar: Decimal = Decimal("0.0")  # Additive % of modelled RWEA (e.g., 0.05 = 5%)
     pma_el_scalar: Decimal = Decimal("0.0")  # Additive % of base EL (must be >= 0)
     mortgage_rw_floor: Decimal = Decimal("0.0")  # Min RW for residential mortgages (e.g., 0.10)
-    unrecognised_exposure_scalar: Decimal = Decimal("0.0")  # Additive % of post-floor RWEA
+    unrecognised_exposure_scalar: Decimal = Decimal("0.0")  # % of A-IRB modelled RWEA
 
     def __post_init__(self) -> None:
         """Validate PMA scalars per Art. 158(6A) — PMAs can only increase, not decrease."""
@@ -400,7 +404,8 @@ class PostModelAdjustmentConfig:
             pma_rwa_scalar: General PMA as fraction of base RWEA (default 0%)
             pma_el_scalar: General PMA as fraction of base EL (default 0%)
             mortgage_rw_floor: Minimum RW for residential mortgages (default 10%, Art. 154(4A)(b))
-            unrecognised_exposure_scalar: Unrecognised exposure add-on (default 0%)
+            unrecognised_exposure_scalar: Unrecognised exposure add-on on Advanced
+                IRB legs (default 0%, Art. 166D(6))
         """
         return cls(
             enabled=True,

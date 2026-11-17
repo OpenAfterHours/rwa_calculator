@@ -363,10 +363,13 @@ financial hedge in place. Under CRR there is no equivalent retail FX uplift.
 ### Post-model adjustments (Basel 3.1 only)
 
 Captures the IRB post-model adjustment (PMA) overlays required by PRA PS1/26 to compensate
-for known IRB model deficiencies. Sequencing is regulatorily prescribed: the mortgage RW
-floor (Art. 154(4A)(b)) is applied first to establish the post-floor RWEA base, then
-general PMA scalars (Art. 146(3) / Art. 153(5A) / Art. 154(4A)(a)) and unrecognised-exposure
-adjustments are applied on top of the floored amount.
+for known IRB model deficiencies. Art. 154(4A) makes them three additive increases to one
+modelled base, not a chain: the general PMA (Art. 146(3) / Art. 153(5A)(a) / Art.
+154(4A)(a)) and the unrecognised exposure adjustment (Art. 153(5A)(b) / 154(4A)(c) /
+166D(6)) both multiply the modelled RWEA, and the mortgage RW floor (Art. 154(4A)(b)) tops
+the modelled RWEA plus the general PMA up to 10% of the exposure value (P1.325). So
+`rwa_pre_adjustments + post_model_adjustment_rwa + mortgage_rw_floor_adjustment +
+unrecognised_exposure_adjustment` is the leg's RWEA after adjustments.
 
 **References**: PRA PS1/26 Art. 146(3) (PMA root obligation), Art. 153(5A) (corporate /
 institution / sovereign sequencing), Art. 154(4A) (retail sequencing and 10% mortgage RW
@@ -374,10 +377,10 @@ floor), Art. 158(6A) (EL monotonicity — PMA can only **increase** EL, never de
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `rwa_pre_adjustments` | `Float64` | RWEA before post-model adjustments (post-formula, post-mortgage-floor) |
+| `rwa_pre_adjustments` | `Float64` | RWEA before post-model adjustments (the modelled, post-formula base) |
 | `mortgage_rw_floor_adjustment` | `Float64` | RWEA increase from the 10% residential mortgage RW floor (Art. 154(4A)(b)) |
 | `post_model_adjustment_rwa` | `Float64` | General PMA add-on to RWEA (Art. 146(3) / Art. 153(5A) / Art. 154(4A)(a)) |
-| `unrecognised_exposure_adjustment` | `Float64` | RWEA increase covering exposures not captured by the IRB model |
+| `unrecognised_exposure_adjustment` | `Float64` | Art. 166D(6) RWEA increase for facilities not captured in exposure values — `unrecognised_exposure_scalar` × modelled RWEA on **Advanced IRB legs only**, 0.0 on F-IRB legs (P1.399) |
 | `el_pre_adjustment` | `Float64` | Expected loss before post-model adjustments |
 | `post_model_adjustment_el` | `Float64` | General PMA add-on to EL — must be ≥ 0 (Art. 158(6A) monotonicity) |
 | `el_after_adjustment` | `Float64` | EL after post-model adjustments |

@@ -1215,6 +1215,9 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
       (0002, 0006, 0010, 0012, 0022, 0024 and any F-IRB sheet off the published axis),
       OF 08.01 and 08.02 — *"This column shall not be reported for sheets relating to the
       FIRB approach or the slotting approach"* (p.112). These sheets used to report 0.0.
+      The engine applies the adjustment to Advanced IRB legs only (Art. 166D(6); P1.399), so
+      an F-IRB sheet's column 0260 still equals columns 0251-0253 at any
+      `unrecognised_exposure_scalar` (`boe_b0751`).
 
     **Cells the published sheet does not have** (Basel 3.1, OF 08.01). The PRA001 taxonomy
     has no data point for 279 of the template's row-by-column positions on any sheet, and

@@ -163,8 +163,9 @@ def run_session(spec: dict[str, Any], *, close: bool = True) -> dict[str, Any]:
     assertions: dict[str, tuple[int, int]] = {}
     # The model Arelle builds is millions of objects, almost all kept to the
     # end, so the cyclic collector's repeated passes over them reclaim little
-    # and cost much: off, a PRA001 worker ran 16% faster for 7% more peak
-    # memory, with the same verdicts. Back on afterwards only for a caller that
+    # and cost much: off, the largest PRA001 worker ran about 14% faster
+    # (52 s against 60 s, mean of the runs measured) for 7% more peak memory,
+    # with the same verdicts. Back on afterwards only for a caller that
     # goes on running (``close``); a script ends the process instead.
     collecting = gc.isenabled()
     gc.disable()

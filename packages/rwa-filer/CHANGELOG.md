@@ -161,7 +161,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - **A referee worker runs Arelle with Python's cyclic garbage collector off.**
   Arelle keeps nearly everything it allocates until the worker ends, so the
   collector's passes freed little: off, a PRA001 worker loads and evaluates
-  about 16% faster for about 7% more peak memory (3.89 GB against 3.64 on the
+  about 14% faster for about 7% more peak memory (3.89 GB against 3.64 on the
   largest chunk measured), with the same verdicts. In-process callers get the
   collector back when the session ends.
 - **A referee worker's result can be reused.** With `cache_dir=` on

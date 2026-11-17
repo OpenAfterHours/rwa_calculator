@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.errors import (
     ERROR_MISSING_EXPECTED_LOSS,
@@ -28,7 +29,7 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
@@ -120,6 +121,9 @@ def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
 # =============================================================================
 
 
+@cites("PS1/26, paragraph 153")
+@cites("PS1/26, paragraph 154")
+@cites("PS1/26, paragraph 166D")
 def apply_post_model_adjustments(
     lf: pl.LazyFrame,
     config: CalculationConfig,
@@ -147,6 +151,7 @@ def apply_post_model_adjustments(
         (a) general PMA               = base x pma_rwa_scalar
         (b) mortgage floor shortfall  = max(0, floor_rw x EAD - (base + (a)))
         (c) unrecognised exposure     = base x unrecognised_exposure_scalar
+                                        (Advanced IRB legs only)
         RWEA = base + (a) + (b) + (c)
 
     Limb (b) is a TEST, not a value in a chain: "any amount needed to ensure
@@ -158,6 +163,16 @@ def apply_post_model_adjustments(
     Limb (c) is deliberately OUTSIDE the comparison: the parenthetical names
     only Art. 146(3)(b) adjustments, and (c) is "calculated under Article
     166D(6)" — a different provision.
+
+    Limb (c) also reaches **Advanced IRB legs only** (``approach`` ==
+    ``advanced_irb``). Art. 166D(6)(a)(ii) confines the adjustment to facilities
+    where "the institution would have applied the Advanced IRB Approach in
+    accordance with Article 147A", and Annex II p.112 says column 0254 "shall
+    not be reported for sheets relating to the FIRB approach or the slotting
+    approach". Applying the scalar to F-IRB legs as well overstated their RWEA
+    and left an F-IRB sheet's column 0260 above 0251 + 0252 + 0253 + 0254
+    (``boe_b0751``, ERROR). Limb (a) is an Art. 146(3) amount and still reaches
+    F-IRB legs. P1.399.
 
     An earlier revision of this docstring asserted the opposite ordering — floor
     first, then both scalars on the post-floor base — and attributed it to
@@ -253,7 +268,18 @@ def apply_post_model_adjustments(
     # Article 166D(6)" — a different provision. It is a sibling increase on the
     # same base and must stay outside the floor test (P1.325).
     general_pma_expr = pl.col("rwa") * pma_rwa_scalar
-    unrecognised_expr = pl.col("rwa") * unrecognised_scalar
+    # Limb (c) is Art. 166D(6)'s adjustment, which covers only facilities where
+    # "the institution would have applied the Advanced IRB Approach in accordance
+    # with Article 147A" (166D(6)(a)(ii)). Read the leg's approach off the sealed
+    # ``approach`` column (classifier exit, required) — not a regime branch: the
+    # whole block is already behind the ``post_model_adjustments`` pack Feature.
+    # Read without a presence guard on purpose: ``classify_approach`` emits the
+    # column on every production path before this transform, and a frame
+    # without it is a programming error, not an F-IRB leg (P1.399).
+    is_airb_leg = pl.col("approach") == ApproachType.AIRB.value
+    unrecognised_expr = (
+        pl.when(is_airb_leg).then(pl.col("rwa") * unrecognised_scalar).otherwise(pl.lit(0.0))
+    )
 
     rw_col = "risk_weight" if "risk_weight" in cols else None
     if rw_col and mortgage_rw_floor > 0:

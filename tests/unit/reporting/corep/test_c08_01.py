@@ -64,6 +64,13 @@ def _irb_results_with_pma() -> pl.LazyFrame:
     pre-adjustment RWEA, general PMAs, mortgage RW floor, and unrecognised
     exposure adjustments. This fixture simulates pipeline output after the
     IRB calculator has applied post-model adjustments.
+
+    Each leg foots (``rwa_final`` = pre-adjustment RWEA + the three
+    adjustments), and only the A-IRB leg carries an unrecognised exposure
+    adjustment: the engine applies Art. 166D(6)'s scalar to Advanced IRB legs
+    only (P1.399), so an F-IRB leg with a non-zero one is a shape no pipeline
+    run produces (LESSONS C11(c)). Until P1.399 both F-IRB legs here carried
+    one (7.7 and 30.0) and their ``rwa_final`` included it.
     """
     return pl.LazyFrame(
         {
@@ -73,7 +80,7 @@ def _irb_results_with_pma() -> pl.LazyFrame:
             "drawn_amount": [5000.0, 3000.0, 4000.0],
             "undrawn_amount": [1000.0, 0.0, 0.0],
             "ead_final": [5500.0, 3000.0, 4000.0],
-            "rwa_final": [4050.0, 1920.0, 1400.0],
+            "rwa_final": [4042.5, 1890.0, 1400.0],
             "risk_weight": [0.70, 0.60, 0.30],
             "pd_floored": [0.005, 0.01, 0.003],
             "lgd_floored": [0.45, 0.45, 0.15],
@@ -87,7 +94,7 @@ def _irb_results_with_pma() -> pl.LazyFrame:
             "rwa_pre_adjustments": [3850.0, 1800.0, 1200.0],
             "post_model_adjustment_rwa": [192.5, 90.0, 60.0],
             "mortgage_rw_floor_adjustment": [0.0, 0.0, 100.0],
-            "unrecognised_exposure_adjustment": [7.7, 30.0, 40.0],
+            "unrecognised_exposure_adjustment": [0.0, 0.0, 40.0],
             # EL adjustments
             "el_pre_adjustment": [12.375, 13.5, 1.8],
             "post_model_adjustment_el": [0.62, 0.675, 0.09],
@@ -594,22 +601,25 @@ class TestPostModelAdjustments:
         mortgage sheet, and not on the F-IRB corporate sheet: PS1/26 Annex II
         p.112, "This column shall not be reported for sheets relating to the FIRB
         approach or the slotting approach" (the adjustment is Art. 166D(6)'s, an
-        A-IRB one). The fixture gives the F-IRB legs an adjustment anyway (7.7 +
-        30.0), so leaving it out cannot be told apart from summing a zero.
+        A-IRB one). The F-IRB legs carry a 0.0 adjustment, as the engine writes
+        it, so summing them would report 0.0, not ``None``: leaving the column out
+        is still told apart from summing a zero.
 
-        That F-IRB adjustment is a shape the engine really produces, and the output
-        it pins is inconsistent: ``engine/irb/adjustments.py`` applies
-        ``unrecognised_exposure_scalar`` to every formula-IRB leg, F-IRB included,
-        so with a non-zero scalar an F-IRB sheet's column 0260 includes an uplift
-        that columns 0251-0253 cannot account for (``boe_b0751``, ERROR). The defect is
-        the engine's (the scalar should reach A-IRB legs only) and is filed as a
-        follow-up; this test holds only that column 0254 is not reported."""
+        And the F-IRB sheet's column 0260 foots to 0251 + 0252 + 0253 with 0254
+        absent (``boe_b0751``, ERROR). Before P1.399 this test pinned output that
+        did not: the engine applied ``unrecognised_exposure_scalar`` to every
+        formula-IRB leg, F-IRB included, so with a non-zero scalar an F-IRB
+        sheet's column 0260 carried an uplift no reported column accounted for.
+        The engine now applies it to A-IRB legs only; the filed-return form of
+        this identity is
+        ``tests/acceptance/reporting/test_of08_01_unrecognised_exposure_scalar.py``."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_pma(), framework="BASEL_3_1")
         mtg = bundle.c08_01[OF08_RETAIL_RESIDENTIAL_NON_SME].filter(pl.col("row_ref") == "0010")
         corp = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0010")
         assert mtg["0254"][0] == pytest.approx(40.0)
         assert corp["0254"][0] is None
+        assert corp["0260"][0] == pytest.approx(corp["0251"][0] + corp["0252"][0] + corp["0253"][0])
 
     def test_b31_col_0280_el_pre_adjustment(self) -> None:
         """Col 0280: EL pre-adjustment equals sum of el_pre_adjustment."""

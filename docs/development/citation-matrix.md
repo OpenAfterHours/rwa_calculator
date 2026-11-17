@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-16.
+Last generated: 2026-11-17.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -1819,6 +1819,19 @@ Last generated: 2026-11-16.
     --8<-- "src/rwa_calc/engine/classify/subtypes.py:75:269"
     ```
 
+??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:124"
+    ```python
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    ```
+
+
+### PS1/26, paragraph 154 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:125"
+    ```python
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    ```
+
 
 ### PS1/26, paragraph 160 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
@@ -1898,6 +1911,14 @@ Last generated: 2026-11-16.
 ??? quote "`_apply_purchased_receivable_ccf` — src/rwa_calc/engine/ccf.py:804"
     ```python
     --8<-- "src/rwa_calc/engine/ccf.py:804:844"
+    ```
+
+
+### PS1/26, paragraph 166D — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:126"
+    ```python
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
     ```
 
 

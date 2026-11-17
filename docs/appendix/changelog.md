@@ -467,6 +467,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **CAPITAL — RWA DOWN, only where a non-zero `unrecognised_exposure_scalar` is
+  configured: the Basel 3.1 unrecognised exposure adjustment no longer uplifts
+  Foundation IRB legs.** PS1/26 Art. 166D(6) confines the adjustment to facilities
+  where "the institution would have applied the Advanced IRB Approach in
+  accordance with Article 147A", and Annex II p.112 says OF 08.01 / 08.02 column
+  0254 "shall not be reported for sheets relating to the FIRB approach or the
+  slotting approach". The calculator multiplied
+  `PostModelAdjustmentConfig.unrecognised_exposure_scalar` into the RWEA of every
+  formula-IRB leg, F-IRB included; it now adds it to Advanced IRB legs only (read
+  from the leg's `approach`). F-IRB RWEA falls by the F-IRB part of the old
+  uplift; A-IRB legs, the general post-model adjustment (which still reaches
+  F-IRB legs), the mortgage floor, slotting and CRR are unchanged.
+  - Measured on the registered `irb-classes` portfolio at a 5% scalar: F-IRB RWEA
+    72,319,310.51 → 68,875,533.82 (−3,443,776.69); A-IRB unchanged at
+    84,096.89, its adjustment still 3,341.23.
+  - The filing knock-on is closed with it: since OF 08.01 stopped reporting
+    column 0254 on F-IRB sheets (2026-11-16), such a run filed an F-IRB column
+    0260 above columns 0251-0254 and failed the Bank's Error rule `boe_b0751`
+    (9 satisfied / 11 unsatisfied on that portfolio); it now passes (20 / 0).
+  - At the default scalar of 0.0 no figure moves and no golden, register entry
+    or ratchet changes. Recorded in `docs/development/escape-log.md`
+    (2026-11-16, O-10).
 - **Return reconciliation prices a Basel 3.1 loan-split mortgage per part.**
   Since OF 07.00 reports such a loan in its two parts, each part carried the
   whole leg's `rwa_final`, and the row-migration matrix priced a leg by its

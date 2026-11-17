@@ -374,6 +374,11 @@
     "CRR Art. 138",
     "CRR Art. 139"
   ],
+  "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments": [
+    "PS1/26, paragraph 153",
+    "PS1/26, paragraph 154",
+    "PS1/26, paragraph 166D"
+  ],
   "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params": [
     "CRR Art. 153(1)"
   ],

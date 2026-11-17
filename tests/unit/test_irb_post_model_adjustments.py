@@ -25,7 +25,7 @@ from rwa_calc.contracts.config import (
     CalculationConfig,
     PostModelAdjustmentConfig,
 )
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.irb.transforms import (
     apply_post_model_adjustments,
 )
@@ -40,6 +40,7 @@ def _make_irb_frame(
     ead_final: float = 2000.0,
     expected_loss: float = 10.0,
     is_defaulted: bool = False,
+    approach: str = ApproachType.AIRB.value,
 ) -> pl.LazyFrame:
     """Minimal IRB frame with columns expected by apply_post_model_adjustments.
 
@@ -50,10 +51,18 @@ def _make_irb_frame(
     edges and ``apply_defaulted_treatment`` — same module, strictly earlier on
     every production path — already dereferences it, so no production frame can
     reach ``apply_post_model_adjustments`` without it.
+
+    ``approach`` is the classifier's sealed approach column, which
+    ``classify_approach`` emits on every production path before this transform.
+    The unrecognised exposure adjustment (Art. 154(4A)(c) / 166D(6)) reaches
+    Advanced IRB legs only (P1.399), so the default is A-IRB: these tests
+    exercise limb (c) and must reach it. The F-IRB side is pinned in
+    ``tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py``.
     """
     return pl.LazyFrame(
         {
             "exposure_reference": ["EXP_1"],
+            "approach": [approach],
             "exposure_class": [exposure_class],
             "rwa": [rwa],
             "risk_weight": [risk_weight],
@@ -462,6 +471,7 @@ class TestPMASequencing:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["MTG_1", "CORP_1"],
+                "approach": [ApproachType.AIRB.value, ApproachType.AIRB.value],
                 "exposure_class": ["retail_mortgage", "corporate"],
                 "rwa": [100.0, 1000.0],
                 "risk_weight": [0.05, 0.50],
@@ -643,6 +653,9 @@ def _make_p1319_frame() -> pl.LazyFrame:
     return pl.LazyFrame(
         {
             "exposure_reference": [row[0] for row in _P1319_ROWS],
+            # The sealed approach column the transform reads for limb (c); the
+            # unrecognised scalar is zero here, so the value moves nothing.
+            "approach": [ApproachType.AIRB.value] * len(_P1319_ROWS),
             "exposure_class": [row[1] for row in _P1319_ROWS],
             "is_defaulted": pl.Series([row[2] for row in _P1319_ROWS], dtype=pl.Boolean),
             "risk_weight": [row[3] for row in _P1319_ROWS],

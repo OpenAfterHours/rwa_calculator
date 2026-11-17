@@ -2681,6 +2681,10 @@ gate that shipped.
   finding about our output until an engine that can tell "no answer" from
   "zero" has agreed. Where the tolerated rule fails only on empty-denominator
   rows, check what the cell holds before blaming the rule.
+- **Discharged 2026-11-16**: the two register entries kept above left the
+  register when the template-level engine stopped evaluating a place where none
+  of a rule's cells is reported (`9e493a6` for `boe_b0778`, `12aacae` for
+  `v09796_m`); see the 2026-11-16 entry on `boe_b0778`.
 
 ## 2026-11-13 — Basel 3.1 OF 07.00 reported figures in cells the published template greys out, and a column it does not have
 
@@ -3913,3 +3917,1187 @@ gate that shipped.
   an oracle measured on data with one row per table cannot tell a row-wise
   reading from a table-wise one. The data must have the shape that separates
   them.
+
+The entries below were written together on 2026-11-16 from a review of the Bank
+of England's v4.1.1 PRA001 validation rules against our output and against our
+two rule engines, not from separate `/postmortem` runs. Each item was fixed in a
+lane worktree and reviewed before merge (lanes L, Z, X, Y, R and G); the shas
+are the lane commits, and `6e8b73d` finished two of them once the lanes had
+merged. A movement quoted here is that lane's own, measured against its parent
+commit; the merged tree re-banks every ratchet once, so a banked figure can
+differ by what the other lanes moved.
+
+Six of these defects — OF 09.02's classification, OF 08.01 column 0010, its
+greyed cells and retail maturity, its conversion-factor rows, the output-floor
+add-on in OF 08 and the retail guarantor — were listed under "What it exposed —
+true before, visible now, each left open" in the 2026-11-13 entry on the IRB
+sheet axis, each with an owning bullet. Those entries are that list being
+worked. The seventh item on the list, the fractional average maturity, was fixed
+too (`b347728`, P2.61) and has no entry: the structure check `STR006` refused
+every such return, so no fraction was ever filed and no wrong figure reached
+output. The returns it blocked are an availability defect that a gate stopped,
+which none of the eight classes describes.
+
+Four entries (row 0015, the loan split, the substituted leg, the PD column) name
+one missing gate: the gateway engine computed a Warning-severity verdict on every
+registered return and nothing kept it. That gate was built in the same batch
+(`269cae1`, `3295585`): the supervisory register's gateway leg,
+`known_gateway_breaks` (every gateway break on the 15 Basel 3.1 returns, keyed on
+rule, portfolio and severity, two-way ratcheted) and `known_engine_disagreements`
+(every rule on which the two engines give opposite verdicts), in
+`tests/acceptance/reporting/test_supervisory_validations.py`, with
+`tests/contracts/test_gateway_break_registers_agree.py` holding its Error half to
+the filing-mapping baseline. Before it was banked it failed with `80 NEW gateway
+break(s) ... 43 of them Error-severity` and `21 NEW disagreement(s)`; the
+reviewers then turned each leg red by dropping or adding one pair of the banked
+register. It closes those four entries' general limb; their rule-anchored tests
+close the rest.
+
+The review also produced the publisher-issue register
+(`docs/rwa-filer/publisher-issues.md`, PI-01 to PI-40): rules that a correct
+return fails. Those are not escapes and have no entry here; where a fix leaves a
+published rule failing on a correct return, the entry names the issue.
+`tests/contracts/test_register_publisher_issues.py` (`269cae1`, `3295585`) now
+requires every register reason on such a rule to cite the issue or rebut it.
+
+## 2026-11-16 — rwa-filer enforced rules the Bank of England had switched off at its gateway, and nothing in the repository read the list that says so
+
+- **Defect**: the Bank changes how its gateway runs some rules after a taxonomy
+  is published. Its "Banking validations deny list"
+  (`boe-banking-validations-deny-list-november-2026.xlsx`, Note sheet): *"These
+  validation execution amendments are applied post-taxonomy publication and
+  therefore override the information provided in the relevant taxonomy and the
+  taxonomy validations spreadsheet. [...] Deactivate - The rule will not be
+  executed in the data collection system and reporters are not expected to meet
+  the requirements of this rule."* Sheet "Version 4.1.1" deactivates PRA001
+  `boe_b0710`, `_1`, `_2`, `_3` and `boe_b0746` from 2026-10-19 and `boe_b0272`,
+  `boe_b0274` from 2026-11-16, the PRA116 `boe_b0063_ss` family from 2026-10-19
+  and PRA115 `boe_b1014`, `boe_b1022` from 2026-05-14, and downgrades MRL001
+  `boe_b4006_1/_2` and `boe_b4008_1/_2` to Warning. `rwa-filer` enforced every
+  one as published, in both engines. Measured before the fix: 8 of the 15
+  registered Basel 3.1 returns (`ccr`, `netting`, `netting-mismatch`, `off-bs`,
+  `over-collateralised`, `re-split`, `row-scope`, `sa-classes`) had `boe_b0710`
+  as their only Error-severity break, so `rwa-filer validate` and
+  `export_filing_package` reported them blocked where the gateway accepts them,
+  and `rwa-filer compare` reported `boe_b0710` as a break in both returns.
+- **Rule**: `boe_b0710` and its family (ERROR) — known issue #22 of the
+  November 2026 log: *"The scope of the formula has been erroneously extended
+  beyond row 0080"*; publisher issue PI-22, acknowledged. Not a regulatory
+  escape: no figure was wrong, the verdict on it was.
+- **Origin**: `rwa_filer.boe` and `rwa_filer.validate` take their rule
+  population from the packaged rule books, built from the taxonomy package and
+  the Bank's workbook. Neither carries the deny list. The known-issues log was
+  downloaded (`scripts/download_docs.py`, P2.59) and read by nothing.
+- **Escape class**: `no-gate-exists`. Every gate that judges our verdicts agreed
+  with the stale one: the Arelle-pinned sample oracle and the referee
+  differential run the taxonomy's formulas, which still contain these rules, and
+  the supervisory register runs the Bank's workbook. The plan shows the cost.
+  Earlier on 2026-11-16, before this fix, P2.63 was closed "as a RULE LIMIT"
+  with the break to stay "banked as a liability", saying `boe_b0710` "is not in
+  its known-issues log as of 27 August 2026" (commit `59e3c07` attributes it to
+  the published rule's scope) — four weeks after the Bank had switched it off.
+  The reading of the rule was right. The information about it was a release out
+  of date, and nothing could say so.
+- **Gate change**:
+  - `packages/rwa-filer/src/rwa_filer/boe/data/deny/4.1.1.json`, the packaged,
+    release-keyed list. It is imported, never hand-edited, by
+    `scripts/build_filer_release.py 4.1.1 --deny-list` or
+    `rwa-filer rulebook deny-list import`, joined to the known-issues log for
+    the issue number. `--check` compares the packaged file with the Bank's
+    workbook in `docs/assets/`.
+  - `packages/rwa-filer/tests/test_shipped_releases.py` deny contracts: every
+    shipped release has a list, none is stray, every entry names a rule of its
+    module.
+  - `packages/rwa-filer/tests/validate/test_deny_application.py` (gateway
+    engine) and `packages/rwa-filer/tests/rules/test_deny_template_engine.py`
+    (template-level engine, with the downgrade path pinned in `967fe39`): a
+    deactivated rule is `NOT_EVALUATED`, reason `deactivated_by_publisher`; a
+    downgraded one is a Warning (`VAL002`). Each keeps a leg dated before
+    2026-10-19 on which `boe_b0710` still fails, so the test stays red-able.
+  - `packages/rwa-filer/tests/workflow/test_compare.py` (`967fe39`): `compare`
+    judges both returns by the list in force on its `--submission-date`.
+  - The referee compares Arelle with the published verdict
+    (`RuleResult.formula`), held by
+    `packages/rwa-filer/tests/referee/test_differential.py::TestTheBanksDenyList`.
+  - `scripts/check_wheel_install.py`'s probe loads every shipped list and runs
+    `rulebook deny-list`.
+- **Verified red** (`a27ecf7`, against the unchanged code):
+  - gateway engine, the PRA001 corporates return run on 2026-11-16:
+    `assert ('FAIL', '') == ('NOT_EVALUATED', 'deactivated_by_publisher')`;
+  - template-level engine, an OF 07.00 frame breaking `boe_b0710`:
+    `assert [('boe_b0710', ...)] == []` (still enforced);
+  - the CLI on the same return: `[VAL001] ERROR: Validation rule boe_b0710 does
+    not hold in 1 of 1 evaluation(s) - an Error-severity break rejects the
+    submission`;
+  - the referee with the formula unwrap mutated out: `'disagree' != 'agree'`.
+
+  The new test files fail to collect on the parent (`ImportError`), so the
+  behavioural red was taken with a probe written against the old API; the
+  reviewer reproduced it on the real 4.1.1 return at both commits. `967fe39`
+  says its compare and downgrade tests were "observed red with the deny list
+  not applied" and quotes no line. The `--deny-list --check` gate was run green
+  and has not been seen red.
+- **What the fix moved**: no figure. Filing-mapping ratchet
+  `error_rule_breaks` 64 → 50 (`boe_b0710` 13 → gone, `boe_b0710_1` 1 → gone).
+  Register: b31 `boe_b0710` and `_1` leave `known_broken_rules`, `_2` and `_3`
+  leave `known_vacuous_rules` — because the rules are no longer enforced, not
+  because a cell went dark. Coverage `union_binding_rules_b31` 390 → 387.
+  Referee: no movement; `compare()`'s inputs are identical on all 15 returns.
+- **Not closed by this entry**:
+  - The list changes monthly, between taxonomy releases, and `--check` runs only
+    after someone downloads the newer workbook. A list published next month
+    reaches no gate. Filed as P5.77. Until it lands, this escape is closed for the
+    16 November 2026 list only.
+  - `rwa_calc.reporting.filing.bindings.derive_variant_columns` still reads
+    `.enforced`, which now moves with the date. Repoint it at
+    `published_in_force` once rwa-calc's `rwa-filer` floor reaches the release
+    that ships it (the partition is identical today, measured; P6.59).
+- **Lesson**: a published rule book describes the gateway on the day it was
+  published. Before calling a rule broken, or a rule limit, read the Bank's
+  current deny list and known-issues log; both override the taxonomy. (LESSONS
+  C5, amended.)
+
+## 2026-11-16 — CAPITAL: the Basel 3.1 equity transitional was coded as a floor that never bound, and the audit that should have caught it read the code as the rule
+
+- **Defect**: `engine/equity/calculator.py::EquityCalculator._apply_transitional_floor`
+  applied the PS1/26 Credit Risk: General Provisions rule 4.2 / 4.3 weights as
+  `pl.max_horizontal(risk_weight, transitional_rw)` under an Art. 133 weight
+  that was already 250% or 400%. max(250%, 160%) is 250% and max(400%, 220%) is
+  400%, so it changed no weight on any date. A firm without IRB permission on
+  31 December 2026 was weighted 250% / 400% in 2027, 2028 and 2029, where the
+  rules assign 160 / 190 / 220% and, for higher risk equity, 220 / 280 / 340%.
+  RWEA on such holdings was overstated by 56% (standard) and 82% (higher risk)
+  in 2027. The same function labelled every row `sa_transitional` (subordinated
+  debt, CIUs, firms with IRB permission, 2030), and derived `equity_higher_risk`
+  from a narrower predicate than the one that assigned 400%.
+- **Rule** (`ps126app1.pdf`): p.20, rule 4.1: *"4.2 and 4.3 only apply to an
+  institution that did not have permission to use the Internal Ratings Based
+  Approach under Article 143 of CRR on 31 December 2026."* Rule 4.2: *"... equity
+  exposures that are not higher risk equity exposures or within the scope of
+  paragraph 6 [...] shall be assigned the following risk weights: (1) 160% [...]
+  2027; (2) 190% [...] 2028; and (3) 220% [...] 2029."* Rule 4.3 (p.21): the same
+  for higher risk equity, 220% / 280% / 340%. "Higher of" appears in chapter 4
+  only in rules 4.6 and 4.8, which are for firms with IRB permission.
+  **Direction: RWA-REDUCING** for the affected population; capital was
+  overstated.
+- **Origin**: the floor in `_apply_transitional_floor`. Plan item P1.296
+  entrenched it: its audit (`IMPLEMENTATION_PLAN.md` line 175) rejected a
+  correct claim, "transitional 160% in 2027", as "WRONG", describing rules
+  4.2 / 4.3 as *"a firm-specific grandfathering provision for firms coming off
+  IRB equity permission ... applied as an upward `max_horizontal` floor"* and
+  citing the code line. That is the code's mechanism, with rule 4.1's scope
+  inverted. The reading was then implemented: `fcsm_equity_collateral_rw` was
+  set to 250% for Basel 3.1 on the strength of it.
+- **Escape class**: `test-shared-the-assumption`, with `wrong-premise` and
+  `path-never-exercised` contributing — the order both independent designs of
+  the fix gave. Fifteen tests, the specification page and the human-reviewed
+  oracle case ORC-080 were written from one sentence, "the transitional is a
+  floor", and ORC-080, the gate that exists to read the rule independently of
+  the code, read Art. 133(3) without the General Provisions Part that modifies
+  it. `wrong-premise` contributed but is not the class: it is a wrong bullet
+  faithfully implemented, and here the floor came first. P1.296's audit cited
+  the code line (`engine/equity/calculator.py:560-566`), recorded the code's
+  mechanism as the rule and the correct claim as "WRONG", and so entrenched the
+  defect rather than caused it — only `fcsm_equity_collateral_rw` was set from
+  it (P1.392). `path-never-exercised`: no registered portfolio held direct
+  equity of a firm without IRB permission in 2027–2029 (`b31/rich` is an
+  IRB-permission run), so the supervisory register, the ratchets and the goldens
+  could not see the RWEA either.
+- **Gate change**:
+  - `tests/oracle/expected_values.json`: ORC-080 re-derived from the quoted rule
+    text (2.50 / 2,500,000 → 1.60 / 1,600,000), and ORC-284 added (higher risk,
+    the Glossary limbs, 2.20 / 2,200,000).
+  - `tests/acceptance/basel31/test_sa_equity_transitional_rules_4_1_4_3.py`:
+    the rule 4.2 and 4.3 weights over six dates; the exclusions (subordinated
+    debt, every CIU, the central-bank type, Art. 133(6)(c) significant
+    investments); the firm fact and its override; `CFG003`; and a full-pipeline
+    book with two moving and three surviving legs.
+  - `tests/unit/test_equity_transitional_carriers.py`: the carriers are
+    non-null only on legs whose weight rules 4.2 / 4.3 set.
+  - With the next entry's fix (`ee96beb`), the registered
+    `b31/equity-transitional` portfolio (`RUNS`, Basel 3.1 only), which closes
+    the `path-never-exercised` limb.
+  - Owed, for the contributing class's prescription (strengthen Wave 0): a
+    premise-auditor criterion that a refutation agreeing with the code must
+    quote the rule's scope sentence and operative verb before it relies on the
+    code's mechanism. Filed as P5.78.
+- **Verified red** (`e9a84a7`, observed in the lane and reproduced by both
+  reviewers against `ba53bd0`):
+  - `tests/oracle`: ORC-080 `risk_weight oracle 1.6000000000 engine
+    2.5000000000 rel err 5.62e-01`, ORC-284 `oracle 2.2000000000 engine
+    4.0000000000` — `2 failed, 220 passed`;
+  - the acceptance file: `43 failed, 46 passed` — `assert 2.5 == 1.6`,
+    `assert 4.0 == 2.2`, `assert 2.5 == 1.9`, `assert 4.0 == 3.4`, and the two
+    moving pipeline legs at `rwa_final` 2,500,000 / 2,000,000;
+  - the carrier test: `19 failed, 11 passed` — the label on subordinated debt,
+    CIUs, the significant investment, the IRB firm and 2030, and a `KeyError`
+    on `risk_weight_pre_equity_transitional`.
+
+  The 30 exclusion cases are green in both states by design; each was shown red
+  under a one-change mutation (CIU exclusion dropped: 17 red; significant
+  investment exclusion dropped: 6; the transitional applied to every leg: 35).
+- **What the fix moved**: per 1,000,000 of exposure held by a firm without IRB
+  permission, 2027 160% (was 250%) and 220% higher risk (was 400%); 2028 190% /
+  280%; 2029 220% / 340%; from 1 January 2030 unchanged. RWA moves 0.00 on all
+  30 previously registered runs, none of which holds such equity; the new
+  `b31/equity-transitional` run carries the moved weights. One new output on a
+  registered run: a `CFG003` WARNING on `b31/rich`, an IRB-permission firm,
+  because rules 4.4–4.6 are not implemented. No golden, register entry or
+  ratchet moved in `e9a84a7`.
+- **Found in review and fixed before merge** (`13ac439`): the first fix's rule
+  4.1 firm fact counted F-IRB and A-IRB permission only. A firm whose only IRB
+  permission is slotting has permission under Art. 143 (PS1/26 Art. 143(2A),
+  p.81: *"(a) the Slotting Approach; (b) the Foundation IRB Approach; or (c) the
+  Advanced IRB Approach"*; slotting sat in the IRB chapter on 31 December 2026
+  too, old Art. 153(5)), so rule 4.1 takes it out of rules 4.2 / 4.3. It now
+  keeps the Art. 133 weights and gets `CFG003`, as every IRB-permission firm does
+  until rules 4.4–4.6 are implemented; `test_a_slotting_only_firm_had_irb_permission`
+  was red first (`assert 1.6 == 2.5`). Two qualifications from the reviews:
+  equity such a firm held under Standardised permission on 31 December 2026
+  takes the rule 4.2 / 4.3 weights under rule 4.5(1), so 250% is the engine's
+  interim treatment, not a corrected figure; and the move reaches only a run
+  given an explicit `irb_permissions` map with slotting and no F-IRB / A-IRB (a
+  `PermissionMode.IRB` run already counted as permitted). Never released, so not
+  an escape of its own. The `CFG003` message now names rules 4.5(1) and 4.6.
+- **Not fixed here**, each filed: rules 4.4–4.6 for firms **with** IRB
+  permission (capital; its design measured `b31/rich` +400,000 and 49 golden
+  cells), P1.389; CRR routing of a slotting-only firm's equity, which still
+  reads F-IRB / A-IRB permission only, P1.390; the CIU look-through path under
+  rules 4.7 / 4.8, P1.391; `fcsm_equity_collateral_rw` (Art. 222(3)) stays 250% in
+  2027–2029, P1.392; pre-existing defects in the equity weight chain, P1.393;
+  equity booked on the loans table keeps 250% with no transitional (`SA005`),
+  P1.344.
+- **Lesson**: an audit that agrees with the code may have read the code. Where a
+  rule says "shall be assigned", a floor in the code is a finding, not a
+  confirmation, and the rule's scope sentence (here rule 4.1) decides who it
+  applies to before the weights do. (LESSONS A1, amended.)
+
+## 2026-11-16 — OF 07.00 memorandum rows 0371-0374 published nothing for two months, and the register recorded the gap as a vacuous rule
+
+- **Defect**: OF 07.00 rows 0371–0374 report equity under the transitional
+  (PS1/26 Annex II pp.97–98). They were null on every return. P1.371
+  (2026-09-10) admitted class (p) equity to OF 07.00 and recorded the rows as a
+  residual: the carriers `equity_transitional_approach` and `equity_higher_risk`
+  were stripped at the aggregator exit. The residual's diagnosis — "the fix is
+  two `EdgeColumn` entries, NOT calculator work" — was also wrong: the carriers
+  were mis-populated, labelling every equity row (see the entry above), so
+  sealing them as produced would have filled the rows with the wrong
+  population.
+- **Rule**: `boe_b0710_2` (ERROR, scoped to sheet 0016 and rows 0371–0374
+  alone). It is now deactivated at the gateway (PI-22), so after this fix no
+  enforced rule reads these rows. Once the rows are filled, a correct return
+  breaks `boe_b1016`, `boe_b1031` (ERROR) and `boe_b0491`, `boe_b0506`
+  (WARNING): publisher issue PI-01, because Annex II p.95 puts transitional
+  RWEA on the Article 133 row and every rule 4.2 / 4.3 weight is below that
+  row's weight.
+- **Origin**: `contracts/edges.py` (`AGGREGATOR_EXIT_EDGE` declared neither
+  carrier) and `engine/equity/calculator.py` (the carriers' population).
+- **Escape class**: `caught-and-parked`. Three tests pinned the null rows, the
+  last written to go red the moment a carrier was sealed, and the register held
+  `boe_b0710_2` as `VACUOUS` pointing straight at them. The plan text said the
+  residual "needs a P-code at the next refresh"; it never got one. The row-0280
+  mis-rowing this fix also prevents (transitional legs banded on their
+  transitional weight would fall into "Other risk weights") is not an escape: it
+  would exist only if the entry above had landed alone.
+- **Gate change**: the registered `b31/equity-transitional` portfolio (a firm
+  without IRB permission at 2027-06-01: listed 1,000,000 and young unlisted
+  500,000 that move; Art. 133(5) subordinated debt 200,000 and an
+  Art. 133(6)(c) holding 300,000 that do not; a 2,000,000 corporate anchor);
+  `tests/acceptance/reporting/test_of07_equity_transitional_rows.py` (row
+  placement on the registered book, and `boe_b0458` / `boe_b0458_1` on the
+  gateway); `tests/unit/reporting/corep/test_c07_equity_transitional_band.py`;
+  `tests/contracts/test_equity_transitional_edge.py` (the three carriers are
+  declared on the exit edge). The pinning test in
+  `tests/acceptance/reporting/test_p1_371_equity_class_p.py` is rewritten to
+  assert the carriers present and null on `b31/rich`, an IRB-permission firm.
+- **Verified red** (`ee96beb`, on the entry above's engine; reproduced by the
+  reviewer against `e9a84a7`): unit `7 failed, 23 passed` (`r0250 c0200 400 vs 1,700`;
+  `r0261 None vs 700`; `r0280 c0200 2,000.0 is not None`); contract
+  `5 failed, 4 passed` (`stripped by the aggregator-exit seal:
+  [equity_higher_risk, equity_transitional_approach,
+  risk_weight_pre_equity_transitional]`); acceptance `13 failed, 16 passed`
+  (`r0371 / r0372 c0010 None`; `boe_b0458 FAIL (satisfied 0, unsatisfied 7)`).
+  The old pinning test failed as its docstring said it would. One-change
+  probes: the band coalesce removed, 11 red; the memorandum sheet term removed,
+  3 red, unit tests only (no labelled CIU leg exists to reach it on the
+  pipeline).
+- **What the fix moved**: no RWA. On `b31/equity-transitional`, equity sheet:
+  r0250 1,300,000 / 2,350,000, r0261 500,000 / 1,100,000, r0371 500,000 /
+  1,100,000, r0372 1,000,000 / 1,600,000, r0280 empty. No golden moved
+  (`b31/rich` is an IRB-permission firm). Register: the PI-01 rules become
+  known breaks on the new run, cited to PI-01; `boe_b0710_2` leaves the register through the
+  deny list (entry above) rather than through this fix.
+- **Not fixed here**: rows 0373 / 0374 and OV1 row 11 stay null until rules
+  4.4–4.6 land (P1.389); the memorandum-row sheet term is reached by no registered
+  leg until then.
+- **Lesson**: a residual written into a closed bullet is parked with no owner,
+  whatever its words say. A diagnosis attached to it ("two `EdgeColumn`
+  entries") is a claim like any other and needs measuring before it is
+  sealed.
+
+## 2026-11-16 — CAPITAL: a natural person was accepted as a provider of unfunded credit protection, and the test written to check the Art. 201 list probed only the path where a null weight declined it
+
+- **Defect**: the Art. 201 gate in `assign_guarantor_approach` covered corporate
+  guarantors only ("Non-corporate classes are governed by other Art. 201 limbs
+  and not gated here"). A natural person (`entity_type` `individual`,
+  `natural_person` or `retail`, guarantor class `retail_other`) went through. On
+  an F-IRB beneficiary whose guarantor carries an internal PD, the engine
+  applied parameter substitution at the person's retail PD. On
+  `crm-substitution`, the S2 leg — 3,300,000 covered by a natural person with an
+  internal PD of 2.00% — moved from the obligor's corporate risk weight
+  1.1178122 (CRR) / 0.9373687 (Basel 3.1) to the retail 0.6146563 / 0.5154350.
+  On SA and slotting beneficiaries the same guarantee was declined only by
+  accident: `build_guarantor_rw_expr` has no retail branch, so a null guarantor
+  risk weight made it non-beneficial, with no `CRM013`. Downstream, OF 02.00 /
+  OF 08 reverted the leg to its obligor's class while OF 09.02 counted it as
+  retail.
+- **Rule**: PS1/26 Art. 201(1) (`ps126app1.pdf` p.178) lists the eligible
+  providers exhaustively — central governments and central banks, regional
+  governments, MDBs, 0% international organisations, PSEs, institutions,
+  *"other corporate entities ... where those other corporate entities have a
+  credit assessment by an ECAI"*, qualifying CCPs — and Art. 201(2) (p.179)
+  adds, for the Parameter Substitution Method only, *"other corporate entities
+  that are internally rated by the institution"*. Art. 194(6)(c) (p.171) allows
+  unfunded protection *"only where ... the protection provider is of a kind that
+  is included in the list of eligible protection providers set out in
+  Article 201"*. CRR Art. 201(1)–(2) and 194(5) are the same in substance. No
+  limb names a natural person. **Direction: RWA-INCREASING**; capital was
+  understated. Rules that saw it: `boe_b0283`, `b0284`, `b1054`, `b1055`, and
+  the CRR C 02.00 against C 08.01 tie that no published rule makes.
+- **Origin**: `engine/crm/guarantees.py::_assign_guarantor_approach`, moved
+  verbatim to `engine/crm/guarantor_eligibility.py` in `857aa00`.
+- **Escape class**: `caught-and-parked`. The gates fired and the finding was
+  parked in four places: the register entries for `boe_b0283`, `b0284`,
+  `b1054`, `b1055` named "a missing Art. 201 eligibility gate in engine/crm/,
+  capital-affecting, not changed here" and carried no `OWNER:` token for the
+  parked-register ratchet to hold (the plan's P1.384 owned it); the reporting code
+  called its revert "A REPORTING GUARD, NOT THE FIX"
+  (`irb_sheets.placeable_irb_class`); the P1.227 docstrings called it "a
+  possible separate plan item"; and P1.384 owned it. Underneath, LESSONS C10:
+  P1.227's acceptance test probed a natural-person guarantor (G5) on an SA
+  beneficiary only, where the null SA weight declines it, and its fixture comment
+  generalised "NOT a capital understatement today" to every path. Within that
+  test the IRB beneficiary was `path-never-exercised`.
+- **Gate change**:
+  - `tests/unit/crm/test_p1_384_art_201_natural_person_guarantor.py`: every
+    regime × natural-person entity type × {F-IRB, SA, slotting} beneficiary must
+    route to no guarantor approach, plus the CRR A-IRB control, which keeps
+    parameter substitution (CRR Art. 108(2)).
+  - `tests/acceptance/reporting/test_p1_384_s2_natural_person_declined.py`: the
+    S2 leg in both regimes — its own risk weight to 1e-9, its EL, one `CRM013`,
+    the CRR C 02.00 / C 08.01 tie and the Basel 3.1 OF 09.02 / OF 08.01 tie.
+  - Owed (the class's prescription, the parked register): a register rule that
+    every reason attributing a capital root cause carries an `OWNER:` token, P5.83;
+    and a contract test that every guarantor class reachable from
+    `entity_type_to_sa_class` is classified as Art. 201-eligible, gated, or a
+    documented null weight, P5.82.
+- **Verified red** (`d588294`; reproduced by the reviewer against `857aa00`):
+  unit `18 failed, 1 passed` — `AssertionError: crr/foundation_irb/individual: a
+  natural person must not route to 'irb'`, `b31/standardised/retail: a natural
+  person must not route to 'sa'`; the CRR A-IRB control passed. Acceptance
+  `11 failed, 3 passed` — leg risk weight 0.6146563 against the hand calculation
+  1.1178122 (CRR) and 0.5154350 against 0.9373687 (Basel 3.1); EL 29,700 against
+  8,910 and 26,400 against 7,920; `CRM013` count 0, expected 1; CRR C 02.00 r0300
+  27,414,657.40 against C 08.01 c0260 25,386,291.63; OF 09.02 r0030 c0105
+  43,000,000 against OF 08.01 46,300,000. The three greens are two adequacy tests
+  and a guard. Mutation A (the IRB-branch guard removed) turns 8 red; mutation B
+  (no A-IRB carve-out) turns exactly the control red.
+- **What the fix moved** — capital, `crm-substitution` only, re-measured with
+  the `RUNS` configs:
+  - CRR `rwa_final` 61,473,508.63 → 63,133,923.18 (**+1,660,414.55, +2.70%**);
+    EL 232,790 → 212,000.
+  - Basel 3.1 TREA 54,812,921.28 → 56,205,302.46 (**+1,392,381.17, +2.54%**);
+    U-TREA 48,322,921.28 → 49,715,302.46; S-TREA unchanged; the floor
+    (34,055,000 → 34,286,000) does not bind; IRB EL deduction 220,880 →
+    202,400; OF-ADJ −2,761,000 → −2,530,000.
+  - The S2 leg's risk weight now equals its own unguaranteed basis and the
+    Art. 153(1) hand calculation to 1e-9.
+  - Not stated in the commit, found by the reviewer: a CRR F-IRB beneficiary
+    whose natural-person guarantor has no internal PD used to route `sa`, so the
+    covered off-balance-sheet part took the SA conversion factor before the
+    guarantee was declined as non-beneficial. It now keeps the F-IRB factor (a
+    probe: EAD 750 → 825). No registered population reaches it.
+  - Register: `boe_b0283`, `b0284` removed; `crm-substitution` leaves
+    `b1054` / `b1055`. Filing ratchet `error_rule_breaks` 64 → 57. Coverage
+    `cells_live` 10309 → 10255: 54 CRR C 08.0x `retail_other` inflow-only cells
+    that existed only because the ineligible guarantee was recognised (a fall
+    to bank deliberately).
+- **Not fixed here**, each filed: the Basel 3.1 A-IRB limb (P1.394); the
+  `is_natural_person` flag (P1.395); Art. 201(1)(h) qualifying CCPs (P1.396); the
+  internal-rating limbs of Art. 201(2) in both regimes (P1.397); the cross-approach
+  conversion-factor swap left in place on a declined guarantee (P1.398); an
+  ineligible leg's `guarantee_status` (P2.96).
+- **Lesson**: a test of an eligibility list proves the paths it ran. A null
+  weight that declines a guarantee on one path is an accident, not a gate; run
+  the list over every beneficiary approach. (LESSONS C10, unchanged; the
+  graduations are P5.82 and P5.83.)
+
+## 2026-11-16 — The template-level engine failed boe_b0778, and its EBA twin v09796_m, on every return, and the reason for tolerating them was written here
+
+- **Defect**: `rwa_filer.validate` (the template-level engine behind the
+  supervisory register and `validate_submission`) read an unreported cell as
+  zero for every rule. `boe_b0778` asks that an OF 08.07 roll-out class's three
+  shares total 1. On a class with no exposure, where the shares are rightly
+  empty (2026-11-13 entry), it compared 0 with 1 and failed: on all 15
+  registered Basel 3.1 portfolios, an Error break that blocked
+  `validate_submission` on returns the gateway accepts. Its EBA twin `v09796_m`
+  (WARNING) failed the same way on all 15 CRR portfolios: a false `VAL002` on
+  every CRR return with an empty C 08.07 roll-out class.
+- **Rule**: `boe_b0778` (ERROR), `v09796_m` (WARNING). XBRL Variables 1.0 §4,
+  special case 2: *"If a variable set contains fact variables but all of the
+  fact variables in it evaluate to fallback values, then the variable set is not
+  deemed to have been evaluated."* Arelle logs *"Variable set ... skipped
+  evaluation, all fact variables have fallen back"*; the Bank's workbook Note
+  sheet: *"If the default value will not be specified, an evaluation may return
+  no results"*. The Bank restates 46 of the EBA's treat-as-zero rules under their
+  EBA ids, none marked "Always execute" and 45 with a default on every
+  reference; Arelle on one of them, `v09779_m` as the Bank files it, gives `[0,0]`
+  with nothing reported, `[1,0]` with one cell reported as 0 and `[0,1]` with one
+  reported as 5.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/validate/evaluate.py`, and for
+  the EBA rules `rules/catalogue.py::_parse_eba_rule`, which marked every EBA
+  rule always-execute.
+- **Escape class**: `caught-and-parked`. The register fired on both, and the
+  2026-11-13 OF 08.07 entry in this file kept them with the reason "an artefact
+  of the zero-fill, owned by the retirement of the template-level engine" — no
+  owner, no date — while the false blocking error kept shipping through
+  `validate_submission`. `v09796_m`'s reason went on saying "limit of the
+  published rule" after that entry had measured an artefact. The gate that
+  should have caught it is a differential between the two engines on the same
+  return.
+- **Gate change**:
+  - `packages/rwa-filer/tests/validate/test_evaluation_semantics.py`:
+    `boe_b0778` passes on a class that reports no share, records the empty row
+    as skipped rather than dropping it, still breaks where reported shares do not
+    total one, and is evaluated on a row that reports zeros; the same three for
+    `v09796_m`; and three coordinate-level tests of the guard's branches
+    (`nothing_reported`, a holding place stays `VACUOUS`, an always-execute rule
+    still breaks).
+  - `packages/rwa-filer/tests/rules/test_rule_catalogue.py`: the "Always
+    execute" flag read from the Bank's extract, `False` for every EBA rule
+    (`test_no_eba_rule_is_always_execute`), and the Bank's own restatements of
+    the EBA treat-as-zero rules pinned as defaulted, never always-execute.
+  - The engine differential (`269cae1`): `known_engine_disagreements` in the
+    supervisory register, two-way ratcheted (see the introduction). Before it
+    was banked it reported `21 NEW disagreement(s)`, 15 of them `boe_b0778`, one
+    per Basel 3.1 portfolio: the gate sees this defect directly.
+- **Verified red**:
+  - `9e493a6` (`boe_b0778`, on the unfixed engine; the reviewer reproduced each
+    against `8ceca03`): `assert ('FAIL', 2, 1) == ('PASS', 2, 0)`;
+    `assert (2, 0) == (1, 1)`; `assert ('FAIL', 1, 2) == ('FAIL', 1, 1)`; the
+    coordinate-level tests `ImportError: cannot import name
+    'SKIP_NOTHING_REPORTED'`; the catalogue tests `AttributeError:
+    'ValidationRule' object has no attribute 'always_execute'`.
+  - `12aacae` (`v09796_m`; reproduced against `9e493a6`):
+    `test_no_eba_rule_is_always_execute` `Left contains 1011 more items`;
+    `assert ('FAIL', 1, 1) == ('PASS', 1, 0)`; `assert (2, 0) == (1, 1)`.
+  - Register level: `test_no_baseline_break_has_been_fixed_without_being_removed`
+    names `b31/boe_b0778` and `crr/v09796_m` once the fixes are in.
+- **What the fix moved**: two rules. `boe_b0778` FAIL → PASS on all 15 Basel 3.1
+  runs (evaluated / passed / skipped as nothing reported: `rich` 6/6/3 ...
+  `facility-share-nonbinding` 2/2/7); 35 of the 816 BoE rules are
+  always-execute and keep the old reading. `v09796_m` FAIL → PASS on all 15 CRR
+  runs, every formerly failing place now skipped as nothing reported; none of
+  the other 740 enforced CRR rules moved in any count. No figure, golden,
+  coverage or filing-ratchet movement. The 2026-11-13 entry's two register
+  entries are discharged by this one.
+- **Not fixed here**: `validate_submission` under Basel 3.1 still gives only the
+  template-level reading, so gateway Error breaks are invisible there (P2.98).
+- **Lesson**: the 2026-11-13 lesson held one step further — a register reason
+  that says "artefact of the engine" is a finding about the engine, and the
+  engine was ours. Tolerating it until the engine retires is parking it.
+
+## 2026-11-16 — CRR C 08.06 reported a computed average in the fixed risk-weight column of its Total rows, and our filing binding judged that column as data
+
+- **Defect**: CRR C 08.06 column 0070 is Art. 153(5) Table 1 printed onto the
+  template. The two Total rows (0110, 0120) carried an EAD-weighted average of
+  the category weights there (0.7 on `crr/rich` project finance r0120), and a
+  zero-EAD Total borrowed its first leg's weight. Our filing adapter bound the
+  whole C 08.06 frame, so the template-level rules `v09782_m` / `v09783_m` (the
+  Total row equals the sum of its category rows) were evaluated on column 0070,
+  a column of fixed weights, and failed: lhs 0.0 against rhs 4.85, lhs 0.7
+  against 5.25.
+- **Rule**: CRR Annex II p.115: *"0070 RISK WEIGHT Article 153(5) CRR This is a
+  fixed column for information purposes. It shall not be altered."* Table 1 has
+  no weight for a total. `v09782_m`, `v09783_m` (WARNING); the EBA sign rules
+  `v10309_s` / `v10310_s` list every C 08.06 column except 0070, and no EBA rule
+  addresses C 08.06 c0070. Basel 3.1 OF 08.06 has no column 0070 at all
+  (PS1/26 Annex II pp.128–129).
+- **Origin**: `src/rwa_calc/reporting/corep/c08.py` (`_c08_06_spec` and the
+  zero-EAD fix in `_c08_06_sheet`), and
+  `src/rwa_calc/reporting/filing/bindings.py`, which bound every column of the
+  frame.
+- **Escape class**: `caught-and-parked` for the output, with
+  `test-shared-the-assumption` under it. The register fired on every slotting
+  portfolio and parked both rules as "unattributed - needs investigation", with
+  a reason that blamed the Total row's average although `v09782_m`'s Total cell
+  was empty; a triage that read the measured sides, a sum of fixed weights on
+  the right, would have found it. `test_col_0070_weighted_average_for_total`
+  pinned the average. The binding half is a defect inside a gate (the adapter
+  evaluated a column that is not a data point) and is left unclassed, as this
+  file allows.
+- **Gate change**: `tests/unit/reporting/filing/test_c08_06_information_column.py`
+  — the binding's columns exclude 0070, `v09783_m` passes a footing frame, and a
+  control that a Total not footing on c0080 still fails, at c0080 only, so the
+  restriction narrows the rule rather than switching it off;
+  `tests/unit/test_corep_c08_06.py` re-anchored to the instruction
+  (`test_col_0070_is_empty_on_both_total_rows_under_crr`,
+  `test_zero_ead_total_row_reports_no_risk_weight_under_crr`); and the register
+  ratchet, which forces both entries out.
+- **Verified red** (`9172d90`; the reviewer reproduced all five against
+  `dd267d3`): `Left contains one more item: '0070'`;
+  `('C 08.06[project_finance][c0070]',) assert 'FAIL' == 'PASS'`; the control
+  with an extra c0070 coordinate beside c0080; `assert 0.5 is None` twice.
+- **What the fix moved**: no RWA. One golden cell:
+  `crr/corep__c08_06__project_finance` r0120 c0070 0.7 → empty. Register, on
+  `crr/rich`, `crm-substitution` and `irb-shapes`: `v09782_m` FAIL → VACUOUS (its
+  only real verdict was the c0070 artefact), `v09783_m` FAIL → PASS. Coverage
+  `union_binding_rules_crr` 286 → 285, a false binding removed, and `cells_live`
+  −1. Basel 3.1 is byte-identical.
+- **Not fixed here**: Basel 3.1 OF 08.06 is still generated on the CRR row grid,
+  with a column 0070 the published table does not have (P2.72, P5.84); no
+  registered portfolio holds a slotting leg under 2.5 years, so the short-maturity
+  rows are empty everywhere and `v09782_m` binds on nothing (P5.81).
+- **Lesson**: a register reason that quotes its own measured sides has already
+  measured the cause. Read them before writing "unattributed".
+
+## 2026-11-16 — rwa-filer gave plain sum() the rounding allowance of isum(), and added OF 08.06's all-types sheet into every type
+
+- **Defect**: two engine defects in `rwa_filer.boe`, both found when Arelle
+  re-checked the publisher-issue examples.
+  1. A plain `sum()` or `abs()` in a rule was read as `isum()` / `iabs()`, so
+     the summed facts kept their rounding allowances. Arelle gives a plain
+     function's result no allowance (Filing Manual v1.0.1 rule 2.18; Eurofiling
+     `iaf:splitValueThreshold`). Affected: PRA001 `boe_b0770`, `b0794` (abs),
+     `b0820`–`b0823`, `b0829`; PRA116 `b0794`, `b1037_ss`. The engine passed
+     rounded returns the gateway fails.
+  2. A fact with no member on OF 08.06's open axis is the "all types" sheet (the
+     axis default `eba_TA:x0`). The engine gave it no place on the axis, so its
+     cells were added into every type's sums: false ERROR breaks on
+     `boe_b0815` and `boe_b1042` when an all-types sheet is filed.
+- **Rule**: as listed. Not a regulatory escape; the verdicts were wrong in both
+  directions.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/boe/engine.py` (`_call`,
+  `_Store._member`).
+- **Escape class**: `path-never-exercised`, for both. Every oracle return was
+  exact to the unit, where the allowance is zero either way, and none filed an
+  all-types OF 08.06 sheet. The same shape as this morning's entry: the oracle's
+  data could not separate the readings.
+- **Gate change**: `packages/rwa-filer/tests/rounding_and_default_returns.py`
+  builds three returns — `rounded` (PRA001, figures to thousands, with a row
+  that separates the readings and an exact control), `rounded_sddt` (PRA116) and
+  `all_types` (project finance and IPRE sheets plus an all-types sheet).
+  Arelle's counts are kept in
+  `packages/rwa-filer/tests/releases/4.1.1/oracles/rounding_and_default_oracle.json`
+  (generated by that module's `main`, never typed).
+  `packages/rwa-filer/tests/boe/test_rounding_and_default_oracle.py` holds the
+  engine to Arelle rule by rule in CI with no Arelle, and asserts that the old
+  reading counts every defect rule differently, so the returns can see it. Five
+  semantics tests in `packages/rwa-filer/tests/boe/test_engine.py`.
+- **Verified red** (`8ceca03`: engine at HEAD, new tests in place; reproduced by
+  the reviewer against `ba53bd0`): `7 failed, 76 passed` —
+  `[rounded]` differs on 7 rules (`boe_b0770 ([1, 1], [2, 0])`,
+  `boe_b0794 ([1, 1], [2, 0])`, `boe_b0820`–`b0823`, `b0829 ([0, 1], [1, 0])`);
+  `[rounded_sddt]` on `boe_b0794` and `boe_b1037_ss`; `[all_types]` on
+  `boe_b0815 ([18, 0], [0, 12])`, `b0823/b0829 ([1, 2], [0, 2])`,
+  `boe_b1042 ([7, 0], [0, 4])`; and the four semantics detectors
+  (`assert (1, 0) == (0, 1)` ×2, `assert (0, 2) == (1, 1)`,
+  `assert (0, 2) == (3, 0)`). The oracle was regenerated by the reviewer with
+  Arelle 2.47.5 and is byte-identical.
+- **What the fix moved**: no figure, golden, register entry or baseline: our
+  returns are written to the penny, so plain sums foot exactly, and OF 08.06 is
+  not yet placed (P2.72). `rwa-filer validate` is stricter on rounded
+  third-party figures under the nine rules above and no longer fails
+  `boe_b0815` / `boe_b1042` on an all-types sheet.
+- **Not fixed here**: plain `max` / `min` keep the old reading; no published
+  rule calls them, so Arelle cannot be asked. That is now a check, not a remark:
+  `packages/rwa-filer/tests/boe/test_packaged_rulebooks.py::test_no_packaged_rule_calls_plain_max_or_min`
+  (`279b415`) fails on the first release that adds such a rule; red under a
+  probe that rewrote `boe_b0560`'s `imax(` to `max(`. `279b415` also added a
+  fourth return, an all-types OF 08.06 sheet with its total alone, red against
+  the pre-fix engine on `boe_b0815`, `b0823`, `b0829` and `b1042`. The strict
+  xfail `("4.1.1", "PI-10", "boe_b0770")` that recorded this defect from the
+  register's side XPASSed at merge and was removed (`6e8b73d`).
+- **Lesson**: recurrence, the same day, of the 2026-11-16 ledger row — an oracle
+  can only separate the readings its data separates. Rounded figures and a
+  default member were two more shapes no oracle return had.
+
+## 2026-11-16 — C 07.00 / OF 07.00 row 0015 reported defaulted exposures on sheets Annex II reserves it from, and the CRR register entry stated the defect in one sentence
+
+- **Defect**: row 0015, "of which: Defaulted exposures", lit on any sheet that
+  held a defaulted leg: always the "in default" sheet, any class sheet a
+  defaulted leg landed on, and through them the Total. Both regimes. On
+  `rich`: 21 cells (CRR) / 18 (Basel 3.1) each on the in-default and Total
+  sheets, e.g. c0010 / c0200 1,000,000, c0220 1,500,000.
+- **Rule**: CRR Annex II p.91: *"This row shall only be reported in exposure
+  classes 'Items associated with a particular high risk' and 'Equity
+  exposures'."* PS1/26 Annex II p.88 adds CIUs. Rules: `v4721_m` (CRR,
+  WARNING); `boe_b0431` and `boe_b1069` (Basel 3.1, WARNING, isNull, which leave
+  sheets 0012, 0015, 0016 off their lists).
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py` — row 0015 had a data term
+  (the defaulted flag) and no sheet term.
+- **Escape class**: by regime. CRR: `caught-and-parked` — `v4721_m` FAILed on
+  `crr/rich` and sat in `known_broken_rules` with a reason that stated the
+  defect, and no owning bullet. Basel 3.1: `no-gate-exists` — `boe_b0431` and
+  `boe_b1069` are isNull rules the template-level engine cannot evaluate, and
+  the filing-mapping ratchet records Error-severity gateway breaks only, so a
+  Warning break at the gateway sat in no baseline. Unit tests:
+  `test-shared-the-assumption` — `test_cross.py` asserted row 0015 on the
+  corporate sheet from a synthetic frame that marks a corporate-class row as
+  defaulted, a shape the aggregator's applied-class overlay never produces.
+- **Gate change**: `tests/contracts/test_c07_defaulted_row_published_sheets.py`
+  holds the declared sheets (`templates.py::_C07_DEFAULTED_ROW_CLASSES`) to the
+  published rules' own sheet lists; `tests/acceptance/reporting/test_c07_defaulted_row_scope.py`
+  holds `boe_b0431` / `boe_b1069` to PASS at the gateway and `v4721_m` to
+  `VACUOUS` on a book with a surviving high-risk leg;
+  `tests/unit/reporting/corep/test_c07_defaulted_row_scope.py`. Since `13ac439`
+  the contract's sheet lookup fails on an allowed code with no bundle key rather
+  than dropping it. The general gate, a ratchet over Warning-severity gateway
+  breaks, is the register's gateway leg (see the introduction).
+- **Verified red** (`f9b786d`; reproduced against `ee96beb`): unit `4 failed, 4
+  passed` (`[CRR] row 0015 reports on the 'ciu' sheet`, `[BASEL_3_1] row 0015
+  reports on the 'corporate' sheet`, Total `assert 3000.0 == 1100.0` (CRR) and
+  `== 1500.0` (Basel 3.1)); acceptance `14 failed, 6 passed` (`boe_b0431: FAIL
+  0/17`, `boe_b1069: FAIL 0/1`, `v4721_m ('FAIL', ...)`); contract
+  `ImportError` on the new getter. Wrong-fix probes: row 0015 blanked everywhere,
+  7 red; the Basel 3.1 list used under CRR, 2 red.
+- **What the fix moved**: no RWEA. 78 golden cells to empty, all row 0015 on the
+  in-default and Total sheets of `crr/rich` and `b31/rich`. `v4721_m` leaves
+  `known_broken_rules` for `known_vacuous_rules` (its passing verdict is vacuous
+  by construction). Gateway: `boe_b0431` and `boe_b1069` FAIL → PASS on
+  `b31/rich`. Coverage `cells_live` −78, `union_binding_rules_crr` 286 → 285;
+  filing `placed_cells` −36.
+- **Not fixed here**: equity and CIU legs cannot be flagged defaulted (no
+  `is_defaulted` on the equity schema), so under CRR row 0015 can no longer be
+  populated at all, and under Basel 3.1 only a defaulted high-risk loan
+  populates it (P2.89). No registered portfolio emits a high-risk sheet, so
+  `boe_b0264` and the rules scoped to sheet 0012 are evaluated only on this
+  item's own book (P5.80).
+- **Lesson**: a Warning-severity rule the gateway evaluates and nothing records
+  is the same as no rule. Four items in this batch hit it (this one, the loan
+  split, the substituted leg and the OF 08.01 PD column below), and it is a gate
+  now: the register's gateway leg.
+
+## 2026-11-16 — OF 07.00 reported a loan-split mortgage whole at its blended weight in "Other risk weights", and the gateway's Warning was computed and thrown away
+
+- **Defect**: a PS1/26 Art. 124F(1) / 124H(1) exposure priced on the engine's
+  whole-loan path carries one exposure-weighted weight (20% on the secured
+  share, the Art. 124L weight on the rest). `c07.py::_rw_band_expr` banded the
+  row on that one weight, which matches no published rung, so the loan was
+  reported whole in row 0280 "Other risk weights". On `b31/rich`, `RP-LN-RRE`
+  (400,000 at 60% LTV to a natural person, 24.58%) sat in row 0280 at 400,000 /
+  RWEA 98,333.33, with rows 0180 and 0220 empty. It reaches every natural-person
+  or retail mortgage above 55% LTV.
+- **Rule**: PS1/26 Annex II p.94: *"Real estate exposures classified as
+  regulatory real estate ... which are not materially dependent on the cash
+  flows generated by the property (Articles 124F and 124H ...) shall be
+  reported in two parts, against the risk weight applied to the portion up to
+  55% of the value of the property, and against the portion above 55% of the
+  value of the property (if applicable)."* `boe_b0445` (FAIL 0/7) and
+  `boe_b0445_1` (FAIL 0/1), both WARNING, isNull: row 0280 empty on sheet 0010.
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py::_rw_band_expr`.
+- **Escape class**: `gate-not-run`, as the design record classes it. The
+  catching verdict existed and was computed on every run:
+  `scripts/filing_mapping_report.py::measure` evaluates the Bank's rule book on
+  the gateway engine and `boe_b0445` came back FAIL on `b31/rich`. The ratchet
+  keeps Error-severity outcomes only, and the register that does hold Warning
+  rules runs the template-level engine, which cannot evaluate isNull. So the
+  Warning fired into nothing. (The row 0015 entry above classes the same gap
+  `no-gate-exists`; the difference is whether one counts a verdict that is
+  computed and discarded as a gate.) Secondary: the `b31` golden froze the row
+  0280 figure (`test-shared-the-assumption`); for CRR,
+  `path-never-exercised` — no registered row is past the 80% LTV limit.
+- **Gate change**: `tests/acceptance/reporting/test_of07_loan_split_two_parts.py`
+  (row placement on `b31/rich`, and `boe_b0445` / `b0445_1` on the gateway);
+  `tests/unit/test_b31_loan_split_parts.py` (the engine records the parts only
+  where its own route reaches the split and the weight is the blend);
+  `tests/unit/reporting/kernel/test_rw_parts.py` (the reporting split, including
+  a row the engine re-weighted after the split — Art. 127 default at 100%, an
+  institution guarantee at 50% — stays whole);
+  `tests/contracts/test_loan_split_carrier_edge.py` (the three
+  `sa_loan_split_*` carriers are declared on the exit edge).
+  `tests/unit/reporting/corep/test_c07_loan_split_gate.py` (`13ac439`) pins the gate order, so a Count cell is never resolved on a frame
+  with nothing to split: red under the reordering mutation, 3 of 3. The general
+  gate, a Warning ratchet on gateway verdicts, is the register's gateway leg (see
+  the introduction).
+- **Verified red** (`4e1c246`; reproduced by the reviewer against `f9b786d`):
+  acceptance `18 failed, 5 passed` (row 0180 c0200 `assert None ==
+  366666.66666666674`; row 0280 `assert 400000.0 is None`; `boe_b0445 FAIL ...
+  satisfied=0, unsatisfied=7`); engine unit `10 failed, 6 passed`
+  (`KeyError: 'sa_loan_split_secured_share'`); kernel `ModuleNotFoundError`;
+  contract `12 failed, 1 passed`. Review round 1 found the stale-carrier guard
+  untestable (its case used a 0% weight that another gate also refuses);
+  `5ec1b10` added non-zero cases, observed red with the blend-equality clause
+  removed (`4 failed, 72 passed`) and with the engine gate loosened (`assert
+  [0.6875, 0.6, 0.85] == [None, None, None]`).
+- **What the fix moved**: no RWA, EAD or risk weight on any of the 31 runs
+  (compared row by row). Goldens: `b31` real-estate sheet 27 cells and Total 19
+  — row 0280 cleared; row 0180 366,666.67 / RWEA 73,333.33 (20%); row 0220
+  33,333.33 / 25,000 (75%). Gateway on `b31/rich`: `boe_b0445` and
+  `boe_b0445_1` FAIL → PASS. Filing `placed_cells` −9; coverage `cells_live` −9.
+- **Not fixed here**: the CRR twin (an Art. 125 / 126 blend above the LTV limit
+  lands in C 07.00 row 0280; no registered CRR row past 80%), P2.87; the residual
+  leg of a loan the engine splits physically is reported on the counterparty's
+  sheet, P2.88; Art. 123B and junior-charge rows that are not split are still
+  banded on the multiplied weight, P2.86; the carriers outlive Art. 127 and CRM
+  substitution, so the reporting re-check is the only line, P6.58; Pillar 3 CR5
+  has the same defect, P2.25(b).
+- **Lesson**: OF 07.00's risk-weight rows ask for the weight Annex II names,
+  which is often not the weight the engine finally applied. (LESSONS E2,
+  amended.)
+
+## 2026-11-16 — OF 07.00 memorandum rows 0300/0320 sat on the "in default" sheet, where the taxonomy has no cell, and not on the obligor's class sheet
+
+- **Defect**: the Basel 3.1 generator keyed memorandum rows 0300/0320 on the
+  applied exposure class, which for every defaulted SA leg is "in default"
+  (Art. 112(1)(j)). On `b31/rich` the one defaulted SA loan (`RP-LN-DEFAULT`,
+  1,000,000 at 150%) sat in row 0320 of our in-default sheet, where table
+  OF07.00.01.03 has no cell — 5 non-zero unplaced figures, which on their own
+  stop the default `export_filing_package` — and was absent from row 0320 of
+  the corporates sheet (sheet 0008), a cell the taxonomy publishes.
+- **Rule**: PS1/26 Annex II p.97, row 0320: *"Exposures included in the exposure
+  class 'exposures in default', subject to Article 127(1)(a) ..., which would
+  otherwise have been assigned to the exposure class being reported on if they
+  were not in default."* ¶54 (pp.78–79) lists the classes. PRA001 v4.1.1
+  publishes the rows on sheets 0001–0004 and 0007–0009 only. Known-issues log,
+  issue #27 (19.10.2026): *"As a temporary solution, the PRA requests that firms
+  report exposures assigned to the real estate exposure class in the total sheet
+  s0001 for rows 0300 and 0320 but do not report such exposures separately to
+  this, until the missing sheet 0010 is provided in the next taxonomy update."*
+  Publisher issue PI-30, acknowledged.
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py` (memorandum terms with no
+  sheet term), recorded since 2026-09-10 as P1.377.
+- **Escape class**: `caught-and-parked`, with `test-shared-the-assumption`
+  underneath. The filing-mapping ratchet banked the 5 figures
+  (`c07_00|cell_not_reportable 5`), and `tests/contracts/test_of07_published_cells.py`
+  said in its docstring that the sheet scope was "deliberately NOT held here ...
+  open question recorded as P1.377". The missing corporates-sheet figure was
+  visible to no ratchet: an empty cell is not an unplaced figure.
+  `TestC0700MemorandumRows` built defaulted legs as `exposure_class
+  "corporate"` with no applied-class overlay, a shape the pipeline cannot
+  produce. P1.377 also carried two readings the taxonomy and issue #27 now
+  reverse: that the in-default-sheet figure is required, and that the
+  real-estate sheet is in scope.
+- **Gate change**: `tests/contracts/test_of07_published_cells.py` holds the
+  memorandum rows' sheet scope to the taxonomy in both directions, as a
+  declaration (`of07_published_cells.get_c07_rows_not_on_sheet`) and
+  behaviourally (no generated figure on a sheet the template lacks the row on);
+  `tests/acceptance/reporting/test_of07_default_memorandum_rows.py` asserts the
+  figure present on the corporates sheet of the real pipeline;
+  `tests/unit/reporting/corep/test_c07_default_memorandum_rows.py` re-anchors
+  the unit tests on a sealed-shape frame, and since `13ac439` pins that a
+  defaulted high-risk leg is in neither memorandum row (red on the pre-fix tree:
+  `assert 700.0 is None`) and opens a real-estate sheet so the real-estate cases
+  are no longer skipped; the aggregator seals
+  `reporting_class_pre_default` (`tests/unit/test_exposure_class_applied.py`).
+- **Verified red** (`f35eedc`; reproduced against `5ec1b10`): unit `7 failed`
+  (`ColumnNotFoundError: unable to find column "reporting_class_pre_default"`)
+  and `14 failed, 9 passed` (corporate / retail / institution r0300 / r0320
+  None; `KeyError 'institution'`); contract `assert [('0320', '0011')] == []`
+  and `ImportError` on the new getter; acceptance `9 failed, 4 passed`
+  (corporate r0320 c0010 None against 1,000,000; 5 unplaced figures). Probes:
+  the Total summed after the sheet scope, 5 red; the in-default sheet keeping
+  every memo leg, 7 red.
+- **What the fix moved**: memorandum rows only (Annex II ¶53: they do not
+  affect RWEA). `b31` corporates r0320 gains eight cells (1,000,000; RWEA
+  1,500,000); in-default r0320 loses the same eight; the Total is unchanged.
+  CRR output is byte-identical. Filing `placed_cells` +8, `unplaced_figures`
+  523 → 518 (`c07_00|cell_not_reportable` 5 → 0). Not in the commit message,
+  found by the reviewer: a defaulted **high-risk** leg no longer appears in rows
+  0300/0320 of the Total — correct, since the Total's data point carries
+  "Exposures in default" and a high-risk leg is not in that class.
+- **Not fixed here**: the CRR half of P1.377 (C 07.00 rows 0290–0320); real
+  estate moves to its own sheet when the Bank publishes sheet 0010 (P2.94); the
+  registered matrix has one defaulted SA leg, so row 0300, the other class
+  sheets, a provisioned and a guaranteed default are unit-tested only (P5.80).
+- **Lesson**: "deliberately not held here" in a contract test's docstring is a
+  parked finding. And a reading the plan records as settled can be reversed by
+  the Bank's known-issues log; read it before implementing the reading.
+
+## 2026-11-16 — C 07.00 / OF 07.00 reported a guaranteed exposure's original amount in the protector's risk-weight row of the obligor's sheet
+
+- **Defect**: the risk-weight row of every cell was chosen from the
+  post-substitution `risk_weight`, the origin-basis cells included. The covered
+  part of an SA exposure whose protection the calculator applied is reported as
+  original exposure on the obligor's sheet; banded on the protector's weight, it
+  opened a row of that weight there. On `crm-substitution` the 2,800,000 covered
+  part of `CSUB-LN-S4` (an unrated corporate, 100%, protected by a CQS 2
+  institution) sat in the corporates sheet's row 0182 (30%, Basel 3.1) / row
+  0200 (50%, CRR), and only the uncovered 5,200,000 in row 0230 (100%); the
+  Total's 30% row was overstated by 2,800,000 in columns 0010 / 0040 and its 100%
+  row understated by the same. Both regimes, for the template's whole life on
+  any beneficially substituted SA leg; the declarative port kept the banding of
+  the code it replaced.
+- **Rule**: PS1/26 Annex II p.94 (rows 0140–0280): *"Institutions shall report
+  the information on the allocation of risk weights within the respective
+  exposure class"*; p.84: the outflow is the covered part of the original
+  exposure *"deducted from the obligor's exposure class"*. EBA Q&A 2014_1636
+  places column 0010 at the obligor's own weight and the substituted part in
+  the provider's class from column 0100 on. `boe_b0441` and `boe_b0441_1`
+  (WARNING, isNull: row 0182 is not a corporate weight) FAIL 0/7 and 0/1 on
+  `b31/crm-substitution`; Arelle agrees. Under CRR no rule objects: 50% is a
+  corporate weight. (`boe_b0441` also closes row 0140, which Art. 113(6)
+  intragroup exposures need: that is publisher issue PI-05, not this defect.)
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py` (`_rw_band_expr`, one band
+  for every cell of a row).
+- **Escape class**: `no-gate-exists`, as the design record classes it. The
+  gateway engine had failed `boe_b0441` on the registered `crm-substitution`
+  return since it began evaluating the canonical return (2026-11-13), and
+  nothing kept the verdict: the template-level engine returns `NOT_EVALUATED`
+  for every OF 07.00 isNull rule, the filing-mapping ratchet kept Error breaks
+  only, and no test asserted which risk-weight row a substituted leg's original
+  exposure lands in — all 1,495 tests in the C 07.00, substitution and lineage
+  scope stayed green with the fix applied. The general gate is the register's
+  gateway leg (see the introduction).
+- **Gate change**:
+  - `tests/acceptance/reporting/test_crm_substitution_flows.py::TestRiskWeightRowsOfASubstitutedLeg`:
+    the original exposure at the obligor's own weight in both regimes,
+    `boe_b0441` / `boe_b0441_1` PASS on the gateway, and a control that the
+    exposure value and RWEA stay at the provider's weight.
+  - `tests/unit/reporting/corep/test_c07_substituted_rw_rows.py`: cross-class
+    and same-class substitution, a covered default in rows 0300 / 0320, a
+    covered loan-split leg, transitional equity, and four controls, each red
+    under its named mutation.
+  - `tests/unit/reporting/kernel/test_rw_parts.py`: a substituted loan-split
+    row is split on the obligor's own weight, its RWEA with its exposure; and
+    `tests/acceptance/reporting/test_of07_loan_split_two_parts.py::TestASubstitutedLoanSplitLeg`
+    on the real pipeline (`rich` with a sovereign guarantee added in the test).
+- **Verified red** (`63c3b5c`; the reviewer ran every new test against
+  `13ac439` and got exactly these 14 failures): acceptance
+  `assert 5200000.0 == 8000000.0 ± 8` (CRR and Basel 3.1: the corporates row
+  0230 held only the uncovered part) and `assert {'boe_b0441': 'FAIL',
+  'boe_b0441_1': 'FAIL'} == {'boe_b0441': 'PASS', 'boe_b0441_1': 'PASS'}`; unit
+  `assert 600.0 == 1000.0 ± 0.001` four times; `ColumnNotFoundError: "rw_part"
+  not found`; `the row was not split - this test would prove nothing`; the
+  substituted loan-split leg on the real-estate sheet r0140 100,000 against
+  None and r0180 275,000 against 366,666.67. The reviewer's own mutations (part
+  weights written to `risk_weight`; row presence on the post band only; the
+  `is_guarantee_beneficial` gate removed) turned 3, 6 and 6 tests red.
+- **What the fix moved**: no RWA, EAD or risk weight on any of the 31 runs. On
+  `crm-substitution` only, 33 CRR and 15 Basel 3.1 cells: the corporates sheet's
+  r0200 (CRR, 21 cells) and r0182 (Basel 3.1, 9 cells) empty; corporates r0230
+  c0010 / c0040 5,200,000 → 8,000,000, and under CRR c0060 / c0090 0 →
+  −2,800,000; Total r0182 / r0200 c0010 4,300,000 → 1,500,000 and r0230
+  5,200,000 → 8,000,000. Columns 0110, 0150, 0200 and 0220 do not move, so the
+  RWEA footing holds. No golden moved. Gateway on `b31/crm-substitution`:
+  `boe_b0441` FAIL 0/7 → PASS, `boe_b0441_1` FAIL 0/1 → PASS. Filing
+  `placed_cells` −9 and coverage `cells_live` −9: the corporates r0182 cells the
+  rules require empty.
+- **Not fixed here**: Simple-Method collateral, life insurance and third-party
+  deposits still blend one row's weight (P1.347), so such a leg's origin and post
+  cells both band on the blend, and a beneficially guaranteed leg whose own
+  weight is already that blend now falls to row 0280; the obligor's own weight is
+  captured before the due-diligence override and the Art. 113(6) 0%, which run
+  after substitution (P2.102); non-split Art. 123B rows still band on the
+  multiplied weight (P2.86); a guaranteed loan-split mortgage and a covered
+  defaulted SA leg are reached by unit tests and an unregistered variant only
+  (P5.80).
+- **Lesson**: the fourth instance in this batch of OF 07.00 banding on a weight
+  other than the one Annex II names (LESSONS E2, amended): an origin-basis cell
+  reports the exposure before mitigation, so it takes the weight before
+  mitigation.
+
+## 2026-11-16 — OF 02.00 wrote 0.0 in IRB class rows with no legs, and each zero was a fact on an OF 08.01 sheet we did not produce
+
+- **Defect**: Basel 3.1 OF 02.00 wrote 0.0 in columns 0010 / 0020 of every IRB
+  class row, including rows whose OF 08.01 class sheet has no legs. Each such row
+  is one data point with that sheet's total, so the zero put a sheet into the
+  filed return that OF 08 does not produce. Fourteen rows qualify (0271,
+  0295–0297, 0350, 0355, 0356, 0382–0385, 0390, 0400, 0410).
+- **Rule**: `boe_b1055` (ERROR) compares OF 09.02 row 0055 with OF 08.01 sheets
+  0011 and 0012 one sheet at a time, so it failed wherever only one of the two
+  had legs — FAIL [1,1] on five portfolios. The Bank's rule is itself at issue
+  for books with legs on both sheets (PI-02). Authority for leaving the cell
+  empty: Bank of England XBRL Filing Manual v1.0.1, rule 2.19 (*"Uninteresting
+  zeros ... SHOULD NOT be reported"*).
+- **Origin**: `src/rwa_calc/reporting/corep/c02.py::_irb_class_amounts`.
+- **Escape class**: `caught-and-parked`. The gateway ratchet fired on
+  2026-11-13: `boe_b1055` was banked at 7 portfolios, with the cause written
+  into the baseline's `_note` ("OF 02.00 zero-fills class rows, which reports the
+  shared OF 08.01 sheet as 0") and parked as P2.68. The template-level register
+  could not see it: on our frames OF 02.00 and OF 08.01 share no data point, and
+  an empty cell reads as zero. Two unit tests in `test_c02_00.py` pinned 0.0 on
+  a row with no legs.
+- **Gate change**: `tests/unit/reporting/corep/test_c02_00_class_rows_follow_sheets.py`
+  — a taxonomy-anchored invariant (OF 02.00 files no data point of an OF 08.01
+  class sheet that OF 08 does not report, over seven books) and four guards,
+  each red only under the wrong implementation it exists to catch (rows dropped
+  by amount; all fifteen rows dropped; approach totals dropped; the rule applied
+  under CRR); `tests/acceptance/reporting/test_of02_class_rows_follow_of08_sheets.py`
+  (`boe_b1055` on the five portfolios, and `boe_b1041` as a guard);
+  since `47dbaae` the invariant asserts per book that a shared fact was placed:
+  under a mutation that stops the mapping placing them it went from `7 passed`
+  (vacuous) to `5 failed`;
+  `tests/contracts/test_of08_published_sheets.py` (`IrbSheet.total_is_the_slot`).
+- **Verified red** (`e53ebae`; reproduced against `ba53bd0`): `AssertionError:
+  assert 0.0 is None` (row 0356 c0010); the invariant red on 6 of 7 books,
+  24–28 orphan facts each (e.g. `('0356', '0010', '0011')`); the acceptance
+  test `assert ('FAIL', 1, 1) == ('PASS', 1, 0)` on all five portfolios; the
+  contract `AttributeError: 'IrbSheet' object has no attribute
+  'total_is_the_slot'`; the two edited pinning tests `assert 0.0 is None`.
+- **What the fix moved**: no RWA or EAD. 154 golden cells 0.0 → empty across six
+  Basel 3.1 `corep__c_02_00` frames. `boe_b1055` 7 → 2 portfolios (FAIL → PASS
+  on `rich`, `irb-classes`, `art199`, both `facility-share` runs); the two left
+  (`crm-substitution`, `irb-shapes`) fail on sheet 0012 itself, and each leaves
+  through a later entry here (Art. 201: `crm-substitution`; OF 09.02:
+  `irb-shapes`) as its own lane measured. The merged count is the filing
+  baseline's re-bank, not this entry's.
+  Filing `error_rule_breaks` 64 → 59, `placed_cells` −16; coverage
+  `cells_live` −16.
+- **Not fixed here**: whether rows 0310 and the SA class rows 0070–0211 follow
+  the same rule, and whether an A-IRB-only firm should emit a zero slotting row
+  for `boe_b1041` (PI-06) — both owner decisions (P2.95). No registered portfolio
+  has legs on both sheets 0011 and 0012, so this fix masks the Bank's both-sheets
+  fault on our estate (P5.81).
+- **Lesson**: a zero is a fact; an empty cell is not. On a data point shared
+  between templates, a zero in one reports a sheet in the other. (LESSONS B4,
+  amended.)
+
+## 2026-11-16 — OF 09.02 split its corporate and retail rows on carriers OF 02.00 and OF 08 do not read
+
+- **Defect**: OF 09.02 keyed row 0048 (financial and large corporates) on
+  `cp_apply_fi_scalar`, the raw input to the Art. 153(2) multiplier, and row
+  0055 excluded that flag; its SME rows read a column the sealed ledger never
+  carries, or fell back to a class name no retail class matches; its real-estate
+  rows used their own property-type lists. OF 02.00 and OF 08 classify the same
+  legs through `irb_sheets`. On `b31/irb-shapes`, `IRS-LN-LFSE`
+  (`cp_apply_fi_scalar=True`, subclass `corporate_other`) was in row 0048
+  (3,300,000; RWEA 5,056,289.59) while OF 08.01 had it on sheet 0012.
+- **Rule**: the 43 enforced OF 09.02 = OF 08.01 ties of the v4.1.1 rule book,
+  among them `boe_b1034`, `b1051`–`b1055` (ERROR) and the retail ties
+  `b0297`–`b0302`.
+- **Origin**: `src/rwa_calc/reporting/corep/c09.py`.
+- **Escape class**: `caught-and-parked` for the corporate rows — the gateway
+  rules fired from 2026-11-13, were recorded in `validation_known_breaks.json`,
+  banked in the filing baseline and filed as P2.67 while the output shipped.
+  `path-never-exercised` for the retail rows — no registered portfolio holds an
+  SME in a retail class under IRB.
+- **Gate change**: `tests/contracts/test_of09_02_reads_the_of08_sheets.py`
+  parses the 43 ties from the Bank's rule book (not from `c09.py` or
+  `irb_sheets.py`) and asserts each on a book with one leg per sheet and the
+  multiplier flag moved onto a non-financial leg, so the candidate carriers
+  differ; two acceptance tests in
+  `tests/acceptance/reporting/test_irb_shapes_template_coverage.py` run the real
+  pipeline. The owed half is fixture coverage (P5.81).
+- **Verified red** (`c494877`; reproduced against `e53ebae`): contract
+  `25 failed, 20 passed` — `boe_b1052: OF 09.02 r0048 c0110 = 140.0, OF 08.01
+  sheets ('0022',) r0010 c0260 = 120.0`, `boe_b1055: ... r0055 c0110 = 340.0
+  ... = 360.0`, `boe_b1071: OF 09.02 r0071 c0010 = 0.0, ... = 460.0`;
+  acceptance `assert 10190000.0 == 13490000.0 ± 13.49` and row 0048 reporting
+  3,300,000 with no sheet 0022 to tie it to. Probes: the retail SME source
+  reverted alone, exactly the 19 retail ties red; row 0048 reverted alone,
+  exactly `b1034` / `b1051` / `b1052`; the class conjunction dropped, a new
+  `boe_b0785` ERROR break (43,000,000 vs 46,300,000) caught by the register.
+- **What the fix moved**: no RWA. 30 OF 09.02 cells, all on `b31/irb-shapes`
+  (no golden): row 0048 empty; row 0055 c0010 10,190,000 → 13,490,000, c0110
+  9,493,474.00 → 14,549,763.59. Register: `boe_b1053` removed, `irb-shapes`
+  leaves `b1054` / `b1055`. Filing `error_rule_breaks` 59 → 53.
+- **Not fixed here**: whether `apply_fi_scalar` implies
+  `is_financial_sector_entity` (capital: `IRS-LN-LFSE` as an FSE is +632,036.20
+  on `b31/irb-shapes`), P1.400; three more carriers of the same classification
+  (OF 08.01 / 08.02 cols 0030 / 0140 / 0240 / 0270, Pillar 3 CR9, the classifier's
+  entity-level revenue), P2.92.
+- **Lesson**: two templates the Bank ties cell for cell must read one
+  classification. Test them on a book where the candidate carriers disagree, or
+  the test cannot tell them apart.
+
+## 2026-11-16 — Basel 3.1 OF 08.01 had no column 0010 (PD), and the test said it should not
+
+- **Defect**: the published OF 08.01 has column 0010 (PD assigned to the obligor
+  grade or pool); the Basel 3.1 layout dropped it ("0010 removed: PD only in
+  OF 08.02"). Under CRR the slotting-only specialised-lending sheet reported PD
+  0.0 where no leg carries a PD.
+- **Rule**: `boe_b0356` (WARNING; failing on 97 places across 7 portfolios) and
+  `boe_b0410` (never evaluated). PS1/26 Annex II has no instruction for column
+  0010 although pp.118 and 142 refer to it (PI-29).
+- **Origin**: `src/rwa_calc/reporting/corep/templates.py` (`B31_C08_COLUMNS`).
+- **Escape class**: `test-shared-the-assumption` —
+  `tests/unit/reporting/corep/test_templates.py::test_b31_c08_no_pd_column`
+  asserted the column absent, written from the same sentence as the layout
+  comment and the docs. The register counts a rule over a missing column as
+  `NOT_EVALUATED` and cannot parse `boe_b0356`; the gateway ratchet keeps Error
+  breaks only.
+- **Gate change**: `tests/contracts/test_of08_published_sheets.py::test_of0801_column_axis_is_the_published_one`
+  (our OF 08.01 column axis against the taxonomy pack, both directions);
+  `tests/unit/reporting/corep/test_c08_01_pd_column.py`;
+  `tests/acceptance/reporting/test_of0801_pd_column.py`, which pins the residual
+  `boe_b0356` places per portfolio; the register's gateway leg now holds them too
+  (see the introduction).
+- **Verified red** (`e8cb71c`; reproduced against `c494877`): contract
+  `assert ['0010'] == []`; unit `ColumnNotFoundError: "0010" not found` and, for
+  CRR, `assert 0.007318181818181818 == 0.0161` (a slotting leg averaged as PD 0)
+  and `assert 0.0 is None`; `assert '0020' == '0010'` on the inverted template
+  test; acceptance: the unsatisfied set held 97 places against the expected 8.
+- **What the fix moved**: no RWA. New Basel 3.1 c0010 cells on 12 golden frames
+  (EAD-weighted over legs that carry a PD); CRR specialised-lending c0010 rows
+  0010 / 0020 / 0080 0.0 → empty. `boe_b0356` 97 → 8 places: 7 on sheet 0010
+  rows that hold slotting only (the rule's limit, PI-29) and one ours
+  (`crm-substitution` sheet 0006 row 0190, a substituted-in leg with exposure
+  and no PD; `OWNER: P2.81`, which the plan now widens to cover it). `boe_b0410` →
+  PASS on all 7 IRB portfolios. Coverage `union_binding_rules_b31` +1.
+- **Not fixed here**: defaulted legs keep a performing PD (P1.381); OF / C 09.02
+  column 0080 still averages slotting legs as PD 0 (P2.85).
+- **Lesson**: see the 2026-11-13 OF 09.02 entry — read the published code row,
+  not a sibling's or a comment's.
+
+## 2026-11-16 — OF 08.01 reported figures in cells its published sheets do not have, and maturity on retail sheets
+
+- **Defect**: three parts. (F1) Basel 3.1 OF 08.01 filled cells the taxonomy
+  publishes on no sheet or not on that sheet: 60 figures unplaced
+  (`c08_01|cell_not_reportable`), e.g. `corporate_non_sme_firb` row 0020 cols
+  0030 / 0140 / 0240 / 0270 / 0310. (F2) Column 0250 (maturity) was reported on
+  retail sheets of C / OF 08.01 and 08.02, both regimes, and the A-IRB Total
+  averaged it over retail legs. (F3) Column 0254 was reported (as 0.0) on F-IRB
+  and slotting sheets.
+- **Rule**: F2 — PS1/26 Annex II p.111 and CRR Annex II p.104 (*"shall not be
+  filled in for the exposure class 'retail'"*); `boe_b0748` (ERROR) failed on
+  `rich` and `irb-classes`. F3 — Annex II p.112: *"This column shall not be
+  reported for sheets relating to the FIRB approach or the slotting
+  approach"*. F1 — the PRA001 taxonomy; known issue #25 (19.10.2026) for
+  sheet 0019 r0017 / r0020 c0035: *"report this data in the total AIRB sheet
+  s0001 but do not report it separately"*.
+- **Origin**: `src/rwa_calc/reporting/corep/c08.py` and `c08_sheets.py`.
+- **Escape class**: `caught-and-parked`, both parts. The filing ratchet banked
+  the 60 figures from the day the sheet axis landed, and the 2026-11-13 IRB
+  sheet-axis entry in this file listed "retail sheets report c0250, which Annex
+  II says they must not" and "per-sheet greyed cells we still fill (60 figures)"
+  as left open; `boe_b0748` was banked at 2. Underneath: `no-gate-exists` for
+  the cells (`test_of08_published_sheets.py` holds the sheet axis, never the
+  cells) and `test-shared-the-assumption` for retail maturity (the Total
+  maturity test expected retail legs in the average).
+- **Gate change**: `tests/contracts/test_of08_published_cells.py` holds the
+  per-sheet declaration (`reporting/corep/of08_published_cells.py`) to the
+  taxonomy in both directions; `tests/unit/reporting/corep/test_c08_published_cells.py`
+  (including that blanking runs after the Totals, as issue #25 requires);
+  `test_c08_retail_maturity.py`; `test_c08_unrecognised_exposure_column.py`;
+  `tests/acceptance/reporting/test_of08_01_published_cells.py`.
+- **Verified red** (`97b90fc`; reproduced against `e8cb71c`): contract
+  `ModuleNotFoundError` (declaration absent), then under probes an empty
+  declaration red on 17 / 17 sheets; acceptance `assert 97 == 0`
+  (`irb-classes`) and `assert 131 == 0` (`rich`) cells not reportable,
+  `assert 6 == 0` / `assert 3 == 0` retail c0250 facts with `boe_b0748` FAIL on
+  both, `assert 13 == 0` c0254 facts on `irb-shapes`; unit `assert [885.125,
+  None, ...] == [None, None, ...]` (retail maturity, both regimes) and
+  `assert 833.4467821782179 == 766.5` (A-IRB Total over non-retail legs).
+- **What the fix moved**: no RWA. 296 golden cells → empty over 28 frames (75 of
+  them non-zero, the largest `total_firb_slotting` r0020 c0310 100,744,060.92).
+  `unplaced_figures` 523 → 457; `boe_b0748` 2 → 0. Coverage `cells_live`
+  10301 → 10038 — a **deliberate fall**: the addresses were never cells of the
+  template.
+- **Not fixed here**: the engine applies `unrecognised_exposure_scalar` to F-IRB
+  legs too; with a non-zero scalar an F-IRB sheet now carries an uplift in c0260
+  that c0251–c0254 cannot show, and `boe_b0751` breaks. The updated
+  `test_b31_col_0254_unrecognised_on_airb_sheets_only` pins that inconsistent
+  output and, since `47dbaae`, says so (P1.399). OF 08.02's and OF 08.06's
+  layouts are not yet held to the taxonomy (P2.71, P2.72, P5.84).
+- **Lesson**: which cells exist is a property of the published sheet, not of the
+  template. A declaration held to the taxonomy, applied after the Totals are
+  summed, is the shape that worked for OF 07.00 and now OF 08.01.
+
+## 2026-11-16 — OF 08.01's conversion-factor rows were never produced, and the row axis was coded one bucket out
+
+- **Defect**: the Basel 3.1 OF 08.01 breakdown of row 0030 by conversion factor
+  (rows 0031 10%, 0032 20%, 0001 40%, 0033 50%, 0034 100%, 0035 own estimate) was
+  bound to no leg, so every row was empty while row 0030 carried the total. The
+  layout had no row 0001, and rows 0033, 0034 and 0035 carried the labels of the
+  bucket below them.
+- **Rule**: `boe_b0741` and `boe_b0742` (ERROR) — row 0030 equals the sum of the
+  six rows — failing on `irb-shapes` and `facility-share-binding`. PS1/26
+  Annex II p.116; Art. 111(1) Table A1; Art. 166D(1) and (3) for own estimates.
+- **Origin**: `src/rwa_calc/reporting/corep/templates.py` (row list) and
+  `c08.py` (no row binding).
+- **Escape class**: `caught-and-parked` for the empty rows — the filing ratchet
+  banked `boe_b0741: 2`, `boe_b0742: 2` under P2.1, open "[~]" with no expiry;
+  the template-level register could not see them. `test-shared-the-assumption`
+  for the row axis —
+  `test_templates.py::test_b31_irb_has_ccf_breakdown_rows` and
+  `docs/features/corep-reporting.md` were written from the same five-row list as
+  the code. An all-null row files no fact, so the canonical mapping could not
+  flag it.
+- **Gate change**: `tests/contracts/test_of08_01_published_rows.py` (the layout's
+  rows equal the pack's in published order; the bucket rows are the published
+  breakdown of row 0030; each factor's row carries the pack's label and
+  `eba_dim:CFO` member); `tests/unit/reporting/corep/test_c08_01_ccf_rows.py`;
+  `tests/acceptance/reporting/test_of08_01_ccf_rows.py` (hand values on both
+  portfolios, and conservation on all 15 Basel 3.1 runs).
+- **Verified red** (`a5ddf42`; reproduced against `97b90fc`): contract
+  `ImportError: cannot import name ccf_buckets`, then with the module present
+  `4 failed` — `At index 6 diff: 0033 != 0001`, and the labels `['0033'] ==
+  ['0001']`, `['0034'] == ['0033']`, `['0035'] == ['0034']`; unit `33 failed`
+  (`assert None == 3000.0` on r0001 c0020; row 0030 not the sum of the rows on
+  18 live columns); acceptance `16 failed, 14 passed`.
+- **What the fix moved**: no RWA. Golden: row 0001 inserted, all null, on 12
+  frames, and three row labels corrected; no numeric cell moved. Gateway:
+  `boe_b0741` → PASS on both portfolios; `boe_b0742` → PASS on
+  `facility-share-binding` and 86/2 on `irb-shapes`, where both failures are
+  c0250 on sheets 0002 / 0012 (1,673 against 3,346) — the rule sums an average
+  (PI-07), banked as a known break. Filing `error_rule_breaks` 51 → 48,
+  `placed_cells` 4076 → 4292; `STR006` +2 on `facility-share-binding` (removed
+  by the whole-unit maturity fix, `b347728`, when the lanes merged).
+- **Not fixed here**: an own estimate of exactly 100% files in row 0034, not
+  0035, until a `ccf_is_own_estimate` flag is sealed (P2.90); rows 0031, 0032, 0035
+  and every A-IRB bucket are exercised by unit tests only (P5.81); OF 08.02's
+  breakdown columns (P2.1); OF 07.00 kept its own copy of the bucket
+  ladder until `6e8b73d` pointed it at `corep/ccf_buckets.py` (no golden moved).
+- **Lesson**: a row list written from the instruction's prose can be off by one
+  and every test written from the same list agrees. Take the row codes and
+  labels from the pack.
+
+## 2026-11-16 — COREP RWEA carried the engine's output-floor add-on where the templates report the own-approach amount, and the register parked the decision Annex II had already made
+
+- **Defect**: on a return whose output floor binds, OF 08.01–08.07, OF 09.01 /
+  09.02, C 08.04 and C 34 summed `rwa_final`, which carries the engine's
+  pro-rata floor add-on. On `b31/facility-share-binding` the OF 08.01 class
+  sheets' c0260 summed to 1,559,200.00 against U-TREA 1,105,491.29; the
+  difference, 453,708.71, is the add-on. OF 02.00 row 0297 (un-floored) and
+  OF 08.01 sheet 0012 c0260 (floored) are one data point with two values.
+- **Rule**: `boe_b0751` / `boe_b0763` (ERROR, OF 08.01 / 08.02 c0260 = c0251 +
+  c0252 + c0253 + c0254), `boe_b0621` (ERROR), and `STR007`. Annex II p.112:
+  column 0260 is *"the value reported in column 0251 and adjust[ed] for values
+  reported in columns 0252 to 0254"*; p.29 states the floor at the total level
+  as `x · S-TREA + OF-ADJ`; Art. 92(3)(a). The templates have no cell for the
+  add-on.
+- **Origin**: `src/rwa_calc/reporting/corep/c08.py`, `c08_07.py`, `c09.py`,
+  `c34.py` (and, latently, `c07.py`), each picking `rwa_final` first.
+- **Escape class**: `caught-and-parked`, primary. The register held
+  `boe_b0751` / `b0763` from 2026-09-05 and `boe_b0621` from 2026-11-13, and the
+  structure check held `STR007`, each banked with `OWNER: P1.369` and the words
+  "a reporting-basis decision ... NOT made here", which became its resting
+  place although Annex II p.112, the data-point model and `boe_b0560` had already
+  decided it. Secondary: `wrong-premise` in P1.369, whose option (b) offers an
+  adjustment column the taxonomy has no cell for; `path-never-exercised` — one
+  registered run binds the floor, with none of slotting, A-IRB retail, defaulted,
+  LFSE or SA-CCR rows (P5.64). `tests/conformance/cell_rederivation.toml`
+  already named `rwa_pre_floor` as the carrier of c0260, on a book whose floor
+  does not bind.
+- **Gate change**: `tests/contracts/test_corep_rwea_carrier.py` — an AST gate:
+  no COREP module passes the literal `"rwa_final"` except through
+  `reporting.kernel.own_rwea` / `with_own_rwea_as`, with a strict allowlist and
+  a scanner-adequacy check; `tests/unit/reporting/corep/test_c08_output_floor_carrier.py`;
+  `tests/acceptance/reporting/test_of08_binding_floor.py` (the registered
+  binding run, and three forced-binding books: `irb-shapes`, `rich`, `ccr`).
+- **Verified red** (`dd267d3`; reproduced against `a5ddf42`): unit `55 failed,
+  3 passed` (sheet 0012 `assert 1140.0 == 140.0`; slotting r0080 c0251
+  `7100.0 == 2100.0`; OF 08.07 / OF 09.02 `25130.0 == 5130.0`; C 08.04 closing
+  `18030.0 == 3030.0`; `STR007` on OF08.01.01.01); contract `6 failed, 2 passed`,
+  naming every site (`c08.py:1144 in c08_02_plans()`, ..., `c34.py:179/424/426/428/531`);
+  acceptance `assert 1559200.0 == 1105491.291068827`, `STR007
+  ['OF02.00.01.01', 'OF08.01.01.01']` on three books, OF 08.06
+  `assert 16611451.641231513 == 12670000.0`. The three unit tests green before
+  the fix are detectors, each red under its own one-change mutation.
+- **What the fix moved**: no capital — `rwa_final`, TREA and OF 02.00 are
+  unchanged. 40 reporting cells on `b31/facility-share-binding`, each by exactly
+  its share of 453,708.71; 0 cells on every other run. Register: `boe_b0621`,
+  `b0751`, `b0763` removed. Filing `structure_findings` 49 → 47 (both `STR007`),
+  `error_rule_breaks` 48 → 46.
+- **Finished after the merge** (`6e8b73d`): `c07.py`'s two reads (col 0220 and
+  the cols 0216 / 0217 supporting-factor delta) belonged to lane X; once it had
+  merged they moved to `own_rwea`, their two allowlist entries in the AST gate
+  were deleted, and the forced-binding `ccr` case, a strict xfail until then,
+  passed. OF 07.00 col 0220 no longer carries the add-on.
+- **Not fixed here**: Pillar 3 still sums `rwa_final` (P3.8); the leg money in
+  `reporting/membership.py` and `analysis/return_recon.py` does too (P2.84);
+  P1.367's subset floor is untouched.
+- **Lesson**: graduated — `tests/contracts/test_corep_rwea_carrier.py` (ledger
+  row). The prose form: `rwa_final` is already post-floor, so no template RWEA
+  reads it.

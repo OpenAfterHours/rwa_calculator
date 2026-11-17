@@ -50,6 +50,20 @@ Report `PREMISE: refuted` as a success, not a failure. Specific tells:
 - The bullet's `Ev:` pointer has drifted; the underlying audit entry in
   `docs/plans/compliance-audit-crr-111-241-rectification.md` §5 usually
   preserves information the bullet lost. Read both.
+- **A refutation, or a reading the plan records as settled, can be the wrong
+  part.** An audit that agrees with the code may have read the code: P1.296
+  described PS1/26 rules 4.2 / 4.3 by the code's `max_horizontal` floor, cited
+  the code line, and recorded the correct claim ("transitional 160% in 2027") as
+  WRONG — a capital overstatement that stood for months (escape log
+  2026-11-16). Where the rule's verb is "shall be assigned", a floor or a max in
+  the code is a finding. Read the rule's scope sentence (who it applies to;
+  there, rule 4.1) before its weights. Four plan readings were reversed in that
+  one batch (P1.296, P1.369, P1.371, P1.377). The graduation is P5.78.
+- **A reading of a template is checked against the taxonomy and the Bank's
+  known-issues log, not only Annex II.** A cell the taxonomy does not have cannot
+  be "required", whatever a paragraph implies, and the log can settle a case the
+  instructions leave open (issue #27 put real-estate defaults on the Total sheet
+  only).
 
 ### A2. Read the PDFs with pymupdf — never reconstruct an article from memory
 
@@ -215,6 +229,19 @@ dominant production escape class in this project is **absence**, not wrongness.
 `sheet_not_emitted` conflates "no exposure" (fixable) with "no bundle key" (not)
 — distinguish them explicitly.
 
+**And its mirror: assert what should NOT be there — a zero is a fact, an empty
+cell is not.** Under the gateway's evaluation a reported 0.0 binds every rule
+over its data point, including in another template that shares the point; an
+unreported cell binds nothing. The Bank's Filing Manual v1.0.1 rule 2.19:
+*"Uninteresting zeros ... SHOULD NOT be reported."* Five instances by
+2026-11-16 of a figure, usually a zero, where none belongs: OF 08.07's share of nothing (2026-11-13), OF 02.00's IRB class rows
+with no legs (a zero there files an OF 08.01 sheet we do not produce), the CRR
+slotting-only PD 0.0, c0254 0.0 on F-IRB sheets, and row 0015 on sheets that do
+not have it. Only `rwa_filer.boe` sees the difference. **Detect:** for every
+`0.0`, `.otherwise(0.0)` or `fill_null(0)` that writes a reporting cell, ask
+whether any leg exists for it, and test emptiness on legs ("is None"), never on
+the amount — a class with legs and no RWEA must still report its zero.
+
 ### B5. A "cosmetic" coverage gap is a hiding place for a self-concealing defect
 
 **Trap.** Deprioritising a coverage gap because "there's no defect there" —
@@ -289,6 +316,19 @@ one being worked. Seven of the eight oracle entries understate capital.
 **Detect.** When you touch a register entry for any reason, check its owning
 bullet is still open and still describes the disagreement. An `OWNER:` pointing
 at a closed or drifted bullet is the review finding.
+
+**The reason is a claim, not a record.** Eleven of the seventeen escape-log entries
+of 2026-11-16 are `caught-and-parked` in whole or part, and what recurred was
+not a missing owner (most had one) but an unchecked reason: "an artefact of the
+zero-fill ... leaves with the template-level engine" (the engine was ours); "a
+reporting-basis decision ... NOT made here" (Annex II p.112 had made it);
+"unattributed - needs investigation" above measured sides that showed the cause;
+"capital-affecting, not changed here" with no `OWNER`; "deliberately NOT held
+here" in a contract test's docstring; a cause written into a baseline `_note`.
+Before writing or keeping a reason, find the instruction text that decides it
+and run the rule on the gateway engine with a compliant return (C5). A reason
+that blames the published rule is now checked (ledger, 2026-11-16); one that
+attributes a capital root cause with no owner is not yet (P5.83).
 
 ### B8. Ratchet the quantity you care about, not a ratio of it nor its complement
 
@@ -392,7 +432,10 @@ pointing at the real root cause. Optimising the count would have buried it.
 
 ### C5. A failing published rule is not always our defect
 
-**Trap.** Contorting output to satisfy an unsatisfiable published rule.
+**Trap.** Contorting output to satisfy an unsatisfiable published rule. And
+its mirror: calling a rule a "limit of the published rule" when the Bank has
+already switched it off, already said how to report the case, or when the
+verdict comes from our own engine's reading rather than the gateway's.
 
 **Why.** BoE summation templates do not distinguish additive from averaged
 columns; one template is applied across ~36 columns of a family, so wherever it
@@ -405,6 +448,30 @@ produces neither. If both hold, record "limit of the published rule" and move on
 Also check the rule's home table before changing output: `.a`/`.b` DPM variants
 are column partitions bound to one frame, so a failure can be an evaluation
 artifact.
+
+The Bank also changes how its gateway runs rules after a taxonomy is published.
+Its validations deny list *"override[s] the information provided in the relevant
+taxonomy and the taxonomy validations spreadsheet"*, and its known-issues log
+carries interim reporting instructions. On 2026-11-16 a plan bullet was closed
+as a rule limit on the August log while the November deny list had deactivated
+the rule four weeks earlier, and two register entries blamed the published rule
+for what our template-level engine did with an unreported cell. So, before any
+of the above:
+
+0. Read the Bank's current deny list (`rwa-filer rulebook deny-list`, packaged at
+   `packages/rwa-filer/src/rwa_filer/boe/data/deny/<release>.json`; refresh with
+   `scripts/build_filer_release.py <release> --deny-list --check` against the
+   newest workbook in `docs/assets/`), the newest known-issues log, and
+   `rwa-filer rulebook issues` for the publisher-issue register. A rule the Bank
+   has deactivated is not a limit; a case its log decides is not a question.
+1. Evaluate the rule on the gateway engine (`rwa_filer.boe`, i.e.
+   `validate_return`) on a return that follows the instructions — not on the
+   template-level engine, which cannot evaluate isNull rules and applies one
+   default per rule where the gateway applies each reference's own.
+
+A "limit of the published rule" reason must cite the publisher issue that
+records it — that half is a check now (ledger, 2026-11-16). Nothing yet fetches
+a newer deny list (P5.77).
 
 ### C6. Enumerate a rule family by ID prefix, never by the members someone quoted
 
@@ -611,6 +678,15 @@ assert _SPLIT_G_LEG.ead != _SPLIT_REM_LEG.ead, "equal legs make .first() undetec
 and when you reuse someone else's fixture, derive its cause from the columns it
 sets rather than from its docstring.
 
+(c) A synthetic reporting frame whose combination of columns the sealed ledger
+can never carry. It passes, it pins the defect, and it blocks the fix. Twice on
+2026-11-16: `test_cross.py` asserted row 0015 on the corporate sheet from a frame
+marking a corporate-class row as defaulted, and `TestC0700MemorandumRows` built
+defaulted legs as `exposure_class "corporate"` with no applied-class overlay. A
+defaulted SA leg's applied class is "in default", never its obligor's class.
+Build reporting unit frames through the sealed shape, or assert in the test that
+the combination is reachable from `PipelineOrchestrator` output.
+
 ### C12. A green mutation probe is a claim that needs its own evidence — four ways one lies
 
 **Trap.** You mutate production code, the suite stays green, and you conclude the
@@ -720,14 +796,31 @@ Same rule for the validation baseline: hold `REGEN_VALIDATION_BASELINE=1` until
 fixes land, and never hand-edit the register. The ratchet failing *because you
 fixed something* is the design working — remove the entry deliberately.
 
-### E2. A breakdown cell must sum the carrier its parent total sums
+### E2. Pick the carrier the instruction names — for a breakdown, the parent's; for a risk-weight row, the weight Annex II names
 
-**Trap.** Picking the plausible carrier for a breakdown column.
+**Trap.** Picking the plausible carrier for a breakdown column, or banding a
+risk-weight row on the weight the engine applied last.
 
-**Why.** Otherwise the footing identity can only hold by coincidence.
+**Why.** Otherwise the footing identity can only hold by coincidence. And
+OF 07.00's risk-weight rows ask for a weight that is often not the one the
+engine applied last (Annex II pp.94–95): transitional equity on its Article 133
+row with transitional RWEA; a regulatory real-estate loan "in two parts"; an
+Art. 123B leg "against the risk weight which would have applied if the currency
+mismatch multiplier was not applied. However, the RWEA shall still reflect" it;
+a substituted exposure's original amount on the obligor's own row, with the
+protector's weight only from the inflow on. Banding every cell of a row on the
+final `risk_weight` put four of these in row 0280 "Other risk weights" or in
+the protector's row on 2026-11-16, and only the gateway's Warning rules noticed.
+The banding now lives in `reporting/corep/c07_rw_bands.py`, one band per basis.
 
 **Detect.** Trace what the parent row actually sums and match it. Verify; don't
-infer from the column name.
+infer from the column name. For a leg whose weight changed after its
+exposure-class weight (transitional, multiplier, loan split, substitution,
+default override), find the weight the row instruction names and check that its
+carrier is sealed on `AGGREGATOR_EXIT_EDGE` (`risk_weight_pre_equity_transitional`,
+`risk_weight_pre_currency_mismatch`, `sa_loan_split_*`, `pre_crm_risk_weight`).
+A Basel 3.1 SA leg in OF 07.00 row 0280 is a tell: the published ladder has a
+rung for every PS1/26 weight once these are undone.
 
 ### E3. Subtotal columns double-count if you subtract both the breakdown and the subtotal
 
@@ -860,7 +953,9 @@ and run the checker from the venv binary rather than `uv run`.
 - **`~` on an all-null Polars column raises.** `fill_null` before negating.
 - **Never fill Float/String nulls to 0.0** — it is anti-conservative.
 - **`rwa_final` is already post-floor.** Adding `floor_impact_rwa`
-  double-counts.
+  double-counts, and a template RWEA must not read it: COREP reads
+  `reporting.kernel.own_rwea` (gated, see the ledger, 2026-11-16). Pillar 3 is
+  not gated yet and still reads it (P3.8).
 - **Goldens are structure-exact + rtol 1e-9**, never byte-exact.
 - **Test helpers that call weight functions directly bypass the input
   contract**, so a newly-read engine column must be added there too.
@@ -893,12 +988,19 @@ the move here and delete the prose entry above.
 | 2026-09-08 | **A published z-code mapped onto MORE THAN ONE of our sheets makes a wrong sheet axis read as a PASSING supervisory rule.** ``resolve_sheet_codes`` returns every ``bundle_key`` for a scoped code and the evaluator sums the reference across all of them, so the rule asserts against a figure that appears in no submitted workbook. Measured on PR #497: ``_C07_SHEETS`` z0008 held ``("corporate", "corporate_sme")`` — our internal ``ExposureClass`` values, not the Art. 112(1) classes the C 07.00 z-axis indexes — and the live EBA **ERROR** rule ``v4240_i`` compared C 02.00 r0130 against the sum of two of our sheets and passed. The multi-key map did not merely fail to catch the defect, it CONVERTED it into a pass: a faithful pre/post comparison of the whole supervisory register was identical in both states (27 broken / 4 uncovered / 188 vacuous). | **`arch_check` check 22** (`check_sheet_code_single_bundle_key`) — an AST scan of `reporting/validations/**` flagging any `SheetCode(...)` call, or any call passing `bundle_keys=`, whose literal holds more than one key; it walks whole modules and labels each finding with the enclosing map, so a `replace(entry, bundle_keys=…)` widening or a map built inside a helper is caught too (both observed red). A non-literal `bundle_keys` is itself a violation. No allowlist — the only other legal cardinality is the EMPTY tuple, which is a skip, never a zero; and the REVERSE shape (several z-codes onto one of our keys, the finer Art. 147(2)(d) IRB axis) stays legal under `resolve_sheet_codes`' closure test. Plus **`tests/contracts/test_sheet_index_bundle_key_cardinality.py`**, whose limb 1 reads the live `SHEET_INDEX_MAPS` at pytest time and so holds whatever syntax built it — the test guards the DATA, the arch gate guards the SHAPE the data is written in. |
 | 2026-11-13 | **A default that varies by platform AND interpreter is an input, and nobody had varied it — plus: a test-only fix to a platform-dependent failure is an unmeasured claim about the product.** `api/batch.py` built its process pool on `multiprocessing`'s DEFAULT start method: `spawn` on Windows and macOS, `forkserver` on Linux from Python 3.14, `fork` on Linux up to 3.13. Under `fork` a worker inherits the caller's initialised Polars without its threads, so `run_batch` hung forever once the caller had run any query — on the interpreter `requires-python` declares as the floor, in every release from 0.3.29. Two tests already in the suite detect it and never ran where it shows: CI takes the runner's `python3` (CPython 3.14.4) and the dev box is Windows. It was the start method's SECOND bite — `b570ad7` had fixed a `forkserver` CI failure in the *test* and documented the result as "correct under fork, forkserver and spawn alike", having measured two of the three. | **`api/batch.py::WORKER_START_METHOD`** — the pool is built on an explicit `spawn` context, so the platform-dependent path is DELETED rather than added to a test matrix (`spawn` because it is the only start method every platform has). Pinned by **`tests/unit/api/test_batch.py::TestWorkerStartMethod`** two ways with opposite blind spots: on the pool's construction arguments (starts no process, so red on every platform, including those whose default is already `spawn`) and on the process class a REAL worker reports (red wherever the default is not `spawn`). Observed red against the pre-fix source on CPython 3.13.18 (`ForkProcess`) and 3.14.6 (`ForkServerProcess`) — on 3.14 the three new tests are the ONLY red, the 35 older ones pass, which is the whole escape in one line. Read the process class, not `multiprocessing.get_start_method()`: a spawned child reports its parent's *default*. **Not graduated, filed:** CI never runs the declared floor interpreter and its interpreter is picked by the runner image (**P5.72**); a deadlocked worker, unlike a dead one, has no bound and no error code, so a hang stalls the suite instead of failing it (**P5.73**). Full account: `docs/development/escape-log.md`, 2026-11-13. |
 | 2026-11-14 | **Every gate ran in an environment that was a superset of the user's, so a missing runtime dependency was unrepresentable — and its symptom was twice read as dev tooling.** `watchfire` (the `@cites` decorator, imported at module level by 79 modules) left `[project].dependencies` in `2888cad5` and shipped dev-only in 38 releases, 0.2.24–0.3.34: no installed wheel could import `rwa_calc.api` or start `rwa-ui`. `import rwa_calc` alone succeeds. The same `No module named 'watchfire'` had surfaced in-repo twice (`875127f5`'s `arch_check`, and the 2026-08-15 row above) and was both times fixed for developers only. The 2026-08-11 escape had already said the defect class lives in the artifact, not the tree; its gate read the artifact's metadata and never installed it. | **`scripts/check_wheel_install.py`** — builds every workspace wheel, installs one into a fresh environment on its `Requires-Python` floor with only its declared dependencies, imports EVERY module the wheel ships (listed from the archive: a `pkgutil` walk skips `rwa_calc/data/`, which has no `__init__.py`), resolves every console script, and serves `rwa-ui`'s app. Run by the `wheel-install` CI job on every push, by `publish.yml` before upload and by `deploy.py` before tagging; pinned by `tests/contracts/test_wheel_install_gate.py` and `PROBES` coverage in `tests/contracts/test_release_coverage.py`. Observed red on the pre-fix tree (216 of 266 modules) and on the published 0.3.34 wheel (208). **Detect, for the residue no check covers:** when a dev gate reports `No module named X`, ask first whether `src/` imports X — if it does, the fix is `[project].dependencies`, never a dev extra or group. Full account: `docs/development/escape-log.md`, 2026-11-14. |
-| 2026-11-16 | **An oracle measured on data with one row per table cannot tell a row-wise reading from a table-wise one, and the rule text cannot either.** `rwa_filer.boe` summed every obligor grade in `boe_b0761` ("each grade's 0070 = its 0040 + 0050 + 0060") and failed every OF 08.02 sheet with more than one grade; 28 rules in three modules were misread the same way, one family in the opposite direction (OF 08.06 read one type of lending at a time). The workbook writes `isum({.., seq: True})` identically for a sum over every row (`boe_b0752`) and one over the row in hand (`boe_b0761`); only the XBRL formula says, by covering the dimension on the summed variable or not. Both Arelle-pinned gates were green throughout: the Bank's sample has one open row per open-row table, and the golden returns carry no OF 08.02 at all. | **`packages/rwa-filer/tests/boe/test_summed_references_oracle.py`** over **`tests/summed_returns.py`**: three returns built with several rows and a holding and a breaking row per family, Arelle's counts on all 28 rules kept in `tests/releases/4.1.1/oracles/summed_references_oracle.json`, the engine held to them in CI, with an adequacy assertion that the text-only reading is counted differently on every one, so the returns can see the defect. The engine reads what a sum spans from the formula (`spans` in the rule books, `Rule.spans_by_variable`). Observed red against the pre-fix engine: `6 failed`. **Detect, for the residue:** before trusting an oracle on a rule over an open-row table or an open axis, count the rows the oracle's data has there; one row agrees with every reading. Full account: `docs/development/escape-log.md`, 2026-11-16. |
+| 2026-11-16 | **An oracle measured on data with one row per table cannot tell a row-wise reading from a table-wise one, and the rule text cannot either.** `rwa_filer.boe` summed every obligor grade in `boe_b0761` ("each grade's 0070 = its 0040 + 0050 + 0060") and failed every OF 08.02 sheet with more than one grade; 28 rules in three modules were misread the same way, one family in the opposite direction (OF 08.06 read one type of lending at a time). The workbook writes `isum({.., seq: True})` identically for a sum over every row (`boe_b0752`) and one over the row in hand (`boe_b0761`); only the XBRL formula says, by covering the dimension on the summed variable or not. Both Arelle-pinned gates were green throughout: the Bank's sample has one open row per open-row table, and the golden returns carry no OF 08.02 at all. | **`packages/rwa-filer/tests/boe/test_summed_references_oracle.py`** over **`tests/summed_returns.py`**: three returns built with several rows and a holding and a breaking row per family, Arelle's counts on all 28 rules kept in `tests/releases/4.1.1/oracles/summed_references_oracle.json`, the engine held to them in CI, with an adequacy assertion that the text-only reading is counted differently on every one, so the returns can see the defect. The engine reads what a sum spans from the formula (`spans` in the rule books, `Rule.spans_by_variable`). Observed red against the pre-fix engine: `6 failed`. **Detect, for the residue:** before trusting an oracle on a rule over an open-row table or an open axis, count the rows the oracle's data has there; one row agrees with every reading. Full account: `docs/development/escape-log.md`, 2026-11-16. **Recurred the same day, twice more** (`8ceca03`): every oracle return was exact to the unit, where a rounding allowance is zero either way, so the engine's reading of plain `sum()` / `abs()` as `isum()` / `iabs()` agreed with Arelle on all of them; and none filed OF 08.06's all-types sheet, so a member-less fact added into every type's sums was never seen. Same remedy: `tests/rounding_and_default_returns.py` and `test_rounding_and_default_oracle.py`, with the old reading asserted to count differently (`7 failed` against the pre-fix engine). The general Detect: before trusting an Arelle-pinned verdict, ask what shape of data separates the readings — several rows, rounded figures, a default member — and whether any oracle return has it. Plain `max` / `min`, which no published rule calls, are held by `test_no_packaged_rule_calls_plain_max_or_min` (`279b415`). |
+| 2026-11-16 | **The Bank changes how its gateway runs rules after the taxonomy is published, and nothing read the list.** Its validations deny list deactivated the `boe_b0710` family on 19 October 2026; `rwa-filer` kept enforcing it, 8 of 15 Basel 3.1 returns were reported blocked by it alone, and a plan bullet was closed that day as a rule limit on the August log. Every Arelle-pinned gate agreed, because the taxonomy's formulas still contain the rule. | **`packages/rwa-filer/src/rwa_filer/boe/data/deny/<release>.json`**, imported (never hand-edited) by `scripts/build_filer_release.py <release> --deny-list [--check]` and applied in both engines; `packages/rwa-filer/tests/test_shipped_releases.py` requires one per shipped release; the application tests on both engines keep a pre-deactivation leg that still fails. Observed red: `('FAIL', '') == ('NOT_EVALUATED', 'deactivated_by_publisher')`. **Not graduated:** nothing fetches a newer list (P5.77); the prose residue is C5 step 0. |
+| 2026-11-16 | **A template RWEA read the post-floor carrier**, so on a binding-floor return OF 08.01–08.07, OF 09.01 / 09.02, C 08.04 and C 34 carried the engine's pro-rata add-on (453,708.71 on `facility-share-binding`), where Annex II p.112 builds c0260 from c0251–c0254 and the taxonomy makes OF 02.00's class rows one data point with the OF 08.01 sheet totals. Second time: OF 02.00 had been moved to `rwa_pre_floor` three days earlier, alone. | **`tests/contracts/test_corep_rwea_carrier.py`** — an AST scan: no call in a COREP module passes the literal `"rwa_final"` except through `reporting.kernel.own_rwea` / `with_own_rwea_as`; a strict allowlist whose stale entries fail (OF 07.00's two left it in `6e8b73d`); a scanner-adequacy check; and each changed module calls the helper. Observed red against the pre-fix tree: `6 failed`, naming 15 sites. Residue: Pillar 3 (P3.8). Full account: `docs/development/escape-log.md`, 2026-11-16. |
+| 2026-11-16 | **The register kept no Warning-severity verdict of the gateway engine, and held its Error verdicts by count with no portfolio.** Four defects lived as gateway Warning FAILs nothing kept (`boe_b0431`, `b1069`, `b0445`, `b0441`, `b0356`), `boe_b1055` spread from 2 to 7 portfolios unseen, and `boe_b0778` sat in the register for months as an engine artefact no gate compared with the gateway. | **`known_gateway_breaks`** (rule, portfolio, severity; two-way) and **`known_engine_disagreements`** in `tests/acceptance/reporting/test_supervisory_validations.py`, with `tests/contracts/test_gateway_break_registers_agree.py` holding the Error half to the filing-mapping baseline (`269cae1`, `3295585`). Observed red before banking: `80 NEW gateway break(s) ... 43 of them Error-severity` and `21 NEW disagreement(s)`; reviewers turned each leg red by mutating one pair. Retires the prose candidate "ratchet Warning-severity gateway breaks". |
+| 2026-11-16 | **A register reason that blamed the published rule was a claim nobody checked.** `boe_b0778` sat for months under a wrong "Bank rule" reason; `boe_b0356` sat under "our defect" although part of the break was PI-29's; two prose rules (C5: record "limit of the published rule"; this retro's draft: cite the issue) said what to write and nothing held it. | **`tests/contracts/test_register_publisher_issues.py`** (`269cae1`, `3295585`): a "limit of the published rule" reason must cite a publisher issue that names the rule; a break on the subject of a `fails_correct_returns` issue must cite or rebut it; a cited issue must have that effect; a mixed-cause pair must cite the issue "in part" and name our share. Observed red: `assert (0 == 1)` on PI-33 (`passes_wrong_returns`) cited on `boe_b0359`, on a fixed issue no longer owed, and on an "in part" citation naming no share of ours. **Not graduated:** an `OWNER:` on a reason that attributes a capital root cause (P5.83). |
 
 Candidates currently identified but not yet graduated (file as plan bullets):
 
 > **The file is over the ~30 cap** — **35** numbered entries as of 2026-08-30,
 > which by this file's own rule means the retro is failing to graduate things.
+> Re-counted 2026-11-16: still 35. The PRA001 rule-review retro merged its
+> patterns into A1, B4, B7, C5, C11 and E2 and graduated two to the ledger rather
+> than adding entries.
 >
 > A deletion pass on the stated criterion (*an entry earns its place only while
 > it is still prose*) found **nothing to delete**: every entry whose executable
@@ -965,3 +1067,14 @@ Candidates currently identified but not yet graduated (file as plan bullets):
   builder is called from `generate_all.py`.
 - **D1** → an `arch_check` rule flagging any new column read by an
   `engine/sa/` transform without a recorded output-floor impact note.
+- **Every template's layout held to the pack** → one contract test over every
+  Basel 3.1 template's sheets, rows, columns and per-sheet cells (P5.84). Each
+  template got its own test after it escaped (OF 07.00, OF 02.00, OF 08's sheets,
+  OF 08.01's cells, rows and columns); OF 08.02, 08.03, 08.05, 08.06, 09.01,
+  09.02 and C 08.04 are held by nothing.
+- **B7, the owner half** → an `OWNER: P<n>.<n>` on every register reason that
+  attributes a capital root cause (P5.83); the publisher-issue half graduated on
+  2026-11-16.
+- **Art. 201 eligibility** → a contract test classifying every guarantor class
+  reachable from `entity_type_to_sa_class` as eligible, gated or a documented
+  null weight (P5.82); the 2026-11-16 natural-person escape's graduation.

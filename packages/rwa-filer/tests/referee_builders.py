@@ -94,10 +94,40 @@ script = json.loads(Path(__file__).with_name("script.json").read_text(encoding="
 chunk = f"chunk{spec['chunk']}"  # "chunk0", "chunk1", ...
 launch = f"{Path(spec['instance']).stem}/{chunk}"
 behaviour = {**script.get("every", {}), **script.get(chunk, {}), **script.get(launch, {})}
-with Path(__file__).with_name("launches.txt").open("a", encoding="utf-8") as log:
-    log.write(launch + "\\n")
-with Path(__file__).with_name("pids.txt").open("a", encoding="utf-8") as log:
-    log.write(f"{os.getpid()}\\n")
+
+
+def record(name, line):
+    """Append one line to a log every worker shares.
+
+    Workers run side by side. On Windows an append is a seek to the end and then
+    a write, not one step, so two workers can write over each other's line: there
+    the writer holds a lock on the log's first byte while it writes. The lock is
+    tried every few milliseconds, not with LK_LOCK, which waits a whole second
+    between tries - longer than the timeout some tests give a worker.
+    """
+    with Path(__file__).with_name(name).open("a", encoding="utf-8") as log:
+        if os.name != "nt":
+            log.write(line + "\\n")
+            return
+        import msvcrt
+
+        log.seek(0)
+        while True:
+            try:
+                msvcrt.locking(log.fileno(), msvcrt.LK_NBLCK, 1)
+                break
+            except OSError:
+                time.sleep(0.005)
+        try:
+            log.write(line + "\\n")
+            log.flush()
+        finally:
+            log.seek(0)
+            msvcrt.locking(log.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+record("launches.txt", launch)
+record("pids.txt", str(os.getpid()))
 
 # The assertions handed over: the ones the overlay's preconditions name or,
 # against the official entry point, all of them (less a run-id restriction).

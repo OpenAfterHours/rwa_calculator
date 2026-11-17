@@ -164,8 +164,11 @@ and released independently of `rwa-calc`; its release tags are prefixed
   `run_referee` / `run_referees`, a worker's raw result is stored under a
   SHA-256 of everything it depends on — the bytes of the instance, the
   taxonomy package, the overlay's members and the filing-rule plug-in, the
-  worker's settings, the Arelle release, Python version and locale of the
-  worker interpreter, and the referee's own code — and of no path. A run that
+  worker's settings, every distribution installed in the worker interpreter
+  (`name==version`: an `arelle-release==X` install leaves lxml, regex,
+  pyparsing and the rest unpinned, and a new release of any of them must
+  re-run Arelle), its Python version and locale, and the referee's own code —
+  and of no path. A run that
   finds the key reuses the result, byte for byte, and launches no worker
   (`ChunkStat.cached`); the merge and any comparison run as before. Only a
   worker that finished is stored, an entry is written whole or not at all,

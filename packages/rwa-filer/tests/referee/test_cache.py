@@ -15,7 +15,8 @@ merge, and every comparison made of the result, run as before.
 What is pinned here, with the stand-in worker of ``referee_builders``:
 - a second run reuses every result and launches no worker, and the reused
   result is the worker's raw result;
-- each keyed input, changed alone, misses; a path changed alone hits;
+- each keyed input, changed alone, misses — a new release of one of Arelle's
+  dependencies included; a path changed alone hits;
 - a corrupt or truncated entry is ignored, recomputed and replaced;
 - a worker that failed, wrote nothing or was killed is never stored;
 - a cache that cannot be written, or an Arelle release that cannot be named,
@@ -42,6 +43,14 @@ from referee_builders import FAKE_WORKER, Referee, counts
 from rwa_filer.referee import runner
 
 IDENTITY = "arelle-release 2.47.5 / python 3.13"
+#: The identity the runner computes, before the autouse fixture stands in for it.
+REAL_IDENTITY = runner._arelle_identity
+#: What the identity probe reports from an Arelle interpreter.
+PROBE = {
+    "arelle-release": "2.47.5",
+    "python": "3.13.1",
+    "distributions": ["arelle-release==2.47.5", "lxml==6.1.3", "regex==2026.11.15"],
+}
 
 
 @pytest.fixture(autouse=True)
@@ -210,6 +219,55 @@ def test_each_keyed_input_changed_alone_misses(
     # Assert — every worker of the second run ran.
     assert len(launches(trimmed)) == before + len(result.chunks)
     assert not any(chunk.cached for chunk in result.chunks)
+
+
+def test_a_new_release_of_one_of_arelles_dependencies_misses(
+    trimmed: Referee, cache: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``arelle-release==X`` leaves lxml, regex and the rest unpinned: a new lxml alone re-runs.
+
+    Otherwise every scheduled run after a dependency release would replay the
+    verdicts of the old libraries, and store them again.
+    """
+    # Arrange — the identity computed from a probe, and a run that reuses with it.
+    monkeypatch.setattr(runner, "_arelle_identity", REAL_IDENTITY)
+    monkeypatch.setattr(runner, "_probe_interpreter", lambda _python: PROBE)
+    trimmed.run(cache_dir=cache)
+    reused = trimmed.run(cache_dir=cache)
+    upgraded = PROBE | {
+        "distributions": ["arelle-release==2.47.5", "lxml==6.2.0", "regex==2026.11.15"]
+    }
+    monkeypatch.setattr(runner, "_probe_interpreter", lambda _python: upgraded)
+
+    # Act
+    result = trimmed.run(cache_dir=cache)
+
+    # Assert
+    assert [chunk.cached for chunk in reused.chunks] == [True, True]
+    assert launches(trimmed)[2:] == ["instance/chunk0", "instance/chunk1"]
+    assert not any(chunk.cached for chunk in result.chunks)
+
+
+def test_the_identity_probe_lists_every_distribution_of_the_interpreter() -> None:
+    """Run for real, isolated as a worker is, on the interpreter running these tests."""
+    # Act
+    probe = runner._probe_interpreter(Path(sys.executable))
+
+    # Assert
+    assert probe is not None
+    assert f"pytest=={pytest.__version__}" in probe["distributions"]
+    assert probe["distributions"] == sorted(probe["distributions"])
+    assert probe["python"] == sys.version
+
+
+def test_an_interpreter_without_arelle_has_no_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    monkeypatch.setattr(
+        runner, "_probe_interpreter", lambda _python: PROBE | {"arelle-release": None}
+    )
+
+    # Act / Assert
+    assert REAL_IDENTITY(Path(sys.executable)) is None
 
 
 def test_the_worker_the_runner_and_the_planner_are_all_keyed() -> None:

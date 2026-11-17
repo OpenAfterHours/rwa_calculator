@@ -130,19 +130,21 @@ jobs:
       # A worker's Arelle result is reused when nothing it depends on changed.
       # rwa_filer/referee/runner.py keys each entry by SHA-256 over the bytes
       # the worker reads (instance, package, overlay, plug-in), its settings,
-      # the Arelle release and the referee's code; an entry that cannot hit is
+      # every distribution in the Arelle environment (the pin above leaves
+      # Arelle's own dependencies - lxml, regex, pyparsing... - free to move),
+      # the Python version and the referee's code; an entry that cannot hit is
       # simply never read. The Actions key below only narrows what is restored
-      # to entries that CAN hit: same publication, same Arelle, same referee
-      # code. Each run saves under a key of its own (run id and attempt), and
-      # restore-keys picks up the latest, so entries a run adds are kept.
+      # to entries that CAN hit: same publication, same Arelle environment
+      # (`uv pip freeze`), same referee code. Each run saves under a key of its
+      # own (run id and attempt), and restore-keys picks up the latest, so
+      # entries a run adds are kept; the prune below drops the ones it did not use.
       - name: Name the referee cache
         id: referee-cache
-        run: >-
-          echo "prefix=referee-${TAXONOMY_SHA256}-arelle-${ARELLE_VERSION}-${{
-          hashFiles('packages/rwa-filer/src/rwa_filer/referee/worker.py',
-          'packages/rwa-filer/src/rwa_filer/referee/plan.py',
-          'packages/rwa-filer/src/rwa_filer/referee/runner.py',
-          'packages/rwa-filer/src/rwa_filer/referee/boe_shim.py') }}-" >> "$GITHUB_OUTPUT"
+        env:
+          REFEREE_SOURCES: ${{ hashFiles('packages/rwa-filer/src/rwa_filer/referee/worker.py', 'packages/rwa-filer/src/rwa_filer/referee/plan.py', 'packages/rwa-filer/src/rwa_filer/referee/runner.py', 'packages/rwa-filer/src/rwa_filer/referee/boe_shim.py') }}
+        run: |
+          freeze=$(uv pip freeze --python .arelle-venv/bin/python | sha256sum | cut -c1-16)
+          echo "prefix=referee-${TAXONOMY_SHA256}-arelle-${ARELLE_VERSION}-${freeze}-${REFEREE_SOURCES}-" >> "$GITHUB_OUTPUT"
 
       - name: Restore the referee cache
         uses: actions/cache/restore@v4

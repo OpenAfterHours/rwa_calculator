@@ -22,8 +22,10 @@ Key responsibilities:
 - Reuse a worker's result when nothing it depends on has changed
   (``cache_dir``): the key is a SHA-256 over the bytes Arelle reads — the
   instance, the taxonomy package, the overlay's members, the filing-rule
-  plug-in — the spec's settings, the Arelle release and this package's
-  worker, planner and runner, and never over a path. A hit skips the worker
+  plug-in — the spec's settings, every distribution installed beside Arelle
+  (Arelle's own dependencies are not pinned by its release), the Python
+  version and locale, and this package's worker, planner and runner, and never
+  over a path. A hit skips the worker
   only; a worker that did not finish is never stored, and an entry that does
   not read back as a result is ignored and recomputed.
 - Merge what the workers report into one result: a verdict per published rule
@@ -183,10 +185,17 @@ _PROC: Final = Path("/proc")
 #: The spec's members that name a file. The key reads each file's bytes, and
 #: never the name.
 _SPEC_PATHS: Final = frozenset({"instance", "packages", "plugin", "xdg"})
-#: Asks the interpreter the workers run under which Arelle it has.
+#: Asks the interpreter the workers run under what it runs Arelle with: the
+#: Python version and every installed distribution, ``name==version``, sorted.
+#: Arelle's verdicts depend on its own dependencies (lxml, regex, pyparsing,
+#: isodate, numpy...), which an ``arelle-release==X`` install leaves unpinned:
+#: a new release of any of them is a new identity, so nothing stored under the
+#: old one is reused.
 _IDENTITY_PROBE: Final = (
-    "import json, sys; from importlib.metadata import version; "
-    "print(json.dumps({'arelle-release': version('arelle-release'), 'python': sys.version}))"
+    "import json, sys; from importlib import metadata; "
+    "names = {(d.metadata['Name'] or '').lower(): d.version for d in metadata.distributions()}; "
+    "print(json.dumps({'arelle-release': names.get('arelle-release'), 'python': sys.version, "
+    "'distributions': sorted(f'{name}=={version}' for name, version in names.items())}))"
 )
 #: The environment the workers inherit that can change the text Arelle writes.
 _LOCALE_VARIABLES: Final = ("LANG", "LC_ALL", "LC_MESSAGES")
@@ -1075,8 +1084,9 @@ class _ResultCache:
 
     The key is a SHA-256 over what a worker's result depends on — the bytes of
     every file it reads (instance, packages, plug-in), the spec's other
-    settings, the Arelle release and this package's referee code — and over no
-    path. Thread-safe: each entry is written to a temporary file and renamed,
+    settings, the worker interpreter's identity (every installed distribution,
+    the Python version, the locale) and this package's referee code — and over
+    no path. Thread-safe: each entry is written to a temporary file and renamed,
     and a key is read and written by one worker only.
     """
 
@@ -1171,17 +1181,33 @@ def _open_cache(cache_dir: Path | None, interpreter: Path) -> _ResultCache | Non
 
 
 def _arelle_identity(interpreter: Path) -> str | None:
-    """The Arelle release, Python version and locale the workers run with; None if unknown."""
+    """What the workers run Arelle with — every distribution, Python, locale; None if unknown.
+
+    None also where the interpreter has no ``arelle-release``: there is no
+    Arelle to key a result by.
+    """
+    probe = _probe_interpreter(interpreter)
+    if probe is None or not probe.get("arelle-release"):
+        return None
+    locale = {name: os.environ.get(name) for name in _LOCALE_VARIABLES}
+    return json.dumps({"probe": probe, "locale": locale}, sort_keys=True)
+
+
+def _probe_interpreter(interpreter: Path) -> dict[str, Any] | None:
+    """``_IDENTITY_PROBE``'s answer from ``interpreter`` (isolated, as a worker is); None if none."""
     done = subprocess.run(  # noqa: S603 - the interpreter the caller named, a fixed probe
         [str(interpreter), "-I", "-c", _IDENTITY_PROBE],
         capture_output=True,
         text=True,
         check=False,
     )
-    if done.returncode != 0 or not done.stdout.strip():
+    if done.returncode != 0:
         return None
-    locale = {name: os.environ.get(name) for name in _LOCALE_VARIABLES}
-    return json.dumps({"probe": json.loads(done.stdout), "locale": locale}, sort_keys=True)
+    try:
+        probe = json.loads(done.stdout)
+    except ValueError:
+        return None
+    return probe if isinstance(probe, dict) else None
 
 
 def _code_sources() -> list[Path]:

@@ -473,14 +473,19 @@ def test_the_workflow_pins_the_publication_and_the_processor_the_baseline_was_me
 
 
 def test_the_workflow_caches_worker_results_keyed_on_what_they_depend_on() -> None:
-    """Restored only where an entry can hit: same publication, Arelle and referee code."""
+    """Restored only where an entry can hit: same publication, Arelle environment and code.
+
+    The environment is the whole ``uv pip freeze`` of the Arelle venv, not the
+    pinned release alone: the pin leaves Arelle's own dependencies free to move.
+    """
     # Act
     live = without_comments(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
     # Assert
     assert "actions/cache/restore@" in live and "actions/cache/save@" in live
     assert "path: .referee-run/cache" in live
-    for keyed in ("${TAXONOMY_SHA256}", "${ARELLE_VERSION}"):
+    for keyed in ("${TAXONOMY_SHA256}", "${ARELLE_VERSION}", "${freeze}"):
         assert keyed in live, f"the cache key does not name {keyed}"
+    assert "uv pip freeze --python .arelle-venv/bin/python" in live
     for source in ("worker.py", "plan.py", "runner.py", "boe_shim.py"):
         assert f"rwa_filer/referee/{source}'" in live, f"the cache key does not hash {source}"

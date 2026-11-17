@@ -5101,3 +5101,73 @@ requires every register reason on such a rule to cite the issue or rebut it.
 - **Lesson**: graduated — `tests/contracts/test_corep_rwea_carrier.py` (ledger
   row). The prose form: `rwa_final` is already post-floor, so no template RWEA
   reads it.
+
+## 2026-11-17 — C / OF 08.01 averaged a slotting leg's missing LGD and maturity in as zero, on the class sheet the Totals had already been fixed beside
+
+- **Defect**: C / OF 08.01 (and 08.02) columns 0230 (LGD), 0240 and 0250
+  (maturity) were weighted by every leg's exposure value, and `cellspec`'s
+  `WeightedAvg` fills a null parameter with 0.0 while keeping the leg's weight.
+  A slotting leg carries neither parameter, so a row of slotting exposure alone
+  reported 0.0, and a row holding F-IRB specialised lending beside slotting
+  reported a diluted average. On every registered portfolio with slotting
+  (`rich`, `crm-substitution`, `irb-shapes`) the specialised-lending sheet is
+  slotting-only: 16 filed 0.0 facts on Basel 3.1 OF08.01.01.01 sheet 0010 (rows
+  0010 / 0020, and 0030 / 0034 on `irb-shapes`, c0230 and c0250), and 0.0 on
+  CRR `specialised_lending` rows 0010 / 0020 / 0030 / 0080. CRR's corporate
+  sheet, which keeps corporate slotting beside corporate F-IRB, was diluted.
+- **Rule**: PS1/26 Annex II §3.3.3 p.111, column 0250: *"This column shall
+  therefore not be filled in for the exposure class 'retail' or for exposures
+  subject to the slotting approach"*; column 0230: *"Data shall not be reported
+  for specialised lending exposures subject to the slotting approach"*. Reg (EU)
+  2021/451 Annex II p.103 excludes slotting from C 08.01 column 0230; p.104
+  names only retail for column 0250 (the CRR cell is left out because no
+  Article 162 maturity is carried for slotting; P2.104 asks whether CRR should
+  report one). No published rule sees it: `boe_b0314_1_5` (">= 0") passes a
+  zero, and `boe_b0749` (Total 0002 = sum of its sheets) omits column 0250.
+- **Origin**: `src/rwa_calc/reporting/corep/c08.py` (the c0230 / c0240 / c0250
+  bindings) over `src/rwa_calc/reporting/cellspec.py::_cell_aggregation`.
+- **Escape class**: `caught-and-parked`. The same defect was fixed twice beside
+  this cell and left here: the Totals average only legs that carry the parameter
+  (`c08_sheets._averaged_cells`, held by `test_c08_total_sheets.py`), and column
+  0010 got that rule on the class sheet in `e8cb71c`, whose escape entry recorded
+  the CRR slotting PD 0.0. P2.74 was filed the same day with the fix's shape and
+  stayed open; the filing ratchet banked the eight zero cells as placed.
+  Underneath, `no-gate-exists`: nothing asserted that a class-sheet average
+  leaves out a leg with no value, and no published rule can.
+- **Gate change**: `tests/unit/reporting/corep/test_c08_01_slotting_parameters.py`
+  — a mixed specialised-lending sheet in both regimes (an F-IRB leg whose LGD and
+  maturity must survive beside a slotting leg whose weight must leave, with an
+  adequacy assertion that the diluted average differs), a slotting-only sheet,
+  the CRR corporate sheet, and a structural check that every `WeightedAvg` the
+  shared C / OF 08.01-08.02 spec binds is weighted by `parameter_weight` of its
+  own parameter, so an average added later with a raw exposure weight fails;
+  `tests/acceptance/reporting/test_of0801_slotting_parameters.py` on the three
+  registered portfolios in both regimes (no c0230 / c0250 on the sheet, none
+  filed on sheet 0010; Total 0002 held to the ledger).
+- **Verified red** (against `c8e699a`, the parent): unit `10 failed, 2 passed` —
+  `assert 597.2727272727274 == 1314.0` (c0250, mixed sheet, both regimes),
+  `assert 0.17272727272727273 == 0.38` (c0230), `assert 0.0 is None`
+  (slotting-only sheet), `assert 790.8333333333333 == 976.9117647058823` (CRR
+  corporate); acceptance `9 failed, 6 passed` — `assert {('0010', '02...0'):
+  0.0, ...} == {}` on all six sheets and filed facts `assert 4 == 0` (`rich`,
+  `crm-substitution`) and `assert 8 == 0` (`irb-shapes`). The structural check
+  (added after) is red under the one-change mutation that restores c0250's raw
+  `ead_final` weight (`('specialised_lending', ('0010', '0250')): 'ead_final'`
+  and the other c0250 places, on C 08.01 and C 08.02 in both regimes), beside
+  the five value tests for c0250.
+- **What the fix moved**: no RWA. Goldens: b31 `specialised_lending_firb_slotting`
+  rows 0010 / 0020 c0230 / c0250 and crr `specialised_lending` rows 0010 / 0020 /
+  0080 c0230 / c0250, 0.0 → empty (10 cells). Register: `boe_b0742` on
+  `irb-shapes` 86 → 85 held (the sheet 0010 c0250 place is no longer evaluated by
+  the gateway); no entry added or removed. Filing `placed_cells` 4289 → 4281;
+  coverage `cells_live` 10146 → 10130, both deliberate falls (each a zero that
+  was not a parameter). Three Basel 3.1 golden referee returns change and need a
+  fresh Arelle run: `b31/rich` and `b31/crm-substitution` file 4 fewer facts,
+  `b31/irb-shapes` 8 fewer.
+- **Not fixed here**: column 0240 files 0.0 on every class sheet with no large
+  financial sector entity (P2.103); no registered portfolio holds F-IRB
+  specialised lending beside slotting, so the mixed case is unit-tested only
+  (P2.105); OF / C 09.02 column 0080 still averages slotting as PD 0 (P2.85).
+- **Lesson**: a fix to an averaging rule in one place (the Totals, then column
+  0010) is a statement about every average with the same binding. Grep for the
+  binding, not the column: the structural check now does it for C / OF 08.01-08.02.

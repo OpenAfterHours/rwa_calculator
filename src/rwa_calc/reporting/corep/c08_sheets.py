@@ -69,10 +69,10 @@ kinds of cell are not a sum:
   exposures the Total covers that CARRY the parameter, weighted as the sheets
   weight it and measured over each sheet's own plan, so a sheet that does not
   report the cell contributes nothing to it. A leg with no value is left out,
-  not averaged in as a zero: a slotting exposure has no maturity and no LGD
-  (Annex II column 0250: "not be filled in ... for exposures subject to the
-  slotting approach"), and on the FIRB-and-slotting Total it sits beside the
-  F-IRB legs of every other sheet.
+  not averaged in as a zero: the engine seals no LGD and no maturity on a
+  slotting leg, Annex II keeps slotting out of both columns (below), and on the
+  FIRB-and-slotting Total a slotting leg sits beside the F-IRB legs of every
+  other sheet.
 - COLUMN 0250 IS LISTED BY ``boe_b0748`` AND IS AN AVERAGE ALL THE SAME. Annex II
   defines it as the exposure-weighted average maturity in days. A sum of
   averages is not a figure, so the AIRB Total reports the average and
@@ -84,11 +84,18 @@ kinds of cell are not a sum:
 - A RATE DERIVED FROM OTHER CELLS (OF 08.05 column 0040, the observed default
   rate) is re-derived from the Total's own counts.
 
-COLUMN 0010 ON A CLASS SHEET FOLLOWS THE SAME RULE (recorded fix 2026-11-16).
-The PD a row reports is the exposure-weighted average of the post-input-floor
-PD (``pd_floored``) over the row's legs that CARRY a PD (``pd_average``, weighted
-by ``PD_WEIGHT``); a slotting leg is left out, not averaged in as a zero, so a
-row of slotting exposure alone reports no PD. (``pd_floored`` is sealed by the
+COLUMNS 0010, 0230 / 0240 AND 0250 ON A CLASS SHEET FOLLOW THE SAME RULE
+(recorded fixes 2026-11-16, PD, and 2026-11-17, LGD and maturity). Each is the
+exposure-weighted average of its parameter over the row's legs that CARRY it
+(``parameter_average``, weighted by ``parameter_weight``: the exposure value
+where the leg carries the parameter, else null); a slotting leg is left out,
+not averaged in as a zero, so a row of slotting exposure alone reports none of
+the three, and a row that holds F-IRB specialised lending beside slotting (both
+are on Basel 3.1 sheet 0010, and CRR keeps corporate slotting on its corporate
+sheet) reports the F-IRB legs' figure, not a diluted one.
+
+The PD a row reports is the post-input-floor PD (``pd_floored``,
+``pd_average``). (``pd_floored`` is sealed by the
 IRB formula path only — ``engine/irb/formulas.py`` and ``engine/irb/transforms.py``
 — as the larger of the input PD and the floor, so every F-IRB / A-IRB leg
 carries one and no slotting leg does.) CRR Annex II C 08.01 column 0010
@@ -103,6 +110,25 @@ shades column 0010 on rows 0080 (slotting) and 0170 (free deliveries), and the
 PRA001 taxonomy has no cell there: a PD filed on row 0080 is refused. One
 definition for both regimes — under CRR a slotting-only row used to report a
 PD of 0.0, which is not a PD.
+
+LGD and maturity are excluded from slotting by the instruction itself, not by
+an absence of risk-weight dependence: maturity sets a slotting risk weight in
+both regimes (PS1/26 Art. 153(5)(d), "if less than 2.5 years remain until
+maturity"; CRR Art. 153(5) Table 1). PS1/26 Annex II §3.3.3 p.111, column 0230:
+"Data shall not be reported for specialised lending exposures subject to the
+slotting approach"; column 0250: "This column shall therefore not be filled in
+for the exposure class 'retail' or for exposures subject to the slotting
+approach". Reg (EU) 2021/451 Annex II says the same of C 08.01 column 0230
+(p.103: "Data shall not be reported for specialised lending exposures referred
+to in Article 153(5) CRR") but of column 0250 names retail only (p.104: "That
+means that this column shall not be filled in for the exposure class
+'retail'"). The CRR cell is left out all the same, because the engine seals no
+Article 162 maturity on a slotting leg — one definition for both regimes, as
+column 0010 has; whether CRR C 08.01 should report a slotting maturity is open
+(IMPLEMENTATION_PLAN.md P2.74). The exclusion is per LEG, not per sheet: sheet
+0010 also holds F-IRB specialised lending, whose LGD and maturity are reported,
+so binding the column to no figure on the sheet (``sheet_spec``, the retail
+mechanism below) would blank them.
 
 WHAT A SHEET DOES NOT REPORT (recorded fix 2026-11-16). Two kinds of cell are
 left out, by different mechanisms:
@@ -159,8 +185,9 @@ References:
 - PRA PS1/26 Annex I OF 08.01 (column 0010); Annex II §3.3.1-§3.3.5, §3.3.7
   (OF 08.01 / 08.02 / 08.03 / 08.05)
 - Reg (EU) 2021/451 Annex II §3.3 (C 08.01-08.05, the CRR sheets)
-- PRA PS1/26 Annex II §3.3.3 columns 0250 (p.111) and 0254 (p.112), §3.3.4
-  (p.118); Reg (EU) 2021/451 Annex II C 08.01 column 0250 (p.104)
+- PRA PS1/26 Annex II §3.3.3 columns 0230 / 0250 (p.111) and 0254 (p.112),
+  §3.3.4 (p.118); Reg (EU) 2021/451 Annex II C 08.01 columns 0230 (p.103) and
+  0250 (p.104); PS1/26 Art. 153(5)(d)
 - Bank of England Banking Taxonomy v4.1.1: ``boe_b0206``, ``boe_b0356``,
   ``boe_b0410``, ``boe_b0748``, ``boe_b0749``, ``boe_b0749_1``, ``boe_b1041``;
   known-issues log (November 2026) item 25
@@ -226,13 +253,24 @@ REPORTED_ROWS: Final[dict[str, frozenset[str]]] = {
     irb_sheets.TOTAL_FIRB_SLOTTING_KEY: frozenset({"0080"}),
 }
 
-#: The weight of the column-0010 PD average: a leg's exposure value where it
-#: carries a PD, else null, so a leg with no PD weighs nothing (module docstring).
-PD_WEIGHT: Final = "c08_pd_weight"
+#: The parameters C / OF 08.01-08.02 report as exposure-weighted averages — the
+#: post-input-floor PD (column 0010), either LGD carrier (0230 / 0240) and the
+#: maturity (0250). Each is averaged over the legs that CARRY it, weighted by
+#: ``parameter_weight``: a leg's exposure value where it carries the parameter,
+#: else null, so a leg with no value weighs nothing (module docstring).
+AVERAGED_PARAMETERS: Final[tuple[str, ...]] = (
+    "pd_floored",
+    "lgd_floored",
+    "lgd_input",
+    "irb_maturity_m",
+)
 
-#: The PD the column reports (post-input-floor) and the exposure value it is
-#: weighted by — the source of ``PD_WEIGHT``.
+#: The PD column 0010 reports, the maturity column 0250 reports (in years; the
+#: column is in days), and the exposure value (column 0110) every average is
+#: weighted by.
 _PD: Final = "pd_floored"
+_MATURITY_YEARS: Final = "irb_maturity_m"
+_DAYS_PER_YEAR: Final = 365.0
 _EXPOSURE_VALUE: Final = "ead_final"
 
 _TOTAL_KEYS: Final[tuple[str, ...]] = tuple(
@@ -501,31 +539,55 @@ def reported_sheets(  # noqa: PLR0913 - with_total_sheets' inputs plus the switc
 
 
 # =============================================================================
-# The PD column (0010)
+# The averaged parameters (columns 0010, 0230 / 0240, 0250)
 # =============================================================================
 
 
-def pd_weight_exprs(cols: set[str]) -> list[pl.Expr]:
-    """The derived ``PD_WEIGHT`` column — a leg's exposure value where it carries
-    a PD, else null — on a frame that seals both; nothing otherwise.
+def parameter_weight(parameter: str) -> str:
+    """The derived column ``parameter``'s average is weighted by: a leg's exposure
+    value where it carries ``parameter``, else null (``parameter_weight_exprs``)."""
+    return f"c08_weight_{parameter}"
+
+
+def parameter_weight_exprs(cols: set[str]) -> list[pl.Expr]:
+    """The ``parameter_weight`` column of every ``AVERAGED_PARAMETERS`` member the
+    frame seals; nothing on a frame without the exposure value.
 
     ``cols`` is the frame's columns before the derived ones are added.
     """
-    if _PD not in cols or _EXPOSURE_VALUE not in cols:
+    if _EXPOSURE_VALUE not in cols:
         return []
-    return [pl.when(pl.col(_PD).is_not_null()).then(pl.col(_EXPOSURE_VALUE)).alias(PD_WEIGHT)]
+    return [
+        pl.when(pl.col(parameter).is_not_null())
+        .then(pl.col(_EXPOSURE_VALUE))
+        .alias(parameter_weight(parameter))
+        for parameter in AVERAGED_PARAMETERS
+        if parameter in cols
+    ]
+
+
+def parameter_average(parameter: str, *, scale: float = 1.0) -> WeightedAvg:
+    """The binding of an averaged-parameter column: the exposure-weighted average
+    of ``parameter`` over the legs that carry it (module docstring).
+
+    Weighted by ``parameter_weight(parameter)``, which ``parameter_weight_exprs``
+    derives on a frame that seals ``parameter`` and ``ead_final``. On any other
+    frame one of the two columns is absent, and a ``WeightedAvg`` over an absent
+    column is an empty cell.
+    """
+    return WeightedAvg(parameter, weight=parameter_weight(parameter), scale=scale)
 
 
 def pd_average() -> WeightedAvg:
-    """The column-0010 binding: the exposure-weighted post-input-floor PD over the
-    legs that carry a PD (module docstring; CRR Annex II C 08.01 column 0010,
-    PS1/26 Annex I OF 08.01 column 0010).
+    """Column 0010: the post-input-floor PD over the legs that carry a PD (CRR
+    Annex II C 08.01 column 0010, PS1/26 Annex I OF 08.01 column 0010)."""
+    return parameter_average(_PD)
 
-    Weighted by ``PD_WEIGHT``, which ``pd_weight_exprs`` derives on a frame that
-    seals both ``pd_floored`` and ``ead_final``. On any other frame one of the two
-    columns is absent, and a ``WeightedAvg`` over an absent column is an empty cell.
-    """
-    return WeightedAvg(_PD, weight=PD_WEIGHT)
+
+def maturity_average() -> WeightedAvg:
+    """Column 0250: the maturity in days over the legs that carry one (PS1/26
+    Annex II p.111; ``irb_maturity_m`` is in years despite its suffix)."""
+    return parameter_average(_MATURITY_YEARS, scale=_DAYS_PER_YEAR)
 
 
 def no_figure(_cells: Mapping[str, float | None], _prior_available: bool) -> None:

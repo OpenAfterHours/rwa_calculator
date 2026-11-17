@@ -246,8 +246,11 @@ def test_the_maturity_of_a_total_is_an_exposure_weighted_average(
 
 def _slotting_without_parameters() -> pl.LazyFrame:
     """The book with no maturity and no LGD on the slotting legs, as the engine
-    seals them: slotting risk-weights by category (Art. 153(5)), so neither is
-    an element of its risk-weighted exposure amount."""
+    seals them. Not because neither is an element of a slotting risk weight -
+    maturity is one (PS1/26 Art. 153(5)(d); CRR Art. 153(5) Table 1) - but
+    because slotting weights by category and the engine carries no Article 162
+    maturity or LGD for it; PS1/26 Annex II p.111 keeps slotting out of columns
+    0230 and 0250 by name."""
     slotting = [leg.reference for leg in SLOTTING_LEGS]
     return irb_book().with_columns(
         pl.when(pl.col("exposure_reference").is_in(slotting))

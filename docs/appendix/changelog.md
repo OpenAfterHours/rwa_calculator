@@ -579,6 +579,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out; a sheet holding only slotting reports it empty. The CRR specialised-lending
   sheet now reports column 0010 empty, not 0.0, when all its exposures are
   slotted.
+- **REPORTING: C / OF 08.01 LGD (column 0230) and maturity (column 0250) leave
+  slotting exposures out.** Each is the exposure-weighted average over the
+  exposures that carry the parameter, as the PD (column 0010) already was. A row
+  holding only slotting exposure now reports both columns empty, not 0.0: on the
+  specialised-lending sheet (Basel 3.1 sheet 0010, CRR `specialised_lending`),
+  that is rows 0010 and 0020 in every portfolio with slotting. A row holding F-IRB
+  specialised lending beside slotting reports the F-IRB figure, no longer diluted;
+  so does the CRR corporate sheet, which keeps corporate slotting beside corporate
+  F-IRB. PS1/26 Annex II p.111 excludes slotting from both columns; CRR Annex II
+  excludes it from column 0230 only, and the CRR maturity cell is left empty
+  because no maturity is carried for slotting. The FIRB-and-slotting Total is
+  unchanged. No RWA changes; anything that reads these cells from the export must
+  accept an empty cell.
 - **REPORTING: OF 08.01 reports only the cells its published sheet has.**
   - Basel 3.1: cells the PRA taxonomy does not publish on a given sheet are
     empty; 60 figures had no place in a return.

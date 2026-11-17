@@ -127,6 +127,7 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 | **Removed** | 0220 | Double default treatment (removed in Basel 3.1) |
 | **Removed** | 0255–0257 | Supporting factor columns (SME and infrastructure factors removed) |
 | **Unchanged** | 0010 | PD column — kept on every sheet (PS1/26 Annex I, PRA001 taxonomy); no cell on rows 0080 (slotting) and 0170 (free deliveries). Both regimes report the exposure-weighted post-input-floor PD of the legs that carry one |
+| **Changed** | 0250 | Maturity — PS1/26 Annex II p.111 excludes "exposures subject to the slotting approach" as well as retail; CRR Annex II p.104 names retail only. Column 0230 (LGD) excludes slotting in both (PS1/26 p.111, CRR p.103). The calculator reports both columns, in both regimes, as the exposure-weighted average over the legs that carry the parameter, so a slotting leg is left out and a row of slotting exposure alone reports neither |
 
 ### Row Changes
 

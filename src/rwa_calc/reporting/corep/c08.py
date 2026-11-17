@@ -219,8 +219,8 @@ Cell semantics (recorded decisions, this slice):
   the after-all-CRM total 0104 (= 0090 + 0101 + 0102 on the REPORTED signs,
   ``_c08_after_all_crm``; another post-execute pass because the executor refuses a
   formula that references a formula and all three inputs are ``Formula`` cells),
-  EAD-weighted LGD and PD (PD over legs carrying one: ``c08_sheets.pd_average``),
-  maturity in DAYS (x365 — ``irb_maturity_m`` is years despite the suffix), LFSE
+  EAD-weighted PD, LGD and maturity, each over the legs that carry it (a slotting
+  leg carries none: ``c08_sheets.parameter_average``), maturity in DAYS, LFSE
   sub-splits gated on ``cp_apply_fi_scalar`` presence, defaulted sub-splits
   via the retired detection ladder, CRR supporting-factor deltas (the
   asymmetric dedicated flag names preserved), B31 adjustment/output-floor
@@ -403,9 +403,11 @@ from rwa_calc.reporting.corep.c08_sheets import (
     BASIS,
     inflow_sheet_key,
     irb_population,
+    maturity_average,
     non_slotting,
+    parameter_average,
+    parameter_weight_exprs,
     pd_average,
-    pd_weight_exprs,
     reported_sheets,
     sheet_keys,
     sheet_plans,
@@ -595,8 +597,8 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
             .alias("c08_bs")
         )
 
-    # The col 0256 disjointness flag (see c07.py) and the col 0010 PD weight (c08_sheets).
-    exprs.extend([*sf_infra_flag_exprs(cols), *pd_weight_exprs(cols)])
+    # The col 0256 disjointness flag (see c07.py) and the averaged-parameter weights (c08_sheets).
+    exprs.extend([*sf_infra_flag_exprs(cols), *parameter_weight_exprs(cols)])
 
     # Supporting-factor RWEA delta (CRR cols 0256/0257).
     if "rwa_pre_factor" in cols:
@@ -843,21 +845,19 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         "0200": CellSpec(Sum("reporting_crm_lgd_other_physical"), predicate=member),
         "0210": CellSpec(Sum("reporting_crm_lgd_receivables"), predicate=member),
         "0220": CellSpec(Sum("double_default_unfunded_protection"), predicate=member),
+        # 0230 / 0240 / 0250 average over the legs that CARRY an LGD / maturity, so a
+        # slotting leg is left out, not averaged in as a zero (c08_sheets docstring).
         "0230": (
-            CellSpec(WeightedAvg(lgd_col, weight=ead_col), predicate=member, empty_cell="null")
+            CellSpec(parameter_average(lgd_col), predicate=member, empty_cell="null")
             if lgd_col is not None
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
         "0240": (
-            _lfse_cell(cols, lambda: WeightedAvg(lgd_col, weight=ead_col), origin)
+            _lfse_cell(cols, lambda: parameter_average(lgd_col), origin)
             if lgd_col is not None
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
-        "0250": CellSpec(
-            WeightedAvg("irb_maturity_m", weight=ead_col, scale=365.0),
-            predicate=member,
-            empty_cell="null",
-        ),
+        "0250": CellSpec(maturity_average(), predicate=member, empty_cell="null"),
         # The RWEA block is POST-basis with the exposure value it weights:
         # Art. 153/154 applied to col 0110's population, so 0251-0254 foot into
         # 0260 and (under CRR) 0255 + 0256 + 0257 = 0260, on one population.

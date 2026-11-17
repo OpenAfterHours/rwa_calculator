@@ -998,9 +998,10 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     slotting sheets, and a firm on one approach reports one Total. Amounts and counts are the
     sum of the sheets (the Bank's rules `boe_b0748` and `boe_b0749`). An exposure-weighted
     average (PD, LGD, maturity) is the average over the exposures the Total covers that carry
-    the parameter — a slotting exposure has no maturity and does not dilute it, and a retail
-    sheet reports none, so the AIRB Total's maturity is the average over its non-retail
-    legs. The OF 08.05 observed default rate is re-derived from the Total's own counts.
+    the parameter — a slotting exposure carries no LGD or maturity and does not dilute
+    them, and a retail sheet reports no maturity, so the AIRB Total's maturity is the
+    average over its non-retail legs. A class sheet averages LGD and maturity the same
+    way ("Not every row carries every column, and not every sheet every column", below). The OF 08.05 observed default rate is re-derived from the Total's own counts.
     `boe_b0748` also lists column 0250 (maturity) as a sum; the Total reports the average,
     so that rule breaks on column 0250 wherever two non-retail AIRB sheets report a
     maturity. A Total has no drill-down of its own: open the same cell on a class sheet.
@@ -1233,6 +1234,21 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     only. The Bank's known-issues log (item 25) asks firms to *"report this data in the total
     AIRB sheet s0001 but do not report it separately until the next taxonomy update"* — so
     that netting is in Total 0001 and not on sheet 0019. The CRR layout is unchanged.
+
+    And one kind of **exposure** is left out of cells it is on: **slotting exposures in the
+    LGD and maturity columns** (0230, 0240, 0250), both regimes. They are left out per
+    exposure, not per sheet, because sheet 0010 holds F-IRB
+    specialised lending beside slotting and its LGD and maturity are reported. Each column
+    is the exposure-weighted average over the row's legs that carry the parameter, as
+    column 0010 (PD) is, so a slotting leg (which carries neither) is left out rather than
+    averaged in as zero. PS1/26 Annex II p.111, column 0230: *"Data shall not be reported
+    for specialised lending exposures subject to the slotting approach"*; column 0250:
+    *"... or for exposures subject to the slotting approach"*. CRR Annex II excludes slotting
+    from column 0230 (p.103) but names only retail for column 0250 (p.104); the CRR cell is
+    left out too, because the engine carries no Article 162 maturity for a slotting
+    exposure. Before 2026-11-17 a row of slotting exposure alone reported 0.0 in both
+    columns, and a row holding F-IRB specialised lending beside slotting reported a
+    diluted average.
 
 ### Row Structure
 

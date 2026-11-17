@@ -212,6 +212,7 @@ from rwa_calc.observability import loggable
 from rwa_calc.reporting.cellspec import subset_rows
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.kernel import available_columns, ensure_gross_side_carriers
+from rwa_calc.reporting.kernel.rw_parts import RW_PART_COL
 from rwa_calc.reporting.lineage import LINEAGE_PLANS, describe_cell
 from rwa_calc.reporting.membership import MEMBERSHIP_TEMPLATE_IDS, cell_membership
 
@@ -1823,7 +1824,8 @@ def _comparison_key(columns: Iterable[str], key_column: str) -> pl.Expr:
     ``_BASE_COLUMN``, where ``_same_base`` reads it to tell a decomposition
     difference from a scope one; the group key stays the LEG. Grouping on it
     instead is the change this paragraph forbids: ``_group_legs`` prices each key
-    with ``.first()`` (a leg legitimately appears on several ROWS of one group),
+    (each part of one, for a loan-split leg) with ``.first()`` (a leg
+    legitimately appears on several ROWS of one group),
     so collapsing two different legs onto one base key there would keep one leg's
     money and silently discard the other's, against the distinct-leg total the
     migration matrix's own docstring states as an invariant. Measured on the
@@ -2197,6 +2199,18 @@ def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price
       place. Both cases are WARNED about; neither drops the leg, because a leg
       whose row cannot be decided is not a leg that carries no money.
 
+    A KEY CAN HOLD TWO PARTS, AND THEY ARE ADDED, NOT PICKED. OF 07.00 reports a
+    Basel 3.1 loan-split exposure in two parts (``reporting/kernel/rw_parts.py``):
+    one key, two membership rows on the total row, the secured part alone on its
+    20% / 60% row and the residual alone on its Art. 124L row, each with its own
+    share of the money (``reporting/membership.py::_LEG_COLUMNS``). So each
+    ``(key, RW_PART_COL)`` is priced once and the parts are summed. Priced per key
+    alone, ``.first()`` kept one part: on ``b31/rich`` the real-estate exposure
+    value came out 10,366,666.67 against the 10,400,000 reported, the residual
+    part's 33,333.33 gone (``tests/integration/test_return_recon_loan_split.py``).
+    A two-part leg's leaves are its parts' rows together, so it sits in two leaf
+    rows and is bucketed ``UNDECIDABLE_ROW`` with all of its money.
+
     THE BASE EXPOSURE RIDES ALONG AND KEYS NOTHING. ``_BASE_COLUMN`` is
     ``_comparison_key`` evaluated per leg and carried as a column, so
     ``_same_base`` can ask whether the other side holds this exposure elsewhere
@@ -2226,6 +2240,7 @@ def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price
     legs = legs.filter(pl.col("predicate_key") == predicate_key).select(
         pl.col(key_column).cast(pl.String()).alias(key_column),
         _comparison_key(legs.columns, key_column).alias(_BASE_COLUMN),
+        pl.col(RW_PART_COL),
         pl.col("row_ref"),
         pl.col(money_column),
         pl.col("is_parent_row"),
@@ -2240,7 +2255,9 @@ def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price
             }
         )
 
-    priced = legs.group_by(key_column).agg(
+    # Priced once per PART, then the parts added: a loan-split leg is two parts
+    # under one key, each on its own rows with its own share of the money.
+    parts = legs.group_by(key_column, RW_PART_COL).agg(
         pl.col(money_column).first().alias(money_column),
         pl.col(money_column).n_unique().alias("_prices"),
         # An IDENTITY, not a price: every membership row of one leg carries the
@@ -2249,6 +2266,15 @@ def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price
         pl.col(_BASE_COLUMN).first().alias(_BASE_COLUMN),
         pl.col("row_ref")
         .filter(pl.col("is_parent_row").fill_null(value=True).not_())
+        .unique()
+        .alias("_leaves"),
+    )
+    priced = parts.group_by(key_column).agg(
+        pl.col(money_column).sum().alias(money_column),
+        pl.col("_prices").max().alias("_prices"),
+        pl.col(_BASE_COLUMN).first().alias(_BASE_COLUMN),
+        pl.col("_leaves")
+        .list.explode(keep_nulls=False, empty_as_null=False)
         .unique()
         .alias("_leaves"),
     )
@@ -2294,7 +2320,8 @@ def _warn_placement(
     if prices:
         logger.warning(
             "row_migration: %s — %d leg(s) carry more than one value for the money column "
-            "across their membership rows; the first is used and the matrix may be wrong",
+            "across the membership rows of one part; the first is used and the matrix may "
+            "be wrong",
             where,
             prices,
         )

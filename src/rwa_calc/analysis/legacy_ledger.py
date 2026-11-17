@@ -202,6 +202,17 @@ different footing from ours):
   is then reported with no matching col 0100 / col 0080 inflow anywhere in the
   estate. This one IS flagged, on the inflow cell.
 
+AND THREE BASEL 3.1 OF 07.00 PLACEMENTS NO MAPPING CAN KEY, which ARE recorded
+in ``LedgerCoverage`` (``unavailable_rows``), because the row a figure lands on
+changes: memorandum rows 0300 / 0320 reach the class sheets only through
+``reporting_class_pre_default``; a loan-split exposure is reported in two parts
+only through the ``sa_loan_split_*`` carriers; transitional equity reaches its
+Article 133 row 0250 / 0261 only through ``risk_weight_pre_equity_transitional``.
+``recon_registry`` targets none of them, so a projection keeps the defaulted
+memorandum leg on the Total alone and bands the loan and the equity on their
+applied weights. ``return_recon`` gates on ``unavailable_cells`` only, so a
+compare surface must read ``unavailable_rows`` to say so.
+
 References:
 - docs/plans/return-reconciliation.md, Phase 2 (the legacy ledger projection)
 - Reg (EU) 2021/451 Annex II: C 07.00, C 08.01, C 08.03, C 08.06
@@ -220,6 +231,7 @@ from rwa_calc.analysis.recon_registry import (
     LEDGER_CARRIERS_BY_NAME,
     RECONCILABLE_COMPONENTS_BY_NAME,
 )
+from rwa_calc.contracts.edges import LOAN_SPLIT_CARRIERS, REPORTING_CLASS_PRE_DEFAULT_COL
 from rwa_calc.data.schemas import (
     VALID_PROTECTION_TYPES,
     VALID_SL_TYPES,
@@ -662,6 +674,21 @@ def _sa_band_rows(framework: str) -> tuple[str, ...]:
     return tuple(row.ref for row in sections[_SA_BAND_SECTION].rows)
 
 
+def _b31_sa_band_rows(framework: str) -> tuple[str, ...]:
+    """C 07.00's risk-weight band rows, on the Basel 3.1 layout only."""
+    return _sa_band_rows(framework) if framework == _BASEL_3_1 else ()
+
+
+def _b31_memo_default_rows(framework: str) -> tuple[str, ...]:
+    """OF 07.00 memorandum rows 0300 / 0320, which only Basel 3.1 sheets by class."""
+    return _MEMO_DEFAULT_ROWS if framework == _BASEL_3_1 else ()
+
+
+def _b31_equity_article_133_rows(framework: str) -> tuple[str, ...]:
+    """OF 07.00 rows 0250 / 0261 and the row 0280 a transitional weight falls to."""
+    return _EQUITY_ARTICLE_133_ROWS if framework == _BASEL_3_1 else ()
+
+
 def _slotting_rows(framework: str) -> tuple[str, ...]:
     """C 08.06's framework-shaped category x maturity row axis."""
     return tuple(row_ref for row_ref, _label, _is_short, _rw in get_c08_06_rows(framework))
@@ -676,6 +703,17 @@ def _ccf_rows(framework: str) -> tuple[str, ...]:
 #: Section index of C 07.00's risk-weight band rows, mirroring the dispatch in
 #: ``corep/c07.py::_terms_for_row`` (``section_index == 2``).
 _SA_BAND_SECTION: int = 2
+
+_BASEL_3_1: str = "BASEL_3_1"
+
+#: OF 07.00 memorandum rows 0300 / 0320: on Basel 3.1 the "in default" class on
+#: the sheet of the class before default (Annex II para 54, p.97).
+_MEMO_DEFAULT_ROWS: tuple[str, ...] = ("0300", "0320")
+
+#: Transitional equity's Article 133 rows (250% / 400%, Annex II p.95-96) and row
+#: 0280 "Other risk weights", where a transitional weight (160% / 220% in 2027)
+#: lands when the Article 133 weight is not carried.
+_EQUITY_ARTICLE_133_ROWS: tuple[str, ...] = ("0250", "0261", "0280")
 
 #: Row-axis dependencies: columns that decide WHICH ROWS a sheet emits rather
 #: than what a column reports. A mapping can populate every column of C 07.00 and
@@ -737,6 +775,32 @@ LEDGER_ROW_AXIS: Mapping[str, tuple[RowAxisRequirement, ...]] = {
             ("0380",),
             _needs("currency_mismatch_multiplier_applied"),
             "currency-mismatch row",
+        ),
+        # Three Basel 3.1 placements read a sealed carrier NO mapping can target
+        # (recon_registry has no component or carrier for any of them), so on a
+        # projected ledger these rows are always unkeyable — named, never shown
+        # as measured differences (tests/integration/test_legacy_ledger_b31_carriers.py).
+        RowAxisRequirement(
+            (),
+            _needs(REPORTING_CLASS_PRE_DEFAULT_COL),
+            "memorandum default rows on the class before default (B31)",
+            rows_for=_b31_memo_default_rows,
+        ),
+        # A loan-split exposure is reported in two parts (kernel/rw_parts.py): the
+        # secured part on its 20% / 60% row, the residual on its Art. 124L
+        # counterparty weight, which can be any band. Without the carriers the
+        # whole loan bands on its blended weight (row 0280 on b31/rich).
+        RowAxisRequirement(
+            (),
+            _needs(*LOAN_SPLIT_CARRIERS),
+            "loan-split two-part risk-weight rows (B31)",
+            rows_for=_b31_sa_band_rows,
+        ),
+        RowAxisRequirement(
+            (),
+            _needs("risk_weight_pre_equity_transitional"),
+            "transitional equity Article 133 rows (B31)",
+            rows_for=_b31_equity_article_133_rows,
         ),
     ),
     "c08_01": (

@@ -651,10 +651,14 @@ def c07_plans(
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
-    # A loan-split exposure is reported in its two parts (module docstring).
+    # A loan-split exposure is reported in its two parts (module docstring). The
+    # leg money membership publishes per row (ead_final, rwa_final) is split too,
+    # even where no cell sums it: rwa_col is rwa_pre_floor wherever the floor ran,
+    # and a part carrying the whole leg's rwa_final doubles it for every per-leg
+    # reader of this frame (reporting/membership.py, analysis/return_recon.py).
     if rw_parts.has_two_part_rows(sa_df):
-        rwea_cols = frozenset({rwa_col, "rwa_pre_factor", "c07_sf_delta"})
-        exposure_cols = (rw_parts.summed_columns(spec) - rwea_cols) | {_UNFUNDED_COL}
+        rwea_cols = frozenset({rwa_col, "rwa_final", "rwa_pre_factor", "c07_sf_delta"})
+        exposure_cols = (rw_parts.summed_columns(spec) - rwea_cols) | {_UNFUNDED_COL, ead_col}
         split = rw_parts.split_risk_weight_parts(
             sa_df, exposure_cols=exposure_cols, rwea_cols=rwea_cols
         )

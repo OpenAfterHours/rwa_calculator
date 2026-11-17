@@ -556,7 +556,8 @@ class MigrationMovers:
     the band boundary crossed, read straight off the matrix's own axis labels —
     so this panel states what moved and where to without quoting a PD at all.
     That is not modesty: ``reporting/membership.py::_LEG_COLUMNS`` publishes two
-    identity columns, three placement carriers and two money columns and no PD,
+    identity columns, a part label, three placement carriers and two money
+    columns and no PD,
     so quoting one would mean widening ``MEMBERSHIP_SCHEMA``.
 
     ``note`` is never empty and states which of three cases the table is: a cap

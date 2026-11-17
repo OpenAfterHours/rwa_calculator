@@ -306,12 +306,19 @@ worker that finished with every assertion answered and no error or exception
 logged is stored, and an entry whose digest line does not match it is
 recomputed. `--no-cache` runs every worker and stores nothing.
 
+A cached result freezes one sample of a worker's `examples` (the first few
+evaluation messages and the facts they bind). Arelle does not pick the same
+sample from one run to the next, even on identical inputs, so two raw chunk
+files can differ in their examples while their verdicts, counts and messages
+are identical. Examples are not gated; compare the assertions and messages,
+never the raw files, when checking a cached run against a fresh one.
+
 | Full run, 16 golden returns (51 workers), 4 cores / 16 GB | Wall time |
 |---|---|
 | Before: one worker at a time, each closing its session | 49 min |
 | No cache, 2 workers at once (the default here) | 16–17 min |
 | No cache, `--jobs 3` (11.8 GB at the peak, 2.7 GB left) | 12.7 min |
-| Cache cold (filled by the run) | 16.5 min |
+| Cache cold (filled by the run; measured before the cache key took in every Arelle distribution) | 16.5 min |
 | Cache warm, 3 returns changed (10 of 51 workers run) | 5.4 min |
 | Cache warm (no return changed) | 40–46 s |
 

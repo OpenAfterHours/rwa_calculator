@@ -195,6 +195,11 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ---
 
 ### Fixed
+- **Two log lines no longer echo file content (CWE-117 log injection).** The referee
+  runner logged an Arelle message code from a worker's result when it declined to
+  cache that result, and a release build logged the previous issue register's open
+  issue ids and release names. Both now log fixed wording and a count; the code and
+  the ids stay in the files they came from.
 - **`rulebook deny-list check` without `--known-issues` no longer reports a
   current list out of date.** The known-issue numbers come from the
   known-issues log alone, so a check run without it rebuilt every entry with no

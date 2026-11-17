@@ -14,6 +14,7 @@ the package). Formula reach on the real publication is what the opt-in
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import zipfile
 from dataclasses import dataclass
@@ -441,3 +442,28 @@ def test_a_release_built_for_the_first_time_starts_with_an_empty_issue_register(
     # Assert
     payload = json.loads(register.read_text(encoding="utf-8"))
     assert (payload["release"], payload["issues"]) == (VERSION, [])
+
+
+def test_the_open_issues_of_the_previous_register_are_counted_not_echoed_into_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A new release's register warns about the previous one's open issues by count (CWE-117).
+
+    The previous register is file content: an id carrying a line break would
+    forge a log line if the ids were interpolated. The warning gives the number
+    of open issues and where to look; the ids stay in the file.
+    """
+    # Arrange
+    issues = tmp_path / release_build.ISSUES_SUBDIR
+    issues.mkdir(parents=True)
+    previous = {"issues": [{"id": "PI-01\nFORGED release built", "status": "draft"}]}
+    (issues / "1.0.0.json").write_text(json.dumps(previous), encoding="utf-8")
+
+    # Act
+    with caplog.at_level(logging.WARNING, logger=release_build.__name__):
+        release_build._start_issue_register("2.0.0", tmp_path, ("1.0.0", "2.0.0"))
+
+    # Assert
+    lines = [record.getMessage() for record in caplog.records]
+    assert len(lines) == 1 and "1 open issue" in lines[0], lines
+    assert "FORGED" not in lines[0]

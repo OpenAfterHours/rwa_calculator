@@ -635,13 +635,15 @@ def _start_issue_register(version: str, root: Path, listed: tuple[str, ...]) -> 
         if issue.get("status") in ("draft", "raised", "acknowledged")
     ]
     if still_open:
+        # The count only: the ids and the release names are file content
+        # (the previous register, releases.json) and could forge a log line
+        # (CWE-117). The operator reads the ids in the previous register.
         logger.warning(
-            "taxonomy %s starts with an empty issue register; re-confirm the %d open issue(s) "
-            "of %s against it (carry each, re-measuring its example, or close it): %s",
-            version,
+            "a new taxonomy release starts with an empty issue register; re-confirm the "
+            "%d open issue(s) of the previous release's register in %s against it (carry "
+            "each, re-measuring its example, or close it)",
             len(still_open),
-            older[-1],
-            ", ".join(still_open),
+            ISSUES_SUBDIR,
         )
 
 

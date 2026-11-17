@@ -469,6 +469,28 @@ def test_a_result_with_an_error_or_an_exception_is_never_stored(
     assert [chunk.cached for chunk in again.chunks] == [True, False]
 
 
+def test_a_refused_result_is_logged_without_any_of_the_workers_output(
+    trimmed: Referee, cache: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The log line says why a result was not stored, in our words only (CWE-117).
+
+    A worker's result is file content: a message code that carries a line break
+    would forge a log line if it were interpolated. The reason logged is one of
+    the runner's own phrases; the code itself stays in the chunk file.
+    """
+    # Arrange
+    forged = {"code": "x\nFORGED referee: worker 0 ok", "level": "ERROR", "text": "boom"}
+
+    # Act
+    with caplog.at_level(logging.INFO, logger=runner.__name__):
+        trimmed.run({"chunk1": {"messages": [forged]}}, cache_dir=cache)
+
+    # Assert
+    refused = [r.getMessage() for r in caplog.records if "not stored" in r.getMessage()]
+    assert refused, "the refusal was not logged"
+    assert not any("FORGED" in line for line in refused), refused
+
+
 def test_a_message_the_merge_drops_does_not_stop_a_result_being_stored(
     trimmed: Referee, cache: Path
 ) -> None:

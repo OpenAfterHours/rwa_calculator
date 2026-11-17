@@ -104,6 +104,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: Why a finished worker's result is not stored (``_not_storable``). Fixed
+#: phrases, so a refusal is logged without any of the worker's output.
+_REFUSED_UNANSWERED: Final = "an assigned assertion has no verdict"
+_REFUSED_ERROR_MESSAGE: Final = (
+    "a message at an error level or naming an exception (see the chunk's result file)"
+)
+
 # =============================================================================
 # Constants
 # =============================================================================
@@ -1422,21 +1429,23 @@ def _not_storable(result: Mapping[str, Any], prepared: PreparedReferee, index: i
     an error level or naming an exception — the form in which Arelle reports
     what it caught, a ``MemoryError`` among them. What the merge drops as noise
     or as a known false positive cannot change a result, and does not count.
+
+    The reason is one of the runner's own phrases, never text from the result:
+    the caller logs it, and a worker's output is file content that could forge
+    a log line (CWE-117). The message itself stays in the chunk's result file.
     """
     assertions = prepared.module.assertions
-    unanswered = sum(
-        1
+    if any(
+        assertions[file].assertion_id not in result["assertions"]
         for file in prepared.plan.chunks[index]
-        if assertions[file].assertion_id not in result["assertions"]
-    )
-    if unanswered:
-        return f"{unanswered} assertion(s) without a verdict"
+    ):
+        return _REFUSED_UNANSWERED
     for message in result["messages"]:
         code, level = message["code"], message["level"]
         if code in NOISE_CODES or code in KNOWN_FALSE_POSITIVE_CODES:
             continue
         if level in ERROR_LEVELS or "exception" in code.lower():
-            return f"[{code}] at {level}"
+            return _REFUSED_ERROR_MESSAGE
     return None
 
 

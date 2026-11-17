@@ -8,6 +8,15 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Added
 - (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.4] - 2026-11-17
+
+### Added
 - **The Bank of England's validations deny list, per release.** The Bank changes
   how its gateway runs some rules after a taxonomy is published: it deactivates
   a rule, or downgrades it to a warning. `rwa-filer` now ships that list for each
@@ -138,7 +147,6 @@ and released independently of `rwa-calc`; its release tags are prefixed
   kept beside its tests.
 
 ### Changed
-- (Next release changes will go here)
 - **The template-level engine's enforced population moves with the date.**
   `load_rules(framework, on=...)` reads the same packaged deny list for the BoE
   extract's release: a deactivated rule is not enforced, and a downgraded one is

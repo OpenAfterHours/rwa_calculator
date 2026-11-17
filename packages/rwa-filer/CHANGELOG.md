@@ -134,10 +134,14 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ### Performance
 - **Referee workers run at once.** `run_referee(jobs=...)` and `rwa-filer
   referee --jobs N` set how many Arelle workers run side by side; by default
-  (`None`) as many as fit in the memory the kernel reports available
-  (`MemAvailable`, less 1.5 GB) at the per-worker cap `max_rss_gb`, and no more
-  than one per CPU — one where `/proc/meminfo` cannot be read
-  (`rwa_filer.referee.resolve_jobs`). Every worker keeps its own memory and
+  (`None`) as many as fit in the memory available, less 1.5 GB, at the
+  per-worker cap `max_rss_gb`, and no more than one per CPU — one where
+  `/proc/meminfo` cannot be read (`rwa_filer.referee.resolve_jobs`). Available
+  is the kernel's `MemAvailable`, or the room under a cgroup memory limit on
+  the process (a container's `--memory`, v1 or v2, on its own group or an
+  ancestor) where that is less: the OOM killer enforces the limit, which
+  `MemAvailable` does not see. An explicit number over that budget is run as
+  asked, with one warning. Every worker keeps its own memory and
   time guard and its own Arelle configuration folder, and the results are
   merged in plan order, so a verdict, a message's order and the lost rules do
   not depend on which worker finishes first. Several instances can share one

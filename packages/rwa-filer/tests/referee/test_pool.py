@@ -13,8 +13,9 @@ the memory the kernel reports available, less a headroom, and no more than one
 per CPU.
 
 What is pinned here, with the stand-in worker of ``referee_builders``:
-- the automatic number of workers, from a stand-in ``/proc/meminfo``, and its
-  fallback to one where there is no ``/proc``;
+- the automatic number of workers, from a stand-in ``/proc/meminfo`` and a
+  stand-in cgroup memory limit (v1 and v2, set on the process's own group or
+  an ancestor), and its fallback to one where there is no ``/proc``;
 - that workers do run at once, and that the result does not depend on the
   order they finish in;
 - that a worker killed in a pool loses its own rules and nobody else's;
@@ -28,12 +29,14 @@ References:
 - packages/rwa-filer/src/rwa_filer/referee/runner.py — ``resolve_jobs``,
   ``prepare_referee``, ``run_referees``
 - Linux ``proc(5)`` — ``MemAvailable`` in ``/proc/meminfo``
+- Linux cgroup v1 ``memory.limit_in_bytes`` and v2 ``memory.max``
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import signal
 import subprocess
@@ -163,6 +166,109 @@ def test_auto_jobs_is_one_where_available_memory_cannot_be_read(
     assert runner.resolve_jobs(None, 1.0) == 1
 
 
+GIB = 1 << 30
+
+
+def fake_cgroup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    membership: str,
+    groups: dict[str, dict[str, str]],
+) -> None:
+    """A stand-in ``/proc/self/cgroup`` (``membership``) and cgroup mount (``groups``).
+
+    ``groups`` maps a folder under the mount to the files in it.
+    """
+    (tmp_path / "proc" / "self").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "proc" / "self" / "cgroup").write_text(membership, encoding="utf-8")
+    mount = tmp_path / "cgroup"
+    for folder, files in groups.items():
+        (mount / folder).mkdir(parents=True, exist_ok=True)
+        for name, text in files.items():
+            (mount / folder / name).write_text(text, encoding="utf-8")
+    mount.mkdir(exist_ok=True)
+    monkeypatch.setattr(runner, "_CGROUP", mount)
+
+
+def v1_group(limit: int, usage: int, inactive: int) -> dict[str, str]:
+    return {
+        "memory.limit_in_bytes": f"{limit}\n",
+        "memory.usage_in_bytes": f"{usage}\n",
+        "memory.stat": f"cache 1\ninactive_file 0\ntotal_inactive_file {inactive}\n",
+    }
+
+
+def v2_group(limit: str, current: int, inactive: int) -> dict[str, str]:
+    return {
+        "memory.max": f"{limit}\n",
+        "memory.current": f"{current}\n",
+        "memory.stat": f"anon 1\ninactive_file {inactive}\n",
+    }
+
+
+#: What the kernel reports for "no limit" in cgroup v1.
+V1_UNLIMITED = 9223372036854771712
+
+#: (membership, groups): each leaves 7 GiB under its limit, where the machine
+#: has 14 GiB available — room for one 4 GB worker, not three.
+CGROUPS = {
+    # A container's --memory under cgroup v1: limit 8, using 2 of which 1 is
+    # inactive page cache the kernel reclaims first.
+    "v1": ("4:memory:/box/shell\n1:cpu:/\n", {"memory/box/shell": v1_group(8 * GIB, 2 * GIB, GIB)}),
+    "v2": ("0::/box\n", {"box": v2_group(str(8 * GIB), 2 * GIB, GIB)}),
+    # The limit is set on a parent; the process's own group has none.
+    "v1-ancestor": (
+        "4:memory:/box/shell\n",
+        {
+            "memory/box": v1_group(8 * GIB, 2 * GIB, GIB),
+            "memory/box/shell": v1_group(V1_UNLIMITED, GIB, 0),
+        },
+    ),
+    "v2-ancestor": (
+        "0::/box/shell\n",
+        {"box": v2_group(str(8 * GIB), 2 * GIB, GIB), "box/shell": v2_group("max", GIB, 0)},
+    ),
+    # Inside a cgroup namespace, or a container that mounts its own group as
+    # the root: the path /proc names is not under the mount.
+    "v1-namespaced": ("4:memory:/docker/abc\n", {"memory": v1_group(8 * GIB, 2 * GIB, GIB)}),
+}
+
+
+@pytest.mark.parametrize("layout", list(CGROUPS))
+def test_auto_jobs_fits_the_workers_in_a_cgroup_memory_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, layout: str
+) -> None:
+    """A container's limit, not the host's free memory, is what the OOM killer enforces."""
+    # Arrange
+    fake_proc(tmp_path, monkeypatch, 14.0)
+    monkeypatch.setattr(runner, "_cpu_count", lambda: 4)
+    fake_cgroup(tmp_path, monkeypatch, *CGROUPS[layout])
+
+    # Act / Assert — (7 - 1.5) / 4 = 1.4, where the host alone gives (14 - 1.5) / 4 = 3.
+    assert runner.resolve_jobs(None, 4.0) == 1
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        {"memory/box": v1_group(V1_UNLIMITED, 2 * GIB, 0)},
+        {"box": v2_group("max", 2 * GIB, 0)},
+        {},
+    ],
+    ids=["v1-unlimited", "v2-max", "no-memory-controller-mounted"],
+)
+def test_a_cgroup_without_a_memory_limit_leaves_the_machines_memory_to_decide(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, groups: dict[str, dict[str, str]]
+) -> None:
+    # Arrange
+    fake_proc(tmp_path, monkeypatch, 14.0)
+    monkeypatch.setattr(runner, "_cpu_count", lambda: 4)
+    fake_cgroup(tmp_path, monkeypatch, "4:memory:/box\n0::/box\n", groups)
+
+    # Act / Assert
+    assert runner.resolve_jobs(None, 4.0) == 3
+
+
 def test_an_explicit_number_of_jobs_is_taken_as_given(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -173,6 +279,28 @@ def test_an_explicit_number_of_jobs_is_taken_as_given(
     assert runner.resolve_jobs(3, 9.0) == 3
     with pytest.raises(ValueError, match="at least 1"):
         runner.resolve_jobs(0, 9.0)
+
+
+def test_jobs_over_the_memory_budget_is_warned_of_once(
+    trimmed: Referee,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The differential script resolves the number to print it, then hands it to the pool."""
+    # Arrange — memory for one 2 GB worker; two asked for.
+    fake_proc(tmp_path, monkeypatch, 3.6)
+    caplog.set_level(logging.WARNING, logger=runner.__name__)
+
+    # Act
+    workers = runner.resolve_jobs(2, 2.0)
+    run_pool(trimmed, [trimmed.instance], jobs=workers, max_rss_gb=2.0)
+
+    # Assert
+    assert workers == 2
+    assert [record.getMessage() for record in caplog.records].count(
+        "referee: 2 worker(s) at 2.0 GB each can outgrow the 3.6 GB available less 1.5 GB headroom"
+    ) == 1
 
 
 # ---------------------------------------------------------------------------

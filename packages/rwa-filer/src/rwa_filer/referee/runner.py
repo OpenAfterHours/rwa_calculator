@@ -60,7 +60,8 @@ Known limit
 
 The memory guard reads ``/proc`` and so works on Linux only. Elsewhere the
 timeout is the only limit, and a log line says so, and the automatic number of
-workers at once is one.
+workers at once is one. On Linux the automatic number also respects a cgroup
+memory limit (a container's), which ``MemAvailable`` does not see.
 
 References:
 - Arelle (arelle-release 2.47.5) — the reference XBRL processor
@@ -183,6 +184,9 @@ _SKIP_RENDERING: Final = "*-rend.xml"
 MEMORY_HEADROOM_GB: Final = 1.5
 
 _PROC: Final = Path("/proc")
+#: Where the cgroup file systems are mounted: v2 at the top, v1's memory
+#: controller in ``memory/``.
+_CGROUP: Final = Path("/sys/fs/cgroup")
 #: The spec's members that name a file. The key reads each file's bytes, and
 #: never the name.
 _SPEC_PATHS: Final = frozenset({"instance", "packages", "plugin", "xdg"})
@@ -207,6 +211,13 @@ _HASH_BLOCK: Final = 1 << 20
 _POLL_SECONDS: Final = 0.5
 _INTERRUPTED: Final = "killed: run interrupted"
 _KB_PER_GB: Final = 1024 * 1024
+_BYTES_PER_GB: Final = 1 << 30
+#: The files of a cgroup's memory limit, its usage, and the ``memory.stat``
+#: line of its inactive page cache (v1's ``total_`` line counts the subgroups).
+_CGROUP_V2_FILES: Final = ("memory.max", "memory.current", "inactive_file")
+_CGROUP_V1_FILES: Final = ("memory.limit_in_bytes", "memory.usage_in_bytes", "total_inactive_file")
+#: A cgroup v1 limit at least this large is the kernel's "no limit".
+_CGROUP_V1_UNLIMITED: Final = 1 << 62
 _BYTES_PER_MB: Final = 1e6
 _STATUS_TAIL_CHARS: Final = 300
 
@@ -440,6 +451,7 @@ def run_referees(
     interpreter = find_arelle_python(python)
     guard = _guard(max_rss_gb, timeout)
     workers = resolve_jobs(jobs, max_rss_gb)
+    _warn_over_budget(workers, max_rss_gb)
     cache = _open_cache(cache_dir, interpreter)
     tasks = [
         (which, index) for which, item in enumerate(prepared) for index in range(len(item.specs))
@@ -485,12 +497,16 @@ def run_referees(
 def resolve_jobs(jobs: int | None, max_rss_gb: float) -> int:
     """How many workers run at once: ``jobs`` as given, or, for ``None``, as many as fit.
 
-    As many as fit is ``max(1, min(CPUs, floor((MemAvailable - headroom) /
-    max_rss_gb)))``. A worker may grow to its cap before the guard kills it, so
+    As many as fit is ``max(1, min(CPUs, floor((available - headroom) /
+    max_rss_gb)))``. Available is the kernel's ``MemAvailable``, or the room
+    left under a cgroup memory limit on this process (a container's) where
+    that is less. A worker may grow to its cap before the guard kills it, so
     it is the cap, not a typical peak, that is budgeted: the workers at once
     cannot together take the memory this process and the system need. The
     headroom is ``MEMORY_HEADROOM_GB``. Where ``/proc/meminfo`` gives no
     ``MemAvailable`` it is one, as the memory guard cannot run there either.
+    An explicit ``jobs`` over the budget is taken as given;
+    ``run_referees`` says so.
 
     Raises:
         ValueError: ``jobs`` is less than one.
@@ -498,16 +514,6 @@ def resolve_jobs(jobs: int | None, max_rss_gb: float) -> int:
     if jobs is not None:
         if jobs < 1:
             raise ValueError(f"jobs must be at least 1, not {jobs}")
-        available = _available_memory_gb()
-        if available is not None and jobs * max_rss_gb > available - MEMORY_HEADROOM_GB:
-            logger.warning(
-                "referee: %d worker(s) at %.1f GB each can outgrow the %.1f GB available "
-                "less %.1f GB headroom",
-                jobs,
-                max_rss_gb,
-                available,
-                MEMORY_HEADROOM_GB,
-            )
         return jobs
     available = _available_memory_gb()
     if available is None:
@@ -1041,7 +1047,34 @@ def _write_progress(prepared: PreparedReferee, finished: Mapping[int, _Outcome])
     )
 
 
+def _warn_over_budget(workers: int, max_rss_gb: float) -> None:
+    """Log once when ``workers`` at their cap can outgrow the memory available."""
+    available = _available_memory_gb()
+    if available is not None and workers * max_rss_gb > available - MEMORY_HEADROOM_GB:
+        logger.warning(
+            "referee: %d worker(s) at %.1f GB each can outgrow the %.1f GB available "
+            "less %.1f GB headroom",
+            workers,
+            max_rss_gb,
+            available,
+            MEMORY_HEADROOM_GB,
+        )
+
+
 def _available_memory_gb() -> float | None:
+    """Memory new workers can take, in GB: the machine's, or a cgroup limit's room if less.
+
+    The machine's is the kernel's ``MemAvailable``. None where that cannot be
+    read: then ``/proc`` is not there, and neither is the memory guard.
+    """
+    machine = _meminfo_available_gb()
+    if machine is None:
+        return None
+    room = _cgroup_room_gb()
+    return machine if room is None else min(machine, room)
+
+
+def _meminfo_available_gb() -> float | None:
     """The kernel's estimate of memory available to new processes, in GB, if it gives one."""
     try:
         text = (_PROC / "meminfo").read_text(encoding="utf-8")
@@ -1051,6 +1084,65 @@ def _available_memory_gb() -> float | None:
         if line.startswith("MemAvailable:"):
             return int(line.split()[1]) / _KB_PER_GB
     return None
+
+
+def _cgroup_room_gb() -> float | None:
+    """The least room under any cgroup memory limit on this process, in GB; None if none.
+
+    A container's ``--memory``, a systemd slice or a CI runner's job group
+    holds this process and its workers to a limit that ``MemAvailable`` does
+    not see, and the OOM killer enforces it. Every limit from this process's
+    own group up to the mount's root counts — cgroup v2 ``memory.max``, v1
+    ``memory.limit_in_bytes`` — and the room under one is the limit less what
+    the group uses that the kernel cannot simply drop: its usage less its
+    inactive page cache. Where the path ``/proc/self/cgroup`` names is not
+    under the mount (a cgroup namespace, a container's own mount), the
+    mount's root is this process's group.
+    """
+    try:
+        lines = (_PROC / "self" / "cgroup").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    rooms: list[int] = []
+    for line in lines:
+        hierarchy, _, rest = line.partition(":")
+        controllers, _, path = rest.partition(":")
+        if hierarchy == "0" and not controllers:
+            mount, files = _CGROUP, _CGROUP_V2_FILES
+        elif "memory" in controllers.split(","):
+            mount, files = _CGROUP / "memory", _CGROUP_V1_FILES
+        else:
+            continue
+        group = mount / path.strip().lstrip("/")
+        if not group.is_dir():
+            group = mount
+        while True:
+            room = _cgroup_room_bytes(group, *files)
+            if room is not None:
+                rooms.append(room)
+            if group == mount:
+                break
+            group = group.parent
+    return min(rooms) / _BYTES_PER_GB if rooms else None
+
+
+def _cgroup_room_bytes(group: Path, limit_file: str, usage_file: str, inactive: str) -> int | None:
+    """The room under one cgroup's memory limit, in bytes; None if it sets none."""
+    try:
+        limit_text = (group / limit_file).read_text(encoding="utf-8").strip()
+        usage = int((group / usage_file).read_text(encoding="utf-8"))
+        limit = int(limit_text)
+    except (OSError, ValueError):
+        return None  # no such group or file, or "max": no limit
+    if limit >= _CGROUP_V1_UNLIMITED:
+        return None
+    reclaimable = 0
+    with contextlib.suppress(OSError, ValueError):
+        for line in (group / "memory.stat").read_text(encoding="utf-8").splitlines():
+            name, _, value = line.partition(" ")
+            if name == inactive:
+                reclaimable = int(value)
+    return max(0, limit - max(0, usage - reclaimable))
 
 
 def _cpu_count() -> int:

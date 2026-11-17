@@ -127,7 +127,8 @@ columns and sheets — the layout `rwa-filer template` writes as a workbook. Cel
 the taxonomy does not accept on a sheet are hatched. Every cell a broken rule
 read is outlined, red for an Error rule and amber for a Warning one, including
 the empty cells a rule read at its default, which are often what the break is
-about. Pick a cell to see its row and column labels, its value and data type,
+about. That is every break of the rule, not only the first few the Rules page
+lists: a rule that breaks on every row of every sheet marks every row. Pick a cell to see its row and column labels, its value and data type,
 and the broken rules that read it. Each rule is shown with the publisher's
 description of it, so `boe_b0713` reads as "the total exposure row 0010 shall
 equal the sum of all the sheets for each exposure class" rather than as a code.
@@ -137,7 +138,8 @@ read (each linking to that cell on the grid, this one outlined), and the
 expression and scope as the Bank's workbook states them. The panel widens while
 a rule is open, and a rule opened on one cell stays open as you pick others in
 the same browser tab. **Show only this rule's cells** greys out every other
-rule's marks; **Open on the Rules page** shows the rule with all of its breaks.
+rule's marks; **Open on the Rules page** shows the rule with its first breaks
+and how many there are in all.
 
 **Build & sign off.** The same three acts as `rwa-filer build`, `signoff` and
 `verify`, recording the same things:

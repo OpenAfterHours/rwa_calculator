@@ -12,6 +12,21 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **The dashboard's template grid marks every break of a rule, not only the
+  first five.** A rule's result records its first `MAX_FAILURES` (5) breaks, in
+  place order, and the grid marked only the cells those read. Places sort row
+  first, so on a return with several sheets the five were often all row 0001:
+  `boe_b0751` (OF 08.01 RWEA after adjustments = the sum of its parts) broke on
+  every row of every sheet, and only row 0001 was marked. The engine still
+  checked every row, and its counts were right. The dashboard now validates with
+  every break recorded, so the grid marks each one and the cell panel explains
+  the break that read the picked cell. The Rules page still lists the first five
+  and says how many there are in all.
+  `evaluate_rules`, `trace_rules`, `validate_return` and `trace_return` take a
+  new `max_failures=` (default `MAX_FAILURES`; `None` records every break).
+  Reports, the CLI and `rwa-calc` keep the default, so their output is unchanged.
+
 ---
 
 ## [0.1.4] - 2026-11-17

@@ -1168,6 +1168,30 @@ def test_recorded_failures_are_capped_but_every_one_is_counted(pack: TaxonomyPac
     assert many.unsatisfied == 6 and len(many.failures) == MAX_FAILURES
 
 
+def test_a_caller_marking_a_template_can_keep_every_failure(pack: TaxonomyPack) -> None:
+    """The cap is for a report. A viewer marking broken cells needs every break, not the first few.
+
+    The evaluations run in place order, so the first ``MAX_FAILURES`` can all sit
+    on one row: on the Bank's ``boe_b0751`` they were row 0001 of five sheets,
+    and the dashboard marked nothing below it.
+    """
+    # Arrange — each amount must be negative; six evaluations are not.
+    everywhere = rule(
+        "everywhere",
+        f"{ref(T03, c='0010')} < 0 and {ref(T01, '0010', '0010')} < 0",
+        tables=(T01, T03),
+    )
+    rows = [t01("0010", "0010", 5)]
+    rows += [geo(member, row, 5) for member in ("GB", "FR", "x1") for row in ("0010", "0020")]
+
+    # Act
+    (result,) = evaluate_rules(ret(*rows), pack, [everywhere], accuracy=EXACT, max_failures=None)
+
+    # Assert — all six, each at its own place.
+    assert result.unsatisfied == 6 > MAX_FAILURES
+    assert len({failure.place for failure in result.failures}) == 6
+
+
 def test_severity_is_the_modules(pack: TaxonomyPack) -> None:
     soft = rule("soft", TOTAL, tables=(T01,), severities={"TST001": "WARNING"})
 

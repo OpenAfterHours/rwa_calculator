@@ -6,13 +6,34 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
+from dash_builders import HEADER
+from rwa_filer.boe.engine import MAX_FAILURES, STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 from rwa_filer.dash.grid import display_value, failure_marks, template_grid
 from rwa_filer.dash.views import RULES_PER_PAGE, overview, rule_label, rules_page, title_case
 from rwa_filer.dash.workspace import safe_file_name
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from rwa_filer.dash import OpenedReturn, Workspace
+
+#: OF 08.01's RWEA after adjustments (c0260) that is not the sum of its parts
+#: (c0251 to c0254) on four rows of three sheets: ``boe_b0751`` breaks twelve
+#: times, more than a report records.
+UNADJUSTED_SHEETS = ("0001", "0002", "0010")
+UNADJUSTED_ROWS = ("0001", "0010", "0020", "0070")
+
+
+@pytest.fixture
+def unadjusted(workspace: Workspace, tmp_path: Path) -> OpenedReturn:
+    lines = ["table,sheet,row,column,value"]
+    for sheet in UNADJUSTED_SHEETS:
+        for row in UNADJUSTED_ROWS:
+            lines.append(f"OF08.01.01.01,{sheet},{row},0251,100")
+            lines.append(f"OF08.01.01.01,{sheet},{row},0260,999000")
+    path = tmp_path / "unadjusted.csv"
+    path.write_text("\n".join(lines) + "\n")
+    return workspace.open(path, HEADER)
 
 
 def test_the_overview_counts_are_the_reports_own(broken: OpenedReturn) -> None:
@@ -119,6 +140,64 @@ def test_every_failure_address_becomes_a_mark(broken: OpenedReturn) -> None:
 
     # Assert
     assert expected and set(marks) == expected
+
+
+def test_every_break_of_a_rule_is_marked_not_only_the_first_few(unadjusted: OpenedReturn) -> None:
+    """``boe_b0751`` breaks on every row; the grid used to mark row 0001 alone.
+
+    A rule's evaluations run row by row, and a report records the first
+    ``MAX_FAILURES`` of them: on a return with several sheets those were all
+    row 0001, so no row below it was ever marked.
+    """
+    # Arrange
+    report = unadjusted.validation.report
+    assert report is not None
+    result = next(item for item in report.results if item.rule_id == "boe_b0751")
+    assert result.unsatisfied == 12 > MAX_FAILURES, "the fixture must break more than are recorded"
+
+    # Act
+    marks = failure_marks(unadjusted.validation)
+
+    # Assert — the RWEA after adjustments, on every row of every sheet.
+    marked = {
+        (place[1], place[3])
+        for place, found in marks.items()
+        if place[0] == "OF08.01.01.01"
+        and place[4] == "0260"
+        and any(mark.rule_id == "boe_b0751" for mark in found)
+    }
+    assert marked == {(sheet, row) for sheet in UNADJUSTED_SHEETS for row in UNADJUSTED_ROWS}
+
+
+def test_a_cell_marked_by_a_late_break_is_explained_by_it(
+    workspace: Workspace, unadjusted: OpenedReturn
+) -> None:
+    """The last row of the last sheet: a break no report would have recorded."""
+    # Act
+    grid = template_grid(
+        workspace.working(unadjusted),
+        table="OF08.01.01.01",
+        sheet="0010",
+        row="0070",
+        column="0260",
+    )
+
+    # Assert
+    assert grid is not None
+    assert grid.cell is not None
+    rule = next(item.rule for item in grid.cell.rules if item.mark.rule_id == "boe_b0751")
+    assert [failure.place for failure in rule.failures] == ["row 0070, sheet 0010"]
+
+
+def test_the_rules_page_lists_the_first_breaks_of_many(unadjusted: OpenedReturn) -> None:
+    """The grid marks every break; the rules page keeps to the first few, and says how many."""
+    # Act
+    view = rules_page(unadjusted, rule_id="boe_b0751")
+
+    # Assert
+    assert view.selected is not None
+    assert view.selected.row.unsatisfied == 12
+    assert len(view.selected.failures) == MAX_FAILURES
 
 
 def test_the_grid_opens_on_a_flagged_sheet_with_a_flagged_cell_picked(

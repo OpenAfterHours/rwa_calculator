@@ -69,6 +69,7 @@ from rwa_filer.boe.catalogue import (
     SEVERITY_WARNING,
 )
 from rwa_filer.boe.engine import (
+    MAX_FAILURES,
     REASON_CLOSED_BY_FORMULA,
     REASON_DEACTIVATED_BY_PUBLISHER,
     REASON_NOT_REPORTED,
@@ -406,6 +407,7 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
     progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
 ) -> ReturnValidation:
     """Validate ``ret``: structure against the taxonomy, then the published rules.
 
@@ -443,6 +445,11 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
         progress: Told which step the validation is on — the structure, then
             the rules, counted one by one (``rwa_filer.progress``) — so a
             person waiting on a large return can see it is moving.
+        max_failures: How many unsatisfied evaluations each rule's result
+            records (``RuleResult.failures``), the first in place order. The
+            default suits a report; ``None`` records every one, for a viewer
+            that marks each broken cell on a template. The counts and the
+            verdict are the same either way.
 
     Returns:
         A ``ReturnValidation``. Never raises for a condition in the data.
@@ -468,6 +475,7 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
         trace=False,
         on=submission_date,
         progress=progress,
+        max_failures=max_failures,
     )
     return validation
 
@@ -485,6 +493,7 @@ def trace_return(  # noqa: PLR0913 - validate_return's arguments
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
     progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
 ) -> tuple[ReturnValidation, RuleTrace | None]:
     """``validate_return``, keeping every evaluation the verdict was reached by.
 
@@ -512,6 +521,7 @@ def trace_return(  # noqa: PLR0913 - validate_return's arguments
         trace=True,
         on=submission_date,
         progress=progress,
+        max_failures=max_failures,
     )
 
 
@@ -547,7 +557,7 @@ def findings_for(report: RuleReport) -> list[Finding]:
 # =============================================================================
 
 
-def _validate(
+def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
     ret: CanonicalReturn,
     chosen: Release,
     accuracy: Accuracy | None,
@@ -557,6 +567,7 @@ def _validate(
     trace: bool,
     on: date | None,
     progress: ProgressCallback | None,
+    max_failures: int | None,
 ) -> tuple[ReturnValidation, RuleTrace | None]:
     pack = chosen.pack
     notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version))
@@ -586,12 +597,20 @@ def _validate(
 
     enforced = rulebook.enforced(module)
     traced = (
-        trace_rules(ret, pack, enforced, accuracy=accuracy, progress=progress) if trace else None
+        trace_rules(
+            ret, pack, enforced, accuracy=accuracy, progress=progress, max_failures=max_failures
+        )
+        if trace
+        else None
     )
     published = (
         traced.results
         if traced is not None
-        else tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy, progress=progress))
+        else tuple(
+            evaluate_rules(
+                ret, pack, enforced, accuracy=accuracy, progress=progress, max_failures=max_failures
+            )
+        )
     )
     # The gateway's execution configuration, after evaluation: the published
     # verdict stays on each result it changes (``RuleResult.formula``).

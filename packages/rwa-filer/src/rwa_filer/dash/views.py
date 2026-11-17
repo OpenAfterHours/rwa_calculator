@@ -30,12 +30,13 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cache
 from typing import TYPE_CHECKING, Final
 
 from rwa_filer.boe.catalogue import SEVERITY_ERROR
 from rwa_filer.boe.engine import (
+    MAX_FAILURES,
     REASON_CLOSED_BY_FORMULA,
     REASON_DEACTIVATED_BY_PUBLISHER,
     REASON_NO_DATA,
@@ -83,6 +84,9 @@ REASON_TEXT: Final = {
 RULES_PER_PAGE: Final = 100
 #: Broken rules quoted on the overview.
 BREAKS_SHOWN: Final = 8
+#: Breaks of the picked rule the rules page lists — as many as a report records.
+#: The workspace keeps every one, for the grid; the page says how many there are.
+FAILURES_LISTED: Final = MAX_FAILURES
 
 
 # =============================================================================
@@ -307,12 +311,16 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
         matched=len(matched),
         page=page,
         pages=pages,
-        selected=_detail(opened, picked, results) if picked else None,
+        selected=_listed(_detail(opened, picked, results)) if picked else None,
     )
 
 
 def rule_detail(opened: OpenedReturn, rule_id: str) -> RuleDetail | None:
-    """One rule of the return in full, or ``None`` when the report holds no result for it."""
+    """One rule of the return in full, or ``None`` when the report holds no result for it.
+
+    In full includes every break the validation recorded — all of them, in the
+    workspace — so the grid's cell panel can find the ones that read its cell.
+    """
     report = opened.validation.report
     results = report.results if report else ()
     result = next((item for item in results if item.rule_id == rule_id), None)
@@ -389,6 +397,11 @@ def _detail(opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...])
             if (issue := opened.release.issues.issue(note.issue_id)) is not None
         ),
     )
+
+
+def _listed(detail: RuleDetail) -> RuleDetail:
+    """``detail`` with its first ``FAILURES_LISTED`` breaks, as the rules page lists them."""
+    return replace(detail, failures=detail.failures[:FAILURES_LISTED])
 
 
 def _rule(version: str, module: str, rule_id: str) -> Rule | None:

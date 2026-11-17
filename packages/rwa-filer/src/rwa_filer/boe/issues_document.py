@@ -285,7 +285,7 @@ def _about(
         )
         lines.append(
             f"- **Rule book ({module}):** {source}{formulas}; "
-            f"{len(book.enforced(module)):,} rules run on a {module} return."
+            f"{_run_count(book, module, deny_list)}."
         )
     checked = [_checked(register, item.document, item.as_at) for item in register.checked_against]
     if deny_list.source:
@@ -311,6 +311,38 @@ def _about(
         )
     lines += ["", _COUNTS, ""]
     return lines
+
+
+def _run_count(book: RuleBook, module: str, deny_list: DenyList) -> str:
+    """How many rules are published for ``module``, and how many the gateway runs.
+
+    The gateway runs the published rules less those the deny list deactivates, as
+    at the day the list was published (the same list the document cites). A
+    downgraded rule still runs, as a warning. Without a dated list the published
+    count is all that can be said.
+    """
+    enforced = book.enforced(module)
+    published = f"{len(enforced):,} rules are published for a {module} return"
+    day = _published_on(deny_list)
+    if day is None:
+        return published
+    off = {code for code, item in deny_list.in_force(module, day).items() if item.is_deactivation}
+    switched_off = sum(1 for rule in enforced if rule.rule_id in off)
+    if not switched_off:
+        return f"{published}, and the Bank's gateway runs all of them as at {long_date(day)}"
+    return (
+        f"{published}, and the Bank's gateway runs {len(enforced) - switched_off:,} of them: "
+        f"the deny list deactivates {switched_off} as at {long_date(day)}"
+    )
+
+
+def _published_on(deny_list: DenyList) -> date | None:
+    """The day the deny list was published, from its source; ``None`` if it gives none."""
+    published = deny_list.source.get("published") if deny_list.source else None
+    try:
+        return date.fromisoformat(str(published)) if published else None
+    except ValueError:
+        return None
 
 
 def _checked(register: IssueRegister, document: str, as_at: date) -> str:
@@ -508,7 +540,10 @@ def _example(issue: PublisherIssue, arelle: Mapping[str, Sequence[int]]) -> list
         ]
     lines += [
         "<details>",
-        f"<summary>The return's {len(example.facts)} facts</summary>",
+        # One entry per template cell. Two cells can share one data point, so the
+        # return holds fewer XBRL facts than this: these are cells, never "facts".
+        f"<summary>The example's {len(example.facts)} cell"
+        f"{'s' if len(example.facts) != 1 else ''}</summary>",
         "",
         "| Table | Sheet | Key | Row | Column | Value |",
         "|---|---|---|---|---|---|",

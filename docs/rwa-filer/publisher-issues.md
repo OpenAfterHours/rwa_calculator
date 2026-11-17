@@ -22,7 +22,7 @@ Bank's known-issues log already records.
 ## What was checked
 
 - **Taxonomy:** Bank of England Banking Taxonomy v4.1.1, module PRA001.
-- **Rule book (PRA001):** the Bank's workbook "Bank of England Banking Taxonomy Validations Banking Reporting v4.1.1.xlsx", with each rule as its XBRL formula in the taxonomy package (banking/banking_reporting/2026-08-17); 1,441 rules run on a PRA001 return.
+- **Rule book (PRA001):** the Bank's workbook "Bank of England Banking Taxonomy Validations Banking Reporting v4.1.1.xlsx", with each rule as its XBRL formula in the taxonomy package (banking/banking_reporting/2026-08-17); 1,441 rules are published for a PRA001 return, and the Bank's gateway runs 1,434 of them: the deny list deactivates 7 as at 16 November 2026.
 - **The Bank's own documents checked:** Bank of England Banking taxonomy known-issues log (16 November 2026); the Bank's validations deny list (boe-banking-validations-deny-list-november-2026.xlsx, sheet "Version 4.1.1", published 16 November 2026). Each issue says where these mention it; an issue that cites neither is not in them.
 - **Reference processor:** every example was evaluated with Arelle 2.47.5 against the Bank's v4.1.1 taxonomy package; the counts shown are Arelle's.
 
@@ -253,7 +253,7 @@ Arelle's result on it:
 | boe_b1031 | 0 | 1 | fails |
 
 <details>
-<summary>The return's 97 facts</summary>
+<summary>The example's 97 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -487,7 +487,7 @@ Arelle's result on it:
 | boe_b1055 | 0 | 2 | fails |
 
 <details>
-<summary>The return's 21 facts</summary>
+<summary>The example's 21 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -646,7 +646,7 @@ Arelle's result on it:
 | boe_b1042 | 4 | 0 | - |
 
 <details>
-<summary>The return's 40 facts</summary>
+<summary>The example's 40 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -866,7 +866,7 @@ Arelle's result on it:
 | boe_b0760 | 2 | 0 | holds |
 
 <details>
-<summary>The return's 34 facts</summary>
+<summary>The example's 34 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -1169,7 +1169,7 @@ Arelle's result on it:
 | boe_b1028 | 2 | 0 | - |
 
 <details>
-<summary>The return's 166 facts</summary>
+<summary>The example's 166 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -1474,7 +1474,7 @@ Arelle's result on it:
 | boe_b0746_1 | 3 | 0 | holds |
 
 <details>
-<summary>The return's 31 facts</summary>
+<summary>The example's 31 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -1653,7 +1653,7 @@ Arelle's result on it:
 | boe_b1068 | 1 | 0 | holds |
 
 <details>
-<summary>The return's 58 facts</summary>
+<summary>The example's 58 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -1816,7 +1816,7 @@ Arelle's result on it:
 | boe_b0770 | 0 | 1 | fails |
 
 <details>
-<summary>The return's 10 facts</summary>
+<summary>The example's 10 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -1922,7 +1922,7 @@ Arelle's result on it:
 | boe_b0834 | 3 | 2 | fails |
 
 <details>
-<summary>The return's 35 facts</summary>
+<summary>The example's 35 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -2108,7 +2108,7 @@ Arelle's result on it:
 | boe_b1068 | 1 | 0 | holds |
 
 <details>
-<summary>The return's 71 facts</summary>
+<summary>The example's 71 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -2646,7 +2646,7 @@ Arelle's result on it:
 | boe_b1071 | 0 | 0 | - |
 
 <details>
-<summary>The return's 57 facts</summary>
+<summary>The example's 57 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -2857,7 +2857,7 @@ Arelle's result on it:
 | boe_b1044 | 2 | 0 | - |
 
 <details>
-<summary>The return's 28 facts</summary>
+<summary>The example's 28 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -3024,7 +3024,7 @@ Arelle's result on it:
 | boe_b1040 | 1 | 0 | holds |
 
 <details>
-<summary>The return's 17 facts</summary>
+<summary>The example's 17 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -3162,7 +3162,7 @@ Arelle's result on it:
 | boe_b1092 | 1 | 0 | - |
 
 <details>
-<summary>The return's 5 facts</summary>
+<summary>The example's 5 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -3269,7 +3269,7 @@ Arelle's result on it:
 | boe_b0718 | 0 | 0 | not evaluated |
 
 <details>
-<summary>The return's 3 facts</summary>
+<summary>The example's 3 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -3414,7 +3414,7 @@ Arelle's result on it:
 | boe_b0931_1 | 1 | 0 | holds |
 
 <details>
-<summary>The return's 21 facts</summary>
+<summary>The example's 21 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -3712,7 +3712,7 @@ Arelle's result on it:
 | boe_b1048 | 0 | 0 | - |
 
 <details>
-<summary>The return's 25 facts</summary>
+<summary>The example's 25 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -3910,7 +3910,7 @@ Arelle's result on it:
 | boe_b0752_36 | 1 | 0 | holds |
 
 <details>
-<summary>The return's 39 facts</summary>
+<summary>The example's 39 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4064,7 +4064,7 @@ Arelle's result on it:
 | boe_b1092 | 1 | 0 | holds |
 
 <details>
-<summary>The return's 12 facts</summary>
+<summary>The example's 12 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4170,7 +4170,7 @@ Arelle's result on it:
 | boe_b1049 | 6 | 0 | - |
 
 <details>
-<summary>The return's 12 facts</summary>
+<summary>The example's 12 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4276,7 +4276,7 @@ Arelle's result on it:
 | boe_b0908 | 0 | 3 | fails |
 
 <details>
-<summary>The return's 6 facts</summary>
+<summary>The example's 6 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4401,7 +4401,7 @@ Arelle's result on it:
 | boe_b0976 | 0 | 0 | - |
 
 <details>
-<summary>The return's 22 facts</summary>
+<summary>The example's 22 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4522,7 +4522,7 @@ Arelle's result on it:
 | boe_b0749 | 3 | 0 | holds |
 
 <details>
-<summary>The return's 21 facts</summary>
+<summary>The example's 21 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4649,7 +4649,7 @@ Arelle's result on it:
 | boe_b0749 | 2 | 0 | holds |
 
 <details>
-<summary>The return's 29 facts</summary>
+<summary>The example's 29 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4775,7 +4775,7 @@ Arelle's result on it:
 | boe_b0749 | 2 | 0 | - |
 
 <details>
-<summary>The return's 29 facts</summary>
+<summary>The example's 29 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -4890,7 +4890,7 @@ Arelle's result on it:
 | boe_b0359 | 1 | 0 | holds |
 
 <details>
-<summary>The return's 1 facts</summary>
+<summary>The example's 1 cell</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -5077,7 +5077,7 @@ Arelle's result on it:
 | boe_b0947 | 0 | 1 | fails |
 
 <details>
-<summary>The return's 33 facts</summary>
+<summary>The example's 33 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -5237,7 +5237,7 @@ Arelle's result on it:
 | boe_b0948 | 1 | 0 | - |
 
 <details>
-<summary>The return's 28 facts</summary>
+<summary>The example's 28 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -5366,7 +5366,7 @@ Arelle's result on it:
 | v7780_m | 1 | 0 | - |
 
 <details>
-<summary>The return's 15 facts</summary>
+<summary>The example's 15 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -5482,7 +5482,7 @@ Arelle's result on it:
 | boe_b0920 | 0 | 1 | fails |
 
 <details>
-<summary>The return's 3 facts</summary>
+<summary>The example's 3 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -5606,7 +5606,7 @@ Arelle's result on it:
 | boe_b1041 | 0 | 1 | fails |
 
 <details>
-<summary>The return's 49 facts</summary>
+<summary>The example's 49 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -5770,7 +5770,7 @@ Arelle's result on it:
 | boe_b0770 | 2 | 1 | fails |
 
 <details>
-<summary>The return's 42 facts</summary>
+<summary>The example's 42 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -5961,7 +5961,7 @@ Arelle's result on it:
 | boe_b0878 | 0 | 1 | fails |
 
 <details>
-<summary>The return's 23 facts</summary>
+<summary>The example's 23 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -6109,7 +6109,7 @@ Arelle's result on it:
 | boe_b0890 | 0 | 0 | - |
 
 <details>
-<summary>The return's 50 facts</summary>
+<summary>The example's 50 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -6354,7 +6354,7 @@ Arelle's result on it:
 | boe_b1016 | 0 | 1 | - |
 
 <details>
-<summary>The return's 178 facts</summary>
+<summary>The example's 178 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -6697,7 +6697,7 @@ Arelle's result on it:
 | boe_b0273 | 1 | 0 | - |
 
 <details>
-<summary>The return's 19 facts</summary>
+<summary>The example's 19 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -6867,7 +6867,7 @@ Arelle's result on it:
 | boe_b0948 | 1 | 0 | - |
 
 <details>
-<summary>The return's 30 facts</summary>
+<summary>The example's 30 cells</summary>
 
 | Table | Sheet | Key | Row | Column | Value |
 |---|---|---|---|---|---|
@@ -6928,7 +6928,7 @@ Nothing to change: the gateway no longer runs boe_b0274 (validations deny list, 
 
 ## Appendix A - Rules the Bank re-imposes that the EBA has deactivated
 
-Many PRA001 rules restate an EBA validation rule. The EBA keeps one list for all its framework releases, one sheet per release, and describes a deactivated rule as one 'which should be disregarded (primarily due to being identified as potentially incorrect)'. This appendix lists every enforced PRA001 rule whose EBA counterpart (as the Bank's v4.0.0 workbook names it) is deactivated in the EBA's latest release sheet, or was deleted while deactivated, checked against every release sheet up to 3.5 (the EBA list of 10 June 2026). Deactivation alone is not a defect: the EBA does not publish its reasons, and several of these rules are sound for the Basel 3.1 templates. The last column gives the assessment: the issue in this document that covers the rule, or why it was found sound.
+Many PRA001 rules restate an EBA validation rule. The EBA keeps one list for all its framework releases, one sheet per release, and describes a deactivated rule as one 'which should be disregarded (primarily due to being identified as potentially incorrect)'. This appendix lists every enforced PRA001 rule whose EBA counterpart is deactivated in the EBA's latest release sheet, or was deleted while deactivated, checked against every release sheet up to 3.5 (the EBA list of 10 June 2026). The counterpart is the one the Bank's v4.0.0 workbook names, except in group B: for the OF 34.07 / OF 08.01 rules that workbook pairs the Bank's rules with the EBA's by position, not by sheet (PI-08, PI-13), so group B matches each Bank rule to the EBA rule on the same table, row, column and sheet code (the Bank kept the EBA's codes 0002, 0006, 0010, 0011 and 0012 for these sheets; the EBA has no sheet 0020). Matched so, boe_b0841 (sheet 0010), b0863 and b0881 (0011) and b0883 (0020) restate no deactivated rule: the EBA's v10530_h, v10548_h and v10710_h were never deactivated. Deactivation alone is not a defect: the EBA does not publish its reasons, and several of these rules are sound for the Basel 3.1 templates. The last column gives the assessment: the issue in this document that covers the rule, or why it was found sound.
 
 34 enforced rules restate an EBA rule that is deactivated, or was deleted while deactivated, in the latest sheet (groups A, A2, B and E below; boe_b0349 and boe_b0350 in group A carry an EBA label but are not restatements). Seven more restate EBA rules the EBA reactivated on 10 March 2022 in corrected form (group C), so 'never reactivated' is not true of them; four were in the taxonomy package in v4.0.0 and are not in it in v4.1.1 (group D). For each rule in groups A, A2, B and E the Bank may wish to confirm that the EBA's reason for deactivating the original does not apply to the Basel 3.1 template. The Bank already does this for the rules it carries under the EBA's own codes: of the 20 EBA-coded PRA001 rules the EBA has deactivated, 16 are switched off in PRA001 (11 not in the package, 5 deactivated) and 4 are still run (v0611_m, v6566_s, v7336_m, v7430_m, all WARNING). Two points beyond the issues: boe_b0779 keeps percentage column 0050, which the EBA's corrected v09797_m dropped (PI-23); and the EBA deactivated v09796_m, the original of boe_b0778, on 10 June 2025 (PI-23). The 'What the Bank's rule checks' column gives the Bank's form, which can differ from the EBA's: the EBA's v4757_m is {c0280} <= {c0020} with no absolute values, and its 3.2 forms of v09773_m-v09778_m sum over sheets s0001-s0017 where the Bank's apply per sheet; boe_b0739 reads OF 08.01 c0282 where v09777_m reads c0280.
 
@@ -6960,14 +6960,14 @@ Many PRA001 rules restate an EBA validation rule. The EBA keeps one list for all
 | A2 | boe_b0823 | ERROR | v09794_m | '/2' form reactivated at 3.2, deactivated again 2025-06-10 | OF 08.06 r0095 c0090 (per type) = sum of OF 08.01 r0080 c0280, / 2 | PI-03 |
 | A2 | boe_b0829 | ERROR | v09795_m | '/2' form reactivated at 3.2, deactivated again 2025-06-10 | OF 08.06 r0095 c0100 (per type) = sum of OF 08.01 r0080 c0290, / 2 | PI-03 |
 | B | boe_b0837 | ERROR | v10522_h | deactivated 2021-09-10, deleted with its family at 3.2 | OF 34.07 r0180 c0030 = sum of OF 08.01 rows 0040-0060 c0300, sheet 0002 | PI-12, PI-08 |
-| B | boe_b0841 | ERROR | v10526_h | deactivated 2021-09-10, deleted with its family at 3.2 | the same, sheet 0010 | PI-12, PI-08 |
+| B | boe_b1035 | ERROR | v10526_h | deactivated 2021-09-10, deleted with its family at 3.2 | the same, sheet 0006 | PI-08 |
 | B | boe_b0855 | ERROR | v10539_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0060 against c0260, sheet 0002 | PI-12 |
-| B | boe_b0859 | ERROR | v10543_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0060 against c0260, sheet 0010 | PI-12 |
-| B | boe_b0863 | ERROR | v10547_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0060 against c0260, sheet 0011 | PI-13 (exposures cleared through a CCP) |
+| B | boe_b1067 | ERROR | v10543_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0060 against c0260, sheet 0006 | PI-13 (exposures cleared through a CCP) |
+| B | boe_b0859 | ERROR | v10547_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0060 against c0260, sheet 0010 | PI-12 |
 | B | boe_b0873 | ERROR | v10701_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0010 against c0110, sheet 0002 | PI-12 |
-| B | boe_b0877 | ERROR | v10705_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0010 against c0110, sheet 0010 | PI-12 |
-| B | boe_b0881 | ERROR | v10709_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0010 against c0110, sheet 0011 | PI-13 |
-| B | boe_b0883 | ERROR | v10711_h | deactivated 2022-12-12, deleted at 3.2 | c0010 against c0110, sheet 0020 | PI-13 |
+| B | boe_b1068 | ERROR | v10705_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0010 against c0110, sheet 0006 | PI-13 |
+| B | boe_b0877 | ERROR | v10709_h | deactivated 2021-09-10, deleted with its family at 3.2 | c0010 against c0110, sheet 0010 | PI-12 |
+| B | boe_b0882 | ERROR | v10711_h | deactivated 2022-12-12, deleted at 3.2 | c0010 against c0110, sheet 0012 | PI-13 |
 | C | boe_b0779 | ERROR | v09797_m | deactivated 2021-06-30; reactivated 2022-03-10 with columns cut to 0010;0020 | OF 08.07 r0260 = sum of rows 0180-0250 | PI-23: the Bank kept percentage column 0050 |
 | C | boe_b0323 | ERROR | v8654_m | deactivated 2020-03-10; reactivated 2022-03-10 | sum of OF 09.02 r0150 over countries less the total = the total | sound: 6/0 on a two-country return, 5/1 when one country is understated |
 | C | boe_b0904 | ERROR | v8653_m | the same | the same on OF 09.01 r0170 | sound: 3/0, and 2/1 on the understated return |

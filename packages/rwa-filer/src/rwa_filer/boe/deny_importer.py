@@ -324,14 +324,38 @@ def write_deny_list(payload: Mapping[str, Any], path: Path) -> None:
         handle.write(dump_deny_list(payload))
 
 
-def is_deny_list_current(payload: Mapping[str, Any], committed: str | None) -> bool:
-    """Whether ``committed`` (a packaged file's text) is exactly what ``payload`` writes."""
-    return committed is not None and committed == dump_deny_list(payload)
+def is_deny_list_current(
+    payload: Mapping[str, Any], committed: str | None, *, known_issues: bool = True
+) -> bool:
+    """Whether ``committed`` (a packaged file's text) is exactly what ``payload`` writes.
+
+    ``known_issues=False`` is for a ``payload`` imported without the known-issues
+    log: it compares everything but that join - each entry's ``known_issue`` and
+    the source's ``known_issues`` - which only the log can give. ``committed``
+    must still be byte for byte what this package writes.
+    """
+    if committed is None:
+        return False
+    if known_issues:
+        return committed == dump_deny_list(payload)
+    stored = json.loads(committed)
+    return committed == dump_deny_list(stored) and dump_deny_list(
+        _without_known_issues(stored)
+    ) == dump_deny_list(_without_known_issues(payload))
 
 
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _without_known_issues(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """``payload`` with the known-issues join taken out: what an import without the log gives."""
+    return {
+        **payload,
+        "source": {**payload.get("source", {}), "known_issues": None},
+        "entries": [{**entry, "known_issue": None} for entry in payload.get("entries", [])],
+    }
 
 
 def _read_sheet(

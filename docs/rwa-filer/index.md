@@ -1123,7 +1123,8 @@ uvx rwa-filer@latest rulebook issues PI-05
 uvx rwa-filer@latest rulebook issues --format markdown
 
 # Rebuild a release's deny list from the Bank's workbook, joined to the
-# known-issues log; or fail if the packaged one is not what it yields
+# known-issues log; or fail if the packaged one is not what it yields. Without
+# --known-issues, check compares every entry but not the known-issue numbers
 uvx "rwa-filer[excel]@latest" rulebook deny-list import deny-list.xlsx --release 4.1.1 \
     --known-issues known-issues.xlsx --out deny/
 uvx "rwa-filer[excel]@latest" rulebook deny-list check deny-list.xlsx --release 4.1.1 \

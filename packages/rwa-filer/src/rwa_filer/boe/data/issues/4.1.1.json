@@ -20735,7 +20735,7 @@
   {
    "id": "A",
    "title": "Rules the Bank re-imposes that the EBA has deactivated",
-   "text": "Many PRA001 rules restate an EBA validation rule. The EBA keeps one list for all its framework releases, one sheet per release, and describes a deactivated rule as one 'which should be disregarded (primarily due to being identified as potentially incorrect)'. This appendix lists every enforced PRA001 rule whose EBA counterpart (as the Bank's v4.0.0 workbook names it) is deactivated in the EBA's latest release sheet, or was deleted while deactivated, checked against every release sheet up to 3.5 (the EBA list of 10 June 2026). Deactivation alone is not a defect: the EBA does not publish its reasons, and several of these rules are sound for the Basel 3.1 templates. The last column gives the assessment: the issue in this document that covers the rule, or why it was found sound.\n\n34 enforced rules restate an EBA rule that is deactivated, or was deleted while deactivated, in the latest sheet (groups A, A2, B and E below; boe_b0349 and boe_b0350 in group A carry an EBA label but are not restatements). Seven more restate EBA rules the EBA reactivated on 10 March 2022 in corrected form (group C), so 'never reactivated' is not true of them; four were in the taxonomy package in v4.0.0 and are not in it in v4.1.1 (group D). For each rule in groups A, A2, B and E the Bank may wish to confirm that the EBA's reason for deactivating the original does not apply to the Basel 3.1 template. The Bank already does this for the rules it carries under the EBA's own codes: of the 20 EBA-coded PRA001 rules the EBA has deactivated, 16 are switched off in PRA001 (11 not in the package, 5 deactivated) and 4 are still run (v0611_m, v6566_s, v7336_m, v7430_m, all WARNING). Two points beyond the issues: boe_b0779 keeps percentage column 0050, which the EBA's corrected v09797_m dropped (PI-23); and the EBA deactivated v09796_m, the original of boe_b0778, on 10 June 2025 (PI-23). The 'What the Bank's rule checks' column gives the Bank's form, which can differ from the EBA's: the EBA's v4757_m is {c0280} <= {c0020} with no absolute values, and its 3.2 forms of v09773_m-v09778_m sum over sheets s0001-s0017 where the Bank's apply per sheet; boe_b0739 reads OF 08.01 c0282 where v09777_m reads c0280.",
+   "text": "Many PRA001 rules restate an EBA validation rule. The EBA keeps one list for all its framework releases, one sheet per release, and describes a deactivated rule as one 'which should be disregarded (primarily due to being identified as potentially incorrect)'. This appendix lists every enforced PRA001 rule whose EBA counterpart is deactivated in the EBA's latest release sheet, or was deleted while deactivated, checked against every release sheet up to 3.5 (the EBA list of 10 June 2026). The counterpart is the one the Bank's v4.0.0 workbook names, except in group B: for the OF 34.07 / OF 08.01 rules that workbook pairs the Bank's rules with the EBA's by position, not by sheet (PI-08, PI-13), so group B matches each Bank rule to the EBA rule on the same table, row, column and sheet code (the Bank kept the EBA's codes 0002, 0006, 0010, 0011 and 0012 for these sheets; the EBA has no sheet 0020). Matched so, boe_b0841 (sheet 0010), b0863 and b0881 (0011) and b0883 (0020) restate no deactivated rule: the EBA's v10530_h, v10548_h and v10710_h were never deactivated. Deactivation alone is not a defect: the EBA does not publish its reasons, and several of these rules are sound for the Basel 3.1 templates. The last column gives the assessment: the issue in this document that covers the rule, or why it was found sound.\n\n34 enforced rules restate an EBA rule that is deactivated, or was deleted while deactivated, in the latest sheet (groups A, A2, B and E below; boe_b0349 and boe_b0350 in group A carry an EBA label but are not restatements). Seven more restate EBA rules the EBA reactivated on 10 March 2022 in corrected form (group C), so 'never reactivated' is not true of them; four were in the taxonomy package in v4.0.0 and are not in it in v4.1.1 (group D). For each rule in groups A, A2, B and E the Bank may wish to confirm that the EBA's reason for deactivating the original does not apply to the Basel 3.1 template. The Bank already does this for the rules it carries under the EBA's own codes: of the 20 EBA-coded PRA001 rules the EBA has deactivated, 16 are switched off in PRA001 (11 not in the package, 5 deactivated) and 4 are still run (v0611_m, v6566_s, v7336_m, v7430_m, all WARNING). Two points beyond the issues: boe_b0779 keeps percentage column 0050, which the EBA's corrected v09797_m dropped (PI-23); and the EBA deactivated v09796_m, the original of boe_b0778, on 10 June 2025 (PI-23). The 'What the Bank's rule checks' column gives the Bank's form, which can differ from the EBA's: the EBA's v4757_m is {c0280} <= {c0020} with no absolute values, and its 3.2 forms of v09773_m-v09778_m sum over sheets s0001-s0017 where the Bank's apply per sheet; boe_b0739 reads OF 08.01 c0282 where v09777_m reads c0280.",
    "columns": [
     "Group",
     "Rule",
@@ -20982,12 +20982,12 @@
     ],
     [
      "B",
-     "boe_b0841",
+     "boe_b1035",
      "ERROR",
      "v10526_h",
      "deactivated 2021-09-10, deleted with its family at 3.2",
-     "the same, sheet 0010",
-     "PI-12, PI-08"
+     "the same, sheet 0006",
+     "PI-08"
     ],
     [
      "B",
@@ -21000,21 +21000,21 @@
     ],
     [
      "B",
-     "boe_b0859",
+     "boe_b1067",
      "ERROR",
      "v10543_h",
      "deactivated 2021-09-10, deleted with its family at 3.2",
-     "c0060 against c0260, sheet 0010",
-     "PI-12"
+     "c0060 against c0260, sheet 0006",
+     "PI-13 (exposures cleared through a CCP)"
     ],
     [
      "B",
-     "boe_b0863",
+     "boe_b0859",
      "ERROR",
      "v10547_h",
      "deactivated 2021-09-10, deleted with its family at 3.2",
-     "c0060 against c0260, sheet 0011",
-     "PI-13 (exposures cleared through a CCP)"
+     "c0060 against c0260, sheet 0010",
+     "PI-12"
     ],
     [
      "B",
@@ -21027,29 +21027,29 @@
     ],
     [
      "B",
-     "boe_b0877",
+     "boe_b1068",
      "ERROR",
      "v10705_h",
+     "deactivated 2021-09-10, deleted with its family at 3.2",
+     "c0010 against c0110, sheet 0006",
+     "PI-13"
+    ],
+    [
+     "B",
+     "boe_b0877",
+     "ERROR",
+     "v10709_h",
      "deactivated 2021-09-10, deleted with its family at 3.2",
      "c0010 against c0110, sheet 0010",
      "PI-12"
     ],
     [
      "B",
-     "boe_b0881",
-     "ERROR",
-     "v10709_h",
-     "deactivated 2021-09-10, deleted with its family at 3.2",
-     "c0010 against c0110, sheet 0011",
-     "PI-13"
-    ],
-    [
-     "B",
-     "boe_b0883",
+     "boe_b0882",
      "ERROR",
      "v10711_h",
      "deactivated 2022-12-12, deleted at 3.2",
-     "c0010 against c0110, sheet 0020",
+     "c0010 against c0110, sheet 0012",
      "PI-13"
     ],
     [

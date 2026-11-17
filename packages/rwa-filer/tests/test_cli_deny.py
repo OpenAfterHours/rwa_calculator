@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -28,6 +29,9 @@ import pytest
 
 from compare_builders import corporate_csv
 from pack_builders import VALID_LEI
+from rwa_filer import cli
+from rwa_filer.boe.deny import DENY_DOWNGRADED
+from rwa_filer.boe.deny_importer import DenyImport
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 from rwa_filer.release import release_deny_list
 from rwa_filer.schemas import VALIDATION_REPORT_SCHEMA, load_schema
@@ -181,6 +185,21 @@ def test_rulebook_deny_list_json_says_whether_each_entry_is_in_force(
 # ---------------------------------------------------------------------------
 
 
+def _packaged_import(*, downgrade: int = 0) -> DenyImport:
+    """The packaged 4.1.1 list as importing its workbook WITHOUT the known-issues log gives it.
+
+    ``downgrade`` turns that many deactivations into downgrades, so the entries differ.
+    """
+    packaged = release_deny_list("4.1.1")
+    entries = [replace(item, known_issue=None) for item in packaged.entries]
+    for index in [i for i, item in enumerate(entries) if item.is_deactivation][:downgrade]:
+        entries[index] = replace(entries[index], deny_type=DENY_DOWNGRADED)
+    deny_list = replace(
+        packaged, entries=tuple(entries), source={**packaged.source, "known_issues": None}
+    )
+    return DenyImport(deny_list=deny_list, rows=len(entries) + len(packaged.unmatched))
+
+
 def _deny_workbook(tmp_path: Path) -> Path:
     openpyxl = pytest.importorskip("openpyxl", reason="reading the deny list needs openpyxl")
     book = openpyxl.Workbook()
@@ -242,6 +261,80 @@ def test_rulebook_deny_list_refuses_a_release_that_is_not_shipped(
     assert "taxonomy 0.0.1 is not shipped" in capsys.readouterr().err
 
 
+def test_rulebook_deny_list_check_without_the_known_issues_log_compares_without_its_join(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--known-issues`` is optional, so a check without it cannot fail on numbers only it gives.
+
+    Arrange: the workbook as the check imports it without --known-issues - the
+             packaged entries and source, with no known-issue number and no log.
+    Act:     run the check.
+    Assert:  it passes, and says the known-issue numbers were not checked.
+    """
+    # Arrange
+    monkeypatch.setattr(cli, "_read_deny_list", lambda _args: _packaged_import())
+
+    # Act
+    code = main(["rulebook", "deny-list", "check", "deny.xlsx", "--release", "4.1.1"])
+    out = capsys.readouterr()
+
+    # Assert
+    assert code == EXIT_OK, out.err
+    assert "ok    packaged deny list 4.1.1.json" in out.out
+    assert "known-issue numbers not checked" in out.out
+
+
+def test_rulebook_deny_list_check_without_the_log_still_fails_on_an_entry_that_differs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Leaving the log out narrows the comparison by the join alone: an entry still counts.
+
+    Arrange: the same import, with one rule downgraded where the package deactivates it.
+    Act:     run the check without --known-issues.
+    Assert:  it fails as out of date.
+    """
+    # Arrange
+    monkeypatch.setattr(cli, "_read_deny_list", lambda _args: _packaged_import(downgrade=1))
+
+    # Act
+    code = main(["rulebook", "deny-list", "check", "deny.xlsx", "--release", "4.1.1"])
+
+    # Assert
+    assert code == EXIT_FAILED
+    assert "packaged deny list 4.1.1.json is out of date" in capsys.readouterr().err
+
+
+def test_rulebook_deny_list_check_with_the_log_compares_its_numbers(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Given the log, the known-issue numbers are compared too.
+
+    Arrange: an import with no known-issue numbers, the log named on the command line.
+    Act:     run the check with --known-issues.
+    Assert:  it fails as out of date: the packaged numbers are not what the import gives.
+    """
+    # Arrange
+    monkeypatch.setattr(cli, "_read_deny_list", lambda _args: _packaged_import())
+
+    # Act
+    code = main(
+        [
+            "rulebook",
+            "deny-list",
+            "check",
+            "deny.xlsx",
+            "--release",
+            "4.1.1",
+            "--known-issues",
+            "issues.xlsx",
+        ]
+    )
+
+    # Assert
+    assert code == EXIT_FAILED
+    assert "packaged deny list 4.1.1.json is out of date" in capsys.readouterr().err
+
+
 # ---------------------------------------------------------------------------
 # The Bank's own workbook — opt-in (it is not in the repository)
 # ---------------------------------------------------------------------------
@@ -256,7 +349,12 @@ KNOWN_ISSUES = os.environ.get("RWA_FILER_KNOWN_ISSUES")
 def test_the_packaged_list_is_what_the_banks_workbook_yields(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """With RWA_FILER_KNOWN_ISSUES naming the known-issues log it was joined to."""
+    """RWA_FILER_DENY_LIST alone checks the entries; RWA_FILER_KNOWN_ISSUES adds the numbers.
+
+    Without the known-issues log the check compares the list without its join
+    (each entry's known-issue number and the log's identity), which only the log
+    can give; with it, the whole file.
+    """
     arguments = ["rulebook", "deny-list", "check", str(DENY_WORKBOOK), "--release", "4.1.1"]
     if KNOWN_ISSUES:
         arguments += ["--known-issues", KNOWN_ISSUES]

@@ -1447,7 +1447,9 @@ def _deny_list_check(args: argparse.Namespace) -> int:
     """``rwa-filer rulebook deny-list check`` — compare the packaged deny list with the workbook.
 
     The address and publication date are not in the workbook: unless given,
-    they are taken from the packaged file.
+    they are taken from the packaged file. The known-issue numbers come from
+    the known-issues log alone, so without ``--known-issues`` they are not
+    compared (and the command says so); with it, the whole file is.
     """
     packaged = Path(str(deny_importer.__file__)).parent.joinpath(
         *DENY_DIRECTORY, deny_list_file(args.release)
@@ -1466,7 +1468,10 @@ def _deny_list_check(args: argparse.Namespace) -> int:
     for line in imported.lines():
         _out(line)
     name = deny_list_file(args.release)
-    if deny_importer.is_deny_list_current(imported.payload, committed):
+    with_log = args.known_issues is not None
+    if not with_log:
+        _out("note  known-issue numbers not checked: pass --known-issues XLSX to check them")
+    if deny_importer.is_deny_list_current(imported.payload, committed, known_issues=with_log):
         _out(f"ok    packaged deny list {name}")
         return EXIT_OK
     state = "out of date" if committed is not None else "missing"

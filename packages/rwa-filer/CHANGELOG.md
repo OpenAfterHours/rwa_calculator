@@ -16,8 +16,10 @@ and released independently of `rwa-calc`; its release tags are prefixed
   - `validate_return` (`rwa-filer validate`, `build`) applies it after the rules
     are evaluated, on the run date; `submission_date=` / `--submission-date`
     sets another date. The return's reference date never decides: the list is
-    the gateway's configuration on the day of submission. An entry with no date,
-    a later date or another module is listed and not applied.
+    the gateway's configuration on the day of submission. An entry for the
+    return's module with no date or a later date is listed and not applied; an
+    entry for another module is neither applied nor listed (the report speaks of
+    the return's own module only).
   - A deactivated rule is `NOT_EVALUATED` with reason `deactivated_by_publisher`.
     Like `closed_by_formula`, it is not an evaluability gap and does not count
     against template coverage. A downgraded rule keeps running, as a Warning
@@ -50,8 +52,9 @@ and released independently of `rwa-calc`; its release tags are prefixed
   (PI-01 to PI-40): 32 defects, 4 clarification questions and 4 the Bank has
   already acknowledged in its known-issues log. Each names its rules, pinned by
   `Rule.fingerprint` and severity, quotes the instructions and the rules with
-  their PDF page, and carries a worked example whose result Arelle 2.47.5
-  measured against the Bank's v4.1.1 package.
+  their PDF page; 37 of the 40 carry a worked example whose result Arelle
+  2.47.5 measured against the Bank's v4.1.1 package (PI-14, PI-21 and PI-30
+  have no rule effect to show, so no example).
   - **No verdict changes.** A finding inside an issue's footprint carries
     `publisher_issues` and a sentence saying what the issue is. A draft issue
     reads "identified by rwa-filer, not yet raised with the Bank of England"; a
@@ -66,8 +69,12 @@ and released independently of `rwa-calc`; its release tags are prefixed
   - The repository's `docs/rwa-filer/publisher-issues.md` is generated from the
     register and is the copy to send to the Bank.
 - `ValidationRule.always_execute`, read from the Bank's extract ("Always
-  execute"); `False` for every EBA rule, as for the Bank's own restatements
-  of EBA rules, none of which is always-execute.
+  execute"). `False` for every rule read from the EBA's extract, which has no
+  such column: an XBRL processor does not evaluate a rule none of whose cells
+  is reported. A rule read from the Bank's extract takes the Bank's flag, and
+  the Bank does mark some of its restatements of EBA rules always-execute: 4 of
+  the 508 it restates under the EBA's ids (`v6295_m`, `e4887_e`, `v7321_n`,
+  `v7322_n`).
 - **Choosing the taxonomy release.** `rwa-filer` can now ship several taxonomy
   releases, and a run uses one: the one `--taxonomy VERSION` names, on every
   command that reads a return (`validate`, `build`, `diff`, `compare`, `dash`,
@@ -134,9 +141,34 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ---
 
 ### Fixed
+- **`rulebook deny-list check` without `--known-issues` no longer reports a
+  current list out of date.** The known-issue numbers come from the
+  known-issues log alone, so a check run without it rebuilt every entry with no
+  number and failed against a packaged list it matched exactly. It now compares
+  everything but that join and says the numbers were not checked; with
+  `--known-issues` it compares the whole file, as before
+  (`is_deny_list_current(..., known_issues=False)`).
+- **The publisher-issue document gives the number of rules the gateway runs.**
+  `render_document` wrote the published population as the number "run on a
+  PRA001 return" (1,441) next to the deny list that deactivates 7 of them. It
+  now says 1,441 are published and the gateway runs 1,434 as at the deny
+  list's publication date (16 November 2026).
+- **A worked example's table is headed by its cells, not "facts".** One entry
+  per template cell; where two cells share a data point the return holds fewer
+  XBRL facts, so the heading disagreed with Arelle's fact count on 8 of the 37
+  examples, and PI-35's heading with its own text ("25 facts for 28 cells").
+- **Appendix A group B of the 4.1.1 register pairs each Bank rule with the EBA
+  rule on its own sheet.** It used the Bank's v4.0.0 workbook's positional
+  pairing, which PI-08 and PI-13 say must not be read sheet for sheet. Matched
+  by table, row, column and sheet code: `boe_b0837`, `b0855`, `b0873` (sheet
+  0002), `b1035`, `b1067`, `b1068` (0006), `b0859`, `b0877` (0010) and `b0882`
+  (0012) restate EBA rules deactivated in 2021-2022; `b0841`, `b0863`, `b0881`
+  and `b0883` restate none (`v10530_h`, `v10548_h` and `v10710_h` were never
+  deactivated, and the EBA has no sheet 0020). Still 34 rules.
 - **Rules the Bank has switched off at its gateway are no longer enforced.**
-  Before this release, `boe_b0710`, `_1`, `_2`, `_3` and `boe_b0746` (deactivated
-  19 October 2026; known issue #22), `boe_b0272` and `boe_b0274` (16 November
+  Before this release, `boe_b0710`, `_1`, `_2`, `_3` (deactivated 19 October
+  2026; known issue #22) and `boe_b0746` (19 October 2026; known issue #26),
+  `boe_b0272` and `boe_b0274` (16 November
   2026), the PRA116 `boe_b0063_ss` family and PRA115 `boe_b1014` / `boe_b1022`
   failed returns the gateway accepts, and MRL001 `boe_b4006_1/_2` and
   `boe_b4008_1/_2` blocked where the gateway only warns. `compare` reported

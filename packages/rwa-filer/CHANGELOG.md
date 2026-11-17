@@ -8,6 +8,74 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Added
 - (Next release changes will go here)
+- **The Bank of England's validations deny list, per release.** The Bank changes
+  how its gateway runs some rules after a taxonomy is published: it deactivates
+  a rule, or downgrades it to a warning. `rwa-filer` now ships that list for each
+  taxonomy release (`boe/data/deny/<release>.json`; 4.1.1 is built from the
+  November 2026 workbook, 16 entries) and applies it.
+  - `validate_return` (`rwa-filer validate`, `build`) applies it after the rules
+    are evaluated, on the run date; `submission_date=` / `--submission-date`
+    sets another date. The return's reference date never decides: the list is
+    the gateway's configuration on the day of submission. An entry for the
+    return's module with no date or a later date is listed and not applied; an
+    entry for another module is neither applied nor listed (the report speaks of
+    the return's own module only).
+  - A deactivated rule is `NOT_EVALUATED` with reason `deactivated_by_publisher`.
+    Like `closed_by_formula`, it is not an evaluability gap and does not count
+    against template coverage. A downgraded rule keeps running, as a Warning
+    (`VAL002`), and its message says so.
+  - The published verdict is kept on the new `RuleResult.formula`.
+    `Rule.fingerprint` does not change.
+  - `compare` (`compare_returns(submission_date=...)`, `--submission-date`)
+    judges both returns by the list in force. A rule switched off that day is
+    not a shared break; if its published formula breaks in either return it is
+    listed in `ReturnComparison.switched_off`, so the switch is never silent.
+  - The referee compares Arelle with the published verdict, since Arelle runs the
+    taxonomy's formulas, which still contain the deny-listed rules.
+  - Every surface that lists rules says what the Bank did, with the date and the
+    known-issue number: the text report, the JSON report and the evidence
+    (`deny_list` and `formula` on rules, `summary.deny_list`,
+    `identity.deny_list`), `rules list`, `rulebook list` (a deny-listed column),
+    and the dashboard's rules, overview, reference and compare pages.
+    `evidence_id` covers the entries in force, not the date or the file.
+  - New `rulebook deny-list [import|check]`: imports the Bank's workbook by
+    column name, matches each code to a rule of its module, reports and keeps any
+    code that matches none, and joins the known-issues log for the issue number.
+    One typo in the November 2026 list is resolved by a stated rule
+    (`boe_b04006_1/_2` is MRL001 `boe_b4006_1/_2`, which known issue #23
+    corroborates); the Bank's spelling is kept as `published_code`. `check`
+    compares a packaged list with the workbook.
+  - Building a release (`rwa_filer.release_build`) keeps a release's list on
+    rebuild and removes it when the release is retired.
+- **A register of known issues with the Bank's published rules, and a label on
+  every result one explains.** `boe/data/issues/4.1.1.json` holds 40 issues
+  (PI-01 to PI-40): 32 defects, 4 clarification questions and 4 the Bank has
+  already acknowledged in its known-issues log. Each names its rules, pinned by
+  `Rule.fingerprint` and severity, quotes the instructions and the rules with
+  their PDF page; 37 of the 40 carry a worked example whose result Arelle
+  2.47.5 measured against the Bank's v4.1.1 package (PI-14, PI-21 and PI-30
+  have no rule effect to show, so no example).
+  - **No verdict changes.** A finding inside an issue's footprint carries
+    `publisher_issues` and a sentence saying what the issue is. A draft issue
+    reads "identified by rwa-filer, not yet raised with the Bank of England"; a
+    clarification reads "Open question with the published rule". The labels are
+    in the JSON report, the text report, the evidence, the filing manifest and
+    the dashboard (a chip and a callout), and outside `evidence_id`.
+  - `rwa-filer rulebook issues [ISSUE] --format text|json|markdown`.
+  - Library: `rwa_filer.boe.issues.issues_for(release, module, rule_id)`, which
+    returns a tuple of issues (several issues can name one rule).
+  - Schema: `publisher-issues-1.schema.json`. A new release gets an empty
+    register and a WARNING; retiring a release removes its register.
+  - The repository's `docs/rwa-filer/publisher-issues.md` is generated from the
+    register and is the copy to send to the Bank.
+- `ValidationRule.always_execute`, read from the Bank's extract ("Always
+  execute"). `False` for every rule read from the EBA's extract, which has no
+  such column: an XBRL processor does not evaluate a rule none of whose cells
+  is reported. A rule read from the Bank's extract takes the Bank's flag, and
+  the Bank does mark some of its restatements of EBA rules always-execute: 4 of
+  the 508 it restates under the EBA's ids (`v6295_m`, `e4887_e`, `v7321_n`,
+  `v7322_n`), and the six forms it splits two EBA rules into (`v6293_1_m` to
+  `v6293_3_m`, `v6294_1_m` to `v6294_3_m`).
 - **Validation says how far it has got.** A full PRA001 return takes tens of
   seconds to validate, nearly all of it in the published rules, and until now
   nothing showed the work was moving. `validate`, `build` and `dash FILE` now
@@ -71,6 +139,14 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Changed
 - (Next release changes will go here)
+- **The template-level engine's enforced population moves with the date.**
+  `load_rules(framework, on=...)` reads the same packaged deny list for the BoE
+  extract's release: a deactivated rule is not enforced, and a downgraded one is
+  a Warning. `RuleSet.enforced` is therefore 795 BoE rules on 16 November 2026,
+  not 800. `RuleSet.published_in_force` keeps the extract's own population. The
+  extract's `status` field is not changed.
+- JSON report schema 2.0 → 2.1 and evidence schema 1.0 → 1.1. Every new field is
+  optional.
 - **Breaking:** `taxonomy.pack.resolve_pack` / `select_pack` and
   `boe.catalogue.rulebook_for_module` are removed; use
   `rwa_filer.release.resolve_release`, which returns the pack and the rule book
@@ -89,9 +165,122 @@ and released independently of `rwa-calc`; its release tags are prefixed
   position, so a column the Bank adds or moves no longer shifts a field, and
   finds its Basel 3.1 extract as the newest one packaged.
 
+### Performance
+- **Referee workers run at once.** `run_referee(jobs=...)` and `rwa-filer
+  referee --jobs N` set how many Arelle workers run side by side; by default
+  (`None`) as many as fit in the memory available, less 1.5 GB, at the
+  per-worker cap `max_rss_gb`, and no more than one per CPU — one where
+  `/proc/meminfo` cannot be read (`rwa_filer.referee.resolve_jobs`). Available
+  is the kernel's `MemAvailable`, or the room under a cgroup memory limit on
+  the process (a container's `--memory`, v1 or v2, on its own group or an
+  ancestor) where that is less: the OOM killer enforces the limit, which
+  `MemAvailable` does not see. An explicit number over that budget is run as
+  asked, with one warning. Every worker keeps its own memory and
+  time guard and its own Arelle configuration folder, and the results are
+  merged in plan order, so a verdict, a message's order and the lost rules do
+  not depend on which worker finishes first. Several instances can share one
+  pool: `prepare_referee` each, then `run_referees` them all, a result each.
+  An interrupt kills the workers that are running, within about half a second:
+  the pool is waited on half a second at a time, as a signal delivered to
+  another thread (polars keeps several) does not wake an unbounded wait. New
+  `interrupt_on_sigterm()` makes SIGTERM do the same — `rwa-filer referee`
+  runs inside it — since a worker runs in a session of its own and SIGTERM's
+  default action would leave every running worker behind.
+- **A referee worker ends as soon as its result is written.** It used to close
+  the Arelle session and tear the interpreter down first, freeing a model of
+  several GB object by object: about 13 seconds of a minute-long worker on
+  PRA001, after the result was on disk. The result is read before the session
+  would close, so it is unchanged; `worker.main` called in-process still
+  closes the session.
+- **A referee worker runs Arelle with Python's cyclic garbage collector off.**
+  Arelle keeps nearly everything it allocates until the worker ends, so the
+  collector's passes freed little: off, a PRA001 worker loads and evaluates
+  about 14% faster for about 7% more peak memory (3.89 GB against 3.64 on the
+  largest chunk measured), with the same verdicts. In-process callers get the
+  collector back when the session ends.
+- **A referee worker's result can be reused.** With `cache_dir=` on
+  `run_referee` / `run_referees`, a worker's raw result is stored under a
+  SHA-256 of everything it depends on — the bytes of the instance, the
+  taxonomy package, the overlay's members and the filing-rule plug-in, the
+  worker's settings, every distribution installed in the worker interpreter
+  (`name==version`: an `arelle-release==X` install leaves lxml, regex,
+  pyparsing and the rest unpinned, and a new release of any of them must
+  re-run Arelle), its Python version and locale, and the referee's own code —
+  and of no path. A run that
+  finds the key reuses the result, byte for byte, and launches no worker
+  (`ChunkStat.cached`); the merge and any comparison run as before. Only a
+  worker that finished is stored, and not even one of those that left an
+  assertion unanswered or logged an error-level or exception message — a
+  stored result is replayed by every later run, so nothing that may not
+  happen again is kept. An entry is a digest line and the raw result, written
+  whole or not at all; one whose digest does not match, or that does not read
+  back as a result, is recomputed.
+  `referee_cache_dir` reads the folder from `RWA_FILER_REFEREE_CACHE`. The
+  library default is no cache.
+
 ---
 
 ### Fixed
+- **Two log lines no longer echo file content (CWE-117 log injection).** The referee
+  runner logged an Arelle message code from a worker's result when it declined to
+  cache that result, and a release build logged the previous issue register's open
+  issue ids and release names. Both now log fixed wording and a count; the code and
+  the ids stay in the files they came from.
+- **`rulebook deny-list check` without `--known-issues` no longer reports a
+  current list out of date.** The known-issue numbers come from the
+  known-issues log alone, so a check run without it rebuilt every entry with no
+  number and failed against a packaged list it matched exactly. It now compares
+  everything but that join and says the numbers were not checked; with
+  `--known-issues` it compares the whole file, as before
+  (`is_deny_list_current(..., known_issues=False)`).
+- **The publisher-issue document gives the number of rules the gateway runs.**
+  `render_document` wrote the published population as the number "run on a
+  PRA001 return" (1,441) next to the deny list that deactivates 7 of them. It
+  now says 1,441 are published and the gateway runs 1,434 as at the deny
+  list's publication date (16 November 2026).
+- **A worked example's table is headed by its cells, not "facts".** One entry
+  per template cell; where two cells share a data point the return holds fewer
+  XBRL facts, so the heading disagreed with Arelle's fact count on 8 of the 37
+  examples, and PI-35's heading with its own text ("25 facts for 28 cells").
+- **Appendix A group B of the 4.1.1 register pairs each Bank rule with the EBA
+  rule on its own sheet.** It used the Bank's v4.0.0 workbook's positional
+  pairing, which PI-08 and PI-13 say must not be read sheet for sheet. Matched
+  by table, row, column and sheet code: `boe_b0837`, `b0855`, `b0873` (sheet
+  0002), `b1035`, `b1067`, `b1068` (0006), `b0859`, `b0877` (0010) and `b0882`
+  (0012) restate EBA rules deactivated in 2021-2022; `b0841`, `b0863`, `b0881`
+  and `b0883` restate none (`v10530_h`, `v10548_h` and `v10710_h` were never
+  deactivated, and the EBA has no sheet 0020). Still 34 rules.
+- **Rules the Bank has switched off at its gateway are no longer enforced.**
+  Before this release, `boe_b0710`, `_1`, `_2`, `_3` (deactivated 19 October
+  2026; known issue #22) and `boe_b0746` (19 October 2026; known issue #26),
+  `boe_b0272` and `boe_b0274` (16 November
+  2026), the PRA116 `boe_b0063_ss` family and PRA115 `boe_b1014` / `boe_b1022`
+  failed returns the gateway accepts, and MRL001 `boe_b4006_1/_2` and
+  `boe_b4008_1/_2` blocked where the gateway only warns. `compare` reported
+  `boe_b0710` as a break in both returns.
+- **A plain `sum()` or `abs()` in a rule carries no rounding allowance.** The
+  engine read them as `isum()` / `iabs()`, so the summed facts kept their
+  allowances and a rounded return passed where the gateway fails it. Affected:
+  PRA001 `boe_b0770`, `boe_b0794`, `boe_b0820`–`boe_b0823`, `boe_b0829`; PRA116
+  `boe_b0794`, `boe_b1037_ss`. Measured against Arelle on returns built with
+  rounded figures (`tests/releases/4.1.1/oracles/rounding_and_default_oracle.json`).
+  Plain `max` / `min` are unchanged: no published rule calls them, so Arelle
+  cannot be asked.
+- **OF 08.06's "all types" sheet is its own sheet.** A fact with no member on
+  OF 08.06's open axis is the axis default (`eba_TA:x0`). The engine gave it no
+  place, so it was added into every type's sums, and `boe_b0815` and
+  `boe_b1042` failed a correct return. A failure on that sheet is reported with
+  no open key, as the return reports it.
+- **The template-level engine no longer fails a Bank rule where none of its cells
+  is reported.** It read every unreported cell as zero, so `boe_b0778` (an
+  OF 08.07 roll-out class's three shares total 1) failed every class with no
+  exposure, where the shares are rightly empty. For a BoE rule that is not
+  always-execute, a failing place whose cells are all unreported is now
+  `NOT_EVALUATED` with reason `nothing_reported` (`SKIP_NOTHING_REPORTED`), as the
+  gateway skips it (XBRL Variables 1.0 §4: a variable set whose fact variables
+  have all fallen back is not evaluated); a place that holds stays `VACUOUS`.
+  EBA rules read the same way, so `v09796_m`, the EBA twin of `boe_b0778`, no
+  longer fails an empty C 08.07 roll-out class either.
 - **A sum in a published rule adds up what the rule's formula says, not what
   its text suggests.** On a table with one row per obligor grade, securitisation
   or entity, a summed reference either adds up every row or stays on the row

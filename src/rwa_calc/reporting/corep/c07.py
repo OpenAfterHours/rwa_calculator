@@ -153,7 +153,9 @@ docs/plans/phase7-declarative-reporting.md §6):
   the CCF bucket, the substitution flag, on/off-balance-sheet). A row
   whose subset is EMPTY (or whose discriminators are absent) renders
   ALL-NULL — the retired ``_null_row`` contract — via a module post-step
-  that re-applies each row's predicate.
+  that re-applies each row's predicate. A row Annex II confines to some
+  classes carries a sheet term too, so it is all-null on every other sheet:
+  row 0015 (defaulted) on the high-risk / equity (+ CIU, Basel 3.1) sheets.
 - Cells whose sources are never produced render None via constant
   Formulas (0240; 0210/0211 when no ``risk_type`` / ``cp_entity_type``
   carrier is sealed; the CCF buckets and supporting-factor adjustments
@@ -175,6 +177,29 @@ docs/plans/phase7-declarative-reporting.md §6):
   CCR rows their gross, in cells a return cannot carry. OF 07.00 also has no
   col 0020 (``templates.B31_C07_COLUMNS``). CRR is untouched: no EBA template is
   held to read its grey cells from.
+- A LOAN-SPLIT REAL-ESTATE EXPOSURE IS REPORTED IN ITS TWO PARTS (PS1/26 Annex
+  II p.94: Art. 124F / 124H exposures "shall be reported in two parts"): the
+  part up to the 55% cap against its 20% / 60% row, the rest against its Art.
+  124L row, off the engine's ``sa_loan_split_*`` carriers, before the sheets are
+  cut (``kernel/rw_parts.py``). On its one blended weight the loan fell to row
+  0280, which ``boe_b0445`` requires empty on sheet 0010.
+- MEMORANDUM ROWS 0300 / 0320 (Basel 3.1) ARE THE "IN DEFAULT" CLASS ON THE
+  SHEET OF THE CLASS BEFORE DEFAULT (Annex II ¶54, p.97), read off the sealed
+  ``reporting_class_pre_default``; real-estate-origin defaults on the Total alone
+  (known-issues log #27); the Total summed before that scope is applied. All of
+  it: ``corep/c07_sheet_scope.py``.
+- TRANSITIONAL EQUITY IS ROWED BY ITS ARTICLE 133 WEIGHT (PS1/26 Annex II
+  p.95-96): rows 0250 / 0261 with the transitional RWEA in col 0220, never row
+  0280, off the sealed ``risk_weight_pre_equity_transitional``
+  (``c07_rw_bands.rw_band_expr``); memorandum rows 0371-0374 repeat those legs on
+  the class (p) sheet alone.
+- THE RISK-WEIGHT ROW IS PER BASIS (Annex II p.81 col 0010, p.84 cols 0090 / 0100,
+  p.94 rows 0140-0280; recorded fix 2026-11-16): cols 0010-0150 of a covered part
+  Art. 235 substitution was applied to sit in the OBLIGOR's own-weight row
+  (``c07_rw_band_origin``), cols 0160-0235 and the col 0100 inflow in the
+  provider's (``c07_rw_band``). Banded on the post weight alone, an 8,000,000
+  corporate loan reported 2,800,000 of original exposure in corporates row 0182
+  (30%), which ``boe_b0441`` requires empty: ``corep/c07_rw_bands.py``.
 - The CCF buckets (0160-0190) are a breakdown of the **fully adjusted
   exposure value of off-balance-sheet items** — Annex II heads that block
   "BREAKDOWN OF THE FULLY ADJUSTED EXPOSURE VALUE OF OFF-BALANCE SHEET
@@ -219,16 +244,25 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.corep.c07_rw_bands import (
+    RW_BAND_COL,
+    origin_band_terms,
+    rw_band_expr,
+    rw_band_exprs,
+)
+from rwa_calc.reporting.corep.c07_sheet_scope import (
+    basis_flags,
+    memo_axis,
+    memo_key_exprs,
+    memo_sheet_frame,
+    memo_terms,
+    null_empty_rows_by_population,
+    publish_sheets,
+    sheet_unreported,
+)
+from rwa_calc.reporting.corep.ccf_buckets import CCF_CARRIERS, ccf_bucket_expr
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
-from rwa_calc.reporting.corep.of07_published_cells import (
-    get_c07_rows_not_on_total,
-    get_c07_unreported_cells,
-)
-from rwa_calc.reporting.corep.postpass import (
-    blank_unreported_cells,
-    negate_deduction_cols,
-    null_empty_rows,
-)
+from rwa_calc.reporting.corep.postpass import negate_deduction_cols
 from rwa_calc.reporting.corep.supporting_factors import (
     sf_adjustment_terms,
     sf_infra_flag_exprs,
@@ -239,16 +273,17 @@ from rwa_calc.reporting.corep.templates import (
     C07_00_TOTAL_SHEET_KEY,
     EQUITY_IRB_METHODS,
     get_c07_columns,
-    get_sa_risk_weight_bands,
+    get_c07_defaulted_row_sheet_keys,
     get_sa_row_sections,
 )
 from rwa_calc.reporting.kernel import (
     TwoBasis,
     class_keys,
+    own_rwea,
     pick,
     population_flags,
+    rw_parts,
     sheet_axis,
-    sheet_frame,
 )
 from rwa_calc.reporting.kernel.bases import ORIGIN_APPROACH_SOURCE
 from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, ReportingContext
@@ -262,7 +297,6 @@ logger = logging.getLogger(__name__)
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute.
 # 0216/0217 are the CRR-only "(-) SME/Infrastructure supporting factor adjustment"
 # columns (Art. 501/501a) — reported negative so 0215 + 0216 + 0217 = 0220 foots.
-_LABEL_COLS: tuple[str, str] = ("row_ref", "row_name")
 _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
@@ -272,8 +306,6 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 # the only shape the post basis can DEGRADE in — lives in
 # ``reporting/kernel/bases.py``, shared with C 08.01.
 _BASIS: TwoBasis = TwoBasis("c07")
-_BASIS_ORIGIN_COL: str = _BASIS.basis_origin
-_BASIS_POST_COL: str = _BASIS.basis_post
 _ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
 
 # THE ROW-LEVEL SHEET SCOPE. Annex II scopes a few rows to ONE exposure class —
@@ -300,6 +332,12 @@ _ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
 # ``{r0040} = empty`` on every C 07.00 z-code except the Total and 0010.
 _SHEET_KEY_COL: str = "c07_sheet"
 
+# The same mechanism for a row Annex II allows on SEVERAL sheets: row 0015 is
+# reported on the high-risk and equity sheets (plus CIU under Basel 3.1) alone
+# (``templates.get_c07_defaulted_row_sheet_keys``), and a tolerant-equals term
+# names one value, so the membership is a per-sheet constant BOOLEAN instead.
+_DEFAULTED_ROW_SHEET_COL: str = "c07_defaulted_row_sheet"
+
 # Article 112(1)(i) — read back from the sheet map so the scope cannot drift
 # from the z-axis it scopes against.
 _RE_SHEET_KEY: str = C07_00_SA_SHEET_MAP["residential_mortgage"]
@@ -325,15 +363,6 @@ _CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0
 _CCF_MAP_B31: dict[float, str] = {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
 _CCF_REFS: tuple[str, ...] = ("0160", "0170", "0171", "0180", "0190")
 
-# Applied-CCF carriers, in preference order. ``ccf`` is the sealed
-# aggregator-exit name the pipeline really produces (and the one C 08.01 / CR5 /
-# CR6 already read); ``ccf_applied`` is the synthetic COREP/Pillar 3 unit-frame
-# spelling, kept so the shim estate keeps working. C 07.00 read ONLY the latter
-# until 2026-08, so every real submission published structurally-null CCF buckets
-# and four supervisory rules were unevaluable — hence the resolution is a single
-# named ladder and its absence is logged, never silently tolerated. Converging
-# the synthetic estate onto ``ccf`` is a recorded follow-up, not done here.
-_CCF_CARRIERS: tuple[str, ...] = ("ccf", "ccf_applied")
 
 # Pre-conversion off-balance-sheet gross: what the CCF buckets break down, and
 # the same carrier col 0010 sums on the off-side (so 0150 decomposes into the
@@ -514,6 +543,13 @@ _EQUITY_TRANSITIONAL_FILTERS: dict[str, tuple[str, bool]] = {
     "0373": ("irb_transitional", True),
     "0374": ("irb_transitional", False),
 }
+# The equity calculator's sealed transitional carriers. Rows 0371-0374 key them
+# on the class (p) sheet alone (PS1/26 Annex II ¶55A; the Bank publishes
+# OF 07.00.01.04 on sheet 0016 only); the band rows read a third
+# (``c07_rw_bands``).
+_EQUITY_TRANSITIONAL_COL: str = "equity_transitional_approach"
+_EQUITY_HIGHER_RISK_COL: str = "equity_higher_risk"
+_EQUITY_SHEET_KEY: str = C07_00_SA_SHEET_MAP["equity"]
 
 _Terms = tuple[tuple[str, str | bool], ...]
 
@@ -582,7 +618,7 @@ def c07_plans(
     # (== the retired exposure_class_applied/exposure_class ladder).
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    rwa_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
     if ec_col is None or ead_col is None or rwa_col is None:
         if ead_col is None or rwa_col is None:
             errors.append("C07: Missing EAD or RWA columns in results")
@@ -602,9 +638,10 @@ def c07_plans(
     # degrades to the origin key on a frame that seals no ``reporting_class``,
     # which is what makes the two-basis split number-neutral wherever nothing
     # substitutes.
-    sa_df = sa_df.with_columns(
-        class_keys(_BASIS, set(sa_df.columns), ec_col, key=_art112_sheet_key_expr)
-    )
+    # Rows 0300 / 0320 read a third key, the class before default (c07_sheet_scope).
+    present = set(sa_df.columns)
+    keys = class_keys(_BASIS, present, ec_col, key=_art112_sheet_key_expr)
+    sa_df = sa_df.with_columns(keys + memo_key_exprs(framework, present, _art112_sheet_key_expr))
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
     _warn_if_ccf_buckets_unreportable(sa_df, data_cols)
@@ -614,7 +651,15 @@ def c07_plans(
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
-    unreported = get_c07_unreported_cells(framework)
+    # A loan-split exposure is reported in its two parts, leg money too (membership._LEG_COLUMNS).
+    if rw_parts.has_two_part_rows(sa_df):
+        rwea_cols = frozenset({rwa_col, "rwa_final", "rwa_pre_factor", "c07_sf_delta"})
+        exposure_cols = (rw_parts.summed_columns(spec) - rwea_cols) | {_UNFUNDED_COL, ead_col}
+        split = rw_parts.split_risk_weight_parts(
+            sa_df, exposure_cols=exposure_cols, rwea_cols=rwea_cols
+        )
+        sa_df = split.with_columns(rw_band_exprs(framework, data_cols))
+    defaulted_row_sheets = get_c07_defaulted_row_sheet_keys(framework)
 
     plans: dict[str, SheetPlan] = {}
     # Sealed-ledger rule: the class columns always exist; a null key (no source
@@ -627,7 +672,7 @@ def c07_plans(
     # without it a leg whose inflow the block cap shed to zero would drop its
     # exposure value and RWEA out of the template silently. An inflow-only sheet
     # keeps its constraint-free total row 0010 and reports 0110 = 0100.
-    axis = sheet_axis(_BASIS, sa_df) | set(inflows.total)
+    axis = sheet_axis(_BASIS, sa_df) | set(inflows.total) | memo_axis(_BASIS, sa_df)
     # A key the map does not hold reached the axis by ``_art112_sheet_key``'s
     # pass-through limb: it keeps its exposure (folding it into "other" would
     # hide it) but it opens a sheet the z-axis has no code for, so it is a data
@@ -643,9 +688,11 @@ def c07_plans(
         plans[ec] = SheetPlan(
             spec=spec,
             # Tagged with its own sheet key so a row Annex II scopes to one
-            # exposure class can say so as a membership term (_SHEET_KEY_COL).
-            frame=sheet_frame(_BASIS, sa_df, ec).with_columns(
-                pl.lit(ec, dtype=pl.String).alias(_SHEET_KEY_COL)
+            # exposure class can say so as a membership term (_SHEET_KEY_COL),
+            # and with whether row 0015 may report here (_DEFAULTED_ROW_SHEET_COL).
+            frame=memo_sheet_frame(_BASIS, sa_df, ec).with_columns(
+                pl.lit(ec, dtype=pl.String).alias(_SHEET_KEY_COL),
+                pl.lit(ec in defaulted_row_sheets).alias(_DEFAULTED_ROW_SHEET_COL),
             ),
             ctx=ReportingContext(
                 substitution_inflow=inflows.total.get(ec, 0.0),
@@ -656,7 +703,7 @@ def c07_plans(
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
             inflow_rows=_inflow_rows(row_terms, sides, bands),
-            unreported=unreported,
+            unreported=sheet_unreported(framework, ec),
         )
     return plans
 
@@ -681,25 +728,33 @@ def generate_c07(
     framework: str,
     errors: list[str],
 ) -> dict[str, pl.DataFrame]:
-    """Execute C 07.00 per obligor-class sheet over the sealed ledger.
+    """The C 07.00 class sheets of ``generate_c07_with_total``, keyed as ``c07_plans``."""
+    return generate_c07_with_total(results, cols, framework, errors)[0]
 
-    The last pass leaves out the cells the published template greys out (module
-    docstring, "ONLY THE CELLS THE TEMPLATE HAS") — after the waterfall, the
-    empty-row rule and the sign convention have all read them.
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c07_with_total(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> tuple[dict[str, pl.DataFrame], pl.DataFrame | None]:
+    """Execute C 07.00 per obligor-class sheet over the sealed ledger, and its Total.
+
+    The last pass leaves out the cells the published template does not have
+    (module docstring, "ONLY THE CELLS THE TEMPLATE HAS") — after the waterfall,
+    the empty-row rule and the sign convention have all read them, and after the
+    Total has been summed (``c07_sheet_scope.publish_sheets``).
     """
-    result: dict[str, pl.DataFrame] = {}
-    for ec, plan in c07_plans(results, cols, framework, errors).items():
-        frame = execute(plan.spec, plan.frame, plan.ctx)
-        # ``row_terms`` -> predicates: ``None`` is an inert row, ``()`` the
-        # constraint-free Total row (never nulled), anything else constrained.
-        preds = {
-            ref: None if terms is None else RowPredicate(equals=terms)
-            for ref, terms in plan.row_terms.items()
-        }
-        frame = null_empty_rows(frame, plan.frame, preds, plan.inflow_rows)
-        frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
-        result[ec] = blank_unreported_cells(frame, plan.unreported)
-    return result
+    plans = c07_plans(results, cols, framework, errors)
+    computed = {
+        ec: negate_deduction_cols(
+            null_empty_rows_by_population(execute(plan.spec, plan.frame, plan.ctx), plan, _BASIS),
+            _NEGATIVE_COLS,
+        )
+        for ec, plan in plans.items()
+    }
+    return publish_sheets(computed, plans, framework)
 
 
 def c07_class_sheets(sheets: Mapping[str, pl.DataFrame]) -> dict[str, pl.DataFrame]:
@@ -710,45 +765,6 @@ def c07_class_sheets(sheets: Mapping[str, pl.DataFrame]) -> dict[str, pl.DataFra
     read this view; adding the whole template counts every exposure twice.
     """
     return {key: sheet for key, sheet in sheets.items() if key != C07_00_TOTAL_SHEET_KEY}
-
-
-@cites("PS1/26, paragraph 1.3")
-def c07_total_sheet(sheets: Mapping[str, pl.DataFrame], framework: str) -> pl.DataFrame | None:
-    """The Total sheet (published z-code 0001): the class sheets, added up.
-
-    Annex II §3.2.2 ¶47: "The information in OF CR SA is required for the total
-    exposure across all exposure classes and individually for each of the
-    exposure classes ... The total figures as well as the information of each
-    exposure class shall be reported in a separate dimension." ``sheets`` is
-    ``generate_c07``'s output; ``None`` when it is empty.
-
-    A CELL-BY-CELL SUM OF THE REPORTED SHEETS, not a second execution over the
-    whole population. Every row is evaluated per sheet over that sheet's own
-    population — the real-estate rows exist on the real-estate sheet alone, an
-    inflow lands on the protection provider's sheet, each cell reads its own
-    basis — so the sum of the sheets is the only total consistent with them, and
-    it is what the published rule states (``boe_b0713``: sheet 0001 equals the
-    sum of sheets 0002-0017). A cell no sheet reports is EMPTY on the Total, not
-    zero: a sum over nothing is not a measured figure, and a grey cell stays
-    grey. A sheet outside the published axis (``c07_plans`` records it as an
-    error) is still part of the total exposure and is included.
-
-    The rows the published Total does not carry are blanked
-    (``get_c07_rows_not_on_total``).
-    """
-    if not sheets:
-        return None
-    stacked = pl.concat(list(sheets.values()), how="vertical_relaxed")
-    value_cols = [col for col in stacked.columns if col not in _LABEL_COLS]
-    total = stacked.group_by("row_ref", maintain_order=True).agg(
-        pl.col("row_name").first(),
-        *(
-            pl.when(pl.col(col).count() > 0).then(pl.col(col).sum()).alias(col)
-            for col in value_cols
-        ),
-    )
-    not_on_total = {ref: frozenset(value_cols) for ref in get_c07_rows_not_on_total(framework)}
-    return blank_unreported_cells(total.select(stacked.columns), not_on_total)
 
 
 @cites("PS1/26")
@@ -894,7 +910,7 @@ def _warn_if_ccf_buckets_unreportable(data: pl.DataFrame, cols: set[str]) -> Non
     This exists because the carrier-name defect (C 07.00 read ``ccf_applied``,
     which no pipeline run produces) failed silently for the life of the template.
     """
-    if pick(cols, *_CCF_CARRIERS) is not None or _OFF_BS_GROSS_COL not in cols:
+    if pick(cols, *CCF_CARRIERS) is not None or _OFF_BS_GROSS_COL not in cols:
         return
     off_bs_total = float(data[_OFF_BS_GROSS_COL].fill_null(0.0).sum())
     if off_bs_total <= 0.0:
@@ -903,7 +919,7 @@ def _warn_if_ccf_buckets_unreportable(data: pl.DataFrame, cols: set[str]) -> Non
         "C 07.00: no applied-CCF carrier (tried %s) but %.0f of off-balance-sheet "
         "gross exposure is in scope — columns 0160-0190 will report null and the "
         "CCF-breakdown validation rules cannot be evaluated",
-        ", ".join(_CCF_CARRIERS),
+        ", ".join(CCF_CARRIERS),
         off_bs_total,
     )
 
@@ -995,24 +1011,14 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
             .alias("c07_ccr_gross")
         )
 
-    # RW band label (retired _compute_rw_section_rows assignment).
-    if "risk_weight" in cols:
-        exprs.append(_rw_band_expr(framework).alias("c07_rw_band"))
+    # RW band labels, one per basis (``c07_rw_bands``).
+    exprs.extend(rw_band_exprs(framework, cols))
 
     # CCF bucket ref (retired _c07_ccf_cols map), off the resolved carrier.
-    ccf_col = pick(cols, *_CCF_CARRIERS)
+    ccf_col = pick(cols, *CCF_CARRIERS)
     if ccf_col is not None:
         ccf_map = _CCF_MAP_B31 if framework == "BASEL_3_1" else _CCF_MAP_CRR
-        bucket_expr: pl.Expr = pl.lit(None, dtype=pl.String)
-        for ccf_value, ref in ccf_map.items():
-            bucket_expr = (
-                pl.when(
-                    pl.col(ccf_col).cast(pl.Float64, strict=False).round(4) == round(ccf_value, 4)
-                )
-                .then(pl.lit(ref))
-                .otherwise(bucket_expr)
-            )
-        exprs.append(bucket_expr.alias("c07_ccf_bucket"))
+        exprs.append(ccf_bucket_expr(ccf_col, ccf_map).alias("c07_ccf_bucket"))
 
     # Materially-dependent ladder (exact field keeps nulls-excluded; proxies
     # fill null to False — retired _filter_re_materially_dependent).
@@ -1094,7 +1100,7 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
 
     # Supporting-factor RWEA delta (cols 0216/0217 = pre - post per row).
     if "rwa_pre_factor" in cols:
-        rwa_source = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+        rwa_source = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
         if rwa_source is not None:
             exprs.append(
                 (pl.col("rwa_pre_factor").fill_null(0.0) - pl.col(rwa_source).fill_null(0.0)).alias(
@@ -1321,28 +1327,6 @@ def _netting_reduction_expr(cols: set[str]) -> pl.Expr:
     return reduction.alias(_NETTING_REDUCTION_COL)
 
 
-def _rw_band_expr(framework: str) -> pl.Expr:
-    """The risk-weight band LABEL for one row — the C 07.00 section-2 row axis.
-
-    One definition, used twice: ``_prepare`` derives ``c07_rw_band`` from it for the
-    band rows themselves, and ``_sa_inflows`` hands the SAME expression to the
-    substitution router so a banded inflow lands on a row that exists. The ladder
-    is regime-shaped (``get_sa_risk_weight_bands``; Basel 3.1 adds 15/25/30/40/45/
-    60/65/80/85/105/110/130/135% sub-bands) and ends in the "Other risk weights"
-    catch-all, so a weight matching no band is reported, never dropped.
-    """
-    band_expr: pl.Expr = pl.lit("Other risk weights")
-    for rw_value, label in reversed(get_sa_risk_weight_bands(framework)):
-        band_expr = (
-            pl.when(
-                pl.col("risk_weight").cast(pl.Float64, strict=False).round(4) == round(rw_value, 4)
-            )
-            .then(pl.lit(label))
-            .otherwise(band_expr)
-        )
-    return band_expr
-
-
 def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     """Per-row magnitudes for the Annex II substitution block (cols 0050-0080).
 
@@ -1548,7 +1532,7 @@ def _sa_inflows(results: pl.LazyFrame, cols: set[str], framework: str) -> _Inflo
     # inflow now reaches (col 0150 through 0110, and col 0200 through the post
     # basis). ``risk_weight`` is absent on a frame too thin to band; the router
     # then returns no split and the band rows keep their ordinary empty policy.
-    band_expr = _rw_band_expr(framework) if "risk_weight" in cols else None
+    band_expr = rw_band_expr(framework, cols) if "risk_weight" in cols else None
     for exposure_class, inflow in irb_origin_inflows(
         results, cols, destination="standardised", band_expr=band_expr
     ).items():
@@ -1614,7 +1598,7 @@ def _add_sa_origin_inflows(inflows: _Inflows, sa_df: pl.DataFrame) -> _Inflows:
     # on + off == total, and therefore keeps ``boe_b0717`` footing.
     merged_sides = _add_split(inflows.by_side, frame, _side_label(cols))
     merged_bands = _add_split(
-        inflows.by_rw_band, frame, pl.col("c07_rw_band") if "c07_rw_band" in cols else None
+        inflows.by_rw_band, frame, pl.col(RW_BAND_COL) if RW_BAND_COL in cols else None
     )
     return _Inflows(merged, merged_sides, merged_bands)
 
@@ -1683,7 +1667,7 @@ def _inflow_rows(
         if terms is None or len(terms) != 1:
             continue
         column, value = terms[0]
-        split = bands if column == "c07_rw_band" else sides if column == "c07_bs" else None
+        split = bands if column == RW_BAND_COL else sides if column == "c07_bs" else None
         if split is not None and split.get(str(value)):
             keep.add(ref)
     return frozenset(keep)
@@ -1717,7 +1701,9 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
         if ref == "0010":
             return _terms()
         if ref == "0015":
-            return _terms(("c07_defaulted", True))
+            # "of which: Defaulted exposures" in the classes that keep them —
+            # never the "in default" class itself (_DEFAULTED_ROW_SHEET_COL).
+            return _terms(("c07_defaulted", True), (_DEFAULTED_ROW_SHEET_COL, True))
         if ref == "0020":
             return _terms(("c07_sme", True))
         if ref in _SL_TYPE_MAP:
@@ -1778,7 +1764,7 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
         # agreement. Inert, not "checked and found empty".
         return None
     if section_index == 2:  # noqa: PLR2004 - RW band section
-        return _terms(("c07_rw_band", name))
+        return _terms((RW_BAND_COL, name))
     if section_index == 3:  # noqa: PLR2004 - CIU section
         if ref in _CIU_ROW_APPROACH:
             return _terms(("ciu_approach", _CIU_ROW_APPROACH[ref]))
@@ -1786,16 +1772,19 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
     # Section 5: memorandum items
     if ref in _EQUITY_TRANSITIONAL_FILTERS:
         approach, higher_risk = _EQUITY_TRANSITIONAL_FILTERS[ref]
-        base: _Terms = _terms(("equity_transitional_approach", approach))
-        if "equity_higher_risk" in cols:
-            return _terms(*base, ("equity_higher_risk", higher_risk))
+        base: _Terms = _terms(
+            (_SHEET_KEY_COL, _EQUITY_SHEET_KEY), (_EQUITY_TRANSITIONAL_COL, approach)
+        )
+        if _EQUITY_HIGHER_RISK_COL in cols:
+            return _terms(*base, (_EQUITY_HIGHER_RISK_COL, higher_risk))
         if higher_risk:
             return None
         return base
     if ref == "0380":
         return _terms(("currency_mismatch_multiplier_applied", True))
-    if ref in _MEMO_DEFAULTED_RW:
-        return _terms(("c07_defaulted", True), ("c07_rw_band", _MEMO_DEFAULTED_RW[ref]))
+    if ref in _MEMO_DEFAULTED_RW:  # by the class before default where sealed (c07_sheet_scope)
+        band = (RW_BAND_COL, _MEMO_DEFAULTED_RW[ref])
+        return _terms(*memo_terms(cols), ("c07_defaulted", True), band)
     if ref in _MEMO_RE_SECURED:
         return _terms(("property_type", _MEMO_RE_SECURED[ref]))
     return None
@@ -1830,10 +1819,8 @@ def _re_terms(
     row — a row added to ``_RE_ROW_FILTERS`` is scoped by construction, which is
     what stops the next RE row repeating this defect.
 
-    NOT applied to the memorandum rows 0290/0300/0310/0320, which are a
-    different question with a different answer (¶52/¶54-55 scope them to the
-    OBLIGOR classes, the two Annex IIs' lists differ, and ¶55 positively
-    REQUIRES 0300/0320 on the 'in default' sheet). See P1.377.
+    NOT applied to the memorandum rows 0290/0300/0310/0320, which ¶52/¶54-55
+    scope to the class BEFORE default instead (``c07_sheet_scope.py``).
     """
     terms: list[tuple[str, str | bool]] = [(_SHEET_KEY_COL, _RE_SHEET_KEY)]
     if property_type is not None:
@@ -1911,7 +1898,7 @@ def _inflow_key_for(ref: str, terms: _Terms) -> str | None:
     RISK-WEIGHT BAND row each take the share of it reported on their side / at
     their band. Both are recognised by their own single membership term rather
     than by a hardcoded ref ladder, so the regime-specific band axis (Basel 3.1
-    adds thirteen sub-bands) and the two-term memo rows 0300/0320 (defaulted AND
+    adds thirteen sub-bands) and the multi-term memo rows 0300/0320 (defaulted AND
     banded, which are "of which" memos and NOT part of the row-0010
     decomposition) both fall out correctly.
     """
@@ -1920,7 +1907,7 @@ def _inflow_key_for(ref: str, terms: _Terms) -> str | None:
     if len(terms) != 1:
         return None
     column, value = terms[0]
-    if column == "c07_rw_band":
+    if column == RW_BAND_COL:
         return f"{SUBSTITUTION_INFLOW_RW_PREFIX}{value}"
     if column == "c07_bs":
         return "substitution_inflow_off_bs" if value == _OFF_BS else "substitution_inflow_on_bs"
@@ -1957,9 +1944,11 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     # The two-basis split (module docstring): cols 0010-0150 read the obligor's
     # own book, cols 0160-0235 read the post-substitution population. Every
     # predicate carries its basis flag, INCLUDING the total row's (whose ``terms``
-    # are empty) — an unflagged predicate would silently sum both populations.
-    origin_terms: _Terms = ((_BASIS_ORIGIN_COL, True), *terms)
-    post_terms: _Terms = ((_BASIS_POST_COL, True), *terms, *_post_sl_terms(terms, cols))
+    # are empty) — an unflagged predicate would silently sum both populations. A
+    # risk-weight row's origin cells key the origin band (``c07_rw_bands``).
+    origin_flag, post_flag = basis_flags(terms, _BASIS)
+    origin_terms: _Terms = ((origin_flag, True), *origin_band_terms(terms))
+    post_terms: _Terms = ((post_flag, True), *terms, *_post_sl_terms(terms, cols))
     member = RowPredicate(equals=origin_terms)
     post_member = RowPredicate(equals=post_terms)
 
@@ -2093,7 +2082,7 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     # origin basis while col 0200 moved would break that identity the other way.
     ccf_refs = [ref for ref in _CCF_REFS if ref in column_refs]
     for ref in ccf_refs:
-        if pick(cols, *_CCF_CARRIERS) is not None and _OFF_BS_GROSS_COL in cols:
+        if pick(cols, *CCF_CARRIERS) is not None and _OFF_BS_GROSS_COL in cols:
             bucket_terms: _Terms = (*post_terms, ("c07_ccf_bucket", ref))
             if _has_bs_side(cols):
                 bucket_terms = (*bucket_terms, ("c07_bs", "off"))

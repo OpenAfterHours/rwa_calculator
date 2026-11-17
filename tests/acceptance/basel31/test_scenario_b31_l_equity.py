@@ -16,11 +16,20 @@ SA equity weights (B31-L1 through B31-L9):
 Art. 147A IRB removal (B31-L10):
 - IRB config still routes equity to SA (Art. 147A removes equity IRB)
 
-Transitional schedule (B31-L11 through B31-L16):
-- PRA Rule 4.1: Standard equity floor 160%/190%/220%/250% (2027-2030)
-- PRA Rule 4.2: Higher-risk floor 220%/280%/340%/400% (2027-2030)
-- PRA Rule 4.3: Excluded from floor: central_bank, government_supported,
-  subordinated_debt, CIU look-through/mandate-based
+Standardised Transitional Approach (B31-L11 through B31-L16), PS1/26 Credit
+Risk: General Provisions (ps126app1.pdf pp.20-21). The configs below are
+Standardised-only, i.e. a firm without IRB permission on 31 December 2026:
+- Rule 4.1: "4.2 and 4.3 only apply to an institution that did not have
+  permission to use the Internal Ratings Based Approach under Article 143 of
+  CRR on 31 December 2026."
+- Rule 4.2: equity exposures that are not higher risk "shall be assigned"
+  160% / 190% / 220% in 2027 / 2028 / 2029 (Art. 133(3) 250% from 2030).
+- Rule 4.3: higher risk equity exposures "shall be assigned" 220% / 280% /
+  340% (Art. 133(4) 400% from 2030).
+- The rules assign the weight; they are not a floor under 250% / 400%.
+  Government-supported equity is ordinary Art. 133(3) equity and moves.
+  Unchanged: subordinated debt (Art. 133(5), not an equity exposure), the 0%
+  central-bank type, CIUs (Arts. 132-132C).
 
 CIU treatment under B31 (B31-L17 through B31-L19):
 - Art. 132(2): Fallback listed=250% / unlisted=400% (was flat 150% under CRR)
@@ -30,7 +39,8 @@ CIU treatment under B31 (B31-L17 through B31-L19):
 Regulatory References:
 - PRA PS1/26 Art. 133(1),(3),(5),(6): Basel 3.1 SA equity weights
 - PRA PS1/26 Art. 147A: Removal of IRB equity approaches
-- PRA PS1/26 Rules 4.1-4.3: Equity transitional schedule (2027-2030)
+- PRA PS1/26 Credit Risk: General Provisions rules 4.1-4.3: Standardised
+  Transitional Approach for equities (2027-2029)
 - PRA PS1/26 Art. 132(2), 132A: CIU treatment
 """
 
@@ -381,10 +391,11 @@ class TestB31L10_IRBConfigRoutesToSA:
 
 class TestB31L11_TransitionalYear1ListedEquity:
     """
-    B31-L11: Listed equity in transitional Year 1 (2027).
+    B31-L11: Listed equity in transitional Year 1 (2027), Standardised firm.
     Input: equity_type=listed, EAD=£500,000, reporting_date=2027-06-30
-    Expected: PRA Rule 4.1 floor 160%, but Art. 133(3) base 250% > 160%
-              → max(250%, 160%) = 250% → RWA = £1,250,000
+    Expected: Rule 4.2(1) "shall be assigned [...] 160% during the period
+              beginning with 1 January 2027 and ending with 31 December 2027"
+              in place of the Art. 133(3) 250% → RWA = £800,000
     """
 
     def test_b31_l11_risk_weight(self, equity_calculator, b31_2027_config):
@@ -394,16 +405,17 @@ class TestB31L11_TransitionalYear1ListedEquity:
             equity_type="listed",
             config=b31_2027_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(1.60, abs=1e-4)
+        assert result["rwa"] == pytest.approx(800_000.0)
 
 
 class TestB31L12_TransitionalYear1SpeculativeEquity:
     """
     B31-L12: Speculative (higher-risk) equity in transitional Year 1 (2027).
     Input: equity_type=speculative, is_speculative=True, EAD=£100,000,
-           reporting_date=2027-06-30
-    Expected: PRA Rule 4.2 higher-risk floor 220%, Art. 133(5) base 400% > 220%
-              → max(400%, 220%) = 400% → RWA = £400,000
+           reporting_date=2027-06-30, Standardised firm
+    Expected: Rule 4.3(1) assigns higher risk equity 220% in 2027 in place of
+              the Art. 133(4) 400% → RWA = £220,000
     """
 
     def test_b31_l12_risk_weight(self, equity_calculator, b31_2027_config):
@@ -414,14 +426,16 @@ class TestB31L12_TransitionalYear1SpeculativeEquity:
             is_speculative=True,
             config=b31_2027_config,
         )
-        assert result["risk_weight"] == pytest.approx(4.00, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(2.20, abs=1e-4)
 
 
 class TestB31L13_TransitionalExclusionSubordinatedDebt:
     """
-    B31-L13: Subordinated debt excluded from transitional floor (PRA Rule 4.3).
+    B31-L13: Subordinated debt is outside the transitional (Art. 133(5)).
     Input: equity_type=subordinated_debt, EAD=£250,000
-    Tests across all transitional years: 150% never raised to 160%/190%/220%/250%.
+    Art. 133(5) weights at 150% "an exposure that is a subordinated debt
+    instrument [...] and is not classified as an equity exposure"; rules 4.2 /
+    4.3 modify only Art. 133(3) / (4), so 150% holds in every year.
     """
 
     def test_b31_l13_year1_not_floored(self, equity_calculator, b31_2027_config):
@@ -463,16 +477,15 @@ class TestB31L13_TransitionalExclusionSubordinatedDebt:
 
 class TestB31L14_TransitionalGovernmentSupported:
     """
-    B31-L14: Government-supported equity subject to transitional floor.
+    B31-L14: Government-supported equity under the Standardised Transitional Approach.
     Input: equity_type=government_supported, is_government_supported=True, EAD=£300,000
-    Expected: 250% across all years — base weight (Art. 133(3)) exceeds all floors.
 
-    B31 removed CRR Art. 133(3)(c) legislative 100% carve-out.
-    Government-supported is standard equity, subject to the transitional floor.
-    Since 250% > max transitional floor (220%), result is always 250%.
+    B31 removed CRR Art. 133(3)(c) legislative 100% carve-out, so
+    government-supported is ordinary Art. 133(3) equity and rule 4.2 assigns
+    it 160% in 2027 and 220% in 2029 (250% from 2030).
     """
 
-    def test_b31_l14_year1_250_pct(self, equity_calculator, b31_2027_config):
+    def test_b31_l14_year1_160_pct(self, equity_calculator, b31_2027_config):
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("300000"),
@@ -480,9 +493,9 @@ class TestB31L14_TransitionalGovernmentSupported:
             is_government_supported=True,
             config=b31_2027_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(1.60, abs=1e-4)
 
-    def test_b31_l14_year3_250_pct(self, equity_calculator, b31_2029_config):
+    def test_b31_l14_year3_220_pct(self, equity_calculator, b31_2029_config):
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("300000"),
@@ -490,14 +503,15 @@ class TestB31L14_TransitionalGovernmentSupported:
             is_government_supported=True,
             config=b31_2029_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(2.20, abs=1e-4)
 
 
 class TestB31L15_TransitionalExclusionCentralBank:
     """
-    B31-L15: Central bank equity excluded from transitional floor.
+    B31-L15: Central bank equity is outside the transitional.
     Input: equity_type=central_bank, EAD=£500,000, reporting_date=2027-06-30
-    Expected: 0% — floor cannot raise a 0% sovereign treatment exposure.
+    Expected: 0% — the engine's central-bank type is not an Art. 133(3) / (4)
+    weight, so rules 4.2 / 4.3 do not replace it.
     """
 
     def test_b31_l15_zero_preserved(self, equity_calculator, b31_2027_config):
@@ -512,43 +526,43 @@ class TestB31L15_TransitionalExclusionCentralBank:
 
 class TestB31L16_TransitionalScheduleProgression:
     """
-    B31-L16: Verify transitional floor progression across years.
-    For listed equity (base 250%), floor never bites because 250% > all floors.
-    But we verify the calculator doesn't accidentally apply a WRONG floor.
+    B31-L16: Rule 4.2 schedule progression for listed equity, Standardised firm.
+    Rule 4.2 assigns 160% / 190% / 220% in 2027 / 2028 / 2029; Art. 133(3)
+    250% applies from 1 January 2030 (steady state below).
     """
 
     def test_b31_l16_year1_listed(self, equity_calculator, b31_2027_config):
-        """Year 1: max(250%, 160%) = 250%."""
+        """Year 1: rule 4.2(1) 160%."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("100000"),
             equity_type="listed",
             config=b31_2027_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(1.60, abs=1e-4)
 
     def test_b31_l16_year2_listed(self, equity_calculator, b31_2028_config):
-        """Year 2: max(250%, 190%) = 250%."""
+        """Year 2: rule 4.2(2) 190%."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("100000"),
             equity_type="listed",
             config=b31_2028_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(1.90, abs=1e-4)
 
     def test_b31_l16_year3_listed(self, equity_calculator, b31_2029_config):
-        """Year 3: max(250%, 220%) = 250%."""
+        """Year 3: rule 4.2(3) 220%."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("100000"),
             equity_type="listed",
             config=b31_2029_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(2.20, abs=1e-4)
 
     def test_b31_l16_steady_state_listed(self, equity_calculator, b31_config):
-        """Steady state (2031): max(250%, 250%) = 250%."""
+        """Steady state (2031): Art. 133(3) 250%."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("100000"),

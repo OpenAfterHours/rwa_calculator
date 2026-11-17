@@ -125,6 +125,7 @@ h3 { font-size: 13px; font-family: var(--font-sans); text-transform: uppercase; 
 .chip-pass { color: var(--pass); background: var(--pass-soft); }
 .chip-ne { color: var(--ne); background: var(--ne-soft); }
 .chip-info { color: var(--info); background: var(--info-soft); }
+.chip-issue { color: var(--warn); background: var(--warn-soft); border-style: dashed; }
 .chip-accent { color: var(--accent-text); background: var(--accent-soft); }
 
 .callout { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; padding: 18px 20px; border-radius: 12px; border: 1px solid; }
@@ -135,6 +136,8 @@ h3 { font-size: 13px; font-family: var(--font-sans); text-transform: uppercase; 
 .callout-warn { border-color: var(--warn); background: var(--warn-soft); }
 .callout-pass { border-color: var(--pass); background: var(--pass-soft); }
 .callout-info { border-color: var(--line); background: var(--panel); }
+.callout-issue { border-color: var(--warn); border-style: dashed; background: var(--panel); padding: 12px 14px; }
+.callout-issue blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--line); }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .btn:hover { border-color: var(--accent); color: var(--fg); }

@@ -623,14 +623,16 @@ class TestB31OnBalanceSheetNettingInWaterfall:
         """``boe_b0746_1`` (row 0030 in scope): the off-BS row's col 0035 is
         NOT a waterfall term, so its own 100 of (economically nonsensical,
         deliberately provocative) netting must NOT reduce its 0090 — a
-        positive control against an overzealous "always add 0035" fix."""
+        positive control against an overzealous "always add 0035" fix. Nor is
+        it a cell of the template: OF 08.01 publishes no column 0035 on row
+        0030 (PRA001 v4.1.1, ``corep/of08_published_cells.py``), so it is empty."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_b31_on_off_bs_netting(), framework="BASEL_3_1"
         )
 
         off_row = bundle.c08_01[OF08_CORPORATE_NON_SME_FIRB].filter(pl.col("row_ref") == "0030")
-        assert off_row["0035"][0] == pytest.approx(-100.0)
+        assert off_row["0035"][0] is None
         assert off_row["0090"][0] == pytest.approx(2_000.0)
 
     def test_c08_02_waterfall_includes_col_0035_on_every_row(self) -> None:

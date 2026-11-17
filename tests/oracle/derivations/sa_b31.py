@@ -643,11 +643,29 @@ def real_estate() -> list[dict[str, Any]]:
 # Art. 129(4) Table 7 (eligible covered bonds):
 #   CQS  1     2     3     4     5     6
 #   RW  10%   20%   20%   50%   50%  100%
-# Art. 133(3): equity exposure -> 250%   (CRR Art. 133(2) assigned 100%).
+# Art. 133(3): equity exposure -> 250%; Art. 133(4): higher risk equity -> 400%
+#   (CRR Art. 133(2) assigned 100%). Those are the END-STATE weights. For
+#   2027-2029, PS1/26 Credit Risk: General Provisions (CRR) Part chapter 4
+#   modifies both paragraphs for a firm without IRB permission:
+#   4.1 "4.2 and 4.3 only apply to an institution that did not have permission
+#       to use the Internal Ratings Based Approach under Article 143 of CRR on
+#       31 December 2026."
+#   4.2 "This rule modifies paragraph 3 of ... Article 133 ... in which equity
+#       exposures that are not higher risk equity exposures or within the scope
+#       of paragraph 6 ... shall be assigned the following risk weights:
+#       (1) 160% during the period beginning with 1 January 2027 and ending with
+#       31 December 2027; (2) 190% ... 2028; and (3) 220% ... 2029."
+#   4.3 "This rule modifies paragraph 4 of ... Article 133 ... in which equity
+#       exposures that are higher risk equity exposures ... shall be assigned
+#       the following risk weights: (1) 220% ... 2027; (2) 280% ... 2028; and
+#       (3) 340% ... 2029."
+#   The oracle firm is Standardised-only and reports on 30 June 2027, so 4.2(1)
+#   and 4.3(1) apply. (ps126app1.pdf pp.20-21; Art. 133 on p.68.)
 # Art. 134(1): tangible assets and other items -> 100%.
 COVERED_BOND_TABLE_7 = {1: 0.10, 2: 0.20, 3: 0.20, 4: 0.50, 5: 0.50, 6: 1.00}
 HIGH_RISK_RW = 1.50
-EQUITY_RW = 2.50
+EQUITY_TRANSITIONAL_2027_RW = 1.60
+HIGHER_RISK_EQUITY_TRANSITIONAL_2027_RW = 2.20
 
 
 def defaults_and_others() -> list[dict[str, Any]]:
@@ -717,12 +735,33 @@ def equity() -> list[dict[str, Any]]:
             framework=FRAMEWORK,
             approach="EQUITY",
             exposure_class="equity",
-            regulation="PS1/26 Art. 133(3): equity exposure -> 250% RW "
-            "(CRR Art. 133(2) assigned 100%)",
+            regulation="PS1/26 Art. 133(3) as modified by Credit Risk: General "
+            "Provisions 4.1 and 4.2(1): equity exposure of a firm without IRB "
+            "permission on 31 December 2026, reporting date in 2027 -> 160% RW "
+            "(end state 250% from 1 January 2030)",
             ead=M,
-            risk_weight=EQUITY_RW,
+            risk_weight=EQUITY_TRANSITIONAL_2027_RW,
             inputs={"equity_type": "listed", "is_exchange_traded": True},
-        )
+        ),
+        oracle(
+            oracle_id="ORC-284",
+            phase=PHASE,
+            framework=FRAMEWORK,
+            approach="EQUITY",
+            exposure_class="equity",
+            regulation="PS1/26 Art. 133(4) as modified by Credit Risk: General "
+            "Provisions 4.1 and 4.3(1): higher risk equity exposure (Glossary: not "
+            "listed on a recognised exchange, business existed under five years) of "
+            "a firm without IRB permission, reporting date in 2027 -> 220% RW "
+            "(end state 400% from 1 January 2030)",
+            ead=M,
+            risk_weight=HIGHER_RISK_EQUITY_TRANSITIONAL_2027_RW,
+            inputs={
+                "equity_type": "other",
+                "is_exchange_traded": False,
+                "business_age_years": 2.0,
+            },
+        ),
     ]
 
 

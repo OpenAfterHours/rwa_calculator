@@ -3,7 +3,8 @@ Builders for Bank of England rules in the published syntax, over the synthetic p
 
 A rule is written here as its workbook cell is written, so a test reads like
 the rule it pins. ``ref`` composes one reference; ``rule`` and ``book`` wrap
-expressions as a ``Rule`` / ``RuleBook`` for the synthetic module ``TST001``.
+expressions as a ``Rule`` / ``RuleBook`` for the synthetic module ``TST001``;
+``issue_register`` names one of them in a one-issue publisher-issue register.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import Any
 
 from pack_builders import SAMPLE_MODULE
 from rwa_filer.boe.catalogue import Rule, RuleBook
+from rwa_filer.boe.issues import EFFECT_FAILS_CORRECT_RETURNS, IssueRegister, issues_from
 
 T01 = "T01.00.01.01"
 T02 = "T02.00.01.01"
@@ -73,4 +75,61 @@ def book(*rules: Rule) -> RuleBook:
         modules=(SAMPLE_MODULE,),
         source={"taxonomy": "1.0.0"},
         rules=tuple(rules),
+    )
+
+
+def issue_register(
+    target: Rule,
+    *,
+    footprint: list[dict[str, Any]] | None = None,
+    effect: str = EFFECT_FAILS_CORRECT_RETURNS,
+    sha: str | None = None,
+    status: str = "draft",
+    attribution: str = "certain",
+    kind: str = "defect",
+) -> IssueRegister:
+    """One issue, PI-01, naming ``target`` as its subject for the synthetic module."""
+    return issues_from(
+        {
+            "format": 1,
+            "release": "1.0.0",
+            "publisher": "Bank of England",
+            "documents": {},
+            "checked_against": [],
+            "issues": [
+                {
+                    "id": "PI-01",
+                    "title": "The total is not the sum of its parts",
+                    "kind": kind,
+                    "status": status,
+                    "raised": None,
+                    "publisher_reference": None,
+                    "publisher_log": [],
+                    "fixed_in": None,
+                    "effect": effect,
+                    "causes": ["contradicts_instructions"],
+                    "rules": [
+                        {
+                            "module": SAMPLE_MODULE,
+                            "rule_id": target.rule_id,
+                            "role": "subject",
+                            "severity": "ERROR",
+                            "rule_sha256": sha or target.fingerprint(SAMPLE_MODULE),
+                            "footprint": footprint,
+                            "attribution": attribution,
+                        }
+                    ],
+                    "requirement": "",
+                    "authority": [],
+                    "why_correct_return_fails": "",
+                    "example": None,
+                    "alternatives_considered": "",
+                    "proposed_fix": "",
+                    "eba_precedent": "",
+                    "reach": "",
+                    "meanwhile": "",
+                }
+            ],
+        },
+        file="1.0.0.json",
     )

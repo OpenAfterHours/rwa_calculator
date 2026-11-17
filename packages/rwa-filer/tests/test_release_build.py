@@ -14,6 +14,7 @@ the package). Formula reach on the real publication is what the opt-in
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import zipfile
 from dataclasses import dataclass
@@ -225,6 +226,27 @@ def test_a_release_no_longer_listed_is_removed_and_recorded_as_retired(
     ]
 
 
+def test_a_rebuild_keeps_the_releases_deny_list_and_retirement_removes_it(
+    publication: Publication,
+) -> None:
+    """The deny list is the Bank's separate, monthly publication: a rebuild cannot remake it."""
+    # Arrange — 9.0.0 on disk, no longer listed; both releases with a deny list.
+    files = find_bank_files(publication.source)
+    build_release(VERSION, files, publication.root)
+    _relabel(publication.root, VERSION, "9.0.0")
+    _write_releases(publication.root, [VERSION])
+    deny = publication.root / release_build.DENY_SUBDIR
+    deny.mkdir(parents=True)
+    for version in (VERSION, "9.0.0"):
+        (deny / f"{version}.json").write_text("{}", encoding="utf-8")
+
+    # Act
+    build_release(VERSION, files, publication.root)
+
+    # Assert
+    assert sorted(path.name for path in deny.iterdir()) == [f"{VERSION}.json"]
+
+
 # ---------------------------------------------------------------------------
 # End dates
 # ---------------------------------------------------------------------------
@@ -383,3 +405,65 @@ def test_the_files_dataclass_finds_a_sample_whatever_the_modules_underscores() -
     )
 
     assert files.sample_for("PRA_GAAP") == Path("s.xbrl")
+
+
+def test_a_new_release_gets_an_empty_issue_register_and_retirement_removes_it(
+    publication: Publication,
+) -> None:
+    """The register is curated, not built: a build never overwrites one, and starts one empty."""
+    # Arrange — 9.0.0 on disk with a curated register, no longer listed.
+    files = find_bank_files(publication.source)
+    build_release(VERSION, files, publication.root)
+    _relabel(publication.root, VERSION, "9.0.0")
+    _write_releases(publication.root, [VERSION])
+    issues = publication.root / release_build.ISSUES_SUBDIR
+    curated = issues / f"{VERSION}.json"
+    curated.write_text('{"curated": true}', encoding="utf-8")
+    (issues / "9.0.0.json").write_text("{}", encoding="utf-8")
+
+    # Act
+    build_release(VERSION, files, publication.root)
+
+    # Assert — the listed release's register is untouched; the retired one's is gone.
+    assert sorted(path.name for path in issues.iterdir()) == [f"{VERSION}.json"]
+    assert curated.read_text(encoding="utf-8") == '{"curated": true}'
+
+
+def test_a_release_built_for_the_first_time_starts_with_an_empty_issue_register(
+    publication: Publication,
+) -> None:
+    # Arrange
+    files = find_bank_files(publication.source)
+    register = publication.root / release_build.ISSUES_SUBDIR / f"{VERSION}.json"
+
+    # Act
+    build_release(VERSION, files, publication.root)
+
+    # Assert
+    payload = json.loads(register.read_text(encoding="utf-8"))
+    assert (payload["release"], payload["issues"]) == (VERSION, [])
+
+
+def test_the_open_issues_of_the_previous_register_are_counted_not_echoed_into_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A new release's register warns about the previous one's open issues by count (CWE-117).
+
+    The previous register is file content: an id carrying a line break would
+    forge a log line if the ids were interpolated. The warning gives the number
+    of open issues and where to look; the ids stay in the file.
+    """
+    # Arrange
+    issues = tmp_path / release_build.ISSUES_SUBDIR
+    issues.mkdir(parents=True)
+    previous = {"issues": [{"id": "PI-01\nFORGED release built", "status": "draft"}]}
+    (issues / "1.0.0.json").write_text(json.dumps(previous), encoding="utf-8")
+
+    # Act
+    with caplog.at_level(logging.WARNING, logger=release_build.__name__):
+        release_build._start_issue_register("2.0.0", tmp_path, ("1.0.0", "2.0.0"))
+
+    # Assert
+    lines = [record.getMessage() for record in caplog.records]
+    assert len(lines) == 1 and "1 open issue" in lines[0], lines
+    assert "FORGED" not in lines[0]

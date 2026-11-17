@@ -719,7 +719,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # (floor pct + transitional schedule, equity transitional RW schedule,
     # mortgage RW floor) and the firm ELECTIONS (institution_type/reporting_basis,
     # opt_out, PMA scalars) stay config-side. The aggregate output floor
-    # (engine/aggregator), the PRA equity transitional floor (engine/equity), and
+    # (engine/aggregator), the PRA equity transitional (engine/equity), and
     # the IRB post-model adjustments (engine/irb/adjustments) are all Basel-3.1-only.
     "output_floor": Feature(
         name="output_floor",

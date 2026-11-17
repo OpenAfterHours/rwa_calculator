@@ -333,9 +333,12 @@ def derive_variant_columns(
     ``.a``.
 
     Args:
-        rules: The rules to read the attribution from. Pass the ENFORCED rules
-            only: a withdrawn rule may reference a retired column, which would
-            widen a variant's set and quietly weaken the partition.
+        rules: The rules to read the attribution from. Pass the rules the
+            extract publishes as in force (``RuleSet.published_in_force``): a
+            withdrawn rule may reference a retired column, which would widen a
+            variant's set and quietly weaken the partition, while a rule the
+            Bank's deny list switches off at its gateway keeps its published
+            scope, so it still says which columns a variant owns.
         bindings: The literal table map, before any column scoping.
 
     Returns:

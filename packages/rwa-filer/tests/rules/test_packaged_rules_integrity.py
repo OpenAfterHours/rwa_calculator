@@ -45,8 +45,11 @@ from rwa_filer.rules.catalogue import (
     load_rules,
 )
 
-#: The pinned population per framework: (rules loaded, rules currently enforced).
-#: A change here is a deliberate taxonomy refresh, never an accident.
+#: The pinned population per framework: (rules loaded, rules the extract
+#: publishes as in force). A change here is a deliberate taxonomy refresh, never
+#: an accident. The Bank's validations deny list takes some of these out of
+#: force at its gateway after publication; that is pinned, as a set, in
+#: ``test_deny_template_engine.py`` — not here, where it would move with the date.
 EXPECTED_COUNTS: dict[str, tuple[int, int]] = {
     FRAMEWORK_CRR: (1011, 741),
     FRAMEWORK_BASEL_3_1: (816, 800),
@@ -185,7 +188,7 @@ def test_the_loaded_and_enforced_counts_match_the_pinned_population(framework: s
     ruleset = load_rules(framework)
 
     # Act
-    counts = (len(ruleset.rules), len(ruleset.enforced))
+    counts = (len(ruleset.rules), len(ruleset.published_in_force))
 
     # Assert
     assert counts == EXPECTED_COUNTS[framework]
@@ -215,12 +218,16 @@ def test_the_eba_enforced_count_matches_the_recorded_reactivation_tally() -> Non
 
 
 def test_the_boe_enforced_count_matches_the_recorded_xbrl_tally() -> None:
-    """The BoE population in force is the one included in XBRL."""
+    """The BoE population the extract publishes in force is the one included in XBRL.
+
+    Published, not enforced at the gateway: the Bank's validations deny list
+    switches rules off after the taxonomy (and its XBRL) is published.
+    """
     # Arrange
     payload = raw_extract(FRAMEWORK_BASEL_3_1)
 
     # Act / Assert
-    assert len(load_rules(FRAMEWORK_BASEL_3_1).enforced) == payload["filter"]["in_xbrl"]
+    assert len(load_rules(FRAMEWORK_BASEL_3_1).published_in_force) == payload["filter"]["in_xbrl"]
 
 
 # ---------------------------------------------------------------------------

@@ -5,8 +5,10 @@ Tests that when EquityTransitionalConfig.opt_out=True both transitional gates ar
 suppressed for the firm irrevocably opting out of the transitional schedule:
   - _equity_holding_higher_of_rw (CIU look-through): holding_rw reverts to
     _DEFAULT_HOLDING_RW=1.00 (100%) — i.e. the 370% higher-of path is not applied.
-  - _apply_transitional_floor (direct equity): end-state RW is used directly,
-    the floor comparison is skipped.
+  - _apply_standardised_equity_transitional (direct equity): the configs here
+    carry IRB permission, so rule 4.1 already keeps direct equity on the
+    Art. 133 end state; the election only silences the CFG003 warning that
+    rules 4.5 / 4.6 are not implemented.
 
 Scenario (reporting_date=2027-06-30, transitional window live):
 
@@ -16,8 +18,10 @@ Scenario (reporting_date=2027-06-30, transitional window live):
     opted_out=True:  holding_rw = 1.00 (_DEFAULT_HOLDING_RW) → RWA = 1,000,000
 
   EQ-CONTROL-001 (control — direct LISTED equity):
-    B31 Art. 133(3) 250% end-state. Transitional floor 2027 = 160% < 250% → no uplift.
-    Both opted_out configs → risk_weight = 2.50, RWA = 2,500,000 (invariant).
+    B31 Art. 133(3) 250% end-state: an IRB-permission firm is outside rules
+    4.2 / 4.3 (rule 4.1). Both opted_out configs → risk_weight = 2.50,
+    RWA = 2,500,000. (Rule 4.6 would give opt_out=False max(290%, 160%) = 290%;
+    not implemented — see the IRB follow-up item.)
 
 Config knob under test:
     EquityTransitionalConfig.opt_out (bool) — NOT YET ADDED by engine-implementer.
@@ -34,7 +38,7 @@ Regulatory references:
     - PRA PS1/26 Art. 133(3): standard equity = 250%.
     - src/rwa_calc/contracts/config.py: EquityTransitionalConfig
     - src/rwa_calc/engine/equity/calculator.py: _equity_holding_higher_of_rw,
-      _resolve_look_through_rw, _apply_transitional_floor
+      _resolve_look_through_rw, _apply_standardised_equity_transitional
 """
 
 from __future__ import annotations
@@ -92,7 +96,7 @@ def base_b31_config() -> CalculationConfig:
 @pytest.fixture(scope="module")
 def config_opt_out_false(base_b31_config: CalculationConfig) -> CalculationConfig:
     """
-    Config A: opted_out=False — higher-of path active, transitional floor applied.
+    Config A: opted_out=False — CIU higher-of path active.
 
     Uses dataclasses.replace on the equity_transitional sub-config to set opt_out=False
     explicitly. This will raise TypeError until engine-implementer adds the field.
@@ -114,7 +118,7 @@ def config_opt_out_true(base_b31_config: CalculationConfig) -> CalculationConfig
 
     The firm irrevocably opts out of the transitional schedule (PRA Rules 4.9-4.10).
     CIU look-through equity holding reverts to _DEFAULT_HOLDING_RW=1.00 (100%).
-    Direct equity keeps end-state assigned RW without transitional floor comparison.
+    Direct equity keeps the end-state Art. 133 weight (IRB-permission firm).
 
     This will raise TypeError until engine-implementer adds the field.
     """
@@ -257,9 +261,9 @@ class TestP215OptOutTrueBothGatesSuppressed:
         ciu_look_through_rw = (1,000,000 x 1.00) / 1,000,000 = 1.00
         risk_weight = 1.00,  RWA = 1,000,000  (load-bearing)
 
-    Gate 2 (_apply_transitional_floor, Rule 4.1):
-        Direct equity keeps end-state assigned RW without floor comparison.
-        EQ-CONTROL-001: B31 Art. 133(3) 250%; floor 160% < 250% → floor inert regardless.
+    Direct equity (_apply_standardised_equity_transitional, Rule 4.1):
+        an IRB-permission firm is outside rules 4.2 / 4.3 in both configs.
+        EQ-CONTROL-001: B31 Art. 133(3) 250%.
         risk_weight = 2.50,  RWA = 2,500,000  (invariant — same under both configs)
     """
 

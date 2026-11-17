@@ -208,3 +208,24 @@ def test_generator_keeps_spliced_content_out_of_a_path_taking_call() -> None:
         '    with path.open("w", encoding="utf-8") as handle:\n'
         "        handle.write(targets[path])"
     )
+
+
+def test_publisher_issues_page_is_fresh() -> None:
+    """The shareable write-up of the known issues must match a fresh render of the registers.
+
+    ``docs/rwa-filer/publisher-issues.md`` is rendered from rwa-filer's packaged
+    publisher-issue registers (and Arelle's counts on each issue's example) by
+    ``scripts/generate_publisher_issues.py``. An issue edited without
+    regenerating — or a hand-edit of the page — would share with the Bank a
+    text the register no longer holds.
+    """
+    # Arrange / Act
+    result = _run_script("generate_publisher_issues.py", "--check")
+
+    # Assert
+    assert result.returncode == 0, (
+        "docs/rwa-filer/publisher-issues.md no longer matches rwa-filer's publisher-issue "
+        "registers. Regenerate (never hand-edit it):\n"
+        "  uv run python scripts/generate_publisher_issues.py\n"
+        f"{result.stdout}{result.stderr}"
+    )

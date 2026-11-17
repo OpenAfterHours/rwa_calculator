@@ -269,6 +269,7 @@ class TestELGuaranteeAdjustment:
                 "maturity": [2.5],
                 "exposure_class": ["corporate"],
                 "exposure_class_applied": ["corporate"],
+                "approach": ["foundation_irb"],
                 "approach_applied": ["foundation_irb"],
                 "rwa": [1_000_000.0],
                 "risk_weight": [1.00],

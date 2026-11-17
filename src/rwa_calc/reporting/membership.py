@@ -67,6 +67,7 @@ import polars as pl
 
 from rwa_calc.reporting.cellspec import subset_rows
 from rwa_calc.reporting.kernel import available_columns, ensure_gross_side_carriers
+from rwa_calc.reporting.kernel.rw_parts import RW_PART_COL
 from rwa_calc.reporting.lineage import LINEAGE_PLANS, describe_cell
 
 if TYPE_CHECKING:
@@ -87,9 +88,18 @@ MEMBERSHIP_TEMPLATE_IDS: tuple[str, ...] = ("c07_00", "c08_01", "c08_03", "c08_0
 #: The leg identity and money carried alongside every membership row. Absent
 #: from a given plan frame -> a typed NULL, never a zero and never a dropped
 #: column: an unsupplied carrier and a measured zero are different claims.
+#:
+#: ``RW_PART_COL`` names the PART of a leg a row reports: OF 07.00 reports a
+#: Basel 3.1 loan-split exposure in two parts (``kernel/rw_parts.py``), so its
+#: plan frame holds the leg twice under one ``exposure_reference``, each part
+#: with its own share of ``ead_final`` and ``rwa_final``. NULL on a whole leg.
+#: A reader pricing a leg once per reference must price it once per PART and
+#: add the parts (``analysis/return_recon.py::_group_legs``), or it keeps one
+#: part's money and drops the other's.
 _LEG_COLUMNS: tuple[tuple[str, pl.DataType], ...] = (
     ("exposure_reference", pl.String()),
     ("source_exposure_reference", pl.String()),
+    (RW_PART_COL, pl.String()),
     ("reporting_leg_role", pl.String()),
     ("reporting_class_origin", pl.String()),
     ("reporting_approach_origin", pl.String()),

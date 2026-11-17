@@ -5,7 +5,9 @@ Pipeline position:
     sealed aggregator-exit ledger
         -> irb_population() / sheet_keys() / inflow_sheet_key()
         -> corep/c08.py (one execution plan per sheet)
-        -> with_total_sheets() (the two published Total sheets)
+        -> sheet_plans() (each sheet's spec, and the cells its published sheet lacks)
+        -> reported_sheets() (the two published Total sheets, then the grey cells
+           left out of every sheet)
         -> COREPTemplateBundle
 
 Key responsibilities:
@@ -16,6 +18,9 @@ Key responsibilities:
   shares). CRR: the exposure class.
 - Build the two Basel 3.1 Total sheets (published codes 0001 and 0002) from the
   class sheets, and record a sheet that is not on the published axis.
+- Narrow the shared C / OF 08.01-08.02 spec to the columns a sheet reports
+  (``sheet_spec``) and leave out of every OF 08.01 sheet, Totals included, the
+  cells its published sheet does not have (``reported_sheets``).
 
 THE BASEL 3.1 AXIS (recorded fix 2026-11-13). OF 08.01, 08.02, 08.03 and 08.05
 are published on seventeen sheets: fifteen exposure sub-classes each under one
@@ -54,7 +59,7 @@ approach". The Bank's rules say what that is wherever a figure can be added up:
 ``boe_b0749`` for the FIRB-and-slotting Total, each over a listed set of
 columns (``boe_b0749``'s list is the shorter: it omits seventeen of
 ``boe_b0748``'s, among them 0250 and 0300). So a Total is the CELL-BY-CELL SUM OF ITS
-CLASS SHEETS (the C 07.00 decision, ``c07.c07_total_sheet``, for the same
+CLASS SHEETS (the C 07.00 decision, ``c07_sheet_scope.c07_total_sheet``, for the same
 reason: every row is evaluated per sheet over that sheet's own population and
 basis, so the sum of the sheets is the only total consistent with them). Three
 kinds of cell are not a sum:
@@ -64,17 +69,98 @@ kinds of cell are not a sum:
   exposures the Total covers that CARRY the parameter, weighted as the sheets
   weight it and measured over each sheet's own plan, so a sheet that does not
   report the cell contributes nothing to it. A leg with no value is left out,
-  not averaged in as a zero: a slotting exposure has no maturity and no LGD
-  (Annex II column 0250: "not be filled in ... for exposures subject to the
-  slotting approach"), and on the FIRB-and-slotting Total it sits beside the
-  F-IRB legs of every other sheet.
+  not averaged in as a zero: the engine seals no LGD and no maturity on a
+  slotting leg, Annex II keeps slotting out of both columns (below), and on the
+  FIRB-and-slotting Total a slotting leg sits beside the F-IRB legs of every
+  other sheet.
 - COLUMN 0250 IS LISTED BY ``boe_b0748`` AND IS AN AVERAGE ALL THE SAME. Annex II
   defines it as the exposure-weighted average maturity in days. A sum of
   averages is not a figure, so the AIRB Total reports the average and
   ``boe_b0748`` breaks on column 0250 wherever two AIRB sheets report a
-  maturity — a limit of the published rule, not a number to manufacture.
+  maturity — a limit of the published rule, not a number to manufacture. A
+  RETAIL sheet reports none (next paragraph), so the A-IRB Total's maturity is
+  the average over its non-retail legs, and a Total of retail sheets alone
+  reports none.
 - A RATE DERIVED FROM OTHER CELLS (OF 08.05 column 0040, the observed default
   rate) is re-derived from the Total's own counts.
+
+COLUMNS 0010, 0230 / 0240 AND 0250 ON A CLASS SHEET FOLLOW THE SAME RULE
+(recorded fixes 2026-11-16, PD, and 2026-11-17, LGD and maturity). Each is the
+exposure-weighted average of its parameter over the row's legs that CARRY it
+(``parameter_average``, weighted by ``parameter_weight``: the exposure value
+where the leg carries the parameter, else null); a slotting leg is left out,
+not averaged in as a zero, so a row of slotting exposure alone reports none of
+the three, and a row that holds F-IRB specialised lending beside slotting (both
+are on Basel 3.1 sheet 0010 and on the CRR ``specialised_lending`` sheet; the
+classifier slots only exposure class specialised lending) reports the F-IRB
+legs' figure, not a diluted one.
+
+The PD a row reports is the post-input-floor PD (``pd_floored``,
+``pd_average``). (``pd_floored`` is sealed by the
+IRB formula path only — ``engine/irb/formulas.py`` and ``engine/irb/transforms.py``
+— as the larger of the input PD and the floor, so every F-IRB / A-IRB leg
+carries one and no slotting leg does.) CRR Annex II C 08.01 column 0010
+defines the aggregate ("the exposure weighted average of the PDs assigned to
+the obligor grades or pools included in the aggregation ... The exposure value
+(column 0110) shall be used"); PS1/26 Annex II gives OF 08.01 column 0010 no
+instruction of its own (its column table starts at 0020) and defines OF 08.02's
+and OF 09.02's PD columns by reference to it. Post-floor because that is what
+OF 08.02 column 0010 and OF 09.02 column 0080 report and what ``boe_b0356``
+("PD floor for these exposures is 0.05%") checks. The PS1/26 Annex I template
+shades column 0010 on rows 0080 (slotting) and 0170 (free deliveries), and the
+PRA001 taxonomy has no cell there: a PD filed on row 0080 is refused. One
+definition for both regimes — under CRR a slotting-only row used to report a
+PD of 0.0, which is not a PD.
+
+LGD and maturity are excluded from slotting by the instruction itself, not by
+an absence of risk-weight dependence: maturity sets a slotting risk weight in
+both regimes (PS1/26 Art. 153(5)(d), "if less than 2.5 years remain until
+maturity"; CRR Art. 153(5) Table 1). PS1/26 Annex II §3.3.3 p.111, column 0230:
+"Data shall not be reported for specialised lending exposures subject to the
+slotting approach"; column 0250: "This column shall therefore not be filled in
+for the exposure class 'retail' or for exposures subject to the slotting
+approach". Reg (EU) 2021/451 Annex II says the same of C 08.01 column 0230
+(p.103: "Data shall not be reported for specialised lending exposures referred
+to in Article 153(5) CRR") but of column 0250 names retail only (p.104: "That
+means that this column shall not be filled in for the exposure class
+'retail'"). The CRR cell is left out all the same, because the engine seals no
+Article 162 maturity on a slotting leg — one definition for both regimes, as
+column 0010 has; whether CRR C 08.01 should report a slotting maturity is open
+(IMPLEMENTATION_PLAN.md P2.104). The exclusion is per LEG, not per sheet: sheet
+0010 also holds F-IRB specialised lending, whose LGD and maturity are reported,
+so binding the column to no figure on the sheet (``sheet_spec``, the retail
+mechanism below) would blank them.
+
+WHAT A SHEET DOES NOT REPORT (recorded fix 2026-11-16). Two kinds of cell are
+left out, by different mechanisms:
+
+- COLUMNS ANNEX II SAYS NOT TO FILL ON A SHEET, both bound to no figure in the
+  sheet's own spec (``sheet_spec``), so a Total built from the sheets averages
+  or sums only what they report. Column 0250 on a RETAIL sheet, both regimes,
+  C / OF 08.01 and 08.02 — PS1/26 Annex II p.111: "This data shall not be
+  reported for the exposure values for which the maturity is not an element in
+  the calculation of risk-weighted exposure amounts. This column shall therefore
+  not be filled in for the exposure class 'retail' or for exposures subject to
+  the slotting approach" (Reg (EU) 2021/451 Annex II p.104 says the same of
+  C 08.01; OF / C 08.02 inherit it: "0010-0300 Instructions for each of these
+  columns are the same as for the corresponding numbered columns in [OF] CR IRB
+  1 template"). C 08.03 column 0080 already applied it (``c08_03_cells``).
+  Column 0254 on a sheet relating to the F-IRB or slotting approach (a sheet
+  that adds into the FIRB-and-slotting Total), Basel 3.1 — Annex II p.112:
+  "This column shall not be reported for sheets relating to the FIRB approach
+  or the slotting approach"; the adjustment is Art. 166D(6)'s, an A-IRB one.
+  The taxonomy publishes both cells all the same, so only the instruction says
+  to leave them out.
+- CELLS THE PUBLISHED OF 08.01 SHEET DOES NOT HAVE (Basel 3.1), declared per
+  sheet in ``corep/of08_published_cells.py`` and held to the PRA001 taxonomy.
+  The generator computes them — a reported cell is often a formula over one,
+  and the Totals are sums of the class sheets — and ``reported_sheets`` blanks
+  them on every sheet AS ITS LAST STEP, AFTER the Totals are built. The order
+  is load-bearing: r0017 / r0020 c0035 are missing on sheet 0019 only, and the
+  PRA "requests that firms report this data in the total AIRB sheet s0001 but
+  do not report it separately" (known-issues log item 25), so blanking first
+  would drop it from Total 0001 too. Each Total is then blanked by its own
+  sheet's grid.
 
 The obligor count (0300) is summed on both Totals: an obligor with exposures on
 two sheets is counted on each, as the sheets count it. ``boe_b0748`` lists it;
@@ -97,16 +183,21 @@ A Total sheet has no execution plan: it is built from its sheets, and
 ``lineage.summed_sheet_reason`` tells a reader so.
 
 References:
-- PRA PS1/26 Annex II §3.3.1-§3.3.5, §3.3.7 (OF 08.01 / 08.02 / 08.03 / 08.05)
+- PRA PS1/26 Annex I OF 08.01 (column 0010); Annex II §3.3.1-§3.3.5, §3.3.7
+  (OF 08.01 / 08.02 / 08.03 / 08.05)
 - Reg (EU) 2021/451 Annex II §3.3 (C 08.01-08.05, the CRR sheets)
-- Bank of England Banking Taxonomy v4.1.1: ``boe_b0206``, ``boe_b0748``,
-  ``boe_b0749``, ``boe_b0749_1``, ``boe_b1041``
+- PRA PS1/26 Annex II §3.3.3 columns 0230 / 0250 (p.111) and 0254 (p.112),
+  §3.3.4 (p.118); Reg (EU) 2021/451 Annex II C 08.01 columns 0230 (p.103) and
+  0250 (p.104); PS1/26 Art. 153(5)(d)
+- Bank of England Banking Taxonomy v4.1.1: ``boe_b0206``, ``boe_b0356``,
+  ``boe_b0410``, ``boe_b0748``, ``boe_b0749``, ``boe_b0749_1``, ``boe_b1041``;
+  known-issues log (November 2026) item 25
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Final
 
 import polars as pl
@@ -114,7 +205,9 @@ from watchfire import cites
 
 from rwa_calc.reporting.cellspec import CellSpec, Formula, Sum, TemplateSpec, WeightedAvg, execute
 from rwa_calc.reporting.corep import c02_rows, irb_sheets
+from rwa_calc.reporting.corep.of08_published_cells import get_c08_01_unreported_cells
 from rwa_calc.reporting.corep.pd_scale import UNASSIGNED, published_row_refs
+from rwa_calc.reporting.corep.postpass import blank_unreported_cells
 from rwa_calc.reporting.corep.templates import PD_BANDS
 from rwa_calc.reporting.kernel import (
     TwoBasis,
@@ -161,6 +254,26 @@ REPORTED_ROWS: Final[dict[str, frozenset[str]]] = {
     irb_sheets.TOTAL_FIRB_SLOTTING_KEY: frozenset({"0080"}),
 }
 
+#: The parameters C / OF 08.01-08.02 report as exposure-weighted averages — the
+#: post-input-floor PD (column 0010), either LGD carrier (0230 / 0240) and the
+#: maturity (0250). Each is averaged over the legs that CARRY it, weighted by
+#: ``parameter_weight``: a leg's exposure value where it carries the parameter,
+#: else null, so a leg with no value weighs nothing (module docstring).
+AVERAGED_PARAMETERS: Final[tuple[str, ...]] = (
+    "pd_floored",
+    "lgd_floored",
+    "lgd_input",
+    "irb_maturity_m",
+)
+
+#: The PD column 0010 reports, the maturity column 0250 reports (in years; the
+#: column is in days), and the exposure value (column 0110) every average is
+#: weighted by.
+_PD: Final = "pd_floored"
+_MATURITY_YEARS: Final = "irb_maturity_m"
+_DAYS_PER_YEAR: Final = 365.0
+_EXPOSURE_VALUE: Final = "ead_final"
+
 _TOTAL_KEYS: Final[tuple[str, ...]] = tuple(
     key for _code, key, _label, _tab in irb_sheets.B31_TOTAL_SHEETS
 )
@@ -169,6 +282,12 @@ _TOTAL_LABELS: Final[dict[str, str]] = {
 }
 
 _LABEL_COLS: Final[tuple[str, str]] = ("row_ref", "row_name")
+
+#: The C / OF 08.01-08.02 columns a sheet may not report (module docstring):
+#: the maturity on a retail sheet, the unrecognised exposure adjustment on an
+#: F-IRB or slotting sheet.
+_MATURITY: Final = "0250"
+_UNRECOGNISED_EXPOSURE: Final = "0254"
 
 # Rows that sort after every other on a Total: the residual for a leg with no
 # grade or an out-of-scale PD (the C 08.02 label and the C 08.03 / 08.05 code).
@@ -338,6 +457,148 @@ def with_total_sheets(
 
 
 # =============================================================================
+# What a sheet reports
+# =============================================================================
+
+
+def sheet_plans(
+    template: str, plans: Mapping[str, SheetPlan], framework: str
+) -> dict[str, SheetPlan]:
+    """``plans`` as each sheet reports them — C / OF 08.01 and 08.02.
+
+    Each plan takes its sheet's own spec (``sheet_spec``), carries the cells its
+    published sheet does not have (``unreported_cells``) — which
+    ``reported_sheets`` blanks and ``lineage.describe_cell`` describes as kind
+    ``unreported`` — and keeps the rows reported even when empty
+    (``REPORTED_ROWS``) out of the empty-row pass, with its inflow rows.
+    """
+    reported_rows = _TOTAL_POLICIES[template].reported_rows
+    return {
+        key: replace(
+            plan,
+            spec=sheet_spec(plan.spec, key),
+            inflow_rows=plan.inflow_rows | reported_rows.get(key, frozenset()),
+            unreported=unreported_cells(template, framework, key),
+        )
+        for key, plan in plans.items()
+    }
+
+
+def sheet_spec(spec: TemplateSpec, sheet_key: str) -> TemplateSpec:
+    """The shared C / OF 08.01-08.02 spec as sheet ``sheet_key`` reports it.
+
+    A retail sheet binds no maturity (column 0250) and a sheet relating to the
+    F-IRB or slotting approach no unrecognised exposure adjustment (column 0254)
+    — each cell becomes a ``Formula`` with no figure, as C 08.03's retail column
+    0080 is (module docstring, "What a sheet does not report"). Because the
+    cell is no longer a ``WeightedAvg``, a Total leaves the sheet out of its
+    average (``_averaged_cells``). Every other sheet keeps ``spec`` unchanged.
+    """
+    place = irb_sheets.place_of(sheet_key)
+    unbound = {
+        _MATURITY: place.retail,
+        _UNRECOGNISED_EXPOSURE: place.total == irb_sheets.TOTAL_FIRB_SLOTTING_KEY,
+    }
+    if not any(unbound.values()):
+        return spec
+    cells = {
+        address: _NOT_REPORTED if unbound.get(address[1], False) else cell
+        for address, cell in spec.cells.items()
+    }
+    return replace(spec, cells=cells)
+
+
+def unreported_cells(template: str, framework: str, sheet_key: str) -> Mapping[str, frozenset[str]]:
+    """Row ref -> the column refs ``template``'s published sheet ``sheet_key``
+    has no cell for: the OF 08.01 declaration; nothing for the other templates."""
+    declaration = _UNREPORTED.get(template)
+    return {} if declaration is None else declaration(framework, sheet_key)
+
+
+def reported_sheets(  # noqa: PLR0913 - with_total_sheets' inputs plus the switch
+    template: str,
+    sheets: dict[str, pl.DataFrame],
+    plans: Mapping[str, SheetPlan],
+    framework: str,
+    errors: list[str],
+    *,
+    totals: bool,
+) -> dict[str, pl.DataFrame]:
+    """The sheets ``template`` reports: its class sheets, its Total sheets when
+    ``totals`` (``with_total_sheets``), and on every one of them only the cells
+    its published sheet has.
+
+    The blanking is the LAST step, after the Totals are summed from the
+    unblanked class sheets, and each Total is blanked by its own sheet's grid —
+    the order known-issues log item 25 needs (module docstring).
+    """
+    reported = with_total_sheets(template, sheets, plans, framework, errors) if totals else sheets
+    return {
+        key: blank_unreported_cells(frame, unreported_cells(template, framework, key))
+        for key, frame in reported.items()
+    }
+
+
+# =============================================================================
+# The averaged parameters (columns 0010, 0230 / 0240, 0250)
+# =============================================================================
+
+
+def parameter_weight(parameter: str) -> str:
+    """The derived column ``parameter``'s average is weighted by: a leg's exposure
+    value where it carries ``parameter``, else null (``parameter_weight_exprs``)."""
+    return f"c08_weight_{parameter}"
+
+
+def parameter_weight_exprs(cols: set[str]) -> list[pl.Expr]:
+    """The ``parameter_weight`` column of every ``AVERAGED_PARAMETERS`` member the
+    frame seals; nothing on a frame without the exposure value.
+
+    ``cols`` is the frame's columns before the derived ones are added.
+    """
+    if _EXPOSURE_VALUE not in cols:
+        return []
+    return [
+        pl.when(pl.col(parameter).is_not_null())
+        .then(pl.col(_EXPOSURE_VALUE))
+        .alias(parameter_weight(parameter))
+        for parameter in AVERAGED_PARAMETERS
+        if parameter in cols
+    ]
+
+
+def parameter_average(parameter: str, *, scale: float = 1.0) -> WeightedAvg:
+    """The binding of an averaged-parameter column: the exposure-weighted average
+    of ``parameter`` over the legs that carry it (module docstring).
+
+    Weighted by ``parameter_weight(parameter)``, which ``parameter_weight_exprs``
+    derives on a frame that seals ``parameter`` and ``ead_final``. On any other
+    frame one of the two columns is absent, and a ``WeightedAvg`` over an absent
+    column is an empty cell.
+    """
+    return WeightedAvg(parameter, weight=parameter_weight(parameter), scale=scale)
+
+
+def pd_average() -> WeightedAvg:
+    """Column 0010: the post-input-floor PD over the legs that carry a PD (CRR
+    Annex II C 08.01 column 0010, PS1/26 Annex I OF 08.01 column 0010)."""
+    return parameter_average(_PD)
+
+
+def maturity_average() -> WeightedAvg:
+    """Column 0250: the maturity in days over the legs that carry one (PS1/26
+    Annex II p.111; ``irb_maturity_m`` is in years despite its suffix)."""
+    return parameter_average(_MATURITY_YEARS, scale=_DAYS_PER_YEAR)
+
+
+def no_figure(_cells: Mapping[str, float | None], _prior_available: bool) -> None:
+    """The ``Formula`` of a cell that reports no figure: a column a sheet does not
+    report, or one the template defines as empty. The one home for the C 08
+    family (OF 08.01's unreported cells, C 08.03, C 08.06)."""
+    return None
+
+
+# =============================================================================
 # Private helpers
 # =============================================================================
 
@@ -377,6 +638,14 @@ _TOTAL_POLICIES: Final[dict[str, _TotalPolicy]] = {
     # Column 0040 is the observed default rate (0030 / 0020) and column 0050
     # copies it where no historical rate is supplied: rates, not amounts.
     "C08.05": _TotalPolicy(row_order=published_row_refs, rederived=frozenset({"0040", "0050"})),
+}
+
+
+_NOT_REPORTED: Final = CellSpec(Formula(refs=(), fn=no_figure))
+
+#: Template -> its declaration of the cells each published sheet lacks.
+_UNREPORTED: Final[dict[str, Callable[[str, str], Mapping[str, frozenset[str]]]]] = {
+    "C08.01": get_c08_01_unreported_cells,
 }
 
 

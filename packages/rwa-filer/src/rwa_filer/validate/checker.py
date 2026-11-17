@@ -28,6 +28,11 @@ What is deliberately NOT reported:
   operational and settlement risk rows a credit-risk return does not carry.
 - A rule whose operands are all null or zero is VACUOUS. It is not counted as a
   pass, because a vacuous pass is no evidence of correctness.
+- A rule not marked "always execute" is not broken at a place where none of the
+  cells it reads is reported: an XBRL processor does not evaluate it there, so
+  a failing comparison over zero-filled blanks is NOT_EVALUATED
+  (``nothing_reported``). A reported zero is still evaluated. The Bank marks 35
+  rules "always execute"; the EBA marks none, so this holds for every EBA rule.
 
 ``Finding`` is this package's own record. A host application maps it onto its
 own error channel (``rwa-calc`` maps it to ``CalculationError`` in
@@ -250,6 +255,10 @@ class Finding:
         positions: Every fact a structure or reading finding is about, uncapped
             — the message quotes the first few. Empty for a finding about a
             rule, a header field or the return as a whole.
+        publisher_issues: The known issues with the published rule that label
+            a broken rule's finding (``validate.issue_labels``), by id; the
+            message carries their sentences. Empty otherwise — and always for
+            this template-level engine, whose rules carry no fingerprint to pin.
     """
 
     code: str
@@ -260,6 +269,7 @@ class Finding:
     expected: str
     actual: str
     positions: tuple[FactPosition, ...] = ()
+    publisher_issues: tuple[str, ...] = ()
 
     @property
     def is_blocking(self) -> bool:
@@ -416,6 +426,7 @@ def _evaluate_rule(rule: ValidationRule, index: TemplateIndex) -> RuleOutcome:
             index,
             missing_value=rule.missing_value,
             arithmetic=rule.arithmetic,
+            always_execute=rule.always_execute,
         )
         for coordinate in expansion.coordinates
     ]

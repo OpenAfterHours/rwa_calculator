@@ -58,6 +58,27 @@ _CITE_CRR_159 = "CRR Art. 159"
 _CITE_CRR_501 = "CRR Art. 501"
 _CITE_PS126_92 = "PS1/26 Art. 92"
 
+# The Basel 3.1 loan-split carriers, named once for all three of their sites: the
+# SA dispatcher writes them (``engine/sa/b31_risk_weight_tables.py::
+# with_b31_loan_split_parts``), the calculation edges below declare them, and OF
+# 07.00 reads them (``reporting/kernel/rw_parts.py``). The secured share, the Art.
+# 124F(1)(a) / 124H(1)(a) secured weight, and the Art. 124L residual weight.
+LOAN_SPLIT_SECURED_SHARE_COL: str = "sa_loan_split_secured_share"
+LOAN_SPLIT_SECURED_RW_COL: str = "sa_loan_split_secured_rw"
+LOAN_SPLIT_RESIDUAL_RW_COL: str = "sa_loan_split_residual_rw"
+LOAN_SPLIT_CARRIERS: tuple[str, str, str] = (
+    LOAN_SPLIT_SECURED_SHARE_COL,
+    LOAN_SPLIT_SECURED_RW_COL,
+    LOAN_SPLIT_RESIDUAL_RW_COL,
+)
+
+# The applied exposure class an exposure would have had were it not in default,
+# named once for its two sites: the aggregator writes it beside the applied class
+# (``engine/aggregator/aggregator.py::_add_exposure_class_applied``) and OF 07.00
+# reads it to put memorandum rows 0300 / 0320 on the sheet of that class
+# (``reporting/corep/c07_sheet_scope.py``; PS1/26 Annex II ¶54).
+REPORTING_CLASS_PRE_DEFAULT_COL: str = "reporting_class_pre_default"
+
 
 class EdgeContractViolation(Exception):
     """A frame failed its edge contract, or a bundle field lacks its brand.
@@ -1743,6 +1764,26 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "risk_weight_pre_currency_mismatch": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False
         ),
+        # The Basel 3.1 loan-split carriers (``engine/sa/b31_risk_weight_tables.py::
+        # with_b31_loan_split_parts``): the secured share and the two part weights of
+        # an Art. 124F(1) / 124H(1) weight, which OF 07.00 reports "in two parts"
+        # (PS1/26 Annex II p.94). CONDITIONAL: the SA risk-weight step writes them on
+        # every Basel 3.1 run, IRB rows included (their SA-equivalent weight), and
+        # never under CRR. Undeclared, the seal strips them with no error. They
+        # record the DISPATCHER's weight: a later step (Art. 127, CRM substitution,
+        # Art. 123B) can re-weight a row that carries them, so a reader checks the
+        # row's weight still equals the blend (``reporting/kernel/rw_parts.py``).
+        **{
+            column: EdgeColumn(
+                dtype=pl.Float64,
+                required=False,
+                inject=False,
+                citation="PS1/26 Art. 124F(1), 124H(1), 124L",
+                null_meaning="the SA dispatcher did not price the row at an Art. 124F(1) / "
+                "124H(1) two-part weight; absent = CRR run",
+            )
+            for column in LOAN_SPLIT_CARRIERS
+        },
         "sa_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False),
         "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False),
@@ -1967,6 +2008,11 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_approach_origin": EdgeColumn(dtype=pl.String),
         "reporting_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
         "reporting_class_origin": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        # The applied class with the Art. 112(1)(j) default limb left out: what an
+        # exposure in default "would otherwise have been assigned to" (PS1/26 Annex
+        # II rows 0300 / 0320). Equal to reporting_class_origin on every row not in
+        # default. Computed by the aggregator (_add_exposure_class_applied).
+        REPORTING_CLASS_PRE_DEFAULT_COL: EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
         # The geographical mirror of the class pair (PS1/26 Annex II §3.4
         # ¶86/¶87): the origin twin is the obligor's own cp_country_code, the
         # post twin the guarantor's country on a BENEFICIALLY guaranteed leg.
@@ -2205,6 +2251,40 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
             citation="PS1/26 Art. 132",
             null_meaning="null = non-CIU leg; absent = equity-free run; never an approach",
         ),
+        # The PS1/26 Credit Risk: General Provisions rules 4.2 / 4.3 carriers the
+        # equity calculator writes (``_apply_standardised_equity_transitional``):
+        # non-null ONLY on a leg whose weight those rules set; typed nulls on every
+        # other equity-table leg under Basel 3.1; not produced under CRR. Same
+        # CONDITIONAL terms as ``equity_method`` (absent on an equity-free or CRR
+        # run, never injected). OF 07.00 reads all three: the risk-weight row is
+        # the Article 133 weight the rules replaced (Annex II p.95, "reported
+        # against the risk weights set out in Article 133 [...] disregarding the
+        # transitional provisions"; ``corep/c07_rw_bands.py::rw_band_expr``) and
+        # memorandum rows 0371-0374 key the label and the higher-risk flag.
+        # Undeclared, the seal stripped them and those rows published null.
+        "equity_transitional_approach": EdgeColumn(
+            dtype=pl.String,
+            required=False,
+            inject=False,
+            citation="PS1/26 Credit Risk: General Provisions rules 4.1-4.3",
+            null_meaning=(
+                "null = leg not weighted under rules 4.2/4.3; absent = equity-free or CRR run"
+            ),
+        ),
+        "equity_higher_risk": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            inject=False,
+            citation="PS1/26 Art. 133(4)",
+            null_meaning="null = leg not under the transitional rules; never 'not higher risk'",
+        ),
+        "risk_weight_pre_equity_transitional": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            inject=False,
+            citation="PS1/26 Art. 133(3)-(4)",
+            null_meaning="null = the applied risk_weight is already the Article 133 weight",
+        ),
         "expected_loss": EdgeColumn(dtype=pl.Float64),
         # Applied reporting class: SA rows carry the SME-managed-as-retail /
         # defaulted applied-treatment class; every other approach keeps
@@ -2300,6 +2380,7 @@ REPORTING_SURFACE: frozenset[str] = frozenset(
         "reporting_approach_origin",
         "reporting_class",
         "reporting_class_origin",
+        REPORTING_CLASS_PRE_DEFAULT_COL,
         "reporting_country",
         "reporting_country_origin",
         "reporting_ead",

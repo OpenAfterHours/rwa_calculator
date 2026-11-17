@@ -104,10 +104,10 @@ a row dimension. Within each submission, rows are organised into sections (total
 breakdown, risk weight breakdown, memorandum items).
 
 ### Templates
-- **C 02.00 / OF 02.00** — Own Funds Requirements: master template aggregating RWEA across all risk types. 1 column (CRR) / 3 columns (Basel 3.1). Row 0040 is the credit-risk RWEA and equals SA (0050, the same figure as 0060) + IRB (0240) + CCP default fund (0460) + securitisation (0470) in both templates (EBA `v0205_m`; BoE `boe_b1093`); neither template has an "8% own funds requirement" row. Basel 3.1 col 0010 ("All approaches") is the **un-floored** RWEA — row 0010 col 0010 is U-TREA, one data point with OF 02.01 row 0080 col 0030. Col 0020 ("Standardised approaches only (Output Floor)") exists on row 0040 and the modelled rows only and holds the standardised-approach RWEA of the same exposures; row 0040 col 0020 is S-TREA = row 0050 col 0010 + row 0240 col 0020 (`boe_b0716`). Col 0030 ("Output Floor") exists on rows 0010, 0034, 0035 and 0036 only: row 0010 is the floor `x·S-TREA + OF-ADJ`, and TREA = max(row 0010 col 0010, col 0030). Rows restructured: FIRB (0250) / AIRB (0310) / Slotting (0411) separated, corporate and retail subclass breakdowns added, slotting by 5 SL types, market risk expanded for ASA/IMA; no rows for IRB sovereigns, A-IRB institutions or IRB equity (Art. 147A). Row codes, labels and cells are declared in `reporting/corep/c02_rows.py` and held to the PRA001 taxonomy by `tests/contracts/test_of02_published_cells.py`. Source: PS1/26 Annex II §1.3; taxonomy table `OF02.00.01.01`.
+- **C 02.00 / OF 02.00** — Own Funds Requirements: master template aggregating RWEA across all risk types. 1 column (CRR) / 3 columns (Basel 3.1). Row 0040 is the credit-risk RWEA and equals SA (0050, the same figure as 0060) + IRB (0240) + CCP default fund (0460) + securitisation (0470) in both templates (EBA `v0205_m`; BoE `boe_b1093`); neither template has an "8% own funds requirement" row. Basel 3.1 col 0010 ("All approaches") is the **un-floored** RWEA — row 0010 col 0010 is U-TREA, one data point with OF 02.01 row 0080 col 0030. Col 0020 ("Standardised approaches only (Output Floor)") exists on row 0040 and the modelled rows only and holds the standardised-approach RWEA of the same exposures; row 0040 col 0020 is S-TREA = row 0050 col 0010 + row 0240 col 0020 (`boe_b0716`). Col 0030 ("Output Floor") exists on rows 0010, 0034, 0035 and 0036 only: row 0010 is the floor `x·S-TREA + OF-ADJ`, and TREA = max(row 0010 col 0010, col 0030). Rows restructured: FIRB (0250) / AIRB (0310) / Slotting (0411) separated, corporate and retail subclass breakdowns added, slotting by 5 SL types, market risk expanded for ASA/IMA; no rows for IRB sovereigns, A-IRB institutions or IRB equity (Art. 147A). Row codes, labels and cells are declared in `reporting/corep/c02_rows.py` and held to the PRA001 taxonomy by `tests/contracts/test_of02_published_cells.py`. An IRB class row that is one data point with an OF 08.01 class sheet's total (0271, 0295–0297, 0350, 0355, 0356, 0382–0385, 0390, 0400, 0410) is reported only when that sheet has exposures and is empty otherwise, as OF 08.01 omits the sheet; row 0290 (its sheet also totals slotting), the approach totals and every CRR row are still zero when empty (BoE XBRL Filing Manual v1.0.1 rule 2.19; `boe_b1055`). Source: PS1/26 Annex II §1.3; taxonomy table `OF02.00.01.01`.
 - **OF 02.01** — Output Floor (**new**, no CRR equivalent): dedicated output floor comparison for IM firms. 4 columns: col 0010 "RWA for modelled approaches" (portfolios under permitted internal models), col 0020 "RWA for portfolios on standardised approaches", col 0030 "Total RWA (U-TREA)" = arithmetic sum of 0010 + 0020 (the un-floored TREA from Art. 92), col 0040 "Standardised total RWA (S-TREA)" (all portfolios on SA, **no** multiplier applied). **Cols 0010 and 0020 partition the book** — col 0030 is only "the complete current portfolio" because each exposure is counted in exactly one of them, so col 0020 is the *complement* of the modelled set (SA, SA-CCR and equity all land there), never an allow-list of approach labels. 8 rows by risk type (credit excl. CCR, CCR, CVA, securitisation, market, op risk, residual, total); rows 0010/0020 partition the credit-risk book and row 0080 is their sum. Produces the raw U-TREA / S-TREA inputs that feed OF 02.00 col 0030. Note: OF 02.01 col 0030 is **U-TREA** (un-floored) — the same data point as OF 02.00 row 0010 col **0010** — and is distinct from OF 02.00 col 0030 (the floor) — same column number, different meaning. Source: PS1/26 Annex II §1.3.2.
-- **C 07.00 / OF 07.00** — CR SA: one submission per SA exposure class. 24 columns (CRR) / ~29 columns (Basel 3.1) covering original exposure, provisions, CRM substitution effects, on-balance sheet netting adjustment, Financial Collateral Comprehensive Method, CCF breakdown (5 bands: 10%, 20%, 40%, 50%, 100%), exposure value, and RWEA. 5 row sections: totals, exposure types (on-BS/off-BS/CCR), risk weights (15 bands CRR / 29 bands Basel 3.1), CIU approach, memorandum items.
-- **C 08.01 / OF 08.01** — CR IRB totals: one submission per IRB exposure class × own-estimates filter. 33 columns (CRR) / 40+ columns (Basel 3.1) covering PD, original exposure, CRM substitution effects, CRM in LGD estimates (detailed collateral breakdown), exposure value, LGD, maturity, RWEA, expected loss, provisions, obligor count. Basel 3.1 adds post-model adjustment and output floor columns.
+- **C 07.00 / OF 07.00** — CR SA: one submission per SA exposure class. 24 columns (CRR) / ~29 columns (Basel 3.1) covering original exposure, provisions, CRM substitution effects, on-balance sheet netting adjustment, Financial Collateral Comprehensive Method, CCF breakdown (5 bands: 10%, 20%, 40%, 50%, 100%), exposure value, and RWEA. 5 row sections: totals, exposure types (on-BS/off-BS/CCR), risk weights (15 bands CRR / 29 bands Basel 3.1), CIU approach, memorandum items. Row 0015 "of which: Defaulted exposures" is reported only on the sheets of the classes that keep a defaulted exposure — high risk and equity (CRR), plus CIUs (Basel 3.1) — and on the Total, which adds those sheets up; a defaulted exposure of any other class is reported on row 0010 of the "exposures in default" sheet and leaves row 0015 blank (COREP Annex II p.91; PS1/26 Annex II p.88; `v4721_m`, `boe_b0431`).
+- **C 08.01 / OF 08.01** — CR IRB totals: one submission per IRB exposure class × own-estimates filter. 33 columns (CRR) / 40+ columns (Basel 3.1) covering PD, original exposure, CRM substitution effects, CRM in LGD estimates (detailed collateral breakdown), exposure value, LGD, maturity, RWEA, expected loss, provisions, obligor count. Basel 3.1 adds post-model adjustment and output floor columns. Column 0010 (PD) is in both layouts (PS1/26 Annex I; taxonomy table `OF08.01.01.01`, no cell on rows 0080 and 0170): the exposure-weighted average of the post-input-floor `pd_floored` over the row's legs that carry a PD, so a row of slotting exposure alone reports none (`boe_b0356`, `boe_b0410`; `corep/c08_sheets.py::pd_average`). Column 0250 (maturity) is empty on a retail sheet in both regimes and both C / OF 08.01 and 08.02 ("This column shall therefore not be filled in for the exposure class 'retail' or for exposures subject to the slotting approach", PS1/26 Annex II p.111; CRR Annex II p.104), so the A-IRB Total's maturity is the average over its non-retail legs (`c08_sheets.py::sheet_spec`). Columns 0230 (LGD), 0240 and 0250 (maturity) are, like column 0010, the exposure-weighted average over the row's legs that carry the parameter (`c08_sheets.py::parameter_average`), so a slotting leg is left out rather than averaged in as zero: PS1/26 Annex II p.111 excludes slotting from both columns 0230 and 0250 (CRR Annex II p.103 from column 0230; for column 0250 CRR p.104 names retail only and the CRR cell is left out because no Article 162 maturity is carried for slotting). A row of slotting exposure alone reports neither, and a row that holds F-IRB specialised lending beside slotting (Basel 3.1 sheet 0010; CRR `specialised_lending`; slotting is assigned to exposure class specialised lending only) reports the F-IRB legs' figure. The exclusion is per leg, not per sheet, because sheet 0010 also holds F-IRB specialised lending. Basel 3.1 OF 08.01 reports a cell only where its published sheet has one: the cells the PRA001 taxonomy lacks per sheet are declared in `corep/of08_published_cells.py`, held to the taxonomy by `tests/contracts/test_of08_published_cells.py`, and left empty on every sheet after the Totals are built (`c08_sheets.py::reported_sheets`) — sheet 0019's r0017 / r0020 column 0035 netting is in Total 0001 and not on sheet 0019 (Bank known-issues log item 25).
 - **C 08.02 / OF 08.02** — CR IRB by obligor grade: same columns as C 08.01 with dynamic rows (one per firm-specific internal rating grade/pool, ordered by PD).
 - **C 08.03 / OF 08.03** — CR IRB PD ranges: one submission per IRB exposure class. 11 columns covering on/off-BS, avg CCF, exposure value, avg PD, obligors, avg LGD, avg maturity, RWEA, EL, provisions. Rows are 17 fixed PD range buckets (0.00–0.15 through 100% default). Basel 3.1: row allocation uses pre-input-floor PD ("PD RANGE (PRE-INPUT FLOOR)") while the PD column value reports post-input-floor PD ("EXPOSURE WEIGHTED AVERAGE PD (POST INPUT FLOOR)"). Supporting factors removed, slotting excluded.
 - **C 08.04 / OF 08.04** — CR IRB RWEA flow statements: one submission per IRB exposure class. 1 column (RWEA), 9 rows (previous period, 7 movement categories, current period). Virtually identical between CRR and Basel 3.1 (supporting factors no longer mentioned).
@@ -138,7 +138,7 @@ breakdown, risk weight breakdown, memorandum items).
 - Col 0251: RWEA pre-adjustments
 - Col 0252: Adjustment for post-model adjustments
 - Col 0253: Adjustment for mortgage RW floor
-- Col 0254: Unrecognised exposure adjustments (Art. 153(5A)(b), 154(4A)(c)) — not reported for F-IRB or slotting sheets
+- Col 0254: Unrecognised exposure adjustments (Art. 153(5A)(b), 154(4A)(c)) — not reported for F-IRB or slotting sheets (PS1/26 Annex II p.112); empty on those sheets and their Total 0002 in OF 08.01 and OF 08.02 (`c08_sheets.py::sheet_spec`). The engine adds the adjustment to Advanced IRB legs only (Art. 166D(6), P1.399), so column 0260 on those sheets still equals 0251 + 0252 + 0253
 - Col 0260: Risk-weighted exposure amount **after** adjustments — equals col 0251 adjusted for cols 0252 to 0254 (i.e. `0251 + 0252 + 0253 + 0254`). This is the post-adjustment RWEA that flows into OF 02.00's IRB class rows (0271–0410, column 0010; each is one data point with this cell on the class's sheet) and through them into rows 0240, 0040 and 0010. Source: PS1/26 Annex II §3.3.1, p. 112.
 - Col 0265: Of which: exposure value for non-defaulted
 - Col 0275-0276: Non-modelled approaches exposure value and RWEA (for output floor)
@@ -217,8 +217,8 @@ LTV bands (Art. 124F–124I), corporate sub-categories (Art. 122), institution E
 
 The previous CRR row 0260 (370%) is **removed** and replaced by row **0261 (400%)**
 for higher-risk equity exposures under Art. 133(4) — reported during the Standardised
-Transitional Approach period via memorandum row 0374, but always allocated to row 0261
-in Section 3.
+Transitional Approach period via memorandum row 0371 (row 0373 is the IRB Transitional
+Approach's), but always allocated to row 0261 in Section 3.
 
 | Row ID | Risk Weight | Basel 3.1 / CRR Article(s) | Typical Source |
 |--------|-------------|----------------------------|----------------|
@@ -267,12 +267,94 @@ in Section 3.
       with a 1.25× junior-charge multiplier reports under row 0232 = 110%, but with
       RWEA = exposure × 137.5%, surfacing in row 0234 = 135% only when the base RW
       itself is the multiplier outcome).
+    - **Loan-split real estate (Art. 124F / 124H, not materially dependent)** is
+      reported *"in two parts, against the risk weight applied to the portion up to
+      55% of the value of the property, and against the portion above 55% of the
+      value of the property (if applicable)"* (Annex II p.94). **Implemented as:** the
+      Basel 3.1 SA dispatcher records the secured share and both part weights on
+      `sa_loan_split_secured_share` / `sa_loan_split_secured_rw` /
+      `sa_loan_split_residual_rw`
+      (`engine/sa/b31_risk_weight_tables.py::with_b31_loan_split_parts`; named once as
+      `contracts/edges.py::LOAN_SPLIT_CARRIERS`; CONDITIONAL columns on every
+      calculator edge and on `AGGREGATOR_EXIT_EDGE`, never produced under CRR).
+      `reporting/kernel/rw_parts.py::split_risk_weight_parts` turns each
+      such ledger row into two report rows before OF 07.00 is cut: every column a cell
+      sums is split by the share (exposure) or by each part's share of the weight
+      (RWEA), so the parts add back to the row, and each part bands on its own weight.
+      A row is split only while the weight it is reported against still equals the
+      recorded blend — the pre-multiplier weight where Art. 123B applied, so the RWEA
+      keeps the multiplier — and a defaulted or otherwise re-weighted leg stays
+      whole: Art. 127 runs after the dispatcher and leaves its record on the row, so
+      the reader, not the engine, is what keeps a defaulted mortgage out of the
+      20% / 75% rows. A covered leg Art. 235 substitution was applied to is split on
+      the OBLIGOR's own weight (`pre_crm_risk_weight`, still the blend): its original
+      exposure goes to the two part rows of the real-estate sheet, its exposure value
+      whole to the protection provider's row (see the next note). Both parts stay on the real-estate sheet
+      (Art. 112(2) Table A2 ranks real estate above retail and corporates;
+      Art. 123(2)). Worked example
+      (`b31/rich`, `RP-LN-RRE`, 400,000 at 60% LTV to a natural person, 24.58% as a
+      whole): row 0180 366,666.67 / RWEA 73,333.33, row 0220 33,333.33 / RWEA
+      25,000.00, row 0280 empty, as `boe_b0445` requires on sheet 0010. No risk weight
+      or RWEA changes. **Not yet:** the CRR template (the Art. 125 / 126 blend above
+      the LTV limit), the residual leg of a loan the engine splits physically (still
+      reported on the counterparty's sheet), Pillar 3 CR5 (Annex XX carries the same
+      sentence), and banding a non-split Art. 123B or junior-charge exposure on its
+      un-multiplied weight — those two are still banded on the applied weight; no
+      registered portfolio reaches either.
+    - **A substituted covered part is reported in two risk-weight rows, one per
+      basis.** Cols 0010-0040 are the original exposure "deducted from the
+      obligor's exposure class" (Annex II p.84, cols 0090 / 0100) and the rows give
+      "the allocation of risk weights within the respective exposure class" (p.94),
+      so cols 0010-0150 of a covered part sit at the **obligor's own** risk weight on
+      the obligor's sheet; from col 0150 on — cols 0160-0235, and the col 0100 inflow
+      — they sit at the **protection provider's** weight on the provider's sheet (EBA
+      Q&A 2014_1636 reads the identical C 07.00 text the same way). **Implemented
+      as:** `reporting/corep/c07_rw_bands.py` derives two bands, `c07_rw_band` (the
+      post weight) and `c07_rw_band_origin` (the obligor's `pre_crm_risk_weight`
+      wherever `is_guarantee_beneficial` is true — the protection was applied — else
+      the post weight; `reporting/kernel/bases.py::origin_risk_weight`); a
+      risk-weight row's origin cells key the second, its post cells the first, and
+      the row is non-empty when a leg is on the sheet under a basis at that basis's
+      band. A same-class substitution therefore reports one leg in two rows of one
+      sheet. Worked example (`crm-substitution`, S4: an unrated corporate loan of
+      8,000,000, 2,800,000 covered by a CQS 2 institution): corporates row 0230
+      (100%) c0010 = c0040 = 8,000,000 and c0150 = c0200 = c0220 = 5,200,000;
+      corporates row 0182 (30% under Basel 3.1; row 0200, 50%, under CRR) empty, as
+      the Bank's `boe_b0441` / `boe_b0441_1` require; institutions row 0182
+      c0150 = c0200 = 4,300,000 (its own 1,500,000 and the 2,800,000 inflow),
+      c0220 = 1,290,000. No risk weight or RWEA changes. **Not yet:** the Financial
+      Collateral Simple Method and the Art. 232 other-funded methods still weight
+      the covered part inside one blended row (P1.347), and a covered leg the due
+      diligence override or the Art. 113(6) intra-group 0% re-weights after
+      substitution is banded on its own weight as it stood before those steps.
     - Equity exposures under the Standardised Transitional Approach (Rules 4.1–4.10
       of the Credit Risk: General Provisions (CRR) Part) are allocated to rows 0250
       and 0261 per Art. 133, and additionally reported against memorandum rows
       0371–0374 for the transitional period (expiring 1 January 2030). The
       memorandum reporting in 0371–0374 does **not** affect the primary allocation
       to 0250 / 0261.
+    - **Implemented as:** `reporting/corep/c07_rw_bands.py::rw_band_expr` bands a leg on
+      `risk_weight_pre_equity_transitional` (the Article 133 weight the rules
+      4.2 / 4.3 weight replaced) where it is set, and on `risk_weight` otherwise,
+      so a 160% leg reports in row 0250 and a 220% leg in row 0261 with col 0220
+      at the transitional RWEA; row 0280 stays empty on the class (p) sheet, as
+      the Bank's `boe_b0458` requires. Rows 0371–0374 key the
+      `equity_transitional_approach` / `equity_higher_risk` carriers on the class
+      (p) sheet only (¶55A; the Bank publishes OF 07.00.01.04 on sheet 0016
+      alone). The three carriers are sealed on `AGGREGATOR_EXIT_EDGE`; the
+      equity calculator sets them only on legs whose weight rules 4.2 / 4.3
+      assigned (firms without IRB permission, 2027–2029). Rows 0373 / 0374 stay
+      empty until rules 4.4–4.6 (IRB permission) are implemented. Registered
+      book: `tests/fixtures/reporting_equity_transitional_portfolio.py`
+      (`b31/equity-transitional`).
+    - **Bank-rule conflict (publisher issue PI-01).** A correct return of such
+      equity fails `boe_b1016` / `boe_b1031` (ERROR, Total sheet: RWEA ≥ 2.5× /
+      4× exposure value on rows 0250 / 0261) and `boe_b0491` / `boe_b0506`
+      (WARNING, sheet 0016: RWEA = 2.5× / 4×), because every rules 4.2 / 4.3
+      weight is below the row weight; and `boe_b0710_2` (ERROR) on rows 0371 /
+      0372, because an on-balance-sheet holding has no conversion-factor
+      breakdown. These are banked in the supervisory register as rule limits;
+      the figures are not altered to satisfy them.
     - Source: PS1/26 Annex II §3.2.5, pp. 95–96 of
       `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf`.
 
@@ -326,7 +408,7 @@ Source: PS1/26 Annex II §3.4.1 (OF 09.01 row instructions, pp. 139-141 of `docs
 - Tests: Complete — 700+ COREP tests across multiple test files covering all template families.
 - Known sub-gaps:
     - **C 07.00 / OF 07.00**: Section 2 rows 0090 (SFT netting sets) / 0100 (of which QCCP) / 0110 (derivative and long-settlement netting sets — the additive parent) / 0120 (of which QCCP) are **populated**, as are columns 0210 / 0211 ("Of which: arising from CCR" / the same excluding Art. 301(1) CCP-cleared contracts). C 07.00 covers counterparty credit risk: Annex II rows 0070/0080 direct CCR exposures to rows 0090–0130, and C 34 is not an alternative to it. Row 0130 (contractual cross-product netting sets, Art. 295(c)) is null — **not modelled**, there is no input carrier for a cross-product netting agreement.
-    - **C 08.01 / OF 08.01**: Section 2 rows 0040–0060 (SFT, derivatives, cross-product netting) always null — **not** because CCR is out of scope, but because the engine risk-weights CCR under SA-CCR, so it reports in C 07.00 rows 0090–0130 rather than in an IRB template; these rows carry no binding, so an IRB-routed CCR exposure would not be broken out. B31 rows 0031–0035 (off-BS CCF bucket breakdown) null. Column 0130 ("Of which: arising from CCR") null (same reason). Column 0120 ("Of which: off balance sheet" under Exposure Value) null (Phase 2B). Column 0030 ("Of which: LFSE") null (Phase 2F).
+    - **C 08.01 / OF 08.01**: Section 2 rows 0040–0060 (SFT, derivatives, cross-product netting) always null — **not** because CCR is out of scope, but because the engine risk-weights CCR under SA-CCR, so it reports in C 07.00 rows 0090–0130 rather than in an IRB template; these rows carry no binding, so an IRB-routed CCR exposure would not be broken out. B31 rows 0031, 0032, 0001, 0033, 0034, 0035 (off-BS breakdown by conversion factor: 10%, 20%, 40%, 50%, 100%, own estimate) are reported, each leg in one row (`corep/ccf_buckets.py`). Column 0130 ("Of which: arising from CCR") null (same reason). Column 0120 ("Of which: off balance sheet" under Exposure Value) null (Phase 2B). Column 0030 ("Of which: LFSE") null (Phase 2F).
     - **B31 CIU sub-rows**: OF 07.00 rows 0284/0285 not populated.
     - **OF 34.07**: IRB CCR template not yet implemented (see Missing Templates above).
 - Detailed feature docs: Done — see [COREP Reporting](../features/corep-reporting.md) (all 10 template families documented)

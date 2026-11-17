@@ -1,0 +1,223 @@
+{
+ "_comment": "Arelle's verdict, as [satisfied, unsatisfied] evaluation counts, on the returns tests/rounding_and_default_returns.py builds: rounded figures under plain sum() and abs(), and an all-types OF 08.06 sheet beside two types. Regenerate with that module's main, never by hand.",
+ "processor": "arelle-release 2.47.5",
+ "returns": {
+  "all_types": {
+   "facts": 58,
+   "module": "PRA001",
+   "rules": {
+    "boe_b0632": [
+     1,
+     0
+    ],
+    "boe_b0633": [
+     0,
+     0
+    ],
+    "boe_b0634": [
+     0,
+     0
+    ],
+    "boe_b0635": [
+     1,
+     0
+    ],
+    "boe_b0636": [
+     0,
+     0
+    ],
+    "boe_b0743": [
+     2,
+     0
+    ],
+    "boe_b0815": [
+     18,
+     0
+    ],
+    "boe_b0816": [
+     0,
+     1
+    ],
+    "boe_b0817": [
+     0,
+     1
+    ],
+    "boe_b0818": [
+     0,
+     0
+    ],
+    "boe_b0819": [
+     0,
+     1
+    ],
+    "boe_b0820": [
+     0,
+     0
+    ],
+    "boe_b0821": [
+     0,
+     0
+    ],
+    "boe_b0822": [
+     0,
+     1
+    ],
+    "boe_b0823": [
+     1,
+     2
+    ],
+    "boe_b0829": [
+     1,
+     2
+    ],
+    "boe_b1042": [
+     7,
+     0
+    ]
+   }
+  },
+  "all_types_total_only": {
+   "facts": 46,
+   "module": "PRA001",
+   "rules": {
+    "boe_b0632": [
+     1,
+     0
+    ],
+    "boe_b0633": [
+     0,
+     0
+    ],
+    "boe_b0634": [
+     0,
+     0
+    ],
+    "boe_b0635": [
+     1,
+     0
+    ],
+    "boe_b0636": [
+     0,
+     0
+    ],
+    "boe_b0743": [
+     2,
+     0
+    ],
+    "boe_b0815": [
+     12,
+     6
+    ],
+    "boe_b0816": [
+     0,
+     1
+    ],
+    "boe_b0817": [
+     0,
+     1
+    ],
+    "boe_b0818": [
+     0,
+     0
+    ],
+    "boe_b0819": [
+     0,
+     1
+    ],
+    "boe_b0820": [
+     0,
+     0
+    ],
+    "boe_b0821": [
+     0,
+     0
+    ],
+    "boe_b0822": [
+     0,
+     1
+    ],
+    "boe_b0823": [
+     1,
+     2
+    ],
+    "boe_b0829": [
+     1,
+     2
+    ],
+    "boe_b1042": [
+     5,
+     0
+    ]
+   }
+  },
+  "rounded": {
+   "facts": 52,
+   "module": "PRA001",
+   "rules": {
+    "boe_b0768": [
+     2,
+     0
+    ],
+    "boe_b0769": [
+     2,
+     0
+    ],
+    "boe_b0770": [
+     1,
+     1
+    ],
+    "boe_b0794": [
+     1,
+     1
+    ],
+    "boe_b0816": [
+     1,
+     0
+    ],
+    "boe_b0817": [
+     1,
+     0
+    ],
+    "boe_b0819": [
+     1,
+     0
+    ],
+    "boe_b0820": [
+     0,
+     1
+    ],
+    "boe_b0821": [
+     0,
+     1
+    ],
+    "boe_b0822": [
+     0,
+     1
+    ],
+    "boe_b0823": [
+     0,
+     1
+    ],
+    "boe_b0829": [
+     0,
+     1
+    ]
+   }
+  },
+  "rounded_sddt": {
+   "facts": 20,
+   "module": "PRA116",
+   "rules": {
+    "boe_b0794": [
+     1,
+     1
+    ],
+    "boe_b1037_ss": [
+     1,
+     1
+    ]
+   }
+  }
+ },
+ "taxonomy": "Bank of England Banking Taxonomy v4.1.1"
+}

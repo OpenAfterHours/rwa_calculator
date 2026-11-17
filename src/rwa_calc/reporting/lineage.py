@@ -283,6 +283,10 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "memorandum rows 0290/0310 under CRR. The QRRE split returns on no row "
             "in either regime, and Specialised lending returns on no row under CRR, "
             "because the template declares none — a sheet total covers them",
+            "Under Basel 3.1 the memorandum rows 0300/0320 of a class sheet read the "
+            "exposures in default whose class before default is that sheet's class "
+            "(reporting_class_pre_default); they are not reported on the 'in default' "
+            "or real-estate sheets, and the Total carries every exposure in default once",
         ),
         sheet_label="obligor class",
     ),
@@ -464,7 +468,8 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "approaches; slotting (supervisory-slotting specialised lending) is "
             "excluded — it discloses on C 08.06 (reporting_approach_origin in "
             "{foundation_irb, advanced_irb})",
-            "Row 0090 (closing RWEA) sums the current period's rwa_final; the "
+            "Row 0090 (closing RWEA) sums the current period's own-approach RWEA "
+            "(rwa_pre_floor where the output floor ran, else rwa_final); the "
             "opening (row 0010) and residual (row 0080) rows need a prior-period "
             "frame the drill-down does not carry, so they are out of the "
             "current-period view",
@@ -545,8 +550,9 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "SA-CCR templates; PS1/26 App. 17). Admitted by exposure reference (not "
             "the approach label the output floor relabels), and the plan frame IS "
             "that pre-filtered population, so both cells sum the whole frame",
-            "The single SA-CCR row sums ead_final (col 0010) and rwa_final (col "
-            "0020) over the population — CRR Art. 274(2) SA-CCR EAD = "
+            "The single SA-CCR row sums ead_final (col 0010) and the own-approach "
+            "RWEA (col 0020; rwa_pre_floor where the output floor ran, else "
+            "rwa_final) over the population — CRR Art. 274(2) SA-CCR EAD = "
             "alpha * (RC + PFE), and the RWEA the netting sets carry. None when the "
             "portfolio has no such rows (a clean no-lineage, the reported None)",
         ),
@@ -624,7 +630,8 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "counterparty is NEITHER row, disclosing on C 34.01/02 instead — the R5 "
             "fix). Row 0030 (default fund) keys the CCR_DEFAULT_FUND risk type "
             "(Art. 308/309), its OWN population, not the CCP subset",
-            "Each row sums ead_final (col 0010) and rwa_final (col 0020) over its subset",
+            "Each row sums ead_final (col 0010) and the own-approach RWEA (col 0020; "
+            "rwa_pre_floor where the output floor ran, else rwa_final) over its subset",
         ),
         sheet_label="",
         single_frame=True,
@@ -1161,7 +1168,7 @@ def summed_sheet_reason(template_id: str, sheet: str | None) -> str | None:
     """Why a sheet has no drill-down of its own, when it is a sum of other sheets.
 
     The C 07.00 / OF 07.00 Total sheet is the cell-by-cell sum of the
-    exposure-class sheets (``corep/c07.py::c07_total_sheet``), and the two
+    exposure-class sheets (``corep/c07_sheet_scope.py::c07_total_sheet``), and the two
     OF 08.01 / 08.02 / 08.03 / 08.05 Total sheets are built from their class
     sheets likewise (``corep/c08_sheets.py::with_total_sheets``). None has an
     execution plan — there is no population to select — so ``sheet_lineage``

@@ -324,14 +324,12 @@ quantify additive adjustments to offset the impact:
 
 #### Sequencing (Art. 154(4A))
 
-The mortgage RW floor and general PMA scalars must be applied in a **mandatory order**:
-
-1. **First:** Mortgage risk weight floor (Art. 154(4A)(b)) — `RW = max(RW_modelled, 0.10)`
-2. **Then:** General PMA RWA/EL scalar (Art. 154(4A)(a) / Art. 153(5A) / Art. 158(6A))
-
-The PMA scalar operates on the floor-adjusted RWEA, not the raw modelled RWEA. Reversing
-the order would allow the scalar to amplify a sub-floor RW, producing an incorrectly low
-result. See the [A-IRB specification](../specifications/basel31/airb-calculation.md#adjustment-sequencing-art-1535a--art-1544a) for the full formula chain.
+Art. 154(4A)'s limbs are **three additive increases to one modelled base**, not a chain
+(P1.325): the general PMA scalar (Art. 154(4A)(a) / Art. 153(5A)(a)) and the unrecognised
+exposure scalar (Art. 154(4A)(c) / Art. 153(5A)(b)) both multiply the modelled RWEA, and
+the mortgage risk weight floor (Art. 154(4A)(b)) tops the modelled RWEA plus the general
+PMA up to 10% of the exposure value. The unrecognised exposure adjustment is an Art. 166D(6)
+amount and reaches Advanced IRB legs only (P1.399). See the [A-IRB specification](../specifications/basel31/airb-calculation.md#adjustment-sequencing-art-1535a--art-1544a) for the full formula chain.
 
 #### EL Monotonicity (Art. 158(6A))
 

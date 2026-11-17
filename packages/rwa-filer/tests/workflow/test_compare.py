@@ -12,10 +12,13 @@ comparison that finds something on every pair carries no information.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
+from datetime import date
 
 import pytest
 
 from compare_builders import CORPORATES, TABLE, corporate_return, unreported_return
+from rwa_filer.boe.deny import DENY_DOWNGRADED, DenyEntry, DenyList
 from rwa_filer.boe.engine import CellAddress, Evaluation
 from rwa_filer.readers import SourceReading
 from rwa_filer.release import resolve_release
@@ -43,8 +46,17 @@ from rwa_filer.workflow.explain import (
     explain_differences,
 )
 
+#: The 4.1.1 deny list switches boe_b0710 off at the Bank's gateway from 19 October 2026.
+BEFORE_B0710_OFF = date(2026, 10, 18)
+B0710_OFF = date(2026, 10, 19)
 
-def compare(baseline: dict[str, object], candidate: dict[str, object]) -> ReturnComparison:
+
+def compare(
+    baseline: dict[str, object],
+    candidate: dict[str, object],
+    *,
+    submission_date: date | None = None,
+) -> ReturnComparison:
     """Compare two corporates returns built from ``corporate_return`` keyword arguments."""
     readings = []
     for differences in (baseline, candidate):
@@ -52,7 +64,9 @@ def compare(baseline: dict[str, object], candidate: dict[str, object]) -> Return
         pack = resolve_release(ret.header.module).pack
         assert check_structure(ret, pack) == [], "the fixture must be a valid PRA001 return"
         readings.append(SourceReading(ret=ret))
-    return compare_returns(*readings, names=Names("the old system", "rwa-filer"))
+    return compare_returns(
+        *readings, names=Names("the old system", "rwa-filer"), submission_date=submission_date
+    )
 
 
 def kinds(comparison: ReturnComparison) -> list[str]:
@@ -74,11 +88,61 @@ def test_two_identical_returns_are_equivalent_and_find_nothing() -> None:
 
 
 def test_rules_both_returns_break_are_shared_and_not_a_finding() -> None:
-    """Neither return fills OF 07.00 cols 0160-0190, so boe_b0710 breaks in both."""
-    comparison = compare({}, {})
+    """Neither return fills OF 07.00 cols 0160-0190, so boe_b0710 breaks in both.
+
+    On a day the Bank's gateway still runs it: the deny list switches it off later.
+    """
+    comparison = compare({}, {}, submission_date=BEFORE_B0710_OFF)
 
     assert "boe_b0710" in comparison.shared_breaks
     assert comparison.is_equivalent
+
+
+# ---------------------------------------------------------------------------
+# The Bank's validations deny list
+# ---------------------------------------------------------------------------
+
+
+def test_a_rule_the_gateway_does_not_run_on_the_submission_date_is_not_compared() -> None:
+    """From 19 October 2026 the deny list switches boe_b0710 off: it judges neither return."""
+    comparison = compare({}, {}, submission_date=B0710_OFF)
+
+    assert "boe_b0710" not in comparison.shared_breaks
+    assert "boe_b0710" in comparison.switched_off
+    assert comparison.submission_date == B0710_OFF
+
+
+def test_a_rule_the_gateway_still_runs_is_not_listed_as_switched_off() -> None:
+    comparison = compare({}, {}, submission_date=BEFORE_B0710_OFF)
+
+    assert comparison.switched_off == ()
+
+
+def test_a_rule_the_deny_list_downgrades_is_still_compared() -> None:
+    """A downgraded rule still runs at the gateway, as a warning: a break is still a break."""
+    entry = DenyEntry(
+        rule_id="boe_b0713",
+        module="PRA001",
+        deny_type=DENY_DOWNGRADED,
+        date_applied=BEFORE_B0710_OFF,
+        known_issue=None,
+    )
+    ret = corporate_return()
+    release = resolve_release(ret.header.module)
+    downgraded = replace(release, deny_list=DenyList(release=release.version, entries=(entry,)))
+    reading = SourceReading(ret=ret, release=downgraded)
+
+    comparison = compare_returns(reading, reading, submission_date=BEFORE_B0710_OFF)
+
+    assert "boe_b0713" in comparison.shared_breaks
+    assert "boe_b0713" not in comparison.switched_off
+
+
+def test_the_record_says_which_day_the_gateway_was_judged_for() -> None:
+    record = compare({}, {}, submission_date=B0710_OFF).as_record()
+
+    assert record["submission_date"] == "2026-10-19"
+    assert "boe_b0710" in record["switched_off"]
 
 
 # ---------------------------------------------------------------------------

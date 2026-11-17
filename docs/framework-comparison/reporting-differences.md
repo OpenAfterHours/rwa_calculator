@@ -124,16 +124,17 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 | **Added** | 0251–0254 | Post-model adjustment columns (pre-adj RWEA, post-model adj, mortgage RW floor, unrecognised exposure adj) |
 | **Added** | 0275–0276 | Output floor columns (SA-equivalent exposure value and RWEA) |
 | **Added** | 0281–0282 | Post-model adjustments to expected loss |
-| **Removed** | 0010 | PD column — moved to OF 08.02 only |
 | **Removed** | 0220 | Double default treatment (removed in Basel 3.1) |
 | **Removed** | 0255–0257 | Supporting factor columns (SME and infrastructure factors removed) |
+| **Unchanged** | 0010 | PD column — kept on every sheet (PS1/26 Annex I, PRA001 taxonomy); no cell on rows 0080 (slotting) and 0170 (free deliveries). Both regimes report the exposure-weighted post-input-floor PD of the legs that carry one |
+| **Changed** | 0250 | Maturity — PS1/26 Annex II p.111 excludes "exposures subject to the slotting approach" as well as retail; CRR Annex II p.104 names retail only. Column 0230 (LGD) excludes slotting in both (PS1/26 p.111, CRR p.103). The calculator reports both columns, in both regimes, as the exposure-weighted average over the legs that carry the parameter, so a slotting leg is left out and a row of slotting exposure alone reports neither |
 
 ### Row Changes
 
 | Change | Ref(s) | Description |
 |--------|--------|-------------|
 | **Added** | 0017 | Revolving loan commitments breakdown |
-| **Added** | 0031–0035 | Off-balance sheet CCF bucket breakdown rows |
+| **Added** | 0031, 0032, 0001, 0033, 0034, 0035 | Off-balance sheet items by conversion factor (10%, 20%, 40%, 50%, 100%, own estimate) |
 | **Added** | 0175 | Purchased receivables (explicit row) |
 | **Added** | 0190, 0200 | Corporates without ECAI / investment grade (output floor) |
 | **Removed** | 0015 | SME supporting factor |
@@ -146,7 +147,7 @@ sub-rows (0284, 0285) under look-through and mandate-based approaches.
 
 | Change | Description |
 |--------|-------------|
-| **PD column** | Retained in OF 08.02 (removed from OF 08.01 totals only) |
+| **PD column** | Column 0010, as in OF 08.01 and as under CRR |
 | **CCF breakdown** | New columns 0001, 0101–0105 for off-BS items by CCF bucket |
 | **PD ordering** | Basel 3.1 uses PDs without input floor adjustments |
 | **Slotting excluded** | Slotting exposures reported separately in OF 08.06 |

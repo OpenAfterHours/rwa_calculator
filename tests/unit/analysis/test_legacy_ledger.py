@@ -53,6 +53,7 @@ from rwa_calc.data.schemas import (
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.reporting.corep.c07 import c07_class_sheets
+from rwa_calc.reporting.corep.ccf_buckets import OF08_01_CCF_ROWS
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import C07_00_TOTAL_SHEET_KEY
 from rwa_calc.reporting.kernel.columns import _CREDIT_BS_TYPES
@@ -1431,6 +1432,24 @@ def test_missing_slotting_placement_mapping_blocks_c08_06(
     if dropped in {"slotting_category", "is_short_maturity"}:
         assert coverage.row_axis_deleted("c08_06")
         assert coverage.unavailable_rows("c08_06", "CRR")
+
+
+def test_an_unmapped_conversion_factor_names_the_b31_conversion_factor_rows(
+    shared: _Shared,
+) -> None:
+    """OF 08.01 rows 0031-0035 and 0001 are keyed on the applied conversion
+    factor (``corep/ccf_buckets.py``); a mapping without one cannot key them, so
+    coverage names them — under Basel 3.1, the only layout that has them."""
+    # Arrange
+    components = {k: v for k, v in _components_for("raw").items() if k != "ccf"}
+    legacy, mapping = _load(shared.legacy_file, components, _CARRIERS)
+
+    # Act
+    _source, coverage = project_legacy_ledger(legacy, mapping, framework="BASEL_3_1")
+
+    # Assert
+    assert set(OF08_01_CCF_ROWS) <= set(coverage.unavailable_rows("c08_01", "BASEL_3_1"))
+    assert not set(OF08_01_CCF_ROWS) & set(coverage.unavailable_rows("c08_01", "CRR"))
 
 
 @pytest.mark.parametrize(

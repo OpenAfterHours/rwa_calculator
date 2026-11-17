@@ -135,6 +135,32 @@ def oracle_path() -> Path:
     )
 
 
+def canonical_return(module: str, rows: list[tuple[Any, ...]]) -> CanonicalReturn:
+    """A return of ``module`` holding ``rows``, under the oracles' LEI and reference date.
+
+    Each row is ``(table, sheet, open_key, row, column, value, text_value,
+    decimals)``. Shared with ``rounding_and_default_returns.py``, whose oracle
+    Arelle measured on returns built here.
+    """
+    header = ReturnHeader(entity_identifier=LEI, reference_date=REFERENCE_DATE, module=module)
+    return CanonicalReturn.from_frame(header, pl.DataFrame(rows, schema=_COLUMNS, orient="row"))
+
+
+def arelle_version(arelle_python: Path | None) -> str:
+    """The ``arelle-release`` version the referee runs, as an oracle records it.
+
+    Shared with ``rounding_and_default_returns.py``.
+    """
+    from rwa_filer.referee.runner import find_arelle_python
+
+    interpreter = find_arelle_python(arelle_python)
+    probe = "from importlib.metadata import version; print(version('arelle-release'))"
+    found = subprocess.run(  # noqa: S603 - the interpreter the referee itself runs
+        [str(interpreter), "-I", "-c", probe], capture_output=True, text=True, check=True
+    )
+    return f"arelle-release {found.stdout.strip()}"
+
+
 # =============================================================================
 # The returns
 # =============================================================================
@@ -165,13 +191,13 @@ def _pra001(pack: TaxonomyPack) -> CanonicalReturn:
     rows = list(dict.fromkeys(rows))
     rows += _securitisations("C14.00.01.01", "C14.01.01.01", ("0010", "0020"))
     rows += _group_entities(pack, "C06.02.01.01")
-    return _return("PRA001", rows)
+    return canonical_return("PRA001", rows)
 
 
 def _pra116(pack: TaxonomyPack) -> CanonicalReturn:
     rows = _securitisations("SC14.00.01.01", "SC14.01.01.01", ("0010", "0020"))
     rows += _group_entities(pack, "SC06.02.01.01")
-    return _return("PRA116", rows)
+    return canonical_return("PRA116", rows)
 
 
 def _mrl003(pack: TaxonomyPack) -> CanonicalReturn:
@@ -205,7 +231,7 @@ def _mrl003(pack: TaxonomyPack) -> CanonicalReturn:
             rows.append(
                 ("BR01.00.01.01", None, None, instrument, *_typed(pack, table.code, None, column))
             )
-    return _return("MRL003", rows)
+    return canonical_return("MRL003", rows)
 
 
 # =============================================================================
@@ -273,11 +299,6 @@ def _typed(pack: TaxonomyPack, table: str, sheet: str | None, column: str) -> tu
     return (column, None, f"text {column}", None)
 
 
-def _return(module: str, rows: list[tuple[Any, ...]]) -> CanonicalReturn:
-    header = ReturnHeader(entity_identifier=LEI, reference_date=REFERENCE_DATE, module=module)
-    return CanonicalReturn.from_frame(header, pl.DataFrame(rows, schema=_COLUMNS, orient="row"))
-
-
 # =============================================================================
 # Regenerating the oracle — needs Arelle and the Bank's taxonomy package
 # =============================================================================
@@ -313,17 +334,6 @@ def _measure(taxonomy_package: Path, arelle_python: Path | None) -> dict[str, An
     return measured
 
 
-def _arelle_version(arelle_python: Path | None) -> str:
-    from rwa_filer.referee.runner import find_arelle_python
-
-    interpreter = find_arelle_python(arelle_python)
-    probe = "from importlib.metadata import version; print(version('arelle-release'))"
-    found = subprocess.run(  # noqa: S603 - the interpreter the referee itself runs
-        [str(interpreter), "-I", "-c", probe], capture_output=True, text=True, check=True
-    )
-    return f"arelle-release {found.stdout.strip()}"
-
-
 def main(argv: list[str] | None = None) -> int:
     """Re-measure the oracle with Arelle and write it."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
@@ -337,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             "the text alone misreads, and the boe_b0752/b0814 control family. "
             "Regenerate with that module's main, never by hand."
         ),
-        "processor": _arelle_version(args.arelle_python),
+        "processor": arelle_version(args.arelle_python),
         "taxonomy": f"Bank of England Banking Taxonomy v{RELEASE}",
         "returns": _measure(args.taxonomy_package, args.arelle_python),
     }

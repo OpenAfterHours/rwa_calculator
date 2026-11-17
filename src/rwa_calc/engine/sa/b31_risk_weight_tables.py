@@ -19,6 +19,9 @@ Key responsibilities:
 - SME corporate treatment (85%)
 - Subordinated debt treatment (150% flat)
 - Polars expression builders for vectorized lookups
+- The real-estate branch predicates (``b31_real_estate_route``) the SA dispatcher
+  routes on, and the Art. 124F(1) / 124H(1) loan-split carriers
+  (``with_b31_loan_split_parts``) OF 07.00 reports the two parts from
 
 References:
     - CRE20.7-15: Sovereign risk weights (unchanged from CRR)
@@ -31,6 +34,8 @@ References:
     - CRE20.86: Commercial RE (income-producing) LTV bands
     - CRE20.87-88: ADC exposures
     - PRA PS1/26 Chapter 4: UK adoption of BCBS SA risk weights
+    - PRA PS1/26 Annex II, OF 07.00 rows 0140-0280 (p.94): loan-split exposures
+      "shall be reported in two parts"
 """
 
 from __future__ import annotations
@@ -38,13 +43,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
-from typing import cast
+from typing import NamedTuple, cast
 
 import polars as pl
 import polars.selectors as cs
 from watchfire import cites
 
+from rwa_calc.contracts.edges import (
+    LOAN_SPLIT_RESIDUAL_RW_COL,
+    LOAN_SPLIT_SECURED_RW_COL,
+    LOAN_SPLIT_SECURED_SHARE_COL,
+)
 from rwa_calc.domain.enums import PropertyType
+from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
 from rwa_calc.rulebook.resolve import resolve
 
 # Basel 3.1 SA risk-weight values now live in packs/b31.py; the int-keyed CQS
@@ -489,6 +500,114 @@ def get_b31_combined_cqs_risk_weights() -> pl.DataFrame:
 # =============================================================================
 
 
+class B31RealEstateRoute(NamedTuple):
+    """The Basel 3.1 real-estate branches of the SA dispatcher, as predicates.
+
+    Read FIRST MATCH WINS, in field order — exactly as
+    ``risk_weights.py::_b31_append_real_estate_branches`` chains them. The
+    dispatcher and ``with_b31_loan_split_parts`` both take them from
+    ``b31_real_estate_route``, so the carrier can never describe a branch the
+    weight did not take.
+    """
+
+    adc: pl.Expr  # Art. 124K
+    other_re: pl.Expr  # Art. 124J: real estate failing Art. 124A
+    commercial: pl.Expr  # Art. 124H / 124I
+    residential: pl.Expr  # Art. 124F / 124G
+
+
+def b31_real_estate_route(uc: pl.Expr) -> B31RealEstateRoute:
+    """The real-estate branch predicates for the upper-cased class ``uc``.
+
+    A null ``is_qualifying_re`` reads as qualifying (the input contract's
+    backward-compatible default), so only an explicit False routes to Art. 124J.
+    Commercial must be tested before residential: ``COMMERCIAL_MORTGAGE``
+    contains ``MORTGAGE`` (``is_commercial_re_class``).
+    """
+    is_re_class = (
+        is_commercial_re_class(uc)
+        | is_residential_re_class(uc)
+        | (pl.col("property_type").fill_null("").is_in(["residential", "commercial"]))
+    )
+    is_non_qualifying = pl.col("is_qualifying_re").fill_null(True) == False  # noqa: E712
+    return B31RealEstateRoute(
+        adc=pl.col("is_adc").fill_null(False),
+        other_re=is_non_qualifying & is_re_class,
+        commercial=is_commercial_re_class(uc),
+        residential=is_residential_re_class(uc),
+    )
+
+
+@cites("PS1/26, paragraph 124F")
+@cites("PS1/26, paragraph 124H")
+def with_b31_loan_split_parts(
+    lf: pl.LazyFrame, uc: pl.Expr, counterparty_rw_col: str = "_cqs_risk_weight"
+) -> pl.LazyFrame:
+    """Record the two parts of every Art. 124F(1) / 124H(1) loan-split weight.
+
+    The dispatcher prices a loan-split exposure at ONE exposure-weighted weight:
+    the part "up to 55% of the value of the property" at 20% (60% commercial) and
+    "the residual part of the exposure, if any" at the Art. 124L counterparty
+    weight (PS1/26 Art. 124F(1), 124H(1)). OF 07.00 must report it "in two parts,
+    against the risk weight applied to the portion up to 55% of the value of the
+    property, and against the portion above 55%" (PS1/26 Annex II p.94), and only
+    this step knows the residual weight, so it writes three carriers:
+
+    - ``sa_loan_split_secured_share``: the share of the exposure at the secured weight
+    - ``sa_loan_split_secured_rw``: Art. 124F(1)(a) 20% / Art. 124H(1)(a) 60%
+    - ``sa_loan_split_residual_rw``: the Art. 124L counterparty weight
+
+    Non-null ONLY where the weight the dispatcher has just set IS that two-part
+    weight: the route's own predicates in its own order (not ADC, not Art. 124J,
+    not materially dependent; commercial to a natural person or SME, else
+    residential), ``risk_weight`` equal to the blend (so an earlier dispatcher
+    branch — sub debt, a domestic sovereign — that also matched is excluded), and
+    a share strictly between 0 and 1 (a loan inside the cap has no second part).
+    Every input is the one the weight itself was computed from, so the parts
+    reproduce the weight exactly. Must run while ``counterparty_rw_col`` is still
+    on the frame.
+
+    A record, never a change: no risk weight or RWEA reads the carriers. A later
+    step (Art. 127 default, CRM substitution, Art. 123B) may still re-weight a row
+    that carries them; they then no longer describe it, which is why a reader
+    checks the row's weight against the blend again (``reporting/kernel/rw_parts.py``).
+
+    Args:
+        lf: Frame whose ``risk_weight`` the Basel 3.1 dispatcher has just set.
+        uc: The upper-cased exposure class the dispatcher routed on.
+        counterparty_rw_col: The pre-override counterparty risk weight.
+
+    Returns:
+        ``lf`` with the three carriers.
+    """
+    route = b31_real_estate_route(uc)
+    inputs = _b31_re_inputs()
+    loan_split = ~(route.adc | route.other_re | inputs.is_income)
+    is_cre = loan_split & route.commercial & _b31_cre_person_or_sme()
+    is_rre = loan_split & ~route.commercial & route.residential
+    cre = _b31_cre_split_terms(inputs, _b31_cre_counterparty_rw(counterparty_rw_col))
+    rre = _b31_rre_split_terms(inputs, counterparty_rw_col)
+
+    def per_branch(cre_term: pl.Expr, rre_term: pl.Expr) -> pl.Expr:
+        return pl.when(is_cre).then(cre_term).when(is_rre).then(rre_term)
+
+    share = per_branch(cre.share, rre.share)
+    is_two_part = (
+        (pl.col("risk_weight") == per_branch(cre.weight(), rre.weight()))
+        & (share > 0.0)
+        & (share < 1.0)
+    )
+    return lf.with_columns(
+        pl.when(is_two_part).then(share).alias(LOAN_SPLIT_SECURED_SHARE_COL),
+        pl.when(is_two_part)
+        .then(per_branch(cre.secured_rw, rre.secured_rw))
+        .alias(LOAN_SPLIT_SECURED_RW_COL),
+        pl.when(is_two_part)
+        .then(per_branch(cre.residual_rw, rre.residual_rw))
+        .alias(LOAN_SPLIT_RESIDUAL_RW_COL),
+    )
+
+
 def b31_residential_rw_expr(
     counterparty_rw_col: str = "_cqs_risk_weight",
 ) -> pl.Expr:
@@ -521,24 +640,13 @@ def b31_residential_rw_expr(
     Returns:
         Expression resolving to the risk weight
     """
-    ltv = pl.col("ltv").fill_null(1.0)
-    is_income = pl.col("has_income_cover").fill_null(False)
-    cp_rw = pl.col(counterparty_rw_col).fill_null(0.75)
-    prior_charge = pl.col("prior_charge_ltv").fill_null(0.0)
-    is_junior = prior_charge > 0.0
+    inputs = _b31_re_inputs()
+    ltv = inputs.ltv
+    is_junior = inputs.prior_charge > 0.0
 
-    # Art. 124L — Counterparty type routing for RRE residual risk weight
-    cp_rw_for_rre = _b31_art_124l_cp_rw_expr(cp_rw)
-
-    # General residential (PRA PS1/26 Art. 124F) — loan-splitting
-    # Art. 124F(2): Junior charges reduce the 55% threshold
-    effective_threshold = pl.max_horizontal(
-        pl.lit(0.0), pl.lit(float(B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO)) - prior_charge
-    )
-    secured_share = pl.min_horizontal(pl.lit(1.0), effective_threshold / ltv)
-    general = pl.lit(float(B31_RESIDENTIAL_GENERAL_SECURED_RW)) * secured_share + cp_rw_for_rre * (
-        pl.lit(1.0) - secured_share
-    )
+    # General residential (PRA PS1/26 Art. 124F) — loan-splitting. Art. 124F(2):
+    # junior charges reduce the 55% threshold; Art. 124L routes the residual.
+    general = _b31_rre_split_terms(inputs, counterparty_rw_col).weight()
 
     # Income-producing residential (PRA PS1/26 Art. 124G, Table 6B)
     base_income = _income_band_chain(ltv, "b31_residential_income_ltv_bands")
@@ -553,7 +661,7 @@ def b31_residential_rw_expr(
     )
     income = base_income * junior_multiplier
 
-    return pl.when(is_income).then(income).otherwise(general)
+    return pl.when(inputs.is_income).then(income).otherwise(general)
 
 
 def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Expr:
@@ -580,26 +688,10 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     Returns:
         Expression resolving to the risk weight
     """
-    ltv = pl.col("ltv").fill_null(1.0)
-    is_income = pl.col("has_income_cover").fill_null(False)
-    cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
-    prior_charge = pl.col("prior_charge_ltv").fill_null(0.0)
-    is_junior = prior_charge > 0.0
-
-    # Counterparty type for Art. 124H routing:
-    # Natural person or SME → loan-splitting (Art. 124H(1-2))
-    # Other counterparties → max/min formula (Art. 124H(3))
-    # Default: False (other counterparty) — conservative, gives higher RW
-    is_natural = pl.col("cp_is_natural_person").fill_null(False)
-    is_sme = pl.col("is_sme").fill_null(False)
-    is_person_or_sme = is_natural | is_sme
-
-    # Art. 124L — counterparty-type residual RW for the Art. 124H(1) loan-split
-    # leg. Only used on the ``is_person_or_sme`` branch (line below), so only the
-    # natural-person/retail-SME (75%) and other-SME (85%) limbs of the shared
-    # Art. 124L helper are reachable; the social-housing and "other" limbs are
-    # inert here (those counterparties route to Art. 124H(3) instead).
-    cp_rw_for_cre = _b31_art_124l_cp_rw_expr(cp_rw)
+    inputs = _b31_re_inputs()
+    ltv = inputs.ltv
+    cp_rw = _b31_cre_counterparty_rw(counterparty_rw_col)
+    is_junior = inputs.prior_charge > 0.0
 
     # Income-producing CRE (PRA Art. 124I): 100% ≤80% LTV, 110% >80% LTV
     base_income_rw = _income_band_chain(ltv, "b31_commercial_income_ltv_bands")
@@ -613,15 +705,9 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     )
     income_rw = pl.when(is_junior).then(junior_income_rw).otherwise(base_income_rw)
 
-    # General CRE — natural person/SME (Art. 124H(1-2)): loan-splitting
-    # Art. 124F(2): Junior charges reduce the 55% threshold
-    effective_threshold = pl.max_horizontal(
-        pl.lit(0.0), pl.lit(float(B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO)) - prior_charge
-    )
-    secured_share = pl.min_horizontal(pl.lit(1.0), effective_threshold / ltv)
-    loan_split_rw = pl.lit(
-        float(B31_COMMERCIAL_GENERAL_SECURED_RW)
-    ) * secured_share + cp_rw_for_cre * (pl.lit(1.0) - secured_share)
+    # General CRE — natural person/SME (Art. 124H(1-2)): loan-splitting.
+    # Art. 124H(2): junior charges reduce the 55% threshold.
+    loan_split_rw = _b31_cre_split_terms(inputs, cp_rw).weight()
 
     # General CRE — other counterparties (Art. 124H(3)):
     # max(60%, min(counterparty_RW, Art. 124I income-producing RW))
@@ -632,10 +718,11 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
         pl.min_horizontal(cp_rw, base_income_rw),
     )
 
-    # Route general CRE based on counterparty type
-    general = pl.when(is_person_or_sme).then(loan_split_rw).otherwise(other_cp_rw)
+    # Route general CRE based on counterparty type: natural person or SME ->
+    # loan-splitting (Art. 124H(1-2)); other counterparties -> Art. 124H(3).
+    general = pl.when(_b31_cre_person_or_sme()).then(loan_split_rw).otherwise(other_cp_rw)
 
-    return pl.when(is_income).then(income_rw).otherwise(general)
+    return pl.when(inputs.is_income).then(income_rw).otherwise(general)
 
 
 def b31_adc_rw_expr() -> pl.Expr:
@@ -795,6 +882,87 @@ def _b31_art_124l_cp_rw_expr(cp_rw: pl.Expr) -> pl.Expr:
         )
         .otherwise(cp_rw)  # Art. 124L(d/e): full unsecured counterparty RW
     )
+
+
+class _ReInputs(NamedTuple):
+    """The inputs every Basel 3.1 real-estate weight reads, null-filled once."""
+
+    ltv: pl.Expr  # null -> 100%, the conservative end of every LTV table
+    is_income: pl.Expr  # materially dependent on the property's cash flows
+    prior_charge: pl.Expr  # charges ranking ahead, as a share of value; null -> none
+
+
+def _b31_re_inputs() -> _ReInputs:
+    """One home for the RE inputs, so the weight and its loan-split record read the same."""
+    return _ReInputs(
+        ltv=pl.col("ltv").fill_null(1.0),
+        is_income=pl.col("has_income_cover").fill_null(False),
+        prior_charge=pl.col("prior_charge_ltv").fill_null(0.0),
+    )
+
+
+class _LoanSplitTerms(NamedTuple):
+    """The two parts of an Art. 124F(1) / 124H(1) loan-split weight."""
+
+    share: pl.Expr  # the part up to the (prior-charge-reduced) 55% cap
+    secured_rw: pl.Expr  # Art. 124F(1)(a) / 124H(1)(a)
+    residual_rw: pl.Expr  # Art. 124L
+
+    def weight(self) -> pl.Expr:
+        """The one exposure-weighted weight the dispatcher prices the row at."""
+        return self.secured_rw * self.share + self.residual_rw * (pl.lit(1.0) - self.share)
+
+
+def _b31_loan_split_terms(
+    inputs: _ReInputs, *, max_secured_ratio: Decimal, secured_rw: Decimal, cp_rw: pl.Expr
+) -> _LoanSplitTerms:
+    """The loan-split terms; Art. 124F(2) / 124H(2): prior charges reduce the 55% cap."""
+    effective_threshold = pl.max_horizontal(
+        pl.lit(0.0), pl.lit(float(max_secured_ratio)) - inputs.prior_charge
+    )
+    return _LoanSplitTerms(
+        share=pl.min_horizontal(pl.lit(1.0), effective_threshold / inputs.ltv),
+        secured_rw=pl.lit(float(secured_rw)),
+        residual_rw=_b31_art_124l_cp_rw_expr(cp_rw),
+    )
+
+
+def _b31_rre_split_terms(inputs: _ReInputs, counterparty_rw_col: str) -> _LoanSplitTerms:
+    """Art. 124F(1): 20% up to 55% of value, the Art. 124L weight on the rest."""
+    return _b31_loan_split_terms(
+        inputs,
+        max_secured_ratio=B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO,
+        secured_rw=B31_RESIDENTIAL_GENERAL_SECURED_RW,
+        cp_rw=pl.col(counterparty_rw_col).fill_null(0.75),
+    )
+
+
+def _b31_cre_split_terms(inputs: _ReInputs, cp_rw: pl.Expr) -> _LoanSplitTerms:
+    """Art. 124H(1): 60% up to 55% of value, the Art. 124L weight on the rest.
+
+    Reached only for a natural person or SME (``_b31_cre_person_or_sme``), so only
+    the 75% / 85% limbs of the shared Art. 124L helper apply; the social-housing
+    and "other" limbs are inert here (those counterparties take Art. 124H(3)).
+    """
+    return _b31_loan_split_terms(
+        inputs,
+        max_secured_ratio=B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO,
+        secured_rw=B31_COMMERCIAL_GENERAL_SECURED_RW,
+        cp_rw=cp_rw,
+    )
+
+
+def _b31_cre_counterparty_rw(counterparty_rw_col: str) -> pl.Expr:
+    """The commercial counterparty weight; null -> 100%, the unrated corporate weight."""
+    return pl.col(counterparty_rw_col).fill_null(1.0)
+
+
+def _b31_cre_person_or_sme() -> pl.Expr:
+    """Art. 124H(1)'s counterparty gate: a natural person or an SME.
+
+    Null reads as "other counterparty" (Art. 124H(3)) — conservative, the higher weight.
+    """
+    return pl.col("cp_is_natural_person").fill_null(False) | pl.col("is_sme").fill_null(False)
 
 
 # =============================================================================

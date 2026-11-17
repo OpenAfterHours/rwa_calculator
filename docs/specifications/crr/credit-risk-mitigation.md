@@ -875,17 +875,35 @@ restriction. PS1/26 carries Art. 197(1)(f)/198(1)(a) forward unchanged.
 
 ## Eligible Unfunded Protection Providers (Art. 201)
 
-| Provider Type | SA + F-IRB | A-IRB (additional) |
-|---------------|------------|-------------------|
-| Central governments and central banks | Yes | Yes |
-| Regional governments and local authorities | Yes | Yes |
-| Multilateral development banks | Yes | Yes |
-| International organisations (0% RW) | Yes | Yes |
-| Public sector entities | Yes | Yes |
-| Institutions | Yes | Yes |
-| Externally-rated corporates (investment grade) | Yes | Yes |
-| Qualifying central counterparties | Yes | Yes |
-| Internally-rated corporates (with internal PD) | No | Yes (Parameter Substitution only) |
+Art. 201(1) is an exhaustive list; Art. 194(5) admits only a provider *"included in the
+list of eligible protection providers set out in Article 201 or 202, as applicable"*.
+The engine gates it in `engine/crm/guarantor_eligibility.py::assign_guarantor_approach`
+and names each rejected guarantor in a CRM013 warning.
+
+| Provider type | Limb | SA / slotting beneficiary | F-IRB beneficiary |
+|---------------|------|---------------------------|-------------------|
+| Central governments and central banks | (1)(a) | Yes | Yes |
+| Regional governments and local authorities | (1)(b) | Yes | Yes |
+| Multilateral development banks | (1)(c) | Yes | Yes |
+| International organisations (0% RW under Art. 117) | (1)(d) | Yes | Yes |
+| Public sector entities | (1)(e) | Yes | Yes |
+| Institutions (and Art. 119(5) financial institutions) | (1)(f) | Yes | Yes |
+| Corporates with an ECAI credit assessment | (1)(g)(i) | Yes | Yes |
+| Corporates with an internal rating only | (1)(g)(ii), (2) | No | Yes (parameter substitution) |
+| Qualifying central counterparties | (1)(h) | Yes | Yes |
+| Natural persons | none | **No** (CRM013) | **No** (CRM013) |
+
+Art. 201(1)(g)(ii) admits an internally rated corporate for *"institutions calculating
+risk-weighted exposure amounts and expected loss amounts under the IRB Approach"*. The
+engine applies it to F-IRB and A-IRB beneficiaries, not to slotting.
+
+**A-IRB (own-LGD) beneficiaries are outside this list.** Art. 108(2): *"For an exposure to
+which an institution applies the IRB Approach by using their own estimates of LGD and
+conversion factors under Article 151, the institution may use credit risk mitigation in
+accordance with Chapter 3."* Recognition then follows Art. 161(3), 164(2) and 183, where
+the firm sets the guarantor types it recognises. So a natural person's guarantee of an
+A-IRB exposure keeps parameter substitution, while the same guarantee of an SA, slotting
+or F-IRB exposure is declined (P1.384).
 
 ## Financial Collateral Simple Method — FCSM (Art. 222)
 

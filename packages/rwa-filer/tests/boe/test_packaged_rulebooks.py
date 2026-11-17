@@ -29,6 +29,7 @@ from pack_builders import VALID_LEI
 from release_measurements import shipped_measurements
 from rwa_filer.boe.catalogue import available_rulebooks, load_rulebook
 from rwa_filer.boe.engine import REASON_UNKNOWN_TABLE, REASON_UNSUPPORTED, evaluate_rules
+from rwa_filer.boe.grammar import Binary, Call, Conditional, Logical, Negate, Node
 from rwa_filer.model import FACT_SCHEMA, CanonicalReturn, ReturnHeader
 from rwa_filer.release import release_packs, release_rulebook, release_rulebooks
 from rwa_filer.release_build import closing_dimensions
@@ -157,6 +158,36 @@ def test_every_enforced_rule_of_a_packaged_module_is_supported_by_the_engine() -
 
 
 @pytest.mark.parametrize("version", RELEASES)
+def test_no_packaged_rule_calls_plain_max_or_min(version: str) -> None:
+    """Why the engine's reading of a plain ``max`` / ``min`` has never been measured.
+
+    Without the ``i`` prefix, ``sum`` and ``abs`` return a number with no
+    rounding allowance; Arelle confirmed that on the Bank's rules that call
+    them. The engine reads a plain ``max`` / ``min`` as ``imax`` / ``imin``
+    instead (the chosen fact keeps its allowance), and nothing has checked that:
+    no rule calls them, so Arelle cannot be asked through a Bank formula. A
+    release that adds one fails here: measure the rule with Arelle and fix the
+    engine's reading before removing this test.
+
+    Every rule the gateway runs parses, which
+    ``test_no_rule_the_gateway_runs_is_unreadable`` holds, so walking the rules
+    that parse covers all of them.
+    """
+    # Act
+    calling = sorted(
+        (name, rule.rule_id)
+        for name in release_rulebooks(version)
+        for rule in load_rulebook(name).rules
+        if rule.parse_error is None
+        for tree in (rule.tree, rule.where_tree)
+        if tree is not None and _called_functions(tree) & {"max", "min"}
+    )
+
+    # Assert
+    assert calling == []
+
+
+@pytest.mark.parametrize("version", RELEASES)
 def test_every_packaged_rule_book_records_what_its_formulas_close(version: str) -> None:
     """Built with the taxonomy package, each from its own framework's folder."""
     # Act
@@ -210,6 +241,22 @@ def _rulebook(version: str, module: str):  # noqa: ANN202 - a test helper
     rulebook = release_rulebook(version, module)
     assert rulebook is not None, f"no rule book for {module} in {version}"
     return rulebook
+
+
+def _called_functions(node: Node) -> set[str]:
+    """The name of every function ``node`` calls, at any depth."""
+    if isinstance(node, Call):
+        return {node.name}.union(*(_called_functions(argument) for argument in node.arguments))
+    if isinstance(node, Negate):
+        return _called_functions(node.operand)
+    if isinstance(node, Binary):
+        return _called_functions(node.left) | _called_functions(node.right)
+    if isinstance(node, Logical):
+        return set().union(*(_called_functions(operand) for operand in node.operands))
+    if isinstance(node, Conditional):
+        branches = (node.condition, node.then, node.otherwise)
+        return set().union(*(_called_functions(branch) for branch in branches if branch))
+    return set()
 
 
 def _codes_in_two_families(version: str) -> list[str]:

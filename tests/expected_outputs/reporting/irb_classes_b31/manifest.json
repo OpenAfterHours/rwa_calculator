@@ -65,6 +65,7 @@
     "corep__c08_01__corporate_non_sme_firb": {
       "row_ref": "String",
       "row_name": "String",
+      "0010": "Float64",
       "0020": "Float64",
       "0030": "Float64",
       "0035": "Float64",
@@ -116,6 +117,7 @@
     "corep__c08_01__institution_firb": {
       "row_ref": "String",
       "row_name": "String",
+      "0010": "Float64",
       "0020": "Float64",
       "0030": "Float64",
       "0035": "Float64",
@@ -167,6 +169,7 @@
     "corep__c08_01__retail_qrre_airb": {
       "row_ref": "String",
       "row_name": "String",
+      "0010": "Float64",
       "0020": "Float64",
       "0030": "Float64",
       "0035": "Float64",
@@ -218,6 +221,7 @@
     "corep__c08_01__retail_residential_re_non_sme_airb": {
       "row_ref": "String",
       "row_name": "String",
+      "0010": "Float64",
       "0020": "Float64",
       "0030": "Float64",
       "0035": "Float64",
@@ -269,6 +273,7 @@
     "corep__c08_01__total_airb": {
       "row_ref": "String",
       "row_name": "String",
+      "0010": "Float64",
       "0020": "Float64",
       "0030": "Float64",
       "0035": "Float64",
@@ -320,6 +325,7 @@
     "corep__c08_01__total_firb_slotting": {
       "row_ref": "String",
       "row_name": "String",
+      "0010": "Float64",
       "0020": "Float64",
       "0030": "Float64",
       "0035": "Float64",

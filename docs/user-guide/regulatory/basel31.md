@@ -784,6 +784,23 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
     available (Rules 4.9–4.10). See [Key Differences — Equity](../../framework-comparison/key-differences.md#equity-exposures)
     for full details including the CIU transitional (Rules 4.7–4.8).
 
+!!! note "What the calculator applies"
+    For a firm without IRB permission (a Standardised-only run, or
+    `equity_transitional.irb_permission_at_2026_year_end=False`) the calculator
+    **assigns** the schedule above to equity in the dedicated equity input table,
+    in place of 250% / 400%, from 1 January 2027 to 31 December 2029. Subordinated
+    debt (150%), CIUs, the central-bank type and Art. 133(6)(c) significant
+    investments (`is_significant_investment`) keep their own weights: 250% for a
+    significant investment, except that one which is also higher risk is
+    weighted 400% on every date, where Art. 133(4) gives it paragraph 6's 250%
+    (an engine gap, `IMPLEMENTATION_PLAN.md` P1.393(b)). A firm
+    with IRB permission — F-IRB, A-IRB **or slotting** — is outside this
+    schedule, and its own Rules 4.5–4.6 are not implemented (neither the
+    schedule for equity it held under Standardised permission, Rule 4.5(1), nor
+    the "higher of" for equity it held under the IRB Approach, Rule 4.6): equity
+    keeps the Art. 133 weights and, unless `opt_out` is set, the run reports a
+    `CFG003` warning. See [Configuration — `EquityTransitionalConfig`](../../api/configuration.md#equitytransitionalconfig).
+
 Under CRR, standard equities receive 100%, with some categories at 250% or 400%.
 The phase-in allows firms to gradually adjust to the higher capital requirements.
 

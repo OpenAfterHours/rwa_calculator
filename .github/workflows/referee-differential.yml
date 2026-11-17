@@ -17,12 +17,12 @@ name: Referee Differential
 # See scripts/referee_differential.py for what is held and how, and
 # scripts/referee_differential_baseline.json for the banked state.
 #
-# WHY IT IS NOT IN ci.yml: each golden return is several minutes and about 3 GB
-# of Arelle, the taxonomy package is a 60 MB download from the Bank's site, and
-# Arelle is a tool this project does not otherwise install. So it runs where it
-# can find something: on a change to the code it referees (the path filter
-# below), weekly, and on demand. A pull request that touches none of those paths
-# does not run it, and does not need to.
+# WHY IT IS NOT IN ci.yml: a full run is ~16 minutes of Arelle with nothing
+# cached (two 3-4 GB workers at once), the taxonomy package is a 60 MB download
+# from the Bank's site, and Arelle is a tool this project does not otherwise
+# install. So it runs where it can find something: on a change to the code it
+# referees (the path filter below), weekly, and on demand. A pull request that
+# touches none of those paths does not run it, and does not need to.
 #
 # WHAT A RED RUN MEANS, in the order to check:
 #   * "new disagreements" — the engine and Arelle differ on a rule. Read both
@@ -127,13 +127,71 @@ jobs:
       - name: Verify the taxonomy package
         run: echo "${TAXONOMY_SHA256}  .taxonomy/boe-banking-v411.zip" | sha256sum --check -
 
+      # A worker's Arelle result is reused when nothing it depends on changed.
+      # rwa_filer/referee/runner.py keys each entry by SHA-256 over the bytes
+      # the worker reads (instance, package, overlay, plug-in), its settings,
+      # every distribution in the Arelle environment (the pin above leaves
+      # Arelle's own dependencies - lxml, regex, pyparsing... - free to move),
+      # the Python version and the referee's code; an entry that cannot hit is
+      # simply never read. The Actions key below only narrows what is restored
+      # to entries that CAN hit: same publication, same Arelle environment
+      # (`uv pip freeze`), same referee code. Each run saves under a key of its
+      # own (run id and attempt), and restore-keys picks up the latest, so
+      # entries a run adds are kept; the prune below drops the ones it did not use.
+      - name: Name the referee cache
+        id: referee-cache
+        env:
+          REFEREE_SOURCES: ${{ hashFiles('packages/rwa-filer/src/rwa_filer/referee/worker.py', 'packages/rwa-filer/src/rwa_filer/referee/plan.py', 'packages/rwa-filer/src/rwa_filer/referee/runner.py', 'packages/rwa-filer/src/rwa_filer/referee/boe_shim.py') }}
+        run: |
+          freeze=$(uv pip freeze --python .arelle-venv/bin/python | sha256sum | cut -c1-16)
+          echo "prefix=referee-${TAXONOMY_SHA256}-arelle-${ARELLE_VERSION}-${freeze}-${REFEREE_SOURCES}-" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the referee cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .referee-run/cache
+          key: ${{ steps.referee-cache.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.referee-cache.outputs.prefix }}
+
       # The script finds the package at .taxonomy/ and leaves its files in
       # .referee-run/ - fixed places, not arguments (arch_check check 19). The
       # interpreter that has Arelle is named for rwa_filer.referee, which reads it.
+      # --max-rss-gb is per worker, and the cap is also what the number of
+      # workers at once is budgeted from: max(1, min(CPUs, floor((MemAvailable
+      # - 1.5 GB) / cap))). On ubuntu-latest (16 GB, 4 cores) 5 GB gives two at
+      # once; the 10 GB this used to pass gave one. The largest worker measured
+      # peaks at 3.9 GB.
+      # The marker dates the run's start, for the prune below.
       - name: Referee differential
         env:
           RWA_FILER_ARELLE_PYTHON: ${{ github.workspace }}/.arelle-venv/bin/python
-        run: uv run python scripts/referee_differential.py --max-rss-gb 10 --check
+        run: |
+          touch "${RUNNER_TEMP}/referee-started"
+          uv run python scripts/referee_differential.py --max-rss-gb 5 --check
+
+      # Without this, every save carries forward every entry since the prefix
+      # last changed: each changed return adds ~40 KB per worker that no run
+      # will read again. A hit refreshes an entry's modification time and a
+      # store writes it new, so an entry older than the marker is one this run
+      # did not use. Only after a run that reached the end (timings.json is
+      # written once the whole estate has been through the pool): a run cut
+      # short has not yet used what it would have.
+      - name: Prune the referee cache
+        if: always()
+        run: |
+          if [ -f .referee-run/timings.json ] && [ -d .referee-run/cache ]; then
+            find .referee-run/cache -type f -name '*.entry' ! -newer "${RUNNER_TEMP}/referee-started" -print -delete
+          fi
+
+      # Saved whether the gate passed or not: an entry is stored only for a
+      # worker that finished with every assertion answered and no error or
+      # exception logged, and whole or not at all.
+      - name: Save the referee cache
+        if: always() && steps.referee-cache.outputs.prefix != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .referee-run/cache
+          key: ${{ steps.referee-cache.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
 
       # Uploaded whether the gate passed or not: on a red run the per-worker
       # files are what say why.

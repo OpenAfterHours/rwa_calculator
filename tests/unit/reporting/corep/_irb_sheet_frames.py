@@ -112,11 +112,35 @@ def maturity_of(leg: Leg) -> float:
     return 1.0 + leg.own / 200.0
 
 
-def irb_book(legs: tuple[Leg, ...] = MODELLED_LEGS) -> pl.LazyFrame:
+def irb_book(
+    legs: tuple[Leg, ...] = MODELLED_LEGS,
+    *,
+    floor_add_on: float = 0.0,
+    adjustment_columns: bool = False,
+) -> pl.LazyFrame:
     """``b31_frame`` with the per-leg parameters OF 08.01-08.05 report.
 
     Every leg is its own obligor, drawn, with EAD ``2 x own`` (``_c02_frames``).
+    ``floor_add_on`` passes through to ``b31_frame`` (added to ``rwa_final`` on
+    every modelled leg, ``rwa_pre_floor`` kept un-floored — the engine's shape of
+    a binding output floor). ``adjustment_columns`` adds the Art. 153(5A) /
+    154(4A) carriers the engine seals: ``rwa_pre_adjustments`` equal to the
+    leg's own RWEA on the formula-IRB legs and NULL on slotting (the engine
+    produces it on the formula-IRB leg only), the three adjustments at 0.0, and
+    a country for OF 09.02.
     """
+    if adjustment_columns:
+        formula_irb = pl.col("approach_applied").is_in(["foundation_irb", "advanced_irb"])
+        return irb_book(legs, floor_add_on=floor_add_on).with_columns(
+            pl.when(formula_irb)
+            .then(pl.col("rwa_pre_floor"))
+            .otherwise(pl.lit(None, dtype=pl.Float64))
+            .alias("rwa_pre_adjustments"),
+            pl.lit(0.0).alias("post_model_adjustment_rwa"),
+            pl.lit(0.0).alias("unrecognised_exposure_adjustment"),
+            pl.lit(0.0).alias("mortgage_rw_floor_adjustment"),
+            pl.lit("GB").alias("cp_country_code"),
+        )
     by_reference = {leg.reference: leg for leg in legs}
     references = [leg.reference for leg in legs]
     parameters = pl.DataFrame(
@@ -132,7 +156,9 @@ def irb_book(legs: tuple[Leg, ...] = MODELLED_LEGS) -> pl.LazyFrame:
             "exposure_type": ["loan" for _ in references],
         }
     )
-    return b31_frame(legs).join(parameters.lazy(), on="exposure_reference", how="left")
+    return b31_frame(legs, floor_add_on=floor_add_on).join(
+        parameters.lazy(), on="exposure_reference", how="left"
+    )
 
 
 def cell(frame: pl.DataFrame, row_ref: str, col_ref: str) -> float | None:

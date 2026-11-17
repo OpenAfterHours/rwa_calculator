@@ -200,10 +200,13 @@ ERROR_COLLATERAL_LINK_DUPLICATE = "CRM011"
 # guarantee the provider can unilaterally cancel (both regimes) or unilaterally
 # change (Basel 3.1 only) is dropped and the exposure flows unguaranteed.
 ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
-# Ineligible guarantor (CRR/PS1-26 Art. 201(1)(g)/(2)): a corporate guarantor
-# without an ECAI credit assessment (or, for an IRB-approach beneficiary, an
-# internal rating) is not an eligible protection provider — the covered exposure
-# reverts to the borrower's own basis.
+# Ineligible guarantor (CRR/PS1-26 Art. 201(1)/(2), with CRR Art. 194(5) /
+# PS1/26 Art. 194(6)(c)): a corporate guarantor without an ECAI credit
+# assessment (or, for an IRB-approach beneficiary, an internal rating), or a
+# natural person of any rating (no Art. 201 limb names one; an A-IRB beneficiary
+# is outside the list, CRR Art. 108(2)), is not an eligible protection provider —
+# the covered exposure reverts to the borrower's own basis. The message names
+# which cause applied.
 ERROR_INELIGIBLE_GUARANTOR = "CRM013"
 # Ineligible IRB/FCM non-financial collateral (CRR/PS1-26 Art. 199(2)/(5)/(6)):
 # real-estate / receivables / other-physical collateral is recognised on the
@@ -335,6 +338,15 @@ ERROR_SEC_FULLY_SECURITISED = "SEC005"
 # Configuration error codes
 ERROR_INVALID_CONFIG = "CFG001"
 ERROR_MISSING_PERMISSION = "CFG002"
+# PS1/26 Credit Risk: General Provisions rules 4.1-4.10 (equity transitional).
+# A WARNING, never an RWA change: the configured firm fact and election lead to
+# a treatment the engine does not apply. Two cases share it — a firm that had
+# IRB permission on 31 December 2026 and has not made the rule 4.9 election
+# (rules 4.5 / 4.6 are not implemented, so the Art. 133 weights it receives are
+# the 4.9 election's), and a firm without that permission that set ``opt_out``
+# (rule 4.9 replaces only 4.5, 4.6 and 4.8, so there is nothing to elect and the
+# rule 4.2 / 4.3 weights still apply to its direct equity).
+ERROR_EQUITY_TRANSITIONAL_CONFIG = "CFG003"
 
 # Aggregated output bound error codes (validate_aggregated_bundle)
 ERROR_RW_ABOVE_CAP = "OUT001"

@@ -1843,8 +1843,10 @@ class TestEquityBasel31:
             config=config,
         )
         assert result["approach"] == "sa"
-        # B31 Art. 133(3): listed/exchange-traded = 250%
-        # 2028 transitional floor = 190%, but 250% > 190% so no floor effect
+        # B31 Art. 133(3): listed/exchange-traded = 250%. An IRB-permission firm
+        # is outside the rules 4.2 / 4.3 transitional (rule 4.1); its own rule
+        # 4.6 higher-of (legacy Art. 155 290% here) is not implemented, so it
+        # keeps the Art. 133 weight — the rule 4.9 election (CFG003 warned).
         assert result["risk_weight"] == pytest.approx(2.50)
         assert result["rwa"] == pytest.approx(1_250_000.0)
 
@@ -1887,8 +1889,14 @@ class TestEquityTransitionalSchedule:
         config = CalculationConfig.crr(reporting_date=date(2026, 6, 30))
         assert config.equity_transitional.enabled is False
 
-    def test_speculative_equity_gets_higher_risk_floor(self) -> None:
-        """Speculative equity should get the higher-risk transitional floor."""
+    def test_speculative_equity_takes_the_rule_4_3_weight(self) -> None:
+        """Speculative equity of a Standardised firm takes the rule 4.3 weight.
+
+        PS1/26 General Provisions rule 4.3 (ps126app1.pdf p.21): higher risk
+        equity exposures "shall be assigned the following risk weights: (1) 220%
+        during the period beginning with 1 January 2027 and ending with
+        31 December 2027" — in place of the Art. 133(4) 400%, not under it.
+        """
         config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
         calculator = EquityCalculator()
         result = calculate_single_equity_exposure(
@@ -1898,9 +1906,7 @@ class TestEquityTransitionalSchedule:
             is_speculative=True,
             config=config,
         )
-        # 2027 higher-risk transitional = 220%, SA speculative = 400%
-        # max(400%, 220%) = 400% (SA weight already exceeds transitional)
-        assert result["risk_weight"] == pytest.approx(4.00)
+        assert result["risk_weight"] == pytest.approx(2.20)
 
 
 # =============================================================================

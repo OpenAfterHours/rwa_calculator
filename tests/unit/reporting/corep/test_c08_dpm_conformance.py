@@ -27,6 +27,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.of08_published_cells import get_c08_01_unreported_cells
 from rwa_calc.reporting.corep.templates import (
     B31_C08_07_ROLLOUT_CLASSES,
     B31_C08_07_ROWS,
@@ -205,7 +206,9 @@ class TestC0801ExposureAfterAllCrm:
         assert total["0104"][0] == pytest.approx(total["0090"][0])
 
     def test_col_0104_holds_across_both_templates(self) -> None:
-        """The identity holds on every populated OF 08.01 and OF 08.02 row.
+        """The identity holds on every populated OF 08.01 and OF 08.02 row that
+        publishes column 0104 — the unrated-corporate rows 0190 / 0200 report a
+        column 0090 and have no column 0104 (``of08_published_cells``).
 
         Arrange: the mixed slotting fixture.
         Act:     generate both templates.
@@ -214,10 +217,16 @@ class TestC0801ExposureAfterAllCrm:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_mixed_slotting_results(), framework="BASEL_3_1")
 
-        sheets = [*bundle.c08_01.values(), *bundle.c08_02.values()]
-        for sheet in sheets:
+        sheets = [
+            *[
+                (sheet, get_c08_01_unreported_cells("BASEL_3_1", key))
+                for key, sheet in bundle.c08_01.items()
+            ],
+            *[(sheet, {}) for sheet in bundle.c08_02.values()],
+        ]
+        for sheet, unreported in sheets:
             for row in sheet.iter_rows(named=True):
-                if row["0090"] is None:
+                if row["0090"] is None or "0104" in unreported.get(row["row_ref"], ()):
                     continue
                 signed = sum(row[ref] or 0.0 for ref in ("0090", "0101", "0102"))
                 assert row["0104"] == pytest.approx(signed), row["row_ref"]
@@ -464,8 +473,9 @@ class TestC0807CoverageAreFractions:
         Act:     generate C 08.07 / OF 08.07.
         Assert:  the three shares partition each populated row exactly.
 
-        Rows with a zero denominator are excluded: 0/0 admits no partition, and
-        the published rule has no emptiness guard (a recorded residual break).
+        Rows with a zero denominator are excluded: 0/0 admits no partition, so
+        such a row reports no share and the published rule (v09796_m /
+        boe_b0778) is not evaluated there.
         """
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_scope_of_use_results(), framework=framework).c08_07

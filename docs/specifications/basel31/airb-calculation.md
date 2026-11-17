@@ -24,13 +24,14 @@ CCF floor at 50% of SA, double default removal, and EL monotonicity.
 | FR-4.2 | Retail A-IRB LGD floors (Art. 164(4)) | P0 | Done |
 | FR-4.3 | Post-model adjustments — RWA and EL scalars | P0 | Done |
 | FR-4.4 | Mortgage risk weight floor (Art. 154(4A)(b)) | P0 | Done |
-| FR-4.5 | PMA sequencing: mortgage floor before PMA scalar | P0 | Done |
+| FR-4.5 | PMA sequencing: three additive limbs on one base; floor tested after limb (a) (P1.325) | P0 | Done |
 | FR-4.6 | A-IRB CCF floor at 50% of SA CCF (Art. 166D, CRE32.27) | P0 | Done |
 | FR-4.7 | Double default treatment removal | P0 | Done |
 | FR-4.8 | EL monotonicity under PMA (Art. 158(6A)) | P0 | Done |
 | FR-4.9 | FI scalar (1.25× correlation) retained | P0 | Done |
 | FR-4.10 | Full-facility EAD approach with floors (Art. 166D(3)–(5)) | P0 | Done |
 | FR-4.11 | Expected drawdown incorporation in CCF (Art. 166D(2)) | P0 | Done |
+| FR-4.12 | Unrecognised exposure adjustment scalar, Advanced IRB legs only (Art. 166D(6), P1.399) | P1 | Done |
 
 ---
 
@@ -118,41 +119,87 @@ LGD_floor = (E_unsecured / EAD) x LGDU_floor + sum_i((E_i / EAD) x LGDS_floor_i)
 
 ## Post-Model Adjustments (Art. 146(3), 154(4A), 158(6A))
 
-PMA is a Basel 3.1 mechanism allowing the PRA to impose conservative overlays on A-IRB
-model outputs without requiring full model re-estimation.
-
-### Mortgage Risk Weight Floor (Art. 154(4A)(b))
-
-A minimum risk weight is applied to residential mortgage exposures before general PMA:
-
-```
-RW_floored = max(RW_modelled, mortgage_rw_floor)
-```
-
-The mortgage RW floor is set by the PRA as a supervisory parameter. Default: **10%**.
-
-### General PMA Scalar (Art. 146(3) / Art. 158(6A))
-
-After the mortgage floor, PMA scalars are applied to both RWA and EL:
-
-```
-RWEA_adjusted = RWEA_modelled x (1 + pma_rwa_scalar)
-EL_adjusted = EL_modelled x (1 + pma_el_scalar)
-```
-
-Where `pma_rwa_scalar` and `pma_el_scalar` are set per model via configuration.
+Art. 153(5A) (corporates and institutions) and Art. 154(4A) (retail) require a firm to
+increase the RWEA its models produce by post-model adjustments. The engine applies them in
+`engine/irb/adjustments.py::apply_post_model_adjustments`, on formula-IRB legs only (the
+slotting calculator applies none), and only under Basel 3.1 — the `post_model_adjustments`
+pack Feature is off under CRR, which has no such framework.
 
 ### Adjustment Sequencing (Art. 153(5A) / Art. 154(4A))
 
-The order of adjustments is **mandatory**:
+The chapeau of Art. 154(4A) — "An institution shall increase the total risk-weighted
+exposure amounts calculated under paragraphs 1, 3 and 4 ... to reflect: (a) ... (b) ...
+(c) ..." — makes the limbs **three additive increases to one modelled base**, not a chain
+(Art. 153(5A) has the same shape for corporates and institutions, with limbs (a) and (b)):
 
-1. **First:** Apply mortgage risk weight floor (Art. 154(4A)(b))
-2. **Then:** Apply PMA RWA/EL scalar (Art. 154(4A)(a))
+```
+base = modelled RWEA (Art. 154(1)/(3)/(4) retail; Art. 153(1)/(2)/(4) others)
+(a) general PMA              = base x pma_rwa_scalar
+(b) mortgage floor shortfall = max(0, mortgage_rw_floor x EAD - (base + (a)))
+(c) unrecognised exposure    = base x unrecognised_exposure_scalar   (A-IRB legs only)
+RWEA = base + (a) + (b) + (c)
+```
 
-!!! warning "Sequencing is Mandatory"
-    Reversing the order would produce different results because the PMA scalar amplifies
-    the floor-adjusted RW, not the raw modelled RW. The correct sequence ensures the floor
-    is never "scaled away" by a PMA scalar less than expected.
+Each is sealed on the leg (`post_model_adjustment_rwa`, `mortgage_rw_floor_adjustment`,
+`unrecognised_exposure_adjustment`, with `rwa_pre_adjustments` the base), so OF 08.01
+column 0260 is columns 0251 + 0252 + 0253 + 0254 on every sheet.
+
+### General PMA Scalar (Art. 146(3) / Art. 158(6A))
+
+Limb (a), and its EL twin, are firm elections on `PostModelAdjustmentConfig`:
+
+```
+post_model_adjustment_rwa = base x pma_rwa_scalar
+post_model_adjustment_el  = max(0, EL x pma_el_scalar)
+```
+
+Limb (a) reaches every formula-IRB leg, F-IRB included: it is an Art. 146(3) amount on the
+firm's rating systems, which an F-IRB leg has (its PD).
+
+### Mortgage Risk Weight Floor (Art. 154(4A)(b))
+
+Limb (b) is a **test**, not a value in a chain: "any amount needed to ensure that
+risk-weighted exposure amounts for non-defaulted exposures which are retail exposures
+secured by UK residential immovable property are greater than or equal to 10% of the
+exposure value ... (following application of any post model adjustments calculated under
+point (b) of Article 146(3))". The parenthetical puts limb (a) inside the comparison and
+nothing else. The floor is the pack scalar `mortgage_rw_floor`.
+
+!!! note "Sequencing corrected (P1.325)"
+    An earlier revision of this page said the floor is applied first and both scalars
+    multiply the floored amount. The article says the reverse: (a) and (c) multiply the
+    modelled base, and (c) sits outside the floor test because it is "calculated under
+    Article 166D(6)", not under Article 146(3)(b). Correcting it released capital where the
+    floor binds.
+
+### Unrecognised Exposure Adjustment (Art. 153(5A)(b) / 154(4A)(c) / 166D(6))
+
+Limb (c) is Art. 166D(6)'s adjustment. Art. 166D(6)(a) has a firm "assess EADs arising
+from facilities or relationships that were not captured in exposure values prior to the
+amount being drawn, in cases where: (i) they are not captured in exposure values because
+the facilities or relationships were not intended to result in credit exposures; and (ii)
+the institution would have applied the Advanced IRB Approach in accordance with Article
+147A in respect of the facilities or relationships had they been captured in exposure
+values." Where material, 166D(6)(b) has it "quantify an unrecognised exposure adjustment
+that reflects the risk-weighted exposure amounts that would be required" and "allocate the
+total value ... to exposure classes and exposure subclasses on a best-efforts basis".
+
+The engine cannot identify uncaptured facilities, so it takes the firm's quantification as
+an election — `PostModelAdjustmentConfig.unrecognised_exposure_scalar`, default 0.0 — and
+allocates it pro rata to modelled RWEA, on **Advanced IRB legs only** (the sealed
+`approach` column is `advanced_irb`). Limb (ii) confines the adjustment to facilities the
+firm would have treated under the Advanced IRB Approach, and Annex II p.112 accordingly says
+column 0254 "shall not be reported for sheets relating to the FIRB approach or the slotting
+approach". An F-IRB leg's `unrecognised_exposure_adjustment` is 0.0 whatever the scalar.
+
+!!! warning "Fixed 2026-11-17 (P1.399)"
+    Until this date the scalar was multiplied into every formula-IRB leg's RWEA, F-IRB
+    included — an overstatement of F-IRB RWEA wherever a non-zero scalar was configured.
+    Since OF 08.01 / 08.02 report no column 0254 on F-IRB and slotting sheets, it also left
+    an F-IRB sheet's column 0260 above columns 0251-0254 and failed the Bank's Error rule
+    `boe_b0751`. At the default 0.0 nothing moved. Held by
+    `tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py` and, on a filed return,
+    `tests/acceptance/reporting/test_of08_01_unrecognised_exposure_scalar.py`.
 
 ### EL Monotonicity (Art. 158(6A))
 
@@ -350,11 +397,10 @@ credit risk. Where such amounts are material, the firm must quantify an
 **unrecognised exposure adjustment** reflecting the additional RWA required.
 This adjustment is allocated to exposure classes on a best-efforts basis.
 
-!!! warning "Not Yet Implemented"
-    Art. 166D(6) unrecognised exposure adjustment is not implemented in the
-    calculator. This provision requires institution-specific judgement about
-    which facilities fall outside normal exposure capture — it cannot be
-    automated without additional input data identifying uncaptured exposures.
+The calculator cannot identify the uncaptured facilities themselves — that is
+institution-specific judgement — so it takes the firm's quantification as a scalar
+election and adds it to Advanced IRB legs only — see "Unrecognised Exposure
+Adjustment" under Post-Model Adjustments above.
 
 See also the [CCF specification](../crr/credit-conversion-factors.md#basel-31-a-irb-changes-pra-ps126-art-166d--cre3227)
 for context on how the A-IRB CCF regime fits within the broader CCF framework.

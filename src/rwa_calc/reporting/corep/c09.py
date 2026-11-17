@@ -97,6 +97,29 @@ Cell semantics (recorded decisions, this slice):
   supporting-factor adjustment on the parent — v0411_m). B31 row 0095 is
   ``re_sme`` instead and keeps the raw ``is_sme`` narrowing of the RE class
   union (recorded R7, mirroring C 07.00's own RE memo rows).
+- OF 09.02's Basel 3.1 sub-class rows read THE classification OF 02.00 and OF 08
+  read (``corep/irb_sheets.py``; recorded fix 2026-11-16, plan P2.67). The Bank
+  ties each, all countries, to the OF 08.01 sheets of its sub-class with ERROR
+  rules (row 0048 = sheet 0022, boe_b1034 / b1051 / b1052; 0050 = 0023 + 0024;
+  0055 = 0011 + 0012, boe_b1053-b1055; 0071-0074 = 0020 / 0021 / 0018 / 0019;
+  0120 / 0130 = 0016 / 0017, boe_b0297-b0302), and Annex II addresses row 0048
+  to Art. 147(4C) and sheet 0022 to Art. 147(2)(c)(ii), one population. Row 0048
+  keyed the correlation-multiplier input ``cp_apply_fi_scalar`` (the narrower
+  Art. 153(2) population, and the raw input at that) and row 0055 excluded it,
+  while the SME rows tested ``sme_supporting_factor_eligible`` — never sealed —
+  or the class NAME, which no retail class carries; so an FSE the user did not
+  flag, every large corporate and every SME in a retail class sat in a row the
+  OF 08 sheet did not. Now the corporate rows 0048 / 0050 / 0055 key the leg's
+  OF 08 sheet on each basis (``c08_sheets.sheet_keys``, which also folds an A-IRB
+  financial or large corporate into sheet 0011 and so row 0055), CONJOINED with
+  the corporate class union; the retail rows 0071-0074 / 0120 / 0130 key their
+  class with ``irb_sheets.is_sme_expr`` / ``is_commercial_expr``. The class term
+  and the retail flags are deliberate: the post sheet key reverts an F-IRB leg
+  moved to a retail guarantor's class to its obligor's corporate sheet
+  (``placeable_irb_class``; plan P1.384), while rows 0030 and 0060 key the post
+  class itself, so keying the sheet alone would put that leg in row 0055 and not
+  0030 (``boe_b0785``) and take it out of row 0130 but not 0060 (``boe_b0783``).
+  CRR C 09.02 has no such row and keeps C 07.00's ``c07_sme`` ladder.
 - Cols 0010/0020 (C 09.01) and 0010/0030 (C 09.02) are ORIGINAL EXPOSURE
   PRE-CONVERSION FACTORS, defined by reference to C 07.00 col 0010 and
   C 08.01 col 0020 respectively, so they bind the same sealed per-side gross
@@ -128,7 +151,11 @@ Cell semantics (recorded decisions, this slice):
   UNWEIGHTED-mean fallback when the subset carries zero total EAD (a
   module post-step — the WeightedAvg verb has no such fallback).
 - The POST-SF RWEA ladder is the retired one, narrower than C 07/C 08:
-  pick(rwa_final, rwa) (NO rwa_post_factor).
+  own_rwea(rwa_final, rwa) (NO rwa_post_factor) — the own-approach carrier
+  ``rwa_pre_floor`` first wherever the output floor ran, so a binding floor's
+  add-on (spread over ``rwa_final`` by the engine) stays out of OF 09.01 col
+  0090 and OF 09.02 cols 0110/0120 exactly as it stays out of OF 08.01 col
+  0260, which OF 09.02's country total ties to (PS1/26 Art. 92(2A)/(3)).
   The CRR "RWEA pre supporting factors" columns (C 09.01 col 0080,
   C 09.02 col 0110) key ``rwa_pre_factor`` — the pre-Art. 501/501a RWA
   snapshot, falling back to the post-SF ladder when it is not sealed —
@@ -181,7 +208,10 @@ Cell semantics (recorded decisions, this slice):
 References:
 - Regulation (EU) 2021/451, Annex I/II (C 09.01 / C 09.02)
 - PRA PS1/26 Annex I/II (OF 09.01 / OF 09.02), §3.4 ¶86/¶87 — the
-  immediate-obligor / ultimate-obligor column basis; CRR Art. 112 / Art. 147
+  immediate-obligor / ultimate-obligor column basis; CRR Art. 112 / Art. 147;
+  PS1/26 Art. 147(2)(c) and 147(4C) — the OF 09.02 corporate sub-class rows
+- Bank of England Banking Taxonomy v4.1.1: boe_b1034, boe_b1051-b1055,
+  boe_b0288-b0290, boe_b0297-b0302 (OF 09.02 rows = OF 08.01 sheet totals)
 - CRR Art. 235 (risk-weight substitution) — what moves the class AND the country
 - docs/plans/phase7-declarative-reporting.md §3.2/§6 (S8)
 """
@@ -189,7 +219,7 @@ References:
 from __future__ import annotations
 
 from functools import cache
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import polars as pl
 from watchfire import cites
@@ -205,7 +235,9 @@ from rwa_calc.reporting.cellspec import (
     execute,
     subset_rows,
 )
+from rwa_calc.reporting.corep import c02_rows, irb_sheets
 from rwa_calc.reporting.corep.c07 import c07_population
+from rwa_calc.reporting.corep.c08_sheets import sheet_keys
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
 from rwa_calc.reporting.corep.supporting_factors import sf_adjustment_terms, sf_infra_flag_exprs
 from rwa_calc.reporting.corep.templates import (
@@ -215,7 +247,14 @@ from rwa_calc.reporting.corep.templates import (
     get_c09_02_columns,
     get_c09_02_rows,
 )
-from rwa_calc.reporting.kernel import TwoBasis, pick, population_flags, sheet_axis, sheet_frame
+from rwa_calc.reporting.kernel import (
+    TwoBasis,
+    own_rwea,
+    pick,
+    population_flags,
+    sheet_axis,
+    sheet_frame,
+)
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -280,13 +319,30 @@ _C09_02_EMPTY_KEYS: frozenset[str] = frozenset(
     {"corporate_purchased_receivables", "retail_purchased_receivables"}
 )
 
-# The four B31 retail-RE rows: (property_type values, is the SME split).
-_C09_02_RE_ROWS: dict[str, tuple[tuple[str, ...], bool]] = {
-    "retail_resi_re_sme": (("residential", "rre"), True),
-    "retail_resi_re_non_sme": (("residential", "rre"), False),
-    "retail_comm_re_sme": (("commercial", "cre"), True),
-    "retail_comm_re_non_sme": (("commercial", "cre"), False),
+# The four B31 retail-RE rows: (secured by COMMERCIAL property, is the SME split),
+# read through ``irb_sheets.is_commercial_expr`` / ``is_sme_expr`` (module docstring).
+_C09_02_RE_ROWS: dict[str, tuple[bool, bool]] = {
+    "retail_resi_re_sme": (False, True),
+    "retail_resi_re_non_sme": (False, False),
+    "retail_comm_re_sme": (True, True),
+    "retail_comm_re_non_sme": (True, False),
 }
+
+# OF 09.02's Basel 3.1 corporate sub-class rows -> the published OF 08.01 sheets
+# each is the all-countries total of. The Bank ties them cell by cell (row 0048:
+# boe_b1034 / b1051 / b1052; row 0050: boe_b0288-b0290; row 0055: boe_b1053-b1055),
+# so a row keys the leg's own OF 08 sheet key (``c08_sheets.sheet_keys``) rather
+# than a classification of its own (module docstring).
+_OF09_02_ROW_SHEET_CODES: dict[str, tuple[str, ...]] = {
+    "corporate_fse_large": ("0022",),
+    "corporate_sme": ("0023", "0024"),
+    "corporate_non_sme": ("0011", "0012"),
+}
+# The class twin the OF 08 sheet keys are derived from (the IMMEDIATE obligor's).
+_ORIGIN_CLASS_COL: str = "reporting_class_origin"
+# The two bases a sheet-membership flag is derived on, in ``sheet_keys`` order.
+type _Basis = Literal["origin", "post"]
+_SHEET_BASES: tuple[_Basis, _Basis] = ("origin", "post")
 
 _CORPORATE_FAMILY: tuple[str, ...] = ("corporate", "corporate_sme")
 
@@ -451,7 +507,7 @@ def _c09_01_prepared(
     if sa_df.height == 0:
         return None
     sa_cols = set(sa_df.columns)
-    rwa_col = pick(sa_cols, "rwa_final", "rwa")
+    rwa_col = own_rwea(sa_cols, "rwa_final", "rwa")
     data = sa_df.with_columns(_c09_01_derived_exprs(sa_cols, rwa_col))
     data = data.with_columns(_geo_keys(sa_cols, _C07_BASIS))
     spec, row_preds = _c09_01_spec(set(data.columns), framework, rwa_col)
@@ -788,8 +844,8 @@ def _c09_02_prepared(
     if irb_df.height == 0:
         return None
     approach_col = pick(cols, "reporting_approach_origin", "approach")
-    rwa_col = pick(cols, "rwa_final", "rwa")
-    data = _c09_02_prepare(irb_df, cols, approach_col, rwa_col)
+    rwa_col = own_rwea(cols, "rwa_final", "rwa")
+    data = _c09_02_prepare(irb_df, cols, framework, approach_col, rwa_col)
     data = data.with_columns(_geo_keys(set(irb_df.columns), _C09_BASIS))
     spec, row_preds = _c09_02_spec(cols, framework, approach_col, rwa_col)
     return data, spec, row_preds
@@ -878,50 +934,91 @@ def _irb_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
 
 
 def _c09_02_prepare(
-    data: pl.DataFrame, cols: set[str], approach_col: str | None, rwa_col: str | None
+    data: pl.DataFrame,
+    cols: set[str],
+    framework: str,
+    approach_col: str | None,
+    rwa_col: str | None,
 ) -> pl.DataFrame:
-    """Derive the C 09.02 discriminators. Null semantics are load-bearing:
-    the retired ``!= True`` filters DROP null-flag rows (no fill), while
-    the non-SME anti-join KEEPS rows with no SME indicator (fill to
-    False before negating)."""
+    """Derive the C 09.02 discriminators.
+
+    The SME split is framework-specific (module docstring): Basel 3.1 reads the
+    OF 08 classification (``_of09_02_classification_exprs``); CRR keeps C 07.00's
+    ``c07_sme`` ladder, where the retired non-SME anti-join KEEPS a leg with no SME
+    indicator and, with no ``exposure_reference`` column, returns the base
+    UNCHANGED (SME rows included).
+
+    Two Basel 3.1 consequences on a frame that lacks a column, both since
+    2026-11-16 (OF 08's reading, where the old one counted a leg twice): with no
+    ``exposure_reference``, ``c09_non_sme`` is NOT ``c09_sme`` rather than true for
+    every leg, so the non-SME rows no longer also count the SME legs; with no
+    ``property_type``, every retail real-estate leg is residential, so rows 0071 /
+    0072 take the whole mortgage base and rows 0073 / 0074 are empty, where before
+    all four rows took it."""
     exprs: list[pl.Expr] = [_defaulted_expr(cols).alias("c09_defaulted")]
-    if "sme_supporting_factor_eligible" in cols:
-        sme = (pl.col("sme_supporting_factor_eligible") == True).fill_null(value=False)  # noqa: E712
+    if framework == c02_rows.FRAMEWORK_BASEL_3_1:
+        exprs.extend(_of09_02_classification_exprs(set(data.columns)))
     else:
-        sme = pl.col("exposure_class").str.contains("sme").fill_null(value=False)
-    exprs.append(sme.alias("c09_sme"))
-    # The retired _filter_non_sme is an exposure_reference anti-join; with no
-    # reference column it returns the base UNCHANGED (SME rows included).
-    non_sme = sme.not_() if "exposure_reference" in cols else pl.lit(value=True)
-    exprs.append(non_sme.alias("c09_non_sme"))
-    if "sme_supporting_factor_eligible" in cols:
-        corp_non_sme = pl.col("sme_supporting_factor_eligible") != True  # noqa: E712
-    else:
-        corp_non_sme = pl.col("exposure_class").str.contains("sme").not_()
-    if "cp_apply_fi_scalar" in cols:
-        corp_non_sme = corp_non_sme & (pl.col("cp_apply_fi_scalar") != True)  # noqa: E712
-    exprs.append(corp_non_sme.alias("c09_corp_non_sme"))
+        sme = _sme_expr(cols)
+        non_sme = sme.not_() if "exposure_reference" in cols else pl.lit(value=True)
+        exprs.extend((sme.alias("c09_sme"), non_sme.alias("c09_non_sme")))
     if approach_col is not None:
         exprs.append((pl.col(approach_col) == "slotting").alias("c09_slotting"))
     exprs.extend(_c09_sf_delta_exprs(cols, rwa_col))
     return data.with_columns(exprs)
 
 
+def _of09_02_classification_exprs(frame_cols: set[str]) -> list[pl.Expr]:
+    """The Basel 3.1 leg classification OF 09.02's sub-class rows read.
+
+    The flags are ``corep/irb_sheets.py``'s, the one definition OF 02.00 and OF 08
+    share: ``c09_sme`` / ``c09_non_sme`` / ``c09_commercial`` for the retail rows,
+    and, per corporate sub-class row and basis, whether the leg's OF 08 sheet key
+    is one of the sheets the row is the total of (``_OF09_02_ROW_SHEET_CODES``).
+    The keys come from ``c08_sheets.sheet_keys`` — the two-basis wrapper OF 08
+    calls, which passes the post class through ``irb_sheets.placeable_irb_class``
+    as OF 02.00 does. A frame with no origin class twin keys no corporate row at
+    all (its class terms are empty), so it derives no sheet flag either.
+    """
+    sme = irb_sheets.is_sme_expr(frame_cols)
+    exprs = [
+        sme.alias("c09_sme"),
+        sme.not_().alias("c09_non_sme"),
+        irb_sheets.is_commercial_expr(frame_cols).alias("c09_commercial"),
+    ]
+    if _ORIGIN_CLASS_COL not in frame_cols:
+        return exprs
+    keys = sheet_keys(frame_cols, _ORIGIN_CLASS_COL, c02_rows.FRAMEWORK_BASEL_3_1)
+    for row_key, codes in _OF09_02_ROW_SHEET_CODES.items():
+        sheets = [irb_sheets.B31_SHEET_KEYS[code] for code in codes]
+        exprs.extend(
+            key.is_in(sheets).fill_null(value=False).alias(_sheet_flag(row_key, basis))
+            for basis, key in zip(_SHEET_BASES, keys, strict=True)
+        )
+    return exprs
+
+
 def _c09_02_row_pred(  # noqa: PLR0911 - the retired branch cascade, one return per row family
-    row_def: COREPRow, cols: set[str], approach_col: str | None, basis_col: str
+    row_def: COREPRow, approach_col: str | None, basis_col: str, *, framework: str, basis: _Basis
 ) -> RowPredicate | None:
     """The retired _filter_c09_02_row branch cascade as predicates.
 
     ``basis_col`` is the class column the row keys on — the ORIGIN twin for the
     original-exposure and provisions columns, the POST twin for exposure value
-    and RWEA (Annex II §3.4 ¶87). Every class term routes through it, so the two
-    bases cannot drift apart in one branch of the cascade.
+    and RWEA (Annex II §3.4 ¶87) — and ``basis`` names which of the two it is.
+    Every class term routes through them, so the two bases cannot drift apart in
+    one branch of the cascade. Basel 3.1's sub-class rows are built by
+    ``_of09_02_sub_class_pred`` first (module docstring).
     """
     if row_def.ref == "0150":
         return RowPredicate()
     key = row_def.exposure_class_value
     if key is None or key in _C09_02_EMPTY_KEYS:
         return None
+    if framework == c02_rows.FRAMEWORK_BASEL_3_1:
+        sub_class = _of09_02_sub_class_pred(key, basis_col, basis)
+        if sub_class is not None:
+            return sub_class
     if key in _C09_02_DIRECT_EC:
         return RowPredicate(equals=((basis_col, key),))
     if key == "corporate":
@@ -937,12 +1034,6 @@ def _c09_02_row_pred(  # noqa: PLR0911 - the retired branch cascade, one return 
         return RowPredicate(equals=((basis_col, "specialised_lending"), ("c09_slotting", True)))
     if key == "corporate_sme":
         return _conjoin(_class_union(*_CORPORATE_FAMILY, col=basis_col), ("c09_sme", True))
-    if key == "corporate_fse_large":
-        return _conjoin(
-            _class_union(*_CORPORATE_FAMILY, col=basis_col), ("cp_apply_fi_scalar", True)
-        )
-    if key == "corporate_non_sme":
-        return _conjoin(_class_union(*_CORPORATE_FAMILY, col=basis_col), ("c09_corp_non_sme", True))
     if key == "retail":
         return _class_union("retail_mortgage", "retail_qrre", "retail_other", col=basis_col)
     if key in ("retail_mortgage_sme", "retail_mortgage_non_sme"):
@@ -951,19 +1042,41 @@ def _c09_02_row_pred(  # noqa: PLR0911 - the retired branch cascade, one return 
     if key in ("retail_other_sme", "retail_other_non_sme"):
         flag = "c09_sme" if key == "retail_other_sme" else "c09_non_sme"
         return RowPredicate(equals=((basis_col, "retail_other"), (flag, True)))
-    if key in _C09_02_RE_ROWS:
-        ptypes, is_sme = _C09_02_RE_ROWS[key]
-        terms = (
-            (basis_col, "retail_mortgage"),
-            ("c09_sme" if is_sme else "c09_non_sme", True),
-        )
-        # The retired code skips the property filter when the column is
-        # absent (the whole mortgage base stays in) — generate-time variant.
-        if "property_type" in cols:
-            limbs = tuple(RowPredicate(equals=(("property_type", ptype),)) for ptype in ptypes)
-            return RowPredicate(equals=terms, any_of=limbs)
-        return RowPredicate(equals=terms)
     return None
+
+
+def _of09_02_sub_class_pred(key: str, basis_col: str, basis: _Basis) -> RowPredicate | None:
+    """A Basel 3.1 sub-class row on the leg classification OF 08 reads, or ``None``.
+
+    The corporate rows (0048 / 0050 / 0055) key the leg's OF 08 sheet on this
+    basis, CONJOINED with the corporate class union. The post sheet key reverts an
+    F-IRB leg whose post class is retail to its obligor's corporate sheet
+    (``irb_sheets.placeable_irb_class``; the retail-guarantor leg of plan P1.384),
+    while parent row 0030 keys the post class itself — without the class term that
+    leg would sit in row 0055 and not in row 0030 (``boe_b0785``). The retail
+    real-estate rows (0071-0074) key the real-estate class with the SME and
+    commercial flags, as rows 0120 / 0130 key ``retail_other`` with the SME flag:
+    flags, not the sheet key, so that same leg stays in the retail sub-row its
+    parent row 0060 counts it in (``boe_b0783``; module docstring).
+    """
+    if key in _OF09_02_ROW_SHEET_CODES:
+        corporate = _class_union(*_CORPORATE_FAMILY, col=basis_col)
+        return _conjoin(corporate, (_sheet_flag(key, basis), True))
+    if key in _C09_02_RE_ROWS:
+        commercial, is_sme = _C09_02_RE_ROWS[key]
+        return RowPredicate(
+            equals=(
+                (basis_col, "retail_mortgage"),
+                ("c09_sme" if is_sme else "c09_non_sme", True),
+                ("c09_commercial", commercial),
+            )
+        )
+    return None
+
+
+def _sheet_flag(row_key: str, basis: _Basis) -> str:
+    """The derived column saying a leg is on one of ``row_key``'s OF 08 sheets."""
+    return f"c09_sheet_{row_key}_{basis}"
 
 
 def _c09_02_spec(
@@ -999,11 +1112,15 @@ def _c09_02_spec(
         # value and RWEA onto the guarantor's sheet while the original exposure
         # stays on the obligor's.
         pred = _narrow_opt(
-            _c09_02_row_pred(row_def, cols, approach_col, "reporting_class_origin"),
+            _c09_02_row_pred(
+                row_def, approach_col, _ORIGIN_CLASS_COL, framework=framework, basis="origin"
+            ),
             *_basis_terms(_C09_BASIS.pop_origin, _GEO_BASIS.basis_origin),
         )
         post_pred = _narrow_opt(
-            _c09_02_row_pred(row_def, cols, approach_col, _post_class_col(cols)),
+            _c09_02_row_pred(
+                row_def, approach_col, _post_class_col(cols), framework=framework, basis="post"
+            ),
             *_basis_terms(_C09_BASIS.pop_post, _GEO_BASIS.basis_post),
         )
         # The all-null post-pass must count the UNION: keying it on the origin

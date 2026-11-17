@@ -17,6 +17,11 @@ Key responsibilities:
 - Never read "nothing compared" as "nothing disagrees": ``is_clean`` is false
   for a differential with no compared rule, and for a referee run that did not
   finish.
+- Compare like with like. Arelle runs the taxonomy's formulas, which know
+  nothing of the Bank's validations deny list; the native engine's verdict on
+  a rule the deny list changed is therefore compared as the formula reached it
+  (``RuleResult.formula``), with a note saying what the Bank did — never as
+  the gateway configuration left it.
 
 References:
 - Bank of England Banking Taxonomy — the same rules, as workbook rows (what the
@@ -32,6 +37,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 from rwa_filer.referee.runner import VERDICT_FAIL, VERDICT_NEVER_FIRED, VERDICT_PASS
+from rwa_filer.validate.execution import formula_result
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -197,7 +203,8 @@ def compare(native: Iterable[RuleResult], referee: RefereeResult) -> Differentia
 
     Args:
         native: The native engine's result for every rule the module enforces
-            (``RuleReport.results``).
+            (``RuleReport.results``). A result the Bank's deny list changed is
+            compared as the taxonomy's formula reached it.
         referee: What Arelle concluded on the same instance.
 
     Returns:
@@ -227,6 +234,12 @@ def _comparison(
     lost: set[str],
 ) -> RuleComparison:
     standing, counts = _referee_standing(rule_id, referee, skipped, lost)
+    denied = (
+        f"{result.deny.describe()}; compared as the taxonomy's formula evaluates it"
+        if result is not None and result.deny is not None
+        else ""
+    )
+    result = formula_result(result) if result is not None else None
     if result is None:
         silent = _REFEREE_VERDICTS.get(standing) == _SILENT
         return RuleComparison(
@@ -262,7 +275,7 @@ def _comparison(
         referee=standing,
         native_counts=native_counts,
         referee_counts=counts,
-        note=result.reason if outcome == DISAGREE else "",
+        note=denied or (result.reason if outcome == DISAGREE else ""),
     )
 
 

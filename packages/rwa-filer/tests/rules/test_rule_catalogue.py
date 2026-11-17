@@ -13,7 +13,8 @@ Key responsibilities:
   ``ValidationRule``: the EBA's spreadsheet scope columns and ``If value
   missing`` / ``Arithmetic approach`` cells, and the BoE's inline
   ``scope(...)`` expression, ``dv:`` default values and ``i=`` interval
-  operators — the last of which the SIMPLIFIED expression drops entirely.
+  operators — the last of which the SIMPLIFIED expression drops entirely — and
+  its "Always execute" column, which the EBA does not publish.
 
 Both mapping families are asserted pairwise against the raw extract across the
 whole population, not on a hand-picked rule, so a normalisation that regresses
@@ -260,6 +261,73 @@ def test_every_boe_rule_without_a_default_value_normalises_to_skip() -> None:
 
     # Assert
     assert mismatched == []
+
+
+def test_the_boe_always_execute_flag_is_read_from_the_extract() -> None:
+    """The workbook's "Always execute" column decides whether an empty place is evaluated.
+
+    Asserted against the raw extract across the whole population, and on its
+    size: 35 of the 816 Bank rules are run where none of their cells is
+    reported. boe_b0778, the OF 08.07 share total, is not one of them.
+    """
+    # Arrange
+    raw = raw_extract(FRAMEWORK_BASEL_3_1)["rules"]
+    published = {r["id"] for r in raw if r["always_execute"]}
+
+    # Act
+    loaded = {rule.rule_id for rule in load_rules(FRAMEWORK_BASEL_3_1).rules if rule.always_execute}
+
+    # Assert
+    assert (loaded, len(loaded), "boe_b0778" in loaded) == (published, 35, False)
+
+
+def test_no_eba_rule_is_always_execute() -> None:
+    """The EBA marks no rule "always execute", so none is run over an unreported place.
+
+    The EBA workbook has no such column, and XBRL needs none: a variable set
+    whose fact variables all take their fallback value "is not deemed to have
+    been evaluated" (XBRL Variables 1.0, section 4, special case 2). An EBA
+    "treat as zero" rule is such a set, and a "do not run rule" one has no
+    fallback to bind at all.
+    """
+    # Arrange / Act
+    always = [r.rule_id for r in load_rules(FRAMEWORK_CRR).rules if r.always_execute]
+
+    # Assert
+    assert always == []
+
+
+def test_the_bank_runs_none_of_the_eba_treat_as_zero_rules_it_restates_where_nothing_is_reported() -> (
+    None
+):
+    """The Bank's own XBRL of the EBA's "treat as zero" rules is a fallback, never always-execute.
+
+    The Bank's package carries 46 of the EBA's "treat as zero" rules under the
+    EBA's own ids (``v09779_m``, the C 08.04 flow total, is one): not one is
+    marked "Always execute", and 45 give every reference a ``dv`` default, the
+    Bank's spelling of XBRL ``@fallbackValue``. That is the publisher evidence
+    behind ``test_no_eba_rule_is_always_execute``; it reads only the two raw
+    extracts, so it cannot drift with the catalogue it supports.
+    """
+    # Arrange
+    eba = {r["id"]: r for r in raw_extract(FRAMEWORK_CRR)["rules"]}
+    boe = {r["id"]: r for r in raw_extract(FRAMEWORK_BASEL_3_1)["rules"]}
+    restated = [
+        rule_id
+        for rule_id in sorted(set(eba) & set(boe))
+        if (eba[rule_id]["if_value_missing"] or "").startswith("treat as zero")
+    ]
+
+    # Act
+    always = [rule_id for rule_id in restated if boe[rule_id]["always_execute"]]
+    defaulted = [
+        rule_id
+        for rule_id in restated
+        if all("dv:" in ref for ref in re.findall(r"\{[^{}]*\}", boe[rule_id]["expression_raw"]))
+    ]
+
+    # Assert
+    assert (len(restated), always, len(defaulted)) == (46, [], 45)
 
 
 def test_the_boe_interval_operator_is_recovered_from_the_raw_expression() -> None:

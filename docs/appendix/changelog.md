@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **New warning code `CFG003`** (`ERROR_EQUITY_TRANSITIONAL_CONFIG`, exported
+  from `rwa_calc.contracts`): see the equity transitional entry under Fixed.
+- **Validation results name the known issues with the Bank's published rules.**
+  Through `rwa-filer`, a validation finding that a known issue explains carries
+  the issue's id and a sentence saying so, in the filing package's validation
+  and its manifest; a draft issue reads "identified by rwa-filer, not yet raised
+  with the Bank of England". No verdict changes. The issues are written up in
+  `docs/rwa-filer/publisher-issues.md` (40 issues, generated from `rwa-filer`'s
+  register; not yet in the site navigation). Needs the `rwa-filer` release that
+  ships the register.
 - **The Basel 3.1 filing package names the taxonomy release it is laid out
   for.** `rwa_calc.reporting.filing.FILING_TAXONOMY` (`"4.1.1"`) is the release
   our sheet maps, bindings and published-cell declarations are written against;
@@ -148,6 +158,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **`CRM013` now names the cause** — "a natural person ... is not an eligible
+  provider of unfunded credit protection under Art. 201(1)/(2)" for a natural
+  person; the corporate message is unchanged.
 - **DOCS — installing and running both packages is shown with uv only.** The
   `pip install` examples are gone from the [installation guide](../getting-started/installation.md),
   the [quick start](../getting-started/quickstart.md), the
@@ -454,6 +467,252 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **CAPITAL — RWA DOWN, only where a non-zero `unrecognised_exposure_scalar` is
+  configured: the Basel 3.1 unrecognised exposure adjustment no longer uplifts
+  Foundation IRB legs.** PS1/26 Art. 166D(6) confines the adjustment to facilities
+  where "the institution would have applied the Advanced IRB Approach in
+  accordance with Article 147A", and Annex II p.112 says OF 08.01 / 08.02 column
+  0254 "shall not be reported for sheets relating to the FIRB approach or the
+  slotting approach". The calculator multiplied
+  `PostModelAdjustmentConfig.unrecognised_exposure_scalar` into the RWEA of every
+  formula-IRB leg, F-IRB included; it now adds it to Advanced IRB legs only (read
+  from the leg's `approach`). F-IRB RWEA falls by the F-IRB part of the old
+  uplift; A-IRB legs, the general post-model adjustment (which still reaches
+  F-IRB legs), the mortgage floor, slotting and CRR are unchanged.
+  - Measured on the registered `irb-classes` portfolio at a 5% scalar: F-IRB RWEA
+    72,319,310.51 → 68,875,533.82 (−3,443,776.69); A-IRB unchanged at
+    84,096.89, its adjustment still 3,341.23.
+  - The filing knock-on is closed with it: since OF 08.01 stopped reporting
+    column 0254 on F-IRB sheets (2026-11-16), such a run filed an F-IRB column
+    0260 above columns 0251-0254 and failed the Bank's Error rule `boe_b0751`
+    (9 satisfied / 11 unsatisfied on that portfolio); it now passes (20 / 0).
+  - At the default scalar of 0.0 no figure moves and no golden, register entry
+    or ratchet changes. Recorded in `docs/development/escape-log.md`
+    (2026-11-16, O-10).
+- **Return reconciliation prices a Basel 3.1 loan-split mortgage per part.**
+  Since OF 07.00 reports such a loan in its two parts, each part carried the
+  whole leg's `rwa_final`, and the row-migration matrix priced a leg by its
+  first row: on `b31/rich` the real-estate sheet's exposure value read
+  10,366,666.67 against the 10,400,000 reported, and a reader summing the
+  membership rows doubled the loan's RWEA. Each part now carries its own share
+  of `ead_final` and `rwa_final` (membership publishes the part as `rw_part`),
+  and the matrix adds the parts. No reported cell changes.
+- **Legacy-ledger coverage names the Basel 3.1 OF 07.00 rows a projected ledger
+  cannot key**: memorandum rows 0300 / 0320 on the class sheets, the
+  risk-weight band rows of a loan-split mortgage and transitional equity's rows
+  0250 / 0261 / 0280, which read carriers no mapping can target
+  (`LedgerCoverage.unavailable_rows`). The compare does not yet read them, so a
+  difference there is still shown as measured
+  (`docs/plans/return-reconciliation.md`).
+- **The shareable publisher-issue register (`docs/rwa-filer/publisher-issues.md`)
+  corrected.** It said 1,441 rules run on a PRA001 return; 1,441 are published
+  and the gateway runs 1,434, the Bank's deny list deactivating 7. Each worked
+  example's table is headed by its number of cells, not "facts": two cells can
+  share one data point, so 8 of the 37 examples hold fewer facts than cells.
+  Appendix A group B now pairs each Bank rule with the deactivated EBA rule on
+  its own sheet (`boe_b1035`, `b1067`, `b1068`, `b0882` in; `b0841`, `b0863`,
+  `b0881`, `b0883` out; still 34 rules). And `rwa-filer rulebook deny-list
+  check` without `--known-issues` no longer reports a current list out of date.
+  Details in `packages/rwa-filer/CHANGELOG.md`.
+- **CAPITAL — RWA DOWN: Basel 3.1 equity held by a firm without IRB permission
+  now takes the PS1/26 transitional weights in 2027–2029.** PS1/26 Credit Risk:
+  General Provisions rules 4.2 and 4.3 say such equity "shall be assigned" 160%
+  (2027), 190% (2028) and 220% (2029), and higher risk equity 220%, 280% and
+  340%; rule 4.1 limits them to an institution that "did not have permission to
+  use the Internal Ratings Based Approach under Article 143 of CRR on
+  31 December 2026". The calculator applied them as a floor under the Art. 133
+  weight (250% / 400%), so they never changed a number: RWEA on such holdings was
+  overstated by 56% (standard) and 82% (higher risk) in 2027. Per 1,000,000 of
+  listed equity, 2027 RWEA is now 1,600,000 instead of 2,500,000; higher risk
+  2,200,000 instead of 4,000,000. From 1 January 2030 nothing changes.
+  - Not affected: subordinated debt (150%), every CIU, the central-bank type,
+    Art. 133(6)(c) significant investments (250%, but 400% where the holding is
+    also higher risk: Art. 133(4) gives it paragraph 6's 250% and the engine
+    does not yet, P1.393(b)), firms with IRB permission (still 250% / 400%),
+    CRR, and equity booked on the loans table (still 250%, flagged `SA005`).
+  - Who has IRB permission is read from `irb_permissions` (any F-IRB, A-IRB or
+    slotting permission: PS1/26 Art. 143(2A) names slotting as an IRB
+    approach), or stated directly with the new
+    `EquityTransitionalConfig.irb_permission_at_2026_year_end`.
+  - New `CFG003` warning. A firm with IRB permission gets it inside 2027–2029,
+    unless it has made the rule 4.9 election (`opt_out`), because rules 4.4–4.6
+    are not implemented and its equity keeps 250% / 400%; the message names
+    rule 4.5(1) (equity held under Standardised permission on 31 December
+    2026 takes the rule 4.2 / 4.3 weights) and rule 4.6 (the higher of), the
+    two rules the calculator does not yet apply. A firm without IRB
+    permission that sets `opt_out` gets the transitional weights and the same
+    warning: rule 4.9 is not available to it.
+  - New result columns under Basel 3.1: `equity_transitional_approach`,
+    `equity_higher_risk` and `risk_weight_pre_equity_transitional` (the Art. 133
+    weight), non-null only on legs whose weight the rules set.
+  - No registered test portfolio held such equity, so no golden moved. Oracle
+    case ORC-080 is corrected (2.50 → 1.60) and ORC-284 added. Recorded in
+    `docs/development/escape-log.md` (2026-11-16).
+- **CAPITAL — RWA UP: a natural person is no longer accepted as a guarantor
+  (CRR / PS1/26 Art. 201).** Art. 201(1) lists the eligible providers of unfunded
+  credit protection exhaustively, and no limb names a natural person. A guarantee
+  from a counterparty with `entity_type` `individual`, `natural_person` or
+  `retail` is now declined on SA, slotting and F-IRB beneficiaries in both
+  regimes, and raises `CRM013` with a message naming the cause. Before, on an
+  F-IRB beneficiary with an internal PD on the guarantor, the calculator
+  substituted the person's retail PD.
+  - Measured on the `crm-substitution` test portfolio: CRR RWA 61,473,508.63 →
+    63,133,923.18 (**+1,660,414.55, +2.70%**); Basel 3.1 TREA 54,812,921.28 →
+    56,205,302.46 (**+1,392,381.17, +2.54%**). Expected loss falls (CRR 232,790
+    → 212,000; Basel 3.1 IRB EL deduction 220,880 → 202,400), because the
+    obligor's own PD replaces the guarantor's.
+  - Under CRR, an F-IRB exposure whose natural-person guarantor has no internal
+    PD used to take the SA conversion factor on its covered off-balance-sheet
+    part, even though the guarantee was then declined. It now keeps the F-IRB
+    factor, so its exposure value can rise.
+  - A-IRB beneficiaries are unchanged in both regimes. Under CRR Art. 108(2) an
+    own-LGD exposure takes credit risk mitigation under Chapter 3, not the
+    Art. 201 list; the Basel 3.1 A-IRB case is open.
+  - Recorded in `docs/development/escape-log.md` (2026-11-16).
+- **REPORTING: OF 07.00 reports Basel 3.1 transitional equity on its Article 133
+  row, and fills memorandum rows 0371–0374.** Annex II p.95 asks for such equity
+  on the row of the weight it would have without the transitional (rows 0250 /
+  0261), with the transitional RWEA in column 0220; it is no longer reported in
+  row 0280 "Other risk weights". Rows 0371 and 0372 now carry it, on the equity
+  sheet only; rows 0371–0374 had published nothing since they were added. Rows
+  0373 / 0374 stay empty until rules 4.4–4.6 are implemented. A return that does
+  this fails the Bank's `boe_b1016`, `boe_b1031` (ERROR) and `boe_b0491`,
+  `boe_b0506` (WARNING): every transitional weight is below the row's weight.
+  That is a defect in the published rules (`docs/rwa-filer/publisher-issues.md`,
+  PI-01), and no figure was changed to satisfy them.
+- **REPORTING: C 07.00 / OF 07.00 row 0015 ("of which: defaulted exposures") is
+  reported only on the sheets Annex II names.** That is the high-risk and equity
+  classes under CRR (Annex II p.91), plus CIUs under Basel 3.1 (PS1/26 Annex II
+  p.88). It used to be filled on the "exposures in default" sheet and the Total.
+  No RWEA or row 0010 figure moves. Under CRR the row is now always empty: equity
+  holdings carry no default flag, and the UK CRR folds high-risk items into
+  "other".
+- **REPORTING: Basel 3.1 OF 07.00 reports a split residential or commercial
+  mortgage in its two risk-weight parts.** An Art. 124F / 124H exposure is now
+  reported at 20% for the part up to 55% of the property value and at the
+  counterparty's weight for the rest (Annex II p.94), instead of whole in row
+  0280 at its blended weight. Example: a 400,000 mortgage at 60% LTV to a natural
+  person now shows 366,666.67 (RWEA 73,333.33) in row 0180 and 33,333.33 (RWEA
+  25,000) in row 0220. A defaulted or guaranteed mortgage, whose weight a later
+  step changed, is still reported whole. New result columns
+  `sa_loan_split_secured_share`, `sa_loan_split_secured_rw` and
+  `sa_loan_split_residual_rw`. No RWA, EAD or risk weight changes; CRR is
+  unchanged.
+- **REPORTING: Basel 3.1 OF 07.00 memorandum rows 0300 / 0320 are reported on the
+  sheet of the exposure class the obligor would have had before default.** A
+  defaulted corporate loan now appears in row 0320 of the corporates sheet and of
+  the Total, and no longer on the "exposures in default" sheet, where the PRA
+  taxonomy has no cell; those figures had blocked the filing package. Exposures
+  that were real estate before default are reported on the Total only, as the
+  Bank of England's known-issues log asks until it publishes the sheet (issue
+  #27, 19 October 2026). A defaulted exposure in the high-risk class is no longer
+  counted in rows 0300 / 0320: it is not in the "exposures in default" class those
+  rows describe. New result column `reporting_class_pre_default`. CRR output is
+  unchanged.
+- **REPORTING: Basel 3.1 OF 02.00 leaves an IRB class row empty when its OF 08.01
+  sheet has no exposures.** Rows 0271, 0295–0297, 0350, 0355, 0356, 0382–0385,
+  0390, 0400 and 0410 used to report 0.0. In the PRA taxonomy each is the same
+  data point as an OF 08.01 sheet total, so the zero filed a sheet OF 08.01 does
+  not produce, and the Bank's `boe_b1055` failed. Rows with exposures, the
+  approach totals and CRR C 02.00 are unchanged (Bank of England XBRL Filing
+  Manual, rule 2.19).
+- **REPORTING: Basel 3.1 OF 09.02's corporate and retail sub-rows use the
+  classification OF 08 uses.** Row 0048 (financial and large corporates) was
+  keyed on the `apply_fi_scalar` input flag, and the SME and real-estate rows on
+  their own tests; each row now matches the OF 08.01 sheets the Bank's rules tie
+  it to. On the `irb-shapes` test portfolio, 3,300,000 moved from row 0048 to row
+  0055. No RWA changes.
+- **REPORTING: Basel 3.1 OF 08.01 reports column 0010, the PD.** It is the
+  exposure-weighted PD of the legs that carry one, so slotting exposures are left
+  out; a sheet holding only slotting reports it empty. The CRR specialised-lending
+  sheet now reports column 0010 empty, not 0.0, when all its exposures are
+  slotted.
+- **REPORTING: C / OF 08.01 LGD (column 0230) and maturity (column 0250) leave
+  slotting exposures out.** Each is the exposure-weighted average over the
+  exposures that carry the parameter, as the PD (column 0010) already was. A row
+  holding only slotting exposure now reports both columns empty, not 0.0: on the
+  specialised-lending sheet (Basel 3.1 sheet 0010, CRR `specialised_lending`),
+  that is rows 0010 and 0020 in every portfolio with slotting. A row holding F-IRB
+  specialised lending beside slotting on the same sheet reports the F-IRB figure,
+  no longer diluted (no test portfolio holds that mix yet). PS1/26 Annex II
+  p.111 excludes slotting from both columns; CRR Annex II
+  excludes it from column 0230 only, and the CRR maturity cell is left empty
+  because no maturity is carried for slotting. The FIRB-and-slotting Total is
+  unchanged. No RWA changes; anything that reads these cells from the export must
+  accept an empty cell.
+- **REPORTING: OF 08.01 reports only the cells its published sheet has.**
+  - Basel 3.1: cells the PRA taxonomy does not publish on a given sheet are
+    empty; 60 figures had no place in a return.
+  - Both regimes: column 0250 (maturity) is empty on retail sheets of C / OF 08.01
+    and 08.02 (Annex II), and the A-IRB Total averages maturity over non-retail
+    exposures only.
+  - Basel 3.1: column 0254 (unrecognised exposure adjustment) is empty on F-IRB
+    and slotting sheets and their Total.
+  - Following the Bank's known-issues log (issue #25), sheet 0019's netting in
+    rows 0017 / 0020 column 0035 is reported in the A-IRB Total only.
+  - No RWA changes. Anything that reads these cells from the export must accept
+    an empty cell.
+- **REPORTING: Basel 3.1 OF 08.01 reports the conversion-factor rows.** Row 0030
+  is broken down by factor in the published order: 0031 (10%), 0032 (20%), 0001
+  (40%, new), 0033 (50%), 0034 (100%) and 0035 (own estimate). The rows had been
+  empty, and 0033–0035 carried the labels of the bucket below them. No RWA
+  changes.
+- **REPORTING: COREP risk-weighted exposure amounts no longer include the output
+  floor's add-on.** On a Basel 3.1 return where the output floor binds, OF 07.00
+  (column 0220 and the supporting-factor columns), OF 08.01–08.07,
+  OF 09.01 / 09.02, C 08.04 and C 34 now report each exposure's own
+  approach amount, as Annex II asks: the floor belongs to the total (OF 02.00 /
+  OF 02.01). On the `facility-share-binding` test portfolio the OF 08.01 sheets
+  now sum to 1,105,491.29 (U-TREA) instead of 1,559,200.00. Total RWA, TREA and
+  OF 02.00 do not change. Pillar 3 templates still include the add-on.
+- **REPORTING: C 07.00 / OF 07.00 report a guaranteed exposure's original
+  exposure on its obligor's own risk-weight row.** Columns 0010–0040 of an
+  exposure whose guarantee or credit derivative the calculator applies now sit
+  in the row of the obligor's own risk weight; only the covered part's
+  exposure value moves to the protection provider's sheet and row, through the
+  column 0100 inflow (Annex II p.94: risk weights "within the respective
+  exposure class"). The covered part used to open a row of the provider's
+  weight on the obligor's sheet: on the `crm-substitution` test portfolio,
+  2,800,000 sat in the corporates sheet's 30% row (Basel 3.1) or 50% row (CRR)
+  instead of its 100% row, and the Bank's `boe_b0441` / `boe_b0441_1` warned.
+  A guaranteed loan-split mortgage is split on its own weight. No RWA, EAD or
+  exposure value changes; columns 0110 onwards do not move.
+- **REPORTING: CRR C 08.06 leaves the risk-weight column of its Total rows
+  empty.** Column 0070 is the fixed Art. 153(5) Table 1 weight of each
+  category (CRR Annex II: "a fixed column for information purposes"), and
+  the Table has no weight for a total. Rows 0110 / 0120 carried an
+  exposure-weighted average there, and a Total with no exposure took its first
+  category's weight. Category rows are unchanged; Basel 3.1 OF 08.06 is
+  unchanged. `validate_submission` no longer judges the column as data (it is
+  not a data point), so the false `v09782_m` / `v09783_m` warnings on CRR
+  slotting returns are gone.
+- **FILING: average maturity is filed in whole units.** OF 08.01 / 08.02 column
+  0250 is filed in whole days and OF 08.03 column 0080 in whole years, rounded
+  half to even (Bank of England XBRL Filing Manual, rule 2.18), because the PRA
+  taxonomy types both as integers. Basel 3.1 IRB returns with a fractional
+  average maturity were refused by the filing package and can now be written.
+  The calculated average on the results and in the COREP templates is not
+  rounded.
+- **VALIDATION: rules the Bank of England has switched off at its gateway no
+  longer block a return.** The Bank's validations deny list deactivated the
+  `boe_b0710` family and `boe_b0746` on 19 October 2026, and `boe_b0272` /
+  `boe_b0274` on 16 November 2026. `export_filing_package`, the filing page and
+  `check_supervisory_validations` now read them as the gateway does, on the day
+  the return is validated (the list's date decides, not the reporting date). Eight of
+  the fifteen Basel 3.1 test portfolios had `boe_b0710` as their only blocking
+  break. A switched-off rule is listed with the date and the known-issue number,
+  and is never a finding. Needs the `rwa-filer` release that ships the deny list.
+- **VALIDATION: `validate_submission` no longer reports `boe_b0778` (Basel 3.1,
+  blocking) or `v09796_m` (CRR, a warning) on an empty C 08.07 / OF 08.07
+  roll-out class.** The rules ask that a class's three shares total 1; where a
+  class has no exposure there is no share to report, and the gateway does not
+  evaluate a rule where none of its cells is reported (XBRL Variables 1.0 §4).
+  Needs the `rwa-filer` release that adds this reading.
+- **VALIDATION: the filing package's validation is stricter on rounded figures
+  and correct on OF 08.06's all-types sheet.** `rwa-filer` gave a plain `sum()`
+  or `abs()` in a rule the rounding allowance of `isum()`; and a fact on OF 08.06's
+  "all types" sheet was added into every type's sums. Our generated returns are
+  not affected. See `packages/rwa-filer/CHANGELOG.md`.
 - **The filing package's validation no longer fails OF 08.02 rules the Bank's
   gateway passes.** `boe_b0761` asks that each obligor grade's total outflow
   (column 0070) equal that grade's guarantees, credit derivatives and other

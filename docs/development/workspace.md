@@ -92,18 +92,25 @@ the supervisory register's matrix and ratchets two counts against
 |-------|-------:|------|
 | `placed_cells` — distinct cells that land on a taxonomy data point | 1,911 | May not fall |
 | `unplaced_figures` — distinct cells holding a non-zero figure with no place | 1,025 | May not rise, in total or for any (template, reason) |
-| `structure_findings` — placed facts that still cannot be filed | 8 | May not rise, in total or for any (finding, table) |
+| `structure_findings` — placed facts that still cannot be filed | 2 | May not rise, in total or for any (finding, table) |
 
 A zero in a cell the taxonomy lacks loses nothing and is not counted.
 
-The eight structure findings are defects in the generated estate:
+The two structure findings are one defect in the generated estate, seen from
+both of the tables that show the data point, on one portfolio
+(`facility-share-binding`, the one whose output floor binds):
 
 | Finding | Table | What is wrong |
 |---------|-------|---------------|
-| `STR007` | OF 02.00 | Rows 0050 and 0060, column 0010, are one data point in the taxonomy (with OF 07.00 total sheet, column 0220) and hold different values. |
-| `STR007` | OF 08.01 | Column 0276 (output-floor RWEA) disagrees with the OF 02.00 column 0020 cell that is the same data point. |
-| `STR007` | OF 02.01 | Row 0080, column 0030 (U-TREA) disagrees with OF 02.00 row 0010, column 0010. |
-| `STR006` | OF 08.03 | Column 0080 is an integer in the taxonomy and holds a fractional maturity. |
+| `STR007` | OF 02.00 | Row 0297, column 0010 is one data point in the taxonomy with OF 08.01 sheet 0012, row 0010, column 0260. OF 02.00 carries the un-floored RWEA, OF 08.01 the RWEA after the output-floor add-on, so the two cells hold different values (plan item P1.369). |
+| `STR007` | OF 08.01 | The same data point, from the OF 08.01 side. |
+
+An exposure-weighted average maturity is not a structure finding. OF 08.01 /
+OF 08.02 column 0250 (days) and OF 08.03 column 0080 (years) are typed integer
+in the taxonomy, so the adapter files them as whole numbers, rounded to nearest
+with ties to even as the Bank's XBRL Filing Manual (rule 2.18) requires. The
+generated templates keep the exact average. See
+[COREP reporting](../features/corep-reporting.md).
 
 The unplaced figures are the work list. The reasons, largest first:
 
@@ -127,6 +134,52 @@ The gate is its own CI job, `Filing Mapping Ratchet`. It is not part of
 runs the measurement. Bank a deliberate move with `--update-baseline` and say
 why in the baseline's `_note`.
 
+## The gateway leg of the supervisory register
+
+The supervisory register (`tests/acceptance/reporting/test_supervisory_validations.py`,
+banked in `tests/expected_outputs/reporting/validation_known_breaks.json`) reads
+our template frames through the template-level engine. That engine reads a
+Bank rule differently from the gateway in six measured ways, so for every
+Basel 3.1 run the register also files the same generated COREP as a canonical
+return and validates it with `rwa_filer.boe`, the engine the gateway and
+`export_filing_package` use. The Bank's validations deny list applies as it
+stands on the run date, as `export_filing_package` applies it: a deactivated
+rule is not evaluated, a downgraded one breaks as a Warning. The filing itself
+is `scripts/filing_mapping_report.py::file_on_gateway`, the same function the
+filing-mapping ratchet measures through, so the two cannot file different
+returns.
+
+Two sections hold what it finds, each two-way ratcheted and keyed per
+(rule, portfolio), so a rule that starts breaking on one more portfolio is a
+new entry. A gateway break is keyed on its severity too, so a break the deny
+list moves from Error to Warning is a new entry whose reason is written again:
+
+| Section | Holds |
+|---------|-------|
+| `known_gateway_breaks` | Every rule the gateway engine breaks on a filed return, Error and Warning, with a written reason per (rule, portfolio) |
+| `known_engine_disagreements` | Every (rule, portfolio) where one engine breaks a rule the other holds |
+
+The Error half of `known_gateway_breaks` must equal the filing-mapping
+baseline's `error_rules_by_rule`, rule for rule and portfolio count for
+portfolio count (`tests/contracts/test_gateway_break_registers_agree.py`, fast).
+Re-bank the two in the same change:
+
+```bash
+REGEN_VALIDATION_BASELINE=1 uv run pytest tests/acceptance/reporting/test_supervisory_validations.py -n 0
+uv run python scripts/filing_mapping_report.py --update-baseline
+```
+
+A reason says whose the break is. `publisher issue PI-nn: ...` means the Bank's
+rule is the cause, as recorded in the publisher-issue register
+([known issues with the published validation rules](../rwa-filer/publisher-issues.md));
+a reason that starts `not PI-nn - ...` says the issue names the rule but this
+break is not that issue, and goes on to say whose it is (usually ours). A pair
+whose places have both causes reads `publisher issue PI-nn, in part: ...` and
+names our defect, with its plan item, for the rest in the same reason. A Basel
+3.1 break on a rule a `fails_correct_returns` issue names as its subject must
+carry one of the labels, and a cited issue must have that effect
+(`tests/contracts/test_register_publisher_issues.py`, fast).
+
 ## The referee differential
 
 Every other check on the filing package is this repository checking its own
@@ -142,14 +195,17 @@ RWA_FILER_ARELLE_PYTHON=/path/to/arelle-venv/bin/python \
     uv run python scripts/referee_differential.py --check
 ```
 
-Five of the thirteen Basel 3.1 portfolios qualify today. The other eight carry
-structure findings, which is the filing-mapping ratchet's business, and are not
-filed. A portfolio that joins or leaves the five must be re-banked and
-explained.
+Fourteen of the fifteen Basel 3.1 portfolios qualify. The fifteenth,
+`facility-share-binding`, carries the two structure findings above, which are
+the filing-mapping ratchet's business, and is not filed. A portfolio that joins
+or leaves the fourteen must be re-banked and explained.
 
 The gate needs Arelle and the Bank's package, neither of which is in the
-repository, and takes several minutes and about 3 GB per return. It therefore
-runs in its own workflow, `Referee Differential`, and not in `ci.yml`: on a pull
+repository. A full run is about 16 minutes on a 16 GB, 4-core machine with
+nothing cached and under a minute when no return changed: Arelle's workers run
+several at once, and a worker's result is reused while nothing it reads has
+changed (see [Scripts](scripts.md)). It runs in its own workflow, `Referee
+Differential`, and not in `ci.yml`: on a pull
 request or push that touches the code it referees, weekly, and on demand. A pull
 request that touches none of those paths does not run it. Its baseline logic
 and its workflow wiring are pinned by the fast tests in

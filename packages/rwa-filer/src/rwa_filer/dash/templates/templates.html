@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import failure_card, rule_text, severity_chip %}
+{% from "_macros.html" import failure_card, issue_callout, issue_chip, rule_text, severity_chip %}
 {% block title %}Templates · {{ current.name }} — rwa-filer dash{% endblock %}
 {% block content %}
 {% set base = "/returns/" ~ current.return_id ~ "/templates" %}
@@ -90,6 +90,7 @@
     <div class="mark{% if focused %} focused{% endif %}">
       <div class="mark-head">{{ severity_chip(mark.severity) }}<span class="mono small muted">{{ mark.rule_id }}</span>{% if not mark.reported %}<span class="small muted">read at its default</span>{% endif %}</div>
       <p class="mark-label">{{ rule.row.label or "No label published" }}</p>
+      {% for item in rule.issues %}{{ issue_callout(item) }}{% endfor %}
       <details class="mark-more" data-rule="{{ mark.rule_id }}"{% if focused %} open{% endif %}>
         <summary>Read the rule</summary>
         <div class="mark-body">

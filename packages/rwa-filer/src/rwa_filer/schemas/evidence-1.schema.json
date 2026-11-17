@@ -193,7 +193,47 @@
         "expression": { "type": ["string", "null"] },
         "scope": { "type": ["string", "null"] },
         "where": { "type": ["string", "null"] },
-        "join": { "type": ["string", "null"] }
+        "join": { "type": ["string", "null"] },
+        "deny_list": {
+          "description": "Since 1.1: the Bank of England validations deny-list entry in force for the rule, or null. A rule the Bank deactivated is NOT_EVALUATED (reason deactivated_by_publisher) and has no evaluation records; its formula's counts are under formula.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["rule_id", "module", "deny_type", "date_applied", "known_issue"],
+              "properties": {
+                "rule_id": { "type": "string" },
+                "module": { "type": "string" },
+                "deny_type": { "enum": ["deactivated", "downgraded"] },
+                "date_applied": { "type": ["string", "null"] },
+                "known_issue": { "type": ["integer", "null"] },
+                "published_code": { "type": "string" },
+                "description": { "type": "string" }
+              }
+            }
+          ]
+        },
+        "formula": {
+          "description": "Since 1.1: the published rule's own verdict where the deny list changed the outcome, or null.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["severity", "status", "satisfied", "unsatisfied"],
+              "properties": {
+                "severity": { "enum": ["ERROR", "WARNING"] },
+                "status": { "enum": ["PASS", "FAIL", "NOT_EVALUATED"] },
+                "satisfied": { "type": "integer", "minimum": 0 },
+                "unsatisfied": { "type": "integer", "minimum": 0 }
+              }
+            }
+          ]
+        },
+        "publisher_issues": {
+          "description": "Since 1.1: the known issues with the published rule that label this result - the validation report's issue_note records (validation-report-2.schema.json $defs/issue_note).",
+          "type": "array",
+          "items": { "type": "object", "required": ["issue", "status", "effect", "sentence"] }
+        }
       }
     },
     "evaluation": {
@@ -222,7 +262,11 @@
         "right_value": { "$ref": "#/$defs/number" },
         "left": { "$ref": "#/$defs/side" },
         "right": { "$ref": "#/$defs/side" },
-        "comparisons": { "type": "array", "items": { "$ref": "#/$defs/comparison" } }
+        "comparisons": { "type": "array", "items": { "$ref": "#/$defs/comparison" } },
+        "publisher_issues": {
+          "description": "Since 1.1: for an unsatisfied evaluation of a break a known issue labels, the issues whose footprint holds it (empty: none explains it); null otherwise.",
+          "oneOf": [{ "type": "array", "items": { "type": "string" } }, { "type": "null" }]
+        }
       }
     },
     "finding": {
@@ -251,7 +295,12 @@
         "expected": { "type": "string" },
         "actual": { "type": "string" },
         "reference": { "type": "string" },
-        "positions_total": { "type": "integer", "minimum": 0 }
+        "positions_total": { "type": "integer", "minimum": 0 },
+        "publisher_issues": {
+          "description": "Since 1.1: the ids of the known issues with the published rule that label the finding.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     },
     "structure_exception": {

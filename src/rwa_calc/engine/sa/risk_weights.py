@@ -80,9 +80,11 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
     b31_adc_rw_expr,
     b31_commercial_rw_expr,
     b31_other_re_rw_expr,
+    b31_real_estate_route,
     b31_residential_rw_expr,
     b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
+    with_b31_loan_split_parts,
 )
 from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr, lift_central_bank_cqs
 from rwa_calc.engine.sa.covered_bond import b31_unrated_cb_rw_expr, crr_unrated_cb_rw_expr
@@ -120,6 +122,7 @@ from rwa_calc.engine.sa.jurisdiction import (
     pse_jurisdiction_not_permitted_expr,
     pse_short_term_eligible_expr,
 )
+from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
 from rwa_calc.engine.sa.re_residual_rw import crr_art_124_1_unsecured_cp_rw_expr
 from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
 from rwa_calc.engine.sa.sovereign_derived import (
@@ -534,34 +537,6 @@ def _eca_meip_rw_expr() -> pl.Expr:
 # ---------------------------------------------------------------------------
 
 
-def is_commercial_re_class(uc: pl.Expr) -> pl.Expr:
-    """Match commercial real-estate exposures by class string or property_type.
-
-    Used by the SA RE dispatchers and the Art. 127(3) defaulted-RESI rule
-    to route ahead of the residential branch — ``COMMERCIAL_MORTGAGE``
-    contains the ``MORTGAGE`` substring, so the residential dispatch
-    would otherwise grab it.
-
-    The ``property_type == "commercial"`` limb is why an exposure can take the
-    Art. 126 / Art. 124H-124I commercial risk weight while its routing
-    ``exposure_class`` still says ``corporate``. PUBLIC because the aggregator's
-    applied-class overlay (``_add_exposure_class_applied``) reuses this exact
-    predicate to put such an exposure in Art. 112(1)(i) for reporting: sharing
-    one expression is what keeps the reported class and the applied risk weight
-    from drifting apart.
-    """
-    return (
-        uc.str.contains("COMMERCIAL", literal=True)
-        | uc.str.contains("CRE", literal=True)
-        | (pl.col("property_type").fill_null("") == "commercial")
-    )
-
-
-def _is_residential_re_class(uc: pl.Expr) -> pl.Expr:
-    """Match residential RE — relies on commercial being routed first."""
-    return uc.str.contains("MORTGAGE", literal=True) | uc.str.contains("RESIDENTIAL", literal=True)
-
-
 @cites("PS1/26, paragraph 128")
 def _b31_append_high_risk_branch(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 Art. 128 high-risk items branch (150% flat).
@@ -633,24 +608,23 @@ def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 
 @cites("PS1/26, paragraph 124")
 def _b31_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
-    """Append Basel 3.1 real-estate branches (ADC / other-RE / CRE / resi)."""
-    is_re_class = (
-        is_commercial_re_class(uc)
-        | _is_residential_re_class(uc)
-        | (pl.col("property_type").fill_null("").is_in(["residential", "commercial"]))
-    )
-    is_non_qualifying = pl.col("is_qualifying_re").fill_null(True) == False  # noqa: E712
+    """Append Basel 3.1 real-estate branches (ADC / other-RE / CRE / resi).
+
+    The predicates are ``b31_real_estate_route``'s, which the loan-split carrier
+    (``with_b31_loan_split_parts``) reads too, so the two cannot disagree on which
+    branch priced a row.
+    """
+    route = b31_real_estate_route(uc)
     return (
-        chain.when(pl.col("is_adc").fill_null(False))
+        chain.when(route.adc)
         .then(b31_adc_rw_expr())
         # Art. 124J: non-qualifying RE that fails Art. 124A criteria.
-        # Null is_qualifying_re defaults to qualifying — backward compatible.
-        .when(is_non_qualifying & is_re_class)
+        .when(route.other_re)
         .then(b31_other_re_rw_expr("_cqs_risk_weight"))
         # Commercial RE must precede residential — see is_commercial_re_class.
-        .when(is_commercial_re_class(uc))
+        .when(route.commercial)
         .then(b31_commercial_rw_expr("_cqs_risk_weight"))
-        .when(_is_residential_re_class(uc))
+        .when(route.residential)
         .then(b31_residential_rw_expr("_cqs_risk_weight"))
     )
 
@@ -831,7 +805,7 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
             .otherwise(pl.lit(_SA_CRR_RW["cre_rw_standard"]))
         )
         # CRR Art. 125 LTV split.
-        .when(_is_residential_re_class(uc))
+        .when(is_residential_re_class(uc))
         .then(
             pl.when(pl.col("ltv").fill_null(0.0) <= _SA_CRR_RW["resi_ltv_threshold"])
             .then(pl.lit(_SA_CRR_RW["resi_rw_low"]))
@@ -1320,8 +1294,8 @@ def _apply_b31_risk_weight_overrides(
         .then(_leased_residual_rw_expr())
         .when(uc == "OTHER")
         .then(pl.lit(_SA_SHARED_RW["other_default"]))
-        # Equity (Art. 133(3)): 250% — full equity treatment (CIU,
-        # transitional floor) lives in the dedicated equity table.
+        # Equity (Art. 133(3)): 250% end state. CIU and the rules 4.2/4.3 2027-29
+        # transitional live in the dedicated equity table; SA005 flags this leg.
         .when(uc == "EQUITY")
         .then(pl.lit(_SA_B31_RW["equity"]))
         # CIU (o): DEFENCE-IN-DEPTH, unreachable — the equity file never reaches
@@ -1332,7 +1306,9 @@ def _apply_b31_risk_weight_overrides(
         .otherwise(pl.col("risk_weight").fill_null(1.0))
         .alias("risk_weight")
     )
-    return exposures
+    # PS1/26 Art. 124F(1) / 124H(1): record the two parts of a loan-split weight
+    # for OF 07.00 (Annex II p.94) — while ``_cqs_risk_weight`` is still here.
+    return with_b31_loan_split_parts(exposures, uc)
 
 
 @cites("CRR Art. 134")
@@ -1572,7 +1548,7 @@ def _crr_defaulted_re_secured_share(upper_class: pl.Expr) -> pl.Expr:
     the flag's meaning.
     """
     ltv = pl.col("ltv")
-    is_rre_only = _is_residential_re_class(upper_class) & ~is_commercial_re_class(upper_class)
+    is_rre_only = is_residential_re_class(upper_class) & ~is_commercial_re_class(upper_class)
     return (
         pl.when(is_rre_only & ltv.is_not_null() & (ltv > 0.0))
         .then(pl.min_horizontal(pl.lit(1.0), pl.lit(_SA_CRR_RW["resi_ltv_threshold"]) / ltv))
@@ -1637,7 +1613,7 @@ def _apply_defaulted_risk_weight(
     if resolved_pack.feature("sa_revised_defaulted_treatment"):
         # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88).
         is_resi_re_non_income = (
-            _is_residential_re_class(_uc)
+            is_residential_re_class(_uc)
             & ~is_commercial_re_class(_uc)
             & ~pl.col("has_income_cover").fill_null(False)
         )

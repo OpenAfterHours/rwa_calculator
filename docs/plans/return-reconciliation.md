@@ -464,6 +464,19 @@ Phase 1 exists.
   gross on/off-balance-sheet carriers cannot populate C 08.03 cols 0010/0020 or
   weight col 0030. `LedgerCoverage` and the reachability panel exist so that
   reads as *unavailable*, never as zero.
+- **Some Basel 3.1 OF 07.00 rows can never be keyed from a projection.** Three
+  placements read a sealed carrier no mapping can target: memorandum rows
+  0300 / 0320 on the class sheets (`reporting_class_pre_default`), the two parts
+  of a loan-split mortgage (`sa_loan_split_*`) and transitional equity on its
+  Article 133 row 0250 / 0261 (`risk_weight_pre_equity_transitional`). A
+  projected ledger keeps the defaulted memorandum leg on the Total alone and
+  bands the loan and the equity on their applied weights, so those rows differ
+  from ours for a reason that is not a value. `LedgerCoverage.unavailable_rows`
+  names them — every risk-weight band row whenever the loan-split carriers are
+  absent, which on a projection is always, split loan or not — but the compare
+  and its view gate on `unavailable_cells` only, so **today a difference on
+  those rows is still shown as measured**. Read it against `unavailable_rows`
+  until the compare surfaces it.
 - **Membership frame size.** One row per (leg × instrumented template × sheet ×
   row), with hierarchical templates contributing ~2 rows per leg — and now twice
   over, once per side. At tens of millions of legs this must spill to parquet and

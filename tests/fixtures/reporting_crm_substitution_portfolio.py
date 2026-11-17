@@ -12,8 +12,10 @@ the 70+ frozen golden ndjson files under ``tests/expected_outputs/reporting/`` �
 no golden portfolio contains a guaranteed exposure that migrates exposure class.
 This portfolio closes that blind spot with guarantee legs, each on a
 distinct obligor/guarantor pair with a distinct round guaranteed amount so a
-mis-posted cell is identifiable on sight. S1-S5 are all BENEFICIALLY substituted
-(``is_guarantee_beneficial`` derives True); S6 adds the DECLINED complement
+mis-posted cell is identifiable on sight. S1 and S3-S5 are BENEFICIALLY substituted
+(``is_guarantee_beneficial`` derives True); S2 is a natural person's guarantee
+that Art. 201 does not recognise at all (P1.384 — see the table); S6 adds the
+DECLINED complement
 (Finding 4 / ``engine/aggregator/aggregator.py::_beneficial_gate``) — a guarantee
 that exists (``is_guaranteed=True``, positive ``guaranteed_portion``) but must
 NOT migrate class/approach or book any outflow/inflow, because the guarantor's
@@ -99,10 +101,18 @@ is what makes the scenarios below orthogonal rather than redundant:
     S1     | IRB corporate  | IRB institution,        | C 08.01 | C 08.01 | within-template inflow,
            |                | OWN IRB exposure         |         |         | destination class HAS a
            |                |                          |         |         | native row already
-    S2     | IRB corporate  | IRB retail_other,        | C 08.01 | C 08.01 | within-template inflow,
-           |                | NO own exposure          |         |         | destination class has NO
-           |                |                          |         |         | native row — an inflow-only
-           |                |                          |         |         | sheet
+    S2     | IRB corporate  | natural person           | none    | none    | Art. 201-INELIGIBLE: a
+           |                | (``individual``, internal|         |         | natural person is in no limb
+           |                | PD 2.00%), NO own        |         |         | of Art. 201(1)/(2) in either
+           |                | exposure                 |         |         | regime, so the protection is
+           |                |                          |         |         | not recognised (CRM013) and
+           |                |                          |         |         | the covered part keeps the
+           |                |                          |         |         | obligor's F-IRB basis. Built
+           |                |                          |         |         | as an IRB retail_other
+           |                |                          |         |         | inflow-only sheet; that was
+           |                |                          |         |         | the capital defect P1.384
+           |                |                          |         |         | closed. See
+           |                |                          |         |         | ``DECLINED_GUARANTEE_DESIGN``
     S3     | IRB corporate  | SA sovereign (domestic   | C 08.01 | C 07.00 | CROSS-TEMPLATE: the outflow
            |                | CGCB, 0% RW), NO own     |         |         | leg is only ever visible to
            |                | exposure                 |         |         | C 08.01's origin-IRB
@@ -198,8 +208,11 @@ is what makes the scenarios below orthogonal rather than redundant:
            |                |                          |         |         | POPULATED native sheet
 
 S1/S4 are the happy-path pair (one IRB, one SA) proving the mechanism works
-when the destination class already has a native row. S2 isolates the
-"destination class has no native population, same template" case. S3 isolates
+when the destination class already has a native row. S2 was built to isolate
+the "destination class has no native population, same template" case; since
+P1.384 it is the Art. 201 decline instead (a natural person is not an eligible
+provider), and no registered portfolio now reaches a C 08.01 inflow-only sheet.
+S3 isolates
 the cross-template case: the leg is only ever visible to C 08.01's population
 (its origin approach is IRB), so its OUTFLOW cannot be anywhere but C 08.01,
 while its guarantor is SA-treated, so its INFLOW belongs on C 07.00 — the two
@@ -212,8 +225,9 @@ correct implementation must still recognise BOTH an outflow (col 0070 /
 C 07.00 col 0090) and an equal inflow (col 0080 / C 07.00 col 0100) on that
 one sheet, netting to no change in the post-substitution total (col 0090 /
 col 0110) despite nothing leaving the class. S6 isolates a FOURTH, orthogonal
-case none of S1-S5 exercise at all: the guarantee GATE itself. S1-S5 are all
-beneficially substituted by construction, so a reporting-layer regression that
+case none of S1-S5 exercise at all: the BENEFIT gate itself. S1 and S3-S5 are
+beneficially substituted by construction (S2 never reaches the benefit test — the
+Art. 201 provider gate rejects it first), so a reporting-layer regression that
 deleted the ``is_guarantee_beneficial`` check entirely (migrating every
 guarantee regardless of benefit) would move none of their numbers — S6 is the
 only scenario that would move if that gate regressed, and it doubles as the
@@ -255,13 +269,21 @@ exactly to net across every sheet with zero leakage. Per sheet, Total row
 (unchanged from the S1-S7 figures below except ``corporate`` on BOTH
 templates and ``specialised_lending``, which S8 perturbs by design):
 
-    c08_01 corporate            : 0020=38,000,000  0040=-12,300,000  0050=-8,800,000  0070=-21,100,000  0080=+5,400,000  0090=22,300,000
+    c08_01 corporate            : 0020=38,000,000  0040=-12,300,000  0050=-5,500,000  0070=-17,800,000  0080=+5,400,000  0090=25,600,000
     c08_01 institution           : 0020= 4,000,000                                                        0080=+7,500,000  0090=11,500,000   <- S1 (2,000,000) + S7 (5,500,000)
-    c08_01 retail_other          : 0020=         0                                                          0080=+3,300,000  0090= 3,300,000   <- S2, inflow-only sheet
     c08_01 specialised_lending   : 0020=28,500,000                                    0050=-7,800,000  0070=-7,800,000                     0090=20,700,000   <- S6 (10,000,000, DECLINED) + S8 (18,500,000)
     c07_00 corporate             : 0010= 8,000,000                                    0060=-2,800,000  0090=-2,800,000  0100=+7,800,000  0110=13,000,000   <- S4 native + S8 inflow
     c07_00 institution           : 0010= 1,500,000                                                                          0100=+2,800,000  0110= 4,300,000
     c07_00 cgcb                  : 0010=         0                                                                          0100=+4,900,000  0110= 4,900,000   <- S3 ONLY
+
+UPDATED 2026-11-16 (P1.384, re-measured on a live run, both regimes): S2's
+natural-person guarantee is no longer recognised, so ``corporate`` loses S2's
+3,300,000 credit-derivative outflow (col 0050 -8,800,000 -> -5,500,000, col 0070
+-21,100,000 -> -17,800,000, col 0090 22,300,000 -> 25,600,000) and the CRR
+``retail_other`` inflow-only sheet (0080 = 0090 = +3,300,000) is no longer
+emitted. Under Basel 3.1 OF 08.01 sheet 0012 also loses the 3,300,000 same-sheet
+inflow it used to show for S2 (col 0080 8,700,000 -> 5,400,000). The S7 figures
+below are the 2026-08-04 observations, made while S2 was still substituted.
 
 ``corporate``'s 0020 rises by exactly DRAWN_S7 (11,000,000 — S7's own ORIGIN
 loan, corporate class, same as S1/S2/S3/S5); its col 0050 (the
@@ -278,7 +300,7 @@ DRAWN_S8_PLAIN + DRAWN_S8_GTD (18,500,000: 10,000,000 -> 28,500,000).
 ``corporate`` on C 07.00 gains an inflow for the FIRST time (col 0100: 0 ->
 7,800,000 = AMOUNT_COVERED_S8, DELIBERATELY landing on S4's already-
 populated native sheet — see the OB_S8/GTOR_S8 constant declarations).
-Every other sheet (retail_other, C 07.00 institution/cgcb) is BYTE-IDENTICAL
+Every other sheet (C 08.01 retail_other then, C 07.00 institution/cgcb) is BYTE-IDENTICAL
 to the S1-S7 figures, confirming S8 perturbs nothing outside its own origin
 (specialised_lending) and destination (corporate, C 07.00) sheets.
 
@@ -387,11 +409,16 @@ References:
   task #13 (S0-revise) for the citation-basis correction from Art. 213 alone
   to Art. 193(1) (mandatory, per-exposure) + Art. 113(3) (the permissive
   amendment hook Art. 235(1) is framed against).
-- CRR Art. 201: eligible-guarantor eligibility gate; Art. 201(1)(g)/(2)'s
-  rating-based eligibility test applies only to a CORPORATE guarantor
-  (``_assign_guarantor_approach``'s ``is_corporate_guarantor`` check) — an
-  "institution" guarantor (S1, S4, S7) is governed by other Art. 201 limbs
-  and is not gated here, same as GTOR_S1/GTOR_S4. GTOR_S8 IS a corporate
+- CRR Art. 201 / PS1/26 Art. 201: eligible-provider gate
+  (``engine/crm/guarantor_eligibility.py::assign_guarantor_approach``). Two
+  limbs are gated. (1) A natural person (S2's GTOR_S2, entity_type
+  ``individual``) is in no limb of Art. 201(1)/(2) in either regime — CRR
+  Art. 194(5) / PS1/26 Art. 194(6)(c) make the list a precondition — so S2's
+  protection is not recognised on its F-IRB beneficiary and raises CRM013
+  (P1.384). (2) Art. 201(1)(g)/(2)'s rating-based test applies to a CORPORATE
+  guarantor (``is_corporate_guarantor``) — an "institution" guarantor (S1, S4,
+  S7) is governed by other Art. 201 limbs and is not gated here, same as
+  GTOR_S1/GTOR_S4. GTOR_S8 IS a corporate
   guarantor and DOES trip this gate, satisfied by its ECAI CQS rating (Art.
   201(1)(g) — an internal PD would not satisfy it here, since Art. 201(2)'s
   internal-rating limb never reaches a slotting beneficiary; see the
@@ -449,7 +476,7 @@ References:
 - engine/slotting/transforms.py: ``apply_guarantee_substitution`` — the
   slotting RWSM consumer (Art. 235(1)), reusing the SAME shared SA
   substitution step (and therefore the same beneficial gate) the
-  ``_assign_guarantor_approach`` SA branch runs; the reason a slotting
+  ``assign_guarantor_approach`` SA branch runs; the reason a slotting
   guarantor is ALWAYS SA-treated (S8's guarantor mechanism, vs S1-S5/S7's
   IRB-PD-based one).
 """
@@ -487,7 +514,7 @@ LN_S1: str = "CSUB-LN-S1"
 LN_S1_GTOR_OWN: str = "CSUB-LN-S1-GTOR-OWN"
 GUAR_S1: str = "CSUB-GUAR-S1"
 
-# -- S2: IRB obligor, IRB guarantor with NO other IRB exposure in this book -
+# -- S2: IRB obligor, NATURAL-PERSON guarantor (Art. 201-ineligible), no own exposure
 OB_S2: str = "CSUB-CP-OB-S2"
 GTOR_S2: str = "CSUB-CP-GTOR-S2"
 LN_S2: str = "CSUB-LN-S2"
@@ -605,7 +632,7 @@ GUAR_S7: str = "CSUB-GUAR-S7"
 #
 # GTOR_S8 is "corporate" (not "institution"/"sovereign"): a slotting
 # beneficiary is EXCLUDED from the IRB internal-rating eligibility limb
-# (``_assign_guarantor_approach``'s ``beneficiary_is_irb`` check only admits
+# (``assign_guarantor_approach``'s ``beneficiary_is_irb`` check only admits
 # FIRB/AIRB, never slotting — "SLOTTING beneficiaries are deliberately
 # excluded, so the Art. 201(2) internal-rating eligibility limb does not
 # reach them either"), so a slotting guarantor is ALWAYS treated SA
@@ -693,9 +720,12 @@ AMOUNT_COVERED_S7: float = DRAWN_S7 * PCT_COVERED_S7  # 5,500,000
 AMOUNT_COVERED_S8: float = DRAWN_S8_GTD * PCT_COVERED_S8  # 7,800,000
 
 #: Internal PDs (IRB legs only). Each guarantor with an internal PD is a
-#: deliberately IRB-routing signal — see ``_assign_guarantor_approach``
+#: deliberately IRB-routing signal — see ``assign_guarantor_approach``
 #: (guarantor treated IRB iff the beneficiary is IRB, the guarantor's class
-#: has IRB model permission, AND the guarantor carries an internal PD).
+#: has IRB model permission, AND the guarantor carries an internal PD) — except
+#: GTOR_S2's: a natural person is not an Art. 201 provider, so its PD routes
+#: nothing. It is kept because it is exactly what used to route S2 to parameter
+#: substitution, which is what makes S2 a regression pin for the P1.384 gate.
 PD_OB_S1: float = 0.0050
 PD_GTOR_S1: float = 0.0030
 PD_OB_S2: float = 0.0060
@@ -821,20 +851,10 @@ LOAN_EXPECTED_ORIGIN_SHEET_B31: dict[str, tuple[str, str]] = {
 #: 3.1, keyed by guarantee reference — the published sheet of the leg's
 #: POST-substitution (approach, class). ``SUBSTITUTION_INFLOW_DESIGN`` below
 #: records the regulatory destination CLASS and stays regime-independent; this
-#: is the sheet that class is reported on.
-#:
-#: GUAR_S2 IS THE ONE THAT DOES NOT FOLLOW ITS CLASS. Its guarantor is retail,
-#: but the engine keeps the OBLIGOR's F-IRB approach on the covered leg, and
-#: (F-IRB, retail) is a pair no Basel 3.1 sheet — and no OF 02.00 row — exists
-#: for: retail exposures are A-IRB only (CRR Art. 151(4)). OF 02.00 has always
-#: reported that RWEA with the obligor's class (``corep/irb_sheets.py::
-#: placeable_irb_class``), and OF 08.01 row 0010 col 0260 of each sheet is ONE
-#: data point with its OF 02.00 row, so the covered part stays on the obligor's
-#: sheet: an outflow and an inflow on the same sheet, as for a same-class
-#: guarantee. Under CRR the class-keyed ``retail_other`` sheet still takes it.
+#: is the sheet that class is reported on. GUAR_S2 is absent: since P1.384 it
+#: has no destination (``DECLINED_GUARANTEE_DESIGN``).
 B31_C08_01_DESTINATION_SHEET: dict[str, str] = {
     GUAR_S1: "institution_firb",
-    GUAR_S2: "corporate_non_sme_firb",
     GUAR_S5: "corporate_non_sme_firb",
     GUAR_S7: "institution_firb",
 }
@@ -851,11 +871,12 @@ B31_C08_01_DESTINATION_SHEET: dict[str, str] = {
 #: sides of one migration can sit on different templates.
 #: ``destination_has_native_population`` records whether the destination
 #: class ALREADY has an origin-basis row on that template independent of any
-#: inflow — S1/S4/S5 True, S2/S3 False. This is NOT the same question as
+#: inflow — S1/S4/S5 True, S3 False. This is NOT the same question as
 #: "does a sheet get emitted for it": the sheet axis is the UNION of "classes
-#: with native rows" and "classes receiving an inflow", so S2's
-#: ``retail_other`` C 08.01 sheet and S3's ``central_govt_central_bank``
-#: C 07.00 sheet are both emitted as INFLOW-ONLY sheets (row 0010 total = 0,
+#: with native rows" and "classes receiving an inflow", so S3's
+#: ``central_govt_central_bank`` C 07.00 sheet is emitted as an INFLOW-ONLY
+#: sheet (S2's ``retail_other`` C 08.01 sheet was too, until P1.384 declined
+#: S2) (row 0010 total = 0,
 #: nothing native, the inflow scalar populated) — see the dated NOTE in the
 #: module docstring. ``same_class`` is True only for S5, where
 #: ``destination_class`` equals the ORIGIN class (``LOAN_EXPECTED_ORIGIN_
@@ -886,15 +907,9 @@ SUBSTITUTION_INFLOW_DESIGN: dict[str, dict[str, object]] = {
         "destination_has_native_population": True,
         "same_class": False,
     },
-    GUAR_S2: {
-        "loan_reference": LN_S2,
-        "guarantor_reference": GTOR_S2,
-        "guaranteed_amount": AMOUNT_COVERED_S2,
-        "destination_class": "retail_other",
-        "destination_template": "c08_01",
-        "destination_has_native_population": False,
-        "same_class": False,
-    },
+    # GUAR_S2 is DELIBERATELY ABSENT since P1.384: a natural person is not an
+    # Art. 201 provider, so the guarantee has no destination — see
+    # ``DECLINED_GUARANTEE_DESIGN`` below.
     GUAR_S3: {
         "loan_reference": LN_S3,
         "guarantor_reference": GTOR_S3,
@@ -975,11 +990,20 @@ SUBSTITUTION_INFLOW_DESIGN: dict[str, dict[str, object]] = {
     },
 }
 
-#: S6's declined-guarantee design intent (Finding 4 /
-#: ``engine/aggregator/aggregator.py::_beneficial_gate``): a guarantee the
-#: engine DECLINES — guarantor SA risk weight no better than the leg's own —
-#: produces NO substitution effect at all. The covered leg keeps the
-#: obligor's basis end to end:
+#: The declined guarantees' design intent. Two gates, one outcome:
+#:
+#: - S6 (Finding 4 / ``engine/aggregator/aggregator.py::_beneficial_gate``):
+#:   eligible protection the engine DECLINES because the guarantor's SA risk
+#:   weight is no better than the leg's own (CRR Art. 213 / Art. 193(1)).
+#: - S2 (P1.384 / ``engine/crm/guarantor_eligibility.py``): protection from a
+#:   natural person, which Art. 201(1)/(2) do not list in either regime, so it
+#:   is never recognised; CRM013 names it. Without the gate, the internally
+#:   rated guarantor routed the F-IRB covered part to parameter substitution at
+#:   the person's 2.00% retail PD (retail_other, RWEA 1,660,414.55 / 1,392,381.17
+#:   lower under CRR / Basel 3.1).
+#:
+#: Either way the guarantee produces NO substitution effect at all. The covered
+#: leg keeps the obligor's basis end to end:
 #:   - ``exposure_class_post_crm`` stays ``exposure_class_applied``
 #:     (no class migration)
 #:   - ``approach_post_crm`` stays ``approach_applied`` (no approach migration)
@@ -999,6 +1023,18 @@ SUBSTITUTION_INFLOW_DESIGN: dict[str, dict[str, object]] = {
 #: is test-writer's job over a live pipeline run) — this dict only records
 #: the fixture's DESIGN intent, as required by Finding 4 / task #7's fix.
 DECLINED_GUARANTEE_DESIGN: dict[str, dict[str, object]] = {
+    GUAR_S2: {
+        "loan_reference": LN_S2,
+        "guarantor_reference": GTOR_S2,
+        "guaranteed_amount": AMOUNT_COVERED_S2,
+        "origin_class": "corporate",
+        "origin_template": "c08_01",
+        # The class the guarantee used to migrate the covered part to (an
+        # inflow-only CRR C 08.01 sheet), before the Art. 201 gate declined it.
+        "would_be_destination_class": "retail_other",
+        "would_be_destination_template": "c08_01",
+        "decline_reason": "Art. 201(1)/(2): a natural person is not an eligible provider",
+    },
     GUAR_S6: {
         "loan_reference": LN_S6,
         "guarantor_reference": GTOR_S6,
@@ -1010,6 +1046,7 @@ DECLINED_GUARANTEE_DESIGN: dict[str, dict[str, object]] = {
         # regresses.
         "would_be_destination_class": "central_govt_central_bank",
         "would_be_destination_template": "c07",
+        "decline_reason": "Art. 213 / 193(1): the guarantor's risk weight is no better",
     },
 }
 
@@ -1152,7 +1189,8 @@ def _counterparties() -> pl.DataFrame:
     exposure falls to slotting (CRR Art. 153(5)). Guarantors span the four SA
     classes ``ENTITY_TYPE_TO_SA_CLASS`` can reach from a counterparty
     (``institution`` x2, ``individual`` -> retail_other, ``sovereign`` x2 ->
-    central_govt_central_bank), PLUS a fifth guarantor deliberately in the
+    central_govt_central_bank — the ``individual`` one, GTOR_S2, a natural
+    person Art. 201 does not recognise as a provider), PLUS a fifth guarantor deliberately in the
     SAME class as its obligor (``corporate`` — S5) — see the module docstring
     table. GTOR_S6 is UNRATED (no rating row at all, like OB_S4) and non-GB
     (``US``) so neither an ECAI rating nor the Art. 114(4)/(7) domestic-CGCB

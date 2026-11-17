@@ -16,6 +16,13 @@ Key responsibilities:
   is ``live`` **or** carries a ``reactivated_on`` date, in both cases excluding
   ``deleted``. Filtering on ``status`` alone silently drops the 153 EBA rules
   that were deactivated and later switched back on.
+- Honour the Bank of England's validations deny list for the Basel 3.1 (BoE)
+  extract — the same packaged list the return-level engine reads
+  (``rwa_filer.boe.deny``), for the extract's own release, as it stands on the
+  day the extract is loaded for: a rule the Bank has deactivated at its gateway
+  is not enforced, and one it has downgraded is a Warning. The extract's own
+  ``status`` and scope stay the taxonomy's (``RuleSet.published_in_force``):
+  the deny list changes how a rule is run, never what it checks.
 
 Missing-value policy, and where each publisher states it: the EBA sheet has a
 dedicated ``If value missing`` column. The BoE sheet has NO equivalent column —
@@ -25,6 +32,30 @@ taxonomy's own statement of the policy, not an inference from the token's
 presence: the vocabulary is visible in ``boe_b0076``, which carries
 ``dv: false()`` on a boolean cell alongside ``dv: 0`` on numeric ones. ``dv: 0``
 is therefore the direct analogue of the EBA "treat as zero".
+
+The publisher's default belongs to ONE reference (the workbook's "Note" sheet:
+"dv prefix is a prefix to define a default value for a variable"), but this
+catalogue reduces it to one policy per RULE: zero-fill if any reference
+carries a ``dv``. That is a simplification. It differs from the publisher's
+reading only on a rule that mixes references with and without a default — four
+enforced Bank rules (``boe_b0383``, ``boe_b0512_2``, ``boe_b0718``,
+``boe_b0785``) — and on the registered portfolios it changes no rule's verdict.
+The return-level engine (``rwa_filer.boe``) applies each reference's own default.
+
+Where none of a rule's cells is reported, an XBRL processor does not evaluate
+the rule there at all: "If a variable set contains fact variables but all of
+the fact variables in it evaluate to fallback values, then the variable set is
+not deemed to have been evaluated" (XBRL Variables 1.0, section 4, special case
+2), and a fact variable with no fallback "cannot be evaluated" over an empty
+source sequence (section 4.2). The Bank's workbook marks the exceptions it runs
+regardless with an "Always execute" column, carried here as
+``always_execute``. The EBA's workbook has no such column and needs none: its
+"treat as zero/empty string" is the numeric / string fallback value, so EBA
+rules are read as not always-execute. The Bank's own package confirms that
+reading: it restates 46 of the EBA's "treat as zero" rules under the EBA's ids,
+45 with a ``dv`` default on every reference and none marked "Always execute",
+and Arelle counts no evaluation of one (``v09779_m``) on a filed C 08.04 with
+no cell reported, and one with a single cell reported as 0.
 
 Why: the published validation rules are the supervisor's own arithmetic checks
 on a submitted return. An Error-severity break rejects the whole submission, so
@@ -43,16 +74,19 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import date
 from functools import cache
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
-from rwa_filer.release import version_key
+from rwa_filer.release import release_deny_list, version_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from importlib.resources.abc import Traversable
+
+    from rwa_filer.boe.deny import DenyEntry, DenyList
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +243,17 @@ class ValidationRule:
         reactivated_on: ISO date a deactivated rule was switched back on.
         label: The publisher's human description (EBA ``narrative`` / BoE
             ``short_label``), quoted verbatim in a finding.
+        deny: The Bank's validations deny-list entry in force for the rule on
+            the day the extract was loaded for, or ``None``. A deactivation
+            takes the rule out of ``is_currently_enforced``; a downgrade has
+            already made ``severity`` a Warning. ``status`` is the extract's.
+        always_execute: Whether the publisher runs the rule at a place where
+            none of the cells it reads is reported. BoE: the workbook's
+            "Always execute" column (35 of the 816 Bank rules). EBA: ``False``
+            for every rule — the EBA marks none, and an XBRL processor does
+            not evaluate a variable set whose fact variables have all fallen
+            back (see the module docstring). The default, ``True``, is for a
+            rule built by hand.
     """
 
     rule_id: str
@@ -228,6 +273,8 @@ class ValidationRule:
     status: tuple[str, ...]
     reactivated_on: str | None
     label: str | None
+    deny: DenyEntry | None = None
+    always_execute: bool = True
 
     def scope_for(self, table: str) -> TableScope:
         """Return the iteration domain bound to ``table`` (empty when unscoped)."""
@@ -248,8 +295,18 @@ class RuleSet:
 
     @property
     def enforced(self) -> tuple[ValidationRule, ...]:
-        """The rules currently in force (see ``is_currently_enforced``)."""
+        """The rules currently in force at the gateway (see ``is_currently_enforced``)."""
         return tuple(rule for rule in self.rules if is_currently_enforced(rule))
+
+    @property
+    def published_in_force(self) -> tuple[ValidationRule, ...]:
+        """The rules the taxonomy publishes as in force, before the Bank's deny list.
+
+        The scope and logic of these are the taxonomy's, which the deny list
+        never alters — so this, not ``enforced``, is what anything derived from
+        the rules' SCOPE reads (``validate.index.derive_variant_columns``).
+        """
+        return tuple(rule for rule in self.rules if is_published_in_force(rule))
 
 
 # =============================================================================
@@ -257,28 +314,26 @@ class RuleSet:
 # =============================================================================
 
 
-@cache
-def load_rules(framework: str) -> RuleSet:
+def load_rules(framework: str, *, on: date | None = None) -> RuleSet:
     """Load and normalise the packaged rule extract for ``framework``.
 
     Args:
         framework: ``"CRR"`` or ``"BASEL_3_1"``.
+        on: The day the Bank's validations deny list is read for (BoE extract
+            only): its entries applied on or before it are honoured. Defaults
+            to today — the gateway's configuration now.
 
     Returns:
-        The parsed ``RuleSet``. Cached — the extracts are immutable package data.
+        The parsed ``RuleSet``. Cached per framework and day — the extracts and
+        the deny lists are immutable package data.
 
     Raises:
         ValueError: ``framework`` is not one of the two supported frameworks.
             (A programming error, not a data-quality issue, so it raises.)
+        DenyListNotFoundError: the BoE extract's release is shipped but its
+            deny list is not packaged (a broken wheel).
     """
-    extract = extract_resource(framework)
-    payload = json.loads(extract.read_text(encoding="utf-8"))
-    source = payload["source"]
-    publisher = source["publisher"]
-    parse = _parse_eba_rule if publisher == "EBA" else _parse_boe_rule
-    rules = tuple(parse(raw, framework) for raw in payload["rules"])
-    logger.debug("loaded %d %s validation rules from %s", len(rules), publisher, extract.name)
-    return RuleSet(framework=framework, publisher=publisher, source=source, rules=rules)
+    return _load_rules(framework, on or date.today())
 
 
 def extract_resource(framework: str) -> Traversable:
@@ -297,7 +352,21 @@ def extract_resource(framework: str) -> Traversable:
 
 
 def is_currently_enforced(rule: ValidationRule) -> bool:
-    """Whether a rule is in force today.
+    """Whether a rule is in force at the gateway: published in force, and not deny-listed.
+
+    See ``is_published_in_force`` for the publisher's own liveness. On top of
+    it, a rule the Bank of England has deactivated at its gateway (its
+    validations deny list) is not enforced: "The rule will not be executed in
+    the data collection system and reporters are not expected to meet the
+    requirements of this rule."
+    """
+    if rule.deny is not None and rule.deny.is_deactivation:
+        return False
+    return is_published_in_force(rule)
+
+
+def is_published_in_force(rule: ValidationRule) -> bool:
+    """Whether the publisher's extract has the rule in force.
 
     ``live`` alone is not the answer for the EBA: 153 matched rules were
     deactivated and later reactivated, so they report as ``deactivated`` while
@@ -341,6 +410,44 @@ def build_rule_reference(publisher: str, tables: Iterable[str]) -> str:
 # =============================================================================
 
 
+@cache
+def _load_rules(framework: str, day: date) -> RuleSet:
+    """The extract for ``framework``, with the BoE deny list in force on ``day`` honoured."""
+    extract = extract_resource(framework)
+    payload = json.loads(extract.read_text(encoding="utf-8"))
+    source = payload["source"]
+    publisher = source["publisher"]
+    if publisher == "EBA":
+        rules = tuple(_parse_eba_rule(raw, framework) for raw in payload["rules"])
+    else:
+        deny_list = release_deny_list(str(source.get("framework_version", "")))
+        rules = tuple(
+            _denied(raw, _parse_boe_rule(raw, framework), deny_list, day)
+            for raw in payload["rules"]
+        )
+    logger.debug("loaded %d %s validation rules from %s", len(rules), publisher, extract.name)
+    return RuleSet(framework=framework, publisher=publisher, source=source, rules=rules)
+
+
+def _denied(
+    raw: dict[str, Any], rule: ValidationRule, deny_list: DenyList, day: date
+) -> ValidationRule:
+    """``rule`` with the deny-list entry in force on ``day`` for any of its modules."""
+    entry = next(
+        (
+            found
+            for module in raw.get("severity_modules") or ()
+            if (found := deny_list.in_force(module, day).get(rule.rule_id)) is not None
+        ),
+        None,
+    )
+    if entry is None:
+        return rule
+    if not entry.is_deactivation and rule.severity == SEVERITY_ERROR:
+        return replace(rule, deny=entry, severity=SEVERITY_WARNING)
+    return replace(rule, deny=entry)
+
+
 def _parse_eba_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
     """Normalise one EBA rule object onto ``ValidationRule``."""
     tables = tuple(raw["tables"])
@@ -368,6 +475,10 @@ def _parse_eba_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
         status=tuple(raw["status"]),
         reactivated_on=raw["reactivated_on"],
         label=raw["narrative"],
+        # The EBA publishes no "Always execute" column: no EBA rule is run where
+        # none of its cells is reported, as XBRL Variables 1.0 section 4 (special
+        # case 2) has it for a "treat as zero" rule's fallen-back variables.
+        always_execute=False,
     )
 
 
@@ -386,7 +497,9 @@ def _parse_boe_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
         table_scopes=_parse_boe_scope(raw["scope"]),
         # ``dv`` is the XBRL formula default value for an unreported fact — the
         # taxonomy's own statement of the missing-value policy, standing in for
-        # the EBA's dedicated column (see the module docstring). Absent ``dv``,
+        # the EBA's dedicated column. The publisher sets it per REFERENCE; this
+        # reads it per rule, a simplification that differs on four enforced
+        # rules and moves no verdict (see the module docstring). Absent ``dv``,
         # skip rather than invent a zero.
         missing_value=MISSING_ZERO if "dv:" in (expression_raw or "") else MISSING_SKIP,
         arithmetic=_boe_arithmetic(expression_raw),
@@ -396,6 +509,7 @@ def _parse_boe_rule(raw: dict[str, Any], framework: str) -> ValidationRule:
         status=tuple(raw["status"]),
         reactivated_on=None,
         label=raw["short_label"],
+        always_execute=bool(raw["always_execute"]),
     )
 
 

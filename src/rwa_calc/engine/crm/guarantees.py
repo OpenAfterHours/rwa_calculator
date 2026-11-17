@@ -23,13 +23,12 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import (
-    ERROR_INELIGIBLE_GUARANTOR,
     ERROR_INELIGIBLE_UNFUNDED_PROTECTION,
     crm_warning,
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import (
     drawn_for_ead,
     interest_for_ead,
@@ -37,12 +36,8 @@ from rwa_calc.engine.ccf import (
     sa_ccf_expression,
 )
 from rwa_calc.engine.crm.expressions import COLLATERAL_VALUE_CARRIERS
+from rwa_calc.engine.crm.guarantor_eligibility import assign_guarantor_approach
 from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
-from rwa_calc.engine.eu_sovereign import (
-    build_domestic_cgcb_guarantor_expr,
-    denomination_currency_expr,
-    funding_currency_expr,
-)
 from rwa_calc.engine.kernels.allocation import (
     expand_items_pro_rata,
     explode_facility_membership,
@@ -134,7 +129,8 @@ def apply_guarantees(
         errors: Optional CRM error channel. When provided, guarantees dropped by
             the Art. 213(1)(c)(i) eligibility gate append a CRM012 warning each.
             CRM013 (Art. 201) is NOT raised here: the processor raises it from the
-            materialised ``crm_exit`` frame (:func:`record_ineligible_guarantors`).
+            materialised ``crm_exit`` frame
+            (:func:`~rwa_calc.engine.crm.guarantor_eligibility.record_ineligible_guarantors`).
 
     Returns:
         Exposures with guarantee effects applied
@@ -164,7 +160,7 @@ def apply_guarantees(
         .alias("guarantor_exposure_class"),
     )
 
-    exposures = _assign_guarantor_approach(exposures, config, present=join_cols)
+    exposures = assign_guarantor_approach(exposures, config, present=join_cols)
 
     # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
     # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed portion
@@ -192,40 +188,6 @@ def apply_guarantees(
     # They can be dropped in the final output aggregation if needed.
 
     return exposures
-
-
-def record_ineligible_guarantors(
-    exposures: pl.LazyFrame,
-    errors: list[CalculationError],
-) -> None:
-    """Append one CRM013 warning per Art. 201-ineligible corporate guarantor leg.
-
-    Reads the ``_guarantor_ineligible`` flag ``_assign_guarantor_approach`` sets.
-    The CRM processor calls this on the materialised ``crm_exit`` frame — an
-    in-memory scan, where the flag's own site re-executed the guarantee split
-    (23 ms of a 150-row run). Nothing is appended to ``errors`` between the two
-    points, so CRM013 keeps its place in the list; the exit seal strips the flag.
-    """
-    dropped = (
-        exposures.filter(pl.col("_guarantor_ineligible"))
-        .select("parent_exposure_reference", "guarantor_reference")
-        .collect()
-    )
-    for row in dropped.iter_rows(named=True):
-        loan_ref = row.get("parent_exposure_reference")
-        guar_ref = row.get("guarantor_reference")
-        errors.append(
-            crm_warning(
-                ERROR_INELIGIBLE_GUARANTOR,
-                f"Guarantor '{guar_ref}' is an ineligible protection provider for "
-                f"exposure '{loan_ref}': a corporate guarantor without an ECAI credit "
-                "assessment (or, for an IRB-approach beneficiary, an internal rating) "
-                "is not eligible under Art. 201(1)(g)/(2); the guarantee is not "
-                "recognised and the exposure reverts to the borrower's own basis.",
-                exposure_reference=loan_ref,
-                regulatory_reference="CRR Art. 201(1)(g)",
-            )
-        )
 
 
 def _prepare_guarantees(
@@ -445,143 +407,6 @@ def _join_guarantor_ratings(
     if missing_rating_cols:
         exposures = exposures.with_columns(missing_rating_cols)
     return exposures
-
-
-@cites("CRR Art. 201")
-@cites("PS1/26, paragraph 201")
-def _assign_guarantor_approach(
-    exposures: pl.LazyFrame,
-    config: CalculationConfig,
-    *,
-    present: list[str] | None = None,
-) -> pl.LazyFrame:
-    """
-    Determine guarantor approach (IRB / SA) and rating provenance.
-
-    A guarantor is treated under IRB only if:
-    1. The beneficiary exposure is itself on FIRB/AIRB (CRR Art. 161 /
-       Basel 3.1 CRE22.70-85: parameter substitution applies only to IRB
-       beneficiaries; SA beneficiaries always substitute via guarantor's
-       SA risk weight regardless of the guarantor's internal rating —
-       SLOTTING beneficiaries are deliberately excluded, so the Art. 201(2)
-       internal-rating eligibility limb does not reach them either), AND
-    2. The firm has IRB permission for the guarantor's exposure class, AND
-    3. The guarantor has an internal rating (PD) — indicating the firm
-       actively rates this counterparty under its IRB model.
-    Counterparties with only external ratings (CQS) are treated under SA.
-
-    CRR/PS1-26 Art. 201(1)(g)/(2) eligibility gate: a CORPORATE guarantor is an
-    eligible protection provider only if it has an ECAI credit assessment
-    (``guarantor_cqs``) or — Art. 201(2), IRB-beneficiary-only — an internal
-    rating (``guarantor_internal_pd``) when the beneficiary is itself IRB. An
-    ineligible corporate guarantor is rejected: its ``guarantor_exposure_class``
-    is cleared so the SA guarantor-RW lookup returns null (non-beneficial), the
-    covered leg reverts to the borrower's own basis, and the leg is flagged on
-    ``_guarantor_ineligible`` for :func:`record_ineligible_guarantors` (CRM013).
-    Non-corporate classes are governed by other Art. 201 limbs and not gated here.
-    """
-    # irb_permissions is derived non-None in CalculationConfig.__post_init__.
-    irb_exposure_class_values = {
-        ec.value
-        for ec, approaches in config.irb_permissions.permissions.items()  # ty: ignore[unresolved-attribute]
-        if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches
-    }
-
-    irb_beneficiary_approaches = [ApproachType.FIRB.value, ApproachType.AIRB.value]
-    schema_names = list(present) if present is not None else exposures.collect_schema().names()
-    beneficiary_is_irb = (
-        pl.col("approach").fill_null("").is_in(irb_beneficiary_approaches)
-        if "approach" in schema_names
-        else pl.lit(False)
-    )
-
-    is_domestic_cgcb_guarantor = _build_domestic_cgcb_flag(schema_names)
-
-    # Art. 201(1)(g)/(2) gate. All inputs are non-null booleans (is_not_null /
-    # == on the default-"" class), so no Kleene-null leaks into the gate. The
-    # class column can only ever say "corporate" (never "corporate_sme" — the
-    # entity->SA-class map has no such entity_type; SME-ness is derived later).
-    is_corporate_guarantor = pl.col("guarantor_exposure_class") == "corporate"
-    corporate_eligible = pl.col("guarantor_cqs").is_not_null() | (
-        beneficiary_is_irb & pl.col("guarantor_internal_pd").is_not_null()
-    )
-    guarantor_ineligible = (
-        is_corporate_guarantor & corporate_eligible.not_() & (pl.col("guaranteed_portion") > 0)
-    )
-
-    return exposures.with_columns(
-        pl.when(is_domestic_cgcb_guarantor)
-        .then(pl.lit("sa"))
-        .when(
-            beneficiary_is_irb
-            & (pl.col("guarantor_exposure_class") != "")
-            & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
-            & pl.col("guarantor_internal_pd").is_not_null()
-        )
-        .then(pl.lit("irb"))
-        # SA fallback — gated: an ineligible corporate guarantor takes "" (the
-        # existing no-substitution value) rather than "sa".
-        .when((pl.col("guarantor_exposure_class") != "") & guarantor_ineligible.not_())
-        .then(pl.lit("sa"))
-        .otherwise(pl.lit(""))
-        .alias("guarantor_approach"),
-        # Audit: track whether guarantor approach was derived from internal or
-        # external rating (spec output field per CRR Art. 153(3) / Art. 233A).
-        pl.when(pl.col("guarantor_internal_pd").is_not_null())
-        .then(pl.lit("internal"))
-        .when(pl.col("guarantor_cqs").is_not_null())
-        .then(pl.lit("external"))
-        .otherwise(pl.lit(None).cast(pl.String))
-        .alias("guarantor_rating_type"),
-        # Explicit revert (Art. 201): clear the guarantor class for an ineligible
-        # corporate so ``build_guarantor_rw_expr`` returns null -> non-beneficial
-        # -> the covered leg reverts to the borrower's own basis. Mirrors the
-        # existing unmapped-guarantor (class "") no-substitution path.
-        pl.when(guarantor_ineligible)
-        .then(pl.lit(""))
-        .otherwise(pl.col("guarantor_exposure_class"))
-        .alias("guarantor_exposure_class"),
-        # Scratch for the processor's CRM013 recorder (stripped by the exit seal).
-        guarantor_ineligible.alias("_guarantor_ineligible"),
-    )
-
-
-def _build_domestic_cgcb_flag(schema_names: list[str]) -> pl.Expr:
-    """
-    Build the EU/UK domestic-currency CGCB guarantor indicator.
-
-    Art. 114(4)/(7): a domestic-currency CGCB guarantor must receive 0% RW
-    via the SA short-circuit, even if the guarantor has an internal PD that
-    would otherwise route to IRB parameter substitution. The domestic-currency
-    (denomination) test is evaluated against the guarantee currency (the
-    currency of the substituted exposure to the sovereign), not the underlying
-    loan's currency — Art. 233(3) FX haircut handles any mismatch between
-    guarantee and underlying.
-
-    Art. 235(3): the 0% extension additionally requires the exposure to be
-    *funded* in the same domestic currency. The funding limb (``funding_currency``,
-    null-PERMISSIVE fallback to the exposure denomination — see
-    :func:`funding_currency_expr`) is ANDed in, so a loan funded in a
-    non-domestic currency (e.g. USD-funded, EUR-guaranteed) no longer receives
-    the 0% short-circuit.
-    """
-    has_exposure_ccy = "original_currency" in schema_names or "currency" in schema_names
-    has_guarantee_ccy = "guarantee_currency" in schema_names
-    if has_guarantee_ccy and has_exposure_ccy:
-        ccy_expr: pl.Expr | None = pl.col("guarantee_currency").fill_null(
-            denomination_currency_expr(schema_names)
-        )
-    elif has_guarantee_ccy:
-        ccy_expr = pl.col("guarantee_currency")
-    elif has_exposure_ccy:
-        ccy_expr = denomination_currency_expr(schema_names)
-    else:
-        return pl.lit(False)
-
-    cgcb = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
-    return (pl.col("guarantor_exposure_class") == cgcb) & build_domestic_cgcb_guarantor_expr(
-        "guarantor_country_code", ccy_expr, funding_currency_expr(schema_names)
-    )
 
 
 def _resolve_guarantees_multi_level(

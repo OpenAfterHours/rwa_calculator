@@ -5,7 +5,7 @@ Builds a single-row 11-column equity LazyFrame and calls
 EquityCalculator._apply_b31_equity_weights_sa directly, returning the
 assigned risk weight. Used by the B31 equity weight and subordinated-debt
 unit test modules to exercise weight assignment in isolation (before the
-transitional floor is applied).
+rules 4.1-4.3 transitional is applied).
 """
 
 from __future__ import annotations

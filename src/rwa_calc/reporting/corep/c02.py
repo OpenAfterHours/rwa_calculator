@@ -25,12 +25,16 @@ Cell semantics (recorded decisions):
   OF02.01.01.03 r0080 c0030), ``boe_b1092`` sums it from the rows beneath it,
   and ``boe_b0383`` compares it with the floor — so a binding floor's add-on,
   which the engine spreads over ``rwa_final``, belongs in none of those rows.
-  Under CRR there is no floor and the column sums ``rwa_final``. (Until
-  2026-11-13 the column summed ``rwa_final`` and row 0010 column 0030 repeated
-  the same total, which reported the floor as its own result.) This template
-  and OF 02.01 each add the legs up in their own order, so the two cells can
-  differ in the last binary place; the filing adapter gives a data point shown
-  in several cells one value (``filing/canonical.py``).
+  Under CRR there is no floor and the column sums ``rwa_final``. The carrier
+  is resolved by ``kernel.own_rwea``, the one resolver for COREP RWEA, so a
+  class row and the OF 08.01 sheet total that is the same data point sum the
+  same carrier (``tests/contracts/test_corep_rwea_carrier.py`` lists any template
+  site not yet on it). (Until 2026-11-13 the column summed ``rwa_final`` and
+  row 0010 column 0030 repeated the same total, which reported the floor as its
+  own result.) This template and OF 02.01 each add the legs up in their own
+  order, so the two cells can differ in the last binary place; the filing
+  adapter gives a data point shown in several cells one value
+  (``filing/canonical.py``).
 - COLUMN 0020 (Basel 3.1) is the standardised-approach RWEA (``sa_rwa``) of the
   SAME legs a modelled row counts in column 0010 — "risk exposure amounts
   calculated under standardised approaches per exposure class" (PS1/26 Annex II
@@ -86,8 +90,9 @@ Cell semantics (recorded decisions):
   the 2026-07-12 fix (whose stated purpose was that tie) rather than
   reversing it, why the IRB half followed one commit later, why Art. 92 is
   unaffected, and — recorded there rather than fixed here — the
-  ``(foundation_irb, retail_other)`` pair that has no row, which is
-  downstream evidence of a missing CRR Art. 201 eligibility gate. The SA class
+  ``(foundation_irb, retail_other)`` pair that has no row, which was
+  downstream evidence of a missing CRR Art. 201 eligibility gate (closed in
+  the engine by P1.384; the pair is unreachable from accepted input). The SA class
   rows route through the many-to-one ACCUMULATING ``C02_00_SA_CLASS_MAP``; they
   are "See CR SA template", so the map's groupings ARE the C 07.00 sheet
   groupings (recorded fix 2026-08-01: the map had been keyed on a vocabulary
@@ -109,6 +114,8 @@ Cell semantics (recorded decisions):
   are grouped by the very sheet key OF 08 keys its sheets by
   (``corep/irb_sheets.py``): a leg cannot be counted in one row and reported on
   another sheet. The leg classification this module used to hold lives there.
+  It also means a row is reported exactly when its sheet is: OF 08 emits no
+  sheet for a class with no legs, so neither does the row (the last bullet).
 - A-IRB folds a financial/large corporate into "other general corporates
   non-SME" while F-IRB reports it separately — asymmetric, preserved: Art. 147A
   permits no A-IRB for that sub-class, so the engine should emit none.
@@ -128,13 +135,30 @@ Cell semantics (recorded decisions):
   OF 08 reports the same legs on a sheet outside its published axis and in the
   same approach's Total (``corep/c08_sheets.py``).
 - Rows this calculator computes zero-fill; the rows it does not (the other risk
-  types, rows 0450 / 0460 / 0470) stay empty.
+  types, rows 0450 / 0460 / 0470) stay empty. ONE EXCEPTION, Basel 3.1 only: an
+  IRB class row that IS its OF 08.01 sheet's total
+  (``IrbSheet.total_is_the_slot`` — fourteen rows, every class sheet but the
+  slotting one) is EMPTY when the sheet has no legs under the row's approach. A
+  zero there would be a fact on a sheet OF 08 does not report, and the gateway
+  evaluates every per-sheet rule on it: ``boe_b1055`` compared the OF 09.02
+  country total with that phantom zero and failed (recorded fix 2026-11-16,
+  P2.68). The Bank of England XBRL Filing Manual v1.0.1, rule 2.19, allows it —
+  a missing numeric fact of a reported template "is treated as equivalent to
+  zero", "inapplicable facts MAY be omitted", and "uninteresting zeros" SHOULD
+  NOT be reported. The test is the LEGS, never the amount: a class whose legs
+  weigh nothing still reports 0.0. Still zero-filled: row 0290 (sheet 0010's
+  total also counts slotting, so it is no OF 08.01 data point, and
+  ``boe_b0618`` / ``boe_b2290`` read it), the approach totals
+  (``tieouts.credit_risk_rollup_c02`` reads rows 0050 and 0240 and skips
+  silently on an empty one), the slotting-type and SA class rows, and every CRR
+  row.
 
 References:
 - CRR Art. 92 (own funds requirements)
 - CRR Art. 155 (IRB equity — ``EQUITY_IRB`` under CRR)
 - PRA PS1/26 Art. 92 para 2A/3A/5 (output floor); Art. 147A (IRB equity,
   IRB sovereigns and A-IRB institutions removed); Annex II §1.3
+- Bank of England XBRL Filing Manual v1.0.1 (30 May 2024), rule 2.19 (pp.27-28)
 - docs/plans/phase7-declarative-reporting.md §8.2 (Kind-9 pre-pass)
 """
 
@@ -155,7 +179,7 @@ from rwa_calc.reporting.corep.templates import (
     CRR_C02_00_COLUMN_REFS,
     EQUITY_IRB_METHODS,
 )
-from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.kernel import own_rwea, pick
 
 logger = logging.getLogger(__name__)
 
@@ -231,17 +255,18 @@ def generate_c02_00(
     slotting, equity); the other risk types are laid out and left empty.
     """
     ead_col = pick(cols, "ead_final")
+    # ``final_col`` (the post-floor ledger figure) feeds only the engine-total log
+    # line below; column 0010 sums the own-approach carrier every COREP RWEA
+    # figure reads (``own_rwea``, module docstring): ``rwa_pre_floor`` wherever the
+    # floor ran, else ``rwa_final``, which then IS the un-floored figure.
     final_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
-    if ead_col is None or final_col is None:
+    own_col = own_rwea(cols, "rwa_final", "rwa_post_factor", "rwa")
+    if ead_col is None or final_col is None or own_col is None:
         errors.append("C 02.00 skipped: missing EAD or RWA columns in results")
         return None
 
     is_b31 = framework == rows.FRAMEWORK_BASEL_3_1
     column_refs = B31_C02_00_COLUMN_REFS if is_b31 else CRR_C02_00_COLUMN_REFS
-    # Column 0010's carrier: the UN-floored RWEA under Basel 3.1 (module
-    # docstring). A frame the floor never ran on seals no ``rwa_pre_floor``, and
-    # there ``rwa_final`` IS the un-floored figure.
-    own_col = "rwa_pre_floor" if is_b31 and "rwa_pre_floor" in cols else final_col
 
     # THREE keys, because C 02.00's breakdowns tie to THREE different templates
     # and each must key the basis of the one it ties to (the two-basis discipline
@@ -286,20 +311,23 @@ def generate_c02_00(
     # exist. Measured on the CRM-substitution portfolio: 2,028,365.78 (CRR) /
     # 1,700,935.66 (B31).
     #
-    # THE CAUSE IS NOT THIS KEY, AND MUST NOT BE PAPERED OVER HERE. The single leg
-    # producing it is an F-IRB corporate loan whose covered part is guaranteed by a
-    # RETAIL counterparty. CRR Art. 201(1) is an exhaustive list of eligible
-    # providers of unfunded credit protection — (a) central governments/banks,
-    # (b) RGLAs, (c) MDBs, (d) 0%-RW international organisations, (e) PSEs,
-    # (f) institutions, (g) other CORPORATE entities, (h) QCCPs — and it has NO
-    # retail limb, while Art. 201(2) additionally requires an IRB guarantor to be
-    # internally rated. So the guarantee is ineligible and should never have
-    # migrated the class at all; the impossible pair is DOWNSTREAM EVIDENCE of a
-    # missing Art. 201 eligibility gate in ``engine/crm/``, not a reporting-layer
-    # keying problem. Re-measured with such a gate applied, stranding is 0.00 in
-    # both regimes. Normalising the pair into an adjacent row here would launder an
-    # ineligible guarantee into a valid-looking disclosure, so it is deliberately
-    # NOT done. Do not "fix" this by remapping the class or the approach.
+    # THE CAUSE WAS NOT THIS KEY, AND MUST NOT BE PAPERED OVER HERE. The single leg
+    # producing it was an F-IRB corporate loan whose covered part was guaranteed by
+    # a NATURAL PERSON. CRR Art. 201(1) is an exhaustive list of eligible providers
+    # of unfunded credit protection — (a) central governments/banks, (b) RGLAs,
+    # (c) MDBs, (d) 0%-RW international organisations, (e) PSEs, (f) institutions,
+    # (g) other CORPORATE entities, (h) QCCPs — with NO natural-person limb, and
+    # Art. 201(2) extends it only to internally rated corporate entities. So the
+    # guarantee was ineligible and should never have migrated the class at all;
+    # the impossible pair was DOWNSTREAM EVIDENCE of a missing Art. 201 eligibility
+    # gate in ``engine/crm/``, not a reporting-layer keying problem. P1.384 closed
+    # it (``engine/crm/guarantor_eligibility.py``): stranding is 0.00 in both
+    # regimes and the pair is unreachable from accepted input — only a natural
+    # person maps to a retail guarantor class, and it now keeps parameter
+    # substitution only on an A-IRB beneficiary. Normalising the pair into an
+    # adjacent row here would launder an ineligible guarantee into a valid-looking
+    # disclosure, so it is deliberately NOT done. Do not "fix" this by remapping
+    # the class or the approach.
     #
     # The 2026-07-12 note also said "identical values for IRB rows (raw ==
     # applied for the IRB book)". That is NO LONGER TRUE, and it is the defect
@@ -659,11 +687,16 @@ def _irb_class_amounts(ledger: _Ledger, *, is_b31: bool) -> dict[rows.Slot, _Amo
         # One definition with OF 08 (module docstring): each row is the legs of
         # its sheet under the sheet's own approach — which, on the sheet F-IRB
         # specialised lending shares with slotting, leaves the slotting legs to
-        # the slotting rows.
-        return {
-            sheet.slot: ledger.irb_sheet.get((sheet.approach, sheet.key), _NOTHING)
-            for sheet in irb_sheets.B31_CLASS_SHEETS
-        }
+        # the slotting rows. A row that IS its sheet's total is left out when the
+        # sheet has no legs, as OF 08 leaves the sheet out: keyed on the legs,
+        # never on the amount, so a class weighing nothing still reports its 0.
+        amounts: dict[rows.Slot, _Amount] = {}
+        for sheet in irb_sheets.B31_CLASS_SHEETS:
+            amount = ledger.irb_sheet.get((sheet.approach, sheet.key))
+            if amount is None and sheet.total_is_the_slot:
+                continue
+            amounts[sheet.slot] = _NOTHING if amount is None else amount
+        return amounts
 
     def of_class(approach: str, exposure_class: str) -> _Amount:
         return ledger.irb_class.get((approach, exposure_class), _NOTHING)

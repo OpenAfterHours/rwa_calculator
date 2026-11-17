@@ -425,7 +425,7 @@ def test_the_record_is_self_contained_and_json_ready(pack: TaxonomyPack) -> None
     record = to_record(ret, validation)
 
     # Assert — every enforced rule is listed, the passed one included.
-    assert record["schema"] == {"name": "rwa-filer/validation-report", "version": "2.0"}
+    assert record["schema"] == {"name": "rwa-filer/validation-report", "version": "2.1"}
     assert record["submittable"] is False
     assert record["header"]["Module"] == SAMPLE_MODULE
     assert record["taxonomy"]["version"] == "1.0.0"

@@ -89,14 +89,14 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 #: The reporting date is INERT for this scenario, and saying so matters more
 #: than the date itself. Measured at 2027-01-01, 2027-06-30, 2028-06-30,
 #: 2029-06-30, 2030-06-30 and 2035-06-30 the leg returns rw 2.50 /
-#: rwa_final 3,750,000.00 at every one. Two independent reasons: the PRA Rules
-#: 4.2/4.3 equity transitional schedule is consumed only by
-#: ``engine/equity/calculator.py`` — the DEDICATED equity_exposures path, which
-#: this main-table leg never reaches — and even there it is an upward floor
-#: (``pl.max_horizontal(risk_weight, transitional_rw)``), so it can never take a
-#: Basel 3.1 weight BELOW 250%. Do not infer from this date that main-table
-#: equity honours the transitional schedule: it does not, which is precisely
-#: what the SA005 warning this run emits is telling the user.
+#: rwa_final 3,750,000.00 at every one. The PS1/26 General Provisions rules
+#: 4.2/4.3 transitional is consumed only by ``engine/equity/calculator.py`` —
+#: the DEDICATED equity_exposures path, which this main-table leg never
+#: reaches. There, a firm without IRB permission is ASSIGNED 160% / 190% / 220%
+#: in 2027-2029 in place of 250% (it was once coded as a floor that never
+#: bound); a main-table leg keeps 250% on every date. Do not infer from this
+#: date that main-table equity honours the transitional schedule: it does not,
+#: which is precisely what the SA005 warning this run emits is telling the user.
 _B31_REPORTING_DATE = date(2030, 6, 30)
 _CRR_REPORTING_DATE = date(2025, 12, 31)
 

@@ -59,6 +59,7 @@ from tests.unit.reporting.corep._c02_frames import (
 
 from rwa_calc.reporting.corep import c02_rows, irb_sheets
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import get_c08_columns
 from rwa_calc.reporting.filing.canonical import (
     FILING_MODULE,
     FILING_TAXONOMY,
@@ -186,6 +187,29 @@ def test_the_declared_sheets_are_exactly_the_published_sheet_codes(
     # Assert
     assert sorted(published_codes - declared) == [], f"{table}: published sheets with no key"
     assert sorted(declared - published_codes) == [], f"{table}: keys with no published sheet"
+
+
+def test_of0801_column_axis_is_the_published_one(pack: TaxonomyPack) -> None:
+    """OF 08.01's columns are the columns of its two published tables, in both
+    directions. ``.01`` and ``.02`` partition one template's columns (``.02``
+    holds 0100 / 0120 / 0130); we generate them as one frame.
+
+    Column 0010 (PD assigned to the obligor grade or pool) was left out of our
+    layout on the premise that Basel 3.1 moved PD to OF 08.02 only - a premise
+    the unit test that pinned it shared. The Annex I template and the taxonomy
+    both carry the column, on every sheet, and ``boe_b0356`` / ``boe_b0410``
+    read it."""
+    # Arrange
+    published = set(pack.tables["OF08.01.01.01"].column_codes) | set(
+        pack.tables["OF08.01.01.02"].column_codes
+    )
+
+    # Act
+    ours = {col.ref for col in get_c08_columns(FRAMEWORK)}
+
+    # Assert
+    assert sorted(published - ours) == [], "published OF 08.01 columns we do not generate"
+    assert sorted(ours - published) == [], "generated OF 08.01 columns with no published cell"
 
 
 def test_each_declared_sheet_carries_the_published_label(published: dict[str, Sheet]) -> None:
@@ -337,8 +361,14 @@ def test_each_sheet_takes_the_size_and_property_its_dimension_members_name(
 def test_each_sheet_total_is_one_data_point_with_its_of02_row(
     pack: TaxonomyPack, of02_column: str, of08_column: str
 ) -> None:
+    """``IrbSheet.total_is_the_slot`` is the generator's word for "this sheet's
+    total IS the OF 02.00 row's data point" - OF 02.00 leaves the row empty when
+    the sheet has no legs on that word. Held to the taxonomy here: True exactly
+    on the sheets tied below, False exactly on the slotting sheet, which
+    ``test_the_sheets_that_carry_slotting_are_no_of02_row`` shows is no row."""
     # Arrange
-    tied = [sheet for sheet in irb_sheets.B31_CLASS_SHEETS if sheet.code != SLOTTING_SHEET_CODE]
+    tied = [sheet for sheet in irb_sheets.B31_CLASS_SHEETS if sheet.total_is_the_slot]
+    untied = {sheet.code for sheet in irb_sheets.B31_CLASS_SHEETS if not sheet.total_is_the_slot}
 
     # Act
     apart = [
@@ -349,6 +379,7 @@ def test_each_sheet_total_is_one_data_point_with_its_of02_row(
     ]
 
     # Assert
+    assert untied == {SLOTTING_SHEET_CODE}
     assert len(tied) == 14
     assert apart == []
 

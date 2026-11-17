@@ -12,6 +12,10 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ### Changed
 - (Next release changes will go here)
 
+---
+
+## [0.1.5] - 2026-11-17
+
 ### Fixed
 - **The dashboard's template grid marks every break of a rule, not only the
   first five.** A rule's result records its first `MAX_FAILURES` (5) breaks, in

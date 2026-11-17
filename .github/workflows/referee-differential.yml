@@ -127,6 +127,30 @@ jobs:
       - name: Verify the taxonomy package
         run: echo "${TAXONOMY_SHA256}  .taxonomy/boe-banking-v411.zip" | sha256sum --check -
 
+      # A worker's Arelle result is reused when nothing it depends on changed.
+      # rwa_filer/referee/runner.py keys each entry by SHA-256 over the bytes
+      # the worker reads (instance, package, overlay, plug-in), its settings,
+      # the Arelle release and the referee's code; an entry that cannot hit is
+      # simply never read. The Actions key below only narrows what is restored
+      # to entries that CAN hit: same publication, same Arelle, same referee
+      # code. Each run saves under a key of its own (run id and attempt), and
+      # restore-keys picks up the latest, so entries a run adds are kept.
+      - name: Name the referee cache
+        id: referee-cache
+        run: >-
+          echo "prefix=referee-${TAXONOMY_SHA256}-arelle-${ARELLE_VERSION}-${{
+          hashFiles('packages/rwa-filer/src/rwa_filer/referee/worker.py',
+          'packages/rwa-filer/src/rwa_filer/referee/plan.py',
+          'packages/rwa-filer/src/rwa_filer/referee/runner.py',
+          'packages/rwa-filer/src/rwa_filer/referee/boe_shim.py') }}-" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the referee cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .referee-run/cache
+          key: ${{ steps.referee-cache.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.referee-cache.outputs.prefix }}
+
       # The script finds the package at .taxonomy/ and leaves its files in
       # .referee-run/ - fixed places, not arguments (arch_check check 19). The
       # interpreter that has Arelle is named for rwa_filer.referee, which reads it.
@@ -134,6 +158,15 @@ jobs:
         env:
           RWA_FILER_ARELLE_PYTHON: ${{ github.workspace }}/.arelle-venv/bin/python
         run: uv run python scripts/referee_differential.py --max-rss-gb 10 --check
+
+      # Saved whether the gate passed or not: an entry is stored only for a
+      # worker that finished, and whole or not at all.
+      - name: Save the referee cache
+        if: always() && steps.referee-cache.outputs.prefix != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .referee-run/cache
+          key: ${{ steps.referee-cache.outputs.prefix }}${{ github.run_id }}-${{ github.run_attempt }}
 
       # Uploaded whether the gate passed or not: on a red run the per-worker
       # files are what say why.

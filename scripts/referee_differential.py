@@ -65,7 +65,17 @@ native engine. A worker is about a minute and 3-4 GB of Arelle; a return is
 three or four of them. ``--portfolio`` restricts the run for a quick local
 look; a restricted run cannot be banked. The instances, Arelle's per-worker
 files, the measurement and the timings are left in ``.referee-run/``
-(git-ignored), which is cleared at the start of every run.
+(git-ignored), which is cleared at the start of every run — all but its
+``cache/``.
+
+A worker's result is cached, keyed by a SHA-256 over everything it depends on
+(the instance's bytes, the taxonomy package's, the overlay's members, the
+filing-rule plug-in, the spec's settings, the Arelle release and the referee's
+own code) and never over a path; see ``rwa_filer.referee.runner``. A hit skips
+that Arelle worker only: every return is still built, filed, merged and set
+beside the native engine. The cache is ``.referee-run/cache/``, or the folder
+``RWA_FILER_REFEREE_CACHE`` names (read by ``rwa_filer.referee``, not here:
+check 19); ``--no-cache`` runs every worker and stores nothing.
 
 Exit codes:
     0 = measured (and, with --check, nothing moved)
@@ -113,6 +123,7 @@ from rwa_filer.referee import (  # noqa: E402
     PreparedReferee,
     find_arelle_python,
     prepare_referee,
+    referee_cache_dir,
     resolve_jobs,
     run_referees,
 )
@@ -135,6 +146,9 @@ MEASUREMENT_PATH = RUN_DIRECTORY / "measured.json"
 TIMINGS_PATH = RUN_DIRECTORY / "timings.json"
 #: The resident memory one Arelle worker is held to, in GB.
 DEFAULT_MAX_RSS_GB = 9.0
+#: Where workers' results are cached unless ``RWA_FILER_REFEREE_CACHE`` says
+#: otherwise. Inside the run directory, and kept when the rest of it is cleared.
+CACHE_DIRECTORY = RUN_DIRECTORY / "cache"
 
 #: Per-portfolio registers held exactly: nothing may join or leave unrecorded.
 REGISTERS = ("disagreements", "arelle_errors", "count_differences")
@@ -178,6 +192,13 @@ def main() -> int:
         help="Arelle workers to run at once (default: as many as fit in the memory "
         "available at --max-rss-gb each, one per CPU at most)",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="run every Arelle worker and store no result (default: reuse a worker's "
+        "result from .referee-run/cache/, or $RWA_FILER_REFEREE_CACHE, when nothing it "
+        "depends on changed)",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="fail if anything moved")
     mode.add_argument(
@@ -196,8 +217,10 @@ def main() -> int:
         parser.error("--jobs must be at least 1")
 
     started = time.perf_counter()
-    shutil.rmtree(RUN_DIRECTORY, ignore_errors=True)
-    RUN_DIRECTORY.mkdir(parents=True)
+    cache_dir = None if args.no_cache else referee_cache_dir(CACHE_DIRECTORY)
+    if cache_dir is not None and cache_dir.resolve() == RUN_DIRECTORY.resolve():
+        parser.error(f"{cache_dir} is the run directory, which every run clears")
+    clear_run_directory(keep=(CACHE_DIRECTORY, *(() if cache_dir is None else (cache_dir,))))
     timings: dict[str, Any] = {}
     measured = measure(
         TAXONOMY_PACKAGE,
@@ -205,6 +228,7 @@ def main() -> int:
         only=frozenset(args.portfolio or ()),
         max_rss_gb=args.max_rss_gb,
         jobs=args.jobs,
+        cache_dir=cache_dir,
         timings=timings,
     )
     timings["total_s"] = round(time.perf_counter() - started, 1)
@@ -254,6 +278,7 @@ def measure(
     only: frozenset[str] = frozenset(),
     max_rss_gb: float = DEFAULT_MAX_RSS_GB,
     jobs: int | None = None,
+    cache_dir: Path | None = None,
     timings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """File every golden return, have Arelle referee them all, then compare each.
@@ -271,6 +296,8 @@ def measure(
         only: Portfolio names to restrict the run to; empty runs them all.
         max_rss_gb: The memory an Arelle worker is held to.
         jobs: Arelle workers run at once; ``None`` for as many as fit.
+        cache_dir: Where Arelle workers' results are reused from and stored;
+            ``None`` to run every worker and store nothing.
         timings: Filled in, when given, with how long each phase and each
             return took. Never part of the measurement.
     """
@@ -301,13 +328,21 @@ def measure(
     planned = sum(len(item.prepared.specs) for item in golden)
     print(
         f"  Arelle: {planned} worker(s) for {len(golden)} golden return(s), {workers} at a "
-        f"time, each held to {max_rss_gb:g} GB",
+        f"time, each held to {max_rss_gb:g} GB; "
+        + ("no cache" if cache_dir is None else f"cache {cache_dir}"),
         flush=True,
     )
     referees = run_referees(
-        [item.prepared for item in golden], python=python, jobs=workers, max_rss_gb=max_rss_gb
+        [item.prepared for item in golden],
+        python=python,
+        jobs=workers,
+        max_rss_gb=max_rss_gb,
+        cache_dir=cache_dir,
     )
     timings["jobs"] = workers
+    timings["arelle_workers_reused"] = sum(
+        chunk.cached for referee in referees for chunk in referee.chunks
+    )
     timings["arelle_phase_s"] = round(time.perf_counter() - phase, 1)
     timings["arelle_workers_s"] = {
         item.name: [chunk.wall_s for chunk in referee.chunks]
@@ -390,6 +425,24 @@ def file_return(
         facts=written.facts,
         prepared=prepare_referee(instance, taxonomy_package, workdir=folder / "arelle"),
     )
+
+
+def clear_run_directory(*, keep: tuple[Path, ...]) -> None:
+    """Empty the run directory of everything but the folders ``keep`` names or holds.
+
+    The cache lives in the run directory by default and must outlive the run
+    that filled it; whatever else is there is the previous run's, and goes.
+    """
+    RUN_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    kept = [folder.resolve() for folder in keep]
+    for entry in RUN_DIRECTORY.iterdir():
+        resolved = entry.resolve()
+        if any(folder == resolved or folder.is_relative_to(resolved) for folder in kept):
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
 
 
 def arelle_version(python: Path | None) -> str:
@@ -521,7 +574,8 @@ def print_timings(timings: dict[str, Any]) -> None:
     """Print where the time went: the three phases, and each return's Arelle workers."""
     print(
         f"\nTimings  build {timings.get('build_phase_s', 0):.0f}s, Arelle "
-        f"{timings.get('arelle_phase_s', 0):.0f}s ({timings.get('jobs', '?')} at a time), "
+        f"{timings.get('arelle_phase_s', 0):.0f}s ({timings.get('jobs', '?')} at a time, "
+        f"{timings.get('arelle_workers_reused', 0)} worker(s) reused from the cache), "
         f"compare {timings.get('compare_phase_s', 0):.0f}s"
     )
     for name, walls in timings.get("arelle_workers_s", {}).items():

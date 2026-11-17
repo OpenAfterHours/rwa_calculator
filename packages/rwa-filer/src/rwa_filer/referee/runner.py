@@ -19,6 +19,13 @@ Key responsibilities:
   memory available at their cap (``resolve_jobs``), each under its own guard
   that kills it above a resident-memory cap or a timeout. The results are
   merged in plan order, so they do not depend on the order workers finish in.
+- Reuse a worker's result when nothing it depends on has changed
+  (``cache_dir``): the key is a SHA-256 over the bytes Arelle reads — the
+  instance, the taxonomy package, the overlay's members, the filing-rule
+  plug-in — the spec's settings, the Arelle release and this package's
+  worker, planner and runner, and never over a path. A hit skips the worker
+  only; a worker that did not finish is never stored, and an entry that does
+  not read back as a result is ignored and recomputed.
 - Merge what the workers report into one result: a verdict per published rule
   id, the processor's other messages (de-duplicated, known noise removed), the
   rules that were not run because the instance does not file their templates,
@@ -61,6 +68,7 @@ References:
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import json
 import logging
@@ -73,11 +81,13 @@ import sys
 import tempfile
 import threading
 import time
+import zipfile
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from rwa_filer.referee import plan as _plan_module
 from rwa_filer.referee.plan import (
     TABLES_INDICATED,
     TaxonomyModule,
@@ -96,6 +106,9 @@ logger = logging.getLogger(__name__)
 
 #: Environment variable naming a Python interpreter that has ``arelle-release``.
 ENV_ARELLE_PYTHON: Final = "RWA_FILER_ARELLE_PYTHON"
+#: Environment variable naming the folder of the worker-result cache, for a
+#: caller that asks ``referee_cache_dir`` where it is.
+ENV_REFEREE_CACHE: Final = "RWA_FILER_REFEREE_CACHE"
 
 #: The script each worker process runs. A module attribute rather than a
 #: parameter of ``run_referee`` so that tests can put a fake worker in its
@@ -167,6 +180,17 @@ _SKIP_RENDERING: Final = "*-rend.xml"
 MEMORY_HEADROOM_GB: Final = 1.5
 
 _PROC: Final = Path("/proc")
+#: The spec's members that name a file. The key reads each file's bytes, and
+#: never the name.
+_SPEC_PATHS: Final = frozenset({"instance", "packages", "plugin", "xdg"})
+#: Asks the interpreter the workers run under which Arelle it has.
+_IDENTITY_PROBE: Final = (
+    "import json, sys; from importlib.metadata import version; "
+    "print(json.dumps({'arelle-release': version('arelle-release'), 'python': sys.version}))"
+)
+#: The environment the workers inherit that can change the text Arelle writes.
+_LOCALE_VARIABLES: Final = ("LANG", "LC_ALL", "LC_MESSAGES")
+_HASH_BLOCK: Final = 1 << 20
 _POLL_SECONDS: Final = 0.5
 _KB_PER_GB: Final = 1024 * 1024
 _BYTES_PER_MB: Final = 1e6
@@ -192,6 +216,7 @@ def run_referee(
     rules: str | None = None,
     max_examples: int = 2,
     jobs: int | None = None,
+    cache_dir: Path | None = None,
 ) -> RefereeResult:
     """Run Arelle on ``instance`` and return its verdict on every rule it evaluated.
 
@@ -215,6 +240,8 @@ def run_referee(
             not the assertion id); only matching rules are run and reported.
         max_examples: Evaluation messages kept per rule, with the facts bound.
         jobs: Workers run at once; ``None`` for as many as fit (``resolve_jobs``).
+        cache_dir: Where workers' results are stored and reused from; ``None``
+            to run every worker and store nothing.
 
     Raises:
         RefereeUnavailableError: no interpreter with Arelle could be located.
@@ -241,7 +268,12 @@ def run_referee(
             max_examples=max_examples,
         )
         (result,) = run_referees(
-            [prepared], python=interpreter, jobs=jobs, max_rss_gb=max_rss_gb, timeout=timeout
+            [prepared],
+            python=interpreter,
+            jobs=jobs,
+            max_rss_gb=max_rss_gb,
+            timeout=timeout,
+            cache_dir=cache_dir,
         )
     return result
 
@@ -359,6 +391,7 @@ def run_referees(
     jobs: int | None = None,
     max_rss_gb: float = 9.0,
     timeout: float = 3600.0,
+    cache_dir: Path | None = None,
 ) -> tuple[RefereeResult, ...]:
     """Run every worker of every prepared instance through ONE pool; a result each.
 
@@ -373,6 +406,9 @@ def run_referees(
         jobs: Workers run at once; ``None`` for as many as fit (``resolve_jobs``).
         max_rss_gb: The resident memory one worker is held to.
         timeout: Seconds one worker may run before it is killed.
+        cache_dir: Where workers' results are stored and reused from; ``None``
+            to run every worker and store nothing. A reused result is the
+            worker's own, byte for byte, so the merge cannot tell it apart.
 
     Returns:
         One result per prepared instance, in the order given.
@@ -387,6 +423,7 @@ def run_referees(
     interpreter = find_arelle_python(python)
     guard = _guard(max_rss_gb, timeout)
     workers = resolve_jobs(jobs, max_rss_gb)
+    cache = _open_cache(cache_dir, interpreter)
     tasks = [
         (which, index) for which, item in enumerate(prepared) for index in range(len(item.specs))
     ]
@@ -402,7 +439,9 @@ def run_referees(
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="referee") as pool:
         try:
             for which, index in tasks:
-                future = pool.submit(_run_chunk, prepared[which], index, interpreter, guard, cancel)
+                future = pool.submit(
+                    _run_chunk, prepared[which], index, interpreter, guard, cancel, cache
+                )
                 futures[future] = (which, index)
             for future in as_completed(futures):
                 which, index = futures[future]
@@ -452,6 +491,12 @@ def resolve_jobs(jobs: int | None, max_rss_gb: float) -> int:
         return 1
     fit = math.floor((available - MEMORY_HEADROOM_GB) / max_rss_gb)
     return max(1, min(_cpu_count(), fit))
+
+
+def referee_cache_dir(default: Path) -> Path:
+    """The worker-result cache folder: ``RWA_FILER_REFEREE_CACHE`` if set, else ``default``."""
+    configured = os.environ.get(ENV_REFEREE_CACHE)
+    return Path(configured) if configured else default
 
 
 # =============================================================================
@@ -526,6 +571,8 @@ class ChunkStat:
         returncode: The worker's exit status; negative when it was killed.
         loaded_s: Seconds Arelle reported loading the instance and taxonomy.
         validated_s: Seconds Arelle reported validating.
+        cached: The result was reused from the cache and no worker ran; the
+            Arelle timings are those of the run that stored it.
     """
 
     index: int
@@ -537,6 +584,7 @@ class ChunkStat:
     returncode: int | None
     loaded_s: float | None = None
     validated_s: float | None = None
+    cached: bool = False
 
     @property
     def ok(self) -> bool:
@@ -740,12 +788,15 @@ def _run_chunk(
     interpreter: Path,
     guard: _Guard,
     cancel: threading.Event,
+    cache: _ResultCache | None = None,
 ) -> _Outcome:
     """Write the spec, run one guarded worker on it, and read back its result.
 
     The worker is handed the spec as its standard input and the result file as
     its standard output, and names no file itself. The result file is opened
-    afresh, so a result an earlier run left behind is never read.
+    afresh, so a result an earlier run left behind is never read. With a
+    cache, a stored result for the same key is written to the result file in
+    the worker's place, and a worker that finished has its result stored.
     """
     files = prepared.plan.chunks[index]
     module = prepared.module
@@ -753,6 +804,10 @@ def _run_chunk(
     spec_path = out.with_suffix(".spec.json")
     spec_path.write_text(json.dumps(prepared.specs[index]), encoding="utf-8")
     stderr_path = out.with_suffix(".stderr.txt")
+    key = cache.key(prepared.specs[index]) if cache is not None else None
+    stored = cache.read(key) if cache is not None and key is not None else None
+    if stored is not None:
+        return _reused(prepared, index, key or "", stored, out, stderr_path)
     run = _run_guarded(
         [str(interpreter), "-I", str(WORKER_SCRIPT)], spec_path, out, stderr_path, guard, cancel
     )
@@ -789,6 +844,8 @@ def _run_chunk(
             stat.wall_s,
             stat.peak_rss_mb,
         )
+        if cache is not None and key is not None:
+            cache.write(key, out.read_bytes())
     else:
         logger.warning(
             "referee: worker %d lost with its %d assertion(s): %s",
@@ -932,6 +989,219 @@ def _cpu_count() -> int:
     if hasattr(os, "sched_getaffinity"):
         return len(os.sched_getaffinity(0))
     return os.cpu_count() or 1
+
+
+def _reused(
+    prepared: PreparedReferee,
+    index: int,
+    key: str,
+    stored: bytes,
+    out: Path,
+    stderr_path: Path,
+) -> _Outcome:
+    """The outcome of a worker whose result the cache held: written as the worker would."""
+    files = prepared.plan.chunks[index]
+    out.write_bytes(stored)
+    stderr_path.write_text(f"referee cache: result {key} reused; no worker ran\n", "utf-8")
+    result = json.loads(stored)
+    timings = result["timings"]
+    stat = ChunkStat(
+        index=index,
+        assertions=len(files),
+        assertion_xml_mb=round(
+            sum(prepared.module.assertions[file].size for file in files) / _BYTES_PER_MB, 1
+        ),
+        status=CHUNK_OK,
+        wall_s=0.0,
+        peak_rss_mb=None,
+        returncode=None,
+        loaded_s=timings.get("loaded_s"),
+        validated_s=timings.get("validated_s"),
+        cached=True,
+    )
+    logger.info("referee: worker %d reused from the cache (%s)", index, key[:12])
+    return _Outcome(stat=stat, files=files, result=result)
+
+
+# =============================================================================
+# Private helpers — the worker-result cache
+# =============================================================================
+
+
+class _ResultCache:
+    """Workers' raw results by key, one file each, under ``folder/<2 hex>/<key>.json``.
+
+    The key is a SHA-256 over what a worker's result depends on — the bytes of
+    every file it reads (instance, packages, plug-in), the spec's other
+    settings, the Arelle release and this package's referee code — and over no
+    path. Thread-safe: each entry is written to a temporary file and renamed,
+    and a key is read and written by one worker only.
+    """
+
+    def __init__(self, folder: Path, *, arelle: str) -> None:
+        self.folder = folder
+        self.arelle = arelle
+        self._package_digests: dict[str, str] = {}
+        self._lock = threading.Lock()
+
+    def key(self, spec: Mapping[str, Any]) -> str:
+        """The key of the worker ``spec`` describes."""
+        official, *overlays = spec["packages"]
+        payload = {
+            "arelle": self.arelle,
+            "code": _code_sha256(),
+            "instance": _file_sha256(Path(spec["instance"])),
+            "packages": [
+                self._package_sha256(Path(official)),
+                *(_zip_members_sha256(Path(overlay)) for overlay in overlays),
+            ],
+            "plugin": _file_sha256(Path(spec["plugin"])) if spec["plugin"] else None,
+            "spec": {name: value for name, value in spec.items() if name not in _SPEC_PATHS},
+        }
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def read(self, key: str) -> bytes | None:
+        """The stored result for ``key``, if there is one and it reads back as a result."""
+        path = self._path(key)
+        try:
+            content = path.read_bytes()
+        except OSError:
+            return None
+        try:
+            readable = _is_result(json.loads(content))
+        except ValueError:
+            readable = False
+        if not readable:
+            logger.warning("referee cache: ignoring an unreadable entry %s", path.name)
+            return None
+        with contextlib.suppress(OSError):
+            os.utime(path)  # last used: a reader may prune what no run uses
+        return content
+
+    def write(self, key: str, content: bytes) -> None:
+        """Store ``content`` under ``key``, whole or not at all; a failure is logged only."""
+        path = self._path(key)
+        temporary: str | None = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handle, temporary = tempfile.mkstemp(
+                dir=path.parent, prefix=f".{key[:12]}.", suffix=".tmp"
+            )
+            with os.fdopen(handle, "wb") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+            temporary = None
+        except OSError as exc:
+            logger.warning("referee cache: could not store %s: %s", path.name, exc)
+        finally:
+            if temporary is not None:
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary)
+
+    def _path(self, key: str) -> Path:
+        return self.folder / key[:2] / f"{key}.json"
+
+    def _package_sha256(self, package: Path) -> str:
+        """A taxonomy package's digest; read once per run, as every worker names it."""
+        name = str(package.resolve())
+        with self._lock:
+            if name not in self._package_digests:
+                self._package_digests[name] = _file_sha256(package)
+            return self._package_digests[name]
+
+
+def _open_cache(cache_dir: Path | None, interpreter: Path) -> _ResultCache | None:
+    """The cache for this run, or ``None`` — asked for none, or no Arelle to key it by."""
+    if cache_dir is None:
+        return None
+    arelle = _arelle_identity(interpreter)
+    if arelle is None:
+        logger.warning(
+            "referee cache: the Arelle release of %s cannot be read, so no result is "
+            "stored or reused in this run",
+            interpreter,
+        )
+        return None
+    logger.info("referee cache: %s", cache_dir)
+    return _ResultCache(cache_dir, arelle=arelle)
+
+
+def _arelle_identity(interpreter: Path) -> str | None:
+    """The Arelle release, Python version and locale the workers run with; None if unknown."""
+    done = subprocess.run(  # noqa: S603 - the interpreter the caller named, a fixed probe
+        [str(interpreter), "-I", "-c", _IDENTITY_PROBE],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0 or not done.stdout.strip():
+        return None
+    locale = {name: os.environ.get(name) for name in _LOCALE_VARIABLES}
+    return json.dumps({"probe": json.loads(done.stdout), "locale": locale}, sort_keys=True)
+
+
+def _code_sources() -> list[Path]:
+    """The referee code a worker's result depends on: the worker, the planner, the runner."""
+    return [Path(WORKER_SCRIPT), Path(_plan_module.__file__), Path(__file__)]
+
+
+def _code_sha256() -> str:
+    """One digest over the referee code a worker's result depends on."""
+    digest = hashlib.sha256()
+    for source in _code_sources():
+        digest.update(hashlib.sha256(source.read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while block := stream.read(_HASH_BLOCK):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _zip_members_sha256(path: Path) -> str:
+    """A digest of an archive's members, names and contents; not of the archive's bytes.
+
+    An overlay is written afresh for every run, with the time in each member's
+    header, so its bytes differ from run to run while what Arelle reads does not.
+    """
+    digest = hashlib.sha256()
+    with zipfile.ZipFile(path) as archive:
+        for name in sorted(archive.namelist()):
+            digest.update(name.encode("utf-8") + b"\0")
+            digest.update(hashlib.sha256(archive.read(name)).digest())
+    return digest.hexdigest()
+
+
+def _is_result(value: Any) -> bool:
+    """Whether ``value`` has the shape of a worker's result, as the merge reads it."""
+    if not isinstance(value, dict):
+        return False
+    assertions, examples = value.get("assertions"), value.get("examples")
+    messages, timings = value.get("messages"), value.get("timings")
+    if not (
+        isinstance(assertions, dict)
+        and isinstance(examples, dict)
+        and isinstance(messages, list)
+        and isinstance(timings, dict)
+    ):
+        return False
+    counts_ok = all(
+        isinstance(counts, list)
+        and len(counts) == 2
+        and all(isinstance(count, int) for count in counts)
+        for counts in assertions.values()
+    )
+    messages_ok = all(
+        isinstance(message, dict)
+        and all(isinstance(message.get(field), str) for field in ("code", "level", "text"))
+        for message in messages
+    )
+    return counts_ok and messages_ok and all(isinstance(v, list) for v in examples.values())
 
 
 # =============================================================================

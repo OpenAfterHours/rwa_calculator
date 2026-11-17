@@ -62,6 +62,7 @@ from rwa_filer.referee.differential import Differential, RuleComparison, compare
 from rwa_filer.referee.plan import RefereePlanError
 from rwa_filer.referee.runner import (
     ENV_ARELLE_PYTHON,
+    ENV_REFEREE_CACHE,
     VERDICT_FAIL,
     VERDICT_NEVER_FIRED,
     VERDICT_PASS,
@@ -74,6 +75,7 @@ from rwa_filer.referee.runner import (
     RuleVerdict,
     find_arelle_python,
     prepare_referee,
+    referee_cache_dir,
     resolve_jobs,
     run_referee,
     run_referees,
@@ -81,6 +83,7 @@ from rwa_filer.referee.runner import (
 
 __all__ = [
     "ENV_ARELLE_PYTHON",
+    "ENV_REFEREE_CACHE",
     "VERDICT_FAIL",
     "VERDICT_NEVER_FIRED",
     "VERDICT_PASS",
@@ -97,6 +100,7 @@ __all__ = [
     "compare",
     "find_arelle_python",
     "prepare_referee",
+    "referee_cache_dir",
     "resolve_jobs",
     "run_referee",
     "run_referees",

@@ -1,0 +1,362 @@
+"""
+The referee's result cache: a worker's result, reused when nothing it depends on changed.
+
+Pipeline position:
+    run_referees -> per worker: cache key -> hit: the stored result, no worker
+                                          -> miss: the worker, then store its result
+
+An Arelle worker is a pure function of what it is handed: the instance's
+bytes, the taxonomy package's bytes, the overlay's contents, the filing-rule
+plug-in, the spec's settings, the Arelle release and the referee's own code.
+The key is a SHA-256 over exactly those — never over a path, so the same
+return written to another folder still hits. A hit skips the worker only; the
+merge, and every comparison made of the result, run as before.
+
+What is pinned here, with the stand-in worker of ``referee_builders``:
+- a second run reuses every result and launches no worker, and the reused
+  result is the worker's raw result;
+- each keyed input, changed alone, misses; a path changed alone hits;
+- a corrupt or truncated entry is ignored, recomputed and replaced;
+- a worker that failed, wrote nothing or was killed is never stored;
+- a cache that cannot be written, or an Arelle release that cannot be named,
+  costs the reuse and nothing else.
+
+References:
+- packages/rwa-filer/src/rwa_filer/referee/runner.py — ``run_referees(cache_dir=...)``
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import shutil
+import sys
+import zipfile
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from referee_builders import FAKE_WORKER, Referee, counts
+from rwa_filer.referee import runner
+
+IDENTITY = "arelle-release 2.47.5 / python 3.13"
+
+
+@pytest.fixture(autouse=True)
+def arelle_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stand-in worker runs where no arelle-release is installed: name one."""
+    monkeypatch.setattr(runner, "_arelle_identity", lambda _python: IDENTITY)
+
+
+@pytest.fixture
+def cache(tmp_path: Path) -> Path:
+    return tmp_path / "cache"
+
+
+def launches(referee: Referee) -> list[str]:
+    """Every worker the stand-in was launched as, in order."""
+    log = referee.script.parent / "launches.txt"
+    return log.read_text(encoding="utf-8").split() if log.exists() else []
+
+
+def entries(cache: Path) -> list[Path]:
+    return sorted(cache.rglob("*.json"))
+
+
+# ---------------------------------------------------------------------------
+# Reuse
+# ---------------------------------------------------------------------------
+
+
+def test_a_second_run_reuses_every_result_and_launches_no_worker(
+    trimmed: Referee, cache: Path
+) -> None:
+    # Act
+    first = trimmed.run(cache_dir=cache)
+    second = trimmed.run(cache_dir=cache)
+
+    # Assert — two workers ran, once; the second result is the first.
+    assert launches(trimmed) == ["instance/chunk0", "instance/chunk1"]
+    assert [chunk.cached for chunk in first.chunks] == [False, False]
+    assert [chunk.cached for chunk in second.chunks] == [True, True]
+    assert all(chunk.ok for chunk in second.chunks)
+    assert second.rules == first.rules
+    assert (second.messages, second.skipped, second.lost) == (
+        first.messages,
+        first.skipped,
+        first.lost,
+    )
+
+
+def test_a_cached_result_is_the_workers_raw_result(trimmed: Referee, cache: Path) -> None:
+    # Act
+    trimmed.run(cache_dir=cache)
+    raw = sorted((trimmed.workdir / f"chunk{index}.json").read_bytes() for index in (0, 1))
+
+    # Assert — stored byte for byte, and handed back byte for byte on a hit.
+    assert sorted(path.read_bytes() for path in entries(cache)) == raw
+    trimmed.run(cache_dir=cache)
+    assert sorted((trimmed.workdir / f"chunk{index}.json").read_bytes() for index in (0, 1)) == raw
+
+
+def test_without_a_cache_dir_nothing_is_stored_or_reused(trimmed: Referee, tmp_path: Path) -> None:
+    # Act
+    trimmed.run()
+    trimmed.run()
+
+    # Assert
+    assert len(launches(trimmed)) == 4
+    assert not list(tmp_path.rglob("*.json.tmp"))
+
+
+def test_the_same_return_in_another_folder_hits(trimmed: Referee, cache: Path) -> None:
+    """Paths are not keyed: the instance, the package and the workdir all move."""
+    # Arrange
+    trimmed.run(cache_dir=cache)
+    elsewhere = trimmed.instance.parent / "elsewhere"
+    elsewhere.mkdir()
+    instance = Path(shutil.copy(trimmed.instance, elsewhere / "copy.xbrl"))
+    package = Path(shutil.copy(trimmed.package, elsewhere / "copy.zip"))
+
+    # Act
+    result = runner.run_referee(
+        instance,
+        package,
+        python=Path(sys.executable),
+        workdir=elsewhere / "work",
+        chunk_mb=600 / 1e6,
+        cache_dir=cache,
+    )
+
+    # Assert
+    assert len(launches(trimmed)) == 2
+    assert [chunk.cached for chunk in result.chunks] == [True, True]
+
+
+# ---------------------------------------------------------------------------
+# What the key holds
+# ---------------------------------------------------------------------------
+
+
+def _change_instance(referee: Referee, _monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    with referee.instance.open("a", encoding="utf-8") as stream:
+        stream.write("<!-- one byte more -->\n")
+    return {}
+
+
+def _change_package(referee: Referee, _monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    with zipfile.ZipFile(referee.package, "a") as archive:
+        archive.writestr("tst-package/README.txt", "republished")
+    return {}
+
+
+def _change_arelle(_referee: Referee, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    monkeypatch.setattr(runner, "_arelle_identity", lambda _python: IDENTITY + " (patched)")
+    return {}
+
+
+def _change_worker(referee: Referee, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    edited = referee.script.parent / "fake_worker_v2.py"
+    edited.write_text(FAKE_WORKER + "\n# a later revision of the worker\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "WORKER_SCRIPT", edited)
+    return {}
+
+
+def _change_runner(_referee: Referee, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    monkeypatch.setattr(runner, "_code_sha256", lambda: "0" * 64)
+    return {}
+
+
+def _change_examples(_referee: Referee, _monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    return {"max_examples": 5}
+
+
+def _change_filing_rules(_referee: Referee, _monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    return {"filing_rules": False}
+
+
+def _change_chunking(_referee: Referee, _monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    # Every assertion in one worker: a different overlay, of other contents.
+    return {"chunk_mb": 1.0}
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        _change_instance,
+        _change_package,
+        _change_arelle,
+        _change_worker,
+        _change_runner,
+        _change_examples,
+        _change_filing_rules,
+        _change_chunking,
+    ],
+    ids=lambda change: change.__name__.removeprefix("_change_"),
+)
+def test_each_keyed_input_changed_alone_misses(
+    trimmed: Referee, cache: Path, monkeypatch: pytest.MonkeyPatch, change: Any
+) -> None:
+    # Arrange
+    trimmed.run(cache_dir=cache)
+    before = len(launches(trimmed))
+
+    # Act
+    options = change(trimmed, monkeypatch)
+    result = trimmed.run(cache_dir=cache, **options)
+
+    # Assert — every worker of the second run ran.
+    assert len(launches(trimmed)) == before + len(result.chunks)
+    assert not any(chunk.cached for chunk in result.chunks)
+
+
+def test_the_worker_the_runner_and_the_planner_are_all_keyed() -> None:
+    # Act
+    sources = runner._code_sources()
+
+    # Assert
+    assert [path.name for path in sources] == ["worker.py", "plan.py", "runner.py"]
+
+
+def test_the_cache_key_reads_no_path(trimmed: Referee, tmp_path: Path) -> None:
+    """The same spec with every path moved, its files copied, has the same key."""
+    # Arrange
+    trimmed.run()
+    spec = trimmed.spec(1)
+    moved = tmp_path / "moved"
+    moved.mkdir()
+    copies = {
+        key: shutil.copy(spec[key], moved / Path(spec[key]).name) for key in ("instance", "plugin")
+    }
+    packages = [shutil.copy(path, moved / Path(path).name) for path in spec["packages"]]
+    elsewhere = spec | copies | {"packages": packages, "xdg": str(moved / "xdg")}
+    keyed = runner._ResultCache(tmp_path / "c", arelle=IDENTITY)
+
+    # Act / Assert
+    assert keyed.key(elsewhere) == keyed.key(spec)
+    assert keyed.key(spec | {"max_examples": 3}) != keyed.key(spec)
+
+
+# ---------------------------------------------------------------------------
+# What is never stored, and what is never trusted
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("behaviour", "options"),
+    [
+        ({"exit": 1, "stderr": "Traceback ...\nMemoryError\n"}, {}),
+        ({"silent": True}, {}),
+        ({"sleep": 60}, {"timeout": 0.5}),
+    ],
+    ids=["failed", "wrote-nothing", "killed"],
+)
+def test_a_worker_that_did_not_finish_is_never_stored(
+    trimmed: Referee, cache: Path, behaviour: dict[str, Any], options: dict[str, Any]
+) -> None:
+    # Act — worker 1 does not finish; then the same run, with nothing wrong.
+    failed = trimmed.run({"chunk1": behaviour}, cache_dir=cache, **options)
+    again = trimmed.run(cache_dir=cache)
+
+    # Assert — only worker 0 was stored, so only worker 1 ran again.
+    assert failed.complete is False
+    assert len(entries(cache)) == 2
+    assert launches(trimmed)[2:] == ["instance/chunk1"]
+    assert [chunk.cached for chunk in again.chunks] == [True, False]
+    assert again.complete is True
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        lambda raw: raw[: len(raw) // 2],
+        lambda _raw: b"",
+        lambda _raw: b"not json",
+        lambda _raw: json.dumps({"assertions": {}}).encode(),
+        lambda _raw: json.dumps(
+            {"assertions": {"a": "x"}, "examples": {}, "messages": [], "timings": {}}
+        ).encode(),
+        lambda _raw: json.dumps([1, 2]).encode(),
+    ],
+    ids=["truncated", "empty", "not-json", "missing-keys", "bad-counts", "not-an-object"],
+)
+def test_a_corrupt_entry_is_ignored_recomputed_and_replaced(
+    trimmed: Referee, cache: Path, damage: Any
+) -> None:
+    # Arrange — worker 0's entry damaged after a good run.
+    first = trimmed.run(cache_dir=cache)
+    raw = (trimmed.workdir / "chunk0.json").read_bytes()
+    entry = next(path for path in entries(cache) if path.read_bytes() == raw)
+    entry.write_bytes(damage(raw))
+
+    # Act
+    second = trimmed.run(cache_dir=cache)
+
+    # Assert — worker 0 ran again, the result is unchanged, the entry is whole again.
+    assert launches(trimmed)[2:] == ["instance/chunk0"]
+    assert [chunk.cached for chunk in second.chunks] == [False, True]
+    assert counts(second) == counts(first)
+    assert entry.read_bytes() == raw
+
+
+def test_a_cache_that_cannot_be_written_costs_the_reuse_only(
+    trimmed: Referee, cache: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An entry is written to a temporary file and renamed: a failed rename leaves neither."""
+
+    # Arrange
+    def refuse(*_args: object) -> None:
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(os, "replace", refuse)
+
+    # Act
+    result = trimmed.run(cache_dir=cache)
+
+    # Assert
+    assert result.complete is True
+    assert entries(cache) == []
+    assert [path.name for path in cache.rglob("*") if path.is_file()] == []
+
+
+def test_an_arelle_that_cannot_be_named_is_run_without_the_cache(
+    trimmed: Referee,
+    cache: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Arrange
+    monkeypatch.setattr(runner, "_arelle_identity", lambda _python: None)
+    caplog.set_level(logging.WARNING, logger=runner.__name__)
+
+    # Act
+    trimmed.run(cache_dir=cache)
+    result = trimmed.run(cache_dir=cache)
+
+    # Assert
+    assert len(launches(trimmed)) == 4
+    assert result.complete is True
+    assert entries(cache) == []
+    assert any("cache" in record.getMessage() for record in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Where the cache is
+# ---------------------------------------------------------------------------
+
+
+def test_the_environment_variable_names_the_cache_folder(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    default = tmp_path / "default"
+
+    # Act / Assert
+    monkeypatch.delenv(runner.ENV_REFEREE_CACHE, raising=False)
+    assert runner.referee_cache_dir(default) == default
+    monkeypatch.setenv(runner.ENV_REFEREE_CACHE, "")
+    assert runner.referee_cache_dir(default) == default
+    monkeypatch.setenv(runner.ENV_REFEREE_CACHE, str(tmp_path / "shared"))
+    assert runner.referee_cache_dir(default) == tmp_path / "shared"

@@ -352,6 +352,94 @@ def test_timings_are_never_part_of_the_banked_measurement(stubbed_run: dict[str,
 
 
 # ---------------------------------------------------------------------------
+# The cache: kept across runs, bypassed on request, located by rwa_filer
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def run_directory(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """The script's run directory and default cache, moved under ``tmp_path``."""
+    folder = tmp_path / ".referee-run"
+    monkeypatch.setattr(gate, "RUN_DIRECTORY", folder)
+    monkeypatch.setattr(gate, "CACHE_DIRECTORY", folder / "cache")
+    monkeypatch.setattr(gate, "MEASUREMENT_PATH", folder / "measured.json")
+    monkeypatch.setattr(gate, "TIMINGS_PATH", folder / "timings.json")
+    monkeypatch.delenv("RWA_FILER_REFEREE_CACHE", raising=False)
+    return folder
+
+
+def test_a_run_clears_the_run_directory_but_keeps_the_cache(run_directory: Path) -> None:
+    # Arrange — what an earlier run left: a return's files, a measurement, the cache.
+    for name in ("b31_rich/arelle/chunk0.json", "measured.json", "cache/ab/abcd.json"):
+        (run_directory / name).parent.mkdir(parents=True, exist_ok=True)
+        (run_directory / name).write_text("{}", encoding="utf-8")
+
+    # Act
+    gate.clear_run_directory(keep=(gate.CACHE_DIRECTORY,))
+
+    # Assert
+    assert sorted(
+        path.relative_to(run_directory).as_posix() for path in run_directory.rglob("*")
+    ) == ["cache", "cache/ab", "cache/ab/abcd.json"]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "environment", "expected"),
+    [
+        ([], None, "cache"),
+        (["--no-cache"], None, None),
+        ([], "elsewhere", "elsewhere"),
+        (["--no-cache"], "elsewhere", None),
+    ],
+    ids=["default", "no-cache", "environment", "no-cache-wins"],
+)
+def test_the_script_hands_the_run_its_cache_folder(
+    run_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arguments: list[str],
+    environment: str | None,
+    expected: str | None,
+) -> None:
+    # Arrange
+    seen: dict[str, Any] = {}
+
+    def measure(_package: Path, **options: Any) -> dict[str, Any]:
+        seen.update(options)
+        return {"measured_with": {}, "portfolios": {}, "provenance": {"not_golden": {}}}
+
+    package = tmp_path / "package.zip"
+    package.write_bytes(b"stand-in")
+    monkeypatch.setattr(gate, "TAXONOMY_PACKAGE", package)
+    monkeypatch.setattr(gate, "measure", measure)
+    monkeypatch.setattr("sys.argv", ["referee_differential.py", *arguments])
+    if environment is not None:
+        monkeypatch.setenv("RWA_FILER_REFEREE_CACHE", str(tmp_path / environment))
+
+    # Act
+    gate.main()
+
+    # Assert
+    wanted = {"cache": gate.CACHE_DIRECTORY, None: None}.get(expected, tmp_path / str(expected))
+    assert seen["cache_dir"] == wanted
+
+
+def test_jobs_below_one_is_a_usage_error(
+    run_directory: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    package = tmp_path / "package.zip"
+    package.write_bytes(b"stand-in")
+    monkeypatch.setattr(gate, "TAXONOMY_PACKAGE", package)
+    monkeypatch.setattr("sys.argv", ["referee_differential.py", "--jobs", "0"])
+
+    # Act / Assert
+    with pytest.raises(SystemExit) as raised:
+        gate.main()
+    assert raised.value.code == 2
+
+
+# ---------------------------------------------------------------------------
 # The workflow
 # ---------------------------------------------------------------------------
 
@@ -382,3 +470,17 @@ def test_the_workflow_pins_the_publication_and_the_processor_the_baseline_was_me
     # Assert
     assert f"TAXONOMY_SHA256: {baseline['measured_with']['taxonomy_package_sha256']}" in live
     assert f"ARELLE_VERSION: {baseline['measured_with']['arelle']}" in live
+
+
+def test_the_workflow_caches_worker_results_keyed_on_what_they_depend_on() -> None:
+    """Restored only where an entry can hit: same publication, Arelle and referee code."""
+    # Act
+    live = without_comments(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    # Assert
+    assert "actions/cache/restore@" in live and "actions/cache/save@" in live
+    assert "path: .referee-run/cache" in live
+    for keyed in ("${TAXONOMY_SHA256}", "${ARELLE_VERSION}"):
+        assert keyed in live, f"the cache key does not name {keyed}"
+    for source in ("worker.py", "plan.py", "runner.py", "boe_shim.py"):
+        assert f"rwa_filer/referee/{source}'" in live, f"the cache key does not hash {source}"

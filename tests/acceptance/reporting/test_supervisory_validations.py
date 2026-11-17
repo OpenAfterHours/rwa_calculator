@@ -37,14 +37,16 @@ Why there is a GATEWAY leg, (h)-(k), and why it keys on (rule, portfolio):
     engine (``rwa_filer.validate``). The Bank's gateway does not: it runs each
     rule on the filed return the way the taxonomy's XBRL formula reads it, and
     ``rwa_filer.boe`` is our implementation of that, pinned to Arelle rule by
-    rule. The two read a Bank rule differently in six measured ways (design
-    record O-03): the template-level engine evaluates a place where none of the
-    rule's cells is reported; it skips where a row, column or sheet is absent
-    instead of applying each reference's default; it refuses 67 Bank rules on
-    grammar; it adds up a multi-cell reference the formula tests one cell at a
-    time; it cannot see one data point shown in two tables; and it sets the
-    missing-value policy per rule rather than per reference. PR #548 and
-    ``boe_b1055`` showed the two disagreeing where legs (a)-(g) could not see it.
+    rule. The two read a Bank rule differently in five measured ways (design
+    record O-03): the template-level engine skips where a row, column or sheet
+    is absent instead of applying each reference's default; it refuses 67 Bank
+    rules on grammar; it adds up a multi-cell reference the formula tests one
+    cell at a time; it cannot see one data point shown in two tables; and it
+    sets the missing-value policy per rule rather than per reference. (O-03
+    measured a sixth - a break at a place where none of the rule's cells is
+    reported - which O-03a and O-14b removed: such a place is now
+    NOT_EVALUATED in both engines.) PR #548 and ``boe_b1055`` showed the two
+    disagreeing where legs (a)-(g) could not see it.
 
     So for every Basel 3.1 run the gateway leg files the SAME generated COREP
     the template leg read — ``scripts/filing_mapping_report.py::file_on_gateway``,
@@ -73,7 +75,7 @@ Why there is a GATEWAY leg, (h)-(k), and why it keys on (rule, portfolio):
     of what the canonical return does not carry (OF 08.02, C 08.04,
     OF08.05.01.01, OF 08.06 and C 34.02 as measured for O-03), and the only
     source of the vacuity legs (f)/(g), which the gateway engine has no notion
-    of. Its six differences above are why a disagreement is triaged, not
+    of. Its five differences above are why a disagreement is triaged, not
     assumed to be our output's fault.
 
 Publisher-issue labels:
@@ -433,13 +435,16 @@ REGISTER_NOTES: dict[str, str] = {
         "ERROR there is a rejected return. A rule the deny list deactivates is not evaluated and "
         "never appears; a downgraded one appears at WARNING. known_engine_disagreements lists "
         "every (rule, portfolio) on which one engine breaks a rule the other holds. The "
-        "template-level engine differs from the gateway in six measured ways (design record "
-        "O-03): it evaluates a place where none of the rule's cells is reported; it skips where a "
-        "row, column or sheet is absent instead of applying each reference's default; it refuses "
-        "67 Bank rules on grammar (isNull, if/then, and/or, dimensional filters); it adds up a "
-        "multi-cell reference the formula tests one cell at a time; it cannot see one data point "
-        "shown in two tables; and it sets the missing-value policy per rule rather than per "
-        "reference. So a break only the gateway shows is usually one the template-level engine "
+        "template-level engine differs from the gateway in five measured ways (design record "
+        "O-03): it skips where a row, column or sheet is absent instead of applying each "
+        "reference's default; it refuses 67 Bank rules on grammar (isNull, if/then, and/or, "
+        "dimensional filters); it adds up a multi-cell reference the formula tests one cell at a "
+        "time; it cannot see one data point shown in two tables; and it sets the missing-value "
+        "policy per rule rather than per reference. O-03 measured a sixth, a break at a place "
+        "where none of the rule's cells is reported; it is gone - since O-03a (Bank rules) and "
+        "O-14b (EBA rules) such a place is NOT_EVALUATED (nothing_reported) unless the extract "
+        "marks the rule 'Always execute', as the XBRL formula skips it. So a break only the "
+        "gateway shows is usually one the template-level engine "
         "cannot see (each gateway entry's by_portfolio.template_level says why), and a "
         "disagreement is triaged before it is blamed on our output. The template-level engine "
         "remains the only reading under CRR, the only one of what the canonical return does not "
@@ -476,9 +481,14 @@ REGISTER_NOTES: dict[str, str] = {
         "all of it on this file. To read the labels: grep -n 'publisher issue PI-' lists the "
         "Bank's share (whole, or ', in part'); grep -n 'reason.: .not PI-' lists the breaks on a "
         "rule an issue names that are not that issue (a reason sits after the reason key in "
-        "the JSON, so a bare '^not PI-' matches nothing). An entry with neither label "
-        "is on a rule no issue names: ours, or 'unattributed - needs investigation'. CRR entries "
-        "are EBA rules and carry no PI label. A label never changes a verdict: an ERROR "
+        "the JSON, so a bare '^not PI-' matches nothing). An entry with neither label is "
+        "one of two kinds: a break on a rule that no fails_correct_returns issue names as its "
+        "subject (ours, said with its plan item, or 'unattributed - needs investigation'), or an "
+        "entry the requirement does not cover - a vacuous rule (known_vacuous_rules is not a "
+        "break, so a rule an issue names may sit there unlabelled), or a break on a rule an "
+        "issue names only as related or contradicting, about whose breaks the issue claims "
+        "nothing. CRR entries are EBA rules and carry no PI label. A label never changes a "
+        "verdict: an ERROR "
         "labelled with an issue still rejects the return at the gateway until the Bank changes "
         "or deactivates the rule."
     ),
@@ -503,24 +513,10 @@ REGISTER_NOTES: dict[str, str] = {
         "PASS -> NOT_EVALUATED escapes every leg of this gate - dropping one emitted row (C 02.00 "
         "r0160) from crr/rich darkens two ERROR rules, one of them (v3335_i) passing on rich "
         "alone, and the whole gate stays green. scripts/coverage_report.py --check mitigates that "
-        "by ratcheting never_evaluated_rules (max 785) and union_binding_rules (min 257/289), but "
-        "those are counts in a different gate, so one rule going dark nets against another "
+        "by ratcheting never_evaluated_rules (may not rise) and union_binding_rules per regime "
+        "(may not fall), but those are counts in a different gate, so one rule going dark nets "
+        "against another "
         "activating. The NOT_EVALUATED half is owed work, not a property of this register."
-    ),
-    "binding_output_floor_add_on_has_no_home_in_the_ir_templates": (
-        "boe_b0751 (OF08.01.01.01) and boe_b0763 (OF08.02.01.01) are ONE published identity "
-        "restated per template (LESSONS C6): RWEA after adjustments (col 0260) must equal the sum "
-        "of RWEA before adjustments, PMAs, unrecognised-exposure adjustments and the mortgage "
-        "RW-floor adjustment (cols 0251-0254). They FAIL on b31/facility-share-binding by exactly "
-        "OutputFloorSummary.shortfall, because the pro-rata output-floor add-on lives inside "
-        "rwa_final and the reporting projection mirrors it into col 0260 while cols 0251-0254 "
-        "have no column for it. Every portfolio registered before 2026-09-05 had a NON-binding "
-        "floor, so the pair had never been evaluated in the binding state (LESSONS B5, a "
-        "portfolio STATE no fixture reached). Pre-existing: the values are byte-identical at the "
-        "commit before the facility-share fan-out landed. The reporting-basis decision - "
-        "un-floored RWEA in the IRB templates with the floor at the total level (OF 02.01 / "
-        "C 02.00), or an adjustment column - is OWNER: P1.369 and is NOT made here. Banked as an "
-        "ERROR-severity liability, not a waiver."
     ),
     "how_to_discharge_a_vacuity_entry": (
         "Make one cell the rule addresses carry a real figure on a registered portfolio, then "
@@ -615,9 +611,11 @@ REGISTER_NOTES: dict[str, str] = {
         "entries above before assuming the parent's negative figure is itself the bug, as it "
         "genuinely was in the boe_b0378 worked example there. This note once named a "
         "'zero-exposure ratio family' as the same shape; that family was not the publisher's: "
-        "the OF 08.07 share rule broke on empty roll-out rows only because the template-level "
-        "engine reads a share nobody reported as 0.0 (known_engine_disagreements, design record "
-        "O-03), and the CRR C 08.06 total rows only because our binding evaluated a column that "
+        "the OF 08.07 share rules (boe_b0778, and its CRR twin v09796_m) broke on empty roll-out "
+        "rows only because the template-level engine read a share nobody reported as 0.0 - the "
+        "XBRL formula skips such a place, and since O-03a / O-14b the template-level engine "
+        "does too (design record O-03) - and the CRR C 08.06 total rows only because our "
+        "binding evaluated a column that "
         "is not a data point (design record O-14). PUBLISHER "
         "CONFIRMATION (BoE taxonomy v4.1.1, Aug 2026): boe_b0378/boe_b0379 were each split into "
         "a _1 rule (of-which <= total on the positive columns) and a _2 rule (total <= of-which "
@@ -646,8 +644,8 @@ REGISTER_NOTES: dict[str, str] = {
         "IRB-axis twin boe_b0745; the EBA restatement v0338_m still binds the CRR template. Live "
         "members in v4.1.1, each with its evidence in the publisher-issue register: boe_b0742 "
         "across the conversion-factor rows (PI-07), boe_b0748 across the AIRB class sheets "
-        "(PI-31; on our returns that break is ours, a maturity reported on a retail sheet - "
-        "design record O-10) and obligor counts across exposure-type rows (PI-08)."
+        "(PI-31; on our returns it broke only because we reported a maturity on a retail sheet, "
+        "which design record O-10 removed) and obligor counts across exposure-type rows (PI-08)."
     ),
     "pattern_standardised_equity_transitional_below_the_row_weight": (
         "PUBLISHER ISSUE PI-01, not our defect (LESSONS C5). PS1/26 Annex II p.95 puts equity "
@@ -662,13 +660,15 @@ REGISTER_NOTES: dict[str, str] = {
         "sheets incl. 0016: RWEA = 2.5x / 4x); the boe_b0491 label ('RWEA shall only exceed 250% "
         "of exposure value if an Equities Transitional Approach is being applied') shows the "
         "rules expected the transitional to RAISE RWEA only. Arelle agrees with rwa_filer.boe on "
-        "all four. boe_b0710_2 (ERROR, rows 0371-0374: c0150 = the sum of the off-balance-sheet "
-        "conversion-factor columns 0160-0190) also fails there: an equity holding is "
-        "on-balance-sheet, so a filled memorandum row has c0150 and nothing to break it down "
-        "into - the boe_b0710 rule limit (P2.63) on the rows p.97 says firms 'shall report'. The "
-        "only placement that passes the four is row 0280 'Other risk weights', which contradicts "
-        "p.95-96 and fails the Bank's own boe_b0458 on sheet 0016. Do NOT move figures to "
-        "satisfy any of the five; the fix belongs to the publisher."
+        "all four. As published, boe_b0710_2 (ERROR, rows 0371-0374: c0150 = the sum of the "
+        "off-balance-sheet conversion-factor columns 0160-0190) would fail there too - an equity "
+        "holding is on-balance-sheet, so a filled memorandum row has c0150 and nothing to break "
+        "it down into (publisher issue PI-22) - but the Bank's validations deny list deactivated "
+        "the whole boe_b0710 family from 19 October 2026 (known issue 22), so neither engine "
+        "evaluates it and it is in no section of this register. The only placement that passes "
+        "the four is row 0280 'Other risk weights', which contradicts p.95-96 and fails the "
+        "Bank's own boe_b0458 on sheet 0016. Do NOT move figures to satisfy any of the four; the "
+        "fix belongs to the publisher."
     ),
 }
 
@@ -1575,32 +1575,74 @@ def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
     The two gateway sections hold one entry per (rule, reason) with the
     portfolios it covers; each is exploded back into its (rule, portfolio)
     pairs here, because the pair is what the legs compare.
+
+    Raises:
+        ValueError: if one key appears twice in a section. REGEN never writes
+            that, but a hand edit of one entry's reason can, and a plain dict
+            would keep the last reason and drop the other unseen.
     """
-    rules = {
-        RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)): entry["reason"]
-        for entry in payload.get("known_broken_rules", [])
-    }
-    templates = {
-        TemplateKey(*(entry[field] for field in TEMPLATE_KEY_FIELDS)): entry["reason"]
-        for entry in payload.get("known_uncovered_templates", [])
-    }
-    vacuous = {
-        RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)): entry["reason"]
-        for entry in payload.get("known_vacuous_rules", [])
-    }
-    gateway = {
-        GatewayKey(entry["rule_id"], portfolio, entry["severity"]): entry["reason"]
-        for entry in payload.get("known_gateway_breaks", [])
-        for portfolio in entry["portfolios"]
-    }
-    disagreements = {
-        DisagreementKey(
-            entry["rule_id"], portfolio, entry["template_level"], entry["gateway"]
-        ): entry["reason"]
-        for entry in payload.get("known_engine_disagreements", [])
-        for portfolio in entry["portfolios"]
-    }
+    rules = _keyed_reasons(
+        "known_broken_rules",
+        (
+            (RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)), entry["reason"])
+            for entry in payload.get("known_broken_rules", [])
+        ),
+    )
+    templates = _keyed_reasons(
+        "known_uncovered_templates",
+        (
+            (TemplateKey(*(entry[field] for field in TEMPLATE_KEY_FIELDS)), entry["reason"])
+            for entry in payload.get("known_uncovered_templates", [])
+        ),
+    )
+    vacuous = _keyed_reasons(
+        "known_vacuous_rules",
+        (
+            (RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)), entry["reason"])
+            for entry in payload.get("known_vacuous_rules", [])
+        ),
+    )
+    gateway = _keyed_reasons(
+        "known_gateway_breaks",
+        (
+            (GatewayKey(entry["rule_id"], portfolio, entry["severity"]), entry["reason"])
+            for entry in payload.get("known_gateway_breaks", [])
+            for portfolio in entry["portfolios"]
+        ),
+    )
+    disagreements = _keyed_reasons(
+        "known_engine_disagreements",
+        (
+            (
+                DisagreementKey(
+                    entry["rule_id"], portfolio, entry["template_level"], entry["gateway"]
+                ),
+                entry["reason"],
+            )
+            for entry in payload.get("known_engine_disagreements", [])
+            for portfolio in entry["portfolios"]
+        ),
+    )
     return Baseline(rules, templates, vacuous, gateway, disagreements)
+
+
+def _keyed_reasons[K: tuple[str, ...]](
+    section: str, pairs: Iterable[tuple[K, str]]
+) -> dict[K, str]:
+    """``{key: reason}`` for one register section, refusing a key held twice."""
+    reasons: dict[K, str] = {}
+    held_twice: list[str] = []
+    for key, reason in pairs:
+        if key in reasons:
+            held_twice.append(f"  {key!r}: {reasons[key]!r} and {reason!r}")
+        reasons[key] = reason
+    if held_twice:
+        detail = "\n".join(held_twice)
+        raise ValueError(
+            f"{section} holds {len(held_twice)} key(s) in more than one entry, so one reason "
+            f"would silently replace the other; give each key one entry:\n{detail}"
+        )
+    return reasons
 
 
 def _write_baseline(run: GateRun) -> None:
@@ -2176,7 +2218,7 @@ def test_the_two_engines_disagree_nowhere_the_register_does_not_say(gate_run: Ga
     assert not new, (
         f"{len(new)} NEW disagreement(s) between the two engines. Establish which reading is "
         "right before anything else - the gateway engine is pinned to Arelle, the "
-        "template-level engine has six known differences (module docstring):\n"
+        "template-level engine has five known differences (module docstring):\n"
         f"{detail}\nOnly once explained, add each to known_engine_disagreements in "
         f"{BASELINE_PATH.name} with a written reason."
     )

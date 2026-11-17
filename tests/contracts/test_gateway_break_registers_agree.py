@@ -42,6 +42,11 @@ at WARNING, a deactivated one not at all, and a banked ERROR the Bank downgrades
 moves legs (h) and (i). No packaged PRA001 deny list downgrades a rule today, so
 no registered portfolio exercises that path.
 
+And the register must read back whole: ``_baseline_from`` refuses a key held by
+two entries (one (rule, portfolio, severity) under two reasons), which a hand
+edit of one entry's reason can leave behind and a plain dict would resolve by
+silently keeping the last reason.
+
 References:
 - tests/acceptance/reporting/test_supervisory_validations.py — the register and its legs
 - scripts/filing_mapping_report.py — the filing-mapping ratchet and ``file_on_gateway``
@@ -55,6 +60,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import pytest
 from tests.acceptance.reporting.test_supervisory_validations import (
     BASELINE_PATH as REGISTER_PATH,
 )
@@ -375,12 +381,124 @@ def test_an_unchanged_estate_moves_no_predicate() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Reading the register back loses no reason
+# ---------------------------------------------------------------------------
+# REGEN writes each pair once, but the re-bank procedure invites a hand edit of
+# one entry's reason, and a hand edit can leave a pair in two entries. Read into
+# a {pair: reason} map, the second reason would silently replace the first, and
+# legs (h)-(k) would compare against a register that is not the one on disk.
+
+
+def test_a_gateway_pair_in_two_entries_is_refused() -> None:
+    """One (rule, portfolio, severity) under two reasons is an error, not a last-wins read.
+
+    Arrange: two known_gateway_breaks entries for boe_b0356 that both name rich.
+    Act:     read the register content.
+    Assert:  the read fails, naming the pair.
+    """
+    # Arrange
+    payload = {
+        GATEWAY_SECTION: [
+            _gateway_entry("boe_b0356", "WARNING", "one cause", ["irb-shapes", "rich"]),
+            _gateway_entry("boe_b0356", "WARNING", "another cause", ["rich"]),
+        ]
+    }
+
+    # Act / Assert
+    with pytest.raises(ValueError, match=r"boe_b0356.*rich"):
+        _baseline_from(payload)
+
+
+def test_a_disagreement_pair_in_two_entries_is_refused() -> None:
+    """The same guard on known_engine_disagreements, whose key carries both verdicts.
+
+    Arrange: two entries for one (rule, portfolio, verdicts) with different reasons.
+    Act:     read the register content.
+    Assert:  the read fails, naming the pair.
+    """
+    # Arrange
+    payload = {
+        DISAGREEMENT_SECTION: [
+            _disagreement_entry("boe_b1055", "one cause", ["crm-substitution"]),
+            _disagreement_entry("boe_b1055", "another cause", ["crm-substitution", "rich"]),
+        ]
+    }
+
+    # Act / Assert
+    with pytest.raises(ValueError, match=r"boe_b1055.*crm-substitution"):
+        _baseline_from(payload)
+
+
+def test_one_rule_on_two_portfolios_in_two_entries_is_read_whole() -> None:
+    """The control: one rule split across entries by portfolio is legal and fully read.
+
+    Without it the two tests above would pass on a reader that refuses any rule
+    appearing twice, which is how REGEN writes a rule with two causes.
+
+    Arrange: boe_b0356 in two entries with disjoint portfolios.
+    Act:     read the register content.
+    Assert:  both pairs are present, each with its own reason.
+    """
+    # Arrange
+    payload = {
+        GATEWAY_SECTION: [
+            _gateway_entry("boe_b0356", "WARNING", "one cause", ["irb-shapes"]),
+            _gateway_entry("boe_b0356", "WARNING", "another cause", ["rich"]),
+        ]
+    }
+
+    # Act
+    gateway = _baseline_from(payload).gateway
+
+    # Assert
+    assert gateway == {
+        GatewayKey("boe_b0356", "irb-shapes", "WARNING"): "one cause",
+        GatewayKey("boe_b0356", "rich", "WARNING"): "another cause",
+    }
+
+
+def test_the_committed_register_holds_each_pair_once() -> None:
+    """The committed file reads back with no pair under two reasons.
+
+    Arrange: the committed register.
+    Act:     read it as the acceptance legs do.
+    Assert:  the read succeeds (a duplicate raises).
+    """
+    # Arrange
+    register = _register()
+
+    # Act
+    baseline = _baseline_from(register)
+
+    # Assert
+    assert baseline.gateway, f"{REGISTER_PATH.name} reads back with no gateway pair"
+
+
+# ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 
 #: The day the synthetic deny-list entries take effect, and the run date after it.
 _APPLIED = date(2026, 1, 1)
 _RUN_DATE = date(2026, 11, 16)
+
+
+def _gateway_entry(
+    rule_id: str, severity: str, reason: str, portfolios: list[str]
+) -> dict[str, Any]:
+    """A known_gateway_breaks entry as REGEN writes it, reduced to what is read back."""
+    return {"rule_id": rule_id, "severity": severity, "reason": reason, "portfolios": portfolios}
+
+
+def _disagreement_entry(rule_id: str, reason: str, portfolios: list[str]) -> dict[str, Any]:
+    """A template-PASS / gateway-FAIL known_engine_disagreements entry, as read back."""
+    return {
+        "rule_id": rule_id,
+        "template_level": "PASS",
+        "gateway": "FAIL",
+        "reason": reason,
+        "portfolios": portfolios,
+    }
 
 
 def _error_break(rule_id: str) -> RuleResult:

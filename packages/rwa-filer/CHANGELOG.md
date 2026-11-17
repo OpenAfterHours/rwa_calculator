@@ -74,7 +74,8 @@ and released independently of `rwa-calc`; its release tags are prefixed
   is reported. A rule read from the Bank's extract takes the Bank's flag, and
   the Bank does mark some of its restatements of EBA rules always-execute: 4 of
   the 508 it restates under the EBA's ids (`v6295_m`, `e4887_e`, `v7321_n`,
-  `v7322_n`).
+  `v7322_n`), and the six forms it splits two EBA rules into (`v6293_1_m` to
+  `v6293_3_m`, `v6294_1_m` to `v6294_3_m`).
 - **Choosing the taxonomy release.** `rwa-filer` can now ship several taxonomy
   releases, and a run uses one: the one `--taxonomy VERSION` names, on every
   command that reads a return (`validate`, `build`, `diff`, `compare`, `dash`,

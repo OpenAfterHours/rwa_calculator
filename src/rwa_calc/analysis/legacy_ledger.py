@@ -1363,6 +1363,11 @@ def ledger_coverage(
             unavailable[template_id] = tuple(entries)
 
         for axis in LEDGER_ROW_AXIS[template_id]:
+            # A regime-shaped axis with no rows under this framework is read by
+            # no template here, so what it needs is not missing (a data-driven
+            # axis, ``rows_for`` None and ``rows`` empty, still counts).
+            if axis.rows_for is not None and not axis.refs(framework):
+                continue
             missing |= _unmet_columns(axis.requirement, supplied)
 
     coverage = LedgerCoverage(

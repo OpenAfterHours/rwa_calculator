@@ -140,8 +140,9 @@ def apply_post_model_adjustments(
        exposures secured by residential immovable property (Art. 154(4A)(b),
        via the ``retail_mortgage`` class as an over-inclusive proxy for the
        Art. 147(5B)(d)(ii) subclass — see the scope comment below)
-    2. General PMA: scalar add-on to post-floor RWEA (supervisory requirement)
-    3. Unrecognised exposure: scalar for model coverage gaps
+    2. General PMA: an additive amount, base x pma_rwa_scalar (Art. 146(3)(b))
+    3. Unrecognised exposure: base x unrecognised_exposure_scalar, on Advanced
+       IRB legs only (Art. 166D(6))
 
     Adjustment sequencing per Art. 154(4A). The chapeau — "An institution shall
     increase the total risk-weighted exposure amounts calculated under

@@ -181,3 +181,30 @@ def test_only_basel_3_1_names_rows_for_the_placement_carriers(framework: str, na
         assert lost == set()
         return
     assert {"0300", "0320", "0180", "0201", "0250", "0261", "0280"} <= lost
+
+
+@pytest.mark.parametrize(
+    ("framework", "counted"), [("CRR", False), ("BASEL_3_1", True)], ids=["crr", "b31"]
+)
+def test_only_basel_3_1_counts_the_placement_carriers_as_missing(
+    framework: str, counted: bool
+) -> None:
+    """A CRR ledger does not miss a column no CRR template reads.
+
+    ``LedgerCoverage.missing`` is "a column a template reads that the mapping
+    does not supply". The three placement carriers are read by Basel 3.1 OF 07.00
+    only: their row axes resolve to no rows under CRR, so a CRR projection that
+    lacks them is not missing them.
+    """
+    # Arrange
+    sealed = set(AGGREGATOR_EXIT_EDGE.columns)
+
+    # Act
+    missing = ledger_coverage(
+        sealed - set(UNMAPPABLE_PLACEMENT_CARRIERS), framework=framework
+    ).missing
+
+    # Assert
+    assert (set(UNMAPPABLE_PLACEMENT_CARRIERS) <= missing) is counted, sorted(
+        set(UNMAPPABLE_PLACEMENT_CARRIERS) & missing
+    )

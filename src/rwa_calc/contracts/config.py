@@ -405,7 +405,9 @@ class PostModelAdjustmentConfig:
             pma_el_scalar: General PMA as fraction of base EL (default 0%)
             mortgage_rw_floor: Minimum RW for residential mortgages (default 10%, Art. 154(4A)(b))
             unrecognised_exposure_scalar: Unrecognised exposure add-on on Advanced
-                IRB legs (default 0%, Art. 166D(6))
+                IRB legs (default 0%, Art. 166D(6)). It is a fraction of each A-IRB
+                leg's base RWEA, so a book with no A-IRB legs gets no adjustment at
+                any scalar; calibrate it against A-IRB RWEA, not total IRB RWEA.
         """
         return cls(
             enabled=True,

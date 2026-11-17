@@ -131,6 +131,43 @@ and released independently of `rwa-calc`; its release tags are prefixed
   position, so a column the Bank adds or moves no longer shifts a field, and
   finds its Basel 3.1 extract as the newest one packaged.
 
+### Performance
+- **Referee workers run at once.** `run_referee(jobs=...)` and `rwa-filer
+  referee --jobs N` set how many Arelle workers run side by side; by default
+  (`None`) as many as fit in the memory the kernel reports available
+  (`MemAvailable`, less 1.5 GB) at the per-worker cap `max_rss_gb`, and no more
+  than one per CPU — one where `/proc/meminfo` cannot be read
+  (`rwa_filer.referee.resolve_jobs`). Every worker keeps its own memory and
+  time guard and its own Arelle configuration folder, and the results are
+  merged in plan order, so a verdict, a message's order and the lost rules do
+  not depend on which worker finishes first. Several instances can share one
+  pool: `prepare_referee` each, then `run_referees` them all, a result each.
+  An interrupt kills the workers that are running.
+- **A referee worker ends as soon as its result is written.** It used to close
+  the Arelle session and tear the interpreter down first, freeing a model of
+  several GB object by object: about 13 seconds of a minute-long worker on
+  PRA001, after the result was on disk. The result is read before the session
+  would close, so it is unchanged; `worker.main` called in-process still
+  closes the session.
+- **A referee worker runs Arelle with Python's cyclic garbage collector off.**
+  Arelle keeps nearly everything it allocates until the worker ends, so the
+  collector's passes freed little: off, a PRA001 worker loads and evaluates
+  about 16% faster for about 7% more peak memory (3.89 GB against 3.64 on the
+  largest chunk measured), with the same verdicts. In-process callers get the
+  collector back when the session ends.
+- **A referee worker's result can be reused.** With `cache_dir=` on
+  `run_referee` / `run_referees`, a worker's raw result is stored under a
+  SHA-256 of everything it depends on — the bytes of the instance, the
+  taxonomy package, the overlay's members and the filing-rule plug-in, the
+  worker's settings, the Arelle release, Python version and locale of the
+  worker interpreter, and the referee's own code — and of no path. A run that
+  finds the key reuses the result, byte for byte, and launches no worker
+  (`ChunkStat.cached`); the merge and any comparison run as before. Only a
+  worker that finished is stored, an entry is written whole or not at all,
+  and one that does not read back as a result is recomputed.
+  `referee_cache_dir` reads the folder from `RWA_FILER_REFEREE_CACHE`. The
+  library default is no cache.
+
 ---
 
 ### Fixed

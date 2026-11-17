@@ -270,23 +270,51 @@ mkdir -p .taxonomy && cp /path/to/boe-banking-v411.zip .taxonomy/
 export RWA_FILER_ARELLE_PYTHON=/path/to/arelle-venv/bin/python
 uv run python scripts/referee_differential.py --check
 uv run python scripts/referee_differential.py --portfolio off-bs   # one return, a quick look
+uv run python scripts/referee_differential.py --check --jobs 3     # more workers at once
+uv run python scripts/referee_differential.py --check --no-cache   # ask Arelle afresh
 uv run python scripts/referee_differential.py --update-baseline
 ```
 
 The package and the interpreter are found at fixed places and are not
 arguments: `.taxonomy/boe-banking-v411.zip`, and the interpreter
 `RWA_FILER_ARELLE_PYTHON` names (or the current one, if it has Arelle). Each run
-leaves its instances, Arelle's per-worker files and `measured.json` in
-`.referee-run/`. Both folders are git-ignored.
+leaves its instances, Arelle's per-worker files, `measured.json` and
+`timings.json` in `.referee-run/`, which it clears first, all but its `cache/`.
+Both folders are git-ignored.
+
+A run has three phases. Every golden return is built and written, one after
+another; then every Arelle worker of every return runs through one pool; then
+each return is set beside the native engine. A worker is under a minute and up
+to 3.9 GB. The pool runs as many at once as fit in the memory the kernel
+reports available, less 1.5 GB, at `--max-rss-gb` each (default 5 GB, above
+the largest worker measured), and no more than one per CPU: two on a 16 GB,
+4-core machine. `--jobs N` sets the number outright.
+
+A worker's result is cached in `.referee-run/cache/` (or the folder
+`RWA_FILER_REFEREE_CACHE` names), keyed by a SHA-256 over everything it reads
+and runs with: the instance's and the package's bytes, the overlay's contents,
+the filing-rule plug-in, the worker's settings, the Arelle release and the
+referee's code. A run whose returns did not change reuses every result; one
+whose code under `rwa_filer/referee/` changed reuses none. A reused result is
+Arelle's own, byte for byte, and the comparison with the native engine always
+runs. `--no-cache` runs every worker and stores nothing.
+
+| Full run, 16 golden returns (51 workers), 4 cores / 16 GB | Wall time |
+|---|---|
+| Before: one worker at a time, each closing its session | 49 min |
+| No cache, 2 workers at once (the default here) | 17 min |
+| No cache, `--jobs 3` (11.8 GB at the peak, 2.7 GB left) | 12.7 min |
+| Cache cold (filled by the run) | 16.5 min |
+| Cache warm (no return changed) | 40 s |
 
 Held two-way against `scripts/referee_differential_baseline.json`: the
 disagreements, Arelle's error codes and the count differences of each golden
 return must be exactly the banked lists, the number of rules compared may not
 fall, and the set of golden returns may not change unrecorded. A run that did
-not finish fails. It needs Arelle and the taxonomy package, takes several
-minutes and about 3 GB per return, and so runs in its own workflow
-(`.github/workflows/referee-differential.yml`) and not in `ci.yml`. Its fast
-contract tests are in `tests/contracts/test_referee_differential.py`.
+not finish fails. It needs Arelle and the taxonomy package, and so runs in its
+own workflow (`.github/workflows/referee-differential.yml`, which restores and
+saves the cache) and not in `ci.yml`. Its fast contract tests are in
+`tests/contracts/test_referee_differential.py`.
 
 ## Test Data Scripts
 

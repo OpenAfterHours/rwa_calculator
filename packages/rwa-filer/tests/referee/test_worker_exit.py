@@ -27,6 +27,7 @@ References:
 
 from __future__ import annotations
 
+import gc
 import io
 import json
 import os
@@ -65,6 +66,8 @@ class Session:
         self.close()
 
     def run(self, options, logHandler=None):
+        import gc
+        sys.stderr.write(f"collector during the session: {{gc.isenabled()}}\\n")
         logger = logging.getLogger("arelle")
         logger.setLevel(logging.DEBUG)
         logger.addHandler(logHandler)
@@ -251,3 +254,36 @@ def test_the_script_and_the_in_process_path_write_the_same_result(
     # Assert
     assert in_process_out.encode("utf-8") == script_out
     assert "late:close" not in in_process_out
+
+
+# ---------------------------------------------------------------------------
+# The cyclic garbage collector
+# ---------------------------------------------------------------------------
+
+
+def test_the_session_runs_with_the_cyclic_collector_off(
+    spec: dict[str, Any], fake_arelle: Path, tmp_path: Path
+) -> None:
+    """Arelle's model is millions of objects it keeps: the collector's passes are pure cost."""
+    # Act
+    code, _out, stderr = run_script(spec, fake_arelle, tmp_path)
+
+    # Assert
+    assert code == 0
+    assert "collector during the session: False" in stderr
+
+
+def test_main_in_process_turns_the_collector_back_on(
+    spec: dict[str, Any], monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    # Arrange
+    install_in_process(monkeypatch)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(spec)))
+
+    # Act
+    worker.main([])
+    captured = capfd.readouterr()
+
+    # Assert — off while the session ran, on again for the caller.
+    assert "collector during the session: False" in captured.err
+    assert gc.isenabled()

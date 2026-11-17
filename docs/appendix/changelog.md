@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **New warning code `CFG003`** (`ERROR_EQUITY_TRANSITIONAL_CONFIG`, exported
+  from `rwa_calc.contracts`): see the equity transitional entry under Fixed.
 - **Validation results name the known issues with the Bank's published rules.**
   Through `rwa-filer`, a validation finding that a known issue explains carries
   the issue's id and a sentence saying so, in the filing package's validation
@@ -156,8 +158,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
-- **New warning code `CFG003`** (`ERROR_EQUITY_TRANSITIONAL_CONFIG`, exported
-  from `rwa_calc.contracts`): see the equity transitional entry under Fixed.
 - **`CRM013` now names the cause** — "a natural person ... is not an eligible
   provider of unfunded credit protection under Art. 201(1)/(2)" for a natural
   person; the corporate message is unchanged.

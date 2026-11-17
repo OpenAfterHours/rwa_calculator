@@ -4599,7 +4599,7 @@
       "regime": "b31",
       "rule_id": "boe_b0356",
       "severity": "WARNING",
-      "reason": "publisher issue PI-29, in part: 2 of the 3 places, sheet 0010 rows 0010 and 0020, hold only slotting exposure and have no PD, so a correct return leaves c0010 empty there and the rule reads PD 0. The third, sheet 0006 row 0190, is our defect, plan item P2.81 (widened on 2026-11-16 to own it; design record O-09): the row holds only exposure substituted in from corporate obligors (c0110 7,500,000, c0020 0), and column 0010 averages PD over the legs whose obligor sits on the row, of which there are none, so it is not reported. The template-level engine cannot see it (it refuses if/then). WARNING.",
+      "reason": "publisher issue PI-29, in part (PI-29's footprint is the whole rule; its case is the slotting-only rows): 2 of the 3 places, sheet 0010 rows 0010 and 0020, hold only slotting exposure and have no PD, so a correct return leaves c0010 empty there and the rule reads PD 0. The third, sheet 0006 row 0190, is our defect, plan item P2.81 (widened on 2026-11-16 to own it; design record O-09): the row holds only exposure substituted in from corporate obligors (c0110 7,500,000, c0020 0), and column 0010 averages PD over the legs whose obligor sits on the row, of which there are none, so it is not reported. The template-level engine cannot see it (it refuses if/then). WARNING.",
       "portfolios": [
         "crm-substitution"
       ],
@@ -5111,7 +5111,7 @@
       "regime": "b31",
       "rule_id": "boe_b0991",
       "severity": "WARNING",
-      "reason": "our defect, plan item P2.100: as boe_b0990 on exposure value - OF 09.01 r0095 c0075 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 not reported. WARNING. Fixed and un-banked with boe_b0990. Re-measured after the loan split (4e1c246): the figures above are unchanged.",
+      "reason": "our defect, plan item P2.100: as boe_b0990 on exposure value - OF 09.01 r0095 c0075 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 not reported. WARNING. To be fixed and un-banked with boe_b0990 (P2.100). Re-measured after the loan split (4e1c246): the figures above are unchanged.",
       "portfolios": [
         "re-split"
       ],
@@ -5129,7 +5129,7 @@
       "regime": "b31",
       "rule_id": "boe_b0992",
       "severity": "WARNING",
-      "reason": "our defect, plan item P2.100: as boe_b0990 on RWEA - OF 09.01 r0095 c0090 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 not reported. WARNING. Fixed and un-banked with boe_b0990. Re-measured after the loan split (4e1c246): the figures above are unchanged.",
+      "reason": "our defect, plan item P2.100: as boe_b0990 on RWEA - OF 09.01 r0095 c0090 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 not reported. WARNING. To be fixed and un-banked with boe_b0990 (P2.100). Re-measured after the loan split (4e1c246): the figures above are unchanged.",
       "portfolios": [
         "re-split"
       ],

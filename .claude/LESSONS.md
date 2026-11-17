@@ -317,10 +317,11 @@ one being worked. Seven of the eight oracle entries understate capital.
 bullet is still open and still describes the disagreement. An `OWNER:` pointing
 at a closed or drifted bullet is the review finding.
 
-**The reason is a claim, not a record.** Eleven of the seventeen escape-log entries
-of 2026-11-16 are `caught-and-parked` in whole or part, and what recurred was
-not a missing owner (most had one) but an unchecked reason: "an artefact of the
-zero-fill ... leaves with the template-level engine" (the engine was ours); "a
+**The reason is a claim, not a record.** Eleven of the seventeen PRA001
+rule-review entries in the escape log (2026-11-16) are `caught-and-parked` in
+whole or part, and what recurred was not a missing owner (most had one) but an
+unchecked reason: "an artefact of the zero-fill ... leaves with the
+template-level engine" (the engine was ours); "a
 reporting-basis decision ... NOT made here" (Annex II p.112 had made it);
 "unattributed - needs investigation" above measured sides that showed the cause;
 "capital-affecting, not changed here" with no `OWNER`; "deliberately NOT held

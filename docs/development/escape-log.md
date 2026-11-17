@@ -3942,7 +3942,7 @@ Four entries (row 0015, the loan split, the substituted leg, the PD column) name
 one missing gate: the gateway engine computed a Warning-severity verdict on every
 registered return and nothing kept it. That gate was built in the same batch
 (`269cae1`, `3295585`): the supervisory register's gateway leg,
-`known_gateway_breaks` (every gateway break on the 15 Basel 3.1 returns, keyed on
+`known_gateway_breaks` (every gateway break on the registered Basel 3.1 returns, keyed on
 rule, portfolio and severity, two-way ratcheted) and `known_engine_disagreements`
 (every rule on which the two engines give opposite verdicts), in
 `tests/acceptance/reporting/test_supervisory_validations.py`, with
@@ -4033,10 +4033,15 @@ requires every register reason on such a rule to cite the issue or rebut it.
 
   The new test files fail to collect on the parent (`ImportError`), so the
   behavioural red was taken with a probe written against the old API; the
-  reviewer reproduced it on the real 4.1.1 return at both commits. `967fe39`
-  says its compare and downgrade tests were "observed red with the deny list
-  not applied" and quotes no line. The `--deny-list --check` gate was run green
-  and has not been seen red.
+  reviewer reproduced it on the real 4.1.1 return at both commits.
+
+  Two limbs of the gate change are **OPEN** under the closing rule, because no
+  red line is quoted for them:
+  - **OPEN**: `967fe39`'s `compare` and template-level downgrade tests. Its
+    message says they were "observed red with the deny list not applied" and
+    quotes no line.
+  - **OPEN**: the `scripts/build_filer_release.py 4.1.1 --deny-list --check`
+    gate. It was run green and has not been seen red.
 - **What the fix moved**: no figure. Filing-mapping ratchet
   `error_rule_breaks` 64 → 50 (`boe_b0710` 13 → gone, `boe_b0710_1` 1 → gone).
   Register: b31 `boe_b0710` and `_1` leave `known_broken_rules`, `_2` and `_3`
@@ -4494,8 +4499,8 @@ requires every register reason on such a rule to cite the issue or rebut it.
   engine to Arelle rule by rule in CI with no Arelle, and asserts that the old
   reading counts every defect rule differently, so the returns can see it. Five
   semantics tests in `packages/rwa-filer/tests/boe/test_engine.py`.
-- **Verified red** (`8ceca03`: engine at HEAD, new tests in place; reproduced by
-  the reviewer against `ba53bd0`): `7 failed, 76 passed` —
+- **Verified red** (`8ceca03`: the pre-fix engine (the parent, `ba53bd0`) with
+  the new tests in place; reproduced there by the reviewer): `7 failed, 76 passed` —
   `[rounded]` differs on 7 rules (`boe_b0770 ([1, 1], [2, 0])`,
   `boe_b0794 ([1, 1], [2, 0])`, `boe_b0820`–`b0823`, `b0829 ([0, 1], [1, 0])`);
   `[rounded_sddt]` on `boe_b0794` and `boe_b1037_ss`; `[all_types]` on

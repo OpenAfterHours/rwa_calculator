@@ -102,7 +102,7 @@ All eleven legs share ONE set-diff (P5.41):
 
     The mechanism is shared; the POLICY is not, and the difference is
     deliberate. This register stays TWO-WAY: its membership is measured over
-    twenty pipeline runs, so a fixture change legitimately grows it and
+    the pipeline runs of ``RUNS``, so a fixture change legitimately grows it and
     ``REGEN_VALIDATION_BASELINE=1`` may bank that. The declared registers are
     SHRINK-ONLY, with no bulk affordance that adds an entry at all, because an
     entry there is a decision to ship a figure an independent derivation has
@@ -167,7 +167,7 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     evidence the estate is still being checked — an earlier draft of this
     paragraph overclaimed twice and a reviewer measured both claims false.
 
-    FIRST, the union. Membership is the union over the twenty runs: a rule is
+    FIRST, the union. Membership is the union over the runs: a rule is
     vacuity-only when NO run gets a real verdict out of it. A change that empties
     a column on ONE portfolio while another still exercises the same rule leaves
     this population unmoved, and 221 rules (130 of them ERROR) currently hold a
@@ -211,12 +211,14 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
 
 Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: fifteen portfolios x two
-    regimes, plus a prior-period run for each of the fourteen IRB ones, is
-    FORTY-FOUR full pipeline runs, about 34 s on a 2-thread budget. The gateway leg adds one
-    canonical return and one ``validate_return`` per Basel 3.1 run (fifteen) and
-    no pipeline run: the pack is loaded once per process and the COREP bundle is
-    the one the template leg already generated. Timed directly (2026-11-16, 4-core
-    box): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
+    regimes plus ``equity-transitional`` under Basel 3.1 alone (thirty-one runs,
+    sixteen of them Basel 3.1), plus a prior-period run for each of the fourteen
+    IRB ones, is FORTY-FIVE full pipeline runs. Count ``RUNS``, not this prose.
+    The gateway leg adds one canonical return and one ``validate_return`` per
+    Basel 3.1 run (sixteen) and no pipeline run: the pack is loaded once per
+    process and the COREP bundle is the one the template leg already generated.
+    Timed directly (2026-11-16, 4-core box, when the matrix held fifteen Basel 3.1
+    runs): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
     each) of a 39.4 s gate, about 15%. That is a standing temptation to trim the run set, so
     the justification lives here rather than only in a commit message. Each run
     is the SOLE reachability route for a family of published rules, and
@@ -300,8 +302,8 @@ Regenerating the baseline:
     silently: five entries once carried "…see crr/v4756_m" after ``v4756_m`` had
     left the register entirely. Grep each surviving reason for rule-id patterns
     (``v\\d{4,5}_[a-z]``, ``boe_b\\d{4}``) and check the ids still exist here.
-    Some references are deliberate — ``boe_b0710`` cites ``v6364_m`` and
-    ``v4721_m`` cites ``v4728_m`` precisely BECAUSE those rules pass for us — so
+    Some references are deliberate — ``boe_b0265`` cites ``boe_b0252`` and
+    ``v09782_m`` cites ``v09783_m`` precisely BECAUSE those rules pass for us — so
     the check is a prompt to look, not a rule. Where a cited rule has been fixed,
     RE-MEASURE the entry rather than editing its prose: the surrounding defect
     has usually changed shape too.
@@ -759,14 +761,14 @@ class GateInput(NamedTuple):
     build_prior_config: Callable[[], CalculationConfig] | None = None
 
 
-#: The twenty runs, each the sole reachability route for a family of published
+#: The runs, each the sole reachability route for a family of published
 #: rules. See "Cost, and why every run is load-bearing" in the module docstring
 #: before trimming this list — a dropped run does not make its rules pass, it
 #: makes them NOT_EVALUATED, which reads the same on the error channel.
 #:
-#: The count in this comment read "sixteen" until the ``netting`` pair below was
-#: added: it had already gone stale when ``art199`` and ``irb-shapes`` were
-#: registered. Count the tuple, not the prose.
+#: This comment used to state a count: "sixteen", stale from the day ``art199`` and
+#: ``irb-shapes`` were registered, then "twenty" while the tuple reached
+#: thirty-one. It states none now. Count the tuple, not the prose.
 #:
 #: The last four were added with the real-estate carrier-conservation batch. They
 #: are registered here rather than left as standalone acceptance fixtures because
@@ -1300,7 +1302,7 @@ class DisagreementFact(NamedTuple):
 
 
 class GateRun(NamedTuple):
-    """Everything the thirty runs produced.
+    """Everything the runs of ``RUNS`` produced (thirty-one, sixteen of them Basel 3.1).
 
     ``summary`` is per-run outcome counts, kept descriptive: nothing asserts an
     individual count, only that the four statuses are all reported and account
@@ -1534,7 +1536,7 @@ def _gateway_verdict(result: RuleResult) -> str:
 
 @pytest.fixture(scope="module")
 def gate_run() -> GateRun:
-    """The thirty runs (and the gateway leg on the fifteen Basel 3.1 ones), executed once.
+    """The runs of ``RUNS`` (and the gateway leg on its Basel 3.1 ones), executed once.
 
     ``--dist=loadfile`` pins this file to one worker, so the pipeline runs happen
     once per session rather than once per test.
@@ -1768,7 +1770,7 @@ def _disagreement_entries(
 # ---------------------------------------------------------------------------
 # Extracted rather than inlined like legs (a)-(d), for one reason: a gate nobody
 # has watched fail is not a gate, and watching THIS one fail through the tests
-# costs twenty pipeline runs plus a fixture change. Named functions over plain
+# costs the whole run matrix plus a fixture change. Named functions over plain
 # dicts can be driven with a synthetic measured-vs-baseline pair in seconds, so
 # both directions are demonstrable on demand instead of argued from the code.
 #
@@ -1779,7 +1781,7 @@ def _disagreement_entries(
 # what "new" and "gone" mean. `diff` is deliberately direction-NEUTRAL: it
 # reports both sides and each caller decides which is a failure. This register
 # stays two-way — an increase may be banked with REGEN_VALIDATION_BASELINE=1,
-# because its membership is MEASURED over twenty pipeline runs and a fixture
+# because its membership is MEASURED over the pipeline runs of RUNS and a fixture
 # change legitimately moves it. The declared registers are shrink-only, because
 # an entry there is a decision to ship a number the oracle has independently
 # shown is wrong. Same arithmetic, different policy, stated in each caller.
@@ -1803,7 +1805,7 @@ def _rules_no_longer_vacuous(
 # The gateway legs, as four named predicates
 # ---------------------------------------------------------------------------
 # Named for the same reason as the vacuity pair: watching legs (h)-(k) fail
-# through the tests costs thirty pipeline runs and a fixture change, while these
+# through the tests costs the whole run matrix and a fixture change, while these
 # can be driven with a synthetic measured-vs-baseline pair in milliseconds —
 # tests/contracts/test_gateway_break_registers_agree.py does exactly that,
 # including the boe_b1055 shape (one more portfolio for a banked rule).
@@ -2123,8 +2125,8 @@ def test_no_gateway_break_outside_the_baseline(gate_run: GateRun) -> None:
     one more portfolio is a new break, and so is a banked break the Bank's deny
     list moves to another severity (leg (i) then reports the old one gone).
 
-    Arrange: the committed register plus the gateway breaks of the fifteen
-             Basel 3.1 returns.
+    Arrange: the committed register plus the gateway breaks of the Basel 3.1
+             returns (one per Basel 3.1 run of ``RUNS``).
     Act:     find (rule, portfolio) pairs the register does not admit to.
     Assert:  there are none.
     """
@@ -2262,7 +2264,7 @@ def test_the_summary_keeps_unevaluable_rules_apart_from_passes(gate_run: GateRun
     after a rule falls out of ``PASS`` into ``VACUOUS`` as before. Legs (f)/(g)
     ratchet the rules themselves.
 
-    Arrange: the twenty runs.
+    Arrange: the runs of ``RUNS``.
     Act:     read the per-run summary.
     Assert:  all four outcome statuses are reported for every run, and together
              they account for exactly the enforced population.

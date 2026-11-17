@@ -17,12 +17,12 @@ name: Referee Differential
 # See scripts/referee_differential.py for what is held and how, and
 # scripts/referee_differential_baseline.json for the banked state.
 #
-# WHY IT IS NOT IN ci.yml: each golden return is several minutes and about 3 GB
-# of Arelle, the taxonomy package is a 60 MB download from the Bank's site, and
-# Arelle is a tool this project does not otherwise install. So it runs where it
-# can find something: on a change to the code it referees (the path filter
-# below), weekly, and on demand. A pull request that touches none of those paths
-# does not run it, and does not need to.
+# WHY IT IS NOT IN ci.yml: a full run is ~17 minutes of Arelle with nothing
+# cached (two 3-4 GB workers at once), the taxonomy package is a 60 MB download
+# from the Bank's site, and Arelle is a tool this project does not otherwise
+# install. So it runs where it can find something: on a change to the code it
+# referees (the path filter below), weekly, and on demand. A pull request that
+# touches none of those paths does not run it, and does not need to.
 #
 # WHAT A RED RUN MEANS, in the order to check:
 #   * "new disagreements" — the engine and Arelle differ on a rule. Read both
@@ -154,10 +154,15 @@ jobs:
       # The script finds the package at .taxonomy/ and leaves its files in
       # .referee-run/ - fixed places, not arguments (arch_check check 19). The
       # interpreter that has Arelle is named for rwa_filer.referee, which reads it.
+      # --max-rss-gb is per worker, and the cap is also what the number of
+      # workers at once is budgeted from: max(1, min(CPUs, floor((MemAvailable
+      # - 1.5 GB) / cap))). On ubuntu-latest (16 GB, 4 cores) 5 GB gives two at
+      # once; the 10 GB this used to pass gave one. The largest worker measured
+      # peaks at 3.9 GB.
       - name: Referee differential
         env:
           RWA_FILER_ARELLE_PYTHON: ${{ github.workspace }}/.arelle-venv/bin/python
-        run: uv run python scripts/referee_differential.py --max-rss-gb 10 --check
+        run: uv run python scripts/referee_differential.py --max-rss-gb 5 --check
 
       # Saved whether the gate passed or not: an entry is stored only for a
       # worker that finished, and whole or not at all.

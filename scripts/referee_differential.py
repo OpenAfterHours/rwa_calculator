@@ -144,8 +144,11 @@ MEASUREMENT_PATH = RUN_DIRECTORY / "measured.json"
 #: How long each part of the run took. Kept apart from the measurement, which
 #: is banked: a timing is not a verdict.
 TIMINGS_PATH = RUN_DIRECTORY / "timings.json"
-#: The resident memory one Arelle worker is held to, in GB.
-DEFAULT_MAX_RSS_GB = 9.0
+#: The resident memory one Arelle worker is held to, in GB. The largest of the
+#: 51 workers of the 16 golden returns peaked at 3.89 GB (a 120 MB chunk, the
+#: cyclic collector off; 3.66 with it on). The cap is also what the automatic
+#: number of workers at once budgets: at 5 GB, two on a 16 GB machine.
+DEFAULT_MAX_RSS_GB = 5.0
 #: Where workers' results are cached unless ``RWA_FILER_REFEREE_CACHE`` says
 #: otherwise. Inside the run directory, and kept when the rest of it is cleared.
 CACHE_DIRECTORY = RUN_DIRECTORY / "cache"

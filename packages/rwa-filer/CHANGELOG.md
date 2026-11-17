@@ -76,6 +76,32 @@ and released independently of `rwa-calc`; its release tags are prefixed
   the 508 it restates under the EBA's ids (`v6295_m`, `e4887_e`, `v7321_n`,
   `v7322_n`), and the six forms it splits two EBA rules into (`v6293_1_m` to
   `v6293_3_m`, `v6294_1_m` to `v6294_3_m`).
+- **Validation says how far it has got.** A full PRA001 return takes tens of
+  seconds to validate, nearly all of it in the published rules, and until now
+  nothing showed the work was moving. `validate`, `build` and `dash FILE` now
+  show on stderr which step they are on (reading the file, checking its
+  structure, evaluating the rules, writing the package) and how many rules are
+  done: `Evaluating the published rules: 612 of 1,441 (42%) - 8s`. In a
+  terminal it is one line, rewritten in place and cleared before the result.
+  Elsewhere nothing is shown unless `--progress` asks, and then it is one line
+  per step and per tenth of the rules. `--no-progress` turns it off. stdout is
+  unchanged, JSON included. Library: `rwa_filer.progress` (`Progress`,
+  `StreamProgress`) and a `progress=` callback on `validate_return`,
+  `trace_return`, `collect_evidence`, `build_filing`, `open_source`,
+  `boe.engine.evaluate_rules` and `trace_rules`. The callback cannot change a
+  verdict.
+- **The dashboard no longer looks frozen while a return is validated.** Opening
+  a return, opening it against another release, opening another version on the
+  Compare page, drafting or withdrawing an override (which validates the return
+  again) and building a package now run in the background. Work that ends
+  within a second is answered as before. Anything slower shows a progress page:
+  the steps, a bar of rules evaluated out of the total, and the time elapsed.
+  The page reloads every second and moves on to the result, or to the refusal
+  on the page the form came from, when the work ends. Work in progress is listed
+  under **Under way** in the side navigation. Refusals the form can make on its
+  own (no file, a fact table without its header, a date that is not a date, a
+  build with no folder) are still answered at once. `create_app` takes
+  `progress_after=` (default 1 second).
 - **Choosing the taxonomy release.** `rwa-filer` can now ship several taxonomy
   releases, and a run uses one: the one `--taxonomy VERSION` names, on every
   command that reads a return (`validate`, `build`, `diff`, `compare`, `dash`,

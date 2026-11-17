@@ -284,3 +284,10 @@ table.data th[scope="row"] { width: 200px; text-transform: none; letter-spacing:
 .draft { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .draft-top, .draft-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .draft-bottom form { margin-left: auto; }
+
+/* ---------- Progress of long work (task.html) --------------- */
+.task-count { display: flex; flex-direction: column; gap: 6px; }
+.task-count progress { width: 100%; height: 10px; appearance: none; border: 0; border-radius: 999px; background: var(--panel2); overflow: hidden; accent-color: var(--accent); }
+.task-count progress::-webkit-progress-bar { background: var(--panel2); border-radius: 999px; }
+.task-count progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+.task-count progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }

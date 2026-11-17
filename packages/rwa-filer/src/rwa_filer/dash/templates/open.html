@@ -18,7 +18,7 @@
     {% call open_fields(values, modules, releases) %}
       <div class="btn-row">
         <button class="btn btn-primary" type="submit">Validate</button>
-        <span class="small muted">Structure first, then the published rules. A PRA001 return takes a few seconds.</span>
+        <span class="small muted">Structure first, then the published rules. A full PRA001 return takes a while; you will see how far it has got.</span>
       </div>
       <div class="command">Same check on the command line: <span class="mono">rwa-filer validate FILE --entity LEI --reference-date YYYY-MM-DD --module PRA001 [--taxonomy VERSION]</span></div>
     {% endcall %}

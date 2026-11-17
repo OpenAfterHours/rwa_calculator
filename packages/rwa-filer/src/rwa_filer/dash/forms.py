@@ -2,22 +2,26 @@
 Opening a return from a form — the one way every page that takes a file reads it.
 
 Pipeline position:
-    open form (upload or path, header fields)  ->  open_from_form
-        ->  Workspace.open  ->  OpenedReturn
+    open form (upload or path, header fields)  ->  read_open_form  ->  OpenRequest
+        ->  (in a dashboard task)  OpenRequest.open  ->  Workspace.open  ->  OpenedReturn
 
 Key responsibilities:
 - Take a file the browser uploaded, or the path of one on this machine, and
-  the header a fact table needs, and open it in the workspace.
+  the header a fact table needs, and make it ready to open in the workspace.
 - Refuse, in words a person can act on, a fact table without its header or a
-  reference date that is not a date — before any reading is attempted.
+  reference date that is not a date — at once, before any reading is
+  attempted, so a refusal the form can make is never kept waiting behind the
+  long work of reading and validating.
 - Keep the Open page and the Compare page reading a file the same way.
 
 References:
 - rwa_filer.readers.open_source — what opening a file means
+- dash.tasks — where the opening itself runs
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -31,18 +35,47 @@ if TYPE_CHECKING:
     from starlette.datastructures import FormData
 
     from rwa_filer.dash.workspace import OpenedReturn, Workspace
+    from rwa_filer.progress import ProgressCallback
 
 #: The text fields of an open form, echoed back when a return cannot be opened.
 FORM_FIELDS: Final = ("path", "entity", "reference_date", "module", "currency", "taxonomy")
 
 
-async def open_from_form(workspace: Workspace, form: FormData) -> OpenedReturn:
-    """Open the return an open form names.
+@dataclass(frozen=True)
+class OpenRequest:
+    """A return an open form names: checked, on this machine, ready to be opened.
+
+    Attributes:
+        path: Where the file is — the upload as saved in the workspace, or the
+            path the person typed.
+        name: The name the person knows the file by.
+        fields: The header the person typed in.
+        taxonomy: The release asked for, by version, or ``None`` for the default.
+    """
+
+    path: Path
+    name: str
+    fields: HeaderFields
+    taxonomy: str | None
+
+    def open(self, workspace: Workspace, progress: ProgressCallback | None = None) -> OpenedReturn:
+        """Read and validate the file in ``workspace`` — the long part, told to ``progress``.
+
+        Raises:
+            ValueError: the file cannot be read.
+            ReleaseNotFoundError: the taxonomy release could not be resolved.
+        """
+        return workspace.open(
+            self.path, self.fields, name=self.name, taxonomy=self.taxonomy, progress=progress
+        )
+
+
+async def read_open_form(workspace: Workspace, form: FormData) -> OpenRequest:
+    """The return an open form names, saved into the workspace if it was uploaded.
 
     Raises:
         ValueError: nothing was named, the header is incomplete for a fact
-            table, the date is not a date, or the file cannot be read.
-        ReleaseNotFoundError: the taxonomy release could not be resolved.
+            table, or the date is not a date.
     """
     values = form_values(form)
     fields = header_fields(values)
@@ -52,9 +85,7 @@ async def open_from_form(workspace: Workspace, form: FormData) -> OpenedReturn:
             f"{name} is a fact table, which carries no header: give the entity, the "
             "reference date and the module."
         )
-    return await run_in_threadpool(
-        workspace.open, path, fields, name=name, taxonomy=values["taxonomy"] or None
-    )
+    return OpenRequest(path=path, name=name, fields=fields, taxonomy=values["taxonomy"] or None)
 
 
 def form_values(form: FormData) -> dict[str, str]:

@@ -81,6 +81,7 @@ from rwa_filer.boe.engine import (
     evaluate_rules,
     trace_rules,
 )
+from rwa_filer.progress import PHASE_STRUCTURE, Progress, notify
 from rwa_filer.release import choose_release
 from rwa_filer.validate.checker import (
     COVERAGE_NO_RULE_EXECUTED,
@@ -103,6 +104,7 @@ if TYPE_CHECKING:
     from rwa_filer.boe.catalogue import RuleBook
     from rwa_filer.boe.engine import RuleResult, RuleTrace
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import CoverageShortfall
@@ -403,6 +405,7 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
+    progress: ProgressCallback | None = None,
 ) -> ReturnValidation:
     """Validate ``ret``: structure against the taxonomy, then the published rules.
 
@@ -437,6 +440,9 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
             configuration, not a property of the return. To validate against
             the taxonomy's rules as published, pass a ``release`` whose
             ``deny_list`` is empty.
+        progress: Told which step the validation is on — the structure, then
+            the rules, counted one by one (``rwa_filer.progress``) — so a
+            person waiting on a large return can see it is moving.
 
     Returns:
         A ``ReturnValidation``. Never raises for a condition in the data.
@@ -454,7 +460,14 @@ def validate_return(  # noqa: PLR0913 - each a way of saying which release, or h
         today=today,
     )
     validation, _trace = _validate(
-        ret, chosen, accuracy, source_findings, source, trace=False, on=submission_date
+        ret,
+        chosen,
+        accuracy,
+        source_findings,
+        source,
+        trace=False,
+        on=submission_date,
+        progress=progress,
     )
     return validation
 
@@ -471,6 +484,7 @@ def trace_return(  # noqa: PLR0913 - validate_return's arguments
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
+    progress: ProgressCallback | None = None,
 ) -> tuple[ReturnValidation, RuleTrace | None]:
     """``validate_return``, keeping every evaluation the verdict was reached by.
 
@@ -489,7 +503,16 @@ def trace_return(  # noqa: PLR0913 - validate_return's arguments
         taxonomy=taxonomy,
         today=today,
     )
-    return _validate(ret, chosen, accuracy, source_findings, source, trace=True, on=submission_date)
+    return _validate(
+        ret,
+        chosen,
+        accuracy,
+        source_findings,
+        source,
+        trace=True,
+        on=submission_date,
+        progress=progress,
+    )
 
 
 def findings_for(report: RuleReport) -> list[Finding]:
@@ -533,8 +556,10 @@ def _validate(
     *,
     trace: bool,
     on: date | None,
+    progress: ProgressCallback | None,
 ) -> tuple[ReturnValidation, RuleTrace | None]:
     pack = chosen.pack
+    notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version))
     structure = (*source_findings, *check_structure(ret, pack))
     release_findings = tuple(check_reference_date(ret, pack))
     module = pack.info.module
@@ -560,11 +585,13 @@ def _validate(
         return unchecked, None
 
     enforced = rulebook.enforced(module)
-    traced = trace_rules(ret, pack, enforced, accuracy=accuracy) if trace else None
+    traced = (
+        trace_rules(ret, pack, enforced, accuracy=accuracy, progress=progress) if trace else None
+    )
     published = (
         traced.results
         if traced is not None
-        else tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy))
+        else tuple(evaluate_rules(ret, pack, enforced, accuracy=accuracy, progress=progress))
     )
     # The gateway's execution configuration, after evaluation: the published
     # verdict stays on each result it changes (``RuleResult.formula``).

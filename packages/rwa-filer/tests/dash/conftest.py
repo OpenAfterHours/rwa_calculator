@@ -21,9 +21,16 @@ def workspace(tmp_path: Path) -> Workspace:
     return Workspace(tmp_path / "workspace")
 
 
+#: How long a form waits for the work it starts. Long enough that every test of
+#: a page's own behaviour sees the result of a form, never its progress page,
+#: however slow the machine: the progress page has tests of its own
+#: (test_tasks.py), which set it to zero.
+SETTLED_SECONDS = 120.0
+
+
 @pytest.fixture
 def client(workspace: Workspace) -> TestClient:
-    return TestClient(create_app(workspace), base_url=BASE_URL)
+    return TestClient(create_app(workspace, progress_after=SETTLED_SECONDS), base_url=BASE_URL)
 
 
 @pytest.fixture

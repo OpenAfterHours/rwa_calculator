@@ -179,12 +179,6 @@ def capped_collateral(*, deposit_in_column_0130: bool) -> float:
     return sum(min(cvam, DRAWN[ref]) for ref, cvam in loans.items())
 
 
-def uncapped_collateral(*, deposit_in_column_0130: bool) -> float:
-    """Column 0130's magnitude BEFORE the fix: the whole collateral carrier."""
-    loans = CVAM if deposit_in_column_0130 else {k: v for k, v in CVAM.items() if k != LN_D}
-    return sum(loans.values())
-
-
 # ---------------------------------------------------------------------------
 # Main public entry point
 # ---------------------------------------------------------------------------

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }} — rwa-filer dash{% endblock %}
+{% block head_extra %}<meta http-equiv="refresh" content="{{ refresh }}">{% endblock %}
+{% block content %}
+<div>
+  <div class="small muted">Working</div>
+  <h1>{{ task.title }}</h1>
+  <p class="lede">A large return takes a while: almost all of it is spent evaluating the published rules, one by one. This page follows the work and moves on by itself when it is done.</p>
+</div>
+
+<section class="panel" id="task" data-status="{{ task.status }}" role="status" aria-live="polite" aria-label="Progress">
+  <ol class="steps" id="task-steps">
+    {% for step in view.steps %}
+    <li class="step{{ ' ' ~ step.state if step.state != 'pending' }}" data-phase="{{ step.phase }}" data-state="{{ step.state }}"{% if step.state == "current" %} aria-current="step"{% endif %}><span class="num">{{ "✓" if step.state == "done" else loop.index }}</span><span><strong>{{ step.label }}</strong><span class="small muted">{{ {"done": "done", "current": step.detail or "under way", "pending": "next"}[step.state] }}</span></span></li>
+    {% endfor %}
+  </ol>
+  {% if view.counted %}
+  <div class="task-count">
+    <progress id="task-progress" max="{{ view.total }}" value="{{ view.done }}">{{ view.percent }}%</progress>
+    <div class="small"><span class="mono" id="task-done">{{ view.done | count }}</span> of <span class="mono">{{ view.total | count }}</span> rules evaluated ({{ view.percent }}%)</div>
+  </div>
+  {% endif %}
+  <p class="small muted" style="margin: 0">Going for <span id="task-elapsed">{{ view.elapsed }}</span>. This page updates every {{ "second" if refresh == 1 else refresh ~ " seconds" }}; you can leave it and use the rest of the dashboard meanwhile.</p>
+</section>
+{% endblock %}
+{% block command %}<div>Same progress on the command line: <span class="mono" style="color: var(--fg)">rwa-filer validate FILE --progress</span> (shown by default in a terminal)</div>{% endblock %}

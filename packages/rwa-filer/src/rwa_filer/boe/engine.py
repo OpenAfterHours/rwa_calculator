@@ -96,6 +96,7 @@ from rwa_filer.boe.grammar import (
     references,
 )
 from rwa_filer.model import DECIMALS_EXACT
+from rwa_filer.progress import PHASE_RULES, Progress, notify
 from rwa_filer.validate.structure import (
     IS_KEY,
     filing_indicators,
@@ -105,12 +106,13 @@ from rwa_filer.validate.structure import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
     from rwa_filer.boe.catalogue import Rule
     from rwa_filer.boe.deny import DenyEntry
     from rwa_filer.boe.grammar import Default, Node, ScopeGroup
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
 
 logger = logging.getLogger(__name__)
@@ -291,15 +293,17 @@ def evaluate_rules(
     rules: Iterable[Rule],
     *,
     accuracy: Accuracy | None = None,
+    progress: ProgressCallback | None = None,
 ) -> list[RuleResult]:
     """Evaluate ``rules`` over ``ret``. One result per rule, in the order given.
 
     Never raises for a condition in the return or in a rule: a rule that cannot
-    be evaluated is a result with a reason.
+    be evaluated is a result with a reason. ``progress``, when given, hears how
+    many of the rules are done: once before the first, then after each one.
     """
     store = _Store(ret, pack, accuracy or Accuracy())
     module = pack.info.module
-    results = [_evaluate_rule(rule, store, module) for rule in rules]
+    results = [_evaluate_rule(rule, store, module) for rule in _counted(tuple(rules), progress)]
     logger.info(
         "evaluated %d rule(s) for %s: %d failed, %d not evaluated",
         len(results),
@@ -374,18 +378,23 @@ def trace_rules(
     rules: Iterable[Rule],
     *,
     accuracy: Accuracy | None = None,
+    progress: ProgressCallback | None = None,
 ) -> RuleTrace:
     """Evaluate ``rules`` as ``evaluate_rules`` does, keeping every evaluation.
 
     The results are exactly ``evaluate_rules``'s. Each evaluation the engine
     made — satisfied or not, unlike ``RuleResult.failures``, which keeps the
     first few unsatisfied ones — is kept with every cell it read, uncapped.
+    ``progress`` hears how many rules are done, as for ``evaluate_rules``.
     """
     store = _Store(ret, pack, accuracy or Accuracy())
     module = pack.info.module
     evaluations: list[Evaluation] = []
     cells: dict[CellAddress, CellFact] = {}
-    results = tuple(_evaluate_rule(rule, store, module, evaluations, cells) for rule in rules)
+    results = tuple(
+        _evaluate_rule(rule, store, module, evaluations, cells)
+        for rule in _counted(tuple(rules), progress)
+    )
     return RuleTrace(results=results, evaluations=tuple(evaluations), cells=cells)
 
 
@@ -1580,6 +1589,19 @@ class _Evaluation:
 # =============================================================================
 # Private helpers — places
 # =============================================================================
+
+
+def _counted(rules: tuple[Rule, ...], progress: ProgressCallback | None) -> Iterator[Rule]:
+    """``rules``, one at a time, telling ``progress`` how many are done before each next one.
+
+    The count is reported before the first rule (0 of N) and after every rule,
+    the last included (N of N), so a watcher sees the step start and finish.
+    """
+    total = len(rules)
+    notify(progress, Progress(PHASE_RULES, 0, total))
+    for done, rule in enumerate(rules, start=1):
+        yield rule
+        notify(progress, Progress(PHASE_RULES, done, total))
 
 
 def _check_functions(node: Node) -> None:

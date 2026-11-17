@@ -82,6 +82,7 @@ if TYPE_CHECKING:
         RuleTrace,
     )
     from rwa_filer.model import CanonicalReturn
+    from rwa_filer.progress import ProgressCallback
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import FactPosition, Finding
@@ -203,11 +204,12 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
     source_findings: Sequence[Finding] = (),
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
+    progress: ProgressCallback | None = None,
 ) -> Evidence:
     """Validate ``ret`` as ``validate_return`` does, keeping everything it executed.
 
-    The arguments are ``validate_return``'s, the taxonomy release included.
-    Never raises for a condition in the data.
+    The arguments are ``validate_return``'s, the taxonomy release and the
+    progress callback included. Never raises for a condition in the data.
 
     Raises:
         ReleaseNotFoundError: the release could not be resolved.
@@ -223,6 +225,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
         source_findings=source_findings,
         source=source,
         submission_date=submission_date,
+        progress=progress,
     )
     return Evidence(ret=ret, validation=validation, trace=trace)
 

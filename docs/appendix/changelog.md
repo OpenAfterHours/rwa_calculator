@@ -467,6 +467,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **Return reconciliation prices a Basel 3.1 loan-split mortgage per part.**
+  Since OF 07.00 reports such a loan in its two parts, each part carried the
+  whole leg's `rwa_final`, and the row-migration matrix priced a leg by its
+  first row: on `b31/rich` the real-estate sheet's exposure value read
+  10,366,666.67 against the 10,400,000 reported, and a reader summing the
+  membership rows doubled the loan's RWEA. Each part now carries its own share
+  of `ead_final` and `rwa_final` (membership publishes the part as `rw_part`),
+  and the matrix adds the parts. No reported cell changes.
+- **Legacy-ledger coverage names the Basel 3.1 OF 07.00 rows a projected ledger
+  cannot key**: memorandum rows 0300 / 0320 on the class sheets, the
+  risk-weight band rows of a loan-split mortgage and transitional equity's rows
+  0250 / 0261 / 0280, which read carriers no mapping can target
+  (`LedgerCoverage.unavailable_rows`). The compare does not yet read them, so a
+  difference there is still shown as measured
+  (`docs/plans/return-reconciliation.md`).
+- **The shareable publisher-issue register (`docs/rwa-filer/publisher-issues.md`)
+  corrected.** It said 1,441 rules run on a PRA001 return; 1,441 are published
+  and the gateway runs 1,434, the Bank's deny list deactivating 7. Each worked
+  example's table is headed by its number of cells, not "facts": two cells can
+  share one data point, so 8 of the 37 examples hold fewer facts than cells.
+  Appendix A group B now pairs each Bank rule with the deactivated EBA rule on
+  its own sheet (`boe_b1035`, `b1067`, `b1068`, `b0882` in; `b0841`, `b0863`,
+  `b0881`, `b0883` out; still 34 rules). And `rwa-filer rulebook deny-list
+  check` without `--known-issues` no longer reports a current list out of date.
+  Details in `packages/rwa-filer/CHANGELOG.md`.
 - **CAPITAL — RWA DOWN: Basel 3.1 equity held by a firm without IRB permission
   now takes the PS1/26 transitional weights in 2027–2029.** PS1/26 Credit Risk:
   General Provisions rules 4.2 and 4.3 say such equity "shall be assigned" 160%
@@ -479,9 +504,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   listed equity, 2027 RWEA is now 1,600,000 instead of 2,500,000; higher risk
   2,200,000 instead of 4,000,000. From 1 January 2030 nothing changes.
   - Not affected: subordinated debt (150%), every CIU, the central-bank type,
-    Art. 133(6)(c) significant investments (250%), firms with IRB permission
-    (still 250% / 400%), CRR, and equity booked on the loans table (still 250%,
-    flagged `SA005`).
+    Art. 133(6)(c) significant investments (250%, but 400% where the holding is
+    also higher risk: Art. 133(4) gives it paragraph 6's 250% and the engine
+    does not yet, P1.393(b)), firms with IRB permission (still 250% / 400%),
+    CRR, and equity booked on the loans table (still 250%, flagged `SA005`).
   - Who has IRB permission is read from `irb_permissions` (any F-IRB, A-IRB or
     slotting permission: PS1/26 Art. 143(2A) names slotting as an IRB
     approach), or stated directly with the new

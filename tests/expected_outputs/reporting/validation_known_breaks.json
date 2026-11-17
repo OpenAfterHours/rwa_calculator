@@ -492,7 +492,7 @@
       "regime": "b31",
       "rule_id": "boe_b0990",
       "severity": "WARNING",
-      "reason": "OF 09.01 r0095 c0010 (geographic breakdown, original exposure pre-CCF) reports 825,000.00 where OF 07.00 sheet 0010 r0020 c0010 reports 0.00. Cross-template class-row mapping defect between the geographic breakdown and the SA template: one side attributes the real-estate split's secured leg to a class row the other leaves empty. PRE-EXISTING and newly REACHABLE, not newly broken -- it fires identically on the unfixed engine, and became visible only when the re-split and funded-protection portfolios were registered in RUNS. WARNING severity, so it does not reject a submission. Not caused by the carrier-conservation batch. Plan item P2.100 (filed 2026-11-16) owns the boe_b0990 family; re-measured after the loan split (4e1c246), the figures above are unchanged.",
+      "reason": "Our defect, plan item P2.100. OF 09.01 r0095 c0010 reports 825,000.00 where OF 07.00 real-estate sheet 0010 r0020 c0010 reports 0.00. Row 0095 is 'Real estate exposures - of which: SME' (r0093 is 'of which: Other real estate'; the Bank's label for this rule names the other-real-estate row, its expression the SME tie-out) and r0020 is OF 07.00's 'of which: SME'. The 825,000 is RESP-LN-CRE-SME_sec, the Art. 124H(1)(a) secured part (60%, row 0201) of a commercial real-estate loan to an SME obligor (RESP-CP-SME): OF 07.00 sheet 0010 reports that leg in rows 0010, 0070, 0201, 0340 and 0341 but never in its SME rows 0020 and 0343, while OF 09.01 counts it in r0095. The residual part RESP-LN-CRE-SME_res (175,000 at the Art. 124L(1)(c) 85%) is reported on the corporate sheet and plays no part in this break. PRE-EXISTING and newly REACHABLE, not newly broken - it fired identically on the unfixed engine and became visible only when the re-split portfolio was registered in RUNS. WARNING severity, so it does not reject a submission. Re-measured on b31/re-split 2026-11-17.",
       "portfolios": [
         "re-split"
       ],
@@ -506,7 +506,7 @@
       "regime": "b31",
       "rule_id": "boe_b0991",
       "severity": "WARNING",
-      "reason": "As boe_b0990 on the exposure-value axis: OF 09.01 r0095 c0075 reports 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 at 0.00. Same cross-template class-row mapping defect, same pre-existing-and-newly-reachable status (fires on the unfixed engine), WARNING severity. One defect with boe_b0990 seen on three columns, so the three must be fixed and un-banked together. Plan item P2.100 (filed 2026-11-16) owns the boe_b0990 family; re-measured after the loan split (4e1c246), the figures above are unchanged.",
+      "reason": "Our defect, plan item P2.100: as boe_b0990 on the exposure-value axis - OF 09.01 r0095 (of which: SME) c0075 reports 825,000.00 against OF 07.00 real-estate sheet 0010 r0020 (of which: SME) c0200 at 0.00, the same SME obligor's secured leg missing from the SME rows. WARNING severity. One defect with boe_b0990 seen on three columns, so the three must be fixed and un-banked together.",
       "portfolios": [
         "re-split"
       ],
@@ -520,7 +520,7 @@
       "regime": "b31",
       "rule_id": "boe_b0992",
       "severity": "WARNING",
-      "reason": "As boe_b0990 on the RWEA axis: OF 09.01 r0095 c0090 reports 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 at 0.00. Same cross-template class-row mapping defect, pre-existing (fires on the unfixed engine), WARNING severity. The RWEA is 60% of the exposure value, consistent with an Art. 124L residual leg at the counterparty weight, which is a hint at where the mapping diverges. One defect with boe_b0990/0991. Plan item P2.100 (filed 2026-11-16) owns the boe_b0990 family; re-measured after the loan split (4e1c246), the figures above are unchanged.",
+      "reason": "Our defect, plan item P2.100: as boe_b0990 on the RWEA axis - OF 09.01 r0095 (of which: SME) c0090 reports 495,000.00 against OF 07.00 real-estate sheet 0010 r0020 (of which: SME) c0220 at 0.00. 495,000 is 60% of 825,000: the Art. 124H(1)(a) weight on the secured part, reported in row 0201 (the Art. 124L counterparty weight, 85%, is the residual leg's, on the corporate sheet). WARNING severity. One defect with boe_b0990 / boe_b0991.",
       "portfolios": [
         "re-split"
       ],
@@ -5093,7 +5093,7 @@
       "regime": "b31",
       "rule_id": "boe_b0990",
       "severity": "WARNING",
-      "reason": "our defect, plan item P2.100: OF 09.01 r0095 c0010 (other real estate, original exposure) reports 825,000.00 where OF 07.00 real-estate sheet 0010 r0020 c0010 reports nothing - a cross-template class-row mapping defect for the real-estate split's secured leg. Pre-existing, reachable since re-split was registered. WARNING. The template-level engine breaks it too; boe_b0991 / boe_b0992 are the same defect on two more columns. Re-measured after the loan split (4e1c246): the figures above are unchanged.",
+      "reason": "our defect, plan item P2.100: OF 09.01 r0095 c0010 ('Real estate exposures - of which: SME'; r0093 is other real estate, which the Bank's label for this rule names in error) reports 825,000.00 where OF 07.00 real-estate sheet 0010 r0020 c0010 ('of which: SME') reports nothing. The 825,000 is RESP-LN-CRE-SME_sec, the Art. 124H(1)(a) secured part (60%) of an SME obligor's commercial real-estate loan: OF 07.00 sheet 0010 reports it in rows 0010, 0070, 0201, 0340 and 0341 but never in the SME rows 0020 and 0343. Pre-existing, reachable since re-split was registered. WARNING. The template-level engine breaks it too; boe_b0991 / boe_b0992 are the same defect on two more columns. Re-measured on b31/re-split 2026-11-17.",
       "portfolios": [
         "re-split"
       ],
@@ -5111,7 +5111,7 @@
       "regime": "b31",
       "rule_id": "boe_b0991",
       "severity": "WARNING",
-      "reason": "our defect, plan item P2.100: as boe_b0990 on exposure value - OF 09.01 r0095 c0075 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 not reported. WARNING. To be fixed and un-banked with boe_b0990 (P2.100). Re-measured after the loan split (4e1c246): the figures above are unchanged.",
+      "reason": "our defect, plan item P2.100: as boe_b0990 on exposure value - OF 09.01 r0095 (of which: SME) c0075 825,000.00 against OF 07.00 real-estate sheet 0010 r0020 (of which: SME) c0200 not reported. WARNING. To be fixed and un-banked with boe_b0990 (P2.100).",
       "portfolios": [
         "re-split"
       ],
@@ -5129,7 +5129,7 @@
       "regime": "b31",
       "rule_id": "boe_b0992",
       "severity": "WARNING",
-      "reason": "our defect, plan item P2.100: as boe_b0990 on RWEA - OF 09.01 r0095 c0090 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 not reported. WARNING. To be fixed and un-banked with boe_b0990 (P2.100). Re-measured after the loan split (4e1c246): the figures above are unchanged.",
+      "reason": "our defect, plan item P2.100: as boe_b0990 on RWEA - OF 09.01 r0095 (of which: SME) c0090 495,000.00 (60% of 825,000, the Art. 124H(1)(a) secured-part weight) against OF 07.00 real-estate sheet 0010 r0020 (of which: SME) c0220 not reported. WARNING. To be fixed and un-banked with boe_b0990 (P2.100).",
       "portfolios": [
         "re-split"
       ],

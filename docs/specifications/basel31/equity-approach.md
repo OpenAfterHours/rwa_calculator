@@ -214,7 +214,12 @@ weight on every date and carry no transitional label:
 - **Art. 133(6) items** — both rules exclude exposures "within scope of
   paragraph 6" by name. The engine recognises Art. 133(6)(c) through
   `is_significant_investment` (a holding weighted 250% under Own Funds
-  Art. 48(4)); 133(6)(a) / (b) have no input carrier
+  Art. 48(4)); 133(6)(a) / (b) have no input carrier. **Engine gap:** a
+  flagged holding that is also higher risk is weighted 400% on every date, not
+  250% — the Art. 133 weight chain puts every higher-risk leg on the 400% rung
+  before it reads the flag, where Art. 133(4) sends a higher-risk exposure
+  "within the scope of paragraph 6" to paragraph 6's treatment
+  (`IMPLEMENTATION_PLAN.md` P1.393(b))
 - **CIUs, every approach** (fall-back 1,250%, mandate-based, look-through) —
   weighted under Arts. 132–132C, not Art. 133. Under an assignment, an
   unexcluded fall-back CIU would drop from 1,250% to 160%, so the exclusion is

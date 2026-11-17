@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from many_breaks_returns import PLACES, RULE, UNADJUSTED_CSV
 from pack_builders import VALID_LEI
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 
@@ -81,6 +82,27 @@ def test_build_with_force_writes_the_package_and_still_reports_failure(
     assert manifest["validation"]["submittable"] is False
     assert "VAL001" in [finding["code"] for finding in manifest["validation"]["findings"]]
     assert manifest["instance"]["monetary_decimals"] == 2
+
+
+@pytest.mark.parametrize("evidence", [False, True], ids=["report", "with-evidence"])
+def test_build_all_breaks_lists_every_break(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], evidence: bool
+) -> None:
+    """``build`` prints the validation report: with the flag, every break in it."""
+    # Arrange — boe_b0751 breaks on every row of three sheets: twelve times.
+    path = _csv(tmp_path, UNADJUSTED_CSV)
+    extra = ["--evidence", str(tmp_path / "evidence.jsonl")] if evidence else []
+
+    # Act
+    code = main(
+        ["build", str(path), "--out", str(tmp_path / "out"), *HEADER_ARGS, "--all-breaks", *extra]
+    )
+
+    # Assert — blocked, as without the flag, and each break listed under the rule.
+    out = capsys.readouterr().out
+    assert code == EXIT_FAILED
+    assert f"  {RULE} (ERROR) breaks in 12 of 12 evaluation(s):" in out
+    assert all(f"    at {place}: " in out for place in PLACES)
 
 
 def test_build_writes_a_return_that_passes_and_exits_zero(

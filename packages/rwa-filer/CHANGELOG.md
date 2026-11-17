@@ -7,7 +7,20 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **`--all-breaks` on `rwa-filer validate` and `build`: every break of each
+  broken rule, not only the first.** A rule's finding quotes its first break
+  and the JSON report lists its first five, so a rule that broke on every row of
+  every sheet showed one or five of them. With the flag the text report gains a
+  section after the findings: each broken rule, then one line per break with
+  where it is and what the cells it read held. Each rule's `failures` in the
+  JSON report (`--format json`, `--report`) holds every break. The verdict, the
+  counts, the exit code, the manifest and the evidence file are the same with or
+  without it; without it the output is byte-for-byte as before. It works with
+  `--evidence` too.
+  - Python: `render_text(..., breaks=True)` renders the section, and says
+    "the first N recorded" for a rule whose validation kept fewer than its
+    breaks. `build_filing` and `collect_evidence` take `max_failures=`, as
+    `validate_return` does.
 
 ### Changed
 - (Next release changes will go here)

@@ -27,6 +27,11 @@ Key responsibilities:
   for: which rules its gateway no longer runs, or runs as warnings — in the
   summary, on each rule (with the published rule's own verdict) and, in the
   text, one line per rule with its date and known-issue number.
+- On request (``rwa-filer validate --all-breaks``), list in the text every
+  recorded break of each broken rule, where it is and what its cells held —
+  the findings quote only the first. The JSON record always lists every break
+  the validation recorded (``failures``): all of them when it was run with
+  ``max_failures=None``.
 - Say which results a known issue with the published rule explains — on each
   labelled rule, on each labelled finding, in the summary by issue and, in the
   text, one line per label after the counts — without changing a word of the
@@ -235,8 +240,15 @@ def finding_record(finding: Finding) -> dict[str, Any]:
     }
 
 
-def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
-    """The report as plain text: the verdict, the counts, then every finding."""
+def render_text(ret: CanonicalReturn, validation: ReturnValidation, *, breaks: bool = False) -> str:
+    """The report as plain text: the verdict, the counts, then every finding.
+
+    A rule's finding quotes its first break. With ``breaks``, a section after
+    the findings lists every break the validation recorded for each broken
+    rule — every one, when it was run with ``max_failures=None``; it says when
+    the record holds fewer than the rule's breaks. Without it, the text is as
+    it always was.
+    """
     info = validation.pack.info
     header = ret.header
     report = validation.report
@@ -276,12 +288,35 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
             f"[{finding.code}] {finding.severity}: {finding.message}"
             for finding in validation.findings
         )
+    if breaks:
+        lines.extend(_break_lines(validation))
     lines.append("")
     lines.append(
         "The regulator's own validation on upload is authoritative; a clean result here "
         "is evidence the return is well-formed, not a guarantee of acceptance."
     )
     return "\n".join(lines)
+
+
+def _break_lines(validation: ReturnValidation) -> list[str]:
+    """Each broken rule, then one line per recorded break: where, and what its cells held."""
+    report = validation.report
+    broken = [result for result in report.results if result.status == STATUS_FAIL] if report else []
+    if not broken:
+        return []
+    lines = ["", "Every break of each broken rule:"]
+    for result in broken:
+        recorded = len(result.failures)
+        partial = "" if recorded >= result.unsatisfied else f"; the first {recorded} recorded"
+        lines.append(
+            f"  {result.rule_id} ({result.severity}) breaks in {result.unsatisfied} of "
+            f"{result.evaluations} evaluation(s){partial}:"
+        )
+        lines.extend(
+            f"    at {failure.place or 'the template as a whole'}: {'; '.join(failure.cells)}"
+            for failure in result.failures
+        )
+    return lines
 
 
 def _deny_lines(validation: ReturnValidation) -> list[str]:

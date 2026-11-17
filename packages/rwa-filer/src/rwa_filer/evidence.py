@@ -55,6 +55,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import IO, TYPE_CHECKING, Any, Final
 
+from rwa_filer.boe.engine import MAX_FAILURES
 from rwa_filer.validate.identity import identity_record, source_identity
 from rwa_filer.validate.issue_labels import evaluation_issues
 from rwa_filer.validate.report import (
@@ -205,11 +206,14 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
     progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
 ) -> Evidence:
     """Validate ``ret`` as ``validate_return`` does, keeping everything it executed.
 
-    The arguments are ``validate_return``'s, the taxonomy release and the
-    progress callback included. Never raises for a condition in the data.
+    The arguments are ``validate_return``'s, the taxonomy release, the progress
+    callback and ``max_failures`` included. ``max_failures`` changes only how
+    many breaks the validation's report lists for each rule: the evidence holds
+    every evaluation either way. Never raises for a condition in the data.
 
     Raises:
         ReleaseNotFoundError: the release could not be resolved.
@@ -226,6 +230,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
         source=source,
         submission_date=submission_date,
         progress=progress,
+        max_failures=max_failures,
     )
     return Evidence(ret=ret, validation=validation, trace=trace)
 

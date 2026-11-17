@@ -10,15 +10,18 @@ pinned in ``tests/boe/test_engine.py``.
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import polars as pl
 import pytest
 
 from boe_builders import T01, T02, T03, book, ref, rule
-from pack_builders import SAMPLE_MODULE, build_header, build_pack, build_return
+from many_breaks_returns import PLACES, RULE, UNADJUSTED_CSV
+from pack_builders import SAMPLE_MODULE, VALID_LEI, build_header, build_pack, build_return
 from rwa_filer.boe.catalogue import SEVERITY_WARNING
 from rwa_filer.boe.engine import (
+    MAX_FAILURES,
     REASON_NOT_REPORTED,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
@@ -26,6 +29,7 @@ from rwa_filer.boe.engine import (
     Accuracy,
 )
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
+from rwa_filer.readers import HeaderFields, open_source
 from rwa_filer.release import release_rulebook
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.checker import (
@@ -484,3 +488,35 @@ def test_a_clean_text_report_says_submittable(pack: TaxonomyPack) -> None:
 
     # Assert
     assert text.startswith("SUBMITTABLE: TST001")
+
+
+@pytest.mark.parametrize(
+    ("max_failures", "heading"),
+    [
+        (None, f"  {RULE} (ERROR) breaks in 12 of 12 evaluation(s):"),
+        (
+            MAX_FAILURES,
+            f"  {RULE} (ERROR) breaks in 12 of 12 evaluation(s); "
+            f"the first {MAX_FAILURES} recorded:",
+        ),
+    ],
+    ids=["every-break-recorded", "first-few-recorded"],
+)
+def test_the_list_of_every_break_says_when_it_holds_only_the_first(
+    tmp_path: Path, max_failures: int | None, heading: str
+) -> None:
+    """Asked to list every break of a validation that kept the first few, it says so."""
+    # Arrange — boe_b0751 breaks twelve times, on the packaged rule book.
+    path = tmp_path / "unadjusted.csv"
+    path.write_text(UNADJUSTED_CSV)
+    fields = HeaderFields(entity=VALID_LEI, reference_date=date(2027, 3, 31), module="PRA001")
+    reading = open_source(path, fields)
+    validation = validate_return(reading.ret, release=reading.release, max_failures=max_failures)
+
+    # Act
+    text = render_text(reading.ret, validation, breaks=True)
+
+    # Assert
+    assert heading in text
+    listed = sum(f"    at {place}: " in text for place in PLACES)
+    assert listed == (len(PLACES) if max_failures is None else MAX_FAILURES)

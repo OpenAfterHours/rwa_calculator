@@ -57,10 +57,15 @@ check 19 — a script does not build a path from what its caller types):
     RWA_FILER_ARELLE_PYTHON=/path/to/arelle-venv/bin/python \\
         uv run python scripts/referee_differential.py --check
 
-Each golden return is several minutes and about 3 GB of Arelle. ``--portfolio``
-restricts the run for a quick local look; a restricted run cannot be banked.
-The instances, Arelle's per-worker files and the measurement are left in
-``.referee-run/`` (git-ignored), which is cleared at the start of every run.
+Every golden return is built and filed first, one after another. Then every
+Arelle worker of every return runs through ONE pool, as many at once as fit in
+the memory available at ``--max-rss-gb`` each (``--jobs N`` to say how many;
+``rwa_filer.referee.resolve_jobs``), and only then is each return set beside the
+native engine. A worker is about a minute and 3-4 GB of Arelle; a return is
+three or four of them. ``--portfolio`` restricts the run for a quick local
+look; a restricted run cannot be banked. The instances, Arelle's per-worker
+files, the measurement and the timings are left in ``.referee-run/``
+(git-ignored), which is cleared at the start of every run.
 
 Exit codes:
     0 = measured (and, with --check, nothing moved)
@@ -82,6 +87,7 @@ import shutil
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -103,7 +109,13 @@ from rwa_calc.reporting.filing.canonical import (  # noqa: E402
     build_canonical_return,
 )
 from rwa_filer.model import ReturnHeader  # noqa: E402
-from rwa_filer.referee import find_arelle_python, run_referee  # noqa: E402
+from rwa_filer.referee import (  # noqa: E402
+    PreparedReferee,
+    find_arelle_python,
+    prepare_referee,
+    resolve_jobs,
+    run_referees,
+)
 from rwa_filer.referee.differential import compare  # noqa: E402
 from rwa_filer.release import resolve_release  # noqa: E402
 from rwa_filer.validate.returns import validate_return  # noqa: E402
@@ -118,6 +130,11 @@ TAXONOMY_PACKAGE = _REPO_ROOT / ".taxonomy" / "boe-banking-v411.zip"
 #: Where a run leaves its instances, Arelle's per-worker files and its measurement.
 RUN_DIRECTORY = _REPO_ROOT / ".referee-run"
 MEASUREMENT_PATH = RUN_DIRECTORY / "measured.json"
+#: How long each part of the run took. Kept apart from the measurement, which
+#: is banked: a timing is not a verdict.
+TIMINGS_PATH = RUN_DIRECTORY / "timings.json"
+#: The resident memory one Arelle worker is held to, in GB.
+DEFAULT_MAX_RSS_GB = 9.0
 
 #: Per-portfolio registers held exactly: nothing may join or leave unrecorded.
 REGISTERS = ("disagreements", "arelle_errors", "count_differences")
@@ -146,7 +163,21 @@ def main() -> int:
         metavar="NAME",
         help="run only this portfolio (repeatable); a restricted run cannot be banked",
     )
-    parser.add_argument("--max-rss-gb", type=float, default=9.0, metavar="GB")
+    parser.add_argument(
+        "--max-rss-gb",
+        type=float,
+        default=DEFAULT_MAX_RSS_GB,
+        metavar="GB",
+        help="the resident memory one Arelle worker is held to; it is killed above it "
+        "(default %(default)s)",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        metavar="N",
+        help="Arelle workers to run at once (default: as many as fit in the memory "
+        "available at --max-rss-gb each, one per CPU at most)",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="fail if anything moved")
     mode.add_argument(
@@ -161,18 +192,26 @@ def main() -> int:
         )
     if args.update_baseline and args.portfolio:
         parser.error("a run restricted with --portfolio cannot be banked")
+    if args.jobs is not None and args.jobs < 1:
+        parser.error("--jobs must be at least 1")
 
     started = time.perf_counter()
     shutil.rmtree(RUN_DIRECTORY, ignore_errors=True)
     RUN_DIRECTORY.mkdir(parents=True)
+    timings: dict[str, Any] = {}
     measured = measure(
         TAXONOMY_PACKAGE,
         workdir=RUN_DIRECTORY,
         only=frozenset(args.portfolio or ()),
         max_rss_gb=args.max_rss_gb,
+        jobs=args.jobs,
+        timings=timings,
     )
-    print_report(measured, time.perf_counter() - started)
+    timings["total_s"] = round(time.perf_counter() - started, 1)
+    print_report(measured, timings["total_s"])
+    print_timings(timings)
     MEASUREMENT_PATH.write_text(json.dumps(measured, indent=2) + "\n", encoding="utf-8")
+    TIMINGS_PATH.write_text(json.dumps(timings, indent=2) + "\n", encoding="utf-8")
 
     if args.update_baseline:
         write_baseline(measured)
@@ -197,15 +236,32 @@ def main() -> int:
 # =============================================================================
 
 
+@dataclass(frozen=True)
+class FiledReturn:
+    """A golden return, written to disk and planned for Arelle, awaiting the pool."""
+
+    name: str
+    content: bytes
+    facts: int
+    prepared: PreparedReferee
+
+
 def measure(
     taxonomy_package: Path,
     *,
     workdir: Path,
     python: Path | None = None,
     only: frozenset[str] = frozenset(),
-    max_rss_gb: float = 9.0,
+    max_rss_gb: float = DEFAULT_MAX_RSS_GB,
+    jobs: int | None = None,
+    timings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """File every golden return and have Arelle referee it.
+    """File every golden return, have Arelle referee them all, then compare each.
+
+    Three phases. Every golden return is built and written, one after another.
+    Every Arelle worker of every return then runs through one pool. Then each
+    return's referee result is set beside the native engine's verdicts on the
+    same file.
 
     Args:
         taxonomy_package: The Bank's taxonomy package zip.
@@ -214,64 +270,73 @@ def measure(
             lookup: ``RWA_FILER_ARELLE_PYTHON``, then the current interpreter.
         only: Portfolio names to restrict the run to; empty runs them all.
         max_rss_gb: The memory an Arelle worker is held to.
+        jobs: Arelle workers run at once; ``None`` for as many as fit.
+        timings: Filled in, when given, with how long each phase and each
+            return took. Never part of the measurement.
     """
+    timings = {} if timings is None else timings
     header = ReturnHeader(ENTITY_IDENTIFIER, REFERENCE_DATE, FILING_MODULE)
     pack = resolve_release(FILING_MODULE, FILING_TAXONOMY).pack
-    portfolios: dict[str, Any] = {}
     not_golden: dict[str, int] = {}
     runs = [run for run in filed_runs() if not only or run.portfolio in only]
 
+    phase = time.perf_counter()
+    golden: list[FiledReturn] = []
+    timings["build_s"] = {}
     for index, run in enumerate(runs, start=1):
         name = portfolio_key(run)
         print(f"  [{index}/{len(runs)}] {name} ...", flush=True)
-        result = PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_config())
-        # With the run's own floor summary, as ``export_filing_package`` files it.
-        corep = COREPGenerator().generate_from_lazyframe(
-            result.results,
-            framework=run.framework,
-            output_floor_summary=result.output_floor_summary,
-        )
-        canonical = build_canonical_return(corep, header, pack=pack).canonical
-        del result, corep
-        gc.collect()
-
-        findings = check_structure(canonical, pack)
-        if findings:
-            not_golden[name] = len(findings)
-            print(f"        not golden: {len(findings)} structure finding(s); not filed")
+        built = time.perf_counter()
+        filed = file_return(run, name, header, pack, workdir, taxonomy_package)
+        timings["build_s"][name] = round(time.perf_counter() - built, 1)
+        if isinstance(filed, int):
+            not_golden[name] = filed
+            print(f"        not golden: {filed} structure finding(s); not filed")
             continue
+        golden.append(filed)
+    timings["build_phase_s"] = round(time.perf_counter() - phase, 1)
 
-        folder = workdir / name.replace("/", "_")
-        folder.mkdir(parents=True, exist_ok=True)
-        written = write_instance(canonical, pack)
-        instance = folder / f"{ENTITY_IDENTIFIER}_{FILING_MODULE}_{REFERENCE_DATE.isoformat()}.xbrl"
-        instance.write_bytes(written.content)
-        referee = run_referee(
-            instance,
-            taxonomy_package,
-            python=python,
-            workdir=folder / "arelle",
-            max_rss_gb=max_rss_gb,
-        )
+    phase = time.perf_counter()
+    workers = resolve_jobs(jobs, max_rss_gb)
+    planned = sum(len(item.prepared.specs) for item in golden)
+    print(
+        f"  Arelle: {planned} worker(s) for {len(golden)} golden return(s), {workers} at a "
+        f"time, each held to {max_rss_gb:g} GB",
+        flush=True,
+    )
+    referees = run_referees(
+        [item.prepared for item in golden], python=python, jobs=workers, max_rss_gb=max_rss_gb
+    )
+    timings["jobs"] = workers
+    timings["arelle_phase_s"] = round(time.perf_counter() - phase, 1)
+    timings["arelle_workers_s"] = {
+        item.name: [chunk.wall_s for chunk in referee.chunks]
+        for item, referee in zip(golden, referees, strict=True)
+    }
+
+    phase = time.perf_counter()
+    portfolios: dict[str, Any] = {}
+    for item, referee in zip(golden, referees, strict=True):
         # The native engine reads the FILE, as Arelle does — not the frame it
         # was written from.
-        filed = read_instance(written.content, pack=pack)
+        filed = read_instance(item.content, pack=pack)
         report = validate_return(filed.ret, filed.pack, source_findings=filed.findings).report
         if report is None:
             raise SystemExit(f"no rule book is packaged for module {FILING_MODULE}")
         differential = compare(report.results, referee)
-        portfolios[name] = {
-            "facts": written.facts,
+        portfolios[item.name] = {
+            "facts": item.facts,
             "referee_complete": referee.complete,
             "rules_evaluated_by_arelle": len(referee.rules),
             "rules_compared": differential.compared,
             "agree": differential.counts()["agree"],
-            "disagreements": [describe(item) for item in differential.disagreements],
-            "count_differences": [describe(item) for item in differential.count_differences],
+            "disagreements": [describe(entry) for entry in differential.disagreements],
+            "count_differences": [describe(entry) for entry in differential.count_differences],
             "arelle_errors": sorted({message.code for message in referee.errors}),
             "arelle_messages": sorted({message.code for message in referee.messages}),
             "lost": list(referee.lost),
         }
+    timings["compare_phase_s"] = round(time.perf_counter() - phase, 1)
 
     return {
         "measured_with": {
@@ -284,6 +349,47 @@ def measure(
             "not_golden": dict(sorted(not_golden.items())),
         },
     }
+
+
+def file_return(
+    run: Any,
+    name: str,
+    header: ReturnHeader,
+    pack: Any,
+    workdir: Path,
+    taxonomy_package: Path,
+) -> FiledReturn | int:
+    """Build one portfolio's return, write it and plan its Arelle run.
+
+    Returns the filed return, or — for a return that cannot be written as
+    valid XBRL — the number of its structure findings.
+    """
+    result = PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_config())
+    # With the run's own floor summary, as ``export_filing_package`` files it.
+    corep = COREPGenerator().generate_from_lazyframe(
+        result.results,
+        framework=run.framework,
+        output_floor_summary=result.output_floor_summary,
+    )
+    canonical = build_canonical_return(corep, header, pack=pack).canonical
+    del result, corep
+    gc.collect()
+
+    findings = check_structure(canonical, pack)
+    if findings:
+        return len(findings)
+
+    folder = workdir / name.replace("/", "_")
+    folder.mkdir(parents=True, exist_ok=True)
+    written = write_instance(canonical, pack)
+    instance = folder / f"{ENTITY_IDENTIFIER}_{FILING_MODULE}_{REFERENCE_DATE.isoformat()}.xbrl"
+    instance.write_bytes(written.content)
+    return FiledReturn(
+        name=name,
+        content=written.content,
+        facts=written.facts,
+        prepared=prepare_referee(instance, taxonomy_package, workdir=folder / "arelle"),
+    )
 
 
 def arelle_version(python: Path | None) -> str:
@@ -409,6 +515,20 @@ def check_against_baseline(
 # =============================================================================
 # Reporting
 # =============================================================================
+
+
+def print_timings(timings: dict[str, Any]) -> None:
+    """Print where the time went: the three phases, and each return's Arelle workers."""
+    print(
+        f"\nTimings  build {timings.get('build_phase_s', 0):.0f}s, Arelle "
+        f"{timings.get('arelle_phase_s', 0):.0f}s ({timings.get('jobs', '?')} at a time), "
+        f"compare {timings.get('compare_phase_s', 0):.0f}s"
+    )
+    for name, walls in timings.get("arelle_workers_s", {}).items():
+        print(
+            f"  {name:<32} build {timings['build_s'].get(name, 0):>5.1f}s  "
+            f"Arelle {sum(walls):>6.1f}s in {len(walls)} worker(s)"
+        )
 
 
 def print_report(measured: dict[str, Any], seconds: float) -> None:

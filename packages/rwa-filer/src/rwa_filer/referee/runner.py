@@ -14,8 +14,11 @@ Key responsibilities:
   entry point in one worker (``MODE_FULL``). A large one is run in chunks, each
   against an overlay package that trims the entry point to that chunk's
   assertions (``MODE_TRIM``; see ``plan``).
-- Run the workers strictly one at a time, each under a guard that kills it
-  above a resident-memory cap or a timeout.
+- Run the workers in a pool — the chunks of one instance, or of many
+  (``prepare_referee`` then ``run_referees``) — as many at once as fit in the
+  memory available at their cap (``resolve_jobs``), each under its own guard
+  that kills it above a resident-memory cap or a timeout. The results are
+  merged in plan order, so they do not depend on the order workers finish in.
 - Merge what the workers report into one result: a verdict per published rule
   id, the processor's other messages (de-duplicated, known noise removed), the
   rules that were not run because the instance does not file their templates,
@@ -46,7 +49,8 @@ Known limit
     ``chunk_mb`` lowers the load, not the evaluation.
 
 The memory guard reads ``/proc`` and so works on Linux only. Elsewhere the
-timeout is the only limit, and a log line says so.
+timeout is the only limit, and a log line says so, and the automatic number of
+workers at once is one.
 
 References:
 - Arelle (arelle-release 2.47.5) — the reference XBRL processor
@@ -60,13 +64,16 @@ import contextlib
 import importlib.util
 import json
 import logging
+import math
 import os
 import re
 import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -151,6 +158,14 @@ ERROR_LEVELS: Final = frozenset({"ERROR", "ERROR-SEMANTIC", "CRITICAL"})
 #: through assertion sets or the module presentation anyway.
 _SKIP_RENDERING: Final = "*-rend.xml"
 
+#: Memory the automatic number of workers leaves free of their caps, in GB.
+#: The kernel's ``MemAvailable`` already nets off what is in use, this process
+#: included; the headroom is for what is not yet: the merge and progress files
+#: this process writes while the pool runs, the page cache the workers read the
+#: taxonomy package through, and the allocation of each worker between two
+#: samples of the guard (``_POLL_SECONDS``) before it is killed at its cap.
+MEMORY_HEADROOM_GB: Final = 1.5
+
 _PROC: Final = Path("/proc")
 _POLL_SECONDS: Final = 0.5
 _KB_PER_GB: Final = 1024 * 1024
@@ -176,6 +191,7 @@ def run_referee(
     filing_rules: bool = True,
     rules: str | None = None,
     max_examples: int = 2,
+    jobs: int | None = None,
 ) -> RefereeResult:
     """Run Arelle on ``instance`` and return its verdict on every rule it evaluated.
 
@@ -198,6 +214,7 @@ def run_referee(
         rules: A regular expression searched in each RULE id (``boe_b0021``,
             not the assertion id); only matching rules are run and reported.
         max_examples: Evaluation messages kept per rule, with the facts bound.
+        jobs: Workers run at once; ``None`` for as many as fit (``resolve_jobs``).
 
     Raises:
         RefereeUnavailableError: no interpreter with Arelle could be located.
@@ -208,11 +225,79 @@ def run_referee(
     ``RefereeResult.lost`` and ``complete`` is false.
     """
     interpreter = find_arelle_python(python)
+    with contextlib.ExitStack() as stack:
+        if workdir is None:
+            workdir = Path(
+                stack.enter_context(tempfile.TemporaryDirectory(prefix="rwa_filer_referee_"))
+            )
+        prepared = prepare_referee(
+            instance,
+            taxonomy_package,
+            workdir=workdir,
+            chunk_mb=chunk_mb,
+            formulas=formulas,
+            filing_rules=filing_rules,
+            rules=rules,
+            max_examples=max_examples,
+        )
+        (result,) = run_referees(
+            [prepared], python=interpreter, jobs=jobs, max_rss_gb=max_rss_gb, timeout=timeout
+        )
+    return result
+
+
+# =============================================================================
+# Running many instances through one pool
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class PreparedReferee:
+    """One instance, planned and laid out on disk: what each of its workers is handed.
+
+    Made by ``prepare_referee``; run, with any others, by ``run_referees``.
+
+    Attributes:
+        instance: The instance, resolved.
+        folder: Where its overlays, specs, results and ``progress.json`` are.
+        schema_ref: The instance's entry point.
+        indicators: The templates the instance files.
+        specs: One worker spec per chunk, in plan order.
+    """
+
+    instance: Path
+    folder: Path
+    schema_ref: str
+    indicators: frozenset[str]
+    specs: tuple[Mapping[str, Any], ...]
+    module: TaxonomyModule
+    plan: _Plan
+
+
+def prepare_referee(
+    instance: Path,
+    taxonomy_package: Path,
+    *,
+    workdir: Path,
+    chunk_mb: float = 120.0,
+    formulas: bool = True,
+    filing_rules: bool = True,
+    rules: str | None = None,
+    max_examples: int = 2,
+) -> PreparedReferee:
+    """Plan the run on ``instance`` and write what its workers need to ``workdir``.
+
+    The arguments are ``run_referee``'s. Nothing is run: the overlays and the
+    specs are written, and the workers wait for ``run_referees``.
+
+    Raises:
+        RefereePlanError: the instance has no ``schemaRef``, or names an entry
+            point the package does not hold.
+    """
     instance = instance.resolve()
     schema_ref, indicators = read_instance_header(instance)
     module = TaxonomyModule.read(taxonomy_package.resolve(), schema_ref)
     plan = _plan(module, indicators, chunk_mb=chunk_mb, formulas=formulas, rules=rules)
-    guard = _guard(max_rss_gb, timeout)
     logger.info(
         "referee: %s against %s, %s mode: %d assertion(s) in %d worker(s), "
         "%d skipped for a false filing-indicator precondition",
@@ -223,54 +308,150 @@ def run_referee(
         len(plan.chunks),
         len(plan.skipped),
     )
-    with contextlib.ExitStack() as stack:
-        if workdir is None:
-            workdir = Path(
-                stack.enter_context(tempfile.TemporaryDirectory(prefix="rwa_filer_referee_"))
+    folder = workdir.resolve()
+    folder.mkdir(parents=True, exist_ok=True)
+    specs: list[dict[str, Any]] = []
+    for index, files in enumerate(plan.chunks):
+        spec: dict[str, Any] = {
+            "instance": str(instance),
+            "packages": [str(module.package)],
+            "plugin": str(FILING_RULES_PLUGIN) if filing_rules else None,
+            "function_plugins": list(FUNCTION_PLUGINS),
+            "repairs": list(ARELLE_REPAIRS),
+            "disclosure_system": DISCLOSURE_SYSTEM if filing_rules else None,
+            "formula": formulas,
+            "run_ids": None,
+            "skip_loading": None,
+            # One configuration home per worker: workers of one instance may
+            # run at once, and none should read what another wrote.
+            "xdg": str(folder / f"xdg{index}"),
+            "max_examples": max_examples,
+            "chunk": index,
+        }
+        if plan.mode == MODE_TRIM:
+            overlay = module.write_overlay(
+                folder / f"overlay{index}.zip", files, indicators, tables=TABLES_INDICATED
             )
-        folder = workdir.resolve()
-        folder.mkdir(parents=True, exist_ok=True)
-        outcomes: list[_Outcome] = []
-        for index, files in enumerate(plan.chunks):
-            spec: dict[str, Any] = {
-                "instance": str(instance),
-                "packages": [str(module.package)],
-                "plugin": str(FILING_RULES_PLUGIN) if filing_rules else None,
-                "function_plugins": list(FUNCTION_PLUGINS),
-                "repairs": list(ARELLE_REPAIRS),
-                "disclosure_system": DISCLOSURE_SYSTEM if filing_rules else None,
-                "formula": formulas,
-                "run_ids": None,
-                "skip_loading": None,
-                "xdg": str(folder / "xdg"),
-                "max_examples": max_examples,
-                "chunk": index,
-            }
-            if plan.mode == MODE_TRIM:
-                overlay = module.write_overlay(
-                    folder / f"overlay{index}.zip", files, indicators, tables=TABLES_INDICATED
-                )
-                spec["packages"].append(str(overlay))
-                spec["skip_loading"] = _SKIP_RENDERING
-            elif plan.wanted is not None:
-                # The official entry point loads every assertion, so restrict
-                # the evaluation instead. Arelle matches on ASSERTION ids.
-                spec["run_ids"] = (
-                    "|".join(module.assertions[file].assertion_id for file in files) or None
-                )
-            outcomes.append(_run_chunk(index, folder, files, spec, module, interpreter, guard))
-            # Survive an interrupted run: what has been measured so far is on disk.
-            (folder / "progress.json").write_text(
-                json.dumps(
-                    {
-                        "chunks_planned": len(plan.chunks),
-                        "chunks": [asdict(outcome.stat) for outcome in outcomes],
-                    },
-                    indent=1,
-                ),
-                encoding="utf-8",
+            spec["packages"].append(str(overlay))
+            spec["skip_loading"] = _SKIP_RENDERING
+        elif plan.wanted is not None:
+            # The official entry point loads every assertion, so restrict
+            # the evaluation instead. Arelle matches on ASSERTION ids.
+            spec["run_ids"] = (
+                "|".join(module.assertions[file].assertion_id for file in files) or None
             )
-    return _merge(plan, module, outcomes, schema_ref, indicators)
+        specs.append(spec)
+    return PreparedReferee(
+        instance=instance,
+        folder=folder,
+        schema_ref=schema_ref,
+        indicators=indicators,
+        specs=tuple(specs),
+        module=module,
+        plan=plan,
+    )
+
+
+def run_referees(
+    prepared: Sequence[PreparedReferee],
+    *,
+    python: Path | None = None,
+    jobs: int | None = None,
+    max_rss_gb: float = 9.0,
+    timeout: float = 3600.0,
+) -> tuple[RefereeResult, ...]:
+    """Run every worker of every prepared instance through ONE pool; a result each.
+
+    Workers are started in plan order — the first instance's chunks, then the
+    next's — and ``jobs`` of them run at once, each under its own guard. Each
+    instance's results are merged in plan order however the workers finish,
+    and its ``progress.json`` is rewritten as each of its workers ends.
+
+    Args:
+        prepared: The instances, from ``prepare_referee``.
+        python: An interpreter that has Arelle (``find_arelle_python``).
+        jobs: Workers run at once; ``None`` for as many as fit (``resolve_jobs``).
+        max_rss_gb: The resident memory one worker is held to.
+        timeout: Seconds one worker may run before it is killed.
+
+    Returns:
+        One result per prepared instance, in the order given.
+
+    Raises:
+        RefereeUnavailableError: no interpreter with Arelle could be located.
+        ValueError: ``jobs`` is less than one.
+
+    An interrupt, or any other exception, kills the workers that are running
+    before it propagates.
+    """
+    interpreter = find_arelle_python(python)
+    guard = _guard(max_rss_gb, timeout)
+    workers = resolve_jobs(jobs, max_rss_gb)
+    tasks = [
+        (which, index) for which, item in enumerate(prepared) for index in range(len(item.specs))
+    ]
+    logger.info(
+        "referee: %d worker(s) for %d instance(s), %d at a time",
+        len(tasks),
+        len(prepared),
+        workers,
+    )
+    finished: list[dict[int, _Outcome]] = [{} for _ in prepared]
+    cancel = threading.Event()
+    futures: dict[Future[_Outcome], tuple[int, int]] = {}
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="referee") as pool:
+        try:
+            for which, index in tasks:
+                future = pool.submit(_run_chunk, prepared[which], index, interpreter, guard, cancel)
+                futures[future] = (which, index)
+            for future in as_completed(futures):
+                which, index = futures[future]
+                finished[which][index] = future.result()
+                # Survive an interrupted run: what has been measured so far is on disk.
+                _write_progress(prepared[which], finished[which])
+        except BaseException:
+            cancel.set()
+            for future in futures:
+                future.cancel()
+            raise
+    return tuple(
+        _merge(item, [finished[which][index] for index in range(len(item.specs))])
+        for which, item in enumerate(prepared)
+    )
+
+
+def resolve_jobs(jobs: int | None, max_rss_gb: float) -> int:
+    """How many workers run at once: ``jobs`` as given, or, for ``None``, as many as fit.
+
+    As many as fit is ``max(1, min(CPUs, floor((MemAvailable - headroom) /
+    max_rss_gb)))``. A worker may grow to its cap before the guard kills it, so
+    it is the cap, not a typical peak, that is budgeted: the workers at once
+    cannot together take the memory this process and the system need. The
+    headroom is ``MEMORY_HEADROOM_GB``. Where ``/proc/meminfo`` gives no
+    ``MemAvailable`` it is one, as the memory guard cannot run there either.
+
+    Raises:
+        ValueError: ``jobs`` is less than one.
+    """
+    if jobs is not None:
+        if jobs < 1:
+            raise ValueError(f"jobs must be at least 1, not {jobs}")
+        available = _available_memory_gb()
+        if available is not None and jobs * max_rss_gb > available - MEMORY_HEADROOM_GB:
+            logger.warning(
+                "referee: %d worker(s) at %.1f GB each can outgrow the %.1f GB available "
+                "less %.1f GB headroom",
+                jobs,
+                max_rss_gb,
+                available,
+                MEMORY_HEADROOM_GB,
+            )
+        return jobs
+    available = _available_memory_gb()
+    if available is None:
+        return 1
+    fit = math.floor((available - MEMORY_HEADROOM_GB) / max_rss_gb)
+    return max(1, min(_cpu_count(), fit))
 
 
 # =============================================================================
@@ -554,13 +735,11 @@ def _guard(max_rss_gb: float, timeout: float) -> _Guard:
 
 
 def _run_chunk(
+    prepared: PreparedReferee,
     index: int,
-    folder: Path,
-    files: tuple[str, ...],
-    spec: Mapping[str, Any],
-    module: TaxonomyModule,
     interpreter: Path,
     guard: _Guard,
+    cancel: threading.Event,
 ) -> _Outcome:
     """Write the spec, run one guarded worker on it, and read back its result.
 
@@ -568,12 +747,14 @@ def _run_chunk(
     its standard output, and names no file itself. The result file is opened
     afresh, so a result an earlier run left behind is never read.
     """
-    out = folder / f"chunk{index}.json"
+    files = prepared.plan.chunks[index]
+    module = prepared.module
+    out = prepared.folder / f"chunk{index}.json"
     spec_path = out.with_suffix(".spec.json")
-    spec_path.write_text(json.dumps(spec), encoding="utf-8")
+    spec_path.write_text(json.dumps(prepared.specs[index]), encoding="utf-8")
     stderr_path = out.with_suffix(".stderr.txt")
     run = _run_guarded(
-        [str(interpreter), "-I", str(WORKER_SCRIPT)], spec_path, out, stderr_path, guard
+        [str(interpreter), "-I", str(WORKER_SCRIPT)], spec_path, out, stderr_path, guard, cancel
     )
     result: Mapping[str, Any] | None = None
     if run.killed is not None:
@@ -619,7 +800,12 @@ def _run_chunk(
 
 
 def _run_guarded(
-    command: Sequence[str], stdin_path: Path, stdout_path: Path, stderr_path: Path, guard: _Guard
+    command: Sequence[str],
+    stdin_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    guard: _Guard,
+    cancel: threading.Event | None = None,
 ) -> _WorkerRun:
     """Run one worker; kill it, and all it started, above the memory cap or timeout.
 
@@ -628,6 +814,8 @@ def _run_guarded(
     The worker gets its own session so that the whole process group can be
     killed, which also means an interrupt of this process does not reach it:
     whatever ends the wait, a worker still running is killed on the way out.
+    Run on a pool thread, the wait is ended by ``cancel``, which the thread
+    that is interrupted sets.
     """
     started = time.monotonic()
     peak_kb = 0
@@ -657,6 +845,8 @@ def _run_guarded(
                         )
                 if killed is None and time.monotonic() - started > guard.timeout:
                     killed = f"killed: timeout {guard.timeout:g}s"
+                if killed is None and cancel is not None and cancel.is_set():
+                    killed = "killed: run interrupted"
         finally:
             if process.poll() is None:
                 _kill(process)
@@ -711,19 +901,47 @@ def _last_line(path: Path) -> str:
     return lines[-1].strip()[:_STATUS_TAIL_CHARS] if lines else ""
 
 
+def _write_progress(prepared: PreparedReferee, finished: Mapping[int, _Outcome]) -> None:
+    """Rewrite an instance's ``progress.json``: its workers that have ended, in plan order."""
+    (prepared.folder / "progress.json").write_text(
+        json.dumps(
+            {
+                "chunks_planned": len(prepared.specs),
+                "chunks": [asdict(finished[index].stat) for index in sorted(finished)],
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _available_memory_gb() -> float | None:
+    """The kernel's estimate of memory available to new processes, in GB, if it gives one."""
+    try:
+        text = (_PROC / "meminfo").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) / _KB_PER_GB
+    return None
+
+
+def _cpu_count() -> int:
+    """The CPUs this process may run on."""
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))
+    return os.cpu_count() or 1
+
+
 # =============================================================================
 # Private helpers — merging
 # =============================================================================
 
 
-def _merge(
-    plan: _Plan,
-    module: TaxonomyModule,
-    outcomes: Sequence[_Outcome],
-    schema_ref: str,
-    indicators: frozenset[str],
-) -> RefereeResult:
-    """One result from every worker's: verdicts by rule id, messages once each."""
+def _merge(prepared: PreparedReferee, outcomes: Sequence[_Outcome]) -> RefereeResult:
+    """One result from every worker's, in plan order: verdicts by rule id, messages once each."""
+    plan, module = prepared.plan, prepared.module
     verdicts: dict[str, RuleVerdict] = {}
     messages: dict[RefereeMessage, None] = {}
     lost: list[str] = []
@@ -783,8 +1001,8 @@ def _merge(
         skipped=skipped,
         lost=tuple(sorted(lost)),
         chunks=tuple(outcome.stat for outcome in outcomes),
-        schema_ref=schema_ref,
-        filing_indicators=tuple(sorted(indicators)),
+        schema_ref=prepared.schema_ref,
+        filing_indicators=tuple(sorted(prepared.indicators)),
         mode=plan.mode,
     )
     logger.info(

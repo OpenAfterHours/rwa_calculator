@@ -267,6 +267,8 @@ class TestTheRefereeCommand:
             "60",
             "--max-rss-gb",
             "6.5",
+            "--jobs",
+            "2",
             "--timeout",
             "900",
             "--no-filing-rules",
@@ -281,6 +283,7 @@ class TestTheRefereeCommand:
         assert options["rules"] == "^boe_b07"
         assert options["workdir"] == tmp_path / "work"
         assert (options["chunk_mb"], options["max_rss_gb"], options["timeout"]) == (60, 6.5, 900)
+        assert options["jobs"] == 2
         assert options["filing_rules"] is False
 
     def test_without_the_comparison_arelle_alone_decides(

@@ -24,6 +24,8 @@ from __future__ import annotations
 import copy
 import json
 import re
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -252,6 +254,101 @@ def test_a_run_that_compared_nothing_fails(measured: dict[str, Any]) -> None:
 def test_a_run_with_no_golden_return_fails() -> None:
     empty = {"portfolios": {}, "provenance": {"golden": [], "not_golden": {"b31/rich": 1}}}
     assert gate.run_problems(empty) == ["no golden return was filed: nothing was refereed"]
+
+
+# ---------------------------------------------------------------------------
+# The shape of a run: file everything, ONE pool of Arelle workers, then compare
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def stubbed_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
+    """``measure`` with the pipeline, Arelle and the native engine stood in for.
+
+    Three portfolios, the last of which is not golden. Every stand-in records,
+    in ``events``, when it was called.
+    """
+    events: list[Any] = []
+    runs = [SimpleNamespace(regime="b31", portfolio=name) for name in ("rich", "ccr", "odd")]
+
+    def file_return(run: Any, name: str, *_args: Any) -> gate.FiledReturn | int:
+        events.append(("filed", name))
+        if run.portfolio == "odd":
+            return 2
+        return gate.FiledReturn(name, name.encode(), 10, SimpleNamespace(specs=(0, 1), name=name))
+
+    def run_referees(prepared: list[Any], **options: Any) -> tuple[Any, ...]:
+        events.append(("pool", [item.name for item in prepared], options["jobs"]))
+        return tuple(
+            SimpleNamespace(
+                complete=True, rules={"r": 1}, errors=(), messages=(), lost=(), chunks=()
+            )
+            for _ in prepared
+        )
+
+    def compare(_results: Any, _referee: Any) -> Any:
+        events.append(("compared",))
+        return SimpleNamespace(
+            compared=1, counts=lambda: {"agree": 1}, disagreements=(), count_differences=()
+        )
+
+    report = SimpleNamespace(report=SimpleNamespace(results=()))
+    monkeypatch.setattr(gate, "filed_runs", lambda: runs)
+    monkeypatch.setattr(gate, "file_return", file_return)
+    monkeypatch.setattr(gate, "run_referees", run_referees)
+    monkeypatch.setattr(gate, "resolve_jobs", lambda jobs, _cap: jobs or 3)
+    monkeypatch.setattr(gate, "resolve_release", lambda *_: SimpleNamespace(pack=None))
+    monkeypatch.setattr(
+        gate, "read_instance", lambda *_a, **_k: SimpleNamespace(ret=0, pack=0, findings=())
+    )
+    monkeypatch.setattr(gate, "validate_return", lambda *_a, **_k: report)
+    monkeypatch.setattr(gate, "compare", compare)
+    monkeypatch.setattr(gate, "arelle_version", lambda _python: "2.47.5")
+    package = tmp_path / "package.zip"
+    package.write_bytes(b"stand-in")
+    return {"events": events, "package": package, "workdir": tmp_path}
+
+
+def test_every_return_is_filed_before_one_pool_runs_all_their_workers(
+    stubbed_run: dict[str, Any],
+) -> None:
+    # Act
+    measured = gate.measure(stubbed_run["package"], workdir=stubbed_run["workdir"], jobs=2)
+
+    # Assert — filed in matrix order, then ONE pool for both golden returns, then compared.
+    assert stubbed_run["events"] == [
+        ("filed", "b31/rich"),
+        ("filed", "b31/ccr"),
+        ("filed", "b31/odd"),
+        ("pool", ["b31/rich", "b31/ccr"], 2),
+        ("compared",),
+        ("compared",),
+    ]
+    assert measured["provenance"] == {
+        "golden": ["b31/ccr", "b31/rich"],
+        "not_golden": {"b31/odd": 2},
+    }
+
+
+def test_without_jobs_the_pool_runs_as_many_as_resolve_jobs_says(
+    stubbed_run: dict[str, Any],
+) -> None:
+    # Act
+    timings: dict[str, Any] = {}
+    gate.measure(stubbed_run["package"], workdir=stubbed_run["workdir"], timings=timings)
+
+    # Assert — and the timings, never part of the measurement, say so.
+    assert ("pool", ["b31/rich", "b31/ccr"], 3) in stubbed_run["events"]
+    assert timings["jobs"] == 3
+    assert set(timings) >= {"build_s", "build_phase_s", "arelle_phase_s", "compare_phase_s"}
+
+
+def test_timings_are_never_part_of_the_banked_measurement(stubbed_run: dict[str, Any]) -> None:
+    # Act
+    measured = gate.measure(stubbed_run["package"], workdir=stubbed_run["workdir"], timings={})
+
+    # Assert
+    assert set(measured) == {"measured_with", "portfolios", "provenance"}
 
 
 # ---------------------------------------------------------------------------

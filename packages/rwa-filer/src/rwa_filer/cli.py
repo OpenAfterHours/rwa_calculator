@@ -1053,6 +1053,13 @@ def _add_referee_command(
     )
     referee.add_argument("--chunk-mb", type=float, default=120.0, metavar="MB")
     referee.add_argument("--max-rss-gb", type=float, default=9.0, metavar="GB")
+    referee.add_argument(
+        "--jobs",
+        type=int,
+        metavar="N",
+        help="workers to run at once (default: as many as fit in the memory available at "
+        "--max-rss-gb each, one per CPU at most)",
+    )
     referee.add_argument("--timeout", type=float, default=3600.0, metavar="SECONDS")
     referee.add_argument(
         "--no-filing-rules", action="store_true", help="skip the filing-rule plug-in"
@@ -1081,6 +1088,7 @@ def _referee(args: argparse.Namespace) -> int:
             python=args.arelle_python,
             chunk_mb=args.chunk_mb,
             max_rss_gb=args.max_rss_gb,
+            jobs=args.jobs,
             timeout=args.timeout,
             workdir=args.workdir,
             filing_rules=not args.no_filing_rules,

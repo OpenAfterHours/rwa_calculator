@@ -28,7 +28,9 @@ not redistributed here.
 
 Module map:
 - ``runner`` — ``run_referee``: plan the run, launch one guarded worker per
-  chunk, merge the workers' results into a ``RefereeResult``
+  chunk, merge the workers' results into a ``RefereeResult``; and, for many
+  instances at once, ``prepare_referee`` each, then ``run_referees`` them all
+  through one pool of workers (``resolve_jobs`` says how many run at once)
 - ``plan`` — pure standard library: read an entry point out of the taxonomy
   package, select the assertions an instance can fire, chunk them, and write
   the overlay package that trims the entry point to one chunk
@@ -64,13 +66,17 @@ from rwa_filer.referee.runner import (
     VERDICT_NEVER_FIRED,
     VERDICT_PASS,
     ChunkStat,
+    PreparedReferee,
     RefereeMessage,
     RefereeResult,
     RefereeUnavailableError,
     RuleExample,
     RuleVerdict,
     find_arelle_python,
+    prepare_referee,
+    resolve_jobs,
     run_referee,
+    run_referees,
 )
 
 __all__ = [
@@ -80,6 +86,7 @@ __all__ = [
     "VERDICT_PASS",
     "ChunkStat",
     "Differential",
+    "PreparedReferee",
     "RefereeMessage",
     "RefereePlanError",
     "RefereeResult",
@@ -89,5 +96,8 @@ __all__ = [
     "RuleVerdict",
     "compare",
     "find_arelle_python",
+    "prepare_referee",
+    "resolve_jobs",
     "run_referee",
+    "run_referees",
 ]

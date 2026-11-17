@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from many_breaks_returns import PLACES, RULE, UNADJUSTED_CSV
 from pack_builders import VALID_LEI
+from rwa_filer.boe.engine import MAX_FAILURES
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 
 HEADER_ARGS = ["--entity", VALID_LEI, "--reference-date", "2027-03-31", "--module", "PRA001"]
@@ -134,6 +136,90 @@ def test_validate_writes_the_report_file_when_asked(
     # Assert
     capsys.readouterr()
     assert json.loads(report.read_text(encoding="utf-8"))["header"]["Module"] == "PRA001"
+
+
+def _failure_places(record: dict[str, object], rule_id: str) -> list[str]:
+    """Where the JSON report says ``rule_id`` breaks, in the order it lists them."""
+    rules = record["rules"]
+    assert isinstance(rules, list)
+    result = next(item for item in rules if item["rule_id"] == rule_id)
+    return [failure["place"] for failure in result["failures"]]
+
+
+@pytest.mark.parametrize("evidence", [False, True], ids=["report", "with-evidence"])
+def test_validate_all_breaks_lists_every_break_in_the_json_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], evidence: bool
+) -> None:
+    """Without the flag a rule lists its first breaks; with it, every one.
+
+    ``--evidence`` takes another route to the verdict (a traced run), so the
+    flag must reach that one too.
+    """
+    # Arrange — boe_b0751 breaks on every row of three sheets: twelve times.
+    path = _csv(tmp_path, UNADJUSTED_CSV)
+    extra = ["--evidence", str(tmp_path / "evidence.jsonl")] if evidence else []
+    command = ["validate", str(path), *HEADER_ARGS, "--format", "json", *extra]
+
+    # Act
+    main(command)
+    capped = _failure_places(json.loads(capsys.readouterr().out), RULE)
+    main([*command, "--all-breaks"])
+    every = _failure_places(json.loads(capsys.readouterr().out), RULE)
+
+    # Assert
+    assert len(capped) == MAX_FAILURES < len(PLACES)
+    assert sorted(every) == sorted(PLACES)
+
+
+def _text_places(out: str, rule_id: str) -> list[str]:
+    """Where the text report's list of every break says ``rule_id`` breaks."""
+    lines = out.splitlines()
+    start = next(index for index, line in enumerate(lines) if line.startswith(f"  {rule_id} ("))
+    places = []
+    for line in lines[start + 1 :]:
+        if not line.startswith("    at "):
+            break
+        places.append(line.removeprefix("    at ").split(": ", 1)[0])
+    return places
+
+
+def test_validate_all_breaks_lists_every_break_in_the_text_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The text report names one break per rule; with the flag it lists them all."""
+    # Arrange
+    path = _csv(tmp_path, UNADJUSTED_CSV)
+
+    # Act
+    main(["validate", str(path), *HEADER_ARGS])
+    default = capsys.readouterr().out
+    main(["validate", str(path), *HEADER_ARGS, "--all-breaks"])
+    every = capsys.readouterr().out
+
+    # Assert — the last break is nowhere by default; with the flag, each one once.
+    assert PLACES[-1] not in default
+    assert f"  {RULE} (ERROR) breaks in 12 of 12 evaluation(s):" in every
+    assert sorted(_text_places(every, RULE)) == sorted(PLACES)
+
+
+def test_validate_text_report_is_unchanged_without_all_breaks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The flag adds a section; it takes nothing away and moves nothing."""
+    # Arrange
+    path = _csv(tmp_path, UNADJUSTED_CSV)
+
+    # Act
+    main(["validate", str(path), *HEADER_ARGS])
+    default = capsys.readouterr().out.splitlines()
+    main(["validate", str(path), *HEADER_ARGS, "--all-breaks"])
+    every = capsys.readouterr().out.splitlines()
+
+    # Assert — the section, cut out with the blank line before it, leaves the default.
+    start = every.index("Every break of each broken rule:")
+    end = every.index("", start)
+    assert every[start - 1] == ""
+    assert every[: start - 1] + every[end:] == default
 
 
 def test_a_fact_table_without_a_header_is_a_failure_not_a_traceback(

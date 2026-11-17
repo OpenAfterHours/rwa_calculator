@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from dash_builders import HEADER
+from many_breaks_returns import COLUMN, ROWS, RULE, SHEETS, TABLE, UNADJUSTED_CSV
 from rwa_filer.boe.engine import MAX_FAILURES, STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 from rwa_filer.dash.grid import display_value, failure_marks, template_grid
 from rwa_filer.dash.views import RULES_PER_PAGE, overview, rule_label, rules_page, title_case
@@ -17,22 +18,12 @@ if TYPE_CHECKING:
 
     from rwa_filer.dash import OpenedReturn, Workspace
 
-#: OF 08.01's RWEA after adjustments (c0260) that is not the sum of its parts
-#: (c0251 to c0254) on four rows of three sheets: ``boe_b0751`` breaks twelve
-#: times, more than a report records.
-UNADJUSTED_SHEETS = ("0001", "0002", "0010")
-UNADJUSTED_ROWS = ("0001", "0010", "0020", "0070")
-
 
 @pytest.fixture
 def unadjusted(workspace: Workspace, tmp_path: Path) -> OpenedReturn:
-    lines = ["table,sheet,row,column,value"]
-    for sheet in UNADJUSTED_SHEETS:
-        for row in UNADJUSTED_ROWS:
-            lines.append(f"OF08.01.01.01,{sheet},{row},0251,100")
-            lines.append(f"OF08.01.01.01,{sheet},{row},0260,999000")
+    """``boe_b0751`` broken on every row of three sheets (``many_breaks_returns``)."""
     path = tmp_path / "unadjusted.csv"
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text(UNADJUSTED_CSV)
     return workspace.open(path, HEADER)
 
 
@@ -152,7 +143,7 @@ def test_every_break_of_a_rule_is_marked_not_only_the_first_few(unadjusted: Open
     # Arrange
     report = unadjusted.validation.report
     assert report is not None
-    result = next(item for item in report.results if item.rule_id == "boe_b0751")
+    result = next(item for item in report.results if item.rule_id == RULE)
     assert result.unsatisfied == 12 > MAX_FAILURES, "the fixture must break more than are recorded"
 
     # Act
@@ -162,11 +153,9 @@ def test_every_break_of_a_rule_is_marked_not_only_the_first_few(unadjusted: Open
     marked = {
         (place[1], place[3])
         for place, found in marks.items()
-        if place[0] == "OF08.01.01.01"
-        and place[4] == "0260"
-        and any(mark.rule_id == "boe_b0751" for mark in found)
+        if place[0] == TABLE and place[4] == COLUMN and any(mark.rule_id == RULE for mark in found)
     }
-    assert marked == {(sheet, row) for sheet in UNADJUSTED_SHEETS for row in UNADJUSTED_ROWS}
+    assert marked == {(sheet, row) for sheet in SHEETS for row in ROWS}
 
 
 def test_a_cell_marked_by_a_late_break_is_explained_by_it(
@@ -176,23 +165,23 @@ def test_a_cell_marked_by_a_late_break_is_explained_by_it(
     # Act
     grid = template_grid(
         workspace.working(unadjusted),
-        table="OF08.01.01.01",
+        table=TABLE,
         sheet="0010",
         row="0070",
-        column="0260",
+        column=COLUMN,
     )
 
     # Assert
     assert grid is not None
     assert grid.cell is not None
-    rule = next(item.rule for item in grid.cell.rules if item.mark.rule_id == "boe_b0751")
+    rule = next(item.rule for item in grid.cell.rules if item.mark.rule_id == RULE)
     assert [failure.place for failure in rule.failures] == ["row 0070, sheet 0010"]
 
 
 def test_the_rules_page_lists_the_first_breaks_of_many(unadjusted: OpenedReturn) -> None:
     """The grid marks every break; the rules page keeps to the first few, and says how many."""
     # Act
-    view = rules_page(unadjusted, rule_id="boe_b0751")
+    view = rules_page(unadjusted, rule_id=RULE)
 
     # Assert
     assert view.selected is not None

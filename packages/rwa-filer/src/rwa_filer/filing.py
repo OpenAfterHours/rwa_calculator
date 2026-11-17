@@ -48,7 +48,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer import __version__
-from rwa_filer.boe.engine import Accuracy
+from rwa_filer.boe.engine import MAX_FAILURES, Accuracy
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.progress import PHASE_WRITING, Progress, notify
 from rwa_filer.release import choose_release
@@ -155,6 +155,7 @@ def build_filing(
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
     progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
 ) -> FilingPackage:
     """Validate ``ret`` and, if it may be filed, write its filing package.
 
@@ -189,6 +190,9 @@ def build_filing(
             ``validate_return``). Defaults to the run date.
         progress: Told which step the build is on: the validation's steps
             (``validate_return``), then writing the package when it is written.
+        max_failures: How many breaks of each rule the validation records
+            (``validate_return``); ``None`` records every one. It changes what
+            the returned validation lists, never the verdict or what is written.
 
     Returns:
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
@@ -216,6 +220,7 @@ def build_filing(
             source=source,
             submission_date=submission_date,
             progress=progress,
+            max_failures=max_failures,
         )
         validation = collected.validation
         evidence_file = write_evidence(collected, evidence, generated_at=options.created_at)
@@ -228,6 +233,7 @@ def build_filing(
             source=source,
             submission_date=submission_date,
             progress=progress,
+            max_failures=max_failures,
         )
     if validation.structure:
         return FilingPackage(

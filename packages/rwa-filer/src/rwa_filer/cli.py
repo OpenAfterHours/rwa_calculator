@@ -19,7 +19,7 @@ Key responsibilities:
 Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
                        [--monetary-decimals N] [--evidence FILE] [--require-complete]
-                       [--taxonomy VERSION] [--submission-date DATE]
+                       [--taxonomy VERSION] [--submission-date DATE] [--all-breaks]
                        [--progress | --no-progress]
         Validate a return (.parquet / .csv / .xlsx, or an XBRL instance .xbrl /
         .zip): structure against the taxonomy, then the published rules, as the
@@ -27,12 +27,14 @@ Commands:
         validations deny list switches some off, or makes them warnings). With
         --evidence, also write every rule outcome, evaluation and comparison
         behind the verdict as a JSON Lines file (.jsonl, or .jsonl.gz).
+        --all-breaks lists every break of each broken rule, not only the first:
+        in the text after the findings, in the JSON in each rule's failures.
         --taxonomy names the release (default: the one live for the module);
         every command that reads a return takes it. --progress says on stderr
         which step the check is on and how many rules are done; it is on by
         default when stderr is a terminal (``validate``, ``build``, ``dash``).
     rwa-filer build FILE --out DIR [--monetary-decimals N] [--zip] [--force]
-                    [--evidence FILE]
+                    [--evidence FILE] [--all-breaks]
         Validate a return and write its filing package: the .xbrl instance, a
         .zip where required, and a manifest.
         With --adjustments FILE --author NAME, apply cell overrides first and
@@ -121,7 +123,7 @@ from rwa_filer.boe import deny_importer
 from rwa_filer.boe import importer as boe_importer
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
 from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
-from rwa_filer.boe.engine import Accuracy
+from rwa_filer.boe.engine import MAX_FAILURES, Accuracy
 from rwa_filer.boe.issues_document import render_document, render_issue, render_listing
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
@@ -263,6 +265,7 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     )
     _add_evidence_argument(validate)
     _add_submission_date_argument(validate)
+    _add_all_breaks_argument(validate)
     validate.add_argument(
         "--require-complete",
         action="store_true",
@@ -322,6 +325,22 @@ def _add_evidence_argument(parser: argparse.ArgumentParser) -> None:
         help="also write every rule outcome, evaluation and comparison behind the verdict "
         "here, as JSON Lines (.jsonl; .jsonl.gz to compress)",
     )
+
+
+def _add_all_breaks_argument(parser: argparse.ArgumentParser) -> None:
+    """``--all-breaks``: list every break of each broken rule, not only the first few."""
+    parser.add_argument(
+        "--all-breaks",
+        action="store_true",
+        help="list every break of each broken rule: in the text, a section after the "
+        "findings (which quote only the first); in the JSON, each rule's failures "
+        f"(otherwise the first {MAX_FAILURES})",
+    )
+
+
+def _max_failures(args: argparse.Namespace) -> int | None:
+    """How many breaks of each rule the validation records: ``None`` is every one."""
+    return None if args.all_breaks else MAX_FAILURES
 
 
 def _add_progress_argument(parser: argparse.ArgumentParser) -> None:
@@ -407,6 +426,7 @@ def _validate(args: argparse.Namespace) -> int:
                     source=identity,
                     submission_date=args.submission_date,
                     progress=progress,
+                    max_failures=_max_failures(args),
                 )
                 validation = evidence.validation
             else:
@@ -418,6 +438,7 @@ def _validate(args: argparse.Namespace) -> int:
                     source=identity,
                     submission_date=args.submission_date,
                     progress=progress,
+                    max_failures=_max_failures(args),
                 )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
@@ -437,7 +458,7 @@ def _validate(args: argparse.Namespace) -> int:
     _out(
         json.dumps(record, indent=2)
         if args.format == "json"
-        else render_text(source.ret, validation)
+        else render_text(source.ret, validation, breaks=args.all_breaks)
     )
     if not validation.is_submittable:
         return EXIT_FAILED
@@ -493,6 +514,7 @@ def _add_build_command(commands: argparse._SubParsersAction[argparse.ArgumentPar
     _add_accuracy_arguments(build)
     _add_evidence_argument(build)
     _add_submission_date_argument(build)
+    _add_all_breaks_argument(build)
     build.add_argument(
         "--declare-unreported",
         action="store_true",
@@ -568,12 +590,13 @@ def _build(args: argparse.Namespace) -> int:
                 source=source_identity(args.file),
                 submission_date=args.submission_date,
                 progress=progress,
+                max_failures=_max_failures(args),
             )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
     source = replace(source, ret=ret)
 
-    _out(render_text(source.ret, package.validation))
+    _out(render_text(source.ret, package.validation, breaks=args.all_breaks))
     if package.evidence is not None:
         _out(
             f"\nWrote {package.evidence.path}: the evidence behind this verdict "

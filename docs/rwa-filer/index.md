@@ -79,6 +79,18 @@ does. `--report` writes the [validation report](#the-validation-report-and-the-e
 as JSON whatever the outcome, and `--evidence FILE.jsonl` writes the evidence
 behind it.
 
+Each broken rule's finding quotes its first break, and the JSON report lists
+its first five. `--all-breaks` lists every one: in the text, a section after
+the findings gives each broken rule and then one line per break, saying where
+it is and what the cells it read held; in the JSON, each rule's `failures`
+holds every break. It changes nothing else: the verdict, the counts and the
+exit code are the same with or without it. `build` takes it too.
+
+```bash
+uvx rwa-filer@latest validate return.parquet --all-breaks \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+```
+
 A fact table states no accuracy of its own, so the rules' rounding allowances
 come from the accuracy the file will be written with. `validate` takes the
 same `--monetary-decimals` and `--percentage-decimals` as `build`, and reaches
@@ -643,7 +655,9 @@ Within a major version the report only gains fields. It holds:
 - `rules`: **every** enforced rule, passes included, each with its status,
   evaluation counts, `rule_sha256` (a digest of everything that decides how the
   rule runs, so a changed formula under an unchanged code shows) and the first
-  five failing evaluations with their cell coordinates. Since 2.1 each rule
+  five failing evaluations with their cell coordinates (`failures`), or every
+  one with `--all-breaks` (`max_failures=None` from Python): a rule whose
+  `failures` are fewer than its `unsatisfied` lists only the first. Since 2.1 each rule
   also has `deny_list`, the Bank's entry for it or null, and `formula`, the
   published rule's verdict where that entry changed the outcome, or null.
   `summary.deny_list` lists what the list deactivated, what it downgraded and

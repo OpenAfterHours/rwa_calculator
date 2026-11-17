@@ -62,6 +62,10 @@ uvx rwa-filer@latest dash return.xbrl
 uvx rwa-filer@latest validate return.parquet \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 
+# List every break of each broken rule, not only the first (text and JSON)
+uvx rwa-filer@latest validate return.parquet --all-breaks \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+
 # The same, at the accuracy the file will be written with, and with the evidence
 # behind the verdict: every rule outcome, evaluation and comparison, as JSON Lines
 uvx rwa-filer@latest validate return.parquet --monetary-decimals 0 \

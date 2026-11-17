@@ -30,6 +30,14 @@ Key responsibilities:
 - Keep the log small. A large filing produces tens of thousands of evaluation
   messages per run; only the first few per assertion are let through, as
   examples, and they are refused before Arelle builds them.
+- Run the session with the cyclic garbage collector off: Arelle keeps almost
+  everything it allocates, so the collector's passes cost time and free little.
+- End without teardown. Run as a script, the worker writes and flushes its
+  result and then ends the process at once (``os._exit``): closing the session
+  and tearing the interpreter down would free a multi-GB model object by
+  object — about 13 seconds per worker on PRA001 — and none of it reaches the
+  result, which is harvested before the session would close. ``main`` called
+  in-process still returns, and still closes the session.
 
 The spec (JSON object)
     ``instance``, ``packages`` (list of zip paths), ``plugin`` and
@@ -49,7 +57,8 @@ The result (JSON object)
 
 Exit status: 0 once the result is written; 2 for a command-line argument (the
 spec comes on standard input). Anything else — Arelle missing, an exception, a
-kill — leaves no result, and the runner reports the chunk as lost.
+kill — leaves no result, and the runner reports the chunk as lost. An
+exception ends the process the ordinary way, traceback and all.
 
 References:
 - Arelle (arelle-release 2.47.5): ``arelle.api.Session``, ``RuntimeOptions``,
@@ -60,6 +69,7 @@ References:
 from __future__ import annotations
 
 import contextlib
+import gc
 import importlib
 import json
 import logging
@@ -68,7 +78,7 @@ import re
 import sys
 import time
 from collections.abc import Iterator
-from typing import Any, TextIO
+from typing import Any, NoReturn, TextIO
 
 # =============================================================================
 # Constants
@@ -96,21 +106,33 @@ _Record = tuple[float, str, str, str, list[dict[str, Any]]]
 # =============================================================================
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run the session the spec on standard input describes; write its result to stdout."""
+def main(argv: list[str] | None = None, *, close: bool = True) -> int:
+    """Run the session the spec on standard input describes; write its result to stdout.
+
+    Args:
+        argv: The command-line arguments; there must be none.
+        close: Close the Arelle session once its result is harvested. ``False``
+            only where the process ends straight after (``end_process``):
+            closing then frees nothing that is not about to be freed anyway.
+    """
     arguments = sys.argv[1:] if argv is None else argv
     if arguments:
         sys.stderr.write("usage: python -I worker.py < SPEC.json > RESULT.json\n")
         return 2
     spec = json.load(sys.stdin)
     with _result_stream() as out:
-        result = run_session(spec)
+        result = run_session(spec, close=close)
         json.dump(result, out)
     return 0
 
 
-def run_session(spec: dict[str, Any]) -> dict[str, Any]:
-    """One Arelle session: load, validate, evaluate; return the result object."""
+def run_session(spec: dict[str, Any], *, close: bool = True) -> dict[str, Any]:
+    """One Arelle session: load, validate, evaluate; return the result object.
+
+    Everything the result holds is read while the session is still open, so it
+    is the same whether the session is then closed (``close``) or left for the
+    process to end with.
+    """
     session_api = importlib.import_module("arelle.api.Session")
     runtime_options = importlib.import_module("arelle.RuntimeOptions")
     for repair in spec.get("repairs", ()):
@@ -139,14 +161,28 @@ def run_session(spec: dict[str, Any]) -> dict[str, Any]:
     arelle_logger: Any = logging.getLogger(ARELLE_LOGGER)
     arelle_logger.logRefObjectProperties = True
     assertions: dict[str, tuple[int, int]] = {}
-    with session_api.Session() as session:
+    # The model Arelle builds is millions of objects, almost all kept to the
+    # end, so the cyclic collector's repeated passes over them reclaim little
+    # and cost much: off, the largest PRA001 worker ran about 14% faster
+    # (52 s against 60 s, mean of the runs measured) for 7% more peak memory,
+    # with the same verdicts. Back on afterwards only for a caller that
+    # goes on running (``close``); a script ends the process instead.
+    collecting = gc.isenabled()
+    gc.disable()
+    session = session_api.Session()
+    try:
         session.run(options, logHandler=handler)
         for model in session.get_models():
             assertions.update(harvest_verdicts(model.errors))
-    return {
-        "assertions": assertions,
-        **summarise(handler.records, spec["instance"], spec["max_examples"]),
-    }
+        return {
+            "assertions": assertions,
+            **summarise(handler.records, spec["instance"], spec["max_examples"]),
+        }
+    finally:
+        if close:
+            session.close()
+            if collecting:
+                gc.enable()
 
 
 # =============================================================================
@@ -186,6 +222,23 @@ def repair_match_any() -> None:
 
 #: The changes to Arelle's behaviour a spec may ask for, by name.
 REPAIRS: dict[str, Any] = {"match_any": repair_match_any}
+
+
+def end_process(code: int) -> NoReturn:
+    """End the worker now, with exit status ``code``; its result is already written.
+
+    What an ordinary exit would still do is close the Arelle session and tear
+    the interpreter down: free every object of the loaded model, collect the
+    cycles among them and run the atexit hooks. On PRA001 that is about 13
+    seconds per worker after the result is on disk, and nothing of it reaches
+    the result. ``os._exit`` skips all of it, buffered streams included, so
+    standard output and standard error are flushed here first. The result
+    stream itself was flushed and closed by ``_result_stream``.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(OSError, ValueError):
+            stream.flush()
+    os._exit(code)
 
 
 def harvest_verdicts(errors: list[Any]) -> dict[str, tuple[int, int]]:
@@ -346,4 +399,4 @@ def _property(properties: dict[str, Any], name: str) -> str | None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    end_process(main(close=False))

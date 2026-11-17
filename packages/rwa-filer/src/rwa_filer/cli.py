@@ -122,7 +122,12 @@ from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
 from rwa_filer.model import LEI_SCHEME
 from rwa_filer.readers import HeaderFields, SourceReading, load_source, open_source
-from rwa_filer.referee import RefereePlanError, RefereeUnavailableError, run_referee
+from rwa_filer.referee import (
+    RefereePlanError,
+    RefereeUnavailableError,
+    interrupt_on_sigterm,
+    run_referee,
+)
 from rwa_filer.referee import report as referee_report
 from rwa_filer.referee.differential import compare
 from rwa_filer.release import (
@@ -1053,6 +1058,13 @@ def _add_referee_command(
     )
     referee.add_argument("--chunk-mb", type=float, default=120.0, metavar="MB")
     referee.add_argument("--max-rss-gb", type=float, default=9.0, metavar="GB")
+    referee.add_argument(
+        "--jobs",
+        type=int,
+        metavar="N",
+        help="workers to run at once (default: as many as fit in the memory available at "
+        "--max-rss-gb each, one per CPU at most)",
+    )
     referee.add_argument("--timeout", type=float, default=3600.0, metavar="SECONDS")
     referee.add_argument(
         "--no-filing-rules", action="store_true", help="skip the filing-rule plug-in"
@@ -1075,17 +1087,20 @@ def _referee(args: argparse.Namespace) -> int:
     if instance.suffix.lower() != ".xbrl":
         return _fail(f"the referee reads an .xbrl instance, not {instance.suffix!r}: {instance}")
     try:
-        result = run_referee(
-            instance,
-            package,
-            python=args.arelle_python,
-            chunk_mb=args.chunk_mb,
-            max_rss_gb=args.max_rss_gb,
-            timeout=args.timeout,
-            workdir=args.workdir,
-            filing_rules=not args.no_filing_rules,
-            rules=args.rules,
-        )
+        # A SIGTERM kills the running workers too, as Ctrl-C does.
+        with interrupt_on_sigterm():
+            result = run_referee(
+                instance,
+                package,
+                python=args.arelle_python,
+                chunk_mb=args.chunk_mb,
+                max_rss_gb=args.max_rss_gb,
+                jobs=args.jobs,
+                timeout=args.timeout,
+                workdir=args.workdir,
+                filing_rules=not args.no_filing_rules,
+                rules=args.rules,
+            )
         differential = None
         if not args.no_compare:
             source = load_source(instance, taxonomy=args.taxonomy)

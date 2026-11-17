@@ -9,8 +9,9 @@ publisher's file, which is not redistributed. SKIPPED unless BOTH are named:
         uv run pytest packages/rwa-filer/tests/referee/test_real_arelle.py -q
 
 It takes a few minutes and several GB of memory — PRA001 is 741 MB of taxonomy
-XML, which is why the referee runs it in trimmed chunks — and it runs one
-Arelle process at a time. Do not run it alongside another.
+XML, which is why the referee runs it in trimmed chunks — and it runs as many
+Arelle processes at once as fit in the memory available at 9 GB each, which on
+most machines is one. Do not run it alongside another.
 
 The instance is written here, by this package's own writer, from seven cells
 across four templates. So this is the end-to-end claim: what rwa-filer writes,

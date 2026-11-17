@@ -138,6 +138,59 @@ and released independently of `rwa-calc`; its release tags are prefixed
   position, so a column the Bank adds or moves no longer shifts a field, and
   finds its Basel 3.1 extract as the newest one packaged.
 
+### Performance
+- **Referee workers run at once.** `run_referee(jobs=...)` and `rwa-filer
+  referee --jobs N` set how many Arelle workers run side by side; by default
+  (`None`) as many as fit in the memory available, less 1.5 GB, at the
+  per-worker cap `max_rss_gb`, and no more than one per CPU — one where
+  `/proc/meminfo` cannot be read (`rwa_filer.referee.resolve_jobs`). Available
+  is the kernel's `MemAvailable`, or the room under a cgroup memory limit on
+  the process (a container's `--memory`, v1 or v2, on its own group or an
+  ancestor) where that is less: the OOM killer enforces the limit, which
+  `MemAvailable` does not see. An explicit number over that budget is run as
+  asked, with one warning. Every worker keeps its own memory and
+  time guard and its own Arelle configuration folder, and the results are
+  merged in plan order, so a verdict, a message's order and the lost rules do
+  not depend on which worker finishes first. Several instances can share one
+  pool: `prepare_referee` each, then `run_referees` them all, a result each.
+  An interrupt kills the workers that are running, within about half a second:
+  the pool is waited on half a second at a time, as a signal delivered to
+  another thread (polars keeps several) does not wake an unbounded wait. New
+  `interrupt_on_sigterm()` makes SIGTERM do the same — `rwa-filer referee`
+  runs inside it — since a worker runs in a session of its own and SIGTERM's
+  default action would leave every running worker behind.
+- **A referee worker ends as soon as its result is written.** It used to close
+  the Arelle session and tear the interpreter down first, freeing a model of
+  several GB object by object: about 13 seconds of a minute-long worker on
+  PRA001, after the result was on disk. The result is read before the session
+  would close, so it is unchanged; `worker.main` called in-process still
+  closes the session.
+- **A referee worker runs Arelle with Python's cyclic garbage collector off.**
+  Arelle keeps nearly everything it allocates until the worker ends, so the
+  collector's passes freed little: off, a PRA001 worker loads and evaluates
+  about 14% faster for about 7% more peak memory (3.89 GB against 3.64 on the
+  largest chunk measured), with the same verdicts. In-process callers get the
+  collector back when the session ends.
+- **A referee worker's result can be reused.** With `cache_dir=` on
+  `run_referee` / `run_referees`, a worker's raw result is stored under a
+  SHA-256 of everything it depends on — the bytes of the instance, the
+  taxonomy package, the overlay's members and the filing-rule plug-in, the
+  worker's settings, every distribution installed in the worker interpreter
+  (`name==version`: an `arelle-release==X` install leaves lxml, regex,
+  pyparsing and the rest unpinned, and a new release of any of them must
+  re-run Arelle), its Python version and locale, and the referee's own code —
+  and of no path. A run that
+  finds the key reuses the result, byte for byte, and launches no worker
+  (`ChunkStat.cached`); the merge and any comparison run as before. Only a
+  worker that finished is stored, and not even one of those that left an
+  assertion unanswered or logged an error-level or exception message — a
+  stored result is replayed by every later run, so nothing that may not
+  happen again is kept. An entry is a digest line and the raw result, written
+  whole or not at all; one whose digest does not match, or that does not read
+  back as a result, is recomputed.
+  `referee_cache_dir` reads the folder from `RWA_FILER_REFEREE_CACHE`. The
+  library default is no cache.
+
 ---
 
 ### Fixed

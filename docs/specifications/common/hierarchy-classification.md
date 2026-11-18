@@ -372,6 +372,8 @@ Under Basel 3.1, PRA PS1/26 Art. 147A mandates specific approaches by exposure s
 !!! note "Implementation Status — Implemented (P1.4 Complete)"
     Art. 147A restrictions are enforced via `IRBPermissions.full_irb_b31()`, which encodes the mandatory approach assignments for sovereign/institution/IPRE/HVCRE/FSE/large corporate/equity sub-classes. The classifier enforces IPRE and HVCRE slotting routing, and blocks FSE and large-corporate exposures from A-IRB (F-IRB only). Equity is restricted to SA. Sovereign sub-classes (RGLA, PSE, MDB, international org with 0% RW) are forced to SA.
 
+    The IPRE / HVCRE slotting is forced only where an IRB permission covers the exposure — an org-wide map granting slotting / F-IRB / A-IRB for `specialised_lending`, or a matching `model_permissions` row with no matching `standardised` (Art. 148 / 150) row. Art. 147A is an IRB-Part rule and Art. 107(1) makes every IRB approach, slotting included, subject to permission, so an SA-only firm (the default `PermissionMode.STANDARDISED` factory) and an Art. 150 SA permission keep IPRE / HVCRE on the Standardised Approach — limb (i) of Art. 147A(1)(c). See [Model Permissions](../basel31/model-permissions.md#iprehvcre-routing).
+
 !!! info "Retail Rows Are Carry-Forward from CRR Art. 151(7)"
     The three retail rows (mortgage, QRRE, other) in the Art. 147A table above restate
     an existing CRR obligation in the Basel 3.1 structured form. CRR Art. 151(7) already

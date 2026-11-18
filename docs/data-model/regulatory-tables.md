@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `1377b7f071c9d6a9`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 239 entries, content hash `ef84759de113acfb`
 
 ## Regime features
 
@@ -52,6 +52,7 @@ On/off behaviour switches (`Feature`).
 | `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
 | `sa_currency_mismatch_multiplier` | off | on | CRR Art. 123 / PS1/26, paragraph 123B |
 | `sa_due_diligence_override` | off | on | CRR Art. 110 / PS1/26, paragraph 110A |
+| `sa_pf_phase_defaults_pre_operational` | off | on | CRR Art. 122 / PS1/26, paragraph 122B |
 | `sa_re_split_art_124_4_all_or_nothing` | off | on | CRR Art. 124 / PS1/26, paragraph 124 |
 | `sa_re_split_cre_rental_coverage_required` | on | off | CRR Art. 126 / PS1/26, paragraph 124H |
 | `sa_re_split_revised_parameters` | off | on | CRR Art. 125 / PS1/26, paragraph 124F |

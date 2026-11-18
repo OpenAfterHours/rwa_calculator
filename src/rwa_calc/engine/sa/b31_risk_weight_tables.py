@@ -54,7 +54,7 @@ from rwa_calc.contracts.edges import (
     LOAN_SPLIT_SECURED_RW_COL,
     LOAN_SPLIT_SECURED_SHARE_COL,
 )
-from rwa_calc.domain.enums import PropertyType
+from rwa_calc.domain.enums import ProjectPhase, PropertyType
 from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
 from rwa_calc.rulebook.resolve import resolve
 
@@ -800,6 +800,7 @@ def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Ex
     )
 
 
+@cites("PS1/26, paragraph 122B")
 def b31_sa_sl_rw_expr() -> pl.Expr:
     """
     Polars expression for Basel 3.1 SA specialised lending risk weights.
@@ -807,13 +808,26 @@ def b31_sa_sl_rw_expr() -> pl.Expr:
     PRA PS1/26 Art. 122A-122B. Unrated SL exposures get type-specific risk
     weights rather than falling through to corporate 100%.
 
+    Project finance by phase — Art. 122B(2)(c): "130% during the
+    pre-operational phase, and (subject to paragraph 4) 100% during the
+    operational phase"; Art. 122B(4): 80% where the exposure "is in the
+    operational phase and is considered high quality" (the firm's
+    ``high_quality_operational`` attestation of the Art. 122B(5) criteria).
+    Art. 122B(3) defines the operational phase by conditions the firm must
+    show, so only the two operational values buy the lower weights and every
+    other phase — ``pre_operational``, null, unrecognised — takes 130%. The
+    classifier already resolves an unevidenced phase to ``pre_operational``
+    (``engine/classify/attributes.py::resolve_sl_project_phase``, SA006);
+    the ``otherwise`` here keeps a frame that bypasses it conservative too.
+
     Requires columns: sl_type (String), sl_project_phase (String, optional)
 
     Returns:
         Expression resolving to the SL-specific risk weight
     """
     sl = pl.col("sl_type").fill_null("").str.to_lowercase()
-    phase = pl.col("sl_project_phase").fill_null("").str.to_lowercase()
+    # cast: an all-null carrier on a hand-built frame arrives as dtype Null.
+    phase = pl.col("sl_project_phase").cast(pl.String).str.to_lowercase()
 
     return (
         pl.when(sl.str.contains("object"))
@@ -822,13 +836,11 @@ def b31_sa_sl_rw_expr() -> pl.Expr:
         .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["commodities_finance"])))
         .when(sl.str.contains("project"))
         .then(
-            pl.when(phase.str.contains("pre"))
-            .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_pre_operational"])))
-            .when(phase.str.contains("high"))
+            pl.when(phase == ProjectPhase.OPERATIONAL.value)
+            .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_operational"])))
+            .when(phase == ProjectPhase.HIGH_QUALITY_OPERATIONAL.value)
             .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_high_quality"])))
-            .otherwise(
-                pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_operational"]))
-            )  # operational default
+            .otherwise(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_pre_operational"])))
         )
         .otherwise(pl.lit(1.00))  # fallback for unknown SL types
     )

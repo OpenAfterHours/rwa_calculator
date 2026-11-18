@@ -1062,6 +1062,7 @@
         "corporate_cqs_rw@crr",
         "corporate_risk_weights@crr",
         "crr_corporate_sme_rw@crr",
+        "sa_pf_phase_defaults_pre_operational@crr",
         "sa_revised_risk_weight_tables@crr"
       ],
       "source_files": [
@@ -2091,6 +2092,7 @@
       ],
       "test_files": [
         "tests/acceptance/_fs1_expectations.py",
+        "tests/acceptance/basel31/test_b31_specialised_lending_sa_treatment.py",
         "tests/acceptance/basel31/test_p1_157_psm_no_better_than_direct.py",
         "tests/acceptance/basel31/test_scenario_b31_b_firb.py",
         "tests/acceptance/basel31/test_scenario_b31_k_defaulted.py",
@@ -5991,6 +5993,24 @@
       "watchfire_index_gap": false
     },
     {
+      "article": "107",
+      "code_functions": [],
+      "confidence": "UNCITED",
+      "framework": "PS1/26",
+      "layer_count": 2,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/classify/approach.py",
+        "engine/classify/permissions.py"
+      ],
+      "test_files": [
+        "tests/acceptance/basel31/test_b31_specialised_lending_sa_treatment.py",
+        "tests/unit/test_b31_approach_restrictions.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
       "article": "110A",
       "code_functions": [
         "rwa_calc.engine.sa.rw_adjustments::apply_due_diligence_override"
@@ -6085,6 +6105,7 @@
         "domain/enums.py",
         "engine/aggregator/_equity_prep.py",
         "engine/aggregator/aggregator.py",
+        "engine/sa/subordinated_debt.py",
         "reporting/corep/c07_sheet_scope.py",
         "reporting/corep/sheet_labels.py",
         "reporting/filing/sheet_maps.py"
@@ -6536,6 +6557,7 @@
       ],
       "source_files": [
         "engine/sa/b31_risk_weight_tables.py",
+        "engine/sa/subordinated_debt.py",
         "reporting/corep/templates.py",
         "rulebook/packs/b31.py"
       ],
@@ -6548,17 +6570,33 @@
     },
     {
       "article": "122B",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.classify.attributes::resolve_sl_project_phase",
+        "rwa_calc.engine.sa.b31_risk_weight_tables::b31_sa_sl_rw_expr"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "sa_pf_phase_defaults_pre_operational@b31"
+      ],
       "source_files": [
-        "data/schemas.py"
+        "contracts/edges.py",
+        "contracts/errors.py",
+        "data/schemas.py",
+        "domain/enums.py",
+        "engine/classify/attributes.py",
+        "engine/classify/audit.py",
+        "engine/sa/b31_risk_weight_tables.py",
+        "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_b31_specialised_lending_sa_treatment.py",
         "tests/acceptance/basel31/test_p2_44_sa_sl_inferred_rating_disapplied.py",
+        "tests/acceptance/basel31/test_slotting_guarantee_rwsm.py",
+        "tests/acceptance/reporting/test_cms1_ccr.py",
+        "tests/acceptance/reporting/test_of02_output_floor.py",
         "tests/fixtures/p2_44/p2_44.py"
       ],
       "watchfire_index_gap": false
@@ -7196,7 +7234,7 @@
       "code_functions": [
         "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa",
         "rwa_calc.engine.equity.calculator::_b31_higher_risk_expr",
-        "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt",
+        "rwa_calc.engine.sa.subordinated_debt::is_b31_subordinated_debt",
         "rwa_calc.reporting.corep.c07_rw_bands::rw_band_expr"
       ],
       "confidence": "HIGH",
@@ -7220,11 +7258,13 @@
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/sa/risk_weights.py",
+        "engine/sa/subordinated_debt.py",
         "reporting/corep/c07_rw_bands.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_b31_specialised_lending_sa_treatment.py",
         "tests/acceptance/basel31/test_p1_182_b31_l24_pe_unlisted_under_5y.py",
         "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/basel31/test_p2_15_equity_transitional_optout.py",
@@ -7245,6 +7285,7 @@
         "tests/unit/reporting/corep/test_c07_equity_transitional_band.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
+        "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_equity_routing.py",
         "tests/unit/test_equity_subordinated_debt.py"
       ],
@@ -7429,6 +7470,7 @@
     {
       "article": "147A",
       "code_functions": [
+        "rwa_calc.engine.classify.permissions::build_sl_irb_permission_expr",
         "rwa_calc.engine.classify.subtypes::derive_exposure_subclass",
         "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate"
       ],
@@ -7450,6 +7492,7 @@
         "engine/aggregator/_securitisation.py",
         "engine/classify/approach.py",
         "engine/classify/audit.py",
+        "engine/classify/permissions.py",
         "engine/classify/subtypes.py",
         "engine/securitisation/allocator.py",
         "reporting/corep/c02.py",
@@ -7462,6 +7505,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p2_41_exposure_subclass_corep.py",
+        "tests/acceptance/basel31/test_scenario_b31_g_provisions.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
         "tests/acceptance/basel31/test_scenario_b31_m_model_permissions.py",
         "tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py",
@@ -7562,7 +7606,9 @@
       "source_files": [
         "contracts/config.py",
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
+        "engine/classify/audit.py",
         "engine/classify/subtypes.py",
         "engine/irb/adjustments.py",
         "engine/irb/formulas.py",
@@ -7578,6 +7624,7 @@
       "test_files": [
         "tests/acceptance/_fs1_expectations.py",
         "tests/acceptance/basel31/conftest.py",
+        "tests/acceptance/basel31/test_b31_specialised_lending_sa_treatment.py",
         "tests/acceptance/basel31/test_p1_159_art_236_psm_correlation_guarantor_class.py",
         "tests/acceptance/basel31/test_p1_251_b31_firb_uk_resi_commitment_ccf.py",
         "tests/acceptance/basel31/test_scenario_b31_e_slotting.py",
@@ -7608,7 +7655,8 @@
         "tests/unit/test_b31_slotting_tables.py",
         "tests/unit/test_basel31_engine.py",
         "tests/unit/test_corep_c08_06.py",
-        "tests/unit/test_other_items_risk_weights.py"
+        "tests/unit/test_other_items_risk_weights.py",
+        "tests/unit/test_sa_sl_classification.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8890,8 +8938,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "b31": "ef84759de113acfbab10bbb740fe5865bf40f440a95c4ccf11e8c06a3ea2b17e",
+    "crr": "1377b7f071c9d6a92aad59cac42e250b04e74a2ffe17afd528933280a51b0a59"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

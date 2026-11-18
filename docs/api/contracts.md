@@ -301,6 +301,7 @@ Error codes are prefixed by domain and numbered sequentially:
 | `CLS003` | `ERROR_MISSING_RATING` | Classification | No rating available for rated class |
 | `CLS004` | `ERROR_QRRE_COLUMNS_MISSING` | Classification | QRRE-specific input columns missing for retail revolving classification |
 | `CLS005` | `ERROR_RETAIL_POOL_MGMT_MISSING` | Classification | Retail pool-management columns required for retail-pool aggregation are missing |
+| `CLS012` | `ERROR_SLOTTING_CATEGORY_MISSING` | Classification | **WARNING, both regimes.** Row(s) routed to the slotting approach whose `slotting_category` is null or not one of `strong` / `good` / `satisfactory` / `weak` / `default`. CRR / PS1/26 Art. 153(5) weight a slotted exposure by the grade the institution assigns; the engine applies the cited pack default (`satisfactory`) to the risk weight and expected-loss rate, and this aggregate warning (with the row count) makes that visible. Emitted by `engine/classify/audit.py::collect_classified_frame_warnings` |
 | `CRM001` | `ERROR_INELIGIBLE_COLLATERAL` | CRM | Collateral type not eligible for CRM |
 | `CRM002` | `ERROR_MATURITY_MISMATCH` | CRM | Collateral maturity < exposure maturity |
 | `CRM003` | `ERROR_CURRENCY_MISMATCH` | CRM | Collateral currency ≠ exposure currency |
@@ -317,6 +318,7 @@ Error codes are prefixed by domain and numbered sequentially:
 | `SA002` | `ERROR_MISSING_RISK_WEIGHT` | SA | Cannot determine risk weight |
 | `SA003` | `ERROR_INVALID_LTV` | SA | LTV ratio invalid for property class |
 | `SA005` | `ERROR_EQUITY_IN_MAIN_TABLE` | SA | Equity exposure incorrectly present in the main SA exposure table (must route through the equity calculator) |
+| `SA006` | `ERROR_PF_PHASE_UNEVIDENCED` | SA | **WARNING, Basel 3.1 only.** Project-finance exposure(s) whose `project_phase` is null or not one of `pre_operational` / `operational` / `high_quality_operational`. PS1/26 Art. 122B(3) defines the operational phase by conditions the firm must show, so the exposure is treated as pre-operational — the Art. 122B(2)(c) 130% when unrated, on SA rows and on the output-floor SA-equivalent of slotted rows. One aggregate warning carrying the row count, emitted by the classifier (`engine/classify/audit.py::collect_classified_frame_warnings`) |
 | `SF001` | `ERROR_SME_MISSING_COUNTERPARTY_REF` | Supporting Factors | SME supporting-factor application requires a `counterparty_reference` and none was supplied |
 | `CFG001` | `ERROR_INVALID_CONFIG` | Configuration | Invalid configuration parameter |
 | `CFG002` | `ERROR_MISSING_PERMISSION` | Configuration | Required IRB permission not granted |

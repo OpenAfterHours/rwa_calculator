@@ -14,7 +14,8 @@ Key responsibilities:
   ``cp_group_annual_revenue`` for the Art. 147(4C)(b)(ii) large-corporate
   F-IRB-only subclass test (``with_group_annual_revenue``).
 - Join specialised-lending metadata (``sl_type`` / ``slotting_category`` /
-  ``is_hvcre``).
+  ``is_hvcre`` / ``sl_project_phase``) and resolve the project-finance phase
+  the exposure is treated as being in (``resolve_sl_project_phase``).
 - Derive every flag that depends only on raw input columns
   (``derive_independent_flags``): exposure classes, is_mortgage,
   is_defaulted, is_adc, qualifies_as_retail, has_income_cover, …
@@ -38,6 +39,7 @@ References:
 - PRA PS1/26 Art. 124(3) / Art. 124K: ADC classification
 - PRA PS1/26 Art. 124E: three-property income-producing re-route
 - CRR Art. 128 (UK-omitted by SI 2021/1078) / PS1/26 Art. 128: high-risk class
+- PRA PS1/26 Art. 122B(2)(c)-(5): project-finance phase weights
 """
 
 from __future__ import annotations
@@ -50,7 +52,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.schemas import NATURAL_PERSON_ENTITY_TYPES
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.domain.enums import ExposureClass, ProjectPhase, SpecialisedLendingType
 from rwa_calc.engine.entity_class_maps import (
     entity_type_to_irb_class,
     entity_type_to_sa_class,
@@ -276,13 +278,23 @@ def join_specialised_lending(
 ) -> pl.LazyFrame:
     """Join specialised lending metadata onto exposures by counterparty.
 
-    Adds ``sl_type``, ``slotting_category``, ``is_hvcre``. When no SL
-    data is supplied, the columns are added as null literals so
-    downstream helpers can rely on their presence.
+    Adds ``sl_type``, ``slotting_category``, ``is_hvcre`` and
+    ``sl_project_phase`` (the input ``project_phase``, sealed onto the raw
+    specialised-lending edge so always present). The phase was once dropped
+    here, which left the PS1/26 Art. 122B(2)(c)/(4) phase weights
+    unreachable from the loader (review IV-01). When no SL data is
+    supplied, the columns are added as null literals so downstream helpers
+    can rely on their presence.
     """
     if sl_data is not None:
         return exposures.join(
-            sl_data.select(["counterparty_reference", "sl_type", "slotting_category", "is_hvcre"]),
+            sl_data.select(
+                "counterparty_reference",
+                "sl_type",
+                "slotting_category",
+                "is_hvcre",
+                pl.col("project_phase").alias("sl_project_phase"),
+            ),
             on="counterparty_reference",
             how="left",
         )
@@ -290,6 +302,62 @@ def join_specialised_lending(
         pl.lit(None).cast(pl.String).alias("sl_type"),
         pl.lit(None).cast(pl.String).alias("slotting_category"),
         pl.lit(None).cast(pl.Boolean).alias("is_hvcre"),
+        pl.lit(None).cast(pl.String).alias("sl_project_phase"),
+    )
+
+
+@cites("PS1/26, paragraph 122B")
+def resolve_sl_project_phase(
+    exposures: pl.LazyFrame,
+    *,
+    pack: ResolvedRulepack,
+) -> pl.LazyFrame:
+    """Resolve the phase a project-finance exposure is treated as being in.
+
+    PRA PS1/26 Art. 122B(2)(c): "project finance exposures shall be assigned
+    a risk weight of 130% during the pre-operational phase, and (subject to
+    paragraph 4) 100% during the operational phase"; Art. 122B(3) defines the
+    operational phase as the one in which the project entity has "(a) a
+    positive net cash-flow that is sufficient to cover any remaining
+    contractual obligations relating to the completion of the project; and
+    (b) declining long-term debt". The operational phase is therefore a
+    condition the firm shows, and a project-finance row whose
+    ``project_phase`` is null or outside ``ProjectPhase`` is treated as
+    PRE_OPERATIONAL (owner decision, review IV-01). Recognised values are
+    lower-cased, matching the case-insensitive input-domain gate.
+
+    Gated on the ``sa_pf_phase_defaults_pre_operational`` pack Feature (Basel
+    3.1 only — CRR has no SA phase weights, so the supplied value is carried
+    unchanged). ``_sl_project_phase_defaulted`` marks the defaulted rows for
+    the SA006 roll-up in ``audit.collect_classified_frame_warnings``; it is
+    intra-stage scratch, stripped by the classifier-exit seal.
+
+    The resolved ``sl_project_phase`` is the carrier the SA risk weight
+    (``engine/sa/b31_risk_weight_tables.py::b31_sa_sl_rw_expr``, including
+    the output-floor SA-equivalent of slotted rows) and the OF 07.00
+    project-finance phase rows read, so the reported phase and the applied
+    weight cannot disagree.
+    """
+    if not pack.feature("sa_pf_phase_defaults_pre_operational"):
+        return exposures.with_columns(pl.lit(False).alias("_sl_project_phase_defaulted"))
+
+    phase = pl.col("sl_project_phase").str.to_lowercase()
+    is_project_finance = (
+        pl.col("sl_type")
+        .str.to_lowercase()
+        .eq_missing(SpecialisedLendingType.PROJECT_FINANCE.value)
+    )
+    unevidenced = is_project_finance & (
+        phase.is_null() | ~phase.is_in([member.value for member in ProjectPhase])
+    )
+    return exposures.with_columns(
+        pl.when(unevidenced)
+        .then(pl.lit(ProjectPhase.PRE_OPERATIONAL.value))
+        .when(is_project_finance)
+        .then(phase)
+        .otherwise(pl.col("sl_project_phase"))
+        .alias("sl_project_phase"),
+        unevidenced.alias("_sl_project_phase_defaulted"),
     )
 
 

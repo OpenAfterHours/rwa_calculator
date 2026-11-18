@@ -6,11 +6,13 @@ Pipeline position:
 
 Key responsibilities:
 - ``ExposureClassifier.classify``: the stage recipe — counterparty
-  attribute join, SL join, independent flags, subtype classification,
+  attribute join, SL join (with the project-finance phase resolution),
+  independent flags, subtype classification,
   corporate→retail reclassification, RE-split candidate flagging, model
   permission resolution, approach assignment, B31 subclass derivation,
   the stage-exit ``materialise_edge``, the two post-materialise diagnostic
-  collects, and the brand-selected producer ``seal``.
+  collects (row-count roll-ups; model-permission misses), and the
+  brand-selected producer ``seal``.
 - ``ExposureClassifier._build_bundle``: assemble the
   ``ClassifiedExposuresBundle`` (pass-through frames + audit trail).
 
@@ -52,12 +54,12 @@ from rwa_calc.engine.classify.attributes import (
     add_counterparty_attributes,
     derive_independent_flags,
     join_specialised_lending,
+    resolve_sl_project_phase,
 )
 from rwa_calc.engine.classify.audit import (
     build_audit_trail,
-    collect_beel_on_non_defaulted_warnings,
+    collect_classified_frame_warnings,
     collect_input_warnings,
-    collect_qrre_gate_demotion_warnings,
 )
 from rwa_calc.engine.classify.permissions import (
     emit_model_permission_diagnostics,
@@ -132,6 +134,7 @@ class ExposureClassifier:
             data.counterparty_lookup.counterparties,
         )
         exposures = join_specialised_lending(exposures, data.specialised_lending)
+        exposures = resolve_sl_project_phase(exposures, pack=resolved_pack)
 
         # Single schema snapshot — used by the remaining schema-conditional
         # helpers (non-contract scratch columns and the EU-sovereign currency
@@ -175,13 +178,13 @@ class ExposureClassifier:
         # strictly intra-stage (migration Phase 1).
         classified = materialise_edge(classified, config, "classifier_exit")
 
-        classification_errors.extend(collect_beel_on_non_defaulted_warnings(classified))
-        classification_errors.extend(collect_qrre_gate_demotion_warnings(classified))
+        classification_errors.extend(collect_classified_frame_warnings(classified))
         if has_model_permissions:
             classification_errors.extend(emit_model_permission_diagnostics(classified))
 
         # Producer seal (Phase 3): validates the contract and strips
-        # intra-stage scratch (including _model_permission_diagnostic) —
+        # intra-stage scratch (including _model_permission_diagnostic and
+        # _sl_project_phase_defaulted) —
         # pure plan ops over the eager-backed frame. CCR runs carry the
         # SA-CCR provenance columns through, so the contract is selected
         # by the input frame's brand.

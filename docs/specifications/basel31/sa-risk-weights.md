@@ -2117,6 +2117,34 @@ Both limbs are mandatory. Pre-operational PF — including the construction phas
 period before declining long-term debt is established — receives the 130% weight under Art.
 122B(2)(c).
 
+!!! info "Engine treatment of the phase input"
+    The phase comes from `specialised_lending.project_phase` (`pre_operational` /
+    `operational` / `high_quality_operational`) and reaches the weight as `sl_project_phase`
+    through the classifier's specialised-lending join. Because the operational phase is a
+    condition the firm must show, a project-finance row whose phase is **null or
+    unrecognised is treated as pre-operational** (130% when unrated) and raises **SA006**
+    (`engine/classify/attributes.py::resolve_sl_project_phase`, gated on the Basel-3.1-only
+    pack Feature `sa_pf_phase_defaults_pre_operational`). Only the two operational values
+    buy the 100% / 80% weights. The same resolved phase drives the output-floor
+    SA-equivalent of a slotted project-finance row and the OF 07.00 rows 0024–0026. Until
+    review IV-01 the join dropped the phase, so every unrated PF row took 100%.
+
+### Subordinated Specialised Lending (Art. 133(5))
+
+> *"An institution shall assign a risk weight of 150% to an exposure that is a subordinated
+> debt instrument, an own funds instrument or an equity instrument and is not classified as
+> an equity exposure"* — Art. 133(5).
+
+Table A2 row (3) (subordinated debt, equity and other own funds instruments) ranks above the
+corporate class, of which specialised lending is a sub-class (Art. 122A). A subordinated
+(`seniority = "subordinated"`) SL row therefore takes **150%**, outranking both the Art.
+122B(2) type weights above and the rated-corporate table of Art. 122B(1), and keeps it when
+defaulted (row (3) also outranks row (5) default). The predicate
+(`engine/sa/subordinated_debt.py::is_b31_subordinated_debt`) covers institution, corporate
+and specialised-lending rows; the quasi-sovereign classes remain outside it pending an owner
+decision. CRR has no SA subordinated carve-out: an unrated subordinated SL row stays at the
+corporate 100%.
+
 ### High-Quality Operational PF — 80% Weight (Art. 122B(4))
 
 > *"Where a project finance exposure is in the operational phase and is considered high

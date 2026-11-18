@@ -808,8 +808,8 @@ fx_rates = pl.DataFrame({
 |--------|------|----------|-------------|
 | `counterparty_reference` | `String` | Yes | Links to counterparty (all exposures inherit SL treatment) |
 | `sl_type` | `String` | Yes | Type of specialised lending |
-| `project_phase` | `String` | No | Project lifecycle phase — typically `"planning"`, `"construction"`, or `"operational"`. Drives the CRE33.5 < 2.5-year strong/good preferential weights (which only apply during construction / pre-operational phase) |
-| `slotting_category` | `String` | No | Slotting category |
+| `project_phase` | `String` | No | Project-finance phase, one of `pre_operational`, `operational`, `high_quality_operational` (case-insensitive; anything else raises **DQ006**). Basel 3.1 only: drives the unrated SA project-finance weight — 130% pre-operational, 100% operational, 80% high-quality operational (PS1/26 Art. 122B(2)(c) / (4)) — on SA rows and on the output-floor SA-equivalent of slotted rows. Supply `high_quality_operational` only where the Art. 122B(5) criteria are met. Art. 122B(3) defines the operational phase by conditions the firm must show, so a **null or unrecognised phase on a project-finance row is treated as `pre_operational`** and raises the **SA006** warning; the resolved phase is carried on the output as `sl_project_phase` and reported in OF 07.00 rows 0024–0026. Under CRR the value is carried unchanged and affects no weight (an unrated SL exposure is a corporate); slotting weights do not depend on it in either regime |
+| `slotting_category` | `String` | No | Slotting category (case-insensitive). A row routed to slotting with a null or unrecognised category is weighted at the `satisfactory` pack default and raises the **CLS012** warning (both regimes) |
 | `is_hvcre` | `Boolean` | No | High-volatility commercial real estate |
 
 **Valid `sl_type` values:**
@@ -821,6 +821,19 @@ fx_rates = pl.DataFrame({
 | `commodities_finance` | Commodities finance (CF) |
 | `ipre` | Income-producing real estate |
 | `hvcre` | High-volatility commercial real estate |
+
+!!! note "Basel 3.1: IPRE / HVCRE slotting needs an IRB permission"
+    PS1/26 Art. 147A(1)(c) puts IPRE and HVCRE on the slotting approach — but only
+    for a firm whose IRB permission covers the exposure (Art. 107(1)), and never
+    over an Art. 148 / 150 standardised permission. The engine slots an `ipre` /
+    `hvcre` row only when the run grants a slotting, F-IRB or A-IRB permission for
+    `specialised_lending` that applies to it: an org-wide `irb_permissions` map
+    covering the class, or (in `PermissionMode.IRB`) a `model_permissions` row
+    matched through the exposure's `model_id` with no matching `standardised`
+    row. Otherwise the row stays on the Standardised Approach — an SA-only firm,
+    the default `PermissionMode.STANDARDISED` factory included. On SA an HVCRE row
+    is ADC (Art. 124K, 150%) only when `is_under_construction` (or the product
+    type) says so; with no property collateral, IPRE / HVCRE take 100%.
 
 **Valid `slotting_category` values:**
 

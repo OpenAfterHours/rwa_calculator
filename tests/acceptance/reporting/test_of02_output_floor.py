@@ -113,7 +113,15 @@ class _Run:
 #   A-IRB 16,085,419.21 + slotting 52,500,000.00 = 116,829,480.13 (== C 02.00 row
 #   0240); standardised = the SA book + equity + CIU = 51,355,833.33 (== C 02.00
 #   row 0060). They sum to the whole portfolio, 168,185,313.47 (== C 02.00 row
-#   0010). S-TREA (column 0040) = whole-book sa_rwa = 195,130,833.33.
+#   0010). S-TREA (column 0040) = whole-book sa_rwa = 217,630,833.33.
+#
+#   **S-TREA grew 195,130,833.33 -> 217,630,833.33 with review IV-01**, by exactly
+#   the 22,500,000 = 75,000,000 x (130% - 100%) on RP-LN-SL, the slotted project-
+#   finance loan with no project_phase: PS1/26 Art. 122B(3) defines the
+#   operational phase by conditions the firm must show, so its SA-equivalent is
+#   now the Art. 122B(2)(c) pre-operational 130%, not the operational 100% the
+#   engine assumed while the phase never reached the weight. Its own slotting
+#   RWEA (52,500,000) and every other column are unchanged.
 #
 #   The A-IRB and SA legs both carry the P1.373 supporting-factor overlap pair
 #   (RP-LN-SME-INFRA, RP-LN-AIRB-INFRA) merged in from master; supporting factors
@@ -141,7 +149,7 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "0010": 116_829_480.13349256,
             "0020": 51_355_833.33333333,
             "0030": 168_185_313.4668259,
-            "0040": 195_130_833.3333333,
+            "0040": 217_630_833.3333333,
         },
         # Counterparty credit risk — populated, and empty because the book has none.
         "0020": {"0010": 0.0, "0020": 0.0, "0030": 0.0, "0040": 0.0},
@@ -150,7 +158,7 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "0010": 116_829_480.13349256,
             "0020": 51_355_833.33333333,
             "0030": 168_185_313.4668259,
-            "0040": 195_130_833.3333333,
+            "0040": 217_630_833.3333333,
         },
     },
     "ccr": {

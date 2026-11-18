@@ -14,7 +14,8 @@ Key responsibilities:
   ``_model_permission_diagnostic`` scratch column.
 - Build the five permission expressions consumed by the approach ladder
   (``build_permission_exprs``) from model-level / IRB-mode / org-wide
-  sources.
+  sources, plus the specialised-lending IRB-permission gate on the Basel 3.1
+  IPRE / HVCRE forced slotting (``build_sl_irb_permission_expr``).
 - Roll the diagnostic column up into CLS006 warnings
   (``emit_model_permission_diagnostics`` — eager, post-materialise).
 
@@ -23,6 +24,8 @@ References:
 - CRR Art. 148: sequential implementation (roll-out) across classes
 - CRR Art. 150: permanent partial use (PPU) — SA-precedence carve-out
 - CRR Art. 147(3)-(4): RGLA / PSE IRB-class keying for permission lookup
+- PRA PS1/26 Art. 107(1) / Art. 147A(1)(c): IPRE / HVCRE slotting needs an IRB
+  permission, and an Art. 148 / 150 SA permission keeps SA
 """
 
 from __future__ import annotations
@@ -370,6 +373,58 @@ def build_permission_exprs(
         config, has_internal_rating
     )
     return airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting
+
+
+@cites("PS1/26, paragraph 147A")
+def build_sl_irb_permission_expr(
+    config: CalculationConfig,
+    *,
+    has_model_permissions: bool,
+) -> pl.Expr:
+    """Does an IRB permission cover this specialised-lending row?
+
+    The gate on the Basel 3.1 IPRE / HVCRE forced slotting. PS1/26 Art. 107(1):
+    institutions "shall apply either the Standardised Approach ... or, if
+    permitted by the PRA in accordance with ... Article 143, the IRB Approach"
+    — and the Slotting Approach is one of the Art. 143(2A) IRB approaches.
+    Art. 147A(1)(c) then directs, for IPRE and HVCRE, "(i) the Standardised
+    Approach for exposures where permission has been granted under Article
+    148 or Article 150; or (ii) the Slotting Approach for all other IPRE
+    exposures and HVCRE exposures". Limb (ii) therefore binds only a firm
+    whose IRB permission covers the exposure, and never over an Art. 148 /
+    150 standardised permission (review IV-02 / RG-01).
+
+    Per permission source (same three as ``build_permission_exprs``):
+
+    - **Model-level**: any of the row's slotting / F-IRB / A-IRB model
+      permission flags. ``resolve_model_permissions`` has already cleared all
+      three where a matching ``standardised`` row exists (the Art. 148 / 150
+      SA-precedence block), so that limb needs no separate term. No PD or LGD
+      requirement — slotting needs neither — but, as for every model-level
+      permission (and for the PF / OF / CF slotting branch), the row must
+      carry a ``model_id`` that a permission row matches: an IPRE / HVCRE row
+      with no internal rating holds no permission and stays on SA.
+    - **IRB mode without model_permissions**: nothing is permitted.
+    - **Org-wide** (``PermissionMode.STANDARDISED``, optionally with an
+      explicit ``irb_permissions`` map): the specialised-lending class grants
+      slotting, F-IRB or A-IRB. The default SA-only map grants none.
+    """
+    if has_model_permissions:
+        return (
+            pl.col("model_slotting_permitted")
+            | pl.col("model_firb_permitted")
+            | pl.col("model_airb_permitted")
+        )
+    if config.permission_mode == PermissionMode.IRB:
+        return pl.lit(False)
+    # irb_permissions is derived non-None in CalculationConfig.__post_init__.
+    permissions = config.irb_permissions
+    return pl.lit(
+        any(
+            permissions.is_permitted(ExposureClass.SPECIALISED_LENDING, approach)  # ty: ignore[unresolved-attribute]
+            for approach in (ApproachType.SLOTTING, ApproachType.FIRB, ApproachType.AIRB)
+        )
+    )
 
 
 def _build_orgwide_permission_exprs(

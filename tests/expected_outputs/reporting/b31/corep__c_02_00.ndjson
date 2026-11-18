@@ -1,8 +1,8 @@
-{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":168185313.4668259,"0020":null,"0030":110626624.99999999}
+{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":168185313.4668259,"0020":null,"0030":124126624.99999999}
 {"row_ref":"0034","row_name":"Output floor activated","0010":null,"0020":null,"0030":0.0}
 {"row_ref":"0035","row_name":"Output floor multiplier","0010":null,"0020":null,"0030":0.6}
 {"row_ref":"0036","row_name":"Output floor adjustment (OF-ADJ)","0010":null,"0020":null,"0030":-6451875.0}
-{"row_ref":"0040","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":168185313.4668259,"0020":195130833.3333333,"0030":null}
+{"row_ref":"0040","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":168185313.4668259,"0020":217630833.3333333,"0030":null}
 {"row_ref":"0050","row_name":"Standardised Approach (SA)","0010":51355833.33333333,"0020":null,"0030":null}
 {"row_ref":"0060","row_name":"SA exposure classes excluding securitisation positions","0010":51355833.33333333,"0020":null,"0030":null}
 {"row_ref":"0070","row_name":"Central governments or central banks","0010":0.0,"0020":null,"0030":null}
@@ -21,7 +21,7 @@
 {"row_ref":"0200","row_name":"Collective investments undertakings (CIU)","0010":28000000.0,"0020":null,"0030":null}
 {"row_ref":"0210","row_name":"Subordinated debt, equity and other own funds instruments","0010":2500000.0,"0020":null,"0030":null}
 {"row_ref":"0211","row_name":"Other items","0010":20000.0,"0020":null,"0030":null}
-{"row_ref":"0240","row_name":"Internal ratings based Approach (IRB)","0010":116829480.13349256,"0020":143775000.0,"0030":null}
+{"row_ref":"0240","row_name":"Internal ratings based Approach (IRB)","0010":116829480.13349256,"0020":166275000.0,"0030":null}
 {"row_ref":"0250","row_name":"Exposures subject to the FIRB approach","0010":48244060.92282306,"0020":50000000.0,"0030":null}
 {"row_ref":"0271","row_name":"Institutions","0010":null,"0020":null,"0030":null}
 {"row_ref":"0290","row_name":"Corporates - Specialised lending exposures","0010":0.0,"0020":0.0,"0030":null}
@@ -39,8 +39,8 @@
 {"row_ref":"0390","row_name":"Retail - Qualifying revolving","0010":null,"0020":null,"0030":null}
 {"row_ref":"0400","row_name":"Retail - Other SME","0010":null,"0020":null,"0030":null}
 {"row_ref":"0410","row_name":"Retail - Other non-SME","0010":21574.12550893193,"0020":75000.0,"0030":null}
-{"row_ref":"0411","row_name":"Exposures subject to the slotting approach","0010":52500000.0,"0020":75000000.0,"0030":null}
-{"row_ref":"0412","row_name":"Project finance exposures","0010":52500000.0,"0020":75000000.0,"0030":null}
+{"row_ref":"0411","row_name":"Exposures subject to the slotting approach","0010":52500000.0,"0020":97500000.0,"0030":null}
+{"row_ref":"0412","row_name":"Project finance exposures","0010":52500000.0,"0020":97500000.0,"0030":null}
 {"row_ref":"0413","row_name":"Object finance exposures","0010":0.0,"0020":0.0,"0030":null}
 {"row_ref":"0414","row_name":"Commodities finance exposures","0010":0.0,"0020":0.0,"0030":null}
 {"row_ref":"0415","row_name":"Income Producing Real Estate (IPRE) exposures","0010":0.0,"0020":0.0,"0030":null}

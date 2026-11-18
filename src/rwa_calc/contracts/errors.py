@@ -182,6 +182,12 @@ ERROR_LARGE_CORP_REVENUE_NULL = "CLS008"
 ERROR_LFSE_ASSETS_NULL = "CLS009"
 ERROR_QRRE_GATE_DEMOTION = "CLS010"
 ERROR_LARGE_CORP_GROUP_ROLLUP = "CLS011"
+# A slotting-approach exposure with no recognised slotting_category (null, or
+# not a SlottingCategory value). CRR / PS1/26 Art. 153(5) weight a slotted
+# exposure by the grade the institution assigns; the engine applies the cited
+# pack default ("satisfactory") and, with this WARNING, no longer does so
+# silently. Emitted by the classifier's post-materialise roll-up.
+ERROR_SLOTTING_CATEGORY_MISSING = "CLS012"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -316,6 +322,12 @@ ERROR_MISSING_RISK_WEIGHT = "SA002"
 ERROR_INVALID_LTV = "SA003"
 ERROR_DUE_DILIGENCE_NOT_PERFORMED = "SA004"
 ERROR_EQUITY_IN_MAIN_TABLE = "SA005"
+# Basel 3.1 project-finance exposure whose project_phase is null or outside the
+# input vocabulary. PS1/26 Art. 122B(3) defines the operational phase by
+# evidenced conditions, so the exposure is treated as pre-operational (the
+# Art. 122B(2)(c) 130% weight when unrated). WARNING; emitted by the
+# classifier's post-materialise roll-up (engine/classify/audit.py).
+ERROR_PF_PHASE_UNEVIDENCED = "SA006"
 
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"
@@ -629,6 +641,61 @@ def beel_on_non_defaulted_exposure_warning(*, n: int) -> CalculationError:
         ),
         regulatory_reference="PS1/26 Art. 181(1)(h)(ii); CRR Art. 158(5)",
         field_name="beel",
+    )
+
+
+def pf_phase_unevidenced_warning(*, n: int) -> CalculationError:
+    """Create the SA006 warning for project-finance rows with no recognised phase.
+
+    PRA PS1/26 Art. 122B(2)(c) weights an unrated project-finance exposure
+    130% in the pre-operational phase and 100% in the operational phase
+    (80% when also high quality, Art. 122B(4)); Art. 122B(3) defines the
+    operational phase by conditions the firm must show. A null or
+    unrecognised ``project_phase`` therefore demonstrates nothing, and the
+    engine treats the exposure as pre-operational. One aggregate warning
+    carries the count, mirroring the classifier roll-ups (CLS010, DQ008).
+    """
+    return CalculationError(
+        code=ERROR_PF_PHASE_UNEVIDENCED,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"{n} project-finance exposure(s) carry no recognised project_phase "
+            "(null, or not one of pre_operational / operational / "
+            "high_quality_operational). PS1/26 Art. 122B(3) requires the "
+            "operational phase to be demonstrated, so they are treated as "
+            "pre-operational: 130% under Art. 122B(2)(c) when unrated."
+        ),
+        regulatory_reference="PRA PS1/26 Art. 122B(2)(c) / Art. 122B(3)",
+        field_name="project_phase",
+    )
+
+
+def slotting_category_missing_warning(*, n: int) -> CalculationError:
+    """Create the CLS012 warning for slotted rows with no recognised grade.
+
+    CRR Art. 153(5) and PRA PS1/26 Art. 153(5) assign a slotted exposure the
+    risk weight of the category the institution grades it into; an exposure
+    with no grade has not been slotted. The engine keeps the cited pack
+    default (``satisfactory``, which the slotting weight and expected-loss
+    tables carry as their ``default``) — whether a missing grade should
+    instead take ``weak`` is an open owner decision (review IV-09) — and this
+    aggregate warning, carrying the row count, makes the substitution visible.
+    """
+    return CalculationError(
+        code=ERROR_SLOTTING_CATEGORY_MISSING,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"{n} slotting exposure(s) carry no recognised slotting_category (null, "
+            "or not one of strong / good / satisfactory / weak / default). They are "
+            "weighted at the 'satisfactory' grade, the pack default, for both the "
+            "risk weight and the expected-loss rate. Art. 153(5) weights a slotted "
+            "exposure by the grade the institution assigns: an obligor that is in "
+            "fact weak is understated, one in default is misstated."
+        ),
+        regulatory_reference="CRR Art. 153(5) / PRA PS1/26 Art. 153(5)",
+        field_name="slotting_category",
     )
 
 

@@ -345,6 +345,26 @@ class SpecialisedLendingType(StrEnum):
     """High-volatility commercial real estate"""
 
 
+class ProjectPhase(StrEnum):
+    """
+    Project-finance phases for the Basel 3.1 SA weights (PRA PS1/26 Art. 122B).
+
+    The ``specialised_lending.project_phase`` input vocabulary. Art. 122B(3)
+    defines the operational phase by conditions the firm must show, so a
+    project-finance exposure with no recognised phase is treated as
+    PRE_OPERATIONAL under Basel 3.1.
+    """
+
+    PRE_OPERATIONAL = "pre_operational"
+    """Before the Art. 122B(3) operational conditions are met (130%)"""
+
+    OPERATIONAL = "operational"
+    """Art. 122B(3) operational phase (100%)"""
+
+    HIGH_QUALITY_OPERATIONAL = "high_quality_operational"
+    """Operational and high quality per Art. 122B(5) (80%, Art. 122B(4))"""
+
+
 class PropertyType(StrEnum):
     """
     Property types for real estate collateral.

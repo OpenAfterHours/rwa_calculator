@@ -18,7 +18,7 @@ and routing exposures to F-IRB, slotting, or SA based on regulatory constraints.
 | FR-11.4 | Institution exposure → F-IRB only, Art. 147A(1)(b) (no A-IRB) | P0 | Done |
 | FR-11.5 | Equity exposure → SA only (Art. 147A(1)(h) per Art. 147(2)(e)) | P0 | Done |
 | FR-11.6 | Sovereign + all quasi-sovereigns (RGLA, PSE, MDB per Art. 117, Int'l Org per Art. 118) → SA only (Art. 147A(1)(a)) | P0 | Done |
-| FR-11.7 | IPRE/HVCRE → Slotting only, Art. 147A(1)(c) (if no A-IRB permission) | P0 | Done |
+| FR-11.7 | IPRE/HVCRE → Slotting only, Art. 147A(1)(c), where an IRB permission covers the exposure; SA with no IRB permission (Art. 107(1)) or with an Art. 148 / 150 SA permission | P0 | Done |
 | FR-11.8 | Model permissions config and fallback logic | P0 | Done |
 
 ---
@@ -156,6 +156,24 @@ high-volatility commercial real estate (HVCRE) exposures must use either the
 F-IRB and A-IRB are **not** available for IPRE/HVCRE. In practice, most firms without
 an Art. 148/150 SA permission for these sub-classes will route to slotting.
 
+Art. 147A sits in the IRB Part and binds only a firm permitted to use IRB: PS1/26 Art.
+107(1) — institutions *"shall apply either the Standardised Approach ... or, if permitted by
+the PRA in accordance with ... Article 143, the IRB Approach"* — and the Slotting Approach is
+one of the Art. 143(2A) IRB approaches. The classifier therefore forces an IPRE / HVCRE row
+onto slotting only when a permission covering it exists
+(`engine/classify/permissions.py::build_sl_irb_permission_expr`):
+
+| Permission source | Forced slotting when | Otherwise |
+|---|---|---|
+| `PermissionMode.STANDARDISED`, default (SA-only) map | never | SA |
+| Org-wide `irb_permissions` map | the `specialised_lending` class grants slotting, F-IRB or A-IRB | SA |
+| `PermissionMode.IRB` with `model_permissions` | a slotting / F-IRB / A-IRB row for `specialised_lending` matches the exposure (model_id, geography, book) **and** no matching `standardised` row exists (Art. 148 / 150 — limb (i)) | SA |
+| `PermissionMode.IRB` without `model_permissions` | never | SA |
+
+An F-IRB or A-IRB permission covering IPRE still yields slotting, never F-IRB / A-IRB. Before
+review IV-02 / RG-01 the forcing fired with no permission at all — including on the default
+SA-only factory — and over an Art. 150 standardised row.
+
 ## Permission Configuration
 
 Model permissions are configured via the `model_permissions` input data source, which specifies
@@ -177,7 +195,8 @@ The classifier applies restrictions in the following order:
 
 1. **Art. 147A hard constraints** — exposure class-level restrictions (equity→SA,
    sovereign/RGLA/PSE/MDB/international organisation→SA, institution→F-IRB, all FSEs→F-IRB,
-   IPRE/HVCRE→slotting, retail→A-IRB) override any permission
+   IPRE/HVCRE→slotting where an IRB permission covers them, retail→A-IRB) override
+   any permission
 2. **Threshold-based restrictions** — large corporate (>£440m revenue) overrides A-IRB permission
    to F-IRB
 3. **Model permissions** — firm-specific approach permissions from the `model_permissions` table
@@ -557,6 +576,7 @@ When no model permission matches an exposure:
 | B31-M7 | Quasi-sovereign exposure — PSE / RGLA / MDB (Art. 117) / Int'l Org (Art. 118) | SA (Art. 147A(1)(a)) |
 | B31-M8 | IPRE with no A-IRB permission | Slotting (Art. 147A(1)(c)) |
 | B31-M9 | HVCRE with no A-IRB permission | Slotting (Art. 147A(1)(c)) |
+| B31-M8a | IPRE / HVCRE, SA-only firm, or an Art. 150 `standardised` row | SA (Art. 107(1); Art. 147A(1)(c)(i)) |
 | B31-M10 | PF with A-IRB permission | A-IRB (no restriction) |
 | B31-M11 | Corporate at £440m boundary (exact threshold) | F-IRB (≥ £440m triggers Art. 147A(1)(e)) |
 | B31-M12 | Exposure with no model permission | SA (fallback) |

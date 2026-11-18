@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `a5d4ba5754bda407`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 241 entries, content hash `b2e0996435b9e56b`
 
 ## Regime features
 
@@ -41,6 +41,7 @@ On/off behaviour switches (`Feature`).
 | `firb_uses_sa_ccf` | off | on | CRR Art. 166 / PS1/26, paragraph 166C |
 | `intragroup_zero_rw` | on | on | CRR Art. 113 / PS1/26, paragraph 113 |
 | `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
+| `irb_purchased_receivable_commitment_ccf_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166A |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
 | `on_bs_netting_perimeter_is_agreement` | on | on | CRR Art. 195 / PS1/26, paragraph 195 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
@@ -144,6 +145,8 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `io_zero_rw` | `0.00` | `0.00` | CRR Art. 118 |
 | `irb_maturity_floor_collateralised_deriv_years` | `0.02739726027397260273972602740` | `0.02739726027397260273972602740` | CRR Art. 162(2) |
 | `irb_maturity_floor_repo_sft_years` | `0.01369863013698630136986301370` | `0.01369863013698630136986301370` | CRR Art. 162(2) |
+| `irb_purchased_receivable_commitment_ccf` | — | `0.40` | PS1/26, paragraph 166A |
+| `irb_purchased_receivable_commitment_ucc_ccf` | — | `0.10` | PS1/26, paragraph 166A |
 | `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
 | `mdb_named_zero_rw` | `0.00` | `0.00` | CRR Art. 117 |
 | `mdb_unrated_rw` | `0.50` | `0.50` | PS1/26, paragraph 117 |
@@ -819,7 +822,7 @@ Key column: `risk_type`
 | `LR` | `0.00` |
 
 **Basel 3.1** — PS1/26, paragraph 111
- *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
+ *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7))*
 
 Key column: `risk_type`
 
@@ -1222,7 +1225,7 @@ Key column: `country_code`
 
 ### `obs_product_to_risk_type`
 
-**Both regimes** — CRR Art. 111
+**CRR** — CRR Art. 111
  *(Annex I OBS product -> risk_type bucket)*
 
 Key column: `obs_product`
@@ -1230,12 +1233,53 @@ Key column: `obs_product`
 | Key | Value |
 |---|---|
 | `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
+| `DOCUMENTARY_CREDIT` | `MR_ISSUED` |
+| `SHIPPING_GUARANTEE` | `MR_ISSUED` |
+| `CUSTOMS_BOND` | `MR_ISSUED` |
+| `TAX_BOND` | `MR_ISSUED` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
+| `TRADE_LC` | `MLR` |
 | `PERFORMANCE_BOND` | `MLR` |
 | `WARRANTY` | `MLR` |
 | `TENDER_BOND` | `MLR` |
 | `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
+
+**Basel 3.1** — PS1/26, paragraph 111
+ *(Table A1 OBS product -> risk_type bucket)*
+
+Key column: `obs_product`
+
+| Key | Value |
+|---|---|
+| `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
 | `DOCUMENTARY_CREDIT` | `MLR` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
 | `TRADE_LC` | `MLR` |
+| `SHIPPING_GUARANTEE` | `MLR` |
+| `CUSTOMS_BOND` | `MLR` |
+| `TAX_BOND` | `MLR` |
+| `PERFORMANCE_BOND` | `MLR` |
+| `WARRANTY` | `MLR` |
+| `TENDER_BOND` | `MLR` |
+| `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
 
 ## Banded tables
 

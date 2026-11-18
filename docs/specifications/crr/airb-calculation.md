@@ -228,7 +228,7 @@ CRR Art. 153(3) provided a double-default treatment for guaranteed exposures. Un
 
 ## A-IRB CCF Restrictions (Basel 3.1)
 
-Under Basel 3.1, own CCF estimates are **only permitted for revolving facilities** (Art. 166D). All non-revolving off-balance sheet items must use SA CCFs from Table A1. See [CCF Specification](credit-conversion-factors.md) for full details including the 50% floor on A-IRB CCF estimates.
+Under Basel 3.1, own CCF estimates are **only permitted for revolving loan commitments** (Art. 166D(1)(a)). All other off-balance sheet items — non-revolving ones, and issued items such as letters of credit even under a revolving facility — must use SA CCFs from Table A1 (Art. 166D(1)(b)). See [CCF Specification](credit-conversion-factors.md) for full details including the 50% floor on A-IRB CCF estimates.
 
 ## Key Scenarios
 

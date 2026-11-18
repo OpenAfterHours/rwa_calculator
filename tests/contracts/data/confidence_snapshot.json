@@ -346,7 +346,6 @@
       "layer_count": 4,
       "oracle_cases": [],
       "pack_entries": [
-        "obs_product_to_risk_type@b31",
         "obs_product_to_risk_type@crr",
         "oc_short_maturity_ccf@b31",
         "oc_short_maturity_ccf@crr",
@@ -2705,12 +2704,12 @@
         "firb_credit_line_ccf@crr",
         "firb_obs_fallback_ccf@crr",
         "firb_trade_lc_ccf@crr",
-        "firb_uses_sa_ccf@crr"
+        "firb_uses_sa_ccf@crr",
+        "irb_purchased_receivable_commitment_ccf_applies@crr"
       ],
       "source_files": [
         "contracts/errors.py",
         "data/schemas.py",
-        "domain/enums.py",
         "engine/ccf.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/unify.py",
@@ -2739,6 +2738,8 @@
         "tests/unit/reporting/corep/test_c08_01.py",
         "tests/unit/rulebook/test_ccf_features.py",
         "tests/unit/test_ccf.py",
+        "tests/unit/test_ccf_airb_own_estimate_scope.py",
+        "tests/unit/test_ccf_purchased_receivable_scope.py",
         "tests/unit/test_irb_approach_selection.py"
       ],
       "watchfire_index_gap": false
@@ -6019,6 +6020,7 @@
       "code_functions": [
         "rwa_calc.engine.ccf::CCFCalculator._apply_uk_residential_mortgage_ccf",
         "rwa_calc.engine.ccf::CCFCalculator._compute_ccf",
+        "rwa_calc.engine.ccf::build_product_to_risk_type_expr",
         "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr"
       ],
       "confidence": "HIGH",
@@ -6028,6 +6030,7 @@
         "ORC-FS1-B31"
       ],
       "pack_entries": [
+        "obs_product_to_risk_type@b31",
         "sa_ccf@b31",
         "sa_revised_ccf_table@b31"
       ],
@@ -6064,6 +6067,8 @@
         "tests/unit/reporting/corep/test_c08_01_ccf_rows.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
+        "tests/unit/test_ccf_obs_product_regime_map.py",
+        "tests/unit/test_ccf_uk_resi_commitment_derivation.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_p1_267_sa_ccf_residual.py"
       ],
@@ -7948,6 +7953,34 @@
       "watchfire_index_gap": false
     },
     {
+      "article": "166A",
+      "code_functions": [],
+      "confidence": "MEDIUM",
+      "framework": "PS1/26",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [
+        "irb_purchased_receivable_commitment_ccf@b31",
+        "irb_purchased_receivable_commitment_ccf_applies@b31",
+        "irb_purchased_receivable_commitment_ucc_ccf@b31"
+      ],
+      "source_files": [
+        "data/schemas.py",
+        "engine/ccf.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py",
+        "rulebook/packs/b31.py",
+        "rulebook/packs/crr.py"
+      ],
+      "test_files": [
+        "tests/acceptance/basel31/test_p2_32_purchased_receivable_ccf.py",
+        "tests/fixtures/p2_32/p2_32.py",
+        "tests/integration/test_ccf_regime_scope_pipeline.py",
+        "tests/unit/test_ccf_purchased_receivable_scope.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
       "article": "166C",
       "code_functions": [],
       "confidence": "HIGH",
@@ -7994,29 +8027,11 @@
         "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/integration/test_ccf_regime_scope_pipeline.py",
         "tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py",
         "tests/unit/test_ccf.py",
+        "tests/unit/test_ccf_airb_own_estimate_scope.py",
         "tests/unit/test_p6_32_airb_floors_hoisted.py"
-      ],
-      "watchfire_index_gap": false
-    },
-    {
-      "article": "166E",
-      "code_functions": [],
-      "confidence": "UNCITED",
-      "framework": "PS1/26",
-      "layer_count": 2,
-      "oracle_cases": [],
-      "pack_entries": [],
-      "source_files": [
-        "data/schemas.py",
-        "engine/ccf.py",
-        "engine/hierarchy/facility_undrawn.py",
-        "engine/hierarchy/unify.py"
-      ],
-      "test_files": [
-        "tests/acceptance/basel31/test_p2_32_purchased_receivable_ccf.py",
-        "tests/fixtures/p2_32/p2_32.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8890,8 +8905,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "b31": "b2e0996435b9e56b6d751e233c5b29bd4356ffd190d1b11f04b81ca10cf5220a",
+    "crr": "a5d4ba5754bda407b1a08319e6879a14bfc4bbdc8ff0a01ad01f7d45e2c878ca"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

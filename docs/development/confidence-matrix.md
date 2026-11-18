@@ -32,15 +32,15 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — content hash `a5d4ba5754bda407`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `b2e0996435b9e56b`
 
 ## Summary
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
 | CRR (Capital Requirements Regulation) | 35 | 59 | 10 | 37 | 14 | 155 |
-| PS1/26 (PRA Policy Statement) | 27 | 31 | 7 | 27 | 15 | 107 |
+| PS1/26 (PRA Policy Statement) | 27 | 32 | 7 | 26 | 15 | 107 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -60,7 +60,7 @@ Package version `0.3.34`. Resolved packs:
 | 108 | 1 | 0 | 2 | 0 | 1 | MEDIUM |
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
-| 111 | 6 | 8 | 20 | 0 | 39 | MEDIUM |
+| 111 | 6 | 7 | 20 | 0 | 39 | MEDIUM |
 | 112 | 4 | 3 | 19 | 0 | 42 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 15 | 14 | 33 | HIGH |
@@ -109,7 +109,7 @@ Package version `0.3.34`. Resolved packs:
 | 163 | 2 | 4 | 4 | 0 | 8 | MEDIUM |
 | 164 | 3 | 5 | 7 | 0 | 10 | MEDIUM |
 | 165 | 1 | 3 | 2 | 0 | 2 | MEDIUM |
-| 166 | 2 | 5 | 7 | 1 | 23 | HIGH |
+| 166 | 2 | 6 | 6 | 1 | 25 | HIGH |
 | 169 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 169A | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 171 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -212,7 +212,7 @@ Package version `0.3.34`. Resolved packs:
 | 62 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 92 | 3 | 4 | 26 | 0 | 39 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
-| 111 | 3 | 2 | 12 | 1 | 20 | HIGH |
+| 111 | 4 | 3 | 12 | 1 | 22 | HIGH |
 | 112 | 1 | 0 | 8 | 0 | 8 | MEDIUM |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 24 | HIGH |
@@ -268,9 +268,9 @@ Package version `0.3.34`. Resolved packs:
 | 163 | 2 | 4 | 3 | 2 | 11 | HIGH |
 | 164 | 4 | 1 | 2 | 3 | 4 | HIGH |
 | 166 | 2 | 0 | 1 | 0 | 0 | LOW |
+| 166A | 0 | 3 | 6 | 0 | 4 | MEDIUM |
 | 166C | 0 | 1 | 0 | 1 | 7 | HIGH |
-| 166D | 3 | 3 | 4 | 0 | 3 | MEDIUM |
-| 166E | 0 | 0 | 4 | 0 | 2 | UNCITED |
+| 166D | 3 | 3 | 4 | 0 | 5 | MEDIUM |
 | 169A | 1 | 1 | 5 | 0 | 4 | MEDIUM |
 | 169B | 0 | 0 | 0 | 0 | 1 | GAP |
 | 180 | 0 | 0 | 0 | 0 | 2 | GAP |
@@ -352,7 +352,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 309 | 3 | 0 | 3 | — | — |
 | CRR 439 | 2 | 0 | 3 | — | — |
 | PS1/26 122B | 1 | 0 | 2 | — | — |
-| PS1/26 166E | 4 | 0 | 2 | — | — |
 | PS1/26 181 | 4 | 0 | 2 | — | CRR Art. 181 |
 | CRR 215 | 2 | 0 | 2 | — | — |
 | PS1/26 226 | 1 | 0 | 2 | — | CRR Art. 226 |

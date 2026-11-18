@@ -31,7 +31,7 @@ References:
 - CRR Art. 195 / 219: on-balance-sheet netting of drawn balances
 - CRR Art. 147(5) / CRE30.55: QRRE classification fields
 - PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential mortgage commitments
-- PRA PS1/26 Art. 166E(5): revolving purchased-receivables commitments
+- PRA PS1/26 Art. 166A(5): revolving purchased-receivables commitments
 - PRA PS1/26 Art. 124(3) / Art. 124K: under-construction (ADC) flag
 - PRA PS1/26 Art. 162(2A)(k): revolving M via facility termination date
 """
@@ -601,7 +601,7 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         # commitment flag carried through to the CCF stage so the 50%
         # override fires under Basel 3.1.
         pl.col("is_uk_residential_mortgage_commitment"),
-        # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn
+        # PRA PS1/26 Art. 166A(5): revolving purchased-receivables undrawn
         # purchase commitment flag carried through to the CCF stage so the
         # OC (40%) / LR (10%) routing fires under Basel 3.1.
         pl.col("is_purchased_receivable_commitment"),

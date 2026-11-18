@@ -1382,12 +1382,13 @@ def _validate_unresolved_obs_risk_type(
     ``obs_product`` is the second route to a category
     (``engine/ccf.py::build_product_to_risk_type_expr``), so a row is only
     unresolved when BOTH are absent. The test is *absence*, not
-    unmappability: every member of ``VALID_OBS_PRODUCTS`` maps to a bucket in
-    the ``obs_product_to_risk_type`` pack CategoryMap, so a NON-null
-    ``obs_product`` either resolves or already draws a DQ006 for failing its
-    declared domain. Reading the CategoryMap here would need
-    ``contracts/`` -> ``rwa_calc.rulebook``, which check 12 forbids; the
-    equivalence is pinned instead by
+    unmappability: every accepted ``obs_product`` spelling maps to a bucket in
+    BOTH regime packs' ``obs_product_to_risk_type`` CategoryMap (the maps are
+    regime-specific — CM-07), so a NON-null ``obs_product`` either resolves or
+    already draws a DQ006 for failing its declared domain. Reading the
+    CategoryMap here would need ``contracts/`` -> ``rwa_calc.rulebook``, which
+    check 12 forbids; the equivalence is pinned instead by
+    ``tests/unit/test_ccf_obs_product_regime_map.py`` (both regimes) and
     ``tests/unit/test_p1_267_sa_ccf_residual.py``.
 
     The check is confined to rows with a non-zero off-balance amount: at zero

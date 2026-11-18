@@ -28,9 +28,14 @@ Exposures under test (all contingents, nominal £2,000,000 each, CRR config):
         Expected: resolved risk_type="MLR", ccf=0.20, ead_from_ccf=400_000
         Pre-fix:  risk_type=null (pass-through), ccf=0.50, ead_from_ccf=1_000_000
 
-    CONT_P231_DOCLC (P2.31-MLR-DOCLC):
+    CONT_P231_DOCLC (P2.31-MR-DOCLC):
         obs_product="DOCUMENTARY_CREDIT", risk_type=None
-        Expected: resolved risk_type="MLR", ccf=0.20, ead_from_ccf=400_000
+        Expected (CRR): resolved risk_type="MR_ISSUED", ccf=0.50, ead_from_ccf=1_000_000
+        CRR Annex I 2(a) "documentary credits issued or confirmed" are medium risk;
+        only one "in which underlying shipment acts as collateral" is medium/low
+        (3(a)(i)). Until TR-04 (2026-11 review) this row pinned the shared
+        "framework-invariant" map's MLR / 0.20 — a CRR understatement. Under
+        PS1/26 Table A1 row 6(a) the same product is 20%.
         Pre-fix:  risk_type=null (pass-through), ccf=0.50, ead_from_ccf=1_000_000
 
     CONT_P231_OVERRIDE (P2.31-LR-OVERRIDE — regression guard):
@@ -53,8 +58,9 @@ Test strategy:
 
 References:
     - CRR Annex I para 1 / PS1/26 Table A1 Row 1: acceptances → FR (100%)
-    - CRR Annex I Row 6(a) / PS1/26 Table A1 Row 6(a): documentary credits → MLR (20%)
-    - CRR Annex I Row 6(b) / PS1/26 Table A1 Row 6(b): performance bonds → MLR (20%)
+    - CRR Annex I 2(a): documentary credits issued or confirmed → medium risk (50%);
+      PS1/26 Table A1 Row 6(a): → 20%
+    - CRR Annex I 3(a)(ii) / PS1/26 Table A1 Row 6(b): performance bonds → MLR (20%)
     - src/rwa_calc/data/tables/ccf.py: SA_CCF_CRR["FR"]=1.00, SA_CCF_CRR["MLR"]=0.20,
       SA_CCF_CRR["LR"]=0.00
     - tests/fixtures/p2_31/p2_31.py: scenario constants and factory functions
@@ -346,36 +352,35 @@ class TestP231PerformanceBondMLRMapping:
 # ---------------------------------------------------------------------------
 
 
-class TestP231DocumentaryCreditMLRMapping:
+class TestP231DocumentaryCreditMediumRiskMapping:
     """
     P2.31 DOCUMENTARY_CREDIT row: obs_product="DOCUMENTARY_CREDIT", risk_type=None.
 
-    The engine must resolve risk_type="MLR" from obs_product and apply
-    SA_CCF_CRR["MLR"] = 0.20.
-
-    Pre-fix: ccf = 0.50 (null risk_type falls to MR default), EAD = 1_000_000.
-    Both assertions FAIL until the engine adds the fill logic.
+    The engine must resolve the CRR bucket from obs_product: CRR Annex I 2(a)
+    "trade finance off-balance sheet items, namely documentary credits issued or
+    confirmed" are MEDIUM risk -> MR_ISSUED -> SA_CCF_CRR 0.50. (TR-04: this
+    class used to assert MLR / 0.20, the shared map's reading, which is only
+    right for a credit "in which underlying shipment acts as collateral",
+    Annex I 3(a)(i).)
 
     References:
-        - CRR Annex I Row 6(a) / PS1/26 Table A1 Row 6(a): documentary credits → MLR (20%)
+        - CRR Annex I 2(a): documentary credits issued or confirmed → 50%
     """
 
-    def test_p2_31_documentary_credit_ccf_is_20_pct(
+    def test_p2_31_documentary_credit_ccf_is_50_pct(
         self,
         p2_31_crr_ccf_results: pl.DataFrame,
     ) -> None:
         """
-        DOCUMENTARY_CREDIT: ccf == 0.20 (MLR, Annex I Row 6(a)).
+        DOCUMENTARY_CREDIT: ccf == 0.50 (CRR medium risk, Annex I 2(a)).
 
         Arrange: CONT_P231_DOCLC, obs_product=DOCUMENTARY_CREDIT, risk_type=None,
                  nominal_amount=2_000_000, CRR config.
         Act:     CCFCalculator.apply_ccf().
-        Assert:  ccf == 0.20.
-
-        Pre-fix failure: ccf == 0.50 (null risk_type → MR default).
+        Assert:  ccf == 0.50.
 
         References:
-            CRR Annex I Row 6(a) / PS1/26 Table A1 Row 6(a): documentary credits → 20%.
+            CRR Annex I 2(a): documentary credits issued or confirmed → 50%.
         """
         # Arrange
         row = _row(p2_31_crr_ccf_results, CONT_REF_DOCLC)
@@ -384,27 +389,24 @@ class TestP231DocumentaryCreditMLRMapping:
         assert row["ccf"] == pytest.approx(EXPECTED_CCF_DOCLC, abs=1e-6), (
             f"{SCENARIO_ID} DOCUMENTARY_CREDIT row ({CONT_REF_DOCLC}): "
             f"expected ccf={EXPECTED_CCF_DOCLC} "
-            f"(CRR Annex I Row 6(a) / Table A1 Row 6(a) — MLR 20%), "
-            f"got {row['ccf']:.4f}. "
-            f"Engine does not yet resolve obs_product='DOCUMENTARY_CREDIT' -> MLR."
+            f"(CRR Annex I 2(a) — medium risk 50%), "
+            f"got {row['ccf']:.4f}."
         )
 
-    def test_p2_31_documentary_credit_ead_is_400k(
+    def test_p2_31_documentary_credit_ead_is_1m(
         self,
         p2_31_crr_ccf_results: pl.DataFrame,
     ) -> None:
         """
-        DOCUMENTARY_CREDIT: ead_from_ccf == 400_000.00 (2M × 0.20).
+        DOCUMENTARY_CREDIT: ead_from_ccf == 1_000_000.00 (2M × 0.50).
 
         Arrange: CONT_P231_DOCLC, nominal_amount=2_000_000, drawn_amount=0,
                  obs_product=DOCUMENTARY_CREDIT, CRR config.
         Act:     CCFCalculator.apply_ccf().
-        Assert:  ead_from_ccf == 400_000.00.
-
-        Pre-fix failure: ead_from_ccf == 1_000_000.00 (2M × 0.50 MR default).
+        Assert:  ead_from_ccf == 1_000_000.00 (before TR-04: 400_000).
 
         References:
-            CRR Art. 111(1), Annex I Row 6(a): MLR CCF = 20%.
+            CRR Art. 111(1)(b), Annex I 2(a): medium-risk CCF = 50%.
         """
         # Arrange
         row = _row(p2_31_crr_ccf_results, CONT_REF_DOCLC)
@@ -413,9 +415,8 @@ class TestP231DocumentaryCreditMLRMapping:
         assert row["ead_from_ccf"] == pytest.approx(EXPECTED_EAD_DOCLC, rel=1e-4), (
             f"{SCENARIO_ID} DOCUMENTARY_CREDIT row ({CONT_REF_DOCLC}): "
             f"expected ead_from_ccf={EXPECTED_EAD_DOCLC:,.2f} "
-            f"(2_000_000 × 0.20, Annex I Row 6(a) MLR), "
-            f"got {row['ead_from_ccf']:,.2f}. "
-            f"Pre-fix EAD = 1_000_000.00 (2M × 0.50, null risk_type → MR default)."
+            f"(2_000_000 × 0.50, Annex I 2(a) medium risk), "
+            f"got {row['ead_from_ccf']:,.2f}."
         )
 
 

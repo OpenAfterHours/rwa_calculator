@@ -45,7 +45,8 @@
     "CRR Art. 166"
   ],
   "rwa_calc.engine.ccf::build_product_to_risk_type_expr": [
-    "CRR Art. 111"
+    "CRR Art. 111",
+    "PS1/26, paragraph 111"
   ],
   "rwa_calc.engine.ccf::sa_ccf_expression": [
     "CRR Art. 111"

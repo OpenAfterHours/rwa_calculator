@@ -2,23 +2,32 @@
 P2.32 / B31-D.CCF10 — Purchased-Receivables Undrawn-Commitment CCF override.
 
 Scenario:
-    PRA PS1/26 Art. 166E(5) states that undrawn purchase commitments for
-    *revolving* purchased-receivables facilities receive a specific CCF:
-        - 40% by default (Art. 111(1) Table A1 Row 5 "Other Commitments").
-        - 10% when the commitment also satisfies the UCC criteria (Row 7 / LR).
+    PRA PS1/26 Art. 166A(5) (IRB Part), second subparagraph: "An institution
+    shall, for undrawn purchase commitments for revolving purchased receivables,
+    calculate the exposure value using a conversion factor of 40%, except where
+    such commitments meet the criteria set out in point 7 of Column A of Table A1
+    ... in which case the conversion factor shall be 10%."
 
     Without an explicit flag-based override, a revolving purchased-receivables
     commitment tagged as ``risk_type="MR"`` falls to the generic MR bucket
     (50% CCF) under Basel 3.1 — over-capitalising the CCF relative to the
-    Art. 166E(5) ceiling.
+    Art. 166A(5) factor.
 
     This scenario introduces a Boolean column
     ``is_purchased_receivable_commitment`` on facility rows.  When True AND
-    ``is_revolving=True`` under a Basel 3.1 config, the CCF engine must:
-        - Apply CCF = 0.40 for risk_type="OC" (main limb, Art. 166E(5))
-        - Apply CCF = 0.10 for risk_type="LR" (UCC exception, Art. 166E(5))
+    ``is_revolving=True`` under a Basel 3.1 config, the CCF engine must, for an
+    IRB row:
+        - Apply CCF = 0.40 for risk_type="OC" (main limb, Art. 166A(5))
+        - Apply CCF = 0.10 for risk_type="LR" (UCC exception, Art. 166A(5))
         - Apply CCF = 0.40 for risk_type="MR" (override; generic MR=0.50 is
           wrong — LOAD-BEARING discriminator)
+
+    TR-02 (2026-11 review) — this harness used to run the rows on the SA (no
+    ``approach`` column, so the CCF stage defaulted it to ``standardised``) and
+    so pinned the 40% as an SA rule. Art. 166A(5) sits in the IRB Part; the SA
+    has only Table A1 (Row 4 MR 50%, Row 2(a) factoring with recourse 100%). The
+    Basel 3.1 rows now run as F-IRB, and an SA control asserts the flagged MR row
+    keeps its Table A1 50%.
 
     Under CRR, the flag is a Basel-3.1-gated no-op: the CRR control row must
     NOT receive the purchased-receivable override and must resolve via the
@@ -50,12 +59,12 @@ Test strategy:
     as an extra column because ``enforce_schema`` only casts known columns.
 
     The load-bearing MR test (test_p2_32_b31_ccf10_mr_row_*) MUST fail with
-    AssertionError until the engine-implementer adds the Art. 166E(5) override
+    AssertionError until the engine-implementer adds the Art. 166A(5) override
     in engine/ccf.py.  The OC/LR tests also fail.  The CRR control test passes
     now (regression guard).
 
 References:
-    - PRA PS1/26 App 1 Art. 166E(5): CCF on undrawn purchase commitments for
+    - PRA PS1/26 App 1 Art. 166A(5): CCF on undrawn purchase commitments for
       revolving purchased receivables.
     - Art. 111(1) Table A1 Row 5 (OC = 40%) and Row 7 (LR/UCC = 10%).
     - src/rwa_calc/data/tables/ccf.py: SA_CCF_B31 — OC=0.40, LR=0.10, MR=0.50
@@ -84,6 +93,7 @@ from tests.fixtures.p2_32.p2_32 import (
     FAC_REF_LR,
     FAC_REF_MR,
     FAC_REF_OC,
+    PRE_FIX_CCF_MR,
     PRE_FIX_EAD_MR,
     SCENARIO_ID_B31,
     SCENARIO_ID_CRR,
@@ -132,6 +142,8 @@ def p2_32_b31_ccf_results() -> pl.DataFrame:
         .with_columns(
             pl.col("limit").alias("nominal_amount"),
             pl.lit(0.0).alias("drawn_amount"),
+            # Art. 166A(5) is an IRB rule (TR-02): run the Basel 3.1 rows as F-IRB.
+            pl.lit("foundation_irb").alias("approach"),
         )
     )
 
@@ -200,7 +212,7 @@ class TestP232B31CCF10OCRow:
     """
     P2.32 B31-D.CCF10 OC row: risk_type="OC", is_purchased_receivable_commitment=True.
 
-    Expected under Basel 3.1 (PRA PS1/26 Art. 166E(5) main limb):
+    Expected under Basel 3.1 (PRA PS1/26 Art. 166A(5) main limb):
         ccf = 0.40  (Table A1 Row 5 OC rate)
         ead_from_ccf = 1_000_000 × 0.40 = 400_000.00
 
@@ -214,7 +226,7 @@ class TestP232B31CCF10OCRow:
         p2_32_b31_ccf_results: pl.DataFrame,
     ) -> None:
         """
-        OC row: ccf == 0.40 (Art. 166E(5) main limb — Table A1 Row 5 OC rate).
+        OC row: ccf == 0.40 (Art. 166A(5) main limb — Table A1 Row 5 OC rate).
 
         Arrange: PR_COMMIT_40, risk_type=OC, is_purchased_receivable_commitment=True,
                  is_revolving=True, limit=1_000_000, Basel 3.1 config.
@@ -222,7 +234,7 @@ class TestP232B31CCF10OCRow:
         Assert:  ccf == 0.40.
 
         References:
-            PRA PS1/26 Art. 166E(5): undrawn purchase commitments for revolving
+            PRA PS1/26 Art. 166A(5): undrawn purchase commitments for revolving
             purchased receivables → 40% by default.
         """
         # Arrange
@@ -232,7 +244,7 @@ class TestP232B31CCF10OCRow:
         assert row["ccf"] == pytest.approx(EXPECTED_CCF_OC, abs=1e-6), (
             f"{SCENARIO_ID_B31} OC row ({FAC_REF_OC}): "
             f"expected ccf={EXPECTED_CCF_OC} "
-            f"(PRA PS1/26 Art. 166E(5) main limb — OC 40%), "
+            f"(PRA PS1/26 Art. 166A(5) main limb — OC 40%), "
             f"got {row['ccf']:.4f}."
         )
 
@@ -249,7 +261,7 @@ class TestP232B31CCF10OCRow:
         Assert:  ead_from_ccf == 400_000.00.
 
         References:
-            PRA PS1/26 Art. 166E(5): OC default CCF = 40%.
+            PRA PS1/26 Art. 166A(5): OC default CCF = 40%.
         """
         # Arrange
         row = _row(p2_32_b31_ccf_results, FAC_REF_OC, SCENARIO_ID_B31)
@@ -258,7 +270,7 @@ class TestP232B31CCF10OCRow:
         assert row["ead_from_ccf"] == pytest.approx(EXPECTED_EAD_OC, rel=1e-4), (
             f"{SCENARIO_ID_B31} OC row ({FAC_REF_OC}): "
             f"expected ead_from_ccf={EXPECTED_EAD_OC:,.2f} "
-            f"(1_000_000 × 0.40, Art. 166E(5)), "
+            f"(1_000_000 × 0.40, Art. 166A(5)), "
             f"got {row['ead_from_ccf']:,.2f}."
         )
 
@@ -272,12 +284,12 @@ class TestP232B31CCF10LRRow:
     """
     P2.32 B31-D.CCF10 LR row: risk_type="LR", is_purchased_receivable_commitment=True.
 
-    Expected under Basel 3.1 (PRA PS1/26 Art. 166E(5) UCC exception):
+    Expected under Basel 3.1 (PRA PS1/26 Art. 166A(5) UCC exception):
         ccf = 0.10  (Table A1 Row 7 UCC / LR rate)
         ead_from_ccf = 1_000_000 × 0.10 = 100_000.00
 
     Pre-fix: SA_CCF_B31["LR"] = 0.10 by coincidence (LR fall-through) — but the
-    engine should apply it through the Art. 166E(5) routing path.
+    engine should apply it through the Art. 166A(5) routing path.
     """
 
     def test_p2_32_b31_ccf10_lr_row_ccf_is_10_pct(
@@ -285,7 +297,7 @@ class TestP232B31CCF10LRRow:
         p2_32_b31_ccf_results: pl.DataFrame,
     ) -> None:
         """
-        LR row: ccf == 0.10 (Art. 166E(5) UCC exception — Table A1 Row 7).
+        LR row: ccf == 0.10 (Art. 166A(5) UCC exception — Table A1 Row 7).
 
         Arrange: PR_COMMIT_10, risk_type=LR, is_purchased_receivable_commitment=True,
                  is_revolving=True, limit=1_000_000, Basel 3.1 config.
@@ -293,7 +305,7 @@ class TestP232B31CCF10LRRow:
         Assert:  ccf == 0.10.
 
         References:
-            PRA PS1/26 Art. 166E(5): UCC / LR exception → 10%.
+            PRA PS1/26 Art. 166A(5): UCC / LR exception → 10%.
         """
         # Arrange
         row = _row(p2_32_b31_ccf_results, FAC_REF_LR, SCENARIO_ID_B31)
@@ -302,7 +314,7 @@ class TestP232B31CCF10LRRow:
         assert row["ccf"] == pytest.approx(EXPECTED_CCF_LR, abs=1e-6), (
             f"{SCENARIO_ID_B31} LR row ({FAC_REF_LR}): "
             f"expected ccf={EXPECTED_CCF_LR} "
-            f"(PRA PS1/26 Art. 166E(5) UCC exception — LR 10%), "
+            f"(PRA PS1/26 Art. 166A(5) UCC exception — LR 10%), "
             f"got {row['ccf']:.4f}."
         )
 
@@ -319,7 +331,7 @@ class TestP232B31CCF10LRRow:
         Assert:  ead_from_ccf == 100_000.00.
 
         References:
-            PRA PS1/26 Art. 166E(5): UCC/LR CCF = 10%.
+            PRA PS1/26 Art. 166A(5): UCC/LR CCF = 10%.
         """
         # Arrange
         row = _row(p2_32_b31_ccf_results, FAC_REF_LR, SCENARIO_ID_B31)
@@ -328,7 +340,7 @@ class TestP232B31CCF10LRRow:
         assert row["ead_from_ccf"] == pytest.approx(EXPECTED_EAD_LR, rel=1e-4), (
             f"{SCENARIO_ID_B31} LR row ({FAC_REF_LR}): "
             f"expected ead_from_ccf={EXPECTED_EAD_LR:,.2f} "
-            f"(1_000_000 × 0.10, Art. 166E(5) UCC exception), "
+            f"(1_000_000 × 0.10, Art. 166A(5) UCC exception), "
             f"got {row['ead_from_ccf']:,.2f}."
         )
 
@@ -343,11 +355,11 @@ class TestP232B31CCF10MRRow:
     P2.32 B31-D.CCF10 MR row: risk_type="MR", is_purchased_receivable_commitment=True.
 
     LOAD-BEARING: This is the only non-coincidental discriminator.  Without the
-    Art. 166E(5) override, risk_type="MR" resolves to SA_CCF_B31["MR"] = 0.50,
+    Art. 166A(5) override, risk_type="MR" resolves to SA_CCF_B31["MR"] = 0.50,
     giving EAD = 500_000.  With the override, the flag routes the row to 0.40,
     giving EAD = 400_000.
 
-    Expected under Basel 3.1 (PRA PS1/26 Art. 166E(5)):
+    Expected under Basel 3.1 (PRA PS1/26 Art. 166A(5)):
         ccf = 0.40  (override: generic MR=0.50 → purchased-receivable OC default)
         ead_from_ccf = 1_000_000 × 0.40 = 400_000.00
 
@@ -360,7 +372,7 @@ class TestP232B31CCF10MRRow:
         p2_32_b31_ccf_results: pl.DataFrame,
     ) -> None:
         """
-        MR row (LOAD-BEARING): ccf == 0.40 (Art. 166E(5) override of generic MR=0.50).
+        MR row (LOAD-BEARING): ccf == 0.40 (Art. 166A(5) override of generic MR=0.50).
 
         Arrange: PR_COMMIT_MR, risk_type=MR, is_purchased_receivable_commitment=True,
                  is_revolving=True, limit=1_000_000, Basel 3.1 config.
@@ -370,7 +382,7 @@ class TestP232B31CCF10MRRow:
         Pre-fix failure: ccf == 0.50 (SA_CCF_B31["MR"] — flag ignored).
 
         References:
-            PRA PS1/26 Art. 166E(5): undrawn purchase commitments for revolving
+            PRA PS1/26 Art. 166A(5): undrawn purchase commitments for revolving
             purchased receivables → 40% (main limb), regardless of risk_type.
         """
         # Arrange
@@ -380,7 +392,7 @@ class TestP232B31CCF10MRRow:
         assert row["ccf"] == pytest.approx(EXPECTED_CCF_MR, abs=1e-6), (
             f"{SCENARIO_ID_B31} MR row ({FAC_REF_MR}): "
             f"expected ccf={EXPECTED_CCF_MR} "
-            f"(PRA PS1/26 Art. 166E(5) override — purchased-receivable OC 40%), "
+            f"(PRA PS1/26 Art. 166A(5) override — purchased-receivable OC 40%), "
             f"got {row['ccf']:.4f}. "
             f"Engine does not yet apply the is_purchased_receivable_commitment override; "
             f"generic MR fall-through gives 0.50 instead."
@@ -401,7 +413,7 @@ class TestP232B31CCF10MRRow:
         Pre-fix failure: ead_from_ccf == 500_000.00 (1_000_000 × 0.50, MR fall-through).
 
         References:
-            PRA PS1/26 Art. 166E(5): override routes MR → OC default CCF = 40%.
+            PRA PS1/26 Art. 166A(5): override routes MR → OC default CCF = 40%.
         """
         # Arrange
         row = _row(p2_32_b31_ccf_results, FAC_REF_MR, SCENARIO_ID_B31)
@@ -410,7 +422,7 @@ class TestP232B31CCF10MRRow:
         assert row["ead_from_ccf"] == pytest.approx(EXPECTED_EAD_MR, rel=1e-4), (
             f"{SCENARIO_ID_B31} MR row ({FAC_REF_MR}): "
             f"expected ead_from_ccf={EXPECTED_EAD_MR:,.2f} "
-            f"(1_000_000 × 0.40, Art. 166E(5) purchased-receivable override), "
+            f"(1_000_000 × 0.40, Art. 166A(5) purchased-receivable override), "
             f"got {row['ead_from_ccf']:,.2f}. "
             f"Pre-fix EAD = {PRE_FIX_EAD_MR:,.2f} (generic MR=0.50 × 1_000_000)."
         )
@@ -425,7 +437,7 @@ class TestP232CRRControlRow:
     """
     P2.32 CRR-D.CCF9 CRR control: is_purchased_receivable_commitment=True, CRR config.
 
-    The Art. 166E(5) override is Basel-3.1-gated.  Under CRR the flag is a no-op
+    The Art. 166A(5) override is Basel-3.1-gated.  Under CRR the flag is a no-op
     and the row must resolve via the existing CRR OC CCF path.
 
     Under CRR SA with long maturity (> 365 days): SA_CCF_CRR["OC"] = 0.50.
@@ -457,7 +469,7 @@ class TestP232CRRControlRow:
 
         References:
             CRR Art. 111: SA CCF categories — OC 50% (>1yr) or 20% (≤1yr).
-            PRA PS1/26 Art. 166E(5): Basel-3.1-only — flag is no-op under CRR.
+            PRA PS1/26 Art. 166A(5): Basel-3.1-only — flag is no-op under CRR.
         """
         # Arrange
         row = _row(p2_32_crr_ccf_results, FAC_REF_CRR, SCENARIO_ID_CRR)
@@ -468,6 +480,42 @@ class TestP232CRRControlRow:
             f"{SCENARIO_ID_CRR} CRR control ({FAC_REF_CRR}): "
             f"ead_from_ccf == {b31_purchased_receivable_ead:,.2f} suggests the "
             f"is_purchased_receivable_commitment flag has leaked into the CRR path. "
-            f"Art. 166E(5) is Basel-3.1-only; CRR must resolve via the OC CCF path. "
+            f"Art. 166A(5) is Basel-3.1-only; CRR must resolve via the OC CCF path. "
             f"Got ead_from_ccf = {row['ead_from_ccf']:,.2f}."
         )
+
+
+# ---------------------------------------------------------------------------
+# Test class — SA control (TR-02): the IRB-only factor does not reach the SA
+# ---------------------------------------------------------------------------
+
+
+class TestP232B31SAControl:
+    """
+    TR-02 SA control: the flagged MR row on the Standardised Approach keeps its
+    PS1/26 Table A1 Row 4 bucket (50%). Art. 166A(5) is in the IRB Part and the
+    SA has no purchased-receivables factor; before the TR-02 fix the engine wrote
+    the 40% onto the SA carrier and this row took EAD 400,000.
+    """
+
+    def test_p2_32_b31_sa_flagged_mr_row_keeps_table_a1_50_pct(self) -> None:
+        # Arrange
+        facilities_lf = (
+            pl.scan_parquet(_FIXTURES_DIR / "facility.parquet")
+            .filter(pl.col("facility_reference") == FAC_REF_MR)
+            .with_columns(
+                pl.col("limit").alias("nominal_amount"),
+                pl.lit(0.0).alias("drawn_amount"),
+                pl.lit("standardised").alias("approach"),
+            )
+        )
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31))
+
+        # Act
+        row = _row(
+            CCFCalculator().apply_ccf(facilities_lf, config).collect(), FAC_REF_MR, SCENARIO_ID_B31
+        )
+
+        # Assert — Table A1 Row 4 MR 50%: 1,000,000 x 0.50
+        assert row["ccf"] == pytest.approx(PRE_FIX_CCF_MR, abs=1e-6)
+        assert row["ead_from_ccf"] == pytest.approx(PRE_FIX_EAD_MR, rel=1e-6)

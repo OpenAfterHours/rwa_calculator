@@ -223,10 +223,22 @@ Under Basel 3.1, A-IRB own-estimate CCFs are **restricted to revolving facilitie
 
 ### Revolving Facility Eligibility (Art. 166D(1)(a))
 
-Own-estimate CCFs are permitted only where **both** conditions are met:
+Own-estimate CCFs are permitted only where **all** conditions are met:
 
-1. The facility is a **revolving loan commitment** — set `is_revolving = True` in input data
-2. The facility's SA CCF (per Art. 111 Table A1) is **less than 100%**
+1. The row arises from a **revolving** facility — `is_revolving = True`
+2. The row is a **commitment**, not an issued item — `is_obs_commitment = True`
+   (the facility default; a contingent defaults to `False`). The PS1/26 glossary
+   defines a commitment as an arrangement "which is not itself an issued off-balance
+   sheet item", so a letter of credit or guarantee booked under a revolving facility
+   — which inherits the facility's `is_revolving` — is not a revolving loan
+   commitment and takes the SA factor under Art. 166D(1)(b) whatever its
+   `ccf_modelled` (CM-03). A null `is_obs_commitment` cannot evidence a commitment.
+3. The row's SA CCF (per Art. 111 Table A1) is **less than 100%**
+
+A revolving purchased-receivables commitment flagged
+`is_purchased_receivable_commitment` takes the fixed PS1/26 Art. 166A(5) 40% (10% for
+an unconditionally cancellable one) on every IRB approach — never an own estimate
+(see the [CCF specification](../crr/credit-conversion-factors.md#purchased-receivables-art-166a5)).
 
 !!! warning "Table A1 Row 2 Carve-Out"
     Revolving facilities classified at **100% SA CCF** under Table A1 Row 2

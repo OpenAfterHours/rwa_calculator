@@ -27,6 +27,7 @@ from decimal import Decimal
 from rwa_calc.domain.enums import CQS, EquityType
 from rwa_calc.rulebook.model import (
     BandedTable,
+    CategoryMap,
     Citation,
     DateParam,
     DecisionTable,
@@ -384,10 +385,48 @@ ENTRIES: dict[str, RuleEntry] = {
             "LR": Decimal("0.10"),
         },
         key="risk_type",
-        citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6)"),
+        citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7)"),
         # No table default — see the CRR pack's ``sa_ccf`` note. Under B31 the
         # residual splits between Table A1 Row 5 (commitment) and Row 3 (issued
         # item), which one shared fallback cannot express (P1.267).
+    ),
+    # Concrete OBS product -> PS1/26 Art. 111 Table A1 row bucket. Overrides the
+    # CRR Annex I map (packs/crr.py), which it differs from: Table A1 row 6 gives
+    # 20% to "(a) documentary credits issued or confirmed and other
+    # self-liquidating transactions" and "(d) shipping guarantees, customs and
+    # tax bonds", which Annex I placed in medium risk (CM-07 / TR-04). Row 1
+    # (100%): credit-substitute guarantees, acceptances, endorsements,
+    # credit-substitute standby LCs. Row 2(a) (100%): transactions with recourse
+    # incl. factoring and invoice discount facilities. Row 6(b)-(c) (20%):
+    # warranties, tender / performance bonds, advance payment and retention
+    # guarantees, non-credit-substitute standby LCs. An explicit ``risk_type``
+    # always wins. Consumed in engine/ccf.py.
+    "obs_product_to_risk_type": CategoryMap(
+        name="obs_product_to_risk_type",
+        key="obs_product",
+        citation=Citation("PS1/26", "111", "Table A1 OBS product -> risk_type bucket"),
+        entries={
+            "ACCEPTANCE": "FR",
+            "FINANCIAL_GUARANTEE": "FR",
+            "AVAL": "FR",
+            "ENDORSEMENT": "FR",
+            "STANDBY_LC_CREDIT_SUBSTITUTE": "FR",
+            "FACTORING_FACILITY": "FRC",
+            "INVOICE_DISCOUNT_FACILITY": "FRC",
+            "DOCUMENTARY_CREDIT": "MLR",
+            "DOCUMENTARY_CREDIT_SHIPMENT_SECURED": "MLR",
+            "TRADE_LC": "MLR",
+            "SHIPPING_GUARANTEE": "MLR",
+            "CUSTOMS_BOND": "MLR",
+            "TAX_BOND": "MLR",
+            "PERFORMANCE_BOND": "MLR",
+            "WARRANTY": "MLR",
+            "TENDER_BOND": "MLR",
+            "BID_BOND": "MLR",
+            "ADVANCE_PAYMENT_GUARANTEE": "MLR",
+            "RETENTION_GUARANTEE": "MLR",
+            "STANDBY_LC_NON_CREDIT_SUBSTITUTE": "MLR",
+        },
     ),
     # PRA PS1/26 Art. 274(2A) transitional alpha add-on phase fractions keyed by
     # reporting year (Basel 3.1 only). Years absent from the table (2030+) resolve
@@ -688,6 +727,33 @@ ENTRIES: dict[str, RuleEntry] = {
         name="airb_obs_floor_b_multiplier",
         value=Decimal("0.5"),
         citation=Citation("PS1/26", "166D", "(5)(b) facility-level EAD floor — on-BS + 50% off-BS"),
+    ),
+    # PRA PS1/26 Art. 166A(5), second subparagraph (IRB Part): "An institution
+    # shall, for undrawn purchase commitments for revolving purchased
+    # receivables, calculate the exposure value using a conversion factor of 40%,
+    # except where such commitments meet the criteria set out in point 7 of
+    # Column A of Table A1 ... in which case the conversion factor shall be 10%."
+    # An IRB rule (Art. 166A governs F-IRB, slotting AND A-IRB), with no
+    # own-estimate limb; the SA has no such rule and keeps its Table A1 bucket
+    # (TR-02). The 40% / 10% are this article's own values — they coincide with
+    # Table A1 rows 5 / 7 today but are cited here, not borrowed from ``sa_ccf``.
+    # Read in engine/ccf.py::CCFCalculator._apply_purchased_receivable_ccf.
+    "irb_purchased_receivable_commitment_ccf_applies": Feature(
+        name="irb_purchased_receivable_commitment_ccf_applies",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "166A", "(5) IRB revolving purchased-receivables undrawn commitment CCF"
+        ),
+    ),
+    "irb_purchased_receivable_commitment_ccf": ScalarParam(
+        name="irb_purchased_receivable_commitment_ccf",
+        value=Decimal("0.40"),
+        citation=Citation("PS1/26", "166A", "(5) revolving purchase commitment CCF 40%"),
+    ),
+    "irb_purchased_receivable_commitment_ucc_ccf": ScalarParam(
+        name="irb_purchased_receivable_commitment_ucc_ccf",
+        value=Decimal("0.10"),
+        citation=Citation("PS1/26", "166A", "(5) Table A1 point 7 (UCC) purchase commitment 10%"),
     ),
     # SA CCF table selection: Basel 3.1 Table A1 (OC 40%, LR 10%) vs the CRR Annex I
     # table. Overrides the CRR Feature; gates the provisions pro-rata weighting basis.

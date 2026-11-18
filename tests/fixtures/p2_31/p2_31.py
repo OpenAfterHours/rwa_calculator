@@ -26,7 +26,9 @@ Scenario design (P2.31 — CRR Annex I / PRA PS1/26 Table A1 product-to-risk_typ
     All products in scope resolve framework-invariantly under SA:
         ACCEPTANCE       -> FR   (CCF 1.00, CRR Annex I para 1 / PS1/26 Table A1 Row 1)
         PERFORMANCE_BOND -> MLR  (CCF 0.20, Annex I Row 6(b))
-        DOCUMENTARY_CREDIT / TRADE_LC -> MLR (CCF 0.20, Annex I Row 6(a))
+        DOCUMENTARY_CREDIT -> CRR MR_ISSUED (CCF 0.50, Annex I 2(a) medium risk);
+            PS1/26 Table A1 row 6(a) 20% (the map is regime-specific — CM-07 / TR-04)
+        TRADE_LC (self-liquidating, Annex I 3(a)(i)) -> MLR (CCF 0.20)
 
     Scenario rows (all contingents, nominal £2,000,000 each):
 
@@ -115,7 +117,7 @@ COUNTERPARTY_REF: str = "CP_P231_CORP"
 # Contingent references
 CONT_REF_ACCEPT: str = "CONT_P231_ACCEPT"  # obs_product=ACCEPTANCE -> FR
 CONT_REF_PERFBOND: str = "CONT_P231_PERFBOND"  # obs_product=PERFORMANCE_BOND -> MLR
-CONT_REF_DOCLC: str = "CONT_P231_DOCLC"  # obs_product=DOCUMENTARY_CREDIT -> MLR
+CONT_REF_DOCLC: str = "CONT_P231_DOCLC"  # obs_product=DOCUMENTARY_CREDIT -> CRR MR_ISSUED
 CONT_REF_OVERRIDE: str = (
     "CONT_P231_OVERRIDE"  # explicit risk_type=LR wins over obs_product=ACCEPTANCE
 )
@@ -128,13 +130,16 @@ OBS_PRODUCT_DOCLC: str = "DOCUMENTARY_CREDIT"
 # Expected resolved risk_types (post-fill)
 RESOLVED_RISK_TYPE_ACCEPT: str = "FR"  # Annex I para 1 / Table A1 Row 1
 RESOLVED_RISK_TYPE_PERFBOND: str = "MLR"  # Annex I Row 6(b)
-RESOLVED_RISK_TYPE_DOCLC: str = "MLR"  # Annex I Row 6(a)
+# CRR Annex I 2(a): "documentary credits issued or confirmed" are MEDIUM risk;
+# only a credit "in which underlying shipment acts as collateral" is medium/low
+# (3(a)(i)). Was "MLR" / 0.20 — a pin of the TR-04 defect (CRR understated).
+RESOLVED_RISK_TYPE_DOCLC: str = "MR_ISSUED"  # Annex I 2(a)
 RESOLVED_RISK_TYPE_OVERRIDE: str = "LR"  # explicit wins — obs_product ignored
 
 # Expected CCF values (SA, framework-invariant for these products)
 EXPECTED_CCF_ACCEPT: float = 1.00  # FR: direct credit substitute
 EXPECTED_CCF_PERFBOND: float = 0.20  # MLR: performance bond
-EXPECTED_CCF_DOCLC: float = 0.20  # MLR: documentary credit
+EXPECTED_CCF_DOCLC: float = 0.50  # CRR medium risk: documentary credit (Annex I 2(a))
 EXPECTED_CCF_OVERRIDE: float = 0.00  # LR: unconditionally cancellable / 0%
 
 # Shared economics
@@ -143,7 +148,7 @@ NOMINAL_AMOUNT: float = 2_000_000.00
 # Expected EAD values
 EXPECTED_EAD_ACCEPT: float = NOMINAL_AMOUNT * EXPECTED_CCF_ACCEPT  # 2_000_000
 EXPECTED_EAD_PERFBOND: float = NOMINAL_AMOUNT * EXPECTED_CCF_PERFBOND  # 400_000
-EXPECTED_EAD_DOCLC: float = NOMINAL_AMOUNT * EXPECTED_CCF_DOCLC  # 400_000
+EXPECTED_EAD_DOCLC: float = NOMINAL_AMOUNT * EXPECTED_CCF_DOCLC  # 1_000_000
 EXPECTED_EAD_OVERRIDE: float = NOMINAL_AMOUNT * EXPECTED_CCF_OVERRIDE  # 0
 
 # Dates
@@ -281,7 +286,8 @@ def create_p231_contingents() -> pl.DataFrame:
     Rows:
         CONT_P231_ACCEPT:    obs_product=ACCEPTANCE,         risk_type=None -> FR,  EAD=2_000_000
         CONT_P231_PERFBOND:  obs_product=PERFORMANCE_BOND,   risk_type=None -> MLR, EAD=400_000
-        CONT_P231_DOCLC:     obs_product=DOCUMENTARY_CREDIT, risk_type=None -> MLR, EAD=400_000
+        CONT_P231_DOCLC:     obs_product=DOCUMENTARY_CREDIT, risk_type=None -> MR_ISSUED (CRR),
+                             EAD=1_000_000
         CONT_P231_OVERRIDE:  obs_product=ACCEPTANCE,         risk_type=LR   -> LR,  EAD=0
     """
     rows = [
@@ -446,7 +452,8 @@ def print_summary(saved: dict[str, Path]) -> None:
     print()
     print("  Regulatory citations:")
     print("    FR  (1.00) <- CRR Annex I para 1 / PS1/26 Table A1 Row 1")
-    print("    MLR (0.20) <- CRR Annex I Row 6(a)/(b) / PS1/26 Table A1 Row 6")
+    print("    MLR (0.20) <- CRR Annex I 3(a)(ii) / PS1/26 Table A1 Row 6(b)")
+    print("    MR_ISSUED (0.50) <- CRR Annex I 2(a) documentary credits (B31 Row 6(a): 0.20)")
 
 
 # ---------------------------------------------------------------------------

@@ -872,27 +872,9 @@ ENTRIES: dict[str, RuleEntry] = {
             "SE": "SEK",  # Swedish krona
         },
     ),
-    # Concrete OBS product -> abstract Annex I risk_type bucket (CRR Annex I
-    # paras 1-4 / Art. 111(1)), relocated from data/tables (S13-f). Category
-    # labels (product key -> FR/MLR/...), not rates. Framework-invariant: every
-    # product resolves to the same risk_type under CRR Annex I and PS1/26 Table
-    # A1; the framework split lives downstream in the sa_ccf lookup. Consumed in
-    # Python via Expr.replace_strict in engine/ccf.py (default=None for unmapped).
-    "obs_product_to_risk_type": CategoryMap(
-        name="obs_product_to_risk_type",
-        key="obs_product",
-        citation=Citation("CRR", "111", "Annex I OBS product -> risk_type bucket"),
-        entries={
-            # Bankers' acceptances: direct credit substitutes -> 100% CCF (FR).
-            "ACCEPTANCE": "FR",
-            # Non-direct-credit-substitute guarantees -> 20% (MLR), Annex I Row 6(b).
-            "PERFORMANCE_BOND": "MLR",
-            "WARRANTY": "MLR",
-            "TENDER_BOND": "MLR",
-            "BID_BOND": "MLR",
-            # Self-liquidating trade-related letters of credit -> 20%, Row 6(a).
-            "DOCUMENTARY_CREDIT": "MLR",
-            "TRADE_LC": "MLR",
-        },
-    ),
+    # NOTE: ``obs_product_to_risk_type`` is deliberately NOT here. It used to be,
+    # documented as "framework-invariant", but CRR Annex I and PS1/26 Table A1
+    # classify documentary credits and shipping / customs / tax bonds differently
+    # (Annex I 2(a)/2(b)(i) medium risk 50% vs Table A1 row 6(a)/(d) 20%), so each
+    # regime pack carries its own cited map (CM-07 / TR-04).
 }

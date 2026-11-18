@@ -23,6 +23,7 @@ from decimal import Decimal
 
 from rwa_calc.domain.enums import CQS, EquityType
 from rwa_calc.rulebook.model import (
+    CategoryMap,
     Citation,
     DecisionTable,
     Feature,
@@ -424,6 +425,53 @@ ENTRIES: dict[str, RuleEntry] = {
         # residual that P1.267 refuted. The residual is Annex I item 1(k) under
         # CRR and Table A1 Row 3/5 under B31; it lives in
         # engine/ccf.py::_sa_ccf_residual, not in a shared table fallback.
+    ),
+    # Concrete OBS product -> CRR Annex I risk_type bucket (given effect by
+    # Art. 111(1)). Category labels, not rates. NOT framework-invariant: Annex I
+    # puts "documentary credits issued or confirmed" (2(a)) and "shipping
+    # guarantees, customs and tax bonds" (2(b)(i)) in MEDIUM risk (50%), where
+    # PS1/26 Table A1 row 6 gives both 20% — b31.py carries that map (CM-07 /
+    # TR-04). Medium-risk ISSUED items take ``MR_ISSUED`` (the issued-item twin
+    # of MR, numerically identical in every CRR carrier; ``MR`` is the NIF/RUF
+    # commitment bucket). Only a documentary credit "in which underlying shipment
+    # acts as collateral" or another self-liquidating transaction is medium/low
+    # (3(a)(i), 20%): ``DOCUMENTARY_CREDIT_SHIPMENT_SECURED`` / ``TRADE_LC``.
+    # An explicit ``risk_type`` always wins. Consumed in engine/ccf.py.
+    "obs_product_to_risk_type": CategoryMap(
+        name="obs_product_to_risk_type",
+        key="obs_product",
+        citation=Citation("CRR", "111", "Annex I OBS product -> risk_type bucket"),
+        entries={
+            # Full risk (Annex I 1): (a) credit-substitute guarantees, (c)
+            # acceptances, (d) endorsements, (f) credit-substitute standby LCs.
+            "ACCEPTANCE": "FR",
+            "FINANCIAL_GUARANTEE": "FR",
+            "AVAL": "FR",
+            "ENDORSEMENT": "FR",
+            "STANDBY_LC_CREDIT_SUBSTITUTE": "FR",
+            # Full risk (Annex I 1(e)): transactions with recourse — a commitment.
+            "FACTORING_FACILITY": "FRC",
+            "INVOICE_DISCOUNT_FACILITY": "FRC",
+            # Medium risk (Annex I 2(a), 2(b)(i)): issued items, 50%.
+            "DOCUMENTARY_CREDIT": "MR_ISSUED",
+            "SHIPPING_GUARANTEE": "MR_ISSUED",
+            "CUSTOMS_BOND": "MR_ISSUED",
+            "TAX_BOND": "MR_ISSUED",
+            # Medium/low risk (Annex I 3(a)(i)): shipment-collateralised documentary
+            # credits and other self-liquidating trade transactions, 20%.
+            "DOCUMENTARY_CREDIT_SHIPMENT_SECURED": "MLR",
+            "TRADE_LC": "MLR",
+            # Medium/low risk (Annex I 3(a)(ii)-(iii)): warranties incl. tender and
+            # performance bonds and associated advance payment / retention
+            # guarantees; non-credit-substitute standby LCs, 20%.
+            "PERFORMANCE_BOND": "MLR",
+            "WARRANTY": "MLR",
+            "TENDER_BOND": "MLR",
+            "BID_BOND": "MLR",
+            "ADVANCE_PAYMENT_GUARANTEE": "MLR",
+            "RETENTION_GUARANTEE": "MLR",
+            "STANDBY_LC_NON_CREDIT_SUBSTITUTE": "MLR",
+        },
     ),
     # CRR Art. 166(10) F-IRB residual fallback for issued OBS items not in scope
     # of Art. 166(8). Selected by the engine when is_obs_commitment=False.
@@ -845,6 +893,18 @@ ENTRIES: dict[str, RuleEntry] = {
         name="airb_ead_floor_applies",
         enabled=False,
         citation=Citation("CRR", "166", "no A-IRB EAD floor tests under CRR"),
+    ),
+    # PS1/26 Art. 166A(5) fixed 40% / 10% purchased-receivables commitment CCF has
+    # no CRR counterpart: CRR Art. 166(8)(c) gives a revolving purchased-
+    # receivables commitment that is unconditionally cancellable 0% (the LR
+    # bucket) and otherwise the ordinary Art. 166(8)(d) / Annex I treatment.
+    # Declared so pack.feature() never KeyErrors (see packs/b31.py).
+    "irb_purchased_receivable_commitment_ccf_applies": Feature(
+        name="irb_purchased_receivable_commitment_ccf_applies",
+        enabled=False,
+        citation=Citation(
+            "CRR", "166", "(8)(c) no fixed purchased-receivables commitment CCF under CRR"
+        ),
     ),
     # SA CCF table selection (CRR Annex I vs PS1/26 Table A1: OC 50→40%, LR 0→10%).
     # Distinct from firb_uses_sa_ccf (which decides WHETHER F-IRB uses SA CCFs); this

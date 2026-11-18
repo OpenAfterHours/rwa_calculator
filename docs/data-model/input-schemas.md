@@ -491,7 +491,7 @@ loans = pl.DataFrame({
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5). Under Basel 3.1 an issued contingent is never eligible (Art. 166D(1)(b)) |
 | `ead_modelled` | `Float64` | No | A-IRB modelled EAD — replaces the CCF-derived value when populated under A-IRB (CRR Art. 166(8a)) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (CRR Art. 166(8)(b)) |
-| `is_obs_commitment` | `Boolean` | No | Default `False` — a contingent is an issued item. Set `True` for a commitment booked as a contingent (e.g. a NIF / RUF: CRR F-IRB Art. 166(8)(d) 75%; or a mortgage offer) |
+| `is_obs_commitment` | `Boolean` | No | Default `False` — a contingent is an issued item. Set `True` for a commitment booked as a contingent (e.g. a NIF / RUF: CRR F-IRB Art. 166(8)(d) 75%; or a mortgage offer). A contingent on a commitment `risk_type` (`MR`, `OC`) left `False` raises **DQ017** |
 | `is_uk_residential_mortgage_commitment` | `Boolean` | No | Basel 3.1 Table A1 Row 4(b) flag, tri-state — see Facility schema. Never derived for a row with `is_obs_commitment = False` |
 | `is_purchased_receivable_commitment` | `Boolean` | No | PS1/26 Art. 166A(5) revolving purchased-receivables commitment (IRB rows only) — see Facility schema |
 | `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor |

@@ -162,6 +162,14 @@ ERROR_UNREADABLE_INPUT_DTYPE = "DQ014"
 # Table A1 Row 3/5's 50%/40%, none of which the preparer chose. Distinct from
 # DQ006, which fires only when a NON-null string fails the domain (P1.267).
 ERROR_UNRESOLVED_OBS_RISK_TYPE = "DQ016"
+# Contingent booked on a COMMITMENT risk_type (MR = NIF / RUF, OC = other
+# commitment) while ``is_obs_commitment`` is False — the contingent default,
+# i.e. an issued item. The two inputs contradict each other; under CRR F-IRB the
+# row takes the Art. 166(10)(b) issued-item 50% instead of the Art. 166(8)(d)
+# 75% for "other credit lines, note issuance facilities (NIFs), and revolving
+# underwriting facilities (RUFs)". Not auto-resolved: an issued medium-risk item
+# mis-coded MR would then be overstated (CM-09).
+ERROR_ISSUED_ITEM_ON_COMMITMENT_RISK_TYPE = "DQ017"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -763,6 +771,39 @@ def unresolved_obs_risk_type_warning(
         ),
         field_name="risk_type",
         regulatory_reference="CRR Art. 111 Annex I 1(k); PS1/26 Art. 111 Table A1 Rows 3, 5",
+    )
+
+
+def issued_item_on_commitment_risk_type_warning(*, context: str, n: int) -> CalculationError:
+    """Create a DQ017 warning for a contingent on a commitment bucket marked as issued.
+
+    ``risk_type`` is ``MR`` (the NIF / RUF commitment bucket) or ``OC`` (other
+    commitments) but ``is_obs_commitment`` is False — the contingent default,
+    which marks an issued item. Under CRR F-IRB the engine follows the flag and
+    prices the row on the Art. 166(10)(b) issued-item 50% rather than the
+    Art. 166(8)(d) 75% the bucket names; the SA factor is the same either way.
+    The contradiction is reported, not resolved: setting the flag for the
+    preparer would overstate an issued medium-risk item that was simply coded
+    ``MR`` instead of ``MR_ISSUED`` (CM-09).
+
+    References:
+    - CRR Art. 166(8)(d): NIFs / RUFs / other credit lines 75%
+    - CRR Art. 166(10)(b): issued medium-risk items 50%
+    """
+    return CalculationError(
+        code=ERROR_ISSUED_ITEM_ON_COMMITMENT_RISK_TYPE,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[{context}] {n} row(s) carry a commitment 'risk_type' (MR = NIF / RUF, "
+            "OC = other commitment) but 'is_obs_commitment' is False (an issued "
+            "item, the contingent default). Under CRR F-IRB they take the "
+            "Art. 166(10)(b) issued-item 50% instead of the Art. 166(8)(d) 75% — set "
+            "'is_obs_commitment' True for a commitment booked as a contingent, or "
+            "use 'MR_ISSUED' for an issued medium-risk item."
+        ),
+        field_name="is_obs_commitment",
+        regulatory_reference="CRR Art. 166(8)(d); Art. 166(10)(b)",
     )
 
 

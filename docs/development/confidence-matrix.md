@@ -109,7 +109,7 @@ Package version `0.3.34`. Resolved packs:
 | 163 | 2 | 4 | 4 | 0 | 8 | MEDIUM |
 | 164 | 3 | 5 | 7 | 0 | 10 | MEDIUM |
 | 165 | 1 | 3 | 2 | 0 | 2 | MEDIUM |
-| 166 | 2 | 6 | 6 | 1 | 25 | HIGH |
+| 166 | 2 | 6 | 7 | 1 | 26 | HIGH |
 | 169 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 169A | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 171 | 0 | 0 | 1 | 0 | 0 | UNCITED |

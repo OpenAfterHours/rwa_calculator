@@ -2709,6 +2709,7 @@
       ],
       "source_files": [
         "contracts/errors.py",
+        "contracts/validation.py",
         "data/schemas.py",
         "engine/ccf.py",
         "engine/hierarchy/facility_undrawn.py",
@@ -2739,6 +2740,7 @@
         "tests/unit/rulebook/test_ccf_features.py",
         "tests/unit/test_ccf.py",
         "tests/unit/test_ccf_airb_own_estimate_scope.py",
+        "tests/unit/test_ccf_issued_item_commitment_bucket_warning.py",
         "tests/unit/test_ccf_purchased_receivable_scope.py",
         "tests/unit/test_irb_approach_selection.py"
       ],

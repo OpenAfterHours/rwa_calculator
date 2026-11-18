@@ -317,6 +317,7 @@ Error codes are prefixed by domain and numbered sequentially:
 | `SA002` | `ERROR_MISSING_RISK_WEIGHT` | SA | Cannot determine risk weight |
 | `SA003` | `ERROR_INVALID_LTV` | SA | LTV ratio invalid for property class |
 | `SA005` | `ERROR_EQUITY_IN_MAIN_TABLE` | SA | Equity exposure incorrectly present in the main SA exposure table (must route through the equity calculator) |
+| `SA008` | `ERROR_CIU_HOLDING_CLASS_UNSUPPORTED` | SA | **WARNING.** A `ciu_holdings` row whose `exposure_class` is null or outside the `ExposureClass` vocabulary (compared case-insensitively — e.g. `securitisation`, `subordinated_debt`, `sovereign`). Such an underlying cannot be weighted "as if directly held" (PS1/26 Art. 132A(1)), so a look-through fund holding it takes the Art. 132(2) 1,250% fall-back on that holding's value. One rolled-up warning naming the values, emitted by the input-domain gate (`contracts/validation.py::_validate_ciu_holding_classes`); the weight is applied by `engine/equity/calculator.py::_holding_rw_expr` |
 | `SF001` | `ERROR_SME_MISSING_COUNTERPARTY_REF` | Supporting Factors | SME supporting-factor application requires a `counterparty_reference` and none was supplied |
 | `CFG001` | `ERROR_INVALID_CONFIG` | Configuration | Invalid configuration parameter |
 | `CFG002` | `ERROR_MISSING_PERMISSION` | Configuration | Required IRB permission not granted |

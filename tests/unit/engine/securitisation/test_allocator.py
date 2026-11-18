@@ -19,10 +19,12 @@ from rwa_calc.contracts.errors import (
     ERROR_SEC_DUPLICATE,
     ERROR_SEC_FULLY_SECURITISED,
     ERROR_SEC_INVALID_PCT,
+    ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER,
     ERROR_SEC_OVER_ALLOCATED,
     ERROR_SEC_UNKNOWN_REFERENCE,
 )
 from rwa_calc.contracts.protocols import SecuritisationAllocatorProtocol
+from rwa_calc.domain.enums import ErrorSeverity
 from rwa_calc.engine.securitisation.allocator import (
     RESOLVED_SECURITISATION_SCHEMA,
     SecuritisationAllocator,
@@ -239,6 +241,139 @@ class TestValidationSEC005FullySecuritised:
         assert row["securitisation_residual_pct"] == pytest.approx(0.0)
         assert row["audit_status"] == "fully_securitised"
         assert any(e.code == ERROR_SEC_FULLY_SECURITISED for e in errors)
+
+
+def _srt_allocs(pools: list[str], pcts: list[float], srt: list[bool | None]) -> pl.LazyFrame:
+    """Allocation rows for L001 carrying an explicit ``significant_risk_transfer``."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["L001"] * len(pools),
+            "exposure_type": ["loan"] * len(pools),
+            "pool_reference": pools,
+            "allocation_pct": pcts,
+            "significant_risk_transfer": srt,
+        },
+        schema_overrides={"significant_risk_transfer": pl.Boolean},
+    )
+
+
+class TestSignificantRiskTransferSEC006:
+    """IV-04: an explicit ``significant_risk_transfer=False`` carves nothing out.
+
+    CRR Art. 244(1) (traditional), verbatim: "The originator institution of a
+    traditional securitisation may exclude underlying exposures from its
+    calculation of risk-weighted exposure amounts and, where relevant, expected
+    loss amounts if either of the following conditions is fulfilled: (a)
+    significant credit risk associated with the underlying exposures has been
+    transferred to third parties; (b) the originator institution applies a
+    1 250 % risk weight to all securitisation positions it holds in the
+    securitisation or deducts these securitisation positions from Common Equity
+    Tier 1 items". Art. 245(1)(a)/(b) is the synthetic twin. PS1/26 does not
+    replace that chapter (Table A2 row (1) points to Chapter 5 of Title II of
+    Part Three of CRR). The engine has no securitisation-position route, so
+    limb (b) cannot be evidenced either: a row asserting no SRT is retained.
+    Pre-fix the flag was read nowhere: residual 0.0 and only SEC005.
+    """
+
+    def test_srt_false_keeps_exposure_fully_on_balance_sheet(self) -> None:
+        # Arrange
+        allocs = _srt_allocs(["POOL_A"], [1.0], [False])
+
+        # Act
+        _, lookup, errors = SecuritisationAllocator().allocate(_bundle(allocs), _CONFIG)
+
+        # Assert
+        assert lookup is not None
+        row = lookup.collect().row(0, named=True)
+        assert row["securitisation_residual_pct"] == pytest.approx(1.0)
+        assert row["securitisation_pool_allocations"] == []
+        assert row["audit_status"] == "no_significant_risk_transfer"
+        codes = [e.code for e in errors]
+        assert ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER in codes
+        assert ERROR_SEC_FULLY_SECURITISED not in codes
+
+    def test_srt_true_still_carves_out(self) -> None:
+        # Arrange
+        allocs = _srt_allocs(["POOL_A"], [1.0], [True])
+
+        # Act
+        _, lookup, errors = SecuritisationAllocator().allocate(_bundle(allocs), _CONFIG)
+
+        # Assert
+        assert lookup is not None
+        row = lookup.collect().row(0, named=True)
+        assert row["securitisation_residual_pct"] == pytest.approx(0.0)
+        assert row["audit_status"] == "fully_securitised"
+        codes = [e.code for e in errors]
+        assert ERROR_SEC_FULLY_SECURITISED in codes
+        assert ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER not in codes
+
+    def test_null_srt_takes_the_documented_true_default(self) -> None:
+        """Orchestrator decision: the null -> True schema default is kept (owner decision).
+
+        Asserted end to end: the raw-table seal (``make_raw_bundle``, as the
+        loader) fills a null Boolean with the schema default before the allocator
+        runs, so this pins the user-visible contract, not the allocator's own
+        ``ne_missing(False)`` null branch (unreachable through a sealed bundle).
+        """
+        # Arrange
+        allocs = _srt_allocs(["POOL_A"], [1.0], [None])
+
+        # Act
+        _, lookup, errors = SecuritisationAllocator().allocate(_bundle(allocs), _CONFIG)
+
+        # Assert
+        assert lookup is not None
+        assert lookup.collect().row(0, named=True)["securitisation_residual_pct"] == 0.0
+        assert ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER not in [e.code for e in errors]
+
+    def test_mixed_pools_carve_out_only_the_srt_slice(self) -> None:
+        """Pool A 0.5 with SRT + pool B 0.3 without: residual 0.5, only A is a slice."""
+        # Arrange
+        allocs = _srt_allocs(["POOL_A", "POOL_B"], [0.5, 0.3], [True, False])
+
+        # Act
+        _, lookup, errors = SecuritisationAllocator().allocate(_bundle(allocs), _CONFIG)
+
+        # Assert
+        assert lookup is not None
+        row = lookup.collect().row(0, named=True)
+        assert row["securitisation_residual_pct"] == pytest.approx(0.5)
+        assert row["securitisation_pool_allocations"] == [
+            {"pool_reference": "POOL_A", "allocation_pct": 0.5}
+        ]
+        assert row["total_allocated_pct"] == pytest.approx(0.8)
+        assert row["audit_status"] == "no_significant_risk_transfer"
+        assert ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER in [e.code for e in errors]
+
+    def test_over_allocation_still_counts_rows_without_srt(self) -> None:
+        """SEC001 is a data error on the input sum, whatever the SRT assertion."""
+        # Arrange
+        allocs = _srt_allocs(["POOL_A", "POOL_B"], [0.7, 0.6], [True, False])
+
+        # Act
+        _, lookup, errors = SecuritisationAllocator().allocate(_bundle(allocs), _CONFIG)
+
+        # Assert
+        assert lookup is not None
+        row = lookup.collect().row(0, named=True)
+        assert row["securitisation_residual_pct"] == pytest.approx(1.0)
+        assert row["audit_status"] == "over_allocated"
+        assert ERROR_SEC_OVER_ALLOCATED in [e.code for e in errors]
+
+    def test_sec006_names_the_retained_exposure(self) -> None:
+        # Arrange
+        allocs = _srt_allocs(["POOL_A"], [1.0], [False])
+
+        # Act
+        _, _, errors = SecuritisationAllocator().allocate(_bundle(allocs), _CONFIG)
+
+        # Assert
+        sec006 = next(e for e in errors if e.code == ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER)
+        assert sec006.severity == ErrorSeverity.WARNING
+        assert "L001" in sec006.message
+        assert sec006.regulatory_reference is not None
+        assert "244" in sec006.regulatory_reference
 
 
 class TestResolvedSchema:

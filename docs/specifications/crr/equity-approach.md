@@ -63,6 +63,7 @@ as high risk items in accordance with Article 128."
 | Equity Type | Risk Weight | Reference |
 |-------------|-------------|-----------|
 | Central bank / sovereign equity | 0% | Sovereign treatment |
+| Significant investment (`is_significant_investment = True`, non-deducted amount) | **250%** | Art. 133(2) → Own Funds Art. 48(4) |
 | All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
 | CIU (fallback) | **1,250%** | Art. 132(2) (pre-omission) |
 | CIU (look-through) | Underlying RW | Art. 132(4) (pre-omission) |
@@ -127,7 +128,16 @@ consistently and not for regulatory arbitrage:
 3. **Internal Models Approach** (Art. 155(4))
 
 Equity exposures deducted under Part Two or assigned 250% under Art. 48 are excluded from
-Art. 155 altogether.
+Art. 155 altogether. The engine applies this exclusion to legs flagged
+`is_significant_investment` (IV-06): on the simple-RW and PD/LGD paths they take the
+Art. 48(4) **250%** (pack `equity_significant_investment_rw`, CRR Art. 133(2)) instead of
+190% / 290% / 370% or the K formula, carry no Art. 158(7) EL and no Art. 155(3) cap, keep
+the `equity` exposure class, and are sealed `equity_method = "sa"` so Pillar 3 CR10.5 and
+C 02.00 row 0420 (Equity IRB) do not disclose them as Art. 155 equity. A `ciu` or
+`central_bank` row keeps its own treatment whatever the flag says. The flag is the firm's
+assertion that the row is the **non-deducted** threshold amount — the engine performs no
+own-funds deduction. Short-position netting (Art. 155(2)) still runs before the weight is
+assigned; a hedged significant investment is not separated from that step.
 
 ### Simple Risk Weight Approach — Art. 155(2)
 
@@ -250,6 +260,18 @@ Where the firm has sufficient information about the CIU's underlying holdings:
 - Each underlying exposure is risk-weighted as if directly held
 - The CIU's leverage is applied to gross up the risk weights
 - Requires daily knowledge of the fund's composition
+
+How the engine weights each `ciu_holdings` row (IV-05), identically under CRR and
+Basel 3.1 except where noted:
+
+| Holding `exposure_class` | Weight | Basis |
+|---|---|---|
+| Rated class in the CQS table (institution, corporate, CGCB, PSE, RGLA, MDB, covered bond) | Table weight for `(class, cqs)` | As if directly held |
+| `ciu` (a level 2 CIU — no look-through data of its own) | **1,250%** | Art. 132(5): "In any other scenario it shall use the fall-back approach" |
+| `high_risk` | 100% CRR / **150%** Basel 3.1 | Art. 128 omitted from UK CRR; PS1/26 Art. 128(1) |
+| `equity` | 100%, or the rules 4.7–4.8 higher-of in 2027–2029 | P1.391 path |
+| Null or any value outside `ExposureClass` (e.g. `securitisation`, `sovereign`) | **1,250%** + `SA008` | Cannot be weighted as if directly held; Art. 132(2) allows combining approaches |
+| Any other known class the table cannot price (unrated corporate, retail, real estate, `other`) | 100% | Default; retail / RE are overstated (out of scope) |
 
 Reintroduced under Basel 3.1 as **PRA PS1/26 Art. 132A(1)** (and Art. 152(4)
 for IRB CIUs).

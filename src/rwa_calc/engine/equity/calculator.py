@@ -96,6 +96,12 @@ _IRB_RW = lookup_float_map(
 # Art. 155(2) simple-RW bucket: 0.8% for diversified-PE/exchange-traded/listed,
 # 2.4% for all other equity, 0% for central-bank. CRR-only (B31 removes IRB equity).
 _IRB_SIMPLE_EL = lookup_float_map(resolve("crr", date(2026, 1, 1)).lookup("equity_irb_simple_el"))
+# CRR Art. 133(2) / Art. 48(4): the 250% weight of a non-deducted significant
+# investment in a financial sector entity. Art. 155(1) keeps it outside the IRB
+# equity approaches, so every CRR equity path (SA, IRB simple, PD/LGD) reads it.
+_CRR_SIGNIFICANT_INVESTMENT_RW = scalar_value(
+    resolve("crr", date(2026, 1, 1)).scalar_param("equity_significant_investment_rw")
+)
 
 # Art. 132(2): CIU fallback risk weight — 1,250% under both CRR and B31.
 # Punitive weight incentivises firms to use look-through or mandate-based approaches.
@@ -150,7 +156,10 @@ _SA_TRANSITIONAL_LABEL = "sa_transitional"
 # Sentinel for null CQS in join operations (data processing convention)
 _NULL_CQS_SENTINEL = -1
 
-# Default holding risk weight when CQS lookup returns null (Art. 132a)
+# Look-through weight of a holding whose class the engine identifies but the
+# (exposure_class, CQS) table cannot price -- an unrated corporate, a retail or
+# real-estate holding, ``other``. Nested CIUs, Basel 3.1 high-risk items and
+# unidentified classes are resolved before it (see ``_holding_rw_expr``).
 _DEFAULT_HOLDING_RW = 1.00
 
 # Audit formatting: convert decimal RW to percentage display
@@ -434,10 +443,13 @@ class EquityCalculator:
         pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
-        Resolve look-through risk weights for CIU exposures (Art. 132a).
+        Resolve look-through risk weights for CIU exposures (Art. 132A(1)).
 
-        Joins CIU holdings to SA risk weight tables, aggregates a
-        value-weighted effective RW per fund, and sets ciu_look_through_rw.
+        Joins CIU holdings to SA risk weight tables, weights each holding by
+        its class (``_holding_rw_expr``: a nested CIU or an unidentified class
+        takes the 1,250% fall-back, a Basel 3.1 high-risk item 150%),
+        aggregates a value-weighted effective RW per fund, and sets
+        ciu_look_through_rw.
 
         Leverage adjustment (Art. 132a(3)): When fund_nav is provided and total
         underlying assets exceed fund_nav (leveraged fund), the effective RW is
@@ -477,17 +489,7 @@ class EquityCalculator:
         # permission also receives the higher-of here — a known gap, left
         # unchanged by the direct-equity fix and filed as its own item.
         equity_holding_fallback_rw = self._equity_holding_higher_of_rw(config, pack=resolved_pack)
-        if equity_holding_fallback_rw is not None:
-            holding_rw_expr = (
-                pl.when(
-                    (pl.col("exposure_class") == ExposureClass.EQUITY.value.upper())
-                    & pl.col("risk_weight").is_null()
-                )
-                .then(pl.lit(equity_holding_fallback_rw))
-                .otherwise(pl.col("risk_weight").fill_null(_DEFAULT_HOLDING_RW))
-            )
-        else:
-            holding_rw_expr = pl.col("risk_weight").fill_null(_DEFAULT_HOLDING_RW)
+        holding_rw_expr = _holding_rw_expr(resolved_pack, equity_holding_fallback_rw)
 
         # Join holdings to RW table by (exposure_class, cqs)
         # Use sentinel for null CQS to allow join
@@ -642,6 +644,9 @@ class EquityCalculator:
         Risk weights:
         - Central bank: 0% (sovereign treatment)
         - CIU: Art. 132 treatment (1,250% fallback, look-through, mandate-based)
+        - Significant investment (``is_significant_investment``): 250%, the
+          Art. 48(4) weight Art. 133(2) defers to (IV-06; see
+          ``_crr_significant_investment_expr``)
         - All other equity: 100% (Art. 133(2) flat)
 
         Note: PE/VC qualifying as high-risk is routed to Art. 128 (150%) via the
@@ -653,6 +658,9 @@ class EquityCalculator:
                 .then(pl.lit(_CRR_SA_RW[EquityType.CENTRAL_BANK]))
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .pipe(_append_ciu_branches)
+                # Art. 133(2) / Art. 48(4): significant investment = 250%
+                .when(_crr_significant_investment_expr())
+                .then(pl.lit(_CRR_SIGNIFICANT_INVESTMENT_RW))
                 # Art. 133(2): all other equity = 100%
                 .otherwise(pl.lit(_CRR_SA_RW[EquityType.OTHER]))
                 .alias("risk_weight"),
@@ -736,6 +744,14 @@ class EquityCalculator:
         Before assigning risk weights this nets non-trading-book short positions
         against long positions in the same individual stock per Art. 155(2)
         (see ``_net_short_positions``).
+
+        A leg flagged ``is_significant_investment`` is not an Art. 155 leg at
+        all: Art. 155(1) applies the approaches to equity "excluding those
+        deducted in accordance with Part Two or subject to a 250 % risk weight
+        in accordance with Article 48". It takes the Art. 48(4) 250% (lower than
+        the 290% / 370% simple weights -- RWA-reducing, IV-06), no Art. 158(7)
+        EL, and is sealed ``equity_method == "sa"`` so CR10.5 and C 02.00's
+        Equity IRB row do not disclose it as simple-RW equity.
         """
         exposures = self._net_short_positions(exposures)
 
@@ -743,6 +759,7 @@ class EquityCalculator:
         # (each Art. 158(7) EL rate must pair with its Art. 155(2) RW bucket).
         eq_type = pl.col("equity_type").str.to_lowercase()
         is_central_bank = eq_type == "central_bank"
+        is_significant_investment = _crr_significant_investment_expr()
         is_diversified_pe = (eq_type == "private_equity_diversified") | (
             (eq_type == "private_equity") & (pl.col("is_diversified_portfolio") == True)  # noqa: E712
         )
@@ -753,6 +770,9 @@ class EquityCalculator:
         risk_weight = (
             pl.when(is_central_bank)
             .then(pl.lit(_IRB_RW[EquityType.CENTRAL_BANK]))
+            # Art. 155(1) exclusion: the Art. 48(4) 250% leg.
+            .when(is_significant_investment)
+            .then(pl.lit(_CRR_SIGNIFICANT_INVESTMENT_RW))
             .when(is_diversified_pe)
             .then(pl.lit(_IRB_RW[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
             .when(is_exchange_traded)
@@ -770,6 +790,9 @@ class EquityCalculator:
         el_rate = (
             pl.when(is_central_bank)
             .then(pl.lit(_IRB_SIMPLE_EL[EquityType.CENTRAL_BANK]))
+            # Outside Art. 155, so no Art. 158(7) simple-RW EL (null, as on SA legs).
+            .when(is_significant_investment)
+            .then(pl.lit(None, dtype=pl.Float64))
             .when(is_diversified_pe)
             .then(pl.lit(_IRB_SIMPLE_EL[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
             .when(is_exchange_traded)
@@ -786,8 +809,11 @@ class EquityCalculator:
             (el_rate * pl.col("ead_final")).alias("expected_loss"),
             # Art. 155(2) simple-RW method tag — the discriminator Pillar 3
             # CR10.5 filters on (reporting_approach_origin == "equity" AND
-            # equity_method == "irb_simple").
-            pl.lit(EquityApproach.IRB_SIMPLE.value).alias("equity_method"),
+            # equity_method == "irb_simple"). An Art. 48(4) leg is excluded
+            # from Art. 155 by its paragraph 1, so it is sealed ``sa``.
+            _significant_investment_method_expr(
+                is_significant_investment, EquityApproach.IRB_SIMPLE
+            ).alias("equity_method"),
         )
 
     @cites("CRR Art. 155(2)")
@@ -962,9 +988,19 @@ class EquityCalculator:
             pl.col("k") * 12.5 * pl.col("scaling_factor") * pl.col("maturity_adjustment")
         ) * rw_scaling
 
+        # Art. 155(1) excludes the Art. 48(4) 250% leg from the PD/LGD approach:
+        # it takes the flat 250% (IV-06), no EL and no Art. 155(3) cap, and keeps
+        # the equity class the K formula's corporate inputs overwrote.
+        is_significant_investment = _crr_significant_investment_expr()
         exposures = exposures.with_columns(
-            risk_weight.alias("risk_weight"),
-            (pl.col("pd_floored") * pl.col("lgd") * pl.col("ead_final")).alias("expected_loss"),
+            pl.when(is_significant_investment)
+            .then(pl.lit(_CRR_SIGNIFICANT_INVESTMENT_RW))
+            .otherwise(risk_weight)
+            .alias("risk_weight"),
+            pl.when(is_significant_investment)
+            .then(pl.lit(None, dtype=pl.Float64))
+            .otherwise(pl.col("pd_floored") * pl.col("lgd") * pl.col("ead_final"))
+            .alias("expected_loss"),
         )
 
         # Uncapped RWEA = RW x EAD.
@@ -974,15 +1010,26 @@ class EquityCalculator:
         rwea_cap = (pl.col("ead_final") * 12.5 - pl.col("expected_loss") * 12.5).clip(
             lower_bound=0.0
         )
-        rwea_capped = pl.min_horizontal(rwea, rwea_cap)
+        rwea_capped = (
+            pl.when(is_significant_investment)
+            .then(rwea)
+            .otherwise(pl.min_horizontal(rwea, rwea_cap))
+        )
 
         return exposures.with_columns(
-            (rwea > rwea_cap).alias("equity_pd_lgd_cap_binds"),
+            (~is_significant_investment & (rwea > rwea_cap)).alias("equity_pd_lgd_cap_binds"),
             rwea_capped.alias("rwa"),
             rwea_capped.alias("rwa_final"),
             # Art. 155(3) PD/LGD method tag — kept OUT of Pillar 3 CR10.5, which
-            # discloses only the Art. 155(2) simple-RW method.
-            pl.lit(EquityApproach.PD_LGD.value).alias("equity_method"),
+            # discloses only the Art. 155(2) simple-RW method. The Art. 48(4)
+            # leg is not an Art. 155 leg and is sealed ``sa``.
+            _significant_investment_method_expr(
+                is_significant_investment, EquityApproach.PD_LGD
+            ).alias("equity_method"),
+            pl.when(is_significant_investment)
+            .then(pl.lit(ExposureClass.EQUITY.value))
+            .otherwise(pl.col("exposure_class"))
+            .alias("exposure_class"),
         )
 
     @cites("PS1/26, paragraph 4.1")
@@ -1328,6 +1375,112 @@ def _standardised_transitional_scope_expr() -> pl.Expr:
         | eq_type.eq_missing(EquityType.CIU.value)
     )
     return ~is_not_article_133_3_or_4 & pl.col("is_significant_investment").ne_missing(True)
+
+
+@cites("CRR Art. 133(2)")
+@cites("CRR Art. 155(1)")
+def _crr_significant_investment_expr() -> pl.Expr:
+    """CRR legs that take the Art. 48(4) 250% in place of their equity weight (IV-06).
+
+    CRR Art. 133(2): "Equity exposures shall be assigned a risk weight of 100 %,
+    unless they are required to be deducted in accordance with Part Two,
+    assigned a 250 % risk weight in accordance with Article 48(4), ...". Art.
+    155(1) applies the IRB equity approaches to equity "excluding those deducted
+    in accordance with Part Two or subject to a 250 % risk weight in accordance
+    with Article 48", so the 250% holds on the SA, IRB-simple and PD/LGD paths.
+    ``is_significant_investment`` is the firm's assertion that the leg is the
+    non-deducted amount of a significant investment in a financial sector entity
+    (the engine performs no deduction; the flag is documented that way).
+
+    Two types keep their own treatment whatever the flag says: a CIU unit
+    (weighted under Arts. 132-132C -- not an Art. 133 equity exposure), and the
+    0% central-bank type. A null flag is not an assertion (``eq_missing``).
+    """
+    equity_type = pl.col("equity_type").str.to_lowercase()
+    return (
+        pl.col("is_significant_investment").eq_missing(True)
+        & equity_type.ne_missing(EquityType.CIU.value)
+        & equity_type.ne_missing(EquityType.CENTRAL_BANK.value)
+    )
+
+
+def _significant_investment_method_expr(
+    is_significant_investment: pl.Expr, irb_method: EquityApproach
+) -> pl.Expr:
+    """The sealed ``equity_method`` of a CRR IRB-path leg: ``sa`` for an Art. 48(4) leg.
+
+    Art. 155(1) excludes the 250% leg from the IRB equity approaches, so it is
+    not ``irb_simple`` / ``pd_lgd`` equity; ``sa`` records its weight's basis
+    (Art. 133(2) / Art. 48(4), the same as an SA firm's) and keeps it out of
+    Pillar 3 CR10.5 and C 02.00 row 0420 (Equity IRB).
+    """
+    return (
+        pl.when(is_significant_investment)
+        .then(pl.lit(EquityApproach.SA.value))
+        .otherwise(pl.lit(irb_method.value))
+    )
+
+
+@cites("PS1/26, paragraph 132")
+@cites("PS1/26, paragraph 132A")
+@cites("PS1/26, paragraph 128")
+def _holding_rw_expr(pack: ResolvedRulepack, equity_holding_rw: float | None) -> pl.Expr:
+    """The look-through weight of one CIU holding, by its class (Art. 132A(1)).
+
+    Art. 132A(1) risk-weights "all underlying exposures of the CIU as if they
+    were directly held by the institution". The caller has already joined the
+    (exposure_class, CQS) table and upper-cased ``exposure_class``; a hit there
+    wins. A miss resolves, in order:
+
+    - **A nested CIU** (``ciu``) -> the 1,250% fall-back. Art. 132(5): a level 2
+      CIU's exposures "may be calculated by using any of the three approaches
+      described in paragraph 2 ... In any other scenario it shall use the
+      fall-back approach." The holdings table carries no look-through or mandate
+      data for a level 2 CIU, so the fall-back is the only approach this row can
+      evidence. Same weight in both regimes (the PS1/26 rule "corresponds to
+      Article 132 of CRR as it applied immediately before revocation").
+    - **An unidentified class** -- null, or a value outside the ``ExposureClass``
+      vocabulary (``securitisation``, ``subordinated_debt``, a typo) -> 1,250%.
+      Such an underlying cannot be weighted "as if directly held", so that slice
+      of the fund takes the fall-back, which Art. 132(2) lets a firm combine with
+      look-through ("a combination of the approaches referred to in this
+      paragraph"). The input-domain gate warns on these values (SA008,
+      ``contracts/validation.py::_validate_ciu_holding_classes``).
+    - **A high-risk item** -> the pack's Art. 128 150% where the
+      ``b31_high_risk_class_applicable`` Feature is on (Basel 3.1). UK CRR
+      Art. 128 was omitted by SI 2021/1078, so under CRR the holding falls to
+      the default, exactly as a direct ``high_risk`` row is demoted to OTHER.
+    - **An equity holding** -> the rules 4.7-4.8 higher-of, when the caller has
+      one for the reporting date (``equity_holding_rw``).
+    - **Anything else the vocabulary knows** (unrated corporate, retail, real
+      estate, ``other``) -> ``_DEFAULT_HOLDING_RW``. Retail and real-estate
+      holdings are overstated at 100%; left as they were by decision (IV-05).
+    """
+    holding_class = pl.col("exposure_class")
+    vocabulary = [member.value.upper() for member in ExposureClass]
+    is_fall_back = (
+        holding_class.is_null()
+        | ~holding_class.is_in(vocabulary)
+        | (holding_class == ExposureClass.CIU.value.upper())
+    )
+    branches: list[tuple[pl.Expr, pl.Expr]] = [
+        (pl.col("risk_weight").is_not_null(), pl.col("risk_weight")),
+        (is_fall_back, pl.lit(CIU_FALLBACK_RW)),
+    ]
+    if pack.feature("b31_high_risk_class_applicable"):
+        high_risk_rw = scalar_value(pack.scalar_param("high_risk_rw"))
+        branches.append(
+            (holding_class == ExposureClass.HIGH_RISK.value.upper(), pl.lit(high_risk_rw))
+        )
+    if equity_holding_rw is not None:
+        branches.append(
+            (holding_class == ExposureClass.EQUITY.value.upper(), pl.lit(equity_holding_rw))
+        )
+
+    weight: pl.Expr = pl.lit(_DEFAULT_HOLDING_RW)
+    for condition, value in reversed(branches):
+        weight = pl.when(condition).then(value).otherwise(weight)
+    return weight
 
 
 def _with_null_transitional_carriers(exposures: pl.LazyFrame) -> pl.LazyFrame:

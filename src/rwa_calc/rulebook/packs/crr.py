@@ -653,6 +653,21 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "133", "Art. 133(2) 100% flat / Art. 132(2) CIU 1250%"),
         default=Decimal("1.00"),
     ),
+    # CRR Art. 133(2): equity "assigned a 250 % risk weight in accordance with
+    # Article 48(4)" -- the non-deducted amount of a significant investment in a
+    # financial sector entity (Art. 48 now sits in the PRA Rulebook Own Funds
+    # (CRR) Part). Art. 155(1) excludes such amounts from the IRB equity
+    # approaches, so the weight applies on the SA, IRB-simple and PD/LGD paths
+    # alike; consumed by engine/equity/calculator.py for legs flagged
+    # ``is_significant_investment``. CRR-only entry: the Basel 3.1 chain is not
+    # changed here (PS1/26 Art. 133(6)(c) interplay is P1.393).
+    "equity_significant_investment_rw": ScalarParam(
+        name="equity_significant_investment_rw",
+        value=Decimal("2.50"),
+        citation=Citation(
+            "CRR", "133", "(2) 250% for amounts risk weighted under Art. 48(4) (sig. investments)"
+        ),
+    ),
     # IRB Simple equity risk weights (CRR Art. 155(2)): PE-diversified 190%,
     # exchange-traded 290%, all other 370%. CRR-only (Basel 3.1 removes IRB equity).
     "equity_irb_simple_risk_weights": LookupTable(

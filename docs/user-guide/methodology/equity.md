@@ -17,11 +17,12 @@ flowchart LR
 
 ## CRR Article 133 - Standardised Approach (SA)
 
-Under CRR, Art. 133(2) assigns a **flat 100% risk weight** to all equity exposures (except central bank sovereign equity at 0%). There is no differentiation by equity type — listed, unlisted, PE, and speculative all receive 100%.
+Under CRR, Art. 133(2) assigns a **flat 100% risk weight** to all equity exposures (except central bank sovereign equity at 0%), "unless they are required to be deducted in accordance with Part Two, assigned a 250 % risk weight in accordance with Article 48(4), ...". There is no differentiation by equity type — listed, unlisted, PE, and speculative all receive 100%. A holding flagged `is_significant_investment` (the non-deducted amount of a significant investment in a financial sector entity) takes the Art. 48(4) **250%**.
 
 | Equity Type | Risk Weight | Reference |
 |-------------|-------------|-----------|
 | Central bank / sovereign equity | 0% | Sovereign treatment |
+| Significant investment (`is_significant_investment = True`) | 250% | Art. 133(2) → Own Funds Art. 48(4) |
 | All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
 
 Under Basel 3.1, equity that is unlisted and where the business has existed for less than five years is classified as "higher-risk" (400%, Art. 133(4)). PE/VC is only higher-risk if it meets both criteria — long-established PE holdings receive standard 250%.
@@ -43,6 +44,8 @@ For firms with IRB permission, a different risk weight schedule applies:
 | Exchange-traded / Listed | 290% | Art. 155(2)(a) |
 | Private equity (diversified portfolios) | 190% | Art. 155(2)(b) |
 | All other equity (unlisted, speculative, CIU, other) | 370% | Art. 155(2)(c) |
+
+A holding flagged `is_significant_investment` is **not** weighted under Art. 155: paragraph 1 applies the IRB equity approaches "excluding those deducted in accordance with Part Two or subject to a 250 % risk weight in accordance with Article 48". It takes **250%** on the simple-RW and PD/LGD paths alike, carries no Art. 158(7) EL, and is reported with `equity_method = "sa"` (so it is not disclosed in Pillar 3 CR10.5 or C 02.00 Equity IRB).
 
 !!! warning "Art. 155 has exactly three categories"
     CRR Art. 155(2) defines only the three risk weight buckets shown above. The code additionally maps `GOVERNMENT_SUPPORTED` and `CENTRAL_BANK` equity types to 190% and 0% respectively — these are implementation-specific mappings with no direct basis in Art. 155 text. Government-supported equity at 100% under SA (Art. 133) is a legislative programme treatment, not an IRB Simple category. Recorded as docs-plan item D3.4 (retired plan file, 2026-08-08 merge); see the [Equity Approach Specification](../../specifications/crr/equity-approach.md#crr-irb-simple-risk-weight-method-art-155) for details.

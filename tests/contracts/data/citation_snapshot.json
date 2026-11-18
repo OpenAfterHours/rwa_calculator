@@ -331,10 +331,19 @@
   "rwa_calc.engine.equity.calculator::_ciu_computed_rw_expr": [
     "PS1/26, paragraph 132"
   ],
+  "rwa_calc.engine.equity.calculator::_crr_significant_investment_expr": [
+    "CRR Art. 133(2)",
+    "CRR Art. 155(1)"
+  ],
   "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end": [
     "CRR Art. 143",
     "CRR Art. 153(5)",
     "PS1/26, paragraph 4.1"
+  ],
+  "rwa_calc.engine.equity.calculator::_holding_rw_expr": [
+    "PS1/26, paragraph 132",
+    "PS1/26, paragraph 132A",
+    "PS1/26, paragraph 128"
   ],
   "rwa_calc.engine.equity.calculator::_standardised_transitional_scope_expr": [
     "PS1/26, paragraph 4.2",
@@ -639,6 +648,10 @@
     "CRR Art. 109",
     "CRR Art. 244",
     "PS1/26, paragraph 147A"
+  ],
+  "rwa_calc.engine.securitisation.allocator::_srt_asserted_expr": [
+    "CRR Art. 244(1)",
+    "CRR Art. 245(1)"
   ],
   "rwa_calc.engine.sft.fccm::_derive_ccr_sft_maturity_years": [
     "CRR Art. 162",

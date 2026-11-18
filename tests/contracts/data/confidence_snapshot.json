@@ -1427,6 +1427,7 @@
       "source_files": [
         "engine/classify/attributes.py",
         "engine/entity_class_maps.py",
+        "engine/equity/calculator.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "rulebook/packs/common.py",
@@ -1437,6 +1438,7 @@
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p2_14/p2_14.py",
         "tests/oracle/derivations/sa_b31.py",
+        "tests/unit/test_ciu_look_through_holding_classes.py",
         "tests/unit/test_high_risk_items.py"
       ],
       "watchfire_index_gap": false
@@ -1516,6 +1518,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "contracts/errors.py",
         "data/schemas.py"
       ],
       "test_files": [
@@ -1558,7 +1561,8 @@
       "article": "133",
       "code_functions": [
         "rwa_calc.engine.equity.calculator::EquityCalculator.calculate_branch",
-        "rwa_calc.engine.equity.calculator::EquityCalculator.get_equity_result_bundle"
+        "rwa_calc.engine.equity.calculator::EquityCalculator.get_equity_result_bundle",
+        "rwa_calc.engine.equity.calculator::_crr_significant_investment_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1570,6 +1574,7 @@
       "pack_entries": [
         "equity_revised_sa_risk_weights@crr",
         "equity_sa_risk_weights@crr",
+        "equity_significant_investment_rw@crr",
         "equity_transitional@crr"
       ],
       "source_files": [
@@ -1594,6 +1599,7 @@
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/crr/test_crr_equity.py",
+        "tests/unit/crr/test_iv06_significant_investment_250.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
         "tests/unit/test_branch_error_accumulation.py",
@@ -2229,6 +2235,7 @@
         "rwa_calc.engine.equity.calculator::EquityCalculator._equity_holding_higher_of_rw",
         "rwa_calc.engine.equity.calculator::EquityCalculator._net_short_positions",
         "rwa_calc.engine.equity.calculator::EquityCalculator.get_equity_result_bundle",
+        "rwa_calc.engine.equity.calculator::_crr_significant_investment_expr",
         "rwa_calc.reporting.pillar3.cr10::build_cr10_equity_spec"
       ],
       "confidence": "HIGH",
@@ -2278,6 +2285,7 @@
         "tests/oracle/derivations/specialised.py",
         "tests/unit/classifier/test_p2_39_b31_equity_sa_only_guard.py",
         "tests/unit/crr/test_crr_equity.py",
+        "tests/unit/crr/test_iv06_significant_investment_250.py",
         "tests/unit/crr/test_p1_247_equity_simple_el.py",
         "tests/unit/test_equity_subordinated_debt.py"
       ],
@@ -4283,7 +4291,32 @@
     {
       "article": "244",
       "code_functions": [
-        "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate"
+        "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate",
+        "rwa_calc.engine.securitisation.allocator::_srt_asserted_expr"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "CRR",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "config/data_sources.py",
+        "contracts/bundles.py",
+        "contracts/edges.py",
+        "contracts/errors.py",
+        "data/schemas.py",
+        "engine/securitisation/allocator.py"
+      ],
+      "test_files": [
+        "tests/integration/test_securitisation_pipeline.py",
+        "tests/unit/engine/securitisation/test_allocator.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "245",
+      "code_functions": [
+        "rwa_calc.engine.securitisation.allocator::_srt_asserted_expr"
       ],
       "confidence": "LOW",
       "framework": "CRR",
@@ -4291,10 +4324,6 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "config/data_sources.py",
-        "contracts/bundles.py",
-        "contracts/edges.py",
-        "data/schemas.py",
         "engine/securitisation/allocator.py"
       ],
       "test_files": [],
@@ -7075,6 +7104,7 @@
     {
       "article": "128",
       "code_functions": [
+        "rwa_calc.engine.equity.calculator::_holding_rw_expr",
         "rwa_calc.engine.sa.risk_weights::_b31_append_high_risk_branch"
       ],
       "confidence": "HIGH",
@@ -7088,6 +7118,7 @@
       ],
       "source_files": [
         "engine/classify/attributes.py",
+        "engine/equity/calculator.py",
         "engine/sa/risk_weights.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
@@ -7142,6 +7173,7 @@
       "code_functions": [
         "rwa_calc.engine.equity.calculator::_append_ciu_branches",
         "rwa_calc.engine.equity.calculator::_ciu_computed_rw_expr",
+        "rwa_calc.engine.equity.calculator::_holding_rw_expr",
         "rwa_calc.reporting.pillar3.ov1::build_ov1_spec"
       ],
       "confidence": "MEDIUM",
@@ -7151,6 +7183,7 @@
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
+        "contracts/errors.py",
         "engine/equity/calculator.py",
         "reporting/pillar3/ov1.py"
       ],
@@ -7163,13 +7196,19 @@
     },
     {
       "article": "132A",
-      "code_functions": [],
-      "confidence": "GAP",
+      "code_functions": [
+        "rwa_calc.engine.equity.calculator::_holding_rw_expr"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "contracts/errors.py",
+        "contracts/validation.py",
+        "engine/equity/calculator.py"
+      ],
       "test_files": [
         "tests/fixtures/p1_139/p1_139.py"
       ],
@@ -7222,7 +7261,8 @@
         "engine/sa/risk_weights.py",
         "reporting/corep/c07_rw_bands.py",
         "rulebook/packs/b31.py",
-        "rulebook/packs/common.py"
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_182_b31_l24_pe_unlisted_under_5y.py",
@@ -7239,9 +7279,11 @@
         "tests/fixtures/p2_19/p2_19.py",
         "tests/fixtures/reporting_equity_transitional_portfolio.py",
         "tests/integration/test_facility_share_equity_exit.py",
+        "tests/integration/test_significant_investment_equity.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
         "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
+        "tests/unit/crr/test_iv06_significant_investment_250.py",
         "tests/unit/reporting/corep/test_c07_equity_transitional_band.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
@@ -8891,7 +8933,7 @@
   ],
   "pack_content_hashes": {
     "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "crr": "ff3f8b1d64a326660dbb01ad4310cea268ea3f348803866b5e78f947ee0772cb"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

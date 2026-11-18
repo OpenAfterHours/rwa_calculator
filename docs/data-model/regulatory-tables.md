@@ -6,7 +6,7 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `ff3f8b1d64a32666`
 - **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
 
 ## Regime features
@@ -122,6 +122,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `equity_netting_min_hedge_years` | `1.0` | — | CRR Art. 155(2) |
 | `equity_pd_lgd_maturity` | `5.0` | — | CRR Art. 165 |
 | `equity_pd_lgd_no_default_info_scaling` | `1.5` | — | CRR Art. 155(3) |
+| `equity_significant_investment_rw` | `2.50` | — | CRR Art. 133 |
 | `failed_trade_dvp_mult_16_30` | `0.50` | `0.50` | CRR Art. 378 |
 | `failed_trade_dvp_mult_31_45` | `0.75` | `0.75` | CRR Art. 378 |
 | `failed_trade_dvp_mult_46_plus` | `1.00` | `1.00` | CRR Art. 378 |

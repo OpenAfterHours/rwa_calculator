@@ -507,7 +507,17 @@ When the firm can identify the CIU's underlying holdings:
 ciu_rw = sum(holding_value_i x rw_i) / fund_nav
 ```
 
-Fallback if look-through data is incomplete: **250%** (B31) / **150%** (CRR).
+A fund with no holdings rows (or no positive denominator) takes the Art. 132(2)
+**1,250%** fall-back. Holding by holding, a class the (exposure class, CQS) table cannot
+price resolves as follows (IV-05; `engine/equity/calculator.py::_holding_rw_expr`):
+
+| Holding `exposure_class` | Basel 3.1 | CRR | Basis |
+|---|---|---|---|
+| `ciu` — a level 2 CIU with no look-through data of its own | **1,250%** | **1,250%** | Art. 132(5): "In any other scenario it shall use the fall-back approach" |
+| `high_risk` | **150%** | 100% | Art. 128(1); omitted from UK CRR by SI 2021/1078 |
+| Null, or outside the `ExposureClass` vocabulary (`securitisation`, `subordinated_debt`, …) | **1,250%** + `SA008` | **1,250%** + `SA008` | Cannot be weighted "as if directly held" (Art. 132A(1)); Art. 132(2) permits combining approaches |
+| `equity` | rules 4.7–4.8 higher-of in 2027–2029, else 100% | 100% | See Rules 4.7–4.8 above |
+| Any other known class (unrated corporate, retail, real estate, `other`) | 100% | 100% | Default (retail / RE overstated — out of scope) |
 
 ### 2. Mandate-Based Approach (Art. 132b)
 

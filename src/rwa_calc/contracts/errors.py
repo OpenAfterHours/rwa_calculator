@@ -316,6 +316,13 @@ ERROR_MISSING_RISK_WEIGHT = "SA002"
 ERROR_INVALID_LTV = "SA003"
 ERROR_DUE_DILIGENCE_NOT_PERFORMED = "SA004"
 ERROR_EQUITY_IN_MAIN_TABLE = "SA005"
+# A ``ciu_holdings`` row whose ``exposure_class`` is null or outside the
+# ``ExposureClass`` vocabulary (``securitisation``, ``subordinated_debt``, a
+# typo). The engine cannot weight such an underlying "as if directly held"
+# (PS1/26 Art. 132A(1)), so a look-through fund holding it takes the Art. 132(2)
+# 1,250% fall-back on that slice. WARNING from the input-domain gate; the weight
+# itself is applied by ``engine/equity/calculator.py::_holding_rw_expr``.
+ERROR_CIU_HOLDING_CLASS_UNSUPPORTED = "SA008"
 
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"
@@ -334,6 +341,13 @@ ERROR_SEC_INVALID_PCT = "SEC002"
 ERROR_SEC_UNKNOWN_REFERENCE = "SEC003"
 ERROR_SEC_DUPLICATE = "SEC004"
 ERROR_SEC_FULLY_SECURITISED = "SEC005"
+# An allocation row whose ``significant_risk_transfer`` is explicitly False
+# carves nothing out: CRR Art. 244(1) / 245(1) let the originator exclude the
+# underlying exposures only where significant credit risk has been transferred
+# (limb (a)) or every retained position takes 1,250% / is deducted (limb (b)),
+# and the engine has no securitisation-position route to evidence limb (b). The
+# exposure stays on balance sheet at its full weight; WARNING, one per run.
+ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER = "SEC006"
 
 # Configuration error codes
 ERROR_INVALID_CONFIG = "CFG001"
@@ -763,6 +777,37 @@ def unresolved_obs_risk_type_warning(
         ),
         field_name="risk_type",
         regulatory_reference="CRR Art. 111 Annex I 1(k); PS1/26 Art. 111 Table A1 Rows 3, 5",
+    )
+
+
+def unsupported_ciu_holding_class_warning(*, n: int, values: list[str]) -> CalculationError:
+    """Create an SA008 warning for CIU holdings with an unidentified exposure class.
+
+    ``ciu_holdings.exposure_class`` carries no categorical domain of its own, so
+    a value the engine does not know -- ``securitisation``, ``subordinated_debt``,
+    a typo, a null -- used to fall through the (exposure_class, CQS) join to a
+    flat 100%. PS1/26 Art. 132A(1) weights each underlying "as if directly held",
+    which an unidentified class cannot be, so the look-through calculation takes
+    the Art. 132(2) 1,250% fall-back for that slice of the fund (Art. 132(2)
+    permits "a combination of the approaches"). This warning names the values.
+
+    References:
+    - PRA PS1/26 Art. 132(2), 132A(1); CRR Art. 132 as it applied before
+      revocation (PRA Rulebook Credit Risk: Standardised Approach (CRR) Part)
+    """
+    return CalculationError(
+        code=ERROR_CIU_HOLDING_CLASS_UNSUPPORTED,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ciu_holdings] {n} row(s) carry an exposure_class outside the "
+            f"ExposureClass vocabulary ({', '.join(values)}). An underlying the "
+            "engine cannot identify cannot be risk weighted as if directly held, so "
+            "a look-through fund holding it takes the 1,250% fall-back on that "
+            "holding's value."
+        ),
+        field_name="exposure_class",
+        regulatory_reference="PS1/26 Art. 132(2), 132A(1)",
     )
 
 

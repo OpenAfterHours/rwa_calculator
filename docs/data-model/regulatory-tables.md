@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `3b8b8c3f27378e6c`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 239 entries, content hash `7e67049465c0e23c`
 
 ## Regime features
 
@@ -33,6 +33,7 @@ On/off behaviour switches (`Feature`).
 | `equity_irb_approaches_available` | on | off | CRR Art. 155 / PS1/26, paragraph 133 |
 | `equity_revised_sa_risk_weights` | off | on | CRR Art. 133 / PS1/26, paragraph 133 |
 | `equity_transitional` | off | on | CRR Art. 133 / PS1/26, paragraph 4.1 |
+| `fcm_hfx_applies_to_non_financial` | off | on | CRR Art. 230 / PS1/26, paragraph 230 |
 | `firb_fixed_supervisory_maturity` | on | off | CRR Art. 162(1) / PS1/26, paragraph 162 |
 | `firb_fse_senior_lgd_split` | off | on | CRR Art. 161(1)(a) / PS1/26, paragraph 161 |
 | `firb_min_collateralisation_threshold_applies` | on | off | CRR Art. 230 / PS1/26, paragraph 230 |

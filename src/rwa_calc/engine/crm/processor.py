@@ -63,6 +63,7 @@ from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.collateral_type_check import record_unrecognised_collateral_type
+from rwa_calc.engine.crm.expressions import CRM_POOL_BASIS, with_crm_pool_basis
 from rwa_calc.engine.crm.guarantor_eligibility import record_ineligible_guarantors
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
@@ -1049,7 +1050,12 @@ class CRMProcessor:
             or not config.enable_collateral_link_splitting
         ):
             return collateral, None
-        ranked = self._annotate_link_rank_metric(exposures, config)
+        # Demand is sized on the loan-table pooling basis: a CCR-engine row
+        # demands nothing, so no finite item is spent on a row it cannot reduce
+        # (CRR Art. 223(5A) / PS1/26 Art. 191A(4); review CL-04 / CC-07).
+        ranked = with_crm_pool_basis(
+            self._annotate_link_rank_metric(exposures, config)
+        ).with_columns(pl.col(CRM_POOL_BASIS).alias("ead_for_crm"))
         result = CollateralLinkAllocator().allocate_links(
             ranked, collateral, data.collateral_links, config
         )

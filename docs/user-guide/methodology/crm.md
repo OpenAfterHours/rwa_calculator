@@ -77,7 +77,15 @@ Applies haircuts to both exposure and collateral. See [`crm/haircuts.py`](https:
 
 ### Supervisory Haircuts
 
-Haircuts depend on collateral type, credit quality, and residual maturity. Cash has 0% haircut; government bonds range from 0.5% to 4% (CQS 1); equities are 15%-25%. A currency mismatch adds 8%.
+Haircuts depend on collateral type, credit quality, and residual maturity. Cash has 0% haircut; government bonds range from 0.5% to 4% (CQS 1); equities are 15%-25%. A currency mismatch adds 8% (10-day basis, scaled for the liquidation period).
+
+Three inputs decide whether those haircuts see the right facts:
+
+- **Residual maturity.** `residual_maturity_years` wins; when it is null the residual is derived from the collateral's `maturity_date` (days to the reporting date / 365.25). Both the Table 1 maturity band and the Art. 237-239 maturity mismatch read it — a deposit that states only its maturity date is mismatch-adjusted like one that states its residual.
+- **Currency.** A collateral row with **no** currency cannot show that it matches the exposure's currency, so it is treated as currency-mismatched (the 8% applies) and a rolled-up `CRM023` warning names it.
+- **Type.** `is_eligible_financial_collateral` reduces an SA exposure value only on an Art. 197 type (cash, debt securities, covered bonds, equity, gold, credit-linked notes). A flagged property, receivable, other-physical, life-insurance or unrecognised row is ignored for the SA reduction and raises `CRM026`. A `bond` is categorised by its `issuer_type`: with a recognised issuer it is financial collateral on every path, including the F-IRB LGDS of 0%.
+
+**Basel 3.1 — currency mismatch on non-financial collateral.** Under the Foundation Collateral Method, PS1/26 Art. 230(1) applies H_fx to every collateral type: ES is the collateral value "after the application of: (a) the volatility adjustment applicable for the type of collateral (HC) ... (b) a volatility adjustment for any currency mismatch between the exposure and the collateral (Hfx)". So a EUR property securing a GBP loan is valued at `MV × (1 − 40% − 8%)` at a 10-day period. CRR Art. 230 has no such term, and CRR keeps H_fx on financial collateral only (rulepack Feature `fcm_hfx_applies_to_non_financial`).
 
 > **Details:** See [CRM Specification](../../specifications/crr/credit-risk-mitigation.md) for the complete haircut tables including Basel 3.1 changes (expanded maturity bands, increased equity haircuts).
 
@@ -429,6 +437,14 @@ Every row the treatment zeroes or scales is counted into one `CRM002` warning
 per run, so a book that loses its netting benefit to these gates says so in
 the error list rather than only in the LGD.
 
+`t` for collateral is `residual_maturity_years`, or — when that is null — the
+time to the collateral's `maturity_date`. For a netted deposit it is the time
+to the date the deposit can be withdrawn (PS1/26 Art. 238(1)(b)), so a deposit
+with **no** maturity date is repayable on demand and has `t = 0`: against a
+loan maturing later it fails the three-month gate and a `CRM024` warning names
+the netting agreement. A loan that is itself on demand (no maturity date)
+still nets in full against an on-demand deposit.
+
 **Example:**
 - Exposure residual maturity: 5 years (so T = min(5, 5) = 5)
 - Guarantee residual maturity: 3 years (so t = 3)
@@ -574,6 +590,10 @@ Under CRR, a deposit pool whose currency **no** loan within its netting perimete
 
 - The negative-drawn loan's own EAD is already floored to 0 by `drawn_for_ead()` — it never self-reduces
 - The synthetic collateral only benefits positive-drawn siblings — distinct mechanism
+
+### Counterparty-Credit-Risk Rows Take No Loan-Table Collateral
+
+The rows the CCR engines add to the exposure frame — SA-CCR derivative and FCCM SFT netting sets, failed trades and CCP default-fund contributions — already carry an exposure value that reflects their own collateral (CRR Art. 223(5A): OTC derivative collateral is taken into account "in accordance with the provisions laid down in Sections 3, 4 and 5 of Chapter 3 of the Counterparty Credit Risk (CRR) Part"; PS1/26 Art. 191A(4) applies the CRM articles to funded protection on a derivative only where another provision cross-refers to them). So the loan collateral table never reaches them: such a row is left out of every counterparty and facility pool, every pro-rata denominator, every direct pledge and every collateral link. A counterparty-level pledge at a counterparty with both loans and derivatives goes wholly to the loans; a pledge whose only beneficiaries are CCR rows mitigates nothing and raises a `CRM025` warning. Supply derivative and SFT collateral in `ccr_collateral` / `sft_collateral`. Guarantees are unaffected.
 
 ### Input Data
 

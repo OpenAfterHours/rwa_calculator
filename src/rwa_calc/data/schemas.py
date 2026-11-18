@@ -2280,6 +2280,18 @@ FINANCIAL_COLLATERAL_TYPES: list[str] = [
     "corporate_bond",
     "equity",
     "credit_linked_note",
+    # The Art. 197 debt-security / equity synonyms the haircut lookup
+    # (``engine/crm/eligibility.py::normalise_collateral_type_expr``) already
+    # resolves to a financial class. Listed here so the CATEGORY agrees with the
+    # haircut: before review CL-11 they fell to the "other" category (CRM021, the
+    # F-IRB Art. 199 gate) while taking a debt-security haircut.
+    "govt_bond",
+    "sovereign_bond",
+    "gilt",
+    "corp_bond",
+    "securitisation",
+    "shares",
+    "stock",
 ]
 
 RECEIVABLE_COLLATERAL_TYPES: list[str] = ["receivables", "trade_receivables"]
@@ -2308,6 +2320,16 @@ COVERED_BOND_COLLATERAL_TYPES: list[str] = ["covered_bond", "covered_bonds"]
 
 LIFE_INSURANCE_COLLATERAL_TYPES: list[str] = ["life_insurance"]
 
+# The canonical generic debt-security input type. Its CRM category is decided by
+# its ``issuer_type``, not by the type string: ``engine/crm/expressions.py``
+# dispatches a ``bond`` whose issuer resolves to an Art. 197(1)(b)-(d)/(h) debt
+# security (sovereign / pse / institution / corporate / securitisation) to the
+# financial category, and any other ``bond`` to other physical — the same
+# resolution ``normalise_collateral_type_expr`` gives the Art. 224 haircut
+# lookup (review CL-11). Deliberately absent from COLLATERAL_TYPE_CATEGORY,
+# which maps a type string to ONE category.
+BOND_COLLATERAL_TYPES: list[str] = ["bond"]
+
 # Every collateral_type string ``collateral_category_expr`` recognises, unioned
 # from the six sets above so it cannot drift from them. A value OUTSIDE this set
 # falls through that expression's ``.otherwise()`` to the "other" category, where
@@ -2323,6 +2345,7 @@ RECOGNISED_COLLATERAL_TYPES: list[str] = [
     *LIFE_INSURANCE_COLLATERAL_TYPES,
     *COVERED_BOND_COLLATERAL_TYPES,
     *FINANCIAL_COLLATERAL_TYPES,
+    *BOND_COLLATERAL_TYPES,
     *RECEIVABLE_COLLATERAL_TYPES,
     *REAL_ESTATE_COLLATERAL_TYPES,
     *OTHER_PHYSICAL_COLLATERAL_TYPES,
@@ -2358,15 +2381,17 @@ ZERO_HAIRCUT_ELIGIBLE_TYPES: list[str] = [
     "gilt",
 ]
 
-# Subset of real estate types that are NOT eligible financial collateral
-# (used for SA EAD reduction eligibility check).
-NON_ELIGIBLE_RE_TYPES: list[str] = [
-    "real_estate",
-    "property",
-    "rre",
-    "cre",
-    "residential_property",
-    "commercial_property",
+# risk_type tags the counterparty-credit-risk engines put on the synthetic rows
+# they mint (SA-CCR derivative netting sets, FCCM SFT netting sets, failed-trade
+# settlement rows, CCP default-fund contributions). Their exposure value already
+# reflects collateral under the CCR Part, so the CRM stage keeps loan-table
+# collateral pools away from them (CRR Art. 223(5A) / PS1/26 Art. 191A(4);
+# engine/crm/expressions.py::ccr_engine_row_expr).
+CCR_ENGINE_RISK_TYPES: list[str] = [
+    "CCR_DERIVATIVE",
+    "CCR_SFT",
+    "SETTLEMENT_FAILED_TRADE",
+    "CCR_DEFAULT_FUND",
 ]
 
 # Beneficiary types treated as direct attachment to a single exposure
@@ -2386,20 +2411,21 @@ COLLATERAL_TYPE_CATEGORY: dict[str, str] = {
     **dict.fromkeys(LIFE_INSURANCE_COLLATERAL_TYPES, "life_insurance"),
 }
 
-# Non-financial funded collateral types recognised under CRR Art. 230
-# (Foundation Collateral Method). These types are NOT subject to the Art. 224
-# Table 4 FX volatility haircut (H_fx) — Art. 233 H_fx is scoped to unfunded
-# credit protection (guarantees / CDS), and Arts. 229–230 (the funded
-# non-financial path) make no mention of an FX adjustment. FX risk on these
-# collateral values is captured upstream by the spot-rate ``FXConverter``.
+# Non-financial funded collateral types recognised under Art. 230 (the F-IRB /
+# Foundation Collateral Method path). Their Art. 230 HC is not scaled by the
+# Art. 226 liquidation period, and whether they take the Art. 224 Table 4
+# currency-mismatch adjustment (H_fx) is the cited pack Feature
+# ``fcm_hfx_applies_to_non_financial``: CRR Art. 230(1) compares the raw value C
+# with C* / C** and names no currency adjustment (disabled), while PS1/26
+# Art. 230(1)(b) builds ES "after the application of ... a volatility adjustment
+# for any currency mismatch between the exposure and the collateral (Hfx)" for
+# every Foundation Collateral Method type (enabled; review CL-09).
 #
-# Used by ``engine/crm/haircuts.py`` to gate the H_fx expression so that the
-# Art. 230 LGD* formula receives the raw (FX-rebased) collateral value C
-# without an additional volatility charge.
+# Used by ``engine/crm/haircuts.py`` for the HC scaling and the H_fx gate.
 #
 # References:
-#   CRR Art. 229–230: Foundation Collateral Method (no H_fx in formula)
-#   CRR Art. 233:    Unfunded credit protection scope of H_fx
+#   CRR Art. 229–230: Foundation Collateral Method (no H_fx in the CRR formula)
+#   PS1/26 Art. 230(1)(b) / 231(1): H_fx on every FCM collateral type
 NON_FINANCIAL_COLLATERAL_TYPES: list[str] = [
     *RECEIVABLE_COLLATERAL_TYPES,
     *REAL_ESTATE_COLLATERAL_TYPES,

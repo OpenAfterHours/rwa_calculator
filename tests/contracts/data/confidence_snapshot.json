@@ -2997,6 +2997,8 @@
         "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr",
         "rwa_calc.engine.crm.eligibility::equity_ineligible_expr",
         "rwa_calc.engine.crm.eligibility::financial_collateral_ineligible_expr",
+        "rwa_calc.engine.crm.expressions::issued_bond_expr",
+        "rwa_calc.engine.crm.expressions::sa_fccm_type_eligible_expr",
         "rwa_calc.engine.crm.simple_method::_prepare_eligible_collateral"
       ],
       "confidence": "HIGH",
@@ -3029,6 +3031,7 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/crm/eligibility.py",
+        "engine/crm/expressions.py",
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
         "engine/crm/simple_method.py"
@@ -3052,6 +3055,7 @@
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_source_conservation.py",
         "tests/unit/crm/test_bond_eligibility.py",
+        "tests/unit/crm/test_collateral_type_eligibility.py",
         "tests/unit/crm/test_crm018_rollup.py"
       ],
       "watchfire_index_gap": false
@@ -3548,6 +3552,7 @@
       "article": "223",
       "code_functions": [
         "rwa_calc.engine.crm.collateral::apply_collateral",
+        "rwa_calc.engine.crm.expressions::ccr_engine_row_expr",
         "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr",
         "rwa_calc.engine.crm.netting::generate_netting_collateral",
         "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures",
@@ -3594,6 +3599,7 @@
         "contracts/bundles.py",
         "contracts/config.py",
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/ccf.py",
         "engine/crm/collateral.py",
@@ -3632,11 +3638,13 @@
         "tests/fixtures/p1_233/p1_233.py",
         "tests/fixtures/p1_96/p1_96.py",
         "tests/fixtures/single_exposure.py",
+        "tests/integration/test_ccr_loan_collateral_isolation.py",
         "tests/integration/test_nested_facility_collateral.py",
         "tests/integration/test_sft_stage_dark_launch.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
         "tests/properties/test_re_split_financial_collateral.py",
+        "tests/unit/crm/test_collateral_currency_adjustments.py",
         "tests/unit/crm/test_collateral_market_value_carriers.py",
         "tests/unit/crm/test_crm_error_propagation.py",
         "tests/unit/crm/test_ead_for_crm.py",
@@ -3650,6 +3658,7 @@
         "rwa_calc.engine.crm.haircut_tables::get_haircut_table",
         "rwa_calc.engine.crm.haircut_tables::get_maturity_band",
         "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_haircuts",
+        "rwa_calc.engine.crm.haircuts::collateral_currency_mismatch_expr",
         "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
       ],
       "confidence": "HIGH",
@@ -3896,6 +3905,7 @@
       "layer_count": 4,
       "oracle_cases": [],
       "pack_entries": [
+        "fcm_hfx_applies_to_non_financial@crr",
         "firb_min_collateralisation_threshold_applies@crr",
         "firb_overcollateralisation_divisor_applies@crr",
         "min_collateralisation_thresholds@b31",
@@ -3913,6 +3923,7 @@
         "engine/crm/collateral.py",
         "engine/crm/collateral_type_check.py",
         "engine/crm/expressions.py",
+        "engine/crm/haircuts.py",
         "engine/crm/link_allocation.py",
         "engine/crm/min_collateralisation.py",
         "engine/crm/processor.py",
@@ -3920,7 +3931,8 @@
         "engine/hierarchy/unify.py",
         "engine/kernels/allocation.py",
         "rulebook/packs/b31.py",
-        "rulebook/packs/common.py"
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_190_b31_re_threshold_30pct.py",
@@ -3939,6 +3951,7 @@
         "tests/integration/test_nested_facility_collateral.py",
         "tests/unit/config/test_data_sources_collateral_links.py",
         "tests/unit/crm/test_art_230_min_collateralisation_warning.py",
+        "tests/unit/crm/test_collateral_currency_adjustments.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_collateral_link_allocation.py",
         "tests/unit/crm/test_collateral_pool_gating.py",
@@ -4020,7 +4033,6 @@
       ],
       "source_files": [
         "contracts/edges.py",
-        "data/schemas.py",
         "engine/crm/guarantees.py",
         "engine/crm/life_insurance.py",
         "rulebook/packs/common.py"
@@ -4223,6 +4235,7 @@
       "article": "238",
       "code_functions": [
         "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch",
+        "rwa_calc.engine.crm.haircuts::with_derived_residual_maturity",
         "rwa_calc.engine.crm.netting::generate_netting_collateral"
       ],
       "confidence": "MEDIUM",
@@ -4247,7 +4260,9 @@
         "tests/fixtures/p1_219/p1_219.py",
         "tests/fixtures/p1_241/p1_241.py",
         "tests/fixtures/p1_30e/p1_30e.py",
-        "tests/unit/crm/test_maturity_mismatch.py"
+        "tests/unit/crm/test_collateral_maturity_date_derivation.py",
+        "tests/unit/crm/test_maturity_mismatch.py",
+        "tests/unit/crm/test_netting_on_demand_deposit.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8098,22 +8113,29 @@
     },
     {
       "article": "191A",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.crm.expressions::ccr_engine_row_expr"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "contracts/errors.py",
         "data/schemas.py",
         "domain/enums.py",
+        "engine/crm/collateral.py",
+        "engine/crm/expressions.py",
         "engine/crm/look_through.py",
+        "engine/crm/processor.py",
         "engine/crm/simple_method.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_161_art_191a_two_layer_protection.py",
         "tests/fixtures/p1_161/p1_161.py",
-        "tests/fixtures/reporting_funded_protection_portfolio.py"
+        "tests/fixtures/reporting_funded_protection_portfolio.py",
+        "tests/integration/test_ccr_loan_collateral_isolation.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8159,13 +8181,18 @@
     },
     {
       "article": "197",
-      "code_functions": [],
-      "confidence": "GAP",
+      "code_functions": [
+        "rwa_calc.engine.crm.expressions::issued_bond_expr",
+        "rwa_calc.engine.crm.expressions::sa_fccm_type_eligible_expr"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "engine/crm/expressions.py"
+      ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_161_art_191a_two_layer_protection.py",
         "tests/acceptance/basel31/test_p1_234_art_197_securitisation_collateral.py",
@@ -8210,6 +8237,7 @@
         "tests/acceptance/basel31/test_p1_273_art_211_lease_collateral.py",
         "tests/fixtures/p1_190/p1_190.py",
         "tests/fixtures/p1_273/p1_273.py",
+        "tests/unit/crm/test_collateral_type_eligibility.py",
         "tests/unit/crm/test_p1_273_lease_collateral.py"
       ],
       "watchfire_index_gap": false
@@ -8514,6 +8542,7 @@
         "rwa_calc.engine.crm.collateral::apply_collateral",
         "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr",
         "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr",
+        "rwa_calc.engine.crm.haircuts::collateral_currency_mismatch_expr",
         "rwa_calc.engine.crm.min_collateralisation::record_below_min_collateralisation"
       ],
       "confidence": "MEDIUM",
@@ -8521,11 +8550,13 @@
       "layer_count": 4,
       "oracle_cases": [],
       "pack_entries": [
+        "fcm_hfx_applies_to_non_financial@b31",
         "firb_min_collateralisation_threshold_applies@b31",
         "firb_overcollateralisation_divisor_applies@b31"
       ],
       "source_files": [
         "contracts/errors.py",
+        "data/schemas.py",
         "engine/crm/collateral.py",
         "engine/crm/collateral_type_check.py",
         "engine/crm/expressions.py",
@@ -8534,7 +8565,8 @@
         "engine/crm/processor.py",
         "engine/irb/formulas.py",
         "rulebook/packs/b31.py",
-        "rulebook/packs/common.py"
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_190_b31_full_re.py",
@@ -8544,12 +8576,14 @@
         "tests/acceptance/basel31/test_p1_235_art_199_firb_fcm_eligibility.py",
         "tests/acceptance/basel31/test_p1_248_art_161_5_partially_secured_lgd_floor.py",
         "tests/acceptance/basel31/test_p1_273_art_211_lease_collateral.py",
+        "tests/acceptance/basel31/test_scenario_b31_g_provisions.py",
         "tests/acceptance/crr/test_p1_165_art_230_receivables_no_volatility_haircut.py",
         "tests/acceptance/p1_190_pipeline_helpers.py",
         "tests/contracts/test_edge_contracts.py",
         "tests/fixtures/p1_190/p1_190.py",
         "tests/unit/crm/test_art169_lgd_modelling.py",
         "tests/unit/crm/test_art_230_min_collateralisation_warning.py",
+        "tests/unit/crm/test_collateral_currency_adjustments.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_collateral_sequential_fill.py",
         "tests/unit/crm/test_crm_basel31.py",
@@ -8685,7 +8719,8 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantees.py"
+        "engine/crm/guarantees.py",
+        "engine/crm/haircuts.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_art237_matched_short_dated_netting_firb.py",
@@ -8698,23 +8733,32 @@
         "tests/fixtures/p1_200/p1_200.py",
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/p2_43/p2_43.py",
-        "tests/unit/crm/test_art237_ineligibility.py"
+        "tests/unit/crm/test_art237_ineligibility.py",
+        "tests/unit/crm/test_collateral_maturity_date_derivation.py"
       ],
       "watchfire_index_gap": false
     },
     {
       "article": "238",
-      "code_functions": [],
-      "confidence": "GAP",
+      "code_functions": [
+        "rwa_calc.engine.crm.haircuts::with_derived_residual_maturity"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "contracts/errors.py",
+        "engine/crm/haircuts.py",
+        "engine/crm/netting.py"
+      ],
       "test_files": [
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_200/p1_200.py",
-        "tests/unit/crm/test_maturity_mismatch.py"
+        "tests/unit/crm/test_collateral_maturity_date_derivation.py",
+        "tests/unit/crm/test_maturity_mismatch.py",
+        "tests/unit/crm/test_netting_on_demand_deposit.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8890,8 +8934,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "b31": "7e67049465c0e23c572b58fb31ea779d6062bc1272149f8b57b1e79ba1af105f",
+    "crr": "3b8b8c3f27378e6c9f8dd5fb52c05299b1e1d9e19f464d1b19e6342bf7df402d"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

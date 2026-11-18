@@ -910,6 +910,25 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("CRR", "230", "30% C*/C** minimum collateralisation threshold applies"),
     ),
+    # Currency-mismatch volatility adjustment (H_fx) on NON-financial collateral
+    # (receivables, immovable property, other physical) under the F-IRB collateral
+    # path. CRR Art. 230(1) tests "the ratio of the value of the collateral (C) to
+    # the exposure value (E)" against the Table 5 C*/C** levels and names no
+    # currency adjustment, and Art. 223(1)'s "adjustment reflecting currency
+    # volatility" is scoped to "financial collateral for the purposes of the
+    # Financial Collateral Comprehensive Method". So CRR keeps H_fx on financial
+    # collateral only. Basel 3.1 enables it (packs/b31.py, PS1/26 Art. 230(1)(b)).
+    # Gates the H_fx expression in engine/crm/haircuts.py (review CL-09).
+    "fcm_hfx_applies_to_non_financial": Feature(
+        name="fcm_hfx_applies_to_non_financial",
+        enabled=False,
+        citation=Citation(
+            "CRR",
+            "230",
+            "(1) C compared with C*/C** with no currency-mismatch adjustment; Art. 223(1) "
+            "currency volatility adjustment applies to financial collateral only",
+        ),
+    ),
     # AIRB LGD collateral method (PS1/26 Art. 169A/169B): Basel 3.1 introduces the
     # Foundation Collateral Method election and the Art. 169B LGD-modelling /
     # insufficient-data fallback that route AIRB exposures to the supervisory LGD

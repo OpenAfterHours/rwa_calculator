@@ -306,6 +306,10 @@ Error codes are prefixed by domain and numbered sequentially:
 | `CRM003` | `ERROR_CURRENCY_MISMATCH` | CRM | Collateral currency ≠ exposure currency |
 | `CRM004` | `ERROR_COLLATERAL_OVERALLOCATION` | CRM | Collateral allocated exceeds available amount |
 | `CRM005` | `ERROR_INVALID_GUARANTEE` | CRM | Guarantee does not meet eligibility criteria |
+| `CRM023` | `ERROR_COLLATERAL_CURRENCY_UNKNOWN` | CRM | Collateral with no stated currency, treated as currency-mismatched (H_fx applied; Art. 224 / PS1/26 Art. 230(1)(b)). Rolled up per run |
+| `CRM024` | `ERROR_ON_DEMAND_NETTED_DEPOSIT` | CRM | Netted deposit with no maturity date treated as repayable on demand (residual 0, Art. 238(1)); relief against later-maturing loans removed by Art. 237(1). One per netting agreement |
+| `CRM025` | `ERROR_CCR_ONLY_COLLATERAL_POOL` | CRM | Loan-table collateral pledged only to CCR netting-set / failed-trade / default-fund rows, which take no loan-table collateral (CRR Art. 223(5A), PS1/26 Art. 191A(4)). Rolled up per run |
+| `CRM026` | `ERROR_NON_ART197_FLAGGED_FINANCIAL` | CRM | Non-Art. 197 collateral flagged `is_eligible_financial_collateral`; the flag is ignored for the SA exposure-value reduction. Rolled up per run |
 | `IRB001` | `ERROR_PD_OUT_OF_RANGE` | IRB | PD value outside valid range **[0, 1]**. The lower bound is **closed**: CRR Art. 160(1) does not reach central governments or central banks, and the CRR pack carries `pd_floors["sovereign"] = 0`, so PD = 0 is admissible sovereign input and a half-open `(0, 1]` domain would reject every sovereign IRB exposure |
 | `IRB002` | `ERROR_LGD_OUT_OF_RANGE` | IRB | LGD value outside valid range **[0, 1.25]**. 1.0 is not a hard ceiling — own-estimate downturn LGD can exceed 100% where workout costs exceed the exposure |
 | `IRB003` | `ERROR_MATURITY_INVALID` | IRB | Effective maturity outside [1, 5] range |

@@ -606,7 +606,11 @@ class TestLifeInsuranceConstants:
         assert result["thresh"][0] == pytest.approx(0.0)
 
     def test_collateral_category_is_life_insurance(self) -> None:
-        df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
+        # The category ladder reads issuer_type (the ``bond`` issuer dispatch).
+        df = pl.DataFrame(
+            {"collateral_type": ["life_insurance"], "issuer_type": [None]},
+            schema={"collateral_type": pl.String, "issuer_type": pl.String},
+        ).lazy()
         result = df.with_columns(collateral_category_expr().alias("cat")).collect()
         assert result["cat"][0] == "life_insurance"
 
@@ -667,7 +671,10 @@ class TestCreditLinkedNotes:
 
     def test_cln_category_is_financial(self) -> None:
         """CLN should be categorised as financial collateral."""
-        df = pl.DataFrame({"collateral_type": ["credit_linked_note"]}).lazy()
+        df = pl.DataFrame(
+            {"collateral_type": ["credit_linked_note"], "issuer_type": [None]},
+            schema={"collateral_type": pl.String, "issuer_type": pl.String},
+        ).lazy()
         result = df.with_columns(collateral_category_expr().alias("cat")).collect()
         assert result["cat"][0] == "financial"
 

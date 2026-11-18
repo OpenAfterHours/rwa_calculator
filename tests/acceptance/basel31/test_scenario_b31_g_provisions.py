@@ -404,17 +404,26 @@ class TestB31GroupG_PortfolioELSummary:
         AVA and other_own_funds_reductions are zero across the whole book):
 
             Non-defaulted pool (57 F-IRB rows + 10 slotting rows = 67):
-                IRB      A_irb  = 382,637.4952081944   B_irb  = 1,668,571.4285714286
+                IRB      A_irb  = 382,564.9133618       B_irb  = 1,668,571.4285714286
                 Slotting A_slot = 680,000.0            B_slot = 0.0
-                A = ΣEL     = 1,062,637.4952081942
+                A = ΣEL     = 1,062,564.9133618003
                 B = Σpool_b = 1,668,571.4285714286
                 nd_shortfall = max(0, A - B) = 0.0
-                nd_excess    = max(0, B - A) = 605,933.9333632344
+                nd_excess    = max(0, B - A) = 606,006.5152096283
 
             (A_irb rose by 159.10 vs the pre-P1.237 figure: an other-listed equity
             collateral row on a subordinated F-IRB obligor now takes the correct 30%
             haircut, not the anti-conservative 20% main-index default, raising that
             row's EAD and hence its EL. B (provisions) is unchanged.)
+
+            (A_irb then fell by 72.581846 with review CL-11: LOAN_INST_UK_001's
+            COLL_GILT_002 is a ``bond`` with issuer_type "sovereign", CQS 1. It was
+            categorised "other" and, being IRB-attested, given the other-physical
+            LGDS 25%; it is now financial collateral at LGDS 0% (PS1/26 Art. 230(2)
+            "Financial collateral 0%"), as ``government_bond`` always was. Its ES is
+            unchanged (580,645, the bond haircut already applied), so LGD* goes
+            0.40 - 0.15 x ES/E = 0.398258 -> 0.40 - 0.40 x ES/E = 0.395355, and EL =
+            0.0005 x 50,000,000 x LGD goes 9,956.450892 -> 9,883.869046.)
             Defaulted pool: 0 rows -> C = D = 0 -> d_shortfall = d_excess = 0
 
             art_159_3_applies = (nd_shortfall>0) and (d_excess>0)
@@ -439,12 +448,12 @@ class TestB31GroupG_PortfolioELSummary:
         Same aggregate ingredients as ``test_el_shortfall_pool_aggregate_nets_to_zero``:
 
             Non-defaulted: nd_excess = max(0, B - A)
-                         = 1,668,571.4285714286 - 1,062,637.4952081942
-                         = 605,933.9333632344
+                         = 1,668,571.4285714286 - 1,062,564.9133618003
+                         = 606,006.5152096283
             Defaulted:     d_excess = 0
 
             art_159_3_applies = False -> combined branch:
-            total_el_excess = nd_excess + d_excess = 605,933.9333632344
+            total_el_excess = nd_excess + d_excess = 606,006.5152096283
 
         The pre-fix per-row-then-sum path instead reports 1,581,112.64 (each
         over-provisioned row's excess is floored and summed independently, so
@@ -453,9 +462,9 @@ class TestB31GroupG_PortfolioELSummary:
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.total_el_excess) == pytest.approx(605_933.9333632344, rel=1e-6), (
+        assert float(el.total_el_excess) == pytest.approx(606_006.5152096283, rel=1e-6), (
             "Portfolio el_excess should be the pool-aggregate netted value "
-            f"605,933.93 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
+            f"606,006.52 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
         )
 
     def test_t2_credit_cap_is_point_six_pct(self, firb_pipeline_results) -> None:

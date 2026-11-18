@@ -117,11 +117,12 @@ H_fx_scaled = H_fx x sqrt(T_m / 10)
 | 10-day (capital market) | 8.00% |
 | 20-day (secured lending) | 11.31% |
 
-**Scope (unchanged from CRR — PS1/26 inherits the Art. 224 / Art. 230 / Art. 233 split):**
+**Scope (changed from CRR for funded non-financial collateral — review CL-09):**
 
 - **Financial collateral (Art. 224 comprehensive method)** — H_fx applies via Art. 224 Table 4.
 - **Unfunded credit protection (Art. 233(3))** — H_fx applies to guarantees and credit derivatives. Article 232 cross-references Art. 233(3) (PS1/26 also pulls in Art. 233(4)) for life insurance / credit-linked notes.
-- **Funded non-financial collateral (Arts. 229–230 — receivables, real estate, other physical)** — H_fx does **not** apply. The LGD\* formula uses the raw collateral value `C` against the C\* / C\*\* thresholds with no FX adjustment; FX risk is captured upstream by the spot-rate `FXConverter`. The engine gate (`engine/crm/haircuts.py`) excludes these types via `data/schemas.py:NON_FINANCIAL_COLLATERAL_TYPES`.
+- **Funded non-financial collateral under the Foundation Collateral Method (receivables, real estate, other physical)** — H_fx **does** apply. PS1/26 Art. 230(1) defines ES as "the current value of the collateral received after the application of: (a) the volatility adjustment applicable for the type of collateral (HC), as specified in paragraph 2; (b) a volatility adjustment for any currency mismatch between the exposure and the collateral (Hfx) in accordance with Articles 224, 226, and 227; (c) an adjustment for any maturity mismatch calculated in accordance with Articles 237 to 239", with no limit to financial collateral; Art. 231(1) restates (b) for each Ci of a mixed pool, and Art. 229(1)(b) uses `P / (1 − HC − Hfx)` on immovable property. So a currency-mismatched pledge is valued at `C × (1 − HC − Hfx)` — e.g. EUR property 100,000 securing a GBP loan at a 10-day period: `100,000 × (1 − 0.40 − 0.08) = 52,000`. This is the cited pack Feature `fcm_hfx_applies_to_non_financial` (enabled in `packs/b31.py`, disabled in `packs/crr.py`, where CRR Art. 230(1) compares the raw `C` with C\* / C\*\*), read by the H_fx expression in `engine/crm/haircuts.py`. It re-opens P1.198, which removed the term on the strength of the CRR reading.
+- **Collateral with no stated currency** — treated as currency-mismatched (H_fx applies wherever it applies to the type) and recorded by the `CRM023` warning: an unknown denomination cannot establish that there is no mismatch (review CL-14). Both regimes.
 
 ---
 

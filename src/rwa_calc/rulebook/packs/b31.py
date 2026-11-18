@@ -856,6 +856,31 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "230", "(1) LGD* formula — no minimum collateralisation threshold"
         ),
     ),
+    # H_fx on NON-financial collateral under the Foundation Collateral Method
+    # (review CL-09, re-opening P1.198 on the verbatim read it was waiting for).
+    # ps126app1.pdf page 208-209 of 492, Art. 230(1), read verbatim: "ES = the
+    # current value of the collateral received after the application of: (a) the
+    # volatility adjustment applicable for the type of collateral (HC), as
+    # specified in paragraph 2; (b) a volatility adjustment for any currency
+    # mismatch between the exposure and the collateral (Hfx) in accordance with
+    # Articles 224, 226, and 227; (c) an adjustment for any maturity mismatch
+    # calculated in accordance with Articles 237 to 239." Paragraph 2's table sets
+    # HC = 40% for receivables, immovable property and other physical collateral,
+    # and nothing limits (b) to financial collateral; Art. 231(1) restates (b) for
+    # each Ci of a mixed pool. So a currency-mismatched receivable / property /
+    # other-physical pledge takes the Table 4 8% (Art. 226(2) liquidation-period
+    # scaling) on top of HC. RWA-INCREASING on such pledges; CRR is unchanged
+    # (packs/crr.py). Gates the H_fx expression in engine/crm/haircuts.py.
+    "fcm_hfx_applies_to_non_financial": Feature(
+        name="fcm_hfx_applies_to_non_financial",
+        enabled=True,
+        citation=Citation(
+            "PS1/26",
+            "230",
+            "(1)(b) ES after a volatility adjustment for any currency mismatch between "
+            "the exposure and the collateral (Hfx), for every FCM collateral type",
+        ),
+    ),
     # AIRB LGD collateral method (PS1/26 Art. 169A/169B): Basel 3.1 Foundation
     # Collateral Method election + Art. 169B LGD-modelling/insufficient-data fallback
     # route AIRB exposures to the supervisory LGD formula. Overrides the CRR Feature;

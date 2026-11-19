@@ -641,7 +641,7 @@
         "entity_type": "corporate",
         "ltv": 0.4,
         "property_type": "commercial",
-        "has_income_cover": true
+        "has_income_cover": false
       },
       "expected": {
         "risk_weight": 0.5,
@@ -662,7 +662,7 @@
         "entity_type": "corporate",
         "ltv": 0.7,
         "property_type": "commercial",
-        "has_income_cover": false
+        "has_income_cover": true
       },
       "expected": {
         "risk_weight": 1.0,

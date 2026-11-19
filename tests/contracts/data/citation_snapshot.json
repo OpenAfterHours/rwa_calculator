@@ -541,6 +541,15 @@
     "CRR Art. 107(2)",
     "PS1/26, paragraph 117"
   ],
+  "rwa_calc.engine.sa.crr_real_estate::crr_art_124_1_rw_expr": [
+    "CRR Art. 124"
+  ],
+  "rwa_calc.engine.sa.crr_real_estate::crr_commercial_re_rw_expr": [
+    "CRR Art. 126"
+  ],
+  "rwa_calc.engine.sa.crr_real_estate::crr_residential_re_rw_expr": [
+    "CRR Art. 125"
+  ],
   "rwa_calc.engine.sa.crr_risk_weight_tables::_create_covered_bond_df": [
     "CRR Art. 129"
   ],

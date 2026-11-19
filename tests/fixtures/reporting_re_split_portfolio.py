@@ -194,7 +194,13 @@ VALUE_RRE_UNDER: float = 1_000_000.0
 VALUE_RRE_OVER: float = 1_000_000.0
 VALUE_RRE_PRIOR: float = 1_000_000.0
 VALUE_CRE_SME: float = 1_500_000.0
-VALUE_CRE_CORP: float = 1_500_000.0
+#: LTV 0.5: the CRR Art. 126 50% on the whole loan (not property-dependent,
+#: Art. 126(2)(b)), so CRR C 07.00 real-estate row 0200 (50%) stays live once
+#: review RE-17 moved the rich book's income-producing CRE leg to Art. 124(1)
+#: 100%. Basel 3.1 is indifferent between 1.5m and 2.0m: the Art. 124H(3)
+#: whole loan is max(60%, min(100%, Art. 124I 100%)) at either LTV (measured:
+#: every Basel 3.1 COREP frame of this portfolio is identical).
+VALUE_CRE_CORP: float = 2_000_000.0
 VALUE_MIXED_RRE: float = 1_000_000.0
 VALUE_MIXED_CRE: float = 1_000_000.0
 

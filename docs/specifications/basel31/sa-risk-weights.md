@@ -2106,6 +2106,37 @@ RW = max(60%, min(counterparty_rw, income_producing_rw))
 ```
 
 This is a distinct third path alongside loan-splitting and income-producing tables.
+The real-estate splitter keeps the exposure whole (`re_split_mode = "whole"`,
+class `commercial_mortgage`). Three inputs to the formula (review CL-10):
+
+- **LTV** — the row keeps the Art. 124C LTV supplied (`property_ltv`, or the one
+  derived from the loan and the property value). It includes "all other loans secured
+  with charges ranking in priority ahead of or pari passu" (Art. 124C(3)) and the full
+  undrawn commitment (Art. 124C(2)); it was previously overwritten with
+  exposure value / property value, which dropped both. Exposure / value is the fallback
+  only where no LTV exists.
+- **`income_producing_rw`** — Art. 124H(3)(b)(ii) names "the risk weight that would be
+  assigned to the exposure under Article 124I if the exposure was materially
+  dependent", i.e. the whole article: where a charge not held by the institution ranks
+  ahead (`prior_charge_ltv > 0`), the Art. 124I(3) junior weight (100% / 125% / 137.5%),
+  not the Art. 124I(1)/(2) base table.
+- **`counterparty_rw`** — Art. 124L(1)(e), "the risk weight that would be assigned to an
+  unsecured exposure to that counterparty": the obligor's Art. 122(2) corporate weight by
+  CQS. A `commercial_mortgage` row has no CQS table of its own, so the weight used to be
+  the 100% null fill whatever the rating — the min() never bound on a CQS 5–6 obligor
+  and the 60% floor never reached a CQS 1–2 one. The re-classed row no longer carries
+  the obligor's original class, so the corporate table is applied to every obligor on
+  this path. That is exact only for an ordinary corporate: not unrated specialised
+  lending (Art. 122A-122B) and outside the Art. 122(6) investment-grade election
+  (65% / 135%). An institution, sovereign or PSE with commercial security is also
+  whole-loaned, and for it the corporate table is an approximation, usually at or above
+  its own weight but not always (an unrated SCRA grade C institution, 150%, reads 100%).
+
+CQS 5 corporate, 70,000 behind a 20,000 prior charge on a 100,000 property (LTV 0.9):
+max(60%, min(150%, 137.5%)) = **137.5%**, RWA 96,250 (previously 70,000 at an LTV of
+0.7 and a counterparty weight of 100%). CQS 1 corporate, 400,000 on 1,000,000:
+max(60%, min(20%, 100%)) = **60%**, RWA 240,000 (previously 400,000). Unrated: 100%,
+unchanged.
 
 ---
 

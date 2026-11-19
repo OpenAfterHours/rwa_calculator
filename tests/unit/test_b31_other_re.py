@@ -572,10 +572,18 @@ class TestOtherRESACalculator:
         assert df["risk_weight"][0] == pytest.approx(1.50)
         assert df["rwa_post_factor"][0] == pytest.approx(ead * 1.50)
 
-    def test_crr_no_other_re_treatment(
+    def test_crr_non_qualifying_takes_art_124_1_not_other_re(
         self, sa_calculator: SACalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR has no Other RE concept — non-qualifying flag is ignored."""
+        """CRR has no Art. 124J; an explicit False takes Art. 124(1) 100% (review CL-07).
+
+        This test pinned "non-qualifying flag is ignored" (35%) until the
+        orchestrator decision that, under CRR, ``is_qualifying_re=False``
+        attests the Art. 125(2) conditions are not met. CRR Art. 124(1): "An
+        exposure or any part of an exposure fully secured by mortgage on
+        immovable property shall be assigned a risk weight of 100 %, where the
+        conditions set out in Article 125 or 126 are not met".
+        """
         bundle = _make_bundle(
             {
                 "exposure_reference": ["ORE007"],
@@ -592,9 +600,9 @@ class TestOtherRESACalculator:
         )
         result = sa_calculator.calculate_branch(bundle, crr_config)
         df = result.collect()
-        # CRR: standard mortgage treatment regardless of is_qualifying_re
-        # LTV 50% ≤ 80% threshold → 35% residential RW (Art. 125)
-        assert df["risk_weight"][0] == pytest.approx(0.35)
+        # CRR Art. 124(1): 100% on the part up to the property value (LTV 50%
+        # → the whole exposure). Not Art. 124J (a Basel 3.1 construct).
+        assert df["risk_weight"][0] == pytest.approx(1.00)
 
     def test_non_qualifying_vs_qualifying_comparison(
         self, sa_calculator: SACalculator, b31_config: CalculationConfig

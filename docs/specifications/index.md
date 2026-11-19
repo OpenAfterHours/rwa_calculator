@@ -74,7 +74,7 @@ Covers risk weight determination for all SA exposure classes:
 - Corporates (rated and unrated)
 - Retail (fixed 75%)
 - Residential mortgages (LTV-based split at 80%)
-- Commercial real estate (LTV-based with income cover test)
+- Commercial real estate (LTV-based; the 50% needs repayment not to depend on the property, Art. 126(2)(b))
 
 ### Group B: Foundation IRB
 Covers F-IRB calculation components:

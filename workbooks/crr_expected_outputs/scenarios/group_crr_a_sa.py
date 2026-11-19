@@ -532,16 +532,19 @@ def _(mo):
     """Scenario CRR-A7 Header."""
     mo.md("""
     ---
-    ## Scenario CRR-A7: Commercial Real Estate 40% LTV - 50% Risk Weight
+    ## Scenario CRR-A7: Income-Producing Commercial Real Estate 40% LTV - 100% Risk Weight
 
-    **Input:** £400k loan, £1m property value (40% LTV), income cover met
-    **Expected:** 50% RW, £200k RWA
+    **Input:** £400k loan, £1m property value (40% LTV), income-producing property
+    **Expected:** 100% RW, £400k RWA
 
-    **CRR Treatment (Art. 126):**
-    - LTV ≤ 50% AND income cover ≥ 1.5x interest: 50% RW
-    - Otherwise: 100% RW (no preferential treatment)
+    **CRR Treatment (Art. 126 / Art. 124(1)):**
+    - LTV ≤ 50% AND repayment not materially dependent on the property
+      (Art. 126(2)(b)): 50% RW
+    - Otherwise: 100% RW (Art. 124(1)) — this scenario's property is income-producing
 
-    **Reference:** CRR Art. 126
+    Was 50% under the inverted gate fixed by review RE-17 / P1.263.
+
+    **Reference:** CRR Art. 124(1), 126(2)(b)
     """)
     return
 
@@ -551,7 +554,7 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, get_commercial_re_rw):
     """Calculate Scenario CRR-A7: Commercial Real Estate 40% LTV."""
     ltv_a7 = Decimal("0.40")
     ead_a7 = Decimal("400000")  # £400k loan
-    has_income_cover_a7 = True  # Meets 1.5x interest coverage
+    has_income_cover_a7 = True  # Income-producing: Art. 126(2)(b) not met
 
     rw_a7, rw_desc_a7 = get_commercial_re_rw(ltv_a7, has_income_cover=has_income_cover_a7)
     rwa_a7 = calculate_sa_rwa(ead_a7, rw_a7)
@@ -559,7 +562,7 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, get_commercial_re_rw):
     result_crr_a7 = CRRScenarioResult(
         scenario_id="CRR-A7",
         scenario_group="CRR-A",
-        description="Commercial real estate 40% LTV - 50% RW",
+        description="Income-producing commercial real estate 40% LTV - 100% RW",
         exposure_reference="LOAN_CRE_001",
         counterparty_reference="CORP_CRE_001",
         approach="SA",
@@ -572,13 +575,13 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, get_commercial_re_rw):
         calculation_details={
             "ltv": float(ltv_a7),
             "property_value": float(ead_a7 / ltv_a7),
-            "income_cover_met": has_income_cover_a7,
+            "materially_dependent_on_property": has_income_cover_a7,
             "treatment": rw_desc_a7,
             "property_type": "commercial",
             "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_a7:,.0f} × {rw_a7 * 100:.0f}% = £{rwa_a7:,.0f}",
         },
-        regulatory_reference="CRR Art. 126",
+        regulatory_reference="CRR Art. 124(1), 126(2)(b)",
     )
 
     print(

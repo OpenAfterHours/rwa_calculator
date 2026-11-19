@@ -505,7 +505,11 @@ def immovable_property() -> list[dict[str, Any]]:
                 "entity_type": "corporate",
                 "ltv": 0.40,
                 "property_type": "commercial",
-                "has_income_cover": True,
+                # Art. 126(2)(b): repayment NOT materially dependent on the
+                # property. ``has_income_cover`` is that dependence, so False.
+                # (Encoded True — the engine's inverted gate — until review
+                # RE-17 / P1.263; the narrative always said "met".)
+                "has_income_cover": False,
             },
         ),
         _sa(
@@ -518,7 +522,8 @@ def immovable_property() -> list[dict[str, Any]]:
                 "entity_type": "corporate",
                 "ltv": 0.70,
                 "property_type": "commercial",
-                "has_income_cover": False,
+                # Art. 126(2)(b) not met: repayment depends on the property.
+                "has_income_cover": True,
             },
         ),
     ]

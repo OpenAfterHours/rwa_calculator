@@ -362,7 +362,7 @@ Equity under CRR is SA or IRB; Basel 3.1 makes it SA-only. See
 ### `commercial_re_params`
 
 **CRR** — CRR Art. 126
- *(commercial RE LTV<=50%+income 50% / else 100%)*
+ *(commercial RE LTV<=50% not property-dependent 50% / else 100%)*
 
 | Parameter | Value |
 |---|---|

@@ -559,35 +559,40 @@ class TestResidentialMortgageRiskWeights:
 class TestCommercialRERiskWeights:
     """Tests for commercial real estate LTV treatment."""
 
-    def test_low_ltv_with_income_cover_fifty_percent(
+    def test_low_ltv_not_materially_dependent_fifty_percent(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRE LTV <= 50% with income cover should get 50% RW."""
-        result = calculate_single_sa_exposure(
-            sa_calculator,
-            ead=Decimal("600000"),
-            exposure_class="COMMERCIAL_RE",
-            ltv=Decimal("0.40"),
-            has_income_cover=True,
-            config=crr_config,
-        )
+        """CRE LTV <= 50%, repayment NOT dependent on the property: 50% (Art. 126).
 
-        assert result["risk_weight"] == pytest.approx(0.50)
-
-    def test_low_ltv_without_income_cover_hundred_percent(
-        self,
-        sa_calculator: SACalculator,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """CRE LTV <= 50% without income cover should get 100% RW."""
+        ``has_income_cover`` is "materially dependent on the property's cash
+        flows"; Art. 126(2)(b) grants 50% only where it is False. This test
+        pinned the inverted gate (True -> 50%) until review RE-17 / P1.263.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("600000"),
             exposure_class="COMMERCIAL_RE",
             ltv=Decimal("0.40"),
             has_income_cover=False,
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(0.50)
+
+    def test_low_ltv_materially_dependent_hundred_percent(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRE LTV <= 50%, income-producing: Art. 126(2)(b) fails -> Art. 124(1) 100%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("600000"),
+            exposure_class="COMMERCIAL_RE",
+            ltv=Decimal("0.40"),
+            has_income_cover=True,
             config=crr_config,
         )
 

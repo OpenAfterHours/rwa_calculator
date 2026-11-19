@@ -471,8 +471,10 @@ def _commercial_real_estate() -> list[Collateral]:
             is_adc=False,
             is_presold=None,
         ),
-        # CRR-A7: Commercial property 40% LTV (£400k loan / £1m property)
-        # Income-producing property that meets 1.5x interest coverage
+        # CRR-A7 / B31-A7: Commercial property 40% LTV (£400k loan / £1m property).
+        # Income-producing: repayment materially depends on the property's cash
+        # flows, so CRR Art. 126(2)(b) fails -> Art. 124(1) 100% (review RE-17;
+        # was the inverted 50%), and Basel 3.1 takes Art. 124I 100%.
         Collateral(
             collateral_reference="COLL_CRE_A7",
             collateral_type="real_estate",
@@ -491,14 +493,16 @@ def _commercial_real_estate() -> list[Collateral]:
             valuation_type="independent",
             property_type="commercial",
             property_ltv=0.40,  # 40% LTV
-            is_income_producing=True,  # Meets 1.5x interest coverage
+            is_income_producing=True,  # materially dependent on the property
             is_adc=False,
             is_presold=None,
         ),
         # CRR-A13: Commercial property 80% LTV (£800k loan / £1m property)
         # Art. 126(2)(d) proportion split: portion ≤ 50% of property value (£500k) → 50% RW,
         # remaining portion (£300k) falls back to unrated corporate → 100% RW.
-        # rental_to_interest_ratio=1.5 satisfies the income-cover test (Art. 126(2)(a)).
+        # is_income_producing=False: repayment NOT materially dependent on the
+        # property, the Art. 126(2)(b) condition the 50% needs (review RE-17 /
+        # P1.263 — the flag was True under the inverted gate; CRR-only loan).
         Collateral(
             collateral_reference="COLL_CRE_A13",
             collateral_type="real_estate",
@@ -517,7 +521,7 @@ def _commercial_real_estate() -> list[Collateral]:
             valuation_type="independent",
             property_type="commercial",
             property_ltv=0.80,  # 80% LTV — triggers proportion split
-            is_income_producing=True,
+            is_income_producing=False,
             is_adc=False,
             is_presold=None,
             rental_to_interest_ratio=1.5,  # Art. 126(2)(a) income-cover threshold exactly met

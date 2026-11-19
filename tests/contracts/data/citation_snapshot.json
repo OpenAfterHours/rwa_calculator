@@ -44,6 +44,9 @@
   "rwa_calc.engine.ccf::_firb_ccf_for_col": [
     "CRR Art. 166"
   ],
+  "rwa_calc.engine.ccf::_is_revolving_loan_commitment": [
+    "PS1/26, paragraph 166D"
+  ],
   "rwa_calc.engine.ccf::build_product_to_risk_type_expr": [
     "CRR Art. 111",
     "PS1/26, paragraph 111"
@@ -768,6 +771,10 @@
   ],
   "rwa_calc.reporting.corep.ccf_buckets::_own_estimate": [
     "PS1/26, paragraph 166D"
+  ],
+  "rwa_calc.reporting.corep.ccf_buckets::_revolving_loan_commitment": [
+    "PS1/26, paragraph 166D",
+    "PS1/26, paragraph 166.5"
   ],
   "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr": [
     "PS1/26, paragraph 111",

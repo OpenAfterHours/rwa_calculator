@@ -7941,7 +7941,8 @@
       "article": "166",
       "code_functions": [
         "rwa_calc.engine.ccf::CCFCalculator._apply_purchased_receivable_ccf",
-        "rwa_calc.engine.ccf::CCFCalculator._apply_uk_residential_mortgage_ccf"
+        "rwa_calc.engine.ccf::CCFCalculator._apply_uk_residential_mortgage_ccf",
+        "rwa_calc.reporting.corep.ccf_buckets::_revolving_loan_commitment"
       ],
       "confidence": "LOW",
       "framework": "PS1/26",
@@ -7949,7 +7950,8 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/ccf.py"
+        "engine/ccf.py",
+        "reporting/corep/ccf_buckets.py"
       ],
       "test_files": [],
       "watchfire_index_gap": false
@@ -7978,6 +7980,7 @@
         "tests/acceptance/basel31/test_p2_32_purchased_receivable_ccf.py",
         "tests/fixtures/p2_32/p2_32.py",
         "tests/integration/test_ccf_regime_scope_pipeline.py",
+        "tests/unit/reporting/corep/test_c08_01_ccf_own_estimate_scope.py",
         "tests/unit/test_ccf_purchased_receivable_scope.py"
       ],
       "watchfire_index_gap": false
@@ -8009,8 +8012,10 @@
     {
       "article": "166D",
       "code_functions": [
+        "rwa_calc.engine.ccf::_is_revolving_loan_commitment",
         "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments",
         "rwa_calc.reporting.corep.ccf_buckets::_own_estimate",
+        "rwa_calc.reporting.corep.ccf_buckets::_revolving_loan_commitment",
         "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr"
       ],
       "confidence": "MEDIUM",
@@ -8031,7 +8036,9 @@
       "test_files": [
         "tests/integration/test_ccf_regime_scope_pipeline.py",
         "tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py",
+        "tests/unit/reporting/corep/test_c08_01_ccf_own_estimate_scope.py",
         "tests/unit/test_ccf.py",
+        "tests/unit/test_ccf_airb_own_ead_scope.py",
         "tests/unit/test_ccf_airb_own_estimate_scope.py",
         "tests/unit/test_p6_32_airb_floors_hoisted.py"
       ],

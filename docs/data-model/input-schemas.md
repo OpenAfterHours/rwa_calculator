@@ -215,7 +215,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `underlying_risk_type` | `String` | No | Underlying-exposure risk type used by the CRM substitution path when the facility's own `risk_type` would otherwise mask the protection's true category |
 | `obs_product` | `String` | No | Concrete off-balance-sheet product key — the route to a bucket when `risk_type` is blank (see [Concrete product keys](#concrete-product-keys-obs_product)). An explicit `risk_type` always wins |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
-| `ead_modelled` | `Float64` | No | A-IRB modelled EAD — when populated and approach is A-IRB, replaces the `drawn_amount + ccf x undrawn_amount` derivation (CRR Art. 166(8a)) |
+| `ead_modelled` | `Float64` | No | Basel 3.1 A-IRB own estimate of EAD (PS1/26 Art. 166D(3)/(4)) — when populated on a **revolving loan commitment** (`is_revolving` and `is_obs_commitment`, not a flagged purchased-receivables commitment) it replaces the `drawn_amount + ccf x undrawn_amount` derivation, floored by Art. 166D(5)(b)/(c). Ignored on every other row and under CRR |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (CRR Art. 166(8)(b)) |
 | `is_obs_commitment` | `Boolean` | No | `True` (facility default) for a commitment / credit line, `False` for an issued item. Selects CRR F-IRB Art. 166(8)(d) 75% vs the Art. 166(10) issued-item scale, the Basel 3.1 Table A1 Row 5 vs Row 3 residual, and Basel 3.1 A-IRB own-estimate eligibility (Art. 166D(1)(a): revolving loan **commitments** only) |
 | `is_uk_residential_mortgage_commitment` | `Boolean` | No | Basel 3.1 Table A1 Row 4(b) 50% UK residential mortgage commitment. **Tri-state, no default**: `True` / `False` are honoured; null is derived (see [UK residential mortgage commitments](#uk-residential-mortgage-commitments)). No effect under CRR |
@@ -489,7 +489,7 @@ loans = pl.DataFrame({
 | `underlying_risk_type` | `String` | No | Underlying-exposure risk type for CRM substitution (see Facility schema) |
 | `obs_product` | `String` | No | Concrete off-balance-sheet product key (see [Concrete product keys](#concrete-product-keys-obs_product)) |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5). Under Basel 3.1 an issued contingent is never eligible (Art. 166D(1)(b)) |
-| `ead_modelled` | `Float64` | No | A-IRB modelled EAD — replaces the CCF-derived value when populated under A-IRB (CRR Art. 166(8a)) |
+| `ead_modelled` | `Float64` | No | Basel 3.1 A-IRB own estimate of EAD — revolving loan commitments only (PS1/26 Art. 166D(3)/(4); see Facility schema). Ignored on an issued contingent (`is_obs_commitment = False`) and under CRR |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (CRR Art. 166(8)(b)) |
 | `is_obs_commitment` | `Boolean` | No | Default `False` — a contingent is an issued item. Set `True` for a commitment booked as a contingent (e.g. a NIF / RUF: CRR F-IRB Art. 166(8)(d) 75%; or a mortgage offer). A contingent on a commitment `risk_type` (`MR`, `OC`) left `False` raises **DQ017** |
 | `is_uk_residential_mortgage_commitment` | `Boolean` | No | Basel 3.1 Table A1 Row 4(b) flag, tri-state — see Facility schema. Never derived for a row with `is_obs_commitment = False` |

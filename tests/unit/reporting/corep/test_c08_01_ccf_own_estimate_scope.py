@@ -110,10 +110,31 @@ def test_revolving_loan_commitment_with_an_own_estimate_stays_in_row_0035(
     assert _row_of(frame) == OWN_ESTIMATE_ROW
 
 
-def test_an_own_estimate_of_ead_stays_in_row_0035_whatever_the_flags() -> None:
-    """Art. 166D(3): the EAD limb is untouched by the conversion-factor scope."""
+@pytest.mark.parametrize(
+    ("columns", "row"),
+    [
+        pytest.param({"is_obs_commitment": False}, "0032", id="issued-item"),
+        pytest.param(
+            {"is_obs_commitment": True, "is_revolving": False}, "0032", id="non-revolving"
+        ),
+        pytest.param(
+            {"is_obs_commitment": True, "is_purchased_receivable_commitment": True},
+            "0032",
+            id="purchased-receivable",
+        ),
+        pytest.param({"is_obs_commitment": True}, OWN_ESTIMATE_ROW, id="revolving-commitment"),
+    ],
+)
+def test_an_own_estimate_of_ead_files_in_row_0035_only_on_a_revolving_loan_commitment(
+    columns: dict[str, object], row: str
+) -> None:
+    """Art. 166D(3): a single own estimate of EAD only for a revolving loan facility.
+
+    The engine (``engine/ccf.py::_compute_ead``) ignores ``ead_modelled`` on any
+    other leg, which then carries its Table A1 / Art. 166A(5) factor (here 20%).
+    """
     # Arrange
-    frame = _leg(ccf=0.2, ccf_modelled=None, ead_modelled=900.0, is_obs_commitment=False)
+    frame = _leg(ccf=0.2, ccf_modelled=None, ead_modelled=900.0, **columns)
 
     # Act / Assert
-    assert _row_of(frame) == OWN_ESTIMATE_ROW
+    assert _row_of(frame) == row

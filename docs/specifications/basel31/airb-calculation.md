@@ -318,8 +318,13 @@ limit itself may fluctuate.
 To use the full-facility approach, provide the `ead_modelled` field (type: `Float64`,
 nullable) on the facility or contingent input record:
 
-- **When present (non-null):** The calculator uses this as the facility-level EAD,
-  subject to the floors below
+- **When present (non-null) on a revolving loan commitment:** The calculator uses
+  this as the facility-level EAD, subject to the floors below. Art. 166D(3)/(4)
+  reach "revolving loan facilities" only, so the row must be revolving
+  (`is_revolving`) and a commitment (`is_obs_commitment` — an issued item is
+  never one), and not a flagged revolving purchased-receivables commitment
+  (Art. 166A(5) fixes its 40% / 10%). On any other row `ead_modelled` is ignored
+  and the row keeps its Art. 166D(1)(b) SA factor (or its Art. 166A(5) factor)
 - **When absent or null:** The calculator falls back to the standard CCF-based
   EAD calculation (drawn + undrawn × CCF)
 

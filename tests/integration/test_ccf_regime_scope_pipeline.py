@@ -62,7 +62,7 @@ def _run(bundle: Any, config: CalculationConfig) -> tuple[dict[str, dict[str, An
 # ---------------------------------------------------------------------------
 
 
-def _airb_bundle() -> Any:
+def _airb_bundle(**lc_overrides: Any) -> Any:
     """An issued MLR letter of credit (ccf_modelled 0.05) under a revolving RCF."""
     return make_raw_data_bundle(
         counterparties=[make_counterparty(counterparty_reference="CP1")],
@@ -85,6 +85,7 @@ def _airb_bundle() -> Any:
                 nominal_amount=1_000_000.0,
                 ccf_modelled=0.05,
                 lgd=0.4,
+                **lc_overrides,
             )
         ],
         loans=[
@@ -138,6 +139,23 @@ def test_cm03_revolving_commitment_keeps_its_own_estimate(regime: str) -> None:
     # Assert
     assert undrawn["ccf"] == pytest.approx(0.30)
     assert undrawn["ead_final"] == pytest.approx(2_700_000.0)
+
+
+@pytest.mark.parametrize("regime", ["crr", "b31"])
+def test_cm03_issued_lc_under_revolving_facility_ignores_its_own_ead(regime: str) -> None:
+    """Art. 166D(3) is for revolving loan facilities: the issued LC keeps its 20%.
+
+    Before the fix B31 took max(50,000, 0.5 x 1,000,000 x 0.20) = 100,000. CRR has
+    no Art. 166D and ignores ``ead_modelled`` (Art. 166(10)(c) 20%).
+    """
+    # Arrange / Act
+    rows, _ = _run(_airb_bundle(ead_modelled=50_000.0), _config(regime, PermissionMode.IRB))
+    lc = rows["C_LC_ISSUED"]
+
+    # Assert
+    assert lc["approach"] == "advanced_irb"
+    assert lc["ead_modelled"] == pytest.approx(50_000.0), "the own estimate reached the CCF stage"
+    assert lc["ead_final"] == pytest.approx(200_000.0)
 
 
 # ---------------------------------------------------------------------------

@@ -12,35 +12,35 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-18.
+Last generated: 2026-11-19.
 
 ## CRR (Capital Requirements Regulation)
 
 ### CRR Art. 111 — Exposure value
 
-??? quote "`build_product_to_risk_type_expr` — src/rwa_calc/engine/ccf.py:128"
+??? quote "`build_product_to_risk_type_expr` — src/rwa_calc/engine/ccf.py:131"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:128:159"
+    --8<-- "src/rwa_calc/engine/ccf.py:131:162"
     ```
 
-??? quote "`sa_ccf_expression` — src/rwa_calc/engine/ccf.py:188"
+??? quote "`sa_ccf_expression` — src/rwa_calc/engine/ccf.py:191"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:188:261"
+    --8<-- "src/rwa_calc/engine/ccf.py:191:264"
     ```
 
-??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:381"
+??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:384"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:381:438"
+    --8<-- "src/rwa_calc/engine/ccf.py:384:441"
     ```
 
-??? quote "`_compute_ccf` — src/rwa_calc/engine/ccf.py:531"
+??? quote "`_compute_ccf` — src/rwa_calc/engine/ccf.py:534"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:531:754"
+    --8<-- "src/rwa_calc/engine/ccf.py:534:757"
     ```
 
-??? quote "`_apply_oc_original_maturity_ccf` — src/rwa_calc/engine/ccf.py:759"
+??? quote "`_apply_oc_original_maturity_ccf` — src/rwa_calc/engine/ccf.py:762"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:759:818"
+    --8<-- "src/rwa_calc/engine/ccf.py:762:821"
     ```
 
 ??? quote "`resolve_provisions` — src/rwa_calc/engine/crm/provisions.py:37"
@@ -866,14 +866,14 @@ Last generated: 2026-11-18.
 
 ### CRR Art. 166 — Exposures to corporates, institutions, central governments and central banks and retail exposures
 
-??? quote "`_firb_ccf_for_col` — src/rwa_calc/engine/ccf.py:292"
+??? quote "`_firb_ccf_for_col` — src/rwa_calc/engine/ccf.py:295"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:292:353"
+    --8<-- "src/rwa_calc/engine/ccf.py:295:356"
     ```
 
-??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:382"
+??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:385"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:381:438"
+    --8<-- "src/rwa_calc/engine/ccf.py:384:441"
     ```
 
 
@@ -1501,19 +1501,19 @@ Last generated: 2026-11-18.
 
 ### PS1/26, paragraph 111 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`build_product_to_risk_type_expr` — src/rwa_calc/engine/ccf.py:129"
+??? quote "`build_product_to_risk_type_expr` — src/rwa_calc/engine/ccf.py:132"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:128:159"
+    --8<-- "src/rwa_calc/engine/ccf.py:131:162"
     ```
 
-??? quote "`_compute_ccf` — src/rwa_calc/engine/ccf.py:532"
+??? quote "`_compute_ccf` — src/rwa_calc/engine/ccf.py:535"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:531:754"
+    --8<-- "src/rwa_calc/engine/ccf.py:534:757"
     ```
 
-??? quote "`_apply_uk_residential_mortgage_ccf` — src/rwa_calc/engine/ccf.py:825"
+??? quote "`_apply_uk_residential_mortgage_ccf` — src/rwa_calc/engine/ccf.py:828"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:825:876"
+    --8<-- "src/rwa_calc/engine/ccf.py:828:879"
     ```
 
 
@@ -1905,21 +1905,26 @@ Last generated: 2026-11-18.
 
 ### PS1/26, paragraph 166.1 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_uk_residential_mortgage_ccf` — src/rwa_calc/engine/ccf.py:826"
+??? quote "`_apply_uk_residential_mortgage_ccf` — src/rwa_calc/engine/ccf.py:829"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:825:876"
+    --8<-- "src/rwa_calc/engine/ccf.py:828:879"
     ```
 
 
 ### PS1/26, paragraph 166.5 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_purchased_receivable_ccf` — src/rwa_calc/engine/ccf.py:881"
+??? quote "`_apply_purchased_receivable_ccf` — src/rwa_calc/engine/ccf.py:884"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:881:919"
+    --8<-- "src/rwa_calc/engine/ccf.py:884:922"
     ```
 
 
 ### PS1/26, paragraph 166D — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_is_revolving_loan_commitment` — src/rwa_calc/engine/ccf.py:1069"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccf.py:1069:1082"
+    ```
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:126"
     ```python

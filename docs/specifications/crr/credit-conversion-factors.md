@@ -219,7 +219,9 @@ off-balance sheet components into one figure:
 
 - **Art. 166D(3)** — Partially/fully undrawn revolving facilities: a single EAD
   estimate replaces the separate on-BS item (Art. 166A(2)) and the revolving loan
-  commitment (Art. 166D(1)). Activated by providing a non-null `ead_modelled` value.
+  commitment (Art. 166D(1)). Activated by providing a non-null `ead_modelled` value on a
+  revolving loan commitment (`is_revolving` and `is_obs_commitment`, not a flagged
+  Art. 166A(5) purchased-receivables commitment); ignored on any other row.
 - **Art. 166D(4)** — Fully drawn revolving facilities: the own EAD estimate replaces
   the on-BS accounting value, recognising that a revolving facility's exposure can
   exceed its current drawn balance due to repayment-and-redraw dynamics.

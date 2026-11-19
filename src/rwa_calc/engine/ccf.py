@@ -25,6 +25,9 @@ Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D):
 - Non-revolving A-IRB must use SA CCFs from Table A1
 - Revolving facilities with 100% SA CCF (Table A1 Row 2) cannot use own-estimates
 - All own-estimate CCFs floored at 50% of SA CCF (CRE32.27)
+- Art. 166D(3)/(4): the single own estimate of EAD (``ead_modelled``) reaches the
+  same revolving loan commitments only (never an issued item, a non-revolving
+  commitment or an Art. 166A(5) purchased-receivables commitment)
 - Art. 166D(5): Three EAD floor tests for A-IRB:
   (a) CCF floor = 50% x SA CCF (implemented in _compute_ccf)
   (b) Facility-level EAD floor = on-BS EAD + 50% x F-IRB off-BS EAD (Art. 166D(3))
@@ -695,9 +698,9 @@ class CCFCalculator:
                 pl.col("_sa_ccf_from_risk_type")
                 * scalar_value(resolved_pack.scalar_param("airb_revolving_ccf_floor_multiplier")),
             )
-            is_eligible_for_own_ccf = (
-                pl.col("is_revolving") & pl.col("is_obs_commitment")
-            ).fill_null(False) & (pl.col("_sa_ccf_from_risk_type") < 1.0)
+            is_eligible_for_own_ccf = _is_revolving_loan_commitment() & (
+                pl.col("_sa_ccf_from_risk_type") < 1.0
+            )
             airb_ccf = (
                 pl.when(is_eligible_for_own_ccf)
                 .then(airb_revolving_ccf)
@@ -932,7 +935,9 @@ class CCFCalculator:
         provision columns were present in the original input.
 
         For A-IRB under Basel 3.1, applies Art. 166D(5) EAD floors:
-        (b) When ead_modelled is provided (Art. 166D(3) single-EAD approach):
+        (b) When ead_modelled is provided on a revolving loan commitment (Art.
+            166D(3) single-EAD approach; any other row ignores it and keeps its
+            Art. 166D(1)(b) / 166A(5) exposure value):
             EAD >= on-BS EAD + 50% x F-IRB off-BS EAD
             (Under B31, F-IRB uses SA CCFs per Art. 166C)
         (c) Fully-drawn EAD floor (Art. 166D(4)/(5)(c)):
@@ -959,7 +964,18 @@ class CCFCalculator:
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         if resolved_pack.feature("airb_ead_floor_applies"):
             is_airb = pl.col("approach") == ApproachType.AIRB.value
-            has_modelled_ead = pl.col("ead_modelled").is_not_null()
+            # Art. 166D(3)/(4): a single own estimate of EAD only for a revolving
+            # loan FACILITY — "instead of the exposure values that would otherwise
+            # be assigned to the revolving loan commitment". An issued item, a
+            # non-revolving commitment or a flagged revolving purchased-receivables
+            # commitment (Art. 166A(5) "shall ... 40%") keeps its paragraph 1 /
+            # 166A(5) exposure value whatever ``ead_modelled`` it carries.
+            own_ead_population = _is_revolving_loan_commitment()
+            if resolved_pack.feature("irb_purchased_receivable_commitment_ccf_applies"):
+                own_ead_population = (
+                    own_ead_population & ~_is_revolving_purchased_receivable_commitment()
+                )
+            has_modelled_ead = pl.col("ead_modelled").is_not_null() & own_ead_population
 
             # Floor (b): facility-level EAD floor for Art. 166D(3) single-EAD approach
             # EAD >= on-BS EAD + 50% x (nominal x SA_CCF)
@@ -1048,6 +1064,22 @@ def create_ccf_calculator() -> CCFCalculator:
         CCFCalculator ready for use
     """
     return CCFCalculator()
+
+
+@cites("PS1/26, paragraph 166D")
+def _is_revolving_loan_commitment() -> pl.Expr:
+    """True for a revolving loan COMMITMENT — the PS1/26 Art. 166D own-estimate population.
+
+    Art. 166D(1)(a) (own conversion factor) and 166D(3)/(4) (single own estimate
+    of EAD) both reach only a revolving loan commitment: ``is_revolving`` AND
+    ``is_obs_commitment`` — a commitment is "not itself an issued off-balance
+    sheet item" (PS1/26 glossary), so an issued LC or guarantee booked under a
+    revolving facility is outside it (CM-03). A null in either cannot evidence
+    the rule, so the AND is filled False and the row takes the SA factor
+    (Art. 166D(1)(b)). Shared by the two routes so they can never test different
+    populations.
+    """
+    return (pl.col("is_revolving") & pl.col("is_obs_commitment")).fill_null(False)
 
 
 def _is_revolving_purchased_receivable_commitment() -> pl.Expr:

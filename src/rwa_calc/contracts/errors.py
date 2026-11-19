@@ -405,7 +405,8 @@ ERROR_FACILITY_SHARE_FALLBACK = "AGG003"
 # i.e. every entity in the reporting-entity registry, not only the run's books.
 # A WARNING naming the rows that failed the threshold ONLY because of debt booked
 # in other group entities, so a solo classification that differs from what the
-# solo books alone show is never silent.
+# solo books alone show is never silent. Counted over natural persons and
+# SME-sized obligors only — the obligors the retail threshold governs.
 ERROR_GROUP_THRESHOLD_FROM_OTHER_ENTITIES = "AGG004"
 
 # Parallel-run reconciliation error codes (legacy-vs-ours comparison).

@@ -48,6 +48,7 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.contracts.errors import (
     ERROR_LARGE_CORP_GROUP_ROLLUP,
+    ERROR_LARGE_CORP_REVENUE_NULL,
     ERROR_SME_GROUP_SIZE_FLIP,
     ERROR_SME_REVENUE_NULL_B31,
 )
@@ -204,6 +205,49 @@ def test_null_revenue_apex_does_not_hide_the_consolidating_midco(
     assert row["approach_applied"] == "standardised"
     assert row["rwa_final"] == pytest.approx(1_000_000.0)
     assert ERROR_LARGE_CORP_GROUP_ROLLUP in codes
+
+
+@pytest.mark.parametrize(
+    ("edges", "approach", "large_corp_warning"),
+    [((("P", "SUB"),), "standardised", True), ((), "advanced_irb", False)],
+    ids=["sub-of-large-asset-group", "standalone"],
+)
+def test_large_corp_assets_fallback_reads_the_group_assets(
+    edges: tuple[tuple[str, str], ...], approach: str, *, large_corp_warning: bool
+) -> None:
+    """B31, A-IRB permission only, no revenue anywhere in the group.
+
+    With no group revenue the Art. 147(4C)(b)(ii) large-corporate test falls back
+    to total assets (``_apply_b31_approach_restrictions``). SUB's own 10m is
+    under the balance-sheet threshold; its parent's 1bn is not. On the group's
+    assets SUB is treated as large -> F-IRB only -> no F-IRB permission -> SA,
+    unrated corporate 100% -> 1,000,000, with CLS008. Standalone, the same SUB is
+    SME-sized on assets -> A-IRB stays permitted and no CLS008 (control; P is
+    left out of the lookup there, since CLS008 counts lookup rows and P itself
+    has null revenue and large assets).
+    """
+    sub = make_counterparty(counterparty_reference="SUB", annual_revenue=None, total_assets=10e6)
+    parent = make_counterparty(counterparty_reference="P", annual_revenue=None, total_assets=1e9)
+    counterparties = [parent, sub] if edges else [sub]
+    row, codes = _run(
+        counterparties,
+        _config("B31", permission_mode=PermissionMode.IRB),
+        org_mappings=_org(*edges) if edges else None,
+        ratings=[
+            make_rating(rating_reference="RS", counterparty_reference="SUB", pd=0.01, model_id="M1")
+        ],
+        model_permissions=[
+            make_model_permission(
+                model_id="M1", exposure_class="corporate", approach="advanced_irb"
+            )
+        ],
+        lgd=0.20,
+    )
+
+    assert row["approach_applied"] == approach
+    assert (ERROR_LARGE_CORP_REVENUE_NULL in codes) is large_corp_warning
+    if approach == "standardised":
+        assert row["rwa_final"] == pytest.approx(1_000_000.0)
 
 
 @pytest.mark.parametrize("regime", ["CRR", "B31"])

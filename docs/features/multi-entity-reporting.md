@@ -120,7 +120,8 @@ The run's own exposures, EAD and RWA are still those of its own books; only the 
 test and E* widen. Example: an individual borrows GBP 600,000 on the parent's book and GBP
 600,000 on a subsidiary's — each solo run sees GBP 1.2m, so neither loan is regulatory
 retail (100%, not 75%). An `AGG004` warning names rows that failed the threshold only because
-of debt booked in other group entities. A consolidated run at the root already holds the whole
+of debt booked in other group entities (natural persons and SMEs only — the obligors the
+threshold governs). A consolidated run at the root already holds the whole
 group and is unchanged. Other entities' CCR / SFT exposures, and group entities whose books are
 not in the feed, are not counted.
 

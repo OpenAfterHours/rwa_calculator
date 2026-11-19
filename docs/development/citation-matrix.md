@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-18.
+Last generated: 2026-11-19.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -281,7 +281,7 @@ Last generated: 2026-11-18.
 
 ??? quote "`collect_group_threshold_warnings` — src/rwa_calc/engine/classify/audit.py:231"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/audit.py:231:284"
+    --8<-- "src/rwa_calc/engine/classify/audit.py:231:292"
     ```
 
 ??? quote "`whole_group_increments` — src/rwa_calc/engine/hierarchy/group_obligor.py:74"
@@ -1652,7 +1652,7 @@ Last generated: 2026-11-18.
 
 ??? quote "`collect_group_threshold_warnings` — src/rwa_calc/engine/classify/audit.py:232"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/audit.py:231:284"
+    --8<-- "src/rwa_calc/engine/classify/audit.py:231:292"
     ```
 
 ??? quote "`whole_group_increments` — src/rwa_calc/engine/hierarchy/group_obligor.py:76"

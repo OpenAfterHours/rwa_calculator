@@ -214,6 +214,50 @@ def test_whole_group_runs_are_unchanged(regime: str, scope: dict[str, Any]) -> N
 
 
 @pytest.mark.parametrize("regime", ["CRR", "B31"])
+@pytest.mark.parametrize(
+    "counterparty",
+    [
+        {
+            "counterparty_reference": ["BIG"],
+            "entity_type": ["corporate"],
+            "country_code": ["GB"],
+            "annual_revenue": [1_000_000_000.0],
+        },
+        {"counterparty_reference": ["BNK"], "entity_type": ["institution"], "country_code": ["GB"]},
+    ],
+    ids=["large-corporate", "institution"],
+)
+def test_agg004_is_silent_for_obligors_the_retail_threshold_does_not_govern(
+    regime: str, counterparty: dict[str, list[Any]]
+) -> None:
+    """500,000 + 500,000 to a non-SME corporate / an institution: no AGG004.
+
+    The retail threshold governs exposures to natural persons and SMEs only
+    (PS1/26 Art. 123(1)(a)/(b); CRR Art. 123(a) "a natural person or persons, or
+    ... an SME"). These obligors are never retail whatever the group owes, so a
+    warning that their solo classification was decided by group debt would be
+    false - and, on a real solo run, would fire for every multi-entity corporate
+    and bank obligor over the limit, burying the rows it exists to name.
+    """
+    own, group_wide = 500_000.0, 1_000_000.0
+    assert own <= 873_200.0, "the solo books must pass the limit or this proves nothing"
+    assert group_wide > 880_000.0, "the group must fail the limit or this proves nothing"
+    bundle = _bundle(counterparty, (own, own))
+
+    _df, codes = _run(bundle, _config(regime, **_PARENT_INDIVIDUAL))
+
+    assert ERROR_GROUP_THRESHOLD_FROM_OTHER_ENTITIES not in codes
+
+
+@pytest.mark.parametrize("regime", ["CRR", "B31"])
+def test_agg004_names_a_retail_sme_decided_by_group_debt(regime: str) -> None:
+    """The retail-managed SME of probe p14 on SUB's solo run: AGG004 names it."""
+    _df, codes = _run(_retail_sme_bundle(), _config(regime, **_SUB_INDIVIDUAL))
+
+    assert ERROR_GROUP_THRESHOLD_FROM_OTHER_ENTITIES in codes
+
+
+@pytest.mark.parametrize("regime", ["CRR", "B31"])
 def test_solo_run_below_threshold_stays_retail(regime: str) -> None:
     """Group aggregate 400,000 is under both limits: the solo loan stays 75% retail.
 

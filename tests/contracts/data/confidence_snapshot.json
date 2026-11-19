@@ -6645,6 +6645,7 @@
         "tests/fixtures/p1_94e/p1_94e.py",
         "tests/fixtures/p1_94f/p1_94f.py",
         "tests/fixtures/p5_15/p5_15.py",
+        "tests/integration/test_scope_group_obligor_aggregates.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/drivers.py",

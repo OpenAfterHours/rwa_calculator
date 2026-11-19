@@ -92,7 +92,9 @@ below the root:
    against the limit. The E* half is added once per group key by
    `compute_e_star_group_drawn`.
 4. **AGG004** (WARNING) names the rows that failed the threshold only because of
-   debt booked in other group entities.
+   debt booked in other group entities. Only natural persons and SME-sized
+   obligors are counted — the threshold governs those alone, so a large corporate
+   or a bank whose group-wide debt passes the limit raises nothing.
 
 Unscoped runs and whole-group runs (consolidated at the root) publish nothing and
 are unchanged. The Art. 123A granularity limb keeps reading the run's own

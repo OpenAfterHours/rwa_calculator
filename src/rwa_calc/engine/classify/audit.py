@@ -245,16 +245,24 @@ def collect_group_threshold_warnings(
     group, carried as ``out_of_scope_group_adjusted_exposure``. A row whose own
     books are within the limit but whose group-wide aggregate is over it is
     classified differently from what the run's own books show, so it is named
-    rather than left silent. Empty on an unscoped or whole-group run, where the
-    increment column is null throughout — an unscoped run returns at once rather
-    than pay a collect to count nothing. Reads the pre-seal classified frame.
+    rather than left silent. Only natural persons and SME-sized obligors are
+    counted: the threshold governs those alone (PS1/26 Art. 123(1)(a)/(b); CRR
+    Art. 123(a) "a natural person or persons, or ... an SME"), so a large
+    corporate or a bank is never retail whatever the group owes, and counting it
+    would make the warning fire for every multi-entity wholesale obligor. Empty on
+    an unscoped or whole-group run, where the increment column is null throughout
+    — an unscoped run returns at once rather than pay a collect to count nothing.
+    Reads the pre-seal classified frame.
     """
     if config.reporting_entity is None:
         return []
     limit = float(regulatory_threshold(pack, "retail_max_exposure", config.eur_gbp_rate))
     own = pl.col("lending_group_adjusted_exposure")
-    flipped = (own <= limit) & (
-        pl.sum_horizontal(own, pl.col("out_of_scope_group_adjusted_exposure")) > limit
+    retail_governed = natural_person_expr() | is_sme_by_size_expr(config, pack=pack)
+    flipped = (
+        retail_governed
+        & (own <= limit)
+        & (pl.sum_horizontal(own, pl.col("out_of_scope_group_adjusted_exposure")) > limit)
     )
     counts = classified.filter(flipped).select(
         pl.len().alias("_rows"),

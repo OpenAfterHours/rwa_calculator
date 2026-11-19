@@ -161,9 +161,12 @@ netting agreement with *one* counterparty
 Any other set holding more than one trade is **split** into one single-trade
 set per trade, `<netting_set_id>__split__<trade_id>` (output reference
 `ccr__<netting_set_id>__split__<trade_id>`), each booked against its own
-counterparty. Collateral on a split set follows its trade through the optional
-collateral `trade_id`; a row with no link to one of that set's trades cannot be
-attributed to a single transaction and is **not recognised**. Each split set
+counterparty. A trade whose `trade_id` is null or shared with another trade of
+the set is keyed by its position instead (`…__split__<trade_id>__row<n>`), so it
+can never fold back into a pooled set. Collateral on a split set follows its
+trade through the optional collateral `trade_id`; a row with no link to exactly
+one of that set's trades cannot be attributed to a single transaction and is
+**not recognised**. Each split set
 raises **`CCR028`** (warning — no eligible MNA) or **`CCR029`** (error — more
 than one counterparty), naming any collateral rows dropped. A single-trade set
 is never affected.

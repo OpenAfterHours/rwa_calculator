@@ -714,7 +714,7 @@ def _compute_exposure_haircut(
     base = _exposure_haircut_unscaled(
         security_type, cqs, residual_maturity_years, revised_table=revised_table
     )
-    if base == 0.0:
+    if base <= 0.0:  # a haircut is never negative; zero needs no scaling
         return 0.0
     scaled = scale_haircut_for_liquidation_period(base, holding_period_days)
     return scale_haircut_for_non_daily_revaluation(

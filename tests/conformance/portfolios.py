@@ -532,7 +532,12 @@ def _collateral(index: int) -> dict:
     """Residential property pledged to the drawn leg (the mortgage flavour)."""
     return {
         "collateral_reference": f"CL{index:04d}",
-        "collateral_type": "residential",
+        # The canonical type: the hierarchy's property aggregates (and the CL-08
+        # evidence-of-security test that reads them) recognise ``real_estate``
+        # only, and the input gate rejects the ``residential`` synonym (DQ006),
+        # so the earlier ``collateral_type="residential"`` left this limb dark.
+        "collateral_type": "real_estate",
+        "property_type": "residential",
         "currency": "GBP",
         "market_value": DRAWN * 2.0,
         "nominal_value": DRAWN * 2.0,

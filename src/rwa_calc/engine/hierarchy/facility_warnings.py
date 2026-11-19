@@ -336,7 +336,9 @@ def _unconvertible_rows(
             if not to_root:
                 rows = rows.join(sub_facilities, on="_netting_facility", how="semi")
             frames.append(
-                rows.filter(pl.col("_fx_factor").is_null() & (pl.col("_amount") != 0.0)).select(
+                rows.filter(
+                    pl.col("_fx_factor").is_null() & (pl.col("_amount").abs() > 0.0)
+                ).select(
                     pl.lit(ERROR_FACILITY_HEADROOM_FX_RATE_MISSING).alias("_code"),
                     pl.col("_netting_facility").alias("_facility"),
                     pl.col("_amount_currency").alias("_value"),

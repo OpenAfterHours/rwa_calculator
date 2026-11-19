@@ -434,10 +434,12 @@ def derive_independent_flags(
     # CRR Art. 107(2)(b) = PS1/26 Art. 107(2)(b): exposures to a NON-qualifying
     # CCP are treated "as exposures to a corporate" — the Section 9 trade
     # exposures too, since CCR (CRR) Part Art. 306(1)(b) gives them "the risk
-    # weight ... as set out in Article 107(2)(b)". Only an explicit
-    # ``is_qccp = False`` demotes: a ``ccp`` with no flag keeps the base map's
-    # institution class (Art. 107(2)(a)), the convention the Art. 306 pin reads
-    # (CC-11; the class used to stay institution for both).
+    # weight ... as set out in Article 107(2)(b)". ``is_qccp`` False demotes,
+    # and the loader defaults an unsupplied column to False (an unreported
+    # qualification is not shown), so only a supplied True — or an explicit
+    # null — keeps the base map's institution class (Art. 107(2)(a)), the
+    # convention the Art. 306 pin reads (CC-11; the class used to stay
+    # institution for both).
     is_non_qualifying_ccp = pl.col("cp_entity_type").eq_missing("ccp") & pl.col(
         "cp_is_qccp"
     ).eq_missing(False)

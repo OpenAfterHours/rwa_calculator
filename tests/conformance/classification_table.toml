@@ -139,14 +139,20 @@ citation = "CRR Art. 112(1)(e), Art. 118"
 [[sa_class_rule]]
 id = "SA6-ccp"
 when = { entity_type = "ccp" }
-verdict = "institution"
-sourcing = "scope"
-citation = "CRR Art. 112(1)(f); CRR Art. 300-311 (Chapter 6, Section 9)"
+verdict = "corporate"
+sourcing = "regulation"
+citation = "CRR Art. 107(2)(b); PS1/26 Art. 107(2)(b); CCR (CRR) Part Art. 306(1)(b)"
 note = """
-Art. 112 has no central-counterparty class. Exposures to CCPs are governed by
-their own Chapter (Art. 300-311), which supplies the 2%/4% trade-exposure risk
-weight rather than a class. Parking a CCP in the institutions class is the
-engine's carrier choice; the treatment is decided elsewhere.
+The space carries no `is_qccp`, and the loader defaults it to False (the
+conservative reading of an unreported qualification), so every generated CCP is
+a NON-qualifying CCP. Verbatim, CRR Art. 107(2): "(b) for exposures to a CCP
+that is not a qualifying CCP, institutions shall treat these exposures as
+exposures to a corporate"; PS1/26 Art. 107(2)(b) is the same, and CCR (CRR) Part
+Art. 306(1)(b) sends the trade exposures to it. Re-authored 2026-11-19 with
+review finding CC-11, which implemented that limb; the previous verdict
+(institution, sourcing "scope") recorded the engine's carrier for every CCP,
+qualifying or not. A qualifying CCP keeps the institution carrier (Art.
+107(2)(a), Section 9 weights) but is outside this space.
 """
 
 [[sa_class_rule]]
@@ -318,8 +324,16 @@ sourcing = "regulation"
 citation = "CRR Art. 147(3)(c), Art. 118"
 
 [[irb_class_rule]]
+id = "IRB10a-non-qualifying-ccp"
+when = { entity_type = "ccp" }
+verdict = "corporate"
+sourcing = "regulation"
+citation = "CRR Art. 107(2)(b); PS1/26 Art. 107(2)(b)"
+note = "See SA6-ccp: the generated CCP is non-qualifying (no is_qccp; loader default False)."
+
+[[irb_class_rule]]
 id = "IRB10-institution"
-when = { entity_type = ["institution", "bank", "financial_institution", "ccp"] }
+when = { entity_type = ["institution", "bank", "financial_institution"] }
 verdict = "institution"
 sourcing = "regulation"
 citation = "CRR Art. 147(2)(b), Art. 147(4)(d); PS1/26 Art. 147(4)(a)-(b)"
@@ -477,8 +491,16 @@ citation = "CRR Art. 112(1)(e), Art. 118"
 note = "See C6 — SA-routed at the baseline, so the carrier holds the Art. 112(1)(e) class."
 
 [[class_rule]]
+id = "C10a-non-qualifying-ccp"
+when = { entity_type = "ccp" }
+verdict = "corporate"
+sourcing = "regulation"
+citation = "CRR Art. 107(2)(b); PS1/26 Art. 107(2)(b)"
+note = "See SA6-ccp: the generated CCP is non-qualifying (no is_qccp; loader default False)."
+
+[[class_rule]]
 id = "C10-institution"
-when = { entity_type = ["institution", "bank", "financial_institution", "ccp"] }
+when = { entity_type = ["institution", "bank", "financial_institution"] }
 verdict = "institution"
 sourcing = "regulation"
 citation = "CRR Art. 112(1)(f), Art. 147(2)(b); PS1/26 Art. 147(4)(a)-(b)"

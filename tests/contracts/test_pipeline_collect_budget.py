@@ -130,9 +130,15 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: the classifier's post-materialise DQ008 and CLS010 roll-ups were folded into
 #: one select (``audit.collect_classified_frame_warnings``), which also carries
 #: the new SA006 project-finance-phase count without a collect of its own.
+#: 2026-11-18 (collateral review CL-01/02/04/09/14): ``collect_schema`` 113 ->
+#: 112 in both regimes. ``HaircutCalculator.apply_haircuts`` reads its optional
+#: inputs through one ``ensure_columns`` call instead of four presence-guarded
+#: schema resolutions, and the CRM018 / CRM019 recorders became one scan that
+#: also emits CRM023 / CRM026; the CRM025 (CCR-only pledge) recorder added one
+#: ``collect`` where the merged scan removed one, so ``collect`` is unchanged.
 _BANKED: dict[str, dict[str, int]] = {
-    "CRR": {"collect": 84, "collect_schema": 112, "collect_all": 8},
-    "B31": {"collect": 82, "collect_schema": 112, "collect_all": 9},
+    "CRR": {"collect": 84, "collect_schema": 111, "collect_all": 8},
+    "B31": {"collect": 82, "collect_schema": 111, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

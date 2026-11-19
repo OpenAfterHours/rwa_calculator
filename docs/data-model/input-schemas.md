@@ -364,7 +364,7 @@ facilities = pl.DataFrame({
 | `book_code` | `String` | No | Portfolio/book classification |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
 | `value_date` | `Date` | No | Loan origination date |
-| `maturity_date` | `Date` | No | Loan maturity date |
+| `maturity_date` | `Date` | No | Loan maturity date. On a **deposit** row (negative `drawn_amount` under a `netting_agreement_reference`) it is the earliest date the deposit can be withdrawn — notice, break or term date — which is the netted protection's maturity (CRR/PS1-26 Art. 238(1)). A deposit with **no** `maturity_date` is repayable on demand: residual maturity 0, so against a later-maturing loan the Art. 237(1) three-month gate removes the netting relief and a **CRM024** warning names the agreement. An on-demand loan (null `maturity_date`) still nets in full against an on-demand deposit |
 | `currency` | `String` | No | ISO 4217 currency code |
 | `drawn_amount` | `Float64` | No | Outstanding principal balance (default `0.0`). For a **finance lease** this must arrive already discounted — see [Lease exposures](#lease-exposures-the-drawn_amount-convention) below |
 | `interest` | `Float64` | No | Accrued interest (adds to on-balance-sheet EAD) |
@@ -541,8 +541,8 @@ contingents = pl.DataFrame({
 |--------|------|----------|-------------|
 | `collateral_reference` | `String` | Yes | Unique identifier |
 | `collateral_type` | `String` | Yes | Type of collateral (see valid values) |
-| `currency` | `String` | No | ISO 4217 currency code |
-| `maturity_date` | `Date` | No | Collateral maturity (if applicable) |
+| `currency` | `String` | No | ISO 4217 currency code. Compared with the exposure's currency for the Art. 224 Table 4 currency-mismatch adjustment `H_fx`. A **null** currency cannot show a match, so the row is treated as currency-mismatched (H_fx applied wherever it applies to the type), its value is left unconverted, and a rolled-up **CRM023** warning names it (life-insurance policies are covered by CRM020 instead) |
+| `maturity_date` | `Date` | No | Collateral maturity — the earliest date the protection may terminate (CRR/PS1-26 Art. 238(1)). Where `residual_maturity_years` is null, the residual maturity is derived from it (days to the reporting date / 365.25) and feeds both the Art. 224 Table 1 haircut band and the Art. 237-239 maturity mismatch |
 | `market_value` | `Float64` | Conditional | Current market value (required unless `pledge_percentage` provided) |
 | `nominal_value` | `Float64` | No | Nominal/face value |
 | `pledge_percentage` | `Float64` | Conditional | Fraction of beneficiary EAD (0.5 = 50%). Used when `market_value` not provided. Resolved to absolute `market_value` before haircuts. |
@@ -550,9 +550,9 @@ contingents = pl.DataFrame({
 | `beneficiary_reference` | `String` | Yes | Reference to counterparty/facility/loan |
 | `issuer_cqs` | `Int8` | No | CQS of issuer (for securities) |
 | `issuer_type` | `String` | No | Issuer type (for haircut lookup) |
-| `residual_maturity_years` | `Float64` | No | Residual maturity in years |
+| `residual_maturity_years` | `Float64` | No | Residual maturity in years. Takes precedence over `maturity_date`; when null it is derived from `maturity_date`, and when both are null the haircut takes the longest maturity band and the maturity mismatch treats the protection as long-dated |
 | `original_maturity_years` | `Float64` | No | Original maturity in years — used for collateral maturity-band differentiation where the haircut depends on issuance maturity rather than residual maturity |
-| `is_eligible_financial_collateral` | `Boolean` | No | Meets SA eligibility (CRR Art 197) |
+| `is_eligible_financial_collateral` | `Boolean` | No | Meets SA eligibility (CRR Art 197). Honoured only on an Art. 197 type — cash / deposit, debt securities (`bond` with a recognised `issuer_type`, government / corporate bonds, securitisation positions), covered bonds, equity, gold, credit-linked notes. On immovable property, receivables, other physical collateral, life insurance or an unrecognised type the flag is ignored for the SA (the Comprehensive Method's exposure-value reduction and the Simple Method's risk-weight substitution) and a rolled-up **CRM026** warning is raised (those types are recognised under Art. 199 via `is_eligible_irb_collateral`, or Art. 232) |
 | `is_eligible_irb_collateral` | `Boolean` | No | Meets IRB eligibility (CRR Art 199) |
 | `is_lease_collateral_attested` | `Boolean` | No | CRR Art. 199(7)/211: the leased asset of a finance-lease exposure attested to meet the Art. 211 lease-specific conditions (robust lessor risk management, legal ownership, unamortised-vs-market-value gap). Supply the leased asset as a `real_estate` / `other_physical` collateral row pledged to the lease exposure with this flag `True`; it is an independent F-IRB Foundation Collateral Method eligibility route (subsumes the Art. 208/210 conditions `is_eligible_irb_collateral` carries). No default: null → not attested → not recognised (conservative). Consulted only for non-financial collateral |
 | `is_airb_model_collateral` | `Boolean` | No | Default `False`. When `True`, the firm asserts the collateral has been used to construct the internal LGD model (CRR Art. 181 / Basel 3.1 Art. 169A). The CRM allocator excludes flagged rows from non-AIRB exposures (no double-counting of the modelled-LGD effect) and routes them only to AIRB-pool exposures whose modelled LGD is preserved. Direct allocation of a flagged row onto a non-AIRB exposure raises CRM006 |
@@ -579,7 +579,7 @@ contingents = pl.DataFrame({
 |-------|-------------|
 | `cash` | Cash collateral (0% haircut) |
 | `gold` | Gold collateral (CRR 15% / B31 20% haircut) |
-| `bond` | Bond securities — haircut depends on `issuer_type`, `issuer_cqs`, and `residual_maturity_years` |
+| `bond` | Bond securities — haircut depends on `issuer_type`, `issuer_cqs`, and `residual_maturity_years`. Categorised by its issuer: with `issuer_type` `sovereign`, `pse`, `institution`, `corporate` or `securitisation` it is financial collateral on every path (SA E\*, F-IRB LGDS 0%); with no recognised issuer it is treated as other physical collateral (40% haircut; F-IRB only with `is_eligible_irb_collateral`) |
 | `equity` | Equity securities |
 | `real_estate` | Real estate — use `property_type` for residential/commercial classification |
 | `receivables` | Trade receivables |
@@ -593,6 +593,8 @@ contingents = pl.DataFrame({
 | `facility` | Allocated at facility level (expands to facility + child loans) |
 | `loan` | Allocated directly to specific loan |
 | `contingent` | Allocated directly to contingent |
+
+**Counterparty-credit-risk rows take no loan-table collateral.** The synthetic rows the CCR engines add — SA-CCR derivative and FCCM SFT netting sets, failed trades and CCP default-fund contributions (`risk_type` `CCR_DERIVATIVE`, `CCR_SFT`, `SETTLEMENT_FAILED_TRADE`, `CCR_DEFAULT_FUND`) — are left out of every collateral pool, pro-rata share and direct link from this table (Comprehensive and Simple Method, life-insurance policies and third-party deposits alike): their exposure value already reflects collateral under the Counterparty Credit Risk Part (CRR Art. 223(5A); PS1/26 Art. 191A(4)). A counterparty-level pledge is shared over the counterparty's other exposures only; a pledge whose only beneficiaries are CCR rows mitigates nothing and raises a rolled-up **CRM025** warning. Supply derivative and SFT collateral in `ccr_collateral` / `sft_collateral`. Guarantees still apply to CCR rows.
 
 **Example:**
 

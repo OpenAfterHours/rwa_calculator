@@ -397,6 +397,44 @@ ERROR_SFT_NETTING_NOT_RECOGNISED = "CCR028"
 # single-trade set per trade, each against its own counterparty, and this ERROR
 # names the counterparties. One ERROR per affected netting set.
 ERROR_SFT_MULTI_COUNTERPARTY_NETTING_SET = "CCR029"
+# Collateral currency unknown (CRR Art. 223(2)/224 Table 4, PS1/26 Art. 230(1)(b);
+# review CL-14): a collateral row whose currency (pre-conversion
+# ``original_currency``, else ``currency``) is null cannot show that it matches
+# the exposure's currency, so it is treated as currency-mismatched and takes the
+# H_fx volatility adjustment wherever H_fx applies to its type (financial
+# collateral in both regimes; non-financial under Basel 3.1). Its value is also
+# left unconverted by FX conversion. One rolled-up warning per run naming up to
+# five references. Life insurance is excluded — CRM020 owns that case.
+ERROR_COLLATERAL_CURRENCY_UNKNOWN = "CRM023"
+# Netted deposit repayable on demand (CRR/PS1-26 Art. 238(1), Art. 237(1);
+# review NT-03): a deposit under an on-balance-sheet netting agreement with no
+# maturity_date is withdrawable on demand, so the protection's residual maturity
+# is zero — "the time to the earliest date at which the protection may terminate"
+# (PS1/26 Art. 238(1)(b): "the date when the deposit ... can be withdrawn"). Where
+# it nets against a loan with a later maturity, the Art. 237(1) three-month gate
+# removes the relief; this warning (one per netting agreement) records that. An
+# on-demand deposit against an on-demand loan (both maturities null) is a matched
+# pair and still nets.
+ERROR_ON_DEMAND_NETTED_DEPOSIT = "CRM024"
+# Loan-table collateral pledged only to counterparty-credit-risk rows (CRR
+# Art. 223(5A), PS1/26 Art. 191A(4); review CL-04 / CC-07): collateral pools and
+# direct links from the collateral table never reduce an SA-CCR derivative, FCCM
+# SFT, failed-trade or default-fund row — their collateral is taken into account
+# in the CCR Part's own calculation (ccr_collateral / sft_collateral). A pledge
+# whose ONLY beneficiaries are such rows therefore mitigates nothing; one rolled-
+# up warning per run names the items. Guarantees still apply to CCR rows.
+ERROR_CCR_ONLY_COLLATERAL_POOL = "CRM025"
+# Non-Art. 197 collateral flagged as eligible financial collateral (CRR/PS1-26
+# Art. 197(1), 199(1); review CL-01): is_eligible_financial_collateral is the
+# firm's Art. 197 attestation, and only an Art. 197 type (cash, debt securities,
+# equity, gold, securitisation positions, covered bonds) can reduce an SA
+# exposure value under the Financial Collateral Comprehensive Method, or be
+# substituted under the Simple Method (Art. 222). A flagged immovable-property,
+# receivable, other-physical, life-insurance or unrecognised row is ignored for
+# both (it stays available to the
+# F-IRB Foundation Collateral Method under its own Art. 199 attestation, and
+# life insurance to Art. 232). One rolled-up warning per run.
+ERROR_NON_ART197_FLAGGED_FINANCIAL = "CRM026"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

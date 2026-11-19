@@ -211,9 +211,17 @@
   "rwa_calc.engine.crm.eligibility::financial_collateral_ineligible_expr": [
     "CRR Art. 197"
   ],
+  "rwa_calc.engine.crm.expressions::ccr_engine_row_expr": [
+    "CRR Art. 223",
+    "PS1/26, paragraph 191A"
+  ],
   "rwa_calc.engine.crm.expressions::flag_netting_rows": [
     "CRR Art. 219",
     "PS1/26 Art. 219"
+  ],
+  "rwa_calc.engine.crm.expressions::issued_bond_expr": [
+    "CRR Art. 197",
+    "PS1/26 Art. 197"
   ],
   "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr": [
     "CRR Art. 223(4)",
@@ -221,6 +229,10 @@
   ],
   "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr": [
     "PS1/26 Art. 230(1)"
+  ],
+  "rwa_calc.engine.crm.expressions::sa_fccm_type_eligible_expr": [
+    "CRR Art. 197",
+    "PS1/26 Art. 197"
   ],
   "rwa_calc.engine.crm.guarantees::_apply_maturity_mismatch_to_guarantees": [
     "CRR Art. 217",
@@ -259,6 +271,14 @@
   "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch": [
     "CRR Art. 237",
     "CRR Art. 238"
+  ],
+  "rwa_calc.engine.crm.haircuts::collateral_currency_mismatch_expr": [
+    "CRR Art. 224",
+    "PS1/26 Art. 230"
+  ],
+  "rwa_calc.engine.crm.haircuts::with_derived_residual_maturity": [
+    "CRR Art. 238",
+    "PS1/26 Art. 238"
   ],
   "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns": [
     "CRR Art. 232(3)",

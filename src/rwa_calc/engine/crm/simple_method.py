@@ -12,6 +12,8 @@ Key responsibilities:
   Art. 222(6) — for cash and 0%-RW sovereign bonds
 - Set fcsm_* columns on exposure frame for SA calculator RW substitution
 - Do NOT reduce EAD (that is the Comprehensive Method's mechanism)
+- Keep counterparty-credit-risk rows out of every pool, share and direct pledge
+  (CRR Art. 223(5A) / PS1/26 Art. 191A(4)), as the Comprehensive path does
 
 References:
 - CRR Art. 222: Financial Collateral Simple Method
@@ -30,6 +32,7 @@ from watchfire import cites
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
 from rwa_calc.engine.crm.eligibility import financial_collateral_ineligible_expr
+from rwa_calc.engine.crm.expressions import ccr_engine_row_expr, sa_fccm_type_eligible_expr
 from rwa_calc.engine.sa.b31_risk_weight_tables import B31_CORPORATE_RISK_WEIGHTS
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
@@ -41,8 +44,20 @@ from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
+
+#: The exposure-side pooling basis / direct-pledge membership the Simple Method
+#: shares loan-table collateral on: the exposure's EAD and 1.0, but 0.0 on a
+#: counterparty-credit-risk row (``ccr_engine_row_expr``). Scratch columns, dropped
+#: with the other ``_fcsm_`` columns.
+_FCSM_POOL_BASIS = "_fcsm_pool_basis"
+_FCSM_POOL_MEMBER = "_fcsm_pool_member"
+#: The exposure's own denomination (pre-FX-conversion ``original_currency``, else
+#: ``currency`` per row) the Art. 222(6) same-currency test reads. Scratch.
+_FCSM_EXP_DENOMINATION = "_fcsm_exp_denomination"
 
 
 @dataclass(frozen=True)
@@ -324,6 +339,24 @@ def compute_fcsm_columns(
     facility_col = "parent_facility_reference"
     cp_col = "counterparty_reference"
 
+    # Review CL-04 / CC-07 on this path too: an SA-CCR / FCCM SFT / failed-trade /
+    # default-fund row already reflects its collateral under the CCR Part (CRR
+    # Art. 223(5A); PS1/26 Art. 191A(4) disapplies the CRM articles to it), so no
+    # loan-table pool, pro-rata share or direct pledge may substitute its weight.
+    # The shares below are sized on this basis, so a pool goes wholly to the
+    # counterparty's other rows. A null ``risk_type`` is not a CCR row.
+    is_ccr = ccr_engine_row_expr()
+    exposures = ensure_columns(
+        exposures, {"risk_type": ColumnSpec(pl.String, required=False)}, present=schema_names
+    ).with_columns(
+        pl.when(is_ccr).then(pl.lit(0.0)).otherwise(pl.col(ead_col)).alias(_FCSM_POOL_BASIS),
+        pl.when(is_ccr).then(pl.lit(0.0)).otherwise(pl.lit(1.0)).alias(_FCSM_POOL_MEMBER),
+    )
+    if "currency" in schema_names:
+        exposures = exposures.with_columns(
+            _denomination_expr(schema_names).alias(_FCSM_EXP_DENOMINATION)
+        )
+
     schema_flags = _SchemaFlags(
         has_exp_maturity="residual_maturity_years" in schema_names,
         sft_col=_resolve_sft_column(schema_names),
@@ -368,9 +401,10 @@ def compute_fcsm_columns(
     # 7. Aggregate per beneficiary_reference.
     agg = _aggregate_per_beneficiary(coll_with_exp)
 
-    # 8-9. Multi-level join back to exposures and combine with pro-rata shares.
+    # 8-9. Multi-level join back to exposures and combine with pro-rata shares,
+    # sized on the CCR-excluding pooling basis.
     result = _join_aggregates_back(
-        exposures, agg, exp_ref_col, facility_col, cp_col, ead_col, schema_flags
+        exposures, agg, exp_ref_col, facility_col, cp_col, _FCSM_POOL_BASIS, schema_flags
     )
 
     # 10. Cap collateral value at EAD; RW floor was applied per-item in step 6.
@@ -483,10 +517,13 @@ def _prepare_eligible_collateral(
     Art. 197 is headed "Eligibility of collateral under ALL approaches and
     methods", and Art. 222(2) recognises only "the market value of eligible
     collateral" — so the firm-supplied ``is_eligible_financial_collateral``
-    attestation is not on its own sufficient here. It is ANDed with the shared
-    Art. 197 gate (``engine/crm/eligibility.py``), the same predicate the
-    Comprehensive Method applies at the haircut stage, so the two methods cannot
-    recognise different collateral.
+    attestation is not on its own sufficient here. It is ANDed with the Art. 197
+    TYPE predicate (``sa_fccm_type_eligible_expr``: a flagged property,
+    receivable, other-physical, life-insurance or unrecognised row is not
+    financial collateral, review CL-01) and with the shared Art. 197 instrument
+    gate (``engine/crm/eligibility.py``) — the same two predicates the
+    Comprehensive Method applies — so the two methods cannot recognise different
+    collateral.
 
     The equity limb is the one legitimate divergence: Art. 198(1)(a)'s extension
     to non-main-index listed equity is expressly confined to a firm using the
@@ -504,7 +541,9 @@ def _prepare_eligible_collateral(
         eligible_schema_names, method=CRMCollateralMethod.SIMPLE
     )
     eligible = collateral.filter(
-        pl.col("is_eligible_financial_collateral").fill_null(False) & art_197_ineligible.not_()
+        pl.col("is_eligible_financial_collateral").fill_null(False)
+        & sa_fccm_type_eligible_expr()
+        & art_197_ineligible.not_()
     )
 
     if "qualifies_for_zero_haircut" not in eligible_schema_names:
@@ -522,8 +561,25 @@ def _prepare_eligible_collateral(
 
 
 def _currency_expr(present: bool, alias: str) -> pl.Expr:
-    """Currency column for the given level, defaulting to GBP if absent."""
-    return pl.col("currency").alias(alias) if present else pl.lit("GBP").alias(alias)
+    """Exposure denomination for the given level, defaulting to GBP if absent.
+
+    Reads ``_FCSM_EXP_DENOMINATION`` (the pre-FX-conversion currency), not the
+    reporting-currency ``currency`` the FX converter leaves on every row.
+    """
+    return pl.col(_FCSM_EXP_DENOMINATION).alias(alias) if present else pl.lit("GBP").alias(alias)
+
+
+def _denomination_expr(schema_names: Collection[str]) -> pl.Expr:
+    """A row's own currency: ``original_currency`` (pre-FX-conversion), else ``currency``.
+
+    ``FXConverter`` overwrites ``currency`` with the reporting currency on the
+    exposure and the collateral alike, so comparing ``currency`` makes every pair
+    "same currency". The fallback is per row: frames can be concatenated, so a
+    row may lack the audit value while the column exists.
+    """
+    if "original_currency" in schema_names:
+        return pl.coalesce("original_currency", "currency")
+    return pl.col("currency")
 
 
 def _maturity_expr(present: bool, alias: str) -> pl.Expr:
@@ -572,7 +628,7 @@ def _build_facility_lookup(
 ) -> pl.LazyFrame:
     """Facility-level aggregate lookup (MAX maturity, ANY SFT, ANY CMP)."""
     fac_aggs = [
-        pl.col("currency").first().alias("_fac_currency")
+        pl.col(_FCSM_EXP_DENOMINATION).first().alias("_fac_currency")
         if sf.has_currency
         else pl.lit("GBP").alias("_fac_currency"),
         pl.col(ead_col).sum().alias("_fac_total_ead"),
@@ -590,7 +646,7 @@ def _build_counterparty_lookup(
 ) -> pl.LazyFrame:
     """Counterparty-level aggregate lookup (MAX maturity, ANY SFT, ANY CMP)."""
     cp_aggs = [
-        pl.col("currency").first().alias("_cp_currency")
+        pl.col(_FCSM_EXP_DENOMINATION).first().alias("_cp_currency")
         if sf.has_currency
         else pl.lit("GBP").alias("_cp_currency"),
         pl.col(ead_col).sum().alias("_cp_total_ead"),
@@ -711,8 +767,12 @@ def _apply_currency_and_sovereign_discount(
     must not be applied on top of it).
     """
     coll_schema_names = coll_with_exp.collect_schema().names()
+    # Art. 222(6): "where the exposure and the collateral are denominated in the
+    # same currency" — the DENOMINATIONS, pre-FX-conversion, on both sides (the
+    # exposure side via ``_FCSM_EXP_DENOMINATION``). An unknown collateral
+    # currency matches nothing, so the carve-out does not apply.
     coll_currency = (
-        pl.col("currency").fill_null("").str.to_uppercase()
+        _denomination_expr(coll_schema_names).fill_null("").str.to_uppercase()
         if "currency" in coll_schema_names
         else pl.lit("")
     )
@@ -803,8 +863,10 @@ def _join_aggregates_back(
     """Join direct/facility/counterparty aggregates back to exposures.
 
     Computes the pro-rata share for facility- and counterparty-level
-    collateral, then combines the three levels into a single raw value and
-    coalesced RW for the downstream EAD cap.
+    collateral on ``ead_col`` (the CCR-excluding pooling basis), then combines
+    the three levels into a single raw value and coalesced RW for the
+    downstream EAD cap. A direct pledge counts only on a pool member (0 on a
+    counterparty-credit-risk row).
     """
     result = exposures.join(
         agg.select(
@@ -822,7 +884,7 @@ def _join_aggregates_back(
 
     return result.with_columns(
         (
-            pl.col("_fcsm_val_d").fill_null(0.0)
+            pl.col("_fcsm_val_d").fill_null(0.0) * pl.col(_FCSM_POOL_MEMBER)
             + pl.col("_fcsm_val_f").fill_null(0.0) * pl.col("_fcsm_fac_share")
             + pl.col("_fcsm_val_c").fill_null(0.0) * pl.col("_fcsm_cp_share")
         ).alias("_fcsm_raw_value"),

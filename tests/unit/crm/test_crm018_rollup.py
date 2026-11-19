@@ -8,7 +8,9 @@ Why this matters:
     the error channel (13k+ warnings at 100k-exposure scale) and turned the
     re_split stage's error dedup quadratic (~11s of a ~20s run). CRM018 now
     rolls up to a single count-carrying warning per run, following the
-    splitter's RE002-RE004 idiom.
+    splitter's RE002-RE004 idiom. The record is emitted by
+    ``_record_haircut_stage_findings``, which reads the post-haircut frame once
+    for CRM018 / CRM019 / CRM023 / CRM026.
 
 References:
     CRR Art. 197(1)(f): main-index equities eligible under all methods.
@@ -24,7 +26,7 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     ErrorSeverity,
 )
-from rwa_calc.engine.crm.collateral import _record_non_main_index_equity_ineligible
+from rwa_calc.engine.crm.collateral import _record_haircut_stage_findings
 
 
 def _collateral_frame(
@@ -34,21 +36,35 @@ def _collateral_frame(
 ) -> pl.LazyFrame:
     """Minimal post-haircut collateral frame carrying the gate's signal columns."""
     n = len(collateral_types)
-    return pl.LazyFrame(
-        {
-            "collateral_reference": [f"COLL{i}" for i in range(n)],
-            "beneficiary_reference": [f"LOAN{i}" for i in range(n)],
-            "collateral_type": collateral_types,
-            "is_main_index": is_main_index,
-            "is_listed": is_listed,
-        },
-        schema={
-            "collateral_reference": pl.String,
-            "beneficiary_reference": pl.String,
-            "collateral_type": pl.String,
-            "is_main_index": pl.Boolean,
-            "is_listed": pl.Boolean,
-        },
+    return _post_haircut(
+        pl.LazyFrame(
+            {
+                "collateral_reference": [f"COLL{i}" for i in range(n)],
+                "beneficiary_reference": [f"LOAN{i}" for i in range(n)],
+                "collateral_type": collateral_types,
+                "is_main_index": is_main_index,
+                "is_listed": is_listed,
+            },
+            schema={
+                "collateral_reference": pl.String,
+                "beneficiary_reference": pl.String,
+                "collateral_type": pl.String,
+                "is_main_index": pl.Boolean,
+                "is_listed": pl.Boolean,
+            },
+        )
+    )
+
+
+def _post_haircut(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Add the columns every post-haircut frame carries (GBP, no H_fx, unflagged)."""
+    return lf.with_columns(
+        pl.lit("GBP").alias("currency"),
+        pl.lit("GBP").alias("original_currency"),
+        pl.lit(None, dtype=pl.String).alias("issuer_type"),
+        pl.lit(100.0).alias("market_value"),
+        pl.lit(0.0).alias("fx_haircut"),
+        pl.lit(False).alias("is_eligible_financial_collateral"),
     )
 
 
@@ -65,7 +81,7 @@ class TestCrm018RollsUpToOneWarning:
         errors: list[CalculationError] = []
 
         # Act
-        _record_non_main_index_equity_ineligible(lf, errors)
+        _record_haircut_stage_findings(lf, errors)
 
         # Assert: exactly one rolled-up CRM018 carrying the gated-row count.
         assert len(errors) == 1
@@ -85,24 +101,26 @@ class TestCrm018RollsUpToOneWarning:
         errors: list[CalculationError] = []
 
         # Act
-        _record_non_main_index_equity_ineligible(lf, errors)
+        _record_haircut_stage_findings(lf, errors)
 
         # Assert
         assert errors == []
 
     def test_missing_signal_columns_is_a_no_op(self) -> None:
         # Arrange: legacy frame without is_main_index / is_listed — gate disabled.
-        lf = pl.LazyFrame(
-            {
-                "collateral_reference": ["COLL0"],
-                "beneficiary_reference": ["LOAN0"],
-                "collateral_type": ["equity"],
-            }
+        lf = _post_haircut(
+            pl.LazyFrame(
+                {
+                    "collateral_reference": ["COLL0"],
+                    "beneficiary_reference": ["LOAN0"],
+                    "collateral_type": ["equity"],
+                }
+            )
         )
         errors: list[CalculationError] = []
 
         # Act
-        _record_non_main_index_equity_ineligible(lf, errors)
+        _record_haircut_stage_findings(lf, errors)
 
         # Assert
         assert errors == []

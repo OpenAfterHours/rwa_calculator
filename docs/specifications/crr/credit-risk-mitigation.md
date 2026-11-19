@@ -296,7 +296,7 @@ Where:
 Scope of the H_FX term in the formula above:
 
 - **Financial collateral** — `HFX` = 8% × √(T_m/10) × Art. 226(1) multiplier when collateral currency ≠ exposure currency, per Art. 224 Table 4.
-- **Funded non-financial collateral (receivables, real estate, other physical)** — `HFX = 0` regardless of currency mismatch. CRR Arts. 229–230 contain no FX volatility adjustment for Art. 230 collateral, and Art. 233 (the source of the 8%) sits in the unfunded-protection sub-section. The collateral value `C` is the market / mortgage-lending value per Art. 229, rebased to the reporting currency upstream by `FXConverter` at the spot rate. PS1/26 inherits this scope.
+- **Funded non-financial collateral (receivables, real estate, other physical)** — `HFX = 0` regardless of currency mismatch. CRR Arts. 229–230 contain no FX volatility adjustment for Art. 230 collateral, and Art. 233 (the source of the 8%) sits in the unfunded-protection sub-section. The collateral value `C` is the market / mortgage-lending value per Art. 229, rebased to the reporting currency upstream by `FXConverter` at the spot rate. **PS1/26 does not inherit this scope:** its Art. 230(1)(b) applies Hfx to every Foundation Collateral Method type (pack Feature `fcm_hfx_applies_to_non_financial`; see the Basel 3.1 CRM specification).
 
 Note: The simplified formula `LGD* = LGD × (E*/E)` where `E* = max(0, E(1+HE) - C(1-HC-HFX))` only works when LGDS = LGDU. For non-financial collateral (LGDS ≠ LGDU), the blended formula above is required.
 

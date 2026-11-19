@@ -593,12 +593,20 @@ def _collateral() -> pl.DataFrame:
     limbs (defect D2), so leaving it unset published col c/d as 0.00 on the
     ``advanced_irb`` sheet. Number-neutral: the goldens are unchanged by attesting
     it, because the A-IRB own-estimate LGD does not read this collateral.
+
+    Each property states its currency (GBP, the loans' currency). It was omitted
+    while a null collateral currency silently counted as matched; since review
+    CL-14 an unknown currency is a mismatch (CRM023) and, under Basel 3.1, takes
+    the Art. 230(1)(b) H_fx on immovable property (CL-09), which cut the B31
+    ``advanced_irb`` CR7-A col c/d coverage from 100% to 81.14% for want of an
+    input the fixture always meant to give. Number-neutral against the goldens.
     """
     return pl.DataFrame(
         [
             {
                 "collateral_reference": "IRC-COLL-RRE",
                 "collateral_type": "real_estate",
+                "currency": "GBP",
                 "is_eligible_irb_collateral": True,
                 "property_type": "residential",
                 # 300k loan / 500k value -> 60% LTV.
@@ -610,6 +618,7 @@ def _collateral() -> pl.DataFrame:
             {
                 "collateral_reference": "IRC-COLL-RRE-FLOOR",
                 "collateral_type": "real_estate",
+                "currency": "GBP",
                 "is_eligible_irb_collateral": True,
                 "property_type": "residential",
                 # 250k loan / 416,666.67 value -> 60% LTV.
@@ -621,6 +630,7 @@ def _collateral() -> pl.DataFrame:
             {
                 "collateral_reference": "IRC-COLL-RRE-DEF",
                 "collateral_type": "real_estate",
+                "currency": "GBP",
                 "is_eligible_irb_collateral": True,
                 "property_type": "residential",
                 # 200k loan / 333,333.33 value -> 60% LTV.

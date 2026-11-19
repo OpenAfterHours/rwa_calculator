@@ -60,6 +60,7 @@
         "tests/fixtures/p1_126/p1_126.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
         "tests/unit/classifier/test_sme_assets_fallback.py",
+        "tests/unit/test_facility_graph_validation.py",
         "tests/unit/test_facility_undrawn_commitments.py",
         "tests/unit/test_hierarchy.py"
       ],
@@ -378,6 +379,7 @@
         "engine/hierarchy/facility_fx.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/facility_warnings.py",
+        "engine/hierarchy/unify.py",
         "engine/kernels/allocation.py",
         "reporting/corep/__init__.py",
         "reporting/corep/c07.py",
@@ -427,6 +429,7 @@
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
         "tests/unit/test_corep_annex1_row_discrimination.py",
+        "tests/unit/test_engine_only_risk_types.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_p1_267_sa_ccf_residual.py",
         "tests/unit/test_r1_negative_amount_dq.py"
@@ -2598,7 +2601,8 @@
         "tests/unit/sft/test_ccr_sft_maturity_carrier.py",
         "tests/unit/sft/test_ccr_sft_maturity_producer.py",
         "tests/unit/test_b31_revolving_maturity.py",
-        "tests/unit/test_effective_maturity.py"
+        "tests/unit/test_effective_maturity.py",
+        "tests/unit/test_engine_only_risk_types.py"
       ],
       "watchfire_index_gap": false
     },
@@ -6053,6 +6057,8 @@
         "engine/ccf.py",
         "engine/hierarchy/facility_fx.py",
         "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/graph.py",
+        "engine/hierarchy/namespace.py",
         "engine/hierarchy/unify.py",
         "reporting/corep/c07.py",
         "reporting/corep/ccf_buckets.py",
@@ -6080,6 +6086,8 @@
         "tests/unit/reporting/corep/test_c08_01_ccf_rows.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
+        "tests/unit/test_engine_only_risk_types.py",
+        "tests/unit/test_facility_graph_validation.py",
         "tests/unit/test_facility_undrawn_commitments.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_p1_267_sa_ccf_residual.py"
@@ -8312,7 +8320,8 @@
         "ucp_unilateral_change_ineligible@b31"
       ],
       "source_files": [
-        "engine/crm/guarantees.py"
+        "engine/crm/guarantees.py",
+        "engine/hierarchy/namespace.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_10_art_213_ucp_eligibility.py"

@@ -255,6 +255,19 @@ See [Classification](../features/classification.md) for the complete classificat
 
 **Note:** Under F-IRB (CRR Art. 166(8)), MR and MLR both become 75% CCF.
 
+**Engine-only risk types are not lending categories.** `CCR_DERIVATIVE`, `CCR_SFT` and
+`CCR_DEFAULT_FUND` tag the rows the counterparty-credit-risk stages mint for SA-CCR netting
+sets, FCCM SFT netting sets and CCP default-fund contributions. On a facilities / contingents row
+(`risk_type` or `underlying_risk_type`) they raise one **`DQ023` ERROR** per value and are
+disregarded: the hierarchy stage rewrites the value to `DQ023:<value>`, so no counterparty-credit-
+risk routing (the `standardised_ccr` approach label, the repo-style F-IRB maturity, the C 07.00
+CCR rows, the default-fund weight) keys on it, while the CCF stays the residual an unrecognised
+risk type receives (CRR Annex I 1(k) 100%; PS1/26 Table A1 Row 3 50% / Row 5 40%) — the same CCF
+the tag received before, so no number falls through the CCF. A derivative's or SFT's exposure
+value comes from the CCR methods or the FCCM, never from a CCF on a nominal amount (CRR Art.
+111(2); PS1/26 Art. 111(2) / (2A)): book them in the CCR / SFT inputs, or flag a repo-style loan
+with `is_sft`.
+
 **F-IRB Exception (Art. 166(9)):** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. To flag these exposures, set `is_short_term_trade_lc = True` for MLR risk type items.
 
 | Column | Type | Required | Description |
@@ -298,7 +311,7 @@ facilities = pl.DataFrame({
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `loan_reference` | `String` | Yes | Unique identifier for the loan |
+| `loan_reference` | `String` | Yes | Unique identifier for the loan — unique across **every exposure table**, not only this one (see [Exposure reference uniqueness](#exposure-reference-uniqueness)) |
 | `product_type` | `String` | No | Product classification |
 | `book_code` | `String` | No | Portfolio/book classification |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
@@ -1113,6 +1126,44 @@ facility_mapping = pl.DataFrame({
     "child_type": ["loan", "loan", "facility"],
 })
 ```
+
+**The mappings must form a tree.** Every consumer — undrawn headroom, the MOF waterfall, the
+Facility Share fan-out, the collateral cascade — reads them as one. Shapes that are not a tree are
+malformed input; the hierarchy stage resolves each deterministically and conservatively and names
+it (review findings RC-01 / RC-02 / SF-03):
+
+| Shape | Resolution | Code |
+|-------|------------|------|
+| A sub-facility mapped under two parents | Attached to its **lowest-referenced** parent only (it used to depend on row order, so RWA changed run to run) | `DQ021` WARNING |
+| Facilities whose mappings form a cycle (`F1 -> F2 -> F1`, or `F -> F`) | Every member is treated as a **root of its own**, keeping its own limit and undrawn commitment (every member's undrawn row used to be dropped) | `DQ022` WARNING |
+| A loan / contingent mapped under facilities of **different** roots | It reduces the headroom of **one** root only — that of its lowest-referenced parent; the other mappings are ignored, so those facilities' commitments are measured gross of it (every root used to be reduced) | `DQ021` WARNING |
+| A loan / contingent mapped under two sub-limits of the **same** root | Each sub-limit's own headroom is reduced by it (an overlapping sub-limit genuinely constrains the same drawing), but the root's headroom only **once** (it used to be reduced twice) | `DQ021` WARNING |
+
+The exposure row's own `parent_facility_reference` is its lowest-referenced remaining parent.
+Example (both regimes, 100% obligor): `F1`, `F2` 2m `medium_risk`, `L1` 1m drawn mapped to both —
+EAD = 1m + (2m − 1m) × 50% + 2m × 50% = **2.5m** (was 2.0m).
+
+---
+
+## Exposure reference uniqueness
+
+Every input that becomes an exposure row shares **one** `exposure_reference` space: a loan's
+`loan_reference`, a contingent's `contingent_reference` and an equity exposure's
+`exposure_reference` verbatim, and the engine's own rows — `ccr__<netting_set_id>` (SA-CCR and
+SFT netting sets), `ft__<failed_trade_id>`, `dfc__<contribution_id>` and
+`<facility_reference>_UNDRAWN[_<sub>|_RESIDUAL|@<member>]`. Each table's own key must be unique
+(`DQ004`), and a reference claimed by **two** of these namespaces raises one **`DQ019` ERROR**
+(review finding RC-10): before, every join keyed on the bare reference merged the two rows — the
+IRB model-permission de-duplication kept one of them, and a guarantee on the loan covered the
+contingent too.
+
+The run keeps them apart: each colliding loan / contingent is published as
+`<reference>#loan` / `<reference>#contingent`, and every pointer to it is resolved by the type it
+declares — `facility_mappings.child_type`, a short-term rating's `scope_type`, the
+`beneficiary_type` of collateral, collateral links, guarantees and provisions, and a
+securitisation allocation's `exposure_type`. A pointer whose type does not say which row it means
+(`beneficiary_type` `exposure`, or null) matches **neither**. A facility reference equal to a loan
+reference is not a collision — a facility is not an exposure row.
 
 ---
 

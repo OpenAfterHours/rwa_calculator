@@ -76,9 +76,29 @@ The converter preserves original values for audit:
 ## Missing FX Rates
 
 If a currency's FX rate is not provided:
-- Values are left unchanged (not converted)
+- Values are left unchanged (not converted): the amount stays in its source currency's units and
+  keeps its currency code, but every GBP threshold, total and template downstream reads it as
+  reporting currency
 - `fx_rate_applied` is set to `null`
-- No error is raised (graceful handling) — except for facility headroom netting, below
+- The run reports one **`DQ020` ERROR per such currency**, naming the rows and amounts per table
+  (loans, contingents, facilities, collateral, guarantees, provisions, equity exposures). The
+  engine still passes the amounts through — it has no rate and must not invent one — so the error
+  is the signal to supply the missing `currency_from -> base_currency` row.
+
+That 1:1 pass-through used to be silent. Its direction depends on the currency — 1m KWD read as
+GBP understates by roughly 60%, 1m ZAR read as GBP overstates roughly twentyfold — so the defect
+was the silence, not a bias (review finding RC-11). The check mirrors the converter exactly: an
+exact-match `currency == base_currency` test, `fx_rates` rows whose `currency_to` is the base
+currency, a null `rate` counting as none, and no `fx_rates` table at all meaning no rate for
+anything. A null currency is not reported (there is no mismatch to measure), and nothing is
+reported when `apply_fx_conversion=False`. `DQ020` is raised by the pipeline-entry input gate
+(`contracts/validation.py`), which holds the run's configuration; facility headroom netting has
+its own warning, `HIE005`, below.
+
+| Example | Result |
+|---------|--------|
+| Loan KWD 1,000,000, `fx_rates` holds EUR only | EAD 1,000,000 (unconverted), **`DQ020` for KWD** |
+| Same loan, KWD -> GBP 2.5 supplied | EAD 2,500,000, no `DQ020` |
 
 ## Facility Headroom Netting
 

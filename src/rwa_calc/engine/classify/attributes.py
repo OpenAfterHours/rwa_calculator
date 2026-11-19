@@ -688,8 +688,8 @@ def _build_is_defaulted_expr() -> pl.Expr:
     and CRR Art. 158(5) define BEEL only for defaulted exposures, but
     firms whose A-IRB models emit a BEEL-style value alongside LGD on
     performing exposures would otherwise see those rows silently
-    reclassified as defaulted. The post-classification step
-    ``_collect_beel_on_non_defaulted_warnings`` flags the contradictory
+    reclassified as defaulted. The post-classification roll-up
+    ``audit.collect_classified_frame_warnings`` flags the contradictory
     combination (``is_defaulted=False ∧ beel>0``) as a DQ008 warning so
     the input contradiction is visible without changing routing.
     """

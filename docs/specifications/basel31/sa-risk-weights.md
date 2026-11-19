@@ -1244,7 +1244,13 @@ The 1.5x multiplier is **capped at 150%** — exposures already at or above 150%
 further increased by this multiplier.
 
 Triggered by setting `cp_borrower_income_currency` in the input data to a currency different
-from the exposure currency. Output column: `currency_mismatch_multiplier_applied`.
+from the exposure's lending currency (its denomination — `original_currency` after FX conversion).
+Output column: `currency_mismatch_multiplier_applied`.
+
+**Income currency unknown (Art. 123B(3)).** A null `cp_borrower_income_currency` takes the 1.5x
+unless the lending currency equals the obligor's domestic currency (`cp_local_currency`, else the
+domestic currency of `cp_country_code`); warning **SA010** counts the exposures. Implementation and
+scope detail: [Credit Risk Mitigation, Art. 123B "Implementation Status"](credit-risk-mitigation.md).
 
 ---
 

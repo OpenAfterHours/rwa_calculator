@@ -9,8 +9,10 @@ Pipeline position:
 
 Key responsibilities:
 - ``collect_input_warnings``: CLS008 warning for null corporate group
-  annual_revenue under Basel 3.1 (Art. 147A(1)(d) conservatism) and CLS011
-  for a group-revenue roll-up that forces F-IRB (Art. 147(4C)(b)(ii)).
+  annual_revenue under Basel 3.1 (Art. 147A(1)(d) conservatism), CLS011
+  for a group-revenue roll-up that forces F-IRB (Art. 147(4C)(b)(ii)), CLS009
+  for an undeterminable LFSE size, and CLS013 for a null counterparty
+  ``entity_type`` (Art. 112 class undeterminable — RC-12).
 - ``collect_beel_on_non_defaulted_warnings``: DQ008 aggregate warning for
   ``is_defaulted=False ∧ beel>0`` rows (eager — must run post-materialise).
 - ``build_audit_trail``: per-exposure classification reason frame.
@@ -23,6 +25,7 @@ References:
   exposures only (DQ008 companion check)
 - CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC Art. 2: SME fallback
   suppressing the CLS008 warning
+- CRR Art. 112 / PS1/26 Art. 112(2) Table A2: exposure-class assignment (CLS013)
 """
 
 from __future__ import annotations
@@ -31,11 +34,13 @@ import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.errors import (
     ERROR_LARGE_CORP_GROUP_ROLLUP,
     ERROR_LARGE_CORP_REVENUE_NULL,
     ERROR_LFSE_ASSETS_NULL,
+    ERROR_NULL_ENTITY_TYPE,
     ERROR_QRRE_GATE_DEMOTION,
     CalculationError,
     ErrorCategory,
@@ -76,8 +81,13 @@ def collect_input_warnings(
 ) -> list[CalculationError]:
     """Collect non-blocking warnings for null input data.
 
-    Three warnings can fire here, each surfaced as a ``CalculationError`` with
+    Four warnings can fire here, each surfaced as a ``CalculationError`` with
     severity WARNING:
+
+    - **Null entity_type** (Art. 112, BOTH regimes, RC-12): a counterparty whose
+      ``entity_type`` is null cannot be mapped to an exposure class; its
+      exposures fall to OTHER (100% SA) and its rating is not read. CLS013 names
+      the first few counterparties. The fallback class is unchanged.
 
     - **LFSE size undetermined** (Art. 153(2), BOTH regimes): when a
       counterparty is flagged ``is_financial_sector_entity=True`` but
@@ -128,8 +138,25 @@ def collect_input_warnings(
         & pl.col("total_assets").is_null()
         & ~pl.col("apply_fi_scalar").fill_null(False)
     )
-    lfse_undetermined_count = (
-        counterparties.filter(lfse_undetermined_filter).select(pl.len()).collect().item()
+    # One materialisation for the regime-invariant counts: the LFSE gap above and
+    # the RC-12 null-entity_type census (count + the first few references, so the
+    # CLS013 message can name rows without a second collect).
+    is_null_entity_type = pl.col("entity_type").is_null()
+    invariant_counts = counterparties.select(
+        lfse_undetermined_filter.sum().alias("_lfse_undetermined"),
+        is_null_entity_type.sum().alias("_null_entity_type"),
+        pl.col("counterparty_reference")
+        .filter(is_null_entity_type)
+        .head(5)  # names the first five; the message counts the rest
+        .implode()
+        .alias("_null_entity_type_refs"),
+    ).collect()
+    lfse_undetermined_count = invariant_counts["_lfse_undetermined"].item()
+    errors.extend(
+        _null_entity_type_warnings(
+            invariant_counts["_null_entity_type"].item(),
+            invariant_counts["_null_entity_type_refs"].item().to_list(),
+        )
     )
     if lfse_undetermined_count > 0:
         errors.append(
@@ -379,3 +406,42 @@ def build_audit_trail(
             ).alias("classification_reason"),
         ]
     )
+
+
+# =========================================================================
+# Private helpers
+# =========================================================================
+
+
+@cites("CRR Art. 112")
+@cites("PS1/26, paragraph 112")
+def _null_entity_type_warnings(count: int, references: list[str | None]) -> list[CalculationError]:
+    """Return the RC-12 CLS013 warning for counterparties with a null ``entity_type``.
+
+    ``entity_type`` is the single source of the exposure class (Art. 112(2): an
+    institution "shall assign exposures to the exposure classes listed in Column A
+    of Table A2 according to the criteria in the corresponding row of Column B").
+    A null matches no row of the class map, so every exposure to the counterparty
+    falls to OTHER (100% SA) and its ECAI rating is never read. The class is left
+    as it is — the true class, and so the direction of error, is unknowable from
+    the row (orchestrator decision) — but the run says so, naming the rows.
+    """
+    if count == 0:
+        return []
+    named = ", ".join(str(reference) for reference in references)
+    more = f" and {count - len(references)} more" if count > len(references) else ""
+    return [
+        CalculationError(
+            code=ERROR_NULL_ENTITY_TYPE,
+            message=(
+                f"{count} counterparty row(s) carry a null entity_type ({named}{more}). "
+                "Their exposures cannot be assigned an Art. 112 exposure class and fall to "
+                "the residual 'other' class at 100% (SA); any external rating is not used. "
+                "The true class may carry a higher or a lower weight — populate entity_type."
+            ),
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.CLASSIFICATION,
+            regulatory_reference="CRR Art. 112 / PRA PS1/26 Art. 112(2) Table A2",
+            field_name="entity_type",
+        )
+    ]

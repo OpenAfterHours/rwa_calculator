@@ -239,18 +239,29 @@ class TestCondition3PoolManagement:
         df = result.all_exposures.collect()
         assert df["qualifies_as_retail"][0] is True
 
-    def test_b31_not_managed_reclassified_to_corporate(
+    def test_b31_not_managed_stays_in_retail_class(
         self, classifier: ExposureClassifier, b31_config: CalculationConfig
     ) -> None:
-        """Non-qualifying retail (condition 3 fail) → reclassified to corporate."""
+        """Non-regulatory retail (condition 3 fail) stays in the retail class (RE-03).
+
+        This test used to pin the reclassification to CORPORATE, which is the CRR
+        rule (CRR Art. 123, last sub-paragraph: exposures that do not comply "shall
+        not be eligible for the retail exposures class"). PS1/26 splits the article:
+        Art. 123(1)(a) categorises "an exposure to one or more natural persons and
+        not an exposure to an SME" as retail with no further condition, and
+        Art. 123A(1)(b)(iii) only decides whether it is *regulatory* retail. The
+        failing row is priced by Art. 123(3)(c): "all other retail exposures that do
+        not qualify as regulatory retail exposures shall be assigned a risk weight
+        of 100%".
+        """
         bundle = _make_bundle(
             _exposures(),
             _counterparties(is_managed_as_retail=False),
         )
         result = classifier.classify(bundle, b31_config)
         df = result.all_exposures.collect()
-        # Non-qualifying retail with no SME revenue → CORPORATE
-        assert df["exposure_class"][0] == ExposureClass.CORPORATE.value
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["qualifies_as_retail"][0] is False
 
 
 # =============================================================================
@@ -483,17 +494,94 @@ class TestRiskWeightImpact:
         df = result.all_exposures.collect()
         assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
 
-    def test_b31_non_qualifying_retail_gets_corporate(
+    def test_b31_non_qualifying_retail_stays_retail_other(
         self, classifier: ExposureClassifier, b31_config: CalculationConfig
     ) -> None:
-        """Non-qualifying retail (condition 3 fail) → CORPORATE (100% RW)."""
+        """Non-regulatory retail stays RETAIL_OTHER, priced at Art. 123(3)(c) 100% (RE-03).
+
+        Previously pinned CORPORATE (the CRR exclusion); see
+        ``test_b31_not_managed_stays_in_retail_class`` for the PS1/26 text.
+        """
         bundle = _make_bundle(
             _exposures(),
             _counterparties(is_managed_as_retail=False),
         )
         result = classifier.classify(bundle, b31_config)
         df = result.all_exposures.collect()
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+
+
+# =============================================================================
+# RE-03 — the class consequence of failing regulatory retail, per regime
+# =============================================================================
+
+
+class TestNonRegulatoryRetailClassByRegime:
+    """Where a natural person that fails the retail criteria lands, per regime.
+
+    CRR Art. 123 (last sub-paragraph): "Exposures that do not comply with the
+    criteria referred to in points (a) to (c) of the first subparagraph shall not
+    be eligible for the retail exposures class." -> CORPORATE.
+
+    PS1/26 Art. 123(1): "an exposure shall be categorised as a retail exposure if
+    it is either: (a) an exposure to one or more natural persons and not an
+    exposure to an SME" -> stays RETAIL_OTHER as a non-regulatory retail exposure
+    (Art. 123(3)(c), 100%), where the Art. 123B multiplier can still reach it.
+    """
+
+    def test_b31_natural_person_over_gbp_880k_stays_retail_other(
+        self, classifier: ExposureClassifier, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 123A(1)(b)(ii) fail (GBP 900k > 880k) is not an exit from retail."""
+        bundle = _make_bundle(
+            _exposures(drawn_amount=900_000.0, lending_group_total=900_000.0),
+            _counterparties(is_managed_as_retail=True),
+        )
+        df = classifier.classify(bundle, b31_config).all_exposures.collect()
+        assert df["qualifies_as_retail"][0] is False
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+
+    def test_crr_natural_person_over_eur_1m_leaves_retail_class(
+        self, classifier: ExposureClassifier, crr_config: CalculationConfig
+    ) -> None:
+        """CRR control: the same breach (GBP 900k > EUR 1m x 0.8732) exits to CORPORATE."""
+        bundle = _make_bundle(
+            _exposures(drawn_amount=900_000.0, lending_group_total=900_000.0),
+            _counterparties(is_managed_as_retail=True),
+        )
+        df = classifier.classify(bundle, crr_config).all_exposures.collect()
+        assert df["qualifies_as_retail"][0] is False
         assert df["exposure_class"][0] == ExposureClass.CORPORATE.value
+
+    def test_b31_individually_managed_natural_person_irb_class_is_corporate(
+        self, classifier: ExposureClassifier, b31_config: CalculationConfig
+    ) -> None:
+        """The SA class moves; the IRB class does not (Art. 147(5)(c)).
+
+        PS1/26 Art. 147(5)(c) admits a retail IRB exposure only where "they are
+        not managed just as individually as exposures in the corporate exposure
+        class". An explicit ``is_managed_as_retail=False`` therefore keeps the
+        obligor in the IRB corporate class, exactly as before RE-03, so IRB
+        permission lookup and the IRB formula are untouched.
+        """
+        bundle = _make_bundle(
+            _exposures(),
+            _counterparties(is_managed_as_retail=False),
+        )
+        df = classifier.classify(bundle, b31_config).all_exposures.collect()
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["exposure_class_irb"][0] == ExposureClass.CORPORATE.value
+
+    def test_b31_pool_managed_natural_person_over_cap_irb_class_is_retail(
+        self, classifier: ExposureClassifier, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 147(5)(a)(i): no amount cap on natural persons in the IRB retail class."""
+        bundle = _make_bundle(
+            _exposures(drawn_amount=900_000.0, lending_group_total=900_000.0),
+            _counterparties(is_managed_as_retail=True),
+        )
+        df = classifier.classify(bundle, b31_config).all_exposures.collect()
+        assert df["exposure_class_irb"][0] == ExposureClass.RETAIL_OTHER.value
 
 
 # =============================================================================

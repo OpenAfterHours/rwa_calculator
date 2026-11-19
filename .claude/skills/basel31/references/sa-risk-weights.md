@@ -348,7 +348,11 @@ the base retail weight:
 
 `retail_art_123a_two_path_applicable` gates the Art. 123A two-path test that decides
 whether an exposure qualifies as regulatory retail at all; failing it routes to the
-non-regulatory retail weight.
+non-regulatory retail weight. A natural person that fails it stays in the retail class
+(Art. 123(1)(a); `non_qualifying_retail_leaves_retail_class` is off), so the Art. 123B
+currency-mismatch multiplier still reaches it. Art. 123A(1)(b)(ii) is the aggregate-owed
+test alone — `b31_retail_granularity_limit` is an optional CRE20.66 method of evidencing
+(iii), not a PS1/26 limb.
 
 <!-- BEGIN GENERATED: b31-sa-retail -->
 | Name | CRR | Basel 3.1 | Citation |
@@ -357,7 +361,7 @@ non-regulatory retail weight.
 | `b31_retail_transactor_rw` | — | `0.45` | PS1/26, paragraph 123 |
 | `b31_retail_payroll_loan_rw` | — | `0.35` | PS1/26, paragraph 123 |
 | `b31_retail_non_regulatory_rw` | — | `1.00` | PS1/26, paragraph 123 |
-| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123 |
+| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123A |
 <!-- END GENERATED: b31-sa-retail -->
 
 ## SA Specialised Lending (Art. 122A-122B)

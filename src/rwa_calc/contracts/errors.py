@@ -182,6 +182,14 @@ ERROR_LARGE_CORP_REVENUE_NULL = "CLS008"
 ERROR_LFSE_ASSETS_NULL = "CLS009"
 ERROR_QRRE_GATE_DEMOTION = "CLS010"
 ERROR_LARGE_CORP_GROUP_ROLLUP = "CLS011"
+# Null counterparty entity_type (RC-12). ``entity_type`` is the single source of
+# the exposure class (CRR / PS1/26 Art. 112, Table A2), and a null matches no row
+# of the class map, so the classifier files the exposure under OTHER (100% SA)
+# and the obligor's ECAI rating is never read. An unrecognised NON-null string
+# already draws DQ006; the null drew nothing at all. One WARNING per run naming
+# the counterparties. The fallback class itself is deliberately unchanged — the
+# true class, and so the direction of error, is unknowable from the row.
+ERROR_NULL_ENTITY_TYPE = "CLS013"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -316,6 +324,17 @@ ERROR_MISSING_RISK_WEIGHT = "SA002"
 ERROR_INVALID_LTV = "SA003"
 ERROR_DUE_DILIGENCE_NOT_PERFORMED = "SA004"
 ERROR_EQUITY_IN_MAIN_TABLE = "SA005"
+# Borrower income currency unknown on an Art. 123B-scope exposure (RE-05). PS1/26
+# Art. 123B(3): where an institution "is unable to identify those exposures with a
+# currency mismatch" it "shall apply the risk weight multiplier of 1.5 to all
+# unhedged retail exposures, and unhedged residential real estate exposures ...,
+# except where the lending currency is the same as the domestic currency of the
+# country of residence of the obligor". The engine applies that fallback wherever
+# ``borrower_income_currency`` is null — verbatim for exposures incurred before
+# 1 January 2027 (123B(3)(b)), as a conservative proxy for later ones, where
+# 123B(1) obliges the institution to know the income currency. One WARNING per
+# run with the count, split by value date.
+ERROR_INCOME_CURRENCY_UNKNOWN = "SA010"
 
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"

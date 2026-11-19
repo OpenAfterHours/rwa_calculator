@@ -1,5 +1,13 @@
 """
-Generate P5.15 fixtures: Art. 123A(1)(b)(ii) 0.2% retail portfolio granularity sub-condition.
+Generate P5.15 fixtures: the optional 0.2% retail portfolio granularity test.
+
+RE-04 (2026-11): PS1/26 Art. 123A has NO 0.2% limb — (1)(b)(ii) is the GBP 880,000
+aggregate test alone and (1)(b)(iii) is qualitative ("one of a significant number of
+exposures with similar characteristics"). The 0.2% test is BCBS CRE20.66, kept as an
+OPTIONAL firm method of evidencing (iii) behind ``enforce_retail_granularity``
+(default False). This portfolio exercises it with the election ON, and the default
+(OFF) as a control. A breaching obligor stays retail at the Art. 123(3)(c) 100%
+weight (RE-03), it no longer moves to CORPORATE.
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer (engine/classify/
@@ -7,7 +15,7 @@ Pipeline position:
 
 Key responsibilities:
 - Produce a Basel-3.1 retail portfolio of natural-person obligors that makes the
-  0.2% granularity limb of Art. 123A(1)(b)(ii) fire independently of the GBP 880k
+  elected 0.2% granularity test fire independently of the GBP 880k
   threshold limb.
 - Counterparties: 10 control obligors (GBP 1,000 each) + 1 breaching obligor
   (RETAIL-BREACH, GBP 2,000) + 1 explicit pass obligor (RETAIL-CONTROL-PASS, GBP 1,000).
@@ -52,21 +60,22 @@ Worked numbers (Basel 3.1, CalculationConfig.basel_3_1()):
         ratio = 1,000 / 503,000 = 0.001988...  <  0.002  -> qualifies_as_retail = True
         stays RETAIL_OTHER: RW = 75%, RWA = 750
 
-Re-route consequence (risk-weight delta):
+Consequence (risk-weight delta):
     RETAIL-BREACH:
-        RWA as retail  (control comparison): 2,000 × 0.75 = 1,500
-        RWA as corporate (actual, post re-route): 2,000 × 1.00 = 2,000
+        RWA as regulatory retail (default config):       2,000 × 0.75 = 1,500
+        RWA as non-regulatory retail (0.2% elected):     2,000 × 1.00 = 2,000
     RETAIL-CONTROL-PASS:
         RWA as retail: 1,000 × 0.75 = 750
 
 References:
-    - PRA PS1/26 Art. 123A(1)(b)(ii): retail granularity sub-condition (0.2%)
-    - PRA PS1/26 Art. 123A(1)(b)(iii): pool-management attestation (cp_is_managed_as_retail)
-    - PRA PS1/26 Art. 122 Table 6: unrated corporate SA RW = 100%
+    - PRA PS1/26 Art. 123A(1)(b)(ii): GBP 880,000 aggregate test (no 0.2% limb)
+    - PRA PS1/26 Art. 123A(1)(b)(iii): "significant number of exposures" — the 0.2%
+      test is an optional method of evidencing it
+    - PRA PS1/26 Art. 123(3)(c): non-regulatory retail SA RW = 100%
     - PRA PS1/26 Art. 123(3)(b): regulatory retail SA RW = 75%
     - BCBS CRE20.66: granularity criterion source
     - engine/classify/: _build_qualifies_as_retail_expr
-    - src/rwa_calc/data/tables/b31_risk_weights.py: B31_RETAIL_GRANULARITY_LIMIT = Decimal("0.002")
+    - src/rwa_calc/rulebook/packs/b31.py: ``b31_retail_granularity_limit``
 
 Usage:
     PYTHONPATH=<worktree>/src python tests/fixtures/p5_15/p5_15.py
@@ -152,14 +161,20 @@ CTRL_RATIO: float = CTRL_DRAWN / PORTFOLIO_TOTAL  # ≈ 0.001988
 # Expected output scalars (single source of truth for test-writer assertions)
 # ---------------------------------------------------------------------------
 
-#: Basel 3.1 unrated corporate SA RW (Art. 122 Table 6) — applied after re-route
-EXPECTED_RW_CORPORATE: float = 1.00
+#: Basel 3.1 non-regulatory retail SA RW (PS1/26 Art. 123(3)(c)) — applied to the
+#: breaching obligor when the firm ELECTS the 0.2% test as its method of evidencing
+#: Art. 123A(1)(b)(iii). The obligor stays in the retail class (Art. 123(1)(a), RE-03).
+EXPECTED_RW_NON_REGULATORY_RETAIL: float = 1.00
 
 #: Basel 3.1 regulatory retail SA RW (Art. 123(3)(b))
 EXPECTED_RW_RETAIL: float = 0.75
 
-#: RWA for the breaching obligor after re-route to CORPORATE
-EXPECTED_RWA_BREACH: float = BREACH_DRAWN * EXPECTED_RW_CORPORATE  # 2,000.00
+#: RWA for the breaching obligor when the 0.2% method is elected
+EXPECTED_RWA_BREACH: float = BREACH_DRAWN * EXPECTED_RW_NON_REGULATORY_RETAIL  # 2,000.00
+
+#: RWA for the breaching obligor under the default config: PS1/26 Art. 123A has no
+#: 0.2% limb (RE-04), so it is regulatory retail at 75%
+EXPECTED_RWA_BREACH_DEFAULT: float = BREACH_DRAWN * EXPECTED_RW_RETAIL  # 1,500.00
 
 #: RWA for the pass obligor (stays RETAIL_OTHER)
 EXPECTED_RWA_PASS: float = PASS_DRAWN * EXPECTED_RW_RETAIL  # 750.00
@@ -313,7 +328,7 @@ def create_p515_counterparties() -> pl.DataFrame:
     is_managed_as_retail=True, annual_revenue=None (null SME size), so:
       - Art. 123A(1)(a) SME auto-qualify branch does NOT fire (no SME size)
       - Art. 123A(1)(b)(iii) pool-management limb passes (is_managed_as_retail=True)
-      - Only Art. 123A(1)(b)(ii) granularity discriminates
+      - Only the elected 0.2% granularity test discriminates
     """
     rows: list[dict] = []
 
@@ -492,7 +507,7 @@ def print_summary(saved: dict[str, Path]) -> None:
         cols = len(df.columns)
         print(f"  {name:<25} {len(df):>3} row(s)  {cols:>3} col(s)  ->  {path}")
     print("-" * 80)
-    print("Scenario: Art. 123A(1)(b)(ii) — 0.2% retail portfolio granularity sub-condition")
+    print("Scenario: optional 0.2% retail granularity test (Art. 123A(1)(b)(iii) evidence)")
     print()
     print(f"  Portfolio total:         {PORTFOLIO_TOTAL:>12,.0f} GBP")
     print(f"  0.2% granularity limit:  {GRANULARITY_LIMIT:>12,.2f} GBP")
@@ -509,7 +524,7 @@ def print_summary(saved: dict[str, Path]) -> None:
     print()
     print("  Expected classifier output:")
     print(
-        f"    RETAIL-BREACH:       qualifies_as_retail=False  -> CORPORATE  RW={EXPECTED_RW_CORPORATE:.0%}  RWA={EXPECTED_RWA_BREACH:,.0f}"
+        f"    RETAIL-BREACH:       qualifies_as_retail=False  -> RETAIL_OTHER RW={EXPECTED_RW_NON_REGULATORY_RETAIL:.0%}  RWA={EXPECTED_RWA_BREACH:,.0f}"
     )
     print(
         f"    RETAIL-CONTROL-PASS: qualifies_as_retail=True   -> RETAIL_OTHER RW={EXPECTED_RW_RETAIL:.0%}  RWA={EXPECTED_RWA_PASS:,.0f}"

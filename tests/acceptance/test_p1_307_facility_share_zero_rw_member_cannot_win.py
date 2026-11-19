@@ -71,13 +71,15 @@ candidate carries EAD 4,000,000, both regimes:
     CRR   CP-MDB      mdb, Art. 117(1) unrated institution  100%  -> 400,000  WINNER
           CP-RETAIL   retail_other, Art. 123                 75%  -> 300,000
     B31   CP-MDB      mdb, Table 2B unrated                  50%  -> 200,000
-          CP-RETAIL   corporate, unrated                    100%  -> 400,000  WINNER
+          CP-RETAIL   retail_other, non-regulatory          100%  -> 400,000  WINNER
 
 The winner is the SAME member as the old preview-corrected expectation in every
 one of the four cells, so nothing flips. The Basel 3.1 MDB share's REASON does
 change and is worth stating: the retail member used to win because its preview
-75% beat Table 2B's 50%; it now wins because its candidate is classified
-``corporate`` unrated at 100% by the Art. 123A granularity limb and prices at
+75% beat Table 2B's 50%; it now wins because its candidate is non-regulatory
+retail at 100% (RE-03: PS1/26 Art. 123(3)(c); it carries no
+``is_managed_as_retail``, so Art. 123A(1)(b)(iii) fails — it was classified
+``corporate`` unrated at 100% before RE-03 kept natural persons retail) and prices at
 400,000 against the MDB's 200,000. At the retail 75% it would price at 300,000
 and still win, so the outcome does not depend on that classification — only the
 asserted risk weight does.
@@ -186,11 +188,10 @@ _CORPORATE_CQS1_RW: dict[str, float] = {
     "crr": float(dict(_CRR_PACK.lookup("corporate_risk_weights").entries)[CQS.CQS1]),
     "b31": float(dict(_B31_PACK.lookup("b31_corporate_risk_weights").entries)[1]),
 }
-#: PS1/26 Art. 122(2) Table 6, unrated — where the Basel 3.1 retail candidate
-#: lands once the Art. 123A granularity limb routes it out of retail.
-_B31_UNRATED_CORPORATE_RW: float = float(
-    dict(_B31_PACK.lookup("b31_corporate_risk_weights").entries)[None]
-)
+#: PS1/26 Art. 123(3)(c) non-regulatory retail — where the Basel 3.1 retail
+#: candidate lands: it carries no ``is_managed_as_retail`` (sealed False), so it
+#: fails Art. 123A(1)(b)(iii) and, being a natural person, stays retail (RE-03).
+_B31_NON_REGULATORY_RETAIL_RW: float = float(_B31_PACK.scalar("b31_retail_non_regulatory_rw"))
 #: Art. 117(1) -> Art. 121: the CRR unrated institution weight a non-named MDB
 #: takes, there being no CRR MDB table.
 _CRR_UNRATED_INSTITUTION_RW: float = float(
@@ -228,7 +229,7 @@ _OWN_APPROACH_RWA: dict[str, dict[str, dict[str, float]]] = {
         },
         _MDB_SHARE: {
             "CP-MDB": _MDB_SHARE_EAD * _B31_UNRATED_MDB_RW,
-            "CP-RETAIL": _MDB_SHARE_EAD * _B31_UNRATED_CORPORATE_RW,
+            "CP-RETAIL": _MDB_SHARE_EAD * _B31_NON_REGULATORY_RETAIL_RW,
         },
     },
 }
@@ -684,15 +685,17 @@ class TestFacilityShareOwnershipUnderTheOwnApproachMetric:
 
         Derivation, from pack values only:
             CP-MDB      400,000 x ``mdb_unrated_rw``             (50%)  = 200,000
-            CP-RETAIL   400,000 x unrated corporate Table 6     (100%)  = 400,000
+            CP-RETAIL   400,000 x non-regulatory retail 123(3)(c) (100%) = 400,000
         so ``argmax`` is CP-RETAIL by 200,000.00.
 
         **The winner is unchanged from the P1.307 expectation; the reason is
         not, and the difference is worth stating.** Under the preview CP-RETAIL
         won because retail's approximated 75% beat Table 2B's 50%. Under the
-        applied-approach metric its CANDIDATE is classified ``corporate`` unrated
-        at 100% — the Art. 123A(1)(b)(ii) granularity limb, which is Basel 3.1
-        only and has nothing to do with facility shares — and wins at 400,000.
+        applied-approach metric its CANDIDATE is non-regulatory retail at 100%
+        — it carries no ``is_managed_as_retail``, so it fails Art. 123A(1)(b)(iii)
+        (Basel 3.1 only, nothing to do with facility shares) and, as a natural
+        person, stays retail under PS1/26 Art. 123(1)(a) (RE-03; it was
+        ``corporate`` unrated 100% before) — and wins at 400,000.
         At the retail 75% it would price at 300,000 and still beat the MDB's
         200,000, so ownership does not depend on that classification. Only the
         asserted class and weight do, which is why they are asserted here
@@ -715,8 +718,8 @@ class TestFacilityShareOwnershipUnderTheOwnApproachMetric:
 
         # Assert — ownership, then the class and weight it won at.
         assert row["counterparty_reference"] == expected
-        assert row["exposure_class"] == "corporate"
-        assert row["risk_weight"] == pytest.approx(_B31_UNRATED_CORPORATE_RW)
+        assert row["exposure_class"] == "retail_other"
+        assert row["risk_weight"] == pytest.approx(_B31_NON_REGULATORY_RETAIL_RW)
         assert row["rwa_final"] == pytest.approx(_OWN_APPROACH_RWA["b31"][_MDB_SHARE][expected])
         # The MDB loses at Table 2B, which is the limb-A divergence itself.
         assert candidates["CP-MDB"]["rwa_pre_floor"] == pytest.approx(

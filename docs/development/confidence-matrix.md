@@ -32,8 +32,8 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — content hash `eba3681dcf050d9d`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `d52b5f7999bdf292`
 
 ## Summary
 
@@ -61,7 +61,7 @@ Package version `0.3.34`. Resolved packs:
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
 | 111 | 6 | 8 | 20 | 0 | 39 | MEDIUM |
-| 112 | 4 | 3 | 19 | 0 | 42 | MEDIUM |
+| 112 | 5 | 3 | 20 | 0 | 43 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 15 | 14 | 33 | HIGH |
 | 115 | 6 | 10 | 8 | 3 | 9 | HIGH |
@@ -72,7 +72,7 @@ Package version `0.3.34`. Resolved packs:
 | 120 | 1 | 2 | 13 | 6 | 94 | HIGH |
 | 121 | 4 | 3 | 8 | 9 | 20 | HIGH |
 | 122 | 2 | 4 | 6 | 11 | 74 | HIGH |
-| 123 | 3 | 7 | 13 | 2 | 27 | HIGH |
+| 123 | 4 | 8 | 14 | 2 | 29 | HIGH |
 | 124 | 1 | 2 | 9 | 2 | 13 | HIGH |
 | 125 | 1 | 3 | 17 | 2 | 23 | HIGH |
 | 126 | 2 | 4 | 11 | 2 | 15 | HIGH |
@@ -199,7 +199,7 @@ Package version `0.3.34`. Resolved packs:
 | 444 | 4 | 0 | 7 | 0 | 1 | MEDIUM |
 | 452 | 2 | 0 | 4 | 0 | 0 | LOW |
 | 453 | 2 | 0 | 3 | 0 | 0 | LOW |
-| 501 | 4 | 2 | 18 | 2 | 31 | HIGH |
+| 501 | 4 | 2 | 18 | 2 | 30 | HIGH |
 | 501a | 2 | 0 | 4 | 1 | 8 | HIGH |
 
 ## PS1/26 (PRA Policy Statement)
@@ -213,7 +213,7 @@ Package version `0.3.34`. Resolved packs:
 | 92 | 3 | 4 | 26 | 0 | 39 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
 | 111 | 3 | 2 | 12 | 1 | 20 | HIGH |
-| 112 | 1 | 0 | 8 | 0 | 8 | MEDIUM |
+| 112 | 2 | 0 | 10 | 0 | 9 | MEDIUM |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 24 | HIGH |
 | 115 | 2 | 0 | 3 | 3 | 6 | HIGH |
@@ -223,12 +223,12 @@ Package version `0.3.34`. Resolved packs:
 | 120 | 0 | 6 | 12 | 2 | 36 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 121 | 1 | 1 | 7 | 4 | 17 | HIGH |
-| 122 | 2 | 7 | 7 | 5 | 49 | HIGH |
+| 122 | 2 | 7 | 7 | 5 | 47 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
-| 123 | 1 | 4 | 3 | 5 | 15 | HIGH |
-| 123A | 1 | 1 | 5 | 0 | 14 | MEDIUM |
-| 123B | 1 | 5 | 8 | 0 | 13 | MEDIUM |
+| 123 | 2 | 4 | 6 | 5 | 20 | HIGH |
+| 123A | 1 | 2 | 5 | 0 | 14 | MEDIUM |
+| 123B | 5 | 5 | 10 | 0 | 14 | MEDIUM |
 | 124 | 2 | 1 | 10 | 0 | 8 | MEDIUM |
 | 124A | 0 | 0 | 0 | 0 | 4 | GAP |
 | 124C | 0 | 0 | 5 | 0 | 1 | UNCITED |
@@ -253,7 +253,7 @@ Package version `0.3.34`. Resolved packs:
 | 138 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 139 | 1 | 1 | 6 | 0 | 3 | MEDIUM |
 | 140 | 2 | 0 | 3 | 0 | 5 | MEDIUM |
-| 147 | 14 | 3 | 17 | 0 | 26 | MEDIUM |
+| 147 | 14 | 3 | 17 | 0 | 27 | MEDIUM |
 | 147A | 2 | 2 | 18 | 0 | 31 | MEDIUM |
 | 147B | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 150 | 0 | 0 | 0 | 0 | 1 | GAP |

@@ -233,51 +233,75 @@ class TestSAEquityRiskWeightCRR:
 class TestSA005EquityWarning:
     """SA005 warning when equity rows detected in main table."""
 
-    def test_warning_emitted_when_equity_present(self, calculator: SACalculator) -> None:
-        exposures = _equity_exposure()
-        errors: list[CalculationError] = []
-        calculator._warn_equity_in_main_table(exposures, errors)
-        assert len(errors) == 1
-        assert errors[0].code == ERROR_EQUITY_IN_MAIN_TABLE
-
-    def test_warning_severity_is_warning(self, calculator: SACalculator) -> None:
-        exposures = _equity_exposure()
-        errors: list[CalculationError] = []
-        calculator._warn_equity_in_main_table(exposures, errors)
-        assert errors[0].severity == ErrorSeverity.WARNING
-
-    def test_warning_category_is_data_quality(self, calculator: SACalculator) -> None:
-        exposures = _equity_exposure()
-        errors: list[CalculationError] = []
-        calculator._warn_equity_in_main_table(exposures, errors)
-        assert errors[0].category == ErrorCategory.DATA_QUALITY
-
-    def test_warning_has_regulatory_reference(self, calculator: SACalculator) -> None:
-        exposures = _equity_exposure()
-        errors: list[CalculationError] = []
-        calculator._warn_equity_in_main_table(exposures, errors)
-        assert errors[0].regulatory_reference is not None
-        assert "Art. 133" in errors[0].regulatory_reference
-
-    def test_no_warning_when_no_equity(self, calculator: SACalculator) -> None:
-        exposures = _mixed_exposures(include_equity=False)
-        errors: list[CalculationError] = []
-        calculator._warn_equity_in_main_table(exposures, errors)
-        assert len(errors) == 0
-
-    def test_no_warning_when_approach_column_absent(self, calculator: SACalculator) -> None:
-        exposures = pl.DataFrame({"exposure_reference": ["X"], "ead_final": [100.0]}).lazy()
-        errors: list[CalculationError] = []
-        calculator._warn_equity_in_main_table(exposures, errors)
-        assert len(errors) == 0
-
-    def test_warning_message_mentions_equity_exposures_table(
-        self, calculator: SACalculator
+    def test_warning_emitted_when_equity_present(
+        self, calculator: SACalculator, crr_config: CalculationConfig
     ) -> None:
         exposures = _equity_exposure()
         errors: list[CalculationError] = []
-        calculator._warn_equity_in_main_table(exposures, errors)
+        calculator._collect_entry_warnings(exposures, crr_config, errors)
+        assert len(errors) == 1
+        assert errors[0].code == ERROR_EQUITY_IN_MAIN_TABLE
+
+    def test_warning_severity_is_warning(
+        self, calculator: SACalculator, crr_config: CalculationConfig
+    ) -> None:
+        exposures = _equity_exposure()
+        errors: list[CalculationError] = []
+        calculator._collect_entry_warnings(exposures, crr_config, errors)
+        assert errors[0].severity == ErrorSeverity.WARNING
+
+    def test_warning_category_is_data_quality(
+        self, calculator: SACalculator, crr_config: CalculationConfig
+    ) -> None:
+        exposures = _equity_exposure()
+        errors: list[CalculationError] = []
+        calculator._collect_entry_warnings(exposures, crr_config, errors)
+        assert errors[0].category == ErrorCategory.DATA_QUALITY
+
+    def test_warning_has_regulatory_reference(
+        self, calculator: SACalculator, crr_config: CalculationConfig
+    ) -> None:
+        exposures = _equity_exposure()
+        errors: list[CalculationError] = []
+        calculator._collect_entry_warnings(exposures, crr_config, errors)
+        assert errors[0].regulatory_reference is not None
+        assert "Art. 133" in errors[0].regulatory_reference
+
+    def test_no_warning_when_no_equity(
+        self, calculator: SACalculator, crr_config: CalculationConfig
+    ) -> None:
+        exposures = _mixed_exposures(include_equity=False)
+        errors: list[CalculationError] = []
+        calculator._collect_entry_warnings(exposures, crr_config, errors)
+        assert len(errors) == 0
+
+    def test_no_warning_when_approach_column_absent(
+        self, calculator: SACalculator, crr_config: CalculationConfig
+    ) -> None:
+        exposures = pl.DataFrame({"exposure_reference": ["X"], "ead_final": [100.0]}).lazy()
+        errors: list[CalculationError] = []
+        calculator._collect_entry_warnings(exposures, crr_config, errors)
+        assert len(errors) == 0
+
+    def test_warning_message_mentions_equity_exposures_table(
+        self, calculator: SACalculator, crr_config: CalculationConfig
+    ) -> None:
+        exposures = _equity_exposure()
+        errors: list[CalculationError] = []
+        calculator._collect_entry_warnings(exposures, crr_config, errors)
         assert "equity_exposures" in errors[0].message
+
+    def test_b31_warning_shares_the_census_collect(
+        self, calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Under Basel 3.1 the SA010 census rides the same collect; SA005 still fires.
+
+        The equity row is outside the Art. 123B classes, so no SA010 accompanies it.
+        """
+        exposures = _equity_exposure()
+        errors: list[CalculationError] = []
+        calculator._collect_entry_warnings(exposures, b31_config, errors)
+        assert [e.code for e in errors] == [ERROR_EQUITY_IN_MAIN_TABLE]
 
 
 # =============================================================================

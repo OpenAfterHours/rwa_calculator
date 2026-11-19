@@ -40,13 +40,16 @@ from watchfire import cites
 
 from rwa_calc.contracts.errors import (
     ERROR_DUE_DILIGENCE_NOT_PERFORMED,
+    ERROR_INCOME_CURRENCY_UNKNOWN,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
 )
-from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod, ReportingBasis
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod, ExposureClass, ReportingBasis
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
+    country_domestic_currency_expr,
     denomination_currency_expr,
     funding_currency_expr,
 )
@@ -57,6 +60,8 @@ from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
@@ -68,6 +73,32 @@ logger = logging.getLogger(__name__)
 # apply). Raw date compared date-to-date (no coercion). (S13-g)
 _B31_PACK = resolve("b31", date(2027, 1, 1))
 _B31_EFFECTIVE_DATE = _B31_PACK.date_param("b31_effective_date").value
+
+# PS1/26 Art. 123B(1) scope: retail (Art. 112(1)(h)) and residential real estate
+# (Art. 112(1)(i)) classes. Commercial RE and corporate are out of scope.
+_ART_123B_CLASSES: tuple[str, ...] = (
+    ExposureClass.RETAIL_OTHER.value,
+    ExposureClass.RETAIL_QRRE.value,
+    ExposureClass.RETAIL_MORTGAGE.value,
+    ExposureClass.RESIDENTIAL_MORTGAGE.value,
+)
+
+# Obligor-residence carriers read by the Art. 123B(3) fallback (RE-05). Both ride
+# the sealed SA input; ``ensure_columns`` injects them as typed nulls on a
+# hand-built frame, which reads as "residence unknown".
+_OBLIGOR_RESIDENCE_COLUMNS: dict[str, ColumnSpec] = {
+    "cp_country_code": ColumnSpec(pl.String, required=False),
+    "cp_local_currency": ColumnSpec(pl.String, required=False),
+}
+
+# SA010 census (RE-05): the carriers it reads — injected as typed nulls where a
+# frame lacks them, so a hand-built frame counts rather than raises — and the
+# names of its two aggregates.
+_INCOME_CENSUS_COLUMNS: dict[str, ColumnSpec] = {
+    "value_date": ColumnSpec(pl.Date, required=False),
+}
+_CENSUS_UNKNOWN = "_sa010_income_currency_unknown"
+_CENSUS_PRE_2027 = "_sa010_income_currency_unknown_pre_2027"
 
 
 @cites("CRR Art. 222")
@@ -441,7 +472,6 @@ def apply_guarantee_substitution(
 
 
 @cites("PS1/26, paragraph 123B")
-@cites("PS1/26, paragraph 123B.3")
 def apply_currency_mismatch_multiplier(
     lf: pl.LazyFrame,
     config: CalculationConfig,
@@ -450,24 +480,37 @@ def apply_currency_mismatch_multiplier(
 ) -> pl.LazyFrame:
     """Apply 1.5x RW multiplier for retail/RE currency mismatch (Basel 3.1 only).
 
-    When the exposure currency differs from the borrower's income currency,
-    a 1.5x multiplier is applied to the risk weight for retail and real estate
-    exposure classes.
+    PS1/26 Art. 123B(1)(a): an unhedged retail / residential RE exposure whose
+    LENDING currency differs from the currency of the obligor's source of income
+    takes 1.5x its risk weight, capped at 150%. The lending currency is the
+    exposure's denomination (``denomination_currency_expr``): the FX converter
+    overwrites ``currency`` with the reporting currency, and comparing THAT with
+    the income currency inverted the test on every FX-converted run (RE-05).
 
-    Basel 3.1 Art. 123B / CRE20.93.
+    Art. 123B(3) — income currency unknown (RE-05): where the institution "is
+    unable to identify those exposures with a currency mismatch" it "shall apply
+    the risk weight multiplier of 1.5 to all unhedged retail exposures ... except
+    where the lending currency is the same as the domestic currency of the
+    country of residence of the obligor". A null ``borrower_income_currency``
+    takes that fallback (``_unknown_income_mismatch_expr``). The rule's text
+    covers exposures incurred before 1 January 2027; for later ones Art. 123B(1)
+    obliges the institution to know the income currency, so the same fallback is
+    the conservative proxy and SA010 says so
+    (``income_currency_unknown_census_exprs`` / ``income_currency_unknown_warnings``).
 
-    Art. 123B(3) transitional: the multiplier is a Basel-3.1-only measure that
-    commences on ``_B31_EFFECTIVE_DATE`` (1 January 2027). Reporting dates strictly
-    before that fall under the pre-Basel-3.1 portfolio treatment and the frame is
-    returned unchanged. The boundary date 1 January 2027 is in scope (strict ``<``).
+    Commencement: the multiplier is a PS1/26 measure in force from
+    ``_B31_EFFECTIVE_DATE`` (1 January 2027). Reporting dates strictly before
+    that fall under the pre-Basel-3.1 treatment and the frame is returned with
+    the flag False. The boundary date is in scope (strict ``<``). This is the
+    Basel 3.1 commencement date, not Art. 123B(3).
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if not resolved_pack.feature("sa_currency_mismatch_multiplier"):
         return lf
 
-    # Art. 123B(3) transitional: pre-commencement reporting dates suppress the
-    # multiplier entirely. Emit the reporting column as ``False`` (consistent with
-    # the no-mismatch branch below) so downstream reporting always sees the flag.
+    # Commencement: pre-1-January-2027 reporting dates suppress the multiplier
+    # entirely. Emit the reporting column as ``False`` (consistent with the
+    # no-mismatch branch below) so downstream reporting always sees the flag.
     if config.reporting_date < _B31_EFFECTIVE_DATE:
         return lf.with_columns(pl.lit(False).alias("currency_mismatch_multiplier_applied"))
 
@@ -475,13 +518,7 @@ def apply_currency_mismatch_multiplier(
     cols = schema.names()
 
     # Need both exposure currency and borrower income currency
-    income_col = (
-        "cp_borrower_income_currency"
-        if "cp_borrower_income_currency" in cols
-        else "borrower_income_currency"
-        if "borrower_income_currency" in cols
-        else None
-    )
+    income_col = _income_currency_column(cols)
     if income_col is None or "currency" not in cols:
         return lf
 
@@ -490,20 +527,16 @@ def apply_currency_mismatch_multiplier(
     # Commercial RE (Art. 112(j) per Art. 124H/124I) and corporate are OUT of
     # scope. Use exact-match against ExposureClass enum string values rather
     # than substring matching to avoid COMMERCIAL_MORTGAGE matching "COMMERCIAL".
-    is_retail_or_re = (
-        pl.col("exposure_class")
-        .fill_null("")
-        .is_in(
-            [
-                "retail_other",
-                "retail_qrre",
-                "retail_mortgage",
-                "residential_mortgage",
-            ]
-        )
-    )
+    is_retail_or_re = pl.col("exposure_class").fill_null("").is_in(list(_ART_123B_CLASSES))
 
-    has_mismatch = pl.col(income_col).is_not_null() & (pl.col(income_col) != pl.col("currency"))
+    lf = ensure_columns(lf, _OBLIGOR_RESIDENCE_COLUMNS, present=cols)
+    lending_currency = denomination_currency_expr(cols)
+    income = pl.col(income_col)
+    # Art. 123B(1)(a): a KNOWN income currency differing from the lending currency;
+    # Art. 123B(3): an UNKNOWN one, unless the lending currency is domestic.
+    has_mismatch = (income.is_not_null() & (income != lending_currency)) | (
+        _unknown_income_mismatch_expr(income, lending_currency)
+    )
 
     # Art. 123B(2) / CRE20.93: the 1.5x mismatch multiplier is suppressed when
     # the exposure is hedged against currency risk. A full hedge can be signalled
@@ -567,6 +600,86 @@ def apply_currency_mismatch_multiplier(
             mismatch_applies.alias("currency_mismatch_multiplier_applied"),
         ]
     )
+
+
+@cites("PS1/26, paragraph 123B")
+def income_currency_unknown_census_exprs(
+    config: CalculationConfig,
+    schema_names: Collection[str],
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> tuple[pl.Expr, ...]:
+    """Return the SA010 census aggregates, or ``()`` where Art. 123B does not run.
+
+    Two row counts over the SA calculator's input: Art. 123B-scope exposures
+    (retail / residential RE class) with no borrower income currency, and those
+    of them incurred before 1 January 2027 (``value_date``). They are returned as
+    expressions, not counted here, so ``SACalculator`` can fold them into the ONE
+    collect it already makes at entry (the SA005 check) — the pipeline's fixed
+    collect budget does not grow. ``income_currency_unknown_warnings`` turns the
+    counts into the warning. Empty under CRR and before commencement, where the
+    multiplier does not run, and on a frame with no income-currency column, which
+    the multiplier skips too.
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("sa_currency_mismatch_multiplier"):
+        return ()
+    if config.reporting_date < _B31_EFFECTIVE_DATE:
+        return ()
+    income_col = _income_currency_column(schema_names)
+    if income_col is None:
+        return ()
+    unknown = pl.col("exposure_class").is_in(list(_ART_123B_CLASSES)) & pl.col(income_col).is_null()
+    return (
+        unknown.sum().alias(_CENSUS_UNKNOWN),
+        (unknown & (pl.col("value_date") < _B31_EFFECTIVE_DATE)).sum().alias(_CENSUS_PRE_2027),
+    )
+
+
+def with_income_currency_census_columns(lf: pl.LazyFrame, present: Collection[str]) -> pl.LazyFrame:
+    """Inject (as typed nulls) the carriers the SA010 census reads, where absent.
+
+    ``present`` is the caller's already-resolved column list, so this costs no
+    second schema resolution.
+    """
+    return ensure_columns(lf, _INCOME_CENSUS_COLUMNS, present=present)
+
+
+@cites("PS1/26, paragraph 123B")
+def income_currency_unknown_warnings(census: pl.DataFrame) -> list[CalculationError]:
+    """Return the SA010 warning from a census row built from the expressions above.
+
+    One WARNING per run, split by value date: exposures incurred before
+    1 January 2027 are inside the PS1/26 Art. 123B(3) fallback verbatim; for
+    later ones Art. 123B(1) requires the institution to identify the income
+    currency, and the same fallback is applied as a conservative proxy. The
+    count covers every row the SA risk-weight pipeline weights — SA rows, and
+    IRB rows whose SA-equivalent weight feeds the Basel 3.1 output floor.
+    """
+    unknown = int(census[_CENSUS_UNKNOWN].item())
+    if unknown == 0:
+        return []
+    pre_2027 = int(census[_CENSUS_PRE_2027].item())
+    return [
+        CalculationError(
+            code=ERROR_INCOME_CURRENCY_UNKNOWN,
+            message=(
+                f"{unknown} retail / residential real estate exposure(s) carry no "
+                "borrower_income_currency, so a currency mismatch cannot be identified. The "
+                "Art. 123B(3) fallback was applied to their SA risk weight (the output-floor "
+                "SA-equivalent for IRB rows): 1.5x (capped at 150%) on each unhedged exposure "
+                "whose lending currency is not the obligor's domestic currency "
+                f"(local_currency, else country_code). {pre_2027} were incurred before "
+                f"1 January 2027 (Art. 123B(3)(b)); {unknown - pre_2027} were incurred on or "
+                "after it, or carry no value_date, where Art. 123B(1) requires the income "
+                "currency to be known. Populate borrower_income_currency."
+            ),
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.DATA_QUALITY,
+            regulatory_reference="PRA PS1/26 Art. 123B(1), 123B(3)",
+            field_name="borrower_income_currency",
+        )
+    ]
 
 
 @cites("PS1/26, paragraph 110A")
@@ -815,4 +928,44 @@ def _build_guarantor_rw_expr(
         domestic_cgcb_expr=is_domestic_guarantor,
         short_term_flag_col=institution_short_term_flag_col,
         no_guarantee_expr=pl.col("guaranteed_portion") <= 0,
+    )
+
+
+# =========================================================================
+# Currency-mismatch helpers (PS1/26 Art. 123B)
+# =========================================================================
+
+
+def _income_currency_column(schema_names: Collection[str]) -> str | None:
+    """Pick the borrower income-currency carrier: the sealed ``cp_`` twin, else raw."""
+    if "cp_borrower_income_currency" in schema_names:
+        return "cp_borrower_income_currency"
+    if "borrower_income_currency" in schema_names:
+        return "borrower_income_currency"
+    return None
+
+
+@cites("PS1/26, paragraph 123B.3")
+def _unknown_income_mismatch_expr(income: pl.Expr, lending_currency: pl.Expr) -> pl.Expr:
+    """Art. 123B(3): income currency unknown and lending currency not shown domestic.
+
+    PS1/26 Art. 123B(3) applies the multiplier to all unhedged retail / RRE
+    exposures whose mismatch cannot be identified "except where the lending
+    currency is the same as the domestic currency of the country of residence of
+    the obligor or the country of employment of the obligor". The obligor's
+    domestic currency is ``cp_local_currency`` when supplied, else the domestic
+    currency of ``cp_country_code`` (UK + EU from the pack); there is no
+    country-of-employment input. A null domestic currency — an unmapped or null
+    country with no local currency — cannot establish the exception, so the
+    multiplier applies (``eq_missing`` keeps the expression total without a
+    ``fill_null``). A null LENDING currency leaves the test unevaluable, exactly
+    as it leaves the known-income limb unevaluable: no multiplier from either.
+    """
+    domestic_currency = pl.coalesce(
+        pl.col("cp_local_currency"), country_domestic_currency_expr("cp_country_code")
+    )
+    return (
+        lending_currency.is_not_null()
+        & income.is_null()
+        & ~domestic_currency.eq_missing(lending_currency)
     )

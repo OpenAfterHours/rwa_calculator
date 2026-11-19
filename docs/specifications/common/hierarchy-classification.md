@@ -271,15 +271,25 @@ Conditions (5A)(d) low loss-rate volatility and (5A)(e) consistency with the
 sub-portfolio's risk characteristics are supervisory, portfolio-level attestations, not
 per-exposure inputs, and are out of scope for row-level classification.
 
-If the **SA regulatory-retail** thresholds are breached, the exposure loses its SA
-regulatory-retail (75%) treatment and its SA `exposure_class` is reclassified to
-CORPORATE.
+If the **SA regulatory-retail** criteria are not met, the exposure loses its SA
+regulatory-retail (75%) treatment. Where it then lands is a regime difference, carried by
+the pack Feature `non_qualifying_retail_leaves_retail_class`:
+
+- **CRR** — CRR Art. 123 (last sub-paragraph): exposures that do not comply "shall not be
+  eligible for the retail exposures class", so the SA `exposure_class` is reclassified to
+  CORPORATE.
+- **Basel 3.1** — PS1/26 Art. 123(1)(a) categorises every non-SME natural-person exposure
+  as retail; Art. 123A only decides whether it is *regulatory* retail. The row stays
+  RETAIL_OTHER as a non-regulatory retail exposure at 100% (Art. 123(3)(c)), and the
+  Art. 123B currency-mismatch multiplier (scoped by retail class) still reaches it. An
+  SME failing PS1/26 Art. 123(1)(b) is not a retail exposure and moves to CORPORATE_SME in
+  both regimes.
 
 !!! warning "SA regulatory retail (Art. 123/123A) vs IRB retail class (Art. 147(5)) — the monetary cap is SME-limb-only in IRB"
     The aggregate-owed cap above (`qualifies_as_retail`) implements the **SA**
     regulatory-retail test (CRR Art. 123 / PS1/26 Art. 123A), which caps natural
-    persons for the 75% treatment and — under Basel 3.1 — adds the Art. 123A(1)(b)(ii)
-    0.2% granularity limb. The **IRB** retail *exposure class* (CRR Art. 147(5)(a) /
+    persons for the 75% treatment (and, where a firm elects it, applies the optional
+    0.2% granularity test). The **IRB** retail *exposure class* (CRR Art. 147(5)(a) /
     PS1/26 Art. 147(5)(a)) is a **different** rule: it admits **(i)** exposures to
     natural persons with **no monetary cap** and no granularity limb, or **(ii)**
     exposures to an SME **provided** the total amount owed (excluding
@@ -287,9 +297,9 @@ CORPORATE.
     GBP 880,000 (PS1/26)**. The cap and granularity limb condition the **SME limb
     only**.
 
-    Consequently a natural person owing more than the cap is expelled from SA
-    regulatory retail (`exposure_class` → CORPORATE) but **stays in the IRB retail
-    class**: `sync_irb_exposure_class` restores such a row's `exposure_class_irb`
+    Consequently, under CRR, a natural person owing more than the cap is expelled
+    from SA regulatory retail (`exposure_class` → CORPORATE) but **stays in the IRB
+    retail class**: `sync_irb_exposure_class` restores such a row's `exposure_class_irb`
     to RETAIL_OTHER (subject to the Art. 147(5)(c) management-basis condition —
     `is_managed_as_retail` not explicitly False), and `_align_irb_exposure_class`
     propagates it to `exposure_class` for the IRB-routed leg so the retail A-IRB
@@ -297,7 +307,11 @@ CORPORATE.
     an entity type in `NATURAL_PERSON_ENTITY_TYPES` (`individual` / `natural_person`
     / `retail`); an unknown obligor is treated as NOT a natural person, so the cap
     keeps binding (conservative). The SME limb is unchanged — an SME above the cap
-    stays corporate.
+    stays corporate. Under Basel 3.1 the SA class already stays RETAIL_OTHER
+    (see above), so the divergence can only run the other way: a natural person with
+    `is_managed_as_retail` explicitly False fails Art. 147(5)(c) and its
+    `exposure_class_irb` is CORPORATE while the SA class is RETAIL_OTHER — the same
+    IRB class it had before RE-03, so IRB permission lookup and routing are unchanged.
 
 ### Basel 3.1 Retail Qualifying Criteria (Art. 123A)
 
@@ -307,13 +321,15 @@ Under Basel 3.1, Art. 123A has a two-path structure:
 - **Art. 123A(1)(b) — Natural person retail**: Three conditions must **all** be met:
 
 1. **Product type** (Art. 123A(1)(b)(i)): The exposure takes the form of revolving credits/lines of credit (credit cards, overdrafts), personal term loans/leases (instalment loans, auto loans, student loans), or small business facilities. Must not be a derivative, bond, or equity instrument. Mortgages are excluded (separate class).
-2. **Granularity** (Art. 123A(1)(b)(ii)): Total exposure to the obligor (or connected group) does not exceed **GBP 880,000**. No single exposure represents more than 0.2% of the retail portfolio.
+2. **Aggregate amount owed** (Art. 123A(1)(b)(ii)): Total amount owed by the obligor (or group of connected clients), excluding residential real estate exposures, does not exceed **GBP 880,000**. That is the whole of the limb — PS1/26 has **no** 0.2% granularity limb (the 0.2% test is BCBS CRE20.66, which the PRA did not adopt).
 3. **Pool management** (Art. 123A(1)(b)(iii)): The exposure is part of a **significant number of similarly managed exposures** with similar characteristics. This is a qualitative/attestation requirement, not a calculated check.
 
 !!! note "Implementation Status"
     - **Condition 1 (product type)**: Not enforced — the calculator relies on input data for product type classification. A dedicated `product_type` field would be needed to validate this condition programmatically.
-    - **Condition 2 (granularity threshold)**: Implemented — aggregate exposure threshold (GBP 880,000) is enforced via lending group aggregation.
-    - **Condition 3 (pool management)**: Implemented under Basel 3.1 — non-SME entities must have `is_managed_as_retail=True` to qualify. This field defaults to `True` for backward compatibility. SME entities auto-qualify per Art. 123A(1)(a) and are not subject to this condition.
+    - **Condition 2 (aggregate amount owed)**: Implemented — the GBP 880,000 threshold is enforced via lending group aggregation.
+    - **Optional 0.2% test**: a firm may evidence condition 3 quantitatively with the BCBS CRE20.66 test (no obligor above 0.2% of the candidate-retail portfolio) by setting `CalculationConfig.enforce_retail_granularity=True`. It is **off by default** (it was on by default until RE-04, applying a limb PS1/26 does not contain). An obligor failing it is non-regulatory retail at 100%.
+    - **Condition 3 (pool management)**: Implemented under Basel 3.1 — non-SME entities must have `is_managed_as_retail=True` to qualify. The loader seals an omitted flag to `False`, so a feed that omits it makes every natural person non-regulatory retail (100%); the classifier's own null default (`True`) is reached only on hand-built frames. SME entities auto-qualify per Art. 123A(1)(a) and are not subject to this condition.
+    - **Failure is not an exit from retail**: a natural person failing any condition stays RETAIL_OTHER at the Art. 123(3)(c) 100% weight (RE-03).
     - **SME auto-qualification (Art. 123A(1)(a))**: Explicitly implemented — SME counterparties bypass the three conditions under (b) and qualify for retail treatment directly.
 
 !!! note "No Art. 123A(d)"

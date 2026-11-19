@@ -47,7 +47,8 @@ Hand-calculation (Basel 3.1, Art. 123B, PS1/26 commencement 1 January 2027):
            RWA = 100,000 x 1.125 = 112,500.00
 
 Regulatory references:
-    - PRA PS1/26 Art. 123B(3): transitional treatment; commencement 1 January 2027.
+    - PRA PS1/26 commencement 1 January 2027 (NOT Art. 123B(3), which is the
+      unknown-income-currency fallback - see RE-05).
     - PRA PS1/26 Art. 123(1): retail non-mortgage SA risk weight = 75%.
     - BCBS CRE20.93: currency mismatch multiplier effective date.
     - tests/fixtures/p1_94a/p1_94a.py: canonical row shape (reused by P1.94e test).

@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `eba3681dcf050d9d`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 239 entries, content hash `d52b5f7999bdf292`
 
 ## Regime features
 
@@ -42,6 +42,7 @@ On/off behaviour switches (`Feature`).
 | `intragroup_zero_rw` | on | on | CRR Art. 113 / PS1/26, paragraph 113 |
 | `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
+| `non_qualifying_retail_leaves_retail_class` | on | off | CRR Art. 123 / PS1/26, paragraph 123 |
 | `on_bs_netting_perimeter_is_agreement` | on | on | CRR Art. 195 / PS1/26, paragraph 195 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
 | `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
@@ -98,7 +99,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `b31_residential_general_secured_rw` | — | `0.20` | PS1/26, paragraph 124F |
 | `b31_residential_income_junior_ltv_threshold` | — | `0.50` | PS1/26, paragraph 124G |
 | `b31_residential_income_junior_multiplier` | — | `1.25` | PS1/26, paragraph 124G |
-| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123 |
+| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123A |
 | `b31_retail_non_regulatory_rw` | — | `1.00` | PS1/26, paragraph 123 |
 | `b31_retail_payroll_loan_rw` | — | `0.35` | PS1/26, paragraph 123 |
 | `b31_retail_transactor_rw` | — | `0.45` | PS1/26, paragraph 123 |

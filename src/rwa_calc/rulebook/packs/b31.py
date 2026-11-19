@@ -617,7 +617,22 @@ ENTRIES: dict[str, RuleEntry] = {
     "retail_art_123a_two_path_applicable": Feature(
         name="retail_art_123a_two_path_applicable",
         enabled=True,
-        citation=Citation("PS1/26", "123A", "two-path retail qualification (SME + granularity)"),
+        citation=Citation("PS1/26", "123A", "two-path regulatory-retail qualification"),
+    ),
+    # PS1/26 Art. 123(1)(a) categorises "an exposure to one or more natural persons
+    # and not an exposure to an SME" as a retail exposure with no further
+    # condition; Art. 123A only decides whether it is REGULATORY retail, and
+    # Art. 123(3)(c) weights "all other retail exposures that do not qualify as
+    # regulatory retail exposures" at 100%. So a natural person failing Art. 123A
+    # STAYS in the retail class (where the Art. 123B multiplier can reach it) —
+    # the CRR exit to CORPORATE is off. The SME limb is untouched: an SME failing
+    # Art. 123(1)(b) is not a retail exposure and still moves to CORPORATE_SME (RE-03).
+    "non_qualifying_retail_leaves_retail_class": Feature(
+        name="non_qualifying_retail_leaves_retail_class",
+        enabled=False,
+        citation=Citation(
+            "PS1/26", "123", "(1)(a) natural persons are retail; (3)(c) non-regulatory 100%"
+        ),
     ),
     # Basel 3.1 regulatory monetary thresholds — PRA-native GBP values (Art. 147(5A) /
     # 147A(1)(d) / 153(4)), EXCEPT sme_balance_sheet which PS1/26 does not restate, so it
@@ -1289,10 +1304,18 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("1.00"),
         citation=Citation("PS1/26", "123", "(3)(c) non-regulatory retail 100%"),
     ),
+    # NOT a PS1/26 limb (RE-04): Art. 123A(1)(b)(ii) is the GBP 880,000 aggregate
+    # test alone. The 0.2% is BCBS CRE20.66, read only when a firm elects it
+    # (``enforce_retail_granularity``, default False) as its method of evidencing
+    # the qualitative Art. 123A(1)(b)(iii) "significant number of exposures".
     "b31_retail_granularity_limit": ScalarParam(
         name="b31_retail_granularity_limit",
         value=Decimal("0.002"),
-        citation=Citation("PS1/26", "123", "123A(1)(b)(ii) single-obligor 0.2% granularity cap"),
+        citation=Citation(
+            "PS1/26",
+            "123A",
+            "(1)(b)(iii) optional evidencing method: BCBS CRE20.66 0.2% test, no PS1/26 limb",
+        ),
     ),
     # PRA PS1/26 commencement date — the Basel 3.1 SA framework (including the
     # Art. 123B currency-mismatch multiplier this date gates) takes effect on

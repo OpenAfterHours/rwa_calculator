@@ -410,7 +410,7 @@ class SACalculator:
 
     def calculate_branch(self, exposures, config, *, errors=None):
         if errors is not None:
-            self._warn_equity_in_main_table(exposures, errors)  # SA005
+            self._collect_entry_warnings(exposures, config, errors, pack=pack)  # SA005 + SA010
 
         return (
             exposures.pipe(apply_risk_weights, config, pack=pack)

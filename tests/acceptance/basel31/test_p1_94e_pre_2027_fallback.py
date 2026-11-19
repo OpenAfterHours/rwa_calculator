@@ -31,7 +31,8 @@ Pre-fix failure mode:
     Test fails on the Run A assertion: assert 1.125 == approx(0.75).
 
 References:
-    - PRA PS1/26 Art. 123B(3): transitional treatment; commencement 1 January 2027.
+    - PRA PS1/26 commencement 1 January 2027 (NOT Art. 123B(3), which is the
+      unknown-income-currency fallback - see RE-05).
     - PRA PS1/26 Art. 123(1): retail non-mortgage SA risk weight = 75%.
     - BCBS CRE20.93: currency mismatch multiplier effective date.
     - tests/fixtures/p1_94e/p1_94e.py: scenario constants.

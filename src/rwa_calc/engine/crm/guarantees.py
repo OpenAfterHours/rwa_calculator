@@ -167,8 +167,14 @@ def apply_guarantees(
     exposures = assign_guarantor_approach(exposures, config, present=join_cols)
 
     # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
-    # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed portion
-    exposures = _apply_cross_approach_ccf(exposures, present=join_cols)
+    # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed
+    # portion — the regime's own SA table (CRR Annex I, or PS1/26 Table A1).
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    exposures = _apply_cross_approach_ccf(
+        exposures,
+        present=join_cols,
+        revised_table=resolved_pack.feature("sa_revised_ccf_table"),
+    )
 
     # Add post-CRM composite attributes for regulatory reporting. For the
     # guaranteed portion, the post-CRM counterparty is the guarantor.
@@ -701,7 +707,10 @@ def _build_remainder_sub_rows(multi_joined: pl.LazyFrame, schema_names: list[str
 
 
 def _apply_cross_approach_ccf(
-    exposures: pl.LazyFrame, *, present: list[str] | None = None
+    exposures: pl.LazyFrame,
+    *,
+    present: list[str] | None = None,
+    revised_table: bool = False,
 ) -> pl.LazyFrame:
     """
     Apply cross-approach CCF substitution for guaranteed exposures.
@@ -709,6 +718,13 @@ def _apply_cross_approach_ccf(
     When an IRB exposure (F-IRB or A-IRB) is guaranteed by an SA counterparty,
     the guaranteed portion must use SA CCFs for COREP C07 reporting.
     If the guarantor is also IRB, the original IRB CCF is retained.
+
+    ``revised_table`` is the run's ``sa_revised_ccf_table`` pack Feature: the
+    SA factor is the PS1/26 Art. 111(1) Table A1 one under Basel 3.1 (Row 5
+    other commitments 40%, Row 7 unconditionally cancellable 10%, the issued /
+    commitment residual split on ``is_obs_commitment``) and the CRR Annex I one
+    otherwise. Before, the CRR table was used in both regimes, so a Basel 3.1
+    F-IRB unconditionally cancellable line took 0% on its guaranteed part.
 
     Returns:
         Exposures with CCF-adjusted guaranteed/unguaranteed portions
@@ -728,7 +744,10 @@ def _apply_cross_approach_ccf(
         & (pl.col("nominal_amount") > 0)
     )
 
-    sa_ccf = sa_ccf_expression()
+    sa_ccf = sa_ccf_expression(
+        is_basel_3_1=revised_table,
+        commitment_col="is_obs_commitment" if "is_obs_commitment" in names else None,
+    )
 
     exposures = exposures.with_columns(
         [

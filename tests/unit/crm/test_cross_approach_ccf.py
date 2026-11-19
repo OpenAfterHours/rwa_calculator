@@ -712,3 +712,47 @@ class TestGuarantorDualRating:
         assert row["guarantor_approach"][0] == "sa"
         # SA approach → SA CCF for guaranteed portion
         assert row["ccf_guaranteed"][0] == pytest.approx(0.50)
+
+
+# =============================================================================
+# Test: Basel 3.1 — the guaranteed portion takes the Table A1 SA CCF
+# =============================================================================
+
+
+class TestBasel31CrossApproachUsesTableA1:
+    """Under Basel 3.1 the SA CCF of the guaranteed portion is the PS1/26 Table A1 one.
+
+    ``_apply_cross_approach_ccf`` used the CRR Annex I table whatever the regime,
+    so a Basel 3.1 F-IRB unconditionally cancellable line guaranteed by an SA
+    guarantor dropped from its Table A1 Row 7 10% (Art. 166C(1) already gives
+    F-IRB the SA factor) to the CRR 0% on the guaranteed part, and an "other
+    commitment" took a CRR factor instead of Row 5's 40%. Rule text: PS1/26
+    Art. 111(1) Table A1 Row 5 "any other commitment ... 40%", Row 7
+    "unconditionally cancellable commitments 10%"; Art. 166C(1).
+    """
+
+    @pytest.mark.parametrize(("risk_type", "expected_ccf"), [("LR", 0.10), ("OC", 0.40)])
+    def test_guaranteed_portion_takes_the_table_a1_factor(
+        self, crm_processor: CRMProcessor, risk_type: str, expected_ccf: float
+    ) -> None:
+        # Arrange
+        config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30), permission_mode=PermissionMode.IRB
+        )
+        exposure = {**_base_exposure(risk_type=risk_type), "is_obs_commitment": True}
+
+        # Act
+        result = _run_crm(
+            crm_processor,
+            config,
+            [exposure],
+            [_base_guarantee()],
+            [
+                _base_counterparty("GUARANTOR01", "institution"),
+                _base_counterparty("BORROWER01", "corporate"),
+            ],
+        )
+
+        # Assert: pre-fix LR 0.0 and OC 0.5 (the CRR Annex I table).
+        row = _get_guar_row(result)
+        assert row["ccf_guaranteed"][0] == pytest.approx(expected_ccf)

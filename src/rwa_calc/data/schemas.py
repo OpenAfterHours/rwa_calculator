@@ -2537,6 +2537,35 @@ RISK_TYPE_SYNONYMS: dict[str, str] = {
 # to ignore the true ones (P1.354).
 VALID_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_INPUT | set(RISK_TYPE_SYNONYMS)
 
+# Risk types that only the ENGINE mints, on the rows its counterparty-credit-risk
+# stages build: ``CCR_DERIVATIVE`` (SA-CCR netting sets), ``CCR_SFT`` (FCCM SFT
+# netting sets) and ``CCR_DEFAULT_FUND`` (CCP default-fund contributions,
+# ``engine/stages/ccr.py``). They are canonical OUTPUT vocabulary, not a lending
+# category: on a loans / contingents / facilities row they routed the item to the
+# CCR treatment (``standardised_ccr`` label, repo-style IRB maturity, C 07.00 CCR
+# rows) while it was still priced at a CCF on its nominal amount (review finding
+# CC-19). The exposure value of a derivative or an SFT comes from the CCR methods
+# or the FCCM, never from an Annex I / Table A1 CCF (CRR Art. 111(2); PS1/26 Art.
+# 111(2) / (2A)). A lending table carrying one draws DQ023
+# (``contracts/validation.py``) and the hierarchy stage disregards the value
+# (``engine/hierarchy/unify.py``).
+ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset(
+    {"CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND"}
+)
+
+# What the hierarchy stage rewrites an engine-only risk type on a lending row to:
+# this prefix + the upper-cased value (``"DQ023:CCR_SFT"``). Deliberately NOT null.
+# An explicit but unrecognised risk type outranks ``obs_product`` and takes the CCF
+# residual (``engine/ccf.py``), exactly as the tag did before; nulling it would let
+# ``obs_product`` re-price the row. The prefix removes ONLY the CCR routing, which
+# keys on the exact tag, and leaves the supplied value readable in the output.
+DISREGARDED_RISK_TYPE_PREFIX = "DQ023:"
+
+# The domain accepted on a LENDING table's ``risk_type`` / ``underlying_risk_type``:
+# every accepted spelling except the engine-only tags above. A value outside it is
+# DQ006, except an engine-only tag, which is reported once, as DQ023.
+LENDING_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_ACCEPTED - ENGINE_ONLY_RISK_TYPES
+
 # CRR Annex I paras 1-4 / Art. 111(1): canonical normalised OBS *product* keys
 # accepted on the ``obs_product`` column. Each maps (via ANNEX1_PRODUCT_RISK_TYPE
 # in data/tables/ccf.py) to an abstract Annex I risk_type bucket. Distinct from
@@ -2827,8 +2856,8 @@ TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
-        "risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
+        "risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": LENDING_RISK_TYPES_ACCEPTED,
         "obs_product": VALID_OBS_PRODUCTS,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
@@ -2840,8 +2869,8 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "contingents": {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
-        "risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
+        "risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": LENDING_RISK_TYPES_ACCEPTED,
         "obs_product": VALID_OBS_PRODUCTS,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
         "exposure_collateral_type": VALID_COLLATERAL_TYPES,

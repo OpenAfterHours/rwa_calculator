@@ -74,6 +74,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     absent_reference_error,
     duplicate_input_key_error,
+    engine_only_risk_type_error,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
     orphan_reference_error,
@@ -97,6 +98,9 @@ COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
 #: rows carry an amount; duplicated rather than imported because check 12 bars
 #: ``contracts/`` from importing ``engine/``.
 _ZERO_AMOUNT_TOLERANCE = 1e-10
+
+#: The categorical columns whose engine-only values report as DQ023, not DQ006.
+_RISK_TYPE_COLUMNS: frozenset[str] = frozenset({"risk_type", "underlying_risk_type"})
 
 
 # =============================================================================
@@ -410,7 +414,21 @@ def _invalid_column_value_error(
     count: int,
     valid_values: set[str],
 ) -> CalculationError:
-    """The DQ006 warning for one distinct out-of-set value of a categorical column."""
+    """The error for one distinct out-of-set value of a categorical column.
+
+    DQ006 WARNING, except for an engine-only risk type (``CCR_DERIVATIVE`` /
+    ``CCR_SFT`` / ``CCR_DEFAULT_FUND``) on a lending table's risk-type column:
+    that value is outside the lending domain for a reason the generic code
+    cannot say — the row would be routed to a counterparty-credit-risk
+    treatment it is not priced under — so it is reported once, as DQ023 ERROR
+    (review finding CC-19), and the hierarchy stage disregards it.
+    """
+    from rwa_calc.data.schemas import ENGINE_ONLY_RISK_TYPES
+
+    if column in _RISK_TYPE_COLUMNS and str(bad_value).strip().upper() in ENGINE_ONLY_RISK_TYPES:
+        return engine_only_risk_type_error(
+            table=context, column=column, value=str(bad_value), count=count
+        )
     sorted_valid = sorted(valid_values)
     return CalculationError(
         code=ERROR_INVALID_COLUMN_VALUE,

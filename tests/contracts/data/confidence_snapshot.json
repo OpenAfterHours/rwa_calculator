@@ -3606,9 +3606,12 @@
         "engine/crm/expressions.py",
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
+        "engine/crm/life_insurance.py",
         "engine/crm/min_collateralisation.py",
         "engine/crm/netting.py",
         "engine/crm/processor.py",
+        "engine/crm/simple_method.py",
+        "engine/crm/third_party_deposit.py",
         "engine/hierarchy/unify.py",
         "engine/irb/formulas.py",
         "engine/kernels/allocation.py",
@@ -8127,9 +8130,11 @@
         "domain/enums.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
+        "engine/crm/life_insurance.py",
         "engine/crm/look_through.py",
         "engine/crm/processor.py",
-        "engine/crm/simple_method.py"
+        "engine/crm/simple_method.py",
+        "engine/crm/third_party_deposit.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_161_art_191a_two_layer_protection.py",

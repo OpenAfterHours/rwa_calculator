@@ -569,26 +569,30 @@ collateral = pl.DataFrame({
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `guarantee_reference` | `String` | Yes | Unique identifier |
-| `guarantee_type` | `String` | No | Type of guarantee |
+| `guarantee_reference` | `String` | Yes | Identifies one protection **contract**. Rows that share a reference are one contract with **one** cap (Art. 233(1): G is the amount the provider undertook to pay): the total recognised across them is capped at the contract's `amount_covered` and shared pro-rata to each row's covered demand, min(G, E). Sharing a reference across beneficiaries is how to state a pool / aggregate-cap guarantee over obligors in different counterparty or facility trees. Rows that state different `amount_covered` values (the largest is used), or repeat one beneficiary, raise **CRM028** |
+| `guarantee_type` | `String` | No | Free-text descriptor. Read for two families only — see [`guarantee_type` values](#guarantee-type-values) below |
 | `guarantor` | `String` | Yes | Guarantor counterparty reference |
 | `currency` | `String` | No | ISO 4217 currency code |
 | `maturity_date` | `Date` | No | Guarantee expiry date |
-| `amount_covered` | `Float64` | Conditional | Amount covered by guarantee (required unless `percentage_covered` provided) |
-| `percentage_covered` | `Float64` | Conditional | Fraction of exposure covered (`1.0` = 100%). Used when `amount_covered` not provided |
+| `amount_covered` | `Float64` | Conditional | Amount the provider undertook to pay (required unless `percentage_covered` provided). With `percentage_covered` also given, it is the cap on the percentage |
+| `percentage_covered` | `Float64` | Conditional | Fraction of exposure covered (`1.0` = 100%), measured on the exposure value with off-balance-sheet items at 100% (Art. 235(1)(a)). Where `amount_covered` is also given, G = **min(percentage × exposure, amount)** — "x% of the exposure, up to the amount" (Art. 233(1)). An `amount_covered` of 0 or null means the percentage alone is used |
 | `beneficiary_type` | `String` | Yes | Level of allocation |
 | `beneficiary_reference` | `String` | Yes | Reference to counterparty/facility/loan |
-| `protection_type` | `String` | No | `"guarantee"` (default) or `"credit_derivative"` — drives CRM treatment under CRR Art. 213 vs Art. 215 (credit-derivative-specific eligibility tests) |
-| `includes_restructuring` | `Boolean` | No | True when the credit derivative includes restructuring as a credit event. Required for full recognition under CRR Art. 216(1)(d); when False the recognised cover is reduced to 60% per Art. 216(1)(e) |
+| `protection_type` | `String` | No | `"guarantee"` (default) or `"credit_derivative"` — drives CRM treatment under CRR Art. 213 vs Art. 215 (credit-derivative-specific eligibility tests). A `guarantee_type` naming a credit derivative overrides it (**CRM030**) |
+| `includes_restructuring` | `Boolean` | No | Default `False` (the loader fills an absent column or a null value with it). For a credit derivative: True when restructuring of the underlying obligation is a credit event. When False, Art. 233(2) applies (both regimes): the cover is reduced by 40% where the amount undertaken is not higher than the exposure value, and valued at no more than 60% of the exposure value where it is higher — whether the cover is stated as an amount or a percentage. Applied before the Art. 233(3) currency haircut |
+| `is_unilaterally_cancellable` / `is_unilaterally_changeable` | `Boolean` | No | Art. 213(1)(c)(i): True drops the protection with **CRM012** — cancellable in both regimes, changeable under Basel 3.1 only. Null is permissive |
+| `attachment_amount` / `detachment_amount` | `Float64` | No | Art. 234 **tranched** protection: an `attachment_amount` above zero, or any `detachment_amount`, says the protection covers a band of the loss rather than a pro-rata share. Art. 234 sends a tranched transfer of risk to the securitisation framework and Art. 235(2) allows the substitution only where the protected and unprotected parts are of equal seniority, so such a row is **not recognised** (**CRM027**) and the exposure keeps the obligor's own risk weight. Leave both null for a guarantee of a share of the exposure, or of all of it |
 | `guarantor_entity_reference` | `String` | No | Non-null tags the guarantor as the named group reporting entity (an `entity_reference` in the [Reporting Entity registry](#multi-entity-reporting-schemas)). Internal protection is not CRM at the consolidated / sub-consolidated level, so such rows are dropped there; kept on an individual run. Null (default) = external guarantor — see [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
-**Valid `guarantee_type` values:**
+<a id="guarantee-type-values"></a>
+**`guarantee_type` values the engine reads** (matched case-insensitively, with spaces and hyphens folded to `_`; any other value — `guarantee`, `bank_guarantee`, `standby_letter_of_credit`, `counter_guarantee`, … — is a descriptor only):
 
-| Value | Description |
-|-------|-------------|
-| `guarantee` | Standard guarantee |
-| `credit_derivative` | Credit derivative protection |
-| `counter_guarantee` | Counter-guarantee |
+| Value | Treatment |
+|-------|-----------|
+| `credit_derivative`, `credit_default_swap`, `cds`, `total_return_swap`, `trs` | The row is a credit derivative whatever `protection_type` says, so Art. 233(2) applies when `includes_restructuring` is False. A disagreeing `protection_type` raises **CRM030** |
+| `letter_of_comfort`, `comfort_letter`, `keepwell`, `keepwell_agreement` | **Not** eligible unfunded credit protection — not "an explicitly documented obligation assumed by the guarantor" (Art. 215(1)(b); Art. 213(1)(b)-(d)). The row is not recognised and **CRM029** names it |
+
+A counter-guarantee (`counter_guarantee`) is entered with the counter-guarantor named as `guarantor` directly on the exposure.
 
 **Example:**
 

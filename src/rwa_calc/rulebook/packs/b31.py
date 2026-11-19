@@ -154,7 +154,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # provider can unilaterally change to increase the effective cost of
     # protection is ineligible under Basel 3.1. Enabled here; the CRR pack sets
     # it False (cancel arm only). Gates the change branch in
-    # engine/crm/guarantees.py::_gate_unilateral_protection.
+    # engine/crm/protection_screen.py::screen_unfunded_protection.
     "ucp_unilateral_change_ineligible": Feature(
         name="ucp_unilateral_change_ineligible",
         enabled=True,

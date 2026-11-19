@@ -851,25 +851,29 @@ classes: PSM remains mandatory there under limb 1 above.)
 
 ## Tranched Coverage (Art. 234)
 
-Art. 234 governs **partial / tranched** unfunded credit protection — structures
-where the protection covers only part of the loss range on the underlying exposure
-(for example, a guarantee that absorbs losses between an attachment point and a
-detachment point, while the borrower retains the first-loss and senior tranches).
+PS1/26 Art. 234(1): "Where an institution transfers a part of the risk of a loan in one or
+more tranches, the institution shall comply with the requirements set out in Chapter 5 of
+Title II of Part Three of CRR. An institution shall consider materiality thresholds on
+payments below which no payment shall be made in the event of loss to be equivalent to
+retained first loss positions and to give rise to a tranched transfer of risk."
 
-Under Art. 234 the protected and unprotected tranches are treated as separate
-exposures, and the protection is recognised only on the covered tranche, with the
-risk weight or PD/LGD of the protection provider substituted via the appropriate
-method (RWSM under Art. 235 for SA / Slotting, or PSM under Art. 236 for IRB).
+Art. 235(2) allows the risk-weight substitution where GA < E "only where the protected and
+unprotected parts of the exposure are of equal seniority". A guarantee of a band of the
+loss (first loss or mezzanine) does not meet that, and the calculator does not run the
+securitisation framework for such protection. A guarantee row with an `attachment_amount`
+above zero, or any `detachment_amount`, is therefore **not recognised** (`CRM027`) and the
+exposure keeps its unprotected requirement — the Art. 268(1) upper bound of the Chapter 5
+result. The treatment is regime-invariant.
 
-!!! warning "Not Yet Implemented"
-    Art. 234 tranched / partial-coverage unfunded protection is not modelled. The
-    CRM processor treats unfunded credit protection as covering a single contiguous
-    portion of the exposure (the `covered_amount` field) and does not split the
-    underlying exposure into attachment / detachment tranches with separate risk
-    weights per tranche. Structured protection arrangements that cover only a
-    middle loss tranche are therefore mis-stated.
-    See IMPLEMENTATION_PLAN.md item **P1.30(e)** (Art. 234 partial protection
-    tranching) for the tracking entry and effort estimate.
+!!! warning "Not modelled"
+    Chapter 5 (SEC-SA) is not run for tranched protection, and deductibles / payment
+    thresholds have no input field — a policy with a threshold must not be entered as a
+    plain percentage guarantee under Basel 3.1.
+
+> **Details:** See [CRR CRM spec — Partial Protection and Tranching](../crr/credit-risk-mitigation.md#partial-protection-and-tranching-art-234-art-2352)
+> for the valuation of G (percentage with an amount cap, one cap per `guarantee_reference`),
+> the Art. 233(2) restructuring exclusion and the letter-of-comfort screen, which read the
+> same under both regimes.
 
 ---
 

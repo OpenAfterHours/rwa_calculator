@@ -306,6 +306,10 @@ Error codes are prefixed by domain and numbered sequentially:
 | `CRM003` | `ERROR_CURRENCY_MISMATCH` | CRM | Collateral currency ≠ exposure currency |
 | `CRM004` | `ERROR_COLLATERAL_OVERALLOCATION` | CRM | Collateral allocated exceeds available amount |
 | `CRM005` | `ERROR_INVALID_GUARANTEE` | CRM | Guarantee does not meet eligibility criteria |
+| `CRM027` | `ERROR_TRANCHED_PROTECTION_NOT_RECOGNISED` | CRM | **WARNING.** Guarantee covers a band of the loss (`attachment_amount` > 0 or any `detachment_amount`): Art. 234 sends a tranched transfer to the securitisation framework and Art. 235(2) allows substitution only for equal seniority, so it is not recognised. One per guarantee row |
+| `CRM028` | `ERROR_GUARANTEE_REFERENCE_INCONSISTENT` | CRM | **WARNING.** Rows sharing a `guarantee_reference` (one contract, one cap) state different `amount_covered` values — the largest is used as the cap — or repeat one beneficiary. One per reference and cause |
+| `CRM029` | `ERROR_NOT_ELIGIBLE_PROTECTION_TYPE` | CRM | **WARNING.** `guarantee_type` is a letter of comfort or keepwell — not an explicitly documented obligation to pay (Art. 213(1)(b)-(d), 215(1)(b)); not recognised. One per guarantee row |
+| `CRM030` | `ERROR_PROTECTION_TYPE_MISMATCH` | CRM | **WARNING.** `guarantee_type` names a credit derivative while `protection_type` does not; the row is treated as a credit derivative (Art. 233(2) applies when restructuring is excluded). One per guarantee row |
 | `IRB001` | `ERROR_PD_OUT_OF_RANGE` | IRB | PD value outside valid range **[0, 1]**. The lower bound is **closed**: CRR Art. 160(1) does not reach central governments or central banks, and the CRR pack carries `pd_floors["sovereign"] = 0`, so PD = 0 is admissible sovereign input and a half-open `(0, 1]` domain would reject every sovereign IRB exposure |
 | `IRB002` | `ERROR_LGD_OUT_OF_RANGE` | IRB | LGD value outside valid range **[0, 1.25]**. 1.0 is not a hard ceiling — own-estimate downturn LGD can exceed 100% where workout costs exceed the exposure |
 | `IRB003` | `ERROR_MATURITY_INVALID` | IRB | Effective maturity outside [1, 5] range |

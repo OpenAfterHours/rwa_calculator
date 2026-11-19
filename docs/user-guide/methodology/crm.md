@@ -304,6 +304,39 @@ override would yield 4% on the guaranteed portion (`6_000_000 × 0.04 =
 3. **Irrevocable** - cannot be cancelled
 4. **Legally enforceable** in relevant jurisdictions
 
+Protection that fails a requirement the input states is **not recognised** — the exposure
+keeps the obligor's risk weight and a warning names the guarantee:
+
+| Input | Rule | Warning |
+|---|---|---|
+| `is_unilaterally_cancellable` (both regimes) or `is_unilaterally_changeable` (Basel 3.1) is True | Art. 213(1)(c)(i) | `CRM012` |
+| `guarantee_type` is a letter of comfort or a keepwell | Art. 215(1)(b): "an explicitly documented obligation assumed by the guarantor" | `CRM029` |
+| `attachment_amount` above zero, or any `detachment_amount` — the protection covers a band of the loss | Art. 234 (tranched transfer → securitisation framework) and Art. 235(2) (substitution only for equal seniority) | `CRM027` |
+
+### Valuing the Protection (Art. 233)
+
+The covered amount is worked out per guarantee before the split, in the order the rule
+sets:
+
+1. **G, the amount undertaken (Art. 233(1)).** `amount_covered`, or `percentage_covered ×
+   E` (E at 100% of off-balance-sheet items). With both, G = **min(percentage × E,
+   amount)**. Rows sharing a `guarantee_reference` are one contract: their total is capped
+   at its amount and shared pro-rata (`CRM028` where its rows disagree).
+2. **Restructuring exclusion (Art. 233(2)).** A credit derivative without restructuring as
+   a credit event: G × 60% where G ≤ E; no more than 60% of E where G > E.
+3. **Currency mismatch (Art. 233(3)).** G* = G × (1 − 8%) where the protection and
+   exposure currencies differ.
+4. **Maturity mismatch (Art. 237–239)** — below — gives GA, which is capped at E in the split.
+
+```python
+# Credit derivative, notional 16, no restructuring credit event, on a loan of 8
+# from an institution guarantor (CQS 2), same currency and maturity:
+G, E = 16.0, 8.0
+covered = 0.60 * E if G > E else 0.60 * G   # Art. 233(2)(b): 4.8, not 8
+rwa_crr = 4.8 * 0.50 + 3.2 * 1.00    # = 5.6
+rwa_b31 = 4.8 * 0.30 + 3.2 * 1.00    # = 4.64
+```
+
 ### Double Default (CRR Only)
 
 For qualifying guarantees under CRR, the double default treatment (Art. 153(3)) adjusts the

@@ -911,7 +911,6 @@
         "tests/acceptance/crr/test_p1_219_guarantee_maturity_mismatch_residual.py",
         "tests/acceptance/crr/test_p1_225_cofire_spillover_floor.py",
         "tests/acceptance/crr/test_p1_239_art_232_third_party_deposit.py",
-        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/acceptance/crr/test_p1_99_crr_institution_short_term.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/fixtures/ccr/ccr_wwr1_builder.py",
@@ -1099,7 +1098,6 @@
         "tests/acceptance/crr/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",
         "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
-        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/acceptance/crr/test_p1_96_art_197_covered_bond_eligibility.py",
         "tests/acceptance/crr/test_p2_46_ppu_provenance_corep.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
@@ -3267,8 +3265,8 @@
     {
       "article": "213",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantees::_gate_unilateral_protection",
-        "rwa_calc.engine.crm.guarantees::apply_guarantees"
+        "rwa_calc.engine.crm.guarantees::apply_guarantees",
+        "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -3281,6 +3279,7 @@
         "data/schemas.py",
         "engine/crm/guarantees.py",
         "engine/crm/processor.py",
+        "engine/crm/protection_screen.py",
         "engine/irb/guarantee.py",
         "engine/kernels/allocation.py",
         "engine/sa/rw_adjustments.py"
@@ -3288,11 +3287,9 @@
       "test_files": [
         "tests/acceptance/basel31/test_slotting_guarantee_rwsm.py",
         "tests/acceptance/crr/test_p1_10_art_213_ucp_eligibility.py",
-        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py",
         "tests/acceptance/crr/test_scenario_crr_d_crm.py",
         "tests/fixtures/p1_10/p1_10.py",
-        "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/integration/test_non_finite_input_gate.py",
         "tests/unit/crm/test_crm_error_propagation.py",
@@ -3306,14 +3303,17 @@
     },
     {
       "article": "215",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection"
+      ],
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
         "engine/crm/guarantees.py",
+        "engine/crm/protection_screen.py",
         "engine/irb/guarantee.py"
       ],
       "test_files": [
@@ -4006,7 +4006,11 @@
     {
       "article": "233",
       "code_functions": [
-        "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns"
+        "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns",
+        "rwa_calc.engine.crm.protection_value::_apply_fx_mismatch",
+        "rwa_calc.engine.crm.protection_value::_apply_restructuring_exclusion",
+        "rwa_calc.engine.crm.protection_value::resolve_guarantee_amount_expr",
+        "rwa_calc.engine.crm.protection_value::value_unfunded_protection"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -4015,14 +4019,16 @@
         "ORC-260"
       ],
       "pack_entries": [
+        "restructuring_exclusion_exposure_cap@b31",
+        "restructuring_exclusion_exposure_cap@crr",
         "restructuring_exclusion_haircut@b31",
         "restructuring_exclusion_haircut@crr"
       ],
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
-        "engine/crm/guarantees.py",
         "engine/crm/life_insurance.py",
+        "engine/crm/protection_value.py",
         "rulebook/packs/common.py"
       ],
       "test_files": [
@@ -4035,10 +4041,12 @@
         "tests/fixtures/p1_218/p1_218.py",
         "tests/fixtures/p1_219/p1_219.py",
         "tests/fixtures/p1_275/p1_275.py",
+        "tests/integration/test_unfunded_protection_valuation_pipeline.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_guarantee_fx_mismatch.py",
         "tests/unit/crm/test_guarantee_submodules.py",
+        "tests/unit/crm/test_protection_value.py",
         "tests/unit/crm/test_restructuring_exclusion.py"
       ],
       "watchfire_index_gap": false
@@ -4053,16 +4061,14 @@
       "pack_entries": [],
       "source_files": [],
       "test_files": [
-        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
-        "tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py",
-        "tests/fixtures/p1_30e/p1_30e.py"
+        "tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py"
       ],
       "watchfire_index_gap": false
     },
     {
       "article": "234",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows"
+        "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -4070,14 +4076,15 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "contracts/errors.py",
         "data/schemas.py",
-        "engine/crm/guarantees.py"
+        "engine/crm/protection_screen.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_30e/p1_30e.py",
-        "tests/unit/crm/test_guarantee_collateral_split.py"
+        "tests/unit/crm/test_protection_screen.py"
       ],
       "watchfire_index_gap": false
     },
@@ -4088,6 +4095,7 @@
         "rwa_calc.engine.aggregator.aggregator::_add_post_crm_reporting_class",
         "rwa_calc.engine.aggregator.aggregator::_add_reporting_projection",
         "rwa_calc.engine.crm.guarantees::_build_guarantor_sub_rows",
+        "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows",
         "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr",
         "rwa_calc.engine.eu_sovereign::funding_currency_expr",
         "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa",
@@ -4133,19 +4141,18 @@
         "tests/acceptance/basel31/test_p1_122_short_term_institution_guarantor_substitution.py",
         "tests/acceptance/crr/test_p1_218_guarantee_coverage_ccf_basis.py",
         "tests/acceptance/crr/test_p1_229_art_235_3_funding_currency.py",
-        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py",
         "tests/acceptance/reporting/test_crm_substitution_flows.py",
         "tests/fixtures/p1_122/p1_122.py",
         "tests/fixtures/p1_218/p1_218.py",
         "tests/fixtures/p1_229/p1_229.py",
-        "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/integration/test_pre_post_crm_reporting.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/corpus.py",
         "tests/properties/test_monotonicity.py",
         "tests/unit/crm/test_guarantee_submodules.py",
+        "tests/unit/crm/test_protection_screen.py",
         "tests/unit/reporting/corep/test_c07_crm_substitution.py",
         "tests/unit/test_aggregator.py"
       ],
@@ -4198,7 +4205,6 @@
         "tests/acceptance/crr/test_p1_231_art_237_maturity_gates.py",
         "tests/acceptance/crr/test_p1_232_art_237_2a_matched_short_guarantee.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
-        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_109/p1_109.py",
@@ -4209,7 +4215,6 @@
         "tests/fixtures/p1_124/p1_124.py",
         "tests/fixtures/p1_219/p1_219.py",
         "tests/fixtures/p1_241/p1_241.py",
-        "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/pse_rgla_guarantor/pse_rgla_guarantor.py",
         "tests/fixtures/reporting_netting_mismatch_portfolio.py",
@@ -4246,7 +4251,6 @@
         "tests/fixtures/p1_109/p1_109.py",
         "tests/fixtures/p1_219/p1_219.py",
         "tests/fixtures/p1_241/p1_241.py",
-        "tests/fixtures/p1_30e/p1_30e.py",
         "tests/unit/crm/test_maturity_mismatch.py"
       ],
       "watchfire_index_gap": false
@@ -4327,6 +4331,21 @@
         "engine/aggregator/_securitisation.py"
       ],
       "test_files": [],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "268",
+      "code_functions": [],
+      "confidence": "GAP",
+      "framework": "CRR",
+      "layer_count": 1,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [],
+      "test_files": [
+        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
+        "tests/fixtures/p1_30e/p1_30e.py"
+      ],
       "watchfire_index_gap": false
     },
     {
@@ -6506,6 +6525,7 @@
         "tests/fixtures/p1_130/p1_130.py",
         "tests/fixtures/p1_193/p1_193.py",
         "tests/fixtures/p1_227/p1_227.py",
+        "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/p1_94f/p1_94f.py",
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/p2_18/p2_18.py",
@@ -8285,7 +8305,7 @@
     {
       "article": "213",
       "code_functions": [
-        "rwa_calc.engine.crm.guarantees::_gate_unilateral_protection"
+        "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -8295,10 +8315,31 @@
         "ucp_unilateral_change_ineligible@b31"
       ],
       "source_files": [
-        "engine/crm/guarantees.py"
+        "contracts/errors.py",
+        "data/schemas.py",
+        "engine/crm/protection_screen.py",
+        "engine/crm/protection_value.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_10_art_213_ucp_eligibility.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "215",
+      "code_functions": [
+        "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "PS1/26",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/crm/protection_screen.py"
+      ],
+      "test_files": [
+        "tests/unit/crm/test_protection_screen.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8591,19 +8632,48 @@
     },
     {
       "article": "233",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.crm.protection_value::_apply_fx_mismatch",
+        "rwa_calc.engine.crm.protection_value::_apply_restructuring_exclusion",
+        "rwa_calc.engine.crm.protection_value::value_unfunded_protection"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/guarantees.py"
+        "engine/crm/guarantees.py",
+        "engine/crm/protection_screen.py",
+        "engine/crm/protection_value.py"
       ],
       "test_files": [
         "tests/unit/crm/test_guarantee_fx_mismatch.py",
         "tests/unit/crm/test_guarantee_submodules.py",
+        "tests/unit/crm/test_protection_screen.py",
         "tests/unit/crm/test_restructuring_exclusion.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "234",
+      "code_functions": [
+        "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "PS1/26",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "contracts/errors.py",
+        "data/schemas.py",
+        "engine/crm/protection_screen.py"
+      ],
+      "test_files": [
+        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
+        "tests/fixtures/p1_30e/p1_30e.py",
+        "tests/unit/crm/test_protection_screen.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8622,7 +8692,10 @@
         "slotting_guarantee_substitution@b31"
       ],
       "source_files": [
+        "engine/crm/guarantees.py",
         "engine/crm/look_through.py",
+        "engine/crm/protection_screen.py",
+        "engine/crm/protection_value.py",
         "engine/eu_sovereign.py",
         "engine/irb/guarantee.py",
         "engine/sa/guarantor_rw.py",
@@ -8639,6 +8712,7 @@
         "tests/acceptance/basel31/test_p1_95_b31_unrated_inst_guarantor_scra.py",
         "tests/acceptance/basel31/test_pse_rgla_guarantor_irb_sa_substitution.py",
         "tests/acceptance/basel31/test_slotting_guarantee_rwsm.py",
+        "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/fixtures/p1_110/p1_110.py",
         "tests/fixtures/p1_122a/p1_122a.py",
         "tests/fixtures/p1_122b/p1_122b.py",
@@ -8646,9 +8720,11 @@
         "tests/fixtures/p1_200/p1_200.py",
         "tests/fixtures/p1_218/p1_218.py",
         "tests/fixtures/p1_229/p1_229.py",
+        "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/pse_rgla_guarantor/pse_rgla_guarantor.py",
-        "tests/fixtures/reporting_crm_substitution_portfolio.py"
+        "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/unit/crm/test_protection_screen.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8890,8 +8966,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "b31": "4c11d0131076d3b4fde1f6928e485d723748032e88d829221332ad7ef9fd00a5",
+    "crr": "7d3f2258164f4c93673fee90469fae620f813b8693a1dd1ee3481d137c554d4c"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

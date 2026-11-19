@@ -79,6 +79,8 @@ _SCREEN_COLUMNS: dict[str, ColumnSpec] = {
 
 @cites("CRR Art. 213")
 @cites("PS1/26, paragraph 213")
+@cites("CRR Art. 215")
+@cites("PS1/26, paragraph 215")
 @cites("CRR Art. 234")
 @cites("PS1/26, paragraph 234")
 def screen_unfunded_protection(

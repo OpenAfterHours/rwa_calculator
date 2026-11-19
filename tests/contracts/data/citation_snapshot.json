@@ -215,11 +215,7 @@
     "CRR Art. 235"
   ],
   "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows": [
-    "CRR Art. 234"
-  ],
-  "rwa_calc.engine.crm.guarantees::_gate_unilateral_protection": [
-    "CRR Art. 213",
-    "PS1/26, paragraph 213"
+    "CRR Art. 235"
   ],
   "rwa_calc.engine.crm.guarantees::apply_guarantees": [
     "CRR Art. 213",
@@ -276,6 +272,29 @@
   ],
   "rwa_calc.engine.crm.processor::CRMProcessor.get_crm_unified_bundle": [
     "CRR Art. 194"
+  ],
+  "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection": [
+    "CRR Art. 213",
+    "PS1/26, paragraph 213",
+    "CRR Art. 215",
+    "PS1/26, paragraph 215",
+    "CRR Art. 234",
+    "PS1/26, paragraph 234"
+  ],
+  "rwa_calc.engine.crm.protection_value::_apply_fx_mismatch": [
+    "CRR Art. 233",
+    "PS1/26, paragraph 233"
+  ],
+  "rwa_calc.engine.crm.protection_value::_apply_restructuring_exclusion": [
+    "CRR Art. 233",
+    "PS1/26, paragraph 233"
+  ],
+  "rwa_calc.engine.crm.protection_value::resolve_guarantee_amount_expr": [
+    "CRR Art. 233"
+  ],
+  "rwa_calc.engine.crm.protection_value::value_unfunded_protection": [
+    "CRR Art. 233",
+    "PS1/26, paragraph 233"
   ],
   "rwa_calc.engine.crm.provisions::resolve_provisions": [
     "CRR Art. 111"

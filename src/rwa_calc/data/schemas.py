@@ -2746,6 +2746,11 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
 #:   left join), double-counting capital. This is the exposure-table analogue of
 #:   the ``org_mappings`` duplicate-child fan-out that ``DQ004`` already reports
 #:   from ``engine/hierarchy/graph.py``.
+#:
+#: ``guarantees`` is deliberately absent: rows sharing a ``guarantee_reference``
+#: are ONE contract with one cap (the pool / aggregate-cap form, Art. 233(1)),
+#: valued once by ``engine/crm/protection_value.py``; inconsistent sharing is
+#: reported there as ``CRM028``, not as a duplicate key.
 TABLE_UNIQUE_KEYS: dict[str, str] = {
     "loans": "loan_reference",
     "contingents": "contingent_reference",

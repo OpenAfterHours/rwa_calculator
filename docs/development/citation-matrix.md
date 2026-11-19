@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-17.
+Last generated: 2026-11-19.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -992,27 +992,35 @@ Last generated: 2026-11-17.
 
 ### CRR Art. 213 — Requirements common to guarantees and credit derivatives
 
-??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:106"
+??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:110"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:106:190"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:110:194"
     ```
 
-??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:256"
+??? quote "`screen_unfunded_protection` — src/rwa_calc/engine/crm/protection_screen.py:80"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:256:299"
+    --8<-- "src/rwa_calc/engine/crm/protection_screen.py:80:119"
+    ```
+
+
+### CRR Art. 215 — Additional requirements for guarantees
+
+??? quote "`screen_unfunded_protection` — src/rwa_calc/engine/crm/protection_screen.py:82"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_screen.py:80:119"
     ```
 
 
 ### CRR Art. 217 — Requirements to qualify for the treatment set out in Article 153(3)
 
-??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:107"
+??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:111"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:106:190"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:110:194"
     ```
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1332"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1003"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1332:1524"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1003:1189"
     ```
 
 
@@ -1178,12 +1186,32 @@ Last generated: 2026-11-17.
     --8<-- "src/rwa_calc/engine/crm/life_insurance.py:94:245"
     ```
 
+??? quote "`value_unfunded_protection` — src/rwa_calc/engine/crm/protection_value.py:67"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_value.py:67:115"
+    ```
+
+??? quote "`resolve_guarantee_amount_expr` — src/rwa_calc/engine/crm/protection_value.py:155"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_value.py:155:182"
+    ```
+
+??? quote "`_apply_restructuring_exclusion` — src/rwa_calc/engine/crm/protection_value.py:207"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_value.py:207:241"
+    ```
+
+??? quote "`_apply_fx_mismatch` — src/rwa_calc/engine/crm/protection_value.py:244"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_value.py:244:277"
+    ```
+
 
 ### CRR Art. 234 — Calculating risk-weighted exposure amounts and expected loss amounts in the event of partial protection and tranching
 
-??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:752"
+??? quote "`screen_unfunded_protection` — src/rwa_calc/engine/crm/protection_screen.py:84"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:752:813"
+    --8<-- "src/rwa_calc/engine/crm/protection_screen.py:80:119"
     ```
 
 
@@ -1204,9 +1232,14 @@ Last generated: 2026-11-17.
     --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:1009:1286"
     ```
 
-??? quote "`_build_guarantor_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:723"
+??? quote "`_build_guarantor_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:624"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:723:749"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:624:650"
+    ```
+
+??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:653"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:653:700"
     ```
 
 ??? quote "`build_domestic_cgcb_guarantor_expr` — src/rwa_calc/engine/eu_sovereign.py:83"
@@ -1242,9 +1275,9 @@ Last generated: 2026-11-17.
 
 ### CRR Art. 237 — Maturity mismatch
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1333"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1004"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1332:1524"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1003:1189"
     ```
 
 ??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:684"
@@ -1821,7 +1854,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:124"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 
@@ -1829,7 +1862,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:125"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 
@@ -1918,7 +1951,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:126"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 
@@ -1948,9 +1981,43 @@ Last generated: 2026-11-17.
 
 ### PS1/26, paragraph 213 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:257"
+??? quote "`screen_unfunded_protection` — src/rwa_calc/engine/crm/protection_screen.py:81"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:256:299"
+    --8<-- "src/rwa_calc/engine/crm/protection_screen.py:80:119"
+    ```
+
+
+### PS1/26, paragraph 215 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`screen_unfunded_protection` — src/rwa_calc/engine/crm/protection_screen.py:83"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_screen.py:80:119"
+    ```
+
+
+### PS1/26, paragraph 233 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`value_unfunded_protection` — src/rwa_calc/engine/crm/protection_value.py:68"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_value.py:67:115"
+    ```
+
+??? quote "`_apply_restructuring_exclusion` — src/rwa_calc/engine/crm/protection_value.py:208"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_value.py:207:241"
+    ```
+
+??? quote "`_apply_fx_mismatch` — src/rwa_calc/engine/crm/protection_value.py:245"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_value.py:244:277"
+    ```
+
+
+### PS1/26, paragraph 234 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`screen_unfunded_protection` — src/rwa_calc/engine/crm/protection_screen.py:85"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/protection_screen.py:80:119"
     ```
 
 
@@ -1974,9 +2041,9 @@ Last generated: 2026-11-17.
 
 ### PS1/26, paragraph 237 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1334"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1005"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1332:1524"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1003:1189"
     ```
 
 

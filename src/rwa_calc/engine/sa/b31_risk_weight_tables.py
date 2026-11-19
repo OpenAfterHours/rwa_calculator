@@ -988,9 +988,17 @@ def _b31_cre_other_counterparty_rw(counterparty_rw_col: str) -> pl.Expr:
     ``commercial_mortgage`` (the Art. 124H(3) path) has no CQS table of its
     own, so its ``counterparty_rw_col`` is the null fill — 100% whatever the
     obligor's rating — and the min() could never bind on a CQS 5-6 obligor nor
-    the 60% floor reach a CQS 1-2 one (review CL-10). The obligor on that path
-    is neither a natural person nor an SME, so its unsecured weight is its
-    Art. 122(2) Table 6 corporate weight; unrated stays 100%. A row whose own
+    the 60% floor reach a CQS 1-2 one (review CL-10). The re-classed row has
+    lost its original class, so the Art. 122(2) Table 6 corporate weight by CQS
+    (unrated 100%) is applied to EVERY non-natural-person, non-SME obligor on
+    it. That is the obligor's own Art. 124L(1)(e) weight only for an ordinary
+    corporate: not unrated specialised lending (Art. 122A-122B) and outside the
+    Art. 122(6) investment-grade election (65% / 135%). The splitter also
+    whole-loans an institution, sovereign or PSE with commercial security
+    (``re_split/flagging.py`` excludes no such class); for those the corporate
+    table is an approximation, usually at or above their own weight but not
+    always (an unrated SCRA grade C institution, 150%, reads 100% here). Before
+    CL-10 every one of these rows read the same 100% null fill. A row whose own
     class has a CQS table (a corporate with commercial property) keeps it.
     """
     is_re_class = pl.col("exposure_class").str.to_uppercase().str.contains("MORTGAGE", literal=True)

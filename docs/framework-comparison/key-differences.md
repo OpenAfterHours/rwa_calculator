@@ -1319,7 +1319,8 @@ values above.
     CRR Art. 166(9) is **blanked by PRA PS1/26**. The 20% short-term trade LC carve-out
     no longer applies under Basel 3.1 — these exposures receive the standard SA CCF for
     their risk type via the Table A1 mapping. The `is_short_term_trade_lc` flag has no
-    effect under Basel 3.1.
+    CCF effect under Basel 3.1 (it still drives the PS1/26 Art. 162(3)(e) one-day maturity
+    minimum and the SA Art. 120(2A)/121(4) / 121(6)(b) trade treatments).
 
 See [CCF specification](../specifications/crr/credit-conversion-factors.md#basel-31-f-irb-changes-pra-ps126-art-166c)
 for the full F-IRB CCF comparison and [IRB Approach](../user-guide/methodology/irb-approach.md#exposure-at-default-ead)

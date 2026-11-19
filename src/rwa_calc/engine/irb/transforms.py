@@ -65,9 +65,10 @@ from rwa_calc.engine.irb.formulas import (
     _lgd_floor_expression_with_collateral,
     _pd_floor_expression,
     _polars_capital_k_expr,
-    _polars_correlation_expr,
-    _polars_maturity_adjustment_expr,
+    ensure_dilution_subtype_column,
     firb_supervisory_lgd_values,
+    risk_weight_function_correlation_expr,
+    risk_weight_function_maturity_adjustment_expr,
 )
 from rwa_calc.engine.irb.guarantee import (
     apply_guarantee_substitution as _apply_guarantee_substitution,  # noqa: E501
@@ -303,8 +304,10 @@ def prepare_columns(
     """
     # Maturity priority chain (highest wins) — see ``_build_maturity_exprs``:
     #   1. effective_maturity input populated → firm override, clipped [1 day, 5y]
-    #   2. has_one_day_maturity_floor flag → M = 1/365 (Art. 162(3) carve-out:
-    #      daily-margined SFTs/derivatives/margin lending, short-term trade)
+    #   2. has_one_day_maturity_floor flag with a residual under one year →
+    #      M = max(residual, 1 day) (Art. 162(3) carve-out: daily-margined
+    #      SFTs/derivatives/margin lending, self-liquidating trade). A MINIMUM,
+    #      never a fixed 1/365; at residual >= 1y or no date the chain below wins.
     #   3. Basel 3.1 revolving + facility_termination_date (Art. 162(2A)(k))
     #   4. maturity_date standard derivation, clipped [1y, 5y]
     #   5. Fallback default 2.5y
@@ -467,6 +470,8 @@ def calculate_correlation(
     - Other retail: PD-dependent (0.03-0.16)
     - SME adjustment for corporates (turnover converted from GBP to EUR)
     - FI scalar (1.25x) for large/unregulated financial sector entities
+    - Retail purchased-receivables dilution risk: the Art. 153(1) corporate
+      curve (Art. 157(1); review TR-03)
 
     Args:
         lf: IRB exposures frame
@@ -482,8 +487,8 @@ def calculate_correlation(
         float(regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate))
         / 1_000_000
     )
-    return lf.with_columns(
-        _polars_correlation_expr(
+    return ensure_dilution_subtype_column(lf).with_columns(
+        risk_weight_function_correlation_expr(
             eur_gbp_rate=eur_gbp_rate,
             is_b31=resolved_pack.feature("irb_correlation_sme_gbp_native"),
             sme_turnover_threshold_m=sme_turnover_m,
@@ -516,7 +521,8 @@ def calculate_maturity_adjustment(lf: pl.LazyFrame, config: CalculationConfig) -
     MA = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
     where b = (0.11852 - 0.05478 × ln(PD))²
 
-    Retail exposures get MA = 1.0.
+    Retail exposures get MA = 1.0, except retail purchased-receivables dilution
+    risk, which Art. 157(1) prices on the Art. 153(1) formula (review TR-03).
 
     Reads ``has_one_day_maturity_floor`` to gate the 1-year M floor
     (CRR Art. 162(3) carve-out); defaulted to False if absent.
@@ -528,19 +534,8 @@ def calculate_maturity_adjustment(lf: pl.LazyFrame, config: CalculationConfig) -
     Returns:
         LazyFrame with maturity_adjustment column
     """
-    is_retail = (
-        pl.col("exposure_class")
-        .cast(pl.String)
-        .fill_null("CORPORATE")
-        .str.to_uppercase()
-        .str.contains("RETAIL")
-    )
-
-    return lf.with_columns(
-        pl.when(is_retail)
-        .then(pl.lit(1.0))
-        .otherwise(_polars_maturity_adjustment_expr())
-        .alias("maturity_adjustment")
+    return ensure_dilution_subtype_column(lf).with_columns(
+        risk_weight_function_maturity_adjustment_expr().alias("maturity_adjustment")
     )
 
 
@@ -698,6 +693,7 @@ def apply_all_formulas(
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     schema = lf.collect_schema()
     schema_names = set(schema.names())
+    lf = ensure_dilution_subtype_column(lf, present=schema_names)
 
     # --- Batch 1: PD floor + LGD floor ---
     batch1: list[pl.Expr] = []
@@ -724,24 +720,16 @@ def apply_all_formulas(
         float(regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate))
         / 1_000_000
     )
-    is_retail = (
-        pl.col("exposure_class")
-        .cast(pl.String)
-        .fill_null("CORPORATE")
-        .str.to_uppercase()
-        .str.contains("RETAIL")
-    )
+    # Class-driven correlation and MA, with retail purchased-receivables dilution
+    # risk on the Art. 153(1) corporate formula (CRR / PS1/26 Art. 157(1); TR-03).
     lf = lf.with_columns(
         [
-            _polars_correlation_expr(
+            risk_weight_function_correlation_expr(
                 eur_gbp_rate=eur_gbp_rate,
                 is_b31=resolved_pack.feature("irb_correlation_sme_gbp_native"),
                 sme_turnover_threshold_m=sme_turnover_m,
             ).alias("correlation"),
-            pl.when(is_retail)
-            .then(pl.lit(1.0))
-            .otherwise(_polars_maturity_adjustment_expr())
-            .alias("maturity_adjustment"),
+            risk_weight_function_maturity_adjustment_expr().alias("maturity_adjustment"),
         ]
     )
 
@@ -1051,30 +1039,46 @@ def _apply_firb_fixed_supervisory_maturity(
     )
 
 
+@cites("CRR Art. 162(3)")
+@cites("PS1/26, paragraph 162")
 def _effective_one_day_floor_flag(config: CalculationConfig, *, pack: ResolvedRulepack) -> pl.Expr:
     """Compose the Art. 162(3) one-day maturity floor flag.
 
-    Per CRR Art. 162(3) second sub-paragraph point (b), self-liquidating short-term
-    trade-finance transactions with residual maturity <= 1y are eligible for the
-    one-day maturity floor. The engine derives ``has_one_day_maturity_floor=True``
-    from ``is_short_term_trade_lc=True`` under CRR. An explicit caller-supplied
-    True is preserved by ORing the derived flag onto the input column.
+    Self-liquidating trade-finance transactions are qualifying short-term
+    exposures for the one-day M floor: CRR Art. 162(3)(b) "with a residual
+    maturity of up to one year" (inclusive) and PS1/26 Art. 162(3)(e) "with a
+    residual maturity of less than one year" (strict). The engine derives
+    ``has_one_day_maturity_floor=True`` from ``is_short_term_trade_lc=True`` where
+    the ``one_day_maturity_floor`` Feature is on (both regimes); the bound's
+    strictness is the ``one_day_floor_trade_residual_strict`` Feature. An explicit
+    caller-supplied True is preserved by ORing the derived flag onto the input
+    column.
     """
     input_floor_flag = pl.col("has_one_day_maturity_floor").fill_null(False)
     if not pack.feature("one_day_maturity_floor"):
         return input_floor_flag
 
-    residual_years = (
-        pl.when(pl.col("maturity_date").is_not_null())
-        .then(_exact_fractional_years_expr(config.reporting_date, "maturity_date"))
-        .otherwise(pl.lit(None, dtype=pl.Float64))
+    residual_years = _residual_maturity_years_expr(config)
+    within_bound = (
+        residual_years < 1.0
+        if pack.feature("one_day_floor_trade_residual_strict")
+        else residual_years <= 1.0
     )
     derived_floor_flag = (
         pl.col("is_short_term_trade_lc").fill_null(False)
         & residual_years.is_not_null()
-        & (residual_years <= 1.0)
+        & within_bound
     )
     return input_floor_flag | derived_floor_flag
+
+
+def _residual_maturity_years_expr(config: CalculationConfig) -> pl.Expr:
+    """Residual maturity in years from ``maturity_date``; null where the date is null."""
+    return (
+        pl.when(pl.col("maturity_date").is_not_null())
+        .then(_exact_fractional_years_expr(config.reporting_date, "maturity_date"))
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
 
 
 def _build_maturity_exprs(config: CalculationConfig, *, pack: ResolvedRulepack) -> list[pl.Expr]:
@@ -1095,8 +1099,23 @@ def _build_maturity_exprs(config: CalculationConfig, *, pack: ResolvedRulepack) 
     maturity_expr = _apply_firb_fixed_supervisory_maturity(maturity_expr, config, pack=pack)
     maturity_expr = _apply_firb_sft_supervisory_maturity(maturity_expr, pack=pack)
 
+    # Art. 162(3) (CRR; PS1/26 162(3) "M shall be at least one day, instead of the
+    # minimum set in paragraph 2A"): a MINIMUM of one day replacing the one-year
+    # minimum, never a fixed M (review TR-11 — M used to be SET to 1/365 whatever
+    # the residual, so a 9-month trade LC was priced as a one-day exposure). The
+    # rung keeps its place above the CRR fixed-M rungs but now fires only where
+    # that replacement can bind — a known residual under one year — and resolves
+    # to max(residual, one day). A residual of one year or more, or an unknown one
+    # (no maturity_date), keeps the chain's value: the floor changes nothing there,
+    # and the date-free default is the conservative reading. The flag itself still
+    # lifts the 1-year floor in the maturity adjustment.
     effective_floor_flag = _effective_one_day_floor_flag(config, pack=pack)
-    maturity_expr = pl.when(effective_floor_flag).then(pl.lit(one_day)).otherwise(maturity_expr)
+    residual_years = _residual_maturity_years_expr(config)
+    maturity_expr = (
+        pl.when(effective_floor_flag & (residual_years < 1.0))
+        .then(residual_years.clip(lower_bound=one_day))
+        .otherwise(maturity_expr)
+    )
 
     # CCR/SFT synthetic carrier (CRR Art. 162(2)/(3); PS1/26 162(2A)/(3)):
     # ``ccr_effective_maturity`` already holds the FULL Art. 162 M (the MNA /

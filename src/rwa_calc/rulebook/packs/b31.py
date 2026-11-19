@@ -105,11 +105,29 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("PS1/26", "162", "Art. 162(1) left blank — no fixed F-IRB supervisory M"),
     ),
+    # PS1/26 Art. 162(3) second subparagraph: "for qualifying short-term exposures
+    # which are not part of the institution's ongoing financing of the obligor, M
+    # shall be at least one day, instead of the minimum set in paragraph 2A.
+    # Qualifying short term exposures shall include the following: ... (e)
+    # self-liquidating trade finance transactions, as set out in point (80) of
+    # Article 4(1) of CRR, with a residual maturity of less than one year". The
+    # one-day value is a MINIMUM on the residual maturity, never a fixed M (review
+    # TR-05 / TR-11). RWA-REDUCING against the former disabled state: a qualifying
+    # trade item now takes its residual maturity instead of the 1-year floor.
     "one_day_maturity_floor": Feature(
         name="one_day_maturity_floor",
-        enabled=False,
+        enabled=True,
         citation=Citation(
-            "PS1/26", "162", "no CRR Art. 162(3) short-term-trade one-day-floor derivation"
+            "PS1/26", "162", "(3)(e) one-day M floor for self-liquidating trade finance"
+        ),
+    ),
+    # PS1/26 Art. 162(3)(e) "with a residual maturity of less than one year" —
+    # STRICT, against CRR Art. 162(3)(b) "up to one year" (inclusive).
+    "one_day_floor_trade_residual_strict": Feature(
+        name="one_day_floor_trade_residual_strict",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "162", "(3)(e) residual maturity of less than one year (strict bound)"
         ),
     ),
     "revolving_uses_termination_maturity": Feature(
@@ -384,7 +402,7 @@ ENTRIES: dict[str, RuleEntry] = {
             "LR": Decimal("0.10"),
         },
         key="risk_type",
-        citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6)"),
+        citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7)"),
         # No table default — see the CRR pack's ``sa_ccf`` note. Under B31 the
         # residual splits between Table A1 Row 5 (commitment) and Row 3 (issued
         # item), which one shared fallback cannot express (P1.267).
@@ -839,6 +857,19 @@ ENTRIES: dict[str, RuleEntry] = {
         name="sa_unrated_institution_sovereign_floor_applies",
         enabled=True,
         citation=Citation("PS1/26", "121", "(6) sovereign RW floor for FX unrated institutions"),
+    ),
+    # PS1/26 Art. 121(6)(b): the floor does not apply where "the exposure is ... a
+    # self-liquidating, trade-related contingent item arising from the movement of
+    # goods with an original maturity of less than one year". The bound is STRICT
+    # (engine/sa/sovereign_floor.py compares with ``<``): a 365-day item derives
+    # original_maturity_years == 1.0 and is NOT exempt (review TR-10). Basel 3.1
+    # only — read solely behind the Feature above (CRR has no Art. 121(6)).
+    "sa_sovereign_floor_trade_exemption_original_maturity_years": ScalarParam(
+        name="sa_sovereign_floor_trade_exemption_original_maturity_years",
+        value=Decimal(1),
+        citation=Citation(
+            "PS1/26", "121", "(6)(b) trade contingent original maturity less than one year"
+        ),
     ),
     # Basel 3.1 replaces the CRR Art. 230 F-IRB collateral step-functions with
     # the continuous LGD* formula (PS1/26 Art. 230(1)): no overcollateralisation

@@ -390,7 +390,7 @@ def apply_risk_weights(
 
     # PS1/26 Art. 121(6) / CRE20.22: Sovereign RW floor for FX-denominated
     # unrated institution exposures. Exception: self-liquidating trade items
-    # with original maturity <= 1yr. Basel 3.1 ONLY — UK CRR Art. 121 has four
+    # with original maturity < 1yr. Basel 3.1 ONLY — UK CRR Art. 121 has four
     # paragraphs and no floor limb, so the regime decision reads a cited pack
     # Feature rather than applying the provision unconditionally (P1.334).
     #
@@ -403,7 +403,7 @@ def apply_risk_weights(
     exposures = apply_sovereign_floor_for_institutions(
         exposures,
         is_domestic_currency,
-        applies=resolved_pack.feature("sa_unrated_institution_sovereign_floor_applies"),
+        pack=resolved_pack,
     )
 
     # Art. 127 defaulted risk weight (secured/unsecured split). Runs after

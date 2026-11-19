@@ -181,23 +181,71 @@ class TestEffectiveMaturityOverride:
 
 
 class TestOneDayMaturityFloorFlag:
-    """Priority-2: has_one_day_maturity_floor sets M = 1/365 (Art. 162(3))."""
+    """Priority-2: has_one_day_maturity_floor replaces the 1-year M minimum with one day.
 
-    def test_flag_wins_over_date_derived(self, b31_config: CalculationConfig) -> None:
-        lf = pl.LazyFrame(
+    CRR Art. 162(3) "M shall be at least one-day"; PS1/26 Art. 162(3) "M shall be
+    at least one day, instead of the minimum set in paragraph 2A". A MINIMUM, not
+    a value: until review TR-11 the flag SET M to 1/365 whatever the residual
+    (``test_flag_wins_over_date_derived`` pinned a 5-year loan at one day).
+    """
+
+    @staticmethod
+    def _flagged(maturity_date: date) -> pl.LazyFrame:
+        return pl.LazyFrame(
             {
                 "pd": [0.01],
                 "lgd": [0.45],
                 "ead_final": [1_000_000.0],
-                "maturity_date": [date(2035, 6, 30)],  # 5y from reporting
+                "maturity_date": [maturity_date],
                 "has_one_day_maturity_floor": [True],
                 "exposure_class": ["CORPORATE"],
             }
         )
 
+    def test_flag_lets_a_sub_one_year_residual_through(self, b31_config: CalculationConfig) -> None:
+        # Arrange — 2030-06-30 -> 2030-12-31: (365 - 181) / 365 = 0.504110y
+        lf = self._flagged(date(2030, 12, 31))
+
+        # Act
         result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
-        assert result["maturity"][0] == pytest.approx(ONE_DAY, abs=1e-9)
+        # Assert
+        assert result["maturity"][0] == pytest.approx(184 / 365, abs=1e-12)
+
+    def test_flag_floors_the_residual_at_one_day(self, b31_config: CalculationConfig) -> None:
+        # Arrange — maturing on the reporting date: residual 0 -> floored at one day
+        lf = self._flagged(date(2030, 6, 30))
+
+        # Act
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
+
+        # Assert
+        assert result["maturity"][0] == pytest.approx(ONE_DAY, abs=1e-12)
+
+    def test_flag_does_not_shorten_a_long_residual(self, b31_config: CalculationConfig) -> None:
+        # Arrange — 5y from reporting: the one-day minimum cannot bind
+        lf = self._flagged(date(2035, 6, 30))
+
+        # Act
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
+
+        # Assert
+        assert result["maturity"][0] == pytest.approx(5.0, abs=0.01)
+
+    def test_flag_without_a_maturity_date_keeps_the_default(
+        self, b31_config: CalculationConfig
+    ) -> None:
+        # Arrange — residual unknown: the conservative date-free default stands
+        # (pre-TR-11 the flag forced M to one day with no date at all)
+        lf = self._flagged(date(2035, 6, 30)).with_columns(
+            pl.lit(None, dtype=pl.Date).alias("maturity_date")
+        )
+
+        # Act
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
+
+        # Assert
+        assert result["maturity"][0] == pytest.approx(2.5, abs=1e-12)
 
     def test_flag_false_leaves_date_derivation(self, b31_config: CalculationConfig) -> None:
         lf = pl.LazyFrame(

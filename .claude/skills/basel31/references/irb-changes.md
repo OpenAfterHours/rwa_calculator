@@ -254,6 +254,12 @@ typically lengthens M and therefore *increases* capital.
 Note the separate SFT and collateralised-derivative maturity floors — these are distinct
 from the general one-day floor and from the F-IRB fixed supervisory maturity.
 
+The Art. 162(3) one-day floor survives (PS1/26 162(3)(e) names self-liquidating trade
+finance), so `one_day_maturity_floor` is on in both regimes. Two traps: the one day is a
+**minimum** replacing the one-year minimum (`M = max(residual, one day)`), never a fixed M;
+and the trade residual bound differs — CRR "up to one year" (inclusive), PS1/26 "less than
+one year" (strict, `one_day_floor_trade_residual_strict`).
+
 <!-- BEGIN GENERATED: irb-maturity -->
 | Name | CRR | Basel 3.1 | Citation |
 |---|---|---|---|
@@ -263,7 +269,7 @@ from the general one-day floor and from the F-IRB fixed supervisory maturity.
 | `firb_sft_supervisory_maturity_years` | `0.5` | `0.5` | CRR Art. 162(1) |
 | `irb_maturity_floor_collateralised_deriv_years` | `0.02739726027397260273972602740` | `0.02739726027397260273972602740` | CRR Art. 162(2) |
 | `irb_maturity_floor_repo_sft_years` | `0.01369863013698630136986301370` | `0.01369863013698630136986301370` | CRR Art. 162(2) |
-| `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_maturity_floor` | on | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
 | `one_day_maturity_floor_years` | `0.002739726027397260273972602740` | `0.002739726027397260273972602740` | CRR Art. 162(3) |
 | `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
 <!-- END GENERATED: irb-maturity -->

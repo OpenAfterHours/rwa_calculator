@@ -121,6 +121,13 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "162(3)", "one-day M floor derivation for short-term trade finance"
         ),
     ),
+    # CRR Art. 162(3)(b) "with a residual maturity of up to one year" — INCLUSIVE,
+    # against PS1/26 Art. 162(3)(e) "less than one year" (strict).
+    "one_day_floor_trade_residual_strict": Feature(
+        name="one_day_floor_trade_residual_strict",
+        enabled=False,
+        citation=Citation("CRR", "162(3)", "(b) residual maturity of up to one year (inclusive)"),
+    ),
     "revolving_uses_termination_maturity": Feature(
         name="revolving_uses_termination_maturity",
         enabled=False,

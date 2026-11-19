@@ -2173,7 +2173,8 @@
         "rwa_calc.engine.classify.subtypes::qrre_obligor_aggregate_limit_expr",
         "rwa_calc.engine.classify.subtypes::qrre_undrawn_cancellable_expr",
         "rwa_calc.engine.classify.subtypes::qrre_unsecured_expr",
-        "rwa_calc.engine.irb.formulas::apply_irb_formulas"
+        "rwa_calc.engine.irb.formulas::apply_irb_formulas",
+        "rwa_calc.engine.irb.formulas::risk_weight_function_maturity_adjustment_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2280,6 +2281,27 @@
         "tests/unit/crr/test_crr_equity.py",
         "tests/unit/crr/test_p1_247_equity_simple_el.py",
         "tests/unit/test_equity_subordinated_debt.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "157",
+      "code_functions": [
+        "rwa_calc.engine.irb.formulas::risk_weight_function_correlation_expr",
+        "rwa_calc.engine.irb.formulas::risk_weight_function_maturity_adjustment_expr"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "CRR",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/irb/formulas.py"
+      ],
+      "test_files": [
+        "tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py",
+        "tests/acceptance/test_tr03_retail_dilution_pipeline.py",
+        "tests/unit/irb/test_art_157_retail_dilution_formula.py"
       ],
       "watchfire_index_gap": false
     },
@@ -2505,6 +2527,7 @@
       "code_functions": [
         "rwa_calc.engine.irb.formulas::_maturity_adjustment_expr_from_pd",
         "rwa_calc.engine.irb.formulas::calculate_maturity_adjustment",
+        "rwa_calc.engine.irb.transforms::_effective_one_day_floor_flag",
         "rwa_calc.engine.irb.transforms::calculate_maturity_adjustment",
         "rwa_calc.engine.irb.transforms::prepare_columns",
         "rwa_calc.engine.sft.fccm::_derive_ccr_sft_maturity_years"
@@ -2530,6 +2553,7 @@
         "irb_maturity_floor_repo_sft_years@b31",
         "irb_maturity_floor_repo_sft_years@crr",
         "mna_intermediate_floor_requires_daily_condition@crr",
+        "one_day_floor_trade_residual_strict@crr",
         "one_day_maturity_floor@crr",
         "one_day_maturity_floor_years@b31",
         "one_day_maturity_floor_years@crr",
@@ -2542,6 +2566,7 @@
         "data/schemas.py",
         "engine/classify/attributes.py",
         "engine/classify/permissions.py",
+        "engine/hierarchy/enrich.py",
         "engine/irb/__init__.py",
         "engine/irb/calculator.py",
         "engine/irb/formulas.py",
@@ -2559,6 +2584,8 @@
         "tests/acceptance/crr/test_p1_249_art_162_1_firb_fixed_maturity.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
         "tests/acceptance/crr/test_scenario_crr_b_firb.py",
+        "tests/acceptance/test_tr01_trade_lc_flag_scope_pipeline.py",
+        "tests/acceptance/test_tr05_one_day_maturity_floor_pipeline.py",
         "tests/benchmarks/data_generators.py",
         "tests/contracts/test_ccr_effective_maturity_edge.py",
         "tests/contracts/test_one_day_maturity_floor_propagation.py",
@@ -2585,7 +2612,8 @@
         "tests/unit/sft/test_ccr_sft_maturity_carrier.py",
         "tests/unit/sft/test_ccr_sft_maturity_producer.py",
         "tests/unit/test_b31_revolving_maturity.py",
-        "tests/unit/test_effective_maturity.py"
+        "tests/unit/test_effective_maturity.py",
+        "tests/unit/test_trade_lc_flag_scope.py"
       ],
       "watchfire_index_gap": false
     },
@@ -6365,7 +6393,8 @@
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/data/tables/test_b31_short_term_institution.py",
         "tests/unit/sa/test_b31_short_term_institution_engine.py",
-        "tests/unit/test_b31_sa_risk_weights.py"
+        "tests/unit/test_b31_sa_risk_weights.py",
+        "tests/unit/test_trade_lc_flag_scope.py"
       ],
       "watchfire_index_gap": false
     },
@@ -6405,6 +6434,7 @@
         "ORC-055"
       ],
       "pack_entries": [
+        "sa_sovereign_floor_trade_exemption_original_maturity_years@b31",
         "sa_unrated_institution_sovereign_floor_applies@b31"
       ],
       "source_files": [
@@ -6420,7 +6450,9 @@
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
         "tests/acceptance/basel31/test_p1_128_art_121_4_scra_short_term_trade_finance.py",
         "tests/acceptance/basel31/test_p1_95_b31_unrated_inst_guarantor_scra.py",
+        "tests/acceptance/basel31/test_tr10_art_121_6_b_trade_exemption_boundary.py",
         "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
+        "tests/acceptance/test_tr01_trade_lc_flag_scope_pipeline.py",
         "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/p1_122b/p1_122b.py",
         "tests/fixtures/p1_128/p1_128.py",
@@ -6433,7 +6465,8 @@
         "tests/unit/test_p1_254_art_121_6_unrated_sovereign_floor.py",
         "tests/unit/test_p1_314_art_114_115_funded_currency.py",
         "tests/unit/test_p1_334_sovereign_floor_is_b31_only.py",
-        "tests/unit/test_sovereign_floor_institutions.py"
+        "tests/unit/test_sovereign_floor_institutions.py",
+        "tests/unit/test_trade_lc_flag_scope.py"
       ],
       "watchfire_index_gap": false
     },
@@ -6629,6 +6662,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p5_15_art_123a_granularity.py",
+        "tests/acceptance/test_tr03_retail_dilution_pipeline.py",
         "tests/conformance/portfolios.py",
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/p1_243/p1_243.py",
@@ -7666,6 +7700,26 @@
       "watchfire_index_gap": false
     },
     {
+      "article": "157",
+      "code_functions": [
+        "rwa_calc.engine.irb.formulas::risk_weight_function_correlation_expr"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "PS1/26",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/irb/formulas.py",
+        "engine/irb/transforms.py"
+      ],
+      "test_files": [
+        "tests/acceptance/test_tr03_retail_dilution_pipeline.py",
+        "tests/unit/irb/test_art_157_retail_dilution_formula.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
       "article": "158",
       "code_functions": [],
       "confidence": "MEDIUM",
@@ -7822,6 +7876,7 @@
     {
       "article": "162",
       "code_functions": [
+        "rwa_calc.engine.irb.transforms::_effective_one_day_floor_flag",
         "rwa_calc.engine.sft.fccm::_derive_ccr_sft_maturity_years"
       ],
       "confidence": "HIGH",
@@ -7835,28 +7890,33 @@
         "firb_fixed_supervisory_maturity@b31",
         "firb_sft_supervisory_maturity@b31",
         "mna_intermediate_floor_requires_daily_condition@b31",
+        "one_day_floor_trade_residual_strict@b31",
         "one_day_maturity_floor@b31",
         "revolving_uses_termination_maturity@b31"
       ],
       "source_files": [
         "contracts/config.py",
         "data/schemas.py",
+        "engine/hierarchy/enrich.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/irb/transforms.py",
         "engine/sft/fccm.py",
         "rulebook/packs/b31.py",
-        "rulebook/packs/common.py"
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/ccr/test_ccr_sft_irb_maturity.py",
         "tests/acceptance/crr/test_p1_249_art_162_1_firb_fixed_maturity.py",
+        "tests/acceptance/test_tr05_one_day_maturity_floor_pipeline.py",
         "tests/contracts/test_ccr_effective_maturity_edge.py",
         "tests/fixtures/ccr/golden_ccr_sft_irb_maturity.py",
         "tests/unit/irb/test_p1_249_firb_fixed_maturity.py",
         "tests/unit/rulebook/test_maturity_double_default_features.py",
         "tests/unit/rulebook/test_maturity_pack_entries.py",
         "tests/unit/sft/test_ccr_sft_maturity_carrier.py",
-        "tests/unit/test_b31_revolving_maturity.py"
+        "tests/unit/test_b31_revolving_maturity.py",
+        "tests/unit/test_effective_maturity.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8890,8 +8950,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "b31": "811f9afa48479457f2ab71e50dfd8f4f08f028376a1757a3eaa00634bd6c31c7",
+    "crr": "c573ad12c0ffffea0ed9d574b6206bac1b849cd169ddae245c83a8cfc9c7b2b9"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

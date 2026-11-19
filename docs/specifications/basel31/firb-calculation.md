@@ -304,8 +304,21 @@ set-off). It is **not** correct that Art. 162(3) widened to "or" under Basel 3.1
 **5-day / 10-day** intermediate floors in Art. 162(2A)(c)/(d) switched CRR's "and" to Basel 3.1's
 **"or"** (daily re-margining **or** revaluation + prompt liquidation). Art. 162(3) applies to
 daily-margined repos / derivatives / margin lending under a master netting agreement and to
-qualifying short-term exposures (FX settlement, self-liquidating trade finance ≤ 1yr, securities
-settlement, electronic payments).
+qualifying short-term exposures (FX settlement, self-liquidating trade finance with a residual
+maturity of **less than** one year, securities settlement, electronic payments).
+
+!!! info "Implementation — Art. 162(3)(e) self-liquidating trade finance"
+    PS1/26 Art. 162(3): *"M shall be at least one day, instead of the minimum set in paragraph
+    2A. Qualifying short term exposures shall include the following: ... (e) self-liquidating
+    trade finance transactions, as set out in point (80) of Article 4(1) of CRR, with a residual
+    maturity of less than one year"*. The engine derives `has_one_day_maturity_floor = True` from
+    `is_short_term_trade_lc = True` where the residual maturity is **strictly** below one year
+    (Basel 3.1 pack Features `one_day_maturity_floor` and
+    `one_day_floor_trade_residual_strict`; the CRR bound, "up to one year", is inclusive). The
+    one-day value is a **minimum**: `M = max(residual, 1/365)`, so a 6-month documentary credit
+    takes `M ≈ 0.5`, not one day. Where the residual is one year or more, or unknown, the flag
+    changes nothing and the ordinary chain applies. Until review TR-05 this derivation was
+    switched off under Basel 3.1 (qualifying trade kept the one-year minimum).
 
 !!! warning "Do not propagate the stale 'Art. 162(3) widened to or' claim"
     An earlier draft of this page stated Art. 162(3) adopted the wider "re-margining **or**
@@ -406,6 +419,18 @@ default-risk exposure on the same pool. The two components have independent para
 | LGD | Art. 161(1)(e)/(f) (corporate) / own estimates (retail) | **100%** — Art. 161(1)(g) (corporate) / Art. 164(1)(b) (retail) |
 | EAD | Art. 166A(5) — drawn amount minus dilution own-funds requirement | Drawn pool balance (no separate netting) |
 | Maturity (M) | Art. 162(2A)(e) — minimum **1 year** for purchased corporate receivables | Art. 157(4) — **1 year** if dilution can be resolved within a year, otherwise the period over which it can be resolved, capped at **5 years** |
+
+!!! info "Implementation — the risk-weight function of a dilution row (Art. 157(1))"
+    A row carrying `purchased_receivables_subtype = "dilution_risk"` in a **retail** exposure
+    class is priced on the Art. 153(1) corporate correlation (`0.12 f(PD) + 0.24 (1 - f(PD))`,
+    decay 50) with the Art. 153(1) maturity adjustment, not the Art. 154(1) retail curve
+    (`engine/irb/formulas.py::risk_weight_function_correlation_expr` /
+    `risk_weight_function_maturity_adjustment_expr`). No Art. 153(4) SME and no Art. 153(2)
+    large-FSE adjustment is applied to those rows. The exposure class is unchanged for
+    reporting. **Corporate** dilution rows keep their class formula as before (including any
+    SME / FSE adjustment). The `maturity` used is the ordinary date-derived M — the Art. 157(4)
+    dilution M is not yet modelled (review TR-08). Review TR-03 (retail dilution had taken the
+    retail curve: −39.5% RWA at PD 2%).
 
 !!! info "EAD Interaction — Art. 166A(5)"
     For the default-risk exposure, the EAD is the drawn pool value **minus** the own-funds

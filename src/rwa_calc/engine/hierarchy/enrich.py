@@ -24,7 +24,8 @@ References:
 - CRR Art. 126: income-producing CRE risk-weight gate
 - CRR Art. 4(1)(39): group of connected clients (lending group totals)
 - PRA PS1/26 Art. 120(2B) Table 4A / Art. 122(3) Table 6A: short-term tables
-- PRA PS1/26 Art. 121(4): SCRA short-term trade-finance LC window
+- PRA PS1/26 Art. 121(4): SCRA short-term trade-finance LC window (the
+  trade-LC flag is inherited from the loan's parent facility only)
 - PRA PS1/26 Art. 124(4) / Art. 124A / Art. 124J: non-qualifying RE gate
 """
 
@@ -70,7 +71,10 @@ def propagate_facility_qrre_columns(
     This join fills them in from the parent facility.
 
     Always returns a frame where ``is_revolving``, ``is_qrre_transactor``,
-    and ``facility_limit`` exist with safe defaults.
+    and ``facility_limit`` exist with safe defaults. When facilities are
+    present, ``is_short_term_trade_lc`` is also inherited from the parent
+    facility (and only from it — PS1/26 Art. 121(4) / CRR Art. 162(3)(b) are
+    transaction-level conditions; review TR-01).
     """
     # Site B of the two-site QRRE coupling pinned by
     # `_FACILITY_QRRE_COUPLED_COLUMNS` (engine/hierarchy/__init__.py). Site A
@@ -90,18 +94,6 @@ def propagate_facility_qrre_columns(
     # depending on the facility data. Reuse exp_schema from the join branch
     # (or check fresh if we skipped the branch entirely).
     exposures = _apply_qrre_defaults(exposures, qrre_schema)
-
-    # PRA PS1/26 Art. 121(4): the SCRA short-term window extends to self-
-    # liquidating trade-finance LCs. The flag lives on the facility row;
-    # drawn loans booked under a trade-LC facility have no facility_reference
-    # column to inherit from, so OR-aggregate the flag across the facilities
-    # of the same counterparty and broadcast it to every exposure of that
-    # counterparty.
-    # Coalesce preserves any explicit per-row value (e.g. on the synthetic
-    # facility_undrawn rows that already carry the flag from their source
-    # facility) and only fills nulls from the counterparty-level OR.
-    if facilities is not None:
-        exposures = _broadcast_trade_lc_flag(exposures, facilities, qrre_schema)
 
     return exposures
 
@@ -701,12 +693,14 @@ def _join_facility_qrre_columns(
     exposures: pl.LazyFrame,
     facilities: pl.LazyFrame,
 ) -> tuple[pl.LazyFrame, set[str]]:
-    """Join facility-side QRRE / limit / termination columns onto exposures.
+    """Join facility-side QRRE / limit / termination / trade-LC columns onto exposures.
 
-    Scratch: facility-side QRRE / limit / termination columns join as
-    ``_fac_*``, get coalesced into their unprefixed exposure-level
-    counterparts (``is_revolving``, ``is_qrre_transactor``, ``facility_limit``,
-    ``facility_termination_date``), then dropped via the scratch aliases.
+    Scratch: facility-side QRRE / limit / termination / trade-LC columns join
+    as ``_fac_*`` on ``parent_facility_reference`` (the IMMEDIATE parent),
+    get coalesced into their unprefixed exposure-level counterparts
+    (``is_revolving``, ``is_qrre_transactor``, ``facility_limit``,
+    ``facility_termination_date``, ``is_short_term_trade_lc``), then dropped
+    via the scratch aliases.
     The facilities frame is sealed at the loader edge, so every source
     column exists and the Boolean ones are non-null.
     """
@@ -724,6 +718,15 @@ def _join_facility_qrre_columns(
             "facility_termination_date",
             False,
         ),
+        # PS1/26 Art. 120(2A) / 121(4) ("the exposure arose from the movement of
+        # goods") and CRR Art. 162(3)(b) / PS1/26 Art. 162(3)(e) (self-liquidating
+        # trade finance) are properties of the TRANSACTION, so a drawn loan takes
+        # the trade-LC flag from its OWN parent facility only, never from a
+        # sibling facility of the same counterparty (review TR-01: the former
+        # counterparty-level OR broadcast flagged every loan of any counterparty
+        # holding one trade-LC facility). Rows that carry their own sealed value
+        # (contingents, facility_undrawn) keep it — coalesce reads the row first.
+        ("is_short_term_trade_lc", "_fac_trade_lc", "is_short_term_trade_lc", True),
     )
 
     fac_select: list[pl.Expr] = [pl.col("facility_reference").alias("_fac_ref")]
@@ -1130,55 +1133,3 @@ def _apply_qrre_defaults(exposures: pl.LazyFrame, qrre_schema: set[str]) -> pl.L
     if default_cols:
         exposures = exposures.with_columns(default_cols)
     return exposures
-
-
-def _broadcast_trade_lc_flag(
-    exposures: pl.LazyFrame,
-    facilities: pl.LazyFrame,
-    exp_schema: set[str],
-) -> pl.LazyFrame:
-    """OR-aggregate ``is_short_term_trade_lc`` per counterparty and broadcast.
-
-    Coalesces with any explicit per-row value already on the exposures frame
-    (e.g. synthetic facility_undrawn rows carrying the flag from their source
-    facility) and only fills nulls from the counterparty-level OR.
-
-    ``exp_schema`` is the caller's column set, resolved EARLIER in the chain
-    rather than here — ``collect_schema()`` is O(plan nodes) and this sits on
-    the deep unify plan.
-
-    It is deliberately not the frame's current column set, and the gap is
-    measured rather than assumed: between capture and hand-over NOTHING is
-    added, and the five ``_fac_*`` scratch aliases are dropped, so the set
-    still lists those five; by the test below it also lacks the
-    ``_cp_trade_lc`` this function's own join has just added. It stays
-    authoritative for the one name tested here, ``is_short_term_trade_lc``,
-    because nothing in between adds or drops it. That makes this site safe by
-    ASSERTION about the intervening steps — unlike the sibling
-    ``_apply_qrre_defaults(exposures, qrre_schema)`` idiom, whose set is
-    resolved at the point it is consumed and is safe by construction (see
-    ``data.column_spec.ensure_columns``). Test any further name here and you
-    must resolve the schema again.
-    """
-    cp_trade_lc = facilities.group_by("counterparty_reference").agg(
-        pl.col("is_short_term_trade_lc").any().alias("_cp_trade_lc")
-    )
-    exposures = exposures.join(
-        cp_trade_lc,
-        on="counterparty_reference",
-        how="left",
-    )
-    if "is_short_term_trade_lc" in exp_schema:
-        exposures = exposures.with_columns(
-            pl.coalesce(
-                pl.col("is_short_term_trade_lc"),
-                pl.col("_cp_trade_lc"),
-            )
-            .fill_null(False)
-            .alias("is_short_term_trade_lc")
-        )
-    else:
-        exposures = exposures.with_columns(
-            pl.col("_cp_trade_lc").fill_null(False).alias("is_short_term_trade_lc")
-        )
-    return exposures.drop("_cp_trade_lc")

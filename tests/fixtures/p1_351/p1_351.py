@@ -63,15 +63,20 @@ EAD=100,000 GBP, no maturity adjustment for retail — CRR Art. 154(1)):
 
     R = 0.03 x f(PD) + 0.16 x (1 - f(PD)),  f(PD) = (1-exp(-35xPD))/(1-exp(-35))
     K = LGD x N[(G(PD) + sqrt(R/(1-R)) x G(0.999)) / sqrt(1-R)] - PD x LGD
-    RWA = K x 12.5 x EAD   (no maturity adjustment, no scaling factor under CRR)
+    RWA = K x 12.5 x 1.06 x EAD   (no maturity adjustment for retail)
 
     Row 1 (senior, LGD=0.45, Art. 161(1)(e)):        RWA = 61,465.63
     Row 2 (subordinated, LGD=1.00, Art. 161(1)(f)):  RWA = 136,590.29
-    Row 3 (dilution_risk, LGD=0.75, Art. 161(1)(g)-CRR): RWA = 102,442.72
+    Row 3 (dilution_risk, LGD=0.75, Art. 161(1)(g)-CRR): RWA = 169,194.90
+        — NOT on the retail curve: Art. 157(1) prices dilution risk of purchased
+        retail receivables "in accordance with the formula set out in Article
+        153(1)", i.e. the corporate correlation R = 0.12 f + 0.24 (1 - f),
+        f = (1-exp(-50xPD))/(1-exp(-50)) -> 0.164146, with the Art. 153(1)
+        maturity adjustment (= 1 at M = 1). Review TR-03; the retail-curve
+        figure this fixture used to carry was 102,442.72.
 
-    LGD ratios reproduce the RWA ratios exactly (K is linear in LGD at fixed
-    PD): 1.00/0.45 = 2.222 = 136,590.29/61,465.63; 0.75/0.45 = 1.667 =
-    102,442.72/61,465.63.
+    LGD ratios reproduce the RWA ratios exactly for rows 1 and 2 (K is linear in
+    LGD at fixed PD and correlation): 1.00/0.45 = 2.222 = 136,590.29/61,465.63.
 
     Row 1's LGD (0.45) is IDENTICAL to the CRR unsecured-senior F-IRB fallback
     (``firb_supervisory_lgd_values(pack)["unsecured_senior"]`` = 0.45) — the
@@ -158,7 +163,7 @@ LGD_DILUTION: float = 0.75  # Art. 161(1)(g) under CRR (Basel 3.1 raises this to
 
 EXPECTED_RWA_RETAIL_SENIOR: float = 61_465.63
 EXPECTED_RWA_RETAIL_SUB: float = 136_590.29
-EXPECTED_RWA_RETAIL_DILUTION: float = 102_442.72
+EXPECTED_RWA_RETAIL_DILUTION: float = 169_194.90  # Art. 157(1) -> Art. 153(1) formula (TR-03)
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +408,7 @@ def create_p1351_loans() -> pl.DataFrame:
         retail, purchased_receivables_subtype="dilution_risk", lgd=null.
         Art. 164(1) legislates the retail dilution-risk rate directly; the
         engine already routes this correctly today and must go on doing so.
-        Expected LGD=0.75, RWA=102,442.72.
+        Expected LGD=0.75, RWA=169,194.90 (Art. 157(1): the Art. 153(1) formula).
 
     LOAN_P1351_CORP_SENIOR (Row 4 — SILENT, anti-over-reach control):
         corporate, purchased_receivables_subtype="senior", lgd=null.

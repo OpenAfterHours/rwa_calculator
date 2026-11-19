@@ -72,7 +72,7 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
 | `on_bs_netting_liquidation_period` | `20` | `10` | CRR Art. 224 / PS1/26, paragraph 219 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
-| `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_floor_trade_residual_strict` | off | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
 | `output_floor` | off | on | CRR Art. 92 / PS1/26, paragraph 92 |
 | `post_model_adjustments` | off | on | CRR Art. 153 / PS1/26, paragraph 154 |
 | `re_split_cre_secured_ltv_cap` | `0.50` | `0.55` | CRR Art. 126 / PS1/26, paragraph 124H |

@@ -56,7 +56,7 @@ Key column: `risk_type`
 | `LR` | `0.00` |
 
 **Basel 3.1** — PS1/26, paragraph 111
- *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
+ *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7))*
 
 Key column: `risk_type`
 

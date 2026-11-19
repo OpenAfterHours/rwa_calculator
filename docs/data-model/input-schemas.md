@@ -215,10 +215,10 @@ See [Classification](../features/classification.md) for the complete classificat
 | `underlying_risk_type` | `String` | No | Underlying-exposure risk type used by the CRM substitution path when the facility's own `risk_type` would otherwise mask the protection's true category |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `ead_modelled` | `Float64` | No | A-IRB modelled EAD — when populated and approach is A-IRB, replaces the `drawn_amount + ccf x undrawn_amount` derivation (CRR Art. 166(8a)) |
-| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
+| `is_short_term_trade_lc` | `Boolean` | No | Short-term self-liquidating trade finance arising from the movement of goods (CRR Art. 166(8)(b) F-IRB 20% CCF; PS1/26 Art. 120(2A)/121(4) six-month SA window; Art. 162(3) one-day M floor). A drawn loan inherits the flag **only from its own parent facility** (`facility_mappings`), never from another facility of the same counterparty |
 | `is_payroll_loan` | `Boolean` | No | Payroll-deduction / pension lending — qualifies for the Basel 3.1 35% retail RW (PS1/26 Art. 123(2)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
-| `has_one_day_maturity_floor` | `Boolean` | No | Set True for short-term self-liquidating trade exposures and certain capital-markets-driven exposures eligible for the 1-day `M` floor under CRR Art. 162(3) (otherwise the standard 1-year floor applies) |
+| `has_one_day_maturity_floor` | `Boolean` | No | Set True for exposures eligible for the Art. 162(3) one-day `M` floor (daily-margined SFTs / derivatives / margin lending, and the qualifying short-term exposures). The one day **replaces the one-year minimum**: `M = max(residual maturity, 1/365)` where the residual is under one year; otherwise the standard chain applies. Self-liquidating trade flagged `is_short_term_trade_lc` derives it automatically (CRR residual up to one year; Basel 3.1 less than one year) |
 | `is_sft` | `Boolean` | No | Securities Financing Transaction — selects the F-IRB **0.5-year** repo-style supervisory maturity (`M`) under CRR **Art. 162(1)** (a fixed value, not a floor; deleted under Basel 3.1) |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. When populated it supersedes the `maturity_date`-derived `M` and bypasses the 1-year floor — firm-owned judgement for short-term carve-outs |
 | `intragroup_entity_reference` | `String` | No | Non-null tags this facility as an intragroup claim on the named reporting entity (an `entity_reference` in the [Reporting Entity registry](#multi-entity-reporting-schemas)). Null (default) = external counterparty. Eliminated on a `consolidated` / `sub_consolidated` run, retained on `individual` — see [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
@@ -255,11 +255,11 @@ See [Classification](../features/classification.md) for the complete classificat
 
 **Note:** Under F-IRB (CRR Art. 166(8)), MR and MLR both become 75% CCF.
 
-**F-IRB Exception (Art. 166(9)):** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. To flag these exposures, set `is_short_term_trade_lc = True` for MLR risk type items.
+**F-IRB Exception (Art. 166(8)(b)):** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. To flag these exposures, set `is_short_term_trade_lc = True` for MLR risk type items.
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `is_short_term_trade_lc` | `Boolean` | No | True for short-term trade LCs for goods movement (Art. 166(9) - retains 20% CCF under F-IRB) |
+| `is_short_term_trade_lc` | `Boolean` | No | True for short-term trade LCs for goods movement (Art. 166(8)(b) - retains 20% CCF under F-IRB) |
 
 **A-IRB Modelled CCF:** For A-IRB exposures, provide the bank's own modelled CCF estimate (0.0 to 1.5) in `ccf_modelled`. Retail IRB CCFs can exceed 100% due to additional drawdown behaviour. When populated and approach is A-IRB, this value takes precedence over the risk_type lookup.
 
@@ -314,7 +314,7 @@ facilities = pl.DataFrame({
 | `seniority` | `String` | No | `senior` (default) or `subordinated` (affects F-IRB LGD) |
 | `is_payroll_loan` | `Boolean` | No | Payroll-deduction / pension lending — qualifies for the Basel 3.1 35% retail RW (PS1/26 Art. 123(2)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
-| `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor in lieu of the standard 1-year floor |
+| `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the Art. 162(3) one-day `M` minimum in lieu of the standard one-year minimum (`M = max(residual, 1/365)` for a residual under one year) |
 | `is_sft` | `Boolean` | No | Securities Financing Transaction — see Facility schema |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. Bypasses the 1-year floor when populated |
 | `netting_agreement_reference` | `String` | No | CRR Art. 195/219 on-balance-sheet netting set. A non-null reference is the sole signal that the loan participates in a netting agreement, and the reference alone defines the **netting perimeter**: exposures net against each other **iff they share the same reference**, across facilities *and* across counterparties. The cross-counterparty limb is gated by the rulepack Feature `on_bs_netting_perimeter_is_agreement` (enabled under both regimes); disabled, the pool and the beneficiary match are additionally keyed on `counterparty_reference`. Sharing one reference across counterparties is the firm's Art. 205(a) attestation that set-off is enforceable against every party under it, and raises the **CRM016** audit warning naming the agreement and the number of counterparties it netted across. A row with a null `counterparty_reference` still nets under the agreement and adds a null clause to that warning, while the loader raises **DQ001** for the null reference separately. Enabling the perimeter reduces own-funds RWA without reducing the Basel 3.1 output-floor basis. See [Credit Risk Mitigation — On-Balance Sheet Netting](../user-guide/methodology/crm.md#on-balance-sheet-netting-crr-art-195-art-219) |
@@ -323,7 +323,7 @@ facilities = pl.DataFrame({
 | `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 | `is_under_irb_rollout` | `Boolean` | No | CRR Art. 148 IRB roll-out-plan flag — see Facility schema. Reporting-only (COREP C 08.07 / OF 08.07 col 0040); default False |
 
-**Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
+**Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly. A loan drawn under a facility (via `facility_mappings`) inherits that facility's `is_short_term_trade_lc`; a loan of the same counterparty under any other facility, or under none, does not — the trade conditions of PS1/26 Art. 121(4) ("arose from the movement of goods") and Art. 162(3) are properties of the transaction, not the counterparty.
 
 #### Lease exposures — the `drawn_amount` convention
 
@@ -428,8 +428,8 @@ loans = pl.DataFrame({
 | `underlying_risk_type` | `String` | No | Underlying-exposure risk type for CRM substitution (see Facility schema) |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
 | `ead_modelled` | `Float64` | No | A-IRB modelled EAD — replaces the CCF-derived value when populated under A-IRB (CRR Art. 166(8a)) |
-| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
-| `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor |
+| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(8)(b)) |
+| `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the Art. 162(3) one-day `M` minimum |
 | `is_sft` | `Boolean` | No | Securities Financing Transaction — see Facility schema |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26 |
 | `bs_type` | `String` | No | `"ONB"` (on-balance-sheet / drawn) or `"OFB"` (off-balance-sheet / undrawn). Default: `"OFB"` |
@@ -458,7 +458,7 @@ contingents = pl.DataFrame({
     "seniority": ["senior", "senior", "senior"],
     "risk_type": ["FR", "MR", "MLR"],  # FR=100%, MR=50%/75%, MLR=20%/75%
     "ccf_modelled": [None, None, None],  # No modelled CCF
-    "is_short_term_trade_lc": [False, False, True],  # Third is Art. 166(9) exception
+    "is_short_term_trade_lc": [False, False, True],  # Third is the Art. 166(8)(b) trade LC
     "bs_type": ["OFB", "OFB", "OFB"],  # Off-balance sheet (default)
 })
 ```

@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `c573ad12c0ffffea`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 240 entries, content hash `811f9afa48479457`
 
 ## Regime features
 
@@ -44,7 +44,8 @@ On/off behaviour switches (`Feature`).
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
 | `on_bs_netting_perimeter_is_agreement` | on | on | CRR Art. 195 / PS1/26, paragraph 195 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
-| `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_floor_trade_residual_strict` | off | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_maturity_floor` | on | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
 | `output_floor` | off | on | CRR Art. 92 / PS1/26, paragraph 92 |
 | `post_model_adjustments` | off | on | CRR Art. 153 / PS1/26, paragraph 154 |
 | `regulatory_thresholds_fx_derived` | on | off | CRR Art. 123 / PS1/26, paragraph 147 |
@@ -203,6 +204,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `sa_ccr_supervisory_factor_equity_sn` | `0.32` | `0.32` | CRR Art. 280 |
 | `sa_ccr_supervisory_factor_fx` | `0.04` | `0.04` | CRR Art. 280 |
 | `sa_ccr_supervisory_factor_ir` | `0.005` | `0.005` | CRR Art. 280 |
+| `sa_sovereign_floor_trade_exemption_original_maturity_years` | — | `1` | PS1/26, paragraph 121 |
 | `slotting_short_maturity_threshold_years` | `2.5` | `2.5` | CRR Art. 153(5) |
 
 ## Integer parameters
@@ -819,7 +821,7 @@ Key column: `risk_type`
 | `LR` | `0.00` |
 
 **Basel 3.1** — PS1/26, paragraph 111
- *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
+ *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7))*
 
 Key column: `risk_type`
 

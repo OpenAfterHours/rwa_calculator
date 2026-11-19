@@ -749,8 +749,8 @@ within `engine/sa/calculator.py`. Required input fields:
 | `currency` | String | Loan currency (ISO code) |
 | `cp_local_currency` | String | Counterparty's home jurisdiction currency |
 | `cp_sovereign_cqs` | Int | Sovereign CQS for floor RW lookup (Art. 114(1)/(2)) |
-| `is_short_term_trade_lc` | Bool | Marks self-liquidating trade ≤ 1 year for (b) carve-out |
-| `original_maturity_years` | Float | Maturity check for the (b) carve-out (< 1 year) |
+| `is_short_term_trade_lc` | Bool | Marks self-liquidating trade for the (b) carve-out (a drawn loan inherits it only from its own parent facility) |
+| `original_maturity_years` | Float | Maturity check for the (b) carve-out — strictly **less than** one year (pack scalar `sa_sovereign_floor_trade_exemption_original_maturity_years`); a 365-day item derives exactly 1.0 and is floored |
 
 When `cp_local_currency` is unavailable, the calculator falls back to a domestic-currency
 heuristic; upstream enrichment is recommended for accurate floor application.

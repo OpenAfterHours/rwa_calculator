@@ -32,15 +32,15 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — content hash `c573ad12c0ffffea`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `811f9afa48479457`
 
 ## Summary
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
-| CRR (Capital Requirements Regulation) | 35 | 59 | 10 | 37 | 14 | 155 |
-| PS1/26 (PRA Policy Statement) | 27 | 31 | 7 | 27 | 15 | 107 |
+| CRR (Capital Requirements Regulation) | 35 | 60 | 10 | 37 | 14 | 156 |
+| PS1/26 (PRA Policy Statement) | 27 | 32 | 7 | 27 | 15 | 108 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -99,13 +99,14 @@ Package version `0.3.34`. Resolved packs:
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
 | 151 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
 | 153 | 14 | 11 | 32 | 15 | 73 | HIGH |
-| 154 | 5 | 0 | 6 | 4 | 23 | HIGH |
+| 154 | 6 | 0 | 6 | 4 | 23 | HIGH |
 | 155 | 7 | 4 | 10 | 3 | 22 | HIGH |
+| 157 | 2 | 0 | 1 | 0 | 3 | MEDIUM |
 | 158 | 0 | 4 | 11 | 0 | 17 | MEDIUM |
 | 159 | 0 | 0 | 8 | 0 | 10 | UNCITED |
 | 160 | 2 | 1 | 10 | 2 | 18 | HIGH |
 | 161 | 4 | 2 | 16 | 4 | 45 | HIGH |
-| 162 | 5 | 16 | 15 | 3 | 33 | HIGH |
+| 162 | 6 | 17 | 16 | 3 | 36 | HIGH |
 | 163 | 2 | 4 | 4 | 0 | 8 | MEDIUM |
 | 164 | 3 | 5 | 7 | 0 | 10 | MEDIUM |
 | 165 | 1 | 3 | 2 | 0 | 2 | MEDIUM |
@@ -220,14 +221,14 @@ Package version `0.3.34`. Resolved packs:
 | 116 | 2 | 0 | 3 | 2 | 8 | HIGH |
 | 117 | 2 | 3 | 6 | 2 | 9 | HIGH |
 | 118 | 0 | 0 | 1 | 1 | 5 | UNCITED |
-| 120 | 0 | 6 | 12 | 2 | 36 | HIGH |
+| 120 | 0 | 6 | 12 | 2 | 37 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
-| 121 | 1 | 1 | 7 | 4 | 17 | HIGH |
+| 121 | 1 | 2 | 7 | 4 | 20 | HIGH |
 | 122 | 2 | 7 | 7 | 5 | 49 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 123 | 1 | 4 | 3 | 5 | 15 | HIGH |
-| 123A | 1 | 1 | 5 | 0 | 14 | MEDIUM |
+| 123A | 1 | 1 | 5 | 0 | 15 | MEDIUM |
 | 123B | 1 | 5 | 8 | 0 | 13 | MEDIUM |
 | 124 | 2 | 1 | 10 | 0 | 8 | MEDIUM |
 | 124A | 0 | 0 | 0 | 0 | 4 | GAP |
@@ -260,11 +261,12 @@ Package version `0.3.34`. Resolved packs:
 | 153 | 2 | 9 | 14 | 11 | 33 | HIGH |
 | 154 | 1 | 2 | 2 | 6 | 9 | HIGH |
 | 155 | 0 | 0 | 0 | 0 | 3 | GAP |
+| 157 | 1 | 0 | 2 | 0 | 2 | MEDIUM |
 | 158 | 0 | 3 | 0 | 0 | 3 | MEDIUM |
 | 159 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 160 | 1 | 1 | 4 | 2 | 17 | HIGH |
 | 161 | 2 | 4 | 6 | 5 | 44 | HIGH |
-| 162 | 1 | 6 | 7 | 1 | 9 | HIGH |
+| 162 | 2 | 7 | 9 | 1 | 11 | HIGH |
 | 163 | 2 | 4 | 3 | 2 | 11 | HIGH |
 | 164 | 4 | 1 | 2 | 3 | 4 | HIGH |
 | 166 | 2 | 0 | 1 | 0 | 0 | LOW |

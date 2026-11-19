@@ -82,16 +82,6 @@ CATEGORY_MARKET_VALUES: dict[str, float] = {
     "life_insurance": 5_000.0,
 }
 
-# The new W2 carrier per category (does not exist yet -- additive contract).
-NEW_MARKET_VALUE_CARRIER: dict[str, str] = {
-    "financial": "collateral_financial_market_value",
-    "cash": "collateral_cash_market_value",
-    "real_estate": "collateral_re_market_value",
-    "receivables": "collateral_receivables_market_value",
-    "other_physical": "collateral_other_physical_market_value",
-    "life_insurance": "collateral_life_insurance_market_value",
-}
-
 # The existing adjusted-value twin per category (None where no twin exists today).
 ADJUSTED_TWIN_CARRIER: dict[str, str | None] = {
     "financial": "collateral_financial_value",

@@ -29,13 +29,16 @@ dependencies = [
     "polars-normal-stats>=0.2.0",  # Required for IRB statistical functions
     "fastexcel>=0.19.0",
     "xlsxwriter>=3.1.0",
-    "zensical>=0.0.30",
     "fastapi>=0.135.3",
     "itsdangerous>=2.2.0",
     "uvicorn>=0.40.0",
     "jinja2>=3.1.0",  # server-rendered read-only UI (rwa-ui)
     "python-multipart>=0.0.9",  # FastAPI form parsing for the calculator
-    "marimo>=0.19.6",
+    # `zensical` (the docs site) and `marimo` (the workbooks under workbooks/,
+    # which the wheel does not ship) are NOT here: no module under src/rwa_calc
+    # imports either. They are dev tools, in [dependency-groups].dev below. As
+    # runtime dependencies they gave every installer a documentation generator,
+    # and marimo's `loro` a source build on any Python it has no wheel for.
     # `@cites` is imported at module level by ~80 modules under src/rwa_calc, so
     # this is a RUNTIME dependency, not a dev tool — and its only home. From
     # 0.2.24 to 0.3.34 it lived in the dev extra and dev group alone, and no
@@ -66,27 +69,14 @@ Issues = "https://github.com/OpenAfterHours/rwa_calculator/issues"
 Changelog = "https://github.com/OpenAfterHours/rwa_calculator/blob/master/docs/appendix/changelog.md"
 
 [project.optional-dependencies]
-ui = [
-    "marimo>=0.5.0",
-    "uvicorn>=0.27.0",
-    "fastapi>=0.115.0",
-]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-benchmark>=4.0.0",
-    "pytest-xdist>=3.5.0",
-    "ruff>=0.3.0",
-    "ty",
-    "httpx>=0.27.0",  # FastAPI TestClient (REST API tests)
-    "zensical>=0.0.29",
-    "mkdocstrings[python]>=0.24.0",
-    "numpy>=1.26.0",  # For benchmark data generation only
-    "hypothesis>=6.100.0",  # tests/properties/ portfolio search + shrinking
-]
-all = [
-    "rwa-calc[ui,dev]",
-]
+# Kept, empty, so that `rwa-calc[ui]` still installs without a warning: the web
+# UI and the REST API need nothing beyond [project].dependencies. There is
+# deliberately no `dev` or `all` extra. An extra is published with the wheel, so
+# one carrying pytest, ruff and ty advertised them as a feature of the
+# calculator, and `uv sync` does not install extras, so a checkout synced the
+# plain way lost the tools the gates run. Development tools live in
+# [dependency-groups].dev, which `uv sync` installs and a wheel never names.
+ui = []
 
 [build-system]
 requires = ["hatchling"]
@@ -102,6 +92,17 @@ packages = ["src/rwa_calc"]
 # outright) and, worse, shell and git config that must never be published. A
 # blocklist would have to grow a row for every new scratch directory; this only
 # ever ships what is named here.
+#
+# It names exactly what builds the wheel, and nothing for running the tests. The
+# repository root is also the workspace root, so tests/, scripts/ and docs/ here
+# serve both packages and read files no sdist carries (.github/, .claude/,
+# AGENTS.md, packages/rwa-filer). Shipped until 0.3.34, they could not pass from
+# it: tests/contracts run inside the extracted 0.3.34 sdist gave 36 failures
+# where the checkout gives 1, with the same interpreter and environment. uv.lock
+# was unusable there too: `uv lock --check` stops at `rwa-filer = { workspace =
+# true }` because the member it names is not in the sdist. The tests, and the
+# lock, are at the release tag. scripts/check_wheel_install.py builds each wheel
+# FROM its sdist, as publish.yml does, so a build input missing here fails it.
 [tool.hatch.build.targets.sdist]
 # Every pattern is root-anchored with a leading slash. These are gitignore-style
 # patterns, so a bare `src` matches a directory of that name at ANY depth — and
@@ -110,13 +111,9 @@ packages = ["src/rwa_calc"]
 # patterns pull all of them back in.
 include = [
     "/src",
-    "/tests",
-    "/scripts",
-    "/docs",
     "/README.md",
     "/LICENSE",
     "/pyproject.toml",
-    "/uv.lock",
 ]
 
 [tool.ruff]
@@ -208,9 +205,18 @@ rulebook_version = "2026-05-15"
 instruments = ["CRR", "PS", "PRA_RULEBOOK", "SS"]
 source_paths = ["src/rwa_calc/engine"]
 
+# The whole development toolchain, and its only home. `uv sync` installs the
+# `dev` group by default, so a plain `uv sync` in a checkout IS the dev
+# environment. Nothing here reaches an installed rwa-calc: a module under src/
+# that imports one of these needs a [project].dependencies entry instead
+# (scripts/check_wheel_install.py is the gate).
 [dependency-groups]
 dev = [
-    "zensical>=0.0.29",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "ty",  # `uv run ty check ...` in the validation gate and CI's typecheck job
+    "marimo>=0.19.6",  # the expected-output workbooks under workbooks/
+    "zensical>=0.0.30",
     "mkdocstrings[python]>=1.0.0",
     "pytest-benchmark>=5.2.3",
     "pytest-xdist>=3.5.0",  # addopts pass -n auto --dist=loadfile; must be in the default-synced group

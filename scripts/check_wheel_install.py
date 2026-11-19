@@ -5,7 +5,8 @@ Pipeline position:
     uv build -> check_distribution.py -> check_wheel_install.py -> gh-action-pypi-publish
 
 Key responsibilities:
-- Build every workspace package's wheel from this tree into a throwaway directory
+- Build every workspace package's wheel from this tree, through its sdist as
+  ``publish.yml`` does, into a throwaway directory
 - Install ONE package's wheel into a fresh virtual environment, on the interpreter
   its ``Requires-Python`` names as the floor, holding nothing but that wheel, the
   workspace wheels it declares, and whatever those declare in turn
@@ -223,9 +224,16 @@ def check_wheel_install(packages: list[str], scratch: Path) -> int:
 
 
 def build_wheels(out_dir: Path) -> dict[str, Path]:
-    """Build every workspace package's wheel into ``out_dir``; return them by name."""
+    """Build every workspace package's wheel into ``out_dir``; return them by name.
+
+    Each wheel is built FROM its sdist — ``uv build`` with neither ``--wheel`` nor
+    ``--sdist`` builds the sdist first and the wheel from that — because that is
+    how ``publish.yml`` builds what it uploads. A wheel built straight from the
+    tree reads files the sdist may not carry, so a build input missing from a
+    package's sdist allowlist would pass here and break, or change, the release.
+    """
     result = _run(
-        ["uv", "build", "--all-packages", "--wheel", "-o", str(out_dir)],
+        ["uv", "build", "--all-packages", "-o", str(out_dir)],
         cwd=REPO_ROOT,
     )
     if result.returncode != 0:

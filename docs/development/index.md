@@ -31,8 +31,8 @@ The development guide covers:
 git clone https://github.com/OpenAfterHours/rwa_calculator.git
 cd rwa_calculator
 
-# Install with development dependencies
-uv sync --all-extras
+# Install with development dependencies (the default `dev` group)
+uv sync
 
 # Verify installation
 uv run pytest

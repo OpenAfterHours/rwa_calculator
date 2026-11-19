@@ -8,8 +8,9 @@ Pipeline position:
 
 Key responsibilities:
 - ``lift_institution_cqs``: source ``cqs`` from ``cp_institution_cqs`` for the two
-  counterparty kinds the CRR redirects onto the institution ladder — non-named
-  MDBs (Art. 117(1)) and demoted non-qualifying CCPs (Art. 107(2)(a)).
+  counterparty kinds whose own ECAI rating is carried there — non-named MDBs
+  (Art. 117(1), institution ladder) and non-qualifying CCPs (Art. 107(2)(b),
+  corporate ladder).
 
 A "pre-ladder lift" writes a counterparty-carried CQS into the exposure's own
 ``cqs`` column so the ordinary rating tables downstream then apply unchanged. It
@@ -24,8 +25,8 @@ added here must check its source dtype and cast to ``pl.Int8`` when it differs.
 
 References:
 - CRR Art. 117(1); PS1/26 Art. 117(1)(a): non-named MDBs risk-weighted as institutions
-- CRR Art. 107(2)(a): exposures to a non-qualifying CCP treated as institutions
-- CRR Art. 120(1): the institution CQS ladder these lifts feed
+- CRR Art. 107(2)(b): exposures to a non-qualifying CCP treated as corporates
+- CRR Art. 120(1) / 122(1): the institution / corporate CQS ladders these lifts feed
 """
 
 from __future__ import annotations
@@ -63,14 +64,15 @@ def lift_institution_cqs(exposures: pl.LazyFrame, upper_class: pl.Expr) -> pl.La
     # Named MDBs (mdb_named) bypass CQS entirely later — coalescing here is
     # harmless for them.
     is_mdb_class = upper_class == _MDB_UPPER_CLASS
-    # CRR Art. 107(2)(a): a non-qualifying CCP counterparty (entity_type "ccp"
-    # demoted past the Art. 306(1) 2%/4% pin by cp_is_qccp=False) is treated as
-    # an ordinary institution. Its own ECAI rating is carried on the synthetic
-    # CCR row as ``cp_institution_cqs`` (the CCR adapter surfaces no top-level
-    # ``cqs``), so lift it into ``cqs`` here — mirroring the MDB treatment —
-    # so the Art. 120(1) Table 3 institution ladder resolves (e.g. CQS 2 -> 50%)
-    # instead of the unrated 100% fallback. Scoped to ``ccp`` entity_type with a
-    # null ``cqs`` so rated institutions and lending rows are untouched.
+    # CRR Art. 107(2)(b): a non-qualifying CCP counterparty (entity_type "ccp"
+    # with cp_is_qccp=False) is treated as a corporate — the classifier gives it
+    # the CORPORATE class (CC-11; it used to say institution, citing (a), which
+    # is the QCCP limb). Its own ECAI rating may be carried on the synthetic CCR
+    # row only as ``cp_institution_cqs`` (the CCR adapter surfaces no top-level
+    # ``cqs``), so lift it into ``cqs`` here — mirroring the MDB treatment — so
+    # the Art. 122(1) Table 6 corporate ladder resolves instead of the unrated
+    # fallback. Scoped to ``ccp`` entity_type with a null ``cqs`` so rated
+    # counterparties and lending rows are untouched.
     is_non_qccp_institution = (
         pl.col("cp_entity_type").fill_null("") == _CCP_ENTITY_TYPE
     ) & ~pl.col("cp_is_qccp").fill_null(True)

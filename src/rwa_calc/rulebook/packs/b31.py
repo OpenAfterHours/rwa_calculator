@@ -1665,9 +1665,9 @@ ENTRIES: dict[str, RuleEntry] = {
     # BA-CVA (Basel-3.1-only) — PRA PS1/26 Credit Valuation Adjustment Risk
     # Part, Chapter 4. The CVA risk capital charge has no CRR equivalent
     # (CRR Art. 382 advanced/standardised CVA is replaced wholesale), so the
-    # feature is present/True ONLY in this pack — absent from common/crr, so
-    # ``pack.feature("cva_ba_cva")`` is False under CRR and the CVA stage is a
-    # clean no-op. Consumed by engine/cva/ba_cva.py + engine/stages/cva.py.
+    # feature is True only here; packs/crr.py declares it False, so the CVA
+    # roll-up is a clean no-op under CRR. Consumed by engine/cva/ba_cva.py via
+    # engine/stages/aggregate.py.
     # ---------------------------------------------------------------------
     "cva_ba_cva": Feature(
         name="cva_ba_cva",

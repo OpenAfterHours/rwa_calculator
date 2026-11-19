@@ -204,6 +204,25 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("12.5"),
         citation=Citation("CRR", "92", "(3)(ca) own-funds -> RWA conversion 1/0.08"),
     ),
+    # CCP default-fund contributions (CCR (CRR) Part Section 9). Regime-invariant:
+    # PS1/26 Annex R re-states only the Art. 308(3) / 309(2) cross-references, so
+    # the Art. 308(2) formula and Art. 310 carry into Basel 3.1 unchanged.
+    # Art. 308(2): K_i = max{ K_CCP . DF_i / (DF_CCP + DF_CM) , 8% . 2% . DF_i }.
+    "ccp_dfc_floor_capital_ratio": ScalarParam(
+        name="ccp_dfc_floor_capital_ratio",
+        value=Decimal("0.08"),
+        citation=Citation("CRR", "308(2)", "QCCP pre-funded DF floor: the 8% in 8% . 2% . DF_i"),
+    ),
+    "ccp_dfc_floor_risk_weight": ScalarParam(
+        name="ccp_dfc_floor_risk_weight",
+        value=Decimal("0.02"),
+        citation=Citation("CRR", "308(2)", "QCCP pre-funded DF floor: the 2% in 8% . 2% . DF_i"),
+    ),
+    "ccp_dfc_qccp_unfunded_rw": ScalarParam(
+        name="ccp_dfc_qccp_unfunded_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "310", "0% RW on unfunded contributions to a QCCP default fund"),
+    ),
     # SA-CCR supervisory option volatilities (CRR Art. 279a(2) / BCBS CRE52.47
     # Table 3) for the Black-Scholes Phi(d1) supervisory delta. Regime-invariant.
     # The two commodity volatilities are carried for table completeness; the

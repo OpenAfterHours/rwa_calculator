@@ -572,6 +572,17 @@ class RiskType(StrEnum):
     carries the ``"fccm_sft"`` discriminator on rows tagged with CCR_SFT.
     """
 
+    # Own-funds lines minted by the CCR stage. Their ``drawn_amount`` is an own
+    # funds REQUIREMENT, not an exposure value: the SA chain pins RW to 12.5
+    # (Art. 92(3)(ca) / CCR Part Art. 308(3), 309(2)), the classifier keeps them
+    # SA and the CRM stage gives them no mitigation (engine/crm/own_funds_lines.py).
+    # Engine-minted only — not accepted on any input table.
+    SETTLEMENT_FAILED_TRADE = "SETTLEMENT_FAILED_TRADE"
+    """Settlement-risk own funds for an unsettled transaction (CRR Art. 378-380)."""
+
+    CCR_DEFAULT_FUND = "CCR_DEFAULT_FUND"
+    """Own funds for a CCP default-fund contribution (CCR (CRR) Part Art. 307-310)."""
+
 
 class PermissionMode(StrEnum):
     """

@@ -1074,9 +1074,9 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     # QCCP discriminator (the "of which: cleared through a QCCP" rows 0100/0120).
     # The project-wide canonical form, mirrored verbatim: a ``ccp`` entity_type
     # whose flag is not an EXPLICIT False (CRR Art. 272 Def (88) / Art. 306 — an
-    # absent flag is treated as qualifying; only an explicit False demotes a
-    # ``ccp`` to the Art. 107(2)(a) institution ladder). Identical to
-    # engine/sa/risk_weights.py's 2%/4% override, the aggregator's
+    # absent flag is treated as qualifying; only an explicit False makes a
+    # ``ccp`` a non-QCCP, a corporate under Art. 107(2)(b)). The counterparty
+    # half of engine/sa/ccp_exposures.py's 2%/4% pin predicate, the aggregator's
     # ``rwa_ccr_qccp_trade`` partition and Pillar 3 CCR8. It MUST be derived
     # rather than expressed as a RowPredicate term: a bare ("cp_is_qccp", True)
     # compiles to ``== True``, so a NULL flag would drop a netting set that the

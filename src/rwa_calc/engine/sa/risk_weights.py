@@ -50,6 +50,7 @@ from rwa_calc.data.schemas import (
     HIERARCHY_OUTPUT_SCHEMA,
 )
 from rwa_calc.domain.enums import CQS, EquityType
+from rwa_calc.engine.crm.own_funds_lines import own_funds_line_expr
 from rwa_calc.engine.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
@@ -86,6 +87,7 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
     get_b31_combined_cqs_risk_weights,
     with_b31_loan_split_parts,
 )
+from rwa_calc.engine.sa.ccp_exposures import qccp_trade_exposure_expr, qccp_trade_risk_weight_expr
 from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr, lift_central_bank_cqs
 from rwa_calc.engine.sa.covered_bond import b31_unrated_cb_rw_expr, crr_unrated_cb_rw_expr
 from rwa_calc.engine.sa.cqs_lift import lift_institution_cqs
@@ -220,10 +222,10 @@ _CRR_PACK = resolve("crr", date(2026, 1, 1))
 _B31_PACK = resolve("b31", date(2027, 1, 1))
 
 # Framework-shared scalars — used under both CRR and Basel 3.1.
+# QCCP trade exposures (CCR Part Art. 306(1), CRE54.14-15) — engine/sa/ccp_exposures.py.
+_QCCP_RW = scalar_value(_CRR_PACK.scalar_param("qccp_proprietary_rw"))
+_QCCP_CLIENT_RW = scalar_value(_CRR_PACK.scalar_param("qccp_client_cleared_rw"))
 _SA_SHARED_RW: dict[str, float] = {
-    # QCCP trade exposures (CRR Art. 306, CRE54.14-15)
-    "qccp_client_cleared": scalar_value(_CRR_PACK.scalar_param("qccp_client_cleared_rw")),
-    "qccp_proprietary": scalar_value(_CRR_PACK.scalar_param("qccp_proprietary_rw")),
     "pse_short_term": float(PSE_SHORT_TERM_RW),
     "pse_unrated": float(PSE_UNRATED_DEFAULT_RW),
     "pse_non_equivalent_jurisdiction": float(PSE_NON_EQUIVALENT_JURISDICTION_RW),
@@ -984,8 +986,8 @@ def _prepare_risk_weight_lookup(
     # classes. Sentinel -1 for null CQS so the left join matches.
     upper = pl.col("exposure_class").str.to_uppercase()
 
-    # CRR Art. 117(1) / Art. 107(2)(a) — non-named MDBs and demoted non-QCCPs
-    # take the institution ladder; see engine/sa/cqs_lift.py.
+    # CRR Art. 117(1) / Art. 107(2)(b) — lift the own rating of non-named MDBs
+    # and non-QCCPs (now corporates, CC-11) into cqs; see engine/sa/cqs_lift.py.
     exposures = lift_institution_cqs(exposures, upper)
 
     # PS1/26 Art. 114(2A) — B31-Feature-gated; see engine/sa/central_bank.py.
@@ -1108,17 +1110,10 @@ def _apply_b31_risk_weight_overrides(
             & pl.col("cp_eca_score").is_not_null()
         )
         .then(_eca_meip_rw_expr())
-        # QCCP trade exposures (CRR Art. 306, CRE54.14-15). The 2%/4% pin is
-        # for QUALIFYING CCPs only (Art. 272 Def (88)): an explicit
-        # cp_is_qccp=False demotes a ``ccp`` entity_type to the standard
-        # institution ladder (Art. 107(2)(a)). An absent flag is treated as
-        # qualifying so legacy ``ccp`` rows keep the prescribed weight.
-        .when((pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(True))
-        .then(
-            pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
-            .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
-            .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
-        )
+        # CCR Part Art. 306(1) 2%/4%: TRADE exposures to a QCCP only. Other
+        # exposures to a CCP fall through to their Art. 107(2) class (CC-11).
+        .when(qccp_trade_exposure_expr())
+        .then(qccp_trade_risk_weight_expr(_QCCP_RW, _QCCP_CLIENT_RW))
         # Subordinated debt: flat 150% (CRE20.47, PS1/26 Art. 133(5)) —
         # overrides all CQS-based weights for institution + corporate (incl. SL).
         .when(is_b31_subordinated_debt(uc))
@@ -1314,17 +1309,10 @@ def _apply_crr_risk_weight_overrides(
             & pl.col("cp_eca_score").is_not_null()
         )
         .then(_eca_meip_rw_expr())
-        # QCCP trade exposures (CRR Art. 306, CRE54.14-15). The 2%/4% pin is
-        # for QUALIFYING CCPs only (Art. 272 Def (88)): an explicit
-        # cp_is_qccp=False demotes a ``ccp`` entity_type to the standard
-        # institution ladder (Art. 107(2)(a)). An absent flag is treated as
-        # qualifying so legacy ``ccp`` rows keep the prescribed weight.
-        .when((pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(True))
-        .then(
-            pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
-            .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
-            .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
-        )
+        # CCR Part Art. 306(1) 2%/4%: TRADE exposures to a QCCP only. Other
+        # exposures to a CCP fall through to their Art. 107(2) class (CC-11).
+        .when(qccp_trade_exposure_expr())
+        .then(qccp_trade_risk_weight_expr(_QCCP_RW, _QCCP_CLIENT_RW))
     )
 
     chain = _crr_append_real_estate_branches(chain, uc)
@@ -1621,8 +1609,11 @@ def _apply_defaulted_risk_weight(
             .otherwise(provision_rw)
         )
 
-    # Art. 128 (HIGH_RISK) takes precedence per Table A2 priority 4 > 5
-    is_defaulted = pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK")
+    # Art. 128 (HIGH_RISK) takes precedence per Table A2 priority 4 > 5. An own-funds
+    # line keeps its 12.5 pin: Art. 127 weights a defaulted EXPOSURE (CC-08).
+    is_defaulted = (
+        pl.col("is_defaulted").fill_null(False) & (_uc != "HIGH_RISK") & ~own_funds_line_expr()
+    )
 
     return exposures.with_columns(
         pl.when(is_defaulted)

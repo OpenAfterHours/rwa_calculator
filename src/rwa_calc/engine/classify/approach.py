@@ -48,6 +48,7 @@ from rwa_calc.engine.classify.permissions import (
     build_permission_exprs,
     build_sl_irb_permission_expr,
 )
+from rwa_calc.engine.crm.own_funds_lines import own_funds_line_expr
 from rwa_calc.engine.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
@@ -104,9 +105,14 @@ def assign_approach(
     # uses pl.lit().cast() — no fill_null — so the check-11 baseline is untouched;
     # a typed null leaves the OR-arm inert on lending rows. Mirrors the
     # ccr_effective_maturity handling in engine/irb/transforms.py::prepare_columns.
+    # ``risk_type`` likewise: the own-funds-line branch (CC-08) reads it, and
+    # minimal classifier frames built by tests may not carry it.
     exposures = ensure_columns(
         exposures,
-        {"ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False)},
+        {
+            "ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False),
+            "risk_type": ColumnSpec(pl.String, default=None, required=False),
+        },
     )
 
     # IRB requires an internal rating (PD from the firm's IRB model).
@@ -282,18 +288,26 @@ def _build_approach_expr(
     """Compose the ``pl.when`` decision ladder for ``approach``.
 
     Branch order (top wins):
-    1. Managed-as-retail without LGD → SA
-    2. Art. 114(4) EU domestic sovereign → SA (forced 0% RW)
-    3. CCP trade exposures → SA (CRE54.14-15)
-    4. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting, where an IRB
+    1. Own-funds lines (settlement risk, CCP default fund) → SA (CC-08)
+    2. Managed-as-retail without LGD → SA
+    3. Art. 114(4) EU domestic sovereign → SA (forced 0% RW)
+    4. CCP trade exposures → SA (CRE54.14-15)
+    5. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting, where an IRB
        permission covers the row (``sl_irb_permitted``); otherwise the row
        falls through and, holding no SL permission, lands on SA
-    5. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
-    6. SL slotting fallback (no internal rating required)
-    7. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
-    8. F-IRB (model or org-wide)
-    9. Equity → EQUITY approach
-    10. Otherwise → SA
+    6. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
+    7. SL slotting fallback (no internal rating required)
+    8. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
+    9. F-IRB (model or org-wide)
+    10. Equity → EQUITY approach
+    11. Otherwise → SA
+
+    Branch 1 is first because the row is not a credit exposure at all: its
+    ``drawn_amount`` is an own-funds requirement (CRR Art. 378 "own funds
+    requirement for settlement risk"; CCR (CRR) Part Art. 308(3) / 309(2) RWEA =
+    own funds x 12.5), which only the SA chain's 12.5 pin converts correctly.
+    Routed to IRB, FT1's 50,000 own funds became RWEA 45,764 (CRR) / 265,881
+    (Basel 3.1) instead of 625,000.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
@@ -338,7 +352,9 @@ def _build_approach_expr(
     is_sl = pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
 
     return (
-        pl.when(managed_as_retail_without_lgd)
+        pl.when(own_funds_line_expr())
+        .then(pl.lit(ApproachType.SA.value))
+        .when(managed_as_retail_without_lgd)
         .then(pl.lit(ApproachType.SA.value))
         .when(is_eu_domestic_sovereign)
         .then(pl.lit(ApproachType.SA.value))

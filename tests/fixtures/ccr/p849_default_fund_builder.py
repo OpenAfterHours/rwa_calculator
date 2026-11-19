@@ -20,18 +20,24 @@ Scenario design:
     CCR-B3: non-QCCP pre-funded (Art. 309)
         DFC_B3  is_qccp_ccp=False, is_unfunded_commitment=False
                 K_CCP=30,000,000; DF_i=1,500,000; DF_CM=60,000,000
-                K_CM = 30,000,000 × (1,500,000 / 60,000,000) = 750,000
-                RWEA = 750,000 × 12.5 = 9,375,000
+                K = DF + UC = DF_i = 1,500,000   (Art. 309(1) — K_CCP / DF_CM unused)
+                RWEA = 1,500,000 × 12.5 = 18,750,000
                 regulatory_band = "dfc_non_qccp_prefunded"
 
     CCR-B4: non-QCCP unfunded (Art. 309 unfunded)
         DFC_B4  is_qccp_ccp=False, is_unfunded_commitment=True
                 K_CCP=20,000,000; DF_i=800,000; DF_CM=40,000,000
-                K_CM = 20,000,000 × (800,000 / 40,000,000) = 400,000
-                RWEA = 400,000 × 12.5 = 5,000,000
+                K = DF + UC = UC = 800,000        (Art. 309(1) — K_CCP / DF_CM unused)
+                RWEA = 800,000 × 12.5 = 10,000,000
                 regulatory_band = "dfc_non_qccp_unfunded"
 
-    Portfolio total RWEA (B2 + B3 + B4) = 12,500,000 + 9,375,000 + 5,000,000 = 26,875,000
+    Portfolio total RWEA (B2 + B3 + B4) = 12,500,000 + 18,750,000 + 10,000,000 = 41,250,000
+
+    CC-10 (2026-11 review): B3/B4 were pinned at K_CCP x DF_i / DF_CM (750,000 /
+    400,000), the QCCP allocation applied to a non-QCCP. Art. 309(1) reads
+    "K = DF + UC" — the contributions themselves — so both non-QCCP rows
+    were understated 2x. B2 carries no DF_CCP (read as 0) and its 8% x 2% x
+    DF_i floor (3,200) does not bind, so its 12,500,000 stands.
 
 Module-level constants are the single source of truth for test-writer assertions.
 No persistent parquet files are written — the test-writer imports these constants
@@ -55,7 +61,7 @@ DEPENDENCY NOTE:
 References:
     - CRR Art. 308(2) (K_CCP hypothetical capital + K_CM allocation)
     - CRR Art. 308(3) (QCCP pre-funded own-funds → RWEA = K_CM × 12.5)
-    - CRR Art. 309(1)/(2) (non-QCCP / unfunded treatment)
+    - CRR Art. 309(1)/(2) (non-QCCP: K = DF + UC; RWEA = K × 12.5)
     - CRR Art. 92(3)(ca) (own_funds_to_rwa_factor = 12.5; pack value reused by engine)
     - BCBS CRE54.18-54.32
     - src/rwa_calc/data/schemas.py — FAILED_TRADE_SCHEMA (pattern reference)
@@ -145,11 +151,11 @@ DFC_B3_K_CCP: float = 30_000_000.0
 DFC_B3_DF_I: float = 1_500_000.0
 DFC_B3_DF_CM: float = 60_000_000.0
 
-#: K_CM = 30,000,000 × (1,500,000 / 60,000,000) per CRR Art. 308(2)
-DFC_B3_K_CM: float = 750_000.0
+#: K = DF + UC per CRR Art. 309(1): the pre-funded contribution DF_i itself
+DFC_B3_K_CM: float = 1_500_000.0
 
 #: RWEA = K_CM × 12.5 per CRR Art. 309(2)
-DFC_B3_RWEA: float = 9_375_000.0
+DFC_B3_RWEA: float = 18_750_000.0
 
 DFC_B3_REGULATORY_BAND: str = "dfc_non_qccp_prefunded"
 
@@ -165,11 +171,11 @@ DFC_B4_K_CCP: float = 20_000_000.0
 DFC_B4_DF_I: float = 800_000.0
 DFC_B4_DF_CM: float = 40_000_000.0
 
-#: K_CM = 20,000,000 × (800,000 / 40,000,000) per CRR Art. 308(2)
-DFC_B4_K_CM: float = 400_000.0
+#: K = DF + UC per CRR Art. 309(1): the unfunded contribution UC itself
+DFC_B4_K_CM: float = 800_000.0
 
 #: RWEA = K_CM × 12.5 per CRR Art. 309(2) unfunded
-DFC_B4_RWEA: float = 5_000_000.0
+DFC_B4_RWEA: float = 10_000_000.0
 
 DFC_B4_REGULATORY_BAND: str = "dfc_non_qccp_unfunded"
 
@@ -178,7 +184,7 @@ DFC_B4_REGULATORY_BAND: str = "dfc_non_qccp_unfunded"
 # ---------------------------------------------------------------------------
 
 #: Sum of RWEA for the combined B2 + B3 + B4 portfolio.
-PORTFOLIO_TOTAL_RWEA: float = 26_875_000.0  # 12,500,000 + 9,375,000 + 5,000,000
+PORTFOLIO_TOTAL_RWEA: float = 41_250_000.0  # 12,500,000 + 18,750,000 + 10,000,000
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +203,7 @@ class DFContribution:
     References:
         - CRR Art. 308(2) (K_CCP + K_CM clearing-member allocation)
         - CRR Art. 308(3) (QCCP pre-funded: RWEA = K_CM × 12.5)
-        - CRR Art. 309(1)/(2) (non-QCCP / unfunded: same arithmetic)
+        - CRR Art. 309(1)/(2) (non-QCCP: K = DF + UC, RWEA = K × 12.5)
     """
 
     contribution_id: str
@@ -306,8 +312,8 @@ def make_b3_frame() -> pl.LazyFrame:
     Return a single-row ``LazyFrame`` for CCR-B3 (non-QCCP pre-funded, Art. 309).
 
     Hand-calc:
-        K_CM = 30,000,000 × (1,500,000 / 60,000,000) = 750,000
-        RWEA = 750,000 × 12.5 = 9,375,000
+        K = DF_i = 1,500,000 (Art. 309(1))
+        RWEA = 1,500,000 × 12.5 = 18,750,000
 
     Returns:
         ``pl.LazyFrame`` ready for ``compute_dfc_capital()`` (engine Wave 4).
@@ -320,8 +326,8 @@ def make_b4_frame() -> pl.LazyFrame:
     Return a single-row ``LazyFrame`` for CCR-B4 (non-QCCP unfunded, Art. 309).
 
     Hand-calc:
-        K_CM = 20,000,000 × (800,000 / 40,000,000) = 400,000
-        RWEA = 400,000 × 12.5 = 5,000,000
+        K = UC = 800,000 (Art. 309(1))
+        RWEA = 800,000 × 12.5 = 10,000,000
 
     Returns:
         ``pl.LazyFrame`` ready for ``compute_dfc_capital()`` (engine Wave 4).
@@ -338,7 +344,7 @@ def make_combined_b2_b3_b4_frame() -> pl.LazyFrame:
         1 — DFC_B3 (non-QCCP pre-funded, regulatory_band="dfc_non_qccp_prefunded")
         2 — DFC_B4 (non-QCCP unfunded,   regulatory_band="dfc_non_qccp_unfunded")
 
-    Portfolio RWEA (all three rows) = 26,875,000.
+    Portfolio RWEA (all three rows) = 41,250,000.
 
     Returns:
         ``pl.LazyFrame`` with 3 rows, schema matching ``DF_CONTRIBUTION_DTYPES``.
@@ -354,8 +360,8 @@ def make_combined_b2_b3_b4_frame() -> pl.LazyFrame:
 #: Engine sets drawn_amount = k_cm on the synthetic exposure; these pin the
 #: per-scenario EAD the test-writer should assert against.
 DFC_B2_EAD: float = DFC_B2_K_CM  # 1,000,000
-DFC_B3_EAD: float = DFC_B3_K_CM  # 750,000
-DFC_B4_EAD: float = DFC_B4_K_CM  # 400,000
+DFC_B3_EAD: float = DFC_B3_K_CM  # 1,500,000
+DFC_B4_EAD: float = DFC_B4_K_CM  # 800,000
 
 
 def make_minimal_counterparties_frame(scenario: str = "all") -> pl.LazyFrame:
@@ -485,7 +491,8 @@ def save_p849_fixtures() -> list[tuple[str, int]]:
         2.  B3 frame: 1 row; is_qccp_ccp == False; is_unfunded_commitment == False.
         3.  B4 frame: 1 row; is_qccp_ccp == False; is_unfunded_commitment == True.
         4.  Combined frame: 3 rows; all three contribution IDs present.
-        5.  K_CM hand-calc: K_CCP × DF_i / DF_CM == constant (within float tolerance).
+        5.  K hand-calc: Art. 308(2) for the QCCP row, Art. 309(1) K = DF + UC
+            for the non-QCCP rows == constant (within float tolerance).
         6.  RWEA hand-calc: K_CM × 12.5 == constant (within float tolerance).
         7.  Portfolio RWEA == sum of per-row RWEAs.
         8.  Counterparties frame (all): 3 rows; is_qccp matches per-scenario flag.
@@ -540,16 +547,17 @@ def save_p849_fixtures() -> list[tuple[str, int]]:
         )
 
     # --- Invariants 5-6: hand-calc verification for each scenario ---
-    for label, k_ccp, df_i, df_cm, expected_k_cm, expected_rwea in [
-        ("B2", DFC_B2_K_CCP, DFC_B2_DF_I, DFC_B2_DF_CM, DFC_B2_K_CM, DFC_B2_RWEA),
-        ("B3", DFC_B3_K_CCP, DFC_B3_DF_I, DFC_B3_DF_CM, DFC_B3_K_CM, DFC_B3_RWEA),
-        ("B4", DFC_B4_K_CCP, DFC_B4_DF_I, DFC_B4_DF_CM, DFC_B4_K_CM, DFC_B4_RWEA),
+    # Art. 308(2) (QCCP, no DF_CCP supplied -> 0, floor 8% x 2% x DF_i) for B2;
+    # Art. 309(1) K = DF + UC (the contribution itself) for B3 / B4.
+    for label, is_qccp, k_ccp, df_i, df_cm, expected_k_cm, expected_rwea in [
+        ("B2", True, DFC_B2_K_CCP, DFC_B2_DF_I, DFC_B2_DF_CM, DFC_B2_K_CM, DFC_B2_RWEA),
+        ("B3", False, DFC_B3_K_CCP, DFC_B3_DF_I, DFC_B3_DF_CM, DFC_B3_K_CM, DFC_B3_RWEA),
+        ("B4", False, DFC_B4_K_CCP, DFC_B4_DF_I, DFC_B4_DF_CM, DFC_B4_K_CM, DFC_B4_RWEA),
     ]:
-        computed_k_cm = k_ccp * (df_i / df_cm)
+        computed_k_cm = max(k_ccp * (df_i / df_cm), 0.08 * 0.02 * df_i) if is_qccp else df_i
         if abs(computed_k_cm - expected_k_cm) > _tolerance:
             raise AssertionError(
-                f"P8.49 {label}: K_CM hand-calc mismatch: "
-                f"{k_ccp} × ({df_i} / {df_cm}) = {computed_k_cm} != {expected_k_cm}"
+                f"P8.49 {label}: K hand-calc mismatch: {computed_k_cm} != {expected_k_cm}"
             )
         computed_rwea = computed_k_cm * OWN_FUNDS_TO_RWA_FACTOR
         if abs(computed_rwea - expected_rwea) > _tolerance:

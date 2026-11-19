@@ -467,6 +467,33 @@ ERROR_CCR_UNRECOGNISED_RISK_FACTOR = "CCR022"
 # alpha 1.4) rather than dropped.
 ERROR_CCR_ORPHAN_TRADE = "CCR023"
 
+# Counterparty credit risk / CVA codes reserved for the 2026-11 review's ccp_cva
+# cluster (CCR030-CCR034). The other CCR codes (CCR001 / CCR010 / CCR011 /
+# CCR020) are declared beside their producers under engine/ccr/.
+#
+# BA-CVA coverage (PS1/26 CVA Risk Part 4.1 / 1.2 "covered transaction", CC-16):
+# a counterparty with OTC derivative netting sets has no row in the BA-CVA
+# counterparty input, so it has no sector, credit quality or M_NS and its CVA
+# own funds are silently zero (the BA-CVA join drops it). One WARNING per such
+# counterparty. QCCP derivatives (exclusion (1)(a)) and counterparties listed
+# with cva_in_scope=False are not warned. Basel 3.1 only (cva_ba_cva Feature).
+ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED = "CCR030"
+
+# Failed-trade side unknown (CRR Art. 378, CC-09): a DvP failed trade whose
+# ``is_purchase`` is null and whose agreed price differs from the market value.
+# The loss side decides the charge ("where the difference could involve a loss
+# for the credit institution"), so the engine charges the absolute difference —
+# conservative for either side — and names the trade with one WARNING.
+ERROR_FAILED_TRADE_SIDE_UNKNOWN = "CCR031"
+
+# Default-fund allocation inputs missing (CCR (CRR) Part Art. 308(2), CC-10): a
+# QCCP pre-funded contribution with no K_CCP or no DF_CM cannot be allocated its
+# share of the CCP's hypothetical capital. The engine charges the 8% x 2% x DF_i
+# floor — the one arm of the Art. 308(2) max it can still evaluate, a LOWER
+# bound — and names the contribution with one ERROR, since the charge can
+# understate. (A null used to reach the SA chain and give RWEA 0 silently.)
+ERROR_DFC_ALLOCATION_INPUT_MISSING = "CCR032"
+
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
 ERROR_LGD_OUT_OF_RANGE = "IRB002"
@@ -1311,6 +1338,59 @@ def unsupported_ciu_holding_class_warning(*, n: int, values: list[str]) -> Calcu
         ),
         field_name="exposure_class",
         regulatory_reference="PS1/26 Art. 132(2), 132A(1)",
+    )
+
+
+def failed_trade_side_unknown_warning(*, failed_trade_id: str) -> CalculationError:
+    """Create a CCR031 warning for a DvP failed trade whose side is not supplied.
+
+    CRR Art. 378 charges the price difference "where the difference could
+    involve a loss for the credit institution" — a seller loses when the market
+    value has fallen below the agreed price, a purchaser when it has risen above
+    it. With ``is_purchase`` null the engine cannot tell which, so it charges the
+    absolute difference (conservative for either side); this warning names the
+    trade so the preparer can supply the side (review item CC-09).
+    """
+    return CalculationError(
+        code=ERROR_FAILED_TRADE_SIDE_UNKNOWN,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ccr.failed_trades] DvP failed trade {failed_trade_id!r} has no "
+            "'is_purchase', so the side that can lose is unknown: the absolute price "
+            "difference is charged (CRR Art. 378). Supply 'is_purchase' to charge only "
+            "a loss-making difference."
+        ),
+        exposure_reference=f"ft__{failed_trade_id}",
+        field_name="is_purchase",
+        regulatory_reference="CRR Art. 378",
+    )
+
+
+def dfc_allocation_input_missing_error(
+    *, contribution_id: str, missing: list[str]
+) -> CalculationError:
+    """Create a CCR032 error for a QCCP pre-funded contribution Art. 308(2) cannot allocate.
+
+    CCR (CRR) Part Art. 308(2): ``K_i = max(K_CCP x DF_i / (DF_CCP + DF_CM),
+    8% x 2% x DF_i)``. Without ``K_CCP`` or ``DF_CM`` (both communicated by the
+    CCP under EMIR Art. 50c) only the floor can be evaluated, so the engine
+    charges it as a lower bound and this error names the contribution — the
+    true requirement can be higher (review item CC-10).
+    """
+    return CalculationError(
+        code=ERROR_DFC_ALLOCATION_INPUT_MISSING,
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ccr.default_fund_contributions] QCCP pre-funded contribution "
+            f"{contribution_id!r} has no {' or '.join(repr(m) for m in missing)}, so its "
+            "share of K_CCP cannot be allocated (CRR Art. 308(2)): only the 8% x 2% x DF_i "
+            "floor is charged, which can understate. Supply the CCP's published values."
+        ),
+        exposure_reference=f"dfc__{contribution_id}",
+        field_name=missing[0],
+        regulatory_reference="CRR Art. 308(2)",
     )
 
 

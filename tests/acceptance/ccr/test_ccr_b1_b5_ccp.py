@@ -7,8 +7,8 @@ Pipeline position:
 
 Key responsibilities:
 - Validate that a CCP-type counterparty with is_qccp=False is demoted to the
-  institution SA risk-weight ladder (CRR Art. 107(2)(a)) and assigned the
-  CQS-1 risk weight of 20% (CRR Art. 120(1) Table 3).
+  corporate SA risk-weight ladder (CRR Art. 107(2)(b); CC-11) and assigned the
+  CQS-1 risk weight of 20% (CRR Art. 122(1) Table 6, as Art. 120(1) Table 3).
 - Validate that the EAD is byte-identical to CCR-A1 (same trade economics),
   loaded from tests/expected_outputs/ccr/CCR-A1.json to avoid transcription drift.
 - Validate anti-degenerate guards: the QCCP-specific weights (2%/4%) and the
@@ -38,7 +38,7 @@ Expected outcome (green-on-arrival regression guard):
     to produce risk_weight == 0.20 without any new implementation.
 
 References:
-    - CRR Art. 107(2)(a) — non-QCCP CCP exposure treated as institution (SA)
+    - CRR Art. 107(2)(b) — non-QCCP CCP exposure treated as corporate (SA)
     - CRR Art. 120(1) Table 3 — institution CQS-1 -> 20% SA risk weight
     - CRR Art. 272 Def (88) — QCCP definition (NOT met; is_qccp=False)
     - CRR Art. 274(2) — EAD = alpha * (RC + PFE), alpha=1.4
@@ -150,7 +150,7 @@ class TestCCRB5NonQCCPInstitutionCQS1:
 
     Pin 1 — risk_weight == 0.20  (CRR Art. 120(1) Table 3, institution CQS-1).
     Pin 2 — ead_final ~ CCR-A1.json ead_final (rel=1e-6; EAD invariant).
-    Pin 3 — exposure_class == "institution" (Art. 107(2)(a) demotion).
+    Pin 3 — exposure_class == "corporate" (Art. 107(2)(b); CC-11 corrected (a)).
     Pin 4 — rwa_final ~ ead_final * 0.20 (rel=1e-9, derived from pipeline EAD).
     Pin 5 — anti-degenerate guards: risk_weight not in {0.02, 0.04, 0.50, 0.40, 1.0, 12.5}.
 
@@ -163,7 +163,7 @@ class TestCCRB5NonQCCPInstitutionCQS1:
     smoke-guard to confirm the builder wired the right CQS value.
 
     References:
-        CRR Art. 107(2)(a) — non-QCCP CCP exposure treated as institution SA.
+        CRR Art. 107(2)(b) — non-QCCP CCP exposure treated as corporate SA.
         CRR Art. 120(1) Table 3 — institution CQS-1 -> 20% risk weight.
         CRR Art. 274(2) — EAD = alpha * (RC + PFE).
         CRR Art. 306(4) — RWA = EAD * risk_weight.
@@ -188,7 +188,7 @@ class TestCCRB5NonQCCPInstitutionCQS1:
 
         References:
             CRR Art. 120(1) Table 3 — institution CQS-1 -> 20% risk weight.
-            CRR Art. 107(2)(a) — non-QCCP CCP exposure demoted to institution SA.
+            CRR Art. 107(2)(b) — non-QCCP CCP exposure treated as corporate SA.
         """
         # Arrange
         expected_rw = NONQCCP_B5_EXPECTED_RW  # 0.20
@@ -199,7 +199,7 @@ class TestCCRB5NonQCCPInstitutionCQS1:
             f"CCR-B5: expected risk_weight={expected_rw} "
             f"(CRR Art. 120(1) Table 3: institution CQS-{NONQCCP_B5_INSTITUTION_CQS} -> 20%), "
             f"got {actual_rw!r}. "
-            "CRR Art. 107(2)(a): non-QCCP CCP exposure is treated as an institution "
+            "CRR Art. 107(2)(b): non-QCCP CCP exposure is treated as a corporate "
             "exposure under SA — apply the CQS-1 weight from Table 3 (20%), not the "
             "QCCP-specific 2%/4% weights (Art. 306(1)) and not the CQS-2 weight (50%)."
         )
@@ -241,26 +241,34 @@ class TestCCRB5NonQCCPInstitutionCQS1:
             "the SA-CCR EAD must match."
         )
 
-    def test_ccr_b5_exposure_class_is_institution(self, ccr_b5_row: dict) -> None:
+    def test_ccr_b5_exposure_class_is_corporate(self, ccr_b5_row: dict) -> None:
         """
-        Classifier must route CP-NONQCCP-B5 to exposure_class "institution".
+        Classifier must route CP-NONQCCP-B5 to exposure_class "corporate".
 
-        CRR Art. 107(2)(a): a counterparty that is a CCP but NOT a QCCP (is_qccp=False)
-        is treated as an institution for SA purposes.  The classifier must produce
-        exposure_class == "institution" (case-insensitive), not "ccp" or "corporate".
+        CC-11 (2026-11 review) corrected this pin, which asserted "institution"
+        on a citation of Art. 107(2)(a) — the QUALIFYING-CCP limb. CRR Art.
+        107(2) = PS1/26 Art. 107(2): "For all other types of exposures to a
+        central counterparty, institutions shall treat those exposures as
+        follows: (a) as exposures to an institution for other types of exposures
+        to a qualifying CCP; (b) as exposures to a corporate for other types of
+        exposures to a non-qualifying CCP." For the trade exposure itself, CCR
+        (CRR) Part Art. 306(1)(b) applies "the risk weight used for the
+        Standardised Approach to credit risk as set out in Article 107(2)(b)".
+        The risk weight pinned above does not move: CQS 1 is 20% on both the
+        Art. 120 institution and the Art. 122 corporate ladder.
 
         Arrange:
             CP-NONQCCP-B5: entity_type="ccp", is_qccp=False.
         Act:
             Full pipeline.
         Assert:
-            exposure_class == "institution" (case-insensitive).
+            exposure_class == "corporate" (case-insensitive).
 
         References:
-            CRR Art. 107(2)(a) — non-QCCP CCP -> institution exposure class.
+            CRR Art. 107(2)(b); CCR (CRR) Part Art. 306(1)(b).
         """
         # Arrange
-        expected_class = "institution"
+        expected_class = "corporate"
 
         # Act
         actual_class = ccr_b5_row["exposure_class"]
@@ -268,10 +276,8 @@ class TestCCRB5NonQCCPInstitutionCQS1:
         # Assert
         assert actual_class.lower() == expected_class, (
             f"CCR-B5: expected exposure_class={expected_class!r} "
-            f"(CRR Art. 107(2)(a): non-QCCP CCP demoted to institution SA), "
-            f"got {actual_class!r}. "
-            "The classifier must route entity_type='ccp' with is_qccp=False to the "
-            "institution exposure class, not to a CCP-specific or corporate class."
+            f"(CRR Art. 107(2)(b): exposures to a non-qualifying CCP are corporate), "
+            f"got {actual_class!r}."
         )
 
     def test_ccr_b5_rwa_equals_ead_times_020(self, ccr_b5_row: dict) -> None:
@@ -354,8 +360,8 @@ class TestCCRB5NonQCCPInstitutionCQS1:
         )
         assert actual_rw != 1.0, (
             f"CCR-B5: risk_weight must NOT be 1.0 (corporate fallback). "
-            f"CP-NONQCCP-B5 must be classified as institution (Art. 107(2)(a)), "
-            f"not as corporate. Got {actual_rw!r}."
+            f"CQS-1 is 20% on the Art. 122 corporate ladder (Art. 107(2)(b)), "
+            f"never the unrated corporate 100%. Got {actual_rw!r}."
         )
         assert actual_rw != 12.5, (
             f"CCR-B5: risk_weight must NOT be 12.5 (Art. 309 non-QCCP default-fund). "

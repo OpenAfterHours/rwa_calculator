@@ -161,8 +161,8 @@ def add_counterparty_attributes(
         # CCP fields (CRR Art. 300-311, CRE54.14-15)
         pl.col("is_ccp_client_cleared").alias("cp_is_ccp_client_cleared"),
         # QCCP flag (CRR Art. 272 Def (88)) — gates the Art. 306(1) 2%/4% trade
-        # exposure pin so a ``ccp`` entity_type with an explicit is_qccp=False
-        # falls through to the standard institution ladder (Art. 107(2)(a)).
+        # exposure pin; a ``ccp`` entity_type with an explicit is_qccp=False is
+        # classified CORPORATE (Art. 107(2)(b), see derive_independent_flags).
         pl.col("is_qccp").alias("cp_is_qccp"),
         # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
         pl.col("borrower_income_currency").alias("cp_borrower_income_currency"),
@@ -430,6 +430,24 @@ def derive_independent_flags(
             .otherwise(pl.col("_irb_class"))
             .alias("_irb_class"),
         )
+
+    # CRR Art. 107(2)(b) = PS1/26 Art. 107(2)(b): exposures to a NON-qualifying
+    # CCP are treated "as exposures to a corporate" — the Section 9 trade
+    # exposures too, since CCR (CRR) Part Art. 306(1)(b) gives them "the risk
+    # weight ... as set out in Article 107(2)(b)". Only an explicit
+    # ``is_qccp = False`` demotes: a ``ccp`` with no flag keeps the base map's
+    # institution class (Art. 107(2)(a)), the convention the Art. 306 pin reads
+    # (CC-11; the class used to stay institution for both).
+    is_non_qualifying_ccp = pl.col("cp_entity_type").eq_missing("ccp") & pl.col(
+        "cp_is_qccp"
+    ).eq_missing(False)
+    exposures = exposures.with_columns(
+        pl.when(is_non_qualifying_ccp)
+        .then(pl.lit(ExposureClass.CORPORATE.value))
+        .otherwise(pl.col(name))
+        .alias(name)
+        for name in ("_sa_class", "_irb_class")
+    )
 
     sl_class = pl.lit(ExposureClass.SPECIALISED_LENDING.value)
     # Art. 112 Table A2: Under SA, specialised lending is a corporate sub-type

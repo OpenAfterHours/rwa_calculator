@@ -44,8 +44,9 @@ from rwa_calc.domain.branch_reasons import (
     SovereignFloorReason,
     reason_dtype,
 )
-from rwa_calc.domain.enums import CQS, RiskType
+from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.branch_reason import BranchCase, decide
+from rwa_calc.engine.sa.ccp_exposures import qccp_trade_exposure_expr
 from rwa_calc.engine.sa.crr_risk_weight_tables import CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS
 from rwa_calc.engine.sa.sovereign_derived import cqs_table_lookup_expr
 
@@ -185,31 +186,19 @@ def apply_sovereign_floor_for_institutions(
     # is lex specialis and admits no Art. 121(6) floor; flooring a 2% pin to the
     # Art. 114(1) unrated-sovereign residual overstates the leg 50x.
     #
-    # The predicate carries a TRADE-EXPOSURE term as well as the QCCP one, and
-    # that is the whole of its difference from the pin's own predicate in
-    # ``risk_weights.py``. CRR Art. 107(2) sends only trade exposures and default
-    # fund contributions to Chapter 6 Section 9; "all other types of exposures to
-    # a qualifying CCP" are treated "as exposures to an institution", so an
-    # ordinary loan to a QCCP stays squarely inside Art. 121(6). Copying the pin's
-    # predicate would exempt that loan too.
+    # The predicate is the SAME one the pin in ``risk_weights.py`` uses
+    # (``engine/sa/ccp_exposures.py``), trade-exposure term included. CRR Art.
+    # 107(2) sends only trade exposures and default fund contributions to Chapter
+    # 6 Section 9; "all other types of exposures to a qualifying CCP" are treated
+    # "as exposures to an institution", so an ordinary loan to a QCCP stays
+    # squarely inside Art. 121(6). Sharing one predicate (CC-11) keeps the floor's
+    # carve-out and the pin it protects from drifting apart again.
     #
     # Null-safe on every term WITHOUT a ``fill_null``: this case sits FIRST in the
     # chain below, and ``decide`` names a row UNKNOWN_FALLBACK the moment a
     # predicate ahead of it is indeterminate — so a null here would relabel the
-    # whole estate. ``eq_missing`` is total by construction, and
-    # ``is_null() | col`` is total by Kleene (the right operand can only be read
-    # when the left is False, i.e. when the column is known). That keeps the
-    # defensive surface off the ``engine_fill_null_sites`` ratchet.
-    #
-    # An absent ``cp_is_qccp`` is read as qualifying, matching the pin in
-    # ``risk_weights.py`` that set the weight this limb protects.
-    _is_ccr_trade_exposure = pl.col("risk_type").eq_missing(RiskType.CCR_DERIVATIVE.value) | pl.col(
-        "risk_type"
-    ).eq_missing(RiskType.CCR_SFT.value)
-    _is_qccp = pl.col("cp_entity_type").eq_missing("ccp") & (
-        pl.col("cp_is_qccp").is_null() | pl.col("cp_is_qccp")
-    )
-    _is_qccp_trade_exposure = _is_ccr_trade_exposure & _is_qccp
+    # whole estate. The shared predicate is total by construction.
+    _is_qccp_trade_exposure = qccp_trade_exposure_expr()
 
     # Floor applies to every unrated institution exposure in FX, excluding
     # trade-exempt items. No sovereign-CQS gate: ``_sovereign_rw`` is total

@@ -3542,6 +3542,7 @@
         "tests/fixtures/reporting_funded_protection_portfolio.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
+        "tests/unit/crm/test_collateral_currency_adjustments.py",
         "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
         "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/crm/test_simple_method.py"
@@ -8426,6 +8427,7 @@
         "tests/acceptance/reporting/test_c07_collateral_columns.py",
         "tests/fixtures/p1_161/p1_161.py",
         "tests/fixtures/p1_93/p1_93.py",
+        "tests/unit/crm/test_collateral_currency_adjustments.py",
         "tests/unit/crm/test_simple_method.py",
         "tests/unit/reporting/corep/test_c07_collateral_cap.py"
       ],

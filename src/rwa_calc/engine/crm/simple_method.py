@@ -44,6 +44,8 @@ from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
@@ -53,6 +55,9 @@ if TYPE_CHECKING:
 #: with the other ``_fcsm_`` columns.
 _FCSM_POOL_BASIS = "_fcsm_pool_basis"
 _FCSM_POOL_MEMBER = "_fcsm_pool_member"
+#: The exposure's own denomination (pre-FX-conversion ``original_currency``, else
+#: ``currency`` per row) the Art. 222(6) same-currency test reads. Scratch.
+_FCSM_EXP_DENOMINATION = "_fcsm_exp_denomination"
 
 
 @dataclass(frozen=True)
@@ -347,6 +352,10 @@ def compute_fcsm_columns(
         pl.when(is_ccr).then(pl.lit(0.0)).otherwise(pl.col(ead_col)).alias(_FCSM_POOL_BASIS),
         pl.when(is_ccr).then(pl.lit(0.0)).otherwise(pl.lit(1.0)).alias(_FCSM_POOL_MEMBER),
     )
+    if "currency" in schema_names:
+        exposures = exposures.with_columns(
+            _denomination_expr(schema_names).alias(_FCSM_EXP_DENOMINATION)
+        )
 
     schema_flags = _SchemaFlags(
         has_exp_maturity="residual_maturity_years" in schema_names,
@@ -552,8 +561,25 @@ def _prepare_eligible_collateral(
 
 
 def _currency_expr(present: bool, alias: str) -> pl.Expr:
-    """Currency column for the given level, defaulting to GBP if absent."""
-    return pl.col("currency").alias(alias) if present else pl.lit("GBP").alias(alias)
+    """Exposure denomination for the given level, defaulting to GBP if absent.
+
+    Reads ``_FCSM_EXP_DENOMINATION`` (the pre-FX-conversion currency), not the
+    reporting-currency ``currency`` the FX converter leaves on every row.
+    """
+    return pl.col(_FCSM_EXP_DENOMINATION).alias(alias) if present else pl.lit("GBP").alias(alias)
+
+
+def _denomination_expr(schema_names: Collection[str]) -> pl.Expr:
+    """A row's own currency: ``original_currency`` (pre-FX-conversion), else ``currency``.
+
+    ``FXConverter`` overwrites ``currency`` with the reporting currency on the
+    exposure and the collateral alike, so comparing ``currency`` makes every pair
+    "same currency". The fallback is per row: frames can be concatenated, so a
+    row may lack the audit value while the column exists.
+    """
+    if "original_currency" in schema_names:
+        return pl.coalesce("original_currency", "currency")
+    return pl.col("currency")
 
 
 def _maturity_expr(present: bool, alias: str) -> pl.Expr:
@@ -602,7 +628,7 @@ def _build_facility_lookup(
 ) -> pl.LazyFrame:
     """Facility-level aggregate lookup (MAX maturity, ANY SFT, ANY CMP)."""
     fac_aggs = [
-        pl.col("currency").first().alias("_fac_currency")
+        pl.col(_FCSM_EXP_DENOMINATION).first().alias("_fac_currency")
         if sf.has_currency
         else pl.lit("GBP").alias("_fac_currency"),
         pl.col(ead_col).sum().alias("_fac_total_ead"),
@@ -620,7 +646,7 @@ def _build_counterparty_lookup(
 ) -> pl.LazyFrame:
     """Counterparty-level aggregate lookup (MAX maturity, ANY SFT, ANY CMP)."""
     cp_aggs = [
-        pl.col("currency").first().alias("_cp_currency")
+        pl.col(_FCSM_EXP_DENOMINATION).first().alias("_cp_currency")
         if sf.has_currency
         else pl.lit("GBP").alias("_cp_currency"),
         pl.col(ead_col).sum().alias("_cp_total_ead"),
@@ -741,8 +767,12 @@ def _apply_currency_and_sovereign_discount(
     must not be applied on top of it).
     """
     coll_schema_names = coll_with_exp.collect_schema().names()
+    # Art. 222(6): "where the exposure and the collateral are denominated in the
+    # same currency" — the DENOMINATIONS, pre-FX-conversion, on both sides (the
+    # exposure side via ``_FCSM_EXP_DENOMINATION``). An unknown collateral
+    # currency matches nothing, so the carve-out does not apply.
     coll_currency = (
-        pl.col("currency").fill_null("").str.to_uppercase()
+        _denomination_expr(coll_schema_names).fill_null("").str.to_uppercase()
         if "currency" in coll_schema_names
         else pl.lit("")
     )

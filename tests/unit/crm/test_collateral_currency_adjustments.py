@@ -33,6 +33,20 @@ CL-14 — a collateral row with NO currency is treated as mismatched.
     50,000 with a null currency, liquidation period 10 days, both regimes):
         H_fx = 8%; C_VA = 50,000 x 0.92 = 46,000; E* = 85,000 - 46,000 = 39,000
         (pre-fix 35,000: the full 50,000 counted with no H_fx).
+
+Skeptic sibling of CL-14 — the Art. 222 Simple Method's same-currency test.
+    PS1/26 Art. 222(6) (CRR Art. 222(4) likewise): "the institution may assign a
+    0% risk weight where the exposure and the collateral are denominated in the
+    same currency" and the collateral is cash on deposit (or a 0%-RW sovereign
+    bond discounted by 20%); otherwise Art. 222(3) floors the collateralised
+    portion at 20%. The Simple Method compared ``currency`` on both sides, which
+    the FX converter has already set to the reporting currency, so a EUR deposit
+    securing a GBP loan took 0%. It now compares the denominations
+    (``original_currency``, else ``currency``).
+
+    Hand calculation (SA, Simple Method, GBP loan 100,000, cash 100,000, EUR at
+    1.0, both regimes): GBP cash -> 0% (RWA 0); EUR cash -> cash item RW 0%
+    floored at 20% (RWA 20,000; pre-fix 0); EUR cash against a EUR loan -> 0%.
 """
 
 from __future__ import annotations
@@ -43,6 +57,7 @@ import polars as pl
 import pytest
 from tests.unit.crm import _pipeline_harness as harness
 
+from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.rulebook.resolve import resolve
 
 _EUR_AT_PAR = pl.DataFrame([{"currency_from": "EUR", "currency_to": "GBP", "rate": 1.0}])
@@ -185,3 +200,53 @@ class TestUnknownCollateralCurrencyIsAMismatch:
         records = [e for e in errors if e.code == "CRM023"]
         assert len(records) == 1
         assert "NOCCY" in records[0].message
+
+
+class TestSimpleMethodSameCurrencyReadsTheDenomination:
+    """Art. 222(6) 0% carve-out only where exposure and cash share a denomination."""
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    @pytest.mark.parametrize(
+        ("loan_currency", "cash_currency", "expected_rwa"),
+        [
+            ("GBP", "GBP", 0.0),  # same currency: Art. 222(6)(a) 0%
+            ("GBP", "EUR", 20_000.0),  # mismatch: Art. 222(3) 20% floor
+            ("EUR", "EUR", 0.0),  # same denomination, both converted to GBP
+        ],
+    )
+    def test_cash_carve_out(
+        self, regime: str, loan_currency: str, cash_currency: str, expected_rwa: float
+    ) -> None:
+        # Arrange
+        pledge = {
+            "collateral_reference": "C1",
+            "collateral_type": "cash",
+            "market_value": 100_000.0,
+            "currency": cash_currency,
+            "beneficiary_type": "loan",
+            "beneficiary_reference": "L1",
+            "is_eligible_financial_collateral": True,
+        }
+
+        # Act
+        results, _errors = harness.run(
+            regime,
+            collateral_method=CRMCollateralMethod.SIMPLE,
+            loans=harness.loans(
+                [
+                    {
+                        "loan_reference": "L1",
+                        "counterparty_reference": "CP1",
+                        "drawn_amount": 100_000.0,
+                        "currency": loan_currency,
+                    }
+                ]
+            ),
+            collateral=harness.collateral([pledge]),
+            fx_rates=_EUR_AT_PAR,
+        )
+
+        # Assert: adequacy - the whole loan is Simple-Method covered.
+        result = harness.row(results, "L1")
+        assert result["fcsm_collateral_value"] == pytest.approx(100_000.0, rel=1e-12)
+        assert result["rwa_final"] == pytest.approx(expected_rwa, abs=1e-6)

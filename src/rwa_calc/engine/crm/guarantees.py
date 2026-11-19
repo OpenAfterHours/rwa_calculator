@@ -5,6 +5,8 @@ Pipeline position:
     Collateral -> apply_guarantees -> Finalise EAD
 
 Key responsibilities:
+- Eligibility screen and Art. 233 valuation of the protection (delegated to
+  ``protection_screen`` and ``protection_value``)
 - Multi-level guarantee resolution (direct / facility / counterparty)
 - Multi-guarantor row splitting
 - Cross-approach CCF substitution (IRB exposure + SA guarantor)
@@ -12,6 +14,7 @@ Key responsibilities:
 
 References:
     CRR Art. 213-217: Unfunded credit protection
+    CRR / PS1/26 Art. 233-235: valuation and the risk-weight substitution method
     CRE22.70-85: Basel 3.1 guarantee substitution
 """
 
@@ -22,10 +25,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.contracts.errors import (
-    ERROR_INELIGIBLE_UNFUNDED_PROTECTION,
-    crm_warning,
-)
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.domain.enums import ApproachType
@@ -37,6 +36,12 @@ from rwa_calc.engine.ccf import (
 )
 from rwa_calc.engine.crm.expressions import COLLATERAL_VALUE_CARRIERS
 from rwa_calc.engine.crm.guarantor_eligibility import assign_guarantor_approach
+from rwa_calc.engine.crm.protection_screen import screen_unfunded_protection
+from rwa_calc.engine.crm.protection_value import (
+    attach_shared_cap,
+    crm_basis_expr,
+    value_unfunded_protection,
+)
 from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.kernels.allocation import (
     expand_items_pro_rata,
@@ -44,7 +49,6 @@ from rwa_calc.engine.kernels.allocation import (
 )
 from rwa_calc.engine.utils import exact_fractional_years_expr
 from rwa_calc.rulebook import RulepackV0
-from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from polars._typing import PolarsDataType
@@ -198,48 +202,42 @@ def _prepare_guarantees(
     pack: ResolvedRulepack | None = None,
     errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
-    """Normalise, filter, expand, and haircut guarantees before the split."""
-    # Art. 233 H_fx and Art. 233(2) restructuring-exclusion haircuts are
-    # regime-invariant scalars sourced from the rulepack. Production threads the
-    # run's pack; direct callers resolve an identical one from config.
+    """Screen, expand and value guarantees before the split.
+
+    Order follows the rule text: the eligibility screen runs on the raw rows
+    (one message per input row); each contract's shared cap is read before
+    multi-level expansion rescales ``amount_covered``; Art. 233(1)-(3)
+    valuation needs the exposure-level E, so it runs after expansion; the
+    Art. 237-239 maturity adjustment then applies to G* (Art. 235(1)(a): GA is
+    G* "further adjusted for any maturity mismatch").
+    """
+    # Art. 233 H_fx and Art. 233(2) restructuring-exclusion scalars are
+    # regime-invariant pack entries. Production threads the run's pack; direct
+    # callers resolve an identical one from config.
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
-    # Default protection_type to "guarantee" when absent, then fill nulls with
-    # the same default (backward compatibility for legacy data).
-    guarantees = ensure_columns(
-        guarantees,
-        {"protection_type": ColumnSpec(pl.String, default="guarantee", required=False)},
-    )
-    guarantees = guarantees.with_columns(
-        pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
-    )
+
+    # Art. 213(1)(c)(i) unilateral cancel / change, Art. 234 tranched protection,
+    # letters of comfort / keepwells, and the guarantee_type -> credit-derivative
+    # normalisation. Also defaults a null protection_type to "guarantee".
+    guarantees = screen_unfunded_protection(guarantees, resolved_pack, errors)
 
     # CRR Art. 237(2)(a): the original-maturity >= 1yr eligibility test is NOT an
     # unconditional pre-filter — Art. 237(2) applies "where there is a maturity
-    # mismatch". A matched (or protection-outlives-exposure) short-dated guarantee
-    # remains eligible. The test is therefore applied inside
-    # _apply_maturity_mismatch_to_guarantees (mismatch-conditioned, mirroring the
-    # collateral twin in haircuts.py) rather than dropping rows here (P1.232). The
-    # original_maturity_years column is ensured so the residual-fallback and the
-    # relocated gate can read it (null-PERMISSIVE, P1.10).
+    # mismatch". It is applied inside _apply_maturity_mismatch_to_guarantees
+    # (mismatch-conditioned, mirroring the collateral twin in haircuts.py) rather
+    # than dropping rows here (P1.232). The original_maturity_years column is
+    # ensured so the residual-fallback and the relocated gate can read it
+    # (null-PERMISSIVE, P1.10).
     guarantees = ensure_columns(
         guarantees,
         {"original_maturity_years": ColumnSpec(pl.Float64, required=False)},
     )
 
-    # CRR / PS1-26 Art. 213(1)(c)(i): drop guarantees the provider can
-    # unilaterally cancel (both regimes) or unilaterally change (Basel 3.1
-    # only). Runs on the raw per-guarantee rows — before multi-level expansion
-    # — so exactly one CRM012 warning is raised per ineligible guarantee.
-    guarantees = _gate_unilateral_protection(guarantees, resolved_pack, errors)
-
+    guarantees = attach_shared_cap(guarantees)
     guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
-
-    # Apply haircuts to guarantee amounts BEFORE splitting (Art. 233).
-    # Haircuts reduce the nominal credit protection value G, then capping
-    # at EAD happens inside the split. This ensures large cross-currency
-    # guarantees still fully cover smaller exposures after the haircut.
-    guarantees = _apply_fx_haircut_to_guarantees(guarantees, exposures, pack=resolved_pack)
-    guarantees = _apply_restructuring_haircut_to_guarantees(guarantees, pack=resolved_pack)
+    guarantees = value_unfunded_protection(
+        guarantees, exposures, exposures.collect_schema().names(), pack=resolved_pack
+    )
 
     # CRR Art. 239(3) / PS1/26 Art. 239(3): maturity mismatch adjustment for
     # unfunded credit protection. When the protection's residual maturity t is
@@ -249,87 +247,7 @@ def _prepare_guarantees(
     # Framework-agnostic (reads only reporting_date + maturity columns; the
     # multiplier is identical under CRR and Basel 3.1), so it runs
     # unconditionally — mirroring the collateral sibling in collateral.py.
-    guarantees = _apply_maturity_mismatch_to_guarantees(guarantees, exposures, config)
-    return guarantees
-
-
-@cites("CRR Art. 213")
-@cites("PS1/26, paragraph 213")
-def _gate_unilateral_protection(
-    guarantees: pl.LazyFrame,
-    pack: ResolvedRulepack,
-    errors: list[CalculationError] | None,
-) -> pl.LazyFrame:
-    """
-    Drop guarantees ineligible under Art. 213(1)(c)(i) (unilateral cancel / change).
-
-    A guarantee the protection provider can unilaterally CANCEL is ineligible
-    under both regimes; one whose terms the provider can unilaterally CHANGE
-    (increasing the effective cost of protection) is additionally ineligible
-    under Basel 3.1 — the "or change" limb is new in PS1/26, gated by the
-    ``ucp_unilateral_change_ineligible`` pack Feature. Dropped rows leave the
-    exposure un-guaranteed and each raises one CRM012 warning.
-
-    Both flags are null-permissive: a null means "no known defect => eligible",
-    mirroring the Art. 237(2)(a) original-maturity fallback in the caller.
-
-    References:
-        CRR Art. 213(1)(c)(i): unfunded credit protection eligibility.
-        PS1/26 Art. 213(1)(c)(i): adds the unilateral-change arm.
-    """
-    guarantees = ensure_columns(
-        guarantees,
-        {
-            "is_unilaterally_cancellable": ColumnSpec(pl.Boolean, required=False),
-            "is_unilaterally_changeable": ColumnSpec(pl.Boolean, required=False),
-        },
-    )
-
-    change_gated = pack.feature("ucp_unilateral_change_ineligible")
-    ineligible = pl.col("is_unilaterally_cancellable")
-    if change_gated:
-        ineligible = ineligible | pl.col("is_unilaterally_changeable")
-    # Null is permissive (no known defect => eligible): coalesce the Kleene-OR
-    # result to False so a null flag never drops the guarantee.
-    ineligible = ineligible.fill_null(False)
-
-    if errors is not None:
-        _record_ucp_ineligibility(guarantees, ineligible, change_gated, errors)
-
-    return guarantees.filter(~ineligible)
-
-
-def _record_ucp_ineligibility(
-    guarantees: pl.LazyFrame,
-    ineligible: pl.Expr,
-    change_gated: bool,
-    errors: list[CalculationError],
-) -> None:
-    """Append one CRM012 warning per guarantee dropped by the Art. 213 gate.
-
-    The guarantee table is a small dimension frame (already materialised
-    upstream by the CRM stage's ``collect_all``), so a targeted collect of the
-    dropped rows to build the per-guarantee messages is cheap — the only
-    mid-pipeline collect on this path.
-    """
-    # The PS1/26 "or change" wording only applies when the change arm is gated
-    # (Basel 3.1); under CRR only the cancellation arm can drop a guarantee.
-    reg_ref = "PS1/26 Art. 213(1)(c)(i)" if change_gated else "CRR Art. 213(1)(c)(i)"
-    arm = "cancel or change" if change_gated else "cancel"
-    dropped = guarantees.filter(ineligible).collect()
-    for row in dropped.iter_rows(named=True):
-        guar_ref = row.get("guarantee_reference")
-        beneficiary_ref = row.get("beneficiary_reference")
-        errors.append(
-            crm_warning(
-                ERROR_INELIGIBLE_UNFUNDED_PROTECTION,
-                f"Guarantee '{guar_ref}' is ineligible unfunded credit protection "
-                f"under Art. 213(1)(c)(i) (the protection provider can unilaterally "
-                f"{arm} it); dropped — the exposure flows unguaranteed.",
-                exposure_reference=beneficiary_ref,
-                regulatory_reference=reg_ref,
-            )
-        )
+    return _apply_maturity_mismatch_to_guarantees(guarantees, exposures, config)
 
 
 def _join_guarantor_counterparty(
@@ -519,11 +437,11 @@ def _apply_guarantee_splits(
 
     # --- Path 2: Guaranteed exposures — row splitting (N >= 1 guarantors) ---
     multi_joined, join_names = _join_multi_guarantees(
-        exposures_with_counts, guarantees, guar_select, "percentage_covered" in guar_cols
+        exposures_with_counts, guarantees, guar_select
     )
 
     guarantor_sub_rows = _build_guarantor_sub_rows(multi_joined, join_names)
-    remainder_sub_rows = _build_remainder_sub_rows(multi_joined)
+    remainder_sub_rows = _build_remainder_sub_rows(multi_joined, join_names)
 
     # Drop transient columns used during splitting
     transient = [
@@ -536,13 +454,7 @@ def _apply_guarantee_splits(
         "_effective_ead",
         "_total_effective",
         "amount_covered",
-        # CRR Art. 234 tranching points are consumed inside the remainder
-        # builder and must not leak downstream.
-        "attachment_amount",
-        "detachment_amount",
     ]
-    if "percentage_covered" in guar_cols:
-        transient.append("percentage_covered")
 
     guarantor_sub_rows = _drop_columns_if_present(guarantor_sub_rows, transient)
     remainder_sub_rows = _drop_columns_if_present(remainder_sub_rows, transient)
@@ -558,7 +470,6 @@ def _build_guarantee_agg_exprs(guar_cols: list[str]) -> list[pl.Expr]:
     # (col_name, alias) — alias differs only for currency, where we always
     # rename to guarantee_currency for downstream FX mismatch logic.
     optional_first: list[tuple[str, str]] = [
-        ("percentage_covered", "percentage_covered"),
         ("guarantee_reference", "guarantee_reference"),
         ("protection_type", "protection_type"),
     ]
@@ -579,9 +490,6 @@ def _build_guarantee_agg_exprs(guar_cols: list[str]) -> list[pl.Expr]:
         "guarantor_seniority",
         "guarantee_fx_haircut",
         "guarantee_restructuring_haircut",
-        # CRR Art. 234 mezzanine tranching attachment/detachment points.
-        "attachment_amount",
-        "detachment_amount",
     ):
         if col in guar_cols:
             agg_exprs.append(pl.col(col).first().alias(col))
@@ -592,7 +500,6 @@ def _build_guarantee_select_cols(guar_cols: list[str]) -> list[str]:
     """Build the list of guarantee columns to select for the multi-join."""
     base = ["beneficiary_reference", "amount_covered", "guarantor"]
     optional = (
-        "percentage_covered",
         "guarantee_reference",
         "protection_type",
         "guarantee_currency",
@@ -600,9 +507,6 @@ def _build_guarantee_select_cols(guar_cols: list[str]) -> list[str]:
         "guarantor_seniority",
         "guarantee_fx_haircut",
         "guarantee_restructuring_haircut",
-        # CRR Art. 234 mezzanine tranching attachment/detachment points.
-        "attachment_amount",
-        "detachment_amount",
     )
     return base + [c for c in optional if c in guar_cols]
 
@@ -648,7 +552,6 @@ def _join_multi_guarantees(
     exposures_with_counts: pl.LazyFrame,
     guarantees: pl.LazyFrame,
     guar_select: list[str],
-    has_percentage: bool,
 ) -> tuple[pl.LazyFrame, list[str]]:
     """Join guarantees onto guaranteed exposures and compute effective amounts.
 
@@ -673,14 +576,12 @@ def _join_multi_guarantees(
     # pure on-balance-sheet rows ead_for_crm == ead_after_collateral, so the two
     # bases coincide. Fall back to ead_after_collateral only if ead_for_crm is
     # absent/null (defensive; collateral.py always populates it in the pipeline).
+    # ``amount_covered`` already holds the valued protection GA (Art. 233 in
+    # protection_value, Art. 237-239 maturity scaling in this module).
     join_names = multi_joined.collect_schema().names()
-    crm_basis = (
-        pl.coalesce(pl.col("ead_for_crm"), pl.col("ead_after_collateral"))
-        if "ead_for_crm" in join_names
-        else pl.col("ead_after_collateral")
-    )
-    multi_joined = multi_joined.with_columns(crm_basis.alias("_crm_basis")).with_columns(
-        _resolve_guarantee_amount_expr(has_percentage, "_guar_amount"),
+    multi_joined = multi_joined.with_columns(
+        crm_basis_expr(join_names),
+        pl.col("amount_covered").alias("_guar_amount"),
     )
 
     # Cap total coverage to the CCF=100% basis using pro-rata scaling, then derive
@@ -749,91 +650,37 @@ def _build_guarantor_sub_rows(multi_joined: pl.LazyFrame, schema_names: list[str
     return multi_joined.with_columns(guar_stock_splits)
 
 
-@cites("CRR Art. 234")
-def _build_remainder_sub_rows(multi_joined: pl.LazyFrame) -> pl.LazyFrame:
+@cites("CRR Art. 235")
+def _build_remainder_sub_rows(multi_joined: pl.LazyFrame, schema_names: list[str]) -> pl.LazyFrame:
     """
-    Build the borrower-retained remainder sub-rows (uncovered portion).
+    Build the borrower-retained remainder sub-row (the uncovered part), one per parent.
 
-    Default (first-loss attach, CRR Art. 235): the protection covers loss band
-    ``[0, G*)`` and the borrower retains a single senior remainder ``[G*, EAD]``
-    emitted as one ``__REM`` row.
+    CRR / PS1/26 Art. 235(1)(b): the uncovered part is E less the covered part,
+    at the obligor's own risk weight. Emitted as one ``__REM`` row carrying a
+    null ``guarantor_reference``. There is no tranched variant: protection that
+    covers a band of the loss is screened out before the split
+    (``protection_screen``, Art. 234 / 235(2)), so every recognised guarantee is
+    an equal-seniority share of the exposure.
 
-    CRR Art. 234 (tranched coverage): when the guarantee carries an
-    ``attachment_amount`` (a) and ``detachment_amount`` (d), the protection
-    attaches to the mezzanine band ``[a, d)`` instead of first loss. The
-    borrower then retains TWO tranches at its own obligor risk weight:
-    a first-loss tranche ``[0, a)`` (``__REM_FL``) and a senior tranche
-    ``[d, EAD]`` (``__REM_SEN``). Both retained tranches carry a null
-    ``guarantor_reference`` so downstream SA/IRB risk-weight the obligor.
-
-    Tranche widths compose AFTER the existing FX / restructuring / maturity
-    mismatch haircuts have reduced ``amount_covered`` to G* (the protected
-    width on the guarantor sub-row); ``_total_effective`` is that post-haircut
-    capped coverage. When ``attachment_amount`` is null behaviour is unchanged.
-
-    References:
-        CRR Art. 234: tranching of credit protection (attachment/detachment).
-        CRR Art. 235: SA risk-weight substitution on the protected tranche.
+    Stock columns are split in proportion to the remainder's share of the parent
+    EAD so downstream per-counterparty aggregations stay consistent.
+    ``schema_names`` is the post-join column set from ``_join_multi_guarantees``.
     """
     remainder = (
         multi_joined.sort("parent_exposure_reference", "guarantor")
         .group_by("parent_exposure_reference", maintain_order=True)
         .first()
     )
-    schema_names = remainder.collect_schema().names()
-    has_tranching = "attachment_amount" in schema_names
-
-    # Total borrower-retained EAD (uncovered portion across all guarantors).
-    retained_total = pl.col("ead_after_collateral") - pl.col("_total_effective")
-
-    if not has_tranching:
-        return _retained_tranche_rows(remainder, schema_names, retained_total, "__REM")
-
-    # CRR Art. 234: attachment a (null/0 => first-loss). Detachment d defaults to
-    # a + protected width so a null detachment collapses to the legacy split.
-    attach = pl.col("attachment_amount").fill_null(0.0)
-    detach = pl.col("detachment_amount").fill_null(attach + pl.col("_total_effective"))
-
-    # First-loss tranche [0, a) and senior tranche [d, EAD]. Clip widths to the
-    # exposure EAD to guard against attachment/detachment overshoot.
-    first_loss_width = attach.clip(lower_bound=0.0, upper_bound=pl.col("ead_after_collateral"))
-    senior_width = (pl.col("ead_after_collateral") - detach).clip(lower_bound=0.0)
-
-    is_tranched = pl.col("attachment_amount").is_not_null() & (pl.col("attachment_amount") > 0.0)
-
-    legacy_rows = _retained_tranche_rows(
-        remainder.filter(~is_tranched), schema_names, retained_total, "__REM"
-    )
-    first_loss_rows = _retained_tranche_rows(
-        remainder.filter(is_tranched), schema_names, first_loss_width, "__REM_FL"
-    )
-    senior_rows = _retained_tranche_rows(
-        remainder.filter(is_tranched), schema_names, senior_width, "__REM_SEN"
-    )
-    return pl.concat([legacy_rows, first_loss_rows, senior_rows], how="diagonal_relaxed")
-
-
-def _retained_tranche_rows(
-    remainder: pl.LazyFrame,
-    schema_names: list[str],
-    tranche_ead: pl.Expr,
-    suffix: str,
-) -> pl.LazyFrame:
-    """
-    Project one borrower-retained tranche of the given EAD width and suffix.
-
-    Stock columns are split proportionally to this tranche's share of the
-    parent EAD so downstream per-counterparty aggregations stay consistent.
-    """
-    tranche_ratio = (
+    retained = pl.col("ead_after_collateral") - pl.col("_total_effective")
+    retained_ratio = (
         pl.when(pl.col("ead_after_collateral") > 0)
-        .then(tranche_ead / pl.col("ead_after_collateral"))
+        .then(retained / pl.col("ead_after_collateral"))
         .otherwise(pl.lit(0.0))
     )
     rem_exprs: list[pl.Expr] = [
         pl.lit(0.0).alias("guaranteed_portion"),
-        tranche_ead.alias("unguaranteed_portion"),
-        tranche_ead.alias("ead_after_collateral"),
+        retained.alias("unguaranteed_portion"),
+        retained.alias("ead_after_collateral"),
         pl.lit(0.0).alias("guarantee_amount"),
         pl.lit(0.0).alias("original_guarantee_amount"),
         pl.lit(None).cast(pl.String).alias("guarantor_reference"),
@@ -844,11 +691,11 @@ def _retained_tranche_rows(
         pl.lit(0.0).alias("guarantee_fx_haircut"),
         pl.lit(0.0).alias("guarantee_restructuring_haircut"),
         pl.concat_str(
-            [pl.col("parent_exposure_reference"), pl.lit(suffix)],
+            [pl.col("parent_exposure_reference"), pl.lit("__REM")],
         ).alias("exposure_reference"),
     ]
     rem_exprs.extend(
-        (pl.col(c) * tranche_ratio).alias(c) for c in _stock_split_cols() if c in schema_names
+        (pl.col(c) * retained_ratio).alias(c) for c in _stock_split_cols() if c in schema_names
     )
     return remainder.with_columns(rem_exprs)
 
@@ -960,31 +807,6 @@ def _apply_cross_approach_ccf(
     return exposures
 
 
-def _resolve_guarantee_amount_expr(has_percentage: bool, alias: str) -> pl.Expr:
-    """Build expression resolving guarantee amount from amount_covered or percentage_covered.
-
-    Percentage-based cover is measured against the CCF=100% basis (``_crm_basis``,
-    i.e. ``ead_for_crm``), not the post-CCF ``ead_after_collateral`` -- CRR
-    Art. 235(1) / 236(3). ``_crm_basis`` is materialised on the frame in
-    ``_join_multi_guarantees`` before this expression is applied.
-    """
-    if has_percentage:
-        return (
-            pl.when(
-                (
-                    pl.col("amount_covered").is_null()
-                    | (pl.col("amount_covered").cast(pl.Float64, strict=False).abs() < 1e-10)
-                )
-                & pl.col("percentage_covered").is_not_null()
-                & (pl.col("percentage_covered") > 0)
-            )
-            .then(pl.col("percentage_covered") * pl.col("_crm_basis"))
-            .otherwise(pl.col("amount_covered").fill_null(0.0))
-            .alias(alias)
-        )
-    return pl.col("amount_covered").fill_null(0.0).alias(alias)
-
-
 def _allocate_guarantees_pro_rata(
     guarantees: pl.LazyFrame,
     exposures: pl.LazyFrame,
@@ -1008,156 +830,6 @@ def _allocate_guarantees_pro_rata(
         basis=pl.col("ead_after_collateral"),
         scale_columns=("amount_covered",),
         rewrite_type="loan",
-    )
-
-
-def _apply_fx_haircut_to_guarantees(
-    guarantees: pl.LazyFrame,
-    exposures: pl.LazyFrame,
-    *,
-    pack: ResolvedRulepack,
-) -> pl.LazyFrame:
-    """
-    Apply FX mismatch haircut to guarantee amounts BEFORE splitting.
-
-    Reduces ``amount_covered`` by H_fx (8%) when the guarantee currency
-    differs from the exposure currency. Haircut is applied to the nominal
-    credit protection value *before* capping at EAD, per CRR Art. 233(3-4):
-
-        G* = G × (1 − H_fx)
-
-    This ensures that a large guarantee in a foreign currency still fully
-    covers a smaller exposure (e.g. £200m guarantee on €1m loan with 8%
-    haircut → £184m effective → still fully covers €1m).
-
-    References:
-        CRR Art. 233(3-4), Art. 235(1): G = nominal credit protection value
-        Art. 224 Table 4: H_fx = 8% (10-day liquidation period)
-    """
-    guar_schema = guarantees.collect_schema()
-    guar_cols = guar_schema.names()
-
-    # Determine guarantee currency column
-    if "original_currency" in guar_cols:
-        guar_ccy_col = "original_currency"
-    elif "currency" in guar_cols:
-        guar_ccy_col = "currency"
-    else:
-        return guarantees.with_columns(pl.lit(0.0).alias("guarantee_fx_haircut"))
-
-    # Determine exposure currency column
-    exp_schema = exposures.collect_schema()
-    exp_cols = exp_schema.names()
-    if "original_currency" in exp_cols:
-        exp_ccy_col = "original_currency"
-    elif "currency" in exp_cols:
-        exp_ccy_col = "currency"
-    else:
-        return guarantees.with_columns(pl.lit(0.0).alias("guarantee_fx_haircut"))
-
-    # Join guarantees with exposure currency (lightweight join)
-    exp_ccy = exposures.select(
-        pl.col("exposure_reference"),
-        pl.col(exp_ccy_col).alias("_exp_ccy"),
-    )
-
-    guarantees = guarantees.join(
-        exp_ccy,
-        left_on="beneficiary_reference",
-        right_on="exposure_reference",
-        how="left",
-    )
-
-    h_fx = scalar_value(pack.scalar_param("fx_haircut"))
-    has_pct = "percentage_covered" in guar_cols
-
-    # Guarantee provides coverage via amount or percentage
-    has_coverage = pl.col("amount_covered").fill_null(0.0) > 0
-    if has_pct:
-        has_coverage = has_coverage | (pl.col("percentage_covered").fill_null(0.0) > 0)
-
-    fx_mismatch = (
-        pl.col(guar_ccy_col).is_not_null()
-        & pl.col("_exp_ccy").is_not_null()
-        & (pl.col(guar_ccy_col) != pl.col("_exp_ccy"))
-        & has_coverage
-    )
-
-    haircut_exprs: list[pl.Expr] = [
-        # Amount-based: reduce amount_covered
-        pl.when(fx_mismatch)
-        .then(pl.col("amount_covered") * (1.0 - h_fx))
-        .otherwise(pl.col("amount_covered"))
-        .alias("amount_covered"),
-        # Track the haircut applied
-        pl.when(fx_mismatch)
-        .then(pl.lit(h_fx))
-        .otherwise(pl.lit(0.0))
-        .alias("guarantee_fx_haircut"),
-    ]
-
-    # Percentage-based: reduce percentage_covered (G = pct × EAD, so G* = pct × (1-H) × EAD)
-    if has_pct:
-        haircut_exprs.append(
-            pl.when(fx_mismatch)
-            .then(pl.col("percentage_covered") * (1.0 - h_fx))
-            .otherwise(pl.col("percentage_covered"))
-            .alias("percentage_covered"),
-        )
-
-    guarantees = guarantees.with_columns(haircut_exprs)
-
-    return guarantees.drop("_exp_ccy")
-
-
-def _apply_restructuring_haircut_to_guarantees(
-    guarantees: pl.LazyFrame,
-    *,
-    pack: ResolvedRulepack,
-) -> pl.LazyFrame:
-    """
-    Apply CDS restructuring exclusion haircut to guarantee amounts BEFORE splitting.
-
-    When a credit derivative does not include restructuring as a credit event,
-    ``amount_covered`` is reduced by 40%:
-
-        G* = G × (1 − H_restructuring) = G × 0.60
-
-    Applied to nominal credit protection value before capping/splitting,
-    consistent with CRR Art. 233(2).
-
-    References:
-        CRR Art. 233(2), PRA PS1/26 Art. 233(2)
-        Art. 216(1): Credit events for credit derivatives
-    """
-    schema = guarantees.collect_schema()
-    cols = schema.names()
-
-    has_protection_type = "protection_type" in cols
-    has_includes_restructuring = "includes_restructuring" in cols
-
-    if not has_protection_type or not has_includes_restructuring:
-        return guarantees.with_columns(
-            pl.lit(0.0).alias("guarantee_restructuring_haircut"),
-        )
-
-    h_restructuring = scalar_value(pack.scalar_param("restructuring_exclusion_haircut"))
-
-    applies = (
-        (pl.col("protection_type") == "credit_derivative")
-        & (pl.col("includes_restructuring").fill_null(True).not_())
-        & (pl.col("amount_covered").fill_null(0.0) > 0)
-    )
-
-    return guarantees.with_columns(
-        pl.when(applies)
-        .then(pl.col("amount_covered") * (1.0 - h_restructuring))
-        .otherwise(pl.col("amount_covered"))
-        .alias("amount_covered"),
-        pl.when(applies)
-        .then(pl.lit(h_restructuring))
-        .otherwise(pl.lit(0.0))
-        .alias("guarantee_restructuring_haircut"),
     )
 
 
@@ -1195,9 +867,8 @@ def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
     # Classify row types
     is_sub_row = pl.col("parent_exposure_reference") != pl.col("exposure_reference")
-    # Art. 234 tranching emits two retained sub-rows ("__REM_FL"/"__REM_SEN")
-    # alongside the legacy single "__REM" row, so match the "__REM" stem anywhere.
-    is_remainder = pl.col("exposure_reference").str.contains("__REM")
+    # The split emits one "__REM" remainder row per parent.
+    is_remainder = pl.col("exposure_reference").str.ends_with("__REM")
     is_guarantor_sub = is_sub_row & ~is_remainder
 
     # Check if any parent group has mixed beneficial/non-beneficial sub-rows.
@@ -1346,9 +1017,9 @@ def _apply_maturity_mismatch_to_guarantees(
         GA = G* × (t - 0.25) / (T - 0.25)
 
     with ``T`` capped at 5.0 years and both ``t`` and ``T`` floored at 0.25.
-    Scaling is applied to ``amount_covered`` and ``percentage_covered`` before
-    the split, so the reduced nominal protection value propagates through
-    cap-at-EAD.
+    Scaling is applied to ``amount_covered`` (G*, already valued under
+    Art. 233) before the split, so the reduced protection value propagates
+    through cap-at-EAD.
 
     Three Art. 237 eligibility gates ZERO coverage (rather than merely scaling
     it) before the 239(3) formula, mirroring the collateral sibling in
@@ -1512,15 +1183,9 @@ def _apply_maturity_mismatch_to_guarantees(
         .otherwise(pl.lit(1.0))
     )
 
-    scale_exprs: list[pl.Expr] = []
-    if "amount_covered" in guar_cols:
-        scale_exprs.append((pl.col("amount_covered") * scale_safe).alias("amount_covered"))
-    if "percentage_covered" in guar_cols:
-        scale_exprs.append((pl.col("percentage_covered") * scale_safe).alias("percentage_covered"))
-
-    if scale_exprs:
-        guarantees = guarantees.with_columns(scale_exprs)
-
+    guarantees = guarantees.with_columns(
+        (pl.col("amount_covered") * scale_safe).alias("amount_covered"),
+    )
     return _drop_columns_if_present(guarantees, ["_exp_T", "_has_1d_floor"])
 
 

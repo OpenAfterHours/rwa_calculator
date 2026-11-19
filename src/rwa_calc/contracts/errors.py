@@ -290,6 +290,39 @@ ERROR_UNRECOGNISED_COLLATERAL_TYPE = "CRM021"
 # It does NOT restate an Art. 199 drop — an unattested pledge is already zeroed
 # before C* is evaluated, and CRM014 owns that cause.
 ERROR_BELOW_MIN_COLLATERALISATION = "CRM022"
+# Tranched unfunded protection (CRR Art. 234 / PS1/26 Art. 234(1), with Art.
+# 235(2)): a guarantee that covers a BAND of the loss distribution — an
+# attachment_amount above zero, or any detachment_amount — rather than a
+# pro-rata share transfers risk "in one or more tranches", which Art. 234 sends
+# to the securitisation framework (Chapter 5), and Art. 235(2) allows the
+# risk-weight substitution only where the protected and unprotected parts are of
+# equal seniority. This engine does not run Chapter 5 for such protection, so the
+# guarantee is NOT recognised (the exposure keeps the obligor's own basis, the
+# Art. 268(1) upper bound of the Chapter 5 result) and this warning names it (one
+# per guarantee row).
+ERROR_TRANCHED_PROTECTION_NOT_RECOGNISED = "CRM027"
+# One guarantee_reference entered inconsistently across rows. Rows sharing a
+# guarantee_reference are ONE contract with ONE cap (Art. 233(1): G is the amount
+# the provider undertook to pay; Art. 213(1)(b): its extent must be clearly
+# defined): the total recognised across the rows is capped at the contract's
+# amount_covered and allocated pro-rata to each row's covered demand. This
+# warning fires when those rows state DIFFERENT amount_covered values (the
+# largest is used as the cap) and when one guarantee_reference is entered more
+# than once for the same beneficiary (one per guarantee_reference and cause).
+ERROR_GUARANTEE_REFERENCE_INCONSISTENT = "CRM028"
+# Not eligible unfunded credit protection (CRR / PS1/26 Art. 213(1)(b)-(d) and
+# Art. 215(1)(b)): a letter of comfort, comfort letter or keepwell is not an
+# explicitly documented obligation assumed by the provider to pay on the
+# obligor's default, so a guarantee row whose guarantee_type names one is NOT
+# recognised and this warning names it (one per guarantee row).
+ERROR_NOT_ELIGIBLE_PROTECTION_TYPE = "CRM029"
+# guarantee_type names a credit derivative while protection_type does not
+# (protection_type defaults to "guarantee" when absent). The row is treated as
+# the credit derivative its guarantee_type says it is — so the CRR / PS1/26
+# Art. 233(2) restructuring-exclusion treatment applies when
+# includes_restructuring is False — and this warning records the disagreement
+# (one per guarantee row).
+ERROR_PROTECTION_TYPE_MISMATCH = "CRM030"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

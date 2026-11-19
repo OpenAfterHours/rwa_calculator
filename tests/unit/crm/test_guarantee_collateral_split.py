@@ -4,17 +4,15 @@ Direct unit tests for the D3 guarantee leg-split collateral conservation defect.
 ``_stock_split_cols()`` (``engine/crm/guarantees.py:61-76``) enumerates the
 stock columns that must be pro-rated across guarantor/remainder legs when a
 guaranteed exposure is physically split into ``__G_<guarantor>`` and
-``__REM`` / ``__REM_FL`` / ``__REM_SEN`` sub-rows. It omits every
-``collateral_*`` / ``crm_alloc_*`` column, so both ``_build_guarantor_sub_rows``
-(``:886-911``) and ``_retained_tranche_rows`` (``:978-1015``) leave those
-columns untouched — each leg inherits the FULL, unsplit collateral value and a
+``__REM`` sub-rows. It omitted every ``collateral_*`` / ``crm_alloc_*`` column,
+so both ``_build_guarantor_sub_rows`` and ``_build_remainder_sub_rows`` left
+those columns untouched — each leg inherits the FULL, unsplit collateral value and a
 downstream ``Sum()`` counts it once per leg (COREP C 08.01/02 cols
 0180/0190/0200/0210, C 07.00 col 0130, Pillar 3 CR7-A cols b/d/e/f).
 
 References:
     CRR Art. 213-217: Unfunded credit protection (guarantee substitution)
     CRR Art. 230-231: Financial collateral comprehensive method / waterfall
-    CRR Art. 234: Tranching of credit protection (attachment/detachment)
     PS1/26 Annex II cols 0150-0210: CRM techniques in LGD estimates reporting
 """
 
@@ -99,7 +97,7 @@ def _exposure_with_collateral(ead: float = 1_000_000.0) -> pl.LazyFrame:
 
 
 # =============================================================================
-# Conservation across guarantor / remainder legs (default first-loss split)
+# Conservation across guarantor / remainder legs
 # =============================================================================
 
 
@@ -202,65 +200,3 @@ class TestGuaranteeSplitConservesCollateralValue:
         assert len(result) == 1
         assert result["collateral_re_value"][0] == pytest.approx(500_000.0, rel=1e-6)
         assert result["total_collateral_for_lgd"][0] == pytest.approx(425_000.0, rel=1e-6)
-
-
-# =============================================================================
-# Conservation across Art. 234 tranched legs (first-loss / mezzanine / senior)
-# =============================================================================
-
-
-class TestArt234TranchedSplitConservesCollateralValue:
-    """D3 on the mezzanine tranching path (``__REM_FL`` / ``__REM_SEN``)."""
-
-    def test_tranched_split_conserves_collateral(self) -> None:
-        """Art. 234 mezzanine tranching: Sum(collateral) across FL/mezz/SEN legs conserves.
-
-        Mirrors tests/fixtures/p1_30e/p1_30e.py: EAD=1,000,000, a=200,000,
-        d=600,000, guarantee amount_covered=400,000 (protected width exactly
-        fills [a, d)) -- the three tranche ratios (0.2 + 0.4 + 0.4) sum to 1.0,
-        so collateral conservation is exact once the fix applies the same
-        ratio already used for drawn_amount/ead_pre_crm to these columns.
-        """
-        # Arrange
-        guarantees = pl.LazyFrame(
-            {
-                "beneficiary_reference": ["EXP001"],
-                "amount_covered": [400_000.0],
-                "guarantor": ["GUAR001"],
-                "attachment_amount": [200_000.0],
-                "detachment_amount": [600_000.0],
-            }
-        )
-        exposures = _exposure_with_collateral(ead=1_000_000.0)
-
-        # Act
-        result = _apply_guarantee_splits(guarantees, exposures).collect()
-
-        # Assert: three-row split (first-loss, mezzanine guaranteed, senior)
-        assert len(result) == 3
-        total_re_value = result["collateral_re_value"].sum()
-        assert total_re_value == pytest.approx(500_000.0, rel=1e-6)
-
-    @pytest.mark.parametrize("column", STOCK_COLLATERAL_COLUMNS)
-    def test_tranched_split_conserves_all_stock_collateral_columns(self, column: str) -> None:
-        """Every collateral_*/crm_alloc_* carrier conserves across the 3-leg tranche split."""
-        # Arrange
-        guarantees = pl.LazyFrame(
-            {
-                "beneficiary_reference": ["EXP001"],
-                "amount_covered": [400_000.0],
-                "guarantor": ["GUAR001"],
-                "attachment_amount": [200_000.0],
-                "detachment_amount": [600_000.0],
-            }
-        )
-        exposures = _exposure_with_collateral(ead=1_000_000.0)
-        original_value = _COLLATERAL_VALUES[column]
-
-        # Act
-        result = _apply_guarantee_splits(guarantees, exposures).collect()
-
-        # Assert
-        assert len(result) == 3
-        total = result[column].sum()
-        assert total == pytest.approx(original_value, rel=1e-6)

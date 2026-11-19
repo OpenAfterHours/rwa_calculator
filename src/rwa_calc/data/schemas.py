@@ -1240,13 +1240,15 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     #   "both"        — out of scope for the current implementation; treated
     #                   as "none" with a CRM warning.
     "look_through_election": ColumnSpec(pl.String, default="none", required=False),
-    # CRR Art. 234: tranching of credit protection. When a guarantee protects a
-    # mezzanine loss band rather than first loss, ``attachment_amount`` (a) marks
-    # where protection begins and ``detachment_amount`` (d) where it ends. The
-    # obligor retains a first-loss tranche [0, a) and a senior tranche [d, EAD]
-    # at its own risk weight, while [a, d) is substituted to the guarantor. Null
-    # on both => first-loss attach (a = 0), preserving legacy single-remainder
-    # behaviour.
+    # CRR Art. 234 / PS1/26 Art. 234(1): tranched protection. A guarantee that
+    # protects a BAND of the loss distribution — ``attachment_amount`` (a) above
+    # zero, or any ``detachment_amount`` (d) — transfers risk "in one or more
+    # tranches", which Art. 234 sends to the securitisation framework, and Art.
+    # 235(2) allows the risk-weight substitution only where the protected and
+    # unprotected parts are of equal seniority. The engine does not run that
+    # framework for such protection, so the row is NOT recognised (CRM027) and
+    # the exposure keeps the obligor's own basis. Leave both null for a guarantee
+    # of a pro-rata share of the exposure, or of all of it.
     "attachment_amount": ColumnSpec(pl.Float64, required=False),
     "detachment_amount": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 6 / 11-18: non-null tags the guarantor as the named group
@@ -2372,6 +2374,33 @@ NON_ELIGIBLE_RE_TYPES: list[str] = [
 # Beneficiary types treated as direct attachment to a single exposure
 # (vs. facility-level or counterparty-level pro-rata allocation).
 DIRECT_BENEFICIARY_TYPES: list[str] = ["exposure", "loan", "contingent"]
+
+# ``guarantee_type`` is a free-text descriptor; the engine reads it only to
+# recognise the two families below. Values are matched after lower-casing and
+# folding spaces / hyphens to underscores (``"Letter of Comfort"`` matches).
+#
+# Not eligible unfunded credit protection (CRR / PS1/26 Art. 213(1)(b)-(d),
+# Art. 215(1)(b)): a letter of comfort or a keepwell is not "an explicitly
+# documented obligation assumed by the guarantor" to pay on the obligor's
+# default, so such a row is dropped with a CRM029 warning.
+NON_ELIGIBLE_GUARANTEE_TYPES: list[str] = [
+    "letter_of_comfort",
+    "comfort_letter",
+    "keepwell",
+    "keepwell_agreement",
+]
+
+# ``guarantee_type`` values naming a credit derivative (Art. 204(1)). A row with
+# one of these whose ``protection_type`` is not ``credit_derivative`` is treated
+# as a credit derivative (Art. 233(2) applies when restructuring is excluded) and
+# raises a CRM030 warning.
+CREDIT_DERIVATIVE_GUARANTEE_TYPES: list[str] = [
+    "credit_derivative",
+    "credit_default_swap",
+    "cds",
+    "total_return_swap",
+    "trs",
+]
 
 # Canonical mapping from accepted collateral_type string to its CRM category.
 # Single source of truth for engine-side categorisation. Engine code can use

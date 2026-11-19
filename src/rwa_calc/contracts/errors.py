@@ -781,7 +781,9 @@ def issued_item_on_commitment_risk_type_warning(*, context: str, n: int) -> Calc
     commitments) but ``is_obs_commitment`` is False — the contingent default,
     which marks an issued item. Under CRR F-IRB the engine follows the flag and
     prices the row on the Art. 166(10)(b) issued-item 50% rather than the
-    Art. 166(8)(d) 75% the bucket names; the SA factor is the same either way.
+    Art. 166(8)(d) 75% the bucket names, and under Basel 3.1 A-IRB the row is not a
+    revolving loan commitment, so no own estimate of conversion factor or EAD
+    applies (PS1/26 Art. 166D(1)(b)); the SA factor is the same either way.
     The contradiction is reported, not resolved: setting the flag for the
     preparer would overstate an issued medium-risk item that was simply coded
     ``MR`` instead of ``MR_ISSUED`` (CM-09).
@@ -789,6 +791,7 @@ def issued_item_on_commitment_risk_type_warning(*, context: str, n: int) -> Calc
     References:
     - CRR Art. 166(8)(d): NIFs / RUFs / other credit lines 75%
     - CRR Art. 166(10)(b): issued medium-risk items 50%
+    - PRA PS1/26 Art. 166D(1): A-IRB own estimates for revolving loan commitments only
     """
     return CalculationError(
         code=ERROR_ISSUED_ITEM_ON_COMMITMENT_RISK_TYPE,
@@ -798,12 +801,14 @@ def issued_item_on_commitment_risk_type_warning(*, context: str, n: int) -> Calc
             f"[{context}] {n} row(s) carry a commitment 'risk_type' (MR = NIF / RUF, "
             "OC = other commitment) but 'is_obs_commitment' is False (an issued "
             "item, the contingent default). Under CRR F-IRB they take the "
-            "Art. 166(10)(b) issued-item 50% instead of the Art. 166(8)(d) 75% — set "
-            "'is_obs_commitment' True for a commitment booked as a contingent, or "
-            "use 'MR_ISSUED' for an issued medium-risk item."
+            "Art. 166(10)(b) issued-item 50% instead of the Art. 166(8)(d) 75%, and "
+            "under Basel 3.1 A-IRB they are not revolving loan commitments, so no own "
+            "estimate applies (PS1/26 Art. 166D(1)(b)) — set 'is_obs_commitment' True "
+            "for a commitment booked as a contingent, or use 'MR_ISSUED' for an issued "
+            "medium-risk item."
         ),
         field_name="is_obs_commitment",
-        regulatory_reference="CRR Art. 166(8)(d); Art. 166(10)(b)",
+        regulatory_reference="CRR Art. 166(8)(d); Art. 166(10)(b); PS1/26 Art. 166D(1)",
     )
 
 

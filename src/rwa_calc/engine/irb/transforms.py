@@ -304,10 +304,11 @@ def prepare_columns(
     """
     # Maturity priority chain (highest wins) — see ``_build_maturity_exprs``:
     #   1. effective_maturity input populated → firm override, clipped [1 day, 5y]
-    #   2. has_one_day_maturity_floor flag with a residual under one year →
-    #      M = max(residual, 1 day) (Art. 162(3) carve-out: daily-margined
+    #   2. has_one_day_maturity_floor flag with a 2/2A value under one year →
+    #      that value with a one-day minimum: max(residual, 1 day), or the B31
+    #      revolving termination date (Art. 162(3) carve-out: daily-margined
     #      SFTs/derivatives/margin lending, self-liquidating trade). A MINIMUM,
-    #      never a fixed 1/365; at residual >= 1y or no date the chain below wins.
+    #      never a fixed 1/365; at >= 1y or no date the chain below wins.
     #   3. Basel 3.1 revolving + facility_termination_date (Art. 162(2A)(k))
     #   4. maturity_date standard derivation, clipped [1y, 5y]
     #   5. Fallback default 2.5y
@@ -951,11 +952,21 @@ def clip_maturity(expr: pl.Expr, floor: float = 1.0, cap: float = 5.0) -> pl.Exp
 # =============================================================================
 
 
-def _maturity_base_expr(config: CalculationConfig, *, pack: ResolvedRulepack) -> pl.Expr:
-    """Build the base maturity expression from maturity_date/termination/default."""
+def _maturity_base_expr(
+    config: CalculationConfig, *, pack: ResolvedRulepack, lower_bound: float = 1.0
+) -> pl.Expr:
+    """Build the base maturity expression from maturity_date/termination/default.
+
+    ``lower_bound`` is the Art. 162(2) / 162(2A) one-year minimum; the Art. 162(3)
+    rung passes the one-day minimum that replaces it.
+    """
     maturity_from_date = (
         pl.when(pl.col("maturity_date").is_not_null())
-        .then(_exact_fractional_years_expr(config.reporting_date, "maturity_date").clip(1.0, 5.0))
+        .then(
+            _exact_fractional_years_expr(config.reporting_date, "maturity_date").clip(
+                lower_bound, 5.0
+            )
+        )
         .otherwise(pl.lit(2.5))
     )
 
@@ -966,7 +977,7 @@ def _maturity_base_expr(config: CalculationConfig, *, pack: ResolvedRulepack) ->
             .then(
                 _exact_fractional_years_expr(
                     config.reporting_date, "facility_termination_date"
-                ).clip(1.0, 5.0)
+                ).clip(lower_bound, 5.0)
             )
             .otherwise(maturity_from_date)
         )
@@ -1104,16 +1115,19 @@ def _build_maturity_exprs(config: CalculationConfig, *, pack: ResolvedRulepack) 
     # minimum, never a fixed M (review TR-11 — M used to be SET to 1/365 whatever
     # the residual, so a 9-month trade LC was priced as a one-day exposure). The
     # rung keeps its place above the CRR fixed-M rungs but now fires only where
-    # that replacement can bind — a known residual under one year — and resolves
-    # to max(residual, one day). A residual of one year or more, or an unknown one
-    # (no maturity_date), keeps the chain's value: the floor changes nothing there,
-    # and the date-free default is the conservative reading. The flag itself still
-    # lifts the 1-year floor in the maturity adjustment.
+    # that replacement can bind — a paragraph 2 / 2A value under one year — and
+    # resolves to that value with the one-day minimum: max(residual, one day), or,
+    # for a Basel 3.1 revolving exposure, the facility termination date (Art.
+    # 162(2A)(k) "shall not use the repayment date of the current drawing"). A
+    # value of one year or more, or an unknown one (no date: the 2.5y default),
+    # keeps the chain's value: the floor changes nothing there, and the date-free
+    # default is the conservative reading. The flag itself still lifts the 1-year
+    # floor in the maturity adjustment.
     effective_floor_flag = _effective_one_day_floor_flag(config, pack=pack)
-    residual_years = _residual_maturity_years_expr(config)
+    one_day_minimum_m = _maturity_base_expr(config, pack=pack, lower_bound=one_day)
     maturity_expr = (
-        pl.when(effective_floor_flag & (residual_years < 1.0))
-        .then(residual_years.clip(lower_bound=one_day))
+        pl.when(effective_floor_flag & (one_day_minimum_m < 1.0))
+        .then(one_day_minimum_m)
         .otherwise(maturity_expr)
     )
 

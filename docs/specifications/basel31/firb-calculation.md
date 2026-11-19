@@ -317,8 +317,12 @@ maturity of **less than** one year, securities settlement, electronic payments).
     `one_day_floor_trade_residual_strict`; the CRR bound, "up to one year", is inclusive). The
     one-day value is a **minimum**: `M = max(residual, 1/365)`, so a 6-month documentary credit
     takes `M ≈ 0.5`, not one day. Where the residual is one year or more, or unknown, the flag
-    changes nothing and the ordinary chain applies. Until review TR-05 this derivation was
-    switched off under Basel 3.1 (qualifying trade kept the one-year minimum).
+    changes nothing and the ordinary chain applies. The minimum is applied to the paragraph 2A
+    method, never in place of it: a **revolving** drawing keeps the Art. 162(2A)(k) facility
+    termination date (*"An institution shall not use the repayment date of the current
+    drawing"*), so a 90-day trade drawing under a revolving facility terminating in three years
+    keeps `M = 3.0`. Until review TR-05 this derivation was switched off under Basel 3.1
+    (qualifying trade kept the one-year minimum).
 
 !!! warning "Do not propagate the stale 'Art. 162(3) widened to or' claim"
     An earlier draft of this page stated Art. 162(3) adopted the wider "re-margining **or**

@@ -669,14 +669,14 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:1251:1279"
     ```
 
-??? quote "`calculate_correlation` — src/rwa_calc/engine/irb/transforms.py:456"
+??? quote "`calculate_correlation` — src/rwa_calc/engine/irb/transforms.py:457"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:456:496"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:457:497"
     ```
 
-??? quote "`calculate_k` — src/rwa_calc/engine/irb/transforms.py:499"
+??? quote "`calculate_k` — src/rwa_calc/engine/irb/transforms.py:500"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:499:513"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:500:514"
     ```
 
 ??? quote "`calculate_branch` — src/rwa_calc/engine/slotting/calculator.py:92"
@@ -829,17 +829,17 @@ Last generated: 2026-11-19.
 
 ??? quote "`prepare_columns` — src/rwa_calc/engine/irb/transforms.py:287"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:287:345"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:287:346"
     ```
 
-??? quote "`calculate_maturity_adjustment` — src/rwa_calc/engine/irb/transforms.py:516"
+??? quote "`calculate_maturity_adjustment` — src/rwa_calc/engine/irb/transforms.py:517"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:516:539"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:517:540"
     ```
 
-??? quote "`_effective_one_day_floor_flag` — src/rwa_calc/engine/irb/transforms.py:1042"
+??? quote "`_effective_one_day_floor_flag` — src/rwa_calc/engine/irb/transforms.py:1053"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:1042:1072"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:1053:1083"
     ```
 
 ??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:232"
@@ -855,9 +855,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:112:207"
     ```
 
-??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:353"
+??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:354"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:353:381"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:354:382"
     ```
 
 
@@ -873,9 +873,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:210:262"
     ```
 
-??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:384"
+??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:385"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:384:453"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:385:454"
     ```
 
 
@@ -1887,9 +1887,9 @@ Last generated: 2026-11-19.
 
 ### PS1/26, paragraph 162 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_effective_one_day_floor_flag` — src/rwa_calc/engine/irb/transforms.py:1043"
+??? quote "`_effective_one_day_floor_flag` — src/rwa_calc/engine/irb/transforms.py:1054"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:1042:1072"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:1053:1083"
     ```
 
 ??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:233"
@@ -1905,9 +1905,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:112:207"
     ```
 
-??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:354"
+??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:355"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:353:381"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:354:382"
     ```
 
 
@@ -1928,9 +1928,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:337:525"
     ```
 
-??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:385"
+??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:386"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:384:453"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:385:454"
     ```
 
 

@@ -2,7 +2,8 @@
 
 Covers the priority chain in `lf.pipe(prepare_columns, config)`:
     1. `effective_maturity` input populated → firm override (clipped to [1/365, 5])
-    2. `has_one_day_maturity_floor = True` → M = 1/365
+    2. `has_one_day_maturity_floor = True` → the one-year minimum becomes one day
+       (M = max(residual, 1/365) where the residual is under one year)
     3. Basel 3.1 revolving + `facility_termination_date` → termination-date derivation
     4. `maturity_date` → standard derivation clipped [1, 5]
     5. Fallback default 2.5

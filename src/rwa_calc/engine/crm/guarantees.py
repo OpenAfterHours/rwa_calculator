@@ -867,8 +867,10 @@ def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
     # Classify row types
     is_sub_row = pl.col("parent_exposure_reference") != pl.col("exposure_reference")
-    # The split emits one "__REM" remainder row per parent.
-    is_remainder = pl.col("exposure_reference").str.ends_with("__REM")
+    # The split emits one "<parent>__REM" remainder row per parent, but this runs
+    # in the calculators, AFTER re_splitter has renamed a split remainder to
+    # "__REM_sec" / "__REM_res" — so match the stem, not the suffix.
+    is_remainder = pl.col("exposure_reference").str.contains("__REM")
     is_guarantor_sub = is_sub_row & ~is_remainder
 
     # Check if any parent group has mixed beneficial/non-beneficial sub-rows.

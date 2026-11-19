@@ -181,7 +181,9 @@ _APPROACH_REFS: dict[str, tuple[str, ...]] = {
 # c02.py's ``_EQUITY_IRB_METHODS = ("irb_simple", "pd_lgd")``, correct there
 # because row 0420 is "Equity IRB" (155(2) AND (3)), wrong here because a PD/LGD
 # leg is not simple risk-weighted. It falls to row 2 rather than out of the block,
-# which keeps the partition total whole; no fixture seals one today.
+# which keeps the partition total whole; no fixture seals one today. An IRB firm's
+# Art. 48(4) fixed-RW leg (``irb_fixed_rw``, excluded from Art. 155 by its
+# paragraph 1) is not simple risk-weighted either and falls to row 2 the same way.
 _EQUITY_SIMPLE_MEMBERSHIP: dict[str, bool] = {"2": False, "UK4a": True}
 
 # Basel 3.1 equity sub-approach memo rows: origin equity legs narrowed by a

@@ -1106,7 +1106,7 @@ for a standalone future codemod. See the
 | `is_speculative` | `Boolean` | No | Higher-risk equity (unlisted + business < 5yr) |
 | `is_exchange_traded` | `Boolean` | No | Listed on recognised exchange |
 | `is_government_supported` | `Boolean` | No | Government-supported programme |
-| `is_significant_investment` | `Boolean` | No | >10% of CET1 |
+| `is_significant_investment` | `Boolean` | No | The firm's assertion that the row is the **non-deducted** amount of a significant investment (>10%) in a financial sector entity, risk weighted 250% under Own Funds Art. 48(4) (the engine performs no deduction). **CRR:** 250% on every equity path — Art. 133(2) defers to Art. 48(4) on SA, and Art. 155(1) excludes the leg from the IRB simple-RW and PD/LGD approaches, so on those paths it takes 250% (not 190% / 290% / 370% or the K formula), carries no Art. 158(7) EL and is sealed `equity_method = "irb_fixed_rw"` (COREP C 10.01 row 0110 / C 02.00 row 0420 Equity IRB; not CR10.5 simple-RW equity). A `ciu` or `central_bank` row keeps its own treatment whatever the flag says. **Basel 3.1:** removes the leg from the rules 4.2 / 4.3 transitional (Art. 133(6)(c)); its weight stays the Art. 133(3) / (4) chain (P1.393). Default `False`; null is not an assertion |
 | `ciu_approach` | `String` | No | CIU treatment selector — `"look_through"` (Art. 132(3)), `"mandate_based"` (Art. 132(4)), or `"fallback"` (1,250% per Art. 132(2)). When null the calculator selects based on data availability and falls back conservatively |
 | `ciu_mandate_rw` | `Float64` | No | Mandate-based RW (decimal) when `ciu_approach = "mandate_based"`. Calculated upstream from the fund's investment mandate |
 | `ciu_third_party_calc` | `Boolean` | No | True when the look-through RW has been calculated by an eligible third party (custodian / depositary / management company) per Art. 132(3) — relaxes the holding-level evidence requirement |
@@ -1144,7 +1144,7 @@ for a standalone future codemod. See the
 |--------|------|----------|-------------|
 | `fund_reference` | `String` | Yes | Join key to `EQUITY_EXPOSURE.fund_reference` — uniquely identifies the parent fund |
 | `holding_reference` | `String` | Yes | Unique identifier for the holding within the fund |
-| `exposure_class` | `String` | Yes | Exposure class of the underlying holding (`"corporate"`, `"institution"`, `"sovereign"`, etc.) — drives the SA risk weight applied |
+| `exposure_class` | `String` | Yes | Exposure class of the underlying holding — an `ExposureClass` value, case-insensitive (`"corporate"`, `"institution"`, `"central_govt_central_bank"`, …). With `cqs` it drives the SA risk weight the holding takes "as if directly held" (Art. 132A(1)). A class the CQS table cannot price takes 100% (unrated corporate, retail, real estate, `other`), except: a nested CIU (`"ciu"`, a level 2 CIU with no look-through data of its own) takes the 1,250% fall-back (Art. 132(5)); `"high_risk"` takes 150% under Basel 3.1 (Art. 128) and 100% under CRR (Art. 128 omitted from UK CRR); a null or any value outside the vocabulary (e.g. `"sovereign"`, `"securitisation"`, `"subordinated_debt"`) takes 1,250% and raises **SA008** |
 | `cqs` | `Int8` | No | Credit Quality Step of the underlying holding, where applicable |
 | `holding_value` | `Float64` | No | Market value of the holding inside the fund — numerator of the look-through formula |
 
@@ -1163,7 +1163,7 @@ import polars as pl
 ciu_holdings = pl.DataFrame({
     "fund_reference": ["FUND_001", "FUND_001", "FUND_001"],
     "holding_reference": ["HOLD_001", "HOLD_002", "HOLD_003"],
-    "exposure_class": ["corporate", "sovereign", "institution"],
+    "exposure_class": ["corporate", "central_govt_central_bank", "institution"],
     "cqs": [3, 1, 2],
     "holding_value": [40_000_000.0, 30_000_000.0, 30_000_000.0],
 })

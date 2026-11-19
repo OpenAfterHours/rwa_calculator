@@ -555,7 +555,13 @@ _C07_DEFAULTED_ROW_CLASSES: dict[str, tuple[str, ...]] = {
 }
 
 # The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
-# report under the IRB umbrella: Art. 155(2) simple-RW and Art. 155(3) PD/LGD.
+# report under the IRB umbrella: Art. 155(2) simple-RW, Art. 155(3) PD/LGD, and
+# an IRB firm's fixed-risk-weight equity outside Art. 155 (``irb_fixed_rw``, the
+# Art. 48(4) 250% leg Art. 155(1) excludes). COREP Annex II puts that last one
+# in C 10.01 row 0110 "Equity exposures subject to risk weights" -- "without
+# however being explicitly treated according to the Simple Risk Weight approach
+# or the (temporary or permanent) partial use of the credit risk standardised
+# approach" -- so it is IRB equity (C 02.00 r0420), never C 07.00.
 # Under Basel 3.1 no equity leg carries these (Art. 147A removes IRB equity —
 # every leg is stamped ``sa``), so the IRB partition empties by construction.
 # Equity whose method the ledger did not seal is treated as SA (never disclosed
@@ -568,7 +574,7 @@ _C07_DEFAULTED_ROW_CLASSES: dict[str, tuple[str, ...]] = {
 # rows 0210 (SA class) / 0420 (Equity IRB) on this tuple and C 07.00 admits its
 # equity population on it, so one copy each would let the two drift either side of
 # that identity.
-EQUITY_IRB_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd")
+EQUITY_IRB_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd", "irb_fixed_rw")
 
 
 # =============================================================================

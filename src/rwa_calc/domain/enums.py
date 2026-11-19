@@ -675,6 +675,19 @@ class EquityApproach(StrEnum):
     institution lacks Art. 178 default-definition data (155(3)).
     """
 
+    IRB_FIXED_RISK_WEIGHT = "irb_fixed_rw"
+    """
+    CRR equity of an IRB firm that attracts a fixed risk weight OUTSIDE the
+    Art. 155 approaches (CRR only): today the Art. 48(4) 250% leg
+    (``is_significant_investment``), which Art. 155(1) excludes from paragraphs
+    2-4. COREP Annex II, C 10.01 row 0110 "Equity exposures subject to risk
+    weights": equity "which attract a fixed risk weight treatment (without however
+    being explicitly treated according to the Simple Risk Weight approach or the
+    (temporary or permanent) partial use of the credit risk standardised
+    approach)" -- so IRB-umbrella equity (C 02.00 row 0420), neither Art. 155(2)
+    simple-RW equity (Pillar 3 CR10.5, OV1 UK 4a) nor SA equity (C 07.00).
+    """
+
 
 class InstitutionType(StrEnum):
     """

@@ -330,10 +330,22 @@ class TestTheEstateCanTellTheTwoRegimesApart:
         records that the two copies of this list must not drift — one import is
         what makes that executable rather than a comment.
         """
-        assert {member.value for member in EquityApproach} == {"sa", "irb_simple", "pd_lgd"}
+        # ``irb_fixed_rw`` (IV-06): an IRB firm's Art. 48(4) 250% leg, which
+        # Art. 155(1) excludes from the IRB approaches and COREP Annex II puts in
+        # C 10.01 row 0110 "Equity exposures subject to risk weights" -- IRB
+        # equity, "without however being explicitly treated according to ... the
+        # (temporary or permanent) partial use of the credit risk standardised
+        # approach", so it joins the IRB umbrella and stays out of C 07.00.
+        assert {member.value for member in EquityApproach} == {
+            "sa",
+            "irb_simple",
+            "pd_lgd",
+            "irb_fixed_rw",
+        }
         assert set(EQUITY_IRB_METHODS) == {
             EquityApproach.IRB_SIMPLE.value,
             EquityApproach.PD_LGD.value,
+            EquityApproach.IRB_FIXED_RISK_WEIGHT.value,
         }
         assert _EQUITY_IRB_METHODS is EQUITY_IRB_METHODS, (
             "C 02.00 and C 07.00 no longer read one definition of IRB-method equity"

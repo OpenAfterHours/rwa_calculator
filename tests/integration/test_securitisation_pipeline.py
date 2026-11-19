@@ -20,6 +20,7 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import (
     ERROR_SEC_FULLY_SECURITISED,
+    ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER,
     ERROR_SEC_OVER_ALLOCATED,
     ERROR_SEC_UNKNOWN_REFERENCE,
 )
@@ -378,3 +379,100 @@ def test_no_allocations_supplied_means_no_securitisation_outputs() -> None:
     df = result.results.collect()
     row = df.filter(pl.col("exposure_reference") == "L001").row(0, named=True)
     assert row["rwa_final"] == pytest.approx(1_000_000.0)
+
+
+# ---------------------------------------------------------------------------
+# IV-04 -- significant_risk_transfer=False carves nothing out (both regimes)
+# ---------------------------------------------------------------------------
+#
+# CRR Art. 244(1), verbatim: "The originator institution of a traditional
+# securitisation may exclude underlying exposures from its calculation of
+# risk-weighted exposure amounts and, where relevant, expected loss amounts if
+# either of the following conditions is fulfilled: (a) significant credit risk
+# associated with the underlying exposures has been transferred to third
+# parties; (b) the originator institution applies a 1 250 % risk weight to all
+# securitisation positions it holds in the securitisation or deducts these
+# securitisation positions from Common Equity Tier 1 items". Art. 245(1) is the
+# synthetic twin, and PS1/26 leaves the chapter in CRR (Table A2 row (1)), so the
+# rule is the same in both regimes.
+#
+# Hand calculation: GBP 1,000,000 drawn, unrated non-SME corporate (100% in both
+# regimes), allocated 100% to POOL_A.
+#   SRT False -> no carve-out -> EAD 1,000,000, RWA 1,000,000, SEC006
+#                (pre-fix: EAD 0, RWA 0, only SEC005)
+#   SRT True  -> carve-out    -> EAD 0, RWA 0, SEC005 (unchanged)
+
+_B31_REPORTING_DATE = date(2027, 6, 30)
+
+
+def _config_for(framework: str) -> CalculationConfig:
+    if framework == "CRR":
+        return _crr_config()
+    return CalculationConfig.basel_3_1(
+        reporting_date=_B31_REPORTING_DATE, permission_mode=PermissionMode.STANDARDISED
+    )
+
+
+def _srt_bundle(*, srt: bool) -> RawDataBundle:
+    allocs = pl.LazyFrame(
+        {
+            "exposure_reference": ["L001"],
+            "exposure_type": ["loan"],
+            "pool_reference": ["POOL_A"],
+            "allocation_pct": [1.0],
+            "significant_risk_transfer": [srt],
+        }
+    )
+    return _bundle(
+        loans=[
+            {"loan_reference": "L001", "drawn_amount": 1_000_000.0},
+            {"loan_reference": "L002", "drawn_amount": 1_000_000.0},
+        ],
+        allocs=allocs,
+    )
+
+
+@pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+def test_iv04_srt_false_keeps_full_rwa_on_balance_sheet(framework: str) -> None:
+    """IV-04: an explicit SRT=False leaves the loan's EAD and RWA in the total."""
+    # Arrange
+    bundle = _srt_bundle(srt=False)
+
+    # Act
+    result = _run(bundle, _config_for(framework))
+
+    # Assert
+    df = result.results.collect()
+    row = df.filter(pl.col("exposure_reference") == "L001").row(0, named=True)
+    control = df.filter(pl.col("exposure_reference") == "L002").row(0, named=True)
+    assert control["rwa_final"] == pytest.approx(1_000_000.0), "control loan must weigh 100%"
+    assert row["securitisation_residual_pct"] == pytest.approx(1.0)
+    assert row["ead_final"] == pytest.approx(1_000_000.0)
+    assert row["rwa_final"] == pytest.approx(1_000_000.0)
+    codes = {e.code for e in result.errors}
+    assert ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER in codes
+    assert ERROR_SEC_FULLY_SECURITISED not in codes
+    # Nothing was carved out, so no pool carries a slice.
+    assert result.securitisation_summary is None
+    audit = result.securitisation_audit.collect().row(0, named=True)
+    assert audit["audit_status"] == "no_significant_risk_transfer"
+    assert audit["securitised_ead"] == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+def test_iv04_srt_true_still_carves_the_loan_out(framework: str) -> None:
+    """IV-04 control: an asserted SRT keeps the existing carve-out (RWA 0)."""
+    # Arrange
+    bundle = _srt_bundle(srt=True)
+
+    # Act
+    result = _run(bundle, _config_for(framework))
+
+    # Assert
+    df = result.results.collect()
+    row = df.filter(pl.col("exposure_reference") == "L001").row(0, named=True)
+    assert row["ead_final"] == pytest.approx(0.0)
+    assert row["rwa_final"] == pytest.approx(0.0)
+    codes = {e.code for e in result.errors}
+    assert ERROR_SEC_FULLY_SECURITISED in codes
+    assert ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER not in codes

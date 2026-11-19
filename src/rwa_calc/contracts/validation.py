@@ -79,8 +79,10 @@ from rwa_calc.contracts.errors import (
     non_finite_raw_input_error,
     orphan_reference_error,
     unresolved_obs_risk_type_warning,
+    unsupported_ciu_holding_class_warning,
 )
 from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
+from rwa_calc.domain.enums import ExposureClass
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -615,6 +617,12 @@ def _table_checks(
     # the is_short_term ↔ scope_type/scope_id contract.
     if table_name == "ratings":
         checks.append(_validate_short_term_rating_scope(lf, columns))
+
+    # PS1/26 Art. 132A(1): a look-through holding is weighted "as if directly
+    # held"; a class outside the ExposureClass vocabulary cannot be, and the
+    # engine weights it at the Art. 132(2) 1,250% fall-back (SA008).
+    if table_name == "ciu_holdings":
+        checks.append(_validate_ciu_holding_classes(lf, columns))
     return [check for check in checks if check is not None]
 
 
@@ -1323,6 +1331,45 @@ def _validate_short_term_rating_scope(
                 )
             )
         return errors
+
+    return _TableCheck(plan=plan, decode=decode)
+
+
+def _validate_ciu_holding_classes(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Flag CIU holdings whose ``exposure_class`` the engine cannot identify (SA008).
+
+    ``ciu_holdings.exposure_class`` has no categorical domain declared, so the
+    DQ006 pass never sees it. A null, or a value outside the ``ExposureClass``
+    vocabulary (compared case-insensitively -- the engine upper-cases before its
+    risk-weight join), is weighted at the Art. 132(2) 1,250% fall-back by
+    ``engine/equity/calculator.py::_holding_rw_expr``, because PS1/26
+    Art. 132A(1) weights each underlying "as if directly held" and an
+    unidentified one cannot be. One rolled-up warning naming the distinct
+    values (null spelled ``null``).
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
+    """
+    if "exposure_class" not in schema_names:
+        return None
+
+    vocabulary = [member.value for member in ExposureClass]
+    holding_class = pl.col("exposure_class").cast(pl.String, strict=False)
+    unsupported = holding_class.is_null() | ~holding_class.str.to_lowercase().is_in(vocabulary)
+    plan = lf.filter(unsupported).select(
+        pl.len().alias("n"),
+        holding_class.fill_null("null").unique().sort().implode().alias("values"),
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        n = frame.item(0, "n")
+        if not n:
+            return []
+        values = [str(value) for value in frame.item(0, "values")]
+        return [unsupported_ciu_holding_class_warning(n=n, values=values)]
 
     return _TableCheck(plan=plan, decode=decode)
 

@@ -2223,8 +2223,10 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "equity_type": EdgeColumn(dtype=pl.String, required=False),
         # The CRR equity method actually applied by the equity calculator
         # (``sa`` = Art. 133, ``irb_simple`` = Art. 155(2), ``pd_lgd`` =
-        # Art. 155(3)). CONDITIONAL (inject=False): the equity path emits it, so
-        # it is present on any run carrying an equity book (null on non-equity
+        # Art. 155(3), ``irb_fixed_rw`` = an IRB firm's Art. 48(4) 250% leg
+        # outside Art. 155, C 10.01 row 0110). CONDITIONAL (inject=False): the
+        # equity path emits it, so it is present on any run carrying an equity
+        # book (null on non-equity
         # legs via the diagonal concat) and simply absent from an equity-free
         # run — never injected, so the eager-backed seal stays a shallow
         # DataFrame.lazy() wrap (mirrors the other equity-run-only columns).

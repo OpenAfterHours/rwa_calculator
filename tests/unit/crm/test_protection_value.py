@@ -437,9 +437,12 @@ class TestSharedCapAcrossExpansion:
                 },
             )
         )
+        per_exposure = out.group_by("beneficiary_reference").agg(pl.col("amount_covered").sum())
         recognised = sum(
             min(g, exposure_value[ref])
-            for ref, g in zip(out["beneficiary_reference"], out["amount_covered"], strict=True)
+            for ref, g in zip(
+                per_exposure["beneficiary_reference"], per_exposure["amount_covered"], strict=True
+            )
         )
 
         assert recognised == pytest.approx(10.0)

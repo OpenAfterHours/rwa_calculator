@@ -156,8 +156,12 @@ def pfe_multiplier(z: pl.Expr, addon_aggregate: pl.Expr) -> pl.Expr:
     ``min{1, Floor_m + (1 - Floor_m) · exp(z / y)}`` with
     ``y = 2 · (1 - Floor_m) · AggAddOn``. ``z`` is ``CMV - NICA`` (Art. 275(1)
     netting sets), ``CMV - VM - NICA`` (275(2)) or ``CMV_i - NICA_i`` (275(3)).
-    The explicit ``z >= 0`` arm keeps a netting set with no add-on (``y = 0``)
-    finite, where ``z / y`` is NaN at ``z = 0``.
+    The explicit ``z >= 0`` arm states the rule's first branch; it does not
+    change a value. At ``y = 0`` (no add-on) ``z / y`` is NaN at ``z = 0``, but
+    ``pl.min_horizontal(1.0, NaN)`` evaluates to 1, so no test can tell the arm
+    from the bare formula (removing it left every CCR test green). Keep the
+    arm if the cap is ever rewritten with an operator that propagates NaN
+    (``clip``, ``min``).
 
     Args:
         z: The collateral-adjusted current market value.

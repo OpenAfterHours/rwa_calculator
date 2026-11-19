@@ -201,9 +201,9 @@ See [Classification](../features/classification.md) for the complete classificat
 | `value_date` | `Date` | No | Facility start date |
 | `maturity_date` | `Date` | No | Final maturity date — used to derive `M` for IRB unless `effective_maturity` is populated |
 | `facility_termination_date` | `Date` | No | Bank's contractual right-to-terminate date — overrides `maturity_date` for IRB `M` derivation when shorter (Art. 162(2)(g)) |
-| `currency` | `String` | No | ISO 4217 currency code |
-| `limit` | `Float64` | No | Committed facility limit |
-| `committed` | `Boolean` | No | Whether the facility is a binding commitment to lend (default `True`). When `False`, the facility is treated as unconditionally cancellable: the hierarchy resolver does **not** generate a `facility_undrawn` exposure row, so no commitment CCF / EAD / RWA is held against the unused headroom. Loans and contingents already mapped to the facility are unaffected and continue to flow through the pipeline as their own exposure rows, with normal counterparty / parent rollup and collateral allocation. |
+| `currency` | `String` | No | ISO 4217 currency code — the currency the `limit` is advised in. Undrawn headroom is netted in it: every mapped loan / contingent amount is first converted into it at the run's `fx_rates` (`amount × rate(child → reporting) / rate(facility → reporting)`). An amount the run has no rate for is **not** netted, and **HIE005** names the facility and the currency. With `apply_fx_conversion=False` amounts are netted as supplied |
+| `limit` | `Float64` | No | The limit **offered to and accepted by the obligor** — the extent of the commitment (CRR Art. 4(1)(56): "determined by the advised limit"). Undrawn headroom = `limit` − mapped utilisation. A null limit on a facility that is not an MOF umbrella generates no undrawn exposure and raises **HIE006** (on an umbrella a null limit means "uncapped above the sub-limits") |
+| `committed` | `Boolean` | No | Whether the unused headroom is a commitment the bank cannot cancel unconditionally (default `True`). `True`: a commitment priced at its own `risk_type`. `False`: an **accepted, unconditionally cancellable (UCC) commitment** — its `facility_undrawn` row is still generated, and is priced in the UCC bucket `LR` whatever `risk_type` says (CRR Annex I 4(a) 0%; PS1/26 Table A1 row (7) 10%; a non-`LR` `risk_type` raises **HIE004**). PS1/26's glossary defines a commitment as an arrangement "offered by the institution and accepted by the obligor", expressly including one that "may be ... unconditionally cancelled by the institution at any time without prior notice". **An internal limit that was never offered to and accepted by the obligor is not a commitment at all** and must not be supplied as headroom: set `limit` to the accepted amount, or 0. On an MOF sub-facility the sub's own flag governs its waterfall row; an uncommitted sub-line takes headroom only from an uncommitted or uncapped umbrella (see [Hierarchy & Classification](../specifications/common/hierarchy-classification.md#multi-option-facility-mof-waterfall-allocation)). Loans and contingents mapped to the facility always flow as their own exposure rows |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `lgd_unsecured` | `Float64` | No | A-IRB unsecured LGD estimate, applied to the residual EAD after eligible collateral (CRR Art. 181) |
 | `beel` | `Float64` | No | Best estimate expected loss |
@@ -793,6 +793,7 @@ fx_rates = pl.DataFrame({
 
 **Behaviour:**
 - **Missing rates:** Exposures in currencies without rates retain original values; `fx_rate_applied` is null
+- **Facility headroom:** a loan / contingent drawn in a currency other than its facility's is converted into the facility's currency at these rates before the undrawn headroom is netted; one with no rate is not netted and raises **HIE005** (see [FX Conversion](../user-guide/methodology/fx-conversion.md#facility-headroom-netting))
 - **FX disabled:** Set `apply_fx_conversion=False` in `CalculationConfig` to skip conversion
 - **No FX file:** If `fx_rates.parquet` is not provided, no conversion occurs
 

@@ -90,7 +90,33 @@ Key rules:
 - **Root/standalone facilities** produce undrawn exposure records
 - **Sub-facilities are excluded** from producing their own undrawn records (avoids double-counting)
 - Negative drawn amounts are clamped to zero before aggregation (negative balances do not increase headroom)
-- Only facilities with `undrawn_amount > 0` and `committed = True` generate exposure records
+- Every facility with `undrawn_amount > 0` generates an exposure record, committed or not. A
+  `committed = False` facility is an **accepted, unconditionally cancellable (UCC) commitment**
+  and its row is priced in the UCC bucket `LR` whatever `risk_type` it declares (PS1/26
+  Table A1 row (7) 10%; CRR Annex I 4(a) 0%; a declared non-LR type raises `HIE004`). PS1/26
+  Glossary "commitment": *"means any off-balance sheet contractual arrangement that has been
+  offered by the institution and accepted by the obligor ... This includes but is not limited to
+  any such arrangement that may be: (1) unconditionally cancelled by the institution at any time
+  without prior notice to the obligor"*. An internal limit never offered to and accepted by the
+  obligor is not a commitment at all: supply its `limit` as the accepted amount, or 0.
+- A facility with a null `limit` (other than an MOF umbrella, where null means "uncapped")
+  generates no record and raises `HIE006`: the commitment's extent is *"determined by the
+  advised limit"* (CRR Art. 4(1)(56)), so an unknown limit cannot be measured.
+
+**Currency.** The subtraction `limit − utilisation` is made in the **facility's** currency. Each
+loan's `drawn_amount` / contingent's `nominal_amount` is first converted at the run's FX rates:
+`amount × rate(child → reporting) / rate(facility → reporting)` (the reporting currency's own rate
+is 1). This runs inside unify, before the run's FX step rebases every row to the reporting
+currency, so the undrawn row is still stated in the facility's currency. Where the run holds no
+rate for either side, that amount is **not netted** — the headroom is never reduced by an amount
+the run cannot measure — and `HIE005` names the facility and the currency. Same-currency netting
+is unchanged, and with `apply_fx_conversion = False` amounts are netted as supplied (no amount in
+the run is rebased, so all are taken to share one unit of account).
+
+```
+GBP 10m line, EUR 5m drawn, EUR→GBP 0.85:   undrawn = 10m − 5m × 0.85 = 5.75m GBP
+(raw netting gave 5.0m; a JPY 1bn drawing at 0.005 used to clip the whole line to 0)
+```
 
 #### Multi-Option Facility (MOF) Waterfall Allocation
 
@@ -98,9 +124,9 @@ A **Multi-Option Facility** is any facility with at least one `child_type='facil
 
 **Allocation rule** (per MOF parent):
 
-1. Compute per-sub headroom: `sub_headroom = max(0, sub_limit − sub_drawn)`, where `sub_drawn` sums loans and contingents directly mapped to that sub (no roll-up).
-2. Compute parent headroom: `parent_headroom = max(0, parent_limit − total_drawn − total_contingent)` rolled up across the whole descendant tree.
-3. Sort committed sub-facilities by descending SA CCF, with deterministic tie-break on `risk_type` then `facility_reference`.
+1. Compute per-sub headroom: `sub_headroom = max(0, sub_limit − sub_drawn)`, where `sub_drawn` sums loans and contingents directly mapped to that sub (no roll-up), each converted into the **sub's** currency; then convert `sub_headroom` into the **parent's** currency, in which the waterfall caps and emits.
+2. Compute parent headroom: `parent_headroom = max(0, parent_limit − total_drawn − total_contingent)` rolled up across the whole descendant tree, each amount converted into the parent's currency.
+3. Sort the eligible sub-facilities (see the edge cases) by descending SA CCF, with deterministic tie-break on `risk_type` then `facility_reference`.
 4. Walk subs in order. Allocate `min(sub_headroom_i, max(0, parent_headroom − cum_{i-1}))` to each sub, where `cum_{i-1}` is the running sum of higher-CCF allocations.
 5. Emit one `facility_undrawn` row per sub with `allocation > 0`. Each row carries the **sub's** `risk_type` and `counterparty_reference`; provenance is captured in `mof_risk_type_source`.
 6. If `parent_headroom > sum(allocations)`, emit one **residual** row at the parent's own `risk_type` and `counterparty_reference` for the leftover headroom.
@@ -146,8 +172,10 @@ parent headroom = 100m − 20m = 80m
 
 **Edge cases**:
 
-- **Uncommitted sub** (`committed=False`): skipped entirely from the waterfall — no row, no headroom consumption. The bank can refuse to lend, so the sub carries no commitment EAD.
-- **Uncommitted parent** (`committed=False`): no rows emitted at all (existing behaviour preserved). Loans/contingents already mapped under the parent flow as their own exposure rows unaffected.
+- **Each sub-line's OWN `committed` flag governs its row.** (Sub rows used to inherit the parent's flag, so committed sub-lines under an uncommitted umbrella were dropped with no warning.)
+- **Committed sub under an uncommitted parent** (`committed=False` umbrella): the sub keeps its waterfall row at its own `risk_type`; the umbrella's residual is a UCC commitment, priced as `LR`. Example — umbrella 30m UCC, two committed `OC` sub-lines of 10m with 2m drawn on each: rows of 8m, 8m (`OC`) and a 10m residual (`LR`) — CRR EAD 8m, Basel 3.1 EAD 7.4m.
+- **Uncommitted sub** (`committed=False`): a UCC commitment, weighted and emitted in the `LR` bucket. It takes a slice of the parent's headroom only where the parent has not already committed that headroom — an uncommitted parent (whose residual is UCC too) or one with no limit. Under a **committed parent with a limit** it takes nothing: the whole headroom is the parent's commitment and stays at the parent's own `risk_type` in the residual (so moving it into the sub-line's 0% CRR / 10% Basel 3.1 bucket can never reduce capital).
+- **Sub-limit in a currency the run cannot convert into the parent's** (no FX rate): the sub takes no slice and `HIE005` names it; the residual carries that headroom.
 - **Sub with zero headroom** (fully drawn): drops out of the waterfall — emits no row.
 - **Sub-limits sum below parent limit**: residual at parent's own `risk_type` covers the gap.
 - **Standalone facility (no facility-typed children)**: single undrawn row with parent's own `risk_type` (non-MOF path unchanged).

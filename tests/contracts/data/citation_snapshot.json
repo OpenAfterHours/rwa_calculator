@@ -374,6 +374,13 @@
     "CRR Art. 138",
     "CRR Art. 139"
   ],
+  "rwa_calc.engine.hierarchy.facility_fx::with_facility_currency_factor": [
+    "CRR Art. 4(1)"
+  ],
+  "rwa_calc.engine.hierarchy.facility_undrawn::_undrawn_select_expressions": [
+    "CRR Art. 111",
+    "PS1/26, paragraph 111"
+  ],
   "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments": [
     "PS1/26, paragraph 153",
     "PS1/26, paragraph 154",

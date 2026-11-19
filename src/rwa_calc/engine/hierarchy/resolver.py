@@ -104,6 +104,9 @@ class HierarchyResolver:
         # facility_mappings is sealed at the loader edge: ``child_type`` always
         # exists (typed null when unreported) and the legacy ``node_type``
         # alias has already been translated by the loader.
+        # ``fx_rates`` reaches the unify step only to put each drawing in its
+        # FACILITY's currency before headroom is netted (CM-02 / SF-01); the
+        # run's conversion to the reporting currency still happens below.
         exposures, exp_errors = self._unify_exposures(
             data.loans,
             data.contingents,
@@ -111,6 +114,7 @@ class HierarchyResolver:
             data.facility_mappings,
             counterparty_lookup,
             config,
+            fx_rates=data.fx_rates,
         )
         errors.extend(exp_errors)
 
@@ -248,6 +252,7 @@ class HierarchyResolver:
         facility_root_lookup: pl.LazyFrame | None = None,
         counterparty_lookup: CounterpartyLookup | None = None,
         config: CalculationConfig | None = None,
+        fx_rates: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """Delegate to :func:`facility_undrawn.calculate_facility_undrawn`."""
         return calculate_facility_undrawn(
@@ -258,6 +263,7 @@ class HierarchyResolver:
             facility_root_lookup,
             counterparty_lookup=counterparty_lookup,
             config=config,
+            fx_rates=fx_rates,
         )
 
     def _unify_exposures(
@@ -268,6 +274,7 @@ class HierarchyResolver:
         facility_mappings: pl.LazyFrame,
         counterparty_lookup: CounterpartyLookup,
         config: CalculationConfig | None = None,
+        fx_rates: pl.LazyFrame | None = None,
     ) -> tuple[pl.LazyFrame, list[CalculationError]]:
         """Delegate to :func:`unify.unify_exposures`."""
         return unify_exposures(
@@ -277,6 +284,7 @@ class HierarchyResolver:
             facility_mappings,
             counterparty_lookup,
             config,
+            fx_rates=fx_rates,
         )
 
     def _apply_short_term_rating_override(

@@ -10,7 +10,9 @@ Key responsibilities:
   (including the ONB/OFB drawn-vs-nominal switch and the FCCM / Pool-B
   pass-through columns).
 - Concat loans + contingents + synthetic facility_undrawn rows into the
-  single unified exposures frame.
+  single unified exposures frame, and return the facility-undrawn warnings
+  (HIE004-HIE006) as the stage's errors. The facility graph edges are
+  collected once here and shared by the root lookup and ancestor closure.
 - Attach facility metadata (parent/root facility refs, hierarchy depth,
   ancestor closure) and delegate QRRE propagation + rating attach to
   ``enrich``.
@@ -37,9 +39,11 @@ from rwa_calc.engine.hierarchy.enrich import (
     propagate_facility_qrre_columns,
 )
 from rwa_calc.engine.hierarchy.facility_undrawn import calculate_facility_undrawn
+from rwa_calc.engine.hierarchy.facility_warnings import collect_facility_undrawn_warnings
 from rwa_calc.engine.hierarchy.graph import (
     build_facility_ancestor_closure,
     build_facility_root_lookup,
+    collect_facility_edges,
 )
 
 if TYPE_CHECKING:
@@ -57,6 +61,7 @@ def unify_exposures(
     facility_mappings: pl.LazyFrame,
     counterparty_lookup: CounterpartyLookup,
     config: CalculationConfig | None = None,
+    fx_rates: pl.LazyFrame | None = None,
 ) -> tuple[pl.LazyFrame, list[CalculationError]]:
     """
     Unify loans, contingents, and facility undrawn into a single exposures LazyFrame.
@@ -64,10 +69,16 @@ def unify_exposures(
     Creates three types of exposures:
     - loan: Drawn amounts from loans
     - contingent: Off-balance sheet items (guarantees, LCs, etc.)
-    - facility_undrawn: Undrawn facility headroom (limit - drawn loans)
+    - facility_undrawn: Undrawn facility headroom (limit - drawn loans), every
+      drawing first put in the facility's currency at ``fx_rates``
+
+    ``fx_rates`` is the run's raw rate table: headroom is netted here, BEFORE
+    ``engine/fx`` rebases the unified frame, so it is needed to compare a
+    drawing with a limit in another currency (review findings CM-02 / SF-01).
 
     Returns:
-        Tuple of (unified exposures LazyFrame, list of errors)
+        Tuple of (unified exposures LazyFrame, list of errors) — the errors
+        are the HIE004 / HIE005 / HIE006 facility-undrawn warnings.
     """
     # Output schema invariants — the unified exposures frame must surface these
     # columns for downstream calculators (EAD / LGD / maturity). Listed here as
@@ -88,8 +99,11 @@ def unify_exposures(
         exposure_frames.append(contingents_unified)
 
     # Build facility root lookup for multi-level hierarchies, then add
-    # synthetic facility_undrawn exposures for the unused headroom.
-    facility_root_lookup = build_facility_root_lookup(facility_mappings)
+    # synthetic facility_undrawn exposures for the unused headroom. The facility
+    # edges are collected ONCE and shared by the root lookup and the ancestor
+    # closure below; the collect that saves pays for the warnings collect.
+    facility_edges = collect_facility_edges(facility_mappings)
+    facility_root_lookup = build_facility_root_lookup(facility_mappings, edges=facility_edges)
     facility_undrawn = calculate_facility_undrawn(
         facilities,
         loans,
@@ -98,14 +112,31 @@ def unify_exposures(
         facility_root_lookup,
         counterparty_lookup=counterparty_lookup,
         config=config,
+        fx_rates=fx_rates,
     )
     exposure_frames.append(facility_undrawn)
+    if facilities is not None:
+        # HIE004 / HIE005 / HIE006: every treatment of a facility's undrawn row
+        # the input did not state outright, named rather than silently chosen.
+        errors.extend(
+            collect_facility_undrawn_warnings(
+                facilities,
+                loans,
+                contingents,
+                facility_mappings,
+                facility_root_lookup,
+                fx_rates=fx_rates,
+                config=config,
+            )
+        )
 
     # Combine all exposure types into the unified frame, then enrich with
     # parent/root facility mapping, QRRE-relevant facility-level columns,
     # and counterparty rating fields needed by downstream stages.
     exposures = pl.concat(exposure_frames, how="diagonal_relaxed")
-    exposures = _join_facility_metadata(exposures, facility_mappings, facility_root_lookup)
+    exposures = _join_facility_metadata(
+        exposures, facility_mappings, facility_root_lookup, facility_edges
+    )
     exposures = propagate_facility_qrre_columns(exposures, facilities)
     exposures = attach_counterparty_rating(exposures, counterparty_lookup)
 
@@ -355,6 +386,7 @@ def _join_facility_metadata(
     exposures: pl.LazyFrame,
     facility_mappings: pl.LazyFrame,
     facility_root_lookup: pl.LazyFrame,
+    facility_edges: pl.DataFrame | None = None,
 ) -> pl.LazyFrame:
     """Attach ``parent_facility_reference``, ``exposure_has_parent``,
     ``root_facility_reference``, and ``facility_hierarchy_depth`` to the
@@ -412,7 +444,7 @@ def _join_facility_metadata(
     # down nested facility hierarchies. Facilities absent from the closure
     # (roots / single-level) fall back to the 1-element [parent] list, which
     # makes the CRM cascade reduce to the legacy single-level allocation.
-    ancestor_lists = build_facility_ancestor_closure(facility_mappings)
+    ancestor_lists = build_facility_ancestor_closure(facility_mappings, edges=facility_edges)
     exposures = (
         exposures.join(
             ancestor_lists.select(

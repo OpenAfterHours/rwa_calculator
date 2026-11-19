@@ -269,7 +269,8 @@ and their census is ratcheted by arch_check check 11:
 
 | Location | What | Why |
 |---|---|---|
-| `engine/hierarchy/graph.py` | Graph-edge collects (ultimate parent / facility root / facility ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
+| `engine/hierarchy/graph.py` | Graph-edge collects (ultimate parent; the facility → facility edges, collected ONCE by `collect_facility_edges` and shared by the facility root lookup and ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
+| `engine/hierarchy/facility_warnings.py` | The HIE004 / HIE005 / HIE006 facility-undrawn warnings, one small plan collected once | Warning rows (empty on clean input) must become `CalculationError`s in the stage that made the decisions; paid for by the shared facility-edge collect above, so the per-run `collect` count did not rise |
 | `engine/hierarchy/ratings.py` | Best internal/external rating lookups (`pl.collect_all`) | Small per-counterparty frames referenced by multiple downstream joins |
 | `engine/crm/collateral.py:363` | 3 collateral lookup collects (`pl.collect_all`) | Each lookup feeds multiple downstream joins; without materialisation the `group_by`/`select` re-evaluates at each reference |
 | `engine/crm/processor.py:982` | Guarantee + counterparty + rating-inheritance lookups (`pl.collect_all`) | Prevents parquet re-scans; small frames |

@@ -44,11 +44,11 @@ commitments" on ORIGINAL maturity into 50% (item 2(b), > 1yr) / 20% (item 3(b),
 <= 1yr) and Table A1 Row 5 replaces that with a flat 40%. Its value_date /
 maturity_date span ~12 years so the CRR arm resolves unambiguously to item 2(b).
 
-``FAC_UCC`` carries ``committed=True`` deliberately. An unconditionally
-cancellable line is modelled here by ``risk_type="LR"``, NOT by
-``committed=False``: a ``committed=False`` facility emits no synthetic undrawn
-exposure at all (``engine/hierarchy/facility_undrawn.py`` filters it out),
-so it could never reach a C 07.00 CCF bucket. The LR route is also the one that
+``FAC_UCC`` carries ``committed=True`` with ``risk_type="LR"``. Since review
+finding CM-01 the ``committed=False`` encoding of the same line reaches the same
+bucket — an uncommitted facility emits its undrawn row priced as LR
+(``engine/hierarchy/facility_undrawn.py``) — so either spelling would do; this
+one is kept so the row the goldens were banked on does not move. The LR route
 shows the headline Basel 3.1 change — UCC moves from 0% to 10%, i.e. from a
 zero-EAD row to a real one, in the same column.
 
@@ -466,9 +466,9 @@ def _facilities() -> pl.DataFrame:
     """Three COMMITMENTS — the undrawn-headroom side of the CCF axis.
 
     Each emits one synthetic ``<facility>_UNDRAWN`` exposure. All carry
-    ``committed=True``: an uncommitted facility produces no undrawn exposure at
-    all, so unconditional cancellability is expressed as ``risk_type="LR"``
-    (see the module docstring).
+    ``committed=True``; unconditional cancellability is expressed as
+    ``risk_type="LR"`` (see the module docstring — ``committed=False`` would
+    price the same row as LR too).
     """
     rows: list[dict] = [
         # CRR Annex I para 2 / Table A1 Row 4(a) — a note issuance facility.

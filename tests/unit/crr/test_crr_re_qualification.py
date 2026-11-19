@@ -164,8 +164,11 @@ class TestCrrResidentialQualificationGate:
     @pytest.mark.parametrize(
         ("is_qualifying_re", "expected_rw"),
         # Commercial property, not materially dependent, LTV 0.4: Art. 126(1)(a)
-        # 50% when attested or unreported; Art. 124(1) 100% when explicitly not.
-        [(False, 1.00), (True, 0.50), (None, 0.50)],
+        # 50% only when attested; Art. 124(1) 100% when explicitly not, and
+        # when unreported — PRA Credit Risk Part rule 4.1 / 4.1A (to 31 Dec 2026)
+        # admit Art. 126 for commercial property only where a loss condition on
+        # PRA market data is met, which a null does not show.
+        [(False, 1.00), (True, 0.50), (None, 1.00)],
     )
     def test_commercial_explicit_false_loses_the_art_126_weight(
         self, sa_calculator: SACalculator, is_qualifying_re: bool | None, expected_rw: float
@@ -213,6 +216,7 @@ class TestCrrArt126MaterialDependenceGate:
             property_type="commercial",
             ltv=Decimal("0.40"),
             has_income_cover=has_income_cover,
+            is_qualifying_re=True,
         )
 
         # Assert
@@ -255,6 +259,7 @@ class TestCrrArt126MaterialDependenceGate:
             ltv=Decimal("0.80"),
             has_income_cover=False,
             qualifies_as_retail=False,
+            is_qualifying_re=True,
         )
 
         # Assert

@@ -577,6 +577,9 @@ class TestCommercialRERiskWeights:
             ltv=Decimal("0.40"),
             has_income_cover=False,
             config=crr_config,
+            # The CRR Art. 126 50% needs the firm's attestation of the Art. 126(2)
+            # conditions, PRA Credit Risk Part rule 4.1 / 4.1A included.
+            is_qualifying_re=True,
         )
 
         assert result["risk_weight"] == pytest.approx(0.50)

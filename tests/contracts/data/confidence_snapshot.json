@@ -1453,8 +1453,11 @@
         "tests/oracle/derivations/sa_crr.py",
         "tests/properties/corpus.py",
         "tests/properties/portfolios.py",
+        "tests/unit/crr/test_crr_sa.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_re_split_features.py",
+        "tests/unit/test_b31_re_junior_charges.py",
+        "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false

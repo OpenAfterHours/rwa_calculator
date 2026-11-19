@@ -874,6 +874,8 @@ class TestCRRNoJuniorChargeEffect:
                 # inverted gate fixed by review RE-17 / P1.263.
                 "has_income_cover": [False],
                 "prior_charge_ltv": [0.20],
+                # The CRR Art. 126 50% needs the firm's attestation (PRA rule 4.1).
+                "is_qualifying_re": [True],
             }
         ).lazy()
         result = sa_calculator.calculate_branch(df, crr_config).collect().to_dicts()[0]

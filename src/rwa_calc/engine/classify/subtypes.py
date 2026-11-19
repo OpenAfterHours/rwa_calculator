@@ -76,8 +76,10 @@ _QRRE_DEDUPED_LIMIT_COLUMN = "_qrre_deduped_limit"
 @cites("CRR Art. 153(2)")
 @cites("CRR Art. 142(1)(4)")
 @cites("CRR Art. 154(4)")
+@cites("CRR Art. 123")
 @cites("PS1/26, paragraph 153")
 @cites("PS1/26, paragraph 147")
+@cites("PS1/26, paragraph 123")
 def classify_exposure_subtypes(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -121,6 +123,14 @@ def classify_exposure_subtypes(
     the schema does not carry and is deferred to a schema-enablement change;
     ``apply_fi_scalar`` is the interim override for known unregulated FSEs.
 
+    A non-SME RETAIL_OTHER row failing ``qualifies_as_retail`` leaves the retail
+    class for CORPORATE only where the pack Feature
+    ``non_qualifying_retail_leaves_retail_class`` is on (CRR Art. 123, last
+    sub-paragraph). Under Basel 3.1 it is off: PS1/26 Art. 123(1)(a) makes every
+    non-SME natural-person exposure retail, and the row stays RETAIL_OTHER as a
+    non-regulatory retail exposure (Art. 123(3)(c), 100%). The SME limb
+    (``is_retail_sme`` -> CORPORATE_SME) is regime-invariant.
+
     A retail mortgage whose class rests on the product label alone (no linked
     property, no LTV — ``re_evidence.re_evidence_expr``) also records the class
     it would otherwise take in the scratch ``RE_UNEVIDENCED_CLASS_COLUMN``; the
@@ -156,6 +166,18 @@ def classify_exposure_subtypes(
         (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
         & (pl.col("qualifies_as_retail") == False)  # noqa: E712
         & is_sme_by_size
+    )
+    # Where a non-SME retail row that fails ``qualifies_as_retail`` lands is a
+    # regime difference (RE-03). CRR Art. 123 (last sub-paragraph) makes it
+    # "not eligible for the retail exposures class" -> CORPORATE. PS1/26
+    # Art. 123(1)(a) keeps every non-SME natural-person exposure retail, priced
+    # at the Art. 123(3)(c) 100% non-regulatory weight downstream, so under
+    # Basel 3.1 the row stays RETAIL_OTHER (and stays in reach of the Art. 123B
+    # currency-mismatch multiplier, which is scoped by retail class).
+    leaves_retail_class = (
+        (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+        & (pl.col("qualifies_as_retail") == False)  # noqa: E712
+        & pl.lit(resolved_pack.feature("non_qualifying_retail_leaves_retail_class"))
     )
     # Specialised lending is a corporate sub-type (Art. 112(1)(g)) and is
     # flagged as SME when the counterparty meets the size test. The
@@ -233,7 +255,8 @@ def classify_exposure_subtypes(
         | (pl.col("cp_entity_type") == "individual")
     )
     # The class the row takes when it is not a retail mortgage. Priority
-    # order: QRRE, SME retail, non-qualifying retail, corporate SME, keep.
+    # order: QRRE, SME retail, non-qualifying retail (CRR only — Basel 3.1
+    # keeps it retail), corporate SME, keep.
     non_mortgage_class = (
         pl.when(
             # QRRE: qualifying revolving retail under QRRE limit (Art. 147(5))
@@ -246,9 +269,9 @@ def classify_exposure_subtypes(
         )
         .then(pl.lit(ExposureClass.CORPORATE_SME.value))
         .when(
-            # Other retail that doesn't qualify → CORPORATE
-            (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
-            & (pl.col("qualifies_as_retail") == False)  # noqa: E712
+            # Other retail that doesn't qualify → CORPORATE (CRR only; see
+            # ``leaves_retail_class``)
+            leaves_retail_class
         )
         .then(pl.lit(ExposureClass.CORPORATE.value))
         .when(
@@ -384,7 +407,7 @@ def qrre_obligor_aggregate_limit_expr(
 
     ⚠ The intra-facility ordinal is a ``cum_sum`` of the CANDIDATE MASK, not a
     row count. This is the difference from the sibling obligor-deduplication in
-    ``attributes.py`` (Art. 123A(1)(b)(ii) granularity), which divides by
+    ``attributes.py`` (the optional 0.2% granularity test), which divides by
     ``pl.len().over(...)``: candidacy genuinely differs across legs of one
     facility (a MOF root with two committed subs of differing ``risk_type``
     emits one cancellable and one non-cancellable waterfall leg), and a line
@@ -632,18 +655,31 @@ def sync_irb_exposure_class(
 
     Natural-person IRB retail restoration (CRR Art. 147(5)(a)(i) / PS1/26
     Art. 147(5)(a)(i)): the SA regulatory-retail test (``qualifies_as_retail``,
-    Art. 123 / 123A) applies the EUR 1,000,000 / GBP 880,000 monetary cap AND
-    (under B31) the Art. 123A(1)(b)(ii) 0.2% granularity limb to natural
-    persons, expelling large or portfolio-dominant individuals to CORPORATE.
-    Neither condition exists in the IRB retail class: Art. 147(5)(a) caps the
-    SME limb (ii) only, and Art. 147(5) has no granularity limb. So a natural
-    person expelled to CORPORATE keeps the IRB retail class, provided the
+    Art. 123 / 123A) applies the EUR 1,000,000 / GBP 880,000 monetary cap (and,
+    where a firm elects it, the optional 0.2% granularity test) to natural
+    persons; under CRR a failing individual is expelled to CORPORATE. Neither
+    condition exists in the IRB retail class: Art. 147(5)(a) caps the SME limb
+    (ii) only, and Art. 147(5) has no granularity limb. So a natural person
+    expelled to CORPORATE keeps the IRB retail class, provided the
     Art. 147(5)(c) management-basis condition holds — i.e. the obligor is not
     managed individually as a corporate (``is_managed_as_retail`` not
     explicitly False; a null flag defaults to True, matching the
     Art. 123A(1)(b)(iii) backward-compatible KEEP). This leaves the SA
     ``exposure_class`` and ``qualifies_as_retail`` untouched — the SA/IRB
     divergence lives only in ``exposure_class_irb``.
+
+    The mirror case under Basel 3.1 (RE-03): a natural person failing the SA
+    regulatory-retail test now STAYS in the SA retail class (PS1/26
+    Art. 123(1)(a)), so the divergence can run the other way. Where that row is
+    managed individually (``is_managed_as_retail`` explicitly False) it fails
+    Art. 147(5)(c) and its IRB class is CORPORATE — exactly the IRB class it had
+    when the SA class itself was CORPORATE, so IRB permission lookup, approach
+    routing and the IRB formula (via ``_align_irb_exposure_class``) are
+    unchanged by RE-03. The predicate needs ``qualifies_as_retail`` False, a
+    population that only exists in RETAIL_OTHER where the
+    ``non_qualifying_retail_leaves_retail_class`` Feature is off, so CRR rows
+    are untouched (a CRR natural person under the cap keeps its IRB retail class
+    whatever the flag says, as before).
     """
     # Art. 147(5)(c): a natural person managed individually as corporate
     # (is_managed_as_retail explicitly False) is NOT IRB retail. Null → True
@@ -653,6 +689,13 @@ def sync_irb_exposure_class(
         natural_person_expr()
         & (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
         & managed_as_retail
+    )
+    # RE-03 mirror: Basel 3.1 non-regulatory retail that is managed individually
+    # keeps the IRB corporate class (Art. 147(5)(c)).
+    individually_managed_retail_irb = (
+        (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+        & (pl.col("qualifies_as_retail") == False)  # noqa: E712
+        & ~managed_as_retail
     )
     # Entity types whose derived IRB class is definitionally distinct from the
     # SA class and must not be overwritten by the sync.
@@ -667,6 +710,8 @@ def sync_irb_exposure_class(
         .then(pl.col("exposure_class_irb"))
         .when(restore_retail_irb)
         .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
+        .when(individually_managed_retail_irb)
+        .then(pl.lit(ExposureClass.CORPORATE.value))
         .otherwise(pl.col("exposure_class"))
         .alias("exposure_class_irb")
     )

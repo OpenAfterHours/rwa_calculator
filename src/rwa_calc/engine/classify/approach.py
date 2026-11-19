@@ -382,12 +382,16 @@ def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
     - rgla_* / pse_* rows, whose SA labels RGLA / PSE differ from the IRB
       CGCB / INSTITUTION class (CRR Art. 147(3)/147(4)(b)).
-    - natural persons expelled from retail to CORPORATE by the SA
-      regulatory-retail monetary cap / granularity limb but kept in the IRB
-      retail class (CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i) — the cap
-      conditions the SME limb only). ``sync_irb_exposure_class`` restores
-      their ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
-      ``exposure_class`` so the retail IRB formula applies.
+    - natural persons expelled from retail to CORPORATE by the CRR SA
+      regulatory-retail monetary cap but kept in the IRB retail class (CRR
+      Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i) — the cap conditions the SME
+      limb only). ``sync_irb_exposure_class`` restores their
+      ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
+      ``exposure_class`` so the retail IRB formula applies. Under Basel 3.1 the
+      divergence can run the other way (RE-03): a non-regulatory natural person
+      stays SA RETAIL_OTHER (PS1/26 Art. 123(1)(a)) while an individually
+      managed one is IRB CORPORATE (Art. 147(5)(c)); the same predicate aligns
+      it to CORPORATE on the IRB leg.
 
     - CRR non-named ``mdb`` rows, whose IRB class is INSTITUTION (Art.
       147(4)(c)) while their SA class stays MDB — the ``preserve_derived_irb_class``

@@ -20,9 +20,15 @@ is an institution for IRB purposes). Read the map for the approach you are calcu
 turnover test. `regulatory_thresholds_fx_derived` records whether the limits are applied
 in their native currency or converted — which changes marginal cases.
 
-Breaching a retail threshold reclassifies the exposure as **corporate**.
-`retail_art_123a_two_path_applicable` gates the Basel 3.1 Art. 123A two-path test, and
-`b31_retail_granularity_limit` the granularity condition.
+Under CRR, breaching a retail criterion reclassifies the exposure as **corporate**
+(Art. 123, last sub-paragraph). Basel 3.1 has no such exit for natural persons — PS1/26
+Art. 123(1)(a) keeps every non-SME natural-person exposure retail, and failing Art. 123A
+only makes it non-regulatory retail. `non_qualifying_retail_leaves_retail_class` is the
+Feature that carries the difference; an SME failing Art. 123(1)(b) still moves to
+corporate SME in both regimes. `retail_art_123a_two_path_applicable` gates the Basel 3.1
+Art. 123A two-path test. `b31_retail_granularity_limit` is NOT a PS1/26 limb: it is the
+BCBS CRE20.66 test, read only when a firm elects `enforce_retail_granularity` (off by
+default) to evidence Art. 123A(1)(b)(iii).
 
 > ⚠️ Do not quote these limits from memory or from a spec page — they have been wrong in
 > this skill before. Read the generated table.
@@ -141,7 +147,7 @@ Key column: `entity_type`
 | Name | CRR | Basel 3.1 | Citation |
 |---|---|---|---|
 | `regulatory_thresholds_fx_derived` | on | off | CRR Art. 123 / PS1/26, paragraph 147 |
-| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123 |
+| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123A |
 | `retail_art_123a_two_path_applicable` | off | on | CRR Art. 123 / PS1/26, paragraph 123A |
 | `b31_high_risk_class_applicable` | off | on | CRR Art. 128 / PS1/26, paragraph 128 |
 | `b31_exposure_subclass_reporting_applies` | off | on | CRR Art. 147 / PS1/26, paragraph 147A |

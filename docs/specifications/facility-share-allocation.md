@@ -307,7 +307,9 @@ Direction, relative to the single-row behaviour it replaced:
 - **A losing member's siblings gain the undrawn** in their partition-local
   totals, so the retail and qualifying-revolving thresholds can only be crossed
   **upward**. Crossing upward moves an obligor to a less favourable treatment.
-- **The Art. 123A(1)(b)(ii) granularity denominator does not move at all.** The
+- **The optional 0.2% retail granularity test's denominator does not move at
+  all** (BCBS CRE20.66, elected through `enforce_retail_granularity`; PS1/26
+  Art. 123A has no such limb). The
   retail-threshold carrier is built from the **drawn** amount only, so an undrawn
   row contributes zero to it; the denominator divides each obligor's aggregate by
   that obligor's own line count, so extra rows of the same obligor and

@@ -462,7 +462,7 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p130e,
         ),
         (
-            "P5.15 (B31 Art. 123A(1)(b)(ii) 0.2% retail portfolio granularity sub-condition)",
+            "P5.15 (optional 0.2% retail granularity test, Art. 123A(1)(b)(iii) evidence)",
             "p5_15",
             _generate_p515,
         ),
@@ -2785,7 +2785,7 @@ def _generate_p130e(output_dir: Path) -> list[tuple[str, int]]:
 
 
 def _generate_p515(output_dir: Path) -> list[tuple[str, int]]:
-    """Generate P5.15 fixtures (B31 Art. 123A(1)(b)(ii) 0.2% retail granularity sub-condition)."""
+    """Generate P5.15 fixtures (optional 0.2% retail granularity test; not a PS1/26 limb)."""
     sys.path.insert(0, str(output_dir))
     try:
         from p5_15 import save_p515_fixtures

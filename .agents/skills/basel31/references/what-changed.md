@@ -71,6 +71,7 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `irb_purchased_receivable_commitment_ccf_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166A |
 | `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
+| `non_qualifying_retail_leaves_retail_class` | on | off | CRR Art. 123 / PS1/26, paragraph 123 |
 | `on_bs_netting_liquidation_period` | `20` | `10` | CRR Art. 224 / PS1/26, paragraph 219 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
 | `one_day_floor_trade_residual_strict` | off | on | CRR Art. 162(3) / PS1/26, paragraph 162 |

@@ -690,14 +690,15 @@ class CalculationConfig:
     # instead of the Art. 155(2) IRB Simple risk weights. Ignored under Basel 3.1
     # (Art. 147A removes IRB equity — all equity uses SA).
     equity_pd_lgd: bool = False
-    # PRA PS1/26 Art. 123A(1)(b)(ii) / BCBS CRE20.66: the 0.2%-of-portfolio
-    # granularity sub-condition for regulatory-retail qualification (Basel 3.1
-    # only). When True (default) an obligor whose aggregate exceeds 0.2% of the
-    # total candidate-retail portfolio is re-routed to CORPORATE. Set False to
-    # suppress the limb — e.g. when granularity is assessed by another method
-    # under CRE20.66's national-discretion clause, or to isolate the other
-    # Art. 123A limbs in tests. No effect under CRR (the limb is Basel-3.1 only).
-    enforce_retail_granularity: bool = True
+    # OPTIONAL firm method (RE-04): the BCBS CRE20.66 0.2%-of-portfolio test as a
+    # quantitative way of evidencing PS1/26 Art. 123A(1)(b)(iii) ("one of a
+    # significant number of exposures with similar characteristics"). PS1/26 has
+    # NO 0.2% limb — Art. 123A(1)(b)(ii) is the GBP 880,000 aggregate test alone —
+    # so it is off by default. When True, a natural person whose aggregate exceeds
+    # 0.2% of the candidate-retail portfolio is not regulatory retail and takes the
+    # Art. 123(3)(c) 100% weight (it stays in the retail class, Art. 123(1)(a)).
+    # No effect under CRR (Basel-3.1 qualification path only).
+    enforce_retail_granularity: bool = False
     # Firm election for the facility-share allocation metric (design of record:
     # docs/plans/facility-share-riskiest-member.md, decision D2). A shared
     # facility's undrawn commitment is capitalised against its riskiest member;
@@ -935,7 +936,7 @@ class CalculationConfig:
         skip_transitional_floor: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
-        enforce_retail_granularity: bool = True,
+        enforce_retail_granularity: bool = False,
         enable_collateral_link_splitting: bool = True,
         facility_share_metric: Literal["floor_aware", "own_approach"] = "floor_aware",
         collect_engine: PolarsEngine = "cpu",
@@ -989,11 +990,11 @@ class CalculationConfig:
                 schedule (60%/65%/70%/72.5%) and apply the full 72.5% floor from
                 day one. Art. 92 para 5 says institutions "may apply" the transitional
                 rates — they are permissive, not mandatory.
-            enforce_retail_granularity: Art. 123A(1)(b)(ii) / CRE20.66 — when True
-                (default) the 0.2%-of-portfolio retail granularity limb is applied
-                and concentrated obligors are re-routed to CORPORATE. Set False to
-                suppress the limb (granularity assessed by another method, or to
-                isolate the other Art. 123A limbs in tests).
+            enforce_retail_granularity: optional firm method (RE-04) — when True the
+                BCBS CRE20.66 0.2%-of-portfolio test is used to evidence PS1/26
+                Art. 123A(1)(b)(iii), and an obligor above it is non-regulatory
+                retail (Art. 123(3)(c), 100%). Default False: PS1/26 Art. 123A has
+                no 0.2% limb ((1)(b)(ii) is the GBP 880,000 test alone).
             facility_share_metric: firm election for the facility-share allocation
                 metric — "floor_aware" (default) evaluates both whole-book
                 assignments end to end and keeps the larger; "own_approach" pins

@@ -74,8 +74,9 @@ logger = logging.getLogger(__name__)
 # int-to-int against ``cp_qualifying_property_count`` (no float coercion).
 _B31_PACK = resolve("b31", date(2027, 1, 1))
 _RRE_THREE_PROPERTY_LIMIT = _B31_PACK.int_param("b31_rre_three_property_limit").value
-# PRA PS1/26 Art. 123A(1)(b)(ii) single-obligor 0.2% retail-granularity cap
-# (Decimal, float()-ed at the call site below) — read direct from the b31 pack.
+# Optional 0.2% retail-granularity test (BCBS CRE20.66) a firm may elect to evidence
+# PS1/26 Art. 123A(1)(b)(iii) — NOT a PS1/26 limb (RE-04). Decimal, float()-ed at the
+# call site below; read direct from the b31 pack.
 _RETAIL_GRANULARITY_LIMIT = _B31_PACK.scalar("b31_retail_granularity_limit")
 
 
@@ -392,8 +393,10 @@ def derive_independent_flags(
       for retail treatment without needing conditions 1/3.
     - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
       retail pool (cp_is_managed_as_retail=True). Null defaults to True for
-      backward compatibility.
+      backward compatibility (the loader seals an omitted flag to False).
     - CRR: threshold check only (no Art. 123A).
+    ``qualifies_as_retail`` is REGULATORY retail; whether a failing row leaves
+    the retail class is decided in ``subtypes.classify_exposure_subtypes``.
 
     ADC derivation (PRA PS1/26 Art. 124(3) / Art. 124K):
     - Derives ``is_adc=True`` for corporate (non-natural-person) exposures
@@ -744,15 +747,15 @@ def _build_qualifies_as_retail_expr(
     Basel 3.1 Art. 123A adds two-path qualifying criteria:
     - Art. 123A(1)(a): SME entities (revenue > 0 and < GBP 44m) auto-qualify
       without needing pool management attestation.
-    - Art. 123A(1)(b)(ii): an obligor's aggregate exposure must not exceed
-      GBP 880k (threshold limb) AND no single obligor's aggregate exposure may
-      exceed 0.2% of the total regulatory-retail portfolio (granularity limb,
-      BCBS CRE20.66). Both limbs are Basel-3.1-only. The granularity limb is
-      gated on ``config.enforce_retail_granularity`` (default True) so it can
-      be suppressed under CRE20.66's national-discretion clause.
+    - Art. 123A(1)(b)(ii): the total owed by the obligor or group of connected
+      clients must not exceed GBP 880,000. That is the whole of the limb.
     - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
       retail pool (cp_is_managed_as_retail=True) to qualify.  Null values
       default to True for backward compatibility.
+    - OPTIONAL (RE-04): a firm may evidence (iii) quantitatively with the BCBS
+      CRE20.66 test — no obligor above 0.2% of the candidate-retail portfolio —
+      by setting ``config.enforce_retail_granularity`` (default False). PS1/26
+      contains no 0.2% limb; an earlier reading placed one in (b)(ii).
 
     References:
         PRA PS1/26 Art. 123A(1)(a)-(b), CRR Art. 123
@@ -778,8 +781,9 @@ def _build_qualifies_as_retail_expr(
     # total < EUR 43m when turnover null).
     is_sme_for_art_123a = is_sme_by_size_expr(config, pack=resolved_pack)
 
-    # Art. 123A(1)(b)(ii) granularity limb (BCBS CRE20.66): no single obligor's
-    # aggregate exposure may exceed 0.2% of the total regulatory-retail
+    # Optional 0.2% granularity test (BCBS CRE20.66; an elected method of
+    # evidencing Art. 123A(1)(b)(iii), not a PS1/26 limb): no single obligor's
+    # aggregate exposure may exceed 0.2% of the total candidate-retail
     # portfolio. Candidate-retail rows are the entity-type RETAIL_OTHER
     # population (``_sa_class``); the denominator counts each obligor once by
     # dividing the per-obligor aggregate (``lending_group_adjusted_exposure``)
@@ -813,10 +817,8 @@ def _build_qualifies_as_retail_expr(
         .then(pl.lit(True))
     )
 
-    # Art. 123A(1)(b)(ii) granularity limb: > 0.2% of the retail portfolio.
-    # Gated on config.enforce_retail_granularity (default True) so the limb
-    # can be suppressed where granularity is assessed by another method under
-    # CRE20.66's national-discretion clause, or to isolate the other limbs.
+    # Elected 0.2% test: > 0.2% of the retail portfolio fails Art. 123A(1)(b)(iii)
+    # as the firm evidences it. Off by default (RE-04): PS1/26 has no such limb.
     if config.enforce_retail_granularity:
         expr = expr.when(granularity_fail).then(pl.lit(False))
 

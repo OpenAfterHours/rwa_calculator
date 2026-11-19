@@ -329,7 +329,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # mismatch 1.5x multiplier (PS1/26 Art. 123B) and the due-diligence RW
     # override (PS1/26 Art. 110A) gate their whole functions in
     # engine/sa/rw_adjustments.py; the multiplier/cap/hedge-floor scalars and the
-    # Art. 123B(3) commencement-date check stay engine-side.
+    # PS1/26 commencement-date check stay engine-side.
     "sa_currency_mismatch_multiplier": Feature(
         name="sa_currency_mismatch_multiplier",
         enabled=False,
@@ -865,6 +865,19 @@ ENTRIES: dict[str, RuleEntry] = {
         name="retail_art_123a_two_path_applicable",
         enabled=False,
         citation=Citation("CRR", "123", "single aggregate-exposure retail threshold check"),
+    ),
+    # CRR Art. 123, last sub-paragraph: "Exposures that do not comply with the
+    # criteria referred to in points (a) to (c) of the first subparagraph shall not
+    # be eligible for the retail exposures class." So a RETAIL_OTHER row that fails
+    # ``qualifies_as_retail`` LEAVES the retail class (-> CORPORATE). PS1/26 has no
+    # such exit for natural persons (see packs/b31.py). Gates the branch in
+    # engine/classify/subtypes.py::classify_exposure_subtypes (RE-03).
+    "non_qualifying_retail_leaves_retail_class": Feature(
+        name="non_qualifying_retail_leaves_retail_class",
+        enabled=True,
+        citation=Citation(
+            "CRR", "123", "non-compliant exposures not eligible for the retail exposure class"
+        ),
     ),
     # CRR regulatory monetary thresholds: the EUR source amounts (CRR Art. 123/123A/
     # 501/142(1)(4)) converted to GBP at the run's EUR/GBP rate. The pack holds the

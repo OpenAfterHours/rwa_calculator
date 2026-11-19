@@ -132,6 +132,10 @@
   "rwa_calc.engine.classify.attributes::with_group_annual_revenue": [
     "PS1/26, paragraph 147"
   ],
+  "rwa_calc.engine.classify.audit::_null_entity_type_warnings": [
+    "CRR Art. 112",
+    "PS1/26, paragraph 112"
+  ],
   "rwa_calc.engine.classify.classifier::ExposureClassifier.classify": [
     "CRR Art. 112",
     "CRR Art. 147"
@@ -148,8 +152,10 @@
     "CRR Art. 153(2)",
     "CRR Art. 142(1)(4)",
     "CRR Art. 154(4)",
+    "CRR Art. 123",
     "PS1/26, paragraph 153",
-    "PS1/26, paragraph 147"
+    "PS1/26, paragraph 147",
+    "PS1/26, paragraph 123"
   ],
   "rwa_calc.engine.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
@@ -367,6 +373,9 @@
   "rwa_calc.engine.eu_sovereign::build_eu_domestic_currency_expr": [
     "CRR Art. 114",
     "CRR Art. 141"
+  ],
+  "rwa_calc.engine.eu_sovereign::country_domestic_currency_expr": [
+    "PS1/26, paragraph 123B"
   ],
   "rwa_calc.engine.eu_sovereign::funding_currency_expr": [
     "CRR Art. 114",
@@ -652,9 +661,11 @@
   "rwa_calc.engine.sa.risk_weights::apply_risk_weights": [
     "CRR Art. 112"
   ],
-  "rwa_calc.engine.sa.rw_adjustments::apply_currency_mismatch_multiplier": [
-    "PS1/26, paragraph 123B",
+  "rwa_calc.engine.sa.rw_adjustments::_unknown_income_mismatch_expr": [
     "PS1/26, paragraph 123B.3"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::apply_currency_mismatch_multiplier": [
+    "PS1/26, paragraph 123B"
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_due_diligence_override": [
     "PS1/26, paragraph 110A"
@@ -674,6 +685,12 @@
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_third_party_deposit_rw_mapping": [
     "CRR Art. 232"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::income_currency_unknown_census_exprs": [
+    "PS1/26, paragraph 123B"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::income_currency_unknown_warnings": [
+    "PS1/26, paragraph 123B"
   ],
   "rwa_calc.engine.sa.sovereign_derived::crr_art_121_4_trade_finance_expr": [
     "CRR Art. 121"

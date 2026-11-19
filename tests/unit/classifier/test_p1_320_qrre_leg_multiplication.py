@@ -128,10 +128,10 @@ def crr_config() -> CalculationConfig:
 
 @pytest.fixture(scope="module")
 def b31_config() -> CalculationConfig:
-    """Basel 3.1 with the Art. 123A(1)(b)(ii) granularity limb disabled.
+    """Basel 3.1 with the optional 0.2% granularity test off (the default since RE-04).
 
-    P5.15's 0.2%-of-portfolio granularity limb is Basel-3.1-only and, on a book
-    this thin, re-classes EVERY retail row here to CORPORATE — orthogonal noise
+    P5.15's 0.2%-of-portfolio test (BCBS CRE20.66, not a PS1/26 limb) would, on a
+    book this thin, fail EVERY retail row here as regulatory retail — orthogonal noise
     that would erase the QRRE population before the (c) aggregate gate under
     test could be reached. ``tests/fixtures/p1_244``'s own ``b31_drawn_leg_``
     fixture uses the same documented isolation switch for the same reason.
@@ -374,7 +374,7 @@ class TestLegVIMixedCandidateGroup:
     over rows that repeat it, on the same nullable key — by DIVIDING BY THE GROUP
     LINE COUNT: ``engine/classify/attributes.py:711-716`` writes
     ``partition_by_nullable(pl.len().over("counterparty_reference"), ...)`` for
-    the Art. 123A(1)(b)(ii) granularity denominator. An implementer who copies
+    the optional 0.2% granularity-test denominator. An implementer who copies
     that shape here writes ``(candidate_limit / pl.len().over(group)).sum()``,
     and that form passes EVERY OTHER LEG in this file. It is wrong only on a
     group that mixes candidate and non-candidate legs, where it gives

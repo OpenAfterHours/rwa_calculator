@@ -27,9 +27,11 @@ emits off-balance-sheet legs, collateral, guarantees, defaults and IRB routing:
 - individuals stay under ``RETAIL_MAX_DRAWN`` so the Art. 123 / 123A retail size
   limit (EUR 1m, ~GBP 880k) does not reclassify them to corporate mid-example.
 The B31 retail 75% branch is also contingent on the property config's
-``enforce_retail_granularity=False`` (``portfolios.config_for``): with granularity
-enforcement ON, PS1/26 Art. 123A(1)(b)(iii)'s 0.2%-of-portfolio limb is
-unsatisfiable for a single obligor, which reclassifies it to corporate at 100%.
+``enforce_retail_granularity=False`` (``portfolios.config_for``, and the
+production default since RE-04): with the optional 0.2%-of-portfolio test
+(BCBS CRE20.66, a firm's elected method of evidencing PS1/26 Art. 123A(1)(b)(iii))
+elected it is unsatisfiable for a single obligor, which fails regulatory retail
+and takes the Art. 123(3)(c) 100%.
 The shadow's 75% therefore matches the engine only under the config this suite
 runs; that config is the documented one, so the comparison is like-for-like.
 Residential real-estate LTV splitting IS in the shadow but is NOT reachable

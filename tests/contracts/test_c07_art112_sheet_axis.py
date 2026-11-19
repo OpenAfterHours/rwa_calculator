@@ -96,9 +96,11 @@ def _sa_config(framework: str) -> CalculationConfig:
 def _irb_config(framework: str) -> CalculationConfig:
     """IRB permission, ``enforce_retail_granularity=False`` on the Basel 3.1 arm.
 
-    Same shape as ``test_reporting_golden``'s config: without the granularity
-    election every natural-person row reclassifies to corporate and the retail
-    letter (h) disappears from the axis this file is asserting about.
+    Same shape as ``test_reporting_golden``'s config (``False`` is also the
+    production default since RE-04). Before RE-03 the elected 0.2% test sent every
+    natural-person row of this compact portfolio to corporate, emptying the retail
+    letter (h) of the axis this file is asserting about; it is stated explicitly
+    so the axis does not depend on that history.
     """
     if framework == "CRR":
         return CalculationConfig.crr(

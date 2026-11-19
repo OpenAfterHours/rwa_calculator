@@ -276,7 +276,7 @@ and their census is ratcheted by arch_check check 11:
 | `engine/crm/processor.py:982` | Guarantee + counterparty + rating-inheritance lookups (`pl.collect_all`) | Prevents parquet re-scans; small frames |
 | `engine/crm/processor.py` (`_apply_own_issue_collateral_gate`) | The collateral dimension, materialised once after the Art. 194(4) gate (`materialise_frame`, flag included, on every path) | ~10 later consumers — the third-party-deposit split, the link allocator, the type check, the AIRB misdirection finder, the lookup joins, the life-insurance and deposit aggregates — each re-executed the netting concat and the gate's joins for itself; the CRM015 / CRM006 / CRM020 / CRM021 recorders now scan memory |
 | `engine/crm/collateral.py` (`apply_collateral`, after `apply_haircuts`) | The post-haircut collateral frame, materialised once (`materialise_frame`) | The CRM018 / CRM019 / CRM002 / CRM014 recorders and the allocation aggregates each re-executed the lookup joins and the haircut chain (~10 ms apiece on a 150-row run) |
-| `contracts/validation.py`, `engine/utils.py` (`has_rows`), `sa/calculator.py` (`_warn_equity_in_main_table`), `irb/formulas.py` (scalar wrapper) | Validation / diagnostics / scalar helpers | Off the hot path or `.head(1)`-sized |
+| `contracts/validation.py`, `engine/utils.py` (`has_rows`), `sa/calculator.py` (`_collect_entry_warnings`: SA005 + the SA010 census in one aggregate collect), `irb/formulas.py` (scalar wrapper) | Validation / diagnostics / scalar helpers | Off the hot path or `.head(1)`-sized |
 
 The two `materialise_frame` rows are not in check 11's census (the pattern it counts is a
 raw `.collect()` / `collect_all(` line); what bounds them is the per-run collect budget in

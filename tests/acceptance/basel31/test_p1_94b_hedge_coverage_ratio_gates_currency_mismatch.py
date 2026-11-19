@@ -98,8 +98,9 @@ def b31_config() -> CalculationConfig:
     """Basel 3.1 SA-only config with 2027-01-04 reporting date (post-effective date).
 
     enforce_retail_granularity=False so the single-obligor currency-mismatch
-    fixture keeps its retail_other classification — the Art. 123A(1)(b)(ii) 0.2%
-    granularity limb (P5.15) is out of scope here and is covered by test_p5_15_*.
+    fixture stays regulatory retail — the optional 0.2% granularity test (P5.15;
+    BCBS CRE20.66, off by default since RE-04) is out of scope here and is covered
+    by test_p5_15_*.
     """
     return CalculationConfig.basel_3_1(
         reporting_date=_REPORTING_DATE,

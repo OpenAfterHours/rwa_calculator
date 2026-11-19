@@ -1402,13 +1402,32 @@ The multiplier-affected exposures appear in:
 
 ### Implementation Status
 
-!!! warning "Implementation Status"
-    Engine support for Art. 123B is tracked in IMPLEMENTATION_PLAN.md. The calculator
-    currently requires an explicit `currency_mismatch_unhedged` input flag; automatic
-    identification (lending-currency vs income-currency comparison) and the Art. 123B(2)
-    90%-coverage hedge test are not performed. The Art. 123B(3) pre-2027 fallback is
-    likewise not implemented — portfolios with unknown mismatch status will not receive the
-    conservative blanket multiplier.
+`engine/sa/rw_adjustments.py::apply_currency_mismatch_multiplier` (pack Feature
+`sa_currency_mismatch_multiplier`, Basel 3.1 only, from the 1 January 2027
+commencement date):
+
+- **Scope** is by exposure class: `retail_other`, `retail_qrre`, `retail_mortgage`,
+  `residential_mortgage`. Under Basel 3.1 a natural person that fails the regulatory-retail
+  criteria stays `retail_other` (Art. 123(1)(a), 100% under Art. 123(3)(c)), so the
+  multiplier reaches it. There is no obligor-type gate yet (the Art. 123B(1)(b) SPE limb
+  and a corporate obligor holding an RRE-class leg are both out of the class-based
+  scope test's sight).
+- **Lending currency** is the exposure's denomination (`original_currency` once FX
+  conversion has run), never the reporting currency the converter writes into `currency`.
+- **Art. 123B(1)(a)**: `borrower_income_currency` (counterparty) populated and different
+  from the lending currency → 1.5x, capped at 150%.
+- **Art. 123B(3) fallback**: `borrower_income_currency` null → 1.5x unless the lending
+  currency equals the obligor's domestic currency — the counterparty `local_currency` when
+  supplied, else the domestic currency of `country_code` (GB → GBP; EU member states from
+  the pack map). An unmapped or null country with no `local_currency` cannot establish the
+  exception, so the multiplier applies. There is no country-of-employment input. A null
+  lending currency leaves both limbs unevaluable (no multiplier). The fallback is applied
+  whatever the exposure's `value_date`: for exposures incurred on or after 1 January 2027
+  Art. 123B(1) requires the income currency to be known, and the fallback is the
+  conservative proxy. Warning **SA010** counts the SA exposures in scope with no income
+  currency, split by value date.
+- **Art. 123B(2) hedge**: `is_hedged=True` or `hedge_coverage_ratio >= 0.90` (revolving
+  facilities rescaled to the fully-drawn base, Art. 123B(2A)) waives both limbs.
 
 ### References
 

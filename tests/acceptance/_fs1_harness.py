@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.acceptance import _fs1_expectations as fx
 from tests.fixtures.facility_share_portfolio import (
@@ -342,7 +343,7 @@ def adequacy_retail_granularity_is_inert(case: Case) -> None:
     for reference, row in case.rows.items():
         assert row["exposure_class"] == "corporate", (
             f"{reference} is not corporate; a retail row would engage the "
-            "Art. 123A(1)(b)(ii) granularity denominator, which this portfolio "
+            "optional 0.2% granularity-test denominator, which this portfolio "
             "structurally cannot carry (retail's 75% exceeds every floor step)"
         )
     if case.framework != "CRR":
@@ -352,7 +353,10 @@ def adequacy_retail_granularity_is_inert(case: Case) -> None:
                 "uniformly False on this portfolio"
             )
         config = facility_share_config("BASEL_3_1")
-        assert config.enforce_retail_granularity is True, (
+        production_default = CalculationConfig.basel_3_1(
+            reporting_date=config.reporting_date
+        ).enforce_retail_granularity
+        assert config.enforce_retail_granularity is production_default, (
             "the Basel 3.1 arm must run with production's granularity default; "
             "registering this portfolio in the supervisory gate against a config "
             "that softens a feature its assertions describe is LESSONS B5's "

@@ -79,6 +79,38 @@ def build_eu_domestic_currency_expr(
     )
 
 
+@cites("PS1/26, paragraph 123B")
+def country_domestic_currency_expr(country_col: str) -> pl.Expr:
+    """
+    Return the domestic currency of the country in ``country_col``, or null.
+
+    The UK (``GB`` -> ``GBP``) plus every EU member state in the cited pack map —
+    the same two populations ``build_domestic_cgcb_guarantor_expr`` recognises.
+    Any other country, and a null country, yields null: the engine does not know
+    that country's currency, and callers must treat null as "not shown to be
+    domestic" (PS1/26 Art. 123B(3) reads the obligor's "domestic currency of the
+    country of residence" this way — RE-05).
+
+    Args:
+        country_col: Column name containing the ISO country code.
+
+    Returns:
+        String Polars expression: the country's domestic currency, or null.
+    """
+    # Cast first: an all-null column arrives as dtype Null on a hand-built frame,
+    # and replace_strict cannot map string keys onto it.
+    country = pl.col(country_col).cast(pl.String)
+    return (
+        pl.when(country == "GB")
+        .then(pl.lit("GBP"))
+        .otherwise(
+            country.replace_strict(
+                _EU_COUNTRY_DOMESTIC_CURRENCY, default=None, return_dtype=pl.String
+            )
+        )
+    )
+
+
 @cites("CRR Art. 114")
 @cites("CRR Art. 235")
 @cites("PS1/26, paragraph 235")

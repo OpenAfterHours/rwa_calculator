@@ -104,10 +104,10 @@ def _config(regime_key: str) -> CalculationConfig:
         return CalculationConfig.crr(
             reporting_date=date(2025, 12, 31), permission_mode=PermissionMode.IRB
         )
-    # enforce_retail_granularity=False, as the rich portfolio does: the 0.2%-of-
-    # portfolio granularity limb is unsatisfiable for a compact oracle, and
-    # without the suppression every natural-person row reclassifies to corporate
-    # and the retail-mortgage / QRRE sheets vanish.
+    # enforce_retail_granularity=False, as the rich portfolio does (the production
+    # default since RE-04): the optional 0.2%-of-portfolio test is unsatisfiable
+    # for a compact oracle, and elected it fails every natural-person row as
+    # regulatory retail and the QRRE sheet vanishes.
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 1),
         permission_mode=PermissionMode.IRB,

@@ -13,6 +13,18 @@ Retail exposures must meet ALL of the following criteria:
 | **Size** | Total exposure ≤ EUR 1m (CRR, FX-converted) or ≤ GBP 880k (Basel 3.1, fixed) |
 | **Management** | Managed as part of a portfolio with similar characteristics |
 
+!!! note "Basel 3.1: failing the criteria is not an exit from retail for natural persons"
+    Under CRR an exposure that fails these criteria leaves the retail class (CRR Art. 123,
+    last sub-paragraph) and is weighted as a corporate. Under Basel 3.1, PS1/26 Art. 123(1)(a)
+    makes every exposure to a natural person (not an SME) a retail exposure; the criteria in
+    Art. 123A only decide whether it is **regulatory** retail (75%, or 45% for a transactor).
+    A natural person that fails them — aggregate owed above GBP 880,000, or
+    `is_managed_as_retail` not True — stays in the retail class as **non-regulatory retail at
+    100%** (Art. 123(3)(c)), where the Art. 123B currency-mismatch multiplier can still apply.
+    An SME that fails PS1/26 Art. 123(1)(b) is not a retail exposure and is weighted as a
+    corporate SME in both regimes. PS1/26 has no 0.2% portfolio-granularity limb; the engine
+    offers it only as an optional firm method (`enforce_retail_granularity`, off by default).
+
 !!! info "Conceptual Logic"
     The following illustrates the retail classification decision logic. For the actual implementation,
     see [`classify/subtypes.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/subtypes.py#L196-L254)

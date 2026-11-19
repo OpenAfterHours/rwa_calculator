@@ -216,6 +216,14 @@ ERROR_LARGE_CORP_GROUP_ROLLUP = "CLS011"
 # pack default ("satisfactory") and, with this WARNING, no longer does so
 # silently. Emitted by the classifier's post-materialise roll-up.
 ERROR_SLOTTING_CATEGORY_MISSING = "CLS012"
+# Null counterparty entity_type (RC-12). ``entity_type`` is the single source of
+# the exposure class (CRR / PS1/26 Art. 112, Table A2), and a null matches no row
+# of the class map, so the classifier files the exposure under OTHER (100% SA)
+# and the obligor's ECAI rating is never read. An unrecognised NON-null string
+# already draws DQ006; the null drew nothing at all. One WARNING per run naming
+# the counterparties. The fallback class itself is deliberately unchanged — the
+# true class, and so the direction of error, is unknowable from the row.
+ERROR_NULL_ENTITY_TYPE = "CLS013"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -393,6 +401,17 @@ ERROR_PF_PHASE_UNEVIDENCED = "SA006"
 # 1,250% fall-back on that slice. WARNING from the input-domain gate; the weight
 # itself is applied by ``engine/equity/calculator.py::_holding_rw_expr``.
 ERROR_CIU_HOLDING_CLASS_UNSUPPORTED = "SA008"
+# Borrower income currency unknown on an Art. 123B-scope exposure (RE-05). PS1/26
+# Art. 123B(3): where an institution "is unable to identify those exposures with a
+# currency mismatch" it "shall apply the risk weight multiplier of 1.5 to all
+# unhedged retail exposures, and unhedged residential real estate exposures ...,
+# except where the lending currency is the same as the domestic currency of the
+# country of residence of the obligor". The engine applies that fallback wherever
+# ``borrower_income_currency`` is null — verbatim for exposures incurred before
+# 1 January 2027 (123B(3)(b)), as a conservative proxy for later ones, where
+# 123B(1) obliges the institution to know the income currency. One WARNING per
+# run with the count, split by value date.
+ERROR_INCOME_CURRENCY_UNKNOWN = "SA010"
 
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"

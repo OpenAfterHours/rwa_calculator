@@ -3563,12 +3563,22 @@ class TestCurrencyMismatchMultiplier:
         # CRR retail = 75%, no multiplier
         assert float(result["risk_weight"]) == pytest.approx(0.75)
 
-    def test_null_income_currency_no_multiplier(
+    def test_null_income_currency_unknown_residence_gets_1_5x(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """When borrower income currency is null, no multiplier is applied."""
+        """Null income currency AND no residence data: the Art. 123B(3) fallback applies.
+
+        This test used to pin "null income currency -> no multiplier" (RE-05). PS1/26
+        Art. 123B(3): where the institution "is unable to identify those exposures
+        with a currency mismatch", it "shall apply the risk weight multiplier of 1.5
+        to all unhedged retail exposures ... except where the lending currency is the
+        same as the domestic currency of the country of residence of the obligor".
+        With neither a country nor a local currency on the obligor the exception
+        cannot be shown, so 75% x 1.5 = 112.5%. The domestic-currency exemption is
+        pinned in ``tests/unit/sa/test_re05_currency_mismatch_unknown_income.py``.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -3577,7 +3587,7 @@ class TestCurrencyMismatchMultiplier:
             borrower_income_currency=None,
             config=b31_config,
         )
-        assert float(result["risk_weight"]) == pytest.approx(0.75)
+        assert float(result["risk_weight"]) == pytest.approx(0.75 * 1.5)
 
     def test_institution_not_affected_by_mismatch(
         self,

@@ -57,6 +57,47 @@ Owner decisions respected: the netting perimeter remains the agreement (operator
 decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 `is_qualifying_re`) remains blocked on P1.353 and its golden sign-off.
 
+## Implementation outcome (2026-11-19)
+
+The scheduled and optional actions were implemented in one PR, test-first, grouped into
+sixteen fix clusters; each cluster was then reviewed adversarially (rule text re-quoted,
+numbers re-derived by hand, each new test shown to fail with its fix reverted, and the full
+gate run). Of the 83 review IDs attempted: **77 fixed**, **3 partly fixed** (CM-09, CC-06,
+IV-09) and **3 optional items not attempted** (NT-06, GT-08, RE-15). The status column in
+the tables below records the outcome per action; the changelog lists the before → after
+figures.
+
+**Found and fixed while implementing** (not in the original list):
+
+- **Basel 3.1 cross-approach CCF.** The guaranteed portion of an IRB exposure with an SA
+  guarantor took the CRR Annex I factor in both regimes; it now takes PS1/26 Table A1
+  (unconditionally cancellable 0% → 10%, other commitment 50% → 40%).
+- **CRR Art. 126 needs the PRA rule 4.1 / 4.1A attestation.** Un-inverting the Art. 126(2)(b)
+  income gate (RE-17) would have given every unattested non-income-producing commercial row
+  the 50%. Rule 4.1 / 4.1A (to 31 December 2026) admit Art. 126 only where a loss condition on
+  PRA market data is met, which no input carries, so the 50% now needs
+  `is_qualifying_re = True` (also accepted on the loan row); a null takes Art. 124(1) 100%.
+- **ADC weight depended on row order.** A loan secured on a pre-sold residential and a
+  commercial ADC property took 100% or 150% by input order; Art. 124K(2) needs an
+  all-residential security, so it takes 150% either way.
+
+**Surfaced, left for the owner:**
+
+- **P1.367 is now visible on the IRB fixture estate.** The fixes raise S-TREA (IV-01's
+  pre-operational default for project finance with no phase, IV-02's unpermissioned HVCRE
+  moving to SA), so the engine's Basel 3.1 floor binds there; the engine floors the modelled
+  subset, so its total exceeds the Art. 92(2A) TREA that OF 02.00 states by the whole
+  shortfall. The tie-out acceptance test admits exactly that amount (and P3.8's OV1 twin)
+  and nothing else. The fix releases capital and awaits sign-off.
+- **Decisions the reviews could not settle from the text:** whether Art. 122(8) displaces the
+  Art. 122B ladder for slotted specialised lending in S-TREA; whether a missing slotting grade
+  should take *weak* rather than *satisfactory* (IV-09); the Art. 274(3) counterfactual's
+  treatment of variation margin (CC-03); the default `collateral_role` (`vm`); whether the
+  Art. 123B(3) income-currency fallback reaches non-natural-person obligors; where Column 3
+  free-delivery failed trades are reported in Pillar 3; the Simple Method's Art. 239(1)
+  maturity gate (NT-06); and whether a multi-parent sub-facility should resolve to the
+  RWA-maximising parent rather than the lowest reference (RC-01 / RC-02).
+
 ## Families reviewed
 
 | Family | Findings | P0 | P1 | P2 |
@@ -79,93 +120,93 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 | Code | Action | Review IDs | Regime | Effect | Size | Status |
 |---|---|---|---|---|---|---|
-| P1.401 | SA-CCR alpha=1.0 NFC/pension carve-out applied under current CRR | CC-01 | CRR | RWA understated | S | In this PR |
-| P1.402 | CCR collateral never read: c_net always 0 (posted collateral, VM, NICA, haircuts ignored) | CC-02 | Both | Either direction | M | In this PR |
-| P1.403 | Margin-agreement terms dead; Art 274(3) cap and Art 275(3) multi-NS margin agreements missing | CC-03 | Both | Either direction | M | In this PR |
-| P1.404 | SA-CCR IR add-on pools all currencies into one hedging set | CC-04 | Both | RWA understated | S | In this PR |
-| P1.405 | CCR and SFT amounts never converted to reporting currency | CC-05 | Both | Either direction | M | In this PR |
-| P1.406 | SA-CCR silently zeroes PFE for unknown/incomplete inputs; CCR/SFT validation dormant | CC-06 | Both | RWA understated | M | In this PR |
-| P1.407 | Settlement-risk and default-fund own-funds rows routed to IRB and reduced by CRM | CC-08 | Both | RWA understated | S | In this PR |
-| P1.408 | Failed trades: non-DvP Column 3 lost, buy-side DvP loss ignored, settlement_type unvalidated | CC-09 | Both | RWA understated | M | In this PR if time |
-| P1.409 | Default-fund capital: non-QCCP K=DF+UC, QCCP DF_CCP denominator and floor, unfunded QCCP 0% | CC-10 | Both | RWA understated | S | In this PR |
-| P1.410 | FCCM SFT engine always uses CRR haircut table under Basel 3.1 | CC-12 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.411 | FCCM: ineligible securities lent take HE=0; property/receivables/unknown collateral recognised | CC-13 | Both | RWA understated | S | In this PR |
-| P1.412 | BA-CVA divides all netting sets by alpha 1.4 and uses post-CRM ead_final incl. SFTs | CC-15 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.413 | Collateral maturity_date ignored; maturity mismatch reads only residual_maturity_years | CL-02 | Both | RWA understated | S | In this PR |
-| P1.414 | Loan-table collateral reduces SA-CCR derivative and SFT EAD again | CL-04, CC-07 | Both | RWA understated | M | In this PR |
+| P1.401 | SA-CCR alpha=1.0 NFC/pension carve-out applied under current CRR | CC-01 | CRR | RWA understated | S | Fixed in this PR |
+| P1.402 | CCR collateral never read: c_net always 0 (posted collateral, VM, NICA, haircuts ignored) | CC-02 | Both | Either direction | M | Fixed in this PR |
+| P1.403 | Margin-agreement terms dead; Art 274(3) cap and Art 275(3) multi-NS margin agreements missing | CC-03 | Both | Either direction | M | Fixed in this PR |
+| P1.404 | SA-CCR IR add-on pools all currencies into one hedging set | CC-04 | Both | RWA understated | S | Fixed in this PR |
+| P1.405 | CCR and SFT amounts never converted to reporting currency | CC-05 | Both | Either direction | M | Fixed in this PR |
+| P1.406 | SA-CCR silently zeroes PFE for unknown/incomplete inputs; CCR/SFT validation dormant | CC-06 | Both | RWA understated | M | Partly fixed in this PR |
+| P1.407 | Settlement-risk and default-fund own-funds rows routed to IRB and reduced by CRM | CC-08 | Both | RWA understated | S | Fixed in this PR |
+| P1.408 | Failed trades: non-DvP Column 3 lost, buy-side DvP loss ignored, settlement_type unvalidated | CC-09 | Both | RWA understated | M | Fixed in this PR |
+| P1.409 | Default-fund capital: non-QCCP K=DF+UC, QCCP DF_CCP denominator and floor, unfunded QCCP 0% | CC-10 | Both | RWA understated | S | Fixed in this PR |
+| P1.410 | FCCM SFT engine always uses CRR haircut table under Basel 3.1 | CC-12 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.411 | FCCM: ineligible securities lent take HE=0; property/receivables/unknown collateral recognised | CC-13 | Both | RWA understated | S | Fixed in this PR |
+| P1.412 | BA-CVA divides all netting sets by alpha 1.4 and uses post-CRM ead_final incl. SFTs | CC-15 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.413 | Collateral maturity_date ignored; maturity mismatch reads only residual_maturity_years | CL-02 | Both | RWA understated | S | Fixed in this PR |
+| P1.414 | Loan-table collateral reduces SA-CCR derivative and SFT EAD again | CL-04, CC-07 | Both | RWA understated | M | Fixed in this PR |
 | P1.415 | FIRB property collateral not reduced for prior or pari-passu claims | CL-05 | Both | RWA understated | M | Backlog |
-| P1.416 | MORTGAGE-labelled loan with no property collateral gets real-estate weights | CL-08, RE-10 | Both | RWA understated | M | In this PR |
-| P1.417 | Basel 3.1 FCM omits Hfx on non-financial collateral | CL-09 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.418 | committed=False silently deletes accepted unconditionally cancellable commitments (Doc B G01) | CM-01 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.419 | Facility headroom subtracts drawings in other currencies before FX conversion | CM-02, SF-01 | Both | Either direction | M | In this PR |
-| P1.420 | B31 A-IRB grants own-estimate CCFs to issued items under a revolving facility | CM-03 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.421 | Art. 234 tranched protection (attachment_amount>0) gets RWSM substitution instead of Chapter 5 | GT-03 | Both | RWA understated | M | In this PR |
-| P1.202 | No-restructuring CDS entered as percentage_covered escapes the Art. 233(2) 40% cut | GT-05 | Both | RWA understated | S | In this PR |
-| P1.201 | Art. 233(2)(b) 60%-of-exposure cap missing for an over-sized no-restructuring CDS | GT-06 | Both | RWA understated | S | In this PR |
-| P1.422 | B31 SA project-finance phase dropped: pre-operational 130% / high-quality 80% unreachable | IV-01 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.423 | B31 forces IPRE/HVCRE to slotting even for SA-only firms and Art. 148/150 SA permissions | IV-02, RG-01 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.424 | B31 Art. 133(5) 150% subordinated-debt weight misses specialised-lending rows | IV-03 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.425 | Securitisation allocator excludes exposures even when significant_risk_transfer=False | IV-04 | Both | RWA understated | S | In this PR |
-| P1.426 | CIU look-through: unsupported underlying classes silently weighted 100% | IV-05 | Both | RWA understated | M | In this PR |
-| P1.427 | CRR equity ignores is_significant_investment (Art. 48(4) 250%) | IV-06 | CRR | RWA understated | S | In this PR |
-| P1.428 | SME and B31 LFSE size tests use entity-own, not consolidated-group figures | RC-05, RC-06 | Both | RWA understated | M | In this PR |
-| P1.429 | Solo/sub-consolidated runs aggregate retail and SME-SF thresholds on scoped books only | RC-07, RG-02, RE-12 | Both | RWA understated | M | In this PR |
-| P1.430 | Cross-table exposure_reference collisions merge rows and double CRM relief | RC-10 | Both | RWA understated | M | In this PR |
-| P1.431 | Collateral-level is_adc/is_presold silently dropped; ADC loans priced as regulatory RE | RE-01 | Both | RWA understated | M | In this PR |
-| P1.432 | B31 reclassifies non-regulatory natural-person retail to CORPORATE, losing Art. 123B multiplier | RE-03 | Basel 3.1 | RWA understated | M | In this PR |
-| P1.433 | Null borrower income currency never triggers Art. 123B; 123B(3) fallback unimplemented and mis-cited | RE-05 | Basel 3.1 | RWA understated | M | In this PR |
+| P1.416 | MORTGAGE-labelled loan with no property collateral gets real-estate weights | CL-08, RE-10 | Both | RWA understated | M | Fixed in this PR |
+| P1.417 | Basel 3.1 FCM omits Hfx on non-financial collateral | CL-09 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.418 | committed=False silently deletes accepted unconditionally cancellable commitments (Doc B G01) | CM-01 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.419 | Facility headroom subtracts drawings in other currencies before FX conversion | CM-02, SF-01 | Both | Either direction | M | Fixed in this PR |
+| P1.420 | B31 A-IRB grants own-estimate CCFs to issued items under a revolving facility | CM-03 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.421 | Art. 234 tranched protection (attachment_amount>0) gets RWSM substitution instead of Chapter 5 | GT-03 | Both | RWA understated | M | Fixed in this PR |
+| P1.202 | No-restructuring CDS entered as percentage_covered escapes the Art. 233(2) 40% cut | GT-05 | Both | RWA understated | S | Fixed in this PR |
+| P1.201 | Art. 233(2)(b) 60%-of-exposure cap missing for an over-sized no-restructuring CDS | GT-06 | Both | RWA understated | S | Fixed in this PR |
+| P1.422 | B31 SA project-finance phase dropped: pre-operational 130% / high-quality 80% unreachable | IV-01 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.423 | B31 forces IPRE/HVCRE to slotting even for SA-only firms and Art. 148/150 SA permissions | IV-02, RG-01 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.424 | B31 Art. 133(5) 150% subordinated-debt weight misses specialised-lending rows | IV-03 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.425 | Securitisation allocator excludes exposures even when significant_risk_transfer=False | IV-04 | Both | RWA understated | S | Fixed in this PR |
+| P1.426 | CIU look-through: unsupported underlying classes silently weighted 100% | IV-05 | Both | RWA understated | M | Fixed in this PR |
+| P1.427 | CRR equity ignores is_significant_investment (Art. 48(4) 250%) | IV-06 | CRR | RWA understated | S | Fixed in this PR |
+| P1.428 | SME and B31 LFSE size tests use entity-own, not consolidated-group figures | RC-05, RC-06 | Both | RWA understated | M | Fixed in this PR |
+| P1.429 | Solo/sub-consolidated runs aggregate retail and SME-SF thresholds on scoped books only | RC-07, RG-02, RE-12 | Both | RWA understated | M | Fixed in this PR |
+| P1.430 | Cross-table exposure_reference collisions merge rows and double CRM relief | RC-10 | Both | RWA understated | M | Fixed in this PR |
+| P1.431 | Collateral-level is_adc/is_presold silently dropped; ADC loans priced as regulatory RE | RE-01 | Both | RWA understated | M | Fixed in this PR |
+| P1.432 | B31 reclassifies non-regulatory natural-person retail to CORPORATE, losing Art. 123B multiplier | RE-03 | Basel 3.1 | RWA understated | M | Fixed in this PR |
+| P1.433 | Null borrower income currency never triggers Art. 123B; 123B(3) fallback unimplemented and mis-cited | RE-05 | Basel 3.1 | RWA understated | M | Fixed in this PR |
 | P1.292 | Null is_qualifying_re treated as qualifying (Art. 124A) | RE-16 | Basel 3.1 | RWA understated | M | Blocked (existing item) |
-| P1.434 | Committed sub-facilities dropped under an uncommitted MOF/umbrella parent | SF-02 | Both | RWA understated | S | In this PR |
-| P1.435 | Trade-LC flag broadcast per counterparty leaks onto every loan | TR-01 | Both | RWA understated | S | In this PR |
-| P1.436 | Art 166A(5) IRB 40% purchased-receivables CCF applied to SA rows and A-IRB own estimates | TR-02 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.437 | Retail dilution risk priced with retail correlation, not Art 153(1) | TR-03 | Both | RWA understated | S | In this PR |
+| P1.434 | Committed sub-facilities dropped under an uncommitted MOF/umbrella parent | SF-02 | Both | RWA understated | S | Fixed in this PR |
+| P1.435 | Trade-LC flag broadcast per counterparty leaks onto every loan | TR-01 | Both | RWA understated | S | Fixed in this PR |
+| P1.436 | Art 166A(5) IRB 40% purchased-receivables CCF applied to SA rows and A-IRB own estimates | TR-02 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.437 | Retail dilution risk priced with retail correlation, not Art 153(1) | TR-03 | Both | RWA understated | S | Fixed in this PR |
 
 ### P1 — capital overstated, common structure not representable, or missing control (42)
 
 | Code | Action | Review IDs | Regime | Effect | Size | Status |
 |---|---|---|---|---|---|---|
-| P1.438 | QCCP 2%/4% pin applied to non-trade exposures; non-QCCP treated as institution not corporate | CC-11 | Both | RWA understated | S | In this PR |
-| P1.439 | SFT netting set pools trades without master-netting eligibility; multi-counterparty sets merged | CC-14 | Both | RWA understated | M | In this PR |
-| P1.440 | BA-CVA completeness: missing or partial CVA counterparty input silently gives no CVA charge | CC-16 | Basel 3.1 | RWA understated | S | In this PR |
+| P1.438 | QCCP 2%/4% pin applied to non-trade exposures; non-QCCP treated as institution not corporate | CC-11 | Both | RWA understated | S | Fixed in this PR |
+| P1.439 | SFT netting set pools trades without master-netting eligibility; multi-counterparty sets merged | CC-14 | Both | RWA understated | M | Fixed in this PR |
+| P1.440 | BA-CVA completeness: missing or partial CVA counterparty input silently gives no CVA charge | CC-16 | Basel 3.1 | RWA understated | S | Fixed in this PR |
 | P1.441 | Specific wrong-way risk: netting-set split only; no jump-to-default EAD, LGD 100% never consumed | CC-18 | Both | RWA understated | M | Backlog |
-| P1.442 | Engine-only risk types CCR_DERIVATIVE/CCR_SFT accepted on lending tables | CC-19 | Both | Either direction | S | In this PR |
-| P1.443 | SA FCCM E* accepts any collateral type flagged is_eligible_financial_collateral | CL-01 | Both | RWA understated | S | In this PR |
+| P1.442 | Engine-only risk types CCR_DERIVATIVE/CCR_SFT accepted on lending tables | CC-19 | Both | Either direction | S | Fixed in this PR |
+| P1.443 | SA FCCM E* accepts any collateral type flagged is_eligible_financial_collateral | CL-01 | Both | RWA understated | S | Fixed in this PR |
 | P1.444 | Duplicate collateral_reference undetected; same asset credited in full per row | CL-03 | Both | RWA understated | M | Backlog |
 | P1.445 | FIRB recognises financial collateral the firm marked as failing Art. 207 | CL-06 | Both | RWA understated | M | Backlog |
-| P1.446 | CRR SA real estate ignores is_qualifying_re=False | CL-07, RE-09 | CRR | RWA understated | S | In this PR |
-| P1.447 | B31 Art. 124H(3) whole-loan CRE overwrites the 124C LTV and drops the 124I(3) junior weights | CL-10 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.448 | Canonical collateral type 'bond' is not financial collateral on the FIRB path | CL-11 | Both | RWA overstated | S | In this PR |
+| P1.446 | CRR SA real estate ignores is_qualifying_re=False | CL-07, RE-09 | CRR | RWA understated | S | Fixed in this PR |
+| P1.447 | B31 Art. 124H(3) whole-loan CRE overwrites the 124C LTV and drops the 124I(3) junior weights | CL-10 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.448 | Canonical collateral type 'bond' is not financial collateral on the FIRB path | CL-11 | Both | RWA overstated | S | Fixed in this PR |
 | P1.449 | Single prior_charge_ltv cannot carry the B31 claim stack; loan-split share double-counts it | CL-12, RE-08, SF-11 | Basel 3.1 | RWA overstated | L | Backlog |
 | P1.450 | Real-estate attributes ignore collateral_links | CL-13 | Both | RWA overstated | M | Backlog |
-| P1.451 | Null collateral currency: no FX conversion and no Hfx, silently | CL-14 | Both | Either direction | S | In this PR |
+| P1.451 | Null collateral currency: no FX conversion and no Hfx, silently | CL-14 | Both | Either direction | S | Fixed in this PR |
 | P1.452 | MOF sub-limit rows inherit the parent's CCF modifiers instead of their own | CM-06, SF-08 | Both | Either direction | M | Backlog |
-| P1.453 | Regime-invariant product map: shipping/customs/tax bonds and unsecured documentary credits wrong under CRR | CM-07, TR-04 | CRR | RWA understated | M | In this PR |
-| P1.454 | risk_type guidance mis-maps SBLCs, commitments and performance bonds | CM-08 | Both | RWA understated | S | In this PR |
-| P1.455 | Committed facility with null limit silently yields no commitment exposure | CM-11, SF-12 | Both | RWA understated | S | In this PR |
-| P1.456 | Aggregate guarantee cap repeated across beneficiary rows is double-counted; no shared-cap representation (G08) | GT-01 | Both | RWA understated | M | In this PR |
-| P1.457 | Percentage-plus-amount-cap guarantee: amount_covered overrides percentage instead of min() | GT-02 | Both | RWA understated | S | In this PR |
+| P1.453 | Regime-invariant product map: shipping/customs/tax bonds and unsecured documentary credits wrong under CRR | CM-07, TR-04 | CRR | RWA understated | M | Fixed in this PR |
+| P1.454 | risk_type guidance mis-maps SBLCs, commitments and performance bonds | CM-08 | Both | RWA understated | S | Fixed in this PR |
+| P1.455 | Committed facility with null limit silently yields no commitment exposure | CM-11, SF-12 | Both | RWA understated | S | Fixed in this PR |
+| P1.456 | Aggregate guarantee cap repeated across beneficiary rows is double-counted; no shared-cap representation (G08) | GT-01 | Both | RWA understated | M | Fixed in this PR |
+| P1.457 | Percentage-plus-amount-cap guarantee: amount_covered overrides percentage instead of min() | GT-02 | Both | RWA understated | S | Fixed in this PR |
 | P1.458 | Multi-guarantor non-beneficial redistribution is half-applied; RWEA can exceed unprotected | GT-09 | Both | RWA overstated | M | Backlog |
 | P1.459 | Collateral plus guarantee: cover fraction taken on the gross exposure wastes the guarantee | GT-10 | Both | RWA overstated | M | Backlog |
-| P1.460 | Demand deposit with null maturity nets fully against term loans | NT-03 | Both | RWA understated | S | In this PR |
+| P1.460 | Demand deposit with null maturity nets fully against term loans | NT-03 | Both | RWA understated | S | Fixed in this PR |
 | P1.461 | Output-floor S-TREA ignores netting on IRB/slotting rows | NT-05, RG-04 | Basel 3.1 | RWA overstated | M | Backlog |
-| P1.462 | FCSM election: netted deposits skip maturity mismatch; B31 routes netting via FCSM | NT-06 | Both | RWA understated | M | In this PR if time |
-| P1.463 | Child mapped to >1 facility consumes every parent's headroom | RC-01, RC-02, SF-03 | Both | Either direction | S | In this PR |
+| P1.462 | FCSM election: netted deposits skip maturity mismatch; B31 routes netting via FCSM | NT-06 | Both | RWA understated | M | Backlog (attempted, deferred) |
+| P1.463 | Child mapped to >1 facility consumes every parent's headroom | RC-01, RC-02, SF-03 | Both | Either direction | S | Fixed in this PR |
 | P1.464 | Unrated subsidiary silently inherits parent's internal PD and model | RC-04 | Both | RWA understated | S | Backlog |
 | P1.465 | Connected-client grouping single-level, first-membership-wins, no closure | RC-08 | Both | RWA understated | M | Backlog |
-| P1.466 | Missing FX rate silently treated as 1:1 | RC-11 | Both | Either direction | S | In this PR |
-| P1.467 | Null entity_type silently classified 'other' at 100% | RC-12 | Both | Either direction | S | In this PR |
-| P1.468 | B31 SME test uses assets fallback and strict < not in PS1/26 definition | RC-16 | Basel 3.1 | Either direction | S | In this PR |
-| P1.469 | Art. 124K(2) 100% residential ADC unreachable; equity-at-risk limb unrepresented | RE-02 | Basel 3.1 | RWA overstated | S | In this PR |
-| P1.470 | 0.2% retail granularity limb enforced by default but absent from PS1/26 Art. 123A | RE-04 | Basel 3.1 | RWA overstated | S | In this PR |
+| P1.466 | Missing FX rate silently treated as 1:1 | RC-11 | Both | Either direction | S | Fixed in this PR |
+| P1.467 | Null entity_type silently classified 'other' at 100% | RC-12 | Both | Either direction | S | Fixed in this PR |
+| P1.468 | B31 SME test uses assets fallback and strict < not in PS1/26 definition | RC-16 | Basel 3.1 | Either direction | S | Fixed in this PR |
+| P1.469 | Art. 124K(2) 100% residential ADC unreachable; equity-at-risk limb unrepresented | RE-02 | Basel 3.1 | RWA overstated | S | Fixed in this PR |
+| P1.470 | 0.2% retail granularity limb enforced by default but absent from PS1/26 Art. 123A | RE-04 | Basel 3.1 | RWA overstated | S | Fixed in this PR |
 | P1.471 | Mortgage-class rows with several properties take arbitrary first collateral row; mixed-use never split | RE-07 | Both | Either direction | L | Backlog |
-| P1.472 | Undrawn UK residential mortgage commitments get 40% unless manually flagged | RE-14 | Basel 3.1 | RWA understated | S | In this PR |
-| P1.262 | RRE exposures with no Art. 124E exception (e.g. corporates) default to not-materially-dependent | RE-15 | Basel 3.1 | RWA understated | M | In this PR if time |
-| P1.263 | CRR Art. 126 50% gate inverted; owner-occupied CRE gets 100% | RE-17 | CRR | Either direction | M | In this PR |
+| P1.472 | Undrawn UK residential mortgage commitments get 40% unless manually flagged | RE-14 | Basel 3.1 | RWA understated | S | Fixed in this PR |
+| P1.262 | RRE exposures with no Art. 124E exception (e.g. corporates) default to not-materially-dependent | RE-15 | Basel 3.1 | RWA understated | M | Backlog (attempted, deferred) |
+| P1.263 | CRR Art. 126 50% gate inverted; owner-occupied CRE gets 100% | RE-17 | CRR | Either direction | M | Fixed in this PR |
 | P1.473 | No primary-residence carrier; landlord's own home re-routed to Art. 124G | RE-18 | Basel 3.1 | RWA overstated | S | Backlog |
 | P1.474 | S-TREA uses A-IRB own-estimate EAD instead of SA Art. 111 exposure value | RG-03 | Basel 3.1 | Either direction | L | Backlog |
 | P1.475 | One flag conflates Art. 122(6) IG permission with Art. 122(8)(b) floor-only election | RG-06 | Basel 3.1 | Either direction | M | Backlog |
 | P1.476 | Share candidates dilute facility-level collateral/guarantees; losers' portions discarded | SF-07 | Both | RWA overstated | M | Backlog |
-| P1.477 | B31 Art 162(3)(e) one-day M floor for self-liquidating trade disabled | TR-05 | Basel 3.1 | RWA overstated | S | In this PR |
+| P1.477 | B31 Art 162(3)(e) one-day M floor for self-liquidating trade disabled | TR-05 | Basel 3.1 | RWA overstated | S | Fixed in this PR |
 
 ### P2 — specialist products, representation and documentation (59)
 
@@ -185,18 +226,18 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 | P7.20 | issuer_type 'institution' rejected by DQ006 although the engine routes it; Art. 197(4) unsupported | CL-21 | Both | RWA overstated | S | Backlog |
 | P7.21 | Declared original_maturity_years never reaches the CRR Annex I maturity split | CM-04 | CRR | Either direction | S | Backlog |
 | P7.22 | Non-revolving, delayed-draw and expired facilities recount repaid or lapsed headroom | CM-05, SF-10 | Both | RWA overstated | M | Backlog |
-| P7.23 | CRR F-IRB: MR/OC contingents default to issued-item ladder 50% instead of 166(8)(d) 75% | CM-09 | CRR | RWA understated | S | In this PR if time |
+| P7.23 | CRR F-IRB: MR/OC contingents default to issued-item ladder 50% instead of 166(8)(d) 75% | CM-09 | CRR | RWA understated | S | Partly fixed in this PR |
 | P7.24 | CRR F-IRB Art. 166(9) commitment-on-commitment lower-of missing; 166(9) mis-cited | CM-10 | CRR | RWA overstated | S | Backlog |
-| P7.25 | Documented obs_product synonyms raise false DQ006 | CM-12 | Both | No RWA effect | S | In this PR if time |
+| P7.25 | Documented obs_product synonyms raise false DQ006 | CM-12 | Both | No RWA effect | S | Fixed in this PR |
 | P7.26 | Deductible / payment-threshold protection cannot be represented; B31 says it shall be tranched | GT-04 | Basel 3.1 | RWA understated | M | Backlog |
-| P7.27 | guarantee_type is never read: letters of comfort and keepwells get full substitution | GT-07 | Both | RWA understated | S | In this PR |
-| P7.28 | Unknown eligibility inputs (maturity, cancellability, currency) give silent full recognition | GT-08 | Both | RWA understated | S | In this PR if time |
+| P7.27 | guarantee_type is never read: letters of comfort and keepwells get full substitution | GT-07 | Both | RWA understated | S | Fixed in this PR |
+| P7.28 | Unknown eligibility inputs (maturity, cancellability, currency) give silent full recognition | GT-08 | Both | RWA understated | S | Backlog (attempted, deferred) |
 | P7.29 | Art. 214 counter-guarantees cannot be represented; counter-guarantee rows silently dropped | GT-11 | Both | RWA overstated | M | Backlog |
 | P7.30 | PS1/26 Art. 216(3) corporate restructuring derogation not implemented | GT-13 | Basel 3.1 | RWA overstated | S | Backlog |
 | P5.87 | Credit-insurer guarantors: no insurer entity type and no guidance; financial_institution mis-entry | GT-14 | Both | Either direction | S | Backlog |
 | P7.31 | CIU look-through / mandate-based RW not capped at 1,250% fall-back | IV-07 | Basel 3.1 | RWA overstated | S | Backlog |
 | P7.32 | No input route for securitisation positions: tranches, ABCP liquidity, warehouse lines go silently corporate | IV-08 | Both | Either direction | M | Backlog |
-| P7.33 | Missing slotting category silently treated as 'satisfactory' 115% | IV-09 | Both | Either direction | S | In this PR if time |
+| P7.33 | Missing slotting category silently treated as 'satisfactory' 115% | IV-09 | Both | Either direction | S | Partly fixed in this PR |
 | P7.34 | Prudential-regulation status of FSE counterparties not representable (fund finance) | IV-10 | Both | Either direction | M | Backlog |
 | P7.35 | Long-term issue-specific ratings cannot attach to an exposure | IV-11 | Both | Either direction | M | Backlog |
 | P7.36 | No carrier for Art. 48(4) 250% threshold-exempt deferred tax assets | IV-12 | Both | RWA understated | S | Backlog |
@@ -226,10 +267,10 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 | P7.58 | MOF residual emitted even when only sublimit products are permitted | SF-09 | Both | RWA overstated | S | Backlog |
 | P5.90 | No syndication/participation inputs and no documented pre-scaling convention | SF-13 | Both | Either direction | S | Backlog |
 | P7.59 | Funded trade-finance loans cannot carry the trade flag | TR-06 | Basel 3.1 | RWA overstated | M | Backlog |
-| P7.60 | Missing obs_product keys for common trade/receivables instruments | TR-07 | Both | No RWA effect | S | In this PR |
+| P7.60 | Missing obs_product keys for common trade/receivables instruments | TR-07 | Both | No RWA effect | S | Fixed in this PR |
 | P7.61 | Dilution-risk M ignores Art 157(4) | TR-08 | Both | RWA overstated | S | Backlog |
 | P7.62 | Dilution leg double-counted; default-risk EAD not reduced | TR-09 | Both | RWA overstated | M | Backlog |
-| P5.91 | B31 'less than one year' trade boundary coded <=1.0; citation slips | TR-10 | Basel 3.1 | RWA understated | S | In this PR |
+| P5.91 | B31 'less than one year' trade boundary coded <=1.0; citation slips | TR-10 | Basel 3.1 | RWA understated | S | Fixed in this PR |
 
 ## Action detail (P0 and P1)
 
@@ -237,7 +278,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.401 — SA-CCR alpha=1.0 NFC/pension carve-out applied under current CRR
 
-*Review IDs:* CC-01 · *Regime:* CRR · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-01 · *Regime:* CRR · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* packs/common.py:72-78 regime-invariant carve-out; ccr/pipeline_adapter.py:423,670-715 sets alpha 1.0 under CRR. Probe: CRR NFC IRS alpha_applied 1.0, EAD 2.219m vs 3.107m. Pinned by test_ccr_alpha_carveout.py (CRR config).
 - *Required:* Current PRA CCR Part Art 274(2): 'alpha = 1.4.' PS1/26 Annex R Art 274(2) adds ', unless the counterparty is a non-financial counterparty...' as new (underlined) text from 1-1-2027.
@@ -246,7 +287,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.402 — CCR collateral never read: c_net always 0 (posted collateral, VM, NICA, haircuts ignored)
 
-*Review IDs:* CC-02 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* In this PR
+*Review IDs:* CC-02 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* ccr/pipeline_adapter.py:366 guards on 'collateral_value', absent from CCR_COLLATERAL_SCHEMA (schemas.py:1772-1795, declares market_value). Probe: posted 1.5m cash, V=-1m gives EAD 41,802 vs 1,006,994; received collateral ignored (overstated).
 - *Required:* CCR Part Art 275(1) RC=max{CMV-NICA,0}; Art 276(1)(c) posted collateral negative sign; 276(1)(d) volatility-adjusted per Art 223; 276(1)(g) segregated excluded; 276(2) posted C(1+HC+Hfx). Unchanged by PS1/26.
@@ -255,7 +296,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.403 — Margin-agreement terms dead; Art 274(3) cap and Art 275(3) multi-NS margin agreements missing
 
-*Review IDs:* CC-03 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* In this PR
+*Review IDs:* CC-03 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* ccr/rc.py:44-79 reads TH/MTA/NICA from netting set only; MARGIN_AGREEMENT_SCHEMA terms unused; number_of_trades user-supplied (maturity_factor.py:186). Probe: MA-only terms EAD 1.49m; NS terms 14.79m; correct cap 1.71m.
 - *Required:* CCR Part Art 274(3) margined exposure 'shall be capped at the exposure value of the same netting set not subject to any form of margin agreement'; Art 275(2)/(3); Art 278(2); CRR Art 285(3)(a) >5000 trades MPOR 20 BD.
@@ -264,7 +305,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.404 — SA-CCR IR add-on pools all currencies into one hedging set
 
-*Review IDs:* CC-04 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-04 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* ccr/pfe.py:242-283 groups IR effective notionals by (netting_set, asset_class, maturity_bucket) without currency. Probe: GBP 100m long + USD 100m short 5y in one NS gives add-on 0, EAD 0.
 - *Required:* CCR Part Art 277a(1)(a): IR trades in same hedging set 'only where their primary risk driver ... is denominated in the same currency'; inflation in separate hedging sets; Art 280a(1) sum over hedging sets.
@@ -273,7 +314,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.405 — CCR and SFT amounts never converted to reporting currency
 
-*Review IDs:* CC-05 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* In this PR
+*Review IDs:* CC-05 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* ccr/adjusted_notional.py:57-108,225-386 and mtm_value unconverted; synthetic rows minted after FXConverter (pipeline_adapter.py:458-462; sft/fccm.py:420-430). Probe: JPY 10bn IRS EAD 419m 'GBP' vs 2.10m; USD repo E* 100m in USD.
 - *Required:* CCR Part Art 279b(2): adjusted notional converted 'into the institution's reporting currency at the prevailing spot exchange rate'; RC/NICA (Art 275, 276) on one currency basis.
@@ -282,16 +323,17 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.406 — SA-CCR silently zeroes PFE for unknown/incomplete inputs; CCR/SFT validation dormant
 
-*Review IDs:* CC-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* CC-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Partly fixed in this PR
 
 - *Current:* No error and add-on 0 for asset_class 'inflation', null credit_quality, null commodity_type, missing FX rate; orphan trades dropped; unknown NS counterparty -> 'other' 100%. validation.py:464-470 keys 'ccr.trades' vs schemas.py:2917 'trades'.
 - *Required:* CCR Part Art 277(1) institutions 'shall map each transaction ... to one of the following risk categories'; Art 278(1) include add-on where a transaction is mapped; Art 280f other risks category.
 - *Fix:* Register ccr/sft table keys in COLUMN_VALUE_CONSTRAINTS (asset_class, settlement_type, credit_quality, commodity_type); declare FKs; conservative engine fallbacks (Art 280f other, highest credit SF, OTHER commodity) plus errors.
 - *Verification (confirmed):* Re-run probes, all with zero errors: null/'BBB' credit_quality, null commodity_type, 'Interest_Rate', and a missing FX rate each give add-on 0; orphan trades are dropped. COLUMN_VALUE_CONSTRAINTS keys 'trades'/'sft_trades' never match the registered 'ccr.trades'/'sft.trades' and self-declare as dormant. Nullable columns make this a normal-input path.
+- *Outcome:* the FX missing-rate leg reports an error only once the saccr_b reporting-currency rebase is merged
 
 #### P1.407 — Settlement-risk and default-fund own-funds rows routed to IRB and reduced by CRM
 
-*Review IDs:* CC-08 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-08 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* stages/ccr.py:170-262 mints ft__/dfc__ rows; 12.5 pin only in SA chain (sa/risk_weights.py:1124-1129). Probe: IRB-permissioned CP FT1 RWA 45,764 (CRR) vs 625,000; CP-level cash collateral -> 0; sovereign guarantee -> 50,000.
 - *Required:* CRR Art 378: price difference x factor is the 'own funds requirement for settlement risk'; Art 92(3)(ca); CCR Part Art 308(3)/309(2) RWEA = own funds x 12.5 — no CRM or IRB formula.
@@ -300,7 +342,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.408 — Failed trades: non-DvP Column 3 lost, buy-side DvP loss ignored, settlement_type unvalidated
 
-*Review IDs:* CC-09 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR if time
+*Review IDs:* CC-09 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* ccr/failed_trades.py:124-135 price diff max(0, agreed-MV) seller only; :155-186 non-DvP <5 days -> 0 labelled dvp_pre_t5; 'DVP' -> 0. Probe: buy-side FT2, non-DvP 2-day FT3, 'DVP' FT5 all 0.
 - *Required:* CRR Art 378 price difference 'where the difference could involve a loss'; Art 379(1) Table 2 Column 3 'From first contractual payment or delivery leg up to four days after second ... Treat as an exposure'.
@@ -309,7 +351,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.409 — Default-fund capital: non-QCCP K=DF+UC, QCCP DF_CCP denominator and floor, unfunded QCCP 0%
 
-*Review IDs:* CC-10 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-10 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* ccr/default_fund.py:109-112 K=K_CCP*DF_i/DF_CM for every branch; no DF_CCP column; pinned by test_ccr_b2_b4_default_fund.py:19-21. Non-QCCP DF 10m gives RWEA 12.5m vs 125m.
 - *Required:* CCR Part Art 308(2) K_i=max{K_CCP*DF_i/(DF_CCP+DF_CM), 8%*2%*DF_i}; Art 309(1) 'K = DF + UC'; Art 310 0% for unfunded QCCP contributions.
@@ -318,7 +360,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.410 — FCCM SFT engine always uses CRR haircut table under Basel 3.1
 
-*Review IDs:* CC-12 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-12 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* sft/fccm.py:603-613 hardcodes is_basel_3_1=False for HE and HC. Probe: cash lent 100m vs 120m equity gives E* 1,213,203 in both regimes.
 - *Required:* PS1/26 Art 224 Table 1 (five maturity bands, revised equity/gold haircuts) applied via Art 223(1) volatility adjustments.
@@ -327,7 +369,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.411 — FCCM: ineligible securities lent take HE=0; property/receivables/unknown collateral recognised
 
-*Review IDs:* CC-13 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-13 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* sft/fccm.py:636-638 HE 0 when security ineligible; crm/haircut_tables.py:515-523 0% for real_estate/receivables, 40% for unknown types. Probe: unrated bond lent 100m vs 95m cash E* 5m; property collateral E* 0.
 - *Required:* CRR & PS1/26 Art 224(4) non-eligible securities lent take the non-main-index equity haircut; FCCM values financial collateral only (Art 223(1); PS1/26 Art 220(2) eligible per Arts 197/198).
@@ -336,7 +378,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.412 — BA-CVA divides all netting sets by alpha 1.4 and uses post-CRM ead_final incl. SFTs
 
-*Review IDs:* CC-15 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-15 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* cva/ba_cva.py:129 alpha=sa_ccr_alpha (1.4) for every NS; EAD = ead_final of ccr__ rows (stages/aggregate.py:66,150) incl. CCR_SFT. Probe NFC EAD 10m M5 OTHER/IG RWEA 12,837,455.
 - *Required:* PS1/26 CVA Part 4.3 'alpha = the value of alpha as specified in the Counterparty Credit Risk (CRR) Part' (1 for NFC/pension); SFTs only if fair-valued and CVA risk material.
@@ -345,7 +387,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.413 — Collateral maturity_date ignored; maturity mismatch reads only residual_maturity_years
 
-*Review IDs:* CL-02 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CL-02 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* haircuts.py:751 fill_null(10.0) on residual_maturity_years, haircuts.py:492 same; 1y deposit vs 5y loan with maturity_date only: SA RWA 0 (should be 84,208 CRR / 84,211 B31).
 - *Required:* CRR/PS1-26 Art. 237(1)/238(1): protection maturity = time to earliest termination date; mismatch adjustment must apply.
@@ -354,7 +396,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.414 — Loan-table collateral reduces SA-CCR derivative and SFT EAD again
 
-*Review IDs:* CL-04, CC-07 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* CL-04, CC-07 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - **CL-04** *Current:* collateral.py:901-910,944-960,1216-1224 pool counterparty-level collateral over CCR rows; CCR-A1 EAD 5,480,018 to 0 (CRR), 5,044,928 to 0 (B31); SFT A12 also zeroed.
 - *Required:* CRR Art. 111(2), 223(6); PS1/26 Art. 111(2)-(3), 191A(4): derivative collateral recognised only inside the CCR method; SFT set value computed once.
@@ -376,7 +418,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.416 — MORTGAGE-labelled loan with no property collateral gets real-estate weights
 
-*Review IDs:* CL-08, RE-10 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* CL-08, RE-10 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - **CL-08** *Current:* attributes.py:633-647 is_mortgage from product_type alone; risk_weights.py:810 CRR ltv fill_null(0.0) gives 35% (RWA 35,000 vs 75,000); B31 0.56 vs 1.00.
 - *Required:* CRR Art. 125(1) 'fully and completely secured by mortgages'; PS1/26 Art. 124A(1)(a) 'secured by immovable property'.
@@ -389,7 +431,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.417 — Basel 3.1 FCM omits Hfx on non-financial collateral
 
-*Review IDs:* CL-09 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CL-09 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* haircuts.py:259 restricts fx_haircut to financial types; B31 FIRB EUR property for a GBP loan gives LGD 0.28, RWA 57,496, the same as GBP collateral.
 - *Required:* PS1/26 Art. 230(1): ES after '(b) a volatility adjustment for any currency mismatch ... (Hfx)'; Art. 229(1)(b) applies Hfx to immovable property.
@@ -398,7 +440,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.418 — committed=False silently deletes accepted unconditionally cancellable commitments (Doc B G01)
 
-*Review IDs:* CM-01 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CM-01 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* facility_undrawn.py:206-216 (and MOF :767-791) emits no undrawn row when committed=False; input-schemas.md:206 says False = unconditionally cancellable. Probe: GBP10m, committed=False+LR -> no row, no error (B31 should be 1m).
 - *Required:* PS1/26 Art. 111 Table A1 row 7: accepted UCC commitments take 10%; glossary 'commitment' includes unconditionally cancellable arrangements. Only no-offer/not-accepted limits create no exposure.
@@ -407,7 +449,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.419 — Facility headroom subtracts drawings in other currencies before FX conversion
 
-*Review IDs:* CM-02, SF-01 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* In this PR
+*Review IDs:* CM-02, SF-01 · *Regime:* Both · *Effect:* Either direction · *Size:* M · *Status:* Fixed in this PR
 
 - **CM-02** *Current:* unify.py:93 computes undrawn before resolver.py:133 FX conversion; facility_undrawn.py:302-311,344-347,386-392 sum raw amounts. Probe: GBP10m limit, USD6.5m draw -> undrawn 3.5m, not 5m.
 - *Required:* PS1/26 Art. 111(1)(b) / CRR Art. 111(1): nominal value of the undrawn commitment, measured against the advised limit (glossary 'conversion factor'), in one currency.
@@ -420,7 +462,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.420 — B31 A-IRB grants own-estimate CCFs to issued items under a revolving facility
 
-*Review IDs:* CM-03 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CM-03 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* ccf.py:639-646 own-estimate gate is is_revolving & SA CCF<1, ignores is_obs_commitment; contingents inherit is_revolving (enrich.py:61-92). Probe: issued MLR LC, ccf_modelled 0.05 -> B31 CCF 10% (SA 20%).
 - *Required:* PS1/26 Art. 166D(1)(a) own estimates only for revolving loan commitments; (b) all other OBS items use the SA CCF. Glossary: a commitment is not itself an issued OBS item.
@@ -429,7 +471,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.421 — Art. 234 tranched protection (attachment_amount>0) gets RWSM substitution instead of Chapter 5
 
-*Review IDs:* GT-03 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* GT-03 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* guarantees.py:752-813 substitutes the mezzanine band and keeps first-loss and senior tranches at the obligor RW. Loan 10 with protection on [2,6): RWA CRR 8.0 / B31 7.2. Pinned by test_p1_30e (800k on 1m).
 - *Required:* Art. 234 (both regimes): tranched transfer follows Chapter 5. Art. 235(2): substitution only for equal seniority. Art. 268 cap ⇒ RWA 10.0 in both regimes.
@@ -438,7 +480,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.202 — No-restructuring CDS entered as percentage_covered escapes the Art. 233(2) 40% cut
 
-*Review IDs:* GT-05 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* GT-05 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* guarantees.py:1146-1160 gates on amount_covered>0 and rewrites only the amount. CDS at 100% with no restructuring on 8 is recognised in full: RWA CRR 4.0 / B31 2.4.
 - *Required:* Art. 233(2)(a) CRR and PS1/26: reduce protection value by 40%, so G = 4.8 and RWA CRR 5.6 / B31 4.64.
@@ -447,7 +489,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.201 — Art. 233(2)(b) 60%-of-exposure cap missing for an over-sized no-restructuring CDS
 
-*Review IDs:* GT-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* GT-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* guarantees.py:1146-1160 applies G×0.6 and then the cap at EAD (:686-699). Notional 16 on 8 is recognised in full: RWA CRR 4.0 / B31 2.4.
 - *Required:* Art. 233(2)(b) CRR and PS1/26: value no higher than 60% of the exposure value, so G = 4.8 and RWA CRR 5.6 / B31 4.64.
@@ -456,7 +498,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.422 — B31 SA project-finance phase dropped: pre-operational 130% / high-quality 80% unreachable
 
-*Review IDs:* IV-01 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* IV-01 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* classify/attributes.py:285 join_specialised_lending never selects project_phase; b31_risk_weight_tables.py:816-831 reads always-null sl_project_phase and defaults to operational 100%. Run: pre-op and high-quality PF both RW 1.0.
 - *Required:* PS1/26 Art. 122B(2)(c): 130% pre-operational, 100% operational; Art. 122B(4): 80% high-quality operational. Operational status must be evidenced per Art. 122B(3).
@@ -465,7 +507,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.423 — B31 forces IPRE/HVCRE to slotting even for SA-only firms and Art. 148/150 SA permissions
 
-*Review IDs:* IV-02, RG-01 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* IV-02, RG-01 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - **IV-02** *Current:* classify/approach.py:309-329 forces slotting on sl_type ipre/hvcre gated only by a pack Feature, above all permission checks. Run: PermissionMode.STANDARDISED B31 HVCRE -> slotting 140%.
 - *Required:* PS1/26 Art. 147A(1)(c): SA where Art. 148/150 permission granted, slotting only for other IPRE/HVCRE of IRB firms; a firm without IRB permission uses SA (ADC 150% Art. 124K).
@@ -478,7 +520,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.424 — B31 Art. 133(5) 150% subordinated-debt weight misses specialised-lending rows
 
-*Review IDs:* IV-03 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* IV-03 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* sa/risk_weights.py:1560-1574 _is_b31_subordinated_debt matches only INSTITUTION/CORPORATE strings; SL rows keep class specialised_lending. Run: subordinated PF loan B31 RW 1.0.
 - *Required:* PS1/26 Art. 133(5): 150% for an exposure that is a subordinated debt instrument; Art. 112(2) Table A2 ranks class (p) above corporates (incl. SL subclass).
@@ -487,7 +529,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.425 — Securitisation allocator excludes exposures even when significant_risk_transfer=False
 
-*Review IDs:* IV-04 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* IV-04 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* schemas.py:1519-1522 SRT default True, comment says carve-out applied when False; securitisation/allocator.py never reads the flag. Run: 1m loan, SRT False, 100% allocated -> RWA 0, both regimes.
 - *Required:* CRR Art. 244(1)/245(1): originator may exclude underlying exposures only if SRT achieved or all retained positions are 1250%/deducted.
@@ -496,7 +538,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.426 — CIU look-through: unsupported underlying classes silently weighted 100%
 
-*Review IDs:* IV-05 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* IV-05 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* equity/calculator.py:487-490 fill_null(_DEFAULT_HOLDING_RW=1.00, :154); CIU_HOLDINGS_SCHEMA.exposure_class (schemas.py:1386) unvalidated. Run: high_risk, sub debt, securitisation, nested CIU holdings -> fund RW 1.0 both regimes.
 - *Required:* PS1/26 Art. 132A(1): weight underlyings as if directly held; Art. 132(5) nested CIU else fall-back 1250%; Art. 128 150%, Art. 133(5) 150%; CRR Art. 254(7) securitisation 1250%.
@@ -505,7 +547,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.427 — CRR equity ignores is_significant_investment (Art. 48(4) 250%)
 
-*Review IDs:* IV-06 · *Regime:* CRR · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* IV-06 · *Regime:* CRR · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* equity/calculator.py:629-660 CRR SA chain: central bank, CIU, else 100%; IRB-simple :715-790 likewise. Run: CRR SA significant investment RW 1.0 (IRB simple 2.9/3.7, overstated).
 - *Required:* CRR Art. 133(2): equity 100% 'unless ... assigned a 250% risk weight in accordance with Article 48(4)'; Art. 48(4) 250% is approach-agnostic.
@@ -514,7 +556,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.428 — SME and B31 LFSE size tests use entity-own, not consolidated-group figures
 
-*Review IDs:* RC-05, RC-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* RC-05, RC-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - **RC-05** *Current:* attributes.py:195-210 sme_size_metric = own revenue/assets; subtypes.py:218-219 LFSE own assets. SUB 10m in 1bn group: B31 85% (850k) with CLS011 same run; CRR SF 0.7619 (761,900).
 - *Required:* PS1/26 SME glossary 'highest consolidated accounts of the group'; Art. 153(4) both regimes 'consolidated group'; CRR 501(2)(b)/4(1)(128D); PS1/26 LFSE glossary 'highest level of consolidation'.
@@ -527,7 +569,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.429 — Solo/sub-consolidated runs aggregate retail and SME-SF thresholds on scoped books only
 
-*Review IDs:* RC-07, RG-02, RE-12 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* RC-07, RG-02, RE-12 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - **RC-07** *Current:* registry.py:47-49 scope before hierarchy; scope/resolver.py:368-369 filter; enrich.py:535-553 sums remainder. SME 500k+500k across entities, individual run: B31 375,000 (should 425,000); CRR 285,712.5 (should 380,950).
 - *Required:* PS1/26 Art. 123(1)(b)(ii)/123A: amount owed 'to the institution, its parent undertakings, its subsidiaries and subsidiaries of its parent undertakings'; CRR Art. 123(c), Art. 501(1) E*.
@@ -544,7 +586,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.430 — Cross-table exposure_reference collisions merge rows and double CRM relief
 
-*Review IDs:* RC-10 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* RC-10 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* schemas.py:2720-2725 per-table uniqueness only; guarantees.py:612-623/660-667 join on reference ignoring type. Loan+contingent 'X1' + 1m loan guarantee: EAD 2m→1m, RWA 1m→0, no error.
 - *Required:* PS1/26 & CRR Art. 213(1)(a): 'the credit protection is direct'; Art. 111(1): each item measured.
@@ -553,7 +595,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.431 — Collateral-level is_adc/is_presold silently dropped; ADC loans priced as regulatory RE
 
-*Review IDs:* RE-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* RE-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* hierarchy/enrich.py:638-643 copies no is_adc; classify/attributes.py:550-565 derives ADC only from loan flag/product_type. Measured: corporate dev loan 500k, collateral is_adc=True -> B31 RW 0.20 (100k), CRR 0.35 (175k).
 - *Required:* PS1/26 Art. 124(3)/124K(1): ADC exposure 150%. CRR Art. 125(1)(a)/124(1): residential not occupied/let by owner -> 100%.
@@ -562,7 +604,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.432 — B31 reclassifies non-regulatory natural-person retail to CORPORATE, losing Art. 123B multiplier
 
-*Review IDs:* RE-03 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* RE-03 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* classify/subtypes.py:247-252 un-gated 'retail not qualifying -> CORPORATE'; rw_adjustments.py:493-504 scopes 123B by class. Measured NP EUR loan 1m, GBP income -> corporate RW 1.00, RWA 1,000,000; omitted is_managed_as_retail -> corporate.
 - *Required:* PS1/26 Art. 123(1)(a): natural persons are retail; Art. 123(3)(c) 100%; Art. 123B(1) applies 1.5x to unhedged retail.
@@ -571,7 +613,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.433 — Null borrower income currency never triggers Art. 123B; 123B(3) fallback unimplemented and mis-cited
 
-*Review IDs:* RE-05 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* RE-05 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* rw_adjustments.py:506 requires non-null income ccy; :443-472 cites 123B(3) for a reporting-date gate. Measured GB NP EUR mortgage 80k: income null RW 0.20 (16,000); income GBP 0.30 (24,000).
 - *Required:* PS1/26 Art. 123B(3): if mismatch unidentifiable (pre-2027 exposures), apply 1.5x unless lending currency is the domestic currency of residence/employment.
@@ -589,7 +631,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.434 — Committed sub-facilities dropped under an uncommitted MOF/umbrella parent
 
-*Review IDs:* SF-02 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* SF-02 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* Sub waterfall rows inherit the parent's committed column (facility_undrawn.py:855-867), and the :214 filter drops them. P(committed=False) with two committed subs of 8 headroom emits zero rows: CRR EAD 8.0 and B31 6.4 lost, silently.
 - *Required:* A committed sub-facility is a commitment: CRR Art. 111(1)/Annex I; PS1/26 Art. 111(1)(b) Table A1 rows 4-5. Even an unconditionally cancellable line is 10% under Table A1 row 7, never omitted.
@@ -598,7 +640,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.435 — Trade-LC flag broadcast per counterparty leaks onto every loan
 
-*Review IDs:* TR-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* TR-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* enrich.py:93-104,1135-1183 ORs is_short_term_trade_lc over all facilities of a counterparty onto all its loans (unify.py:169 nulls loans). B31 SA 40%->20%, CRR IRB M 1y->1 day (RWA 488,073->370,573) measured.
 - *Required:* PS1/26 Art 120(2A)/121(4) need exposure 'arose from the movement of goods'; CRR 162(3)(b)/PS1/26 162(3)(e) need self-liquidating trade finance. A counterparty's other loans do not qualify.
@@ -607,7 +649,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.436 — Art 166A(5) IRB 40% purchased-receivables CCF applied to SA rows and A-IRB own estimates
 
-*Review IDs:* TR-02 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* TR-02 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* ccf.py:584-587,805-845 overrides SA carrier to 40% when flag+revolving, even risk_type FR/FRC (measured SA 0.4 vs 1.0); A-IRB then takes own estimate 0.25 (ccf.py:639-646). schemas.py:537-544 cites Row 5.
 - *Required:* PS1/26 Art 166A(5) (IRB Part) mandates 40%/10% for IRB; SA Table A1 Row 2(a) 'transactions with recourse (including factoring and invoice discount facilities)' = 100%.
@@ -616,7 +658,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.437 — Retail dilution risk priced with retail correlation, not Art 153(1)
 
-*Review IDs:* TR-03 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* TR-03 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* irb/transforms.py:720-745 and formulas.py:632-645 pick correlation/MA by exposure_class only; retail dilution row R=0.0946, RWA 102,443 vs required 169,195 (CRR, PD 2%, LGD 75%).
 - *Required:* CRR & PS1/26 Art 157(1): RWEA for dilution risk of purchased corporate and retail receivables 'in accordance with the formula set out in Article 153(1)'.
@@ -627,7 +669,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.438 — QCCP 2%/4% pin applied to non-trade exposures; non-QCCP treated as institution not corporate
 
-*Review IDs:* CC-11 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-11 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* sa/risk_weights.py:1144-1154 and 1350-1360 pin any ccp row; sa/cqs_lift.py:66-80 non-QCCP -> institution ladder. Probe: 1m term loan to QCCP RW 2% both regimes (expected 100% CRR / 150% B31 unrated).
 - *Required:* CRR & PS1/26 Art 107(2): other exposures '(a) as exposures to an institution ... qualifying CCP; (b) as exposures to a corporate ... non-qualifying CCP'; CCR Part Art 306(1)(b) non-QCCP trade exposures use 107(2)(b).
@@ -636,7 +678,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.439 — SFT netting set pools trades without master-netting eligibility; multi-counterparty sets merged
 
-*Review IDs:* CC-14 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* CC-14 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* sft/fccm.py:410-427 nets E and collateral across trades in netting_set_id with no enforceability flag; :163-167 counterparty first(). Probe: two trades E* 52.1m vs 100m; two counterparties merged into CP1.
 - *Required:* CRR & PS1/26 Art 220(1) netted E* only for 'exposures subject to an eligible master netting agreement'; PS1/26 Art 111(2A) single netting-set value only where an MNA is taken into account.
@@ -645,7 +687,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.440 — BA-CVA completeness: missing or partial CVA counterparty input silently gives no CVA charge
 
-*Review IDs:* CC-16 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-16 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* stages/aggregate.py:142-145 returns None when cva_counterparties absent; cva/ba_cva.py:225-226 inner join drops uncovered counterparties; DEBUG log only.
 - *Required:* PS1/26 CVA Risk Part: own funds for CVA risk on all covered transactions (QCCP/client-clearing exclusions and 7.1 transitional aside).
@@ -663,7 +705,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.442 — Engine-only risk types CCR_DERIVATIVE/CCR_SFT accepted on lending tables
 
-*Review IDs:* CC-19 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* In this PR
+*Review IDs:* CC-19 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* schemas.py:2492-2502 accepts them. Probe: 10m contingent CCR_SFT gets CCF 100% CRR / 50% B31, label standardised_ccr; CCR_SFT loan becomes repo-style in IRB (irb/transforms.py:993-1003,1117-1124).
 - *Required:* CRR Art 271(2) / PS1/26 Art 111(2)-(2A): derivative and SFT exposure values come from the CCR Part or FCCM, not an Annex I/Table A1 CCF.
@@ -672,7 +714,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.443 — SA FCCM E* accepts any collateral type flagged is_eligible_financial_collateral
 
-*Review IDs:* CL-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CL-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* collateral.py:677-681 SA predicate is the flag alone; flagged CRR receivables/RE give EAD 0 (RWA 0), B31 other physical 40,000, life policy RWA 0. No warning.
 - *Required:* Only Art. 197 financial collateral reduces SA E* (CRR/PS1-26 Art. 197(1), 199(1) is IRB/FCM-only); life policies use Art. 232(3) RW mapping.
@@ -699,7 +741,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.446 — CRR SA real estate ignores is_qualifying_re=False
 
-*Review IDs:* CL-07, RE-09 · *Regime:* CRR · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CL-07, RE-09 · *Regime:* CRR · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - **CL-07** *Current:* sa/risk_weights.py:797-816 CRR RE branch never reads is_qualifying_re; LTV 0.5 mortgage gets 35% (RWA 35,000) with flag False.
 - *Required:* CRR Art. 125(2)(c) requires Art. 208/229(1) met; Art. 124(1): 100% where Art. 125/126 conditions are not met.
@@ -712,7 +754,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.447 — B31 Art. 124H(3) whole-loan CRE overwrites the 124C LTV and drops the 124I(3) junior weights
 
-*Review IDs:* CL-10 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CL-10 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* splitter.py:767-779 sets ltv=EAD/value; b31_risk_weight_tables.py:716 caps on base table only. CQS5 corporate, prior 20k, own 70k: RW 1.00, RWA 70,000.
 - *Required:* PS1/26 Art. 124C(3) LTV includes prior/pari-passu loans; Art. 124H(3)(b)(ii) uses the RW 'under Article 124I', including 124I(3) junior weights.
@@ -721,7 +763,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.448 — Canonical collateral type 'bond' is not financial collateral on the FIRB path
 
-*Review IDs:* CL-11 · *Regime:* Both · *Effect:* RWA overstated · *Size:* S · *Status:* In this PR
+*Review IDs:* CL-11 · *Regime:* Both · *Effect:* RWA overstated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* schemas.py:2274-2283 FINANCIAL_COLLATERAL_TYPES lacks 'bond'; expressions.py:227-246 maps to 'other'. FIRB RWA 111,402 CRR / 82,137 B31 vs 56,815 / 57,450 as government_bond. Spurious CRM014/021 on SA.
 - *Required:* CRR/PS1-26 Art. 197(1)(b)-(d): rated debt securities are eligible under all methods; PS1/26 Art. 230(2) financial collateral LGDS 0%.
@@ -756,7 +798,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.451 — Null collateral currency: no FX conversion and no Hfx, silently
 
-*Review IDs:* CL-14 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* In this PR
+*Review IDs:* CL-14 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* haircuts.py:249-263: null coll_ccy makes the mismatch test null, so Hfx is 0; value left unconverted. EUR loan, null-currency cash 100k is credited as GBP 100k, no warning (CRM020 exists only for life policies).
 - *Required:* CRR Art. 223(2) 'Hfx = the volatility adjustment appropriate to currency mismatch'; PS1/26 Art. 230(1)(b). An unknown currency cannot prove no mismatch.
@@ -778,7 +820,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.453 — Regime-invariant product map: shipping/customs/tax bonds and unsecured documentary credits wrong under CRR
 
-*Review IDs:* CM-07, TR-04 · *Regime:* CRR · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* CM-07, TR-04 · *Regime:* CRR · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - **CM-07** *Current:* packs/common.py:874-898 'framework-invariant' map: DOCUMENTARY_CREDIT/TRADE_LC->MLR both regimes; no shipping/customs/tax keys; CCF spec :60 maps them MLR. Probe: CRR DOCUMENTARY_CREDIT -> 20%.
 - *Required:* CRR Annex I 2: documentary credits issued or confirmed and shipping guarantees, customs and tax bonds are medium risk (50%) unless shipment collateral (3(a)(i)); PS1/26 Table A1 row 6(a),(d): 20%.
@@ -791,7 +833,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.454 — risk_type guidance mis-maps SBLCs, commitments and performance bonds
 
-*Review IDs:* CM-08 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CM-08 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* enums.py:464-478, input-schemas.md:252, standardised-approach.md:81, api/domain.md:229: MR='standby LCs, committed undrawn', MR_ISSUED='performance bonds...'; crr.md:186-187 MR/MLR maturity encoding, no OC; LR doc 0%; b31.py:386 'Row 6'.
 - *Required:* Table A1 row 1(e) credit-substitute SBLC 100%; row 5 other commitments 40%; row 6(b) performance/tender bonds, warranties 20%; CRR Annex I 1(f) and 3(a)(ii) likewise.
@@ -800,7 +842,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.455 — Committed facility with null limit silently yields no commitment exposure
 
-*Review IDs:* CM-11, SF-12 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* CM-11, SF-12 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - **CM-11** *Current:* schemas.py:494 limit optional; null undrawn dropped by facility_undrawn.py:214; DQ016 (validation.py:1407-1431) only checks rows with an amount. Probe: committed OC facility, limit=None -> no row, no error.
 - *Required:* PS1/26 Art. 111(1)(b) and glossary 'conversion factor': commitment extent determined by the advised limit; unknown limit cannot silently mean zero.
@@ -813,7 +855,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.456 — Aggregate guarantee cap repeated across beneficiary rows is double-counted; no shared-cap representation (G08)
 
-*Review IDs:* GT-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR
+*Review IDs:* GT-01 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* guarantees.py:507-509 aggregates per (beneficiary, guarantor); guarantees are not in TABLE_UNIQUE_KEYS (schemas.py:2720) and have no link table. Cap 5 on two loans (8, 6): 10 covered, RWA CRR 9.0 / B31 7.0, no error.
 - *Required:* Art. 233(1) both regimes: G is the amount the provider undertook to pay; Art. 213(1)(b) extent incontrovertible. Total cover must be ≤ 5 (20/7 + 15/7): RWA CRR 11.5 / B31 10.5.
@@ -822,7 +864,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.457 — Percentage-plus-amount-cap guarantee: amount_covered overrides percentage instead of min()
 
-*Review IDs:* GT-02 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* GT-02 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* guarantees.py:963-985 uses the percentage only when amount is null or 0. 50% capped at 5 on a loan of 8 is recognised as 5: RWA CRR 5.5 / B31 4.5, no warning.
 - *Required:* Art. 233(1) CRR and PS1/26: G = the amount undertaken = min(0.5×8, 5) = 4, giving RWA CRR 6.0 / B31 5.2.
@@ -849,7 +891,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.460 — Demand deposit with null maturity nets fully against term loans
 
-*Review IDs:* NT-03 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* NT-03 · *Regime:* Both · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* netting.py:243-254,321-330 leaves the residual null and haircuts.py:751 fills 10y, so no mismatch. Measured: null-maturity deposit 4,000 vs 2032 loan gives EAD 2,000; the same deposit dated overnight gives 6,000.
 - *Required:* PS1/26 Art 238(1): netting protection maturity is the earlier of agreement termination and 'the date when the deposit ... can be withdrawn'. CRR Art 238(1)/237(1): under 3 months and shorter than the exposure is ineligible.
@@ -871,16 +913,17 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.462 — FCSM election: netted deposits skip maturity mismatch; B31 routes netting via FCSM
 
-*Review IDs:* NT-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* In this PR if time
+*Review IDs:* NT-06 · *Regime:* Both · *Effect:* RWA understated · *Size:* M · *Status:* Backlog (attempted, deferred)
 
 - *Current:* simple_method.py treats NETTING_ cash as FCSM 0% cash. The Art 239(1) gate (:746-773) needs an exposure residual_maturity_years that is never present. Measured: 2y deposit vs 6y loan gives RWA 2,000 in both regimes; FCCM gives 4,525.16.
 - *Required:* CRR Art 239(1): mismatched FCSM collateral 'does not qualify', so 6,000. PS1/26 defines netting as 'determining the exposure value in accordance with Article 219'; Art 238(1A)(a) and 239(2) apply CVAM, so 4,525.16.
 - *Fix:* Pack Feature on_bs_netting_always_art219 (B31 on, CRR off): SIMPLE excludes NETTING_ rows from FCSM and keeps the E* reduction. Fix the FCSM gate to derive exposure T from maturity_date (general, cross-reference collateral review).
 - *Verification (confirmed):* Re-measured: 2y deposit vs 6y loan gives 2,000 under SIMPLE (both regimes) against 4,525.16 under FCCM. The FCSM Art. 239(1) gate needs an exposure residual_maturity_years that no CRM-stage frame carries. CRR Art. 239(1) gives 6,000. PS1/26 Art. 238(1A)(a)/239(2) and the flowchart route netting to Art. 219 (4,525.16). The general FCSM gate is shared with the collateral review.
+- *Outcome:* optional; not attempted (Simple Method maturity gate needs an owner decision on moving goldens)
 
 #### P1.463 — Child mapped to >1 facility consumes every parent's headroom
 
-*Review IDs:* RC-01, RC-02, SF-03 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* In this PR
+*Review IDs:* RC-01, RC-02, SF-03 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* Fixed in this PR
 
 - **RC-01** *Current:* facility_undrawn.py:291-312 + graph.py:358 dedup only (child,parent); loan 3m mapped to two sublimits under 20m umbrella: EAD 11.5m→10.0m both regimes, no error.
 - *Required:* PS1/26 & CRR Art. 111(1): OBS exposure = nominal value x CCF; one drawing reduces the commitment's nominal once.
@@ -915,7 +958,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.466 — Missing FX rate silently treated as 1:1
 
-*Review IDs:* RC-11 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* In this PR
+*Review IDs:* RC-11 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* fx/converter.py:124-160 otherwise(x) keeps source amounts; KWD 1,000,000 loan with no rate → EAD/RWA 1,000,000, currency 'KWD', no error. Pinned by test_fx_converter.py:219.
 - *Required:* GBP thresholds (PS1/26 Art. 123 GBP 880k, 147(4C) GBP 440m, 153(4) GBP 44m) need reporting-currency amounts; Doc B T63 visible outcome.
@@ -924,7 +967,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.467 — Null entity_type silently classified 'other' at 100%
 
-*Review IDs:* RC-12 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* In this PR
+*Review IDs:* RC-12 · *Regime:* Both · *Effect:* Either direction · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* attributes.py:362-368 replace_strict default OTHER; null raises nothing (unknown → DQ006 warning). CQS6 corporate: 1,500,000 → 1,000,000.
 - *Required:* PS1/26 Art. 112(2): assign exposures to classes per Table A2 criteria; corporate ECAI weights Art. 122 (both regimes).
@@ -933,7 +976,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.468 — B31 SME test uses assets fallback and strict < not in PS1/26 definition
 
-*Review IDs:* RC-16 · *Regime:* Basel 3.1 · *Effect:* Either direction · *Size:* S · *Status:* In this PR
+*Review IDs:* RC-16 · *Regime:* Basel 3.1 · *Effect:* Either direction · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* b31.py:632 sme_balance_sheet_threshold + attributes.py:503-504: null revenue, 10m assets → 85% (850,000) silently; revenue exactly 44,000,000 → 100%.
 - *Required:* PS1/26 SME glossary: 'annual turnover of not more than GBP 44 million'; assets substitution only Art. 153(4) IRB, consolidated group, when revenue not meaningful.
@@ -942,16 +985,17 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.469 — Art. 124K(2) 100% residential ADC unreachable; equity-at-risk limb unrepresented
 
-*Review IDs:* RE-02 · *Regime:* Basel 3.1 · *Effect:* RWA overstated · *Size:* S · *Status:* In this PR
+*Review IDs:* RE-02 · *Regime:* Basel 3.1 · *Effect:* RWA overstated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* b31_risk_weight_tables.py:728-749 reads is_presold; no producer (edges.py:1859 injects null, netting.py:371). Measured presold ADC 500k -> RW 1.50, RWA 750,000.
 - *Required:* PS1/26 Art. 124K(2): 100% if prudent underwriting and (pre-sale/pre-lease contracts OR substantial borrower equity at risk).
 - *Fix:* Propagate is_presold with RE-01; add adc_borrower_equity_at_risk and adc_prudent_underwriting attestations (null=not established). Test: B31 1.00 / 500,000; commercial stays 1.50.
 - *Verification (confirmed):* No producer of is_presold (edges inject null; netting literal null). Measured construction loan plus collateral is_presold=True gives 1.50/750,000. Art. 124K(2) is permissive ('may assign 100%'), conditions (a) underwriting, (b)(i) pre-sale or (ii) equity at risk, quoted. Same root cause as RE-01, so fix them together.
+- *Outcome:* including the row-order fix for mixed residential / commercial ADC security
 
 #### P1.470 — 0.2% retail granularity limb enforced by default but absent from PS1/26 Art. 123A
 
-*Review IDs:* RE-04 · *Regime:* Basel 3.1 · *Effect:* RWA overstated · *Size:* S · *Status:* In this PR
+*Review IDs:* RE-04 · *Regime:* Basel 3.1 · *Effect:* RWA overstated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* classify/attributes.py:697-740; packs/b31.py:1292-1296 cites 123A(1)(b)(ii); config.py:694-701 default True. Measured 10 NPs x 20k -> all corporate 1.00, RWA 200,000.
 - *Required:* PS1/26 Art. 123A(1)(b)(ii) is only the GBP 880k aggregate test; (iii) 'significant number of exposures' is qualitative. No 0.2% limb.
@@ -969,7 +1013,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.472 — Undrawn UK residential mortgage commitments get 40% unless manually flagged
 
-*Review IDs:* RE-14 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* In this PR
+*Review IDs:* RE-14 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* ccf.py:756-800 applies row 4(b) only when is_uk_residential_mortgage_commitment=True; never derived. Measured B31 mortgage facility undrawn 100k, risk_type null -> CCF 0.40, EAD 40,000, RWA 8,000.
 - *Required:* PS1/26 Art. 111(1) Table A1 row 4(b): UK residential mortgage commitments 50% (row 5 other commitments 40%).
@@ -978,21 +1022,23 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.262 — RRE exposures with no Art. 124E exception (e.g. corporates) default to not-materially-dependent
 
-*Review IDs:* RE-15 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* M · *Status:* In this PR if time
+*Review IDs:* RE-15 · *Regime:* Basel 3.1 · *Effect:* RWA understated · *Size:* M · *Status:* Backlog (attempted, deferred)
 
 - *Current:* has_income_cover defaults False (hierarchy/enrich.py:693; classify/attributes.py:594-599). Measured non-SME corporate 400k on RRE 1m (LTV 0.4) -> B31 RW 0.20, RWA 80,000.
 - *Required:* PS1/26 Art. 124E(1): RRE is materially dependent unless (a)-(e) exceptions; Art. 124E(6) CRE dependent unless own-use.
 - *Fix:* As P1.262: B31 materially dependent where no engine-verifiable exception (non-NP, not social housing/coop/attested SPV) plus DQ warning. Test 124G 0.30 / 120,000; CRR 140,000 unchanged.
 - *Verification (rescoped):* Understatement re-measured (corporate RRE LTV 0.4 -> 0.20/80,000) and is P1.262. But the fix overshoots: the same row with is_income_producing=True -> corporate 1.00/400,000, not 124G 30%. Income rows skip the splitter and nothing reclassifies non-retail obligors. Defaulting to 'dependent' must also route rows to the 124G/124I class.
+- *Outcome:* optional; needs the P1.262 routing redesign and sign-off on goldens
 
 #### P1.263 — CRR Art. 126 50% gate inverted; owner-occupied CRE gets 100%
 
-*Review IDs:* RE-17 · *Regime:* CRR · *Effect:* Either direction · *Size:* M · *Status:* In this PR
+*Review IDs:* RE-17 · *Regime:* CRR · *Effect:* Either direction · *Size:* M · *Status:* Fixed in this PR
 
 - *Current:* risk_weights.py:798-805 grants 50% only when has_income_cover (materially dependent) is True. Measured NP CRE row, has_income_cover False -> 1.00.
 - *Required:* CRR Art. 126(2)(b): 50% only where repayment does not materially depend on property cash flows (Art. 126(3) derogation separate).
 - *Fix:* As P1.263: separate CRR attestation crr_art_126_conditions_met; explicit Feature for 126(3) derogation. Test SME owner-occupied 400k/1m -> 0.50 / 200,000.
 - *Verification (confirmed):* risk_weights.py:798-805 grants 50% only when materially dependent; CRR Art. 126(2)(b) quoted requires the opposite. 126(3) UK derogation makes the income-producing half derogation-dependent. Measured natural-person CRE not dependent -> 1.00. Existing P1.263. Side note: the CRR splitter's 1.5x rental-cover gate is not in the UK Art. 126 text fetched.
+- *Outcome:* with the PRA rule 4.1 / 4.1A attestation: the CRR Art. 126 50% needs is_qualifying_re True
 
 #### P1.473 — No primary-residence carrier; landlord's own home re-routed to Art. 124G
 
@@ -1032,7 +1078,7 @@ decision 2026-09-04, findings NT-01/NT-02 downgraded to P2), and P1.292 (null
 
 #### P1.477 — B31 Art 162(3)(e) one-day M floor for self-liquidating trade disabled
 
-*Review IDs:* TR-05 · *Regime:* Basel 3.1 · *Effect:* RWA overstated · *Size:* S · *Status:* In this PR
+*Review IDs:* TR-05 · *Regime:* Basel 3.1 · *Effect:* RWA overstated · *Size:* S · *Status:* Fixed in this PR
 
 - *Current:* packs/b31.py:108-114 one_day_maturity_floor=False; irb/transforms.py:1054-1077 derivation off; pinned by test_maturity_double_default_features.py:31. B31 6m DC M=1.0 measured.
 - *Required:* PS1/26 Art 162(3): M at least one day for '(e) self-liquidating trade finance transactions ... with a residual maturity of less than one year'.

@@ -11,8 +11,10 @@ Key responsibilities:
   pass-through columns).
 - Concat loans + contingents + synthetic facility_undrawn rows into the
   single unified exposures frame, and return the facility-undrawn warnings
-  (HIE004-HIE006) as the stage's errors. The facility graph edges are
-  collected once here and shared by the root lookup and ancestor closure.
+  (HIE004-HIE006) and facility-mapping repairs (DQ021 / DQ022) as the stage's
+  errors. The facility graph edges are collected once here, made a forest,
+  and shared by the root lookup and ancestor closure; every consumer reads the
+  resolved mappings (``graph.resolve_exposure_mappings``).
 - Attach facility metadata (parent/root facility refs, hierarchy depth,
   ancestor closure) and delegate QRRE propagation + rating attach to
   ``enrich``.
@@ -44,7 +46,8 @@ from rwa_calc.engine.hierarchy.facility_warnings import collect_facility_undrawn
 from rwa_calc.engine.hierarchy.graph import (
     build_facility_ancestor_closure,
     build_facility_root_lookup,
-    collect_facility_edges,
+    collect_facility_graph,
+    resolve_exposure_mappings,
 )
 
 if TYPE_CHECKING:
@@ -109,8 +112,18 @@ def unify_exposures(
     # synthetic facility_undrawn exposures for the unused headroom. The facility
     # edges are collected ONCE and shared by the root lookup and the ancestor
     # closure below; the collect that saves pays for the warnings collect.
-    facility_edges = collect_facility_edges(facility_mappings)
+    # RC-01 / RC-02 / SF-03: the graph is made the tree every consumer assumes
+    # (one parent per sub-facility, cycle members as roots - DQ021 / DQ022), and
+    # every consumer below reads the RESOLVED mappings (one root per loan /
+    # contingent); the raw ones are kept only to name each repair (DQ021).
+    facility_graph = collect_facility_graph(facility_mappings)
+    errors.extend(facility_graph.errors)
+    facility_edges = facility_graph.edges
     facility_root_lookup = build_facility_root_lookup(facility_mappings, edges=facility_edges)
+    raw_facility_mappings = facility_mappings
+    facility_mappings = resolve_exposure_mappings(
+        facility_mappings, facility_edges, facility_root_lookup
+    )
     facility_undrawn = calculate_facility_undrawn(
         facilities,
         loans,
@@ -134,6 +147,7 @@ def unify_exposures(
                 facility_root_lookup,
                 fx_rates=fx_rates,
                 config=config,
+                raw_facility_mappings=raw_facility_mappings,
             )
         )
 
@@ -415,13 +429,13 @@ def _join_facility_metadata(
         facility_mappings.filter(
             pl.col("child_type").fill_null("").str.to_lowercase() != "facility"
         )
-        .select(
-            [
-                pl.col("child_reference"),
-                pl.col("parent_facility_reference").alias("mapped_parent_facility"),
-            ]
-        )
-        .unique(subset=["child_reference"], keep="first")
+        # One parent per exposure, and always the same one: the lowest reference.
+        # ``resolve_exposure_mappings`` has already confined a multi-parent child
+        # to the facilities of one root (DQ021), so this is a parent under the
+        # root whose headroom the exposure reduces. It used to be ``keep="first"``
+        # over an unordered frame.
+        .group_by("child_reference")
+        .agg(pl.col("parent_facility_reference").min().alias("mapped_parent_facility"))
     )
 
     exposures = exposures.join(

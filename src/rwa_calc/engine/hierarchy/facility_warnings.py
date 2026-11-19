@@ -1,5 +1,5 @@
 """
-Facility undrawn-commitment warnings for the hierarchy stage (HIE004-HIE006).
+Facility undrawn-commitment warnings for the hierarchy stage (HIE004-HIE006, DQ021).
 
 Pipeline position:
     Loader -> HierarchyResolver (engine/hierarchy) -> Classifier
@@ -14,6 +14,11 @@ Key responsibilities:
   rate the run does not hold — a drawing (not netted against the headroom) or
   a sub-facility limit (no slice of its umbrella's waterfall).
 - HIE006: a facility other than an umbrella with no limit — no undrawn row.
+- DQ021 (exposure children): a loan / contingent mapped under more than one
+  facility, and how ``graph.resolve_exposure_mappings`` resolved it — the root
+  whose headroom it reduces, once, and any mapping under another root ignored
+  (review findings RC-01 / SF-03). Read off the RAW mappings, since the
+  resolved ones no longer show the extra parents.
 - Build all three as ONE small plan and materialise it once. The HIE005 rows
   come from the SAME expressions the netting sums read
   (``facility_utilisation_rows``, ``with_facility_currency_factor``), so a
@@ -35,13 +40,16 @@ import polars as pl
 from rwa_calc.contracts.errors import (
     ERROR_FACILITY_HEADROOM_FX_RATE_MISSING,
     ERROR_FACILITY_LIMIT_MISSING,
+    ERROR_FACILITY_MAPPING_MULTI_PARENT,
     ERROR_UNCOMMITTED_FACILITY_RISK_TYPE,
     facility_headroom_fx_rate_missing_warning,
     facility_limit_missing_warning,
+    facility_multi_parent_warning,
     facility_warning_summary,
     uncommitted_facility_risk_type_warning,
 )
-from rwa_calc.data.schemas import RISK_TYPE_SYNONYMS
+from rwa_calc.data.schemas import RISK_TYPE_SYNONYMS, VALID_CHILD_TYPES
+from rwa_calc.domain.enums import ErrorCategory
 from rwa_calc.engine.hierarchy.facility_fx import (
     build_facility_fx,
     facility_currency_lookup,
@@ -51,7 +59,10 @@ from rwa_calc.engine.hierarchy.facility_undrawn import (
     UCC_RISK_TYPE,
     facility_utilisation_rows,
 )
-from rwa_calc.engine.hierarchy.graph import filter_mappings_by_child_type
+from rwa_calc.engine.hierarchy.graph import (
+    filter_mappings_by_child_type,
+    resolve_to_root_facility,
+)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -67,6 +78,10 @@ _WARNING_SCHEMA: dict[str, pl.DataType] = {
     "_value": pl.String(),
     "_target_currency": pl.String(),
     "_umbrella": pl.String(),
+    # DQ021 only: the child's mapping type, every parent and the ignored ones.
+    "_child_type": pl.String(),
+    "_parents": pl.String(),
+    "_ignored": pl.String(),
 }
 
 
@@ -80,13 +95,15 @@ def collect_facility_undrawn_warnings(
     fx_rates: pl.LazyFrame | None,
     config: CalculationConfig | None,
     sample_cap: int = 5,
+    raw_facility_mappings: pl.LazyFrame | None = None,
 ) -> list[CalculationError]:
-    """Return the HIE004 / HIE005 / HIE006 warnings for one run's facilities.
+    """Return the HIE004 / HIE005 / HIE006 / DQ021 warnings for one run's facilities.
 
-    One warning per facility (HIE004, HIE006) or per (facility, currency) pair
-    (HIE005), in code-then-facility order, under the estate's ``sample_cap``
-    contract (as DQ005 / DQ013): at most ``sample_cap`` named per code, then one
-    summary carrying the truthful count of the rest. Clean input returns ``[]``.
+    One warning per facility (HIE004, HIE006), per (facility, currency) pair
+    (HIE005) or per multi-parent loan / contingent (DQ021), in code-then-facility
+    order, under the estate's ``sample_cap`` contract (as DQ005 / DQ013): at most
+    ``sample_cap`` named per code, then one summary carrying the truthful count
+    of the rest. Clean input returns ``[]``.
 
     Args:
         facilities: Sealed facilities frame.
@@ -97,9 +114,12 @@ def collect_facility_undrawn_warnings(
         fx_rates: The run's FX rates, or None when none were supplied.
         config: Calculation configuration (reporting currency, FX switch).
         sample_cap: Facilities named per code before the rest are summarised.
+        raw_facility_mappings: The mappings BEFORE ``resolve_exposure_mappings``
+            (the source of DQ021); None skips DQ021.
 
     Returns:
-        The warnings, as ``CalculationError`` WARNINGs of category HIERARCHY.
+        The warnings, as ``CalculationError`` WARNINGs — category HIERARCHY for
+        the HIE codes, DATA_QUALITY for DQ021.
     """
     plan = facility_undrawn_warning_plan(
         facilities,
@@ -109,6 +129,7 @@ def collect_facility_undrawn_warnings(
         facility_root_lookup,
         fx_rates=fx_rates,
         config=config,
+        raw_facility_mappings=raw_facility_mappings,
     )
     # Targeted mid-pipeline collect: the warning rows are a small dimension
     # (empty on clean input, at most one per facility and currency) and must
@@ -132,6 +153,11 @@ def collect_facility_undrawn_warnings(
                     omitted=omitted,
                     sample_cap=sample_cap,
                     detail=_summary_detail(code, rows[sample_cap:]),
+                    category=(
+                        ErrorCategory.DATA_QUALITY
+                        if code == ERROR_FACILITY_MAPPING_MULTI_PARENT
+                        else ErrorCategory.HIERARCHY
+                    ),
                 )
             )
     return errors
@@ -146,6 +172,7 @@ def facility_undrawn_warning_plan(
     *,
     fx_rates: pl.LazyFrame | None,
     config: CalculationConfig | None,
+    raw_facility_mappings: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """The lazy plan behind :func:`collect_facility_undrawn_warnings`.
 
@@ -159,6 +186,8 @@ def facility_undrawn_warning_plan(
         _uncommitted_risk_type_rows(facilities),
         _limit_missing_rows(facilities, facility_mappings),
     ]
+    if raw_facility_mappings is not None:
+        frames.append(_multi_parent_rows(raw_facility_mappings, facility_root_lookup))
     fx = build_facility_fx(fx_rates, config)
     if fx.enabled:
         frames.extend(
@@ -213,6 +242,58 @@ def _limit_missing_rows(facilities: pl.LazyFrame, facility_mappings: pl.LazyFram
             pl.lit(ERROR_FACILITY_LIMIT_MISSING).alias("_code"),
             pl.col("facility_reference").alias("_facility"),
         )
+    )
+
+
+def _multi_parent_rows(raw_mappings: pl.LazyFrame, root_lookup: pl.LazyFrame) -> pl.LazyFrame:
+    """DQ021: a loan / contingent mapped under more than one parent facility.
+
+    ``_facility`` is the root whose headroom the child reduces — the root of its
+    lowest-referenced parent, exactly as ``graph.resolve_exposure_mappings``
+    chooses it — ``_parents`` every distinct parent and ``_ignored`` those under
+    any other root (the mappings that resolution drops). Same-root children have
+    an empty ``_ignored``: every sub-limit keeps them, the root nets them once.
+    """
+    kind = pl.col("child_type").str.to_lowercase()
+    pairs = (
+        raw_mappings.filter(
+            kind.is_in(sorted(VALID_CHILD_TYPES - {"facility"})).eq_missing(True)
+            & pl.col("parent_facility_reference").is_not_null()
+            & pl.col("child_reference").is_not_null()
+        )
+        .select(
+            kind.alias("_child_type"),
+            pl.col("child_reference"),
+            pl.col("parent_facility_reference"),
+        )
+        .unique()
+    )
+    resolved = resolve_to_root_facility(pairs, root_lookup)
+    keys = ["_child_type", "child_reference"]
+    summary = (
+        resolved.group_by(keys)
+        .agg(
+            pl.col("parent_facility_reference").sort().alias("_parent_list"),
+            pl.col("aggregation_facility")
+            .sort_by("parent_facility_reference")
+            .first()
+            .alias("_facility"),
+        )
+        .filter(pl.col("_parent_list").list.len() > 1)
+    )
+    ignored = (
+        resolved.join(summary.select([*keys, "_facility"]), on=keys, how="inner")
+        .filter(pl.col("aggregation_facility") != pl.col("_facility"))
+        .group_by(keys)
+        .agg(pl.col("parent_facility_reference").sort().str.join(", ").alias("_ignored"))
+    )
+    return summary.join(ignored, on=keys, how="left").select(
+        pl.lit(ERROR_FACILITY_MAPPING_MULTI_PARENT).alias("_code"),
+        pl.col("_facility"),
+        pl.col("child_reference").alias("_value"),
+        pl.col("_child_type"),
+        pl.col("_parent_list").list.join(", ").alias("_parents"),
+        pl.col("_ignored"),
     )
 
 
@@ -306,6 +387,11 @@ def _unconvertible_rows(
 
 def _summary_detail(code: str, omitted: list[dict[str, str | None]]) -> str:
     """What the omitted facilities of one code have in common, for its summary."""
+    if code == ERROR_FACILITY_MAPPING_MULTI_PARENT:
+        return (
+            "loans / contingents mapped under more than one facility, each reducing "
+            "one root's headroom once"
+        )
     if code == ERROR_UNCOMMITTED_FACILITY_RISK_TYPE:
         return "committed=False facilities declaring a non-LR risk_type, priced as LR"
     if code == ERROR_FACILITY_HEADROOM_FX_RATE_MISSING:
@@ -321,6 +407,15 @@ def _to_error(row: dict[str, str | None]) -> CalculationError:
     """Turn one warning row into its ``CalculationError``."""
     facility = str(row["_facility"])
     code = row["_code"]
+    if code == ERROR_FACILITY_MAPPING_MULTI_PARENT:
+        ignored = row["_ignored"]
+        return facility_multi_parent_warning(
+            child_reference=str(row["_value"]),
+            child_type=str(row["_child_type"]),
+            parents=str(row["_parents"]).split(", "),
+            kept=facility,
+            ignored=ignored.split(", ") if ignored else (),
+        )
     if code == ERROR_UNCOMMITTED_FACILITY_RISK_TYPE:
         return uncommitted_facility_risk_type_warning(
             facility_reference=facility, risk_type=str(row["_value"])

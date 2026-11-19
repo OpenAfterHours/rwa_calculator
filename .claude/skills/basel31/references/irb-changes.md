@@ -255,10 +255,12 @@ Note the separate SFT and collateralised-derivative maturity floors — these ar
 from the general one-day floor and from the F-IRB fixed supervisory maturity.
 
 The Art. 162(3) one-day floor survives (PS1/26 162(3)(e) names self-liquidating trade
-finance), so `one_day_maturity_floor` is on in both regimes. Two traps: the one day is a
+finance), so `one_day_maturity_floor` is on in both regimes. Three traps: the one day is a
 **minimum** replacing the one-year minimum (`M = max(residual, one day)`), never a fixed M;
-and the trade residual bound differs — CRR "up to one year" (inclusive), PS1/26 "less than
-one year" (strict, `one_day_floor_trade_residual_strict`).
+it replaces only the paragraph 2A minimum, not its method, so a revolving drawing keeps the
+Art. 162(2A)(k) facility termination date, never the drawing's own repayment date; and the
+trade residual bound differs — CRR "up to one year" (inclusive), PS1/26 "less than one
+year" (strict, `one_day_floor_trade_residual_strict`).
 
 <!-- BEGIN GENERATED: irb-maturity -->
 | Name | CRR | Basel 3.1 | Citation |

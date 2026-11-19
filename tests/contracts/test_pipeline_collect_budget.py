@@ -140,9 +140,16 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: as the classifier's counterparty-size warnings (CLS008/009/011 plus the new
 #: CLS015/016) are counted in ONE select instead of a CLS009 collect and a
 #: separate Basel 3.1 collect. CRR unchanged (it paid only the CLS009 collect).
+#: 2026-11-19 (review cluster "dq", RC-10/RC-11/RC-01/RC-02/SF-03/CC-19):
+#: ``collect`` one fewer in each regime (on its own branch 85 -> 84 CRR, 83 -> 82 B31). The four new data-quality
+#: findings add no materialisation: DQ019 rides the duplicate-key collect, DQ020
+#: the input gate's ``collect_all``, DQ021 / DQ022 the facility-edge and
+#: facility-warnings collects. And ``validate_duplicate_keys`` now sorts in its
+#: plan instead of on the collected frame, whose eager ``sort`` was a second
+#: lazy collect of its own.
 _BANKED: dict[str, dict[str, int]] = {
-    "CRR": {"collect": 84, "collect_schema": 111, "collect_all": 8},
-    "B31": {"collect": 81, "collect_schema": 111, "collect_all": 9},
+    "CRR": {"collect": 83, "collect_schema": 111, "collect_all": 8},
+    "B31": {"collect": 80, "collect_schema": 111, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

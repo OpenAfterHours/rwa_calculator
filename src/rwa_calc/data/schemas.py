@@ -2738,6 +2738,65 @@ RISK_TYPE_SYNONYMS: dict[str, str] = {
 # to ignore the true ones (P1.354).
 VALID_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_INPUT | set(RISK_TYPE_SYNONYMS)
 
+# Risk types that only the ENGINE mints, on the rows its counterparty-credit-risk
+# stages build: ``CCR_DERIVATIVE`` (SA-CCR netting sets), ``CCR_SFT`` (FCCM SFT
+# netting sets), ``CCR_DEFAULT_FUND`` (CCP default-fund contributions) and
+# ``SETTLEMENT_FAILED_TRADE`` (failed trades; both ``engine/stages/ccr.py``). They
+# are canonical OUTPUT vocabulary, not a lending category: on a loans /
+# contingents / facilities row they routed the item to a CCR treatment while it
+# was still priced at a CCF on its nominal amount (review finding CC-19). The
+# exposure value of a derivative or an SFT comes from the CCR methods or the
+# FCCM, never from an Annex I / Table A1 CCF (CRR Art. 111(2); PS1/26 Art. 111(2)
+# / (2A)). A lending table carrying one draws DQ023 (``contracts/validation.py``);
+# what the hierarchy stage does with the value is
+# :data:`DISREGARDED_ENGINE_ONLY_RISK_TYPES`.
+ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset(
+    {"CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND", "SETTLEMENT_FAILED_TRADE"}
+)
+
+# The engine-only tags the hierarchy stage DISREGARDS on a lending row
+# (``engine/hierarchy/unify.py``): the two CCR routing tags. Every treatment they
+# select - the Basel 3.1 ``standardised_ccr`` label, the repo-style 0.5-year CRR
+# F-IRB maturity and the sub-1-year maturity-floor waiver, the QCCP trade
+# exemption from the Art. 121(6) sovereign floor, the C 07.00 CCR rows - is one
+# the row is not priced under, and none raises its capital, so removing them
+# cannot lower RWA. The two OWN-FUNDS tags are reported (DQ023) but HONOURED:
+# ``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE`` select the SA chain's 1250%
+# own-funds conversion (``engine/sa/risk_weights.py``), the weight such a row
+# carried before CC-19, and disregarding them would cut its SA RWA - and the Basel
+# 3.1 output floor's SA-equivalent - by up to 92%, an RWA reduction no rule text
+# or owner decision makes.
+DISREGARDED_ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset({"CCR_DERIVATIVE", "CCR_SFT"})
+
+#: The input amounts ``engine/fx`` rebases to the reporting currency, per raw
+#: table, read by ``contracts/validation.py::_validate_missing_fx_rates`` to
+#: report (DQ020) the rows whose
+#: currency has no rate into ``base_currency`` and therefore pass through 1:1
+#: (review finding RC-11). Each table's ``currency`` column is the one the
+#: converter joins on; a facility's currency is its undrawn rows' currency.
+FX_CONVERTED_AMOUNT_COLUMNS: dict[str, tuple[str, ...]] = {
+    "loans": ("drawn_amount", "interest"),
+    "contingents": ("nominal_amount",),
+    "facilities": ("limit",),
+    "collateral": ("market_value",),
+    "guarantees": ("amount_covered",),
+    "provisions": ("amount",),
+    "equity_exposures": ("carrying_value",),
+}
+
+# What the hierarchy stage rewrites a DISREGARDED engine-only risk type on a lending
+# row to: this prefix + the upper-cased value (``"DQ023:CCR_SFT"``). Deliberately NOT null.
+# An explicit but unrecognised risk type outranks ``obs_product`` and takes the CCF
+# residual (``engine/ccf.py``), exactly as the tag did before; nulling it would let
+# ``obs_product`` re-price the row. The prefix removes ONLY the CCR routing, which
+# keys on the exact tag, and leaves the supplied value readable in the output.
+DISREGARDED_RISK_TYPE_PREFIX = "DQ023:"
+
+# The domain accepted on a LENDING table's ``risk_type`` / ``underlying_risk_type``:
+# every accepted spelling except the engine-only tags above. A value outside it is
+# DQ006, except an engine-only tag, which is reported once, as DQ023.
+LENDING_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_ACCEPTED - ENGINE_ONLY_RISK_TYPES
+
 # CRR Annex I paras 1-4 / PS1/26 Art. 111(1) Table A1: canonical normalised OBS
 # *product* keys accepted on the ``obs_product`` column. Each maps, via the
 # REGIME-SPECIFIC ``obs_product_to_risk_type`` CategoryMap in
@@ -2984,6 +3043,48 @@ TABLE_UNIQUE_KEYS: dict[str, str] = {
     "counterparties": "counterparty_reference",
 }
 
+#: The exposure_reference NAMESPACES: every input whose key becomes an exposure
+#: row's ``exposure_reference``, as ``bundle_frames`` key -> (key column, prefix
+#: the engine puts on it). Read by ``contracts/validation.py::
+#: validate_duplicate_keys``: a reference claimed by more than one namespace is
+#: DQ019 (review finding RC-10). ``TABLE_UNIQUE_KEYS`` above states uniqueness
+#: per table only, so a loan and a contingent sharing a reference were plausible
+#: input — and every join keyed on the bare reference merged them (the IRB
+#: model-permission de-duplication kept one; a guarantee on one covered both).
+#:
+#: The prefixed entries are the engine-minted rows: ``ccr__<netting_set_id>`` for
+#: SA-CCR (``engine/ccr/pipeline_adapter.py``) and FCCM SFT
+#: (``engine/sft/fccm.py``) netting sets, ``ft__`` / ``dfc__`` for failed trades
+#: and CCP default-fund contributions (``engine/stages/ccr.py``). A facility's
+#: undrawn rows are the one minted family not listed here, because their
+#: reference is the facility's PLUS a suffix: see
+#: :data:`FACILITY_UNDRAWN_REFERENCE_INFIX`. A ``facilities`` reference is not an
+#: exposure reference at all — ``facility_reference == loan_reference`` is a
+#: legitimate pattern (``engine/hierarchy/unify.py::_join_facility_metadata``).
+EXPOSURE_REFERENCE_NAMESPACES: dict[str, tuple[str, str]] = {
+    "loans": ("loan_reference", ""),
+    "contingents": ("contingent_reference", ""),
+    "equity_exposures": ("exposure_reference", ""),
+    "ccr.trades": ("netting_set_id", "ccr__"),
+    "sft.trades": ("netting_set_id", "ccr__"),
+    "ccr.failed_trades": ("failed_trade_id", "ft__"),
+    "ccr.default_fund_contributions": ("contribution_id", "dfc__"),
+}
+
+#: The infix of every engine-minted facility-undrawn reference:
+#: ``<facility_reference>_UNDRAWN`` plus an optional ``_<sub>`` / ``_RESIDUAL``
+#: (MOF waterfall) or ``@<member>`` (Facility Share) suffix
+#: (``engine/hierarchy/facility_undrawn.py``). A loan / contingent / equity
+#: reference of that shape for an existing facility claims the minted namespace
+#: too (DQ019).
+FACILITY_UNDRAWN_REFERENCE_INFIX = "_UNDRAWN"
+
+#: The separator the hierarchy stage puts between a colliding loan / contingent
+#: reference and its exposure type when it keeps the rows apart
+#: (``engine/hierarchy/namespace.py``): ``X1`` -> ``X1#loan`` / ``X1#contingent``.
+#: DQ019's message names the re-keyed references with it.
+EXPOSURE_REFERENCE_QUALIFIER = "#"
+
 #: Declared referential links, keyed by the REFERENCING table. Read generically
 #: by ``contracts/validation.py::validate_referential_integrity``.
 #:
@@ -3143,8 +3244,8 @@ TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
-        "risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
+        "risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": LENDING_RISK_TYPES_ACCEPTED,
         "obs_product": VALID_OBS_PRODUCTS_ACCEPTED,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
@@ -3156,8 +3257,8 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "contingents": {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
-        "risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
+        "risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": LENDING_RISK_TYPES_ACCEPTED,
         "obs_product": VALID_OBS_PRODUCTS_ACCEPTED,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
         "exposure_collateral_type": VALID_COLLATERAL_TYPES,

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 
@@ -170,6 +171,54 @@ ERROR_UNRESOLVED_OBS_RISK_TYPE = "DQ016"
 # underwriting facilities (RUFs)". Not auto-resolved: an issued medium-risk item
 # mis-coded MR would then be overstated (CM-09).
 ERROR_ISSUED_ITEM_ON_COMMITMENT_RISK_TYPE = "DQ017"
+# One ``exposure_reference`` claimed by more than one exposure namespace — a loan
+# and a contingent sharing a reference, or a user row named like an engine-minted
+# one (``<facility>_UNDRAWN``, ``ccr__<netting set>``, ``ft__``, ``dfc__``) or like
+# an equity exposure (review finding RC-10). Uniqueness was only ever declared PER
+# TABLE (``TABLE_UNIQUE_KEYS``), so such a pair was plausible input, and every
+# join keyed on the bare reference merged the two rows: the IRB model-permission
+# de-duplication kept one of them (the other's capital left the total) and a
+# guarantee on the loan covered the contingent too. ERROR, one per colliding
+# reference. The hierarchy stage keeps the rows apart by re-keying each colliding
+# loan / contingent to ``<reference>#<type>`` and resolving every typed pointer to
+# it (facility mapping, short-term rating scope, CRM beneficiary, securitisation
+# allocation) by its declared type (``engine/hierarchy/namespace.py``).
+ERROR_EXPOSURE_REFERENCE_COLLISION = "DQ019"
+# An amount in a currency other than the reporting currency with no FX rate into
+# it (review finding RC-11). ``engine/fx`` keeps such an amount in its source
+# currency's units and every downstream GBP threshold, total and template reads it
+# as reporting currency — a 1:1 conversion that understates (KWD) or overstates
+# (ZAR) depending on the currency, which is why the defect is the silence, not a
+# direction. ERROR, one per currency, naming the rows and amounts per table.
+# Emitted by ``contracts/validation.py::_validate_missing_fx_rates`` (the
+# pipeline-entry input gate); not raised when conversion is off.
+ERROR_FX_RATE_MISSING = "DQ020"
+# A facility-mapping child (sub-facility, loan or contingent) mapped under more than
+# one parent facility (review findings RC-01 / RC-02 / SF-03). A facility hierarchy
+# is a tree; a second parent used to make a sub-facility's root depend on row order
+# and made a loan consume the headroom of every parent it was mapped to. WARNING:
+# the hierarchy stage resolves the graph deterministically and conservatively (one
+# parent per sub-facility, the lowest reference; one root per loan / contingent,
+# that of its lowest-referenced parent; one reduction per root) and names the
+# resolution here.
+ERROR_FACILITY_MAPPING_MULTI_PARENT = "DQ021"
+# Facility mappings that form a cycle (review finding RC-02). Every member used to
+# be treated as somebody's sub-facility, so NONE emitted its undrawn commitment.
+# WARNING: every facility on the cycle is treated as a root of its own instead.
+ERROR_FACILITY_MAPPING_CYCLE = "DQ022"
+# A risk type only the ENGINE mints (``CCR_DERIVATIVE`` / ``CCR_SFT`` /
+# ``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE``) supplied on a LENDING table
+# (review finding CC-19). Those tags route a row to a counterparty-credit-risk
+# treatment — the ``standardised_ccr`` approach label, the repo-style IRB
+# maturity, the CCR rows of C 07.00, the 1250% own-funds conversion — whose
+# exposure value comes from the CCR methods or the FCCM (CRR Art. 111(2); PS1/26
+# Art. 111(2) / (2A)), never from an Annex I / Table A1 CCF on a nominal amount.
+# ERROR. The hierarchy stage disregards the two CCR routing tags (rewritten to
+# ``DQ023:<tag>``: the row keeps the residual CCF of an unrecognised risk type and
+# loses the CCR routing) and honours the two own-funds tags, whose 1250% weight
+# disregarding would cut (``data/schemas.py::DISREGARDED_ENGINE_ONLY_RISK_TYPES``).
+# Replaces the DQ006 such a value would otherwise draw.
+ERROR_ENGINE_ONLY_RISK_TYPE = "DQ023"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -887,9 +936,14 @@ def facility_limit_missing_warning(*, facility_reference: str) -> CalculationErr
 
 
 def facility_warning_summary(
-    *, code: str, omitted: int, sample_cap: int, detail: str
+    *,
+    code: str,
+    omitted: int,
+    sample_cap: int,
+    detail: str,
+    category: ErrorCategory = ErrorCategory.HIERARCHY,
 ) -> CalculationError:
-    """Create the one summary that closes a sampled HIE004 / HIE005 / HIE006 group.
+    """Create the one summary that closes a sampled HIE004-HIE006 / DQ021 group.
 
     The facility-undrawn warnings follow the estate's ``sample_cap`` contract
     (as DQ005 / DQ013 do): up to ``sample_cap`` facilities are named one per
@@ -897,6 +951,7 @@ def facility_warning_summary(
     so a systemic gap — a whole multi-currency book with no FX table — stays
     readable instead of raising one warning per facility. ``actual_value``
     holds the omitted count; ``exposure_reference`` is None (no one facility).
+    ``category`` follows the code it closes (DATA_QUALITY for DQ021).
     """
     return CalculationError(
         code=code,
@@ -905,8 +960,104 @@ def facility_warning_summary(
             f"sample_cap={sample_cap}: {detail}"
         ),
         severity=ErrorSeverity.WARNING,
-        category=ErrorCategory.HIERARCHY,
+        category=category,
         actual_value=str(omitted),
+    )
+
+
+def facility_multi_parent_warning(
+    *,
+    child_reference: str,
+    child_type: str,
+    parents: Sequence[str],
+    kept: str,
+    ignored: Sequence[str] = (),
+) -> CalculationError:
+    """Create a DQ021 warning for a facility-mapping child with several parents.
+
+    A facility hierarchy is a tree, and every consumer of ``facility_mappings``
+    assumed one: a sub-facility's root was taken from a last-wins dict over an
+    unordered ``unique()`` (so RWA changed from run to run), and a loan or
+    contingent consumed the headroom of EVERY facility it was mapped to (review
+    findings RC-01 / RC-02 / SF-03). The hierarchy stage now resolves the
+    mapping deterministically, and this warning says how:
+
+    - ``child_type == "facility"``: ``kept`` is the one parent the sub-facility
+      is attached to (the lowest reference); ``ignored`` the parents dropped.
+    - a loan / contingent: ``kept`` is the ROOT whose headroom it reduces — the
+      root of its lowest-referenced parent. Every mapping under that root is
+      kept (an overlapping sub-limit genuinely constrains the same drawing), but
+      the root's headroom is reduced once. ``ignored`` lists the parents under
+      any other root; those facilities' commitments are measured gross of it.
+
+    Reference: CRR Art. 4(1)(56) / PS1/26 Glossary "conversion factor" — the
+    undrawn amount is that of "the commitment ... determined by the advised
+    limit", which one drawing reduces once.
+    """
+    listed = ", ".join(parents)
+    if child_type == "facility":
+        resolution = (
+            f"A facility hierarchy is a tree, so it is attached to '{kept}' (the "
+            "lowest reference) only: its limit, drawings and undrawn slice count "
+            "once, under that parent. The parent no longer depends on row order."
+        )
+    elif ignored:
+        resolution = (
+            f"It reduces the headroom under root '{kept}' only (the root of its "
+            f"lowest-referenced parent); the mapping(s) to {', '.join(ignored)} are "
+            "ignored, so those facilities' undrawn commitments are measured gross "
+            "of it rather than reduced a second time."
+        )
+    else:
+        resolution = (
+            f"All of them hang under root '{kept}': it reduces each mapped "
+            f"sub-limit's own headroom, but '{kept}''s headroom only once."
+        )
+    return CalculationError(
+        code=ERROR_FACILITY_MAPPING_MULTI_PARENT,
+        message=(
+            f"[facility_mappings] {child_type} '{child_reference}' is mapped under "
+            f"{len(parents)} parent facilities ({listed}). {resolution}"
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=child_reference,
+        regulatory_reference="CRR Art. 4(1)(56); PS1/26 Glossary 'conversion factor'",
+        field_name="parent_facility_reference",
+        expected_value="one parent facility per child",
+        actual_value=listed,
+    )
+
+
+def facility_mapping_cycle_warning(*, members: Sequence[str]) -> CalculationError:
+    """Create a DQ022 warning for facility mappings that form a cycle.
+
+    Every facility on a cycle is somebody's child, and only root / standalone
+    facilities emit an undrawn row, so a cycle used to delete every member's
+    undrawn commitment with no error (review finding RC-02: a two-facility
+    cycle took EAD from 2.25m to 0.5m). The hierarchy stage now treats every
+    member as a root of its own — each keeps its own limit and emits its own
+    undrawn commitment, netted only by its own children — which is the
+    conservative reading of a graph that names no root.
+
+    ``members`` is the cycle, sorted; ``actual_value`` holds it joined.
+    """
+    listed = ", ".join(members)
+    return CalculationError(
+        code=ERROR_FACILITY_MAPPING_CYCLE,
+        message=(
+            f"[facility_mappings] facilities {listed} form a cycle of parent "
+            "mappings, so none of them has a root. Each is treated as a root "
+            "facility of its own: it keeps its own limit and emits its own undrawn "
+            "commitment instead of every member being dropped as a sub-facility."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=members[0] if members else None,
+        regulatory_reference="CRR Art. 111(1); PS1/26 Art. 111(1)",
+        field_name="parent_facility_reference",
+        expected_value="an acyclic facility hierarchy",
+        actual_value=listed,
     )
 
 
@@ -1524,6 +1675,163 @@ def duplicate_input_key_error(
         field_name=column,
         expected_value="one row per key",
         actual_value=str(count),
+    )
+
+
+def exposure_reference_collision_error(
+    *,
+    reference: str,
+    namespaces: Sequence[str],
+    qualified: Sequence[str],
+) -> CalculationError:
+    """Create a DQ019 error for an exposure_reference claimed by several namespaces.
+
+    ``namespaces`` names every table (or engine-minted family) that produces an
+    exposure row with this reference; ``qualified`` the references the
+    colliding loan / contingent rows are published under instead
+    (``<reference>#loan`` / ``<reference>#contingent``), empty when none of the
+    claimants is a lending row the stage can re-key.
+
+    One per colliding reference and uncapped, for the reason
+    :func:`duplicate_input_key_error` gives: the finding is a property of a
+    row, and a sampled collision leaves the un-sampled ones as merged as before.
+    Severity is ERROR: before the re-key the two rows merged downstream (the
+    IRB model-permission de-duplication kept one of them; a guarantee on one
+    covered both), so the input was reporting one exposure's capital twice or
+    not at all, and even after it a pointer that does not say which row it
+    means (``beneficiary_type`` ``'exposure'`` or null) matches neither.
+
+    Reference: CRR / PS1/26 Art. 111(1) — each item's exposure value is
+    measured; Art. 213(1)(a) — "the credit protection is direct".
+    """
+    listed = ", ".join(namespaces)
+    if qualified:
+        resolution = (
+            "The rows are kept apart: each colliding loan / contingent is published "
+            f"as {', '.join(repr(q) for q in qualified)}, and every pointer to it "
+            "(facility mapping, short-term rating scope, collateral / guarantee / "
+            "provision beneficiary, securitisation allocation) is resolved by its "
+            "declared type. A pointer whose type does not say which row it means "
+            "(beneficiary_type 'exposure' or null) now matches neither."
+        )
+    else:
+        resolution = (
+            "None of the claimants is a loan or contingent row the hierarchy stage "
+            "can re-key, so the rows may still merge downstream."
+        )
+    return CalculationError(
+        code=ERROR_EXPOSURE_REFERENCE_COLLISION,
+        message=(
+            f"exposure_reference '{reference}' is claimed by more than one exposure "
+            f"namespace ({listed}). Uniqueness was declared per table only, and every "
+            "join keyed on the bare reference merges the rows. "
+            f"{resolution} Give every exposure a reference unique across tables."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=reference,
+        regulatory_reference="CRR Art. 111(1); Art. 213(1)(a)",
+        field_name="exposure_reference",
+        expected_value="one exposure namespace per reference",
+        actual_value=listed,
+    )
+
+
+def fx_rate_missing_error(
+    *,
+    currency: str,
+    base_currency: str,
+    rows: int,
+    detail: str,
+) -> CalculationError:
+    """Create a DQ020 error for amounts in a currency with no rate into the base.
+
+    ``engine/fx`` converts an amount only where ``fx_rates`` holds a
+    ``currency -> base_currency`` rate; any other amount passes through in its
+    SOURCE currency's units while its row keeps the source currency code, and
+    every downstream threshold, total and template then reads it as reporting
+    currency — a 1:1 conversion nobody chose (review finding RC-11). The
+    direction depends on the currency (1m KWD read as GBP understates by ~60%,
+    1m ZAR overstates ~20x), so the defect is the silence, which this ends. The
+    amounts are still passed through unconverted: the engine has no rate to
+    apply and must not invent one.
+
+    ``detail`` lists the affected rows and amounts per table; ``actual_value``
+    is the currency, ``expected_value`` the missing pair.
+    """
+    return CalculationError(
+        code=ERROR_FX_RATE_MISSING,
+        message=(
+            f"No FX rate {currency} -> {base_currency} in fx_rates: {rows} row(s) "
+            f"carry {currency} amounts ({detail}), which are NOT converted and are "
+            f"read as {base_currency} by every threshold, total and template "
+            f"downstream. Supply the {currency} -> {base_currency} rate."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        field_name="currency",
+        expected_value=f"an fx_rates row {currency} -> {base_currency}",
+        actual_value=currency,
+    )
+
+
+def engine_only_risk_type_error(
+    *,
+    table: str,
+    column: str,
+    value: str,
+    count: int,
+    disregarded: bool,
+) -> CalculationError:
+    """Create a DQ023 error for an engine-only risk type on a lending table.
+
+    ``CCR_DERIVATIVE`` / ``CCR_SFT`` / ``CCR_DEFAULT_FUND`` /
+    ``SETTLEMENT_FAILED_TRADE`` tag the rows the counterparty-credit-risk stages
+    mint. On a lending row the first two used to be accepted silently and
+    route it to the CCR treatment — a contingent priced at a CCF on its nominal
+    amount yet labelled ``standardised_ccr`` and reported on C 07.00's CCR
+    rows, a ``CCR_SFT`` row given the repo-style IRB maturity (review finding
+    CC-19). The exposure value of a derivative or an SFT is not an Annex I /
+    Table A1 CCF on a nominal amount at all (CRR Art. 111(2); PS1/26 Art. 111(2)
+    / (2A)).
+
+    ``disregarded`` says what the hierarchy stage does with the value
+    (``data/schemas.py::DISREGARDED_ENGINE_ONLY_RISK_TYPES``). True for the two
+    CCR routing tags: the value is rewritten to ``DQ023:<TAG>``, an explicit but
+    unrecognised risk type, so the row keeps the residual CCF it had —
+    ``obs_product`` is not consulted, an explicit risk type outranks it — and
+    loses only the CCR routing. False for the two own-funds tags: their 1250%
+    weight is kept, since disregarding it would cut the row's RWA. Lending
+    tables carry ``is_sft`` for a repo-style maturity.
+    """
+    canonical = value.strip().upper()
+    if disregarded:
+        treatment = (
+            f"The value is disregarded: it is rewritten to 'DQ023:{canonical}', an "
+            "unrecognised risk type, so the row keeps the CCF residual it had "
+            "(obs_product is not consulted - an explicit risk_type outranks it) and "
+            "loses only the counterparty-credit-risk routing."
+        )
+    else:
+        treatment = (
+            "The value is honoured: it selects the 1250% own-funds conversion, which "
+            "the row keeps, because disregarding the tag would lower its capital."
+        )
+    return CalculationError(
+        code=ERROR_ENGINE_ONLY_RISK_TYPE,
+        message=(
+            f"[{table}] '{column}' = '{value}' on {count} row(s): this risk type is "
+            "minted by the counterparty-credit-risk stages for their own rows and is "
+            f"not a lending-table category. {treatment} Book derivatives, SFTs, "
+            "failed trades and default-fund contributions in the CCR / SFT inputs, "
+            "or flag a repo-style loan with is_sft."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="CRR Art. 111(2); PS1/26 Art. 111(2) / (2A)",
+        field_name=column,
+        expected_value="a lending risk type (FR, FRC, MR, MR_ISSUED, OC, MLR, LR)",
+        actual_value=value,
     )
 
 

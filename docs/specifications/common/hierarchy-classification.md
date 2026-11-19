@@ -118,6 +118,30 @@ Facilities can form their own hierarchies (e.g., a master facility with sub-faci
 - The hierarchy is traversed upward (up to 10 levels) to find the **root facility** for each sub-facility
 - Output columns: `child_facility_reference`, `root_facility_reference`, `facility_hierarchy_depth`
 
+#### Graph validation (DQ021 / DQ022)
+
+Every consumer reads the mappings as a **tree**, so the stage makes them one before anything else
+reads them (`graph.collect_facility_graph`, `graph.resolve_exposure_mappings`; review findings
+RC-01 / RC-02 / SF-03). Each repair is deterministic — independent of row order — and named:
+
+1. **A sub-facility with several parents** keeps its lowest-referenced parent (`DQ021`). Its root
+   used to come from a last-wins dict over an unordered `unique()`, so the same input priced
+   differently from run to run.
+2. **A cycle** (`F1 -> F2 -> F1`, or a self-mapping) makes every member a root of its own
+   (`DQ022`); an edge into the cycle from outside it is kept. Every member used to be somebody's
+   child, and only roots emit an undrawn row, so every member's commitment vanished.
+3. **A loan / contingent under facilities of several roots** keeps only the mappings under the root
+   of its lowest-referenced parent (`DQ021` names the ignored ones): a drawing is made under one
+   commitment and must not reduce the headroom of every root it was mapped to.
+4. **A loan / contingent under several sub-limits of one root** keeps them all — each sub-limit's
+   own headroom is reduced by it — but `facility_utilisation_rows` reduces the root's headroom once
+   (the mapping pairs are made unique per child and root before the join).
+
+The rule each resolution serves: CRR Art. 4(1)(56) / PS1/26 Glossary "conversion factor" — the
+undrawn amount is that of "the commitment ... determined by the advised limit", which one drawing
+reduces once — and CRR / PS1/26 Art. 111(1), under which every commitment is measured. No article
+sets a graph rule; these shapes are malformed input, which is why the codes are WARNINGs.
+
 #### Undrawn Amount Aggregation
 
 For multi-level facility hierarchies, drawn amounts from loans under sub-facilities are aggregated up to the root facility. The root undrawn equals the parent's headroom net of every drawn loan/contingent across the descendant tree:

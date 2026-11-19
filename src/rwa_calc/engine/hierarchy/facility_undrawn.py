@@ -308,24 +308,33 @@ def facility_utilisation_rows(
         reference = pl.col("contingent_reference")
         amount = pl.col("nominal_amount").clip(lower_bound=0.0)
 
+    mappings = filter_mappings_by_child_type(facility_mappings, child_type).select(
+        pl.col("child_reference"), pl.col("parent_facility_reference")
+    )
+    if to_root:
+        # SF-03: a child mapped under two sub-limits of one root reaches that root
+        # twice; it is one drawing against one advised limit (CRR Art. 4(1)(56)),
+        # so it reduces the root's headroom once. The MAPPING pairs are made unique
+        # per (child, root) before the join, so two input rows that share a
+        # reference (DQ004) still each count. Each sub-limit's own headroom
+        # (``to_root=False``) is still reduced by the drawing - an overlapping
+        # sub-limit genuinely constrains it.
+        targets = (
+            resolve_to_root_facility(mappings, root_lookup)
+            .select(
+                pl.col("child_reference"),
+                pl.col("aggregation_facility").alias("_netting_facility"),
+            )
+            .unique(maintain_order=True)
+        )
+    else:
+        targets = mappings.rename({"parent_facility_reference": "_netting_facility"})
+
     mapped = frame.select(
         reference.alias("_child_reference"),
         amount.alias("_amount"),
         pl.col("currency").alias("_amount_currency"),
-    ).join(
-        filter_mappings_by_child_type(facility_mappings, child_type).select(
-            pl.col("child_reference"), pl.col("parent_facility_reference")
-        ),
-        left_on="_child_reference",
-        right_on="child_reference",
-        how="inner",
-    )
-    if to_root:
-        mapped = resolve_to_root_facility(mapped, root_lookup).rename(
-            {"aggregation_facility": "_netting_facility"}
-        )
-    else:
-        mapped = mapped.rename({"parent_facility_reference": "_netting_facility"})
+    ).join(targets, left_on="_child_reference", right_on="child_reference", how="inner")
 
     if fx.enabled:
         # ``maintain_order="left"`` keeps the rows in the order the netting sums

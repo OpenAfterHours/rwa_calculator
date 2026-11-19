@@ -282,7 +282,7 @@ class PipelineOrchestrator:
             # are already on the bundle and _new_input_domain_errors keeps only
             # what is not there yet. Appended to the BUNDLE (not the result) so
             # they flow through the existing loader-error merge below.
-            domain_errors = _new_input_domain_errors(data)
+            domain_errors = _new_input_domain_errors(data, config)
             if domain_errors:
                 logger.warning(
                     "input-domain gate raised %d error(s) not already on the bundle",
@@ -523,7 +523,9 @@ def create_test_pipeline() -> PipelineOrchestrator:
 # =============================================================================
 
 
-def _new_input_domain_errors(data: RawDataBundle) -> list[CalculationError]:
+def _new_input_domain_errors(
+    data: RawDataBundle, config: CalculationConfig
+) -> list[CalculationError]:
     """Input-domain errors for ``data`` that are not already on the bundle.
 
     ``validate_bundle_values`` is idempotent over a bundle, so running it at
@@ -533,14 +535,16 @@ def _new_input_domain_errors(data: RawDataBundle) -> list[CalculationError]:
     ``data.errors`` and is filtered out here. (``CalculationError`` is a
     frozen dataclass, hence hashable, so the set difference is exact.) On the
     loader path the only survivors are therefore errors the loader could NOT
-    have produced — none today, since the sole transformation between the two
-    calls is ``scrub_non_finite_values``, which can only remove them.
+    have produced: the configuration-dependent checks, which only this call
+    can run (the loader has no ``CalculationConfig``) — today DQ020, a
+    currency with no FX rate into ``config.base_currency``. The scrub between
+    the two calls (``scrub_non_finite_values``) can only remove errors.
 
     Never raises: a validator defect must not stop a run, exactly as in
     ``engine/loader.py::_scrub_and_validate``.
     """
     try:
-        errors = validate_bundle_values(data)
+        errors = validate_bundle_values(data, config=config)
     except Exception as e:
         logger.warning("Input-domain validation failed: %s", e)
         return []

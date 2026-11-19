@@ -162,6 +162,40 @@ def test_small_group_keeps_sme_treatment(regime: str) -> None:
     assert ERROR_SME_GROUP_SIZE_FLIP not in codes
 
 
+@pytest.mark.parametrize(
+    ("regime", "risk_weight", "factor", "rwa"),
+    [("CRR", 1.0, 1.0, 1_000_000.0), ("B31", 0.85, 1.0, 850_000.0)],
+    ids=["CRR", "B31"],
+)
+def test_figureless_subsidiary_takes_its_small_groups_turnover(
+    regime: str, risk_weight: float, factor: float, rwa: float
+) -> None:
+    """SUB with no figures of its own under a GBP 30m parent: an SME on the group.
+
+    The RWA-REDUCING direction of RC-05 (before: no SME size metric at all, so
+    B31 corporate 100% -> 1,000,000). The PS1/26 glossary SME measures "an annual
+    turnover of not more than GBP 44 million where: (1) the annual turnover shall
+    be calculated on the basis of the highest consolidated accounts of the group
+    to which the enterprise belongs, if any" - the group's GBP 30m, so B31
+    corporate SME 85% -> 850,000. CRR: corporate SME too (Art. 4(1)(128D) ->
+    Rec 2003/361/EC on linked enterprises), but the Art. 501 factor needs the
+    entity's own turnover ("only the annual turnover shall be taken into
+    account", read as its own figure - the conservative gate), so 1.0 and
+    unrated corporate 100% -> 1,000,000.
+    """
+    parent = make_counterparty(
+        counterparty_reference="P", annual_revenue=30_000_000.0, total_assets=30_000_000.0
+    )
+    sub = make_counterparty(counterparty_reference="SUB", annual_revenue=None, total_assets=None)
+
+    row, _codes = _run([parent, sub], _config(regime), org_mappings=_org(("P", "SUB")))
+
+    assert row["exposure_class"] == "corporate_sme"
+    assert row["risk_weight"] == pytest.approx(risk_weight)
+    assert row["supporting_factor"] == pytest.approx(factor)
+    assert row["rwa_final"] == pytest.approx(rwa)
+
+
 # =============================================================================
 # RC-06: the group figure is the max over EVERY org ancestor
 # =============================================================================

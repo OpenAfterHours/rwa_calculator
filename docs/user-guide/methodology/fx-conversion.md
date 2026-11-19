@@ -78,7 +78,36 @@ The converter preserves original values for audit:
 If a currency's FX rate is not provided:
 - Values are left unchanged (not converted)
 - `fx_rate_applied` is set to `null`
-- No error is raised (graceful handling)
+- No error is raised (graceful handling) — except for facility headroom netting, below
+
+## Facility Headroom Netting
+
+A facility's undrawn commitment is `limit − utilisation`, and that subtraction is only
+meaningful in one currency — the facility's, in which its limit is advised (CRR Art. 4(1)(56):
+the extent of the commitment is "determined by the advised limit"). Headroom is computed during
+hierarchy unification, **before** the conversion above, so each mapped loan's `drawn_amount` and
+contingent's `nominal_amount` is first put in the facility's currency at the same `fx_rates`:
+
+```
+amount_in_facility_ccy = amount × rate(child_ccy → GBP) / rate(facility_ccy → GBP)
+```
+
+The undrawn row is then converted to the reporting currency with everything else.
+
+| Case | Example | Undrawn |
+|------|---------|---------|
+| Same currency | GBP 10m line, GBP 4m drawn | 6m GBP (unchanged) |
+| Drawing in another currency | GBP 10m line, EUR 5m drawn at 0.85 | 10m − 4.25m = 5.75m GBP |
+| Low-unit currency | GBP 10m line, JPY 1bn drawn at 0.005 | 5m GBP (raw netting clipped the line to 0) |
+| No rate for the drawing | GBP 10m line, USD 6.5m drawn, no USD rate | 10m GBP, not netted — **HIE005** |
+| Conversion disabled | `apply_fx_conversion=False` | netted as supplied (one unit of account) |
+
+An amount with no rate is **not netted**: the headroom is never reduced by an amount the run
+cannot measure, and the `HIE005` warning names the facility and the currency so the missing rate
+can be supplied. For a Multiple Option Facility, each sub-facility's headroom is netted in its own
+currency and converted into the umbrella's currency for the waterfall cap; a sub-limit that cannot
+be converted takes no slice (also `HIE005`). See
+[Hierarchy & Classification](../../specifications/common/hierarchy-classification.md#undrawn-amount-aggregation).
 
 ## Regulatory Thresholds
 

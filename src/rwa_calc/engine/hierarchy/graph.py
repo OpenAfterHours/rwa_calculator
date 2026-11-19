@@ -163,15 +163,50 @@ def build_ultimate_parent_lazy(
     ).lazy()
 
 
+def collect_facility_edges(facility_mappings: pl.LazyFrame) -> pl.DataFrame | None:
+    """Collect the facility -> facility edges once (small data).
+
+    Both facility graph lookups (:func:`build_facility_root_lookup`,
+    :func:`build_facility_ancestor_closure`) walk this same edge set, so the
+    hierarchy stage collects it once and hands it to both via ``edges=``.
+
+    Null ``child_type`` values (legacy mappings) yield no facility-typed rows.
+
+    Returns:
+        DataFrame with ``child_facility_reference`` / ``parent_facility_reference``,
+        or None when the mappings frame cannot carry any edge (missing columns).
+    """
+    if not has_required_columns(
+        facility_mappings, {"parent_facility_reference", "child_reference"}
+    ):
+        return None
+    return (
+        facility_mappings.filter(
+            pl.col("child_type").fill_null("").str.to_lowercase() == "facility"
+        )
+        .select(
+            [
+                pl.col("child_reference").alias("child_facility_reference"),
+                pl.col("parent_facility_reference"),
+            ]
+        )
+        .unique()
+        .collect()
+    )
+
+
 def build_facility_root_lookup(
     facility_mappings: pl.LazyFrame,
     max_depth: int = 10,
+    *,
+    edges: pl.DataFrame | None = None,
 ) -> pl.LazyFrame:
     """
     Build root facility lookup using eager graph traversal.
 
-    Collects the small facility edge data eagerly, resolves the full graph
-    via dict traversal, and returns the result as a LazyFrame.
+    Collects the small facility edge data eagerly (or reuses ``edges``),
+    resolves the full graph via dict traversal, and returns the result as a
+    LazyFrame.
 
     Args:
         facility_mappings: Facility mappings with ``parent_facility_reference``,
@@ -179,6 +214,8 @@ def build_facility_root_lookup(
                          (sealed at the loader edge, so ``child_type``
                          always exists — typed null when unreported).
         max_depth: Maximum hierarchy depth to traverse
+        edges: Facility edges already collected by :func:`collect_facility_edges`
+            (None: collect them here)
 
     Returns:
         LazyFrame with columns:
@@ -194,29 +231,8 @@ def build_facility_root_lookup(
         }
     )
 
-    if not has_required_columns(
-        facility_mappings, {"parent_facility_reference", "child_reference"}
-    ):
-        return empty_result
-
-    # Filter to facility→facility relationships and collect (small data).
-    # Null child_type values (legacy mappings) yield no facility-typed
-    # rows — facility_edges is empty and the height==0 short-circuit fires.
-    facility_edges = (
-        facility_mappings.filter(
-            pl.col("child_type").fill_null("").str.to_lowercase() == "facility"
-        )
-        .select(
-            [
-                pl.col("child_reference").alias("child_facility_reference"),
-                pl.col("parent_facility_reference"),
-            ]
-        )
-        .unique()
-        .collect()
-    )
-
-    if facility_edges.height == 0:
+    facility_edges = edges if edges is not None else collect_facility_edges(facility_mappings)
+    if facility_edges is None or facility_edges.height == 0:
         return empty_result
 
     # The HIE003 channel is counterparty-scoped; drop the new ``truncated``
@@ -240,6 +256,8 @@ def build_facility_root_lookup(
 def build_facility_ancestor_closure(
     facility_mappings: pl.LazyFrame,
     max_depth: int = 10,
+    *,
+    edges: pl.DataFrame | None = None,
 ) -> pl.LazyFrame:
     """Build the facility ancestor closure for multi-level collateral cascade.
 
@@ -256,6 +274,8 @@ def build_facility_ancestor_closure(
             ``child_reference`` and ``child_type`` (sealed at the loader
             edge, so ``child_type`` always exists).
         max_depth: Maximum hierarchy depth to traverse.
+        edges: Facility edges already collected by :func:`collect_facility_edges`
+            (None: collect them here).
 
     Returns:
         LazyFrame with columns:
@@ -269,26 +289,8 @@ def build_facility_ancestor_closure(
             "ancestor_facilities": pl.List(pl.String),
         }
     )
-    if not has_required_columns(
-        facility_mappings, {"parent_facility_reference", "child_reference"}
-    ):
-        return empty_result
-
-    facility_edges = (
-        facility_mappings.filter(
-            pl.col("child_type").fill_null("").str.to_lowercase() == "facility"
-        )
-        .select(
-            [
-                pl.col("child_reference").alias("child_facility_reference"),
-                pl.col("parent_facility_reference"),
-            ]
-        )
-        .unique()
-        .collect()
-    )
-
-    if facility_edges.height == 0:
+    facility_edges = edges if edges is not None else collect_facility_edges(facility_mappings)
+    if facility_edges is None or facility_edges.height == 0:
         return empty_result
 
     closure = _resolve_ancestors_eager(

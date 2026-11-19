@@ -31,28 +31,36 @@
     },
     {
       "article": "4",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.hierarchy.facility_fx::with_facility_currency_factor"
+      ],
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/classify/attributes.py",
         "engine/classify/audit.py",
         "engine/classify/subtypes.py",
         "engine/hierarchy/__init__.py",
         "engine/hierarchy/enrich.py",
+        "engine/hierarchy/facility_fx.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/facility_warnings.py",
         "engine/hierarchy/graph.py",
         "engine/hierarchy/resolver.py",
         "engine/stages/hierarchy.py"
       ],
       "test_files": [
+        "tests/acceptance/test_facility_undrawn_commitments.py",
         "tests/fixtures/p1_126/p1_126.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
         "tests/unit/classifier/test_sme_assets_fallback.py",
+        "tests/unit/test_facility_undrawn_commitments.py",
         "tests/unit/test_hierarchy.py"
       ],
       "watchfire_index_gap": false
@@ -339,7 +347,8 @@
         "rwa_calc.engine.ccf::CCFCalculator.apply_ccf",
         "rwa_calc.engine.ccf::build_product_to_risk_type_expr",
         "rwa_calc.engine.ccf::sa_ccf_expression",
-        "rwa_calc.engine.crm.provisions::resolve_provisions"
+        "rwa_calc.engine.crm.provisions::resolve_provisions",
+        "rwa_calc.engine.hierarchy.facility_undrawn::_undrawn_select_expressions"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -366,6 +375,9 @@
         "engine/crm/guarantees.py",
         "engine/crm/processor.py",
         "engine/crm/provisions.py",
+        "engine/hierarchy/facility_fx.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/facility_warnings.py",
         "engine/kernels/allocation.py",
         "reporting/corep/__init__.py",
         "reporting/corep/c07.py",
@@ -387,6 +399,7 @@
         "tests/acceptance/crr/test_scenario_crr_h_complex.py",
         "tests/acceptance/reporting/test_r1_negative_gross_carriers.py",
         "tests/acceptance/reporting/test_reporting_offbs_golden.py",
+        "tests/acceptance/test_facility_undrawn_commitments.py",
         "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/conformance/rederive.py",
         "tests/contracts/test_ccf_tables.py",
@@ -6019,6 +6032,7 @@
       "code_functions": [
         "rwa_calc.engine.ccf::CCFCalculator._apply_uk_residential_mortgage_ccf",
         "rwa_calc.engine.ccf::CCFCalculator._compute_ccf",
+        "rwa_calc.engine.hierarchy.facility_undrawn::_undrawn_select_expressions",
         "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr"
       ],
       "confidence": "HIGH",
@@ -6037,6 +6051,7 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/ccf.py",
+        "engine/hierarchy/facility_fx.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/unify.py",
         "reporting/corep/c07.py",
@@ -6052,6 +6067,7 @@
         "tests/acceptance/basel31/test_p2_33_uk_resi_mortgage_commitment_ccf.py",
         "tests/acceptance/reporting/test_of08_01_ccf_rows.py",
         "tests/acceptance/reporting/test_reporting_offbs_golden.py",
+        "tests/acceptance/test_facility_undrawn_commitments.py",
         "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/contracts/test_ccf_tables.py",
         "tests/contracts/test_of08_01_published_rows.py",
@@ -6064,6 +6080,7 @@
         "tests/unit/reporting/corep/test_c08_01_ccf_rows.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
+        "tests/unit/test_facility_undrawn_commitments.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_p1_267_sa_ccf_residual.py"
       ],

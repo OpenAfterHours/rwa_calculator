@@ -93,6 +93,15 @@ The `risk_type` column determines the CCF for off-balance sheet exposures:
 | NIFs/RUFs | 50% | 50% |
 | Direct Credit Substitutes | 100% | 100% |
 
+!!! note "Encoding an unconditionally cancellable line"
+    A facility with `committed=False` is an accepted commitment the bank may cancel
+    unconditionally, and its undrawn headroom is still an exposure: the engine prices it in the
+    `LR` bucket whatever `risk_type` says (0% under CRR, 10% under Basel 3.1 — PS1/26 Table A1
+    row (7)), raising `HIE004` if `risk_type` contradicts it. `risk_type="LR"` on a committed
+    facility gives the same row. A limit that was never offered to and accepted by the obligor is
+    not a commitment at all: supply it with `limit` 0. Headroom is netted in the facility's own
+    currency — see [FX Conversion](fx-conversion.md#facility-headroom-netting).
+
 ## Credit Risk Mitigation
 
 SA allows several CRM techniques — financial collateral (simple and comprehensive methods), guarantees (substitution approach), and provisions (drawn-first deduction).

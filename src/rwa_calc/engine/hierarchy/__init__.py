@@ -10,6 +10,9 @@ Layout:
 - ``graph``            — counterparty/facility graph resolution + CP lookup
 - ``ratings``          — dual rating-inheritance resolution
 - ``facility_undrawn`` — synthetic undrawn rows (MOF / Facility Share)
+- ``facility_fx``      — drawings put in their facility's currency before
+  headroom netting
+- ``facility_warnings`` — HIE004 / HIE005 / HIE006 facility-undrawn warnings
 - ``unify``            — loans/contingents/undrawn -> unified exposure frame
 - ``enrich``           — unified-frame decoration (QRRE, ratings, RE, LTV,
   lending group)

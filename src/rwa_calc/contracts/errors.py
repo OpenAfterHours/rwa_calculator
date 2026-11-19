@@ -167,6 +167,26 @@ ERROR_UNRESOLVED_OBS_RISK_TYPE = "DQ016"
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
 ERROR_MISSING_PARENT = "HIE002"
 ERROR_HIERARCHY_DEPTH = "HIE003"
+# Facility undrawn commitments (engine/hierarchy/facility_warnings.py). All three
+# are WARNINGs: each names a facility whose undrawn row the hierarchy stage built
+# on a treatment the input did not state outright, so the number is visible
+# rather than silently chosen.
+#
+# ``committed=False`` with a non-null risk_type other than the UCC bucket LR. An
+# uncommitted facility is an accepted, unconditionally cancellable commitment
+# (PS1/26 Glossary "commitment"; Table A1 row (7) 10%; CRR Annex I 4(a) 0%), so
+# its undrawn row is priced as LR whatever the row declared.
+ERROR_UNCOMMITTED_FACILITY_RISK_TYPE = "HIE004"
+# A loan / contingent drawn in a currency other than its facility's, or a
+# sub-facility limit in a currency other than its umbrella's, with no FX rate in
+# the run to express it in the facility currency. The amount is NOT netted
+# against the headroom (the undrawn commitment is measured gross of it) rather
+# than subtracted in raw units (CRR Art. 4(1)(56): the commitment's extent is
+# "determined by the advised limit").
+ERROR_FACILITY_HEADROOM_FX_RATE_MISSING = "HIE005"
+# A facility with a null ``limit`` that is not an umbrella (MOF parent): its
+# undrawn commitment cannot be measured, so no undrawn row is generated.
+ERROR_FACILITY_LIMIT_MISSING = "HIE006"
 
 # Classification error codes
 ERROR_UNKNOWN_EXPOSURE_CLASS = "CLS001"
@@ -517,6 +537,143 @@ def hierarchy_error(
         category=ErrorCategory.HIERARCHY,
         exposure_reference=exposure_reference,
         counterparty_reference=counterparty_reference,
+    )
+
+
+def uncommitted_facility_risk_type_warning(
+    *, facility_reference: str, risk_type: str
+) -> CalculationError:
+    """Create a HIE004 warning: an uncommitted facility declared a non-UCC risk_type.
+
+    ``committed=False`` is the documented encoding of an accepted commitment the
+    institution may cancel unconditionally at any time. Its undrawn headroom is
+    therefore priced in the UCC bucket (``LR``: PS1/26 Table A1 row (7) 10%; CRR
+    Annex I 4(a) 0%) and the declared ``risk_type`` is not used. The warning
+    exists because the two inputs contradict each other: either the line is not
+    unconditionally cancellable (set ``committed=True``) or its risk type is LR.
+    ``exposure_reference`` carries the facility reference (the undrawn row's
+    ``source_exposure_reference``).
+
+    References:
+    - PRA PS1/26 Glossary "commitment"; Art. 111 Table A1 row (7)
+    - CRR Art. 111, Annex I item 4(a)
+    """
+    return CalculationError(
+        code=ERROR_UNCOMMITTED_FACILITY_RISK_TYPE,
+        message=(
+            f"Facility '{facility_reference}' has committed=False (an accepted, "
+            "unconditionally cancellable commitment) but declares risk_type "
+            f"'{risk_type}'. Its undrawn headroom is priced in the UCC bucket LR "
+            "(PS1/26 Table A1 row (7); CRR Annex I 4(a)); set committed=True if the "
+            "line cannot be cancelled unconditionally."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.HIERARCHY,
+        exposure_reference=facility_reference,
+        regulatory_reference="PS1/26 Art. 111 Table A1 row (7); CRR Annex I 4(a)",
+        field_name="risk_type",
+        expected_value="LR (or committed=True)",
+        actual_value=risk_type,
+    )
+
+
+def facility_headroom_fx_rate_missing_warning(
+    *,
+    facility_reference: str,
+    currency: str,
+    facility_currency: str,
+    umbrella_reference: str | None = None,
+) -> CalculationError:
+    """Create a HIE005 warning: an amount could not be put in its facility's currency.
+
+    Undrawn headroom is ``limit - utilisation`` in the FACILITY's currency, so a
+    drawing in another currency is converted at the run's FX rates before it is
+    netted. Where the run holds no rate for one side, the amount is not netted —
+    the headroom is never reduced by an amount the run cannot measure — and this
+    warning names the facility and the currency. With ``umbrella_reference`` set,
+    the facility is a sub-facility whose own limit could not be expressed in its
+    umbrella's currency, so it takes no slice of the umbrella's waterfall (the
+    umbrella's residual row carries that headroom instead).
+
+    References:
+    - CRR Art. 4(1)(56); PRA PS1/26 Glossary "conversion factor"
+    - CRR Art. 111(1); PRA PS1/26 Art. 111(1)(b)
+    """
+    if umbrella_reference is None:
+        effect = (
+            f"Utilisation in {currency} could not be converted into the facility "
+            f"currency {facility_currency}: the run holds no FX rate for it. Those "
+            "amounts were not netted, so the facility's undrawn commitment is "
+            "measured gross of them."
+        )
+    else:
+        effect = (
+            f"Its {currency} limit could not be expressed in the currency "
+            f"{facility_currency} of umbrella '{umbrella_reference}': the run holds "
+            "no FX rate for it. The sub-facility takes no slice of the umbrella's "
+            "waterfall; the umbrella's residual row carries that headroom."
+        )
+    return CalculationError(
+        code=ERROR_FACILITY_HEADROOM_FX_RATE_MISSING,
+        message=f"Facility '{facility_reference}': {effect} Supply the missing fx_rates row.",
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.HIERARCHY,
+        exposure_reference=facility_reference,
+        regulatory_reference="CRR Art. 4(1)(56); PS1/26 Glossary 'conversion factor'",
+        field_name="currency",
+        expected_value=facility_currency,
+        actual_value=currency,
+    )
+
+
+def facility_limit_missing_warning(*, facility_reference: str) -> CalculationError:
+    """Create a HIE006 warning: a facility has no limit, so no undrawn commitment.
+
+    The extent of a commitment is "determined by the advised limit" (CRR Art.
+    4(1)(56); PS1/26 Glossary "conversion factor"). With ``limit`` null the
+    undrawn amount is unknown, and the engine does not invent one: no undrawn row
+    is generated. Not raised for an umbrella (a facility with sub-facilities),
+    where a null limit legitimately means "no cap above the sub-limits".
+
+    References:
+    - CRR Art. 4(1)(56); PRA PS1/26 Glossary "conversion factor"
+    """
+    return CalculationError(
+        code=ERROR_FACILITY_LIMIT_MISSING,
+        message=(
+            f"Facility '{facility_reference}' has no limit, so its undrawn "
+            "commitment cannot be measured and no undrawn exposure row was "
+            "generated. Supply the advised limit (or 0 if nothing was committed)."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.HIERARCHY,
+        exposure_reference=facility_reference,
+        regulatory_reference="CRR Art. 4(1)(56); PS1/26 Glossary 'conversion factor'",
+        field_name="limit",
+    )
+
+
+def facility_warning_summary(
+    *, code: str, omitted: int, sample_cap: int, detail: str
+) -> CalculationError:
+    """Create the one summary that closes a sampled HIE004 / HIE005 / HIE006 group.
+
+    The facility-undrawn warnings follow the estate's ``sample_cap`` contract
+    (as DQ005 / DQ013 do): up to ``sample_cap`` facilities are named one per
+    warning, then this single WARNING carries the truthful count of the rest,
+    so a systemic gap — a whole multi-currency book with no FX table — stays
+    readable instead of raising one warning per facility. ``actual_value``
+    holds the omitted count; ``exposure_reference`` is None (no one facility).
+    """
+    return CalculationError(
+        code=code,
+        message=(
+            f"{omitted} additional facility warning(s) omitted beyond "
+            f"sample_cap={sample_cap}: {detail}"
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.HIERARCHY,
+        actual_value=str(omitted),
     )
 
 

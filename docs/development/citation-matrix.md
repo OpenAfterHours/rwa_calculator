@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-17.
+Last generated: 2026-11-18.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -46,6 +46,11 @@ Last generated: 2026-11-17.
 ??? quote "`resolve_provisions` — src/rwa_calc/engine/crm/provisions.py:37"
     ```python
     --8<-- "src/rwa_calc/engine/crm/provisions.py:37:148"
+    ```
+
+??? quote "`_undrawn_select_expressions` — src/rwa_calc/engine/hierarchy/facility_undrawn.py:613"
+    ```python
+    --8<-- "src/rwa_calc/engine/hierarchy/facility_undrawn.py:613:758"
     ```
 
 
@@ -591,6 +596,14 @@ Last generated: 2026-11-17.
 ### CRR Art. 152 — Treatment of exposures in the form of CIU units (IRB)
 
 *Not implemented — CIU look-through under IRB is out of scope for this calculator. Equity-class CIU treatment under SA is in scope via `engine/equity/calculator.py::_append_ciu_branches` (see `PS1/26, paragraph 132`).*
+
+
+### CRR Art. 4 — Definitions
+
+??? quote "`with_facility_currency_factor` — src/rwa_calc/engine/hierarchy/facility_fx.py:98"
+    ```python
+    --8<-- "src/rwa_calc/engine/hierarchy/facility_fx.py:98:154"
+    ```
 
 
 ### CRR Art. 107 — Approaches to credit risk
@@ -1511,6 +1524,11 @@ Last generated: 2026-11-17.
     --8<-- "src/rwa_calc/engine/ccf.py:755:799"
     ```
 
+??? quote "`_undrawn_select_expressions` — src/rwa_calc/engine/hierarchy/facility_undrawn.py:614"
+    ```python
+    --8<-- "src/rwa_calc/engine/hierarchy/facility_undrawn.py:613:758"
+    ```
+
 
 ### PS1/26, paragraph 114 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
@@ -1821,7 +1839,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:124"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 
@@ -1829,7 +1847,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:125"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 
@@ -1918,7 +1936,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:126"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 

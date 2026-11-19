@@ -1413,6 +1413,12 @@ def _validate_unresolved_obs_risk_type(
     if "obs_product" in schema_names:
         product = pl.col("obs_product").cast(pl.Utf8, strict=False).fill_null("")
         unresolved = unresolved & (product.str.strip_chars() == "")
+    # An uncommitted facility is an accepted unconditionally cancellable
+    # commitment, priced in the UCC bucket LR by the hierarchy stage whatever its
+    # risk_type (PS1/26 Table A1 row (7); CRR Annex I 4(a); review finding
+    # CM-01) - it never reaches the residual this warning reports on.
+    if "committed" in schema_names:
+        unresolved = unresolved & ~pl.col("committed").eq_missing(other=False)
 
     # Mirrors ``engine/ccf.py``'s ``_nominal_is_zero`` predicate rather than
     # testing ``!= 0.0``: that is the expression which decides whether the CCF

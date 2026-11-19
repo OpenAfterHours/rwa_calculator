@@ -2169,8 +2169,9 @@ class TestFacilityUndrawnCalculation:
         """Committed facility with LR risk type should create exposure with LR."""
         # FAC005: limit=1M, committed=True, no linked loans, risk_type=LR (0% CCF).
         # The LR-with-zero-CCF treatment under CRR is for the on-pipeline row;
-        # genuine uncommitted (committed=False) suppression is covered by the
-        # dedicated tests below.
+        # the committed=False encoding of the same UCC line (which also emits an
+        # LR row since review finding CM-01) is covered by the dedicated tests
+        # below.
         facility_undrawn = _calc_undrawn(
             resolver,
             facilities_with_undrawn,
@@ -2298,14 +2299,19 @@ class TestFacilityUndrawnCalculation:
 
         assert len(df) == 0
 
-    def test_uncommitted_facility_suppresses_undrawn_row(
+    def test_uncommitted_facility_emits_ucc_undrawn_row(
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """Uncommitted facility (committed=False) generates no synthetic undrawn row.
+        """Uncommitted facility (committed=False) emits its undrawn row in the UCC bucket.
 
-        The bank can refuse to lend, so no commitment EAD/RWA is held against the
-        unused headroom — even when limit > 0 and no loans are drawn.
+        This test used to pin the opposite ("no synthetic undrawn row") — review
+        finding CM-01. ``committed=False`` is an accepted commitment the bank may
+        cancel unconditionally, and PS1/26 Glossary "commitment" includes "any
+        such arrangement that may be: (1) unconditionally cancelled by the
+        institution at any time without prior notice to the obligor". Table A1
+        row (7) gives it 10% under Basel 3.1 (CRR Annex I 4(a): 0%), so the row
+        must exist: deleting it lost the whole Basel 3.1 commitment silently.
         """
         facilities = pl.DataFrame(
             {
@@ -2342,9 +2348,11 @@ class TestFacilityUndrawnCalculation:
         facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
-        # No facility_undrawn row at all — undrawn headroom carries no commitment
-        # EAD because the bank is not contractually obliged to lend.
-        assert len(df) == 0
+        # One facility_undrawn row for the whole headroom, priced as LR (UCC).
+        assert len(df) == 1
+        assert df["exposure_reference"][0] == "FAC_UNCOMMIT_UNDRAWN"
+        assert df["undrawn_amount"][0] == pytest.approx(1000000.0)
+        assert df["risk_type"][0] == "LR"
 
     def test_committed_null_treated_as_committed(
         self,
@@ -2485,9 +2493,14 @@ class TestFacilityUndrawnInUnifyExposures:
         simple_org_mappings: pl.LazyFrame,
         simple_ratings: pl.LazyFrame,
     ) -> None:
-        """Uncommitted facility suppresses its undrawn row, but the loan mapped to
-        it is unaffected — the loan is already on-balance-sheet and still flows
-        through the unified exposures with correct counterparty linkage.
+        """The loan mapped to an uncommitted facility is unaffected — it is already
+        on-balance-sheet and still flows through the unified exposures with
+        correct counterparty linkage — and it nets the facility's UCC undrawn row.
+
+        This test used to assert that no ``facility_undrawn`` row exists; since
+        review finding CM-01 an uncommitted facility is an accepted UCC
+        commitment (PS1/26 Table A1 row (7); CRR Annex I 4(a)), so its remaining
+        headroom IS emitted, in the LR bucket.
         """
         facilities = pl.DataFrame(
             {
@@ -2547,8 +2560,11 @@ class TestFacilityUndrawnInUnifyExposures:
 
         df = exposures.collect()
 
-        # Loan is still present, no facility_undrawn synthetic row.
-        assert "facility_undrawn" not in df["exposure_type"].to_list()
+        # The UCC undrawn row nets the loan: 1,000,000 - 100,000.
+        undrawn_rows = df.filter(pl.col("exposure_type") == "facility_undrawn")
+        assert len(undrawn_rows) == 1
+        assert undrawn_rows["undrawn_amount"][0] == pytest.approx(900000.0)
+        assert undrawn_rows["risk_type"][0] == "LR"
         loan_rows = df.filter(pl.col("exposure_type") == "loan")
         assert len(loan_rows) == 1
         assert loan_rows["exposure_reference"][0] == "LOAN_ON_UNCOMMIT"
@@ -2562,9 +2578,14 @@ class TestFacilityUndrawnInUnifyExposures:
         simple_org_mappings: pl.LazyFrame,
         simple_ratings: pl.LazyFrame,
     ) -> None:
-        """Uncommitted facility suppresses its undrawn row, but a contingent mapped
-        to it is unaffected — the contingent retains its own exposure row with
-        nominal_amount intact for downstream CCF and reporting.
+        """A contingent mapped to an uncommitted facility is unaffected — it
+        retains its own exposure row with nominal_amount intact for downstream
+        CCF and reporting — and it nets the facility's UCC undrawn row.
+
+        This test used to assert that no ``facility_undrawn`` row exists; since
+        review finding CM-01 an uncommitted facility is an accepted UCC
+        commitment (PS1/26 Table A1 row (7); CRR Annex I 4(a)), so its remaining
+        headroom IS emitted, in the LR bucket.
         """
         facilities = pl.DataFrame(
             {
@@ -2644,7 +2665,11 @@ class TestFacilityUndrawnInUnifyExposures:
 
         df = exposures.collect()
 
-        assert "facility_undrawn" not in df["exposure_type"].to_list()
+        # The UCC undrawn row nets the contingent: 1,000,000 - 200,000.
+        undrawn_rows = df.filter(pl.col("exposure_type") == "facility_undrawn")
+        assert len(undrawn_rows) == 1
+        assert undrawn_rows["undrawn_amount"][0] == pytest.approx(800000.0)
+        assert undrawn_rows["risk_type"][0] == "LR"
         cont_rows = df.filter(pl.col("exposure_type") == "contingent")
         assert len(cont_rows) == 1
         assert cont_rows["exposure_reference"][0] == "CONT_ON_UNCOMMIT"
@@ -6163,11 +6188,15 @@ class TestMOFAndFacilityShare:
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """An uncommitted (committed=False) sub-facility is skipped from the waterfall.
+        """An uncommitted (committed=False) sub-facility under a COMMITTED, limited
+        umbrella takes no slice of the waterfall.
 
-        The bank can refuse to lend on an unconditionally cancellable sub, so it
-        carries no commitment EAD and must not consume parent headroom — the
-        higher-CCF sub's limit is preserved for the still-committed sub.
+        The umbrella's headroom is already the umbrella's commitment, so the
+        cancellable sub-line adds no further one and must not consume parent
+        headroom — the residual keeps the umbrella's own risk type, and the
+        committed sub keeps its full limit. (Under an uncommitted or uncapped
+        umbrella the cancellable sub-line DOES emit its UCC row — review findings
+        CM-01 / SF-02, pinned in ``tests/unit/test_facility_undrawn_commitments.py``.)
         """
         # FAC_SUB_HIGH (committed=False, FR 100%) would otherwise win the waterfall
         # but is skipped. FAC_SUB_LOW (committed=True, MLR 20%) takes the full headroom.

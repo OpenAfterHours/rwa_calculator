@@ -403,27 +403,31 @@ class TestB31GroupG_PortfolioELSummary:
         ``irb_results`` and ``slotting_results`` — grouped by ``is_defaulted``;
         AVA and other_own_funds_reductions are zero across the whole book):
 
-            Non-defaulted pool (57 F-IRB rows + 10 slotting rows = 67):
-                IRB      A_irb  = 382,637.4952081944   B_irb  = 1,668,571.4285714286
+            Non-defaulted pool (58 F-IRB rows + 10 slotting rows = 68):
+                IRB      A_irb  = 383,437.4952081944   B_irb  = 1,668,571.4285714286
                 Slotting A_slot = 680,000.0            B_slot = 0.0
-                A = ΣEL     = 1,062,637.4952081942
+                A = ΣEL     = 1,063,437.4952081942
                 B = Σpool_b = 1,668,571.4285714286
                 nd_shortfall = max(0, A - B) = 0.0
-                nd_excess    = max(0, B - A) = 605,933.9333632344
+                nd_excess    = max(0, B - A) = 605,133.9333632344
 
             (A_irb rose by 159.10 vs the pre-P1.237 figure: an other-listed equity
             collateral row on a subordinated F-IRB obligor now takes the correct 30%
             haircut, not the anti-conservative 20% main-index default, raising that
-            row's EAD and hence its EL. B (provisions) is unchanged.)
+            row's EAD and hence its EL. B (provisions) is unchanged. It rose by a
+            further 800.00, and the pool by one row, with review finding CM-01: the
+            uncommitted ``FAC_CORP_UNCOMMIT_001`` now emits its UCC undrawn row,
+            EAD 200,000 at the Table A1 row (7) 10%, EL 800.00, no provision.)
             Defaulted pool: 0 rows -> C = D = 0 -> d_shortfall = d_excess = 0
 
             art_159_3_applies = (nd_shortfall>0) and (d_excess>0)
                               = (0>0) and (0>0) = False -> combined branch:
             total_el_shortfall = nd_shortfall + d_shortfall = 0.0
 
-        The pre-fix per-row-then-sum path instead reports 982,235.00 (it floors
+        The pre-fix per-row-then-sum path instead reports 983,035.00 (it floors
         and sums each under-provisioned row's shortfall independently, never
-        letting the over-provisioned rows in the same pool absorb it).
+        letting the over-provisioned rows in the same pool absorb it; 982,235.00
+        before the CM-01 row's unprovisioned 800.00 joined the pool).
         """
         el = firb_pipeline_results.el_summary
         if el is None:
@@ -439,12 +443,18 @@ class TestB31GroupG_PortfolioELSummary:
         Same aggregate ingredients as ``test_el_shortfall_pool_aggregate_nets_to_zero``:
 
             Non-defaulted: nd_excess = max(0, B - A)
-                         = 1,668,571.4285714286 - 1,062,637.4952081942
-                         = 605,933.9333632344
+                         = 1,668,571.4285714286 - 1,063,437.4952081942
+                         = 605,133.9333632344
             Defaulted:     d_excess = 0
 
             art_159_3_applies = False -> combined branch:
-            total_el_excess = nd_excess + d_excess = 605,933.9333632344
+            total_el_excess = nd_excess + d_excess = 605,133.9333632344
+
+        A moved by +800.00 with review finding CM-01: the uncommitted facility
+        ``FAC_CORP_UNCOMMIT_001`` (limit 2,000,000, committed=False) now emits
+        its UCC undrawn row - PS1/26 Table A1 row (7) 10%, so EAD 200,000 - whose
+        F-IRB EL (PD 1% x LGD 40% x 200,000) is exactly 800.00. Before CM-01 the
+        row was deleted, so A was 1,062,637.4952081942 and the excess 605,933.93.
 
         The pre-fix per-row-then-sum path instead reports 1,581,112.64 (each
         over-provisioned row's excess is floored and summed independently, so
@@ -453,9 +463,9 @@ class TestB31GroupG_PortfolioELSummary:
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.total_el_excess) == pytest.approx(605_933.9333632344, rel=1e-6), (
+        assert float(el.total_el_excess) == pytest.approx(605_133.9333632344, rel=1e-6), (
             "Portfolio el_excess should be the pool-aggregate netted value "
-            f"605,933.93 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
+            f"605,133.93 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
         )
 
     def test_t2_credit_cap_is_point_six_pct(self, firb_pipeline_results) -> None:

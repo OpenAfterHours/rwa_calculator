@@ -186,7 +186,10 @@ def _corporate_facilities() -> list[Facility]:
             seniority="subordinated",
             risk_type="MR",  # Medium risk - committed undrawn
         ),
-        # Uncommitted facility - 0% CCF for unconditionally cancellable
+        # Uncommitted facility: an accepted, unconditionally cancellable (UCC)
+        # commitment. Its undrawn row IS emitted, priced as LR - CRR Annex I
+        # 4(a) 0%, PS1/26 Table A1 row (7) 10% (review finding CM-01; before it,
+        # committed=False deleted the row, losing the Basel 3.1 200,000 EAD).
         Facility(
             facility_reference="FAC_CORP_UNCOMMIT_001",
             product_type="UNCOMMITTED_RCF",

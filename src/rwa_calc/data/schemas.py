@@ -1980,6 +1980,12 @@ VALID_MPOR_FLOOR_CATEGORIES: set[str] = {"repo_only", "other", "illiquid_or_larg
 #   reserves the flags; engine currently treats them as no-op false).
 # - CRR Art. 380: system-wide failure waiver (schema reserves the flag).
 
+#: Eligible ``settlement_type`` values (compared case-insensitively by the input
+#: gate and by ``engine/ccr/failed_trades.py``): Art. 378 DvP and Art. 379
+#: free delivery. Any other value gets no settlement-risk charge, so it is
+#: reported (DQ006) rather than silently zeroed (review item CC-09).
+VALID_SETTLEMENT_TYPES = {"dvp", "non_dvp_free_delivery"}
+
 #: Failed-trade input schema. ``settlement_type`` discriminates the two
 #: branches: ``"dvp"`` rows require ``agreed_settlement_price`` +
 #: ``current_market_value``; ``"non_dvp_free_delivery"`` rows require
@@ -1997,6 +2003,12 @@ FAILED_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # DvP-only (Art. 378 Table 1 inputs) — null for non-DvP rows.
     "agreed_settlement_price": ColumnSpec(pl.Float64, required=False),
     "current_market_value": ColumnSpec(pl.Float64, required=False),
+    # DvP-only: the side of the trade (Art. 378 "where the difference could
+    # involve a loss"). True = the firm is to receive the instrument and pay the
+    # agreed price (loses when MV > agreed); False = the firm is to deliver it
+    # (loses when MV < agreed). Null = unknown: the engine charges the absolute
+    # difference and raises CCR031 — never a silent seller-only reading (CC-09).
+    "is_purchase": ColumnSpec(pl.Boolean, required=False),
     # Non-DvP-only (Art. 379(1) Table 2 inputs) — null for DvP rows.
     "value_transferred": ColumnSpec(pl.Float64, required=False),
     "current_positive_exposure": ColumnSpec(pl.Float64, required=False),
@@ -2949,6 +2961,10 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     # of truth for the input domain.
     "sft_trades": {
         "mpor_floor_category": VALID_MPOR_FLOOR_CATEGORIES,
+    },
+    # CRR Art. 378 / 379 — the failed-trade branch discriminator (CC-09).
+    "ccr.failed_trades": {
+        "settlement_type": VALID_SETTLEMENT_TYPES,
     },
 }
 

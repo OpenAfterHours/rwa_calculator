@@ -110,7 +110,7 @@ upstream regulatory categorisation differs.
 > `@cites(...)` decorators that other CCR modules carry. The article
 > attribution lives entirely in the docstring + this spec page until
 > the watchfire index re-extension lands. See the leading comment on
-> `failed_trades.py:71–77` for the same explanation in the source.
+> `failed_trades.py:95–101` for the same explanation in the source.
 
 ### Verbatim text — CRR Art. 378
 
@@ -299,33 +299,35 @@ The failed-trade calculation is a free function on
 LazyFrame with the own-funds requirement, RWA, and a stable
 `regulatory_band` audit string for downstream attribution:
 
+- **DvP** (`settlement_type` `"dvp"`, read case-insensitively): the Art.
+  378 price difference **on the side that can lose** — `agreed − MV` for a
+  sale (`is_purchase = False`), `MV − agreed` for a purchase (`is_purchase =
+  True`), floored at 0; when the side is unknown (`is_purchase` null or the
+  column absent) the absolute difference is charged and the input gate
+  names the trade (**CCR031** warning). Own funds = price difference × the
+  Table 1 multiplier for the `working_days_past_due` band; RWA = own funds
+  × 12.5.
+- **Free delivery** (`"non_dvp_free_delivery"`), Art. 379(1) Table 2, with
+  `exposure_amount = value_transferred + current_positive_exposure`:
+  Column 4 (5 or more days after the second leg) — own funds = exposure
+  (1,250% RW); Column 3 (something transferred, fewer than 5 days) — no
+  own-funds amount here: the exposure is risk-weighted downstream as an
+  ordinary credit exposure; Column 2 (nothing transferred) — no charge.
+- Any other `settlement_type` is reported by the input gate (**DQ006**,
+  `VALID_SETTLEMENT_TYPES`) and gets `regulatory_band =
+  "unrecognised_settlement_type"` with no charge.
+
+Before the 2026-11 review (item CC-09) the price difference was
+`max(0, agreed − MV)` for every trade — a purchase's loss was dropped and a
+purchase's gain charged — Column 3 produced zero under a `dvp_pre_t5`
+label, and any spelling other than the exact lower-case type (`"DVP"`)
+produced zero silently.
+
+Source: [`src/rwa_calc/engine/ccr/failed_trades.py::compute_failed_trade_rwa`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/failed_trades.py#L102-L264)
+(lines 102–264).
+
 ```python
-from rwa_calc.engine.ccr.failed_trades import compute_failed_trade_rwa
-
-def compute_failed_trade_rwa(
-    failed_trades: pl.LazyFrame,
-    config: CalculationConfig,
-) -> pl.LazyFrame:
-    """Compute own-funds and RWA for failed trades per CRR Art. 378 / 379.
-
-    For DvP rows (``settlement_type == "dvp"``): compute
-    ``price_difference = max(0, agreed_settlement_price - current_market_value)``
-    and look up the Art. 378 Table 1 multiplier by ``working_days_past_due``
-    band (5-15, 16-30, 31-45, 46+). Own-funds = price_difference x multiplier;
-    RWA = own_funds x 12.5.
-
-    For non-DvP free-delivery rows (``settlement_type ==
-    "non_dvp_free_delivery"``) past t+5: compute
-    ``exposure_amount = value_transferred + current_positive_exposure``,
-    treat as a credit-risk exposure at 1250% RW, so RWA = exposure x 12.5
-    and own_funds = exposure (Art. 379(1) Table 2 Column 4)."""
-```
-
-Source: [`src/rwa_calc/engine/ccr/failed_trades.py::compute_failed_trade_rwa`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/failed_trades.py#L78-L217)
-(lines 78–217).
-
-```python
---8<-- "src/rwa_calc/engine/ccr/failed_trades.py:78:217"
+--8<-- "src/rwa_calc/engine/ccr/failed_trades.py:102:264"
 ```
 
 ### Inputs (`FailedTradesBundle.failed_trades`)
@@ -341,12 +343,13 @@ supply `value_transferred` + `current_positive_exposure`.
 |---------------------------------|-----------------------------------------------|-------------|--------------------------------------------------------------------------------------------------------|
 | `failed_trade_id`               | `FAILED_TRADE_SCHEMA.failed_trade_id`         | `String`    | Primary key — passes through unchanged.                                                                |
 | `counterparty_reference`        | `FAILED_TRADE_SCHEMA.counterparty_reference`  | `String`    | Joins the row back to the firm's CP master.                                                            |
-| `settlement_type`               | `FAILED_TRADE_SCHEMA.settlement_type`         | `String`    | `"dvp"` or `"non_dvp_free_delivery"` — branch discriminator.                                           |
+| `settlement_type`               | `FAILED_TRADE_SCHEMA.settlement_type`         | `String`    | `"dvp"` or `"non_dvp_free_delivery"` (case-insensitive) — branch discriminator. Any other value raises DQ006 and is not charged. |
 | `working_days_past_due`         | `FAILED_TRADE_SCHEMA.working_days_past_due`   | `Int32`     | Number of working days elapsed since due settlement date — drives the Art. 378 / 379 band lookup.       |
 | `instrument_class`              | `FAILED_TRADE_SCHEMA.instrument_class`        | `String`    | `"debt" \| "equity" \| "fx" \| "commodity"` — audit attribution only; not consumed by the formula.     |
 | `agreed_settlement_price`       | `FAILED_TRADE_SCHEMA.agreed_settlement_price` | `Float64`   | DvP-only required. Null on non-DvP rows. Art. 378 ¶2 price-difference numerator.                       |
 | `current_market_value`          | `FAILED_TRADE_SCHEMA.current_market_value`    | `Float64`   | DvP-only required. Null on non-DvP rows. Art. 378 ¶2 price-difference subtrahend.                      |
-| `value_transferred`             | `FAILED_TRADE_SCHEMA.value_transferred`       | `Float64`   | Non-DvP-only required. Null on DvP rows. Art. 379(1) exposure numerator (the "value transferred" leg). |
+| `is_purchase`                   | `FAILED_TRADE_SCHEMA.is_purchase`             | `Boolean` (optional, no default) | DvP-only. The side that can lose (Art. 378): `True` = the firm is to receive the instrument and pay the agreed price (loses when MV > agreed); `False` = the firm is to deliver it (loses when MV < agreed). Null / absent = unknown: absolute difference charged, CCR031 warning. |
+| `value_transferred`             | `FAILED_TRADE_SCHEMA.value_transferred`       | `Float64`   | Non-DvP-only required. Null on DvP rows. Art. 379(1) exposure numerator (the "value transferred" leg); a positive value before Column 4 marks Column 3 (first leg made). |
 | `current_positive_exposure`     | `FAILED_TRADE_SCHEMA.current_positive_exposure` | `Float64` | Non-DvP-only required. Null on DvP rows. Art. 379(1) exposure addend.                                  |
 | `is_repo_or_sec_lending`        | `FAILED_TRADE_SCHEMA.is_repo_or_sec_lending`  | `Boolean` (default `False`) | Art. 378 ¶1 scope exclusion — not currently consumed (engine treats every row as in scope). |
 | `is_immaterial`                 | `FAILED_TRADE_SCHEMA.is_immaterial`           | `Boolean` (default `False`) | Art. 379(2) immateriality election — not currently consumed.                                           |
@@ -363,22 +366,30 @@ non-applicable cells are `null`.
 
 | Column                    | Dtype     | Formula                                                                                                | Article             |
 |---------------------------|-----------|--------------------------------------------------------------------------------------------------------|---------------------|
-| `price_difference`        | `Float64` (nullable) | `max(0, agreed_settlement_price − current_market_value)` on DvP rows; null on non-DvP rows.            | Art. 378 ¶2         |
+| `price_difference`        | `Float64` (nullable) | DvP rows: the loss-side difference floored at 0 — `agreed − MV` (sale), `MV − agreed` (purchase), `|agreed − MV|` (side unknown); null on non-DvP rows. | Art. 378 ¶2         |
 | `exposure_amount`         | `Float64` (nullable) | `value_transferred + current_positive_exposure` on non-DvP rows; null on DvP rows.                     | Art. 379(1) Col 4   |
-| `multiplier_or_rw`        | `Float64` | DvP rows: Table 1 multiplier (`0.08 / 0.50 / 0.75 / 1.00 / 0.0`); non-DvP Col 4 rows: `12.5`; `0.0` otherwise. | Art. 378 Table 1; Art. 379(1) Table 2 |
-| `own_funds_requirement`   | `Float64` | DvP: `price_difference × multiplier`; non-DvP Col 4: `exposure_amount`; `0.0` otherwise.                | Art. 378 ¶3; Art. 379(1) |
-| `failed_trade_rwa`        | `Float64` | `own_funds_requirement × 12.5` (= `1 / 0.08`).                                                          | Art. 92(3)(ca)      |
-| `regulatory_band`         | `String`  | One of `dvp_5_15`, `dvp_16_30`, `dvp_31_45`, `dvp_46_plus`, `non_dvp_col4_t5_plus`, `dvp_pre_t5`.       | Audit / attribution |
+| `multiplier_or_rw`        | `Float64` | DvP rows: Table 1 multiplier (`0.08 / 0.50 / 0.75 / 1.00 / 0.0`); non-DvP Col 4 rows: `12.5`; null on Col 3 rows; `0.0` otherwise. | Art. 378 Table 1; Art. 379(1) Table 2 |
+| `own_funds_requirement`   | `Float64` | DvP: `price_difference × multiplier`; non-DvP Col 4: `exposure_amount`; null on Col 3 rows (risk-weighted downstream); `0.0` otherwise. | Art. 378 ¶3; Art. 379(1) |
+| `failed_trade_rwa`        | `Float64` | `own_funds_requirement × 12.5` (= `1 / 0.08`); null on Col 3 rows.                                      | Art. 92(3)(ca)      |
+| `regulatory_band`         | `String`  | One of `dvp_5_15`, `dvp_16_30`, `dvp_31_45`, `dvp_46_plus`, `dvp_pre_t5`, `non_dvp_col4_t5_plus`, `non_dvp_col3`, `non_dvp_col2`, `unrecognised_settlement_type`. | Audit / attribution |
 
 ### Own-funds lines are not credit exposures
 
 The `ccr_sa_ccr` registry stage
 ([`src/rwa_calc/engine/stages/ccr.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/ccr.py))
-calls `compute_failed_trade_rwa` and mints one synthetic
-`ft__<failed_trade_id>` row per failed trade, with
+calls `failed_trade_exposure_rows` (`engine/ccr/failed_trades.py`) and
+mints one synthetic `ft__<failed_trade_id>` row per failed trade, with
 `drawn_amount = own_funds_requirement` and
 `risk_type = "SETTLEMENT_FAILED_TRADE"`. The SA risk-weight chain pins
-that row's risk weight to 12.5, so `rwa_final = own_funds × 12.5`. CCP
+that row's risk weight to 12.5, so `rwa_final = own_funds × 12.5`. The
+one exception is an Art. 379 **Column 3** free delivery, which Table 2
+says to "treat as an exposure": its row carries `drawn_amount =
+value_transferred + current_positive_exposure` and no `risk_type`, so it
+is classified, mitigated and risk-weighted (SA, or IRB per Art. 379(2))
+like any drawn exposure to the counterparty. Its value and maturity dates
+are the reporting date, so a short-term weight applies where the class has
+one (a CQS 2 institution: 20% in both regimes, CRR Art. 120(2) Table 4 /
+PS1/26 Art. 120(2)). CCP
 default-fund contributions are minted the same way (`dfc__` rows,
 `risk_type = "CCR_DEFAULT_FUND"`, see
 [CCP exposures](ccp-exposures.md#art-307-default-fund-contributions)).
@@ -415,7 +426,7 @@ engine today (all schema-supported with default-False Boolean flags):
 |--------------------------------------------------------------------------------------------------|---------------------|------------------------------------------------------------------------------------------------------------------|
 | Art. 378 ¶1 repo / securities-lending / securities-borrowing exclusion gate                       | Art. 378 ¶1         | `is_repo_or_sec_lending` flag on `FAILED_TRADE_SCHEMA`, not branched on.                                          |
 | Pre-t+5 DvP rows                                                                                  | Art. 378 Table 1    | Produce `regulatory_band = "dvp_pre_t5"`, `multiplier_or_rw = 0.0`, `own_funds = 0.0` — the correct outcome by construction. |
-| Art. 379(1) Table 2 Column 2 (pre-first-leg) / Column 3 (post-first-leg up to t+4 after second leg) | Art. 379(1)         | Schema present; engine's `regulatory_band` falls through to `dvp_pre_t5` for the Column 2 path, and Column 3 is not yet implemented (the Column-3 path requires routing to the SA / IRB risk-weight ladder rather than a fixed pin). |
+| Art. 379(1)(b) cross-border one-day condition                                                     | Art. 379(1)(b)      | No input; every free delivery is charged (conservative). |
 | Art. 379(2) immateriality 100% RW alternative                                                     | Art. 379(2)         | `is_immaterial` flag present; not branched on.                                                                    |
 | Art. 379(3) CET1 deduction election                                                               | Art. 379(3)         | `elect_cet1_deduction` flag present; not branched on. Would require a CET1-deduction emission to the aggregator. |
 | Art. 380 system-wide failure waiver                                                               | Art. 380            | `system_wide_failure_waiver` flag present; not branched on. Would short-circuit the row to zero capital.          |

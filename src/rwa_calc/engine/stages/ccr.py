@@ -124,17 +124,15 @@ def run(
     concat_frames = [resolved.exposures, ccr_exposure_rows]
 
     # CCR Art. 378/379 settlement risk: when the firm reports failed (DvP /
-    # non-DvP free-delivery) settlements, compute their own-funds / RWA via
-    # ``compute_failed_trade_rwa`` and shape each row into a synthetic SA
-    # exposure (drawn_amount = own_funds_requirement, RW pinned to 12.5 in the
-    # SA override chain) so the failed-trade RWA reaches the aggregated totals.
+    # non-DvP free-delivery) settlements, shape each into a synthetic ``ft__``
+    # row — an own-funds line (drawn_amount = own funds, RW pinned to 12.5) or,
+    # for an Art. 379 Column 3 free delivery, an ordinary credit exposure — so
+    # the settlement-risk RWA reaches the aggregated totals.
     if data.ccr.failed_trades is not None:
-        from rwa_calc.engine.ccr.failed_trades import compute_failed_trade_rwa
+        from rwa_calc.engine.ccr.failed_trades import failed_trade_exposure_rows
 
-        failed_trade_rows = _failed_trade_rows_to_exposures(
-            data.ccr.failed_trades.failed_trades,
-            run_config,
-            compute_failed_trade_rwa,
+        failed_trade_rows = failed_trade_exposure_rows(
+            data.ccr.failed_trades.failed_trades, run_config
         )
         concat_frames.append(
             enrich_ccr_rows_with_ratings(failed_trade_rows, resolved.counterparty_lookup)
@@ -167,52 +165,6 @@ def run(
         exposures=materialise_sealed_edge(new_exposures, run_config, CCR_EXIT_EDGE),
     )
     return ctx.put(RESOLVED_HIERARCHY, new_resolved)
-
-
-def _failed_trade_rows_to_exposures(
-    failed_trades: pl.LazyFrame,
-    run_config: CalculationConfig,
-    compute_failed_trade_rwa: Callable[[pl.LazyFrame, CalculationConfig], pl.LazyFrame],
-) -> pl.LazyFrame:
-    """Shape failed-trade own-funds requirements into synthetic SA exposure rows.
-
-    CCR Art. 378/379 settlement risk: each failed trade carries an own-funds
-    requirement (DvP price-difference x multiplier, or non-DvP exposure). The
-    synthetic row sets ``drawn_amount = own_funds_requirement`` and tags itself
-    with ``risk_type = "SETTLEMENT_FAILED_TRADE"`` so the SA override chain pins
-    its risk weight to the own-funds->RWA factor (12.5, Art. 92(3)(ca)); the
-    downstream EAD x RW then reproduces the upstream ``failed_trade_rwa``.
-
-    References:
-        CRR Art. 378 + Table 1; CRR Art. 379(1) + Table 2; CRR Art. 92(3)(ca).
-    """
-    computed = compute_failed_trade_rwa(failed_trades, run_config)
-    return computed.select(
-        pl.concat_str([pl.lit("ft__"), pl.col("failed_trade_id")]).alias("exposure_reference"),
-        # Reconciliation base: keep the ``ft__`` namespace (no legacy
-        # per-exposure equivalent; avoids collision with a loan reference).
-        pl.concat_str([pl.lit("ft__"), pl.col("failed_trade_id")]).alias(
-            "source_exposure_reference"
-        ),
-        pl.lit("ccr_failed_trade").alias("exposure_type"),
-        pl.col("counterparty_reference"),
-        pl.lit(run_config.reporting_date).alias("value_date"),
-        pl.lit(run_config.reporting_date).alias("maturity_date"),
-        pl.col("own_funds_requirement").alias("drawn_amount"),
-        pl.lit(0.0).alias("interest"),
-        pl.lit(0.0).alias("undrawn_amount"),
-        pl.lit(0.0).alias("nominal_amount"),
-        pl.lit("senior").alias("seniority"),
-        pl.lit("SETTLEMENT_FAILED_TRADE").alias("risk_type"),
-        pl.lit("failed_trade").alias("ccr_method"),
-        # Audit columns reconciling the synthetic row back to Art. 378/379.
-        pl.col("regulatory_band"),
-        pl.col("multiplier_or_rw"),
-        pl.col("own_funds_requirement"),
-        pl.col("failed_trade_rwa"),
-        pl.col("price_difference"),
-        pl.col("exposure_amount"),
-    )
 
 
 def _dfc_rows_to_exposures(

@@ -890,6 +890,7 @@
         "tests/acceptance/basel31/test_p1_223_art_120_3c_obligor_st_spillover.py",
         "tests/acceptance/basel31/test_scenario_b31_a_sa.py",
         "tests/acceptance/basel31/test_scenario_b31_p1106_fcsm_inst_cqs2.py",
+        "tests/acceptance/ccr/test_ccp_cva_review_cluster.py",
         "tests/acceptance/ccr/test_ccr_a10_mixed_asset_class.py",
         "tests/acceptance/ccr/test_ccr_a11_a12_sft_fccm_ead.py",
         "tests/acceptance/ccr/test_ccr_a13_margined_rc.py",
@@ -5530,13 +5531,14 @@
       ],
       "source_files": [
         "contracts/bundles.py",
+        "contracts/errors.py",
+        "contracts/validation.py",
         "data/schemas.py",
         "domain/enums.py",
         "engine/aggregator/aggregator.py",
         "engine/ccr/failed_trades.py",
         "engine/classify/approach.py",
         "engine/crm/own_funds_lines.py",
-        "engine/stages/ccr.py",
         "engine/supporting_factors.py",
         "rulebook/packs/common.py"
       ],
@@ -5548,6 +5550,7 @@
         "tests/fixtures/ccr/p843_failed_trade_builder.py",
         "tests/fixtures/generate_all.py",
         "tests/unit/ccr/test_failed_trades.py",
+        "tests/unit/ccr/test_failed_trades_direction_and_free_delivery.py",
         "tests/unit/test_supporting_factor_own_funds_lines.py"
       ],
       "watchfire_index_gap": false
@@ -5568,12 +5571,12 @@
       "source_files": [
         "contracts/bundles.py",
         "data/schemas.py",
-        "engine/ccr/failed_trades.py",
-        "engine/stages/ccr.py"
+        "engine/ccr/failed_trades.py"
       ],
       "test_files": [
         "tests/fixtures/ccr/failed_trade_builder.py",
-        "tests/unit/ccr/test_failed_trades.py"
+        "tests/unit/ccr/test_failed_trades.py",
+        "tests/unit/ccr/test_failed_trades_direction_and_free_delivery.py"
       ],
       "watchfire_index_gap": false
     },
@@ -5972,6 +5975,7 @@
         "contracts/config.py",
         "contracts/edges.py",
         "contracts/protocols.py",
+        "contracts/validation.py",
         "domain/enums.py",
         "engine/aggregator/_facility_share.py",
         "engine/aggregator/_floor.py",
@@ -6019,6 +6023,7 @@
         "tests/properties/test_output_floor_identities.py",
         "tests/properties/test_structural_invariants.py",
         "tests/unit/ccr/test_failed_trades.py",
+        "tests/unit/ccr/test_failed_trades_direction_and_free_delivery.py",
         "tests/unit/reporting/corep/test_c08_output_floor_carrier.py",
         "tests/unit/reporting/test_tieouts.py",
         "tests/unit/rulebook/test_model.py",
@@ -6405,6 +6410,7 @@
         "tests/acceptance/basel31/test_p1_93_art_222_4_fcsm_sft_carveout.py",
         "tests/acceptance/basel31/test_pse_rgla_guarantor_irb_sa_substitution.py",
         "tests/acceptance/basel31/test_scenario_b31_p1106_fcsm_inst_cqs2.py",
+        "tests/acceptance/ccr/test_ccp_cva_review_cluster.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
         "tests/acceptance/ccr/test_ccr_floor1_output_floor.py",
         "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",

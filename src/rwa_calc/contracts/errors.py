@@ -303,6 +303,13 @@ ERROR_BELOW_MIN_COLLATERALISATION = "CRM022"
 # with cva_in_scope=False are not warned. Basel 3.1 only (cva_ba_cva Feature).
 ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED = "CCR030"
 
+# Failed-trade side unknown (CRR Art. 378, CC-09): a DvP failed trade whose
+# ``is_purchase`` is null and whose agreed price differs from the market value.
+# The loss side decides the charge ("where the difference could involve a loss
+# for the credit institution"), so the engine charges the absolute difference —
+# conservative for either side — and names the trade with one WARNING.
+ERROR_FAILED_TRADE_SIDE_UNKNOWN = "CCR031"
+
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
 ERROR_LGD_OUT_OF_RANGE = "IRB002"
@@ -775,6 +782,32 @@ def unresolved_obs_risk_type_warning(
         ),
         field_name="risk_type",
         regulatory_reference="CRR Art. 111 Annex I 1(k); PS1/26 Art. 111 Table A1 Rows 3, 5",
+    )
+
+
+def failed_trade_side_unknown_warning(*, failed_trade_id: str) -> CalculationError:
+    """Create a CCR031 warning for a DvP failed trade whose side is not supplied.
+
+    CRR Art. 378 charges the price difference "where the difference could
+    involve a loss for the credit institution" — a seller loses when the market
+    value has fallen below the agreed price, a purchaser when it has risen above
+    it. With ``is_purchase`` null the engine cannot tell which, so it charges the
+    absolute difference (conservative for either side); this warning names the
+    trade so the preparer can supply the side (review item CC-09).
+    """
+    return CalculationError(
+        code=ERROR_FAILED_TRADE_SIDE_UNKNOWN,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ccr.failed_trades] DvP failed trade {failed_trade_id!r} has no "
+            "'is_purchase', so the side that can lose is unknown: the absolute price "
+            "difference is charged (CRR Art. 378). Supply 'is_purchase' to charge only "
+            "a loss-making difference."
+        ),
+        exposure_reference=f"ft__{failed_trade_id}",
+        field_name="is_purchase",
+        regulatory_reference="CRR Art. 378",
     )
 
 

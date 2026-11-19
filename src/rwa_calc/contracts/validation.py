@@ -74,6 +74,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     absent_reference_error,
     duplicate_input_key_error,
+    failed_trade_side_unknown_warning,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
     orphan_reference_error,
@@ -609,6 +610,10 @@ def _table_checks(
     # the is_short_term ↔ scope_type/scope_id contract.
     if table_name == "ratings":
         checks.append(_validate_short_term_rating_scope(lf, columns))
+
+    # CRR Art. 378: a DvP failed trade's loss depends on its side (CC-09).
+    if table_name == "ccr.failed_trades":
+        checks.append(_validate_failed_trade_side(lf, columns))
     return [check for check in checks if check is not None]
 
 
@@ -1431,6 +1436,52 @@ def _validate_unresolved_obs_risk_type(
         return [unresolved_obs_risk_type_warning(context=context, amount_column=amount_column, n=n)]
 
     return _TableCheck(plan=lf.select((unresolved & has_amount).sum().alias("n")), decode=decode)
+
+
+def _validate_failed_trade_side(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Name each DvP failed trade whose unknown side changes its charge (CCR031).
+
+    CRR Art. 378 charges the price difference "where the difference could
+    involve a loss for the credit institution", which is ``agreed - MV`` for a
+    sale and ``MV - agreed`` for a purchase. ``engine/ccr/failed_trades.py``
+    charges the absolute difference when ``is_purchase`` is null. A trade whose
+    agreed price equals its market value is charged nothing either way, so only
+    a DvP row with a null side AND a difference is named — one warning per
+    trade, keyed on its ``ft__`` exposure reference. A table that omits the
+    ``is_purchase`` column altogether leaves every side unknown, exactly as a
+    null does. Runs inside the batched input gate, so it adds no collect of its
+    own.
+
+    References:
+    - CRR Art. 378 (PS1/26 Art. 92(3)(ca) keeps Title V in CRR)
+    """
+    required = {"failed_trade_id", "settlement_type"}
+    required |= {"agreed_settlement_price", "current_market_value"}
+    if not required <= schema_names:
+        return None
+    side_unknown = (
+        pl.col("is_purchase").is_null() if "is_purchase" in schema_names else pl.lit(value=True)
+    )
+    plan = (
+        lf.filter(
+            pl.col("settlement_type").str.to_lowercase().eq_missing("dvp")
+            & side_unknown
+            & (pl.col("agreed_settlement_price") != pl.col("current_market_value"))
+        )
+        .select("failed_trade_id")
+        .sort("failed_trade_id")
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        return [
+            failed_trade_side_unknown_warning(failed_trade_id=ref)
+            for ref in frame["failed_trade_id"].to_list()
+        ]
+
+    return _TableCheck(plan=plan, decode=decode)
 
 
 def _validate_table_columns_batched(

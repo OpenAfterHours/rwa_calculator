@@ -630,3 +630,130 @@ class TestCC11CcpExposureTreatment:
         # Assert (pre-fix: institution CQS 3 -> 50% in both regimes)
         assert row["exposure_class"] == "corporate"
         assert row["risk_weight"] == pytest.approx(_NON_QCCP_TRADE_RW[regime])
+
+
+# ---------------------------------------------------------------------------
+# CC-09 — failed trades: the losing side, Column 3, the settlement type
+# ---------------------------------------------------------------------------
+#
+# CRR Art. 378 (Title V; PS1/26 Art. 92(3)(ca) keeps it in CRR): "The price
+# difference is calculated as the difference between the agreed settlement price
+# ... and its current market value, where the difference could involve a loss
+# for the credit institution." Art. 379(1) Table 2 Column 3: "From first
+# contractual payment or delivery leg up to four days after second contractual
+# payment or delivery leg — Treat as an exposure".
+
+_FT_INSTITUTION = [
+    {
+        "counterparty_reference": "CP_BANK",
+        "counterparty_name": "CQS 2 bank",
+        "entity_type": "institution",
+        "country_code": "GB",
+    }
+]
+
+_FT_INSTITUTION_RATING = [
+    {
+        "rating_reference": "R_BANK",
+        "counterparty_reference": "CP_BANK",
+        "rating_type": "external",
+        "rating_agency": "S&P",
+        "cqs": 2,
+        "rating_date": date(2026, 1, 1),
+    }
+]
+
+_FT2_BUY = {
+    "failed_trade_id": "FT2",
+    "counterparty_reference": "CP_BANK",
+    "settlement_type": "dvp",
+    "working_days_past_due": 20,
+    "instrument_class": "equity",
+    "agreed_settlement_price": 900_000.0,
+    "current_market_value": 1_000_000.0,
+    "is_purchase": True,
+}
+
+_FT3_FREE_DELIVERY = {
+    "failed_trade_id": "FT3",
+    "counterparty_reference": "CP_BANK",
+    "settlement_type": "non_dvp_free_delivery",
+    "working_days_past_due": 2,
+    "instrument_class": "debt",
+    "value_transferred": 1_000_000.0,
+    "current_positive_exposure": 0.0,
+}
+
+_FT5_UPPER_CASE = {
+    "failed_trade_id": "FT5",
+    "counterparty_reference": "CP_BANK",
+    "settlement_type": "DVP",
+    "working_days_past_due": 50,
+    "instrument_class": "equity",
+    "agreed_settlement_price": 1_000_000.0,
+    "current_market_value": 500_000.0,
+    "is_purchase": False,
+}
+
+
+def _ft_run(regime: str, *failed_trades: dict[str, Any]) -> AggregatedResultBundle:
+    return _run(
+        regime,
+        counterparties=pl.LazyFrame(_FT_INSTITUTION),
+        ratings=pl.LazyFrame(_FT_INSTITUTION_RATING),
+        ccr=_ccr_bundle(failed_trades=list(failed_trades)),
+    )
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+class TestCC09FailedTrades:
+    """Hand-calculated settlement-risk RWEA through the full pipeline, both regimes."""
+
+    def test_purchase_charged_when_the_market_value_has_risen(self, regime: str) -> None:
+        # Act
+        row = _by_ref(_ft_run(regime, _FT2_BUY))["ft__FT2"]
+
+        # Assert: (1.0m - 0.9m) x 50% = 50,000 own funds -> 625,000 (pre-fix: 0)
+        assert row["rwa_final"] == pytest.approx(625_000.0, rel=1e-9)
+
+    def test_column_3_free_delivery_is_a_short_term_institution_exposure(self, regime: str) -> None:
+        # Act
+        row = _by_ref(_ft_run(regime, _FT3_FREE_DELIVERY))["ft__FT3"]
+
+        # Assert: 1m transferred to a CQS 2 bank, residual maturity nil -> the
+        # short-term institution weight, 20% in both regimes (CRR Art. 120(2)
+        # Table 4; PS1/26 Art. 120(2) Table 4). Pre-fix: own funds 0, RWA 0.
+        assert row["exposure_class"] == "institution"
+        assert row["approach_applied"] == "standardised"
+        assert row["risk_weight"] == pytest.approx(0.20)
+        assert row["rwa_final"] == pytest.approx(200_000.0, rel=1e-9)
+
+    def test_upper_case_settlement_type_is_charged(self, regime: str) -> None:
+        # Act
+        row = _by_ref(_ft_run(regime, _FT5_UPPER_CASE))["ft__FT5"]
+
+        # Assert: 0.5m x 100% (46+ days) = 0.5m own funds (pre-fix: "DVP" -> 0)
+        assert row["rwa_final"] == pytest.approx(6_250_000.0, rel=1e-9)
+
+    def test_unknown_side_is_charged_and_warned(self, regime: str) -> None:
+        # Arrange: FT2 without its side.
+        unknown = {**_FT2_BUY, "is_purchase": None}
+
+        # Act
+        result = _ft_run(regime, unknown)
+
+        # Assert: |1.0m - 0.9m| x 50% -> 625,000, and CCR031 names the trade.
+        assert _by_ref(result)["ft__FT2"]["rwa_final"] == pytest.approx(625_000.0, rel=1e-9)
+        assert [e.exposure_reference for e in result.errors if e.code == "CCR031"] == ["ft__FT2"]
+
+    def test_unknown_settlement_type_is_reported(self, regime: str) -> None:
+        # Arrange
+        bad = {**_FT5_UPPER_CASE, "settlement_type": "delivery_versus_payment"}
+
+        # Act
+        result = _ft_run(regime, bad)
+
+        # Assert: the input gate names the value (DQ006) instead of a silent zero.
+        assert [e.actual_value for e in result.errors if e.code == "DQ006"] == [
+            "delivery_versus_payment"
+        ]

@@ -36,6 +36,20 @@ Hand calculations:
                          (pre-fix: the leaked flag set the one-day floor)
         trade loan       carries the Art. 162(3) one-day floor flag
 
+    CRR SA, unrated bank whose central government is CQS 1, 11.5-month loans
+    (RWA-REDUCING for the standalone loan, which is correct): CRR Art. 121(1)
+    "Exposures to institutions for which a credit assessment by a nominated ECAI
+    is not available shall be assigned a risk weight in accordance with the
+    credit quality step to which exposures to the central government ... are
+    assigned in accordance with Table 5" (CQS 1 -> 20%). Art. 121(4) reaches only
+    "trade finance exposures referred to in point (b) of the second subparagraph
+    of Article 162(3)", which the engine holds out of the Table 5 ladder at the
+    100% residual while P1.326 / P7.8 settle the 50% / 20% reading
+    (``sovereign_derived.crr_art_121_4_trade_finance_expr``):
+        trade loan       RW 100% (held out)          RWA 1,000,000
+        standalone loan  RW 20% (Table 5 CQS 1)      RWA   200,000   (pre-fix
+                         the leaked flag held it out too: 100%, 1,000,000)
+
     The figures are re-derived with ``tests/oracle/derivations/formulas.py``,
     which imports nothing from ``rwa_calc``.
 """
@@ -68,7 +82,14 @@ _OTHER_LOAN = "LN_TR01_STANDALONE"
 _EAD = 1_000_000.0
 
 
-def _bundle(*, entity_type: str, value_date: date, maturity_date: date, irb: bool):
+def _bundle(
+    *,
+    entity_type: str,
+    value_date: date,
+    maturity_date: date,
+    irb: bool,
+    sovereign_cqs: int | None = None,
+):
     """One trade-LC facility with one mapped loan, plus one standalone loan."""
     cp_row = {
         "counterparty_reference": _CP,
@@ -79,6 +100,8 @@ def _bundle(*, entity_type: str, value_date: date, maturity_date: date, irb: boo
         "scra_grade": "A",
         "annual_revenue": 500_000_000.0,
     }
+    if sovereign_cqs is not None:
+        cp_row |= {"sovereign_cqs": sovereign_cqs, "local_currency": "GBP"}
     counterparties = pl.DataFrame([cp_row], schema_overrides=dtypes_of(COUNTERPARTY_SCHEMA))
     facilities = pl.DataFrame(
         [
@@ -162,6 +185,22 @@ def b31_sa_rows() -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
+def crr_sa_rows() -> dict[str, dict]:
+    """CRR SA: unrated bank, central government CQS 1, 350-day loans."""
+    config = CalculationConfig.crr(
+        reporting_date=date(2026, 12, 31), permission_mode=PermissionMode.STANDARDISED
+    )
+    bundle = _bundle(
+        entity_type="bank",
+        value_date=date(2026, 12, 15),
+        maturity_date=date(2027, 11, 30),
+        irb=False,
+        sovereign_cqs=1,
+    )
+    return _rows(bundle, config)
+
+
+@pytest.fixture(scope="module")
 def crr_firb_rows() -> dict[str, dict]:
     """CRR F-IRB: large corporate, 273-day residual maturity."""
     config = CalculationConfig.crr(
@@ -196,6 +235,27 @@ class TestBasel31SAShortTermTradeWindow:
             "counterparty-level broadcast of a sibling facility's trade-LC flag"
         )
         assert row["rwa_final"] == pytest.approx(400_000.0, abs=0.01)
+
+
+class TestCrrSATradeFinanceHoldOut:
+    """CRR Art. 121(4) holds out trade finance only; other lending is Art. 121(1)."""
+
+    def test_trade_loan_is_held_out_of_the_table_5_ladder(
+        self, crr_sa_rows: dict[str, dict]
+    ) -> None:
+        """The loan under the trade-LC facility keeps the P1.316 hold-out (100%)."""
+        row = crr_sa_rows[_TRADE_LOAN]
+
+        assert row["is_short_term_trade_lc"] is True
+        assert row["risk_weight"] == pytest.approx(1.0, abs=1e-12)
+
+    def test_standalone_loan_takes_table_5_cqs_1(self, crr_sa_rows: dict[str, dict]) -> None:
+        """Pre-fix the leaked flag held this ordinary loan out of Table 5 too."""
+        row = crr_sa_rows[_OTHER_LOAN]
+
+        assert row["is_short_term_trade_lc"] is False
+        assert row["risk_weight"] == pytest.approx(0.20, abs=1e-12)
+        assert row["rwa_final"] == pytest.approx(200_000.0, abs=0.01)
 
 
 class TestCrrFirbOneDayMaturityFloor:

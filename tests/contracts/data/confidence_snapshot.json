@@ -1018,6 +1018,7 @@
         "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
         "tests/acceptance/crr/test_p1_121_art_121_3_unrated_inst_short_term.py",
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
+        "tests/acceptance/test_tr01_trade_lc_flag_scope_pipeline.py",
         "tests/contracts/test_branch_reason_contract.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_121/__init__.py",

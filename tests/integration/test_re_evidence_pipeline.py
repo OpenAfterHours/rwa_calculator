@@ -276,6 +276,35 @@ class TestResidentialAdcPresold:
         assert row["risk_weight"] == pytest.approx(expected_rw)
         assert row["rwa_final"] == pytest.approx(expected_rwa)
 
+    @pytest.mark.parametrize("order", ["residential_first", "commercial_first"])
+    def test_mixed_adc_security_takes_150_in_any_row_order(self, order: str) -> None:
+        """Art. 124K(2)'s 100% is for ADC financing *residential* development only.
+
+        A loan secured on a pre-sold residential property and a commercial ADC
+        property is not wholly residential ADC, so it takes the Art. 124K(1) 150%:
+        500,000 x 150% = 750,000. Before the fix the weight followed the input
+        row order (the property type is keep-first, the pre-sale flag any-True):
+        residential first gave 100% / 500,000, commercial first 150% / 750,000.
+        """
+        # Arrange
+        residential = _property(1_000_000.0, "residential", 0.5, is_adc=True, is_presold=True)
+        commercial = {
+            **_property(1_000_000.0, "commercial", 0.5, is_adc=True, is_presold=False),
+            "collateral_reference": "C2",
+        }
+        collateral = (
+            [residential, commercial] if order == "residential_first" else [commercial, residential]
+        )
+
+        # Act
+        df, _codes = _run("b31", _DEVELOPER, _loan(500_000.0, "term_loan"), collateral)
+
+        # Assert
+        row = _single(df)
+        assert row["is_adc"] is True
+        assert row["risk_weight"] == pytest.approx(1.50)
+        assert row["rwa_final"] == pytest.approx(750_000.0)
+
 
 # ---------------------------------------------------------------------------
 # RE-10 / CL-08 — LTV derivation and evidence of security

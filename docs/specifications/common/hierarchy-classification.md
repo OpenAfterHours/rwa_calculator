@@ -445,7 +445,9 @@ linked to the exposure (direct, facility or counterparty level, any-True per
 beneficiary; carried by the hierarchy stage as `re_collateral_is_adc`) — all
 behind the definition's corporate / SPE gate, so a natural person's
 self-build is never ADC. The collateral `is_presold` flag reaches the
-Art. 124K(2) branch the same way (`re_collateral_is_presold` → `is_presold`).
+Art. 124K(2) branch the same way (`re_collateral_is_presold` → `is_presold`),
+but only when every property linked to the exposure is residential — a mixed
+residential / commercial security is not residential ADC and takes 150% in any row order.
 Before review RE-01 / RE-02 the collateral flags were read by nothing: ADC
 lending flagged only on its property was loan-split onto the regulatory-RE
 tables (B31 20% instead of 150%; CRR 35% instead of the corporate 100%), and

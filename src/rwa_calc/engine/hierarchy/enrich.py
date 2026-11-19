@@ -819,7 +819,7 @@ def _join_property_collateral_multi_level(
     """
     is_residential = pl.col("property_type").str.to_lowercase() == "residential"
 
-    return allocate_multi_level(
+    allocated = allocate_multi_level(
         exposures,
         all_property_collateral,
         values={
@@ -841,8 +841,18 @@ def _join_property_collateral_multi_level(
             "re_collateral_non_qualifying": is_non_qualifying_re.any(),
             "re_collateral_is_adc": pl.col("is_adc").any(),
             "re_collateral_is_presold": pl.col("is_presold").any(),
+            "_re_collateral_non_residential": (~is_residential.fill_null(False)).any(),
         },
     )
+    # Art. 124K(2)'s 100% is for ADC financing residential development only, so
+    # the pre-sale flag holds only when every linked property is residential. A
+    # mixed residential / commercial security takes the 124K(1) 150% whatever
+    # the input row order (``property_type`` itself is keep-first by row order).
+    return allocated.with_columns(
+        (pl.col("re_collateral_is_presold") & ~pl.col("_re_collateral_non_residential")).alias(
+            "re_collateral_is_presold"
+        )
+    ).drop("_re_collateral_non_residential")
 
 
 def _add_ltv_defaults_for_missing_collateral(exposures: pl.LazyFrame) -> pl.LazyFrame:

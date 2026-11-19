@@ -3023,9 +3023,11 @@
       ],
       "pack_entries": [],
       "source_files": [
+        "contracts/ccr_collateral_checks.py",
         "contracts/edges.py",
         "data/schemas.py",
         "domain/enums.py",
+        "engine/ccr/findings.py",
         "engine/crm/eligibility.py",
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
@@ -3049,6 +3051,7 @@
         "tests/properties/portfolios.py",
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_source_conservation.py",
+        "tests/unit/ccr/test_saccr_b_collateral_terms_currency.py",
         "tests/unit/crm/test_bond_eligibility.py",
         "tests/unit/crm/test_crm018_rollup.py"
       ],
@@ -3590,10 +3593,12 @@
       "source_files": [
         "config/data_sources.py",
         "contracts/bundles.py",
+        "contracts/ccr_collateral_checks.py",
         "contracts/config.py",
         "contracts/edges.py",
         "data/schemas.py",
         "engine/ccf.py",
+        "engine/ccr/reporting_currency.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
         "engine/crm/haircut_tables.py",
@@ -4394,6 +4399,7 @@
       "source_files": [
         "config/data_sources.py",
         "contracts/bundles.py",
+        "contracts/ccr_collateral_checks.py",
         "contracts/ccr_input_checks.py",
         "contracts/errors.py",
         "data/schemas.py",
@@ -4745,7 +4751,9 @@
     {
       "article": "278",
       "code_functions": [
-        "rwa_calc.engine.ccr.pfe::compute_pfe"
+        "rwa_calc.engine.ccr.exposure_value::compose_exposure_value",
+        "rwa_calc.engine.ccr.pfe::compute_pfe",
+        "rwa_calc.engine.ccr.pfe::pfe_multiplier"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -4760,6 +4768,7 @@
       "source_files": [
         "contracts/edges.py",
         "engine/ccr/__init__.py",
+        "engine/ccr/exposure_value.py",
         "engine/ccr/pfe.py",
         "engine/ccr/pipeline_adapter.py",
         "rulebook/packs/common.py"
@@ -4808,6 +4817,7 @@
         "rwa_calc.engine.ccr.adjusted_notional::compute_adjusted_notional_ir",
         "rwa_calc.engine.ccr.maturity_factor::compute_maturity_factor_margined",
         "rwa_calc.engine.ccr.maturity_factor::compute_maturity_factor_unmargined",
+        "rwa_calc.engine.ccr.maturity_factor::margined_mpor_days",
         "rwa_calc.engine.ccr.risk_categories::compute_adjusted_notional_other"
       ],
       "confidence": "LOW",
@@ -4968,7 +4978,6 @@
       ],
       "test_files": [
         "tests/acceptance/ccr/test_ccr_a10_mixed_asset_class.py",
-        "tests/acceptance/ccr/test_ccr_a13_margined_rc.py",
         "tests/acceptance/ccr/test_ccr_a14_long_remargin_mf.py",
         "tests/acceptance/ccr/test_ccr_a2_unmargined_fx_forward.py",
         "tests/acceptance/ccr/test_ccr_a3_unmargined_credit_cds.py",
@@ -5234,8 +5243,10 @@
       ],
       "source_files": [
         "contracts/bundles.py",
+        "contracts/ccr_collateral_checks.py",
         "contracts/config.py",
         "data/schemas.py",
+        "engine/ccr/margin_terms.py",
         "engine/ccr/maturity_factor.py",
         "engine/ccr/pipeline_adapter.py",
         "engine/sft/fccm.py",
@@ -8468,6 +8479,7 @@
         "collateral_haircuts@b31"
       ],
       "source_files": [
+        "engine/ccr/collateral.py",
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
         "rulebook/packs/b31.py"

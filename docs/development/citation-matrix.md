@@ -819,9 +819,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/transforms.py:511:544"
     ```
 
-??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:232"
+??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:253"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:232:288"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:253:309"
     ```
 
 
@@ -1039,9 +1039,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 220 — Using the Supervisory Volatility Adjustments Approach or the Own Estimates Volatility Adjustments Approach for master netting agreements
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:109"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:113"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:113:199"
     ```
 
 
@@ -1075,9 +1075,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/crm/netting.py:48:374"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:114"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:113:199"
     ```
 
 
@@ -1098,9 +1098,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/crm/haircuts.py:126:339"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:115"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:113:199"
     ```
 
 
@@ -1111,9 +1111,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:123:158"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:112"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:116"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:113:199"
     ```
 
 
@@ -1268,9 +1268,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 271 — Determination of the exposure value
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:113"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:117"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:113:199"
     ```
 
 
@@ -1286,9 +1286,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/ccr/hedging_sets.py:96:191"
     ```
 
-??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:160"
+??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:185"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:160:235"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:185:260"
     ```
 
 ??? quote "`map_trade_risk_categories` — src/rwa_calc/engine/ccr/risk_categories.py:89"
@@ -1299,9 +1299,19 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 278 — Transactions with a non-linear risk profile
 
+??? quote "`compose_exposure_value` — src/rwa_calc/engine/ccr/exposure_value.py:91"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/exposure_value.py:91:164"
+    ```
+
 ??? quote "`compute_pfe` — src/rwa_calc/engine/ccr/pfe.py:75"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:75:154"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:75:148"
+    ```
+
+??? quote "`pfe_multiplier` — src/rwa_calc/engine/ccr/pfe.py:151"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:151:179"
     ```
 
 
@@ -1339,7 +1349,12 @@ Last generated: 2026-11-19.
 
 ??? quote "`compute_maturity_factor_margined` — src/rwa_calc/engine/ccr/maturity_factor.py:126"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:126:239"
+    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:126:201"
+    ```
+
+??? quote "`margined_mpor_days` — src/rwa_calc/engine/ccr/maturity_factor.py:206"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:206:270"
     ```
 
 ??? quote "`compute_adjusted_notional_other` — src/rwa_calc/engine/ccr/risk_categories.py:146"
@@ -1376,14 +1391,14 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 285 — Exposure value for netting sets subject to a margin agreement
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:114"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:118"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:113:199"
     ```
 
-??? quote "`_derive_margining_terms` — src/rwa_calc/engine/sft/fccm.py:186"
+??? quote "`_derive_margining_terms` — src/rwa_calc/engine/sft/fccm.py:207"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:186:229"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:207:250"
     ```
 
 
@@ -1874,9 +1889,9 @@ Last generated: 2026-11-19.
 
 ### PS1/26, paragraph 162 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:233"
+??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:254"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:232:288"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:253:309"
     ```
 
 

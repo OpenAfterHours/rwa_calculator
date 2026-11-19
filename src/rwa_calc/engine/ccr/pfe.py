@@ -123,13 +123,7 @@ def compute_pfe(
     # to the scalar α for backward compatibility.
     has_alpha_col = "alpha_applied" in netting_sets.collect_schema().names()
     alpha_expr = pl.col("alpha_applied") if has_alpha_col else pl.lit(alpha_value)
-    floor_f = _PFE_MULTIPLIER_FLOOR_F
-    denom_coeff = _PFE_AGGREGATE_DENOM_COEFF
-    one_minus_f = 1.0 - floor_f
-
-    v_minus_c = pl.col("v_net") - pl.col("c_net")
-    denom = denom_coeff * one_minus_f * pl.col("addon_aggregate")
-    uncapped = floor_f + one_minus_f * (v_minus_c / denom).exp()
+    multiplier = pfe_multiplier(pl.col("v_net") - pl.col("c_net"), pl.col("addon_aggregate"))
 
     # Delegate the unmargined RC derivation to the canonical
     # ``compute_rc_unmargined`` (Art. 275(1)) so the ``rc_unmargined`` column is
@@ -145,12 +139,43 @@ def compute_pfe(
 
     return (
         netting_sets.with_columns(
-            pl.min_horizontal(pl.lit(1.0), uncapped).alias("pfe_multiplier"),
+            multiplier.alias("pfe_multiplier"),
         )
         .with_columns(
             (pl.col("pfe_multiplier") * pl.col("addon_aggregate")).alias("pfe_addon"),
         )
         .with_columns((alpha_expr * (rc_for_ead + pl.col("pfe_addon"))).alias("ead_ccr"))
+    )
+
+
+@cites("CRR Art. 278")
+def pfe_multiplier(z: pl.Expr, addon_aggregate: pl.Expr) -> pl.Expr:
+    """The Art. 278(3) PFE multiplier for collateral-adjusted CMV ``z``.
+
+    ``multiplier = 1`` if ``z >= 0``, else
+    ``min{1, Floor_m + (1 - Floor_m) · exp(z / y)}`` with
+    ``y = 2 · (1 - Floor_m) · AggAddOn``. ``z`` is ``CMV - NICA`` (Art. 275(1)
+    netting sets), ``CMV - VM - NICA`` (275(2)) or ``CMV_i - NICA_i`` (275(3)).
+    The explicit ``z >= 0`` arm keeps a netting set with no add-on (``y = 0``)
+    finite, where ``z / y`` is NaN at ``z = 0``.
+
+    Args:
+        z: The collateral-adjusted current market value.
+        addon_aggregate: AggAddOn of the netting set.
+
+    Returns:
+        The multiplier expression.
+
+    References:
+        CCR (CRR) Part Art. 278(3); BCBS CRE52.23.
+    """
+    floor_f = _PFE_MULTIPLIER_FLOOR_F
+    one_minus_f = 1.0 - floor_f
+    y = _PFE_AGGREGATE_DENOM_COEFF * one_minus_f * addon_aggregate
+    return (
+        pl.when(z >= 0.0)
+        .then(pl.lit(1.0))
+        .otherwise(pl.min_horizontal(pl.lit(1.0), floor_f + one_minus_f * (z / y).exp()))
     )
 
 

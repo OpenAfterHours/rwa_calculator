@@ -68,6 +68,9 @@
   "rwa_calc.engine.ccr.ccp::apply_ccp_risk_weight": [
     "CRR Art. 306"
   ],
+  "rwa_calc.engine.ccr.exposure_value::compose_exposure_value": [
+    "CRR Art. 278"
+  ],
   "rwa_calc.engine.ccr.hedging_sets::assign_hedging_set": [
     "CRR Art. 277"
   ],
@@ -80,10 +83,16 @@
   "rwa_calc.engine.ccr.maturity_factor::compute_maturity_factor_unmargined": [
     "CRR Art. 279"
   ],
+  "rwa_calc.engine.ccr.maturity_factor::margined_mpor_days": [
+    "CRR Art. 279"
+  ],
   "rwa_calc.engine.ccr.pfe::compute_addon_per_asset_class": [
     "CRR Art. 277"
   ],
   "rwa_calc.engine.ccr.pfe::compute_pfe": [
+    "CRR Art. 278"
+  ],
+  "rwa_calc.engine.ccr.pfe::pfe_multiplier": [
     "CRR Art. 278"
   ],
   "rwa_calc.engine.ccr.risk_categories::compute_addon_other": [

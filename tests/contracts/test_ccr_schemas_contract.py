@@ -269,25 +269,57 @@ def test_margin_agreement_schema_exists() -> None:
     )
 
 
-def test_margin_agreement_schema_mpor_days_default_is_ten() -> None:
-    """MARGIN_AGREEMENT_SCHEMA.mpor_days must default to 10.
+def test_margin_agreement_csa_terms_default_to_unstated() -> None:
+    """MARGIN_AGREEMENT_SCHEMA's TH / MTA / NICA / mpor_days default to null.
 
-    CRR Art. 285(2)(b): the minimum Margin Period of Risk for standard
-    margined netting sets is 10 business days.  Default to 10 so that
-    the SA-CCR PFE add-on uses the regulatory minimum when mpor_days is
-    not explicitly supplied.
+    Review CC-03: the margin agreement's terms are now read (coalesced with the
+    netting set's own, ``engine/ccr/margin_terms.py``). A default-filled 0 / 10
+    would be indistinguishable from a stated one, so a netting set stating its
+    own terms would be reported CCR025 against a fabricated value and its NICA
+    replaced by the "conservative" 0. Replaces the earlier pin of
+    ``mpor_days`` default 10: the Art. 285(2)(b) 10-BD floor is applied by the
+    margined maturity factor whatever the input (``margined_mpor_days``).
     """
     # Arrange
     schema = _get_schema("MARGIN_AGREEMENT_SCHEMA")
 
     # Act
-    default = _default_of(schema, "mpor_days")
+    defaults = {
+        col: _default_of(schema, col)
+        for col in ("margin_threshold", "minimum_transfer_amount", "nica", "mpor_days")
+    }
 
     # Assert
-    assert default == 10, (
-        f"MARGIN_AGREEMENT_SCHEMA.mpor_days must default to 10 "
-        f"(Art. 285(2)(b) — 10 business-day MPOR minimum), got {default!r}."
+    assert defaults == dict.fromkeys(defaults), defaults
+
+
+def test_unstated_mpor_floors_at_ten_business_days() -> None:
+    """CRR Art. 285(2)(b): a margined OTC netting set with no stated MPOR takes 10 BD."""
+    # Arrange
+    from rwa_calc.engine.ccr.maturity_factor import margined_mpor_days
+
+    frame = pl.DataFrame(
+        {
+            "number_of_trades": [1],
+            "has_illiquid": [False],
+            "dispute_count_qtr": [None],
+            "remargining_frequency_days": [None],
+            "mpor_days_input": [None],
+        },
+        schema={
+            "number_of_trades": pl.Int32,
+            "has_illiquid": pl.Boolean,
+            "dispute_count_qtr": pl.Int32,
+            "remargining_frequency_days": pl.Int32,
+            "mpor_days_input": pl.Int32,
+        },
     )
+
+    # Act
+    mpor = frame.select(margined_mpor_days().alias("mpor"))["mpor"][0]
+
+    # Assert
+    assert mpor == 10
 
 
 # ===========================================================================

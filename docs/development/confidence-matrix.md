@@ -121,7 +121,7 @@ Package version `0.3.34`. Resolved packs:
 | 193 | 1 | 0 | 12 | 1 | 6 | HIGH |
 | 194 | 3 | 0 | 3 | 0 | 5 | MEDIUM |
 | 195 | 1 | 1 | 8 | 0 | 16 | MEDIUM |
-| 197 | 4 | 0 | 7 | 19 | 19 | HIGH |
+| 197 | 4 | 0 | 9 | 19 | 20 | HIGH |
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
 | 200 | 0 | 0 | 4 | 0 | 5 | UNCITED |
@@ -140,7 +140,7 @@ Package version `0.3.34`. Resolved packs:
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 13 | HIGH |
-| 223 | 5 | 0 | 20 | 30 | 29 | HIGH |
+| 223 | 5 | 0 | 22 | 30 | 29 | HIGH |
 | 224 | 4 | 11 | 11 | 33 | 44 | HIGH |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
 | 227 | 0 | 2 | 3 | 0 | 1 | MEDIUM |
@@ -161,17 +161,17 @@ Package version `0.3.34`. Resolved packs:
 | 247 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 259 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 271 | 1 | 0 | 10 | 0 | 30 | MEDIUM |
-| 272 | 0 | 0 | 13 | 0 | 27 | UNCITED |
+| 272 | 0 | 0 | 14 | 0 | 27 | UNCITED |
 | 273a | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 274 | 4 | 4 | 19 | 0 | 67 | MEDIUM † |
 | 275 | 0 | 0 | 8 | 0 | 45 | UNCITED † |
 | 277 | 4 | 0 | 8 | 0 | 30 | MEDIUM |
 | 277a | 0 | 6 | 7 | 0 | 25 | MEDIUM † |
-| 278 | 1 | 4 | 5 | 0 | 30 | MEDIUM |
-| 279 | 8 | 0 | 3 | 0 | 0 | LOW |
+| 278 | 3 | 4 | 6 | 0 | 30 | MEDIUM |
+| 279 | 9 | 0 | 3 | 0 | 0 | LOW |
 | 279a | 3 | 20 | 5 | 0 | 11 | MEDIUM |
 | 279b | 0 | 4 | 5 | 0 | 39 | MEDIUM † |
-| 279c | 0 | 10 | 4 | 0 | 31 | MEDIUM † |
+| 279c | 0 | 10 | 4 | 0 | 30 | MEDIUM † |
 | 280 | 1 | 26 | 4 | 0 | 25 | MEDIUM |
 | 280a | 0 | 0 | 3 | 0 | 13 | UNCITED |
 | 280b | 0 | 0 | 1 | 0 | 6 | UNCITED |
@@ -180,7 +180,7 @@ Package version `0.3.34`. Resolved packs:
 | 281 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 282 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 283 | 0 | 0 | 0 | 0 | 1 | GAP |
-| 285 | 2 | 12 | 7 | 0 | 19 | MEDIUM † |
+| 285 | 2 | 12 | 9 | 0 | 19 | MEDIUM † |
 | 291 | 1 | 2 | 5 | 0 | 5 | MEDIUM |
 | 295 | 0 | 0 | 3 | 0 | 18 | UNCITED |
 | 300 | 0 | 0 | 2 | 0 | 1 | UNCITED |
@@ -292,7 +292,7 @@ Package version `0.3.34`. Resolved packs:
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 7 | MEDIUM |
 | 223 | 2 | 0 | 5 | 0 | 5 | MEDIUM |
-| 224 | 0 | 2 | 3 | 0 | 14 | MEDIUM |
+| 224 | 0 | 2 | 4 | 0 | 14 | MEDIUM |
 | 226 | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 227 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 228 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -327,7 +327,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | PS1/26 118 | 1 | 1 | 5 | — | CRR Art. 118 |
 | PS1/26 134 | 2 | 1 | 2 | — | CRR Art. 134 |
 | CRR 275 | 8 | 0 | 45 | yes | — |
-| CRR 272 | 13 | 0 | 27 | — | — |
+| CRR 272 | 14 | 0 | 27 | — | — |
 | CRR 295 | 3 | 0 | 18 | — | — |
 | CRR 239 | 2 | 0 | 13 | — | — |
 | CRR 280a | 3 | 0 | 13 | — | — |

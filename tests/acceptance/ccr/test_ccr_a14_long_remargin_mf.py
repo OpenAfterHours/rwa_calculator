@@ -1,6 +1,17 @@
 """
 CCR-A14: single 10-year GBP vanilla IR swap, margined netting set, 126-day remargin.
 
+Review CC-03 re-pin (CCR (CRR) Part Art. 274(3), unamended by PS1/26): "The
+exposure value of a netting set that is subject to a contractual margin agreement
+shall be capped at the exposure value of the same netting set not subject to any
+form of margin agreement." This netting set's margined value exceeds its
+unmargined value (RC 0, MF 1, z = CMV - NICA = -4.25m, multiplier 0.5864684746,
+PFE 2_295_612.511, EAD 3_213_857.515), so the cap binds: the row reports the
+unmargined RC / PFE / add-on and EAD 3_213_857.515, RWA 1_606_928.758. The
+margined RC (2_250_000, Art. 275(2) floor arm) is still computed and reported in
+``rc_margined``. The figures below are the pre-cap derivation, kept for the
+margined basis.
+
 Pipeline position:
     Loader -> HierarchyResolver -> Classifier -> CRMProcessor -> CCRAdapter
     -> SACalculator -> OutputAggregator
@@ -237,41 +248,34 @@ class TestCCRA14LongRemarginMF:
 
     def test_ccr_a14_addon_aggregate(self, ccr_a14_result: dict) -> None:
         """
-        addon_aggregate = 3_914_298.2277279915 × MF_margined(1.10227) = 4_314_615.012.
+        addon_aggregate = 3_914_298.2277279915: the unmargined-basis add-on (MF 1).
 
-        This is the P8.54 load-bearing precision assertion. addon_aggregate is exactly
-        linear in MF (single trade, single bucket), so this test directly proves whether
-        the engine wires MF_margined≈1.10227 (long-remargin) vs the unwired MF=1.0 baseline.
+        Review CC-03 re-pin. The long-remargin margined add-on (MF_margined =
+        1.5 × sqrt(135/250) = 1.102270384252 -> 4_314_615.012) still prices the
+        margined value, but that value (6_868_989.918) exceeds the unmargined one
+        and CCR (CRR) Part Art. 274(3) caps it: "The exposure value of a netting set
+        that is subject to a contractual margin agreement shall be capped at the
+        exposure value of the same netting set not subject to any form of margin
+        agreement." The row reports the components of the value it carries, so the
+        add-on is the unmargined (MF 1) one. The margined MF itself is pinned by
+        tests/unit/ccr/test_maturity_factor_margined.py.
 
-        Arrange: remargining_frequency_days=126 → MPOR_eff=135
-                 → MF_margined = 1.5 × sqrt(135/250) = 1.102270384252.
-                 Baseline addon_aggregate (MF=1.0) = 3_914_298.2277279915.
-                 addon_aggregate (MF=1.10227) = 3_914_298.2277279915 × 1.102270384252
-                                              = 4_314_615.011554657 (exact).
-        Act:     full CRR SA+CCR pipeline.
-        Assert:  addon_aggregate == 4_314_615.011554657 (rel tol 1e-9 — exactly linear in MF).
-
-        Current engine (MF=1.0 unwired): addon_aggregate ≈ 3_914_298.228 — FAILS RED.
-        Post-fix (MF=1.10227 wired): addon_aggregate ≈ 4_314_615.012 — PASSES GREEN.
-
-        References: CRR Art. 279c(2) MF=1.5×sqrt(MPOR_eff/250); Art. 285(5) MPOR_eff cascade.
+        References: CCR (CRR) Part Art. 274(3); Art. 279c(1).
         """
         # Arrange
         row = ccr_a14_result
-        expected = CCR_A14_ADDON_AGGREGATE  # 4_314_615.011554657 (exact, from fixture constant)
+        expected = _EXPECTED["addon_aggregate"]
 
         # Assert — rel=1e-9 (linear precision; no exp() in addon_aggregate itself)
         assert row["addon_aggregate"] == pytest.approx(expected, rel=1e-9), (
-            f"CCR-A14: expected addon_aggregate={expected:,.9f} "
-            f"(= 3_914_298.228 × MF_margined(1.10227)), "
-            f"got {row['addon_aggregate']:,.9f}. "
-            "P8.54: current engine applies unmargined MF=1.0 (≈3_914_298.228 — wrong). "
-            "CRR Art. 279c(2): MF_margined = 1.5 × sqrt(135/250) = 1.102270384252."
+            f"CCR-A14: expected the unmargined-basis addon_aggregate={expected:,.9f} "
+            f"(Art. 274(3) cap binds), got {row['addon_aggregate']:,.9f}. "
+            f"{CCR_A14_ADDON_AGGREGATE:,.3f} would mean the uncapped margined basis."
         )
 
     def test_ccr_a14_pfe_addon(self, ccr_a14_result: dict) -> None:
         """
-        PFE add-on = multiplier * AddOn_aggregate ≈ 2_732_138 (MF≈1.10227).
+        PFE add-on = multiplier * AddOn_aggregate = 2_295_612.511 (unmargined basis, Art. 274(3) cap).
 
         Arrange: 10y GBP IR swap, notional GBP 100m. MtM=-4m (V<0).
                  addon_aggregate(MF=1.10227) ≈ 4_314_615.012.
@@ -294,46 +298,35 @@ class TestCCRA14LongRemarginMF:
 
         # Assert
         assert row["pfe_addon"] == pytest.approx(expected, rel=1e-6), (
-            f"CCR-A14: expected pfe_addon approx {expected:,.6f} (MF≈1.10227 post-fix), "
+            f"CCR-A14: expected pfe_addon approx {expected:,.6f} (CC-03 Art. 274(3) re-pin), "
             f"got {row['pfe_addon']:,.6f}. "
             "CRR Art. 278: PFE = multiplier * AddOn_aggregate; Art. 280a: SF_IR=0.005."
         )
 
-    def test_ccr_a14_ead_rises_above_unmargined_baseline(self, ccr_a14_result: dict) -> None:
+    def test_ccr_a14_ead_capped_at_the_unmargined_value(self, ccr_a14_result: dict) -> None:
         """
-        EAD > 6_464_360.391383706 (load-bearing inequality — margined MF > 1.0 raises EAD).
+        EAD = 3_213_857.515: the long-remargin margined value is capped (Art. 274(3)).
 
-        This is the definitive proof of P8.54: when MF_margined > 1.0 (long-remargin CSA),
-        the margined path produces a HIGHER EAD than the unmargined-MF=1.0 baseline.
+        Review CC-03 inverts the P8.54 "EAD rises" inequality. A margined maturity
+        factor above 1 lifts the margined value to 1.4 × (2_250_000 + 2_656_421.37) =
+        6_868_989.918, but CCR (CRR) Part Art. 274(3) — "The exposure value of a
+        netting set that is subject to a contractual margin agreement shall be capped
+        at the exposure value of the same netting set not subject to any form of
+        margin agreement" — caps it at the unmargined value: RC max(-4m - 0.25m, 0)
+        = 0, z = -4.25m, multiplier 0.5864684746, PFE 2_295_612.511, EAD =
+        1.4 × PFE = 3_213_857.515. Pre-fix (no cap): 6_974_799.281.
 
-        6_464_360.391383706 is the CCR-A13 (and current CCR-A14 engine) EAD with MF=1.0.
-        After the P8.54 fix, CCR-A14 EAD ≈ 6_974_993 (MF=1.10227), which exceeds the bound.
-
-        Arrange: alpha=1.4; rc_margined=2_250_000; pfe_addon(MF=1.10227) ≈ 2_732_138.
-                 EAD ≈ 1.4 × (2_250_000 + 2_732_138) ≈ 6_974_993
-                 Bound = 6_464_360.391383706 (unmargined-MF=1.0 EAD).
-        Act:     full CRR SA+CCR pipeline.
-        Assert:  ead_final > 6_464_360.391383706 (strict inequality).
-
-        Current engine (MF=1.0 unwired):
-            ead_final ≈ 6_464_360.391383706 (EQUALS the bound — strict > FAILS RED).
-        Post-fix (MF=1.10227 wired):
-            ead_final ≈ 6_974_993 (EXCEEDS the bound — strict > PASSES GREEN).
-
-        References: CRR Art. 274(2) — EAD = alpha * (RC + PFE).
+        References: CCR (CRR) Part Art. 274(3), 275(1), 278(3).
         """
         # Arrange
         row = ccr_a14_result
-        lower_bound: float = CCR_A14_EAD_LOWER_BOUND  # 6_464_360.391383706
+        uncapped_floor: float = CCR_A14_EAD_LOWER_BOUND  # 6_464_360.391383706
 
-        # Assert — strict inequality proves the "EAD rises" branch
-        assert row["ead_final"] > lower_bound, (
-            f"CCR-A14: expected ead_final > {lower_bound:,.9f} "
-            f"(unmargined-MF=1.0 baseline, i.e. CCR-A13 pre-fix EAD), "
-            f"got ead_final={row['ead_final']:,.9f}. "
-            "P8.54: current engine applies MF=1.0 so ead_final EQUALS the bound. "
-            "After fix: MF_margined=1.10227 → ead_final ≈ 6_974_993 (rises above bound). "
-            "CRR Art. 279c(2): MF_margined = 1.5 × sqrt(135/250) = 1.102270384252 > 1.0."
+        # Assert
+        assert row["ead_final"] == pytest.approx(_EXPECTED["ead_final"], rel=1e-9)
+        assert row["ead_final"] < uncapped_floor, (
+            f"CCR-A14: ead_final {row['ead_final']:,.3f} is at or above the pre-fix "
+            "unmargined-MF baseline — the Art. 274(3) cap is not applied."
         )
 
     def test_ccr_a14_exposure_class(self, ccr_a14_result: dict) -> None:
@@ -359,7 +352,7 @@ class TestCCRA14LongRemarginMF:
 
     def test_ccr_a14_rwa(self, ccr_a14_result: dict) -> None:
         """
-        RWA = EAD * RW ≈ 6_974_993 * 0.50 ≈ 3_487_497 (MF≈1.10227 post-fix).
+        RWA = EAD * RW = 3_213_857.515 * 0.50 = 1_606_928.758 (CC-03 Art. 274(3) re-pin).
 
         Arrange: EAD≈6_974_993 (P8.54 MF=1.10227), institution CQS 2 → RW=50%.
         Act:     full CRR SA+CCR pipeline.
@@ -377,9 +370,9 @@ class TestCCRA14LongRemarginMF:
 
         # Assert
         assert row["rwa_final"] == pytest.approx(expected, rel=1e-6), (
-            f"CCR-A14: expected rwa_final approx {expected:,.6f} (P8.54 MF≈1.10227), "
+            f"CCR-A14: expected rwa_final approx {expected:,.6f} (CC-03 Art. 274(3) re-pin), "
             f"got {row['rwa_final']:,.6f}. "
-            "RWA = EAD * RW ≈ 6_974_993 * 0.50 ≈ 3_487_497 "
+            "RWA = EAD * RW = 3_213_857.515 * 0.50 "
             "(CRR Art. 120(1) Table 3, CQS 2, institution). "
-            "Pre-fix engine (MF=1.0): rwa_final≈3_232_180."
+            "Pre-fix (no cap): rwa_final 3_487_399.641."
         )

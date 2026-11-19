@@ -10,6 +10,12 @@ Key responsibilities:
   (adjusted notional, supervisory delta, maturity factor, hedging set,
   asset-class add-on, PFE multiplier, EAD) over a ``RawCCRBundle`` to
   produce one ``ead_ccr`` value per netting set.
+- Rebase every money input to the reporting currency (Art. 279b(3),
+  ``reporting_currency``), resolve each netting set's CSA terms against its
+  margin agreement (``margin_terms``), value its collateral into VM / NICA
+  (``collateral``) and compose the exposure value on the unmargined,
+  margined-and-capped or shared-agreement basis (``exposure_value``) — review
+  cluster saccr_b (CC-02, CC-03, CC-05).
 - Shape each netting-set row into a synthetic exposure row compatible
   with the unified ``RAW_EXPOSURE_SCHEMA`` (extended with provenance
   columns ``source_netting_set_id`` and ``ccr_method``) so the rest of
@@ -21,8 +27,8 @@ Key responsibilities:
 References:
 - CRR Art. 271: scope (one EAD row per netting set / counterparty pair)
 - CRR Art. 272(4): netting-set definition + legal-enforceability fallback
-- CRR Art. 274(2): EAD = alpha * (RC + PFE)
-- CRR Art. 275(1): replacement cost (unmargined)
+- CRR Art. 274(2): EAD = alpha * (RC + PFE); Art. 274(3): margined cap
+- CRR Art. 275(1)-(3), 276: replacement cost and collateral recognition
 - CRR Art. 277(1)-(2): hedging-set and IR maturity-bucket partition
 - CRR Art. 277a(1)(a): intra-asset-class add-on aggregation
 - CRR Art. 278(1)-(3): PFE multiplier + add-on
@@ -42,7 +48,7 @@ from rwa_calc.contracts.bundles import (
     RawCCRBundle,
     TradeBundle,
 )
-from rwa_calc.contracts.config import CCRConfig
+from rwa_calc.contracts.config import CalculationConfig, CCRConfig
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import CCR_ALPHA_CARVE_OUT_COUNTERPARTY_TYPES, NETTING_SET_SCHEMA
@@ -54,20 +60,28 @@ from rwa_calc.engine.ccr.adjusted_notional import (
     compute_adjusted_notional_fx,
     compute_adjusted_notional_ir,
 )
+from rwa_calc.engine.ccr.collateral import collateral_horizons, value_ccr_collateral
+from rwa_calc.engine.ccr.exposure_value import compose_exposure_value
 from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
+from rwa_calc.engine.ccr.margin_terms import resolve_margin_terms
 from rwa_calc.engine.ccr.maturity_factor import (
     compute_maturity_factor_margined,
     compute_maturity_factor_unmargined,
+    margined_mpor_days,
 )
-from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
-from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined
+from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class
+from rwa_calc.engine.ccr.reporting_currency import (
+    rebase_to_reporting_currency,
+    reporting_currency_rates,
+    stamp_reporting_currency,
+)
 from rwa_calc.engine.ccr.risk_categories import (
     compute_adjusted_notional_other,
     map_trade_risk_categories,
 )
 from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
-from rwa_calc.rulebook.resolve import resolve
+from rwa_calc.rulebook.resolve import ResolvedRulepack, resolve
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +135,9 @@ def ccr_rows_to_exposures(
     counterparties: pl.LazyFrame | None = None,
     is_basel_3_1: bool = False,
     alpha_nfc_carve_out_applicable: bool = False,
+    calculation_config: CalculationConfig | None = None,
+    rulepack: ResolvedRulepack | None = None,
+    rebase_amounts: bool = True,
 ) -> pl.LazyFrame:
     """Shape SA-CCR netting-set EADs into synthetic exposure rows.
 
@@ -145,7 +162,8 @@ def ccr_rows_to_exposures(
         interest              = 0.0
         undrawn_amount        = 0.0
         nominal_amount        = 0.0
-        currency              = first trade currency in the NS
+        currency              = reporting currency once converted, else the
+                                first trade currency (= original_currency)
         value_date            = config.reporting_date
         maturity_date         = max(trade maturity in the NS)
         seniority             = "senior"   (conservative default)
@@ -156,9 +174,11 @@ def ccr_rows_to_exposures(
                                        commodity, other} per-class add-on breakdown
         pfe_multiplier        = Art. 278(3) multiplier
         pfe_addon             = Art. 278(1) PFE
-        rc_unmargined         = Art. 275(1) replacement cost
-        rc_margined           = Art. 275(2) replacement cost (null if unmargined)
-        rc                    = unified RC (margined where applicable) feeding EAD
+        rc_unmargined         = Art. 275(1) replacement cost (every netting set)
+        rc_margined           = Art. 275(2) RC, or the Art. 275(3) agreement
+                                RC share (null if unmargined)
+        rc                    = RC of the basis ead_ccr is taken on (the
+                                unmargined one where the Art. 274(3) cap binds)
         ead_ccr               = Art. 274(2) EAD at alpha
 
     The downstream concat in the orchestrator uses ``how="diagonal_relaxed"``
@@ -171,7 +191,8 @@ def ccr_rows_to_exposures(
         raw_ccr: CCR bundle whose legal-enforceability gate has already been
             applied upstream (non-enforceable netting sets are split into
             single-trade NSes per Art. 272(4)).
-        config_ccr: CCR configuration (controls alpha for compute_pfe).
+        config_ccr: CCR configuration. Not read for alpha: every netting set
+            carries its own ``alpha_applied`` (Art. 274(2)).
         reporting_date: As-of date for the calculation; used to compute
             ``years_to_maturity`` and ``adjusted_notional`` per Art. 279b
             and is written to the synthetic exposure row's ``value_date``.
@@ -200,6 +221,15 @@ def ccr_rows_to_exposures(
             Basel 3.1 (PS1/26 Art. 274(2) α = 1 carve-out); False under CRR, whose
             CCR (CRR) Part Art. 274(2) sets α = 1.4 for every netting set. The
             default ``False`` is the CRR rule and never lowers alpha.
+        calculation_config: The run configuration, which selects the Art. 224
+            haircut table the CCR collateral is valued with (Art. 276(1)(d)).
+            None (direct callers) builds the regime's default configuration
+            from ``is_basel_3_1``.
+        rulepack: The run's resolved rulepack, threaded to the haircut lookup.
+        rebase_amounts: Convert notionals, market prices, MtM and collateral to
+            ``base_currency`` (Art. 279b(3); review CC-05). The stage passes
+            ``CalculationConfig.apply_fx_conversion``. A currency with no rate
+            in ``fx_rates`` is left unconverted (reported CCR026).
 
     Returns:
         LazyFrame at netting-set grain with one synthetic exposure row per
@@ -230,7 +260,24 @@ def ccr_rows_to_exposures(
     # commodity-type fallbacks — none of these inputs may contribute a silent
     # zero add-on (review CC-06; reported as CCR021 / CCR022 by the input gate).
     trades_lf = map_trade_risk_categories(raw_ccr.trades.trades)
-    netting_sets_lf = raw_ccr.netting_sets.netting_sets
+    # Art. 279b(3) / Art. 275: every money input enters in the reporting
+    # currency (review CC-05). FX-category notionals are converted leg by leg by
+    # the Art. 279b(1)(b) branch below, so only their MtM is rebased here; the
+    # trade ``currency`` stays the denomination (IR hedging-set key, Hfx).
+    rates = reporting_currency_rates(fx_rates, base_currency) if rebase_amounts else None
+    trades_lf = rebase_to_reporting_currency(
+        rebase_to_reporting_currency(
+            trades_lf, ("notional", "market_price"), rates, keep=pl.col("asset_class") == "fx"
+        ),
+        ("mtm_value",),
+        rates,
+    )
+    # Art. 275(2) / 285: one resolved set of CSA terms per netting set — the
+    # netting set's own terms coalesced with its margin agreement's (CCR025 on a
+    # conflict) and the trade count floored at the input (review CC-03).
+    netting_sets_lf = resolve_margin_terms(
+        raw_ccr.netting_sets.netting_sets, raw_ccr.margin_agreements.margin_agreements, trades_lf
+    )
 
     # 1) Enrich trade-level frame with residual-maturity measures, then chain the
     #    per-trade SA-CCR components in regulatory order. Two distinct measures:
@@ -281,9 +328,7 @@ def ccr_rows_to_exposures(
     # netting set's ``margin_agreement_id``. ``remargining_frequency_days`` is a
     # business-day count (Art. 285(5)) — deliberately NOT conflated with the
     # calendar-day ``years_to_maturity`` derived above.
-    trades_enriched = _attach_mpor_cascade_inputs(
-        trades_enriched, netting_sets_lf, raw_ccr.margin_agreements.margin_agreements
-    )
+    trades_enriched = _attach_mpor_cascade_inputs(trades_enriched, netting_sets_lf)
 
     # Maturity factor (Art. 279c). The unmargined fn writes the bare
     # ``maturity_factor``; rename it to ``maturity_factor_unmargined`` so the
@@ -302,40 +347,14 @@ def ccr_rows_to_exposures(
         )
     )
 
-    # 2) Per-(NS, asset_class) add-on, then aggregate to per-NS sum.
-    addon_per_class = compute_addon_per_asset_class(trades_enriched)
-    addon_per_ns = addon_per_class.group_by("netting_set_id").agg(
-        pl.col("asset_class_addon").fill_null(0.0).sum().alias("addon_aggregate")
-    )
-    # 2b) Per-NS struct breakdown of the per-asset-class add-on so the
-    #     synthetic exposure row carries an auditable reconciliation of
-    #     ``addon_aggregate`` to its six Art. 277(1) risk-category components.
-    #     Missing asset classes in a netting set become 0.0 in the struct so
-    #     ``sum(struct) == addon_aggregate`` holds for every NS row.
-    #     LazyFrame-first: pivot via a group_by + conditional-sum over the
-    #     five fixed asset-class labels rather than the eager-only pl.pivot.
-    asset_class_struct_fields = ["interest_rate", "fx", "credit", "equity", "commodity", "other"]
-    addon_by_class_per_ns = (
-        addon_per_class.group_by("netting_set_id")
-        .agg(
-            [
-                pl.when(pl.col("asset_class") == asset_class)
-                .then(pl.col("asset_class_addon"))
-                .otherwise(None)
-                .sum()
-                .fill_null(0.0)
-                .alias(asset_class)
-                for asset_class in asset_class_struct_fields
-            ]
-        )
-        .select(
-            [
-                pl.col("netting_set_id"),
-                pl.struct([pl.col(c) for c in asset_class_struct_fields]).alias(
-                    "addon_by_asset_class"
-                ),
-            ]
-        )
+    # 2) Per-NS add-on on each maturity-factor basis: the coalesced (margined
+    #    where the netting set is margined) MF feeds the Art. 275(2) margined
+    #    exposure value; the unmargined MF feeds the Art. 275(1) value that every
+    #    netting set has and that caps a margined one (Art. 274(3)).
+    addon_margined = _addon_per_netting_set(trades_enriched, "_margined")
+    addon_unmargined = _addon_per_netting_set(
+        trades_enriched.with_columns(pl.col("maturity_factor_unmargined").alias("maturity_factor")),
+        "_unmargined",
     )
 
     # 3) Per-NS v_net (sum of mtm_value over trades) and trade-level metadata
@@ -382,34 +401,33 @@ def ccr_rows_to_exposures(
         ]
     )
 
-    # 4) CCR collateral: per-NS c_net. CCR-A1 has zero rows -> all NS see c_net=0.
-    ccr_collateral_lf = raw_ccr.ccr_collateral.ccr_collateral
-    ccr_collateral_cols = ccr_collateral_lf.collect_schema().names()
-    if "netting_set_id" in ccr_collateral_cols and "collateral_value" in ccr_collateral_cols:
-        c_net_per_ns = ccr_collateral_lf.group_by("netting_set_id").agg(
-            pl.col("collateral_value").fill_null(0.0).sum().alias("c_net")
-        )
-    else:
-        # Empty-collateral path: derive an empty c_net frame keyed by netting set.
-        c_net_per_ns = netting_sets_lf.select(
-            pl.col("netting_set_id"),
-            pl.lit(0.0).alias("c_net"),
-        )
+    # 4) CCR collateral (review CC-02): each netting set's VM and NICA, valued
+    #    with the regime's Art. 224 haircuts over the Art. 276(3) liquidation
+    #    period of its basis.
+    haircut_config = calculation_config or _default_haircut_config(
+        reporting_date, is_basel_3_1, base_currency
+    )
+    horizons = collateral_horizons(netting_sets_lf, trades_enriched, margined_mpor_days())
+    collateral_per_ns = value_ccr_collateral(
+        raw_ccr.ccr_collateral.ccr_collateral, horizons, rates, haircut_config, rulepack
+    )
 
-    # 5) Compose NS-grain frame for compute_pfe: v_net, c_net, addon_aggregate.
-    #    Carries ``addon_by_asset_class`` alongside so the per-class breakdown
-    #    rides the same lazy plan into the final select.
+    # 5) Compose the NS-grain frame: CMV, collateral and the per-basis add-ons.
     ns_frame = (
         netting_sets_lf.join(ns_trade_aggregates, on="netting_set_id", how="left")
-        .join(addon_per_ns, on="netting_set_id", how="left")
-        .join(addon_by_class_per_ns, on="netting_set_id", how="left")
-        .join(c_net_per_ns, on="netting_set_id", how="left")
+        .join(addon_margined, on="netting_set_id", how="left")
+        .join(addon_unmargined, on="netting_set_id", how="left")
+        .join(collateral_per_ns, on="netting_set_id", how="left")
         .with_columns(
-            [
-                pl.col("v_net").fill_null(0.0),
-                pl.col("c_net").fill_null(0.0),
-                pl.col("addon_aggregate").fill_null(0.0),
-            ]
+            pl.col(name).fill_null(0.0)
+            for name in (
+                "v_net",
+                "vm_net",
+                "nica_collateral",
+                "collateral_unmargined",
+                "addon_aggregate_margined",
+                "addon_aggregate_unmargined",
+            )
         )
     )
 
@@ -423,20 +441,6 @@ def ccr_rows_to_exposures(
         ns_frame, {"wwr_lgd_override": NETTING_SET_SCHEMA["wwr_lgd_override"]}
     )
 
-    # Replacement cost. Unmargined sets follow CRR Art. 275(1):
-    #   RC = max(V - C, 0).
-    # Margined sets follow CRR Art. 275(2):
-    #   RC = max(V - C, TH + MTA - NICA, 0)
-    # using the threshold / minimum-transfer-amount / NICA carried on the
-    # netting set (NETTING_SET_SCHEMA). Both are surfaced for audit; the
-    # unified ``rc`` selects the margined form for margined sets and feeds
-    # EAD = alpha * (rc + PFE) inside compute_pfe.
-    ns_frame = compute_rc_unmargined(ns_frame)
-    ns_frame = compute_rc_margined(ns_frame)
-    ns_frame = ns_frame.with_columns(
-        pl.coalesce(pl.col("rc_margined"), pl.col("rc_unmargined")).alias("rc")
-    )
-
     # Per-NS supervisory alpha: 1.4 under CRR (CCR (CRR) Part Art. 274(2));
     # under Basel 3.1 the PS1/26 Art. 274(2) carve-out joins the counterparty_type
     # discriminator (keyed on counterparty_reference, NOT cross-joined — the NS
@@ -444,7 +448,10 @@ def ccr_rows_to_exposures(
     # it to a per-NS ``alpha_applied`` scalar. compute_pfe reads this column.
     ns_frame = _attach_alpha_applied(ns_frame, counterparties, alpha_nfc_carve_out_applicable)
 
-    ns_with_ead = compute_pfe(ns_frame, config_ccr)
+    # Art. 274(2)/(3), 275, 278: RC, PFE and the exposure value on the
+    # unmargined basis, the margined basis capped at it, or the Art. 275(3)
+    # shared-agreement basis.
+    ns_with_ead = compose_exposure_value(ns_frame)
 
     # PRA PS1/26 Art. 274(2A): transitional alpha add-on. For legacy
     # CVA-exempt netting sets on the α=1.0 carve-out, phase a fraction of the
@@ -457,7 +464,7 @@ def ccr_rows_to_exposures(
     #    the CRM `_initialize_ead` produces ead_pre_crm = ead_ccr (no CCF /
     #    no collateral / no guarantee match) and the SA calculator then
     #    routes it through Classifier's INSTITUTION class at CQS 2 -> 50%.
-    return ns_with_ead.select(
+    rows = ns_with_ead.select(
         [
             pl.concat_str([pl.lit("ccr__"), pl.col("netting_set_id")]).alias("exposure_reference"),
             # Reconciliation base: a netting set has no legacy per-exposure
@@ -533,6 +540,9 @@ def ccr_rows_to_exposures(
             pl.col("ead_ccr"),
         ]
     )
+    # The row's amounts are in the reporting currency once its denomination
+    # converted (Art. 279b(3)); ``original_currency`` keeps the denomination.
+    return stamp_reporting_currency(rows, rates, base_currency)
 
 
 def partition_out_sft_rows(
@@ -639,21 +649,16 @@ def partition_out_sft_rows(
 def _attach_mpor_cascade_inputs(
     trades_enriched: pl.LazyFrame,
     netting_sets_lf: pl.LazyFrame,
-    margin_agreements_lf: pl.LazyFrame,
 ) -> pl.LazyFrame:
     """Denormalise the Art. 285 MPOR-cascade inputs onto each trade row.
 
     The margined maturity factor (CRR Art. 279c(2)) consumes a denormalised
-    trade frame carrying the Art. 285 cascade drivers. Two left joins (each
-    deduplicated to one row per key so they cannot fan out the trade frame)
-    bring those drivers onto ``trades_enriched``:
-
-    - keyed on ``netting_set_id`` (NETTING_SET_SCHEMA):
-      ``is_margined``, ``number_of_trades``, ``mpor_days`` (→ ``mpor_days_input``),
-      ``has_illiquid_collateral_or_hard_to_replace_otc`` (→ ``has_illiquid``)
-      and ``margin_agreement_id`` (the join key for the next hop).
-    - keyed on ``margin_agreement_id`` (MARGIN_AGREEMENT_SCHEMA):
-      ``remargining_frequency_days`` and ``dispute_count_qtr``.
+    trade frame carrying the Art. 285 cascade drivers. They come from the
+    resolved netting-set terms (``resolve_margin_terms``) — ``is_margined``,
+    ``number_of_trades`` (max of stated and counted), ``mpor_days_input``,
+    ``has_illiquid`` and the CSA's ``remargining_frequency_days`` /
+    ``dispute_count_qtr`` — in one left join deduplicated to one row per netting
+    set so it cannot fan out the trade frame.
 
     ``remargining_frequency_days`` is a business-day count (Art. 285(5));
     it is deliberately kept distinct from the calendar-day ``years_to_maturity``
@@ -661,8 +666,7 @@ def _attach_mpor_cascade_inputs(
 
     Args:
         trades_enriched: Per-trade LazyFrame carrying ``netting_set_id``.
-        netting_sets_lf: Netting-set LazyFrame (NETTING_SET_SCHEMA).
-        margin_agreements_lf: Margin-agreement LazyFrame (MARGIN_AGREEMENT_SCHEMA).
+        netting_sets_lf: Resolved netting-set terms (``resolve_margin_terms``).
 
     Returns:
         ``trades_enriched`` with the Art. 285 cascade columns attached.
@@ -674,20 +678,60 @@ def _attach_mpor_cascade_inputs(
         pl.col("netting_set_id"),
         pl.col("is_margined"),
         pl.col("number_of_trades"),
-        pl.col("mpor_days").alias("mpor_days_input"),
-        pl.col("has_illiquid_collateral_or_hard_to_replace_otc").alias("has_illiquid"),
-        pl.col("margin_agreement_id"),
-    ).unique(subset=["netting_set_id"])
-
-    ma_terms = margin_agreements_lf.select(
+        pl.col("mpor_days_input"),
+        pl.col("has_illiquid"),
         pl.col("margin_agreement_id"),
         pl.col("remargining_frequency_days"),
         pl.col("dispute_count_qtr"),
-    ).unique(subset=["margin_agreement_id"])
+    ).unique(subset=["netting_set_id"])
+    return trades_enriched.join(ns_cascade, on="netting_set_id", how="left")
 
-    return trades_enriched.join(ns_cascade, on="netting_set_id", how="left").join(
-        ma_terms, on="margin_agreement_id", how="left"
+
+def _addon_per_netting_set(trades_enriched: pl.LazyFrame, suffix: str) -> pl.LazyFrame:
+    """Per-netting-set aggregate add-on and its per-risk-category breakdown.
+
+    Runs the Art. 280a-280f add-ons on the trades' ``maturity_factor`` and
+    reduces them to ``addon_aggregate<suffix>`` (Art. 278(1) AggAddOn) and the
+    ``addon_by_asset_class<suffix>`` struct of the six Art. 277(1) categories —
+    a category absent from the netting set is 0.0, so the struct sums to the
+    aggregate. LazyFrame-first: a group_by with conditional sums over the fixed
+    category labels rather than the eager-only ``pl.pivot``.
+
+    Args:
+        trades_enriched: Trades carrying the add-on inputs and ``maturity_factor``.
+        suffix: Column suffix naming the maturity-factor basis.
+
+    Returns:
+        LazyFrame ``(netting_set_id, addon_aggregate<suffix>,
+        addon_by_asset_class<suffix>)``.
+    """
+    categories = ["interest_rate", "fx", "credit", "equity", "commodity", "other"]
+    per_class = compute_addon_per_asset_class(trades_enriched)
+    return per_class.group_by("netting_set_id").agg(
+        pl.col("asset_class_addon").sum().alias(f"addon_aggregate{suffix}"),
+        pl.struct(
+            pl.col("asset_class_addon")
+            .filter(pl.col("asset_class") == category)
+            .sum()
+            .alias(category)
+            for category in categories
+        ).alias(f"addon_by_asset_class{suffix}"),
     )
+
+
+def _default_haircut_config(
+    reporting_date: date,
+    is_basel_3_1: bool,
+    base_currency: str,
+) -> CalculationConfig:
+    """The regime's default configuration for a direct caller with none of its own.
+
+    Only the Art. 224 haircut table it selects is read (CCR collateral
+    valuation); the pipeline stage always passes the run configuration.
+    """
+    if is_basel_3_1:
+        return CalculationConfig.basel_3_1(reporting_date, base_currency=base_currency)
+    return CalculationConfig.crr(reporting_date, base_currency=base_currency)
 
 
 def _attach_alpha_applied(

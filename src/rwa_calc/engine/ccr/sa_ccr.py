@@ -27,6 +27,7 @@ import logging
 import polars as pl
 
 from rwa_calc.contracts.bundles import (
+    CCRCollateralBundle,
     NettingSetBundle,
     RawCCRBundle,
     TradeBundle,
@@ -255,12 +256,43 @@ def apply_legal_enforceability_gate(raw_ccr: RawCCRBundle) -> RawCCRBundle:
         len(affected_ns_ids),
     )
 
+    # --- Re-key the collateral of a split single-trade netting set ---
+    # A netting set holding ONE trade becomes exactly one synthetic netting set,
+    # so its collateral (keyed by the original id) belongs to it unchanged. The
+    # collateral of a split multi-trade set cannot be attributed to any one of
+    # its single-transaction netting sets: it keeps the original id, matches no
+    # netting set and is left out (reported CCR024 by the collateral findings).
+    single_trade = (
+        trade_keys_df.group_by("netting_set_id")
+        .agg(pl.col("trade_id").first(), pl.len().alias("_trades"))
+        .filter(pl.col("_trades") == 1)
+        .select(
+            pl.col("netting_set_id"),
+            pl.concat_str(
+                [pl.col("netting_set_id"), pl.lit("__split__"), pl.col("trade_id")]
+            ).alias("_split_id"),
+        )
+    )
+    collateral_lf = (
+        raw_ccr.ccr_collateral.ccr_collateral.join(
+            single_trade.lazy(), on="netting_set_id", how="left"
+        )
+        .with_columns(
+            pl.coalesce(pl.col("_split_id"), pl.col("netting_set_id")).alias("netting_set_id")
+        )
+        .drop("_split_id")
+    )
+
     return dataclasses.replace(
         raw_ccr,
         trades=TradeBundle(trades=new_trades_lf, errors=list(raw_ccr.trades.errors)),
         netting_sets=NettingSetBundle(
             netting_sets=new_netting_sets_df.lazy(),
             errors=list(raw_ccr.netting_sets.errors),
+        ),
+        ccr_collateral=CCRCollateralBundle(
+            ccr_collateral=collateral_lf,
+            errors=list(raw_ccr.ccr_collateral.errors),
         ),
         errors=new_errors,
     )

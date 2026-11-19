@@ -124,9 +124,12 @@ where:
 - `V` is the **sum of trade-level mark-to-market values** within the
   netting set (`v_net` in the engine — populated by summing `mtm_value`
   over the legally enforceable trades in the netting set).
-- `C` is the **sum of collateral values** held against the netting set
-  (`c_net` in the engine — sum of `collateral_value` from the CCR
-  collateral table for that netting set).
+- `C` is the collateral term of `z` (Art. 278(3)): `NICA` for an unmargined
+  netting set, `VM + NICA` for a margined one, `NICA_i` for a netting set under
+  a shared margin agreement — volatility-adjusted and signed per Art. 276
+  (`c_net` in `compute_pfe`; built by `engine/ccr/collateral.py` and
+  `engine/ccr/exposure_value.py`, see
+  [rc-calculation.md](rc-calculation.md#collateral-the-art-2743-cap-and-shared-csas)).
 - `2` is the canonical exponent coefficient (Art. 278(3); cited pack param
   `pfe_aggregate_denom_coeff`).
 - `AddOn_aggregate` is the per-netting-set add-on sum above.
@@ -155,12 +158,14 @@ The engine evaluates the multiplier in a single Polars `min_horizontal`
 expression and then applies it to `AddOn_aggregate`:
 
 ```python
-v_minus_c = pl.col("v_net") - pl.col("c_net")
-denom = denom_coeff * one_minus_f * pl.col("addon_aggregate")
-uncapped = floor_f + one_minus_f * (v_minus_c / denom).exp()
-multiplier = pl.min_horizontal(pl.lit(1.0), uncapped)
+# pfe.py::pfe_multiplier(z, addon) — Art. 278(3): 1 if z >= 0, else
+# min{1, F + (1 - F) * exp(z / y)}, y = 2 * (1 - F) * AggAddOn
+multiplier = pfe_multiplier(pl.col("v_net") - pl.col("c_net"), pl.col("addon_aggregate"))
 pfe_addon = multiplier * pl.col("addon_aggregate")
 ```
+
+The explicit `z >= 0` arm (the article's first case) also keeps a netting set
+with no add-on finite: `z / y` is NaN at `z = y = 0`.
 
 The `min_horizontal(pl.lit(1.0), uncapped)` formulation is the lazy-plan
 equivalent of `min(1, …)` and works element-wise across all netting-set
@@ -174,7 +179,7 @@ The full PFE composition layer — multiplier, `pfe_addon`, unmargined RC and
 EAD — is implemented by a single function operating at netting-set grain:
 
 ```python
---8<-- "src/rwa_calc/engine/ccr/pfe.py:57:116"
+--8<-- "src/rwa_calc/engine/ccr/pfe.py:75:182"
 ```
 
 Signature:
@@ -187,7 +192,7 @@ Source: [`src/rwa_calc/engine/ccr/pfe.py`](https://github.com/OpenAfterHours/rwa
 | Column            | Dtype     | Source                                                                                | Article          |
 | ----------------- | --------- | ------------------------------------------------------------------------------------- | ---------------- |
 | `v_net`           | `Float64` | Sum of `mtm_value` over the trades in the netting set (`pipeline_adapter` step 3)     | Art. 275(1)      |
-| `c_net`           | `Float64` | Sum of `collateral_value` over the CCR collateral rows for the netting set (step 4)   | Art. 275(1)      |
+| `c_net`           | `Float64` | The basis's collateral term (NICA, or VM + NICA), volatility-adjusted per Art. 276    | Art. 275, 276    |
 | `addon_aggregate` | `Float64` | Plain sum over per-asset-class add-ons from `compute_addon_per_asset_class` (step 2)  | Art. 278(2)      |
 
 ### Outputs (netting-set grain)
@@ -204,13 +209,14 @@ The `α` value defaults to `1.4` and is overridable via
 counterparties is a config-level toggle, not a multiplier-formula
 adjustment.
 
-The margined RC path of Art. 275(2)
-(`RC_margined = max(V − C, TH + MTA − NICA, 0)`) is **not** yet routed
-through `compute_pfe` — the current orchestrator wires only the unmargined
-path. The multiplier formula itself is unchanged between margined and
-unmargined netting sets per Art. 278(3); only the inputs `V`, `C` and the
-upstream maturity factor differ between the two paths
-(see [maturity-factor.md](maturity-factor.md#margined-formula--art-279c2)).
+`compute_pfe` prices the unmargined basis of every netting set;
+`engine/ccr/exposure_value.py::compose_exposure_value` applies the same
+`pfe_multiplier` to the margined basis (`z = CMV − VM − NICA`, MPOR maturity
+factor) and to netting sets under a shared margin agreement
+(`z_i = CMV_i − NICA_i`, unmargined maturity factor, Art. 278(2)), and caps a
+margined netting set at its unmargined exposure value (Art. 274(3)); see
+[rc-calculation.md](rc-calculation.md#collateral-the-art-2743-cap-and-shared-csas)
+and [maturity-factor.md](maturity-factor.md#margined-formula--art-279c2).
 
 ---
 
@@ -228,9 +234,9 @@ trades → adjusted_notional            (Art. 279b)
        │
        ├─ group_by(netting_set_id).agg(sum)  → addon_aggregate   (Art. 278(2))
        ├─ trades.group_by(netting_set_id).agg(sum(mtm_value))    → v_net
-       └─ ccr_collateral.group_by(netting_set_id).agg(sum)       → c_net
+       └─ value_ccr_collateral (Art. 276)        → VM / NICA per basis
        │
-       → compute_pfe                  (Art. 278(1)–(3))   ← this page
+       → compose_exposure_value        (Art. 274(3), 275, 278) ← calls compute_pfe / pfe_multiplier
            ├─ pfe_multiplier
            ├─ pfe_addon
            ├─ rc_unmargined            (Art. 275(1))

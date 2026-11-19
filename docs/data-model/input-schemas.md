@@ -901,8 +901,8 @@ volatility-haircut (`HE`) inputs.
 | `trade_id` | `String` | Yes | Unique identifier for the SFT |
 | `netting_set_id` | `String` | Yes | Netting-set reference — used for the `ccr__<netting_set_id>` output reference and the collateral join |
 | `counterparty_reference` | `String` | Yes | Counterparty (denormalised from the netting set) — drives the SA institution risk-weight lookup (CRR Art. 120(1) Table 3) |
-| `notional` | `Float64` | Yes | `E` — the exposure amount lent / sold under the SFT (Art. 223(5)) |
-| `currency` | `String` | Yes | ISO 4217 currency code of the exposure |
+| `notional` | `Float64` | Yes | `E` — the exposure amount lent / sold under the SFT (Art. 223(5)), in `currency`; rebased to the reporting currency by the SFT stage (no `fx_rates` row: unconverted, `CCR026`) |
+| `currency` | `String` | Yes | ISO 4217 currency code of the exposure (kept as the denomination for the `HFX` test) |
 | `maturity_date` | `Date` | Yes | SFT maturity date |
 | `start_date` | `Date` | Yes | SFT start date |
 | `exposure_collateral_type` | `String` | No | `HE` input — exposure-side security type for the Art. 224 Table 1 haircut lookup. Null when the exposure side is cash / a standard loan (`HE = 0`) |
@@ -947,10 +947,49 @@ the common case this is literally one file.
 | `sft_collateral_reference` | `String` | Yes | Unique identifier for the collateral row |
 | `netting_set_id` | `String` | Yes | Join key back to the SFT trade's `netting_set_id` |
 | `collateral_type` | `String` | Yes | Collateral security type — `HC` input for the Art. 224 Table 1 lookup |
-| `market_value` | `Float64` | No (default `0.0`) | `CVA` — collateral market value in the `E*` formula; `0.0` when unknown (no collateral credit) |
+| `market_value` | `Float64` | No (default `0.0`) | `CVA` — collateral market value in the `E*` formula, in `currency`; rebased to the reporting currency by the SFT stage; `0.0` when unknown (no collateral credit) |
 | `currency` | `String` | No | Collateral currency. Drives the `HFX` same-currency shortcut (Art. 224 Table 4: `HFX = 0` when collateral and exposure currencies match) |
 | `issuer_cqs` | `Int8` | No | `HC` input — collateral issuer CQS |
 | `residual_maturity_years` | `Float64` | No | `HC` input — collateral residual maturity (years) |
+
+### SA-CCR collateral and margin agreements
+
+Read since review cluster saccr_b (CC-02 / CC-03); before it, SA-CCR netted no
+collateral at all and ignored the margin agreement's terms. Full method:
+[Replacement cost — collateral, the Art. 274(3) cap and shared CSAs](../specifications/crr/ccr/rc-calculation.md#collateral-the-art-2743-cap-and-shared-csas).
+
+**`ccr.ccr_collateral`** (`CCR_COLLATERAL_SCHEMA`, one row per item, keyed by
+`netting_set_id` — a foreign key to `ccr.netting_sets`, `DQ005` when it names
+none):
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `market_value` | `Float64` | No (default `0.0`) | Unsigned value before the Art. 223 volatility adjustment, in `currency` (rebased to the reporting currency) |
+| `is_posted_by_firm` | `Boolean` | No (default `False`) | Direction: received collateral is recognised positive, posted negative (CCR (CRR) Part Art. 276(1)(c)) |
+| `is_segregated` | `Boolean` | No (default `False`) | Posted and bankruptcy remote: not recognised in NICA (Art. 276(1)(g)) |
+| `collateral_role` | `String` | No (default `"vm"`) | `"vm"` (variation margin) or `"im"` (independent collateral → NICA) on a margined netting set (Art. 275(2), 276(1)(e)); every item is NICA on an unmargined one. Constrained to `VALID_CCR_COLLATERAL_ROLES` |
+| `is_main_index` | `Boolean` | No (default `False`) | An equity is recognised only when included in a main index (Art. 197(1)(f); the Art. 198 extension does not apply to SA-CCR) |
+| `collateral_type`, `issuer_cqs`, `issuer_type`, `residual_maturity_years`, `currency` | — | — | The Art. 224 haircut lookup and the Art. 197 gates, as for lending collateral; an item that is not Art. 197 eligible is left out and reported `CCR024`. `currency` also decides `Hfx` (waived only for an item in the single currency of every trade of its netting set) |
+| `haircut_override` | `Float64` | No | **Not read** — Art. 276(1)(d) excludes own-estimate haircuts |
+
+**`ccr.margin_agreements`** (`MARGIN_AGREEMENT_SCHEMA`): `margin_threshold`,
+`minimum_transfer_amount`, `nica` and `mpor_days` are nullable with **no
+default** (null = not stated on the CSA) and are coalesced with the same-named
+`ccr.netting_sets` columns of every netting set naming the agreement. A term
+both state with different values is reported `CCR025` and the conservative value
+applies (larger TH / MTA / MPOR, smaller signed NICA). An unstated TH or MTA is
+0; an unstated MPOR takes the Art. 285(2)(b) 10-business-day floor. TH, MTA and
+NICA are reporting-currency amounts; NICA is signed (received +, posted −) and
+is **added** to the NICA itemised in `ccr.ccr_collateral` — do not enter an
+itemised amount twice. Margined netting sets naming the same agreement take one
+Art. 275(3) replacement cost for it.
+
+**`ccr.netting_sets.number_of_trades`**: the Art. 285(3)(a) large-netting-set
+test now uses `max(number_of_trades, trades in the input)`.
+
+**`ccr.trades`**: `notional`, `market_price` and `mtm_value` are in the trade
+`currency` and rebased to the reporting currency (Art. 279b(3)); a currency with
+no `fx_rates` row is left unconverted and reported `CCR026`.
 
 ### `transaction_type` discriminator
 

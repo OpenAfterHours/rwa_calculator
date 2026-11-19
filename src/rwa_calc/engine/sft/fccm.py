@@ -58,6 +58,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.engine.ccr.reporting_currency import (
+    rebase_to_reporting_currency,
+    stamp_reporting_currency,
+)
 from rwa_calc.engine.crm.haircut_tables import (
     FX_HAIRCUT,
     lookup_collateral_haircut,
@@ -116,6 +120,9 @@ def sft_bundle_to_exposures(
     raw_sft: RawSFTBundle,
     reporting_date: date,
     rulepack: ResolvedRulepack | None = None,
+    *,
+    rates: pl.LazyFrame | None = None,
+    base_currency: str = "GBP",
 ) -> pl.LazyFrame:
     """Shape FCCM SFT EADs into synthetic exposure rows from the lean SFT bundle.
 
@@ -149,6 +156,12 @@ def sft_bundle_to_exposures(
             acceptance calls) falls back to the module-level CRR ``_PACK``; the
             stage adapter threads the run pack so production runs are regime-
             correct.
+        rates: Spot rates to the reporting currency
+            (``engine/ccr/reporting_currency.py::reporting_currency_rates``).
+            None (the default: direct callers, or a run with FX conversion
+            off) leaves every amount in its own currency, as before review
+            CC-05.
+        base_currency: The reporting currency stamped on a converted row.
 
     Returns:
         LazyFrame at netting-set grain. Empty (zero-row) frame when the trades
@@ -158,7 +171,12 @@ def sft_bundle_to_exposures(
         CRR Art. 271(2); Art. 220(1)(a); Art. 223(5); Art. 224 Table 1;
         Art. 224(2)(b); Art. 226; Art. 285(2)-(5).
     """
-    sft_trades_lf = raw_sft.trades.sft_trades
+    # Art. 223(5) nets E against the collateral in one currency (review CC-05):
+    # rebase the lent / sold amount and the collateral market value to the
+    # reporting currency, keeping each row's ``currency`` as its denomination for
+    # the Art. 224 Table 4 HFX test. A currency with no rate stays unconverted
+    # (reported CCR026 by the stage).
+    sft_trades_lf = rebase_to_reporting_currency(raw_sft.trades.sft_trades, ("notional",), rates)
     # Counterparty is denormalised onto the trade — collapse to NS grain. The
     # ``first()`` aggregation is exact under the single-CP-per-NS scope
     # (Art. 220(1)(a)); should a future netting set span counterparties the
@@ -167,15 +185,18 @@ def sft_bundle_to_exposures(
         pl.col("counterparty_reference").first()
     )
     ccr_collateral_lf = (
-        raw_sft.collateral.sft_collateral if raw_sft.collateral is not None else None
+        rebase_to_reporting_currency(raw_sft.collateral.sft_collateral, ("market_value",), rates)
+        if raw_sft.collateral is not None
+        else None
     )
-    return _build_sft_exposure_rows(
+    rows = _build_sft_exposure_rows(
         sft_trades_lf=sft_trades_lf,
         ns_counterparty_lf=ns_counterparty_lf,
         ccr_collateral_lf=ccr_collateral_lf,
         reporting_date=reporting_date,
         pack=rulepack if rulepack is not None else _PACK,
     )
+    return stamp_reporting_currency(rows, rates, base_currency)
 
 
 # =============================================================================

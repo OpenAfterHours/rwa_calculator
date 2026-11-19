@@ -224,6 +224,48 @@ def test_single_trade_set_without_flags_is_unchanged(regime: str) -> None:
 
 
 @pytest.mark.parametrize("regime", ["crr", "b31"])
+def test_duplicated_trade_id_does_not_re_net_a_split_set(regime: str) -> None:
+    """Two trades sharing trade_id R1, no MNA: still two exposures, 100m each.
+
+    Keying the split set by ``trade_id`` alone folded both trades back into
+    ``S1__split__R1`` and netted them against cash linked to "R1" (E* = 50m) -
+    exactly the pooling the gate exists to stop. The link is ambiguous (two
+    trades carry the id), so the cash cannot be attributed to one transaction
+    and is not recognised.
+    """
+    # Arrange
+    trades = [sft_trade("R1", "S1"), sft_trade("R1", "S1")]
+    collateral = [sft_collateral("C_CASH", "S1", "cash", 150_000_000.0, trade_id="R1")]
+
+    # Act
+    frame, errors = _run(regime, trades, collateral)
+
+    # Assert
+    references = frame["exposure_reference"].to_list()
+    assert len(references) == 2
+    assert len(set(references)) == 2
+    assert frame["ead_ccr"].to_list() == pytest.approx([100_000_000.0, 100_000_000.0], rel=_REL)
+    assert [e.code for e in errors] == [ERROR_SFT_NETTING_NOT_RECOGNISED]
+    assert "C_CASH" in errors[0].message
+
+
+@pytest.mark.parametrize("regime", ["crr", "b31"])
+def test_null_trade_id_in_a_split_set_keeps_a_non_null_reference(regime: str) -> None:
+    """A null trade_id on a split set must not yield a null netting set / exposure id."""
+    # Arrange
+    trades = [sft_trade("R1", "S1"), sft_trade(None, "S1"), sft_trade(None, "S1")]
+
+    # Act
+    frame, _errors = _run(regime, trades, None)
+
+    # Assert
+    references = frame["exposure_reference"].to_list()
+    assert None not in references
+    assert len(set(references)) == 3
+    assert frame["ead_ccr"].to_list() == pytest.approx([100_000_000.0] * 3, rel=_REL)
+
+
+@pytest.mark.parametrize("regime", ["crr", "b31"])
 def test_split_conserves_exposure_against_the_unnetted_sum(regime: str) -> None:
     """With no collateral the split legs sum to the gross notional the pooled set showed."""
     # Arrange

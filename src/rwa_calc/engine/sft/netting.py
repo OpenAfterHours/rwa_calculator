@@ -25,10 +25,12 @@ Key responsibilities:
   when EVERY trade carries both and the set names one counterparty.
 - Split every other multi-trade set into one single-trade set per trade
   (``<netting_set_id>__split__<trade_id>``, the derivative gate's naming,
-  ``engine/ccr/sa_ccr.py::apply_legal_enforceability_gate``). Collateral on a
-  split set follows its trade through the optional ``trade_id`` link; a row with
-  no link to one of the set's own trades cannot be attributed to a single
-  transaction and is not recognised.
+  ``engine/ccr/sa_ccr.py::apply_legal_enforceability_gate``; a trade whose
+  ``trade_id`` is null or shared with another trade of the set takes a
+  ``__row<n>`` position suffix, so it can never fold back into a pooled set).
+  Collateral on a split set follows its trade through the optional
+  ``trade_id`` link; a row with no link to exactly one of the set's own trades
+  cannot be attributed to a single transaction and is not recognised.
 - Emit CCR028 (WARNING, no eligible MNA) or CCR029 (ERROR, more than one
   counterparty) per split set, naming any unrecognised collateral rows.
 
@@ -64,6 +66,9 @@ SFT_NETTING_NOT_RECOGNISED_REG_REF = "CRR / PS1/26 Art. 206(1), 220(1), 223(5); 
 #: Regulatory citation attached to the CCR029 error.
 SFT_MULTI_COUNTERPARTY_REG_REF = "CRR / PS1/26 Art. 220(4), 223(5)"
 
+#: Helper column: the trade's ``trade_id`` is non-null and unique in its set.
+_LINKABLE = "_linkable_trade_id"
+
 
 @cites("CRR Art. 206")
 @cites("CRR Art. 220")
@@ -87,7 +92,8 @@ def apply_sft_netting_gate(
         removed (not recognised); one CCR028 / CCR029 per split set. Both frames
         are returned unchanged, with no error, when no set needs splitting.
     """
-    ns_stats = trades.group_by("netting_set_id", maintain_order=True).agg(
+    keyed = trades.with_columns(_unique_trade_id().alias(_LINKABLE))
+    ns_stats = keyed.group_by("netting_set_id", maintain_order=True).agg(
         pl.len().alias("_n_trades"),
         pl.col("counterparty_reference").unique(maintain_order=True).alias("_counterparties"),
         (
@@ -106,14 +112,14 @@ def apply_sft_netting_gate(
 
     split_ids = to_split["netting_set_id"].to_list()
     in_split = pl.col("netting_set_id").is_in(split_ids)
-    split_trades = trades.with_columns(
+    split_trades = keyed.with_columns(
         pl.when(in_split)
-        .then(_split_key())
+        .then(_trade_split_key())
         .otherwise(pl.col("netting_set_id"))
         .alias("netting_set_id")
-    )
+    ).drop(_LINKABLE)
 
-    split_collateral, unlinked = _rekey_collateral(trades, collateral, in_split)
+    split_collateral, unlinked = _rekey_collateral(keyed, collateral, in_split)
     errors = [
         _split_error(row, unlinked.get(row["netting_set_id"], []))
         for row in to_split.iter_rows(named=True)
@@ -122,9 +128,40 @@ def apply_sft_netting_gate(
     return split_trades, split_collateral, errors
 
 
+def _unique_trade_id() -> pl.Expr:
+    """True where ``trade_id`` names exactly one trade of its netting set."""
+    return pl.col("trade_id").is_not_null() & (pl.len().over("netting_set_id", "trade_id") == 1)
+
+
 def _split_key() -> pl.Expr:
     """The per-trade netting-set id of a split set (derivative gate naming)."""
     return pl.concat_str([pl.col("netting_set_id"), pl.lit("__split__"), pl.col("trade_id")])
+
+
+def _trade_split_key() -> pl.Expr:
+    """:func:`_split_key`, made unique per trade when ``trade_id`` cannot key it.
+
+    A null or duplicated ``trade_id`` would fold several trades back into ONE
+    split set (and a null one would null the set id), re-netting exactly what
+    the gate splits; such a trade is keyed by its row position in the set.
+    """
+    position = pl.int_range(pl.len()).over("netting_set_id").cast(pl.String)
+    return (
+        pl.when(pl.col(_LINKABLE))
+        .then(_split_key())
+        .otherwise(
+            pl.concat_str(
+                [
+                    pl.col("netting_set_id"),
+                    pl.lit("__split__"),
+                    pl.col("trade_id"),
+                    pl.lit("__row"),
+                    position,
+                ],
+                ignore_nulls=True,
+            )
+        )
+    )
 
 
 def _rekey_collateral(
@@ -134,18 +171,15 @@ def _rekey_collateral(
 ) -> tuple[pl.DataFrame | None, dict[str, list[str]]]:
     """Move linked collateral onto its trade's split set; drop the unlinked rows.
 
-    A row on a split set is linked when its ``trade_id`` names a trade of THAT
-    set (a null ``trade_id`` never joins). Returns the re-keyed frame and, per
-    original split set, the references of the rows that were not recognised.
+    A row on a split set is linked when its ``trade_id`` names exactly one
+    trade of THAT set (a null ``trade_id`` never joins; one naming a duplicated
+    id cannot be attributed to a single transaction). Returns the re-keyed frame
+    and, per original split set, the references of the rows not recognised.
     """
     if collateral is None:
         return None, {}
-    # ``unique`` so a duplicated trade id can never fan one collateral row out
-    # into two recognised copies.
-    trade_links = (
-        trades.filter(in_split)
-        .select("netting_set_id", "trade_id", pl.lit(True).alias("_linked"))
-        .unique()
+    trade_links = trades.filter(in_split & pl.col(_LINKABLE)).select(
+        "netting_set_id", "trade_id", pl.lit(True).alias("_linked")
     )
     joined = collateral.join(trade_links, on=["netting_set_id", "trade_id"], how="left")
     unlinked_mask = in_split & pl.col("_linked").is_null()

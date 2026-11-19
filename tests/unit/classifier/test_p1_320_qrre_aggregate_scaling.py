@@ -188,6 +188,7 @@ def _build_frame(n_rows: int) -> pl.LazyFrame:
         "sme_size_source": pl.lit(None, dtype=pl.String),
         "property_collateral_value": pl.lit(0.0),
         "has_facility_property_collateral": pl.lit(False),
+        "property_type": pl.lit(None, dtype=pl.String),
         "ltv": pl.lit(None, dtype=pl.Float64),
     }
 

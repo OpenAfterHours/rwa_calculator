@@ -125,7 +125,7 @@ Two input fields drive the calculator's LTV logic:
 When `property_ltv` is omitted but the property carries a `market_value`, the LTV is
 derived as the Art. 124C(2) amount of the loan (drawn + accrued interest + undrawn
 committed) over the property value, plus `prior_charge_ltv`, and a `RE006` warning is
-raised. A mortgage `product_type` with **no** valued property and **no** LTV is not
+raised. A mortgage `product_type` with **no** linked property and **no** LTV is not
 treated as real estate: it takes its counterparty's class (e.g. regulatory retail) and a
 `RE005` warning is raised — a product label is not "a charge on immovable property".
 

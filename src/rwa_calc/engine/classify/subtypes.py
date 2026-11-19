@@ -121,7 +121,7 @@ def classify_exposure_subtypes(
     the schema does not carry and is deferred to a schema-enablement change;
     ``apply_fi_scalar`` is the interim override for known unregulated FSEs.
 
-    A retail mortgage whose class rests on the product label alone (no valued
+    A retail mortgage whose class rests on the product label alone (no linked
     property, no LTV — ``re_evidence.re_evidence_expr``) also records the class
     it would otherwise take in the scratch ``RE_UNEVIDENCED_CLASS_COLUMN``; the
     classifier applies it to Standardised-Approach rows (review CL-08).
@@ -267,7 +267,7 @@ def classify_exposure_subtypes(
             .otherwise(non_mortgage_class)
             .alias("exposure_class"),
             # Review CL-08: a mortgage class resting on the product label alone
-            # (no valued property, no LTV) records its non-mortgage class for
+            # (no linked property, no LTV) records its non-mortgage class for
             # ``re_evidence.withhold_unevidenced_re_class`` to apply to
             # Standardised-Approach rows once the approach is known.
             pl.when(is_retail_mortgage & ~re_evidence_expr())

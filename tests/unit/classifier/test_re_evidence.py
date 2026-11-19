@@ -7,7 +7,8 @@ Pipeline position:
 
 Key responsibilities pinned here:
 - ``re_evidence_expr``: a valued property (direct or allocated), a facility /
-  counterparty pledge allocated nothing, or an LTV is evidence; nothing else is.
+  counterparty pledge allocated nothing, a linked property with no value (its
+  ``property_type``), or an LTV is evidence; nothing else is.
 - ``withhold_unevidenced_re_class``: only a Standardised-Approach row takes its
   recorded non-mortgage class; an IRB row keeps its IRB retail-mortgage class.
 - ``classify_exposure_subtypes`` records the fallback only where the mortgage
@@ -41,25 +42,33 @@ from tests.fixtures.p1_244.p1_244 import make_subtypes_frame
 
 
 @pytest.mark.parametrize(
-    ("property_value", "facility_pledge", "ltv", "expected"),
+    ("property_value", "facility_pledge", "property_type", "ltv", "expected"),
     [
-        (0.0, False, None, False),  # a mortgage label and nothing else
-        (100_000.0, False, None, True),  # a valued property linked directly
-        (0.0, True, None, True),  # a facility pledge allocated nothing (undrawn row)
-        (0.0, False, 0.6, True),  # an LTV, supplied or derived
+        (0.0, False, None, None, False),  # a mortgage label and nothing else
+        (100_000.0, False, None, None, True),  # a valued property linked directly
+        (0.0, True, None, None, True),  # a facility pledge allocated nothing (undrawn row)
+        # A linked property with no value and no LTV is still a charge on
+        # immovable property (PS1/26 Glossary): real estate, priced on Art. 124J.
+        (0.0, False, "residential", None, True),
+        (0.0, False, None, 0.6, True),  # an LTV, supplied or derived
     ],
 )
 def test_re_evidence_truth_table(
-    property_value: float, facility_pledge: bool, ltv: float | None, expected: bool
+    property_value: float,
+    facility_pledge: bool,
+    property_type: str | None,
+    ltv: float | None,
+    expected: bool,
 ) -> None:
     # Arrange
     frame = pl.DataFrame(
         {
             "property_collateral_value": [property_value],
             "has_facility_property_collateral": [facility_pledge],
+            "property_type": [property_type],
             "ltv": [ltv],
         },
-        schema_overrides={"ltv": pl.Float64},
+        schema_overrides={"property_type": pl.String, "ltv": pl.Float64},
     )
 
     # Act
@@ -130,5 +139,11 @@ class TestSubtypesRecordTheFallback:
 
     def test_mortgage_with_property_records_nothing(self) -> None:
         row = self._classify(property_collateral_value=150_000.0)
+        assert row["exposure_class"] == ExposureClass.RETAIL_MORTGAGE.value
+        assert row[RE_UNEVIDENCED_CLASS_COLUMN] is None
+
+    def test_mortgage_with_unvalued_linked_property_records_nothing(self) -> None:
+        """A property with no value is still security: the class stays (Art. 124J)."""
+        row = self._classify(property_type="residential")
         assert row["exposure_class"] == ExposureClass.RETAIL_MORTGAGE.value
         assert row[RE_UNEVIDENCED_CLASS_COLUMN] is None

@@ -9,9 +9,9 @@ Pipeline position:
 
 Key responsibilities:
 - ``re_evidence_expr``: is there anything that shows the exposure is secured
-  by immovable property — a linked property with a value at any level, or an
-  LTV (supplied on the collateral or the loan row, or derived by the hierarchy
-  stage from the property value)?
+  by immovable property — a property linked at any level (with or without a
+  value), or an LTV (supplied on the collateral or the loan row, or derived by
+  the hierarchy stage from the property value)?
 - ``withhold_unevidenced_re_class``: a Standardised-Approach exposure whose
   real-estate class came from a mortgage product label alone takes its
   counterparty's class instead (review CL-08). IRB rows keep their class: the
@@ -57,15 +57,21 @@ RE_UNEVIDENCED_CLASS_COLUMN = "_re_unevidenced_class"
 def re_evidence_expr() -> pl.Expr:
     """True where something shows the exposure is secured by immovable property.
 
-    The property aggregates and ``ltv`` are hierarchy_exit contract columns:
-    ``property_collateral_value`` is the linked real-estate market value at the
-    direct level or allocated from a facility / counterparty pledge,
-    ``has_facility_property_collateral`` catches a pledge whose allocation to
-    this row is zero (an undrawn commitment), and ``ltv`` is supplied or derived.
+    The property aggregates, ``property_type`` and ``ltv`` are hierarchy_exit
+    contract columns: ``property_collateral_value`` is the linked real-estate
+    market value at the direct level or allocated from a facility /
+    counterparty pledge, ``has_facility_property_collateral`` catches a pledge
+    whose allocation to this row is zero (an undrawn commitment),
+    ``property_type`` is set by a linked real-estate row even when it carries
+    no value or LTV (or by the loan row's own property data), and ``ltv`` is
+    supplied or derived. A linked property with no value is still a charge on
+    immovable property: it is real estate, priced off the LTV tables (Basel 3.1
+    Art. 124J, Art. 124A(1)(d) not met), not a product label.
     """
     return (
         (pl.col("property_collateral_value") > 0.0)
         | (pl.col("has_facility_property_collateral") == True)  # noqa: E712
+        | pl.col("property_type").is_not_null()
         | pl.col("ltv").is_not_null()
     )
 

@@ -326,7 +326,7 @@ ERROR_RE_ZERO_EFFECTIVE_CAP = "RE002"
 ERROR_RE_MIXED_PROPERTY_TYPES = "RE003"
 ERROR_RE_CRR_RENTAL_COVERAGE_FAILED = "RE004"
 # Real-estate evidence (CL-08 / RE-10). RE005: a real-estate class (a mortgage
-# product label) with no linked, valued property collateral and no LTV — the
+# product label) with no linked property collateral and no LTV — the
 # preferential real-estate weights are withheld (CRR Art. 124(1)/125(1); PS1/26
 # glossary "real estate exposure", Art. 124A(1)(a)). RE006: an LTV derived from
 # the linked property value because no ``property_ltv`` was supplied (PS1/26
@@ -647,8 +647,8 @@ def no_property_evidence_warning(*, n_standardised: int, n_other: int) -> Calcul
     real estate exposure as "an ADC exposure or an exposure secured by a charge
     on immovable property", and CRR Art. 125(1) reaches only exposures "fully
     and completely secured by mortgages on residential property". An exposure
-    whose class came from its product label alone, with no valued property
-    collateral linked at any level and no LTV supplied, is therefore not given
+    whose class came from its product label alone, with no property collateral
+    linked at any level and no LTV supplied, is therefore not given
     the preferential real-estate weights: a Standardised-Approach row takes the
     class of its counterparty, and an IRB row keeps its IRB class while its
     Standardised-equivalent weight (the Basel 3.1 output floor) is the
@@ -658,7 +658,7 @@ def no_property_evidence_warning(*, n_standardised: int, n_other: int) -> Calcul
         code=ERROR_RE_NO_PROPERTY_EVIDENCE,
         message=(
             f"{n_standardised + n_other} exposure(s) carry a mortgage product label but "
-            "no property collateral with a value is linked to them and no LTV is "
+            "no property collateral is linked to them and no LTV is "
             "supplied, so they are not treated as secured by real estate: "
             f"{n_standardised} Standardised-Approach exposure(s) take their "
             f"counterparty's exposure class, and {n_other} IRB exposure(s) keep their "

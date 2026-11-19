@@ -1819,7 +1819,7 @@ incorporates Art. 124C(2)–(3) components. Where a property is linked with a
 accrued interest plus undrawn committed amount — over the property value, plus
 `prior_charge_ltv` (Art. 124C(3)); a facility or counterparty pledge uses the total
 of every exposure it secures. A `RE006` warning reports the substitution. Where
-neither a valued property nor an LTV exists, the exposure is not treated as real
+neither a linked property nor an LTV exists, the exposure is not treated as real
 estate at all (see *Evidence of security* below). The separate `prior_charge_ltv` field
 enables the calculator to determine the junior charge effect on the loan-splitting
 threshold (55% of property value for both RRE under Art. 124F(1) and CRE under
@@ -1839,8 +1839,8 @@ Art. 124H(1)).
 ### Evidence of security (review CL-08 / RE-10)
 
 A real-estate risk weight needs evidence that the exposure is "secured by a charge on
-immovable property" (PS1/26 Glossary, *real estate exposure*): a linked property with a
-value (at any level), or an LTV. A mortgage `product_type` alone is not evidence.
+immovable property" (PS1/26 Glossary, *real estate exposure*): a linked property (at any
+level, with or without a value), or an LTV. A mortgage `product_type` alone is not evidence.
 
 | Situation | Treatment |
 |-----------|-----------|

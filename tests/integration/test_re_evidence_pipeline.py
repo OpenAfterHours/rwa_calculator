@@ -105,7 +105,9 @@ def _loan(drawn: float, product: str, **extra: Any) -> dict[str, Any]:
     }
 
 
-def _property(market_value: float, property_type: str, ltv: float | None, **extra: Any) -> dict:
+def _property(
+    market_value: float | None, property_type: str, ltv: float | None, **extra: Any
+) -> dict:
     return {
         "collateral_reference": "C1",
         "collateral_type": "real_estate",
@@ -322,32 +324,41 @@ class TestLtvDerivedFromPropertyValue:
         assert row["rwa_final"] == pytest.approx(expected_rwa)
         assert "RE006" in codes
 
-    @pytest.mark.parametrize(
-        ("regime", "expected_rw", "expected_rwa"),
-        [
-            # Derived LTV = 40,000 / 100,000 + prior charges 0.20 = 0.60
-            # (Art. 124C(3): prior charges are in the LTV numerator).
-            # CRR Art. 125: 0.60 <= 0.80 -> 35%.
-            ("crr", 0.35, 14_000.0),
-            # B31 Art. 124F(2): 55% reduced by 20% -> 35%; share = 0.35/0.60.
-            # 20% x 0.583333 + 75% x 0.416667 = 0.429167.
-            ("b31", 0.2575 / 0.60, 17_166.666667),
-        ],
-    )
-    def test_derived_ltv_includes_prior_charges(
-        self, regime: str, expected_rw: float, expected_rwa: float
-    ) -> None:
+    @pytest.mark.parametrize("regime", ["b31", "crr"])
+    def test_derived_ltv_includes_prior_charges(self, regime: str) -> None:
+        """Derived LTV = 40,000 / 100,000 + prior charges 0.20 = 0.60 (Art. 124C(3)).
+
+        Only the LTV is pinned in Basel 3.1. Its weight for a junior charge is
+        the open review finding CL-12, not this change: the Art. 124F(2)(a)
+        share ``(0.55 - prior) / ltv`` divides by an LTV that already holds the
+        prior charge. Art. 124F(2)(a) reduces "the amount of 55% of the value of
+        the property ... by the amount of any charges not held by the
+        institution that rank in priority ahead", i.e. 35,000 of this 40,000 at
+        20% and 5,000 at 75% (10,750), where the engine gives 17,166.67. Pinning
+        the engine's figure here would block the CL-12 fix.
+        """
         # Arrange
         collateral = [_property(100_000.0, "residential", None, prior_charge_ltv=0.20)]
 
         # Act
-        df, _codes = _run(regime, _INDIVIDUAL, _loan(40_000.0, "mortgage"), collateral)
+        df, codes = _run(regime, _INDIVIDUAL, _loan(40_000.0, "mortgage"), collateral)
+
+        # Assert
+        assert _single(df)["ltv"] == pytest.approx(0.60)
+        assert "RE006" in codes
+
+    def test_crr_derived_ltv_with_prior_charges_stays_in_the_35_band(self) -> None:
+        """CRR Art. 125(2)(d): LTV 0.60 <= 0.80, so the whole 40,000 takes 35%."""
+        # Arrange
+        collateral = [_property(100_000.0, "residential", None, prior_charge_ltv=0.20)]
+
+        # Act
+        df, _codes = _run("crr", _INDIVIDUAL, _loan(40_000.0, "mortgage"), collateral)
 
         # Assert
         row = _single(df)
-        assert row["ltv"] == pytest.approx(0.60)
-        assert row["risk_weight"] == pytest.approx(expected_rw)
-        assert row["rwa_final"] == pytest.approx(expected_rwa)
+        assert row["risk_weight"] == pytest.approx(0.35)
+        assert row["rwa_final"] == pytest.approx(14_000.0)
 
     @pytest.mark.parametrize("regime", ["b31", "crr"])
     def test_supplied_property_ltv_is_not_overridden(self, regime: str) -> None:
@@ -433,6 +444,50 @@ class TestMortgageWithoutPropertyEvidence:
         row = _single(df)
         assert row["exposure_class"] == "retail_mortgage"
         assert row["risk_weight"] == pytest.approx(expected_rw)
+        assert "RE005" not in codes
+
+    @pytest.mark.parametrize(
+        ("regime", "property_type", "expected_rw"),
+        [
+            # A linked property with no value is "a charge on immovable property"
+            # (PS1/26 Glossary, real estate exposure) that cannot meet
+            # Art. 124A(1)(d), so it is an other real estate exposure (Art. 124(2)):
+            # Art. 124J(2) "the risk weight of the counterparty in accordance with
+            # Article 124L" -> Art. 124L(1)(a) natural person 75%.
+            ("b31", "residential", 0.75),
+            # Art. 124J(3): "the higher of: (a) 60%; and (b) the risk weight of the
+            # counterparty in accordance with Article 124L" -> 75%.
+            ("b31", "commercial", 0.75),
+            # CRR: no value, so no Art. 125(2)(d) 35% part; the whole loan takes the
+            # obligor's unsecured weight (Art. 124(1) second sentence), retail 75%.
+            ("crr", "residential", 0.75),
+            # CRR Art. 124(1): "100 %, where the conditions set out in Article ...
+            # 126 are not met".
+            ("crr", "commercial", 1.00),
+        ],
+    )
+    def test_unvalued_linked_property_is_evidence(
+        self, regime: str, property_type: str, expected_rw: float
+    ) -> None:
+        """A linked property with no value and no LTV keeps the real-estate class.
+
+        Decision (CL-08): evidence is "property collateral linked to the exposure
+        or a populated LTV" — the value is what the LTV needs, not what makes the
+        exposure secured. Pre-repair the row was reclassified on its label
+        (Basel 3.1 with the granularity limb on: ``corporate``) with ``RE005``.
+        """
+        # Arrange
+        collateral = [_property(None, property_type, None)]
+
+        # Act
+        df, codes = _run(regime, _INDIVIDUAL, _loan(80_000.0, "mortgage"), collateral)
+
+        # Assert
+        row = _single(df)
+        assert row["ltv"] is None, "the adequacy condition: no LTV was supplied or derived"
+        assert row["exposure_class"] == "retail_mortgage"
+        assert row["risk_weight"] == pytest.approx(expected_rw)
+        assert row["rwa_final"] == pytest.approx(80_000.0 * expected_rw)
         assert "RE005" not in codes
 
     @pytest.mark.parametrize("regime", ["b31", "crr"])

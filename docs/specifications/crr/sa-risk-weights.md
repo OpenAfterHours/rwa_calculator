@@ -1124,7 +1124,10 @@ A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
       CRR has no LTV-numerator article; the hierarchy stage has no exposure
       value yet, and a conversion factor never exceeds 100%, so this amount is
       never below the exposure value — the conservative bound.
-    - No valued property and no LTV (a bare mortgage label): the exposure takes
+    - A linked property with no `market_value` and no LTV: still secured, but no
+      35% part can be established, so the loan takes the obligor's unsecured
+      weight (residential; Art. 124(1)) or 100% (commercial; Art. 124(1)).
+    - No linked property and no LTV (a bare mortgage label): the exposure takes
       its counterparty's class — e.g. regulatory retail 75% (Art. 123) — and a
       `RE005` warning is raised.
 

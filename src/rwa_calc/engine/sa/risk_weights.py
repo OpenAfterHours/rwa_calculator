@@ -772,7 +772,7 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
     at 80% / 50% "of the market value of the property", and the hierarchy
     derives one wherever a valued property is linked (``hierarchy/re_ltv.py``).
     A null LTV used to fill to 0.0 here — the 35% band (review RE-10). Now an
-    RRE row without one (a bare mortgage label, review CL-08) falls through to
+    RRE row without one (an unvalued property; review CL-08) falls through to
     its counterparty-class weight, and CRE without one takes Art. 124(1) 100%.
     """
     ltv = pl.col("ltv")

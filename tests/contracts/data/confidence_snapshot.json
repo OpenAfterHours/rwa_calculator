@@ -185,11 +185,13 @@
         "engine/branch_split.py",
         "engine/ccr/default_fund.py",
         "engine/ccr/failed_trades.py",
+        "engine/crm/own_funds_lines.py",
         "engine/orchestrator.py",
         "engine/pipeline.py",
         "engine/stages/aggregate.py",
         "engine/stages/calc.py",
         "engine/stages/ccr.py",
+        "engine/stages/crm.py",
         "reporting/corep/c02.py",
         "reporting/corep/c02_rows.py",
         "reporting/corep/templates.py",
@@ -231,6 +233,7 @@
     {
       "article": "107",
       "code_functions": [
+        "rwa_calc.engine.sa.ccp_exposures::qccp_trade_exposure_expr",
         "rwa_calc.engine.sa.cqs_lift::lift_institution_cqs"
       ],
       "confidence": "MEDIUM",
@@ -243,15 +246,18 @@
         "contracts/edges.py",
         "engine/aggregator/aggregator.py",
         "engine/ccr/ccp.py",
+        "engine/classify/attributes.py",
         "engine/orchestrator.py",
         "engine/pipeline.py",
         "engine/registry.py",
+        "engine/sa/ccp_exposures.py",
         "engine/sa/cqs_lift.py",
         "engine/sa/sovereign_floor.py",
         "reporting/lineage.py",
         "reporting/pillar3/ccr.py"
       ],
       "test_files": [
+        "tests/acceptance/ccr/test_ccp_cva_review_cluster.py",
         "tests/acceptance/ccr/test_ccr_b1_b5_ccp.py",
         "tests/acceptance/ccr/test_ccr_ccp_orchestrator_pin.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
@@ -260,7 +266,8 @@
         "tests/fixtures/ccr/p842_nonqccp_b5_builder.py",
         "tests/fixtures/ccr/qccp_builder.py",
         "tests/fixtures/generate_all.py",
-        "tests/unit/ccr/test_ccp.py"
+        "tests/unit/ccr/test_ccp.py",
+        "tests/unit/crr/test_crr_sa.py"
       ],
       "watchfire_index_gap": false
     },
@@ -1078,6 +1085,7 @@
         "tests/acceptance/basel31/test_p1_10_art_213_ucp_eligibility.py",
         "tests/acceptance/basel31/test_p1_110_art_122_corporate_cqs3_guarantee_substitution.py",
         "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
+        "tests/acceptance/ccr/test_ccr_b1_b5_ccp.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
         "tests/acceptance/crr/test_art219_netting_currency_mismatch.py",
         "tests/acceptance/crr/test_art_222_fcsm_unified_pipeline.py",
@@ -4486,7 +4494,6 @@
         "engine/ccr/pipeline_adapter.py",
         "engine/ccr/sa_ccr.py",
         "engine/ccr/wwr.py",
-        "engine/cva/ba_cva.py",
         "engine/stages/ccr.py",
         "reporting/corep/c34.py",
         "reporting/corep/templates.py",
@@ -5352,6 +5359,7 @@
       "article": "306",
       "code_functions": [
         "rwa_calc.engine.ccr.ccp::apply_ccp_risk_weight",
+        "rwa_calc.engine.sa.ccp_exposures::qccp_trade_exposure_expr",
         "rwa_calc.reporting.corep.c34::generate_c34_08",
         "rwa_calc.reporting.pillar3.ccr::generate_ccr8",
         "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_ccr8"
@@ -5374,9 +5382,9 @@
         "engine/ccr/ccp.py",
         "engine/ccr/pipeline_adapter.py",
         "engine/irb/guarantee.py",
+        "engine/sa/ccp_exposures.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
-        "engine/sa/risk_weights.py",
         "engine/sa/sovereign_floor.py",
         "reporting/corep/c34.py",
         "reporting/corep/templates.py",
@@ -5413,7 +5421,8 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "data/schemas.py"
+        "data/schemas.py",
+        "engine/ccr/default_fund.py"
       ],
       "test_files": [
         "tests/fixtures/ccr/qccp_builder.py",
@@ -5423,12 +5432,19 @@
     },
     {
       "article": "308",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.ccr.default_fund::compute_dfc_capital"
+      ],
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "ccp_dfc_floor_capital_ratio@b31",
+        "ccp_dfc_floor_capital_ratio@crr",
+        "ccp_dfc_floor_risk_weight@b31",
+        "ccp_dfc_floor_risk_weight@crr"
+      ],
       "source_files": [
         "contracts/bundles.py",
         "contracts/edges.py",
@@ -5447,10 +5463,12 @@
     },
     {
       "article": "309",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.ccr.default_fund::compute_dfc_capital"
+      ],
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
@@ -5463,6 +5481,26 @@
         "tests/acceptance/ccr/test_ccr_b2_b4_default_fund.py",
         "tests/fixtures/ccr/p849_default_fund_builder.py"
       ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "310",
+      "code_functions": [
+        "rwa_calc.engine.ccr.default_fund::compute_dfc_capital"
+      ],
+      "confidence": "LOW",
+      "framework": "CRR",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [
+        "ccp_dfc_qccp_unfunded_rw@b31",
+        "ccp_dfc_qccp_unfunded_rw@crr"
+      ],
+      "source_files": [
+        "data/schemas.py",
+        "engine/ccr/default_fund.py"
+      ],
+      "test_files": [],
       "watchfire_index_gap": false
     },
     {
@@ -5493,18 +5531,24 @@
       "source_files": [
         "contracts/bundles.py",
         "data/schemas.py",
+        "domain/enums.py",
         "engine/aggregator/aggregator.py",
         "engine/ccr/failed_trades.py",
+        "engine/classify/approach.py",
+        "engine/crm/own_funds_lines.py",
         "engine/stages/ccr.py",
+        "engine/supporting_factors.py",
         "rulebook/packs/common.py"
       ],
       "test_files": [
+        "tests/acceptance/ccr/test_ccp_cva_review_cluster.py",
         "tests/acceptance/ccr/test_ccr_c1_c3_failed_trades.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
         "tests/fixtures/ccr/failed_trade_builder.py",
         "tests/fixtures/ccr/p843_failed_trade_builder.py",
         "tests/fixtures/generate_all.py",
-        "tests/unit/ccr/test_failed_trades.py"
+        "tests/unit/ccr/test_failed_trades.py",
+        "tests/unit/test_supporting_factor_own_funds_lines.py"
       ],
       "watchfire_index_gap": false
     },
@@ -5554,11 +5598,13 @@
     {
       "article": "382",
       "code_functions": [],
-      "confidence": "UNCITED",
+      "confidence": "LOW",
       "framework": "CRR",
-      "layer_count": 1,
+      "layer_count": 2,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "cva_ba_cva@crr"
+      ],
       "source_files": [
         "rulebook/packs/b31.py"
       ],
@@ -5733,6 +5779,7 @@
         "tests/acceptance/basel31/test_p5_15_art_123a_granularity.py",
         "tests/acceptance/basel31/test_scenario_b31_b_firb.py",
         "tests/acceptance/basel31/test_scenario_b31_h_complex.py",
+        "tests/acceptance/ccr/test_ccp_cva_review_cluster.py",
         "tests/acceptance/comparison/test_scenario_m32_capital_impact.py",
         "tests/acceptance/crr/conftest.py",
         "tests/acceptance/crr/test_p1_196_crr_rated_sme_corporate_cqs_weight.py",
@@ -5951,6 +5998,7 @@
         "tests/acceptance/_fs1_expectations.py",
         "tests/acceptance/basel31/test_p1_130_summaries_reflect_post_floor.py",
         "tests/acceptance/basel31/test_scenario_b31_f_output_floor.py",
+        "tests/acceptance/ccr/test_ccp_cva_review_cluster.py",
         "tests/acceptance/ccr/test_ccr_floor1_output_floor.py",
         "tests/acceptance/ccr/test_ccr_floor2_sft_output_floor.py",
         "tests/acceptance/comparison/test_scenario_m33_transitional.py",
@@ -5987,6 +6035,24 @@
         "tests/unit/test_portfolio_level_floor.py",
         "tests/unit/test_t2_cap_floor_isolation.py",
         "tests/unit/test_transitional_schedule.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "107",
+      "code_functions": [],
+      "confidence": "UNCITED",
+      "framework": "PS1/26",
+      "layer_count": 2,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/classify/attributes.py",
+        "engine/sa/ccp_exposures.py"
+      ],
+      "test_files": [
+        "tests/acceptance/ccr/test_ccp_cva_review_cluster.py",
+        "tests/acceptance/ccr/test_ccr_b1_b5_ccp.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8890,8 +8956,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "b31": "ddb0f40d2eecc163c3c156e275b361ef953ab69d5ecce20c4c1e8d0b2b5558d4",
+    "crr": "34b43d3977e11a885db6d2be45eed99910191863642b43c9ff507c5c8514aa55"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

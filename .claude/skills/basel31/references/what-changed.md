@@ -56,6 +56,7 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `collateral_haircut_maturity_bands_revised` | off | on | CRR Art. 224 / PS1/26, paragraph 224 |
 | `crr_non_named_mdb_institution_irb_class` | on | off | CRR Art. 147 / PS1/26, paragraph 147 |
 | `crr_retail_re_portfolio_lgd_floor` | on | off | CRR Art. 164 / PS1/26, paragraph 164 |
+| `cva_ba_cva` | off | on | CRR Art. 382 / PS1/26, paragraph 4.1 |
 | `double_default_treatment` | on | off | CRR Art. 153(3) / PS1/26, paragraph 153 |
 | `equity_irb_approaches_available` | on | off | CRR Art. 155 / PS1/26, paragraph 133 |
 | `equity_revised_sa_risk_weights` | off | on | CRR Art. 133 / PS1/26, paragraph 133 |

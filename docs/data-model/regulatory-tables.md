@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 210 entries, content hash `34b43d3977e11a88`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 241 entries, content hash `ddb0f40d2eecc163`
 
 ## Regime features
 
@@ -28,7 +28,7 @@ On/off behaviour switches (`Feature`).
 | `collateral_haircut_maturity_bands_revised` | off | on | CRR Art. 224 / PS1/26, paragraph 224 |
 | `crr_non_named_mdb_institution_irb_class` | on | off | CRR Art. 147 / PS1/26, paragraph 147 |
 | `crr_retail_re_portfolio_lgd_floor` | on | off | CRR Art. 164 / PS1/26, paragraph 164 |
-| `cva_ba_cva` | — | on | PS1/26, paragraph 4.1 |
+| `cva_ba_cva` | off | on | CRR Art. 382 / PS1/26, paragraph 4.1 |
 | `double_default_treatment` | on | off | CRR Art. 153(3) / PS1/26, paragraph 153 |
 | `equity_irb_approaches_available` | on | off | CRR Art. 155 / PS1/26, paragraph 133 |
 | `equity_revised_sa_risk_weights` | off | on | CRR Art. 133 / PS1/26, paragraph 133 |
@@ -107,6 +107,9 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `b31_rre_residual_rw_retail_sme` | — | `0.75` | PS1/26, paragraph 124L |
 | `b31_rre_residual_rw_social_housing_floor` | — | `0.75` | PS1/26, paragraph 124L |
 | `b31_subordinated_debt_rw` | — | `1.50` | PS1/26, paragraph 133 |
+| `ccp_dfc_floor_capital_ratio` | `0.08` | `0.08` | CRR Art. 308(2) |
+| `ccp_dfc_floor_risk_weight` | `0.02` | `0.02` | CRR Art. 308(2) |
+| `ccp_dfc_qccp_unfunded_rw` | `0.00` | `0.00` | CRR Art. 310 |
 | `ccr_wwr_specific_lgd_override` | `1.0` | `1.0` | CRR Art. 291 |
 | `crr_corporate_sme_rw` | `1.00` | — | CRR Art. 122 |
 | `crr_defaulted_provision_threshold` | `0.20` | — | CRR Art. 127 |

@@ -68,6 +68,11 @@
   "rwa_calc.engine.ccr.ccp::apply_ccp_risk_weight": [
     "CRR Art. 306"
   ],
+  "rwa_calc.engine.ccr.default_fund::compute_dfc_capital": [
+    "CRR Art. 308(2)",
+    "CRR Art. 309(1)",
+    "CRR Art. 310"
+  ],
   "rwa_calc.engine.ccr.hedging_sets::assign_hedging_set": [
     "CRR Art. 277"
   ],
@@ -476,6 +481,10 @@
   "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts": [
     "PS1/26, paragraph 124F",
     "PS1/26, paragraph 124H"
+  ],
+  "rwa_calc.engine.sa.ccp_exposures::qccp_trade_exposure_expr": [
+    "CRR Art. 107(2)",
+    "CRR Art. 306(1)"
   ],
   "rwa_calc.engine.sa.central_bank::ecb_rw_expr": [
     "CRR Art. 114(3)",

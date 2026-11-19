@@ -78,6 +78,32 @@ unmargined MF 1; margined MF 1.5 · sqrt(10 / 250) = 0.3 at the 10-BD MPOR):
     CC-05 JPY 10bn swap at JPY->GBP 0.005 == GBP 50m swap:
         EAD = 1.4 · 0.005 · 50m · SD = 1,534,221.935 / 1,534,968.194
     CC-05 SFT USD 100m cash lent at USD->GBP 0.8, no collateral: E* = 80m
+
+Skeptic detectors (each pins one claimed behaviour no other case could see):
+    CC-02/05 posted USD 1.5m cash at USD->GBP 0.8 on the GBP swap, CMV -1m:
+        C = 1.2m GBP; Hfx = 8% x sqrt(250 / 10) = 40% (one-business-year
+        horizon, Art. 276(3)(a)); C_VA = -1.2m x (1 + 0 + 0.4) = -1.68m
+        (Art. 276(2)); RC = max(-1m + 1.68m, 0) = 680,000, z >= 0
+        EAD = 1.4 x (680,000 + AddOn)    CRR 1,258,844.387  B31 1,258,993.639
+        posted at C x (1 - H) instead: RC 0; unconverted: RC 1.1m
+    CC-03 NICA 100k received stated on the CSA, CMV -100k, TH = MTA = 0:
+        RC_m = max(-200k, -100k, 0) = 0; z = CMV - VM - NICA = -200k
+        mult = 0.05 + 0.95 x exp(-200k / (1.9 x 0.3 x AddOn))
+        EV_m = 1.4 x mult x 0.3 x AddOn    CRR 22,242.713  B31 22,267.274
+        EV_u = 195,670.067 / 195,807.374 -> the margined value stands
+        NICA left out of z: 43,879.041 / 43,915.679
+    CC-03 Art. 275(3) agreement capped at the unmargined values: NS-A CMV +2m
+        with 3m cash VM received, NS-B CMV -1m, one CSA:
+        shared: RC_MA 0, PFE_A = AddOn (z_A = CMV_A - NICA_A = +2m) ->
+        1.4 x AddOn + EV_B = 348,595.3 (CRR) > unmargined sum
+        unmargined: NS-A z = 2m - 3m = -1m, NS-B z = -1m, RC 0 both ->
+        each EV = 1.4 x mult(-1m) x AddOn = 41,750.908 / 41,802.081 <- cap
+    CC-03 CSA with no remargining frequency, 6,000 trades stated, CMV 0:
+        Art. 285(3)(a) MPOR 20 -> MF = 1.5 x sqrt(20 / 250) = 0.424264
+        EV_m = 1.4 x 0.424264 x AddOn    CRR 130,183.048  B31 130,246.370
+        unstated frequency nulling the cascade: MPOR 10, 92,053.316 / 92,098.092
+    CC-05 SFT USD 100m cash lent against USD 50m cash, USD->GBP 0.8:
+        E* = max(0, 80m - 40m) = 40m GBP (collateral left in USD: 30m)
 """
 
 from __future__ import annotations
@@ -95,6 +121,7 @@ from rwa_calc.contracts.bundles import (
     RawCCRBundle,
     RawDataBundle,
     RawSFTBundle,
+    SftCollateralBundle,
     SftTradeBundle,
     TradeBundle,
 )
@@ -106,6 +133,7 @@ from rwa_calc.data.schemas import (
     COUNTERPARTY_SCHEMA,
     FX_RATES_SCHEMA,
     MARGIN_AGREEMENT_SCHEMA,
+    SFT_COLLATERAL_SCHEMA,
     SFT_TRADE_SCHEMA,
 )
 from rwa_calc.domain.enums import PermissionMode
@@ -131,6 +159,9 @@ _EXPECTED: dict[str, dict[str, float]] = {
         "shared_a": 306_844.386989891,
         "shared_b": 17_734.719076504476,
         "gbp_50m": 1_534_221.9349494553,
+        "posted_usd_cash": 1_258_844.386989891,
+        "stated_nica_in_z": 22_242.713135224603,
+        "large_set_unstated_frequency": 130_183.04808574871,
     },
     "b31": {
         "cash_z_half_million": 1_006_993.6387056451,
@@ -141,6 +172,9 @@ _EXPECTED: dict[str, dict[str, float]] = {
         "shared_a": 306_993.63870564516,
         "shared_b": 17_748.94099134168,
         "gbp_50m": 1_534_968.193528226,
+        "posted_usd_cash": 1_258_993.6387056452,
+        "stated_nica_in_z": 22_267.273704000883,
+        "large_set_unstated_frequency": 130_246.3702259368,
     },
 }
 
@@ -238,6 +272,28 @@ def test_ineligible_collateral_gets_no_relief_and_is_reported(regime: str) -> No
     assert "C-RE" in flagged[0].message
 
 
+@pytest.mark.parametrize("regime", _REGIMES)
+def test_posted_foreign_currency_cash_is_rebased_and_grossed_up(regime: str) -> None:
+    """Art. 276(2) / 279b(3): posted USD cash is rebased, then C x (1 + HC + Hfx).
+
+    Every other posted item here is GBP cash on a GBP set (HC = Hfx = 0), where
+    C x (1 + H), C x (1 - H) and C agree — so neither the posted gross-up nor
+    the collateral rebase could be seen. Posted at C x (1 - H): RC 0; left in
+    USD: RC 1.1m.
+    """
+    # Arrange
+    collateral = [
+        _collateral("C1", "NS1", "cash", 1_500_000.0, posted=True, currency="USD"),
+    ]
+
+    # Act
+    row = _ccr_row(_run(regime, mtm=-1_000_000.0, collateral=collateral, fx=[("USD", 0.8)]), "NS1")
+
+    # Assert
+    assert row["rc"] == pytest.approx(680_000.0, rel=1e-9)
+    assert row["ead_ccr"] == pytest.approx(_EXPECTED[regime]["posted_usd_cash"], rel=1e-9)
+
+
 # ---------------------------------------------------------------------------
 # CC-03 — margin-agreement terms, the Art. 274(3) cap, shared agreements
 # ---------------------------------------------------------------------------
@@ -315,6 +371,66 @@ def test_netting_sets_sharing_an_agreement_take_one_replacement_cost(regime: str
     assert row_b["ead_ccr"] == pytest.approx(_EXPECTED[regime]["shared_b"], rel=1e-9)
 
 
+@pytest.mark.parametrize("regime", _REGIMES)
+def test_stated_nica_enters_the_margined_multiplier(regime: str) -> None:
+    """Art. 278(3): z = CMV - VM - NICA on a margined set below the cap.
+
+    A13 / A14 / D3 move z by their NICA too, but the Art. 274(3) cap binds there,
+    so the margined multiplier never reaches their EAD. Leaving NICA out of z
+    here gives 43,879.041 (CRR).
+    """
+    # Act
+    row = _ccr_row(_run(regime, mtm=-100_000.0, agreement={"nica": 100_000.0}), "NS1")
+
+    # Assert
+    assert row["rc"] == pytest.approx(0.0, abs=1e-6)
+    assert row["ead_ccr"] == pytest.approx(_EXPECTED[regime]["stated_nica_in_z"], rel=1e-9)
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+def test_shared_agreement_is_capped_at_the_unmargined_values(regime: str) -> None:
+    """Art. 274(3) on an Art. 275(3) agreement: each set falls to its unmargined value.
+
+    Received VM 3m on NS-A (CMV +2m) is not NICA_A, so the shared basis prices
+    NS-A at the full add-on (z = +2m); unmargined, the VM is collateral and
+    z = -1m. The shared total exceeds the unmargined one, so both sets report it.
+    """
+    # Arrange
+    collateral = [_collateral("VM-A", "NS-A", "cash", 3_000_000.0)]
+
+    # Act
+    result = _run(
+        regime,
+        collateral=collateral,
+        agreement={},
+        netting_sets=[("NS-A", 2_000_000.0), ("NS-B", -1_000_000.0)],
+    )
+
+    # Assert
+    expected = _EXPECTED[regime]["no_collateral_cmv_minus_1m"]
+    assert _ccr_row(result, "NS-A")["ead_ccr"] == pytest.approx(expected, rel=1e-9)
+    assert _ccr_row(result, "NS-B")["ead_ccr"] == pytest.approx(expected, rel=1e-9)
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+def test_unstated_remargining_frequency_keeps_the_large_netting_set_mpor(regime: str) -> None:
+    """Art. 285(3)(a): 6,000 trades -> MPOR 20 although the CSA states no frequency.
+
+    An unstated frequency used to null the Art. 285(5) step and the 10-BD input
+    floor then replaced the whole cascade (MPOR 10, MF 0.3).
+    """
+    # Act
+    row = _ccr_row(
+        _run(regime, agreement={}, ns_overrides={"number_of_trades": 6_000}),
+        "NS1",
+    )
+
+    # Assert
+    assert row["ead_ccr"] == pytest.approx(
+        _EXPECTED[regime]["large_set_unstated_frequency"], rel=1e-9
+    )
+
+
 # ---------------------------------------------------------------------------
 # CC-05 — reporting currency
 # ---------------------------------------------------------------------------
@@ -373,6 +489,18 @@ def test_sft_amounts_are_converted_to_the_reporting_currency(regime: str) -> Non
     assert row.height == 1
     assert row["ead_final"][0] == pytest.approx(80_000_000.0, rel=1e-12)
     assert row["currency"][0] == "GBP"
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+def test_sft_collateral_is_converted_to_the_reporting_currency(regime: str) -> None:
+    """USD 100m cash lent against USD 50m cash at 0.8: E* = 80m - 40m (left in USD: 30m)."""
+    # Act
+    result = _run_sft(regime, collateral_usd=50_000_000.0)
+    row = result.results.collect().filter(pl.col("exposure_reference") == "ccr__SFT-NS1")
+
+    # Assert
+    assert row.height == 1
+    assert row["ead_final"][0] == pytest.approx(40_000_000.0, rel=1e-12)
 
 
 # ---------------------------------------------------------------------------
@@ -492,8 +620,11 @@ def _run(
     return PipelineOrchestrator().run_with_data(bundle, _config(regime))
 
 
-def _run_sft(regime: str) -> Any:
-    """One USD 100m cash-lent SFT to the financial counterparty, USD->GBP 0.8."""
+def _run_sft(regime: str, collateral_usd: float | None = None) -> Any:
+    """One USD 100m cash-lent SFT to the financial counterparty, USD->GBP 0.8.
+
+    ``collateral_usd`` adds that much USD cash received against it.
+    """
     reporting_date, _ = _DATES[regime]
     trade = pl.DataFrame(
         [
@@ -510,10 +641,28 @@ def _run_sft(regime: str) -> Any:
         schema=dtypes_of(SFT_TRADE_SCHEMA),
     )
     sealed, _missing, _lossy = seal_lenient(trade.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    collateral = None
+    if collateral_usd is not None:
+        frame = pl.DataFrame(
+            [
+                {
+                    "sft_collateral_reference": "SFT-C1",
+                    "netting_set_id": "SFT-NS1",
+                    "collateral_type": "cash",
+                    "market_value": collateral_usd,
+                    "currency": "USD",
+                }
+            ],
+            schema=dtypes_of(SFT_COLLATERAL_SCHEMA),
+        )
+        sealed_collateral, _missing, _lossy = seal_lenient(
+            frame.lazy(), SFT_TABLE_EDGES["sft_collateral"]
+        )
+        collateral = SftCollateralBundle(sft_collateral=sealed_collateral)
     bundle: RawDataBundle = make_raw_bundle(
         counterparties=_counterparty(),
         fx_rates=_fx_rates([("USD", 0.8)]),
-        sft=RawSFTBundle(trades=SftTradeBundle(sft_trades=sealed)),
+        sft=RawSFTBundle(trades=SftTradeBundle(sft_trades=sealed), collateral=collateral),
     )
     return PipelineOrchestrator().run_with_data(bundle, _config(regime))
 

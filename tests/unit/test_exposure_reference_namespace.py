@@ -36,7 +36,12 @@ from typing import Any
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
+from rwa_calc.contracts.bundles import (
+    AggregatedResultBundle,
+    RawDataBundle,
+    RawSFTBundle,
+    SftTradeBundle,
+)
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_DUPLICATE_KEY, ERROR_EXPOSURE_REFERENCE_COLLISION
 from rwa_calc.contracts.validation import validate_bundle_values
@@ -47,6 +52,12 @@ from rwa_calc.engine.hierarchy.namespace import (
     qualify_securitisation_lookup,
 )
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.ccr.golden_ccr_a1 import (
+    CCR_A1_COUNTERPARTY_REF,
+    CCR_A1_NETTING_SET_ID,
+    build_raw_data_bundle_with_ccr_a1,
+)
+from tests.fixtures.ccr.sft_bundle_builder import _seal_sft_trades, _sft_trade_df
 from tests.fixtures.raw_bundle import seal_raw_table
 from tests.integration.conftest import (
     make_contingent,
@@ -269,6 +280,73 @@ class TestIrbPermissionDeduplication:
 
         assert set(distinct["approach_applied"]) == {"foundation_irb"}, "adequacy: IRB rows"
         assert shared["rwa_final"].sum() == pytest.approx(distinct["rwa_final"].sum())
+
+
+@cache
+def _ccr_sft_irb_run(regime: str, sft_netting_set_id: str) -> AggregatedResultBundle:
+    """CCR-A1 (SA-CCR netting set NS_001) plus one SFT netting set, IRB mode.
+
+    Both netting sets belong to CP_001 and both mint ``ccr__<netting_set_id>``
+    rows of ``exposure_type`` ``ccr_netting_set``; CP_001 carries an internal
+    rating on model M1, which holds an F-IRB institution permission.
+    """
+    base = build_raw_data_bundle_with_ccr_a1()
+    trade = _sft_trade_df("SFT_T1", sft_netting_set_id).with_columns(
+        pl.lit(CCR_A1_COUNTERPARTY_REF).alias("counterparty_reference")
+    )
+    internal = make_raw_data_bundle(
+        ratings=[
+            make_rating(
+                rating_reference="RI", counterparty_reference=CCR_A1_COUNTERPARTY_REF, model_id="M1"
+            )
+        ],
+        model_permissions=[make_model_permission(model_id="M1", exposure_class="institution")],
+    )
+    assert base.ratings is not None
+    assert internal.ratings is not None
+    bundle = dataclasses.replace(
+        base,
+        sft=RawSFTBundle(
+            trades=SftTradeBundle(sft_trades=_seal_sft_trades(trade)), collateral=None
+        ),
+        ratings=seal_raw_table(
+            pl.concat([base.ratings, internal.ratings], how="diagonal_relaxed"), "ratings"
+        ),
+        model_permissions=internal.model_permissions,
+    )
+    return PipelineOrchestrator().run_with_data(
+        bundle, _config(regime, permission_mode=PermissionMode.IRB)
+    )
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+class TestCcrAndSftNettingSetsSharingAnId:
+    """An SA-CCR and an SFT netting set with one id both mint ``ccr__<id>``.
+
+    Same reference AND same ``exposure_type`` (``ccr_netting_set``), so the
+    model-permission de-duplication keyed on (reference, type) still kept one
+    of them: the SFT netting set's capital left the total under IRB (measured
+    CRR 52.45m -> 6.95m, B31 47.11m -> 5.34m RWA), with DQ019 raised. Neither row
+    is a lending row the hierarchy stage re-keys, so the de-duplication itself
+    must keep one row per INPUT row.
+    """
+
+    def test_both_netting_sets_survive(self, regime: str) -> None:
+        ledger = _ccr_sft_irb_run(regime, CCR_A1_NETTING_SET_ID).results.collect()
+
+        assert sorted(ledger["risk_type"].to_list()) == ["CCR_DERIVATIVE", "CCR_SFT"]
+        assert set(ledger["approach_applied"]) == {"foundation_irb"}, "adequacy: IRB rows"
+
+    def test_rwa_equals_the_distinct_id_twin(self, regime: str) -> None:
+        shared = _ccr_sft_irb_run(regime, CCR_A1_NETTING_SET_ID)
+        distinct = _ccr_sft_irb_run(regime, "NS_SFT_ONLY").results.collect()
+
+        assert [e.exposure_reference for e in shared.errors if e.code == "DQ019"] == [
+            f"ccr__{CCR_A1_NETTING_SET_ID}"
+        ]
+        assert shared.results.collect()["rwa_final"].sum() == pytest.approx(
+            distinct["rwa_final"].sum()
+        )
 
 
 class TestPermissionDeduplicationIsTypeAware:

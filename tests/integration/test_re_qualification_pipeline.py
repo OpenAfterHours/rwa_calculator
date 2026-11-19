@@ -267,6 +267,42 @@ class TestArt126MaterialDependenceUnderCrr:
         assert df["risk_weight"][0] == pytest.approx(expected_rw)
         assert _total_rwa(df) == pytest.approx(expected_rwa)
 
+    @pytest.mark.parametrize(
+        ("is_qualifying_re", "expected_rw", "expected_rwa"),
+        [
+            # Attested: the Art. 126 50% (Art. 126(2)(d) part up to 50% of value).
+            (True, 0.50, 200_000.0),
+            # Not attested: PRA Credit Risk Part rule 4.1 (to 31 Dec 2026) allows
+            # Art. 126 for UK commercial property "only where annual average
+            # losses ... did not exceed 0.5% of risk-weighted exposure amounts",
+            # measured on PRA-published market data the engine does not hold,
+            # and rule 4.1A sets conditions for non-UK property. Without the
+            # firm's attestation the conditions are not shown, so Art. 124(1):
+            # 100% / 400,000 — the pre-RE-17 figure for this row.
+            (None, 1.00, 400_000.0),
+            (False, 1.00, 400_000.0),
+        ],
+    )
+    def test_crr_art_126_needs_the_rule_4_1_attestation(
+        self, is_qualifying_re: bool | None, expected_rw: float, expected_rwa: float
+    ) -> None:
+        # Arrange
+        collateral = _property(
+            1_000_000.0,
+            "commercial",
+            0.4,
+            is_income_producing=False,
+            is_qualifying_re=is_qualifying_re,
+        )
+
+        # Act
+        df = _run("crr", _INDIVIDUAL, _loan(400_000.0, "commercial_mortgage"), collateral)
+
+        # Assert
+        assert df.height == 1
+        assert df["risk_weight"][0] == pytest.approx(expected_rw)
+        assert _total_rwa(df) == pytest.approx(expected_rwa)
+
 
 class TestArt124h3WholeLoanUnderBasel31:
     """CL-10: the Art. 124H(3) whole loan keeps its LTV and reads the whole of Art. 124I."""

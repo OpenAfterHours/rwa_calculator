@@ -754,6 +754,11 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # is withheld (conservative), matching the engine's fill_null(False)
     # handling and the CLASSIFIER_OUTPUT_SCHEMA default.
     "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
+    # The loan-row twin of the collateral ``is_qualifying_re`` (CRR Art. 125(2) /
+    # 126(2) attestation; Basel 3.1 Art. 124A), for property data carried on the
+    # loan. The CRR Art. 126 50% needs an explicit True (PRA Credit Risk Part rule
+    # 4.1 / 4.1A). A linked collateral row's value wins over this one.
+    "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
     # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
     # application): non-null tags this exposure as an intragroup claim on the
     # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).

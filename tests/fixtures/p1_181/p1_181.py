@@ -228,6 +228,9 @@ class _Loan:
     property_type: str
     is_defaulted: bool
     qualifies_as_retail: bool
+    # CRR Art. 126(2) attestation, incl. PRA Credit Risk Part rule 4.1 (to
+    # 31 Dec 2026): the Art. 126 50% needs an explicit True.
+    is_qualifying_re: bool = True
 
     def to_dict(self) -> dict:
         return {
@@ -246,6 +249,7 @@ class _Loan:
             "property_type": self.property_type,
             "is_defaulted": self.is_defaulted,
             "qualifies_as_retail": self.qualifies_as_retail,
+            "is_qualifying_re": self.is_qualifying_re,
         }
 
 
@@ -301,6 +305,7 @@ _LOAN_FIXTURE_SCHEMA: dict[str, PolarsDataType] = {
     "property_type": pl.String,
     "is_defaulted": pl.Boolean,
     "qualifies_as_retail": pl.Boolean,
+    "is_qualifying_re": pl.Boolean,
 }
 
 

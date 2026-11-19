@@ -445,7 +445,9 @@ RWA = 1,000,000 × 0.43 = 430,000.00
 ## ORC-030 — SA commercial mortgage meeting Art. 126(2), LTV 40% (CRR)
 
 **Inputs:** EAD £1,000,000; class `commercial_mortgage`; LTV 40%; the Art. 126(2)
-conditions are met (repayment does not materially depend on the property).
+conditions are met (repayment does not materially depend on the property) and
+the firm attests them, the PRA Credit Risk Part rule 4.1 loss condition included
+(`is_qualifying_re = True`).
 **Regulation:** Art. 126(1)(a) — 50%. The whole loan sits inside the
 Art. 126(2)(d) 50%-of-value limit: value is `1,000,000 / 0.40 = 2,500,000` and
 50% of that is `1,250,000`.

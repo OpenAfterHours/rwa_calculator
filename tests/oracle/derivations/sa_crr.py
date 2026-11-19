@@ -510,6 +510,11 @@ def immovable_property() -> list[dict[str, Any]]:
                 # (Encoded True — the engine's inverted gate — until review
                 # RE-17 / P1.263; the narrative always said "met".)
                 "has_income_cover": False,
+                # "The Art. 126(2) conditions are met" is the firm's attestation,
+                # which for commercial property includes the PRA Credit Risk Part
+                # rule 4.1 / 4.1A loss condition (to 31 Dec 2026); the engine
+                # grants the 50% only on an explicit True.
+                "is_qualifying_re": True,
             },
         ),
         _sa(

@@ -322,9 +322,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/classify/re_evidence.py:79:96"
     ```
 
-??? quote "`crr_art_124_1_rw_expr` — src/rwa_calc/engine/sa/crr_real_estate.py:190"
+??? quote "`crr_art_124_1_rw_expr` — src/rwa_calc/engine/sa/crr_real_estate.py:199"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_real_estate.py:190:203"
+    --8<-- "src/rwa_calc/engine/sa/crr_real_estate.py:199:212"
     ```
 
 ??? quote "`_crr_append_real_estate_branches` — src/rwa_calc/engine/sa/risk_weights.py:764"
@@ -350,9 +350,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/re_split/splitter.py:203:254"
     ```
 
-??? quote "`crr_residential_re_rw_expr` — src/rwa_calc/engine/sa/crr_real_estate.py:163"
+??? quote "`crr_residential_re_rw_expr` — src/rwa_calc/engine/sa/crr_real_estate.py:172"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_real_estate.py:163:187"
+    --8<-- "src/rwa_calc/engine/sa/crr_real_estate.py:172:196"
     ```
 
 
@@ -368,9 +368,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/re_split/splitter.py:203:254"
     ```
 
-??? quote "`crr_commercial_re_rw_expr` — src/rwa_calc/engine/sa/crr_real_estate.py:120"
+??? quote "`crr_commercial_re_rw_expr` — src/rwa_calc/engine/sa/crr_real_estate.py:125"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/crr_real_estate.py:120:160"
+    --8<-- "src/rwa_calc/engine/sa/crr_real_estate.py:125:169"
     ```
 
 
@@ -422,9 +422,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:161:303"
     ```
 
-??? quote "`_apply_obligor_short_term_spillover` — src/rwa_calc/engine/hierarchy/enrich.py:997"
+??? quote "`_apply_obligor_short_term_spillover` — src/rwa_calc/engine/hierarchy/enrich.py:1001"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:997:1089"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1001:1093"
     ```
 
 
@@ -526,9 +526,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:161:303"
     ```
 
-??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1092"
+??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1096"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1092:1147"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1096:1151"
     ```
 
 ??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:424"
@@ -2117,9 +2117,9 @@ Last generated: 2026-11-19.
 
 ### PS1/26, paragraph 140 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1093"
+??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/hierarchy/enrich.py:1097"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1092:1147"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:1096:1151"
     ```
 
 ??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:425"

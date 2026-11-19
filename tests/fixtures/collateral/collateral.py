@@ -75,6 +75,10 @@ class Collateral:
     # if listed on a recognised exchange. None/False -> ineligible (conservative);
     # only consulted for equity that is not attested main-index.
     is_listed: bool | None = None
+    # CRR Art. 125(2) / 126(2) attestation (and, for commercial property, the PRA
+    # Credit Risk Part rule 4.1 / 4.1A loss condition): the CRR Art. 126 50% needs
+    # an explicit True; None is "not reported".
+    is_qualifying_re: bool | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -103,6 +107,7 @@ class Collateral:
             "rental_to_interest_ratio": self.rental_to_interest_ratio,
             "is_main_index": self.is_main_index,
             "is_listed": self.is_listed,
+            "is_qualifying_re": self.is_qualifying_re,
         }
 
 
@@ -525,6 +530,9 @@ def _commercial_real_estate() -> list[Collateral]:
             is_adc=False,
             is_presold=None,
             rental_to_interest_ratio=1.5,  # Art. 126(2)(a) income-cover threshold exactly met
+            # The firm attests the Art. 126(2) conditions, PRA rule 4.1 included;
+            # without it the row takes Art. 124(1) 100%.
+            is_qualifying_re=True,
         ),
         # ADC property (150% RW unless pre-sold)
         Collateral(

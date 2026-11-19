@@ -229,6 +229,7 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
             ("ltv", pl.Float64),
             ("property_type", pl.String),
             ("has_income_cover", pl.Boolean),
+            ("is_qualifying_re", pl.Boolean),
             ("is_defaulted", pl.Boolean),
             # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased receivables F-IRB LGD subtype.
             ("purchased_receivables_subtype", pl.String),

@@ -609,7 +609,7 @@ def add_collateral_ltv(
     A real-estate row supplied WITHOUT a ``property_ltv`` still contributes its
     property attributes (type, Art. 124A qualifying flag, income dependence,
     prior charges); within a level a row that carries an LTV is preferred. The
-    loan row's own ``ltv`` is the last fallback, and where no LTV is supplied at
+    loan row's own ``ltv`` and ``is_qualifying_re`` are the last fallback, and where no LTV is supplied at
     all it is derived from the linked property value
     (:func:`re_ltv.derive_missing_ltv`, PS1/26 Art. 124C). Before this, a
     null-LTV row was dropped whole — its ``is_qualifying_re=False`` or
@@ -638,7 +638,10 @@ def add_collateral_ltv(
         pl.col("property_ltv").is_not_null()
         | (pl.col("collateral_type").str.to_lowercase() == "real_estate")
     ).sort(pl.col("property_ltv").is_null(), maintain_order=True)
-    exposures = exposures.with_columns(pl.col("ltv").alias("_loan_ltv"))
+    exposures = exposures.with_columns(
+        pl.col("ltv").alias("_loan_ltv"),
+        pl.col("is_qualifying_re").alias("_loan_qualifying_re"),
+    )
 
     # Multi-level linking: separate collateral by beneficiary_type, then
     # coalesce direct -> facility -> counterparty so the most specific
@@ -710,9 +713,10 @@ def add_collateral_ltv(
             ("prior_charge_ltv", "prior_charge_ltv", NO_DEFAULT),
         ),
     )
-    exposures = exposures.with_columns(pl.coalesce("ltv", "_loan_ltv").alias("ltv")).drop(
-        "_loan_ltv"
-    )
+    exposures = exposures.with_columns(
+        pl.coalesce("ltv", "_loan_ltv").alias("ltv"),
+        pl.coalesce("is_qualifying_re", "_loan_qualifying_re").alias("is_qualifying_re"),
+    ).drop("_loan_ltv", "_loan_qualifying_re")
     return derive_missing_ltv(exposures, collateral)
 
 

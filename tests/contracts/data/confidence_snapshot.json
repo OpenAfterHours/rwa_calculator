@@ -1372,6 +1372,7 @@
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/contracts/test_collapse_additivity.py",
+        "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/fixtures/reporting_row_scope_portfolio.py",
         "tests/fixtures/single_exposure.py",

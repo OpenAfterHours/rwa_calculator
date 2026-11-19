@@ -202,13 +202,17 @@ class TestPackScalarHoming:
     """The homed pack scalars preserve the byte-identical values."""
 
     def test_one_day_floor_value_preserved(self, b31_config: CalculationConfig) -> None:
-        """has_one_day_maturity_floor → M resolves to exactly 1/365."""
+        """A flagged row maturing on the reporting date resolves to exactly 1/365.
+
+        The one-day value is a MINIMUM on the residual (review TR-11), so the
+        scalar is observed where it binds: residual 0 -> M = one day.
+        """
         lf = pl.LazyFrame(
             {
                 "pd": [0.01],
                 "lgd": [0.45],
                 "ead_final": [1_000_000.0],
-                "maturity_date": [date(2035, 6, 30)],
+                "maturity_date": [date(2027, 12, 31)],
                 "has_one_day_maturity_floor": [True],
                 "exposure_class": ["CORPORATE"],
             }

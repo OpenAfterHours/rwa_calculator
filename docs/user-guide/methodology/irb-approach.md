@@ -96,7 +96,7 @@ for details.
     | MLR | **75%** | Medium-low risk (Art. 166(8)) |
     | LR | 0% | Unconditionally cancellable |
 
-    **Art. 166(9) Exception:** Short-term letters of credit arising from the movement of
+    **Art. 166(8)(b) Exception:** Short-term letters of credit arising from the movement of
     goods retain 20% CCF under F-IRB. Flag these exposures with
     `is_short_term_trade_lc = True`.
 
@@ -116,11 +116,13 @@ for details.
 
     *\* Under CRR, OC had no separate category. These commitments were classified by maturity into MR/MLR, both 75% under F-IRB Art. 166(8).*
 
-    !!! warning "Art. 166(9) Trade LC Exception Removed"
-        CRR Art. 166(9) is **blanked by PRA PS1/26**. The 20% short-term trade LC
-        carve-out no longer applies under Basel 3.1 — these exposures receive the
-        standard SA CCF for their risk type. The `is_short_term_trade_lc` flag has
-        no effect under Basel 3.1.
+    !!! warning "Art. 166(8)(b) Trade LC Exception Removed"
+        The CRR F-IRB schedule of Art. 166(8) is **replaced by PRA PS1/26**. The separate
+        20% short-term trade LC bucket no longer applies under Basel 3.1 — these exposures
+        receive the standard SA CCF for their risk type (Table A1 Row 6 is itself 20% for
+        documentary credits). The `is_short_term_trade_lc` flag has no CCF effect under
+        Basel 3.1, but it still drives the Art. 162(3)(e) one-day maturity minimum below and
+        the SA Art. 120(2A)/121(4) / 121(6)(b) trade treatments.
 
 A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to Basel 3.1
 restrictions: own-estimate CCFs are limited to **revolving loan commitments**
@@ -164,9 +166,14 @@ contractual terms. Revolving exposures must use the **maximum contractual termin
 (Art. 162(2A)(k)), not the current drawing repayment date.
 
 !!! info "Exceptions to the 1-Year Floor"
-    Art. 162(3) allows a **one-day** maturity floor for daily-margined repos, derivatives,
-    and margin lending, and for qualifying short-term exposures (FX settlement, trade finance
-    ≤ 1yr, securities settlement). The `has_one_day_maturity_floor` input flag controls this.
+    Art. 162(3) allows a **one-day** maturity minimum for daily-margined repos, derivatives,
+    and margin lending, and for qualifying short-term exposures (FX settlement,
+    self-liquidating trade finance, securities settlement). The `has_one_day_maturity_floor`
+    input flag controls this, and the engine derives it from `is_short_term_trade_lc` for
+    self-liquidating trade with a residual maturity **up to** one year (CRR Art. 162(3)(b)) or
+    **less than** one year (PS1/26 Art. 162(3)(e)). The one day replaces the one-year
+    minimum — `M = max(residual, 1/365)` — it is not a fixed `M`: a 6-month documentary
+    credit takes `M ≈ 0.5`.
     See the [F-IRB specification](../../specifications/crr/firb-calculation.md#effective-maturity-crr-art-162)
     for full details.
 

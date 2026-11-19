@@ -239,7 +239,7 @@ entries and override the general floor.
 | `firb_sft_supervisory_maturity_years` | `0.5` | `0.5` | CRR Art. 162(1) |
 | `irb_maturity_floor_collateralised_deriv_years` | `0.02739726027397260273972602740` | `0.02739726027397260273972602740` | CRR Art. 162(2) |
 | `irb_maturity_floor_repo_sft_years` | `0.01369863013698630136986301370` | `0.01369863013698630136986301370` | CRR Art. 162(2) |
-| `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_maturity_floor` | on | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
 | `one_day_maturity_floor_years` | `0.002739726027397260273972602740` | `0.002739726027397260273972602740` | CRR Art. 162(3) |
 | `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
 <!-- END GENERATED: crr-irb-maturity -->

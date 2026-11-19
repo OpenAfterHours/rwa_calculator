@@ -439,12 +439,24 @@
   "rwa_calc.engine.irb.formulas::calculate_maturity_adjustment": [
     "CRR Art. 162"
   ],
+  "rwa_calc.engine.irb.formulas::risk_weight_function_correlation_expr": [
+    "CRR Art. 157",
+    "PS1/26, paragraph 157"
+  ],
+  "rwa_calc.engine.irb.formulas::risk_weight_function_maturity_adjustment_expr": [
+    "CRR Art. 154",
+    "CRR Art. 157"
+  ],
   "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa": [
     "CRR Art. 122",
     "CRR Art. 235"
   ],
   "rwa_calc.engine.irb.guarantee::apply_guarantee_substitution": [
     "CRR Art. 161(3)"
+  ],
+  "rwa_calc.engine.irb.transforms::_effective_one_day_floor_flag": [
+    "CRR Art. 162(3)",
+    "PS1/26, paragraph 162"
   ],
   "rwa_calc.engine.irb.transforms::apply_firb_lgd": [
     "CRR Art. 161",

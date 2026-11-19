@@ -10,7 +10,9 @@ Key responsibilities:
 - Produce one facility row: term_loan, GBP 1,000,000, 151-day original maturity
   (2027-01-01 to 2027-06-01), is_short_term_trade_lc=True (Art. 121(4) gate flag).
   No short-term ECAI rating row is attached — SCRA unrated path.
-- Produce one loan row: GBP 1,000,000 drawn, same 151-day maturity window.
+- Produce one loan row: GBP 1,000,000 drawn, same 151-day maturity window. The
+  acceptance test maps it under the facility (``facility_link_ref``): the loan
+  inherits the trade-LC flag from its own parent facility only (review TR-01).
 - Produce one empty ratings parquet (RATINGS_SCHEMA schema, zero rows) — absence of
   any external CQS forces the SCRA unrated path.
 - No collateral, no guarantee, no provisions.

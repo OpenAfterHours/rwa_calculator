@@ -208,7 +208,7 @@ def test_the_reason_column_keeps_its_enum_dtype_when_gated_off(
 
     # Act
     out = apply_sovereign_floor_for_institutions(
-        exposures, pl.lit(value=True), applies=False
+        exposures, pl.lit(value=True), pack=resolve("crr", crr_config.reporting_date)
     ).collect()
 
     # Assert

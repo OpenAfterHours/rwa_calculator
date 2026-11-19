@@ -39,8 +39,6 @@ from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb.transforms import classify_approach, prepare_columns
 
-_ONE_DAY = 1.0 / 365.0
-
 # reporting_date 2025-12-31 → maturity_date 2027-12-31 is exactly 2.0y under the
 # engine's /365 ordinal-day year fraction, safely clear of both 0.5y and 2.5y.
 _CRR_REPORTING_DATE = date(2025, 12, 31)
@@ -169,14 +167,28 @@ class TestFIRBFixedMaturityElectionOn:
         assert m == pytest.approx(4.0)
 
     def test_one_day_floor_still_outranks_the_fixed_value(self) -> None:
-        # Arrange — Art. 162(3) carve-out sits above the fixed values in the chain
+        # Arrange — Art. 162(3) carve-out sits above the fixed values in the chain,
+        # where it binds: a sub-1y residual (2025-12-31 -> 2026-06-30 = 181/365y).
+        # The carve-out is a one-day MINIMUM on that residual, not a fixed 1/365
+        # (review TR-11).
+        lf = _irb_frame(maturity_date=date(2026, 6, 30), has_one_day_maturity_floor=True)
+
+        # Act
+        m = _maturity(lf, _crr_config(firb_fixed_maturity=True))
+
+        # Assert
+        assert m == pytest.approx(181 / 365)
+
+    def test_one_day_floor_cannot_shorten_the_fixed_value_beyond_one_year(self) -> None:
+        # Arrange — a 2.0y residual: the one-day minimum cannot bind, so the
+        # elected fixed 2.5y stands (pre-TR-11 the flag forced M to 1/365 here).
         lf = _irb_frame(has_one_day_maturity_floor=True)
 
         # Act
         m = _maturity(lf, _crr_config(firb_fixed_maturity=True))
 
         # Assert
-        assert m == pytest.approx(_ONE_DAY)
+        assert m == pytest.approx(2.5)
 
 
 class TestFIRBFixedMaturityElectionOff:

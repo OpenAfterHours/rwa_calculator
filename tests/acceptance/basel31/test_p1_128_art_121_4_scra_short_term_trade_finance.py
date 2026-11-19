@@ -55,6 +55,7 @@ from tests.fixtures.p1_128.p1_128 import (
     EXPECTED_K,
     EXPECTED_RISK_WEIGHT,
     EXPECTED_RWA,
+    FACILITY_REF,
     LOAN_REF,
     SCRA_LONG_TERM_FALLBACK_RISK_WEIGHT,
     SCRA_LONG_TERM_FALLBACK_RWA,
@@ -81,13 +82,16 @@ def p1_128_sa_result() -> dict:
     no short-term ECAI rating row is attached and the ratings parquet is empty,
     forcing the SCRA (unrated) institution path.
 
-    The test uses inline LazyFrames for facility_mappings and lending_mappings
-    because those tables have no P1.128-specific rows — the pipeline only needs
-    them present with the correct schema.
+    The loan is linked to the trade-LC facility through ``facility_mappings``
+    (``facility_link_ref``): the flag is a property of the transaction, and a
+    drawn loan inherits it only from its OWN parent facility (review TR-01).
+    Before TR-01 this test passed with NO mapping, because a counterparty-level
+    broadcast spread the facility's flag onto every loan of the counterparty —
+    the leak that also flagged that counterparty's ordinary lending.
 
     Returns the single result row for LN_INST_SCRA_TRADE_01 as a dict.
     """
-    return run_sa_single_loan_result(_FIXTURES_DIR, LOAN_REF)
+    return run_sa_single_loan_result(_FIXTURES_DIR, LOAN_REF, facility_link_ref=FACILITY_REF)
 
 
 # ---------------------------------------------------------------------------

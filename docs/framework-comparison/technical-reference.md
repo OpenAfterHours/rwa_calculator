@@ -596,11 +596,13 @@ contractual calculation, generally increasing M from 0.5 to ≥ 1 year.
     for the method table and implementation notes.
 
 !!! info "One-Day Floor Exceptions (Art. 162(3))"
-    Both CRR and Basel 3.1 allow a **one-day** maturity floor (overriding the general 1-year
-    floor) for daily-margined repos, derivatives, and margin lending, plus qualifying
-    short-term exposures (FX settlement, trade finance ≤ 1yr, securities settlement). Basel 3.1
-    widens the trigger condition from re-margining **and** revaluation to re-margining **or**
-    revaluation. See the [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1623--one-day-maturity-floor-exceptions)
+    Both CRR and Basel 3.1 allow a **one-day** maturity minimum (replacing the general 1-year
+    minimum, so `M = max(residual, 1/365)` — not a fixed one day) for daily-margined repos,
+    derivatives, and margin lending, plus qualifying short-term exposures (FX settlement,
+    self-liquidating trade finance — residual **up to** one year under CRR Art. 162(3)(b),
+    **less than** one year under PS1/26 Art. 162(3)(e) — securities settlement). The
+    re-margining **and** revaluation trigger is unchanged; only the Art. 162(2A)(c)/(d)
+    intermediate floors use **or** under Basel 3.1. See the [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1623--one-day-maturity-floor-exceptions)
     for the full qualifying exposure list.
 
 See the [CRR F-IRB specification](../specifications/crr/firb-calculation.md#effective-maturity-crr-art-162)

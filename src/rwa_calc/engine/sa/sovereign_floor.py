@@ -34,6 +34,7 @@ References:
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
@@ -48,6 +49,9 @@ from rwa_calc.engine.branch_reason import BranchCase, decide
 from rwa_calc.engine.sa.crr_risk_weight_tables import CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS
 from rwa_calc.engine.sa.sovereign_derived import cqs_table_lookup_expr
 
+if TYPE_CHECKING:
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,7 +61,7 @@ def apply_sovereign_floor_for_institutions(
     exposures: pl.LazyFrame,
     is_domestic_currency_expr: pl.Expr,
     *,
-    applies: bool,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Apply sovereign RW floor for FX unrated institution exposures.
 
@@ -72,14 +76,18 @@ def apply_sovereign_floor_for_institutions(
     5", modifying an SCRA Grade A/B/C ladder CRR does not have; CRR instead
     handles the same concern structurally, since Art. 121(1) already derives
     the unrated institution's weight from its central government's credit
-    quality step. ``applies`` carries the regime decision from the cited pack
-    Feature ``sa_unrated_institution_sovereign_floor_applies`` (arch_check
+    quality step. The regime decision reads the cited pack Feature
+    ``sa_unrated_institution_sovereign_floor_applies`` from ``pack`` (arch_check
     check 17); when it is False every row is named
     ``REGIME_NOT_APPLICABLE`` and no risk weight is touched (P1.334).
 
     Exception: Self-liquidating trade-related contingent items arising
-    from the movement of goods with original maturity ≤ 1 year are not
-    subject to this floor (CRE20.22 footnote 13).
+    from the movement of goods with an original maturity of LESS THAN one
+    year are not subject to this floor (PS1/26 Art. 121(6)(b); CRE20.22
+    footnote 13). The bound is the pack scalar
+    ``sa_sovereign_floor_trade_exemption_original_maturity_years`` and the
+    comparison is strict — a 365-day item (original maturity 1.0y) is floored
+    (review TR-10).
 
     Exception: QCCP **trade** exposures, which CRR Art. 306 pins at 2%
     (clearing member's own) / 4% (client-cleared) as lex specialis. CRR
@@ -121,7 +129,7 @@ def apply_sovereign_floor_for_institutions(
     - CRR Art. 107(2) — only trade exposures and default fund contributions
       reach the Chapter 6 Section 9 regime
     """
-    if not applies:
+    if not pack.feature("sa_unrated_institution_sovereign_floor_applies"):
         # No value leg at all — every ``risk_weight`` passes through untouched.
         # The reason column is still emitted so the census can see that the rule
         # abstained for a regime reason rather than silently not running.
@@ -162,10 +170,14 @@ def apply_sovereign_floor_for_institutions(
         .otherwise(~is_domestic_currency_expr)
     )
 
-    # Exception: self-liquidating trade items ≤ 1yr original maturity
-    # (Art. 121(6) CRR / CRE20.22 footnote 13 — both key on ORIGINAL maturity).
+    # Exception: self-liquidating trade items with an original maturity of LESS
+    # THAN one year (PS1/26 Art. 121(6)(b) / CRE20.22 footnote 13 — both key on
+    # ORIGINAL maturity). Strict ``<``: "less than one year" (review TR-10).
+    trade_exemption_years = float(
+        pack.scalar("sa_sovereign_floor_trade_exemption_original_maturity_years")
+    )
     _is_trade_exempt = pl.col("is_short_term_trade_lc").fill_null(False) & (
-        pl.col("original_maturity_years").fill_null(5.0) <= 1.0
+        pl.col("original_maturity_years").fill_null(5.0) < trade_exemption_years
     )
 
     # Exception: QCCP TRADE exposures (CRR Art. 306 / CRE54.14-15), which the

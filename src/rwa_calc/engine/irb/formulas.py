@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, cast
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.crm.expressions import lgd_star_exposure_basis_expr
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
@@ -38,6 +39,7 @@ from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import formula_float_map, scalar_value
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from decimal import Decimal
 
     from rwa_calc.contracts.config import CalculationConfig
@@ -564,6 +566,7 @@ def apply_irb_formulas(
     # crm_exit contract columns).
     schema = exposures.collect_schema()
     schema_names = schema.names()
+    exposures = ensure_dilution_subtype_column(exposures, present=schema_names)
     if "maturity" not in schema_names:
         exposures = exposures.with_columns(pl.lit(2.5).alias("maturity"))
     if "turnover_m" not in schema_names:
@@ -618,7 +621,7 @@ def apply_irb_formulas(
         / 1_000_000
     )
     exposures = exposures.with_columns(
-        _polars_correlation_expr(
+        risk_weight_function_correlation_expr(
             eur_gbp_rate=eur_gbp_rate,
             is_b31=resolved_pack.feature("irb_correlation_sme_gbp_native"),
             sme_turnover_threshold_m=sme_turnover_m,
@@ -628,20 +631,9 @@ def apply_irb_formulas(
     # Step 4: Calculate K using pure Polars with polars-normal-stats
     exposures = exposures.with_columns(_polars_capital_k_expr().alias("k"))
 
-    # Step 5: Calculate maturity adjustment (only for non-retail)
-    is_retail = (
-        pl.col("exposure_class")
-        .cast(pl.String)
-        .fill_null("CORPORATE")
-        .str.to_uppercase()
-        .str.contains("RETAIL")
-    )
-
+    # Step 5: Calculate maturity adjustment (non-retail, and Art. 157(1) retail dilution)
     exposures = exposures.with_columns(
-        pl.when(is_retail)
-        .then(pl.lit(1.0))
-        .otherwise(_polars_maturity_adjustment_expr())
-        .alias("maturity_adjustment")
+        risk_weight_function_maturity_adjustment_expr().alias("maturity_adjustment")
     )
 
     # Step 6-9: Final calculations (pure Polars expressions)
@@ -722,18 +714,14 @@ def _correlation_expr_from_pd(
 
     exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
 
-    # Pre-calculate decay denominators (constants)
-    corporate_denom = 1.0 - math.exp(-50.0)
+    # Pre-calculate decay denominator (constant)
     retail_denom = 1.0 - math.exp(-35.0)
-
-    # f(PD) for corporate (decay = 50)
-    f_pd_corp = (1.0 - (-50.0 * pd_expr).exp()) / corporate_denom
 
     # f(PD) for retail (decay = 35)
     f_pd_retail = (1.0 - (-35.0 * pd_expr).exp()) / retail_denom
 
     # Corporate correlation: 0.12 × f(PD) + 0.24 × (1 - f(PD))
-    r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)
+    r_corporate = _corporate_correlation_expr_from_pd(pd_expr)
 
     # Retail other correlation: 0.03 × f(PD) + 0.16 × (1 - f(PD))
     r_retail_other = 0.03 * f_pd_retail + 0.16 * (1.0 - f_pd_retail)
@@ -817,6 +805,75 @@ def _polars_correlation_expr(
         eur_gbp_rate,
         is_b31=is_b31,
         sme_turnover_threshold_m=sme_turnover_threshold_m,
+    )
+
+
+@cites("CRR Art. 157")
+@cites("PS1/26, paragraph 157")
+def risk_weight_function_correlation_expr(
+    eur_gbp_rate: float = 0.8732,
+    is_b31: bool = False,
+    sme_turnover_threshold_m: float = 44.0,
+) -> pl.Expr:
+    """Correlation for the IRB risk-weight function, on the ``pd_floored`` column.
+
+    The exposure-class curve of ``_polars_correlation_expr``, except that a RETAIL
+    purchased-receivables dilution-risk row takes the Art. 153(1) corporate curve:
+    CRR / PS1/26 Art. 157(1) — "the risk-weighted exposure amounts for dilution
+    risk of purchased corporate and retail receivables" are calculated "in
+    accordance with the formula set out in Article 153(1)" (review TR-03). No
+    Art. 153(4) SME and no Art. 153(2) large-FSE adjustment applies to those rows:
+    a retail pool's dilution risk is neither an exposure to an SME corporate nor
+    one to a financial sector entity. CORPORATE dilution rows keep their class
+    curve unchanged — whether Art. 153(2)/(4) reach a 157(1) row is an unsigned-off
+    reading, and stripping the 1.25 multiplier would reduce RWA.
+
+    Reads ``purchased_receivables_subtype`` (``ensure_dilution_subtype_column``
+    guarantees it) on top of ``_polars_correlation_expr``'s columns.
+    """
+    return (
+        pl.when(_is_retail_dilution_expr())
+        .then(_corporate_correlation_expr_from_pd(pl.col("pd_floored")))
+        .otherwise(
+            _polars_correlation_expr(
+                eur_gbp_rate=eur_gbp_rate,
+                is_b31=is_b31,
+                sme_turnover_threshold_m=sme_turnover_threshold_m,
+            )
+        )
+    )
+
+
+@cites("CRR Art. 154")
+@cites("CRR Art. 157")
+def risk_weight_function_maturity_adjustment_expr() -> pl.Expr:
+    """Maturity adjustment for the IRB risk-weight function, on ``pd_floored``.
+
+    Retail rows take MA = 1 (Art. 154(1) has no maturity adjustment), except a
+    retail purchased-receivables dilution-risk row, which Art. 157(1) prices on the
+    Art. 153(1) formula — maturity adjustment included (review TR-03).
+    """
+    return (
+        pl.when(_is_retail_class_expr() & ~_is_retail_dilution_expr())
+        .then(pl.lit(1.0))
+        .otherwise(_polars_maturity_adjustment_expr())
+    )
+
+
+def ensure_dilution_subtype_column(
+    lf: pl.LazyFrame, *, present: Collection[str] | None = None
+) -> pl.LazyFrame:
+    """Guarantee ``purchased_receivables_subtype`` exists (typed null when absent).
+
+    Production frames carry it off the sealed IRB branch edge; hand-built and
+    stepwise frames may not. ``ensure_columns`` adds no ``fill_null`` site, and a
+    caller that already resolved the frame's names passes them as ``present`` so
+    the production fast path costs no extra schema resolution.
+    """
+    return ensure_columns(
+        lf,
+        {"purchased_receivables_subtype": ColumnSpec(pl.String, default=None, required=False)},
+        present=present,
     )
 
 
@@ -1321,3 +1378,30 @@ def calculate_expected_loss(pd: float, lgd: float, ead: float) -> float:
     Simple multiplication - no need for vectorized wrapper.
     """
     return pd * lgd * ead
+
+
+def _corporate_correlation_expr_from_pd(pd_expr: pl.Expr) -> pl.Expr:
+    """Art. 153(1)(iii) correlation, before the Art. 153(2) / 153(4) adjustments.
+
+    R = 0.12 × f(PD) + 0.24 × (1 - f(PD)), f(PD) = (1 - e^(-50·PD)) / (1 - e^(-50)).
+    """
+    f_pd_corp = (1.0 - (-50.0 * pd_expr).exp()) / (1.0 - math.exp(-50.0))
+    return 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)
+
+
+def _is_retail_class_expr() -> pl.Expr:
+    """True on a retail exposure class (a null class reads as corporate)."""
+    return (
+        pl.col("exposure_class")
+        .cast(pl.String)
+        .fill_null("CORPORATE")
+        .str.to_uppercase()
+        .str.contains("RETAIL")
+    )
+
+
+def _is_retail_dilution_expr() -> pl.Expr:
+    """True on a retail purchased-receivables dilution-risk row (Art. 157(1))."""
+    return _is_retail_class_expr() & pl.col("purchased_receivables_subtype").eq_missing(
+        "dilution_risk"
+    )

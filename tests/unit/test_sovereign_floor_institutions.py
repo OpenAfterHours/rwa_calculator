@@ -247,7 +247,7 @@ class TestRatedInstitutionNoFloor:
 
 
 class TestTradeExemption:
-    """Self-liquidating trade items ≤ 1yr exempt from sovereign floor."""
+    """Self-liquidating trade items < 1yr original maturity exempt from sovereign floor."""
 
     def test_trade_lc_exempt_from_floor(
         self, sa_calculator: SACalculator, b31_config: CalculationConfig
@@ -298,6 +298,26 @@ class TestTradeExemption:
         # Sovereign floor 100% binds over SCRA A 40%
         assert result["risk_weight"] == pytest.approx(1.0)
 
+    def test_trade_lc_just_under_one_year_original_maturity_exempt(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """364 days is "less than one year": exempt, SCRA Grade A long-term 40% stands."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            config=b31_config,
+            scra_grade="A",
+            sovereign_cqs=4,
+            local_currency="TRY",
+            currency="USD",
+            country_code="TR",
+            is_short_term_trade_lc=True,
+            original_maturity_years=364 / 365,
+            residual_maturity_years=0.5,
+        )
+        assert result["risk_weight"] == pytest.approx(0.40)
+
     def test_non_trade_not_exempt(
         self, sa_calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
@@ -318,10 +338,15 @@ class TestTradeExemption:
         # Sovereign floor 100% binds — not trade LC
         assert result["risk_weight"] == pytest.approx(1.0)
 
-    def test_trade_lc_exactly_1yr_exempt(
+    def test_trade_lc_exactly_1yr_not_exempt(
         self, sa_calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Trade LC with maturity exactly 1yr → exempt (≤ 1yr)."""
+        """Trade LC with original maturity exactly 1yr → NOT exempt (strict "< 1yr").
+
+        This test used to assert the opposite ("exempt (≤ 1yr)"), pinning the
+        boundary defect review TR-10 fixed: PS1/26 Art. 121(6)(b) exempts only an
+        item "with an original maturity of less than one year".
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -335,7 +360,7 @@ class TestTradeExemption:
             is_short_term_trade_lc=True,
             residual_maturity_years=1.0,
         )
-        assert result["risk_weight"] == pytest.approx(0.40)
+        assert result["risk_weight"] == pytest.approx(1.0)
 
 
 # =========================================================================

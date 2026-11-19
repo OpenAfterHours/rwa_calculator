@@ -75,6 +75,10 @@ _SFT_TRADE_COLUMNS = {
     "under_master_netting_agreement",
     "qualifies_one_day_maturity_floor",
     "qualifies_mna_intermediate_floor",
+    # Review CC-14 — the Art. 206 eligibility attestation that, with
+    # under_master_netting_agreement, lets a multi-trade set net (Art. 220(1)).
+    # Additive, required=False, conservative default False.
+    "is_legally_enforceable",
     # P1.215 — A-IRB routing carrier for synthetic CCR rows (own-estimate
     # LGD). Additive, required=False, no default value (null = no modelled
     # LGD; feeds the classifier's has_modelled_lgd AIRB gate).
@@ -266,6 +270,9 @@ _SFT_COLLATERAL_COLUMNS = {
     "currency",
     "issuer_cqs",
     "residual_maturity_years",
+    # Review CC-14 — optional link to the SFT trade the collateral was received
+    # against; read only when a netting set is split per trade (no eligible MNA).
+    "trade_id",
 }
 
 
@@ -290,6 +297,22 @@ def test_sft_collateral_schema_drops_sa_ccr_only_columns() -> None:
     dropped = {"is_posted_by_firm", "is_segregated", "issuer_type", "haircut_override"}
     leaked = dropped & set(schema.keys())
     assert not leaked, f"SFT_COLLATERAL_SCHEMA must drop SA-CCR-only columns: {sorted(leaked)}"
+
+
+def test_sft_trade_is_legally_enforceable_defaults_false() -> None:
+    """is_legally_enforceable must default False: an absent attestation never nets a set."""
+    spec = _spec(_get_schema("SFT_TRADE_SCHEMA"), "is_legally_enforceable")
+    assert spec.dtype == pl.Boolean
+    assert spec.required is False
+    assert spec.default is False, f"is_legally_enforceable must default False, got {spec.default!r}"
+
+
+def test_sft_collateral_trade_id_is_optional_nullable_string() -> None:
+    """trade_id on SFT collateral is an optional, nullable String with no default."""
+    spec = _spec(_get_schema("SFT_COLLATERAL_SCHEMA"), "trade_id")
+    assert spec.dtype == pl.String
+    assert spec.required is False
+    assert spec.default is None
 
 
 def test_sft_collateral_schema_market_value_default_is_zero() -> None:

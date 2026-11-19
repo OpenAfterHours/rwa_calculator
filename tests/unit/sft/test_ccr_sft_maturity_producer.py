@@ -76,7 +76,8 @@ def _build_bundle(
 
 def _carrier(bundle: RawSFTBundle) -> float | None:
     """Run the FCCM producer with the CRR run pack and return ccr_effective_maturity."""
-    rows = sft_bundle_to_exposures(bundle, _REPORTING_DATE, rulepack=_CRR_PACK).collect().to_dicts()
+    frame, _errors = sft_bundle_to_exposures(bundle, _REPORTING_DATE, rulepack=_CRR_PACK)
+    rows = frame.collect().to_dicts()
     assert len(rows) == 1
     return rows[0]["ccr_effective_maturity"]
 
@@ -123,7 +124,9 @@ def test_empty_sft_book_does_not_raise() -> None:
     sealed, *_ = seal_lenient(empty_trades.lazy(), SFT_TABLE_EDGES["sft_trades"])
     bundle = RawSFTBundle(trades=SftTradeBundle(sft_trades=sealed))
 
-    rows = sft_bundle_to_exposures(bundle, _REPORTING_DATE, rulepack=_CRR_PACK).collect()
+    frame, errors = sft_bundle_to_exposures(bundle, _REPORTING_DATE, rulepack=_CRR_PACK)
+    rows = frame.collect()
 
     assert rows.height == 0
+    assert errors == []
     assert "ccr_effective_maturity" in rows.columns

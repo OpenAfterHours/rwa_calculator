@@ -102,7 +102,8 @@ def _build_bundle(
 
 def _ead_ccr(bundle: RawSFTBundle) -> float:
     """Run the FCCM stage and return the single netting set's ead_ccr."""
-    rows = sft_bundle_to_exposures(bundle, _REPORTING_DATE).collect().to_dicts()
+    frame, _errors = sft_bundle_to_exposures(bundle, _REPORTING_DATE)
+    rows = frame.collect().to_dicts()
     assert len(rows) == 1
     return rows[0]["ead_ccr"]
 

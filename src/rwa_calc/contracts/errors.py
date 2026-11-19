@@ -319,6 +319,36 @@ ERROR_UNRECOGNISED_COLLATERAL_TYPE = "CRM021"
 # before C* is evaluated, and CRM014 owns that cause.
 ERROR_BELOW_MIN_COLLATERALISATION = "CRM022"
 
+# SFT (Financial Collateral Comprehensive Method) error codes — emitted by the
+# peer sft_fccm stage (engine/sft/). The older CCR codes (CCR001/010/011/020) are
+# declared beside their SA-CCR producers; these three are the SFT FCCM ones.
+#
+# SFT collateral not recognised in E* (CRR / PS1-26 Art. 223(1): volatility
+# adjustments are applied "when valuing financial collateral"; Art. 197/198 list
+# the eligible items). A collateral row whose type is not one the SFT path can
+# price from the Art. 224 Tables 1/3 (real estate, receivables, other physical,
+# a bare "bond" with no issuer class, CIU units, an unknown string), or a debt
+# security whose CQS fails Art. 197(1)(b)-(d), contributes NOTHING to the
+# CVA·(1-HC-HFX) term; so does a row keyed to a netting set holding no SFT trade.
+# One WARNING per collateral row.
+ERROR_SFT_COLLATERAL_NOT_RECOGNISED = "CCR027"
+# SFT netting set without an eligible master netting agreement (CRR / PS1-26
+# Art. 220(1): the netted E* applies to "exposures subject to an eligible master
+# netting agreement"; Art. 206(1)(a)-(d) eligibility; PS1/26 Art. 111(2A)). A
+# netting set holding more than one trade whose trades do not ALL carry both
+# under_master_netting_agreement and is_legally_enforceable is split into one
+# single-trade set per trade (Art. 223(5) per transaction); collateral rows on it
+# that are not linked to one of its trades by trade_id are not recognised. One
+# WARNING per affected netting set.
+ERROR_SFT_NETTING_NOT_RECOGNISED = "CCR028"
+# SFT netting set spanning more than one counterparty (CRR / PS1-26 Art. 220(4):
+# E* is "the exposure value of the exposure to the counterparty"; a master
+# netting agreement is bilateral). The engine would otherwise book the whole set
+# against the first counterparty's risk weight; the set is instead split into one
+# single-trade set per trade, each against its own counterparty, and this ERROR
+# names the counterparties. One ERROR per affected netting set.
+ERROR_SFT_MULTI_COUNTERPARTY_NETTING_SET = "CCR029"
+
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
 ERROR_LGD_OUT_OF_RANGE = "IRB002"

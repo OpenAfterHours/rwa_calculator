@@ -198,7 +198,7 @@ class TestCCRFloor2SFTOutputFloor:
         """
         INVARIANT: total_rwa_post_floor == FCCM SFT RWA (no double-count).
 
-        Floor non-binding: 0.725 × s_trea (≈9.30m) < u_trea (≈12.83m), so
+        Floor non-binding: 0.725 × s_trea (≈9.17m) < u_trea (≈12.66m), so
         total_rwa_post_floor == u_trea. This invariant ensures the SFT RWA is
         not added to BOTH the floor numerator AND the sa_rwa_total path.
 

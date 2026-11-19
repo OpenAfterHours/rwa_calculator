@@ -918,6 +918,7 @@
         "tests/acceptance/ccr/test_ccr_ls_long_settlement_inert.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
         "tests/acceptance/ccr/test_ccr_wwr1_orchestrator_gate.py",
+        "tests/acceptance/ccr/test_sft_fccm_haircut_eligibility_netting.py",
         "tests/acceptance/crr/conftest.py",
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
         "tests/acceptance/crr/test_p1_216_art_131_table_7_short_term_ecai.py",
@@ -950,6 +951,7 @@
         "tests/fixtures/ccr/p842_nonqccp_b5_builder.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
         "tests/fixtures/ccr/qccp_builder.py",
+        "tests/fixtures/ccr/sft_fccm_review_builder.py",
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/counterparty/corporate.py",
         "tests/fixtures/counterparty/institution.py",
@@ -3247,6 +3249,24 @@
       "watchfire_index_gap": false
     },
     {
+      "article": "206",
+      "code_functions": [
+        "rwa_calc.engine.sft.netting::apply_sft_netting_gate"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "CRR",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/sft/netting.py"
+      ],
+      "test_files": [
+        "tests/unit/sft/test_sft_netting_gate.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
       "article": "207",
       "code_functions": [
         "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr"
@@ -3469,7 +3489,8 @@
     {
       "article": "220",
       "code_functions": [
-        "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
+        "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures",
+        "rwa_calc.engine.sft.netting::apply_sft_netting_gate"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -3484,6 +3505,7 @@
         "engine/ccr/pipeline_adapter.py",
         "engine/sft/__init__.py",
         "engine/sft/fccm.py",
+        "engine/sft/netting.py",
         "engine/stages/sft.py"
       ],
       "test_files": [
@@ -3497,7 +3519,8 @@
         "tests/fixtures/ccr/golden_ccr_a15_a18_margined_sft.py",
         "tests/fixtures/ccr/sft_bundle_builder.py",
         "tests/fixtures/p1_101/p1_101.py",
-        "tests/integration/test_sft_loader.py"
+        "tests/integration/test_sft_loader.py",
+        "tests/unit/sft/test_sft_netting_gate.py"
       ],
       "watchfire_index_gap": false
     },
@@ -3682,7 +3705,8 @@
         "tests/unit/crm/test_collateral_market_value_carriers.py",
         "tests/unit/crm/test_crm_error_propagation.py",
         "tests/unit/crm/test_ead_for_crm.py",
-        "tests/unit/sft/test_fccm_margined_branches.py"
+        "tests/unit/sft/test_fccm_margined_branches.py",
+        "tests/unit/sft/test_fccm_security_eligibility.py"
       ],
       "watchfire_index_gap": false
     },
@@ -3692,6 +3716,7 @@
         "rwa_calc.engine.crm.haircut_tables::get_haircut_table",
         "rwa_calc.engine.crm.haircut_tables::get_maturity_band",
         "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_haircuts",
+        "rwa_calc.engine.sft.fccm::_exposure_haircut_unscaled",
         "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
       ],
       "confidence": "HIGH",
@@ -3800,7 +3825,9 @@
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/data/tables/test_collateral_haircut_null_maturity.py",
         "tests/unit/rulebook/test_haircut_features.py",
+        "tests/unit/sft/test_fccm_haircut_regime.py",
         "tests/unit/sft/test_fccm_margined_branches.py",
+        "tests/unit/sft/test_fccm_security_eligibility.py",
         "tests/unit/sft/test_margining_terms.py",
         "tests/unit/test_irb_lgd_collateral.py"
       ],
@@ -6083,6 +6110,8 @@
         "engine/hierarchy/facility_fx.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/unify.py",
+        "engine/sft/fccm.py",
+        "engine/sft/netting.py",
         "reporting/corep/c07.py",
         "reporting/corep/ccf_buckets.py",
         "reporting/pillar3/irb_scope.py",
@@ -6094,6 +6123,7 @@
         "tests/acceptance/basel31/test_p1_248_art_161_5_partially_secured_lgd_floor.py",
         "tests/acceptance/basel31/test_p1_251_b31_firb_uk_resi_commitment_ccf.py",
         "tests/acceptance/basel31/test_p2_33_uk_resi_mortgage_commitment_ccf.py",
+        "tests/acceptance/ccr/test_sft_fccm_haircut_eligibility_netting.py",
         "tests/acceptance/reporting/test_of08_01_ccf_rows.py",
         "tests/acceptance/reporting/test_reporting_offbs_golden.py",
         "tests/acceptance/test_facility_undrawn_commitments.py",
@@ -6108,6 +6138,7 @@
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/reporting/corep/test_c08_01_ccf_rows.py",
         "tests/unit/rulebook/test_provisions_features.py",
+        "tests/unit/sft/test_sft_netting_gate.py",
         "tests/unit/test_ccf.py",
         "tests/unit/test_facility_undrawn_commitments.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
@@ -6393,6 +6424,7 @@
         "tests/contracts/test_short_term_rating_override.py",
         "tests/fixtures/ccr/golden_ccr_floor1.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
+        "tests/fixtures/ccr/sft_fccm_review_builder.py",
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_105/p1_105.py",
@@ -8238,18 +8270,21 @@
     {
       "article": "197",
       "code_functions": [],
-      "confidence": "GAP",
+      "confidence": "UNCITED",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 2,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "engine/sft/fccm.py"
+      ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_161_art_191a_two_layer_protection.py",
         "tests/acceptance/basel31/test_p1_234_art_197_securitisation_collateral.py",
         "tests/acceptance/basel31/test_p1_271_art_198_non_main_index_equity.py",
         "tests/fixtures/p1_161/p1_161.py",
-        "tests/unit/crm/test_equity_main_index.py"
+        "tests/unit/crm/test_equity_main_index.py",
+        "tests/unit/sft/test_fccm_security_eligibility.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8339,6 +8374,23 @@
       "source_files": [],
       "test_files": [
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "206",
+      "code_functions": [],
+      "confidence": "UNCITED",
+      "framework": "PS1/26",
+      "layer_count": 2,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/sft/netting.py"
+      ],
+      "test_files": [
+        "tests/acceptance/ccr/test_sft_fccm_haircut_eligibility_netting.py",
+        "tests/unit/sft/test_sft_netting_gate.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8436,16 +8488,23 @@
     },
     {
       "article": "220",
-      "code_functions": [],
-      "confidence": "GAP",
+      "code_functions": [
+        "rwa_calc.engine.sft.netting::apply_sft_netting_gate"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "engine/sft/fccm.py",
+        "engine/sft/netting.py"
+      ],
       "test_files": [
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
-        "tests/fixtures/p2_18/p2_18.py"
+        "tests/fixtures/ccr/sft_fccm_review_builder.py",
+        "tests/fixtures/p2_18/p2_18.py",
+        "tests/unit/sft/test_sft_netting_gate.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8492,6 +8551,7 @@
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
         "engine/crm/processor.py",
+        "engine/sft/fccm.py",
         "reporting/corep/c07.py"
       ],
       "test_files": [
@@ -8499,16 +8559,21 @@
         "tests/fixtures/p1_161/p1_161.py",
         "tests/fixtures/reporting_over_collateralised_portfolio.py",
         "tests/unit/crm/test_ead_for_crm.py",
-        "tests/unit/reporting/corep/test_c07_collateral_cap.py"
+        "tests/unit/reporting/corep/test_c07_collateral_cap.py",
+        "tests/unit/sft/test_fccm_haircut_regime.py",
+        "tests/unit/sft/test_fccm_security_eligibility.py"
       ],
       "watchfire_index_gap": false
     },
     {
       "article": "224",
-      "code_functions": [],
+      "code_functions": [
+        "rwa_calc.engine.sft.fccm::_exposure_haircut_unscaled",
+        "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
+      ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
       "pack_entries": [
         "collateral_haircut_maturity_bands_revised@b31",
@@ -8517,6 +8582,7 @@
       "source_files": [
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
+        "engine/sft/fccm.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
@@ -8524,6 +8590,8 @@
         "tests/acceptance/basel31/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
         "tests/acceptance/basel31/test_scenario_b31_d_crm.py",
+        "tests/acceptance/ccr/test_sft_fccm_haircut_eligibility_netting.py",
+        "tests/fixtures/ccr/golden_ccr_floor2_sft.py",
         "tests/fixtures/netting_currency/netting_currency.py",
         "tests/fixtures/p2_18/p2_18.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
@@ -8533,7 +8601,8 @@
         "tests/unit/crm/test_on_bs_netting_adjusted_value.py",
         "tests/unit/crm/test_p1_234_securitisation_haircut_table.py",
         "tests/unit/data/tables/test_collateral_haircut_null_maturity.py",
-        "tests/unit/rulebook/test_haircut_features.py"
+        "tests/unit/rulebook/test_haircut_features.py",
+        "tests/unit/sft/test_fccm_security_eligibility.py"
       ],
       "watchfire_index_gap": false
     },

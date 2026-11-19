@@ -957,9 +957,14 @@ edge brand so SFT and derivative rows share the same downstream contract.
 **File:** `ccr/sft_trades.parquet` (the single primary SFT dataload; optional)
 
 One row per SFT. The netting-set counterparty is **denormalised onto the
-trade row** — FCCM's current scope is single-trade, single-counterparty
-netting sets (Art. 220(1)(a)), so no separate SFT netting-set table is
-needed. The three `exposure_*` columns carry the Art. 223(5) exposure-side
+trade row**, so no separate SFT netting-set table is needed. Trades sharing a
+`netting_set_id` are netted into one `E*` only when **every** trade carries
+both `under_master_netting_agreement` and `is_legally_enforceable` (an
+*eligible* master netting agreement, Art. 220(1) / 206) and they name one
+counterparty (Art. 220(4)); otherwise each trade is its own exposure and the
+engine raises `CCR028` (no eligible MNA) or `CCR029` (several counterparties) —
+see the [SFT specification](../specifications/crr/sft/index.md#netting-sets-one-e-only-under-an-eligible-bilateral-master-netting-agreement).
+The three `exposure_*` columns carry the Art. 223(5) exposure-side
 volatility-haircut (`HE`) inputs.
 
 | Column | Type | Required | Description |
@@ -971,7 +976,7 @@ volatility-haircut (`HE`) inputs.
 | `currency` | `String` | Yes | ISO 4217 currency code of the exposure |
 | `maturity_date` | `Date` | Yes | SFT maturity date |
 | `start_date` | `Date` | Yes | SFT start date |
-| `exposure_collateral_type` | `String` | No | `HE` input — exposure-side security type for the Art. 224 Table 1 haircut lookup. Null when the exposure side is cash / a standard loan (`HE = 0`) |
+| `exposure_collateral_type` | `String` | No | `HE` input — the security lent / sold, for the Art. 224 Table 1 / 3 haircut lookup of the run's regime. Null when the exposure side is cash (`HE = 0`). A type that is not eligible collateral — an unrated or low-CQS bond, real estate, an unknown string — takes the Art. 224(4) non-main-index listed-equity haircut (as a floor), never `HE = 0` |
 | `exposure_security_cqs` | `Int8` | No | `HE` input — exposure-side issuer CQS |
 | `exposure_security_residual_maturity_years` | `Float64` | No | `HE` input — exposure-side residual maturity (years) |
 | `is_margined` | `Boolean` | No (default `False`) | Branch selector (Art. 224(2) final subparagraph). `False` → unmargined branch (today's behaviour); `True` → the margined Art. 285 MPOR branch |
@@ -979,6 +984,8 @@ volatility-haircut (`HE`) inputs.
 | `mpor_floor_category` | `String` | No (default `repo_only`) | MPOR floor `F` selector (margined branch only): `repo_only` → 5 (Art. 285(2)(a)) / `other` → 10 (Art. 285(2)(b)) / `illiquid_or_large` → 20 (Art. 285(3)). Constrained to `VALID_MPOR_FLOOR_CATEGORIES` |
 | `has_margin_dispute_doubling` | `Boolean` | No (default `False`) | `True` doubles `F` for the two quarters following more than two margin disputes (Art. 285(4)) |
 | `mpor_days_override` | `Int16` | No (default `null`) | Explicit MPOR in business days; supersedes the `F + N − 1` derivation when set |
+| `under_master_netting_agreement` | `Boolean` | No (default `False`) | The SFT is under a master netting agreement — the Art. 162(2) precondition for the sub-1-year IRB maturity floors and, with `is_legally_enforceable`, for netting the set (Art. 220(1)) |
+| `is_legally_enforceable` | `Boolean` | No (default `False`) | The master netting agreement meets the Art. 206(1)(a)–(d) conditions (legally effective and enforceable in all relevant jurisdictions incl. insolvency; close-out right; netting of gains and losses; prompt liquidation / set-off of collateral). A multi-trade netting set nets only when every trade carries this **and** `under_master_netting_agreement`; a single-trade set is unaffected |
 | `book_code` | `String` | No | Booking-unit code (default `""`) — mirrors the Facility/Loan/Contingent column; joined to the [Book-Entity Mapping](#multi-entity-reporting-schemas) by the scope resolver |
 | `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
@@ -1017,6 +1024,15 @@ the common case this is literally one file.
 | `currency` | `String` | No | Collateral currency. Drives the `HFX` same-currency shortcut (Art. 224 Table 4: `HFX = 0` when collateral and exposure currencies match) |
 | `issuer_cqs` | `Int8` | No | `HC` input — collateral issuer CQS |
 | `residual_maturity_years` | `Float64` | No | `HC` input — collateral residual maturity (years) |
+| `trade_id` | `String` | No | The SFT trade the collateral was received against. Read only when the netting set is **split** per trade (no eligible master netting agreement, or several counterparties): a linked row moves with its trade, an unlinked one is not recognised (`CCR028` / `CCR029` name it). Ignored on a netted or single-trade set |
+
+Only financial collateral the Art. 224 Tables 1 / 3 price is recognised on the
+SFT path — cash / deposit, gold, government bonds (CQS 1–4), corporate and
+covered bonds (CQS 1–3) and equities (`data/schemas.py::SFT_FCCM_HAIRCUT_LOOKUP_TYPES`).
+Any other `collateral_type` (real estate, receivables, other physical, a bare
+`bond`, fund units, an unknown string) or a bond failing the Art. 197 CQS test
+contributes nothing to `E*` and raises one `CCR027` warning per row
+(Art. 223(1): volatility adjustments value *financial* collateral).
 
 ### `transaction_type` discriminator
 

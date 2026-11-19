@@ -1914,6 +1914,18 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # under an MNA but lacking it falls to the 162(2A)(f) 1-year catch-all.
     # Default False (conservative). (PS1/26 Art. 162(2A)(c)/(d).)
     "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # is_legally_enforceable: the master netting agreement covering this SFT meets
+    # the Art. 206(1)(a)-(d) conditions (legally effective and enforceable in all
+    # relevant jurisdictions incl. insolvency; close-out right; netting of gains
+    # and losses; prompt liquidation / set-off of collateral). Together with
+    # ``under_master_netting_agreement`` it makes the MNA ELIGIBLE (Art. 220(1)):
+    # a netting set holding more than one trade is netted into one E* only when
+    # EVERY trade carries both flags and the set has one counterparty; otherwise
+    # each trade is its own exposure (CCR028 / CCR029, engine/sft/netting.py).
+    # Default False (conservative): an absent attestation never unlocks netting.
+    # A single-trade netting set is unaffected either way. (CRR / PS1-26
+    # Art. 206, 220(1); PS1/26 Art. 111(2A).)
+    "is_legally_enforceable": ColumnSpec(pl.Boolean, default=False, required=False),
     # Own-estimate LGD carrier for A-IRB routing of the synthetic CCR/SFT row
     # (P1.215, mirrors ``ccr_effective_maturity``). A netting-set/trade that
     # routes to A-IRB carries the firm's modelled LGD here — the synthetic
@@ -1955,6 +1967,14 @@ SFT_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "residual_maturity_years": ColumnSpec(
         pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
     ),
+    # Optional nullable (1) — the SFT trade (``SFT_TRADE_SCHEMA.trade_id``) this
+    # collateral was received against. Read only when the netting set is NOT
+    # covered by an eligible master netting agreement and is therefore split
+    # into one exposure per trade (CRR / PS1-26 Art. 220(1), 223(5)): a linked
+    # row moves with its trade; an unlinked row cannot be attributed to a single
+    # transaction and is not recognised (CCR028). Ignored on a netted set and on
+    # a single-trade set, where the collateral is netting-set-keyed as before.
+    "trade_id": ColumnSpec(pl.String, required=False),
 }
 
 #: Valid values for the CCR/SFT trade discriminator ``transaction_type``
@@ -2354,6 +2374,39 @@ CREDIT_LINKED_NOTE_COLLATERAL_TYPES: list[str] = ["credit_linked_note"]
 # engine/crm/haircuts.py::_normalize_collateral_type_expr; used by the Art. 198(1)(a)
 # non-main-index-equity listing-eligibility gate (P1.271).
 EQUITY_COLLATERAL_TYPES: list[str] = ["equity", "shares", "stock"]
+
+# SFT FCCM (engine/sft/fccm.py): the security / collateral type strings the SFT
+# path prices from the Art. 224 Tables 1 and 3, each mapped to the key
+# ``engine/crm/haircut_tables.py::lookup_collateral_haircut`` prices it under.
+# A type OUTSIDE this map is not eligible financial collateral on the SFT path:
+# - received as COLLATERAL it is not recognised in E* (CRR / PS1-26 Art. 223(1)
+#   applies volatility adjustments "when valuing financial collateral"; the
+#   eligible items are listed in Art. 197/198) and CCR027 names the row;
+# - LENT or SOLD (the exposure side) it takes the Art. 224(4) volatility
+#   adjustment for "non-eligible securities and commodities", i.e. the
+#   non-main-index listed equity value.
+# Covered bonds are debt securities issued by institutions (Art. 197(1)(c)) and
+# price in the Table 1 "points (c) and (d)" column, as the lending-side CRM does
+# (engine/crm/eligibility.py::normalise_collateral_type_expr). A bare "bond" is
+# deliberately absent: SFT_COLLATERAL_SCHEMA carries no issuer class, so the
+# Art. 197(1)(b) column cannot be told from the (c)/(d) one. CIU units are absent
+# pending the Art. 224(5) look-through (P1.199).
+SFT_FCCM_HAIRCUT_LOOKUP_TYPES: dict[str, str] = {
+    "cash": "cash",
+    "deposit": "cash",
+    "gold": "gold",
+    "govt_bond": "govt_bond",
+    "sovereign_bond": "govt_bond",
+    "government_bond": "govt_bond",
+    "gilt": "govt_bond",
+    "corp_bond": "corp_bond",
+    "corporate_bond": "corp_bond",
+    "covered_bond": "corp_bond",
+    "covered_bonds": "corp_bond",
+    "equity": "equity",
+    "shares": "equity",
+    "stock": "equity",
+}
 
 # Art. 227(2)(a): collateral types eligible for zero-haircut treatment in repos.
 # Both the exposure and collateral must be cash or 0%-RW sovereign debt securities.

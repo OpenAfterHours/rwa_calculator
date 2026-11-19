@@ -258,12 +258,21 @@ CCR_D3_HAS_ILLIQUID_COLLATERAL: bool = False
 # AddOn_agg = 3_914_298.2277279915 * 0.30 = 1_174_289.4683183974.
 # PRIMARY PIN: pfe_multiplier 0.20816907251400474 != 1.0 proves NOT Simplified.
 CCR_D3_EXPECTED_CCR_METHOD: str = "sa_ccr"
-CCR_D3_EXPECTED_PFE_MULTIPLIER: float = 0.20816907251400474  # sub-unity; Art.281 forces 1.0
+#
+# Review CC-03 re-pin (CCR (CRR) Part Art. 274(3), unamended by PS1/26): "The
+# exposure value of a netting set that is subject to a contractual margin
+# agreement shall be capped at the exposure value of the same netting set not
+# subject to any form of margin agreement." The margined value
+# 1.4 * (2.25m + 0.3-MF PFE) = 3_464_667.708 (NICA now in z = CMV - VM - NICA)
+# exceeds the unmargined one, so the row reports the unmargined basis: RC 0,
+# AddOn 3_914_298.228, z = -4.25m -> multiplier 0.5864684746 (still sub-unity,
+# so still not Simplified), PFE 2_295_612.511, EAD 3_213_857.515.
+CCR_D3_EXPECTED_PFE_MULTIPLIER: float = 0.5864684746261847  # sub-unity; Art.281 forces 1.0
 CCR_D3_EXPECTED_RC_MARGINED: float = 2_250_000.0  # TH+MTA-NICA floor arm (MF-independent)
-CCR_D3_EXPECTED_PFE_ADDON: float = 244_450.7494828046
-CCR_D3_EXPECTED_EAD: float = 3_492_231.049275926
+CCR_D3_EXPECTED_PFE_ADDON: float = 2_295_612.510847613
+CCR_D3_EXPECTED_EAD: float = 3_213_857.515186658
 CCR_D3_EXPECTED_RISK_WEIGHT: float = 0.50
-CCR_D3_EXPECTED_RWA: float = 1_746_115.524637963
+CCR_D3_EXPECTED_RWA: float = 1_606_928.757593329
 
 # Contrast (would-go-RED if Simplified fired): forcing the PFE multiplier to 1.0
 # over the same margined add-on gives

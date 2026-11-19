@@ -7,15 +7,16 @@
   "ccr_method": "sa_ccr",
   "risk_type": "CCR_DERIVATIVE",
   "_note_p854": "P8.54 new scenario: remargining_frequency_days=126 → MPOR_eff=max(10+126-1,10)=135 → MF_margined=1.5*sqrt(135/250)=1.102270384252. addon_aggregate=3914298.2277279915*1.102270384252=4314615.011554657 (exactly linear). Load-bearing inequality: ead_final>6464360.391383706 (unmargined MF=1.0 baseline). pfe_multiplier/pfe_addon/ead/rwa involve exp() so final bytes confirmed by engine-implementer during validation gate. rc_margined=2250000.0 exactly (MF-independent).",
+  "_note_cc03": "Review CC-03 (Art. 274(3) cap) re-pin: 'The exposure value of a netting set that is subject to a contractual margin agreement shall be capped at the exposure value of the same netting set not subject to any form of margin agreement.' Unmargined basis: RC = max(CMV - NICA, 0) = max(-4m - 0.25m, 0) = 0; MF 1 -> AddOn 3914298.2277279915; z = -4.25m -> multiplier 0.05 + 0.95*exp(-4.25m/(1.9*AddOn)) = 0.5864684746; PFE 2295612.511; EV_u = 1.4*PFE = 3213857.515. The margined value (1.4*(2.25m + 1.1023-MF PFE) = 6868989.918) exceeds it, so the cap binds and the row reports the unmargined RC / PFE / add-on (rc_margined still shows the Art. 275(2) floor arm). The margined value also changed: NICA now enters z = CMV - VM - NICA (Art. 278(3)), -4.25m not -4m. Pre-cap EAD 6974799.28128236.",
   "rc_margined": 2250000.0,
   "rc_unmargined": 0.0,
-  "addon_aggregate": 4314615.011554657,
-  "pfe_multiplier": 0.633196584008729,
-  "pfe_addon": 2731999.486630257,
-  "ead_ccr": 6974799.28128236,
-  "ead_final": 6974799.28128236,
+  "addon_aggregate": 3914298.2277279915,
+  "pfe_multiplier": 0.5864684746261847,
+  "pfe_addon": 2295612.510847613,
+  "ead_ccr": 3213857.515186658,
+  "ead_final": 3213857.515186658,
   "exposure_class": "institution",
   "approach_applied": "standardised",
-  "risk_weight": 0.50,
-  "rwa_final": 3487399.64064118
+  "risk_weight": 0.5,
+  "rwa_final": 1606928.757593329
 }

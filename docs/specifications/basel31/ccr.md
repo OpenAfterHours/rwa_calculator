@@ -177,6 +177,19 @@ way to record a Part 3.2 exemption or a client-clearing exclusion
 (1)(b)–(d) that the input cannot otherwise express. The charge itself
 is not defaulted; the warning names the gap.
 
+### (d) Collateral haircuts follow the Basel 3.1 Art. 224 table
+
+PS1/26 Annex R leaves Art. 274(3), 275, 276 and 278 unamended, so collateral,
+margin-agreement terms, the Art. 274(3) cap and the Art. 275(3) shared-agreement
+RC work as under CRR
+([rc-calculation.md](../crr/ccr/rc-calculation.md#collateral-the-art-2743-cap-and-shared-csas)).
+The one regime difference is the volatility adjustment Art. 276(1)(d) takes from
+Art. 223 / 224: a Basel 3.1 run values SA-CCR collateral with the PS1/26
+Art. 224 table (five maturity bands; main-index equity 20%, gold 20%), read
+through the `collateral_haircut_maturity_bands_revised` Feature exactly as for
+lending collateral. Main-index equity variation margin at a 10-day MPOR is
+therefore worth 80% of its value under Basel 3.1 against 85% under CRR.
+
 ---
 
 ## CRR per-article specifications (canonical content)

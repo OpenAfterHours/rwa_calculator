@@ -208,23 +208,27 @@ def test_make_netting_set_defaults_conservative_per_art_295() -> None:
 
 
 # ===========================================================================
-# 6. make_margin() defaults: mpor_days = 10 per Art. 285(2)(b)
+# 6. make_margin() defaults: CSA terms unstated, mirroring the schema (CC-03)
 # ===========================================================================
 
 
-def test_make_margin_defaults_mpor_10_per_art_285_2_b() -> None:
-    """make_margin().mpor_days must default to 10 per CRR Art. 285(2)(b)."""
+def test_make_margin_leaves_csa_terms_unstated() -> None:
+    """make_margin() leaves TH / MTA / NICA / mpor_days null, as MARGIN_AGREEMENT_SCHEMA does.
+
+    Review CC-03 reads the margin agreement's terms; a fabricated default would
+    conflict (CCR025) with a netting set's own stated terms. The CRR Art.
+    285(2)(b) 10-day MPOR floor is the margined maturity factor's, whatever the
+    input.
+    """
     # Arrange
     from tests.fixtures.ccr.margin_builder import make_margin
 
     # Act
     m = make_margin(margin_agreement_id="MA_TEST", counterparty_reference="CP_TEST")
 
-    # Assert — CRR Art. 285(2)(b): 10-day minimum MPOR for standard margined netting sets
-    assert m.mpor_days == 10, (
-        f"make_margin().mpor_days expected 10 (regulatory minimum per Art. 285(2)(b)), "
-        f"got {m.mpor_days!r}"
-    )
+    # Assert
+    terms = (m.margin_threshold, m.minimum_transfer_amount, m.nica, m.mpor_days)
+    assert terms == (None, None, None, None), terms
 
 
 # ===========================================================================

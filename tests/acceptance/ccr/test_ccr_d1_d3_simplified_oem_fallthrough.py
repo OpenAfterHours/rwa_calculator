@@ -501,13 +501,17 @@ class TestCCRD3MarginedOTMIR:
     The full SA-CCR formula yields:
         correct_ead = 1.4 * (2_250_000 + 244_450.749) = 3_492_231.049275926
 
+    Review CC-03 re-pin: the margined value 3_464_667.708 exceeds the unmargined
+    one, so CCR (CRR) Part Art. 274(3) caps the netting set at the unmargined value
+    and the row reports that basis (multiplier 0.5864684746 — still sub-unity).
+
     Six assertions:
       1. ccr_method == "sa_ccr"
-      2. pfe_multiplier approx 0.20816907251400474   <- PRIMARY PIN (rel=1e-9)
+      2. pfe_multiplier approx 0.5864684746261847    <- PRIMARY PIN (rel=1e-9)
       3. rc_margined approx 2,250,000.0               (TH+MTA-NICA floor arm)
-      4. pfe_addon approx 244,450.7494828046
-      5. ead_final approx 3,492,231.049275926 AND ead_final != 4,794,005.256
-      6. rwa_final approx 1,746,115.524637963
+      4. pfe_addon approx 2,295,612.510847613
+      5. ead_final approx 3,213,857.515186658 AND ead_final != 4,794,005.256
+      6. rwa_final approx 1,606,928.757593329
 
     Go-RED trigger: any Art.281 branch that sets pfe_multiplier=1.0 for margined
     OTM netting sets, causing ead_final to match CCR_D3_WRONG_SIMPLIFIED_EAD.

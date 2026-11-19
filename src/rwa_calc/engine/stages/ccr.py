@@ -64,6 +64,7 @@ def run(
         logger.debug("no CCR inputs - skipping SA-CCR stage")
         return ctx
 
+    from rwa_calc.contracts.ccr_collateral_checks import collect_findings
     from rwa_calc.engine.ccr import (
         apply_legal_enforceability_gate,
         apply_wwr_gate,
@@ -71,6 +72,7 @@ def run(
         ccr_rows_to_exposures,
         partition_out_sft_rows,
     )
+    from rwa_calc.engine.ccr.findings import derivative_findings
 
     resolved = ctx.get(RESOLVED_HIERARCHY)
 
@@ -99,12 +101,29 @@ def run(
     # Unified error channel: the gates' CCR001/CCR010/CCR011 diagnostics
     # reach the result verbatim — original code/severity/category preserved.
     ctx = append_stage_errors(ctx, *raw_ccr_gated.errors)
+    # Review cluster saccr_b: CCR025 margin-term conflicts, CCR024 collateral left
+    # out of VM / NICA and CCR026 amounts with no rate to the reporting currency —
+    # built from the same engine/ccr expressions that price the netting sets.
+    ctx = append_stage_errors(
+        ctx,
+        *collect_findings(
+            derivative_findings(
+                derivatives_only, raw_ccr_gated, data.fx_rates, run_config, rulepack.pack
+            )
+        ),
+    )
     ccr_exposure_rows = ccr_rows_to_exposures(
         raw_ccr_gated,
         run_config.ccr,
         run_config.reporting_date,
         base_currency=run_config.base_currency,
         fx_rates=data.fx_rates,
+        # Art. 276(1)(d): CCR collateral takes the run regime's Art. 224 haircuts;
+        # Art. 279b(3): amounts are rebased to the reporting currency unless the
+        # run has FX conversion switched off.
+        calculation_config=run_config,
+        rulepack=rulepack.pack,
+        rebase_amounts=run_config.apply_fx_conversion,
         # Art. 274(2): the counterparty frame carries the ``counterparty_type``
         # discriminator that selects the per-NS supervisory alpha — the α = 1
         # NFC / pension carve-out is PS1/26 text, so it is gated on the cited

@@ -173,6 +173,57 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
     References:
         CRR Art. 279c(2); CRR Art. 285(2)-(5); BCBS CRE52.51-52.
     """
+    mpor_eff = margined_mpor_days()
+
+    # MF = 1.5 * sqrt(MPOR_eff / 250) per Art. 279c(2).
+    maturity_factor = (
+        pl.lit(_MF_MARGINED_SCALAR)
+        * (mpor_eff.cast(pl.Float64) / pl.lit(float(_SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
+    ).cast(pl.Float64)
+
+    # Gate on ``is_margined`` (mirrors ``compute_rc_margined``): emit the MF only
+    # for margined rows; unmargined rows get null so the pipeline-adapter
+    # coalesce falls back to ``maturity_factor_unmargined``. A null/absent
+    # ``is_margined`` flows to the ``.otherwise`` (null) branch exactly like an
+    # explicit False — the conservative NETTING_SET_SCHEMA default — so no
+    # ``fill_null`` is needed on the gate. ``maturity_factor`` is written as an
+    # alias of the gated margined column for the P8.14 unit tests (all-margined
+    # frame).
+    maturity_factor_margined = (
+        pl.when(pl.col("is_margined"))
+        .then(maturity_factor)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
+
+    return trades.with_columns(
+        maturity_factor_margined.alias("maturity_factor_margined"),
+        maturity_factor_margined.alias("maturity_factor"),
+    )
+
+
+# Watchfire's bundled CRR index does not yet contain Art. 285; collapse the
+# ``@cites`` to the parent Art. 279 (the margined maturity factor this MPOR feeds).
+@cites("CRR Art. 279")
+def margined_mpor_days() -> pl.Expr:
+    """The effective margin period of risk (business days) of a margined netting set.
+
+    The single definition of the CRR Art. 285 cascade, read by the margined
+    maturity factor (Art. 279c(1)(b)) and — as the liquidation period of the
+    collateral of a margined netting set — by the SA-CCR collateral valuation
+    (CCR (CRR) Part Art. 276(3)(b): "the margin period of risk determined in
+    accordance with point (b) of Article 279c(1) for the netting sets referred to
+    in Article 275(2) and (3)").
+
+    Reads the denormalised cascade inputs ``number_of_trades``, ``has_illiquid``,
+    ``dispute_count_qtr``, ``remargining_frequency_days`` and ``mpor_days_input``
+    from the frame it is evaluated on (trade or netting-set grain).
+
+    Returns:
+        Integer expression: the Art. 285 effective MPOR in business days.
+
+    References:
+        CRR Art. 285(2)-(5); CRR Art. 279c(1)(b).
+    """
     # Step 1 — base MPOR per Art. 285(2)(b): 10 BD for the OTC derivative
     # netting set. The Art. 285(2)(a) 5-BD SFT/repo base is not modelled here:
     # this function is derivatives-only since the SFT/FCCM separation, so every
@@ -202,8 +253,11 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
     )
 
     # Step 4 — remargining frequency adjustment per Art. 285(5):
-    # MPOR_eff = base + remargining_frequency_days − 1.
-    mpor_eff_pre_floor = base_post_step3 + pl.col("remargining_frequency_days") - pl.lit(1)
+    # MPOR_eff = base + remargining_frequency_days − 1. A frequency the CSA does
+    # not state reads as daily (N = 1): left null it nulled this step and the
+    # floor below then discarded the Art. 285(3) / 285(4) upgrades with it.
+    remargining_days = pl.col("remargining_frequency_days").fill_null(1)
+    mpor_eff_pre_floor = base_post_step3 + remargining_days - pl.lit(1)
 
     # Step 5 — input-MPOR floor: MPOR_eff = max(MPOR_eff, mpor_days_input).
     # Null-safety: a null ``mpor_days_input`` would null the whole MF through
@@ -213,27 +267,4 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
         mpor_eff_pre_floor, pl.col("mpor_days_input").fill_null(_MF_FLOOR_DAYS_OTC)
     )
 
-    # MF = 1.5 * sqrt(MPOR_eff / 250) per Art. 279c(2).
-    maturity_factor = (
-        pl.lit(_MF_MARGINED_SCALAR)
-        * (mpor_eff.cast(pl.Float64) / pl.lit(float(_SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
-    ).cast(pl.Float64)
-
-    # Gate on ``is_margined`` (mirrors ``compute_rc_margined``): emit the MF only
-    # for margined rows; unmargined rows get null so the pipeline-adapter
-    # coalesce falls back to ``maturity_factor_unmargined``. A null/absent
-    # ``is_margined`` flows to the ``.otherwise`` (null) branch exactly like an
-    # explicit False — the conservative NETTING_SET_SCHEMA default — so no
-    # ``fill_null`` is needed on the gate. ``maturity_factor`` is written as an
-    # alias of the gated margined column for the P8.14 unit tests (all-margined
-    # frame).
-    maturity_factor_margined = (
-        pl.when(pl.col("is_margined"))
-        .then(maturity_factor)
-        .otherwise(pl.lit(None, dtype=pl.Float64))
-    )
-
-    return trades.with_columns(
-        maturity_factor_margined.alias("maturity_factor_margined"),
-        maturity_factor_margined.alias("maturity_factor"),
-    )
+    return mpor_eff

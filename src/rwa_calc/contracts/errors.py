@@ -542,6 +542,30 @@ ERROR_FAILED_TRADE_SIDE_UNKNOWN = "CCR031"
 # bound — and names the contribution with one ERROR, since the charge can
 # understate. (A null used to reach the SA chain and give RWEA 0 silently.)
 ERROR_DFC_ALLOCATION_INPUT_MISSING = "CCR032"
+# SA-CCR collateral, margin-term and reporting-currency codes (review cluster
+# saccr_b). Built by engine/ccr from the same expressions that price the netting
+# set, decoded by contracts/ccr_collateral_checks.py and appended by the ccr / sft
+# stages; one row-named entry per finding up to a sample cap.
+#
+# CCR collateral item not recognised (CCR (CRR) Part Art. 276(1)(a)/(b), Art. 197,
+# Art. 274(1)): the item is not Art. 197 eligible financial collateral (a
+# non-financial type, a debt security below the Art. 197(1)(b)/(d) credit quality,
+# an equity outside a main index), or it was pledged against a netting set that is
+# not legally enforceable and holds more than one trade, so it cannot be attributed
+# to the single-transaction netting sets Art. 274(1) substitutes. WARNING: the item
+# is left out of VM and NICA (no relief if received, no add-on if posted).
+ERROR_CCR_COLLATERAL_NOT_RECOGNISED = "CCR024"
+# Margin terms conflict (CCR (CRR) Part Art. 275(2), Art. 285): a netting set and
+# the margin agreement it names both state a margin threshold, minimum transfer
+# amount, NICA or MPOR, and the two differ. WARNING: the capital-conservative
+# value is used (the larger TH / MTA / MPOR, the smaller signed NICA).
+ERROR_CCR_MARGIN_TERMS_CONFLICT = "CCR025"
+# No spot rate to the reporting currency (CCR (CRR) Part Art. 279b(3), Art. 275):
+# a trade, CCR collateral item, SFT or SFT collateral item is denominated in a
+# currency with no fx_rates row to the reporting currency. ERROR: its amounts are
+# used unconverted (the FXConverter's own pass-through for a missing rate) so the
+# exposure value is not in the reporting currency.
+ERROR_CCR_NO_REPORTING_CURRENCY_RATE = "CCR026"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

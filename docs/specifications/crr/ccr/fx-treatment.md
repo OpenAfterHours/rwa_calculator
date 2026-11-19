@@ -16,6 +16,36 @@ Part of the [SA-CCR specification set](index.md); see also
 [wrong-way-risk.md](wrong-way-risk.md), and
 [ccp-exposures.md](ccp-exposures.md).
 
+## Reporting currency — every CCR and SFT amount (Art. 279b(3))
+
+CCR (CRR) Part Art. 279b(3), unchanged by PS1/26: "Institutions shall convert
+the adjusted notional amount of a transaction into their reporting currency at
+the prevailing spot exchange rate where the adjusted notional amount is
+calculated under this Article from a contractual notional amount or a market
+price of the number of units of the underlying instrument denominated in another
+currency." The CMV, VM and NICA of Art. 275-276 and an SFT's E* (CRR
+Art. 223(5)) are likewise netted in one currency.
+
+The `FXConverter` runs inside the hierarchy stage, before the CCR and SFT stages,
+so it never sees their inputs. Since review CC-05
+(`engine/ccr/reporting_currency.py`) the stages rebase them themselves, with the
+run's `fx_rates` (rows with `currency_to` = `CalculationConfig.base_currency`):
+
+| Input | Columns rebased | Kept in its own currency |
+| ----- | --------------- | ------------------------ |
+| `ccr.trades` | `notional`, `market_price` (not on FX-category trades, whose legs the Art. 279b(1)(b) branch converts), `mtm_value` | `currency` — the Art. 277a(1)(a) IR hedging-set key and the Hfx test |
+| `ccr.ccr_collateral` | `market_value` | `currency` (Hfx) |
+| `sft.trades` | `notional` | `currency` (HFX) |
+| `sft.collateral` | `market_value` | `currency` (HFX) |
+
+The synthetic netting-set row then carries `currency` = the reporting currency
+and `original_currency` = the trade currency. A currency with no rate (or a null
+one) is left unconverted — the `FXConverter`'s own treatment of a missing rate —
+and reported **CCR026** (ERROR) per record; the row keeps its trade currency in
+`currency`. With `apply_fx_conversion=False` nothing is rebased or reported, as
+for the lending book. Before CC-05 a JPY 10bn swap entered the GBP totals at
+about 419m GBP (200x) and an SFT's E* stayed in the trade currency.
+
 ## Input — two-leg trade schema
 
 FX forwards / FX swaps / cross-currency basis swaps carry two currency legs.

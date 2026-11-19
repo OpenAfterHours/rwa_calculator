@@ -45,7 +45,9 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.ccr_collateral_checks import collect_findings
 from rwa_calc.contracts.edges import CCR_EXIT_EDGE
+from rwa_calc.engine.ccr.findings import reporting_rates, sft_findings
 from rwa_calc.engine.materialise import materialise_sealed_edge
 from rwa_calc.engine.orchestrator import RAW_DATA, RESOLVED_HIERARCHY, append_stage_errors
 from rwa_calc.engine.sft.fccm import sft_bundle_to_exposures
@@ -108,8 +110,18 @@ def run(
     # recognised, Art. 223(1)), CCR028 (no eligible master netting agreement,
     # Art. 220(1)) and CCR029 (netting set spanning counterparties, Art. 220(4))
     # — which reach the result verbatim through the unified stage error channel.
+    # Review CC-05: E and the collateral enter E* in the reporting currency
+    # (CRR Art. 223(5)); an amount with no rate to it is reported CCR026.
+    rates = reporting_rates(data.fx_rates, run_config)
+    ctx = append_stage_errors(
+        ctx, *collect_findings(sft_findings(data.sft, data.fx_rates, run_config))
+    )
     sft_exposure_rows, sft_errors = sft_bundle_to_exposures(
-        data.sft, run_config.reporting_date, rulepack=rulepack.pack
+        data.sft,
+        run_config.reporting_date,
+        rulepack=rulepack.pack,
+        rates=rates,
+        base_currency=run_config.base_currency,
     )
     ctx = append_stage_errors(ctx, *sft_errors)
     # Inherit the resolved counterparty rating columns onto each SFT synthetic

@@ -79,6 +79,10 @@ from watchfire import cites
 from rwa_calc.contracts.errors import ERROR_SFT_COLLATERAL_NOT_RECOGNISED, CalculationError
 from rwa_calc.data.schemas import SFT_FCCM_HAIRCUT_LOOKUP_TYPES
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+from rwa_calc.engine.ccr.reporting_currency import (
+    rebase_to_reporting_currency,
+    stamp_reporting_currency,
+)
 from rwa_calc.engine.crm.haircut_tables import (
     FX_HAIRCUT,
     lookup_collateral_haircut,
@@ -142,6 +146,9 @@ def sft_bundle_to_exposures(
     raw_sft: RawSFTBundle,
     reporting_date: date,
     rulepack: ResolvedRulepack | None = None,
+    *,
+    rates: pl.LazyFrame | None = None,
+    base_currency: str = "GBP",
 ) -> tuple[pl.LazyFrame, list[CalculationError]]:
     """Shape FCCM SFT EADs into synthetic exposure rows from the lean SFT bundle.
 
@@ -175,6 +182,12 @@ def sft_bundle_to_exposures(
             unit / acceptance calls) falls back to the module-level CRR
             ``_PACK``; the stage adapter threads the run pack so production runs
             are regime-correct.
+        rates: Spot rates to the reporting currency
+            (``engine/ccr/reporting_currency.py::reporting_currency_rates``).
+            None (the default: direct callers, or a run with FX conversion
+            off) leaves every amount in its own currency, as before review
+            CC-05.
+        base_currency: The reporting currency stamped on a converted row.
 
     Returns:
         ``(rows, errors)``: a LazyFrame at (post-gate) netting-set grain — empty
@@ -187,14 +200,23 @@ def sft_bundle_to_exposures(
         PS1/26 Art. 224(1); PS1/26 Art. 111(2A).
     """
     pack = rulepack if rulepack is not None else _PACK
+    # Art. 223(5) nets E against the collateral in one currency (review CC-05):
+    # rebase the lent / sold amount and the collateral market value to the
+    # reporting currency, keeping each row's ``currency`` as its denomination for
+    # the Art. 224 Table 4 HFX test. A currency with no rate stays unconverted
+    # (reported CCR026 by the stage).
+    sft_trades_lf = rebase_to_reporting_currency(raw_sft.trades.sft_trades, ("notional",), rates)
+    collateral_lf = (
+        rebase_to_reporting_currency(raw_sft.collateral.sft_collateral, ("market_value",), rates)
+        if raw_sft.collateral is not None
+        else None
+    )
     # Materialise the firm-scale SFT book once: the netting gate, the per-row
     # HE / HC haircut lookups and the CCR027 diagnostics all read concrete rows
     # (tens to hundreds of trades — far cheaper than a band x CQS x type
     # expression chain in Polars).
-    trades_df = raw_sft.trades.sft_trades.collect()
-    collateral_df = (
-        raw_sft.collateral.sft_collateral.collect() if raw_sft.collateral is not None else None
-    )
+    trades_df = sft_trades_lf.collect()
+    collateral_df = collateral_lf.collect() if collateral_lf is not None else None
     trades_df, collateral_df, netting_errors = apply_sft_netting_gate(trades_df, collateral_df)
     rows, collateral_errors = _build_sft_exposure_rows(
         sft_trades_df=trades_df,
@@ -202,7 +224,10 @@ def sft_bundle_to_exposures(
         reporting_date=reporting_date,
         pack=pack,
     )
-    return rows, [*netting_errors, *collateral_errors]
+    return (
+        stamp_reporting_currency(rows, rates, base_currency),
+        [*netting_errors, *collateral_errors],
+    )
 
 
 # =============================================================================

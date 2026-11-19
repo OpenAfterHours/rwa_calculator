@@ -1727,8 +1727,12 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     # legality confirmed).
     "is_legally_enforceable": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_margined": ColumnSpec(pl.Boolean, default=False, required=False),
-    # Optional nullable (6) — margined RC / MF parameters; null when
-    # ``is_margined`` is False.
+    # Optional nullable (6) — margined RC / MF parameters. TH / MTA / NICA /
+    # mpor_days are coalesced with the same terms on the margin agreement named
+    # by ``margin_agreement_id`` (engine/ccr/margin_terms.py, review CC-03): a
+    # conflict takes the conservative value and is CCR025; an unstated TH / MTA
+    # is 0. TH / MTA / NICA are reporting-currency amounts; NICA is signed and
+    # ADDED to the NICA itemised in ccr.ccr_collateral (never enter one twice).
     "netting_agreement_type": ColumnSpec(pl.String, required=False),
     "margin_threshold": ColumnSpec(pl.Float64, required=False),
     "minimum_transfer_amount": ColumnSpec(pl.Float64, required=False),
@@ -1738,10 +1742,9 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     # Optional with defaults (2) — consumed by the margined maturity-factor
     # (Art. 279c(2)) MPOR cascade (Art. 285(3)(b) and Art. 285(4)).
     # ``number_of_trades``: netting-set trade count used to determine whether
-    # the large-netting-set 20-day MPOR floor applies (Art. 285(3)(b):
-    # threshold > 5000 trades).  Null-safe default 0 means no large-NS uplift
-    # when the count is unknown, consistent with the conservative-default
-    # pattern elsewhere in this schema.
+    # the large-netting-set 20-day MPOR floor applies (Art. 285(3)(a):
+    # threshold > 5000 trades "at any point during a quarter"). The engine uses
+    # max(stated, trades in the input) — the input is a lower bound (CC-03).
     "number_of_trades": ColumnSpec(pl.Int32, default=0, required=False),
     # ``has_illiquid_collateral_or_hard_to_replace_otc``: True when the
     # netting set contains illiquid collateral or hard-to-replace OTC trades
@@ -1780,14 +1783,21 @@ MARGIN_AGREEMENT_SCHEMA: dict[str, ColumnSpec] = {
     # Required (2).
     "margin_agreement_id": ColumnSpec(pl.String),
     "counterparty_reference": ColumnSpec(pl.String),
-    # Optional with defaults (5).
-    "margin_threshold": ColumnSpec(pl.Float64, default=0.0, required=False),
-    "minimum_transfer_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
-    "nica": ColumnSpec(pl.Float64, default=0.0, required=False),
-    # CRR Art. 285(2)(b): minimum Margin Period of Risk for standard margined
-    # netting sets is 10 business days. Default to the regulatory minimum so
-    # SA-CCR PFE add-on uses it when ``mpor_days`` is not explicitly supplied.
-    "mpor_days": ColumnSpec(pl.Int32, default=10, required=False),
+    # Optional nullable (4) — the CSA terms. Read by engine/ccr/margin_terms.py
+    # (review CC-03), which coalesces each with the same-named NETTING_SET_SCHEMA
+    # column (netting-set value first). No default-fill: a null is "not stated
+    # on the CSA", which must stay distinguishable from an explicit 0 so a
+    # netting-set value is not reported as conflicting with a fabricated one
+    # (CCR025). TH / MTA / NICA are reporting-currency amounts (the schema has no
+    # currency column); NICA is signed (received +, posted -, CCR (CRR) Part
+    # Art. 276(1)(c)) and is ADDED to the NICA itemised in ccr.ccr_collateral, so
+    # an amount itemised there must not be entered here too.
+    "margin_threshold": ColumnSpec(pl.Float64, required=False),
+    "minimum_transfer_amount": ColumnSpec(pl.Float64, required=False),
+    "nica": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 285: firm-supplied MPOR floor (business days). Null => the
+    # Art. 285(2)(b) 10-BD floor the margined maturity factor applies anyway.
+    "mpor_days": ColumnSpec(pl.Int32, required=False),
     "is_segregated_im": ColumnSpec(pl.Boolean, default=False, required=False),
     # Optional nullable (3).
     "remargining_frequency_days": ColumnSpec(pl.Int32, required=False),
@@ -1796,19 +1806,36 @@ MARGIN_AGREEMENT_SCHEMA: dict[str, ColumnSpec] = {
 }
 
 #: CCR-specific collateral input. Keyed by ``netting_set_id`` (structurally
-#: different from ``COLLATERAL_SCHEMA`` which is keyed by beneficiary). Haircut
-#: lookup reuses the supervisory haircut tables in ``engine/crm/`` (Art. 224).
+#: different from ``COLLATERAL_SCHEMA`` which is keyed by beneficiary). Valued by
+#: ``engine/ccr/collateral.py`` (review CC-02) into the VM / NICA of CCR (CRR)
+#: Part Art. 275-276 with the run regime's Art. 224 supervisory haircuts
+#: (``engine/crm/haircuts.py``).
 CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # Required (3).
     "ccr_collateral_reference": ColumnSpec(pl.String),
     "netting_set_id": ColumnSpec(pl.String),
     "collateral_type": ColumnSpec(pl.String),
-    # Optional with defaults (3).
-    # CRR Art. 275(1) replacement cost: C (net collateral). Conservative
-    # default: 0.0 (no collateral credit when value unknown).
+    # Optional with defaults (5).
+    # Market value C before the Art. 223 volatility adjustment, in ``currency``
+    # (rebased to the reporting currency by the engine, Art. 279b(3)). Unsigned:
+    # the direction is ``is_posted_by_firm``. Default 0.0 (no collateral).
     "market_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    # Art. 276(1)(c): received collateral is recognised with a positive sign,
+    # posted collateral with a negative sign.
     "is_posted_by_firm": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 276(1)(g): posted collateral segregated from the counterparty's assets
+    # (bankruptcy remote) is not recognised in NICA.
     "is_segregated": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 275(2) / 276(1)(e): "vm" (variation margin) or "im" (independent
+    # collateral -> NICA); one item is never both. Read only on a margined netting
+    # set; on an unmargined one every item is NICA (Art. 275(1)). Default "vm":
+    # for received collateral VM gives less relief than NICA (it does not reduce
+    # the TH + MTA - NICA floor term), the common case on a CSA.
+    "collateral_role": ColumnSpec(pl.String, default="vm", required=False),
+    # Art. 197(1)(f): an equity is eligible collateral only when it is included in
+    # a main index (Art. 276(1)(a)/(b) admit Art. 197 collateral only — the
+    # Art. 198 listed-equity extension does not apply). Default False.
+    "is_main_index": ColumnSpec(pl.Boolean, default=False, required=False),
     # Optional nullable (5).
     "currency": ColumnSpec(pl.String, required=False),
     "issuer_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
@@ -1816,8 +1843,23 @@ CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "residual_maturity_years": ColumnSpec(
         pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
     ),
+    # Not read: Art. 276(1)(d) values SA-CCR collateral with the Art. 224
+    # supervisory volatility adjustments only ("institutions shall not use the
+    # method set out in Article 225"), so an own-estimate haircut has no route in.
     "haircut_override": ColumnSpec(pl.Float64, required=False, domain=_HAIRCUT_DOMAIN),
 }
+
+#: Valid ``CCR_COLLATERAL_SCHEMA.collateral_role`` values (CCR (CRR) Part
+#: Art. 275(2) VM vs NICA; Art. 276(1)(e) — no item in both).
+VALID_CCR_COLLATERAL_ROLES: set[str] = {"vm", "im"}
+
+#: The normalised collateral types (``engine/crm/eligibility.py::
+#: normalise_collateral_type_expr`` tokens) that SA-CCR may recognise: CCR (CRR)
+#: Part Art. 276(1)(a)/(b) admit Art. 197 collateral only — (a) cash, (b)/(d)
+#: debt securities, (f) equities in a main index, (g) gold — still subject to the
+#: Art. 197 credit-quality and main-index gates of ``HaircutCalculator``. Read by
+#: ``engine/ccr/collateral.py`` (review CC-02); anything else is CCR024.
+SA_CCR_RECOGNISED_COLLATERAL_TYPES: set[str] = {"cash", "gold", "govt_bond", "corp_bond", "equity"}
 
 
 # =============================================================================
@@ -3198,6 +3240,21 @@ TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
             ),
         ),
     ),
+    # Review CC-02: a CCR collateral item is netted into the netting set it names.
+    "ccr.ccr_collateral": (
+        ForeignKey(
+            column="netting_set_id",
+            parent_table="ccr.netting_sets",
+            parent_column="netting_set_id",
+            reason=(
+                "CCR (CRR) Part Art. 275-276 — collateral enters the replacement "
+                "cost and PFE multiplier of the netting set it names. An item whose "
+                "netting_set_id resolves to no netting set is not recognised: "
+                "received collateral gives no relief and posted collateral adds no "
+                "exposure."
+            ),
+        ),
+    ),
     "sft.trades": (
         ForeignKey(
             column="counterparty_reference",
@@ -3351,6 +3408,10 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     # CRR Art. 378 / 379 — the failed-trade branch discriminator (CC-09).
     "ccr.failed_trades": {
         "settlement_type": VALID_SETTLEMENT_TYPES,
+    },
+    # Review CC-02 — the Art. 275(2) VM / NICA split of an SA-CCR collateral item.
+    "ccr.ccr_collateral": {
+        "collateral_role": VALID_CCR_COLLATERAL_ROLES,
     },
 }
 

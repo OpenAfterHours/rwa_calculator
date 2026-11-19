@@ -600,7 +600,41 @@ class TestCommercialRERiskWeights:
 
 
 class TestCCPRiskWeights:
-    """Qualifying CCP exposures get prescribed risk weights, not CQS-based."""
+    """Qualifying CCP TRADE exposures get prescribed risk weights, not CQS-based.
+
+    CC-11 (2026-11 review): every frame here now says it is a trade
+    (``risk_type = CCR_DERIVATIVE``). The tests were named "trade exposure" but
+    carried no trade marker, so they pinned the old reading that any row with a
+    ``ccp`` counterparty takes 2% / 4%. CRR Art. 107(2): "For all other types of
+    exposures to a central counterparty, institutions shall treat those exposures
+    as follows: (a) as exposures to an institution for other types of exposures
+    to a qualifying CCP" — see ``test_ccp_non_trade_exposure_is_an_institution``.
+    """
+
+    def test_ccp_non_trade_exposure_is_an_institution(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A loan to a QCCP (no trade marker) takes the CQS 1 institution 20%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_LOAN"],
+                "ead_final": [5_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [False],
+            }
+        ).lazy()
+
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
+
+        # Pre-fix: 2% (the QCCP pin keyed on the counterparty alone).
+        assert df["risk_weight"][0] == pytest.approx(0.20)
 
     def test_ccp_proprietary_trade_gets_2pct_rw(
         self,
@@ -617,6 +651,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [False],
             }
         ).lazy()
@@ -641,6 +676,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [True],
             }
         ).lazy()
@@ -665,6 +701,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [None],
             }
         ).lazy()
@@ -689,6 +726,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [True],
             }
         ).lazy()
@@ -714,6 +752,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [False],
             }
         ).lazy()
@@ -744,6 +783,7 @@ class TestCCPRiskWeightsBasel31:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [False],
             }
         ).lazy()
@@ -768,6 +808,7 @@ class TestCCPRiskWeightsBasel31:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [True],
             }
         ).lazy()

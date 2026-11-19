@@ -9,18 +9,24 @@ Key responsibilities:
 - One end-to-end hand-calculated assertion per review item of the 2026-11
   product review's ``ccp_cva`` cluster, run under BOTH regimes wherever the rule
   applies to both (LESSONS C7): CRR at 2026-03-31, Basel 3.1 at 2027-03-31.
+- CC-08: settlement-risk and default-fund rows are own-funds amounts, not credit
+  exposures — always SA (RW 12.5), never reduced by collateral, guarantees,
+  provisions or a supporting factor, and never a sink for another row's CRM.
 - CC-10: default-fund own funds per CCR (CRR) Part Art. 308(2) / 309(1) / 310.
+- CC-15 / CC-16: BA-CVA netting-set inputs and coverage (Basel 3.1 only).
 
 The unit tests next to each module pin the arithmetic; these pin that the
 arithmetic reaches ``rwa_final`` and the bundle roll-ups unchanged.
 
 References:
+- CRR Art. 378-380 and Art. 92(3)(ca) (PS1/26 Art. 92(3)(ca) identical).
 - PRA Rulebook, Counterparty Credit Risk (CRR) Part Art. 307-310.
 - PS1/26 Appendix 1, Annex R (re-states only Art. 308(3) / 309(2)).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from datetime import date
 from typing import Any
@@ -31,6 +37,7 @@ import pytest
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
     CCRCollateralBundle,
+    FailedTradesBundle,
     MarginAgreementBundle,
     NettingSetBundle,
     RawCCRBundle,
@@ -41,6 +48,7 @@ from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     CCR_COLLATERAL_SCHEMA,
     DF_CONTRIBUTION_SCHEMA,
+    FAILED_TRADE_SCHEMA,
     MARGIN_AGREEMENT_SCHEMA,
     NETTING_SET_SCHEMA,
     TRADE_SCHEMA,
@@ -48,18 +56,25 @@ from rwa_calc.data.schemas import (
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.loader import enforce_schema
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from tests.fixtures.raw_bundle import make_raw_bundle
+from tests.fixtures.ccr.golden_ccr_irb1 import (
+    CCR_IRB1_COUNTERPARTY_REF,
+    build_raw_data_bundle_ccr_irb1,
+    create_ccr_irb1_model_permission,
+)
+from tests.fixtures.raw_bundle import make_raw_bundle, seal_raw_table
 
 _REGIMES = ("crr", "b31")
 
 
-def _config(regime: str) -> CalculationConfig:
+def _config(
+    regime: str, permission_mode: PermissionMode = PermissionMode.STANDARDISED
+) -> CalculationConfig:
     if regime == "crr":
         return CalculationConfig.crr(
-            reporting_date=date(2026, 3, 31), permission_mode=PermissionMode.STANDARDISED
+            reporting_date=date(2026, 3, 31), permission_mode=permission_mode
         )
     return CalculationConfig.basel_3_1(
-        reporting_date=date(2027, 3, 31), permission_mode=PermissionMode.STANDARDISED
+        reporting_date=date(2027, 3, 31), permission_mode=permission_mode
     )
 
 
@@ -74,6 +89,7 @@ def _ccr_bundle(
     trades: list[dict[str, Any]] | None = None,
     netting_sets: list[dict[str, Any]] | None = None,
     default_fund_contributions: list[dict[str, Any]] | None = None,
+    failed_trades: list[dict[str, Any]] | None = None,
 ) -> RawCCRBundle:
     return RawCCRBundle(
         trades=TradeBundle(trades=_frame(trades or [], TRADE_SCHEMA)),
@@ -87,16 +103,204 @@ def _ccr_bundle(
             if default_fund_contributions
             else None
         ),
+        failed_trades=(
+            FailedTradesBundle(failed_trades=_frame(failed_trades, FAILED_TRADE_SCHEMA))
+            if failed_trades
+            else None
+        ),
     )
 
 
-def _run(regime: str, **bundle_kwargs: Any) -> AggregatedResultBundle:
-    return PipelineOrchestrator().run_with_data(make_raw_bundle(**bundle_kwargs), _config(regime))
+def _run(
+    regime: str,
+    permission_mode: PermissionMode = PermissionMode.STANDARDISED,
+    **bundle_kwargs: Any,
+) -> AggregatedResultBundle:
+    return PipelineOrchestrator().run_with_data(
+        make_raw_bundle(**bundle_kwargs), _config(regime, permission_mode)
+    )
 
 
 def _by_ref(result: AggregatedResultBundle) -> dict[str, dict[str, Any]]:
     df = result.results.collect()
     return {row["exposure_reference"]: row for row in df.to_dicts()}
+
+
+# ---------------------------------------------------------------------------
+# CC-08 — settlement-risk / default-fund rows are own-funds amounts
+# ---------------------------------------------------------------------------
+#
+# CRR Art. 378: "multiply that price difference by the appropriate factor in
+# column A of Table 1 in order to calculate the institution's own funds
+# requirement for settlement risk"; Art. 92(3)(ca) (PS1/26 identical): "the own
+# funds requirements for settlement risk calculated in accordance with Articles
+# 378 and 380 of CRR"; CCR (CRR) Part Art. 308(3) / 309(2): RWEA = own funds
+# requirement x 12.5. Neither admits an IRB formula or credit risk mitigation on
+# the own-funds amount, so FT1 (DvP, agreed 1.0m, market value 0.9m, 20 working
+# days -> 100,000 x 50% = 50,000 own funds) is RWEA 625,000 however the
+# counterparty's lending book is mitigated or rated.
+
+_FT1 = {
+    "failed_trade_id": "FT1",
+    "counterparty_reference": "CP_SME",
+    "settlement_type": "dvp",
+    "working_days_past_due": 20,
+    "instrument_class": "equity",
+    "agreed_settlement_price": 1_000_000.0,
+    "current_market_value": 900_000.0,
+}
+_FT1_RWA = 50_000.0 * 12.5
+
+_SME_COUNTERPARTIES = [
+    {
+        "counterparty_reference": "CP_SME",
+        "counterparty_name": "SME corporate with lending and a failed trade",
+        "entity_type": "corporate",
+        "country_code": "GB",
+        "annual_revenue": 5_000_000.0,
+    },
+    {
+        "counterparty_reference": "GOV",
+        "counterparty_name": "UK sovereign",
+        "entity_type": "sovereign",
+        "country_code": "GB",
+    },
+]
+
+_LOAN = {
+    "loan_reference": "L1",
+    "counterparty_reference": "CP_SME",
+    "product_type": "term_loan",
+    "drawn_amount": 1_000_000.0,
+    "currency": "GBP",
+    "value_date": date(2026, 1, 1),
+    "maturity_date": date(2030, 1, 1),
+    "seniority": "senior",
+}
+
+_CP_CASH = {
+    "collateral_reference": "C1",
+    "collateral_type": "cash",
+    "currency": "GBP",
+    "market_value": 1_000_000.0,
+    "beneficiary_type": "counterparty",
+    "beneficiary_reference": "CP_SME",
+    "is_eligible_financial_collateral": True,
+}
+
+_CP_GUARANTEE = {
+    "guarantee_reference": "G1",
+    "guarantor": "GOV",
+    "currency": "GBP",
+    "amount_covered": 1_000_000.0,
+    "beneficiary_type": "counterparty",
+    "beneficiary_reference": "CP_SME",
+    "guarantee_type": "guarantee",
+}
+
+_CP_PROVISION = {
+    "provision_reference": "P1",
+    "provision_type": "scra",
+    "currency": "GBP",
+    "amount": 100_000.0,
+    "beneficiary_type": "counterparty",
+    "beneficiary_reference": "CP_SME",
+}
+
+
+def _sme_run(regime: str, **crm: Any) -> dict[str, dict[str, Any]]:
+    return _by_ref(
+        _run(
+            regime,
+            counterparties=pl.LazyFrame(_SME_COUNTERPARTIES),
+            loans=pl.LazyFrame([_LOAN]),
+            ccr=_ccr_bundle(failed_trades=[_FT1]),
+            **crm,
+        )
+    )
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+class TestCC08OwnFundsRowsTakeNoCreditRiskMitigation:
+    """Counterparty-level CRM belongs to the credit exposures, not the own-funds row."""
+
+    def test_counterparty_cash_collateral(self, regime: str) -> None:
+        # Act
+        rows = _sme_run(regime, collateral=pl.LazyFrame([_CP_CASH]))
+
+        # Assert: pre-fix the pool was pro-rated over the loan (1m) and FT1 (50k):
+        # FT1 RWA 29,761.90 and the loan kept 47,619.05 of unmitigated EAD.
+        assert rows["ft__FT1"]["rwa_final"] == pytest.approx(_FT1_RWA, rel=1e-9)
+        assert rows["L1"]["ead_final"] == pytest.approx(0.0, abs=1e-6)
+
+    def test_counterparty_guarantee(self, regime: str) -> None:
+        # Act
+        rows = _sme_run(regime, guarantees=pl.LazyFrame([_CP_GUARANTEE]))
+
+        # Assert: pre-fix FT1 was split into a guaranteed leg at the guarantor's
+        # weight (RWA 50,000 in total); now one unsplit row at 12.5.
+        ft_rows = [ref for ref in rows if ref.startswith("ft__")]
+        assert ft_rows == ["ft__FT1"]
+        assert rows["ft__FT1"]["rwa_final"] == pytest.approx(_FT1_RWA, rel=1e-9)
+
+    def test_counterparty_provision(self, regime: str) -> None:
+        # Act
+        rows = _sme_run(regime, provisions=pl.LazyFrame([_CP_PROVISION]))
+
+        # Assert: pre-fix 100,000 x 50k / 1.05m = 4,761.90 came off FT1's EAD.
+        assert rows["ft__FT1"]["rwa_final"] == pytest.approx(_FT1_RWA, rel=1e-9)
+        assert rows["L1"]["provision_allocated"] == pytest.approx(100_000.0, rel=1e-9)
+
+    def test_no_supporting_factor(self, regime: str) -> None:
+        # Act
+        rows = _sme_run(regime)
+
+        # Assert: an own-funds amount is not an exposure to an SME (CRR Art. 501).
+        assert rows["ft__FT1"]["supporting_factor"] == 1.0
+        assert rows["ft__FT1"]["rwa_final"] == pytest.approx(_FT1_RWA, rel=1e-9)
+
+    def test_defaulted_counterparty_keeps_the_12_5_pin(self, regime: str) -> None:
+        # Arrange: the same SME, now in default. Art. 127 weights the unsecured
+        # part of a defaulted EXPOSURE; an own-funds amount is not one.
+        defaulted = [{**_SME_COUNTERPARTIES[0], "default_status": True}, _SME_COUNTERPARTIES[1]]
+
+        # Act
+        rows = _by_ref(
+            _run(
+                regime,
+                counterparties=pl.LazyFrame(defaulted),
+                ccr=_ccr_bundle(failed_trades=[_FT1]),
+            )
+        )
+
+        # Assert (pre-fix: Art. 127 150% replaced the pin -> RWA 75,000)
+        assert rows["ft__FT1"]["risk_weight"] == 12.5
+        assert rows["ft__FT1"]["rwa_final"] == pytest.approx(_FT1_RWA, rel=1e-9)
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+def test_cc08_own_funds_rows_are_never_irb(regime: str) -> None:
+    """An F-IRB-permissioned, internally rated counterparty still gets 12.5 x own funds."""
+    # Arrange
+    base = build_raw_data_bundle_ccr_irb1()
+    ft1 = {**_FT1, "counterparty_reference": CCR_IRB1_COUNTERPARTY_REF}
+    bundle = dataclasses.replace(
+        base,
+        ccr=dataclasses.replace(
+            base.ccr, failed_trades=_ccr_bundle(failed_trades=[ft1]).failed_trades
+        ),
+        model_permissions=seal_raw_table(create_ccr_irb1_model_permission(), "model_permissions"),
+    )
+
+    # Act
+    result = PipelineOrchestrator().run_with_data(bundle, _config(regime, PermissionMode.IRB))
+    rows = _by_ref(result)
+
+    # Assert: the netting set itself IS IRB-routed (adequacy); the own-funds row is not.
+    # Pre-fix: FT1 routed foundation_irb, RWA 45,764 (CRR) / 265,881 (B31).
+    assert rows["ccr__NS_IRB_001"]["approach_applied"] == "foundation_irb"
+    assert rows["ft__FT1"]["approach_applied"] == "standardised"
+    assert rows["ft__FT1"]["rwa_final"] == pytest.approx(_FT1_RWA, rel=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -329,3 +533,100 @@ class TestCC16BaCvaCoverage:
         # Assert: the cva_ba_cva Feature is Basel 3.1 only
         assert result.cva_rwa is None
         assert not [e for e in result.errors if e.code == "CCR030"]
+
+
+# ---------------------------------------------------------------------------
+# CC-11 — Art. 107(2): the 2% / 4% pin is for TRADE exposures to a QCCP only
+# ---------------------------------------------------------------------------
+#
+# CRR Art. 107(2) = PS1/26 Art. 107(2): "For trade exposures and for default fund
+# contributions to a central counterparty, institutions shall apply the treatment
+# set out in Section 9 ... For all other types of exposures to a central
+# counterparty, institutions shall treat those exposures as follows: (a) as
+# exposures to an institution for other types of exposures to a qualifying CCP;
+# (b) as exposures to a corporate for other types of exposures to a
+# non-qualifying CCP." CCR (CRR) Part Art. 306(1)(b): non-QCCP trade exposures
+# take "the risk weight ... as set out in Article 107(2)(b)" — a corporate's.
+
+_CCP_RATED = [
+    {**_CCP_COUNTERPARTIES[0]},  # CCP_Q, QCCP
+    {**_CCP_COUNTERPARTIES[1]},  # CCP_N, non-QCCP
+]
+
+_CCP_RATINGS = [
+    {
+        "rating_reference": "R_Q",
+        "counterparty_reference": "CCP_Q",
+        "rating_type": "external",
+        "rating_agency": "S&P",
+        "cqs": 2,
+        "rating_date": date(2026, 1, 1),
+    },
+    {
+        "rating_reference": "R_N",
+        "counterparty_reference": "CCP_N",
+        "rating_type": "external",
+        "rating_agency": "S&P",
+        "cqs": 3,
+        "rating_date": date(2026, 1, 1),
+    },
+]
+
+_QCCP_LOAN = {**_LOAN, "loan_reference": "L_QCCP", "counterparty_reference": "CCP_Q"}
+
+
+def _ccp_run(regime: str) -> dict[str, dict[str, Any]]:
+    return _by_ref(
+        _run(
+            regime,
+            counterparties=pl.LazyFrame(_CCP_RATED),
+            ratings=pl.LazyFrame(_CCP_RATINGS),
+            loans=pl.LazyFrame([_QCCP_LOAN]),
+            ccr=_ccr_bundle(
+                trades=[_irs("T_Q", "NS_Q"), _irs("T_N", "NS_N")],
+                netting_sets=[
+                    {
+                        "netting_set_id": "NS_Q",
+                        "counterparty_reference": "CCP_Q",
+                        "is_legally_enforceable": True,
+                    },
+                    {
+                        "netting_set_id": "NS_N",
+                        "counterparty_reference": "CCP_N",
+                        "is_legally_enforceable": True,
+                    },
+                ],
+            ),
+        )
+    )
+
+
+# (CRR, B31) risk weights. Institution CQS 2 (Art. 120 Table 3): 50% / ECRA 30%.
+# Corporate CQS 3 (Art. 122 Table 6): 100% / 75%.
+_QCCP_LOAN_RW = {"crr": 0.50, "b31": 0.30}
+_NON_QCCP_TRADE_RW = {"crr": 1.00, "b31": 0.75}
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+class TestCC11CcpExposureTreatment:
+    """Only trade exposures to a QCCP are pinned; other CCP exposures follow Art. 107(2)."""
+
+    def test_qccp_trade_exposure_keeps_the_two_percent_pin(self, regime: str) -> None:
+        # Act / Assert (control: Art. 306(1)(a) unchanged)
+        assert _ccp_run(regime)["ccr__NS_Q"]["risk_weight"] == pytest.approx(0.02)
+
+    def test_loan_to_a_qccp_is_an_institution_exposure(self, regime: str) -> None:
+        # Act
+        row = _ccp_run(regime)["L_QCCP"]
+
+        # Assert (pre-fix: pinned at 2%)
+        assert row["exposure_class"] == "institution"
+        assert row["risk_weight"] == pytest.approx(_QCCP_LOAN_RW[regime])
+
+    def test_non_qccp_trade_exposure_is_a_corporate_exposure(self, regime: str) -> None:
+        # Act
+        row = _ccp_run(regime)["ccr__NS_N"]
+
+        # Assert (pre-fix: institution CQS 3 -> 50% in both regimes)
+        assert row["exposure_class"] == "corporate"
+        assert row["risk_weight"] == pytest.approx(_NON_QCCP_TRADE_RW[regime])

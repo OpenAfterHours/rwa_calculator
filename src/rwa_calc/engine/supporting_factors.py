@@ -78,7 +78,9 @@ from rwa_calc.contracts.errors import (
     ERROR_SME_MISSING_COUNTERPARTY_REF,
     CalculationError,
 )
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, ExposureClass
+from rwa_calc.engine.crm.own_funds_lines import own_funds_line_expr
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import formula_float_map
@@ -271,6 +273,13 @@ class SupportingFactorCalculator:
         # lending_group_reference are crm_exit contract columns and read
         # directly).
         schema = exposures.collect_schema()
+        # ``risk_type`` feeds the own-funds-line exclusion below; minimal test
+        # frames may omit it, and a typed null reads as "not an own-funds line".
+        exposures = ensure_columns(
+            exposures,
+            {"risk_type": ColumnSpec(pl.String, default=None, required=False)},
+            present=schema.names(),
+        )
         has_counterparty = "counterparty_reference" in schema.names()
         has_drawn = "drawn_amount" in schema.names()
         has_res_coll = "residential_collateral_value" in schema.names()
@@ -404,7 +413,15 @@ class SupportingFactorCalculator:
             else pl.lit(True)
         )
 
-        sme_eligible = pl.col("is_sme") & turnover_eligible & ~is_btl & ~is_defaulted
+        # Own-funds lines (settlement risk, CCP default fund — CC-08) are not
+        # exposures to an SME or to an infrastructure entity: their amount is an
+        # own funds requirement (CRR Art. 378 / Art. 92(3)(ca); CCR (CRR) Part
+        # Art. 308(3) / 309(2)), so neither Art. 501 nor Art. 501a reaches them.
+        # Synthetic rows used to escape only by accident (a null is_defaulted).
+        is_own_funds_line = own_funds_line_expr()
+        sme_eligible = (
+            pl.col("is_sme") & turnover_eligible & ~is_btl & ~is_defaulted & ~is_own_funds_line
+        )
 
         sme_factor_expr = (
             pl.when(sme_eligible & (ead_for_tier > 0))
@@ -474,7 +491,9 @@ class SupportingFactorCalculator:
             if "exposure_class" in schema.names()
             else pl.lit(True)
         )
-        infra_eligible = pl.col("is_infrastructure") & infra_class_eligible & ~is_defaulted
+        infra_eligible = (
+            pl.col("is_infrastructure") & infra_class_eligible & ~is_defaulted & ~is_own_funds_line
+        )
         infra_factor_expr = (
             pl.when(infra_eligible).then(pl.lit(infra_factor)).otherwise(pl.lit(1.0))
         )

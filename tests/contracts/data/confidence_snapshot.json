@@ -5448,6 +5448,8 @@
       "source_files": [
         "contracts/bundles.py",
         "contracts/edges.py",
+        "contracts/errors.py",
+        "contracts/validation.py",
         "data/schemas.py",
         "engine/ccr/default_fund.py",
         "engine/stages/ccr.py",

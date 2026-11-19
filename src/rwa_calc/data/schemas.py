@@ -2768,6 +2768,48 @@ TABLE_UNIQUE_KEYS: dict[str, str] = {
     "counterparties": "counterparty_reference",
 }
 
+#: The exposure_reference NAMESPACES: every input whose key becomes an exposure
+#: row's ``exposure_reference``, as ``bundle_frames`` key -> (key column, prefix
+#: the engine puts on it). Read by ``contracts/validation.py::
+#: validate_duplicate_keys``: a reference claimed by more than one namespace is
+#: DQ019 (review finding RC-10). ``TABLE_UNIQUE_KEYS`` above states uniqueness
+#: per table only, so a loan and a contingent sharing a reference were plausible
+#: input — and every join keyed on the bare reference merged them (the IRB
+#: model-permission de-duplication kept one; a guarantee on one covered both).
+#:
+#: The prefixed entries are the engine-minted rows: ``ccr__<netting_set_id>`` for
+#: SA-CCR (``engine/ccr/pipeline_adapter.py``) and FCCM SFT
+#: (``engine/sft/fccm.py``) netting sets, ``ft__`` / ``dfc__`` for failed trades
+#: and CCP default-fund contributions (``engine/stages/ccr.py``). A facility's
+#: undrawn rows are the one minted family not listed here, because their
+#: reference is the facility's PLUS a suffix: see
+#: :data:`FACILITY_UNDRAWN_REFERENCE_INFIX`. A ``facilities`` reference is not an
+#: exposure reference at all — ``facility_reference == loan_reference`` is a
+#: legitimate pattern (``engine/hierarchy/unify.py::_join_facility_metadata``).
+EXPOSURE_REFERENCE_NAMESPACES: dict[str, tuple[str, str]] = {
+    "loans": ("loan_reference", ""),
+    "contingents": ("contingent_reference", ""),
+    "equity_exposures": ("exposure_reference", ""),
+    "ccr.trades": ("netting_set_id", "ccr__"),
+    "sft.trades": ("netting_set_id", "ccr__"),
+    "ccr.failed_trades": ("failed_trade_id", "ft__"),
+    "ccr.default_fund_contributions": ("contribution_id", "dfc__"),
+}
+
+#: The infix of every engine-minted facility-undrawn reference:
+#: ``<facility_reference>_UNDRAWN`` plus an optional ``_<sub>`` / ``_RESIDUAL``
+#: (MOF waterfall) or ``@<member>`` (Facility Share) suffix
+#: (``engine/hierarchy/facility_undrawn.py``). A loan / contingent / equity
+#: reference of that shape for an existing facility claims the minted namespace
+#: too (DQ019).
+FACILITY_UNDRAWN_REFERENCE_INFIX = "_UNDRAWN"
+
+#: The separator the hierarchy stage puts between a colliding loan / contingent
+#: reference and its exposure type when it keeps the rows apart
+#: (``engine/hierarchy/namespace.py``): ``X1`` -> ``X1#loan`` / ``X1#contingent``.
+#: DQ019's message names the re-keyed references with it.
+EXPOSURE_REFERENCE_QUALIFIER = "#"
+
 #: Declared referential links, keyed by the REFERENCING table. Read generically
 #: by ``contracts/validation.py::validate_referential_integrity``.
 #:

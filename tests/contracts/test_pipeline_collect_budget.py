@@ -126,9 +126,16 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: the root lookup and the ancestor closure, dropping one schema resolution and
 #: one collect; the collect it frees pays for the new HIE004-HIE006 warnings
 #: collect (``facility_warnings``), so ``collect`` is unchanged.
+#: 2026-11-19 (review cluster "dq", RC-10/RC-11/RC-01/RC-02/SF-03/CC-19):
+#: ``collect`` 85 -> 84 (CRR) and 83 -> 82 (B31). The four new data-quality
+#: findings add no materialisation: DQ019 rides the duplicate-key collect, DQ020
+#: the input gate's ``collect_all``, DQ021 / DQ022 the facility-edge and
+#: facility-warnings collects. And ``validate_duplicate_keys`` now sorts in its
+#: plan instead of on the collected frame, whose eager ``sort`` was a second
+#: lazy collect of its own.
 _BANKED: dict[str, dict[str, int]] = {
-    "CRR": {"collect": 85, "collect_schema": 112, "collect_all": 8},
-    "B31": {"collect": 83, "collect_schema": 112, "collect_all": 9},
+    "CRR": {"collect": 84, "collect_schema": 112, "collect_all": 8},
+    "B31": {"collect": 82, "collect_schema": 112, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

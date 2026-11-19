@@ -5,6 +5,10 @@ Pipeline position:
     securitisation_allocator -> hierarchy_resolver -> ccr_sa_ccr
 
 Key responsibilities:
+- Keep apart the loan / contingent rows whose exposure_reference another
+  namespace also claims (the input gate's DQ019, review finding RC-10): the
+  bundle handed to the resolver and the securitisation lookup are re-keyed by
+  ``engine/hierarchy/namespace.py`` first. A no-op on a clean book.
 - Run ``HierarchyResolver.resolve`` over the raw data bundle.
 - Join the resolved securitisation lookup onto the unified exposures frame
   so residual_pct + pool_allocations ride through CRM and the calculators
@@ -29,6 +33,11 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from rwa_calc.contracts.edges import HIERARCHY_EXIT_EDGE
+from rwa_calc.engine.hierarchy.namespace import (
+    colliding_references,
+    qualify_colliding_references,
+    qualify_securitisation_lookup,
+)
 from rwa_calc.engine.materialise import materialise_sealed_edge
 from rwa_calc.engine.orchestrator import (
     COMPONENTS,
@@ -56,7 +65,15 @@ def run(
     """Run hierarchy resolution and attach the securitisation lookup."""
     data = ctx.get(RAW_DATA)
     components = ctx.get(COMPONENTS)
-    securitisation_resolved = ctx.get(SECURITISATION_RESOLVED)
+
+    # RC-10: re-key the rows the input gate found sharing a reference across
+    # namespaces (DQ019) before anything joins on it, and point the
+    # securitisation allocations at the re-keyed rows.
+    collided = colliding_references(data)
+    data = qualify_colliding_references(data, collided)
+    securitisation_resolved = qualify_securitisation_lookup(
+        ctx.get(SECURITISATION_RESOLVED), collided
+    )
 
     result = components.hierarchy_resolver.resolve(data, run_config)
 

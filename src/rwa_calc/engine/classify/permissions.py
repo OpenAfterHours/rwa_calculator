@@ -235,6 +235,14 @@ def resolve_model_permissions(
     # not depend on the physical row order of the input parquet. The
     # priority key keeps the most-informative diagnostic on the surviving
     # row (null > filter_rejected > unmatched_model_id > null_model_id).
+    #
+    # One row per (exposure_reference, exposure_type), not per reference: a
+    # loan and a contingent sharing a reference were collapsed here into ONE
+    # row, the other's capital leaving the total (review finding RC-10). The
+    # hierarchy stage now re-keys such rows apart (DQ019,
+    # engine/hierarchy/namespace.py), so the windows above see one exposure per
+    # reference; keying the de-duplication on the type as well keeps it from
+    # ever deleting a row of another table should two still meet here.
     diagnostic_priority = (
         pl.when(pl.col("_model_permission_diagnostic").is_null())
         .then(pl.lit(0))
@@ -250,6 +258,7 @@ def resolve_model_permissions(
         .sort(
             [
                 "exposure_reference",
+                "exposure_type",
                 "_diagnostic_priority",
                 "mp_approach",
                 "mp_country_codes",
@@ -258,7 +267,7 @@ def resolve_model_permissions(
             nulls_last=True,
             maintain_order=True,
         )
-        .unique(subset=["exposure_reference"], keep="first", maintain_order=True)
+        .unique(subset=["exposure_reference", "exposure_type"], keep="first", maintain_order=True)
         .select(
             pl.exclude(
                 "mp_exposure_class",

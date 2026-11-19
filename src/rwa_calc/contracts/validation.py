@@ -44,6 +44,7 @@ References:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -75,6 +76,7 @@ from rwa_calc.contracts.errors import (
     absent_reference_error,
     duplicate_input_key_error,
     engine_only_risk_type_error,
+    exposure_reference_collision_error,
     fx_rate_missing_error,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
@@ -996,6 +998,9 @@ def _collateral_link_valid_beneficiaries(bundle: RawDataBundle) -> pl.LazyFrame:
 #: collect below rather than evaluated as two separate queries.
 _KIND_ORPHAN = "orphan"
 _KIND_ABSENT = "absent"
+#: And for the two key findings of ``validate_duplicate_keys`` (DQ004 / DQ019).
+_KIND_DUPLICATE = "duplicate"
+_KIND_COLLISION = "collision"
 
 
 def validate_referential_integrity(
@@ -1093,11 +1098,16 @@ def validate_duplicate_keys(
     *,
     columns: Mapping[str, frozenset[str]] | None = None,
 ) -> list[CalculationError]:
-    """Flag input tables whose natural key names more than one row (``DQ004``).
+    """Flag natural keys naming more than one row (``DQ004``) or namespace (``DQ019``).
 
     Reads ``data/schemas.py``'s ``TABLE_UNIQUE_KEYS`` — the tables where a
-    repeated key is silent data loss rather than a visible fan-out. One
-    ``.collect()`` for the whole registry.
+    repeated key is silent data loss rather than a visible fan-out — and its
+    ``EXPOSURE_REFERENCE_NAMESPACES``: uniqueness WITHIN a table is not enough,
+    because every input that becomes an exposure row shares one
+    ``exposure_reference`` space, and a loan and a contingent (or a user row
+    and an engine-minted ``ccr__`` / ``ft__`` / ``dfc__`` / ``<facility>_UNDRAWN``
+    row, or an equity exposure) sharing a reference merged in every join keyed
+    on it (review finding RC-10). One ``.collect()`` for both registries.
 
     **Uncapped, one error per duplicated key**, breaking with the ``sample_cap``
     contract the rest of this module follows. The reason is that the two other
@@ -1137,23 +1147,122 @@ def validate_duplicate_keys(
             .with_columns(
                 pl.lit(table).alias("_table"),
                 pl.lit(key_column).alias("_column"),
+                pl.lit(_KIND_DUPLICATE).alias("_kind"),
             )
         )
+    collisions = _namespace_collision_plan(frames, names)
+    if collisions is not None:
+        plans.append(collisions)
 
     if not plans:
         return []
 
-    duplicated = pl.concat(plans, how="vertical").collect()
-    return [
-        duplicate_input_key_error(
-            table=row["_table"],
-            column=row["_column"],
-            value=row["_value"],
-            count=int(row["_count"]),
-            names_a_counterparty=row["_table"] == "counterparties",
+    # Ordered in the plan and split in Python: an eager DataFrame filter / sort
+    # runs a lazy collect of its own, a materialisation per kind for nothing.
+    found = pl.concat(plans, how="vertical").sort(["_kind", "_table", "_value"]).collect()
+    errors: list[CalculationError] = []
+    collisions: list[CalculationError] = []
+    for row in found.iter_rows(named=True):
+        if row["_kind"] == _KIND_COLLISION:
+            collisions.append(_namespace_collision_error(row["_value"], row["_table"].split(", ")))
+            continue
+        errors.append(
+            duplicate_input_key_error(
+                table=row["_table"],
+                column=row["_column"],
+                value=row["_value"],
+                count=int(row["_count"]),
+                names_a_counterparty=row["_table"] == "counterparties",
+            )
         )
-        for row in duplicated.sort(["_table", "_value"]).iter_rows(named=True)
+    return errors + collisions
+
+
+def _namespace_collision_plan(
+    frames: Mapping[str, pl.LazyFrame | None],
+    names: Mapping[str, frozenset[str]],
+) -> pl.LazyFrame | None:
+    """Every exposure_reference two namespaces claim, shaped as a duplicate-key row.
+
+    Each namespace of ``EXPOSURE_REFERENCE_NAMESPACES`` contributes its keys
+    (with the prefix the engine puts on a minted one), and a facility claims
+    every user reference shaped ``<facility>_UNDRAWN[_<x>|@<x>]`` — the
+    references its undrawn rows are minted under. ``_table`` carries the sorted
+    claimants, ``_count`` how many, ``_kind`` the collision marker, so the plan
+    unions into the duplicate-key concat and costs no collect of its own.
+    """
+    from rwa_calc.data.schemas import (
+        EXPOSURE_REFERENCE_NAMESPACES,
+        FACILITY_UNDRAWN_REFERENCE_INFIX,
+    )
+
+    claims: list[pl.LazyFrame] = []
+    user_references: list[pl.LazyFrame] = []
+    for namespace, (key_column, prefix) in EXPOSURE_REFERENCE_NAMESPACES.items():
+        lf = frames.get(namespace)
+        if lf is None or key_column not in names.get(namespace, frozenset()):
+            continue
+        reference = pl.col(key_column).cast(pl.String)
+        if prefix:
+            reference = pl.lit(prefix) + reference
+        claim = lf.select(reference.alias("_value"), pl.lit(namespace).alias("_namespace"))
+        claims.append(claim)
+        if not prefix:
+            user_references.append(claim.select("_value"))
+
+    facilities = frames.get("facilities")
+    if facilities is not None and user_references and "facility_reference" in names["facilities"]:
+        minted = re.escape(FACILITY_UNDRAWN_REFERENCE_INFIX)
+        stems = facilities.select(
+            pl.col("facility_reference").cast(pl.String).alias("_stem")
+        ).unique()
+        claims.append(
+            pl.concat(user_references, how="vertical")
+            .with_columns(
+                pl.col("_value").str.extract(rf"^(.*){minted}(?:[_@].*)?$", 1).alias("_stem")
+            )
+            .join(stems, on="_stem", how="semi")
+            .select(pl.col("_value"), pl.lit("facilities").alias("_namespace"))
+        )
+
+    if not claims:
+        return None
+    return (
+        pl.concat(claims, how="vertical")
+        .drop_nulls("_value")
+        .unique()
+        .group_by("_value")
+        .agg(
+            pl.col("_namespace").sort().str.join(", ").alias("_table"),
+            pl.len().cast(pl.UInt32).alias("_count"),
+        )
+        .filter(pl.col("_count") > 1)
+        .select(
+            pl.col("_value"),
+            pl.col("_count"),
+            pl.col("_table"),
+            pl.lit("exposure_reference").alias("_column"),
+            pl.lit(_KIND_COLLISION).alias("_kind"),
+        )
+    )
+
+
+def _namespace_collision_error(reference: str, namespaces: list[str]) -> CalculationError:
+    """The DQ019 for one colliding reference, naming the keys it is re-keyed to.
+
+    Only a loan or contingent row is re-keyed (``engine/hierarchy/namespace.py``);
+    an equity exposure or an engine-minted row keeps its reference.
+    """
+    from rwa_calc.data.schemas import EXPOSURE_REFERENCE_QUALIFIER
+
+    qualified = [
+        f"{reference}{EXPOSURE_REFERENCE_QUALIFIER}{exposure_type}"
+        for table, exposure_type in (("contingents", "contingent"), ("loans", "loan"))
+        if table in namespaces
     ]
+    return exposure_reference_collision_error(
+        reference=reference, namespaces=namespaces, qualified=qualified
+    )
 
 
 def _checkable_parent(

@@ -267,6 +267,14 @@ class TestLoanUnderTwoSubLimitsOfOneRoot:
         assert [(e.exposure_reference, e.actual_value) for e in found] == [("LX", "CCY, REG")]
         assert "only once" in found[0].message
 
+    def test_the_exposure_row_hangs_under_the_lowest_parent(self, regime: str) -> None:
+        # The mappings list REG before CCY; the row's own parent is the lowest
+        # reference, not the first row (it was ``keep="first"`` over an unordered
+        # frame), and its root is G.
+        row = _ledger(self._result(regime))["LX"]
+
+        assert (row["parent_facility_reference"], row["root_facility_reference"]) == ("CCY", "G")
+
 
 @pytest.mark.parametrize("regime", _REGIMES)
 class TestFacilityCycle:

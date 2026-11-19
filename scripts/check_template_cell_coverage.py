@@ -442,7 +442,7 @@ def _write_baseline(measured: Census, elapsed: float, *, partial: bool) -> int:
         },
         "counts": _counts(measured),
         "caveats": list(measured.warnings),
-        "caveat_identities": sorted({_caveat_identity(w) for w in measured.warnings}),
+        "caveat_identities": sorted(_caveat_identities(measured.warnings)),
         "dead_columns": [
             {
                 "id": key.describe(),
@@ -467,6 +467,24 @@ def _write_baseline(measured: Census, elapsed: float, *, partial: bool) -> int:
 #: alternation matches it FIRST and hands it back unchanged. Without that, the
 #: normaliser eats the template name and every template's identities collide.
 _CAVEAT_AMOUNT_RE = re.compile(r"C \d{2}\.\d{2}|[-+]?\d[\d,]*\.\d{2}")
+#: A money amount at 2dp, the mark of a reconciliation caveat (see
+#: ``_caveat_identities``); the ``C 02.00`` template code is not one.
+_CAVEAT_MONEY_RE = re.compile(r"(?<!C )(?<![\d.])[-+]?\d[\d,]*\.\d{2}(?!\.)")
+
+
+def _caveat_identities(warnings: tuple[str, ...]) -> set[str]:
+    """The ratcheted caveats: the reconciliation strandings, by identity.
+
+    Only a warning that states an amount is a reconciliation caveat — a C 02.00
+    / OF 02.00 total that its detail rows or the engine's own total do not
+    reproduce (P1.327, P1.367). Every other pipeline warning a run raises (a
+    data-quality roll-up such as DQ017, CCR030's missing CVA input) is a finding
+    about the INPUT, not about the template layout this census measures; it is
+    still printed under "Recorded caveats" and still read by
+    ``_fail_on_degradation``, but ratcheting it would make a fixture's data gap
+    look like a reporting regression.
+    """
+    return {_caveat_identity(w) for w in warnings if _CAVEAT_MONEY_RE.search(w)}
 
 
 def _caveat_identity(warning: str) -> str:
@@ -509,7 +527,7 @@ def _check_baseline(measured: Census, *, partial: bool) -> int:
     was_live = set(payload.get("live_columns", []))
     was_dead = {entry["id"] for entry in payload.get("dead_columns", [])}
     was_caveats = set(payload.get("caveat_identities", []))
-    now_caveats = {_caveat_identity(w) for w in measured.warnings}
+    now_caveats = _caveat_identities(measured.warnings)
     now_live = {key.describe() for key in measured.live}
     now_dead = {key.describe() for key in measured.dead}
 

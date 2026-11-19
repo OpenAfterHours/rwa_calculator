@@ -48,12 +48,16 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.engine.utils import partition_by_nullable
 from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
+
+# One protection contract: rows sharing it share one cap (null = no contract).
+_CONTRACT_KEY = "guarantee_reference"
 
 # Columns the valuation reads that an input may legitimately omit.
 _VALUATION_COLUMNS: dict[str, ColumnSpec] = {
@@ -126,13 +130,13 @@ def attach_shared_cap(guarantees: pl.LazyFrame) -> pl.LazyFrame:
     stated only as a percentage (no supplied amount), carries no cap.
     """
     guarantees = ensure_columns(guarantees, _VALUATION_COLUMNS)
-    reference = pl.col("guarantee_reference")
     supplied = pl.when(_amount_supplied()).then(pl.col("amount_covered"))
     return guarantees.with_columns(
-        pl.when(reference.is_not_null())
-        .then(supplied.max().over(reference))
-        .otherwise(pl.lit(None, dtype=pl.Float64))
-        .alias("_shared_cap"),
+        partition_by_nullable(
+            supplied.max().over(_CONTRACT_KEY),
+            _CONTRACT_KEY,
+            pl.lit(None, dtype=pl.Float64),
+        ).alias("_shared_cap"),
     )
 
 
@@ -193,7 +197,9 @@ def _apply_shared_cap(guarantees: pl.LazyFrame) -> pl.LazyFrame:
     """
     demand = pl.min_horizontal(pl.col("amount_covered"), pl.col("_crm_basis"))
     guarantees = guarantees.with_columns(demand.alias("_demand"))
-    total_demand = pl.col("_demand").sum().over("guarantee_reference")
+    total_demand = partition_by_nullable(
+        pl.col("_demand").sum().over(_CONTRACT_KEY), _CONTRACT_KEY, pl.col("_demand")
+    )
     cap = pl.col("_shared_cap")
     binds = cap.is_not_null() & (total_demand > cap)
     return guarantees.with_columns(

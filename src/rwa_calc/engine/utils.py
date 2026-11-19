@@ -26,6 +26,7 @@ NULLABLE_PARTITION_KEYS: frozenset[str] = frozenset(
         "parent_facility_reference",
         "lending_group_reference",
         "counterparty_reference",
+        "guarantee_reference",
     }
 )
 

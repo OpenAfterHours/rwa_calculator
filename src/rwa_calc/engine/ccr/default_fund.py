@@ -115,10 +115,14 @@ def compute_dfc_capital(
     denominator = pl.coalesce(pl.col("df_ccp_prefunded"), pl.lit(0.0)) + pl.col(
         "df_cm_total_contributions"
     )
-    # ``clip`` rather than ``max_horizontal``: a missing K_CCP must stay null (and
-    # surface as a null EAD downstream), never collapse silently onto the floor.
-    k_qccp_prefunded = (pl.col("k_ccp_published") * contribution / denominator).clip(
-        lower_bound=_FLOOR_CAPITAL_RATIO * _FLOOR_RISK_WEIGHT * contribution
+    # Art. 308(2) is a max, so the floor is a lower bound whatever K_CCP is: with
+    # K_CCP or DF_CM missing the share is null, ``max_horizontal`` skips it and
+    # the floor is charged, and the input gate names the row (CCR032, ERROR — the
+    # floor can understate). A null used to survive here and reach the SA chain
+    # as a null drawn amount: EAD 0, RWEA 0, and no null-EAD error ever fired.
+    k_qccp_prefunded = pl.max_horizontal(
+        pl.col("k_ccp_published") * contribution / denominator,
+        _FLOOR_CAPITAL_RATIO * _FLOOR_RISK_WEIGHT * contribution,
     )
     # Art. 310: RWEA = UC x 0%, so K = RWEA / 12.5.
     k_qccp_unfunded = contribution * _QCCP_UNFUNDED_RW / _OWN_FUNDS_TO_RWA_FACTOR

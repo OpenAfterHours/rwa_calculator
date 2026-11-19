@@ -310,6 +310,14 @@ ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED = "CCR030"
 # conservative for either side — and names the trade with one WARNING.
 ERROR_FAILED_TRADE_SIDE_UNKNOWN = "CCR031"
 
+# Default-fund allocation inputs missing (CCR (CRR) Part Art. 308(2), CC-10): a
+# QCCP pre-funded contribution with no K_CCP or no DF_CM cannot be allocated its
+# share of the CCP's hypothetical capital. The engine charges the 8% x 2% x DF_i
+# floor — the one arm of the Art. 308(2) max it can still evaluate, a LOWER
+# bound — and names the contribution with one ERROR, since the charge can
+# understate. (A null used to reach the SA chain and give RWEA 0 silently.)
+ERROR_DFC_ALLOCATION_INPUT_MISSING = "CCR032"
+
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
 ERROR_LGD_OUT_OF_RANGE = "IRB002"
@@ -808,6 +816,33 @@ def failed_trade_side_unknown_warning(*, failed_trade_id: str) -> CalculationErr
         exposure_reference=f"ft__{failed_trade_id}",
         field_name="is_purchase",
         regulatory_reference="CRR Art. 378",
+    )
+
+
+def dfc_allocation_input_missing_error(
+    *, contribution_id: str, missing: list[str]
+) -> CalculationError:
+    """Create a CCR032 error for a QCCP pre-funded contribution Art. 308(2) cannot allocate.
+
+    CCR (CRR) Part Art. 308(2): ``K_i = max(K_CCP x DF_i / (DF_CCP + DF_CM),
+    8% x 2% x DF_i)``. Without ``K_CCP`` or ``DF_CM`` (both communicated by the
+    CCP under EMIR Art. 50c) only the floor can be evaluated, so the engine
+    charges it as a lower bound and this error names the contribution — the
+    true requirement can be higher (review item CC-10).
+    """
+    return CalculationError(
+        code=ERROR_DFC_ALLOCATION_INPUT_MISSING,
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ccr.default_fund_contributions] QCCP pre-funded contribution "
+            f"{contribution_id!r} has no {' or '.join(repr(m) for m in missing)}, so its "
+            "share of K_CCP cannot be allocated (CRR Art. 308(2)): only the 8% x 2% x DF_i "
+            "floor is charged, which can understate. Supply the CCP's published values."
+        ),
+        exposure_reference=f"dfc__{contribution_id}",
+        field_name=missing[0],
+        regulatory_reference="CRR Art. 308(2)",
     )
 
 

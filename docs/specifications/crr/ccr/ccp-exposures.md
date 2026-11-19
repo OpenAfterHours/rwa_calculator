@@ -344,6 +344,12 @@ values (pinned by `tests/acceptance/ccr/test_ccp_cva_review_cluster.py`):
 - QCCP floor, `K_CCP` 0.5m: `K = max(8,333.33, 16,000) = 16,000`, RWEA 200,000.
 - Non-QCCP pre-funded `DF_i` 10m: `K = 10m`, RWEA 125,000,000.
 - QCCP unfunded: `K = 0`, RWEA 0.
+- QCCP pre-funded with `K_CCP` or `DF_CM` missing: only the floor arm of
+  the Art. 308(2) max can be evaluated, so `K = 8% · 2% · DF_i` (16,000 on
+  `DF_i` 10m, RWEA 200,000) is charged as a **lower bound**, and the input
+  gate raises **CCR032** (ERROR) naming the `dfc__` row, because the true
+  requirement can be higher. Before this the null reached the SA chain as a
+  null drawn amount and the row published RWEA 0 with no error.
 
 Not implemented: the `K_CCP` hypothetical-capital simulation itself
 (the firm supplies `k_ccp_published`) and the Art. 303(2) cap, which can

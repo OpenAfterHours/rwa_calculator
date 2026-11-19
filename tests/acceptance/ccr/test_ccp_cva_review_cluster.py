@@ -408,6 +408,24 @@ class TestCC10DefaultFundBranches:
         assert result.rwa_ccr_default_fund == pytest.approx(expected, rel=1e-9)
 
 
+@pytest.mark.parametrize("regime", _REGIMES)
+def test_cc10_qccp_contribution_without_k_ccp_is_floored_and_reported(regime: str) -> None:
+    """Art. 308(2) floor as the lower bound when K_CCP is missing, named by CCR032."""
+    # Arrange
+    no_k_ccp = {**_QCCP_COMMON, "contribution_id": "QN", "k_ccp_published": None}
+
+    # Act
+    result = _run(
+        regime,
+        counterparties=pl.LazyFrame(_CCP_COUNTERPARTIES),
+        ccr=_ccr_bundle(default_fund_contributions=[no_k_ccp]),
+    )
+
+    # Assert: 8% x 2% x 10m = 16,000 -> RWEA 200,000 (pre-fix: RWEA 0, no error).
+    assert _by_ref(result)["dfc__QN"]["rwa_final"] == pytest.approx(200_000.0, rel=1e-9)
+    assert [e.exposure_reference for e in result.errors if e.code == "CCR032"] == ["dfc__QN"]
+
+
 # ---------------------------------------------------------------------------
 # CC-15 / CC-16 — BA-CVA netting-set inputs and coverage (Basel 3.1 only)
 # ---------------------------------------------------------------------------

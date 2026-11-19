@@ -37,10 +37,27 @@ from datetime import date
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import (
+    CCRCollateralBundle,
+    MarginAgreementBundle,
+    NettingSetBundle,
+    RawCCRBundle,
+    TradeBundle,
+)
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.schemas import DF_CONTRIBUTION_SCHEMA
+from rwa_calc.contracts.validation import validate_bundle_values
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import (
+    CCR_COLLATERAL_SCHEMA,
+    DF_CONTRIBUTION_SCHEMA,
+    MARGIN_AGREEMENT_SCHEMA,
+    NETTING_SET_SCHEMA,
+    TRADE_SCHEMA,
+)
+from rwa_calc.domain.enums import ErrorSeverity
 from rwa_calc.engine.ccr.default_fund import compute_dfc_capital
 from rwa_calc.engine.loader import enforce_schema
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 _CONFIGS = {
     "crr": CalculationConfig.crr(reporting_date=date(2026, 3, 31)),
@@ -55,6 +72,10 @@ def _compute(rows: list[dict[str, object]], regime: str) -> pl.DataFrame:
 
 def _row(out: pl.DataFrame, contribution_id: str) -> dict[str, object]:
     return out.filter(pl.col("contribution_id") == contribution_id).row(0, named=True)
+
+
+def _empty(schema: dict[str, object]) -> pl.LazyFrame:
+    return pl.LazyFrame(schema=dtypes_of(schema))
 
 
 @pytest.mark.parametrize("regime", ["crr", "b31"])
@@ -202,28 +223,61 @@ def test_art_310_qccp_unfunded_contribution_carries_no_own_funds(regime: str) ->
     assert row["regulatory_band"] == "dfc_qccp_unfunded"
 
 
-def test_missing_k_ccp_on_a_qccp_prefunded_row_stays_null_not_the_floor() -> None:
-    """A QCCP pre-funded row without K_CCP cannot be priced by Art. 308(2).
+_QX = {
+    "contribution_id": "QX",
+    "ccp_reference": "CCP",
+    "is_qccp_ccp": True,
+    "df_i_contribution_amount": 10_000_000.0,
+    "df_cm_total_contributions": 500_000_000.0,
+    "k_ccp_published": 20_000_000.0,
+}
 
-    The floor is one arm of a max, not a fallback: collapsing a null K_CCP onto
-    8% x 2% x DF_i would publish a plausible understated number. The null must
-    survive so the downstream null-EAD / null-RWA detectors (OUT004 / OUT005)
-    name the row.
+
+@pytest.mark.parametrize("missing", ["k_ccp_published", "df_cm_total_contributions"])
+class TestArt308AllocationInputMissing:
+    """A QCCP pre-funded row Art. 308(2) cannot allocate: floor charged, CCR032 raised.
+
+    The floor is one arm of the Art. 308(2) max, so it is a lower bound on K_i
+    whatever K_CCP or DF_CM would have been. Before this, the missing input left
+    ``k_cm`` null; the ccr stage minted a null drawn amount, the CRM chain made
+    it EAD 0, and the row published RWEA 0 with no error at all — the null-EAD
+    detector (OUT004) never saw a null. Measured end to end, both regimes.
     """
-    # Arrange
-    rows = [
-        {
-            "contribution_id": "QX",
-            "ccp_reference": "CCP",
-            "is_qccp_ccp": True,
-            "df_i_contribution_amount": 10_000_000.0,
-            "df_cm_total_contributions": 500_000_000.0,
-            "k_ccp_published": None,
-        }
-    ]
 
-    # Act
-    row = _row(_compute(rows, "b31"), "QX")
+    def test_the_floor_is_charged(self, missing: str) -> None:
+        # Arrange
+        rows = [{**_QX, missing: None}]
 
-    # Assert
-    assert row["k_cm"] is None
+        # Act
+        row = _row(_compute(rows, "b31"), "QX")
+
+        # Assert: 8% x 2% x 10m = 16,000 (RWEA 200,000), never null / zero.
+        assert row["k_cm"] == pytest.approx(16_000.0, rel=1e-12)
+        assert row["dfc_rwea"] == pytest.approx(200_000.0, rel=1e-12)
+
+    def test_the_input_gate_names_the_contribution(self, missing: str) -> None:
+        # Arrange: the missing row, an unfunded QCCP row and a non-QCCP row with
+        # the same gap (neither reads K_CCP / DF_CM), and a complete row.
+        rows = [
+            {**_QX, missing: None},
+            {**_QX, "contribution_id": "QU", missing: None, "is_unfunded_commitment": True},
+            {**_QX, "contribution_id": "NQ", missing: None, "is_qccp_ccp": False},
+            {**_QX, "contribution_id": "OK"},
+        ]
+        frame = enforce_schema(pl.LazyFrame(rows), DF_CONTRIBUTION_SCHEMA, strict=False)
+        ccr = RawCCRBundle(
+            trades=TradeBundle(trades=_empty(TRADE_SCHEMA)),
+            netting_sets=NettingSetBundle(netting_sets=_empty(NETTING_SET_SCHEMA)),
+            margin_agreements=MarginAgreementBundle(
+                margin_agreements=_empty(MARGIN_AGREEMENT_SCHEMA)
+            ),
+            ccr_collateral=CCRCollateralBundle(ccr_collateral=_empty(CCR_COLLATERAL_SCHEMA)),
+            default_fund_contributions=frame,
+        )
+
+        # Act
+        errors = [e for e in validate_bundle_values(make_raw_bundle(ccr=ccr)) if e.code == "CCR032"]
+
+        # Assert
+        assert [(e.exposure_reference, e.field_name) for e in errors] == [("dfc__QX", missing)]
+        assert errors[0].severity is ErrorSeverity.ERROR

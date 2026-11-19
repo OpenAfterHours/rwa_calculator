@@ -73,6 +73,7 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
     absent_reference_error,
+    dfc_allocation_input_missing_error,
     duplicate_input_key_error,
     failed_trade_side_unknown_warning,
     negative_amount_without_netting_warning,
@@ -614,6 +615,11 @@ def _table_checks(
     # CRR Art. 378: a DvP failed trade's loss depends on its side (CC-09).
     if table_name == "ccr.failed_trades":
         checks.append(_validate_failed_trade_side(lf, columns))
+
+    # CCR (CRR) Part Art. 308(2): a QCCP pre-funded contribution needs K_CCP and
+    # DF_CM to be allocated its share (CC-10).
+    if table_name == "ccr.default_fund_contributions":
+        checks.append(_validate_dfc_allocation_inputs(lf, columns))
     return [check for check in checks if check is not None]
 
 
@@ -1479,6 +1485,59 @@ def _validate_failed_trade_side(
         return [
             failed_trade_side_unknown_warning(failed_trade_id=ref)
             for ref in frame["failed_trade_id"].to_list()
+        ]
+
+    return _TableCheck(plan=plan, decode=decode)
+
+
+def _validate_dfc_allocation_inputs(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Name each QCCP pre-funded contribution missing K_CCP or DF_CM (CCR032).
+
+    CCR (CRR) Part Art. 308(2) allocates ``K_CCP x DF_i / (DF_CCP + DF_CM)``
+    to the clearing member, floored at ``8% x 2% x DF_i``.
+    ``engine/ccr/default_fund.py`` charges the floor when either input is null;
+    this names every such row — one ERROR per contribution, keyed on its
+    ``dfc__`` exposure reference — because the floor is a lower bound, not the
+    requirement. Unfunded contributions (Art. 310) and non-QCCP rows (Art.
+    309(1), K = DF + UC) read neither input and are not named. Runs inside the
+    batched input gate, so it adds no collect of its own.
+
+    References:
+    - CRR Art. 308(2) (PRA CCR (CRR) Part; PS1/26 Annex R leaves it unamended)
+    """
+    required = {"contribution_id", "is_qccp_ccp", "k_ccp_published", "df_cm_total_contributions"}
+    if not required <= schema_names:
+        return None
+    is_unfunded = (
+        pl.col("is_unfunded_commitment").eq_missing(True)
+        if "is_unfunded_commitment" in schema_names
+        else pl.lit(value=False)
+    )
+    no_k_ccp = pl.col("k_ccp_published").is_null()
+    no_df_cm = pl.col("df_cm_total_contributions").is_null()
+    plan = (
+        lf.filter(pl.col("is_qccp_ccp").eq_missing(True) & ~is_unfunded & (no_k_ccp | no_df_cm))
+        .select("contribution_id", no_k_ccp.alias("no_k_ccp"), no_df_cm.alias("no_df_cm"))
+        .sort("contribution_id")
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        return [
+            dfc_allocation_input_missing_error(
+                contribution_id=row["contribution_id"],
+                missing=[
+                    name
+                    for name, absent in (
+                        ("k_ccp_published", row["no_k_ccp"]),
+                        ("df_cm_total_contributions", row["no_df_cm"]),
+                    )
+                    if absent
+                ],
+            )
+            for row in frame.iter_rows(named=True)
         ]
 
     return _TableCheck(plan=plan, decode=decode)

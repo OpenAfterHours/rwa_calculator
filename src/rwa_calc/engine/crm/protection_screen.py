@@ -105,7 +105,12 @@ def screen_unfunded_protection(
     change_gated = pack.feature("ucp_unilateral_change_ineligible")
     flagged = guarantees.with_columns(_flag_exprs(change_gated))
     if errors is not None:
-        _record_screen_findings(flagged.collect(), change_gated, errors)
+        # The messages need concrete rows. Materialise the (small) guarantee
+        # dimension once and continue from it, so the input plan is not
+        # executed a second time downstream.
+        materialised = flagged.collect()
+        _record_screen_findings(materialised, change_gated, errors)
+        flagged = materialised.lazy()
 
     return (
         flagged.filter(~_dropped())
@@ -156,7 +161,7 @@ def _record_screen_findings(
     errors: list[CalculationError],
 ) -> None:
     """Append the per-row screen warnings, then the shared-reference ones."""
-    for row in flagged.iter_rows(named=True):
+    for row in flagged.filter(_dropped() | pl.col("_cd_by_type")).iter_rows(named=True):
         errors.extend(_row_findings(row, change_gated))
     survivors = flagged.filter(~_dropped())
     errors.extend(_shared_reference_findings(survivors))
@@ -230,16 +235,24 @@ def _shared_reference_findings(survivors: pl.DataFrame) -> list[CalculationError
     pooled cap and raises nothing.
     """
     keyed = survivors.filter(pl.col("guarantee_reference").is_not_null())
-    by_reference = keyed.group_by("guarantee_reference", maintain_order=True).agg(
-        pl.len().alias("rows"),
-        pl.col("amount_covered").min().alias("low"),
-        pl.col("amount_covered").max().alias("high"),
-        pl.col("beneficiary_reference").n_unique().alias("beneficiaries"),
+    by_reference = (
+        keyed.group_by("guarantee_reference", maintain_order=True)
+        .agg(
+            pl.len().alias("rows"),
+            pl.col("amount_covered").min().alias("low"),
+            pl.col("amount_covered").max().alias("high"),
+            pl.col("beneficiary_reference").n_unique().alias("beneficiaries"),
+        )
+        .with_columns(
+            (pl.col("high") != pl.col("low")).fill_null(False).alias("amounts_differ"),
+            (pl.col("beneficiaries") < pl.col("rows")).alias("beneficiary_repeated"),
+        )
+        .filter(pl.col("amounts_differ") | pl.col("beneficiary_repeated"))
     )
     found: list[CalculationError] = []
     for row in by_reference.iter_rows(named=True):
         ref = row["guarantee_reference"]
-        if row["low"] is not None and row["high"] != row["low"]:
+        if row["amounts_differ"]:
             found.append(
                 crm_warning(
                     ERROR_GUARANTEE_REFERENCE_INCONSISTENT,
@@ -250,7 +263,7 @@ def _shared_reference_findings(survivors: pl.DataFrame) -> list[CalculationError
                     regulatory_reference="CRR / PS1/26 Art. 213(1)(b), 233(1)",
                 )
             )
-        if row["beneficiaries"] < row["rows"]:
+        if row["beneficiary_repeated"]:
             found.append(
                 crm_warning(
                     ERROR_GUARANTEE_REFERENCE_INCONSISTENT,

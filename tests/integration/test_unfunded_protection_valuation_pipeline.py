@@ -170,6 +170,22 @@ CASES: dict[str, _Case] = {
         5.0,
         (ERROR_GUARANTEE_REFERENCE_INCONSISTENT,),
     ),
+    # GT-01: a counterparty-level contract of 10 over CP-A's loans of 8 and 4 is
+    # expanded pro-rata (6.67 + 3.33) and must keep its full 10 — its cap is
+    # read before expansion. CRR 10 x 0.5 + 2 = 7.0; B31 10 x 0.3 + 2 = 5.0.
+    "gt01-counterparty-level-contract": _Case(
+        (("L1", "CP-A", 8.0), ("L3", "CP-A", 4.0)),
+        (
+            _guarantee(
+                guarantee_reference="GCP",
+                beneficiary_type="counterparty",
+                beneficiary_reference="CP-A",
+                amount_covered=10.0,
+            ),
+        ),
+        {"crr": 7.0, "b31": 5.0},
+        10.0,
+    ),
     # GT-07: a letter of comfort is not a guarantee: 8 x 100%. Pre-fix 4.0 / 2.4.
     "gt07-letter-of-comfort": _Case(
         _ONE_LOAN,

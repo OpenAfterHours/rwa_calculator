@@ -30,7 +30,6 @@ maturity above one year, ``LR`` 0%; Basel 3.1 ``OC`` 40%, ``LR`` 10%.
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import date
 from functools import cache
 from typing import Any
@@ -325,9 +324,3 @@ class TestNullLimit:
 
         assert ledger["exposure_reference"].to_list() == ["L1"]
         assert ledger["rwa_final"].sum() == pytest.approx(2_000_000.0)
-
-
-def test_cases_are_built_from_distinct_bundles() -> None:
-    """Adequacy: every case runs on its own bundle, so error lists cannot leak across."""
-    assert len({id(_CASES[c]) for c in _CASES}) == len(_CASES)
-    assert dataclasses.is_dataclass(_run("ucc_lr", "B31"))

@@ -335,6 +335,34 @@ class TestMofSubFacilityCommittedFlag:
         assert residual["risk_type"] == "MR"
         assert residual["undrawn_amount"] == pytest.approx(18_000_000.0)
 
+    def test_uncommitted_sub_declaring_a_non_ucc_risk_type_is_weighted_and_emitted_as_lr(
+        self,
+    ) -> None:
+        """An uncommitted sub-line is a UCC commitment whatever ``risk_type`` it declares.
+
+        P 14m committed=False with 4m drawn leaves 10m of umbrella headroom. S1 is a
+        committed OC line (8m headroom); S2 is committed=False but declares FR. Priced
+        as LR, S2 sorts AFTER S1 in the CCF-descending waterfall: S1 takes 8m, S2 the
+        last 2m, and HIE004 names S2. Read at its declared FR, S2 would sort first and
+        take 8m, leaving S1 only 2m.
+        """
+        facilities = [
+            _facility("P", 14_000_000.0, committed=False, risk_type="LR"),
+            _facility("S1", 10_000_000.0, risk_type="OC"),
+            _facility("S2", 10_000_000.0, committed=False, risk_type="FR"),
+        ]
+
+        undrawn = _undrawn(facilities, _UMBRELLA_LOANS, _UMBRELLA_MAPPINGS)
+        errors = _warnings(facilities, _UMBRELLA_LOANS, _UMBRELLA_MAPPINGS)
+
+        s1 = _row(undrawn, "P_UNDRAWN_S1")
+        s2 = _row(undrawn, "P_UNDRAWN_S2")
+        assert (s1["risk_type"], s1["undrawn_amount"]) == ("OC", pytest.approx(8_000_000.0))
+        assert (s2["risk_type"], s2["undrawn_amount"]) == ("LR", pytest.approx(2_000_000.0))
+        assert "P_UNDRAWN_RESIDUAL" not in undrawn["exposure_reference"].to_list()
+        hie004 = [e for e in errors if e.code == ERROR_UNCOMMITTED_FACILITY_RISK_TYPE]
+        assert [(e.exposure_reference, e.actual_value) for e in hie004] == [("S2", "FR")]
+
 
 # =============================================================================
 # CM-02 / SF-01 - headroom nets utilisation in the FACILITY's currency
@@ -433,6 +461,25 @@ class TestFacilityHeadroomCurrency:
 
         assert _row(undrawn, "P_UNDRAWN_S1")["undrawn_amount"] == pytest.approx(5.1)
         assert _row(undrawn, "P_UNDRAWN_RESIDUAL")["undrawn_amount"] == pytest.approx(11.5)
+
+    def test_mof_sub_limit_with_no_rate_takes_no_slice(self) -> None:
+        """A CHF sub-limit under a GBP umbrella with no CHF rate cannot be capped in GBP.
+
+        Its headroom is unmeasurable in the umbrella's currency (HIE005), so it takes
+        no slice of the waterfall and the umbrella's residual carries the whole 20 at
+        the umbrella's own risk type. Netting it raw would have given S1 10 and the
+        residual only 10.
+        """
+        facilities = [
+            _facility("P", 20.0, risk_type="MR"),
+            _facility("S1", 10.0, currency="CHF", risk_type="OC"),
+        ]
+
+        undrawn = _undrawn(facilities, [], [_map("P", "S1", "facility")], fx=[("EUR", 0.85)])
+
+        assert undrawn["exposure_reference"].to_list() == ["P_UNDRAWN_RESIDUAL"]
+        residual = _row(undrawn, "P_UNDRAWN_RESIDUAL")
+        assert (residual["risk_type"], residual["undrawn_amount"]) == ("MR", pytest.approx(20.0))
 
 
 # =============================================================================

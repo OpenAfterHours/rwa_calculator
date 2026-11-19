@@ -136,6 +136,10 @@
     "CRR Art. 147",
     "PS1/26, paragraph 147"
   ],
+  "rwa_calc.engine.classify.attributes::is_sme_by_size_expr": [
+    "CRR Art. 153(4)",
+    "PS1/26, paragraph 122"
+  ],
   "rwa_calc.engine.classify.attributes::natural_person_expr": [
     "CRR Art. 147(5)",
     "PS1/26, paragraph 147"
@@ -143,12 +147,13 @@
   "rwa_calc.engine.classify.attributes::resolve_sl_project_phase": [
     "PS1/26, paragraph 122B"
   ],
-  "rwa_calc.engine.classify.attributes::with_group_annual_revenue": [
-    "PS1/26, paragraph 147"
-  ],
   "rwa_calc.engine.classify.audit::_null_entity_type_warnings": [
     "CRR Art. 112",
     "PS1/26, paragraph 112"
+  ],
+  "rwa_calc.engine.classify.audit::collect_group_threshold_warnings": [
+    "CRR Art. 123",
+    "PS1/26, paragraph 123A"
   ],
   "rwa_calc.engine.classify.classifier::ExposureClassifier.classify": [
     "CRR Art. 112",
@@ -161,6 +166,14 @@
     "CRR Art. 143",
     "CRR Art. 148",
     "CRR Art. 150"
+  ],
+  "rwa_calc.engine.classify.re_evidence::re_evidence_expr": [
+    "CRR Art. 125",
+    "PS1/26, paragraph 124A"
+  ],
+  "rwa_calc.engine.classify.re_evidence::withhold_unevidenced_re_class": [
+    "CRR Art. 124",
+    "PS1/26, paragraph 124"
   ],
   "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes": [
     "CRR Art. 153(2)",
@@ -462,6 +475,20 @@
     "CRR Art. 111",
     "PS1/26, paragraph 111"
   ],
+  "rwa_calc.engine.hierarchy.graph::with_group_size_figures": [
+    "CRR Art. 153(4)",
+    "PS1/26, paragraph 147",
+    "PS1/26, paragraph 153"
+  ],
+  "rwa_calc.engine.hierarchy.group_obligor::whole_group_increments": [
+    "CRR Art. 123",
+    "CRR Art. 501",
+    "PS1/26, paragraph 123A"
+  ],
+  "rwa_calc.engine.hierarchy.re_ltv::derive_missing_ltv": [
+    "CRR Art. 125",
+    "PS1/26, paragraph 124C"
+  ],
   "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments": [
     "PS1/26, paragraph 153",
     "PS1/26, paragraph 154",
@@ -759,6 +786,11 @@
   "rwa_calc.engine.sa.subordinated_debt::is_b31_subordinated_debt": [
     "PS1/26, paragraph 133"
   ],
+  "rwa_calc.engine.scope.resolver::resolve_group_population": [
+    "CRR Art. 123",
+    "CRR Art. 501",
+    "PS1/26, paragraph 123A"
+  ],
   "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate": [
     "CRR Art. 109",
     "CRR Art. 244",
@@ -817,6 +849,9 @@
     "CRR Art. 501"
   ],
   "rwa_calc.engine.supporting_factors::compute_e_star_group_drawn": [
+    "CRR Art. 501"
+  ],
+  "rwa_calc.engine.supporting_factors::e_star_contribution_expr": [
     "CRR Art. 501"
   ],
   "rwa_calc.reporting.corep.c02::generate_c02_00": [

@@ -5,13 +5,18 @@ Tests currency conversion functionality for exposures, collateral,
 guarantees, and provisions.
 """
 
+import dataclasses
 from datetime import date
 
 import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ERROR_FX_RATE_MISSING
+from rwa_calc.contracts.validation import validate_bundle_values
 from rwa_calc.engine.fx.converter import FXConverter, create_fx_converter
+from tests.fixtures.raw_bundle import seal_raw_table
+from tests.integration.conftest import make_loan, make_raw_data_bundle
 
 # =============================================================================
 # FIXTURES
@@ -223,7 +228,15 @@ class TestConvertExposures:
         fx_rates: pl.LazyFrame,
         config: CalculationConfig,
     ) -> None:
-        """Test that exposures with missing rates keep original values."""
+        """An exposure with no rate keeps its values - but no longer silently.
+
+        The converter has no ZAR rate and must not invent one, so the amount
+        passes through in ZAR units with its currency code kept. Before review
+        finding RC-11 nothing reported that 1:1 (here a ~20x overstatement, ZAR
+        being worth far less than GBP); the run now carries one DQ020 ERROR per
+        unconvertible currency (``contracts/validation.py``,
+        ``tests/unit/test_fx_missing_rate.py``), raised by the input gate.
+        """
         result = fx_converter.convert_exposures(multi_currency_exposures, fx_rates, config)
         df = result.collect()
 
@@ -231,6 +244,17 @@ class TestConvertExposures:
         zar_row = df.filter(pl.col("exposure_reference") == "EXP_UNK")
         assert zar_row["drawn_amount"][0] == 1000000.0
         assert zar_row["currency"][0] == "ZAR"
+        # ... and the pass-through is reported, for ZAR alone, by the input gate.
+        bundle = make_raw_data_bundle(
+            loans=[
+                make_loan(loan_reference=f"L_{ccy}", currency=ccy)
+                for ccy in ("GBP", "USD", "EUR", "ZAR")
+            ],
+            facility_mappings=[],
+        )
+        bundle = dataclasses.replace(bundle, fx_rates=seal_raw_table(fx_rates, "fx_rates"))
+        errors = validate_bundle_values(bundle, config=config)
+        assert [e.actual_value for e in errors if e.code == ERROR_FX_RATE_MISSING] == ["ZAR"]
 
     def test_fx_disabled_skips_conversion(
         self,

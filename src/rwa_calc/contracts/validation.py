@@ -75,6 +75,7 @@ from rwa_calc.contracts.errors import (
     absent_reference_error,
     duplicate_input_key_error,
     engine_only_risk_type_error,
+    fx_rate_missing_error,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
     orphan_reference_error,
@@ -86,6 +87,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
+    from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.data.column_spec import ColumnDomain, ForeignKey
 
 # Regulatory reference for collateral link validation (CRM)
@@ -497,6 +499,8 @@ def bundle_frames(bundle: RawDataBundle) -> dict[str, pl.LazyFrame | None]:
 def validate_bundle_values(
     bundle: RawDataBundle,
     constraints: dict[str, dict[str, set[str]]] | None = None,
+    *,
+    config: CalculationConfig | None = None,
 ) -> list[CalculationError]:
     """
     Validate the input domain of every column in a RawDataBundle.
@@ -507,11 +511,18 @@ def validate_bundle_values(
     - **Declared domains** — every ``ColumnSpec.domain`` the table's schema
       declares and the frame carries (:func:`_validate_declared_domains`),
       one aggregate plan per table, with the offending row named.
-    - **Categorical domains** against the constraints registry (DQ006), all
-      columns batched into a single plan.
+    - **Categorical domains** against the constraints registry (DQ006, or
+      DQ023 for an engine-only risk type on a lending table), all columns
+      batched into a single plan.
     - **Exposure-table rules** — unreferenced negative on-balance amounts
       (DQ010).
     - **Ratings** — the short-term rating scope contract (DQ002).
+
+    And, when ``config`` is supplied, one cross-table check: every amount in a
+    currency with no FX rate into the reporting currency (DQ020,
+    :func:`_validate_missing_fx_rates`), which needs the run's
+    ``base_currency`` and ``apply_fx_conversion`` and is therefore skipped by
+    the configless file-loader call and raised by the pipeline entry.
 
     Every per-table check is a :class:`_TableCheck`; all of them are executed
     in ONE ``pl.collect_all`` (:func:`_run_table_checks`) and decoded in
@@ -529,6 +540,8 @@ def validate_bundle_values(
     Args:
         bundle: RawDataBundle to validate
         constraints: Override constraints dict; defaults to COLUMN_VALUE_CONSTRAINTS
+        config: The run's configuration; enables the configuration-dependent
+            checks (DQ020). None skips them.
 
     Returns:
         List of CalculationError objects for any invalid values found
@@ -548,6 +561,10 @@ def validate_bundle_values(
         checks.extend(
             _table_checks(lf, table_name, constraints.get(table_name, {}), columns[table_name])
         )
+    if config is not None:
+        fx_check = _validate_missing_fx_rates(frames, columns, config)
+        if fx_check is not None:
+            checks.append(fx_check)
     all_errors = _run_table_checks(checks)
 
     # Cross-table referential integrity for the M:N collateral-links table.
@@ -1379,6 +1396,89 @@ def _validate_negative_amounts_without_netting(
             negative_amount_without_netting_warning(context=context, column=c, n=counts[c])
             for c in amount_cols
             if counts[c]
+        ]
+
+    return _TableCheck(plan=plan, decode=decode)
+
+
+def _validate_missing_fx_rates(
+    frames: Mapping[str, pl.LazyFrame | None],
+    columns: Mapping[str, frozenset[str]],
+    config: CalculationConfig,
+) -> _TableCheck | None:
+    """Report every currency the FX conversion has no rate for (DQ020).
+
+    ``engine/fx`` converts an amount only where ``fx_rates`` holds a
+    ``currency -> base_currency`` rate; every other amount passes through in its
+    source currency's units, keeps its currency code, and is read as reporting
+    currency by every threshold, total and template downstream (review finding
+    RC-11 - a 1:1 that understates or overstates by currency). This mirrors the
+    converter exactly: its exact-match ``currency == base_currency`` test, its
+    ``currency_to == base_currency`` rate rows, a null rate counting as none,
+    and no table at all meaning no rate for anything. A null currency is not
+    reported - there is no mismatch to measure and the converter leaves the
+    row alone for that reason, not for want of a rate. With conversion switched
+    off nothing is converted on purpose and nothing is reported.
+
+    The tables and amounts are ``data/schemas.py::FX_CONVERTED_AMOUNT_COLUMNS``
+    (a facility's currency is its undrawn rows'). One ERROR per currency,
+    naming rows and amounts per table; the amounts are left as they are - the
+    engine has no rate and must not invent one.
+    """
+    from rwa_calc.data.schemas import FX_CONVERTED_AMOUNT_COLUMNS
+
+    if not config.apply_fx_conversion:
+        return None
+    base = config.base_currency
+    plans: list[pl.LazyFrame] = []
+    for table, amount_columns in FX_CONVERTED_AMOUNT_COLUMNS.items():
+        frame = frames.get(table)
+        table_columns = columns.get(table, frozenset())
+        present = [c for c in amount_columns if c in table_columns]
+        if frame is None or "currency" not in table_columns or not present:
+            continue
+        # ``sum_horizontal`` ignores a null amount rather than nulling the sum.
+        amount = pl.sum_horizontal([pl.col(c).cast(pl.Float64, strict=False) for c in present])
+        plans.append(
+            frame.filter(pl.col("currency").is_not_null() & (pl.col("currency") != base)).select(
+                pl.col("currency").cast(pl.String).alias("_currency"),
+                amount.alias("_amount"),
+                pl.lit(table).alias("_table"),
+            )
+        )
+    if not plans:
+        return None
+
+    unconverted = pl.concat(plans, how="vertical")
+    fx_rates = frames.get("fx_rates")
+    if fx_rates is not None:
+        rated = (
+            fx_rates.filter((pl.col("currency_to") == base) & pl.col("rate").is_not_null())
+            .select(pl.col("currency_from").cast(pl.String).alias("_currency"))
+            .unique()
+        )
+        unconverted = unconverted.join(rated, on="_currency", how="anti")
+    plan = (
+        unconverted.group_by(["_currency", "_table"])
+        .agg(pl.len().alias("_rows"), pl.col("_amount").sum().alias("_amount"))
+        .sort(["_currency", "_table"])
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        by_currency: dict[str, list[dict[str, Any]]] = {}
+        for row in frame.iter_rows(named=True):
+            by_currency.setdefault(str(row["_currency"]), []).append(row)
+        return [
+            fx_rate_missing_error(
+                currency=currency,
+                base_currency=base,
+                rows=sum(int(row["_rows"]) for row in rows),
+                detail="; ".join(
+                    f"{row['_table']}: {row['_rows']} row(s), {float(row['_amount']):,.2f}"
+                    for row in rows
+                ),
+            )
+            for currency, rows in by_currency.items()
         ]
 
     return _TableCheck(plan=plan, decode=decode)

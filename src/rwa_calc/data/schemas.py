@@ -2553,6 +2553,21 @@ ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset(
     {"CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND"}
 )
 
+#: The input amounts ``engine/fx`` rebases to the reporting currency, per raw
+#: table, read by ``engine/fx/missing_rates.py`` to report (DQ020) the rows whose
+#: currency has no rate into ``base_currency`` and therefore pass through 1:1
+#: (review finding RC-11). Each table's ``currency`` column is the one the
+#: converter joins on; a facility's currency is its undrawn rows' currency.
+FX_CONVERTED_AMOUNT_COLUMNS: dict[str, tuple[str, ...]] = {
+    "loans": ("drawn_amount", "interest"),
+    "contingents": ("nominal_amount",),
+    "facilities": ("limit",),
+    "collateral": ("market_value",),
+    "guarantees": ("amount_covered",),
+    "provisions": ("amount",),
+    "equity_exposures": ("carrying_value",),
+}
+
 # What the hierarchy stage rewrites an engine-only risk type on a lending row to:
 # this prefix + the upper-cased value (``"DQ023:CCR_SFT"``). Deliberately NOT null.
 # An explicit but unrecognised risk type outranks ``obs_product`` and takes the CCF

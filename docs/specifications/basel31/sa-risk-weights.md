@@ -1694,8 +1694,8 @@ The calculator uses two input fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `is_adc` | Boolean | Flags the exposure as ADC — routes to Art. 124K treatment, bypassing all RE LTV-band logic |
-| `is_presold` | Boolean | Flags the ADC exposure as meeting Art. 124K(2) qualifying conditions — reduces RW from 150% to 100% |
+| `is_adc` | Boolean | Flags the exposure as ADC — routes to Art. 124K treatment, bypassing all RE LTV-band logic. Supplied on the **collateral** row (any-True across every real-estate pledge linked to the exposure, at any level) or derived from the loan/facility `is_under_construction` flag or a development-finance `product_type`; all three sit behind the Glossary's corporate / SPE gate |
+| `is_presold` | Boolean | Supplied on the **collateral** row: attests Art. 124K(2) condition (a) and limb (b)(i) — reduces a residential ADC exposure's RW from 150% to 100% |
 
 **Code:** `b31_adc_rw_expr()` in `engine/sa/b31_risk_weight_tables.py` dispatches on `is_presold`.
 ADC sits at priority 4 in the Basel 3.1 SA when-chain (`engine/sa/calculator.py`), after
@@ -1704,10 +1704,19 @@ or income-producing treatment.
 
 !!! warning "Qualifying assessment is external"
     The calculator does not validate whether Art. 124K(2) conditions are met. The reporting
-    institution must pre-evaluate prudent underwriting standards and pre-sale/equity-at-risk
-    thresholds, then set `is_presold = True` accordingly. PRA does not define quantitative
-    thresholds for "substantial" or "significant portion" — these are institution-level
-    judgements subject to supervisory review.
+    institution must pre-evaluate prudent underwriting standards and the pre-sale /
+    pre-lease threshold, then set `is_presold = True` accordingly. PRA does not define
+    quantitative thresholds for "substantial" or "significant portion" — these are
+    institution-level judgements subject to supervisory review.
+
+!!! note "Limb (b)(ii) — substantial equity at risk — has no input"
+    No field attests "the borrower has substantial equity at risk", so a residential ADC
+    exposure qualifying only through that limb stays at the conservative 150%.
+
+Before review RE-01 / RE-02 (2026-11) the collateral `is_adc` / `is_presold` flags were
+read by nothing: a corporate development loan flagged ADC only on its property was
+loan-split onto Art. 124F (20% on the secured part — 100,000 instead of 750,000 on a
+500,000 loan), and Art. 124K(2) could not be reached at all.
 
 ### Key Scenarios
 
@@ -1804,7 +1813,14 @@ The calculator uses two input fields to implement Art. 124C:
 
 The reporting institution is responsible for computing the stacked LTV externally:
 the calculator consumes the pre-computed `property_ltv` value and assumes it already
-incorporates Art. 124C(2)–(3) components. The separate `prior_charge_ltv` field
+incorporates Art. 124C(2)–(3) components. Where a property is linked with a
+`market_value` but no `property_ltv`, the hierarchy stage **derives** the LTV
+(`engine/hierarchy/re_ltv.py`) as the Art. 124C(2) amount of the loan — drawn plus
+accrued interest plus undrawn committed amount — over the property value, plus
+`prior_charge_ltv` (Art. 124C(3)); a facility or counterparty pledge uses the total
+of every exposure it secures. A `RE006` warning reports the substitution. Where
+neither a valued property nor an LTV exists, the exposure is not treated as real
+estate at all (see *Evidence of security* below). The separate `prior_charge_ltv` field
 enables the calculator to determine the junior charge effect on the loan-splitting
 threshold (55% of property value for both RRE under Art. 124F(1) and CRE under
 Art. 124H(1)).
@@ -1819,6 +1835,23 @@ Art. 124H(1)).
       Art. 124F(1)(a), 60% CRE per Art. 124H(1)(a)))
     - A first-charge exposure has `prior_charge_ltv = 0.0`
     - An exposure behind a senior lien has `prior_charge_ltv > 0.0`
+
+### Evidence of security (review CL-08 / RE-10)
+
+A real-estate risk weight needs evidence that the exposure is "secured by a charge on
+immovable property" (PS1/26 Glossary, *real estate exposure*): a linked property with a
+value (at any level), or an LTV. A mortgage `product_type` alone is not evidence.
+
+| Situation | Treatment |
+|-----------|-----------|
+| Valued property, `property_ltv` supplied | LTV as supplied (unchanged) |
+| Valued property, no `property_ltv` | LTV derived (above), `RE006` |
+| `ltv` on the loan row, no collateral link | LTV as supplied (now also when a collateral file exists that does not link to the loan) |
+| Property data but no value and no LTV | Art. 124J — Art. 124A(1)(d) cannot be met |
+| Mortgage label only (no property, no LTV) | Standardised Approach: the counterparty's class (e.g. regulatory retail 75%), `RE005`. IRB rows keep their IRB class; their Standardised-equivalent (output-floor) weight is the counterparty-class weight |
+
+Before this, a null LTV was filled to 100% here (Art. 124F at 44.75% for a natural
+person) whatever the loan and the property were.
 
 ---
 

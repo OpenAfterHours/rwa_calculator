@@ -916,6 +916,35 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "commercial_collateral_value_uncapped": EdgeColumn(dtype=pl.Float64),
         "has_facility_property_collateral": EdgeColumn(dtype=pl.Boolean),
         "re_collateral_non_qualifying": EdgeColumn(dtype=pl.Boolean),
+        # Collateral-level ADC flags, any-True per beneficiary and OR-ed across
+        # the direct / facility / counterparty levels (review RE-01 / RE-02).
+        # The classifier ORs ``re_collateral_is_adc`` into ``is_adc`` and carries
+        # ``re_collateral_is_presold`` as ``is_presold``. Optional with a False
+        # default so synthetic CCR rows (concatenated after the hierarchy) read
+        # "no ADC collateral".
+        "re_collateral_is_adc": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="PS1/26 Art. 124(3) / 124K(1)",
+        ),
+        "re_collateral_is_presold": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="PS1/26 Art. 124K(2)",
+        ),
+        # True where ``ltv`` was derived from the linked property value because
+        # no LTV was supplied (review RE-10; ``engine/hierarchy/re_ltv.py``).
+        "ltv_derived": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="PS1/26 Art. 124C",
+        ),
         "exposure_for_retail_threshold": EdgeColumn(dtype=pl.Float64),
         "lending_group_reference": EdgeColumn(
             dtype=pl.String,
@@ -1184,6 +1213,7 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         "is_mortgage": EdgeColumn(dtype=pl.Boolean),
         "is_infrastructure": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501a"),
         "is_adc": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 124K"),
+        "is_presold": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 124K(2)"),
         "qualifies_as_retail": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 123"),
         "retail_threshold_exclusion_applied": EdgeColumn(dtype=pl.Boolean),
         "requires_fi_scalar": EdgeColumn(dtype=pl.Boolean),

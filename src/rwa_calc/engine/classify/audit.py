@@ -11,8 +11,10 @@ Key responsibilities:
 - ``collect_input_warnings``: CLS008 warning for null corporate group
   annual_revenue under Basel 3.1 (Art. 147A(1)(d) conservatism) and CLS011
   for a group-revenue roll-up that forces F-IRB (Art. 147(4C)(b)(ii)).
-- ``collect_beel_on_non_defaulted_warnings``: DQ008 aggregate warning for
-  ``is_defaulted=False ∧ beel>0`` rows (eager — must run post-materialise).
+- ``collect_row_count_warnings``: the row-count roll-ups read in ONE eager
+  pass after the stage-exit materialise — DQ008 (``is_defaulted=False ∧
+  beel>0``), RE005 (mortgage label without evidence of security) and RE006
+  (LTV derived from the property value).
 - ``build_audit_trail``: per-exposure classification reason frame.
 
 References:
@@ -21,6 +23,9 @@ References:
   the roll-up flip warning (CLS011)
 - PS1/26 Art. 181(1)(h)(ii) / CRR Art. 158(5): BEEL defined for defaulted
   exposures only (DQ008 companion check)
+- PS1/26 Glossary "real estate exposure" / Art. 124A(1)(a), CRR Art. 125(1):
+  security, not a product label, makes an exposure real estate (RE005)
+- PS1/26 Art. 124C: LTV = amount of the loan / value of the property (RE006)
 - CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC Art. 2: SME fallback
   suppressing the CLS008 warning
 """
@@ -42,12 +47,15 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     beel_on_non_defaulted_exposure_warning,
     classification_warning,
+    ltv_derived_warning,
+    no_property_evidence_warning,
 )
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.classify.attributes import (
     natural_person_expr,
     with_group_annual_revenue,
 )
+from rwa_calc.engine.classify.re_evidence import re_evidence_count_exprs
 from rwa_calc.engine.classify.subtypes import (
     qrre_undrawn_cancellable_expr,
     qrre_unsecured_expr,
@@ -236,39 +244,53 @@ def collect_input_warnings(
     return errors
 
 
-def collect_beel_on_non_defaulted_warnings(
+def collect_row_count_warnings(
     classified: pl.LazyFrame,
 ) -> list[CalculationError]:
-    """Emit a single aggregate DQ008 warning summing ``(is_defaulted=False ∧ beel>0)`` rows.
+    """Emit the roll-up warnings that are row counts over the classified frame.
 
-    PS1/26 Art. 181(1)(h)(ii) and CRR Art. 158(5) define BEEL only for
-    defaulted exposures, but a firm's A-IRB model pipeline may emit a
-    BEEL-style value alongside LGD on performing rows. The classifier
-    deliberately does NOT treat ``beel > 0`` as a default trigger (see
-    ``_build_is_defaulted_expr``); this companion check surfaces the
-    input contradiction as a non-blocking data-quality warning so the
-    audit trail is explicit.
+    ONE eager read of the stage-exit frame (it runs post-materialise, so the
+    read is in-memory) computes every count, so adding a warning here costs the
+    run no extra collect (``tests/contracts/test_pipeline_collect_budget.py``):
 
-    Returns an empty list when no rows are offending (``beel`` is a
-    hierarchy_exit contract column — always present, null = not
-    supplied). Otherwise returns a single-element list carrying the
-    total count, matching the CLS006 / CLS008 roll-up pattern used by
-    every other classifier-stage warning. Reads the *derived*
-    ``is_defaulted`` so rows that the counterparty cascade legitimately
-    routes to defaulted are NOT flagged — those rows correctly consume
-    BEEL in the IRB defaulted formula.
+    - DQ008 — ``is_defaulted=False ∧ beel>0``. PS1/26 Art. 181(1)(h)(ii) and
+      CRR Art. 158(5) define BEEL only for defaulted exposures, but a firm's
+      A-IRB model pipeline may emit a BEEL-style value alongside LGD on
+      performing rows. The classifier deliberately does NOT treat ``beel > 0``
+      as a default trigger (see ``_build_is_defaulted_expr``); this surfaces the
+      input contradiction. Reads the *derived* ``is_defaulted`` so rows the
+      counterparty cascade legitimately routes to defaulted are NOT flagged.
+    - RE005 — a mortgage product label with no evidence of real-estate security
+      (``re_evidence.re_evidence_count_exprs``; review CL-08).
+    - RE006 — an LTV the hierarchy derived from the linked property value
+      (review RE-10).
+
+    Each warning is one roll-up carrying its count (the CLS006 / CLS008
+    pattern), and is omitted when its count is zero. ``beel`` and
+    ``ltv_derived`` are hierarchy_exit contract columns — always present.
     """
-    offender_count = (
-        classified.filter(
-            ~pl.col("is_defaulted").fill_null(False) & (pl.col("beel").fill_null(0.0) > 0.0)
+    counts = (
+        classified.select(
+            (~pl.col("is_defaulted").fill_null(False) & (pl.col("beel").fill_null(0.0) > 0.0))
+            .sum()
+            .alias("dq008"),
+            *[expr.alias(name) for name, expr in re_evidence_count_exprs().items()],
         )
-        .select(pl.len())
         .collect()
-        .item()
+        .row(0, named=True)
     )
-    if offender_count == 0:
-        return []
-    return [beel_on_non_defaulted_exposure_warning(n=offender_count)]
+    warnings: list[CalculationError] = []
+    if counts["dq008"]:
+        warnings.append(beel_on_non_defaulted_exposure_warning(n=counts["dq008"]))
+    if counts["re005_standardised"] or counts["re005_other"]:
+        warnings.append(
+            no_property_evidence_warning(
+                n_standardised=counts["re005_standardised"], n_other=counts["re005_other"]
+            )
+        )
+    if counts["re006"]:
+        warnings.append(ltv_derived_warning(n=counts["re006"]))
+    return warnings
 
 
 def collect_qrre_gate_demotion_warnings(

@@ -378,6 +378,12 @@ _SUBTYPES_SCHEMA: dict[str, PolarsDataType] = {
     "cp_apply_fi_scalar": pl.Boolean,
     "sme_size_metric_gbp": pl.Float64,
     "sme_size_source": pl.String,
+    # Real-estate evidence (review CL-08): the mortgage branch reads these
+    # hierarchy_exit columns to decide whether a mortgage label is backed by
+    # a valued property or an LTV.
+    "property_collateral_value": pl.Float64,
+    "has_facility_property_collateral": pl.Boolean,
+    "ltv": pl.Float64,
 }
 
 
@@ -423,6 +429,9 @@ def make_subtypes_frame(
             "cp_apply_fi_scalar": [False],
             "sme_size_metric_gbp": [None],
             "sme_size_source": [None],
+            "property_collateral_value": [0.0],
+            "has_facility_property_collateral": [False],
+            "ltv": [None],
         },
         schema=_SUBTYPES_SCHEMA,
     )

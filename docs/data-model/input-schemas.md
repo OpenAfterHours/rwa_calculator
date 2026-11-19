@@ -299,7 +299,7 @@ facilities = pl.DataFrame({
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `loan_reference` | `String` | Yes | Unique identifier for the loan |
-| `product_type` | `String` | No | Product classification |
+| `product_type` | `String` | No | Product classification. A `MORTGAGE` / `HOME_LOAN` label makes a natural person's loan a retail mortgage only with evidence of security — a linked `real_estate` collateral row with a `market_value`, or an LTV; without either a Standardised-Approach loan takes its counterparty's class and a `RE005` warning is raised (CRR Art. 125(1); PS1/26 Glossary, *real estate exposure*) |
 | `book_code` | `String` | No | Portfolio/book classification |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
 | `value_date` | `Date` | No | Loan origination date |
@@ -312,6 +312,7 @@ facilities = pl.DataFrame({
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `has_sufficient_collateral_data` | `Boolean` | No | A-IRB collateral data-quality attestation per Art. 181(1)(f). See Facility schema |
 | `seniority` | `String` | No | `senior` (default) or `subordinated` (affects F-IRB LGD) |
+| `ltv` | `Float64` | No | Loan-level LTV for a loan whose property data lives on the loan row. Used when no linked collateral supplies `property_ltv` (a linked collateral LTV wins), including when a collateral file exists that does not link to the loan |
 | `is_payroll_loan` | `Boolean` | No | Payroll-deduction / pension lending — qualifies for the Basel 3.1 35% retail RW (PS1/26 Art. 123(2)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
 | `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor in lieu of the standard 1-year floor |
@@ -496,11 +497,11 @@ contingents = pl.DataFrame({
 | `valuation_date` | `Date` | No | Date of last valuation |
 | `valuation_type` | `String` | No | `market`, `indexed`, `independent` |
 | `property_type` | `String` | No | `residential` or `commercial` (RE only) |
-| `property_ltv` | `Float64` | No | Regulatory LTV per Art. 124C — must include prior/pari passu charges (Art. 124C(3)) in numerator |
+| `property_ltv` | `Float64` | No | Regulatory LTV per Art. 124C — must include prior/pari passu charges (Art. 124C(3)) in numerator. When null on a `real_estate` row with a `market_value`, the LTV is **derived** as (drawn + accrued interest + undrawn committed amount) / property value + `prior_charge_ltv` — over every exposure the pledge secures for a facility / counterparty-level row — and a `RE006` warning is raised. A null-LTV row still supplies its `property_type` / `is_qualifying_re` / `is_income_producing` / `prior_charge_ltv` (a row carrying an LTV is preferred at the same level). No valued property and no LTV anywhere (collateral or loan `ltv`) → no real-estate weight (`RE005`) |
 | `prior_charge_ltv` | `Float64` | No | LTV portion from prior/pari passu charges only (Art. 124C(3)); 0.0 = first charge. Used by Art. 124F(2)/124G(2) junior charge treatment |
 | `is_income_producing` | `Boolean` | No | Material dependency on property cash flows per Art. 124E. `True` = materially dependent (residential: Art. 124G whole-loan; commercial: Art. 124I). `False`/null = not materially dependent (residential: Art. 124F loan-splitting; commercial: Art. 124H). For residential RE, this requires upstream assessment of Art. 124E(1) exceptions (primary residence, three-property limit, social housing, cooperative). For commercial RE, the own-business-use test (Art. 124E(6)). See [Art. 124E spec](../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e) |
-| `is_adc` | `Boolean` | No | Acquisition/Development/Construction |
-| `is_presold` | `Boolean` | No | ADC pre-sold to qualifying buyer |
+| `is_adc` | `Boolean` | No | Acquisition/Development/Construction (PS1/26 Art. 124K). Any-True across every `real_estate` row linked to the exposure (loan, facility or counterparty level); applies only to a corporate / SPE borrower (Glossary, *ADC exposure*). Basel 3.1: 150% on the whole exposure; CRR: the exposure is not loan-split and keeps its corporate weight |
+| `is_presold` | `Boolean` | No | Attests PS1/26 Art. 124K(2)(a) prudent underwriting and (b)(i) pre-sale / pre-lease contracts — a residential ADC exposure takes 100% (Basel 3.1 only). Any-True like `is_adc`. Limb (b)(ii), substantial equity at risk, has no input |
 | `rental_to_interest_ratio` | `Float64` | No | CRR Art. 126(2)(d): rental income / interest payments ratio. The ≥ 1.5 test gates the 50% preferential CRE risk weight; if absent, CRE collateral is conservatively treated as failing the test under CRR and the loan-splitter leaves the exposure in its original corporate / retail class. **Not used under Basel 3.1.** |
 | `liquidation_period_days` | `Int32` | No | Liquidation period in business days — used to scale supervisory haircuts under the Comprehensive method when the firm's holding period differs from the supervisory minimum (CRR Art. 224) |
 | `qualifies_for_zero_haircut` | `Boolean` | No | Repo-style transaction qualifying for the zero-haircut carve-out under CRR Art. 224(1) / Art. 227 (core market participants, eligible securities, daily margining) |

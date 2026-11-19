@@ -331,12 +331,12 @@ def derive_independent_flags(
     - Derives ``is_adc=True`` for corporate (non-natural-person) exposures
       whose financed property is under construction (``is_under_construction``
       on the loan/facility) or whose product type signals development finance.
+    - A real-estate collateral row flagged ``is_adc=True`` (propagated by the
+      hierarchy stage as ``re_collateral_is_adc``) is a third signal, OR-ed in
+      behind the same corporate gate; its ``is_presold`` is carried as
+      ``is_presold`` for the Art. 124K(2) weight.
     - Natural persons fail the corporate gate even when
       ``is_under_construction=True``.
-    - Any pre-existing non-null ``is_adc`` on the input row (e.g. propagated
-      from collateral by upstream stages) takes precedence via
-      ``pl.coalesce`` so the derivation cannot override an explicit
-      user-supplied flag.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     max_retail_exposure = float(
@@ -445,10 +445,13 @@ def derive_independent_flags(
             pl.col("_pt_upper").str.contains("INFRASTRUCTURE").alias("is_infrastructure"),
             # --- ADC classification (PRA PS1/26 Art. 124(3) / Art. 124K) ---
             # Derive ``is_adc`` from the loan/facility ``is_under_construction``
-            # flag (or a development-finance product_type) gated on a corporate
-            # / non-natural-person counterparty. Coalesce with any pre-existing
-            # ``is_adc`` value so an explicit user-supplied flag wins.
+            # flag, a development-finance product_type or the linked collateral's
+            # ``is_adc``, gated on a corporate / non-natural-person counterparty.
             _build_is_adc_expr(schema_names),
+            # PS1/26 Art. 124K(2)(b)(i) pre-sale / pre-lease attestation from the
+            # linked real-estate collateral (review RE-02); read only on the
+            # Basel 3.1 ADC branch (``b31_adc_rw_expr``).
+            pl.col("re_collateral_is_presold").alias("is_presold"),
             # --- Retail threshold check + Art. 123A conditions (B31) ---
             _build_qualifies_as_retail_expr(config, max_retail_exposure, pack=resolved_pack),
             pl.when(pl.col("residential_collateral_value") > 0)
@@ -535,15 +538,24 @@ def _build_is_adc_expr(schema_names: set[str]) -> pl.Expr:
     Derives ``is_adc=True`` when:
         - the financed property is under construction
           (``is_under_construction=True`` on the loan/facility), OR
-        - ``product_type`` indicates development finance / construction,
+        - ``product_type`` indicates development finance / construction, OR
+        - a real-estate collateral row linked to the exposure (at any level)
+          carries ``is_adc=True`` (``re_collateral_is_adc``, review RE-01 —
+          the flag the input documentation asks for, which before this was
+          read by nothing),
     AND the borrower passes the corporate gate:
         - counterparty entity_type is one of {corporate, company,
           specialised_lending}, AND
         - counterparty is NOT a natural person.
 
-    Any pre-existing non-null ``is_adc`` (e.g. propagated from collateral
-    upstream) wins via ``pl.coalesce`` — the derivation only fires when
-    ``is_adc`` is null on the input row.
+    The gate applies to the collateral flag too: the PS1/26 glossary defines
+    an ADC exposure as "an exposure to a corporate or special purpose entity
+    financing any land acquisition for development and construction
+    purposes, or financing development and construction of any residential
+    real estate or commercial real estate", so a natural person's
+    self-build stays on the real-estate tables. The flag is OR-ed, never
+    coalesced: the collateral column is loader-defaulted False, and a False
+    must not cancel a construction-loan derivation.
 
     Returns a ``pl.Expr`` aliased ``is_adc`` (Boolean).
     """
@@ -554,12 +566,14 @@ def _build_is_adc_expr(schema_names: set[str]) -> pl.Expr:
         ["corporate", "company", "specialised_lending"]
     )
     is_natural_person = pl.col("cp_is_natural_person").fill_null(False)
-    derived = is_corporate_entity & ~is_natural_person & (is_under_construction | is_adc_product)
+    adc_signal = is_under_construction | is_adc_product | pl.col("re_collateral_is_adc")
+    derived = is_corporate_entity & ~is_natural_person & adc_signal
 
-    # KEEP (presence guard on a non-contract column): ``is_adc`` is not
-    # declared on hierarchy_exit, so a sealed classifier input never
-    # carries it and the plain derivation applies. The coalesce branch
-    # preserves explicit-flag precedence for direct expression-level use.
+    # KEEP (presence guard on a non-contract column): an ``is_adc`` column is
+    # not declared on hierarchy_exit (the collateral flag arrives as
+    # ``re_collateral_is_adc``), so a sealed classifier input never carries
+    # it. The coalesce branch preserves explicit-flag precedence for direct
+    # expression-level use on hand-built frames.
     if "is_adc" in schema_names:
         return pl.coalesce(pl.col("is_adc"), derived).fill_null(False).alias("is_adc")
     return derived.alias("is_adc")
@@ -621,7 +635,7 @@ def _build_is_defaulted_expr() -> pl.Expr:
     firms whose A-IRB models emit a BEEL-style value alongside LGD on
     performing exposures would otherwise see those rows silently
     reclassified as defaulted. The post-classification step
-    ``_collect_beel_on_non_defaulted_warnings`` flags the contradictory
+    ``audit.collect_row_count_warnings`` flags the contradictory
     combination (``is_defaulted=False ∧ beel>0``) as a DQ008 warning so
     the input contradiction is visible without changing routing.
     """

@@ -161,12 +161,23 @@ class TestB31ResidentialGeneral:
 
         assert float(result["risk_weight"]) == pytest.approx(expected_rw, abs=1e-4)
 
-    def test_null_ltv_defaults_to_full_counterparty_rw(
+    def test_null_ltv_is_not_priced_on_the_loan_split_table(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Null LTV defaults to 1.0: secured_share = 55%, residual = 45%."""
+        """A null LTV is no evidence of security, so Art. 124F does not apply.
+
+        This test used to pin the defect (review CL-08 / RE-10): a null LTV was
+        filled to 1.0 and priced at the Art. 124F loan-split weight 0.4475. The
+        hierarchy now derives an LTV wherever a valued property is linked
+        (``engine/hierarchy/re_ltv.py``), so a null one means nothing shows the
+        exposure is "secured by a charge on immovable property" (PS1/26
+        glossary, real estate exposure). The LTV-driven route is skipped and
+        the row falls to the dispatcher's class fallback — 100% for this
+        synthetic RESIDENTIAL_MORTGAGE frame, which production never builds
+        without an LTV (the splitter always sets one on its secured legs).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
@@ -176,10 +187,8 @@ class TestB31ResidentialGeneral:
             config=b31_config,
         )
 
-        # fill_null(1.0) → LTV=1.0 → secured_share = 55/100 = 0.55
-        # RW = 0.20 × 0.55 + 0.75 × 0.45 = 0.4475
-        expected = _expected_loan_split_rw(1.0)
-        assert float(result["risk_weight"]) == pytest.approx(expected, abs=1e-4)
+        assert float(result["risk_weight"]) != pytest.approx(_expected_loan_split_rw(1.0))
+        assert float(result["risk_weight"]) == pytest.approx(1.0)
 
     def test_rwa_calculation(
         self,

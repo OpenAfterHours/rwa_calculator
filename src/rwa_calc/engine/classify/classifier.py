@@ -55,14 +55,15 @@ from rwa_calc.engine.classify.attributes import (
 )
 from rwa_calc.engine.classify.audit import (
     build_audit_trail,
-    collect_beel_on_non_defaulted_warnings,
     collect_input_warnings,
     collect_qrre_gate_demotion_warnings,
+    collect_row_count_warnings,
 )
 from rwa_calc.engine.classify.permissions import (
     emit_model_permission_diagnostics,
     resolve_model_permissions,
 )
+from rwa_calc.engine.classify.re_evidence import withhold_unevidenced_re_class
 from rwa_calc.engine.classify.subtypes import (
     classify_exposure_subtypes,
     derive_exposure_subclass,
@@ -167,6 +168,9 @@ class ExposureClassifier:
             has_model_permissions=has_model_permissions,
             pack=resolved_pack,
         )
+        # Review CL-08: a Standardised-Approach mortgage class resting on the
+        # product label alone takes its counterparty's class (needs ``approach``).
+        classified = withhold_unevidenced_re_class(classified)
         classified = derive_exposure_subclass(classified, config, pack=resolved_pack)
 
         # Stage-exit edge (producer-side): the diagnostic emits below run
@@ -175,7 +179,7 @@ class ExposureClassifier:
         # strictly intra-stage (migration Phase 1).
         classified = materialise_edge(classified, config, "classifier_exit")
 
-        classification_errors.extend(collect_beel_on_non_defaulted_warnings(classified))
+        classification_errors.extend(collect_row_count_warnings(classified))
         classification_errors.extend(collect_qrre_gate_demotion_warnings(classified))
         if has_model_permissions:
             classification_errors.extend(emit_model_permission_diagnostics(classified))

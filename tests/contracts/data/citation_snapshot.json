@@ -134,6 +134,14 @@
     "CRR Art. 148",
     "CRR Art. 150"
   ],
+  "rwa_calc.engine.classify.re_evidence::re_evidence_expr": [
+    "CRR Art. 125",
+    "PS1/26, paragraph 124A"
+  ],
+  "rwa_calc.engine.classify.re_evidence::withhold_unevidenced_re_class": [
+    "CRR Art. 124",
+    "PS1/26, paragraph 124"
+  ],
   "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes": [
     "CRR Art. 153(2)",
     "CRR Art. 142(1)(4)",
@@ -373,6 +381,10 @@
     "CRR Art. 136",
     "CRR Art. 138",
     "CRR Art. 139"
+  ],
+  "rwa_calc.engine.hierarchy.re_ltv::derive_missing_ltv": [
+    "CRR Art. 125",
+    "PS1/26, paragraph 124C"
   ],
   "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments": [
     "PS1/26, paragraph 153",

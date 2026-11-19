@@ -766,52 +766,51 @@ def _crr_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 
 @cites("CRR Art. 124")
 def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
-    """Append CRR commercial-then-residential RE branches (Art. 125-126)."""
-    ltv_safe = pl.col("ltv").fill_null(1.0)
+    """Append CRR commercial-then-residential RE branches (Art. 125-126).
+
+    The preferential weights need an LTV: Art. 125(2)(d) / 126(2)(d) cap them
+    at 80% / 50% "of the market value of the property", and the hierarchy
+    derives one wherever a valued property is linked (``hierarchy/re_ltv.py``).
+    A null LTV used to fill to 0.0 here — the 35% band (review RE-10). Now an
+    RRE row without one (a bare mortgage label, review CL-08) falls through to
+    its counterparty-class weight, and CRE without one takes Art. 124(1) 100%.
+    """
+    ltv = pl.col("ltv")
     # CRR Art. 126(2)(d) proportion split for CRE with income cover and LTV > 50%:
-    #   secured_share   = min(1.0, 50% / LTV)  -> portion attracting 50% RW
-    #   residual_share  = 1.0 - secured_share  -> portion attracting unsecured
-    #                     counterparty RW (Art. 124(1) -> Art. 122 corporate CQS)
-    # When LTV <= 50% the clamp drives secured_share = 1.0 so the average collapses
-    # to the preferential 50% RW, matching the pre-split behaviour.
-    cre_secured_share = pl.min_horizontal(pl.lit(1.0), _SA_CRR_RW["cre_ltv_threshold"] / ltv_safe)
+    # min(1, 50% / LTV) of the exposure at 50%, the rest at the counterparty's
+    # unsecured RW (Art. 124(1)); at LTV <= 50% the clamp gives the flat 50%.
+    cre_secured_share = pl.min_horizontal(pl.lit(1.0), _SA_CRR_RW["cre_ltv_threshold"] / ltv)
     cre_residual_share = pl.lit(1.0) - cre_secured_share
-    # CRR Art. 124(1): the residual leg attracts the counterparty's UNSECURED
-    # risk weight, i.e. the Art. 122 corporate CQS lookup — NOT a fixed 100%.
-    # Look up counterparty CQS against CORPORATE_RISK_WEIGHTS directly (rather
-    # than via the join-derived ``risk_weight``) so the rule still fires when
-    # the upstream class lookup did not resolve to CORPORATE (e.g. exposures
-    # reclassified to COMMERCIAL_MORTGAGE by the real-estate splitter).
+    # CRR Art. 124(1): the CRE residual takes the Art. 122 corporate CQS weight,
+    # NOT a fixed 100%, looked up directly so it still fires on rows the
+    # real-estate splitter reclassified to COMMERCIAL_MORTGAGE.
     cre_residual_rw = cqs_table_lookup_expr(
         "cqs",
         CORPORATE_RISK_WEIGHTS,
         pl.lit(float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])),
     )
-    # CRR Art. 124(1) again, on the Art. 125 RRE blend: the part above the
-    # Art. 125(2)(d) 80% limit takes the counterparty's unsecured RW. Unlike
-    # the CRE residual above it resolves the obligor's OWN ladder (Art. 123
-    # retail ahead of Art. 122 corporate) — an RRE obligor is usually a natural
-    # person, so the unconditional corporate lookup is wrong here.
+    # CRR Art. 124(1) on the Art. 125 blend: the part above 80% takes the obligor's
+    # OWN unsecured ladder (Art. 123 retail ahead of Art. 122) — usually a natural person.
     resi_residual_rw = crr_art_124_1_unsecured_cp_rw_expr()
     return (
         # Commercial RE must precede residential — see is_commercial_re_class.
         # CRR Art. 126: LTV + income cover.
         chain.when(is_commercial_re_class(uc))
         .then(
-            pl.when(pl.col("has_income_cover").fill_null(False))
+            pl.when(pl.col("has_income_cover").fill_null(False) & ltv.is_not_null())
             .then(
                 _SA_CRR_RW["cre_rw_low"] * cre_secured_share + cre_residual_rw * cre_residual_share
             )
             .otherwise(pl.lit(_SA_CRR_RW["cre_rw_standard"]))
         )
         # CRR Art. 125 LTV split.
-        .when(is_residential_re_class(uc))
+        .when(is_residential_re_class(uc) & ltv.is_not_null())
         .then(
-            pl.when(pl.col("ltv").fill_null(0.0) <= _SA_CRR_RW["resi_ltv_threshold"])
+            pl.when(ltv <= _SA_CRR_RW["resi_ltv_threshold"])
             .then(pl.lit(_SA_CRR_RW["resi_rw_low"]))
             .otherwise(
-                _SA_CRR_RW["resi_rw_low"] * _SA_CRR_RW["resi_ltv_threshold"] / ltv_safe
-                + resi_residual_rw * (ltv_safe - _SA_CRR_RW["resi_ltv_threshold"]) / ltv_safe
+                _SA_CRR_RW["resi_rw_low"] * _SA_CRR_RW["resi_ltv_threshold"] / ltv
+                + resi_residual_rw * (ltv - _SA_CRR_RW["resi_ltv_threshold"]) / ltv
             )
         )
     )

@@ -219,45 +219,47 @@ def test_the_map_is_not_in_the_common_pack() -> None:
     assert "obs_product_to_risk_type" not in common.ENTRIES
 
 
-def _bundle_with_product(product: str) -> object:
-    contingents = pl.DataFrame(
+def _bundle_with_product(product: str, table: str = "contingents") -> object:
+    reference = "contingent_reference" if table == "contingents" else "facility_reference"
+    amount = "nominal_amount" if table == "contingents" else "limit"
+    frame = pl.DataFrame(
         {
-            "contingent_reference": ["C1"],
+            reference: ["X1"],
             "counterparty_reference": ["CP001"],
-            "nominal_amount": [_NOMINAL],
+            amount: [_NOMINAL],
             "obs_product": [product],
         },
     ).lazy()
     return make_raw_bundle(
-        contingents=contingents,
+        **{table: frame},
         counterparties=pl.LazyFrame({"counterparty_reference": ["CP001"]}),
     )
 
 
+def _obs_product_dq006(bundle: object) -> list[object]:
+    return [
+        e
+        for e in validate_bundle_values(bundle)
+        if e.code == ERROR_INVALID_COLUMN_VALUE and e.field_name == "obs_product"
+    ]
+
+
+@pytest.mark.parametrize("table", ["contingents", "facilities"])
 @pytest.mark.parametrize("spelling", ["bankers_acceptance", "perf_bond", "doc_credit"])
-def test_documented_synonym_raises_no_dq006(spelling: str) -> None:
+def test_documented_synonym_raises_no_dq006(spelling: str, table: str) -> None:
     """CM-12: a documented spelling the engine prices correctly is not invalid input."""
     # Arrange
-    bundle = _bundle_with_product(spelling)
+    bundle = _bundle_with_product(spelling, table)
 
-    # Act
-    errors = validate_bundle_values(bundle)
-
-    # Assert
-    assert not [
-        e for e in errors if e.code == ERROR_INVALID_COLUMN_VALUE and e.field_name == "obs_product"
-    ]
+    # Act / Assert
+    assert not _obs_product_dq006(bundle)
 
 
-def test_an_unknown_product_still_raises_dq006() -> None:
+@pytest.mark.parametrize("table", ["contingents", "facilities"])
+def test_an_unknown_product_still_raises_dq006(table: str) -> None:
     """CM-12 control: widening to the synonyms must not accept arbitrary strings."""
     # Arrange
-    bundle = _bundle_with_product("NOT_A_PRODUCT")
+    bundle = _bundle_with_product("NOT_A_PRODUCT", table)
 
-    # Act
-    errors = validate_bundle_values(bundle)
-
-    # Assert
-    assert [
-        e for e in errors if e.code == ERROR_INVALID_COLUMN_VALUE and e.field_name == "obs_product"
-    ]
+    # Act / Assert
+    assert _obs_product_dq006(bundle)

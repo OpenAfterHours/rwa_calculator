@@ -45,11 +45,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: The per-input-row identity ``resolve_model_permissions`` folds its
-#: permission fan-out back onto (dropped before it returns).
-_ROW_KEY = "_mp_exposure_row"
-
-
 # =========================================================================
 # Model-level permission resolution (optional)
 # =========================================================================
@@ -104,7 +99,7 @@ def resolve_model_permissions(
     # (review finding RC-10, DQ019) — an SA-CCR and an SFT netting set with one
     # id both mint ``ccr__<id>`` with ``exposure_type`` ``ccr_netting_set``, and
     # keying the fold on (reference, type) still deleted one of them.
-    exposures = exposures.with_row_index(_ROW_KEY)
+    exposures = exposures.with_row_index("_mp_exposure_row")
 
     # The model_permissions frame is sealed at the loader edge
     # (raw_model_permissions), so the optional columns country_codes /
@@ -203,17 +198,17 @@ def resolve_model_permissions(
     # SA-precedence override is applied AFTER the .max() roll-up so any SA
     # row with permission_valid=True flips all IRB flags to False.
     result = result.with_columns(
-        pl.col("_sa_block_match").max().over(_ROW_KEY).alias("_sa_block"),
-        pl.col("_mp_row_joined").max().over(_ROW_KEY).alias("_mp_joined_any"),
-        pl.col("_sa_ppu_reason").max().over(_ROW_KEY).alias("ppu_reason"),
+        pl.col("_sa_block_match").max().over("_mp_exposure_row").alias("_sa_block"),
+        pl.col("_mp_row_joined").max().over("_mp_exposure_row").alias("_mp_joined_any"),
+        pl.col("_sa_ppu_reason").max().over("_mp_exposure_row").alias("ppu_reason"),
     ).with_columns(
-        (pl.col("_airb_match").max().over(_ROW_KEY) & ~pl.col("_sa_block")).alias(
+        (pl.col("_airb_match").max().over("_mp_exposure_row") & ~pl.col("_sa_block")).alias(
             "model_airb_permitted"
         ),
-        (pl.col("_firb_match").max().over(_ROW_KEY) & ~pl.col("_sa_block")).alias(
+        (pl.col("_firb_match").max().over("_mp_exposure_row") & ~pl.col("_sa_block")).alias(
             "model_firb_permitted"
         ),
-        (pl.col("_slotting_match").max().over(_ROW_KEY) & ~pl.col("_sa_block")).alias(
+        (pl.col("_slotting_match").max().over("_mp_exposure_row") & ~pl.col("_sa_block")).alias(
             "model_slotting_permitted"
         ),
     )
@@ -247,7 +242,7 @@ def resolve_model_permissions(
     # priority key keeps the most-informative diagnostic on the surviving
     # row (null > filter_rejected > unmatched_model_id > null_model_id).
     #
-    # One row per INPUT row (``_ROW_KEY``), not per reference: a loan and a
+    # One row per INPUT row (``_mp_exposure_row``), not per reference: a loan and a
     # contingent sharing a reference were collapsed here into ONE row, the
     # other's capital leaving the total (review finding RC-10). The hierarchy
     # stage re-keys colliding lending rows apart (DQ019,
@@ -270,7 +265,7 @@ def resolve_model_permissions(
         .sort(
             [
                 "exposure_reference",
-                _ROW_KEY,
+                "_mp_exposure_row",
                 "_diagnostic_priority",
                 "mp_approach",
                 "mp_country_codes",
@@ -279,7 +274,7 @@ def resolve_model_permissions(
             nulls_last=True,
             maintain_order=True,
         )
-        .unique(subset=[_ROW_KEY], keep="first", maintain_order=True)
+        .unique(subset=["_mp_exposure_row"], keep="first", maintain_order=True)
         .select(
             pl.exclude(
                 "mp_exposure_class",
@@ -296,7 +291,7 @@ def resolve_model_permissions(
                 "_mp_row_joined",
                 "_mp_joined_any",
                 "_diagnostic_priority",
-                _ROW_KEY,
+                "_mp_exposure_row",
             )
         )
     )

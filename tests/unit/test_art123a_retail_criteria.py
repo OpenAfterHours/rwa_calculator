@@ -57,10 +57,10 @@ def crr_config() -> CalculationConfig:
 
 @pytest.fixture
 def b31_config() -> CalculationConfig:
-    # enforce_retail_granularity=False isolates the Art. 123A(1)(a)/(b)(iii) limbs
-    # exercised in this file (SME auto-qualify, GBP 880k threshold, pool management)
-    # from the (b)(ii) 0.2% granularity limb, which needs a full granular portfolio
-    # and is covered separately by tests/acceptance/basel31/test_p5_15_*.
+    # enforce_retail_granularity=False (the production default since RE-04) keeps
+    # the optional 0.2% granularity test (BCBS CRE20.66, not a PS1/26 limb) out of
+    # the Art. 123A(1)(a)/(b)(ii)/(b)(iii) limbs exercised in this file; it needs a
+    # full granular portfolio and is covered by tests/acceptance/basel31/test_p5_15_*.
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 30), enforce_retail_granularity=False
     )
@@ -582,6 +582,29 @@ class TestNonRegulatoryRetailClassByRegime:
         )
         df = classifier.classify(bundle, b31_config).all_exposures.collect()
         assert df["exposure_class_irb"][0] == ExposureClass.RETAIL_OTHER.value
+
+
+# =============================================================================
+# RE-04 — the 0.2% granularity test is off unless a firm elects it
+# =============================================================================
+
+
+class TestRetailGranularityDefaultIsOff:
+    """Every construction route defaults ``enforce_retail_granularity`` to False.
+
+    PS1/26 Art. 123A(1)(b)(ii) is the GBP 880,000 aggregate test alone; the 0.2%
+    test is BCBS CRE20.66, which the PRA did not adopt. The dataclass field and the
+    ``basel_3_1`` factory parameter carry the default separately, so each is pinned:
+    a skeptic probe flipping only the field default left every other test green.
+    """
+
+    def test_dataclass_field_default_is_false(self) -> None:
+        field = CalculationConfig.__dataclass_fields__["enforce_retail_granularity"]
+        assert field.default is False
+
+    def test_basel_3_1_factory_default_is_false(self) -> None:
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+        assert config.enforce_retail_granularity is False
 
 
 # =============================================================================

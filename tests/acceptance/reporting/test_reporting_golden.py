@@ -106,11 +106,11 @@ def _crr_config() -> CalculationConfig:
 
 
 def _b31_config() -> CalculationConfig:
-    # enforce_retail_granularity=False: the 0.2%-of-portfolio retail granularity
-    # limb (Art. 123A(1)(b)(ii)) is unsatisfiable for a compact oracle portfolio;
-    # CRE20.66 national discretion permits suppressing it. Without this, every
-    # natural-person retail exposure reclassifies to corporate under B31 and the
-    # retail template rows would be unreachable.
+    # enforce_retail_granularity=False (the production default since RE-04): the
+    # optional 0.2%-of-portfolio test (BCBS CRE20.66, not a PS1/26 limb) is
+    # unsatisfiable for a compact oracle portfolio. Elected, every natural-person
+    # retail exposure fails regulatory retail under B31 and the regulatory-retail
+    # template rows would be unreachable.
     return CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 1),
         permission_mode=PermissionMode.IRB,

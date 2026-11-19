@@ -715,10 +715,11 @@ def _irb_config(framework: str) -> CalculationConfig:
     """IRB config, matching the IRB-classes goldens.
 
     ``enforce_retail_granularity=False`` on the Basel 3.1 arm, exactly as the rich
-    portfolio does. Without it the Art. 123A(1)(b)(ii) 0.2%-of-portfolio limb is
-    unsatisfiable for a compact oracle portfolio, every natural-person row
-    reclassifies to corporate, and the retail-mortgage and QRRE sheets vanish —
-    silently undoing the C 08.xx sheet-axis coverage this portfolio exists for.
+    portfolio does (the production default since RE-04). Electing the optional
+    0.2%-of-portfolio test (BCBS CRE20.66, not a PS1/26 limb) would fail every
+    natural-person row of a compact oracle portfolio as regulatory retail, and the
+    QRRE sheet would vanish — silently undoing the C 08.xx sheet-axis coverage
+    this portfolio exists for.
 
     Deliberately not sharing ``test_reporting_golden``'s helpers even though the
     two are currently identical: a change made for the rich portfolio must not
@@ -1058,8 +1059,8 @@ RUNS: tuple[GateInput, ...] = (
     # and the difference is load-bearing. ``_irb_config`` passes
     # ``enforce_retail_granularity=False`` on its Basel 3.1 arm so a compact
     # oracle portfolio's natural-person rows stay retail; THIS portfolio has no
-    # retail obligor at all, so the Art. 123A(1)(b)(ii) limb decides nothing here
-    # and the production default must stand. Cloning ``_irb_config`` would put
+    # retail obligor at all, so the optional 0.2% granularity test decides nothing
+    # here and the production default must stand. Cloning ``_irb_config`` would put
     # the portfolio inside the gate against a config that softens a feature its
     # own assertions describe — LESSONS B5's third form, registered with the
     # wrong config.

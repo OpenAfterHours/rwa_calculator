@@ -390,7 +390,7 @@ def qrre_obligor_aggregate_limit_expr(
 
     ⚠ The intra-facility ordinal is a ``cum_sum`` of the CANDIDATE MASK, not a
     row count. This is the difference from the sibling obligor-deduplication in
-    ``attributes.py`` (Art. 123A(1)(b)(ii) granularity), which divides by
+    ``attributes.py`` (the optional 0.2% granularity test), which divides by
     ``pl.len().over(...)``: candidacy genuinely differs across legs of one
     facility (a MOF root with two committed subs of differing ``risk_type``
     emits one cancellable and one non-cancellable waterfall leg), and a line

@@ -206,8 +206,8 @@ def b31_source() -> _Source:
     The Basel-3.1-only CMS templates (CMS1/CMS2) are None under CRR, so they
     tie out against this run. Mirrors the golden harness's B31 config
     (``test_reporting_golden.py::_b31_config``): the 2027 effective date and
-    ``enforce_retail_granularity=False`` so the compact oracle portfolio keeps
-    its retail exposures instead of reclassifying them all to corporate.
+    ``enforce_retail_granularity=False`` (the production default since RE-04) so
+    the compact oracle portfolio's retail exposures stay regulatory retail.
     """
     config = CalculationConfig.basel_3_1(
         reporting_date=date(2027, 6, 1),

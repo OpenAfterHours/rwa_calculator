@@ -58,8 +58,8 @@ entangling it here would make a failure ambiguous.
 Note the structural limit that absence records: the divergence chain needs every
 standardised member to sit BELOW the output-floor percentage, and regulatory
 retail sits above it at 75%, so no fixture that proves the floor-aware metric can
-also carry a retail obligor. The Art. 123A(1)(b)(ii) granularity denominator and
-the QRRE demotion path therefore need their own, separate fixtures.
+also carry a retail obligor. The optional 0.2% retail granularity test's
+denominator and the QRRE demotion path therefore need their own, separate fixtures.
 
 Regulatory values
 -----------------
@@ -75,8 +75,9 @@ References:
 - CRR Art. 122(1) Table 6; PS1/26 Art. 122(2) Table 6: the SA corporate weights.
 - CRR Art. 161(1)(a); PS1/26 Art. 161(1)(aa): the F-IRB supervisory LGD.
 - CRR Art. 158 / 159(1); PS1/26 Art. 92(2A): expected loss, Pool B and OF-ADJ.
-- PS1/26 Art. 123A(1)(b)(ii): the retail granularity limb — inert here, and the
-  config says so explicitly rather than by inheritance.
+- BCBS CRE20.66: the optional 0.2% retail granularity test (not a PS1/26 limb,
+  RE-04) — inert here, and the config states the production default explicitly
+  rather than by inheritance.
 - docs/plans/facility-share-riskiest-member.md: the design of record.
 """
 
@@ -243,8 +244,9 @@ def facility_share_config(
     difference is load-bearing: that helper passes
     ``enforce_retail_granularity=False`` on its Basel 3.1 arm so a compact oracle
     portfolio's natural-person rows stay retail. THIS portfolio has no retail
-    obligor at all, so the Art. 123A(1)(b)(ii) 0.2% limb decides nothing here and
-    the production default must stand. Registering this portfolio inside the
+    obligor at all, so the optional 0.2% granularity test decides nothing here and
+    the production default must stand (``False`` since RE-04: PS1/26 Art. 123A has
+    no 0.2% limb). Registering this portfolio inside the
     supervisory gate against a config that softens a feature its own assertions
     describe is the third form of the LESSONS B5 trap — registered, wrong config,
     dead cell. No number moves either way on this portfolio, which is exactly what
@@ -546,10 +548,10 @@ def _b31_config(reporting_date: date) -> CalculationConfig:
         reporting_date=reporting_date,
         permission_mode=PermissionMode.IRB,
         use_investment_grade_assessment=False,
-        # This portfolio has no retail obligor, so the Art. 123A(1)(b)(ii) limb
-        # decides nothing and the run must NOT be softened relative to production
-        # defaults. Stated rather than inherited — see facility_share_config.
-        enforce_retail_granularity=True,
+        # This portfolio has no retail obligor, so the optional 0.2% granularity
+        # test decides nothing and the run must sit on the production default
+        # (off since RE-04). Stated rather than inherited — see facility_share_config.
+        enforce_retail_granularity=False,
         gcra_amount=0.0,
         sa_t2_credit=0.0,
         art_40_deductions=0.0,

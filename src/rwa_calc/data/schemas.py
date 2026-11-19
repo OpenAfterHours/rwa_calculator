@@ -2021,29 +2021,45 @@ FAILED_TRADE_SCHEMA: dict[str, ColumnSpec] = {
 # CCP default-fund contributions.
 #
 # References:
-# - CRR Art. 308(2): K_CCP hypothetical capital + K_CM clearing-member
-#   allocation (K_CM = K_CCP x DF_i / DF_CM).
-# - CRR Art. 308(3): QCCP pre-funded own-funds (RWEA = K_CM x 12.5).
-# - CRR Art. 309(1)/(2): non-QCCP / unfunded treatment (same arithmetic).
+# - CRR Art. 308(2): QCCP pre-funded own funds
+#   K_i = max(K_CCP x DF_i / (DF_CCP + DF_CM), 8% x 2% x DF_i).
+# - CRR Art. 308(3): QCCP pre-funded RWEA = K_i x 12.5.
+# - CRR Art. 309(1)/(2): non-QCCP K = DF + UC (the contributions themselves);
+#   RWEA = K x 12.5.
+# - CRR Art. 310: unfunded contributions to a QCCP take a 0% risk weight.
 
 #: Default-fund-contribution input schema. ``is_qccp_ccp`` discriminates the
-#: Art. 308 (QCCP) vs Art. 309 (non-QCCP) branch; ``is_unfunded_commitment``
-#: selects the Art. 309 unfunded leg. The firm supplies ``k_ccp_published``
-#: (K_CCP), ``df_i_contribution_amount`` (DF_i) and
-#: ``df_cm_total_contributions`` (DF_CM); the engine derives K_CM and RWEA.
-#: Optional booleans default False per Art. 308/309 scope rules.
+#: Art. 308/310 (QCCP) vs Art. 309 (non-QCCP) branch; ``is_unfunded_commitment``
+#: marks an unfunded contribution (Art. 309 UC for a non-QCCP, Art. 310 0% for a
+#: QCCP). ``df_i_contribution_amount`` is the row's own contribution — DF_i when
+#: pre-funded, UC when unfunded. ``k_ccp_published`` (K_CCP), ``df_ccp_prefunded``
+#: (DF_CCP) and ``df_cm_total_contributions`` (DF_CM) are read only on the
+#: Art. 308(2) QCCP pre-funded branch. Optional booleans default False.
 DF_CONTRIBUTION_SCHEMA: dict[str, ColumnSpec] = {
     # Required — primary key + CCP reference.
     "contribution_id": ColumnSpec(pl.String),
     "ccp_reference": ColumnSpec(pl.String),
-    # QCCP flag (CRR Art. 272 Def (88)): True -> Art. 308, False -> Art. 309.
+    # QCCP flag (CRR Art. 272 Def (88)): True -> Art. 308/310, False -> Art. 309.
     "is_qccp_ccp": ColumnSpec(pl.Boolean, default=False, required=False),
-    # Art. 308(2) clearing-member allocation inputs.
-    "df_i_contribution_amount": ColumnSpec(pl.Float64),  # DF_i (>= 0)
-    "df_cm_total_contributions": ColumnSpec(pl.Float64),  # DF_CM (> 0 — denominator)
+    # The row's own contribution: DF_i (pre-funded) or UC (unfunded), >= 0.
+    "df_i_contribution_amount": ColumnSpec(pl.Float64),
+    # Art. 308(2) QCCP pre-funded allocation inputs, as communicated by the CCP
+    # (EMIR Art. 50c). DF_CM > 0 is the denominator's clearing-member term.
+    "df_cm_total_contributions": ColumnSpec(pl.Float64),
+    # DF_CCP — the CCP's own pre-funded financial resources. Optional: an absent
+    # value is read as 0 by the engine, which can only RAISE K_i (smaller
+    # denominator), so omitting it is conservative, never a silent relief.
+    "df_ccp_prefunded": ColumnSpec(
+        pl.Float64,
+        required=False,
+        domain=NumericDomain(
+            lower=0.0,
+            reason="DF_CCP is a stock of pre-funded resources and cannot be negative",
+        ),
+    ),
     # Art. 308(2) K_CCP supplied by the firm (simulation out of scope).
     "k_ccp_published": ColumnSpec(pl.Float64),  # K_CCP (>= 0)
-    # Art. 309 unfunded-commitment flag — meaningful only when is_qccp_ccp=False.
+    # Unfunded-contribution flag: Art. 309 UC (non-QCCP) or Art. 310 (QCCP, 0%).
     "is_unfunded_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
@@ -2688,6 +2704,7 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
     "ccr.netting_sets": "netting_set_id",
     "ccr.margin_agreements": "margin_agreement_id",
     "ccr.ccr_collateral": "ccr_collateral_reference",
+    "ccr.default_fund_contributions": "contribution_id",
     "sft.trades": "trade_id",
     "sft.collateral": "sft_collateral_reference",
 }

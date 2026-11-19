@@ -33,10 +33,29 @@ Key responsibilities:
   collections.
 
 The CVA stage joins the BA-CVA counterparty frame onto the SA-CCR synthetic
-exposure rows (``exposure_reference`` like ``ccr__<ns_id>``) so EAD_NS is the
-same ``ead_final`` the rest of the pipeline carries — the BA-CVA charge is
-computed off the live SA-CCR EAD, not a hand-coded value. CVA hedges (when
-present) are matched to counterparties via ``counterparty_reference``.
+derivative netting-set rows (``risk_type == CCR_DERIVATIVE``), one per netting
+set (CC-15, 2026-11 review):
+
+- EAD_NS is the netting set's SA-CCR exposure value ``ead_ccr`` — PS1/26 4.3:
+  "calculated in the same manner in which the firm calculates exposure at
+  default for determining own funds requirements for counterparty credit risk,
+  in accordance with either Sections 3 to 5 of Counterparty Credit Risk (CRR)
+  Part" — not the post-CRM ``ead_final``, which lending-side CRM can cut and
+  guarantee substitution splits across legs. A split netting set is counted
+  once (its legs share ``source_netting_set_id`` and ``ead_ccr``).
+- alpha is the netting set's own ``alpha_applied`` — 4.3: "alpha = the value of
+  alpha as specified in the Counterparty Credit Risk (CRR) Part", which Annex R
+  Art. 274(2) sets to 1 for a non-financial or pension-scheme counterparty and
+  1.4 otherwise. Dividing every netting set by 1.4 understated an NFC's SCVA_c
+  by 1 - 1/1.4 = 28.6%.
+- FCCM SFT rows share the ``ccr__`` prefix but are excluded: an SFT is a covered
+  transaction only if it is fair-valued AND its CVA risk is material (1.2
+  "covered transaction" (2)), neither of which the input carries.
+
+CVA hedges (when present) are matched to counterparties via
+``counterparty_reference``. ``uncovered_cva_counterparty_errors`` (CC-16) names
+every derivative counterparty with no CVA input row instead of letting the inner
+join drop it silently.
 
 CRITICAL: SNH_c (PS1/26 4.7) carries NO (1/alpha) factor, unlike SCVA_c (4.3).
 
@@ -51,7 +70,8 @@ References:
 - PRA PS1/26 CVA Part 4.9 (HMA_c indirect-hedge misalignment; page 403).
 - PRA PS1/26 CVA Part 4.10 (r_hc single-name supervisory correlation; page 403).
 - PRA PS1/26 Own Funds Part 4(b) (own-funds -> RWEA multiplier = 12.5).
-- CRR Art. 274(2) (SA-CCR alpha = 1.4 sourced from the common pack).
+- PRA PS1/26 CVA Part 1.2 ("covered transaction"); 4.1 (BA-CVA scope).
+- CCR (CRR) Part Art. 274(2) as amended by PS1/26 Annex R (alpha per netting set).
 """
 
 from __future__ import annotations
@@ -61,6 +81,8 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import polars as pl
 
+from rwa_calc.contracts.errors import ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED, CalculationError
+from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, RiskType
 from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
@@ -101,9 +123,10 @@ def compute_ba_cva_rwa(
             ``cva_rw_rating_band``, ``cva_effective_maturity_years`` (M_NS) and
             ``cva_in_scope``.
         ccr_exposures: The aggregated results frame restricted (by the caller)
-            to the SA-CCR netting-set rows that carry ``ead_final`` and a
-            ``counterparty_reference``. The CVA frame is joined onto these so
-            EAD_NS is the live SA-CCR EAD.
+            to the synthetic ``ccr__`` rows. Read: ``risk_type``,
+            ``source_netting_set_id``, ``counterparty_reference``, ``ead_ccr``
+            (EAD_NS) and ``alpha_applied`` (alpha). Only CCR_DERIVATIVE rows
+            are used, one per netting set.
         pack: The run's resolved rulepack. Sources DS_BA-CVA, rho, beta, the
             discount rate, alpha, the supervisory RW table, the r_hc correlation
             table, the index diversification factor and the own-funds -> RWA
@@ -121,19 +144,19 @@ def compute_ba_cva_rwa(
         the full-K path, ``False`` for the reduced path).
 
     References:
-        PRA PS1/26 CVA Part 4.2-4.10; Own Funds Part 4(b); CRR Art. 274(2).
+        PRA PS1/26 CVA Part 4.2-4.10; Own Funds Part 4(b); CCR (CRR) Part
+        Art. 274(2) as amended by PS1/26 Annex R.
     """
     ds_ba_cva = scalar_value(pack.scalar_param("ds_ba_cva"))
     rho = scalar_value(pack.scalar_param("cva_ba_supervisory_correlation"))
     discount_rate = scalar_value(pack.scalar_param("cva_ba_supervisory_discount_rate"))
-    alpha = scalar_value(pack.scalar_param("sa_ccr_alpha"))
     own_funds_to_rwa = scalar_value(pack.scalar_param("own_funds_to_rwa_factor"))
 
     rw_rows, rw_default = _supervisory_rw_rows(pack)
 
     # SCVA_c per counterparty from the live SA-CCR EAD (PS1/26 4.3).
     scva = _scva_per_counterparty(
-        cva_counterparties, ccr_exposures, rw_rows, rw_default, alpha, discount_rate
+        cva_counterparties, _covered_netting_sets(ccr_exposures), rw_rows, rw_default, discount_rate
     )
 
     # Reduced path when no hedge frame is supplied OR every supplied hedge is
@@ -175,6 +198,62 @@ def compute_ba_cva_rwa(
     return BaCvaResult(rwea=rwea, hedges_recognised=rwea is not None)
 
 
+def uncovered_cva_counterparty_errors(
+    ccr_exposures: pl.LazyFrame,
+    cva_counterparties: pl.LazyFrame | None,
+) -> list[CalculationError]:
+    """Name every derivative counterparty that has no BA-CVA input row (CC-16).
+
+    PS1/26 CVA Part 4.1 requires own funds for CVA risk on all covered
+    transactions, and 1.2 makes every derivative a covered transaction except,
+    among others, "(a) derivatives transacted directly with a qualifying central
+    counterparty". Without a row in ``cva_counterparties`` a counterparty has no
+    sector, credit quality or M_NS, so ``_scva_per_counterparty``'s inner join
+    drops it and its CVA charge is silently zero. This returns one WARNING per
+    such counterparty (code CCR030), in counterparty order.
+
+    Not warned: QCCP derivatives (exclusion (1)(a); ``cp_is_qccp`` null reads as
+    qualifying, the SA pin's convention), SFT rows (covered only when
+    fair-valued and material), and counterparties listed with
+    ``cva_in_scope=False`` — an explicit statement, e.g. a 3.2 exemption or a
+    client-clearing exclusion (1)(b)-(d) the input cannot otherwise carry.
+    """
+    # Null-total by construction (``eq_missing``; Kleene ``is_null() | col``), so
+    # an unknown entity type is warned rather than silently filtered out.
+    is_qccp = pl.col("cp_entity_type").eq_missing("ccp") & (
+        pl.col("cp_is_qccp").is_null() | pl.col("cp_is_qccp")
+    )
+    derivative_counterparties = ccr_exposures.filter(
+        pl.col("risk_type").eq_missing(RiskType.CCR_DERIVATIVE.value) & ~is_qccp
+    ).select("counterparty_reference")
+    if cva_counterparties is not None:
+        derivative_counterparties = derivative_counterparties.join(
+            cva_counterparties.select("counterparty_reference"),
+            on="counterparty_reference",
+            how="anti",
+        )
+    missing = _collect_sums(derivative_counterparties.unique().sort("counterparty_reference"))
+    if missing is None:
+        return []
+    return [
+        CalculationError(
+            code=ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED,
+            message=(
+                f"Counterparty {ref!r} has OTC derivative netting sets but no row in the "
+                "BA-CVA counterparty input, so no CVA own funds are calculated for it. "
+                "Supply its CVA sector, credit quality and M_NS, or list it with "
+                "cva_in_scope=False if its derivatives are not covered transactions."
+            ),
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.DATA_QUALITY,
+            counterparty_reference=ref,
+            regulatory_reference="PS1/26 CVA Risk Part 1.2 (covered transaction), 4.1",
+            field_name="cva_counterparties",
+        )
+        for ref in missing["counterparty_reference"].to_list()
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Supporting functions
 # ---------------------------------------------------------------------------
@@ -191,15 +270,37 @@ def _supervisory_rw_rows(pack: ResolvedRulepack) -> tuple[dict[tuple[str, str], 
     return rw_rows, rw_default
 
 
+def _covered_netting_sets(ccr_exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """One row per derivative netting set: counterparty, EAD_NS and alpha (CC-15).
+
+    Guarantee substitution splits a netting set into legs that each carry the
+    netting set's ``ead_ccr``; collapsing on ``source_netting_set_id`` counts the
+    exposure value once. FCCM SFT rows are dropped (not covered by default).
+    """
+    return (
+        ccr_exposures.filter(pl.col("risk_type") == RiskType.CCR_DERIVATIVE.value)
+        .group_by("source_netting_set_id")
+        .agg(
+            pl.col("counterparty_reference").first(),
+            pl.col("ead_ccr").first(),
+            pl.col("alpha_applied").first(),
+        )
+    )
+
+
 def _scva_per_counterparty(
     cva_counterparties: pl.LazyFrame,
-    ccr_exposures: pl.LazyFrame,
+    netting_sets: pl.LazyFrame,
     rw_rows: dict[tuple[str, str], float],
     rw_default: float,
-    alpha: float,
     discount_rate: float,
 ) -> pl.LazyFrame:
-    """SCVA_c = (1/alpha) . RW_c . SUM_NS[ M_NS . EAD_NS . DF_NS ] (PS1/26 4.3)."""
+    """SCVA_c = RW_c . SUM_NS[ M_NS . EAD_NS . DF_NS / alpha_NS ] (PS1/26 4.3).
+
+    The (1/alpha) factor sits inside the sum because alpha is the CCR Part's
+    value for each netting set (``alpha_applied``); every netting set of one
+    counterparty carries the same value, so this equals 4.3's factored form.
+    """
     rw_frame = pl.LazyFrame(
         {
             "cva_rw_sector": [sector for sector, _ in rw_rows],
@@ -210,9 +311,9 @@ def _scva_per_counterparty(
 
     m_ns = pl.col("cva_effective_maturity_years")
     df_ns = (1.0 - (-discount_rate * m_ns).exp()) / (discount_rate * m_ns)
-    per_ns_term = (m_ns * pl.coalesce(pl.col("ead_final"), pl.lit(0.0)) * df_ns).alias(
-        "_cva_ns_term"
-    )
+    per_ns_term = (
+        m_ns * pl.coalesce(pl.col("ead_ccr"), pl.lit(0.0)) * df_ns / pl.col("alpha_applied")
+    ).alias("_cva_ns_term")
 
     in_scope = cva_counterparties.filter(pl.col("cva_in_scope")).select(
         "counterparty_reference",
@@ -222,15 +323,12 @@ def _scva_per_counterparty(
     )
 
     return (
-        ccr_exposures.select("counterparty_reference", "ead_final")
-        .join(in_scope, on="counterparty_reference", how="inner")
+        netting_sets.join(in_scope, on="counterparty_reference", how="inner")
         .join(rw_frame, on=["cva_rw_sector", "cva_rw_rating_band"], how="left")
         .with_columns(pl.coalesce(pl.col("_cva_rw_c"), pl.lit(rw_default)).alias("_cva_rw_c"))
         .with_columns(per_ns_term)
         .group_by("counterparty_reference")
-        .agg(
-            ((1.0 / alpha) * pl.first("_cva_rw_c") * pl.col("_cva_ns_term").sum()).alias("_scva_c")
-        )
+        .agg((pl.first("_cva_rw_c") * pl.col("_cva_ns_term").sum()).alias("_scva_c"))
     )
 
 
@@ -347,12 +445,13 @@ def _hedge_correlation_expr(rows: dict[str, float], default: float) -> pl.Expr:
 
 
 def _collect_sums(plan: pl.LazyFrame) -> pl.DataFrame | None:
-    """Materialise a single-row portfolio-sum plan; the sole engine collect here.
+    """Materialise a small plan; the sole engine collect here.
 
-    Both the reduced (SUM SCVA_c) and full (SUM net_c / HMA_c / IH) aggregates
-    funnel through this one materialisation boundary, keeping the eager-collect
-    surface flat. Returns ``None`` when the plan yields no rows (no in-scope
-    counterparty with matching EAD).
+    The reduced (SUM SCVA_c) and full (SUM net_c / HMA_c / IH) aggregates and the
+    CC-16 uncovered-counterparty list all funnel through this one
+    materialisation boundary, keeping the eager-collect surface flat. Returns
+    ``None`` when the plan yields no rows (no in-scope counterparty with
+    matching EAD, or no uncovered counterparty).
     """
     out = plan.collect()
     return out if out.height else None
@@ -380,4 +479,4 @@ def _has_eligible_hedge(cva_hedges: pl.LazyFrame) -> bool:
     return int(eligible.item(0, "n") or 0) > 0
 
 
-__all__ = ["BaCvaResult", "compute_ba_cva_rwa"]
+__all__ = ["BaCvaResult", "compute_ba_cva_rwa", "uncovered_cva_counterparty_errors"]

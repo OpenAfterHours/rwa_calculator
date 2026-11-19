@@ -1,6 +1,6 @@
 {
   "_comment": "Declared input-domain ratchet (scripts/check_input_domains.py --check). One id per column carrying a ColumnSpec.domain, as <SCHEMA>::<column>. REMOVALS ARE A HARD FAILURE and --update-baseline refuses to make one: a domain that disappears is coverage going backwards, which is what clearing a red gate by deleting the bound looks like. Additions are the outcome we want and must still be banked here so the next removal is visible. docs/plans/test-space-correctness-proposal.md Phase 1.",
-  "count": 75,
+  "count": 76,
   "declared_domains": [
     "CCR_COLLATERAL_SCHEMA::haircut_override",
     "CCR_COLLATERAL_SCHEMA::issuer_cqs",
@@ -36,6 +36,7 @@
     "COUNTERPARTY_SCHEMA::sovereign_cqs",
     "CVA_COUNTERPARTY_SCHEMA::cva_effective_maturity_years",
     "CVA_HEDGE_SCHEMA::cva_hedge_residual_maturity_years",
+    "DF_CONTRIBUTION_SCHEMA::df_ccp_prefunded",
     "EQUITY_EXPOSURE_SCHEMA::business_age_years",
     "EQUITY_EXPOSURE_SCHEMA::carrying_value",
     "EQUITY_EXPOSURE_SCHEMA::ciu_mandate_rw",

@@ -8,18 +8,28 @@ Pipeline position:
 Key responsibilities:
 - Validate that default-fund-contribution (DFC) RWEA is wired into the full
   pipeline output, producing one synthetic SA exposure row per contribution
-  via the Art. 308/309 K_CM × 12.5 formula.
+  via the Art. 308/309 K × 12.5 formula.
 - Validate per-row RWA against three Art. 308/309 branches (QCCP pre-funded,
   non-QCCP pre-funded, non-QCCP unfunded) using the P8.49 fixture constants.
 - Validate portfolio-total RWA delta (with vs without default_fund_contributions)
-  == 26,875,000.
+  == 41,250,000.
 - Validate the bundle-level roll-up field ``rwa_ccr_default_fund``.
 
 Scenario (three independent DFC rows):
     CCR-B2: DFC_B2, QCCP pre-funded  (Art. 308), K_CM=1,000,000  -> RWEA  12,500,000
-    CCR-B3: DFC_B3, non-QCCP prefund (Art. 309), K_CM=750,000    -> RWEA   9,375,000
-    CCR-B4: DFC_B4, non-QCCP unfunded(Art. 309), K_CM=400,000    -> RWEA   5,000,000
-    Portfolio total RWEA = 26,875,000.
+    CCR-B3: DFC_B3, non-QCCP prefund (Art. 309), K=DF=1,500,000  -> RWEA  18,750,000
+    CCR-B4: DFC_B4, non-QCCP unfunded(Art. 309), K=UC=800,000    -> RWEA  10,000,000
+    Portfolio total RWEA = 41,250,000.
+
+CC-10 (2026-11 review) — defect-pinning values corrected. B3/B4 were pinned at
+K_CCP x DF_i / DF_CM (750,000 / 400,000): the Art. 308(2) QCCP allocation applied
+to a NON-qualifying CCP. PRA CCR (CRR) Part Art. 309(1): "K = DF + UC where ...
+DF = the pre-funded contributions to the default fund of a non-qualifying CCP;
+and UC = the unfunded contributions to the default fund of a non-qualifying
+CCP" — the contributions themselves are the own-funds requirement, so both rows
+were understated 2x. B2 is unchanged: Art. 308(2) K_i = max(K_CCP x DF_i /
+(DF_CCP + DF_CM), 8% x 2% x DF_i) with no DF_CCP supplied (read as 0) gives
+max(1,000,000, 3,200).
 
 Expected synthetic row provenance contract (agreed with engine-implementer):
     exposure_reference = 'dfc__' + contribution_id   (e.g. 'dfc__DFC_B2')
@@ -46,13 +56,13 @@ EXPECTED FAILURE MODE (pre-implementation):
     thing the engine-implementer must add.  It is NOT an import error or fixture bug.
 
     Once the field lands (and the engine is wired), the bundle constructs cleanly and
-    the PRIMARY assertion (delta == 26,875,000) fires if the DFC sub-stage is not yet
+    the PRIMARY assertion (delta == 41,250,000) fires if the DFC sub-stage is not yet
     wired into ``engine/stages/ccr.py``.
 
 References:
     - CRR Art. 308(2) (K_CCP + K_CM clearing-member allocation)
     - CRR Art. 308(3) (QCCP pre-funded own-funds: RWEA = K_CM × 12.5)
-    - CRR Art. 309(1)/(2) (non-QCCP / unfunded treatment; same arithmetic)
+    - CRR Art. 309(1)/(2) (non-QCCP: K = DF + UC; RWEA = K × 12.5)
     - CRR Art. 92(3)(ca) (own_funds_to_rwa_factor = 12.5; pack value reused)
     - BCBS CRE54.18-54.32
     - tests/fixtures/ccr/p849_default_fund_builder.py: fixture builder + expected constants
@@ -324,16 +334,16 @@ class TestCCRB2B4DefaultFund:
 
     Tests verify:
       1. PRIMARY (robust): firm-total RWA delta (with vs without DFC frame)
-         == 26,875,000.  PRE-IMPLEMENTATION: TypeError at bundle construction
+         == 41,250,000.  PRE-IMPLEMENTATION: TypeError at bundle construction
          (``default_fund_contributions`` field missing from RawCCRBundle).
       2. B2 per-row RWEA == 12,500,000 (QCCP, Art. 308).
-      3. B3 per-row RWEA == 9,375,000 (non-QCCP pre-funded, Art. 309).
-      4. B4 per-row RWEA == 5,000,000 (non-QCCP unfunded, Art. 309).
+      3. B3 per-row RWEA == 18,750,000 (non-QCCP pre-funded, Art. 309).
+      4. B4 per-row RWEA == 10,000,000 (non-QCCP unfunded, Art. 309).
       5. Synthetic risk_weight == 12.5 for each of B2/B3/B4.
       6. Provenance contract: exposure_reference, ccr_method, drawn_amount,
          regulatory_band for each of B2/B3/B4.
       7. Bundle-level rwa_ccr_default_fund:
-         B2-only run -> 12,500,000; combined run -> 26,875,000.
+         B2-only run -> 12,500,000; combined run -> 41,250,000.
     """
 
     def test_ccr_b2_b4_portfolio_rwa_delta(
@@ -342,22 +352,22 @@ class TestCCRB2B4DefaultFund:
         ccr_b234_no_dfc_results: pl.DataFrame,
     ) -> None:
         """
-        PRIMARY: firm-total RWA with DFC frame MINUS firm-total RWA without == 26,875,000.
+        PRIMARY: firm-total RWA with DFC frame MINUS firm-total RWA without == 41,250,000.
 
         Arrange: two pipeline runs — one with combined B2+B3+B4 default_fund_contributions,
                  one with default_fund_contributions=None; otherwise identical.
         Act:     sum rwa_final across all rows in each run's results.
-        Assert:  delta == 26,875,000 exactly (abs tol 1.0).
+        Assert:  delta == 41,250,000 exactly (abs tol 1.0).
 
         PRE-IMPLEMENTATION: TypeError at bundle construction because
         ``default_fund_contributions`` is not yet a field on ``RawCCRBundle``.
         Once the field lands but the DFC sub-stage is unwired, delta == 0, not
-        26,875,000 — the secondary AssertionError becomes the TDD red signal.
+        41,250,000 — the secondary AssertionError becomes the TDD red signal.
 
         References:
             CRR Art. 308(3): QCCP  K_CM × 12.5 = 1,000,000 × 12.5 = 12,500,000
-            CRR Art. 309(2): non-QCCP K_CM × 12.5 = 750,000 × 12.5 = 9,375,000
-            CRR Art. 309(2): unfunded K_CM × 12.5 = 400,000 × 12.5 = 5,000,000
+            CRR Art. 309(1)/(2): non-QCCP K = DF = 1,500,000 × 12.5 = 18,750,000
+            CRR Art. 309(1)/(2): unfunded K = UC = 800,000 × 12.5 = 10,000,000
             CRR Art. 92(3)(ca): own_funds_to_rwa_factor = 12.5
         """
         # Arrange
@@ -376,7 +386,7 @@ class TestCCRB2B4DefaultFund:
             f"(with={total_with:,.0f}, without={total_without:,.0f}). "
             "The DFC sub-stage (compute_dfc_capital) must be wired into "
             "engine/stages/ccr.py and its synthetic rows appended to the aggregated results. "
-            "CRR Art. 308(3)/309(2): 12,500,000 + 9,375,000 + 5,000,000 = 26,875,000."
+            "CRR Art. 308(3)/309(2): 12,500,000 + 18,750,000 + 10,000,000 = 41,250,000."
         )
 
     def test_ccr_b2_rwa(
@@ -422,17 +432,17 @@ class TestCCRB2B4DefaultFund:
         ccr_b234_combined_results: pl.DataFrame,
     ) -> None:
         """
-        CCR-B3 (non-QCCP pre-funded, Art. 309): rwa_final == 9,375,000.
+        CCR-B3 (non-QCCP pre-funded, Art. 309): rwa_final == 18,750,000.
 
         Arrange: DFC_B3, K_CCP=30m, DF_i=1.5m, DF_CM=60m.
-                 K_CM = 30,000,000 × (1,500,000 / 60,000,000) = 750,000
-                 RWEA = 750,000 × 12.5 = 9,375,000
+                 K = DF + UC = DF_i = 1,500,000 (Art. 309(1); K_CCP / DF_CM unused)
+                 RWEA = 1,500,000 × 12.5 = 18,750,000
         Act:     full Basel 3.1 pipeline; filter synthetic row for DFC_B3.
-        Assert:  rwa_final == 9,375,000 (abs tol 1.0).
+        Assert:  rwa_final == 18,750,000 (abs tol 1.0).
 
         References:
-            CRR Art. 308(2): K_CM = K_CCP × (DF_i / DF_CM)
-            CRR Art. 309(2): RWEA = K_CM × 12.5 (non-QCCP pre-funded)
+            CRR Art. 309(1): K = DF + UC
+            CRR Art. 309(2): RWEA = K × 12.5 (non-QCCP pre-funded)
         """
         # Arrange
         df = ccr_b234_combined_results
@@ -450,8 +460,8 @@ class TestCCRB2B4DefaultFund:
         # Assert
         assert row["rwa_final"] == pytest.approx(DFC_B3_RWEA, abs=1.0), (
             f"CCR-B3: expected rwa_final=={DFC_B3_RWEA:,.0f} "
-            f"(K_CM=750,000 × 12.5), got {row['rwa_final']:,.0f}. "
-            "CRR Art. 309(2): non-QCCP pre-funded RWEA = K_CM × 12.5."
+            f"(K=DF=1,500,000 × 12.5), got {row['rwa_final']:,.0f}. "
+            "CRR Art. 309(1)/(2): non-QCCP pre-funded RWEA = (DF + UC) × 12.5."
         )
 
     def test_ccr_b4_rwa(
@@ -459,17 +469,17 @@ class TestCCRB2B4DefaultFund:
         ccr_b234_combined_results: pl.DataFrame,
     ) -> None:
         """
-        CCR-B4 (non-QCCP unfunded, Art. 309 unfunded): rwa_final == 5,000,000.
+        CCR-B4 (non-QCCP unfunded, Art. 309 unfunded): rwa_final == 10,000,000.
 
         Arrange: DFC_B4, K_CCP=20m, DF_i=0.8m, DF_CM=40m.
-                 K_CM = 20,000,000 × (800,000 / 40,000,000) = 400,000
-                 RWEA = 400,000 × 12.5 = 5,000,000
+                 K = DF + UC = UC = 800,000 (Art. 309(1); K_CCP / DF_CM unused)
+                 RWEA = 800,000 × 12.5 = 10,000,000
         Act:     full Basel 3.1 pipeline; filter synthetic row for DFC_B4.
-        Assert:  rwa_final == 5,000,000 (abs tol 1.0).
+        Assert:  rwa_final == 10,000,000 (abs tol 1.0).
 
         References:
-            CRR Art. 308(2): K_CM = K_CCP × (DF_i / DF_CM)
-            CRR Art. 309(2): RWEA = K_CM × 12.5 (non-QCCP unfunded)
+            CRR Art. 309(1): K = DF + UC
+            CRR Art. 309(2): RWEA = K × 12.5 (non-QCCP unfunded)
         """
         # Arrange
         df = ccr_b234_combined_results
@@ -487,8 +497,8 @@ class TestCCRB2B4DefaultFund:
         # Assert
         assert row["rwa_final"] == pytest.approx(DFC_B4_RWEA, abs=1.0), (
             f"CCR-B4: expected rwa_final=={DFC_B4_RWEA:,.0f} "
-            f"(K_CM=400,000 × 12.5), got {row['rwa_final']:,.0f}. "
-            "CRR Art. 309(2): non-QCCP unfunded RWEA = K_CM × 12.5."
+            f"(K=UC=800,000 × 12.5), got {row['rwa_final']:,.0f}. "
+            "CRR Art. 309(1)/(2): non-QCCP unfunded RWEA = (DF + UC) × 12.5."
         )
 
     def test_ccr_b2_provenance_contract(
@@ -672,7 +682,7 @@ class TestCCRB2B4DefaultFund:
         ccr_b2_only_result,
     ) -> None:
         """
-        Bundle-level roll-up: combined B2+B3+B4 run -> rwa_ccr_default_fund == 26,875,000.
+        Bundle-level roll-up: combined B2+B3+B4 run -> rwa_ccr_default_fund == 41,250,000.
 
         NOTE: This test re-runs a combined bundle through PipelineOrchestrator to access
         the full AggregatedResultBundle.  The ccr_b234_combined_results fixture exposes
@@ -680,10 +690,10 @@ class TestCCRB2B4DefaultFund:
 
         Arrange: Combined B2+B3+B4 bundle, full pipeline.
         Act:     full Basel 3.1 pipeline via PipelineOrchestrator (inline run).
-        Assert:  AggregatedResultBundle.rwa_ccr_default_fund == 26,875,000 (abs tol 1.0).
+        Assert:  AggregatedResultBundle.rwa_ccr_default_fund == 41,250,000 (abs tol 1.0).
 
         References:
-            Scenario proposal §5: combined rwa_ccr_default_fund = 26,875,000.
+            Scenario proposal §5 as corrected by CC-10: combined = 41,250,000.
         """
         # Arrange
         bundle = make_raw_bundle(
@@ -703,7 +713,7 @@ class TestCCRB2B4DefaultFund:
         )
         assert float(bundle_field_value) == pytest.approx(PORTFOLIO_TOTAL_RWEA, abs=1.0), (
             f"Combined B2+B3+B4 run: expected rwa_ccr_default_fund=={PORTFOLIO_TOTAL_RWEA:,.0f} "
-            f"(= 12,500,000 + 9,375,000 + 5,000,000), "
+            f"(= 12,500,000 + 18,750,000 + 10,000,000), "
             f"got {bundle_field_value:,.0f}. "
-            "CRR Art. 308(3)/309(2): sum of K_CM × 12.5 across all DFC rows."
+            "CRR Art. 308(3)/309(2): sum of K × 12.5 across all DFC rows."
         )

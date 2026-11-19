@@ -866,6 +866,16 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "274", "no SA-CCR transitional alpha add-on under CRR"),
     ),
+    # BA-CVA (PS1/26 Credit Valuation Adjustment Risk Part Ch.4) is not in force
+    # under CRR, whose CVA own funds are Title VI (Art. 381-386; the Art. 384
+    # standardised method is not implemented). Declared explicitly so the
+    # aggregation stage's regime gate reads a cited False instead of raising on
+    # an absent entry — which it did for a CRR run carrying CVA inputs.
+    "cva_ba_cva": Feature(
+        name="cva_ba_cva",
+        enabled=False,
+        citation=Citation("CRR", "382", "CRR CVA risk is Title VI, not the PS1/26 BA-CVA"),
+    ),
     # FCSM equity collateral (Art. 222(3)). The collateralised portion takes "the
     # risk weight that they would assign under Chapter 2 ... where the lending
     # institution had a direct exposure to the collateral instrument" — a DERIVED

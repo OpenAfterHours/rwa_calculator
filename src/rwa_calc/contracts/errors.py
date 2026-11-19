@@ -291,6 +291,18 @@ ERROR_UNRECOGNISED_COLLATERAL_TYPE = "CRM021"
 # before C* is evaluated, and CRM014 owns that cause.
 ERROR_BELOW_MIN_COLLATERALISATION = "CRM022"
 
+# Counterparty credit risk / CVA codes reserved for the 2026-11 review's ccp_cva
+# cluster (CCR030-CCR034). The other CCR codes (CCR001 / CCR010 / CCR011 /
+# CCR020) are declared beside their producers under engine/ccr/.
+#
+# BA-CVA coverage (PS1/26 CVA Risk Part 4.1 / 1.2 "covered transaction", CC-16):
+# a counterparty with OTC derivative netting sets has no row in the BA-CVA
+# counterparty input, so it has no sector, credit quality or M_NS and its CVA
+# own funds are silently zero (the BA-CVA join drops it). One WARNING per such
+# counterparty. QCCP derivatives (exclusion (1)(a)) and counterparties listed
+# with cva_in_scope=False are not warned. Basel 3.1 only (cva_ba_cva Feature).
+ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED = "CCR030"
+
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
 ERROR_LGD_OUT_OF_RANGE = "IRB002"

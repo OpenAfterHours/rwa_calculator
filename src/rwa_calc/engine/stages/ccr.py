@@ -222,9 +222,11 @@ def _dfc_rows_to_exposures(
 ) -> pl.LazyFrame:
     """Shape default-fund-contribution K_CM into synthetic SA exposure rows.
 
-    CCR Art. 308/309 CCP default-fund contributions: each contribution
-    carries a clearing-member capital requirement (K_CM = K_CCP x DF_i /
-    DF_CM, Art. 308(2)). The synthetic row sets ``drawn_amount = k_cm`` and
+    CCR Art. 307-310 CCP default-fund contributions: each contribution
+    carries an own-funds requirement ``k_cm`` — Art. 308(2) max(K_CCP x DF_i /
+    (DF_CCP + DF_CM), 8% x 2% x DF_i) for a QCCP pre-funded contribution,
+    Art. 309(1) K = DF + UC for a non-QCCP, 0 for an Art. 310 QCCP unfunded
+    contribution. The synthetic row sets ``drawn_amount = k_cm`` and
     tags itself with ``risk_type = "CCR_DEFAULT_FUND"`` so the SA override
     chain pins its risk weight to the own-funds->RWA factor (12.5, Art.
     92(3)(ca)); the downstream EAD x RW then reproduces the upstream

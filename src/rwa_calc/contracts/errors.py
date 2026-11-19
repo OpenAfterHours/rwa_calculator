@@ -182,7 +182,8 @@ ERROR_EXPOSURE_REFERENCE_COLLISION = "DQ019"
 # as reporting currency — a 1:1 conversion that understates (KWD) or overstates
 # (ZAR) depending on the currency, which is why the defect is the silence, not a
 # direction. ERROR, one per currency, naming the rows and amounts per table.
-# Emitted by ``engine/fx/missing_rates.py``; not raised when conversion is off.
+# Emitted by ``contracts/validation.py::_validate_missing_fx_rates`` (the
+# pipeline-entry input gate); not raised when conversion is off.
 ERROR_FX_RATE_MISSING = "DQ020"
 # A facility-mapping child (sub-facility, loan or contingent) mapped under more than
 # one parent facility (review findings RC-01 / RC-02 / SF-03). A facility hierarchy
@@ -198,14 +199,17 @@ ERROR_FACILITY_MAPPING_MULTI_PARENT = "DQ021"
 # WARNING: every facility on the cycle is treated as a root of its own instead.
 ERROR_FACILITY_MAPPING_CYCLE = "DQ022"
 # A risk type only the ENGINE mints (``CCR_DERIVATIVE`` / ``CCR_SFT`` /
-# ``CCR_DEFAULT_FUND``) supplied on a LENDING table (review finding CC-19). Those
-# tags route a row to the counterparty-credit-risk treatment — the
-# ``standardised_ccr`` approach label, the repo-style IRB maturity, the CCR rows of
-# C 07.00 — whose exposure value comes from the CCR methods or the FCCM (CRR Art.
-# 111(2); PS1/26 Art. 111(2) / (2A)), never from an Annex I / Table A1 CCF on a
-# nominal amount. ERROR;
-# the hierarchy stage disregards the value (the row is priced as if no risk_type
-# had been supplied). Replaces the DQ006 such a value would otherwise draw.
+# ``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE``) supplied on a LENDING table
+# (review finding CC-19). Those tags route a row to a counterparty-credit-risk
+# treatment — the ``standardised_ccr`` approach label, the repo-style IRB
+# maturity, the CCR rows of C 07.00, the 1250% own-funds conversion — whose
+# exposure value comes from the CCR methods or the FCCM (CRR Art. 111(2); PS1/26
+# Art. 111(2) / (2A)), never from an Annex I / Table A1 CCF on a nominal amount.
+# ERROR. The hierarchy stage disregards the two CCR routing tags (rewritten to
+# ``DQ023:<tag>``: the row keeps the residual CCF of an unrecognised risk type and
+# loses the CCR routing) and honours the two own-funds tags, whose 1250% weight
+# disregarding would cut (``data/schemas.py::DISREGARDED_ENGINE_ONLY_RISK_TYPES``).
+# Replaces the DQ006 such a value would otherwise draw.
 ERROR_ENGINE_ONLY_RISK_TYPE = "DQ023"
 
 # Hierarchy error codes
@@ -1306,30 +1310,50 @@ def engine_only_risk_type_error(
     column: str,
     value: str,
     count: int,
+    disregarded: bool,
 ) -> CalculationError:
     """Create a DQ023 error for an engine-only risk type on a lending table.
 
-    ``CCR_DERIVATIVE`` / ``CCR_SFT`` / ``CCR_DEFAULT_FUND`` tag the rows the
-    counterparty-credit-risk stages mint. On a lending row they used to be
-    accepted silently and route it to the CCR treatment — a contingent priced
-    at a CCF on its nominal amount yet labelled ``standardised_ccr`` and
-    reported on C 07.00's CCR rows, a ``CCR_SFT`` row given the repo-style IRB
-    maturity (review finding CC-19). The exposure value of a derivative or an
-    SFT is not an Annex I / Table A1 CCF on a nominal amount at all (CRR Art.
-    111(2); PS1/26 Art. 111(2) / (2A)), so the value cannot be honoured: the
-    hierarchy stage disregards it, and the row is priced as if no ``risk_type``
-    had been supplied (its ``obs_product``, else the regime's residual limb).
-    Lending tables carry ``is_sft`` for a repo-style maturity.
+    ``CCR_DERIVATIVE`` / ``CCR_SFT`` / ``CCR_DEFAULT_FUND`` /
+    ``SETTLEMENT_FAILED_TRADE`` tag the rows the counterparty-credit-risk stages
+    mint. On a lending row the first two used to be accepted silently and
+    route it to the CCR treatment — a contingent priced at a CCF on its nominal
+    amount yet labelled ``standardised_ccr`` and reported on C 07.00's CCR
+    rows, a ``CCR_SFT`` row given the repo-style IRB maturity (review finding
+    CC-19). The exposure value of a derivative or an SFT is not an Annex I /
+    Table A1 CCF on a nominal amount at all (CRR Art. 111(2); PS1/26 Art. 111(2)
+    / (2A)).
+
+    ``disregarded`` says what the hierarchy stage does with the value
+    (``data/schemas.py::DISREGARDED_ENGINE_ONLY_RISK_TYPES``). True for the two
+    CCR routing tags: the value is rewritten to ``DQ023:<TAG>``, an explicit but
+    unrecognised risk type, so the row keeps the residual CCF it had —
+    ``obs_product`` is not consulted, an explicit risk type outranks it — and
+    loses only the CCR routing. False for the two own-funds tags: their 1250%
+    weight is kept, since disregarding it would cut the row's RWA. Lending
+    tables carry ``is_sft`` for a repo-style maturity.
     """
+    canonical = value.strip().upper()
+    if disregarded:
+        treatment = (
+            f"The value is disregarded: it is rewritten to 'DQ023:{canonical}', an "
+            "unrecognised risk type, so the row keeps the CCF residual it had "
+            "(obs_product is not consulted - an explicit risk_type outranks it) and "
+            "loses only the counterparty-credit-risk routing."
+        )
+    else:
+        treatment = (
+            "The value is honoured: it selects the 1250% own-funds conversion, which "
+            "the row keeps, because disregarding the tag would lower its capital."
+        )
     return CalculationError(
         code=ERROR_ENGINE_ONLY_RISK_TYPE,
         message=(
             f"[{table}] '{column}' = '{value}' on {count} row(s): this risk type is "
             "minted by the counterparty-credit-risk stages for their own rows and is "
-            "not a lending-table category. The value is disregarded — the row is "
-            "priced as if no risk_type had been supplied (obs_product, else the "
-            "CCF residual). Book derivatives and SFTs in the CCR / SFT inputs, or "
-            "flag a repo-style loan with is_sft."
+            f"not a lending-table category. {treatment} Book derivatives, SFTs, "
+            "failed trades and default-fund contributions in the CCR / SFT inputs, "
+            "or flag a repo-style loan with is_sft."
         ),
         severity=ErrorSeverity.ERROR,
         category=ErrorCategory.DATA_QUALITY,

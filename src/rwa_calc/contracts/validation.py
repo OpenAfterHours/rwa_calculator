@@ -420,18 +420,23 @@ def _invalid_column_value_error(
 ) -> CalculationError:
     """The error for one distinct out-of-set value of a categorical column.
 
-    DQ006 WARNING, except for an engine-only risk type (``CCR_DERIVATIVE`` /
-    ``CCR_SFT`` / ``CCR_DEFAULT_FUND``) on a lending table's risk-type column:
-    that value is outside the lending domain for a reason the generic code
-    cannot say — the row would be routed to a counterparty-credit-risk
-    treatment it is not priced under — so it is reported once, as DQ023 ERROR
-    (review finding CC-19), and the hierarchy stage disregards it.
+    DQ006 WARNING, except for an engine-only risk type (``data/schemas.py::
+    ENGINE_ONLY_RISK_TYPES``) on a lending table's risk-type column: that value
+    is outside the lending domain for a reason the generic code cannot say —
+    the row would be routed to a counterparty-credit-risk treatment it is not
+    priced under — so it is reported once, as DQ023 ERROR (review finding
+    CC-19), saying whether the hierarchy stage disregards it.
     """
-    from rwa_calc.data.schemas import ENGINE_ONLY_RISK_TYPES
+    from rwa_calc.data.schemas import DISREGARDED_ENGINE_ONLY_RISK_TYPES, ENGINE_ONLY_RISK_TYPES
 
-    if column in _RISK_TYPE_COLUMNS and str(bad_value).strip().upper() in ENGINE_ONLY_RISK_TYPES:
+    canonical = str(bad_value).strip().upper()
+    if column in _RISK_TYPE_COLUMNS and canonical in ENGINE_ONLY_RISK_TYPES:
         return engine_only_risk_type_error(
-            table=context, column=column, value=str(bad_value), count=count
+            table=context,
+            column=column,
+            value=str(bad_value),
+            count=count,
+            disregarded=canonical in DISREGARDED_ENGINE_ONLY_RISK_TYPES,
         )
     sorted_valid = sorted(valid_values)
     return CalculationError(

@@ -255,18 +255,26 @@ See [Classification](../features/classification.md) for the complete classificat
 
 **Note:** Under F-IRB (CRR Art. 166(8)), MR and MLR both become 75% CCF.
 
-**Engine-only risk types are not lending categories.** `CCR_DERIVATIVE`, `CCR_SFT` and
-`CCR_DEFAULT_FUND` tag the rows the counterparty-credit-risk stages mint for SA-CCR netting
-sets, FCCM SFT netting sets and CCP default-fund contributions. On a facilities / contingents row
-(`risk_type` or `underlying_risk_type`) they raise one **`DQ023` ERROR** per value and are
-disregarded: the hierarchy stage rewrites the value to `DQ023:<value>`, so no counterparty-credit-
-risk routing (the `standardised_ccr` approach label, the repo-style F-IRB maturity, the C 07.00
-CCR rows, the default-fund weight) keys on it, while the CCF stays the residual an unrecognised
-risk type receives (CRR Annex I 1(k) 100%; PS1/26 Table A1 Row 3 50% / Row 5 40%) — the same CCF
-the tag received before, so no number falls through the CCF. A derivative's or SFT's exposure
-value comes from the CCR methods or the FCCM, never from a CCF on a nominal amount (CRR Art.
-111(2); PS1/26 Art. 111(2) / (2A)): book them in the CCR / SFT inputs, or flag a repo-style loan
-with `is_sft`.
+**Engine-only risk types are not lending categories.** `CCR_DERIVATIVE`, `CCR_SFT`,
+`CCR_DEFAULT_FUND` and `SETTLEMENT_FAILED_TRADE` tag the rows the counterparty-credit-risk stages
+mint for SA-CCR netting sets, FCCM SFT netting sets, CCP default-fund contributions and failed
+trades. On a facilities / contingents row (`risk_type` or `underlying_risk_type`) each raises one
+**`DQ023` ERROR** per value. What happens to the row then depends on the tag:
+
+- **`CCR_DERIVATIVE` / `CCR_SFT` are disregarded.** The hierarchy stage rewrites the value to
+  `DQ023:<value>`, so no counterparty-credit-risk routing (the Basel 3.1 `standardised_ccr`
+  approach label, the repo-style CRR F-IRB maturity and its sub-1-year floor waiver, the QCCP
+  sovereign-floor exemption, the C 07.00 CCR rows) keys on it, while the CCF stays the residual an
+  unrecognised risk type receives (CRR Annex I 1(k) 100%; PS1/26 Table A1 Row 3 50% / Row 5 40%) —
+  the same CCF the tag received before. `obs_product` is not consulted: an explicit risk type
+  outranks it. None of the removed treatments raised capital, so no number can fall.
+- **`CCR_DEFAULT_FUND` / `SETTLEMENT_FAILED_TRADE` are honoured.** They select the 1250% own-funds
+  conversion, the weight such a row carried before; disregarding them would cut its SA RWA (and
+  the Basel 3.1 output floor's SA-equivalent) by up to 92%.
+
+A derivative's or SFT's exposure value comes from the CCR methods or the FCCM, never from a CCF on
+a nominal amount (CRR Art. 111(2); PS1/26 Art. 111(2) / (2A)): book them in the CCR / SFT inputs,
+or flag a repo-style loan with `is_sft`.
 
 **F-IRB Exception (Art. 166(9)):** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. To flag these exposures, set `is_short_term_trade_lc = True` for MLR risk type items.
 

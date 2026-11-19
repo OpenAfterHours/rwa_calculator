@@ -36,7 +36,10 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.schemas import DISREGARDED_RISK_TYPE_PREFIX, ENGINE_ONLY_RISK_TYPES
+from rwa_calc.data.schemas import (
+    DISREGARDED_ENGINE_ONLY_RISK_TYPES,
+    DISREGARDED_RISK_TYPE_PREFIX,
+)
 from rwa_calc.engine.hierarchy.enrich import (
     attach_counterparty_rating,
     propagate_facility_qrre_columns,
@@ -95,9 +98,10 @@ def unify_exposures(
 
     errors: list[CalculationError] = []
 
-    # CC-19: an engine-only CCR tag on a lending row (DQ023 at the input gate) is
+    # CC-19: a CCR routing tag on a lending row (DQ023 at the input gate) is
     # disregarded before any consumer reads it — undrawn rows and MOF subs
-    # included — so no lending row is routed to the CCR treatment.
+    # included — so no lending row is routed to the CCR treatment. The 1250%
+    # own-funds tags draw the same DQ023 but are honoured (schemas.py).
     contingents = _disregard_engine_only_risk_types(contingents)
     facilities = _disregard_engine_only_risk_types(facilities)
 
@@ -531,21 +535,25 @@ def _join_facility_metadata(
 
 
 def _disregard_engine_only_risk_types(frame: pl.LazyFrame | None) -> pl.LazyFrame | None:
-    """Prefix an engine-only CCR risk type on a lending row so nothing routes on it.
+    """Prefix a CCR routing risk type on a lending row so nothing routes on it.
 
-    ``CCR_DERIVATIVE`` / ``CCR_SFT`` / ``CCR_DEFAULT_FUND`` are minted by the
-    counterparty-credit-risk stages for their own rows; the SA approach
-    relabel, the repo-style F-IRB maturity, the default-fund weight and the
-    C 07.00 CCR rows all key on the exact tag. On a loans / contingents /
-    facilities row the tag is malformed input (DQ023; CRR Art. 111(2), PS1/26
-    Art. 111(2) / (2A): such exposure values never come from a CCF), so it is
-    rewritten to ``DISREGARDED_RISK_TYPE_PREFIX + tag``. Not nulled: an explicit
+    ``CCR_DERIVATIVE`` / ``CCR_SFT`` are minted by the counterparty-credit-risk
+    stages for their own netting-set rows; the Basel 3.1 SA approach relabel,
+    the repo-style F-IRB maturity and its sub-1-year floor waiver, the QCCP
+    sovereign-floor exemption and the C 07.00 CCR rows all key on the exact
+    tag. On a loans / contingents / facilities row the tag is malformed input
+    (DQ023; CRR Art. 111(2), PS1/26 Art. 111(2) / (2A): such exposure values
+    never come from a CCF), so it is rewritten to
+    ``DISREGARDED_RISK_TYPE_PREFIX + tag``. Not nulled: an explicit
     unrecognised risk type keeps the CCF residual it had and outranks
-    ``obs_product`` (``engine/ccf.py``), so the CCF — and the RWA — cannot fall.
+    ``obs_product`` (``engine/ccf.py``), so the CCF cannot fall, and none of the
+    removed treatments raised capital, so the RWA cannot either. The 1250%
+    own-funds tags (``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE``) are left
+    alone: :data:`~rwa_calc.data.schemas.DISREGARDED_ENGINE_ONLY_RISK_TYPES`.
     """
     if frame is None:
         return None
-    engine_only = sorted(ENGINE_ONLY_RISK_TYPES)
+    engine_only = sorted(DISREGARDED_ENGINE_ONLY_RISK_TYPES)
     return frame.with_columns(
         pl.when(pl.col(column).str.strip_chars().str.to_uppercase().is_in(engine_only))
         .then(

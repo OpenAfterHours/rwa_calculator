@@ -2539,22 +2539,37 @@ VALID_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_INPUT | set(RISK_TYPE_SYNONYMS)
 
 # Risk types that only the ENGINE mints, on the rows its counterparty-credit-risk
 # stages build: ``CCR_DERIVATIVE`` (SA-CCR netting sets), ``CCR_SFT`` (FCCM SFT
-# netting sets) and ``CCR_DEFAULT_FUND`` (CCP default-fund contributions,
-# ``engine/stages/ccr.py``). They are canonical OUTPUT vocabulary, not a lending
-# category: on a loans / contingents / facilities row they routed the item to the
-# CCR treatment (``standardised_ccr`` label, repo-style IRB maturity, C 07.00 CCR
-# rows) while it was still priced at a CCF on its nominal amount (review finding
-# CC-19). The exposure value of a derivative or an SFT comes from the CCR methods
-# or the FCCM, never from an Annex I / Table A1 CCF (CRR Art. 111(2); PS1/26 Art.
-# 111(2) / (2A)). A lending table carrying one draws DQ023
-# (``contracts/validation.py``) and the hierarchy stage disregards the value
-# (``engine/hierarchy/unify.py``).
+# netting sets), ``CCR_DEFAULT_FUND`` (CCP default-fund contributions) and
+# ``SETTLEMENT_FAILED_TRADE`` (failed trades; both ``engine/stages/ccr.py``). They
+# are canonical OUTPUT vocabulary, not a lending category: on a loans /
+# contingents / facilities row they routed the item to a CCR treatment while it
+# was still priced at a CCF on its nominal amount (review finding CC-19). The
+# exposure value of a derivative or an SFT comes from the CCR methods or the
+# FCCM, never from an Annex I / Table A1 CCF (CRR Art. 111(2); PS1/26 Art. 111(2)
+# / (2A)). A lending table carrying one draws DQ023 (``contracts/validation.py``);
+# what the hierarchy stage does with the value is
+# :data:`DISREGARDED_ENGINE_ONLY_RISK_TYPES`.
 ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset(
-    {"CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND"}
+    {"CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND", "SETTLEMENT_FAILED_TRADE"}
 )
 
+# The engine-only tags the hierarchy stage DISREGARDS on a lending row
+# (``engine/hierarchy/unify.py``): the two CCR routing tags. Every treatment they
+# select - the Basel 3.1 ``standardised_ccr`` label, the repo-style 0.5-year CRR
+# F-IRB maturity and the sub-1-year maturity-floor waiver, the QCCP trade
+# exemption from the Art. 121(6) sovereign floor, the C 07.00 CCR rows - is one
+# the row is not priced under, and none raises its capital, so removing them
+# cannot lower RWA. The two OWN-FUNDS tags are reported (DQ023) but HONOURED:
+# ``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE`` select the SA chain's 1250%
+# own-funds conversion (``engine/sa/risk_weights.py``), the weight such a row
+# carried before CC-19, and disregarding them would cut its SA RWA - and the Basel
+# 3.1 output floor's SA-equivalent - by up to 92%, an RWA reduction no rule text
+# or owner decision makes.
+DISREGARDED_ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset({"CCR_DERIVATIVE", "CCR_SFT"})
+
 #: The input amounts ``engine/fx`` rebases to the reporting currency, per raw
-#: table, read by ``engine/fx/missing_rates.py`` to report (DQ020) the rows whose
+#: table, read by ``contracts/validation.py::_validate_missing_fx_rates`` to
+#: report (DQ020) the rows whose
 #: currency has no rate into ``base_currency`` and therefore pass through 1:1
 #: (review finding RC-11). Each table's ``currency`` column is the one the
 #: converter joins on; a facility's currency is its undrawn rows' currency.
@@ -2568,8 +2583,8 @@ FX_CONVERTED_AMOUNT_COLUMNS: dict[str, tuple[str, ...]] = {
     "equity_exposures": ("carrying_value",),
 }
 
-# What the hierarchy stage rewrites an engine-only risk type on a lending row to:
-# this prefix + the upper-cased value (``"DQ023:CCR_SFT"``). Deliberately NOT null.
+# What the hierarchy stage rewrites a DISREGARDED engine-only risk type on a lending
+# row to: this prefix + the upper-cased value (``"DQ023:CCR_SFT"``). Deliberately NOT null.
 # An explicit but unrecognised risk type outranks ``obs_product`` and takes the CCF
 # residual (``engine/ccf.py``), exactly as the tag did before; nulling it would let
 # ``obs_product`` re-price the row. The prefix removes ONLY the CCR routing, which

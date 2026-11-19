@@ -116,6 +116,7 @@ class TestInputGate:
             ("contingents", "risk_type", "CCR_SFT"),
             ("contingents", "risk_type", "ccr_derivative"),
             ("contingents", "underlying_risk_type", "CCR_DEFAULT_FUND"),
+            ("contingents", "risk_type", "SETTLEMENT_FAILED_TRADE"),
             ("facilities", "risk_type", "CCR_DERIVATIVE"),
         ],
     )
@@ -198,6 +199,47 @@ class TestPipelineDisregardsTheTag:
         found = _codes(_run(regime, "CCR_SFT"), ERROR_ENGINE_ONLY_RISK_TYPE)
 
         assert [(e.field_name, e.actual_value) for e in found] == [("risk_type", "CCR_SFT")]
+
+    def test_dq023_says_what_the_row_is_priced_at(self, regime: str) -> None:
+        # The tag is rewritten, not nulled: an explicit risk type outranks
+        # obs_product, so the message must not promise an obs_product CCF.
+        (found,) = _codes(_run(regime, "CCR_SFT"), ERROR_ENGINE_ONLY_RISK_TYPE)
+
+        assert "'DQ023:CCR_SFT'" in found.message
+        assert "obs_product is not consulted" in found.message
+
+
+@pytest.mark.parametrize("regime", _REGIMES)
+@pytest.mark.parametrize("tag", ["CCR_DEFAULT_FUND", "SETTLEMENT_FAILED_TRADE"])
+class TestOwnFundsTagsAreReportedButHonoured:
+    """The 1250% own-funds tags draw DQ023 and keep the weight they select.
+
+    ``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE`` select the SA override
+    chain's 1250% own-funds conversion (``engine/sa/risk_weights.py``; the
+    engine mints them on its default-fund and failed-trade rows). A lending row
+    carrying one drew DQ006 and kept that weight before CC-19. Disregarding the
+    tag, as is done for the two CCR routing tags, would take the row to its
+    obligor's 100%: SA RWA 125,000,000 -> 10,000,000 (CRR) and 62,500,000 ->
+    5,000,000 (B31), and the Basel 3.1 output floor's SA-equivalent with it -
+    an RWA reduction no rule text or owner decision makes. So they are reported
+    and honoured.
+
+    Hand calculation: 10,000,000 x residual CCF (CRR Annex I 1(k) 100% / PS1/26
+    Table A1 Row 3 50%) x 1250% = 125,000,000 (CRR) / 62,500,000 (B31).
+    """
+
+    def test_the_1250_weight_is_kept(self, regime: str, tag: str) -> None:
+        row = _contingent_row(_run(regime, tag))
+
+        assert row["risk_type"] == tag
+        assert row["risk_weight"] == pytest.approx(12.5)
+        assert row["rwa_final"] == pytest.approx(_NOMINAL * _RESIDUAL_CCF[regime] * 12.5)
+
+    def test_dq023_is_raised_and_says_the_tag_is_honoured(self, regime: str, tag: str) -> None:
+        (found,) = _codes(_run(regime, tag), ERROR_ENGINE_ONLY_RISK_TYPE)
+
+        assert (found.field_name, found.actual_value) == ("risk_type", tag)
+        assert "1250%" in found.message
 
 
 class TestIrbMaturityIsNotRepoStyle:

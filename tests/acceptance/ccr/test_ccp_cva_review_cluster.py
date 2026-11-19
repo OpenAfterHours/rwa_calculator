@@ -728,6 +728,21 @@ class TestCC09FailedTrades:
         assert row["risk_weight"] == pytest.approx(0.20)
         assert row["rwa_final"] == pytest.approx(200_000.0, rel=1e-9)
 
+    def test_free_delivery_without_current_positive_exposure_is_charged(self, regime: str) -> None:
+        # Arrange: FT3 with the optional current_positive_exposure left out of the
+        # input altogether, plus a Column 4 twin (5 days after the second leg).
+        ft3 = {k: v for k, v in _FT3_FREE_DELIVERY.items() if k != "current_positive_exposure"}
+        ft4 = {**ft3, "failed_trade_id": "FT4", "working_days_past_due": 5}
+
+        # Act
+        rows = _by_ref(_ft_run(regime, ft3, ft4))
+
+        # Assert: the value transferred is still the exposure (pre-fix: a null
+        # current_positive_exposure made it null and both rows RWA 0, no error).
+        # Column 3: 1m x 20% short-term institution; Column 4: 1m at 1,250%.
+        assert rows["ft__FT3"]["rwa_final"] == pytest.approx(200_000.0, rel=1e-9)
+        assert rows["ft__FT4"]["rwa_final"] == pytest.approx(12_500_000.0, rel=1e-9)
+
     def test_upper_case_settlement_type_is_charged(self, regime: str) -> None:
         # Act
         row = _by_ref(_ft_run(regime, _FT5_UPPER_CASE))["ft__FT5"]

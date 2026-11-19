@@ -308,7 +308,9 @@ LazyFrame with the own-funds requirement, RWA, and a stable
   Table 1 multiplier for the `working_days_past_due` band; RWA = own funds
   × 12.5.
 - **Free delivery** (`"non_dvp_free_delivery"`), Art. 379(1) Table 2, with
-  `exposure_amount = value_transferred + current_positive_exposure`:
+  `exposure_amount = value_transferred + current_positive_exposure` (a term
+  that is not supplied adds nothing, so a missing
+  `current_positive_exposure` never zeroes the value transferred):
   Column 4 (5 or more days after the second leg) — own funds = exposure
   (1,250% RW); Column 3 (something transferred, fewer than 5 days) — no
   own-funds amount here: the exposure is risk-weighted downstream as an
@@ -323,11 +325,11 @@ purchase's gain charged — Column 3 produced zero under a `dvp_pre_t5`
 label, and any spelling other than the exact lower-case type (`"DVP"`)
 produced zero silently.
 
-Source: [`src/rwa_calc/engine/ccr/failed_trades.py::compute_failed_trade_rwa`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/failed_trades.py#L102-L264)
-(lines 102–264).
+Source: [`src/rwa_calc/engine/ccr/failed_trades.py::compute_failed_trade_rwa`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/failed_trades.py#L103-L268)
+(lines 103–268).
 
 ```python
---8<-- "src/rwa_calc/engine/ccr/failed_trades.py:102:264"
+--8<-- "src/rwa_calc/engine/ccr/failed_trades.py:103:268"
 ```
 
 ### Inputs (`FailedTradesBundle.failed_trades`)
@@ -350,7 +352,7 @@ supply `value_transferred` + `current_positive_exposure`.
 | `current_market_value`          | `FAILED_TRADE_SCHEMA.current_market_value`    | `Float64`   | DvP-only required. Null on non-DvP rows. Art. 378 ¶2 price-difference subtrahend.                      |
 | `is_purchase`                   | `FAILED_TRADE_SCHEMA.is_purchase`             | `Boolean` (optional, no default) | DvP-only. The side that can lose (Art. 378): `True` = the firm is to receive the instrument and pay the agreed price (loses when MV > agreed); `False` = the firm is to deliver it (loses when MV < agreed). Null / absent = unknown: absolute difference charged, CCR031 warning. |
 | `value_transferred`             | `FAILED_TRADE_SCHEMA.value_transferred`       | `Float64`   | Non-DvP-only required. Null on DvP rows. Art. 379(1) exposure numerator (the "value transferred" leg); a positive value before Column 4 marks Column 3 (first leg made). |
-| `current_positive_exposure`     | `FAILED_TRADE_SCHEMA.current_positive_exposure` | `Float64` | Non-DvP-only required. Null on DvP rows. Art. 379(1) exposure addend.                                  |
+| `current_positive_exposure`     | `FAILED_TRADE_SCHEMA.current_positive_exposure` | `Float64` | Non-DvP-only required. Null on DvP rows. Art. 379(1) exposure addend; a null adds nothing (the value transferred is still charged).  |
 | `is_repo_or_sec_lending`        | `FAILED_TRADE_SCHEMA.is_repo_or_sec_lending`  | `Boolean` (default `False`) | Art. 378 ¶1 scope exclusion — not currently consumed (engine treats every row as in scope). |
 | `is_immaterial`                 | `FAILED_TRADE_SCHEMA.is_immaterial`           | `Boolean` (default `False`) | Art. 379(2) immateriality election — not currently consumed.                                           |
 | `elect_cet1_deduction`          | `FAILED_TRADE_SCHEMA.elect_cet1_deduction`    | `Boolean` (default `False`) | Art. 379(3) CET1 deduction election — not currently consumed.                                          |
@@ -367,7 +369,7 @@ non-applicable cells are `null`.
 | Column                    | Dtype     | Formula                                                                                                | Article             |
 |---------------------------|-----------|--------------------------------------------------------------------------------------------------------|---------------------|
 | `price_difference`        | `Float64` (nullable) | DvP rows: the loss-side difference floored at 0 — `agreed − MV` (sale), `MV − agreed` (purchase), `|agreed − MV|` (side unknown); null on non-DvP rows. | Art. 378 ¶2         |
-| `exposure_amount`         | `Float64` (nullable) | `value_transferred + current_positive_exposure` on non-DvP rows; null on DvP rows.                     | Art. 379(1) Col 4   |
+| `exposure_amount`         | `Float64` (nullable) | `value_transferred + current_positive_exposure` on non-DvP rows, a null term read as nothing (`sum_horizontal`); null on DvP rows. | Art. 379(1) Col 3 / 4 |
 | `multiplier_or_rw`        | `Float64` | DvP rows: Table 1 multiplier (`0.08 / 0.50 / 0.75 / 1.00 / 0.0`); non-DvP Col 4 rows: `12.5`; null on Col 3 rows; `0.0` otherwise. | Art. 378 Table 1; Art. 379(1) Table 2 |
 | `own_funds_requirement`   | `Float64` | DvP: `price_difference × multiplier`; non-DvP Col 4: `exposure_amount`; null on Col 3 rows (risk-weighted downstream); `0.0` otherwise. | Art. 378 ¶3; Art. 379(1) |
 | `failed_trade_rwa`        | `Float64` | `own_funds_requirement × 12.5` (= `1 / 0.08`); null on Col 3 rows.                                      | Art. 92(3)(ca)      |

@@ -166,11 +166,14 @@ def compute_failed_trade_rwa(
         .alias("price_difference")
     )
 
-    # Non-DvP exposure: value_transferred + current_positive_exposure.
-    # Null on DvP rows.
+    # Non-DvP exposure: value_transferred + current_positive_exposure. Both are
+    # optional input columns and non-negative amounts, so a term that is not
+    # supplied adds nothing (``sum_horizontal`` skips nulls) — a plain ``+`` made
+    # the whole exposure null, and a 1m Column 3 / Column 4 free delivery with no
+    # current_positive_exposure was charged 0. Null on DvP rows.
     exposure_amount = (
         pl.when(is_non_dvp)
-        .then(pl.col("value_transferred") + pl.col("current_positive_exposure"))
+        .then(pl.sum_horizontal("value_transferred", "current_positive_exposure"))
         .otherwise(pl.lit(None, dtype=pl.Float64))
         .alias("exposure_amount")
     )

@@ -237,6 +237,22 @@ class TestFreeDeliveryColumns:
         assert row["regulatory_band"] == "non_dvp_col2"
         assert row["own_funds_requirement"] == 0.0
 
+    @pytest.mark.parametrize(("days", "band"), [(2, "non_dvp_col3"), (5, "non_dvp_col4_t5_plus")])
+    def test_missing_current_positive_exposure_keeps_the_value_transferred(
+        self, days: int, band: str
+    ) -> None:
+        # Arrange: the optional current_positive_exposure is not supplied (null).
+        free = self._free("NO_CPE", days=days, transferred=1_000_000.0)
+        rows = [{**free, "current_positive_exposure": None}]
+
+        # Act
+        row = _by_id(rows)["NO_CPE"]
+
+        # Assert: value transferred + nothing, never a null that zeroes the
+        # exposure (pre-fix: exposure_amount null -> drawn_amount null -> RWA 0).
+        assert row["regulatory_band"] == band
+        assert row["exposure_amount"] == pytest.approx(1_000_000.0)
+
     def test_column_4_is_unchanged(self) -> None:
         # Arrange (control)
         rows = [self._free("COL4", days=5, transferred=1_000_000.0)]

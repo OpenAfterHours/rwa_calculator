@@ -21,6 +21,12 @@ Art. 197 type.
     unrated) -> no E* reduction, the Art. 232(3) mapping applies exactly as when
     unflagged (RWA 70,000 measured both ways). Cash control -> EAD 0.
 
+    The Art. 222 Simple Method reads the same flag. Art. 197 binds "under all
+    approaches and methods", so a flagged non-Art. 197 row is no Simple-Method
+    collateral either: ``fcsm_collateral_value`` 0 (pre-fix 100,000, the whole
+    loan, substituted at the corporate-bond fallback weight — a relief wherever
+    the obligor's own weight exceeds it); the cash control is recognised in full.
+
 CL-11 — the canonical input type ``bond`` is financial collateral by its issuer.
     ``normalise_collateral_type_expr`` already resolved ``bond`` + ``issuer_type``
     for the Art. 224 haircut (P1.233); the category ladder did not, so on the
@@ -41,12 +47,18 @@ import polars as pl
 import pytest
 from tests.unit.crm import _pipeline_harness as harness
 
+from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.crm.expressions import collateral_category_expr, sa_fccm_type_eligible_expr
 
 
-def _sa_run(regime: str, pledge: dict) -> tuple[dict, set[str]]:
+def _sa_run(
+    regime: str,
+    pledge: dict,
+    method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
+) -> tuple[dict, set[str]]:
     results, errors = harness.run(
         regime,
+        collateral_method=method,
         loans=harness.loans(
             [{"loan_reference": "L1", "counterparty_reference": "CP1", "drawn_amount": 100_000.0}]
         ),
@@ -113,6 +125,24 @@ class TestSaFccmIgnoresTheFlagOnNonArt197Types:
         assert flagged["rwa_final"] == pytest.approx(70_000.0)
         assert unflagged["rwa_final"] == pytest.approx(70_000.0)
         assert "CRM026" in error_codes
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    @pytest.mark.parametrize(
+        ("collateral_type", "expected_value"),
+        [("receivables", 0.0), ("other_physical", 0.0), ("cash", 100_000.0)],
+    )
+    def test_simple_method_honours_the_flag_only_on_art_197_types(
+        self, regime: str, collateral_type: str, expected_value: float
+    ) -> None:
+        # Act
+        result, error_codes = _sa_run(
+            regime, _flagged(collateral_type), method=CRMCollateralMethod.SIMPLE
+        )
+
+        # Assert: pre-fix the flagged receivable / other-physical row was
+        # recognised for the whole loan (fcsm_collateral_value 100,000).
+        assert result["fcsm_collateral_value"] == pytest.approx(expected_value, abs=1e-9)
+        assert ("CRM026" in error_codes) is (collateral_type != "cash")
 
     @pytest.mark.parametrize("regime", ["crr", "b31"])
     def test_flagged_cash_still_reduces_ead(self, regime: str) -> None:

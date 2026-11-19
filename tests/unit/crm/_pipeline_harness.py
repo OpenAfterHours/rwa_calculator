@@ -28,6 +28,7 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 #: One reporting date per regime, each before the other's effective boundary.
@@ -76,12 +77,14 @@ def run(
     *,
     firb: bool = False,
     counterparty_refs: tuple[str, ...] = ("CP1",),
+    collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
     **frames: Any,
 ) -> tuple[pl.DataFrame, list[CalculationError]]:
     """Run the full pipeline; return the collected results and the error list.
 
     ``firb=True`` attaches a 1% internal PD and a Foundation IRB permission for
     the corporate class, so the loans take the F-IRB LGD* path.
+    ``collateral_method`` elects the Art. 222 Simple Method when ``SIMPLE``.
     """
     frames.setdefault("counterparties", counterparties(*counterparty_refs))
     if firb:
@@ -104,9 +107,17 @@ def run(
     mode = PermissionMode.IRB if firb else PermissionMode.STANDARDISED
     reporting_date = REPORTING_DATES[regime]
     config = (
-        CalculationConfig.crr(reporting_date=reporting_date, permission_mode=mode)
+        CalculationConfig.crr(
+            reporting_date=reporting_date,
+            permission_mode=mode,
+            crm_collateral_method=collateral_method,
+        )
         if regime == "crr"
-        else CalculationConfig.basel_3_1(reporting_date=reporting_date, permission_mode=mode)
+        else CalculationConfig.basel_3_1(
+            reporting_date=reporting_date,
+            permission_mode=mode,
+            crm_collateral_method=collateral_method,
+        )
     )
     result = PipelineOrchestrator().run_with_data(make_raw_bundle(**frames), config)
     return result.results.collect(), list(result.errors)

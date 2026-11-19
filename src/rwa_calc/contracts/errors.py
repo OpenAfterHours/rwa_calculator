@@ -321,9 +321,10 @@ ERROR_CCR_ONLY_COLLATERAL_POOL = "CRM025"
 # Art. 197(1), 199(1); review CL-01): is_eligible_financial_collateral is the
 # firm's Art. 197 attestation, and only an Art. 197 type (cash, debt securities,
 # equity, gold, securitisation positions, covered bonds) can reduce an SA
-# exposure value under the Financial Collateral Comprehensive Method. A flagged
-# immovable-property, receivable, other-physical, life-insurance or
-# unrecognised row is ignored for that reduction (it stays available to the
+# exposure value under the Financial Collateral Comprehensive Method, or be
+# substituted under the Simple Method (Art. 222). A flagged immovable-property,
+# receivable, other-physical, life-insurance or unrecognised row is ignored for
+# both (it stays available to the
 # F-IRB Foundation Collateral Method under its own Art. 199 attestation, and
 # life insurance to Art. 232). One rolled-up warning per run.
 ERROR_NON_ART197_FLAGGED_FINANCIAL = "CRM026"

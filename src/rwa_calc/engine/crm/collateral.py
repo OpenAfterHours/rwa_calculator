@@ -727,8 +727,9 @@ def _append_non_art197_record(
             f"{len(refs)} collateral item(s) ({_name_some(refs)}) are flagged "
             f"is_eligible_financial_collateral but their type ({', '.join(types)}) is not "
             f"eligible financial collateral under Art. 197, so the flag is ignored for the "
-            f"Standardised Approach exposure-value reduction (Financial Collateral "
-            f"Comprehensive Method). Immovable property, receivables and other physical "
+            f"Standardised Approach (the Financial Collateral Comprehensive Method's "
+            f"exposure-value reduction and the Simple Method's risk-weight substitution). "
+            f"Immovable property, receivables and other physical "
             f"collateral are recognised only under the IRB / Foundation Collateral Method "
             f"(Art. 199, is_eligible_irb_collateral); life insurance under Art. 232.",
             regulatory_reference="CRR/PS1-26 Art. 197(1) / 199(1)",

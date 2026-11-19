@@ -47,12 +47,60 @@ in Art. 138 resolution.
 
 ### Lending Group Aggregation
 
-Lending groups aggregate exposure across related counterparties for threshold calculations (e.g., SME turnover, retail exposure limits).
+Lending groups aggregate exposure across related counterparties for the retail
+threshold (CRR Art. 123(c); PS1/26 Art. 123(1)(b)(ii) / 123A(1)(b)(ii) /
+147(5)(a)(ii)) and the SME supporting factor's E* (CRR Art. 501(1)). SME
+*turnover* is not a lending-group measure — it is sized on the org hierarchy's
+consolidated accounts (see [SME Detection](#sme-detection)).
 
 - Members are defined via `lending_mappings`
 - The parent counterparty is automatically included as a member
 - Duplicate membership is resolved (a counterparty appearing in multiple groups keeps only the first assignment)
 - Residential property exposures are excluded from retail aggregation per CRR Art. 123(c)
+
+#### Group-wide aggregates on solo and sub-consolidated runs
+
+Both aggregates count what the obligor owes to the whole banking group, not only
+to the reporting entity: CRR Art. 123(c) "the total amount owed to the
+institution and parent undertakings and its subsidiaries"; PS1/26
+Art. 123A(1)(b)(ii) "owed to the institution, its parent undertakings, its
+subsidiaries and subsidiaries of its parent undertakings"; CRR Art. 501(1) E*
+"owed to the institution, its subsidiaries, its parent undertakings and other
+subsidiaries of those parent undertakings". Every entity in the reporting-entity
+registry sits under the registry root, so every in-registry book is one of
+those undertakings.
+
+On a scoped run (`reporting_entity` set) whose population is smaller than the
+whole registry — an individual run, or a sub-consolidated / consolidated run
+below the root:
+
+1. The scope stage publishes `GROUP_POPULATION`: the feed filtered to **every**
+   in-registry book, with rows tagged intragroup to a registry entity removed
+   (`engine/scope/resolver.py::resolve_group_population`). It is the population
+   a consolidated run at the registry root sees.
+2. The hierarchy stage resolves that population with the same resolver (FX,
+   facility and counterparty-level collateral allocation) and, per obligor-group
+   key (`lending_group_reference`, else `counterparty_reference`), publishes what
+   the rest of the group adds: `max(whole group − the run's own books, 0)` for
+   the retail-threshold amount (net of residential cover) and for E*
+   (`engine/hierarchy/group_obligor.py`). Measuring both sides with one set of
+   rules means a residential pledge whose exposures span the scope boundary is
+   allocated as the whole-group run allocates it.
+3. The threshold half rides on the exposures as
+   `out_of_scope_group_adjusted_exposure`; the classifier tests
+   `lending_group_adjusted_exposure + out_of_scope_group_adjusted_exposure`
+   against the limit. The E* half is added once per group key by
+   `compute_e_star_group_drawn`.
+4. **AGG004** (WARNING) names the rows that failed the threshold only because of
+   debt booked in other group entities. Only natural persons and SME-sized
+   obligors are counted — the threshold governs those alone, so a large corporate
+   or a bank whose group-wide debt passes the limit raises nothing.
+
+Unscoped runs and whole-group runs (consolidated at the root) publish nothing and
+are unchanged. The Art. 123A granularity limb keeps reading the run's own
+`lending_group_adjusted_exposure`: it measures the reporting entity's retail
+portfolio. Limits: other entities' CCR / SFT exposures are not run through the
+group pass, and group entities whose books are not in the feed cannot be counted.
 
 ### Facility-to-Exposure Mapping
 
@@ -261,10 +309,36 @@ PRA PS1/26 Art. 112 Table A2 defines 16 exposure classes with a strict priority 
 
 ### SME Detection
 
-Corporate counterparties are reclassified as CORPORATE_SME when:
+Corporate counterparties are reclassified as CORPORATE_SME when the **consolidated
+group's** size passes the regime's SME test:
 
-- **CRR:** Group turnover < EUR 50m (GBP converted to EUR at configured rate)
-- **Basel 3.1:** Group turnover < **GBP 44m** (direct GBP threshold per PRA PS1/26, calculated on highest consolidated accounts of the group; no FX conversion needed)
+- **CRR:** group turnover < EUR 50m (GBP converted at the configured rate), or —
+  when no turnover is known anywhere in the group — group balance-sheet total
+  < EUR 43m (Art. 4(1)(128D) → Commission Rec 2003/361/EC Annex Art. 2).
+- **Basel 3.1:** group turnover **not more than GBP 44m** — PS1/26 glossary SME:
+  "a micro, small or medium enterprise with an annual turnover of not more than
+  GBP 44 million where: (1) the annual turnover shall be calculated on the basis
+  of the highest consolidated accounts of the group to which the enterprise
+  belongs". Turnover only (no balance-sheet limb) and an inclusive bound: GBP
+  44,000,000 exactly is an SME. A corporate with no turnover anywhere in its group
+  is **not** an SME; **CLS015** names those whose total assets would have
+  qualified under the CRR balance-sheet limb.
+
+The regime differences are cited pack Features: `sme_size_assets_fallback` (CRR
+on, Basel 3.1 off) and `sme_turnover_threshold_inclusive` (Basel 3.1 on).
+
+**Group figures.** `cp_group_annual_revenue` / `cp_group_total_assets`
+(`hierarchy/graph.py::with_group_size_figures`, read by the classifier) are the **maximum** over the counterparty
+and **every** org ancestor — parent, grandparent, up to the ultimate parent
+(`ancestor_references`, from the hierarchy's org walk). A parent's own figures are
+by convention its consolidated audited accounts. Taking every ancestor means an
+apex without accounts (a fund, a sovereign owner, a holding company) does not hide
+the consolidating parent beneath it. The SME size metric, the Art. 153(4) IRB
+firm-size adjustment (`turnover_m`), the Art. 147(4C) large-corporate test and the
+Basel 3.1 large-FSE asset test all read these group figures. **CLS016** names
+counterparties whose own figures are SME-sized but whose group's are not. The
+Art. 501 supporting factor additionally requires the counterparty's own
+`annual_revenue` (Art. 501(2)(b) turnover-only gate).
 
 ### Retail Qualification
 
@@ -367,11 +441,11 @@ Under Basel 3.1, Art. 123A has a two-path structure:
 
 Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500 million (GBP 440 million)** are classified as **large corporates** and, together with financial corporates, form the Art. 147(2)(c)(ii) subclass restricted to **F-IRB only** (cannot use A-IRB, per Art. 147A(1)(e)). This threshold is distinct from the SME firm-size adjustment threshold (EUR 50m / GBP 44m).
 
-**Group-consolidation basis (Art. 147(4C)(b)(ii)).** The revenue is measured "at the highest level of consolidation which is performed and at which audited financial statements are available" — the *group's* revenue, not the individual counterparty's. The classifier therefore rolls each corporate's own `annual_revenue` up its resolved `ultimate_parent_reference` chain into `cp_group_annual_revenue` before the test (`attributes.with_group_annual_revenue`): the signal is the **maximum** of the counterparty's own turnover and its ultimate parent's own turnover. A parent's own `annual_revenue` is, by convention, its consolidated audited-accounts figure (which subsumes its subsidiaries), so the ultimate parent — the top of the group — carries the highest-consolidation figure. A small subsidiary of a > GBP 440m group is therefore correctly F-IRB-only even when its own turnover is below the threshold. The `max` (rather than a source-preference coalesce) is the conservative direction for a test that *forces* F-IRB: neither a small subsidiary figure nor a data-anomalous small parent figure can let a large obligor escape.
+**Group-consolidation basis (Art. 147(4C)(b)(ii)).** The revenue is measured "at the highest level of consolidation which is performed and at which audited financial statements are available" — the *group's* revenue, not the individual counterparty's. The classifier therefore reads `cp_group_annual_revenue` (`hierarchy/graph.py::with_group_size_figures`): the **maximum** of the counterparty's own turnover and the turnover of every org ancestor. A parent's own `annual_revenue` is, by convention, its consolidated audited-accounts figure (which subsumes its subsidiaries). Taking every ancestor rather than only the ultimate parent matters when the apex performs no consolidation with a figure: under a null-revenue fund, the GBP 1bn mid-level holding company is the highest level "at which audited financial statements are available". A small subsidiary of a > GBP 440m group is therefore correctly F-IRB-only even when its own turnover is below the threshold. The `max` (rather than a source-preference coalesce) is the conservative direction for a test that *forces* F-IRB: neither a small subsidiary figure nor a data-anomalous small parent figure can let a large obligor escape.
 
-This is deliberately distinct from the entity-level `cp_annual_revenue`, which continues to drive the Art. 4(1)(128D) SME size test and the Art. 501 SME supporting factor — those read the counterparty's *own* turnover, not the group's.
+The SME size test reads the same group figures (see [SME Detection](#sme-detection)); only the Art. 501 supporting factor's turnover-present gate reads the counterparty's own `annual_revenue`.
 
-**Null composition.** `max_horizontal` ignores nulls, so a null own turnover under a revenue-bearing parent yields the parent figure; a standalone corporate (null `ultimate_parent_reference`) yields its own; both-null yields null, at which point the existing conservative default applies (a corporate whose group revenue is null and whose `total_assets` does not confirm SME size is treated as large and **CLS008** is emitted). A subsidiary with null own revenue under a large parent is thus resolved by the roll-up and no longer trips CLS008.
+**Null composition.** `max_horizontal` ignores nulls, so a null own turnover under a revenue-bearing parent yields the parent figure; a standalone corporate (null `ultimate_parent_reference`) yields its own; both-null yields null, at which point the existing conservative default applies (a corporate whose group revenue is null and whose **group** total assets do not confirm SME size is treated as large and **CLS008** is emitted). A subsidiary with null own revenue under a large parent is thus resolved by the roll-up and no longer trips CLS008.
 
 **Warning.** When the roll-up itself drives the restriction — the counterparty's own turnover is at/below GBP 440m but its group turnover exceeds it — a **CLS011** classification warning records that F-IRB was forced by the group rather than the entity, for audit transparency (mirroring the CLS010 pattern). CLS008 and CLS011 are mutually exclusive.
 

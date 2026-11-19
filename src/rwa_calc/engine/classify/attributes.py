@@ -9,10 +9,13 @@ Pipeline position:
 
 Key responsibilities:
 - Join the 20+ ``cp_*`` counterparty columns and derive the consolidated
-  SME size metric (``sme_size_metric_gbp`` / ``sme_size_source``).
-- Roll counterparty revenue up the ultimate-parent chain into
-  ``cp_group_annual_revenue`` for the Art. 147(4C)(b)(ii) large-corporate
-  F-IRB-only subclass test (``with_group_annual_revenue``).
+  SME size metric (``sme_size_metric_gbp`` / ``sme_size_source``) from the
+  group figures.
+- Read the hierarchy's consolidated figures (max over the entity and EVERY
+  org ancestor) into ``cp_group_annual_revenue`` / ``cp_group_total_assets``
+  (``group_size_exprs``): the highest-consolidation figures read by the SME
+  size test, the Art. 147(4C)(b)(ii) large-corporate F-IRB-only subclass test
+  and (Basel 3.1) the large-FSE asset test.
 - Join specialised-lending metadata (``sl_type`` / ``slotting_category`` /
   ``is_hvcre`` / ``sl_project_phase``) and resolve the project-finance phase
   the exposure is treated as being in (``resolve_sl_project_phase``).
@@ -34,6 +37,9 @@ Scratch-column coupling (load-bearing):
 References:
 - CRR Art. 112 / Art. 147: SA / IRB exposure-class mapping by entity type
 - CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC Art. 2: SME size test
+  (CRR: turnover or balance-sheet total); PS1/26 glossary SME: turnover only,
+  "not more than GBP 44 million", on "the highest consolidated accounts of the
+  group to which the enterprise belongs"; Art. 153(4) "consolidated group"
 - CRR Art. 123: retail threshold; PS1/26, paragraph 123A: retail criteria
 - CRR Art. 178 / Art. 153: default detection (counterparty + row-level)
 - PRA PS1/26 Art. 124(3) / Art. 124K: ADC classification
@@ -104,20 +110,23 @@ def add_counterparty_attributes(
 
     Also derives the consolidated SME size metric used by every
     classification gate (corporate-SME, retail-SME, SL-SME, Art. 123
-    reclassification, Art. 123A retail qualification, Art. 147A(1)(d)
-    large-corporate F-IRB restriction) and by the IRB Art. 153(4)
-    correlation adjustment:
-    - sme_size_metric_gbp = coalesce(cp_annual_revenue, cp_total_assets)
+    reclassification, Art. 123A retail qualification) and by the IRB
+    Art. 153(4) correlation adjustment, from the GROUP figures:
+    - sme_size_metric_gbp = coalesce(cp_group_annual_revenue, cp_group_total_assets)
     - sme_size_source     = "turnover" | "assets" | null
-    Art. 501 supporting factor deliberately ignores this column and
-    keys off cp_annual_revenue directly (Art. 501(2)(c)).
+    The SME definition sizes the enterprise on its group — PS1/26 glossary SME
+    (1) "the annual turnover shall be calculated on the basis of the highest
+    consolidated accounts of the group to which the enterprise belongs";
+    Art. 153(4) (both regimes) "the consolidated group of which the entity is a
+    part". Whether the "assets" source can make an SME is the regime's
+    ``sme_size_assets_fallback`` Feature (``is_sme_by_size_expr``).
+    The Art. 501 supporting factor additionally requires the entity's own
+    ``cp_annual_revenue`` (Art. 501(2)(b) turnover-only gate).
 
-    Also surfaces ``cp_group_annual_revenue`` — the highest-level-of-
-    consolidation revenue signal for the Art. 147(4C)(b)(ii) large-corporate
-    F-IRB-only subclass test (``with_group_annual_revenue``): the counterparty's
-    own turnover rolled up its ultimate-parent chain. This is deliberately
-    distinct from ``cp_annual_revenue`` (the entity's own turnover) so the group
-    test and the entity-level SME / supporting-factor tests read different bases.
+    ``cp_group_annual_revenue`` / ``cp_group_total_assets`` are the
+    highest-level-of-consolidation figures the hierarchy put on the lookup (the
+    max over the entity and every org ancestor, ``group_size_exprs``).
+    ``cp_annual_revenue`` / ``cp_total_assets`` stay the entity's own figures.
 
     The lookup is sealed against ``CP_LOOKUP_COUNTERPARTIES_EDGE``
     (``CounterpartyLookup.__post_init__``), so every declared column is
@@ -125,6 +134,7 @@ def add_counterparty_attributes(
     its own null-VALUE semantics (e.g. ``cp_is_managed_as_retail``
     ``fill_null(True)`` in ``_build_qualifies_as_retail_expr``).
     """
+    group_revenue, group_assets = group_size_exprs()
     select_cols = [
         pl.col("counterparty_reference"),
         pl.col("entity_type").str.to_lowercase().alias("cp_entity_type"),
@@ -178,15 +188,15 @@ def add_counterparty_attributes(
         # derivative exposure routes through F-IRB/A-IRB instead of falling back
         # to SA (CRR Art. 153(1) corporate IRB; CRR Art. 162(2)(b) derivative M).
         pl.col("internal_model_id").alias("cp_internal_model_id"),
-        # Group-consolidated revenue signal — PS1/26 Art. 147(4C)(b)(ii) large-
-        # corporate F-IRB subclass test (see with_group_annual_revenue). Distinct
-        # from cp_annual_revenue (the entity's own turnover, which continues to
-        # drive the Art. 4(1)(128D) SME size test and the Art. 501 supporting
-        # factor); this column carries the highest-level-of-consolidation figure.
-        pl.col("group_annual_revenue").alias("cp_group_annual_revenue"),
+        # Highest-level-of-consolidation figures (see group_size_exprs):
+        # the SME size test, the PS1/26 Art. 147(4C)(b)(ii) large-corporate
+        # subclass test and the Basel 3.1 large-FSE asset test read these;
+        # cp_annual_revenue / cp_total_assets stay the entity's own figures.
+        group_revenue.alias("cp_group_annual_revenue"),
+        group_assets.alias("cp_group_total_assets"),
     ]
 
-    cp_cols = with_group_annual_revenue(counterparties).select(select_cols)
+    cp_cols = counterparties.select(select_cols)
 
     joined = exposures.join(
         cp_cols,
@@ -194,82 +204,31 @@ def add_counterparty_attributes(
         how="left",
     )
 
-    # SME size metric (CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC):
-    # turnover when present, total assets otherwise. Every SME
-    # classification gate downstream reads sme_size_metric_gbp together
-    # with sme_size_source so the threshold can be turnover- or
-    # balance-sheet-keyed without re-reading the raw cp_ columns.
-    # Null on both fields → null metric → no SME treatment.
-    joined = joined.with_columns(
-        [
-            pl.coalesce([pl.col("cp_annual_revenue"), pl.col("cp_total_assets")]).alias(
-                "sme_size_metric_gbp"
-            ),
-            pl.when(pl.col("cp_annual_revenue").is_not_null())
-            .then(pl.lit("turnover"))
-            .when(pl.col("cp_total_assets").is_not_null())
-            .then(pl.lit("assets"))
-            .otherwise(pl.lit(None, dtype=pl.String))
-            .alias("sme_size_source"),
-        ]
+    # SME size metric on the consolidated group's figures: turnover when
+    # present, total assets otherwise. Every SME classification gate
+    # downstream reads sme_size_metric_gbp together with sme_size_source so
+    # the threshold can be turnover- or balance-sheet-keyed without re-reading
+    # the raw cp_ columns. Null on both fields → null metric → no SME treatment.
+    metric, source = sme_size_exprs(
+        pl.col("cp_group_annual_revenue"), pl.col("cp_group_total_assets")
     )
-    return joined
+    return joined.with_columns(metric.alias("sme_size_metric_gbp"), source.alias("sme_size_source"))
 
 
-@cites("PS1/26, paragraph 147")
-def with_group_annual_revenue(counterparties: pl.LazyFrame) -> pl.LazyFrame:
-    """Add ``group_annual_revenue`` — the highest-consolidation revenue signal.
+def group_size_exprs() -> tuple[pl.Expr, pl.Expr]:
+    """The consolidated revenue and total assets read off a counterparty lookup row.
 
-    PS1/26 Art. 147(4C)(b)(ii) assigns a corporate to the financial-/large-
-    corporates F-IRB-only subclass (Art. 147A(1)(e)) when its annual revenue
-    exceeds GBP 440m, "taken at the highest level of consolidation which is
-    performed and at which audited financial statements are available". The
-    engine approximates that group figure by rolling the counterparty's own
-    ``annual_revenue`` up its resolved ``ultimate_parent_reference`` chain: a
-    parent's own ``annual_revenue`` is, by convention, its consolidated audited-
-    accounts turnover (which subsumes the subsidiary), so the ultimate parent —
-    the top of the group — carries the highest-consolidation figure.
-
-    The MAX of own and ultimate-parent revenue is taken (not a coalesce that
-    prefers one source), so the group can never be understated by a small
-    subsidiary figure AND a large subsidiary is never let off by a smaller
-    (data-anomalous) parent figure — both are the conservative direction for a
-    test that FORCES F-IRB (own-LGD A-IRB is typically lower RWA than the F-IRB
-    supervisory LGD). ``max_horizontal`` ignores nulls, so a null own revenue
-    under a revenue-bearing parent yields the parent figure, a top-level entity
-    (null ``ultimate_parent_reference`` → no self-join match) yields its own, and
-    both-null yields null (the caller's total_assets / conservative-large default
-    at ``_apply_b31_approach_restrictions`` then applies unchanged).
-
-    3-year averaging (Art. 147(4C)(b)(ii) second sentence — "average annual
-    amount over the last three years") is NOT applied: the counterparty schema
-    carries a single point-in-time ``annual_revenue``. The most-recent-figure
-    convention is used; supplying multi-year revenue would be new schema
-    machinery and is a documented deferral.
-
-    The lookup keys on the (unique) ``counterparty_reference``, so the
-    ultimate-parent self-join matches at most one row and never fans out. When
-    the ultimate parent is absent from the counterparty table the join misses
-    and the own figure stands.
+    ``max(own, group)`` of the lookup's ``group_annual_revenue`` /
+    ``group_total_assets`` (the hierarchy's max over the entity and every org
+    ancestor — ``engine/hierarchy/graph.py::with_group_size_figures``) and the
+    entity's own figure: identical to the group figure on a hierarchy-built
+    lookup, and the own figure on a hand-built one that carries no group
+    columns. Shared by the counterparty-attribute join and the CLS0xx audit so
+    both size on one definition.
     """
-    parent_revenue = counterparties.select(
-        pl.col("counterparty_reference").alias("_grp_parent_ref"),
-        pl.col("annual_revenue").alias("_grp_parent_revenue"),
-    )
     return (
-        counterparties.join(
-            parent_revenue,
-            left_on="ultimate_parent_reference",
-            right_on="_grp_parent_ref",
-            how="left",
-        )
-        .with_columns(
-            pl.max_horizontal(
-                pl.col("annual_revenue"),
-                pl.col("_grp_parent_revenue"),
-            ).alias("group_annual_revenue")
-        )
-        .drop("_grp_parent_revenue")
+        pl.max_horizontal("annual_revenue", "group_annual_revenue"),
+        pl.max_horizontal("total_assets", "group_total_assets"),
     )
 
 
@@ -549,34 +508,79 @@ def derive_independent_flags(
 # =========================================================================
 
 
+@cites("CRR Art. 153(4)")
+@cites("PS1/26, paragraph 122")
 def is_sme_by_size_expr(
-    config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+    metric: pl.Expr | None = None,
+    source: pl.Expr | None = None,
 ) -> pl.Expr:
     """
     Return an expression that flags a counterparty as SME-sized.
 
-    Reads ``sme_size_metric_gbp`` (= coalesce(annual_revenue, total_assets))
-    and ``sme_size_source`` ("turnover" | "assets" | null), comparing
-    against the appropriate threshold for each source. Implements CRR
-    Art. 4(1)(128D) / Commission Recommendation 2003/361/EC Art. 2:
-    annual turnover < EUR 50m OR balance-sheet total < EUR 43m. Returns
-    False when both fields are null.
+    Reads ``sme_size_metric_gbp`` (= coalesce(group annual revenue, group total
+    assets), see ``add_counterparty_attributes``) and ``sme_size_source``
+    ("turnover" | "assets" | null) — or the ``metric`` / ``source`` expressions
+    a caller passes to size on other figures (the CLS016 audit's own-figure
+    test). Returns False when both figures are null. The regime decides the
+    shape of the test through two cited pack Features:
 
-    CRR Art. 501 supporting factor (Art. 501(2)(c)) is keyed on annual
-    turnover only and is gated separately in sa/supporting_factors.py.
+    - ``sme_size_assets_fallback``: whether a balance-sheet total can make an
+      SME. CRR: yes — Art. 4(1)(128D) defines SME by Commission Rec 2003/361/EC,
+      whose Annex Art. 2 admits a turnover OR a balance-sheet limb. Basel 3.1:
+      no — the PS1/26 glossary SME is "a micro, small or medium enterprise with
+      an annual turnover of not more than GBP 44 million", turnover only (total
+      assets substitute only inside the Art. 153(4) correlation, "when total
+      annual revenue is not a meaningful indicator of entity size", which this
+      size test does not model).
+    - ``sme_turnover_threshold_inclusive``: Basel 3.1 "not more than GBP 44
+      million" is inclusive (``<=``); CRR keeps the strict ``<`` of Art. 153(4)
+      "less than EUR 50 million".
+
+    CRR Art. 501 supporting factor (Art. 501(2)(b)) is keyed on annual
+    turnover only and is gated separately in engine/supporting_factors.py.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     turnover_threshold = float(
         regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate)
     )
+    size = pl.col("sme_size_metric_gbp") if metric is None else metric
+    size_source = pl.col("sme_size_source") if source is None else source
+    within_turnover = (
+        size <= turnover_threshold
+        if resolved_pack.feature("sme_turnover_threshold_inclusive")
+        else size < turnover_threshold
+    )
+    turnover_branch = (size_source == "turnover") & (size > 0) & within_turnover
+    if not resolved_pack.feature("sme_size_assets_fallback"):
+        return turnover_branch
     balance_sheet_threshold = float(
         regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
     )
-    metric = pl.col("sme_size_metric_gbp")
-    source = pl.col("sme_size_source")
-    turnover_branch = (source == "turnover") & (metric > 0) & (metric < turnover_threshold)
-    assets_branch = (source == "assets") & (metric > 0) & (metric < balance_sheet_threshold)
+    assets_branch = (size_source == "assets") & (size > 0) & (size < balance_sheet_threshold)
     return turnover_branch | assets_branch
+
+
+def sme_size_exprs(revenue: pl.Expr, assets: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
+    """The SME size metric and its source from a revenue and a total-assets figure.
+
+    ``(coalesce(revenue, assets), "turnover" | "assets" | null)`` — turnover
+    when present, the balance-sheet total otherwise, null when neither is
+    known. ``add_counterparty_attributes`` feeds it the consolidated group
+    figures; the CLS016 audit feeds it the entity's own figures too, so both
+    sides of that comparison are sized by one definition.
+    """
+    metric = pl.coalesce([revenue, assets])
+    source = (
+        pl.when(revenue.is_not_null())
+        .then(pl.lit("turnover"))
+        .when(assets.is_not_null())
+        .then(pl.lit("assets"))
+        .otherwise(pl.lit(None, dtype=pl.String))
+    )
+    return metric, source
 
 
 @cites("CRR Art. 147(5)")
@@ -762,8 +766,21 @@ def _build_qualifies_as_retail_expr(
     """
     # Hierarchy resolver now populates lending_group_adjusted_exposure with the
     # counterparty aggregate when no lending group exists, so the threshold
-    # check is a single comparison across both cases.
-    threshold_fail = pl.col("lending_group_adjusted_exposure") > max_retail_exposure
+    # check is a single comparison across both cases. On a solo /
+    # sub-consolidated run the amount owed to the reporting group's OTHER
+    # entities is added (``out_of_scope_group_adjusted_exposure``, null when
+    # nothing is owed elsewhere — sum_horizontal reads it as zero): CRR
+    # Art. 123(c) "owed to the institution and parent undertakings and its
+    # subsidiaries"; PS1/26 Art. 123A(1)(b)(ii) "owed to the institution, its
+    # parent undertakings, its subsidiaries and subsidiaries of its parent
+    # undertakings". The granularity limb below keeps the run's own figure.
+    threshold_fail = (
+        pl.sum_horizontal(
+            pl.col("lending_group_adjusted_exposure"),
+            pl.col("out_of_scope_group_adjusted_exposure"),
+        )
+        > max_retail_exposure
+    )
 
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if not resolved_pack.feature("retail_art_123a_two_path_applicable"):
@@ -776,9 +793,9 @@ def _build_qualifies_as_retail_expr(
         )
 
     # Basel 3.1: Art. 123A two-path qualifying criteria.
-    # Art. 123A(1)(a): SME auto-qualification — counterparty meets the
-    # Art. 4(1)(128D) SME size test (turnover < EUR 50m OR balance-sheet
-    # total < EUR 43m when turnover null).
+    # Art. 123A(1)(a): SME auto-qualification — the counterparty's group
+    # meets the PS1/26 glossary SME test (turnover not more than GBP 44m; no
+    # balance-sheet limb — see is_sme_by_size_expr).
     is_sme_for_art_123a = is_sme_by_size_expr(config, pack=resolved_pack)
 
     # Optional 0.2% granularity test (BCBS CRE20.66; an elected method of

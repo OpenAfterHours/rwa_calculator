@@ -136,9 +136,13 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: schema resolutions, and the CRM018 / CRM019 recorders became one scan that
 #: also emits CRM023 / CRM026; the CRM025 (CCR-only pledge) recorder added one
 #: ``collect`` where the merged scan removed one, so ``collect`` is unchanged.
+#: 2026-11-18 (review cluster "group", RC-05/RC-16): ``collect`` 83 -> 82 (B31)
+#: as the classifier's counterparty-size warnings (CLS008/009/011 plus the new
+#: CLS015/016) are counted in ONE select instead of a CLS009 collect and a
+#: separate Basel 3.1 collect. CRR unchanged (it paid only the CLS009 collect).
 _BANKED: dict[str, dict[str, int]] = {
     "CRR": {"collect": 84, "collect_schema": 111, "collect_all": 8},
-    "B31": {"collect": 82, "collect_schema": 111, "collect_all": 9},
+    "B31": {"collect": 81, "collect_schema": 111, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

@@ -59,6 +59,7 @@ from rwa_calc.engine.classify.attributes import (
 from rwa_calc.engine.classify.audit import (
     build_audit_trail,
     collect_classified_frame_warnings,
+    collect_group_threshold_warnings,
     collect_input_warnings,
 )
 from rwa_calc.engine.classify.permissions import (
@@ -183,6 +184,9 @@ class ExposureClassifier:
         classified = materialise_edge(classified, config, "classifier_exit")
 
         classification_errors.extend(collect_classified_frame_warnings(classified))
+        classification_errors.extend(
+            collect_group_threshold_warnings(classified, config, pack=resolved_pack)
+        )
         if has_model_permissions:
             classification_errors.extend(emit_model_permission_diagnostics(classified))
 

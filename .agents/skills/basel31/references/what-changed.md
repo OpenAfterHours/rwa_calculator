@@ -71,6 +71,7 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
 | `irb_purchased_receivable_commitment_ccf_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166A |
 | `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
+| `lfse_assets_at_highest_consolidation` | off | on | CRR Art. 142(1)(4) / PS1/26, paragraph 153 |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
 | `non_qualifying_retail_leaves_retail_class` | on | off | CRR Art. 123 / PS1/26, paragraph 123 |
 | `on_bs_netting_liquidation_period` | `20` | `10` | CRR Art. 224 / PS1/26, paragraph 219 |
@@ -97,6 +98,8 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `sa_sl_inferred_rating_disapplied` | off | on | CRR Art. 139 / PS1/26, paragraph 139 |
 | `sa_unrated_institution_sovereign_floor_applies` | off | on | CRR Art. 121 / PS1/26, paragraph 121 |
 | `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
+| `sme_size_assets_fallback` | on | off | CRR Art. 4(1)(128D) / PS1/26, paragraph 122 |
+| `sme_turnover_threshold_inclusive` | off | on | CRR Art. 153(4) / PS1/26, paragraph 122 |
 | `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |
 | `ucp_unilateral_change_ineligible` | off | on | CRR Art. 213 / PS1/26, paragraph 213 |
 <!-- END GENERATED: regime-divergence -->

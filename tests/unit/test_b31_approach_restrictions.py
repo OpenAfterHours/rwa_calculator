@@ -16,9 +16,11 @@ References:
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date
 
 import polars as pl
+import pytest
 
 from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
@@ -599,6 +601,116 @@ class TestB31IPREHVCRESlottingOnly:
             framework="crr",
         )
         assert df["approach"][0] == ApproachType.AIRB.value
+
+
+def _sl_model_permissions(rows: list[tuple[str, str | None]]) -> pl.LazyFrame:
+    """(approach, ppu_reason) permission rows for the specialised-lending class."""
+    return pl.DataFrame(
+        {
+            "model_id": [_TEST_MODEL_ID] * len(rows),
+            "exposure_class": [ExposureClass.SPECIALISED_LENDING.value] * len(rows),
+            "approach": [r[0] for r in rows],
+            "ppu_reason": [r[1] for r in rows],
+        },
+        schema_overrides={"ppu_reason": pl.String},
+    ).lazy()
+
+
+def _classify_ipre(
+    *,
+    permission_mode: PermissionMode = PermissionMode.STANDARDISED,
+    irb_permissions: IRBPermissions | None = None,
+    model_permissions: pl.LazyFrame | None = None,
+    sl_type: str = "ipre",
+    framework: str = "b31",
+) -> str:
+    """Classify one IPRE / HVCRE exposure under the given permissions; return its approach."""
+    bundle = _make_bundle(
+        _make_exposure(lgd=0.45, internal_pd=0.005),
+        _make_counterparty(entity_type="specialised_lending"),
+        specialised_lending=_make_sl_table(sl_type, is_hvcre=sl_type == "hvcre"),
+        model_permissions=model_permissions,
+    )
+    if framework == "b31":
+        config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30), permission_mode=permission_mode
+        )
+    else:
+        config = CalculationConfig.crr(
+            reporting_date=date(2026, 6, 30), permission_mode=permission_mode
+        )
+    if irb_permissions is not None:
+        config = dataclasses.replace(config, irb_permissions=irb_permissions)
+    df = ExposureClassifier().classify(bundle, config).all_exposures.collect()
+    assert isinstance(df, pl.DataFrame)
+    return df["approach"][0]
+
+
+class TestB31IPREHVCRESlottingNeedsIRBPermission:
+    """Art. 147A(1)(c) slots IPRE / HVCRE only for a firm permitted to use IRB.
+
+    PS1/26 Art. 107(1): institutions "shall apply either the Standardised
+    Approach ... or, if permitted by the PRA in accordance with ... Article
+    143, the IRB Approach"; Art. 147A(1)(c): "(i) the Standardised Approach
+    for exposures where permission has been granted under Article 148 or
+    Article 150; or (ii) the Slotting Approach for all other IPRE exposures
+    and HVCRE exposures". The forced slotting used to fire with no permission
+    at all and over an Art. 150 standardised permission row (review IV-02 /
+    RG-01). The tests above keep the permissioned (IRB mode, full model
+    permissions) case on slotting.
+    """
+
+    @pytest.mark.parametrize("sl_type", ["ipre", "hvcre"])
+    def test_sa_only_firm_keeps_sa(self, sl_type: str) -> None:
+        """Default B31 factory (PermissionMode.STANDARDISED): no IRB permission -> SA."""
+        assert _classify_ipre(sl_type=sl_type) == ApproachType.SA.value
+
+    def test_orgwide_slotting_permission_forces_slotting(self) -> None:
+        approach = _classify_ipre(irb_permissions=IRBPermissions.full_irb_b31())
+
+        assert approach == ApproachType.SLOTTING.value
+
+    def test_orgwide_permission_without_sl_class_keeps_sa(self) -> None:
+        """An org-wide grant that does not cover the SL class is no SL permission."""
+        corporate_only = IRBPermissions(
+            permissions={ExposureClass.CORPORATE: {ApproachType.SA, ApproachType.FIRB}}
+        )
+
+        assert _classify_ipre(irb_permissions=corporate_only) == ApproachType.SA.value
+
+    @pytest.mark.parametrize(
+        "approach",
+        [ApproachType.SLOTTING.value, ApproachType.FIRB.value, ApproachType.AIRB.value],
+    )
+    def test_any_sl_model_permission_forces_slotting(self, approach: str) -> None:
+        """An F-IRB / A-IRB / slotting SL row covers IPRE, which (c)(ii) slots."""
+        model_permissions = _sl_model_permissions([(approach, None)])
+
+        result = _classify_ipre(
+            permission_mode=PermissionMode.IRB, model_permissions=model_permissions
+        )
+
+        assert result == ApproachType.SLOTTING.value
+
+    @pytest.mark.parametrize("ppu_reason", ["art_150_1_a", "art_148_rollout"])
+    def test_art_148_150_standardised_row_keeps_sa(self, ppu_reason: str) -> None:
+        """Art. 147A(1)(c)(i): a standardised permission row beats the slotting row."""
+        model_permissions = _sl_model_permissions(
+            [(ApproachType.SLOTTING.value, None), (ApproachType.SA.value, ppu_reason)]
+        )
+
+        result = _classify_ipre(
+            permission_mode=PermissionMode.IRB, model_permissions=model_permissions
+        )
+
+        assert result == ApproachType.SA.value
+
+    def test_irb_mode_without_model_permissions_keeps_sa(self) -> None:
+        assert _classify_ipre(permission_mode=PermissionMode.IRB) == ApproachType.SA.value
+
+    def test_crr_sa_only_firm_keeps_sa(self) -> None:
+        """CRR control: no forced slotting at all (Feature off), SA as before."""
+        assert _classify_ipre(framework="crr") == ApproachType.SA.value
 
 
 class TestB31FSEFIRBOnly:

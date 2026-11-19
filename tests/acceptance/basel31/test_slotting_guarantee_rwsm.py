@@ -123,11 +123,17 @@ def _run(
         ],
         schema=dtypes_of(LOAN_SCHEMA),
     )
+    # An OPERATIONAL project: Basel 3.1 treats an unsupplied phase as
+    # pre-operational (PS1/26 Art. 122B(3), review IV-01), which lifts the
+    # row's output-floor SA-equivalent from 100% to 130% and makes the floor
+    # bind on these totals. This scenario is about RWSM on the slotting legs,
+    # not the floor, so the phase is stated rather than defaulted.
     sl_meta = pl.DataFrame(
         [
             {
                 "counterparty_reference": _BORROWER,
                 "sl_type": "project_finance",
+                "project_phase": "operational",
                 "slotting_category": "strong",
                 "is_hvcre": False,
             },

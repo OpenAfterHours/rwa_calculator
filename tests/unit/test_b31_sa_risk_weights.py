@@ -1290,8 +1290,12 @@ class TestB31SASpecialisedLending:
             ("commodities_finance", None, 1.00),
             ("project_finance", "pre_operational", 1.30),
             ("project_finance", "operational", 1.00),
-            ("project_finance", "high_quality", 0.80),
-            ("project_finance", None, 1.00),  # defaults to operational
+            ("project_finance", "high_quality_operational", 0.80),
+            # Art. 122B(3): the operational phase must be demonstrated, so an
+            # unsupplied or unrecognised phase is pre-operational (review IV-01;
+            # this case used to pin the 100% operational default).
+            ("project_finance", None, 1.30),
+            ("project_finance", "construction", 1.30),
         ],
         ids=[
             "object_finance_100pct",
@@ -1299,7 +1303,8 @@ class TestB31SASpecialisedLending:
             "pf_pre_op_130pct",
             "pf_operational_100pct",
             "pf_high_quality_80pct",
-            "pf_default_100pct",
+            "pf_unevidenced_phase_130pct",
+            "pf_unrecognised_phase_130pct",
         ],
     )
     def test_sa_sl_risk_weight(
@@ -1409,7 +1414,7 @@ class TestRatedSASpecialisedLending:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "sl_type": ["project_finance"],
-                "sl_project_phase": ["high_quality"],
+                "sl_project_phase": ["high_quality_operational"],
             }
         ).lazy()
 
@@ -1459,7 +1464,7 @@ class TestRatedSASpecialisedLending:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "sl_type": ["project_finance"],
-                "sl_project_phase": ["high_quality"],  # Would be 80% if unrated
+                "sl_project_phase": ["high_quality_operational"],  # Would be 80% if unrated
             }
         ).lazy()
 
@@ -3256,6 +3261,127 @@ class TestB31SubordinatedDebt:
 
         assert float(result["risk_weight"]) == pytest.approx(1.00)
         assert float(result["risk_weight"]) != pytest.approx(0.20)
+
+
+def _sl_row(
+    *,
+    sl_type: str,
+    seniority: str,
+    cqs: int | None = None,
+    sl_project_phase: str | None = None,
+    is_defaulted: bool = False,
+    provision_allocated: float = 0.0,
+) -> pl.LazyFrame:
+    """A 1,000,000 SA specialised-lending row as the SA branch receives it."""
+    return pl.DataFrame(
+        {
+            "exposure_reference": ["SL_SUB"],
+            "ead_final": [1_000_000.0],
+            "ead_gross": [1_000_000.0],
+            "exposure_class": ["specialised_lending"],
+            "cqs": [cqs],
+            "is_sme": [False],
+            "is_infrastructure": [False],
+            "sl_type": [sl_type],
+            "sl_project_phase": [sl_project_phase],
+            "seniority": [seniority],
+            "is_defaulted": [is_defaulted],
+            "provision_allocated": [provision_allocated],
+            "provision_deducted": [0.0],
+        },
+        schema_overrides={"cqs": pl.Int8, "sl_project_phase": pl.String},
+    ).lazy()
+
+
+class TestB31SubordinatedSpecialisedLending:
+    """PS1/26 Art. 133(5) reaches specialised-lending rows (review IV-03).
+
+    Art. 133(5): "An institution shall assign a risk weight of 150% to an
+    exposure that is a subordinated debt instrument, an own funds instrument
+    or an equity instrument and is not classified as an equity exposure".
+    Table A2 row (3) outranks the corporate class, of which specialised
+    lending is a sub-class (Art. 122A), so the 150% outranks the Art. 122B
+    type weights and the Art. 122B(1) / 122(2) rated-corporate table. The
+    predicate used to string-match INSTITUTION / CORPORATE on
+    ``exposure_class``, which an SL row (``specialised_lending``) never
+    matched, so a mezzanine PF loan took 100% / 130% / 80%.
+    """
+
+    @pytest.mark.parametrize(
+        ("sl_type", "cqs", "phase"),
+        [
+            ("project_finance", None, "operational"),
+            ("project_finance", None, "pre_operational"),
+            ("project_finance", None, "high_quality_operational"),
+            ("object_finance", None, None),
+            ("commodities_finance", None, None),
+            ("project_finance", 1, "operational"),
+        ],
+        ids=["pf_op", "pf_pre_op", "pf_hq", "of", "cf", "pf_rated_cqs1"],
+    )
+    def test_subordinated_sl_150pct_b31(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        sl_type: str,
+        cqs: int | None,
+        phase: str | None,
+    ) -> None:
+        """Every subordinated SL row takes 150% under Basel 3.1."""
+        row = _sl_row(sl_type=sl_type, seniority="subordinated", cqs=cqs, sl_project_phase=phase)
+
+        df = sa_calculator.calculate_branch(row, b31_config).collect()
+
+        assert df["risk_weight"][0] == pytest.approx(1.50)
+        assert df["rwa_final"][0] == pytest.approx(1_500_000.0)
+
+    def test_senior_sl_keeps_type_weight_b31(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Seniority is the discriminator: the senior twin keeps 100%."""
+        row = _sl_row(sl_type="project_finance", seniority="senior", sl_project_phase="operational")
+
+        df = sa_calculator.calculate_branch(row, b31_config).collect()
+
+        assert df["risk_weight"][0] == pytest.approx(1.00)
+
+    def test_defaulted_subordinated_sl_keeps_150pct_b31(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Table A2 row (3) outranks row (5): the defaulted override keeps 150%.
+
+        Provisions 300,000 >= 20% of 1,000,000, so Art. 127 alone would give
+        exactly 100% — the 150% can only come from the Art. 133(5) limb.
+        """
+        row = _sl_row(
+            sl_type="project_finance",
+            seniority="subordinated",
+            sl_project_phase="operational",
+            is_defaulted=True,
+            provision_allocated=300_000.0,
+        )
+
+        df = sa_calculator.calculate_branch(row, b31_config).collect()
+
+        assert df["risk_weight"][0] == pytest.approx(1.50)
+
+    def test_subordinated_sl_unchanged_under_crr(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no SA subordinated carve-out: unrated SL is corporate 100%."""
+        row = _sl_row(
+            sl_type="project_finance", seniority="subordinated", sl_project_phase="operational"
+        )
+
+        df = sa_calculator.calculate_branch(row, crr_config).collect()
+
+        assert df["risk_weight"][0] == pytest.approx(1.00)
 
 
 # =============================================================================

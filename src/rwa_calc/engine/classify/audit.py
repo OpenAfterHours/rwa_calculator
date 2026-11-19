@@ -11,8 +11,12 @@ Key responsibilities:
 - ``collect_input_warnings``: CLS008 warning for null corporate group
   annual_revenue under Basel 3.1 (Art. 147A(1)(d) conservatism) and CLS011
   for a group-revenue roll-up that forces F-IRB (Art. 147(4C)(b)(ii)).
-- ``collect_beel_on_non_defaulted_warnings``: DQ008 aggregate warning for
-  ``is_defaulted=False ∧ beel>0`` rows (eager — must run post-materialise).
+- ``collect_classified_frame_warnings``: the row-count roll-ups over the
+  materialised classified frame, from ONE collect — DQ008 for
+  ``is_defaulted=False ∧ beel>0`` rows, CLS010 for revolving retail rows a
+  QRRE gate kept out of QRRE, SA006 for project-finance rows whose phase
+  was defaulted to pre-operational, and CLS012 for slotted rows with no
+  recognised grade (eager — must run post-materialise).
 - ``build_audit_trail``: per-exposure classification reason frame.
 
 References:
@@ -23,6 +27,9 @@ References:
   exposures only (DQ008 companion check)
 - CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC Art. 2: SME fallback
   suppressing the CLS008 warning
+- CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b): QRRE gates (CLS010)
+- PRA PS1/26 Art. 122B(2)(c)/(3): project-finance phase not demonstrated (SA006)
+- CRR / PS1/26 Art. 153(5): slotting weight by the assigned grade (CLS012)
 """
 
 from __future__ import annotations
@@ -42,8 +49,10 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     beel_on_non_defaulted_exposure_warning,
     classification_warning,
+    pf_phase_unevidenced_warning,
+    slotting_category_missing_warning,
 )
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.domain.enums import ApproachType, ExposureClass, SlottingCategory
 from rwa_calc.engine.classify.attributes import (
     natural_person_expr,
     with_group_annual_revenue,
@@ -236,90 +245,76 @@ def collect_input_warnings(
     return errors
 
 
-def collect_beel_on_non_defaulted_warnings(
+def collect_classified_frame_warnings(
     classified: pl.LazyFrame,
 ) -> list[CalculationError]:
-    """Emit a single aggregate DQ008 warning summing ``(is_defaulted=False ∧ beel>0)`` rows.
+    """Roll the per-row classification warnings up from ONE collect.
 
-    PS1/26 Art. 181(1)(h)(ii) and CRR Art. 158(5) define BEEL only for
-    defaulted exposures, but a firm's A-IRB model pipeline may emit a
-    BEEL-style value alongside LGD on performing rows. The classifier
-    deliberately does NOT treat ``beel > 0`` as a default trigger (see
-    ``_build_is_defaulted_expr``); this companion check surfaces the
-    input contradiction as a non-blocking data-quality warning so the
-    audit trail is explicit.
+    Runs on the materialised classifier-exit frame (the scratch column
+    ``_sl_project_phase_defaulted`` is still present; the seal strips it
+    afterwards). Each warning is a single aggregate carrying its row count,
+    and is omitted when the count is zero:
 
-    Returns an empty list when no rows are offending (``beel`` is a
-    hierarchy_exit contract column — always present, null = not
-    supplied). Otherwise returns a single-element list carrying the
-    total count, matching the CLS006 / CLS008 roll-up pattern used by
-    every other classifier-stage warning. Reads the *derived*
-    ``is_defaulted`` so rows that the counterparty cascade legitimately
-    routes to defaulted are NOT flagged — those rows correctly consume
-    BEEL in the IRB defaulted formula.
+    - **DQ008** — ``is_defaulted=False ∧ beel>0``. PS1/26 Art. 181(1)(h)(ii)
+      and CRR Art. 158(5) define BEEL only for defaulted exposures; the
+      classifier deliberately does NOT treat ``beel > 0`` as a default trigger
+      (see ``_build_is_defaulted_expr``), so the contradiction is surfaced
+      here. Reads the *derived* ``is_defaulted``, so rows the counterparty
+      cascade routes to defaulted are not flagged.
+    - **CLS010** — a revolving regulatory-retail row (RETAIL_OTHER) that fails
+      an Art. 154(4)(a)-(b) / Art. 147(5A)(a)-(b) QRRE gate (not to an
+      individual, secured, or — to the extent undrawn — not unconditionally
+      cancellable) and so stays out of QRRE. Rows demoted purely by the (c)
+      aggregate-nominal limit pass every (a)/(b) gate and are not flagged.
+      Reuses the classifier's own gate predicates so it cannot drift.
+    - **SA006** — a project-finance row whose phase
+      ``resolve_sl_project_phase`` defaulted to pre-operational (PS1/26
+      Art. 122B(3)); always zero under CRR, where the Feature is off.
+    - **CLS012** — a row routed to the slotting approach whose
+      ``slotting_category`` is null or not a ``SlottingCategory`` value
+      (case-insensitive, as the slotting lookup reads it). Both regimes. The
+      slotting calculator weights it at the cited ``satisfactory`` default;
+      this makes that visible (review IV-09, warning half).
+
+    One collect for all four: ``engine_eager_collect_sites`` is a
+    non-increasing ratchet, so a new roll-up joins this select rather than
+    adding a materialisation.
     """
-    offender_count = (
-        classified.filter(
-            ~pl.col("is_defaulted").fill_null(False) & (pl.col("beel").fill_null(0.0) > 0.0)
-        )
-        .select(pl.len())
-        .collect()
-        .item()
+    failed_qrre_gate = (
+        ~natural_person_expr() | ~qrre_unsecured_expr() | ~qrre_undrawn_cancellable_expr()
     )
-    if offender_count == 0:
-        return []
-    return [beel_on_non_defaulted_exposure_warning(n=offender_count)]
-
-
-def collect_qrre_gate_demotion_warnings(
-    classified: pl.LazyFrame,
-) -> list[CalculationError]:
-    """Emit a single aggregate CLS010 warning for revolving retail rows denied QRRE.
-
-    CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b) restrict the qualifying
-    revolving retail exposures (QRRE) sub-class to exposures that are (a) to
-    individuals and (b) revolving, unsecured and — to the extent undrawn —
-    unconditionally cancellable. A row that is otherwise a QRRE candidate
-    (RETAIL_OTHER, regulatory-retail, revolving) but fails one of those gates is
-    correctly left in RETAIL_OTHER rather than admitted to QRRE (whose lower
-    correlation would understate RWA). This companion check surfaces those
-    gate-driven demotions as a single non-blocking warning so the reason a
-    revolving retail line missed QRRE is explicit in the audit trail.
-
-    Rows demoted purely by the (c) aggregate-nominal limit are NOT flagged —
-    they pass every (a)/(b) gate and their demotion is the long-standing
-    per-obligor cap behaviour, not a new gate. The driver columns
-    (``is_secured`` / ``risk_type`` / ``undrawn_amount`` / ``cp_entity_type`` /
-    ``cp_is_natural_person``) are present on the pre-seal classified frame.
-    """
-    # Fails an (a)/(b) gate: not an individual, secured, or (undrawn and) not
-    # unconditionally cancellable. Reuses the exact gate predicates the
-    # classifier applies (subtypes.py) so the warning cannot drift from the rule.
-    failed_gate = ~natural_person_expr() | ~qrre_unsecured_expr() | ~qrre_undrawn_cancellable_expr()
-    would_be_candidate = (
+    would_be_qrre_candidate = (
         (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
         & pl.col("is_revolving")
         & pl.col("qualifies_as_retail")
     )
-    demoted_count = (
-        classified.filter(would_be_candidate & failed_gate).select(pl.len()).collect().item()
+    grade = pl.col("slotting_category").str.to_lowercase()
+    slotted_without_grade = (pl.col("approach") == ApproachType.SLOTTING.value) & (
+        grade.is_null() | ~grade.is_in([member.value for member in SlottingCategory])
     )
-    if demoted_count == 0:
-        return []
-    return [
-        classification_warning(
-            code=ERROR_QRRE_GATE_DEMOTION,
-            message=(
-                f"{demoted_count} revolving regulatory-retail exposure(s) were kept in "
-                "RETAIL_OTHER rather than admitted to QRRE: they fail an "
-                "Art. 147(5A)(a)-(b) / Art. 154(4)(a)-(b) gate (not to an individual, "
-                "secured, or — to the extent undrawn — not unconditionally cancellable). "
-                "QRRE's lower correlation would understate RWA, so the demotion is "
-                "conservative."
-            ),
-            regulatory_reference="CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b)",
-        )
-    ]
+    counts = classified.select(
+        (~pl.col("is_defaulted").fill_null(False) & (pl.col("beel").fill_null(0.0) > 0.0))
+        .sum()
+        .alias("beel_on_non_defaulted"),
+        (would_be_qrre_candidate & failed_qrre_gate).sum().alias("qrre_gate_demoted"),
+        pl.col("_sl_project_phase_defaulted").sum().alias("pf_phase_defaulted"),
+        slotted_without_grade.sum().alias("slotting_grade_missing"),
+    ).collect()
+
+    errors: list[CalculationError] = []
+    beel_count = counts["beel_on_non_defaulted"].item()
+    if beel_count:
+        errors.append(beel_on_non_defaulted_exposure_warning(n=beel_count))
+    demoted_count = counts["qrre_gate_demoted"].item()
+    if demoted_count:
+        errors.append(_qrre_gate_demotion_warning(demoted_count))
+    pf_phase_count = counts["pf_phase_defaulted"].item()
+    if pf_phase_count:
+        errors.append(pf_phase_unevidenced_warning(n=pf_phase_count))
+    grade_missing_count = counts["slotting_grade_missing"].item()
+    if grade_missing_count:
+        errors.append(slotting_category_missing_warning(n=grade_missing_count))
+    return errors
 
 
 # =========================================================================
@@ -378,4 +373,25 @@ def build_audit_trail(
                 ]
             ).alias("classification_reason"),
         ]
+    )
+
+
+# =========================================================================
+# Private helpers
+# =========================================================================
+
+
+def _qrre_gate_demotion_warning(demoted_count: int) -> CalculationError:
+    """The CLS010 roll-up for revolving retail rows a QRRE gate kept in RETAIL_OTHER."""
+    return classification_warning(
+        code=ERROR_QRRE_GATE_DEMOTION,
+        message=(
+            f"{demoted_count} revolving regulatory-retail exposure(s) were kept in "
+            "RETAIL_OTHER rather than admitted to QRRE: they fail an "
+            "Art. 147(5A)(a)-(b) / Art. 154(4)(a)-(b) gate (not to an individual, "
+            "secured, or — to the extent undrawn — not unconditionally cancellable). "
+            "QRRE's lower correlation would understate RWA, so the demotion is "
+            "conservative."
+        ),
+        regulatory_reference="CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b)",
     )

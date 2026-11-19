@@ -240,7 +240,8 @@ def build_p1_244_control_only_raw_bundle() -> RawDataBundle:
     """Return a RawDataBundle with ONLY the QRRE-eligible control facility.
 
     Every (a)/(b) gate passes, so no row is gate-demoted and the CLS010 warning
-    must NOT fire — the negative control for ``collect_qrre_gate_demotion_warnings``.
+    must NOT fire — the negative control for the CLS010 roll-up in
+    ``audit.collect_classified_frame_warnings``.
     """
     refs = [f"{CP_INDIVIDUAL}_{n}" for n in range(3)]
     control_only = pl.LazyFrame(

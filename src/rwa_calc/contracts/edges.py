@@ -1176,6 +1176,14 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         "sl_type": EdgeColumn(dtype=pl.String),
         "slotting_category": EdgeColumn(dtype=pl.String, citation="CRR Art. 153(5)"),
         "is_hvcre": EdgeColumn(dtype=pl.Boolean),
+        "sl_project_phase": EdgeColumn(
+            dtype=pl.String,
+            citation="PS1/26 Art. 122B(2)(c)",
+            null_meaning=(
+                "null = not project finance, or (CRR) no phase supplied; under Basel 3.1 "
+                "an unsupplied project-finance phase resolves to pre_operational"
+            ),
+        ),
         # Exposure classification (CRR Art. 112/147; PS1/26 Art. 112/147)
         "exposure_class_sa": EdgeColumn(dtype=pl.String),
         "exposure_class_irb": EdgeColumn(dtype=pl.String),

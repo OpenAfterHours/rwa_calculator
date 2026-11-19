@@ -288,6 +288,18 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "139", "(2B) non-issue-specific ECAI disapplied for SL"),
     ),
+    # PRA PS1/26 Art. 122B(3) defines the project-finance operational phase by
+    # conditions the firm must show (net cash flow covering the remaining
+    # completion obligations; declining long-term debt), so a PF exposure whose
+    # project_phase is null or unrecognised has not shown it and is treated as
+    # pre-operational (Art. 122B(2)(c) 130% when unrated). Gates the phase
+    # resolution in engine/classify/attributes.py::resolve_sl_project_phase and
+    # its SA006 roll-up (review IV-01; owner decision: the conservative default).
+    "sa_pf_phase_defaults_pre_operational": Feature(
+        name="sa_pf_phase_defaults_pre_operational",
+        enabled=True,
+        citation=Citation("PS1/26", "122B", "(3) operational phase must be demonstrated"),
+    ),
     # Basel 3.1 defaulted-exposure treatment (PRA PS1/26 Art. 127 / CRE20.88):
     # gross-outstanding unsecured denominator + the Art. 127(3) residential-RE
     # non-income flat-100% carve-out. Overrides the CRR Feature; gates the regime

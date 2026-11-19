@@ -403,13 +403,20 @@ class TestB31GroupG_PortfolioELSummary:
         ``irb_results`` and ``slotting_results`` — grouped by ``is_defaulted``;
         AVA and other_own_funds_reductions are zero across the whole book):
 
-            Non-defaulted pool (58 F-IRB rows + 10 slotting rows = 68):
+            Non-defaulted pool (58 F-IRB rows + 9 slotting rows = 67):
                 IRB      A_irb  = 383,437.4952081944   B_irb  = 1,668,571.4285714286
-                Slotting A_slot = 680,000.0            B_slot = 0.0
-                A = ΣEL     = 1,063,437.4952081942
+                Slotting A_slot = 660,000.0            B_slot = 0.0
+                A = ΣEL     = 1,043,437.4952081942
                 B = Σpool_b = 1,668,571.4285714286
                 nd_shortfall = max(0, A - B) = 0.0
-                nd_excess    = max(0, B - A) = 605,133.9333632344
+                nd_excess    = max(0, B - A) = 625,133.9333632344
+
+            (A_slot fell by 20,000 with review IV-02 / RG-01: LOAN_SL_HVCRE_TABLE1_FIX
+            — HVCRE strong, 5,000,000, slotting EL 0.4% = 20,000 — has no internal
+            rating, so no model_id and no model permission row applies to it. PS1/26
+            Art. 147A(1)(c) forces IPRE / HVCRE onto slotting only where an IRB
+            permission covers the exposure (Art. 107(1)), so the row is now
+            standardised and carries no slotting EL. It was force-slotted before.)
 
             (A_irb rose by 159.10 vs the pre-P1.237 figure: an other-listed equity
             collateral row on a subordinated F-IRB obligor now takes the correct 30%
@@ -443,18 +450,20 @@ class TestB31GroupG_PortfolioELSummary:
         Same aggregate ingredients as ``test_el_shortfall_pool_aggregate_nets_to_zero``:
 
             Non-defaulted: nd_excess = max(0, B - A)
-                         = 1,668,571.4285714286 - 1,063,437.4952081942
-                         = 605,133.9333632344
+                         = 1,668,571.4285714286 - 1,043,437.4952081942
+                         = 625,133.9333632344
             Defaulted:     d_excess = 0
 
             art_159_3_applies = False -> combined branch:
-            total_el_excess = nd_excess + d_excess = 605,133.9333632344
+            total_el_excess = nd_excess + d_excess = 625,133.9333632344
 
         A moved by +800.00 with review finding CM-01: the uncommitted facility
         ``FAC_CORP_UNCOMMIT_001`` (limit 2,000,000, committed=False) now emits
         its UCC undrawn row - PS1/26 Table A1 row (7) 10%, so EAD 200,000 - whose
-        F-IRB EL (PD 1% x LGD 40% x 200,000) is exactly 800.00. Before CM-01 the
-        row was deleted, so A was 1,062,637.4952081942 and the excess 605,933.93.
+        F-IRB EL (PD 1% x LGD 40% x 200,000) is exactly 800.00. Review IV-02 /
+        RG-01 then took the unpermissioned LOAN_SL_HVCRE_TABLE1_FIX off slotting,
+        and its 20,000 slotting EL left A. Before both, A was 1,062,637.4952081942
+        and the excess 605,933.93.
 
         The pre-fix per-row-then-sum path instead reports 1,581,112.64 (each
         over-provisioned row's excess is floored and summed independently, so
@@ -463,9 +472,9 @@ class TestB31GroupG_PortfolioELSummary:
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.total_el_excess) == pytest.approx(605_133.9333632344, rel=1e-6), (
+        assert float(el.total_el_excess) == pytest.approx(625_133.9333632344, rel=1e-6), (
             "Portfolio el_excess should be the pool-aggregate netted value "
-            f"605,133.93 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
+            f"625,133.93 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
         )
 
     def test_t2_credit_cap_is_point_six_pct(self, firb_pipeline_results) -> None:

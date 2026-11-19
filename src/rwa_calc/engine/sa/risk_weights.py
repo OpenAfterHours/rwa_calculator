@@ -131,6 +131,7 @@ from rwa_calc.engine.sa.sovereign_derived import (
     sovereign_derived_rw_expr,
 )
 from rwa_calc.engine.sa.sovereign_floor import apply_sovereign_floor_for_institutions
+from rwa_calc.engine.sa.subordinated_debt import is_b31_subordinated_debt
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
@@ -1152,9 +1153,9 @@ def _apply_b31_risk_weight_overrides(
             .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
             .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
         )
-        # Subordinated debt: flat 150% (CRE20.47) — overrides all CQS-based
-        # weights for institution + corporate.
-        .when(_is_b31_subordinated_debt(uc))
+        # Subordinated debt: flat 150% (CRE20.47, PS1/26 Art. 133(5)) —
+        # overrides all CQS-based weights for institution + corporate (incl. SL).
+        .when(is_b31_subordinated_debt(uc))
         .then(pl.lit(_SA_B31_RW["sub_debt"]))
     )
 
@@ -1556,24 +1557,6 @@ def _crr_defaulted_re_secured_share(upper_class: pl.Expr) -> pl.Expr:
     )
 
 
-@cites("PS1/26, paragraph 133")
-def _is_b31_subordinated_debt(upper_class: pl.Expr) -> pl.Expr:
-    """B31 subordinated-debt predicate — Art. 112 Table A2 priority 3.
-
-    Shared by the risk-weight chain and the defaulted override so the two
-    cannot drift, and so the single ``seniority.fill_null`` site is not
-    duplicated (check-11 ratchets ``engine_fill_null_sites``).
-
-    Scoped to institution/corporate deliberately: the Art. 133 150% is not a
-    universal subordinated weight, and widening it would re-price subordinated
-    sovereign and retail rows that today correctly take their class weight.
-    """
-    return (pl.col("seniority").fill_null("senior") == "subordinated") & (
-        upper_class.str.contains("INSTITUTION", literal=True)
-        | upper_class.str.contains("CORPORATE", literal=True)
-    )
-
-
 def _apply_defaulted_risk_weight(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -1635,7 +1618,7 @@ def _apply_defaulted_risk_weight(
         # Predicate order IS the Art. 112 Table A2 waterfall:
         # row 3 subordinated > row 7 real estate > row 5 default (P1.256).
         defaulted_rw = (
-            pl.when(_is_b31_subordinated_debt(_uc))
+            pl.when(is_b31_subordinated_debt(_uc))
             .then(pl.lit(_SA_B31_RW["sub_debt"]))
             .when(is_resi_re_non_income)
             .then(pl.lit(_SA_B31_RW["defaulted_resi_re_non_income"]))

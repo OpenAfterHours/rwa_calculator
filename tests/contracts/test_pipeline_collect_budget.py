@@ -126,9 +126,13 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: the root lookup and the ancestor closure, dropping one schema resolution and
 #: one collect; the collect it frees pays for the new HIE004-HIE006 warnings
 #: collect (``facility_warnings``), so ``collect`` is unchanged.
+#: 2026-11-18 (review IV-01): ``collect`` 85 -> 84 (CRR) and 83 -> 82 (B31) as
+#: the classifier's post-materialise DQ008 and CLS010 roll-ups were folded into
+#: one select (``audit.collect_classified_frame_warnings``), which also carries
+#: the new SA006 project-finance-phase count without a collect of its own.
 _BANKED: dict[str, dict[str, int]] = {
-    "CRR": {"collect": 85, "collect_schema": 112, "collect_all": 8},
-    "B31": {"collect": 83, "collect_schema": 112, "collect_all": 9},
+    "CRR": {"collect": 84, "collect_schema": 112, "collect_all": 8},
+    "B31": {"collect": 82, "collect_schema": 112, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

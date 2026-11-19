@@ -382,6 +382,151 @@ class TestSLApproachRoutingUnchanged:
 
 
 # =============================================================================
+# Project-finance phase carried by the SL join (review IV-01)
+# =============================================================================
+
+
+def _make_pf_table(phase: str | None, sl_type: str = "project_finance") -> pl.LazyFrame:
+    return pl.DataFrame(
+        {
+            "counterparty_reference": ["CP001"],
+            "sl_type": [sl_type],
+            "project_phase": [phase],
+            "slotting_category": ["good"],
+            "is_hvcre": [False],
+        },
+        schema_overrides={"project_phase": pl.String},
+    ).lazy()
+
+
+def _classify_sa_firm(
+    specialised_lending: pl.LazyFrame, framework: str = "b31"
+) -> tuple[pl.DataFrame, set[str]]:
+    """Classify for an SA-only firm; return the frame and the error codes."""
+    bundle = _make_bundle(
+        _make_exposure(lgd=None, internal_pd=None),
+        _make_counterparty(entity_type="specialised_lending"),
+        specialised_lending=specialised_lending,
+    )
+    config = (
+        CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+        if framework == "b31"
+        else CalculationConfig.crr(reporting_date=date(2026, 6, 30))
+    )
+    result = ExposureClassifier().classify(bundle, config)
+    collected = result.all_exposures.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected, {e.code for e in result.classification_errors}
+
+
+class TestClassifierCarriesProjectPhase:
+    """The SL join carries ``project_phase`` onto ``sl_project_phase``.
+
+    The join used to select only sl_type / slotting_category / is_hvcre, so
+    the Art. 122B(2)(c)/(4) phase weights were unreachable from the loader.
+    Under Basel 3.1 the carrier holds the phase the exposure is TREATED as
+    being in: Art. 122B(3) defines the operational phase by evidenced
+    conditions, so a null or unrecognised phase is pre-operational and SA006
+    records it. CRR has no Art. 122B, so the supplied value passes through.
+    """
+
+    @pytest.mark.parametrize(
+        ("phase", "expected"),
+        [
+            ("pre_operational", "pre_operational"),
+            ("operational", "operational"),
+            ("high_quality_operational", "high_quality_operational"),
+            ("Operational", "operational"),
+            (None, "pre_operational"),
+            ("construction", "pre_operational"),
+        ],
+    )
+    def test_b31_pf_phase_is_the_treated_phase(self, phase: str | None, expected: str) -> None:
+        df, _ = _classify_sa_firm(_make_pf_table(phase))
+
+        assert df["sl_project_phase"][0] == expected
+
+    @pytest.mark.parametrize(
+        ("phase", "raises_sa006"),
+        [(None, True), ("construction", True), ("operational", False)],
+    )
+    def test_b31_sa006_flags_only_the_unevidenced_phase(
+        self, phase: str | None, raises_sa006: bool
+    ) -> None:
+        _, codes = _classify_sa_firm(_make_pf_table(phase))
+
+        assert ("SA006" in codes) is raises_sa006
+
+    def test_b31_non_pf_null_phase_is_not_defaulted(self) -> None:
+        """Object finance has no phase: no default, no SA006."""
+        df, codes = _classify_sa_firm(_make_pf_table(None, sl_type="object_finance"))
+
+        assert df["sl_project_phase"][0] is None
+        assert "SA006" not in codes
+
+    @pytest.mark.parametrize("phase", [None, "construction", "operational"])
+    def test_crr_phase_passes_through_without_sa006(self, phase: str | None) -> None:
+        df, codes = _classify_sa_firm(_make_pf_table(phase), framework="crr")
+
+        assert df["sl_project_phase"][0] == phase
+        assert "SA006" not in codes
+
+
+def _classify_slotted(grade: str | None, framework: str) -> tuple[str, set[str]]:
+    """Classify one PF row with no PD / LGD under full model permissions (-> slotting)."""
+    sl = pl.DataFrame(
+        {
+            "counterparty_reference": ["CP001"],
+            "sl_type": ["project_finance"],
+            "project_phase": ["operational"],
+            "slotting_category": [grade],
+            "is_hvcre": [False],
+        },
+        schema_overrides={"slotting_category": pl.String},
+    ).lazy()
+    bundle = _make_bundle(
+        _make_exposure(lgd=None, internal_pd=None),
+        _make_counterparty(entity_type="specialised_lending"),
+        specialised_lending=sl,
+        model_permissions=_full_model_permissions(),
+    )
+    config = (
+        CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30), permission_mode=PermissionMode.IRB
+        )
+        if framework == "b31"
+        else CalculationConfig.crr(
+            reporting_date=date(2026, 6, 30), permission_mode=PermissionMode.IRB
+        )
+    )
+    result = ExposureClassifier().classify(bundle, config)
+    approach = result.all_exposures.collect()["approach"][0]
+    return approach, {e.code for e in result.classification_errors}
+
+
+class TestSlottedRowWithoutGradeIsFlagged:
+    """CLS012: a slotted row with no recognised grade is flagged (review IV-09).
+
+    CRR / PS1/26 Art. 153(5) weight a slotted exposure by the grade the firm
+    assigns. The cited pack default (``satisfactory``) is kept — the weak-grade
+    alternative is an open owner decision — but no longer applied silently.
+    """
+
+    @pytest.mark.parametrize("framework", ["crr", "b31"])
+    @pytest.mark.parametrize(
+        ("grade", "flagged"),
+        [(None, True), ("excellent", True), ("Weak", False), ("default", False)],
+    )
+    def test_cls012_flags_only_an_unrecognised_grade(
+        self, framework: str, grade: str | None, flagged: bool
+    ) -> None:
+        approach, codes = _classify_slotted(grade, framework)
+
+        assert approach == ApproachType.SLOTTING.value, "fixture must reach slotting"
+        assert ("CLS012" in codes) is flagged
+
+
+# =============================================================================
 # COREP — SL merged into corporate for SA C 07.00
 # =============================================================================
 
@@ -514,7 +659,7 @@ class TestSACalculatorSLRegressionB31:
             ("commodities_finance", None, 1.00),
             ("project_finance", "pre_operational", 1.30),
             ("project_finance", "operational", 1.00),
-            ("project_finance", "high_quality", 0.80),
+            ("project_finance", "high_quality_operational", 0.80),
         ],
         ids=["OF_100", "CF_100", "PF_pre_130", "PF_op_100", "PF_hq_80"],
     )

@@ -303,6 +303,15 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "139", "inferred/issuer-level ECAI assessments apply to SL"),
     ),
+    # CRR has no SA project-finance phase weights (Art. 122B is Basel 3.1 only):
+    # an unrated SL exposure is an Art. 122 corporate, so the supplied
+    # project_phase is carried as-is and never defaulted. Gates
+    # engine/classify/attributes.py::resolve_sl_project_phase.
+    "sa_pf_phase_defaults_pre_operational": Feature(
+        name="sa_pf_phase_defaults_pre_operational",
+        enabled=False,
+        citation=Citation("CRR", "122", "no SA project-finance phase weights"),
+    ),
     # SA defaulted-exposure treatment (Art. 127): Basel 3.1 revises the unsecured
     # denominator basis (gross outstanding vs the CRR pre-provision ead_final) and
     # adds the Art. 127(3) residential-RE non-income flat-100% carve-out — see

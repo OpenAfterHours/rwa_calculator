@@ -301,6 +301,8 @@ Error codes are prefixed by domain and numbered sequentially:
 | `CLS003` | `ERROR_MISSING_RATING` | Classification | No rating available for rated class |
 | `CLS004` | `ERROR_QRRE_COLUMNS_MISSING` | Classification | QRRE-specific input columns missing for retail revolving classification |
 | `CLS005` | `ERROR_RETAIL_POOL_MGMT_MISSING` | Classification | Retail pool-management columns required for retail-pool aggregation are missing |
+| `CLS015` | `ERROR_SME_REVENUE_NULL_B31` | Classification | **WARNING, Basel 3.1.** Corporates with no `annual_revenue` anywhere in their group whose total assets are under the balance-sheet threshold: the PS1/26 glossary SME is turnover-only ("an annual turnover of not more than GBP 44 million"), so they are NOT SMEs — the CRR balance-sheet limb (Rec 2003/361/EC) does not apply |
+| `CLS016` | `ERROR_SME_GROUP_SIZE_FLIP` | Classification | **WARNING, both regimes.** Counterparties whose own revenue / assets are SME-sized but whose consolidated group's (the max over the entity and its `org_mapping` ancestors) are not, so no SME treatment applies (PS1/26 glossary SME (1); CRR Art. 153(4) "consolidated group") |
 | `CRM001` | `ERROR_INELIGIBLE_COLLATERAL` | CRM | Collateral type not eligible for CRM |
 | `CRM002` | `ERROR_MATURITY_MISMATCH` | CRM | Collateral maturity < exposure maturity |
 | `CRM003` | `ERROR_CURRENCY_MISMATCH` | CRM | Collateral currency ≠ exposure currency |
@@ -318,6 +320,7 @@ Error codes are prefixed by domain and numbered sequentially:
 | `SA003` | `ERROR_INVALID_LTV` | SA | LTV ratio invalid for property class |
 | `SA005` | `ERROR_EQUITY_IN_MAIN_TABLE` | SA | Equity exposure incorrectly present in the main SA exposure table (must route through the equity calculator) |
 | `SF001` | `ERROR_SME_MISSING_COUNTERPARTY_REF` | Supporting Factors | SME supporting-factor application requires a `counterparty_reference` and none was supplied |
+| `AGG004` | `ERROR_GROUP_THRESHOLD_FROM_OTHER_ENTITIES` | Aggregation | **WARNING, solo / sub-consolidated runs.** Rows that failed the retail threshold only because of debt the obligor owes to other entities of the reporting group: the run's own books are within the limit, the amount owed to the institution, its parent undertakings and their subsidiaries (CRR Art. 123(c); PS1/26 Art. 123A(1)(b)(ii)) is not |
 | `CFG001` | `ERROR_INVALID_CONFIG` | Configuration | Invalid configuration parameter |
 | `CFG002` | `ERROR_MISSING_PERMISSION` | Configuration | Required IRB permission not granted |
 | `CFG003` | `ERROR_EQUITY_TRANSITIONAL_CONFIG` | Configuration | Equity transitional (PS1/26 General Provisions rules 4.1–4.10) not applied as configured: a firm with IRB permission on 31 Dec 2026 receives the Art. 133 weights because rules 4.5–4.6 are not implemented, or `opt_out` was set by a firm with no rule 4.9 election (warning) |

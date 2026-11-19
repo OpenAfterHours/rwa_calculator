@@ -182,6 +182,15 @@ ERROR_LARGE_CORP_REVENUE_NULL = "CLS008"
 ERROR_LFSE_ASSETS_NULL = "CLS009"
 ERROR_QRRE_GATE_DEMOTION = "CLS010"
 ERROR_LARGE_CORP_GROUP_ROLLUP = "CLS011"
+# Basel 3.1 SME size undetermined: the PS1/26 glossary SME definition is
+# turnover-only ("an annual turnover of not more than GBP 44 million"), so a
+# corporate with no annual revenue (own or group) whose total assets would have
+# met the Commission Rec 2003/361/EC balance-sheet limb is NOT treated as an SME.
+ERROR_SME_REVENUE_NULL_B31 = "CLS015"
+# SME size test decided by the consolidated group: the entity's OWN figures pass
+# the SME test but the highest-consolidation group figures do not (PS1/26
+# glossary SME (1); CRR Art. 4(1)(128D) / Art. 153(4) "consolidated group").
+ERROR_SME_GROUP_SIZE_FLIP = "CLS016"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -388,6 +397,16 @@ ERROR_NON_FINITE_INPUT = "AGG002"
 # (never dropped), but the member it was capitalised against was not chosen by
 # the policy metric, and that must not be silent.
 ERROR_FACILITY_SHARE_FALLBACK = "AGG003"
+
+# Group-wide obligor aggregation code. On a solo / sub-consolidated run the
+# retail threshold (CRR Art. 123(c); PS1/26 Art. 123(1)(b)(ii) / 123A(1)(b)(ii) /
+# 147(5)(a)(ii)) counts the amount the obligor owes to the institution, its parent
+# undertakings, its subsidiaries and subsidiaries of its parent undertakings —
+# i.e. every entity in the reporting-entity registry, not only the run's books.
+# A WARNING naming the rows that failed the threshold ONLY because of debt booked
+# in other group entities, so a solo classification that differs from what the
+# solo books alone show is never silent.
+ERROR_GROUP_THRESHOLD_FROM_OTHER_ENTITIES = "AGG004"
 
 # Parallel-run reconciliation error codes (legacy-vs-ours comparison).
 # Non-fatal: reconciliation degrades gracefully (skips the affected

@@ -32,14 +32,14 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — content hash `af165f296a3b2028`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `03478e2fbc998795`
 
 ## Summary
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
-| CRR (Capital Requirements Regulation) | 35 | 59 | 10 | 37 | 14 | 155 |
+| CRR (Capital Requirements Regulation) | 35 | 60 | 10 | 36 | 14 | 155 |
 | PS1/26 (PRA Policy Statement) | 27 | 31 | 7 | 27 | 15 | 107 |
 
 ## CRR (Capital Requirements Regulation)
@@ -48,7 +48,7 @@ Package version `0.3.34`. Resolved packs:
 |---|---|---|---|---|---|---|
 | 1 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 2 | 0 | 0 | 0 | 0 | 1 | GAP |
-| 4 | 0 | 0 | 10 | 0 | 4 | UNCITED |
+| 4 | 0 | 1 | 13 | 0 | 4 | MEDIUM |
 | 6 | 0 | 0 | 8 | 0 | 6 | UNCITED |
 | 34 | 0 | 0 | 3 | 0 | 3 | UNCITED |
 | 36 | 0 | 0 | 0 | 0 | 3 | GAP |
@@ -72,7 +72,7 @@ Package version `0.3.34`. Resolved packs:
 | 120 | 1 | 2 | 13 | 6 | 94 | HIGH |
 | 121 | 4 | 3 | 8 | 9 | 20 | HIGH |
 | 122 | 2 | 4 | 6 | 11 | 74 | HIGH |
-| 123 | 3 | 7 | 13 | 2 | 27 | HIGH |
+| 123 | 6 | 7 | 20 | 2 | 30 | HIGH |
 | 124 | 1 | 2 | 9 | 2 | 13 | HIGH |
 | 125 | 1 | 3 | 17 | 2 | 23 | HIGH |
 | 126 | 2 | 4 | 11 | 2 | 15 | HIGH |
@@ -92,13 +92,13 @@ Package version `0.3.34`. Resolved packs:
 | 139 | 1 | 1 | 1 | 0 | 0 | LOW |
 | 140 | 3 | 0 | 4 | 0 | 6 | MEDIUM |
 | 141 | 1 | 0 | 1 | 0 | 0 | LOW |
-| 142 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
+| 142 | 1 | 1 | 4 | 0 | 6 | MEDIUM |
 | 143 | 2 | 0 | 8 | 0 | 8 | MEDIUM |
 | 147 | 5 | 5 | 22 | 0 | 26 | MEDIUM |
 | 148 | 2 | 0 | 8 | 0 | 5 | MEDIUM |
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
 | 151 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
-| 153 | 14 | 11 | 32 | 15 | 73 | HIGH |
+| 153 | 16 | 12 | 34 | 15 | 74 | HIGH |
 | 154 | 5 | 0 | 6 | 4 | 23 | HIGH |
 | 155 | 7 | 4 | 10 | 3 | 22 | HIGH |
 | 158 | 0 | 4 | 11 | 0 | 17 | MEDIUM |
@@ -199,7 +199,7 @@ Package version `0.3.34`. Resolved packs:
 | 444 | 4 | 0 | 7 | 0 | 1 | MEDIUM |
 | 452 | 2 | 0 | 4 | 0 | 0 | LOW |
 | 453 | 2 | 0 | 3 | 0 | 0 | LOW |
-| 501 | 4 | 2 | 18 | 2 | 31 | HIGH |
+| 501 | 7 | 2 | 20 | 2 | 34 | HIGH |
 | 501a | 2 | 0 | 4 | 1 | 8 | HIGH |
 
 ## PS1/26 (PRA Policy Statement)
@@ -223,11 +223,11 @@ Package version `0.3.34`. Resolved packs:
 | 120 | 0 | 6 | 12 | 2 | 36 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 121 | 1 | 1 | 7 | 4 | 17 | HIGH |
-| 122 | 2 | 7 | 7 | 5 | 49 | HIGH |
+| 122 | 3 | 9 | 8 | 5 | 49 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
-| 123 | 1 | 4 | 3 | 5 | 15 | HIGH |
-| 123A | 1 | 1 | 5 | 0 | 14 | MEDIUM |
+| 123 | 1 | 4 | 8 | 5 | 15 | HIGH |
+| 123A | 4 | 1 | 10 | 0 | 18 | MEDIUM |
 | 123B | 1 | 5 | 8 | 0 | 13 | MEDIUM |
 | 124 | 2 | 1 | 10 | 0 | 8 | MEDIUM |
 | 124A | 0 | 0 | 0 | 0 | 4 | GAP |
@@ -253,11 +253,11 @@ Package version `0.3.34`. Resolved packs:
 | 138 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 139 | 1 | 1 | 6 | 0 | 3 | MEDIUM |
 | 140 | 2 | 0 | 3 | 0 | 5 | MEDIUM |
-| 147 | 14 | 3 | 17 | 0 | 26 | MEDIUM |
+| 147 | 14 | 3 | 18 | 0 | 27 | MEDIUM |
 | 147A | 2 | 2 | 18 | 0 | 31 | MEDIUM |
 | 147B | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 150 | 0 | 0 | 0 | 0 | 1 | GAP |
-| 153 | 2 | 9 | 14 | 11 | 33 | HIGH |
+| 153 | 3 | 10 | 15 | 11 | 34 | HIGH |
 | 154 | 1 | 2 | 2 | 6 | 9 | HIGH |
 | 155 | 0 | 0 | 0 | 0 | 3 | GAP |
 | 158 | 0 | 3 | 0 | 0 | 3 | MEDIUM |
@@ -337,7 +337,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 6 | 8 | 0 | 6 | — | — |
 | CRR 280b | 1 | 0 | 6 | — | — |
 | CRR 200 | 4 | 0 | 5 | — | — |
-| CRR 4 | 10 | 0 | 4 | — | PS1/26 para. 4 |
 | PS1/26 239 | 1 | 0 | 4 | — | — |
 | CRR 34 | 3 | 0 | 3 | — | — |
 | PS1/26 120A | 4 | 0 | 3 | — | — |

@@ -50,8 +50,8 @@ This page documents the authoritative schemas for all input data files required 
 | `counterparty_name` | `String` | No | Legal name of the counterparty |
 | `entity_type` | `String` | Yes | **Single source of truth** for exposure class (see valid values below) |
 | `country_code` | `String` | No | ISO 3166-1 alpha-2 country code |
-| `annual_revenue` | `Float64` | No | Annual revenue in GBP (for SME classification - EUR 50m threshold) |
-| `total_assets` | `Float64` | No | Total assets in GBP (for LFSE threshold: EUR 70bn under CRR Art. 142(1)(4); GBP 79bn under PS1/26 Glossary p. 78) |
+| `annual_revenue` | `Float64` | No | Annual revenue in GBP. The SME size test (CRR EUR 50m; Basel 3.1 not more than GBP 44m) and the Basel 3.1 Art. 147(4C) large-corporate test read the **group** figure: the max of this value and every `org_mapping` ancestor's (a parent's value is taken as its consolidated accounts). Under Basel 3.1 a corporate with no revenue anywhere in its group is not an SME (CLS015) |
+| `total_assets` | `Float64` | No | Total assets in GBP. LFSE threshold: EUR 70bn on the entity's own figure under CRR Art. 142(1)(4); GBP 79bn under PS1/26 Glossary p. 78, taken at the highest level of consolidation (max over the entity and its `org_mapping` ancestors). CRR only: the SME balance-sheet fallback (EUR 43m, group figure) when no turnover is known |
 | `default_status` | `Boolean` | No | Whether counterparty is in default |
 | `sector_code` | `String` | No | Industry sector code (SIC-based) |
 | `apply_fi_scalar` | `Boolean` | No | User flag: True = apply 1.25x FI correlation scalar (CRR Art. 153(2)) |
@@ -144,7 +144,7 @@ The **1.25x correlation multiplier** (Art. 153(2)) applies to **large financial 
 | CRR | Total assets ≥ **EUR 70 billion** | CRR Art. 142(1)(4) |
 | Basel 3.1 | Total assets ≥ **GBP 79 billion** | PS1/26 Glossary p. 78 (Note: "corresponds to Article 142(1)(4) of CRR") |
 
-**How it works in the calculator:** The `apply_fi_scalar` flag on the counterparty record is the **sole input** — the calculator does not automatically compare `total_assets` against the framework-specific threshold. The user is responsible for setting `apply_fi_scalar = True` on counterparties that meet the regulatory LFSE (or unregulated FSE) criteria for the framework in use. The classifier derives `requires_fi_scalar` directly from this flag with no entity-type gate.
+**How it works in the calculator:** the classifier derives `requires_fi_scalar` for a counterparty flagged `is_financial_sector_entity = True` whose total assets meet the framework threshold — the entity's own `total_assets` under CRR (Art. 142(1)(4)(a): "calculated on an individual or consolidated basis"), the **group** figure (max over the entity and its `org_mapping` ancestors) under Basel 3.1 (glossary: "taken at the highest level of consolidation at which audited financial statements are available"). `apply_fi_scalar = True` remains an authoritative override (an unregulated FSE, or an LFSE whose size data is incomplete); it can never suppress a derived True. A flagged FSE whose asset figure is null and that carries no election raises CLS009.
 
 !!! warning "Two distinct thresholds — do not conflate"
     - **LFSE total-assets threshold** (EUR 70bn CRR / GBP 79bn B31) → 1.25x correlation multiplier (Art. 153(2), both CRR and Basel 3.1). Applies to the asset correlation coefficient R, not to the capital requirement directly.
@@ -1117,7 +1117,7 @@ facility_mapping = pl.DataFrame({
 
 ## Org Mapping Schema
 
-**Purpose:** Defines organisation hierarchy for rating and turnover inheritance.
+**Purpose:** Defines the organisation hierarchy. It drives rating inheritance and the **group size figures**: every size test (the SME turnover / balance-sheet test, the Art. 153(4) IRB firm-size adjustment, the Basel 3.1 Art. 147(4C) large-corporate test and the Basel 3.1 large-FSE asset test) reads the maximum of the counterparty's own figure and every ancestor's along its parent chain, so a subsidiary is sized on its group's consolidated accounts and a figure-less apex (a fund, a holding company) does not hide the consolidating parent beneath it. CLS016 names counterparties whose own figures are SME-sized but whose group's are not. A child listed under two parents keeps the first row (DQ004).
 
 **File:** `mapping/org_mapping.parquet`
 
@@ -1150,7 +1150,7 @@ org_mapping = pl.DataFrame({
 | `parent_counterparty_reference` | `String` | Yes | Lending group lead reference |
 | `child_counterparty_reference` | `String` | Yes | Member counterparty reference |
 
-Exposures are aggregated to the group level for retail eligibility (threshold: EUR 1m CRR Art. 123(c) / GBP 880k Basel 3.1 Art. 123(1)(b)(ii)).
+Exposures are aggregated to the group level for retail eligibility (threshold: EUR 1m CRR Art. 123(c) / GBP 880k Basel 3.1 Art. 123(1)(b)(ii)) and for the CRR Art. 501 SME supporting factor's E*. On a solo or sub-consolidated run both aggregates also count what the group owes to the reporting group's **other** registry entities (see [Multi-Entity Reporting](../features/multi-entity-reporting.md)).
 
 ---
 

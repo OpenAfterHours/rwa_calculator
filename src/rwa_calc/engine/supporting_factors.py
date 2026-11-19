@@ -69,7 +69,7 @@ References:
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import polars as pl
 from watchfire import cites
@@ -84,8 +84,14 @@ from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import formula_float_map
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
+
+#: Column carrying :func:`obligor_group_key_expr` on the scoped-run
+#: ``GROUP_OBLIGOR_INCREMENTS`` frame (``engine/hierarchy/group_obligor.py``).
+OBLIGOR_GROUP_KEY: Final = "obligor_group_key"
 
 
 class SupportingFactorCalculator:
@@ -303,13 +309,7 @@ class SupportingFactorCalculator:
             exposures = exposures.with_columns(pl.col("e_star_group_drawn").alias("total_cp_drawn"))
             ead_for_tier = pl.col("total_cp_drawn")
         elif has_counterparty:
-            group_key_expr = (
-                pl.when(pl.col("lending_group_reference").is_not_null())
-                .then(pl.col("lending_group_reference"))
-                .otherwise(pl.col("counterparty_reference"))
-            ).alias("_sme_group_key")
-
-            exposures = exposures.with_columns([group_key_expr])
+            exposures = exposures.with_columns(obligor_group_key_expr().alias("_sme_group_key"))
 
             # Art. 501 carve-out: "excluding claims or contingent claims
             # secured on residential property collateral". Implemented as
@@ -510,6 +510,7 @@ def compute_e_star_group_drawn(
     *,
     errors: list[CalculationError] | None = None,
     pack: ResolvedRulepack | None = None,
+    group_increments: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """
     Compute Art. 501 E* across the unified frame before the approach split.
@@ -536,6 +537,15 @@ def compute_e_star_group_drawn(
     - written to every row (SME and non-SME) in a partition so all three
       branch calculators can read it
 
+    Solo / sub-consolidated runs: Art. 501(1) counts the amount owed "to the
+    institution, its subsidiaries, its parent undertakings and other
+    subsidiaries of those parent undertakings", so the run's own books are not
+    the whole of E*. ``group_increments`` (the hierarchy stage's
+    ``GROUP_OBLIGOR_INCREMENTS``: per ``obligor_group_key``, the E* the rest of
+    the reporting group adds, never negative) is added ONCE per group key on top
+    of the windowed sum. None on an unscoped or whole-group run, where the
+    frame already holds every group book.
+
     No-ops:
     - if supporting factors are disabled (Basel 3.1), returns the frame
       unchanged — column is not added
@@ -546,6 +556,8 @@ def compute_e_star_group_drawn(
         exposures: Unified-frame LazyFrame post-CRM, pre-branch-split
         config: Calculation configuration
         errors: Optional error accumulator for data-quality warnings
+        group_increments: Per obligor-group key E* owed to the other entities
+            of the reporting group (scoped runs), or None
 
     Returns:
         LazyFrame with ``e_star_group_drawn`` column added
@@ -577,6 +589,58 @@ def compute_e_star_group_drawn(
             )
         return exposures
 
+    exposures = exposures.with_columns(obligor_group_key_expr().alias("_sme_group_key"))
+    exposures = exposures.with_columns(
+        e_star_contribution_expr(names).sum().over("_sme_group_key").alias("e_star_group_drawn")
+    )
+    if group_increments is None:
+        return exposures.drop("_sme_group_key")
+
+    # Scoped run: add what the rest of the reporting group is owed, once per
+    # group key (the increment is a per-key constant broadcast by the join).
+    # A key the group pass never saw joins to null, which sum_horizontal
+    # reads as "nothing owed elsewhere".
+    exposures = exposures.join(
+        group_increments.select(
+            pl.col(OBLIGOR_GROUP_KEY).alias("_sme_group_key"),
+            pl.col("group_e_star_increment").alias("_grp_e_star_increment"),
+        ),
+        on="_sme_group_key",
+        how="left",
+        maintain_order="left",
+    )
+    exposures = exposures.with_columns(
+        pl.sum_horizontal("e_star_group_drawn", "_grp_e_star_increment").alias("e_star_group_drawn")
+    )
+    return exposures.drop("_sme_group_key", "_grp_e_star_increment")
+
+
+def obligor_group_key_expr() -> pl.Expr:
+    """The connected-clients aggregation key: the lending group, else the obligor.
+
+    CRR Art. 4(1)(39) group of connected clients: ``lending_group_reference``
+    when the counterparty is mapped into a lending group, else its own
+    ``counterparty_reference`` (a group of one). A lending group's reference is
+    its parent counterparty, which is itself a member, so the two halves of the
+    key never collide. The key Art. 501 E* sums over, and the key the scoped-run
+    group increments (``engine/hierarchy/group_obligor.py``) are published on.
+    """
+    return pl.coalesce(pl.col("lending_group_reference"), pl.col("counterparty_reference"))
+
+
+@cites("CRR Art. 501")
+def e_star_contribution_expr(names: Collection[str]) -> pl.Expr:
+    """One row's contribution to Art. 501 E*.
+
+    ``drawn_amount`` (clipped at zero) plus ``interest``, less the residential
+    property cover capped at that amount — Art. 501(1) E* is "the total amount
+    owed ..., including any exposure in default, but excluding claims or
+    contingent claims secured on residential property collateral". NaN / null
+    amounts contribute zero so one bad row cannot poison the group sum. Absent
+    columns (minimal test-harness frames) contribute zero; ``names`` is the
+    caller's frame schema, so the hierarchy stage's scoped-run increments and
+    the calculators' E* apply one definition.
+    """
     has_drawn = "drawn_amount" in names
     has_interest = "interest" in names
     has_res_coll = "residential_collateral_value" in names
@@ -588,29 +652,12 @@ def compute_e_star_group_drawn(
     )
     interest_expr = pl.col("interest").fill_nan(0.0).fill_null(0.0) if has_interest else pl.lit(0.0)
     drawn_expr = drawn_principal + interest_expr
-
-    if has_res_coll:
-        res_coll_expr = (
-            pl.col("residential_collateral_value")
-            .fill_nan(0.0)
-            .fill_null(0.0)
-            .clip(lower_bound=0.0)
-        )
-        drawn_in_e_star = drawn_expr - pl.min_horizontal(res_coll_expr, drawn_expr)
-    else:
-        drawn_in_e_star = drawn_expr
-
-    group_key_expr = (
-        pl.when(pl.col("lending_group_reference").is_not_null())
-        .then(pl.col("lending_group_reference"))
-        .otherwise(pl.col("counterparty_reference"))
+    if not has_res_coll:
+        return drawn_expr
+    res_coll_expr = (
+        pl.col("residential_collateral_value").fill_nan(0.0).fill_null(0.0).clip(lower_bound=0.0)
     )
-
-    exposures = exposures.with_columns(group_key_expr.alias("_sme_group_key"))
-    exposures = exposures.with_columns(
-        drawn_in_e_star.sum().over("_sme_group_key").alias("e_star_group_drawn")
-    )
-    return exposures.drop("_sme_group_key")
+    return drawn_expr - pl.min_horizontal(res_coll_expr, drawn_expr)
 
 
 def _optional_bool_column(schema: pl.Schema, column: str) -> pl.Expr:

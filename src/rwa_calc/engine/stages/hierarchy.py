@@ -12,6 +12,12 @@ Key responsibilities:
 - Materialise + seal the stage exit against the ``hierarchy_exit`` contract
   (the resolver's ``hierarchy_resolved`` pure-plan seal plus the
   securitisation lookup columns attached here).
+- On a solo / sub-consolidated run (``GROUP_POPULATION`` present), resolve the
+  whole reporting group's population too and publish what the rest of the
+  group adds to each obligor's retail-threshold aggregate and Art. 501 E*
+  (``GROUP_OBLIGOR_INCREMENTS``); the threshold half rides on the exposures as
+  ``out_of_scope_group_adjusted_exposure``. The group pass's own diagnostics
+  are not forwarded — they describe rows outside the run.
 - Forward hierarchy errors (HIE*, DQ004/DQ005) to the STAGE_ERRORS channel
   verbatim — original code/severity/category/context preserved into
   ``AggregatedResultBundle.errors`` (error-channel slice, P2.21).
@@ -19,6 +25,7 @@ Key responsibilities:
 
 References:
 - CRR Art. 4(1)(39): Group of connected clients (hierarchy resolution)
+- CRR Art. 123(c) / 501(1); PS1/26 Art. 123A(1)(b)(ii): group-wide "amount owed"
 - docs/plans/target-architecture-migration.md (Phase 4)
 """
 
@@ -29,9 +36,15 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from rwa_calc.contracts.edges import HIERARCHY_EXIT_EDGE
+from rwa_calc.engine.hierarchy.group_obligor import (
+    attach_out_of_scope_threshold,
+    whole_group_increments,
+)
 from rwa_calc.engine.materialise import materialise_sealed_edge
 from rwa_calc.engine.orchestrator import (
     COMPONENTS,
+    GROUP_OBLIGOR_INCREMENTS,
+    GROUP_POPULATION,
     RAW_DATA,
     RESOLVED_HIERARCHY,
     SECURITISATION_RESOLVED,
@@ -41,6 +54,8 @@ from rwa_calc.engine.securitisation.allocator import attach_securitisation_looku
 from rwa_calc.observability.audit_cache import sink_audit
 
 if TYPE_CHECKING:
+    import polars as pl
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.context import PipelineContext
     from rwa_calc.rulebook import RulepackV0
@@ -65,6 +80,18 @@ def run(
     # columns at their canonical defaults (1.0, []), keeping the downstream
     # contract uniform.
     new_exposures = attach_securitisation_lookup(result.exposures, securitisation_resolved)
+
+    # Solo / sub-consolidated run: the retail threshold and E* count what the
+    # obligor owes the WHOLE banking group (CRR Art. 123(c) / 501(1); PS1/26
+    # Art. 123A(1)(b)(ii)). Resolve the whole group's population with the same
+    # resolver and publish the per-obligor increments. Absent on an unscoped
+    # run, None on a whole-group run: the exposures are then untouched.
+    group_population = ctx.get_or(GROUP_POPULATION, None)
+    increments: pl.LazyFrame | None = None
+    if group_population is not None:
+        whole_group = components.hierarchy_resolver.resolve(group_population, run_config)
+        increments = whole_group_increments(result.exposures, whole_group.exposures)
+        new_exposures = attach_out_of_scope_threshold(new_exposures, increments)
     result = replace(
         result,
         # Stage-exit edge: hierarchy output crosses to the CCR stage /
@@ -85,4 +112,7 @@ def run(
         "rating_inheritance",
     )
 
-    return ctx.put(RESOLVED_HIERARCHY, result)
+    ctx = ctx.put(RESOLVED_HIERARCHY, result)
+    if increments is None:
+        return ctx
+    return ctx.put(GROUP_OBLIGOR_INCREMENTS, increments)

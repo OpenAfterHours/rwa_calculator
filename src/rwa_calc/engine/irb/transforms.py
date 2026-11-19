@@ -1158,7 +1158,7 @@ def _prepare_columns_exprs(
         # CRR Art. 153(4) third subparagraph: substitute total assets of the
         # consolidated group for total annual sales when sales are not a
         # meaningful indicator of firm size. The classifier derives
-        # ``sme_size_metric_gbp = coalesce(cp_annual_revenue, cp_total_assets)``
+        # ``sme_size_metric_gbp = coalesce(cp_group_annual_revenue, cp_group_total_assets)``
         # and sets ``is_sme`` per the size test (turnover < EUR 50m OR
         # balance-sheet total < EUR 43m). The IRB correlation reads
         # turnover_m and re-derives its own SME gate at the EUR 50m / GBP 44m

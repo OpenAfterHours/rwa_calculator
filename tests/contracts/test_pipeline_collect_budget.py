@@ -120,9 +120,13 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: per declared foreign key and per unique key; the aggregator resolves the
 #: post-floor ledger once for its four summary builders; the CRM facility
 #: lookup reuses the names its caller already resolved.
+#: 2026-11-18 (review cluster "group", RC-05/RC-16): ``collect`` 83 -> 82 (B31)
+#: as the classifier's counterparty-size warnings (CLS008/009/011 plus the new
+#: CLS015/016) are counted in ONE select instead of a CLS009 collect and a
+#: separate Basel 3.1 collect. CRR unchanged (it paid only the CLS009 collect).
 _BANKED: dict[str, dict[str, int]] = {
     "CRR": {"collect": 85, "collect_schema": 113, "collect_all": 8},
-    "B31": {"collect": 83, "collect_schema": 113, "collect_all": 9},
+    "B31": {"collect": 82, "collect_schema": 113, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

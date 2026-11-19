@@ -819,6 +819,28 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "147", "no COREP corporate exposure-subclass split under CRR"),
     ),
+    # SME / large-FSE size-test shape (engine/classify/attributes.py
+    # ::is_sme_by_size_expr, engine/classify/subtypes.py); Basel 3.1 overrides all
+    # three. CRR Art. 4(1)(128D) defines SME by Commission Rec 2003/361/EC, whose
+    # Annex Art. 2 admits a turnover OR a balance-sheet limb; the engine keeps its
+    # strict turnover test (Art. 153(4) "less than EUR 50 million"). CRR
+    # Art. 142(1)(4)(a) sizes a large FSE on total assets "calculated on an
+    # individual or consolidated basis", so the entity's own assets stay the basis.
+    "sme_size_assets_fallback": Feature(
+        name="sme_size_assets_fallback",
+        enabled=True,
+        citation=Citation("CRR", "4(1)(128D)", "SME per Rec 2003/361/EC: turnover or assets"),
+    ),
+    "sme_turnover_threshold_inclusive": Feature(
+        name="sme_turnover_threshold_inclusive",
+        enabled=False,
+        citation=Citation("CRR", "153(4)", "SME turnover 'less than EUR 50 million' (strict)"),
+    ),
+    "lfse_assets_at_highest_consolidation": Feature(
+        name="lfse_assets_at_highest_consolidation",
+        enabled=False,
+        citation=Citation("CRR", "142(1)(4)", "(a) assets on an individual or consolidated basis"),
+    ),
     # IRB SME-correlation turnover basis (Art. 153(4)): CRR converts GBP turnover
     # to EUR via eur_gbp_rate then clips EUR 5-50m; Basel 3.1 uses GBP-native
     # thresholds directly (no FX conversion). The Feature selects the branch in

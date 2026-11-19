@@ -110,7 +110,8 @@ Derived convenience columns:
 |--------|------|-------------|
 | `lending_group_reference` | `String` | Lending group parent if applicable |
 | `lending_group_total_exposure` | `Float64` | Aggregated exposure across lending group |
-| `lending_group_adjusted_exposure` | `Float64` | Excludes residential RE for retail threshold test |
+| `lending_group_adjusted_exposure` | `Float64` | Excludes residential RE for retail threshold test (the run's own books) |
+| `out_of_scope_group_adjusted_exposure` | `Float64` | Solo / sub-consolidated runs only: the same amount owed to the reporting group's **other** registry entities (CRR Art. 123(c); PS1/26 Art. 123A(1)(b)(ii)). The threshold test reads the sum of this and `lending_group_adjusted_exposure`; null on unscoped and whole-group runs |
 | `residential_collateral_value` | `Float64` | Residential RE collateral securing this exposure |
 | `exposure_for_retail_threshold` | `Float64` | This exposure's contribution (excl. residential RE) |
 

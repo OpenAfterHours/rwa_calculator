@@ -650,6 +650,35 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "147A", "three-way corporate COREP exposure-subclass split"),
     ),
+    # SME / large-FSE size-test shape (engine/classify/attributes.py
+    # ::is_sme_by_size_expr, engine/classify/subtypes.py). Override the CRR Features.
+    # The PS1/26 glossary SME is "a micro, small or medium enterprise with an annual
+    # turnover of not more than GBP 44 million", the turnover "calculated on the
+    # basis of the highest consolidated accounts of the group": turnover only (no
+    # balance-sheet limb) and an inclusive bound. The glossary large FSE takes total
+    # assets "at the highest level of consolidation at which audited financial
+    # statements are available".
+    "sme_size_assets_fallback": Feature(
+        name="sme_size_assets_fallback",
+        enabled=False,
+        citation=Citation(
+            "PS1/26", "122", "(11) SME per glossary: annual turnover only, no balance-sheet limb"
+        ),
+    ),
+    "sme_turnover_threshold_inclusive": Feature(
+        name="sme_turnover_threshold_inclusive",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "122", "(11) SME per glossary: turnover 'not more than GBP 44 million'"
+        ),
+    ),
+    "lfse_assets_at_highest_consolidation": Feature(
+        name="lfse_assets_at_highest_consolidation",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "153", "(2) large FSE per glossary: assets at highest consolidation"
+        ),
+    ),
     # Basel 3.1 SME correlation uses GBP-native turnover thresholds directly, no
     # EUR FX conversion (PRA PS1/26 Art. 153(4)). Overrides the CRR Feature.
     "irb_correlation_sme_gbp_native": Feature(

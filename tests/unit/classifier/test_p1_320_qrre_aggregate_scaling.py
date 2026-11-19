@@ -183,6 +183,7 @@ def _build_frame(n_rows: int) -> pl.LazyFrame:
         "cp_is_natural_person": pl.lit(True),
         "cp_is_financial_sector_entity": pl.lit(False),
         "cp_total_assets": pl.lit(None, dtype=pl.Float64),
+        "cp_group_total_assets": pl.lit(None, dtype=pl.Float64),
         "cp_apply_fi_scalar": pl.lit(False),
         "sme_size_metric_gbp": pl.lit(None, dtype=pl.Float64),
         "sme_size_source": pl.lit(None, dtype=pl.String),

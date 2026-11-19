@@ -924,6 +924,20 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         ),
         "lending_group_total_exposure": EdgeColumn(dtype=pl.Float64),
         "lending_group_adjusted_exposure": EdgeColumn(dtype=pl.Float64),
+        # Solo / sub-consolidated runs only (engine/hierarchy/group_obligor.py):
+        # the retail-threshold amount, net of residential cover, the obligor or
+        # its lending group owes to the reporting group's OTHER entities. The
+        # classifier adds it to lending_group_adjusted_exposure for the
+        # threshold test (CRR Art. 123(c); PS1/26 Art. 123A(1)(b)(ii)).
+        "out_of_scope_group_adjusted_exposure": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="CRR Art. 123(c)",
+            null_meaning=(
+                "null = unscoped / whole-group run, or no debt owed to other group "
+                "entities — the run's own aggregate is the whole amount owed"
+            ),
+        ),
     }
 
 
@@ -1072,6 +1086,25 @@ CP_LOOKUP_COUNTERPARTIES_EDGE: EdgeContract = EdgeContract(
         "counterparty_type": EdgeColumn(dtype=pl.String),
         "parent_counterparty_reference": EdgeColumn(dtype=pl.String),
         "ultimate_parent_reference": EdgeColumn(dtype=pl.String),
+        # Consolidated group size figures (hierarchy/graph.py
+        # ::with_group_size_figures): the max over the entity and every org
+        # ancestor (PS1/26 glossary SME (1) "highest consolidated accounts of
+        # the group"; Art. 147(4C)(b)(ii); Art. 153(4)). Optional so a
+        # hand-built lookup without them classifies on its own figures.
+        "group_annual_revenue": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="PS1/26 Art. 147(4C)",
+            null_meaning="null = no revenue anywhere in the group (or a hand-built "
+            "lookup): the classifier falls back to the entity's own annual_revenue",
+        ),
+        "group_total_assets": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="PS1/26 Art. 153(4)",
+            null_meaning="null = no total assets anywhere in the group (or a hand-built "
+            "lookup): the classifier falls back to the entity's own total_assets",
+        ),
         "counterparty_hierarchy_depth": EdgeColumn(dtype=pl.Int32),
         "cqs": EdgeColumn(dtype=pl.Int8),
         "pd": EdgeColumn(dtype=pl.Float64),

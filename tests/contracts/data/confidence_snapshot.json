@@ -32,13 +32,16 @@
     {
       "article": "4",
       "code_functions": [],
-      "confidence": "UNCITED",
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "sme_size_assets_fallback@crr"
+      ],
       "source_files": [
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/classify/attributes.py",
         "engine/classify/audit.py",
@@ -47,7 +50,9 @@
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/graph.py",
         "engine/hierarchy/resolver.py",
-        "engine/stages/hierarchy.py"
+        "engine/stages/hierarchy.py",
+        "engine/supporting_factors.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/fixtures/p1_126/p1_126.py",
@@ -1155,7 +1160,10 @@
       "code_functions": [
         "rwa_calc.engine.aggregator.aggregator::_add_exposure_class_applied",
         "rwa_calc.engine.classify.attributes::_build_qualifies_as_retail_expr",
-        "rwa_calc.engine.sa.risk_weights::_crr_append_retail_branches"
+        "rwa_calc.engine.classify.audit::collect_group_threshold_warnings",
+        "rwa_calc.engine.hierarchy.group_obligor::whole_group_increments",
+        "rwa_calc.engine.sa.risk_weights::_crr_append_retail_branches",
+        "rwa_calc.engine.scope.resolver::resolve_group_population"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1175,14 +1183,21 @@
       ],
       "source_files": [
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/aggregator/aggregator.py",
         "engine/classify/attributes.py",
+        "engine/classify/audit.py",
         "engine/hierarchy/enrich.py",
+        "engine/hierarchy/group_obligor.py",
+        "engine/orchestrator.py",
         "engine/re_split/carriers.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
+        "engine/scope/resolver.py",
+        "engine/stages/hierarchy.py",
+        "engine/stages/scope.py",
         "engine/supporting_factors.py",
         "engine/thresholds.py",
         "rulebook/packs/common.py",
@@ -1200,14 +1215,17 @@
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_243/p1_243.py",
         "tests/fixtures/p2_17/p2_17.py",
+        "tests/integration/test_scope_group_obligor_aggregates.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/properties/portfolios.py",
         "tests/properties/strategies.py",
         "tests/properties/test_homogeneity.py",
+        "tests/unit/classifier/test_group_threshold_out_of_scope.py",
         "tests/unit/classifier/test_p1_243_natural_person_irb_retail_cap.py",
         "tests/unit/crr/test_crr_sa.py",
         "tests/unit/crr/test_crr_tables.py",
+        "tests/unit/engine/test_group_obligor_increments.py",
         "tests/unit/rulebook/test_thresholds_features.py",
         "tests/unit/test_art123a_retail_criteria.py",
         "tests/unit/test_b31_sa_risk_weights.py",
@@ -1802,9 +1820,11 @@
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "lfse_assets_at_highest_consolidation@crr"
+      ],
       "source_files": [
         "engine/classify/audit.py",
         "engine/classify/subtypes.py",
@@ -1815,6 +1835,7 @@
         "tests/acceptance/crr/test_scenario_crr_h_complex.py",
         "tests/fixtures/lfse_fi_scalar/lfse_fi_scalar.py",
         "tests/fixtures/p4_20/p4_20.py",
+        "tests/integration/test_group_consolidated_size_tests.py",
         "tests/unit/classifier/test_p1_242_lfse_fi_scalar.py",
         "tests/unit/test_p4_20_c0802_internal_grades.py"
       ],
@@ -2008,8 +2029,10 @@
       "article": "153",
       "code_functions": [
         "rwa_calc.engine.classify.attributes::_build_is_defaulted_expr",
+        "rwa_calc.engine.classify.attributes::is_sme_by_size_expr",
         "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
         "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end",
+        "rwa_calc.engine.hierarchy.graph::with_group_size_figures",
         "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params",
         "rwa_calc.engine.irb.formulas::_correlation_expr_from_pd",
         "rwa_calc.engine.irb.formulas::_double_default_multiplier_expr",
@@ -2053,7 +2076,8 @@
         "slotting_rw_hvcre_short@crr",
         "slotting_rw_short@crr",
         "slotting_short_maturity_threshold_years@b31",
-        "slotting_short_maturity_threshold_years@crr"
+        "slotting_short_maturity_threshold_years@crr",
+        "sme_turnover_threshold_inclusive@crr"
       ],
       "source_files": [
         "analysis/comparison.py",
@@ -2065,11 +2089,13 @@
         "engine/branch_split.py",
         "engine/classify/approach.py",
         "engine/classify/attributes.py",
+        "engine/classify/audit.py",
         "engine/classify/permissions.py",
         "engine/classify/subtypes.py",
         "engine/crm/guarantor_eligibility.py",
         "engine/equity/calculator.py",
         "engine/fx_rate_sync.py",
+        "engine/hierarchy/graph.py",
         "engine/irb/__init__.py",
         "engine/irb/adjustments.py",
         "engine/irb/calculator.py",
@@ -2129,6 +2155,7 @@
         "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/fixtures/reporting_portfolio.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
+        "tests/integration/test_group_consolidated_size_tests.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
         "tests/oracle/derivations/specialised.py",
@@ -5693,10 +5720,13 @@
     {
       "article": "501",
       "code_functions": [
+        "rwa_calc.engine.hierarchy.group_obligor::whole_group_increments",
         "rwa_calc.engine.sa.factors_output::apply_supporting_factors",
+        "rwa_calc.engine.scope.resolver::resolve_group_population",
         "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.apply_factors",
         "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.calculate_sme_factor",
-        "rwa_calc.engine.supporting_factors::compute_e_star_group_drawn"
+        "rwa_calc.engine.supporting_factors::compute_e_star_group_drawn",
+        "rwa_calc.engine.supporting_factors::e_star_contribution_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -5717,11 +5747,13 @@
         "engine/aggregator/aggregator.py",
         "engine/classify/attributes.py",
         "engine/classify/classifier.py",
+        "engine/hierarchy/group_obligor.py",
         "engine/irb/calculator.py",
         "engine/re_split/carriers.py",
         "engine/sa/__init__.py",
         "engine/sa/calculator.py",
         "engine/sa/factors_output.py",
+        "engine/scope/resolver.py",
         "engine/slotting/calculator.py",
         "engine/stages/calc.py",
         "engine/supporting_factors.py",
@@ -5744,12 +5776,15 @@
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/p1_196/p1_196.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
+        "tests/integration/test_scope_group_obligor_aggregates.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_homogeneity.py",
         "tests/unit/crr/test_crr_sa.py",
         "tests/unit/crr/test_p1_211_art_501a_infrastructure_eligibility.py",
+        "tests/unit/engine/scope/test_scope_group_population.py",
+        "tests/unit/engine/test_group_obligor_increments.py",
         "tests/unit/reporting/corep/test_c07.py",
         "tests/unit/rulebook/test_supporting_factors_features.py",
         "tests/unit/test_b31_sa_risk_weights.py",
@@ -6440,6 +6475,7 @@
     {
       "article": "122",
       "code_functions": [
+        "rwa_calc.engine.classify.attributes::is_sme_by_size_expr",
         "rwa_calc.engine.sa.b31_risk_weight_tables::get_b31_combined_cqs_risk_weights",
         "rwa_calc.engine.sa.risk_weights::_prepare_risk_weight_lookup"
       ],
@@ -6460,11 +6496,14 @@
         "b31_corporate_short_term_ecai_risk_weights@b31",
         "b31_corporate_sme_rw@b31",
         "sa_revised_risk_weight_overrides@b31",
-        "sa_revised_risk_weight_tables@b31"
+        "sa_revised_risk_weight_tables@b31",
+        "sme_size_assets_fallback@b31",
+        "sme_turnover_threshold_inclusive@b31"
       ],
       "source_files": [
         "data/schemas.py",
         "engine/aggregator/_floor.py",
+        "engine/classify/attributes.py",
         "engine/crm/simple_method.py",
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
@@ -6585,8 +6624,13 @@
         "b31_retail_transactor_rw@b31"
       ],
       "source_files": [
+        "contracts/errors.py",
+        "engine/classify/audit.py",
+        "engine/hierarchy/group_obligor.py",
+        "engine/orchestrator.py",
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
+        "engine/scope/resolver.py",
         "rulebook/packs/common.py"
       ],
       "test_files": [
@@ -6611,7 +6655,10 @@
     {
       "article": "123A",
       "code_functions": [
-        "rwa_calc.engine.classify.attributes::_build_qualifies_as_retail_expr"
+        "rwa_calc.engine.classify.attributes::_build_qualifies_as_retail_expr",
+        "rwa_calc.engine.classify.audit::collect_group_threshold_warnings",
+        "rwa_calc.engine.hierarchy.group_obligor::whole_group_increments",
+        "rwa_calc.engine.scope.resolver::resolve_group_population"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -6625,7 +6672,12 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/aggregator/aggregator.py",
-        "engine/classify/attributes.py"
+        "engine/classify/attributes.py",
+        "engine/classify/audit.py",
+        "engine/hierarchy/group_obligor.py",
+        "engine/scope/resolver.py",
+        "engine/stages/hierarchy.py",
+        "engine/stages/scope.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p5_15_art_123a_granularity.py",
@@ -6633,12 +6685,16 @@
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/p1_243/p1_243.py",
         "tests/fixtures/p5_15/p5_15.py",
+        "tests/integration/test_scope_group_obligor_aggregates.py",
         "tests/properties/portfolios.py",
         "tests/properties/strategies.py",
         "tests/properties/test_differential_shadow.py",
         "tests/properties/test_homogeneity.py",
         "tests/unit/classifier/test_facility_share_granularity_denominator.py",
+        "tests/unit/classifier/test_group_threshold_out_of_scope.py",
         "tests/unit/classifier/test_p1_243_natural_person_irb_retail_cap.py",
+        "tests/unit/engine/scope/test_scope_group_population.py",
+        "tests/unit/engine/test_group_obligor_increments.py",
         "tests/unit/test_art123a_retail_criteria.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_exposure_class_applied.py"
@@ -7356,12 +7412,12 @@
         "rwa_calc.engine.classify.approach::_align_irb_exposure_class",
         "rwa_calc.engine.classify.attributes::derive_independent_flags",
         "rwa_calc.engine.classify.attributes::natural_person_expr",
-        "rwa_calc.engine.classify.attributes::with_group_annual_revenue",
         "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
         "rwa_calc.engine.classify.subtypes::qrre_obligor_aggregate_limit_expr",
         "rwa_calc.engine.classify.subtypes::qrre_undrawn_cancellable_expr",
         "rwa_calc.engine.classify.subtypes::qrre_unsecured_expr",
         "rwa_calc.engine.classify.subtypes::sync_irb_exposure_class",
+        "rwa_calc.engine.hierarchy.graph::with_group_size_figures",
         "rwa_calc.reporting.pillar3.cr9::generate_cr9",
         "rwa_calc.reporting.pillar3.cr9::generate_cr9_1",
         "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_all_cr9",
@@ -7387,6 +7443,7 @@
         "engine/hierarchy/__init__.py",
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/graph.py",
         "engine/thresholds.py",
         "reporting/corep/c09.py",
         "reporting/corep/irb_sheets.py",
@@ -7412,6 +7469,7 @@
         "tests/fixtures/p1_245/p1_245.py",
         "tests/fixtures/p1_320/p1_320.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
+        "tests/unit/classifier/test_group_size_figures.py",
         "tests/unit/classifier/test_p1_191_qrre_aggregate_nominal.py",
         "tests/unit/classifier/test_p1_243_natural_person_irb_retail_cap.py",
         "tests/unit/classifier/test_p1_244_qrre_gates.py",
@@ -7530,6 +7588,7 @@
       "article": "153",
       "code_functions": [
         "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.hierarchy.graph::with_group_size_figures",
         "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments"
       ],
       "confidence": "HIGH",
@@ -7552,6 +7611,7 @@
         "double_default_treatment@b31",
         "irb_correlation_sme_gbp_native@b31",
         "irb_scaling_factor@b31",
+        "lfse_assets_at_highest_consolidation@b31",
         "slotting_revised_tables@b31",
         "slotting_rw_base@b31",
         "slotting_rw_hvcre@b31",
@@ -7564,6 +7624,7 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/classify/subtypes.py",
+        "engine/hierarchy/graph.py",
         "engine/irb/adjustments.py",
         "engine/irb/formulas.py",
         "engine/slotting/calculator.py",
@@ -7590,6 +7651,7 @@
         "tests/fixtures/p1_98/p1_98.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/fixtures/reporting_irb_shapes_portfolio.py",
+        "tests/integration/test_group_consolidated_size_tests.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
         "tests/oracle/derivations/specialised.py",
@@ -8890,8 +8952,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "b31": "03478e2fbc998795a87b00467531494f7c1152faaba4233262bcf02220910096",
+    "crr": "af165f296a3b20281a906da2a7b50dab735921585957baed34c9513c774987e6"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

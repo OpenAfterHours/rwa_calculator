@@ -140,6 +140,16 @@ RESULT: ArtifactKey[AggregatedResultBundle] = ArtifactKey("result")
 # Side artifacts (formerly orchestrator ``self._*`` scratch).
 SECURITISATION_RESOLVED: ArtifactKey[pl.LazyFrame | None] = ArtifactKey("securitisation_resolved")
 
+# Group-wide obligor aggregates of a solo / sub-consolidated run (CRR Art. 123(c)
+# / 501(1); PS1/26 Art. 123/123A/147(5)). Absent on an unscoped run and None when
+# the run already covers the whole reporting group, so those runs are unchanged.
+# - GROUP_POPULATION: the whole reporting group's raw bundle (scope stage).
+# - GROUP_OBLIGOR_INCREMENTS: per obligor-group key, what the rest of the group
+#   adds to the retail-threshold aggregate and to the Art. 501 E* (hierarchy
+#   stage; the E* half is read by the calculators stage).
+GROUP_POPULATION: ArtifactKey[RawDataBundle | None] = ArtifactKey("group_population")
+GROUP_OBLIGOR_INCREMENTS: ArtifactKey[pl.LazyFrame | None] = ArtifactKey("group_obligor_increments")
+
 # Eager branch results (branch-edge branded DataFrames from the shared
 # calculator collect).
 SA_RESULTS: ArtifactKey[pl.DataFrame] = ArtifactKey("sa_results")

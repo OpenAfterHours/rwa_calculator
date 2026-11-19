@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 209 entries, content hash `af165f296a3b2028`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 241 entries, content hash `03478e2fbc998795`
 
 ## Regime features
 
@@ -41,6 +41,7 @@ On/off behaviour switches (`Feature`).
 | `firb_uses_sa_ccf` | off | on | CRR Art. 166 / PS1/26, paragraph 166C |
 | `intragroup_zero_rw` | on | on | CRR Art. 113 / PS1/26, paragraph 113 |
 | `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
+| `lfse_assets_at_highest_consolidation` | off | on | CRR Art. 142(1)(4) / PS1/26, paragraph 153 |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
 | `on_bs_netting_perimeter_is_agreement` | on | on | CRR Art. 195 / PS1/26, paragraph 195 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
@@ -64,6 +65,8 @@ On/off behaviour switches (`Feature`).
 | `sa_unrated_institution_sovereign_floor_applies` | off | on | CRR Art. 121 / PS1/26, paragraph 121 |
 | `slotting_guarantee_substitution` | on | on | CRR Art. 235 / PS1/26, paragraph 235 |
 | `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
+| `sme_size_assets_fallback` | on | off | CRR Art. 4(1)(128D) / PS1/26, paragraph 122 |
+| `sme_turnover_threshold_inclusive` | off | on | CRR Art. 153(4) / PS1/26, paragraph 122 |
 | `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |
 | `ucp_unilateral_change_ineligible` | off | on | CRR Art. 213 / PS1/26, paragraph 213 |
 

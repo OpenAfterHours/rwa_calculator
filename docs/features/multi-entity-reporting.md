@@ -99,6 +99,31 @@ population. A row whose `book_code` is blank or absent from the mapping cannot b
 any entity and is **excluded** (with an `SCP001` warning below) — it is never silently assigned
 to the requesting scope by default.
 
+### Group-wide obligor aggregates
+
+Two obligor aggregates are **not** scoped: the retail threshold and the CRR SME supporting
+factor's E* count what the obligor owes to the whole banking group.
+
+- CRR Art. 123(c): "the total amount owed to the institution and parent undertakings and its
+  subsidiaries ... shall not, to the knowledge of the institution, exceed EUR 1 million".
+- PS1/26 Art. 123A(1)(b)(ii) (and Art. 123(1)(b)(ii), 147(5)(a)(ii)): "the total amount
+  (including defaulted exposures) owed to the institution, its parent undertakings, its
+  subsidiaries and subsidiaries of its parent undertakings ... does not exceed GBP 880,000".
+- CRR Art. 501(1): E* is "the total amount owed to the institution, its subsidiaries, its parent
+  undertakings and other subsidiaries of those parent undertakings".
+
+Every registry entity sits under the registry root, so on an `individual` run, or a
+`sub_consolidated` / `consolidated` run below the root, the pipeline also resolves the
+**whole registry's** population (every attributable book, intragroup claims on registry
+entities removed) and adds what the rest of the group is owed to each obligor's aggregates.
+The run's own exposures, EAD and RWA are still those of its own books; only the threshold
+test and E* widen. Example: an individual borrows GBP 600,000 on the parent's book and GBP
+600,000 on a subsidiary's — each solo run sees GBP 1.2m, so neither loan is regulatory
+retail (100%, not 75%). An `AGG004` warning names rows that failed the threshold only because
+of debt booked in other group entities. A consolidated run at the root already holds the whole
+group and is unchanged. Other entities' CCR / SFT exposures, and group entities whose books are
+not in the feed, are not counted.
+
 ## Art. 113(6) core UK group 0% risk weight
 
 On an **individual**-basis run, an intragroup exposure to a fellow "core UK group" member is
@@ -231,6 +256,12 @@ result rather than aborting the run:
 `SCP004` and `SCP006` are the two "no scope could be resolved" cases; both empty the run's
 exposure population entirely (loudly, via the error channel) rather than silently falling back
 to an unscoped run.
+
+One classification warning is specific to scoped runs:
+
+| Code | Severity | Meaning |
+|------|----------|---------|
+| `AGG004` | WARNING | Rows that failed the retail threshold only because of debt the obligor owes to **other** entities of the reporting group (see [Group-wide obligor aggregates](#group-wide-obligor-aggregates)). |
 
 ## Related
 

@@ -56,6 +56,7 @@ from rwa_calc.engine.classify.attributes import (
 from rwa_calc.engine.classify.audit import (
     build_audit_trail,
     collect_beel_on_non_defaulted_warnings,
+    collect_group_threshold_warnings,
     collect_input_warnings,
     collect_qrre_gate_demotion_warnings,
 )
@@ -177,6 +178,9 @@ class ExposureClassifier:
 
         classification_errors.extend(collect_beel_on_non_defaulted_warnings(classified))
         classification_errors.extend(collect_qrre_gate_demotion_warnings(classified))
+        classification_errors.extend(
+            collect_group_threshold_warnings(classified, config, pack=resolved_pack)
+        )
         if has_model_permissions:
             classification_errors.extend(emit_model_permission_diagnostics(classified))
 

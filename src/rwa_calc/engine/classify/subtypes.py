@@ -108,7 +108,12 @@ def classify_exposure_subtypes(
     The threshold is the LFSE size test (CRR Art. 142(1)(4): EUR 70bn on an
     individual/consolidated basis, converted GBP via the FX seam; PS1/26 IRB
     Part glossary: GBP 79bn native, at the highest level of consolidation).
-    ``total_assets`` is a GBP figure, mirroring the SME balance-sheet gate.
+    The assets basis is the pack Feature ``lfse_assets_at_highest_consolidation``:
+    Basel 3.1 reads the group figure ``cp_group_total_assets`` (the glossary:
+    "total assets, taken at the highest level of consolidation at which audited
+    financial statements are available"); CRR keeps the entity's own
+    ``cp_total_assets``, which Art. 142(1)(4)(a) ("calculated on an individual
+    or consolidated basis") admits. Assets are GBP figures.
     The user-supplied ``apply_fi_scalar`` is retained as an authoritative
     True-OVERRIDE (a firm may know an entity is a large or UNREGULATED FSE
     even when size data says otherwise) — it can never SUPPRESS a derived
@@ -128,6 +133,11 @@ def classify_exposure_subtypes(
     )
     lfse_total_assets_threshold = float(
         regulatory_threshold(resolved_pack, "lfse_total_assets_threshold", config.eur_gbp_rate)
+    )
+    lfse_assets = pl.col(
+        "cp_group_total_assets"
+        if resolved_pack.feature("lfse_assets_at_highest_consolidation")
+        else "cp_total_assets"
     )
     is_sme_by_size = is_sme_by_size_expr(config, pack=resolved_pack)
 
@@ -216,7 +226,7 @@ def classify_exposure_subtypes(
     # user flag is OR-ed in as an authoritative override that can never
     # suppress a derived True.
     is_large_fse = pl.col("cp_is_financial_sector_entity").fill_null(False) & (
-        pl.col("cp_total_assets") >= lfse_total_assets_threshold
+        lfse_assets >= lfse_total_assets_threshold
     ).fill_null(False)
     requires_fi_scalar = pl.col("cp_apply_fi_scalar").fill_null(False) | is_large_fse
 

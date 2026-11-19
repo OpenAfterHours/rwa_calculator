@@ -191,16 +191,17 @@ def _apply_b31_approach_restrictions(
     # restriction applies ONLY to counterparties of entity_type ==
     # "corporate". Non-corporate entity types are governed by their own
     # Art. 147A sub-clauses and must never trip this branch. The revenue
-    # test reads ``cp_group_annual_revenue`` — the counterparty's own
-    # turnover rolled up its ultimate-parent chain (attributes.
-    # with_group_annual_revenue) — because Art. 147(4C)(b)(ii) prescribes
+    # test reads ``cp_group_annual_revenue`` — the max of the counterparty's
+    # own turnover and every org ancestor's (hierarchy/graph.py
+    # ::with_group_size_figures) — because Art. 147(4C)(b)(ii) prescribes
     # revenue "taken at the highest level of consolidation", so a small
     # subsidiary of a large group is F-IRB-only. Within the corporate slice:
     #   - When the group revenue is non-null, compare to the large-corp
     #     threshold (GBP 440m).
-    #   - When group revenue is null but total_assets indicates the
-    #     counterparty is SME-sized (assets < EUR 43m per Commission
-    #     Rec 2003/361/EC Art. 2), it is definitively not large.
+    #   - When group revenue is null but the GROUP's total assets indicate
+    #     the counterparty is SME-sized (assets < EUR 43m per Commission
+    #     Rec 2003/361/EC Art. 2), it is definitively not large. Group, not
+    #     own, assets: a small entity of a large group is not SME-sized.
     #   - Otherwise (both fields null, or null revenue with assets that
     #     don't resolve the question) treat conservatively as large;
     #     CLS008 is emitted to flag the missing data.
@@ -218,8 +219,8 @@ def _apply_b31_approach_restrictions(
                 )
             )
         )
-        .when(pl.col("cp_total_assets").is_not_null())
-        .then(pl.col("cp_total_assets") >= balance_sheet_threshold)
+        .when(pl.col("cp_group_total_assets").is_not_null())
+        .then(pl.col("cp_group_total_assets") >= balance_sheet_threshold)
         .otherwise(pl.lit(True))
     )
     # Art. 147A(1)(b): genuine institution exposures → F-IRB only (no

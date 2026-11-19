@@ -9,7 +9,8 @@ Pipeline position:
 
 Key responsibilities:
 - Build and seal the 4-frame CounterpartyLookup (dedup org mappings,
-  ultimate parents, rating inheritance, enriched counterparties).
+  ultimate parents, rating inheritance, enriched counterparties — including the
+  consolidated group size figures, ``with_group_size_figures``).
 - Resolve counterparty and facility parent graphs via eager dict traversal
   (ultimate parent, root facility, ancestor closure).
 - Shared facility-mapping helpers (root resolution, child-type filtering).
@@ -26,6 +27,7 @@ from __future__ import annotations
 import logging
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.bundles import CounterpartyLookup
 from rwa_calc.contracts.edges import CP_LOOKUP_EDGES, RAW_TABLE_EDGES, seal
@@ -132,6 +134,12 @@ def build_ultimate_parent_lazy(
     - ultimate_parent_reference: Its deepest reachable parent (the true
       root, or the parent at ``max_depth`` if the chain was truncated)
     - hierarchy_depth: Number of levels traversed
+    - ancestor_references: every org ancestor on the chain (parent, grand-
+      parent, ... up to the ultimate parent), excluding the entity itself.
+      Read by ``with_group_size_figures`` — the SME turnover and the
+      Art. 147(4C) revenue are "taken at the highest level of consolidation",
+      and an apex with no figures (a fund, a holding company) must not hide
+      the consolidating parent beneath it.
     - truncated: True iff the chain was cut off at ``max_depth``; consumed
       by ``build_counterparty_lookup`` to synthesise HIE003 WARNINGs and
       stripped before the LazyFrame is exposed on ``CounterpartyLookup``.
@@ -159,6 +167,7 @@ def build_ultimate_parent_lazy(
             "entity": "counterparty_reference",
             "root": "ultimate_parent_reference",
             "depth": "hierarchy_depth",
+            "ancestors": "ancestor_references",
         }
     ).lazy()
 
@@ -226,7 +235,7 @@ def build_facility_root_lookup(
         child_col="child_facility_reference",
         parent_col="parent_facility_reference",
         max_depth=max_depth,
-    ).drop("truncated")
+    ).drop("truncated", "ancestors")
 
     return resolved.rename(
         {
@@ -360,6 +369,83 @@ def filter_mappings_by_child_type(
     )
 
 
+@cites("CRR Art. 153(4)")
+@cites("PS1/26, paragraph 147")
+@cites("PS1/26, paragraph 153")
+def with_group_size_figures(
+    enriched: pl.LazyFrame,
+    counterparties: pl.LazyFrame,
+    ultimate_parents: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """Add ``group_annual_revenue`` / ``group_total_assets`` — the consolidated figures.
+
+    Each size test sizes the enterprise on its group, not on the legal entity:
+
+    - PS1/26 glossary, SME: "a micro, small or medium enterprise with an annual
+      turnover of not more than GBP 44 million where: (1) the annual turnover
+      shall be calculated on the basis of the highest consolidated accounts of
+      the group to which the enterprise belongs, if any".
+    - PS1/26 Art. 153(4): "the total annual revenue for the consolidated group of
+      which the entity is a part"; UK CRR Art. 153(4): "the total annual sales
+      for the consolidated group of which the firm is a part".
+    - PS1/26 Art. 147(4C)(b)(ii): annual revenue "taken at the highest level of
+      consolidation which is performed and at which audited financial statements
+      are available".
+    - PS1/26 glossary, large financial sector entity: total assets "taken at the
+      highest level of consolidation at which audited financial statements are
+      available".
+
+    A parent's own ``annual_revenue`` / ``total_assets`` are, by convention, its
+    consolidated audited figures, which subsume the subsidiary. The group figure
+    is the MAX over the entity and EVERY org ancestor on its de-duplicated parent
+    chain (``ancestor_references`` from :func:`build_ultimate_parent_lazy`): the
+    highest consolidation with a figure, so an apex without accounts (a fund, a
+    sovereign owner, a dormant holding company) does not hide the consolidating
+    parent beneath it, and neither a small subsidiary figure nor a smaller
+    (data-anomalous) parent figure lets a large group off — the conservative
+    direction for every test that reads these. ``max_horizontal`` ignores nulls:
+    a figure-less entity under a figure-bearing ancestor takes the ancestor's, an
+    entity with no ancestors keeps its own, all-null stays null.
+
+    Computed here, on the raw counterparty frame, rather than in the classifier:
+    the walk is the hierarchy's, and the classifier would otherwise re-reference
+    the whole counterparty-lookup plan per ancestor join. 3-year averaging
+    (Art. 147(4C)(b)(ii) "average annual amount over the last three years") is
+    NOT applied: the schema carries one point-in-time figure. Ancestors absent
+    from the counterparty table contribute nothing; the per-entity aggregate is
+    unique, so the join back never fans out.
+    """
+    ancestors = ultimate_parents.select(
+        pl.col("counterparty_reference").alias("_grp_cp"),
+        pl.col("ancestor_references").alias("_grp_ancestor"),
+    ).explode("_grp_ancestor")
+    figures = counterparties.select(
+        pl.col("counterparty_reference").alias("_grp_ancestor"),
+        pl.col("annual_revenue").alias("_grp_revenue"),
+        pl.col("total_assets").alias("_grp_assets"),
+    )
+    ancestor_max = (
+        ancestors.join(figures, on="_grp_ancestor", how="inner")
+        .group_by("_grp_cp")
+        .agg(
+            pl.col("_grp_revenue").max().alias("_grp_ancestor_revenue"),
+            pl.col("_grp_assets").max().alias("_grp_ancestor_assets"),
+        )
+    )
+    return (
+        enriched.join(
+            ancestor_max, left_on="counterparty_reference", right_on="_grp_cp", how="left"
+        )
+        .with_columns(
+            pl.max_horizontal("annual_revenue", "_grp_ancestor_revenue").alias(
+                "group_annual_revenue"
+            ),
+            pl.max_horizontal("total_assets", "_grp_ancestor_assets").alias("group_total_assets"),
+        )
+        .drop("_grp_ancestor_revenue", "_grp_ancestor_assets")
+    )
+
+
 def _enrich_counterparties_with_hierarchy(
     counterparties: pl.LazyFrame,
     org_mappings: pl.LazyFrame,
@@ -374,6 +460,8 @@ def _enrich_counterparties_with_hierarchy(
     - counterparty_has_parent: bool
     - parent_counterparty_reference: str | null
     - ultimate_parent_reference: str | null
+    - group_annual_revenue / group_total_assets: max over the entity and every
+      org ancestor (``with_group_size_figures``)
     - counterparty_hierarchy_depth: int
     - cqs, pd, internal_pd, external_cqs, internal_model_id: from ratings
     """
@@ -431,7 +519,7 @@ def _enrich_counterparties_with_hierarchy(
         )
     )
 
-    return enriched
+    return with_group_size_figures(enriched, counterparties, ultimate_parents)
 
 
 def _dedup_org_mappings(
@@ -552,6 +640,9 @@ def _resolve_graph_eager(
         - root (Utf8): The deepest reachable parent (true root if reached,
           otherwise the parent at depth ``max_depth`` when truncated)
         - depth (Int32): Number of levels traversed
+        - ancestors (List[Utf8]): every node the walk passed, parent first and
+          root last, the entity itself excluded (the org graph's group size
+          figures read it; the facility root lookup drops it)
         - truncated (Boolean): True iff the traversal exited because of the
           ``max_depth`` guard rather than reaching the natural root. Callers
           use this column to synthesise HIE003 WARNINGs.
@@ -567,17 +658,20 @@ def _resolve_graph_eager(
     entities: list[str] = []
     roots: list[str] = []
     depths: list[int] = []
+    paths: list[list[str]] = []
     truncated: list[bool] = []
 
     for entity in parent_of:
         current = entity
         depth = 0
         visited: set[str] = {current}
+        path: list[str] = []
         while current in parent_of and depth < max_depth:
             next_parent = parent_of[current]
             if next_parent in visited:
                 break  # Cycle detected
             visited.add(next_parent)
+            path.append(next_parent)
             current = next_parent
             depth += 1
         # Truncation: depth limit reached AND chain still has further parents.
@@ -588,6 +682,7 @@ def _resolve_graph_eager(
         entities.append(entity)
         roots.append(current)
         depths.append(depth)
+        paths.append(path)
         truncated.append(was_truncated)
 
     return pl.DataFrame(
@@ -595,12 +690,14 @@ def _resolve_graph_eager(
             "entity": entities,
             "root": roots,
             "depth": depths,
+            "ancestors": paths,
             "truncated": truncated,
         },
         schema={
             "entity": pl.String,
             "root": pl.String,
             "depth": pl.Int32,
+            "ancestors": pl.List(pl.String),
             "truncated": pl.Boolean,
         },
     )

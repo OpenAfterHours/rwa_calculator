@@ -3,9 +3,10 @@ P1.245 unit tests — Art. 147(4C)(b)(ii) group-consolidation revenue roll-up.
 
 The financial/large-corporates F-IRB-only subclass (Art. 147A(1)(e)) captures a
 corporate whose annual revenue exceeds GBP 440m "taken at the highest level of
-consolidation which is performed". The classifier therefore rolls the
-counterparty's own turnover up its ultimate-parent chain
-(``attributes.with_group_annual_revenue``) before the large-corp test:
+consolidation which is performed". The hierarchy stage rolls the
+counterparty's own turnover up its org ancestors into ``group_annual_revenue``
+(``hierarchy/graph.py::with_group_size_figures``) and the classifier's
+large-corp test reads it (the classify-level bundles here carry that figure):
 
     sub own 50m  under 500m parent  -> B31 F-IRB (roll-up flip), CRR A-IRB
     sub own null under 500m parent  -> B31 F-IRB (parent resolves size)

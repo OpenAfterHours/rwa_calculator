@@ -45,6 +45,7 @@ from rwa_calc.engine.orchestrator import (
     BRANCH_ERRORS,
     COMPONENTS,
     CRM_ADJUSTED,
+    GROUP_OBLIGOR_INCREMENTS,
     IRB_RESULTS,
     SA_RESULTS,
     SLOTTING_RESULTS,
@@ -92,8 +93,16 @@ def run(
     # this, each branch's apply_factors would compute the window sum on
     # its own subset and under-count E* whenever a group spans multiple
     # approaches. No-op when supporting factors are disabled (Basel 3.1).
+    # On a solo / sub-consolidated run the hierarchy stage's group increments
+    # add what the obligor owes the reporting group's OTHER entities (Art.
+    # 501(1) "owed to the institution, its subsidiaries, its parent
+    # undertakings and other subsidiaries of those parent undertakings").
     exposures = compute_e_star_group_drawn(
-        exposures, run_config, errors=branch_errors, pack=rulepack.pack
+        exposures,
+        run_config,
+        errors=branch_errors,
+        pack=rulepack.pack,
+        group_increments=ctx.get_or(GROUP_OBLIGOR_INCREMENTS, None),
     )
 
     # For Basel 3.1 output floor: SA-equivalent RW needed on all rows

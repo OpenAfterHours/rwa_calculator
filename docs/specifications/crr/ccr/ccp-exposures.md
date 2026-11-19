@@ -16,17 +16,22 @@ ladder and applies one of two regulatorily-pinned weights:
   client when the Art. 305(2) conditions are *not* met — PRA PS1/26
   Art. 306(1)(c).
 
-Non-qualifying CCP (non-QCCP) trade exposures fall back to the standard
-SA-CCR EAD and the ordinary SA institution risk-weight (Art. 121, or
-the corresponding Basel 3.1 ECRA / SCRA bucket) per Art. 107(2)(a).
+Non-qualifying CCP (non-QCCP) trade exposures keep the standard SA-CCR
+EAD and take the ordinary SA **corporate** risk weight (Art. 122 in
+both regimes) per Art. 107(2)(b) and Art. 306(1)(b). Exposures to a
+QCCP that are neither trade exposures nor default-fund contributions —
+a term loan, a deposit, held CCP debt — are **not** pinned: Art.
+107(2)(a) treats them as exposures to an institution. See
+[Which rows the pin covers](#which-rows-the-pin-covers-art-1072).
 
 This page documents:
 
 - the Art. 306 trade-exposure risk-weight ladder (2% / 4% / non-QCCP
   fallback) and the Art. 305(2)(a)–(c) condition list for the
   client-clearing 2% leg;
-- the Art. 307 default-fund-contribution stack and its current
-  engine status (placeholder pending);
+- the Art. 307–310 default-fund-contribution stack (Art. 308(2)
+  QCCP pre-funded formula and floor, Art. 309(1) non-QCCP, Art. 310
+  QCCP unfunded);
 - the engine entry point (`apply_ccp_risk_weight`) and its position
   immediately downstream of the SA-CCR EAD producer;
 - the non-QCCP fallback to standard SA-CCR with SA risk-weighting;
@@ -53,10 +58,14 @@ revocation by the Treasury]" provenance footer.
 | Art. 306(1)(b)         | 2% RW on a clearing member's trade exposure to a client when intermediating on behalf of that client (Art. 305(2) satisfied) | CRE54.14 |
 | Art. 306(1)(c)         | 4% RW on a clearing member's trade exposure to a client when Art. 305(2) is *not* satisfied | CRE54.15 |
 | Art. 306(4)            | `RWA = Σ EAD_trade × RW` — PS1/26 verbatim restated to point at the Required Level of Own Funds (CRR) Part Art. 92(3) | CRE54.16 |
-| Art. 307               | Own funds requirements for **default-fund contributions** to a CCP — engine-pending (see below) | CRE54.21 |
+| Art. 307               | Own funds requirements for **default-fund contributions** to a CCP — implemented (see below) | CRE54.21 |
+| Art. 308(2)            | QCCP pre-funded: `K_i = max{K_CCP · DF_i / (DF_CCP + DF_CM), 8% · 2% · DF_i}` | CRE54.31–32 |
 | Art. 308(3)            | RWA = own-funds requirement × 12.5 for **pre-funded** default-fund contributions to a QCCP    | CRE54.22 |
+| Art. 309(1)            | Non-QCCP: `K = DF + UC` — the contribution itself is the own-funds requirement | CRE54.40 |
 | Art. 309(2)            | RWA = own-funds requirement × 12.5 for default-fund contributions / unfunded contributions to a non-QCCP | CRE54.27 |
-| Art. 107(2)(a)         | Non-QCCP fallback — exposures classified as institution exposures and weighted per the SA institution ladder | CRE20.14 |
+| Art. 310               | 0% risk weight on **unfunded** contributions to the default fund of a QCCP | CRE54.38 |
+| Art. 107(2)(a)         | Other (non-trade) exposures to a **QCCP** treated as exposures to an institution | CRE20.14 |
+| Art. 107(2)(b)         | Other exposures to a **non-QCCP** treated as exposures to a corporate; Art. 306(1)(b) applies the same weight to non-QCCP trade exposures | CRE54.11 |
 
 ### Verbatim text — PRA PS1/26 Art. 306(4)
 
@@ -111,6 +120,47 @@ example below for a comparison of the two outcomes on the same
 notional.
 
 ---
+
+## Which rows the pin covers (Art. 107(2))
+
+CRR Art. 107(2) = PS1/26 Art. 107(2):
+
+> "For trade exposures and for default fund contributions to a central
+> counterparty, institutions shall apply the treatment set out in
+> Section 9 ... For all other types of exposures to a central
+> counterparty, institutions shall treat those exposures as follows:
+> (a) as exposures to an institution for other types of exposures to a
+> qualifying CCP; (b) as exposures to a corporate for other types of
+> exposures to a non-qualifying CCP."
+
+The engine applies the 2% / 4% pin to a row only when **both** hold
+(one shared predicate, `engine/sa/ccp_exposures.py::qccp_trade_exposure_expr`,
+used by the SA risk-weight chain and by the Art. 121(6) sovereign-floor
+carve-out so the two cannot drift apart):
+
+- the row is a **trade exposure** — an SA-CCR netting-set row
+  (`risk_type = "CCR_DERIVATIVE"`) or an FCCM SFT row (`"CCR_SFT"`);
+- the counterparty is a **qualifying** CCP — `entity_type = "ccp"` and
+  `is_qccp` is not `False` (an absent flag is read as qualifying).
+
+| Row | Class | Risk weight |
+|---|---|---|
+| Trade exposure to a QCCP | institution (base map) | 2% / 4% pin (Art. 306(1)) |
+| Loan, deposit or other non-trade row to a QCCP | institution | Art. 120 / 121 institution ladder (Art. 107(2)(a)) |
+| Any row to a non-QCCP (`is_qccp = False`) | **corporate** | Art. 122 corporate ladder (Art. 107(2)(b), 306(1)(b)) |
+| Default-fund contribution | own-funds line | 12.5 × K (Art. 308(3) / 309(2)) |
+
+Before the 2026-11 review (item CC-11) the pin keyed on the
+counterparty alone, so a term loan to a QCCP took 2%, and a non-QCCP
+was classified as an institution on a citation of Art. 107(2)(a) — the
+qualifying-CCP limb.
+
+!!! note "Initial margin posted to a QCCP"
+    Posted initial margin is a trade exposure (Art. 306(1)), but the
+    input contract has no posted-collateral row and no flag that marks
+    a loan-table row as one. A loan row booked against a QCCP to carry
+    posted margin is therefore weighted as an institution exposure —
+    a conservative treatment, never a relief.
 
 ## Engine entry point
 
@@ -198,25 +248,21 @@ treat the QCCP row identically because there is no IRB risk-weight
 to differ from the SA pin (the QCCP risk weight is the same on both
 legs, by construction).
 
-### Pending engine wiring — `apply_ccp_risk_weight` not yet orchestrated
+### Where the pin is applied in the pipeline
 
-!!! warning "Engine gap — orchestrator hook missing"
-    `apply_ccp_risk_weight` is implemented and unit-tested
-    (`tests/unit/ccr/test_ccp.py`) but is **not yet called from
-    `engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures`**. The
-    `is_qccp` and `is_client_cleared` flags exist on the CCR
-    counterparty and trade schemas (`data/schemas.py`), and the
-    regulatory scalars are cited pack params in the rulebook common
-    pack, but the synthetic
-    exposure row currently flows from SA-CCR EAD straight to the
-    Classifier without the QCCP gate. Wiring this through is the
-    follow-up batch P8.30; until then, every QCCP trade is
-    risk-weighted by the standard SA institution ladder instead of
-    the regulatory 2% / 4% pin. This is a **conservative**
-    mis-pricing — the SA institution weight (20% CQS-1, 50% CQS-2,
-    etc., per [`../sa-risk-weights.md`](../sa-risk-weights.md)) is
-    higher than the QCCP 2% / 4%, so firms are over-stating
-    capital, not under-stating it.
+The pin that reaches `rwa_final` is applied in the SA risk-weight chain
+(`engine/sa/risk_weights.py`, both regime ladders), on the predicate in
+`engine/sa/ccp_exposures.py` described in
+[Which rows the pin covers](#which-rows-the-pin-covers-art-1072). The
+CCR stage tags each SA-CCR netting-set row `risk_type =
+"CCR_DERIVATIVE"`; the classifier carries the counterparty's `is_qccp`
+and `is_ccp_client_cleared` onto it (`cp_is_qccp`,
+`cp_is_ccp_client_cleared`) and routes every `entity_type = "ccp"` row
+to SA.
+
+`engine/ccr/ccp.py::apply_ccp_risk_weight`, the standalone annotator
+shown above, is unit-tested but is not called from the pipeline; the
+diagram above describes its contract, not the production path.
 
 ---
 
@@ -255,46 +301,77 @@ contributions are weighted under Art. 309.
 > — PS1/26 Appendix 1, Counterparty Credit Risk (CRR) Part, Article
 > 309(2), p. 457 (source PDF: `docs/assets/ps126app1.pdf`).
 
-### Engine status — default fund contributions not yet implemented
+### Engine implementation — `engine/ccr/default_fund.py`
 
-!!! warning "Engine gap — Art. 307 not implemented"
-    The Art. 307 own-funds-requirement formula (the "K_CM" stack
-    that allocates a portion of the CCP's hypothetical capital
-    requirement `K_CCP` to each clearing member by pre-funded
-    contribution share) is **not** implemented in
-    `src/rwa_calc/engine/ccr/ccp.py`. The module covers only the
-    Art. 306 trade-exposure RW. Articles 307 / 308(3) / 309(2) are
-    deferred to a follow-up batch; until then, a clearing member
-    must compute its default-fund-contribution RWA off-system and
-    fold the result into the aggregator's `manual_addon` channel
-    (or report-only adjustment).
+The default-fund-contribution stack is not on the SA-CCR EAD chain. It
+reads `RawCCRBundle.default_fund_contributions` (one row per
+contribution) and produces an own-funds requirement `k_cm` per row, one
+branch per limb:
 
-The default-fund-contribution stack is not on the SA-CCR EAD chain — it
-sits on a separate input (the firm's pre-funded contribution amount and
-the CCP-published `K_CCP` / `DF_CM` figures) and produces an own-funds
-requirement directly. The 12.5× RWA conversion in Art. 308(3) is the
-standard inverse of the 8% capital ratio — no SA-CCR EAD is involved.
+| Branch (`regulatory_band`) | Condition | Own funds `K` | Article |
+|---|---|---|---|
+| `dfc_qccp_prefunded` | `is_qccp_ccp`, not unfunded | `max(K_CCP · DF_i / (DF_CCP + DF_CM), 8% · 2% · DF_i)` | Art. 308(2) |
+| `dfc_qccp_unfunded` | `is_qccp_ccp`, unfunded | `0` | Art. 310 |
+| `dfc_non_qccp_prefunded` | not QCCP, pre-funded | `DF_i` | Art. 309(1) |
+| `dfc_non_qccp_unfunded` | not QCCP, unfunded | `UC_i` | Art. 309(1) |
+
+RWEA = `K × 12.5` (Art. 308(3) / 309(2)). The ccr stage mints each
+contribution as a synthetic `dfc__<contribution_id>` row with
+`drawn_amount = k_cm` and `risk_type = "CCR_DEFAULT_FUND"`; the SA chain
+pins its risk weight to 12.5. The row is an **own-funds line**, not a
+credit exposure: it is always SA, takes no collateral, guarantee,
+provision or supporting factor, and keeps the 12.5 pin even when the
+CCP is in default (see [Failed trades — own-funds lines](failed-trades.md#own-funds-lines-are-not-credit-exposures)).
+
+Inputs (`DF_CONTRIBUTION_SCHEMA`):
+
+| Column | Meaning |
+|---|---|
+| `df_i_contribution_amount` | The row's own contribution: `DF_i` (pre-funded) or `UC` (unfunded) |
+| `is_qccp_ccp` | Art. 272 Def (88) — selects Art. 308 / 310 (True) or Art. 309 (False) |
+| `is_unfunded_commitment` | Unfunded contribution flag (Art. 309 UC / Art. 310) |
+| `k_ccp_published` | `K_CCP`, as communicated by the CCP |
+| `df_cm_total_contributions` | `DF_CM`, the clearing members' pre-funded contributions |
+| `df_ccp_prefunded` | `DF_CCP`, the CCP's own pre-funded resources. Optional: absent is read as 0, which can only raise `K_i` |
+
+The two floor scalars are cited pack entries
+(`ccp_dfc_floor_capital_ratio` 8%, `ccp_dfc_floor_risk_weight` 2%, both
+Art. 308(2)); the Art. 310 weight is `ccp_dfc_qccp_unfunded_rw`. Worked
+values (pinned by `tests/acceptance/ccr/test_ccp_cva_review_cluster.py`):
+
+- QCCP, `K_CCP` 20m, `DF_i` 10m, `DF_CCP` 100m, `DF_CM` 500m:
+  `K = max(20m · 10m / 600m, 16,000) = 333,333.33`, RWEA 4,166,666.67.
+- QCCP floor, `K_CCP` 0.5m: `K = max(8,333.33, 16,000) = 16,000`, RWEA 200,000.
+- Non-QCCP pre-funded `DF_i` 10m: `K = 10m`, RWEA 125,000,000.
+- QCCP unfunded: `K = 0`, RWEA 0.
+
+Not implemented: the `K_CCP` hypothetical-capital simulation itself
+(the firm supplies `k_ccp_published`) and the Art. 303(2) cap, which can
+only lower the charge.
 
 ---
 
 ## Non-QCCP fallback to standard SA-CCR
 
 When the counterparty's `is_qccp` flag is `False`, the SA-CCR EAD
-(`α · (RC + PFE)`, Art. 274(2)) is preserved unchanged, the
-`apply_ccp_risk_weight` annotator returns `risk_weight = NULL`, and
-the synthetic exposure row falls back to the standard SA / IRB
-risk-weight ladder via the Classifier:
-
-| Framework            | Counterparty class                     | Risk weight ladder                                                   | Reference                                                   |
-|----------------------|----------------------------------------|----------------------------------------------------------------------|-------------------------------------------------------------|
-| CRR                  | Institutions (Art. 107(2)(a))          | CQS-1 → 20%, CQS-2 → 50%, CQS-3 → 50%, CQS-4/5 → 100%, CQS-6 → 150% (Art. 121) | [`../sa-risk-weights.md`](../sa-risk-weights.md)           |
-| Basel 3.1 (PS1/26)   | Institutions (Art. 121 Bucket A/B/C)   | ECRA-rated: A → 20%, B → 30%/40% by short/long-term; SCRA: A → 40%, B → 75%, C → 150% | [`../sa-risk-weights.md`](../sa-risk-weights.md) |
+(`α · (RC + PFE)`, Art. 274(2)) is preserved unchanged and the
+classifier gives the row the **corporate** exposure class (Art.
+107(2)(b); CCR (CRR) Part Art. 306(1)(b) applies "the risk weight used
+for the Standardised Approach to credit risk as set out in Article
+107(2)(b)" to non-QCCP trade exposures). The row is then weighted on
+the Art. 122 corporate ladder — the generated `corporate_risk_weights`
+(CRR) and `b31_corporate_risk_weights` (Basel 3.1) tables in
+[Regulatory tables](../../../data-model/regulatory-tables.md). A rating
+carried only as `institution_cqs` on the CCP counterparty is lifted into
+`cqs` for the corporate lookup (`engine/sa/cqs_lift.py`).
 
 The non-QCCP fallback **does not amend** the SA-CCR EAD — `α = 1.4`
 still applies, the multiplier and add-on aggregation are unchanged.
 What changes is only the downstream risk-weight lookup: instead of the
-2% / 4% Art. 306 pin, the row is weighted as an ordinary institution
-exposure. Under Basel 3.1, the same row also enters both legs of the
+2% / 4% Art. 306 pin, the row is weighted as an ordinary corporate
+exposure. Before the 2026-11 review (CC-11) it was weighted as an
+institution, which differs from the corporate weight in both
+directions (CRR CQS 3: 50% institution vs 100% corporate). Under Basel 3.1, the same row also enters both legs of the
 output floor (`U-TREA` and `S-TREA`) per [`../basel31/output-floor.md`](../../basel31/output-floor.md#floor-calculation).
 
 ---
@@ -391,7 +468,7 @@ The 2% → 4% step is exactly a **doubling** of CCP-leg RWA — the
 regulator's quantitative signal that the Art. 305(2) protections
 materially reduce client-leg counterparty risk.
 
-### Example 4 — Non-QCCP fallback (standard SA institution RW)
+### Example 4 — Non-QCCP fallback (standard SA corporate RW)
 
 The same trade, but the CCP is not on the PRA / FSMA-recognised QCCP
 list (e.g. a non-EMIR-equivalent overseas CCP). `is_qccp = False`,
@@ -403,23 +480,19 @@ Inputs:
   is_qccp           = False                       (Art. 272 Def (88) not satisfied)
   is_client_cleared = (any)                       (ignored on the non-QCCP branch)
 
-apply_ccp_risk_weight branch:
-  ¬is_qccp → Art. 107(2)(a) (institution SA path)
-  risk_weight       = NULL                        (deferred to Classifier + SA Calculator)
-
-Downstream Classifier (P8.30):
-  exposure_class    = "INSTITUTION"               (CRR Art. 121 / B31 Art. 121 Bucket A/B)
+Classifier:
+  ¬is_qccp → Art. 107(2)(b) / Art. 306(1)(b)
+  exposure_class    = "corporate"
   CQS               = 2 (illustrative)
-  risk_weight       = 0.50                        (CRR Art. 121 Table 3; or B31 ECRA Bucket B → 0.40)
+  risk_weight       = 0.50                        (Art. 122 Table 6, CQS 2 — both regimes)
 
-RWA (under CRR):
+RWA:
   RWA = 5,480,017.52 × 0.50 = 2,740,008.76
 ```
 
 Compare with the 2% QCCP proprietary leg: the non-QCCP fallback
-multiplies the CCP-leg RWA by **25× under CRR** (50% / 2%) and
-**20× under Basel 3.1** (40% / 2%). This is the structural
-incentive that drives clearing through QCCPs.
+multiplies the CCP-leg RWA by **25×** (50% / 2%) at CQS 2. This is the
+structural incentive that drives clearing through QCCPs.
 
 ---
 
@@ -428,8 +501,8 @@ incentive that drives clearing through QCCPs.
 | # | Gap                                                                                                                                          | Article             | Status                                  |
 |---|----------------------------------------------------------------------------------------------------------------------------------------------|---------------------|-----------------------------------------|
 | 1 | `apply_ccp_risk_weight` not wired into `pipeline_adapter.py::ccr_rows_to_exposures`. The function exists with unit-test coverage but is unreachable from the orchestrator. | Art. 306(1)(a)–(c) | P8.30 follow-up                         |
-| 2 | Art. 307 own-funds-requirement formula for **pre-funded** default-fund contributions to a QCCP — `K_CCP` / `K_CM` allocation stack — not implemented. | Art. 307            | Engine batch deferred                   |
-| 3 | Art. 308(3) and Art. 309(2) RWA conversion (`× 12.5`) — gated on (2). | Art. 308(3), 309(2) | Engine batch deferred                   |
+| 2 | Art. 308(2) / 309(1) / 310 default-fund own funds — **implemented** (`engine/ccr/default_fund.py`, see [above](#engine-implementation-engineccrdefault_fundpy)); only the `K_CCP` simulation and the Art. 303(2) cap remain out of scope. | Art. 307–310        | Done (2026-11 review, CC-10)            |
+| 3 | Art. 308(3) and Art. 309(2) RWA conversion (`× 12.5`). | Art. 308(3), 309(2) | Done                                    |
 | 4 | Per-condition Art. 305(2)(a)/(b)/(c) audit-trail booleans on the trade schema (the engine currently collapses the three-part test into a single `is_client_cleared` flag pre-engine). | Art. 305(2)         | Tracked alongside (1); operator-driven  |
 
 The math itself is documented above for all four — the engine wiring
@@ -456,9 +529,10 @@ is the follow-up.
   a non-QCCP.
 - **PRA Rulebook — Counterparty Credit Risk (CRR) Part, Article 272 Def (88)** —
   definition of *qualifying central counterparty*.
-- **PRA Rulebook — Counterparty Credit Risk (CRR) Part, Article 107(2)(a)** —
-  non-QCCP exposures classified as institution exposures and weighted
-  per the SA institution ladder.
+- **CRR Art. 107(2) = PS1/26 Art. 107(2)** — (a) other exposures to a
+  QCCP treated as institution exposures; (b) other exposures to a
+  non-QCCP treated as corporate exposures (Art. 306(1)(b) applies the
+  same weight to non-QCCP trade exposures).
 - **BCBS CRE54.14, CRE54.15, CRE54.18, CRE54.21–22, CRE54.27** —
   Basel-level methodology for QCCP trade-exposure weights, the client-
   clearing condition list, and the default-fund-contribution stack.
@@ -474,8 +548,9 @@ is the follow-up.
 - `tests/unit/ccr/test_ccp.py` — unit-test coverage of the 2% / 4% /
   NULL branching matrix.
 - [SA risk weights (CRR)](../sa-risk-weights.md) — risk-weight lookup
-  used on the non-QCCP fallback branch (Art. 107(2)(a) institution
-  ladder).
+  used on the non-QCCP fallback branch (Art. 107(2)(b) corporate
+  ladder) and for non-trade exposures to a QCCP (Art. 107(2)(a)
+  institution ladder).
 - [EAD composition](ead-composition.md) — `α · (RC + PFE)` chain that
   produces `ead_ccr`; QCCP rows preserve this EAD and override only
   the risk weight.

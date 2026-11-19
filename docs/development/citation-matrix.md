@@ -1384,9 +1384,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 306 — Own funds requirements for trade exposures
 
-??? quote "`apply_ccp_risk_weight` — src/rwa_calc/engine/ccr/ccp.py:51"
+??? quote "`apply_ccp_risk_weight` — src/rwa_calc/engine/ccr/ccp.py:53"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/ccp.py:51:115"
+    --8<-- "src/rwa_calc/engine/ccr/ccp.py:53:117"
     ```
 
 ??? quote "`qccp_trade_exposure_expr` — src/rwa_calc/engine/sa/ccp_exposures.py:58"

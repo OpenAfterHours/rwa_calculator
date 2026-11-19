@@ -44,9 +44,9 @@ This page documents:
   for the underlying 8% capital ratio inverse `1 / 0.08 = 12.5`);
 - the Art. 380 system-wide failure waiver (schema-supported as a
   Boolean flag; engine currently treats waiver as off);
-- the engine entry point (`compute_failed_trade_rwa`) and its
-  pipeline status (function exists with full unit-test coverage,
-  but is **not yet wired** into the orchestrator);
+- the engine entry point (`compute_failed_trade_rwa`), the synthetic
+  `ft__` own-funds line it feeds, and why that line is always SA and
+  never takes credit risk mitigation;
 - one worked example per Art. 378 band plus the Art. 379 Column-4
   shape, replaying the five-row P8.24 fixture
   (`tests/fixtures/ccr/failed_trade_builder.py`) used by the unit-
@@ -370,29 +370,43 @@ non-applicable cells are `null`.
 | `failed_trade_rwa`        | `Float64` | `own_funds_requirement × 12.5` (= `1 / 0.08`).                                                          | Art. 92(3)(ca)      |
 | `regulatory_band`         | `String`  | One of `dvp_5_15`, `dvp_16_30`, `dvp_31_45`, `dvp_46_plus`, `non_dvp_col4_t5_plus`, `dvp_pre_t5`.       | Audit / attribution |
 
-### Pending — engine wiring gaps
+### Own-funds lines are not credit exposures
 
-!!! warning "Engine gap — orchestrator hook missing (P8.24 follow-up)"
-    `compute_failed_trade_rwa` is implemented end-to-end and pinned by
-    a 6-test unit suite
-    ([`tests/unit/ccr/test_failed_trades.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/tests/unit/ccr/test_failed_trades.py))
-    but is **not yet wired** into the `ccr_sa_ccr` registry stage
-    ([`src/rwa_calc/engine/stages/ccr.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/ccr.py))
-    or
-    [`src/rwa_calc/engine/ccr/pipeline_adapter.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/pipeline_adapter.py).
-    The `FAILED_TRADE_SCHEMA` and the regulatory scalars — now cited
-    pack params in
-    [`src/rwa_calc/rulebook/packs/common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py)
-    (DvP multipliers `failed_trade_dvp_mult_*`, band lower-bound IntParams
-    `failed_trade_dvp_band_*_lower_days` / `failed_trade_non_dvp_col4_lower_days`,
-    non-DvP Col-4 RW multiplier `failed_trade_non_dvp_col4_rw_multiplier`,
-    `own_funds_to_rwa_factor`)
-    — are in place, but the orchestrator does not yet read a
-    `failed_trades` leaf off the `RawCCRBundle` or aggregate the
-    resulting `failed_trade_rwa` into the firm-level totals. Until the
-    wiring lands, firms with failed settlements must compute the
-    Art. 378 / 379 RWA off-system and fold it into the aggregator's
-    `manual_addon` channel (or report-only adjustment).
+The `ccr_sa_ccr` registry stage
+([`src/rwa_calc/engine/stages/ccr.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/ccr.py))
+calls `compute_failed_trade_rwa` and mints one synthetic
+`ft__<failed_trade_id>` row per failed trade, with
+`drawn_amount = own_funds_requirement` and
+`risk_type = "SETTLEMENT_FAILED_TRADE"`. The SA risk-weight chain pins
+that row's risk weight to 12.5, so `rwa_final = own_funds × 12.5`. CCP
+default-fund contributions are minted the same way (`dfc__` rows,
+`risk_type = "CCR_DEFAULT_FUND"`, see
+[CCP exposures](ccp-exposures.md#art-307-default-fund-contributions)).
+
+The amount on these rows is an own-funds **requirement**, not an
+exposure value. CRR Art. 378: *"multiply that price difference by the
+appropriate factor in column A of Table 1 in order to calculate the
+institution's own funds requirement for settlement risk"*; Art.
+92(3)(ca) (PS1/26 identical): *"the own funds requirements for
+settlement risk calculated in accordance with Articles 378 and 380 of
+CRR"*; CCR (CRR) Part Art. 308(3) / 309(2): RWEA = own funds
+requirement × 12.5. None of these admits an IRB formula or credit risk
+mitigation on the own-funds amount, so the engine treats both risk
+types as **own-funds lines** (`engine/crm/own_funds_lines.py`,
+review item CC-08):
+
+| Stage | Treatment of an own-funds line |
+|---|---|
+| Classifier (`engine/classify/approach.py`) | Always SA — first branch of the approach ladder, ahead of every IRB permission |
+| CRM (`engine/stages/crm.py`) | Processed in its own partition with **no** collateral, collateral links, guarantees or provisions, so a counterparty-level pledge, guarantee or provision is neither applied to it nor diluted by it |
+| SA risk weight (`engine/sa/risk_weights.py`) | 12.5 pin; the Art. 127 defaulted-exposure weight does not replace it |
+| Supporting factors (`engine/supporting_factors.py`) | No Art. 501 SME or Art. 501a infrastructure factor |
+
+Before the fix an IRB-permissioned counterparty's failed trade with own
+funds 50,000 was routed F-IRB (RWEA 45,764 CRR / 265,881 Basel 3.1), a
+counterparty-level cash pledge cut it to 29,762 and a counterparty-level
+sovereign guarantee to 50,000; the correct RWEA is 625,000 in every
+case (pinned by `tests/acceptance/ccr/test_ccp_cva_review_cluster.py`).
 
 The following Art. 378–380 sub-articles are **not** consumed by the
 engine today (all schema-supported with default-False Boolean flags):
@@ -422,9 +436,9 @@ PipelineOrchestrator.run_with_data
       ├─ apply_legal_enforceability_gate    (Art. 272(4))
       ├─ apply_wwr_gate                     (Art. 291(5)(a))
       ├─ ccr_rows_to_exposures              (SA-CCR EAD chain → CCR_DERIVATIVE rows)
-      └─ compute_failed_trade_rwa           (Art. 378-380; this page)     ← PENDING ORCHESTRATOR WIRING
-            └─ per-row failed_trade_rwa  → aggregator (manual_addon today)
-  → Classifier / CRM / SA / IRB
+      └─ compute_failed_trade_rwa           (Art. 378-380; this page)
+            └─ synthetic ft__ row (drawn_amount = own funds, RW pinned 12.5)
+  → Classifier (always SA) / CRM (none applied) / SA calculator
   → OutputAggregator                        (firm-level totals + output floor)
 ```
 

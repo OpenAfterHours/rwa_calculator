@@ -83,6 +83,7 @@ import polars as pl
 
 from rwa_calc.contracts.errors import ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED, CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, RiskType
+from rwa_calc.engine.sa.ccp_exposures import qccp_trade_exposure_expr
 from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
@@ -218,13 +219,11 @@ def uncovered_cva_counterparty_errors(
     ``cva_in_scope=False`` — an explicit statement, e.g. a 3.2 exemption or a
     client-clearing exclusion (1)(b)-(d) the input cannot otherwise carry.
     """
-    # Null-total by construction (``eq_missing``; Kleene ``is_null() | col``), so
-    # an unknown entity type is warned rather than silently filtered out.
-    is_qccp = pl.col("cp_entity_type").eq_missing("ccp") & (
-        pl.col("cp_is_qccp").is_null() | pl.col("cp_is_qccp")
-    )
+    # The QCCP test is the SA pin's own predicate (engine/sa/ccp_exposures.py),
+    # null-total by construction, so an unknown entity type is warned rather than
+    # silently filtered out and the two QCCP readings cannot drift apart.
     derivative_counterparties = ccr_exposures.filter(
-        pl.col("risk_type").eq_missing(RiskType.CCR_DERIVATIVE.value) & ~is_qccp
+        pl.col("risk_type").eq_missing(RiskType.CCR_DERIVATIVE.value) & ~qccp_trade_exposure_expr()
     ).select("counterparty_reference")
     if cva_counterparties is not None:
         derivative_counterparties = derivative_counterparties.join(

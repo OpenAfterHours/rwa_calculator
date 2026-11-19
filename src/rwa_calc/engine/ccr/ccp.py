@@ -10,9 +10,11 @@ Key responsibilities:
 - Assign the regulatory trade-exposure risk weight per CRR Art. 306(1):
     * Proprietary QCCP trade exposure  -> 2% (Art. 306(1)(a), CRE54.14)
     * Client-cleared via clearing member -> 4% (Art. 306(1)(c), CRE54.15)
-    * Non-QCCP                          -> NULL pass-through (SA path,
-      Art. 107(2)(a), 20% institution weight applied by the downstream
-      classifier).
+    * Non-QCCP                          -> NULL pass-through (SA path:
+      Art. 107(2)(b) / 306(1)(b), the corporate weight applied downstream).
+
+This standalone annotator is not called from the pipeline; the production
+pin lives in the SA chain on ``engine/sa/ccp_exposures.py``'s predicate.
 - Preserve ``ead_ccr`` unchanged — this stage annotates ``risk_weight``
   only. EAD is produced upstream by SA-CCR (Art. 274) and the load-bearing
   invariant of P8.25 is that all three CCR-B1 variants share identical EAD.
@@ -22,7 +24,7 @@ References:
 - CRR Art. 306(1)(c) — 4% RW for client-cleared trades through clearing member
 - CRR Art. 306(4)    — RWA = EAD x 2%
 - CRR Art. 272 Def (88) — qualified central counterparty
-- CRR Art. 107(2)(a) — non-QCCP exposures routed via SA institution path
+- CRR Art. 107(2)(b) — non-QCCP exposures treated as corporate exposures
 - BCBS CRE54.14, CRE54.15 — supervisory risk weights for trade exposures
 - rulepack ``common`` pack — qccp_proprietary_rw, qccp_client_cleared_rw
   (single source of truth for the scalars)
@@ -64,8 +66,8 @@ def apply_ccp_risk_weight(
         is_qccp=True,  is_client_cleared=True  -> 0.04 (Art. 306(1)(c))
         is_qccp=False                          -> NULL (pass-through to SA)
 
-    The non-QCCP NULL pass-through is intentional: the 20% SA-institution
-    weight for CQS-1 is applied by the downstream classifier (P8.30),
+    The non-QCCP NULL pass-through is intentional: the Art. 122 corporate
+    weight (Art. 107(2)(b)) is applied downstream (P8.30, CC-11),
     not here. Signalling pass-through via NULL keeps the routing layer
     able to detect which rows have already had a regulatory weight set.
 
@@ -87,7 +89,7 @@ def apply_ccp_risk_weight(
         ``risk_weight: Float64`` column. ``ead_ccr`` is unchanged.
 
     References:
-        - CRR Art. 306(1)(a), 306(1)(c), 306(4); CRR Art. 107(2)(a).
+        - CRR Art. 306(1)(a), 306(1)(c), 306(4); CRR Art. 107(2)(b).
         - BCBS CRE54.14 (2% proprietary), CRE54.15 (4% client-cleared).
     """
     # Reduce counterparties / trades to the single flag column each carries

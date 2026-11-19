@@ -48,9 +48,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/crm/provisions.py:37:148"
     ```
 
-??? quote "`_undrawn_select_expressions` — src/rwa_calc/engine/hierarchy/facility_undrawn.py:613"
+??? quote "`_undrawn_select_expressions` — src/rwa_calc/engine/hierarchy/facility_undrawn.py:622"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/facility_undrawn.py:613:758"
+    --8<-- "src/rwa_calc/engine/hierarchy/facility_undrawn.py:622:767"
     ```
 
 
@@ -555,9 +555,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 143 — Permission to use the IRB Approach
 
-??? quote "`resolve_model_permissions` — src/rwa_calc/engine/classify/permissions.py:57"
+??? quote "`resolve_model_permissions` — src/rwa_calc/engine/classify/permissions.py:56"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/permissions.py:57:285"
+    --8<-- "src/rwa_calc/engine/classify/permissions.py:56:302"
     ```
 
 ??? quote "`_had_irb_permission_at_2026_year_end` — src/rwa_calc/engine/equity/calculator.py:1251"
@@ -626,9 +626,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 148 — Conditions for implementing the IRB Approach across different classes of exposure and business units
 
-??? quote "`resolve_model_permissions` — src/rwa_calc/engine/classify/permissions.py:58"
+??? quote "`resolve_model_permissions` — src/rwa_calc/engine/classify/permissions.py:57"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/permissions.py:57:285"
+    --8<-- "src/rwa_calc/engine/classify/permissions.py:56:302"
     ```
 
 
@@ -639,9 +639,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 150 — Conditions for permanent partial use
 
-??? quote "`resolve_model_permissions` — src/rwa_calc/engine/classify/permissions.py:59"
+??? quote "`resolve_model_permissions` — src/rwa_calc/engine/classify/permissions.py:58"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/permissions.py:57:285"
+    --8<-- "src/rwa_calc/engine/classify/permissions.py:56:302"
     ```
 
 
@@ -717,9 +717,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/equity/calculator.py:1251:1281"
     ```
 
-??? quote "`with_group_size_figures` — src/rwa_calc/engine/hierarchy/graph.py:374"
+??? quote "`with_group_size_figures` — src/rwa_calc/engine/hierarchy/graph.py:501"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/graph.py:374:448"
+    --8<-- "src/rwa_calc/engine/hierarchy/graph.py:501:575"
     ```
 
 ??? quote "`apply_irb_formulas` — src/rwa_calc/engine/irb/formulas.py:534"
@@ -935,9 +935,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/transforms.py:1053:1083"
     ```
 
-??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:259"
+??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:284"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:259:315"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:284:340"
     ```
 
 
@@ -1128,7 +1128,7 @@ Last generated: 2026-11-19.
 
 ??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:110"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:110:194"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:110:200"
     ```
 
 ??? quote "`screen_unfunded_protection` — src/rwa_calc/engine/crm/protection_screen.py:80"
@@ -1149,12 +1149,12 @@ Last generated: 2026-11-19.
 
 ??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:111"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:110:194"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:110:200"
     ```
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1005"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1024"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1005:1191"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1024:1210"
     ```
 
 
@@ -1181,9 +1181,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 220 — Using the Supervisory Volatility Adjustments Approach or the Own Estimates Volatility Adjustments Approach for master netting agreements
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:134"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:138"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:134:205"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:138:230"
     ```
 
 ??? quote "`apply_sft_netting_gate` — src/rwa_calc/engine/sft/netting.py:74"
@@ -1227,9 +1227,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/crm/netting.py:49:414"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:135"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:139"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:134:205"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:138:230"
     ```
 
 
@@ -1255,14 +1255,14 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/crm/haircuts.py:1048:1069"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:136"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:140"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:134:205"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:138:230"
     ```
 
-??? quote "`_exposure_haircut_unscaled` — src/rwa_calc/engine/sft/fccm.py:625"
+??? quote "`_exposure_haircut_unscaled` — src/rwa_calc/engine/sft/fccm.py:650"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:625:664"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:650:689"
     ```
 
 
@@ -1273,9 +1273,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:123:158"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:137"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:141"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:134:205"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:138:230"
     ```
 
 
@@ -1386,14 +1386,14 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:1009:1286"
     ```
 
-??? quote "`_build_guarantor_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:624"
+??? quote "`_build_guarantor_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:630"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:624:650"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:630:656"
     ```
 
-??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:653"
+??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:659"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:653:700"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:659:706"
     ```
 
 ??? quote "`build_domestic_cgcb_guarantor_expr` — src/rwa_calc/engine/eu_sovereign.py:115"
@@ -1429,9 +1429,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 237 — Maturity mismatch
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1006"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1025"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1005:1191"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1024:1210"
     ```
 
 ??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:686"
@@ -1476,9 +1476,9 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 271 — Determination of the exposure value
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:138"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:142"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:134:205"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:138:230"
     ```
 
 
@@ -1494,9 +1494,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/ccr/hedging_sets.py:96:191"
     ```
 
-??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:160"
+??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:189"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:160:235"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:189:264"
     ```
 
 ??? quote "`map_trade_risk_categories` — src/rwa_calc/engine/ccr/risk_categories.py:89"
@@ -1507,9 +1507,19 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 278 — Transactions with a non-linear risk profile
 
+??? quote "`compose_exposure_value` — src/rwa_calc/engine/ccr/exposure_value.py:91"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/exposure_value.py:91:164"
+    ```
+
 ??? quote "`compute_pfe` — src/rwa_calc/engine/ccr/pfe.py:75"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:75:154"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:75:148"
+    ```
+
+??? quote "`pfe_multiplier` — src/rwa_calc/engine/ccr/pfe.py:151"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:151:183"
     ```
 
 
@@ -1547,7 +1557,12 @@ Last generated: 2026-11-19.
 
 ??? quote "`compute_maturity_factor_margined` — src/rwa_calc/engine/ccr/maturity_factor.py:126"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:126:239"
+    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:126:201"
+    ```
+
+??? quote "`margined_mpor_days` — src/rwa_calc/engine/ccr/maturity_factor.py:206"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:206:270"
     ```
 
 ??? quote "`compute_adjusted_notional_other` — src/rwa_calc/engine/ccr/risk_categories.py:146"
@@ -1584,14 +1599,14 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 285 — Exposure value for netting sets subject to a margin agreement
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:139"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:143"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:134:205"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:138:230"
     ```
 
-??? quote "`_derive_margining_terms` — src/rwa_calc/engine/sft/fccm.py:213"
+??? quote "`_derive_margining_terms` — src/rwa_calc/engine/sft/fccm.py:238"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:213:256"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:238:281"
     ```
 
 
@@ -1786,9 +1801,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/ccf.py:828:879"
     ```
 
-??? quote "`_undrawn_select_expressions` — src/rwa_calc/engine/hierarchy/facility_undrawn.py:614"
+??? quote "`_undrawn_select_expressions` — src/rwa_calc/engine/hierarchy/facility_undrawn.py:623"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/facility_undrawn.py:613:758"
+    --8<-- "src/rwa_calc/engine/hierarchy/facility_undrawn.py:622:767"
     ```
 
 
@@ -2170,17 +2185,17 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/classify/subtypes.py:635:727"
     ```
 
-??? quote "`with_group_size_figures` — src/rwa_calc/engine/hierarchy/graph.py:375"
+??? quote "`with_group_size_figures` — src/rwa_calc/engine/hierarchy/graph.py:502"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/graph.py:374:448"
+    --8<-- "src/rwa_calc/engine/hierarchy/graph.py:501:575"
     ```
 
 
 ### PS1/26, paragraph 147A — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`build_sl_irb_permission_expr` — src/rwa_calc/engine/classify/permissions.py:378"
+??? quote "`build_sl_irb_permission_expr` — src/rwa_calc/engine/classify/permissions.py:395"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/permissions.py:378:427"
+    --8<-- "src/rwa_calc/engine/classify/permissions.py:395:444"
     ```
 
 ??? quote "`allocate` — src/rwa_calc/engine/securitisation/allocator.py:130"
@@ -2204,9 +2219,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/classify/subtypes.py:76:318"
     ```
 
-??? quote "`with_group_size_figures` — src/rwa_calc/engine/hierarchy/graph.py:376"
+??? quote "`with_group_size_figures` — src/rwa_calc/engine/hierarchy/graph.py:503"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy/graph.py:374:448"
+    --8<-- "src/rwa_calc/engine/hierarchy/graph.py:501:575"
     ```
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:124"
@@ -2259,9 +2274,9 @@ Last generated: 2026-11-19.
     --8<-- "src/rwa_calc/engine/irb/transforms.py:1053:1083"
     ```
 
-??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:260"
+??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:285"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:259:315"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:284:340"
     ```
 
 
@@ -2388,14 +2403,14 @@ Last generated: 2026-11-19.
 
 ### PS1/26, paragraph 224 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:140"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:144"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:134:205"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:138:230"
     ```
 
-??? quote "`_exposure_haircut_unscaled` — src/rwa_calc/engine/sft/fccm.py:626"
+??? quote "`_exposure_haircut_unscaled` — src/rwa_calc/engine/sft/fccm.py:651"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:625:664"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:650:689"
     ```
 
 
@@ -2445,9 +2460,9 @@ Last generated: 2026-11-19.
 
 ### PS1/26, paragraph 237 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1007"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1026"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1005:1191"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1024:1210"
     ```
 
 

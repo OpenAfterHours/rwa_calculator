@@ -64,6 +64,7 @@
         "tests/fixtures/p1_126/p1_126.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
         "tests/unit/classifier/test_sme_assets_fallback.py",
+        "tests/unit/test_facility_graph_validation.py",
         "tests/unit/test_facility_undrawn_commitments.py",
         "tests/unit/test_hierarchy.py"
       ],
@@ -387,6 +388,7 @@
         "engine/hierarchy/facility_fx.py",
         "engine/hierarchy/facility_undrawn.py",
         "engine/hierarchy/facility_warnings.py",
+        "engine/hierarchy/unify.py",
         "engine/kernels/allocation.py",
         "reporting/corep/__init__.py",
         "reporting/corep/c07.py",
@@ -436,6 +438,7 @@
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
         "tests/unit/test_corep_annex1_row_discrimination.py",
+        "tests/unit/test_engine_only_risk_types.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_p1_267_sa_ccf_residual.py",
         "tests/unit/test_r1_negative_amount_dq.py"
@@ -2711,6 +2714,7 @@
         "tests/unit/sft/test_ccr_sft_maturity_producer.py",
         "tests/unit/test_b31_revolving_maturity.py",
         "tests/unit/test_effective_maturity.py",
+        "tests/unit/test_engine_only_risk_types.py",
         "tests/unit/test_trade_lc_flag_scope.py"
       ],
       "watchfire_index_gap": false
@@ -6271,6 +6275,7 @@
         "tests/acceptance/reporting/test_of08_binding_floor.py",
         "tests/acceptance/stress/test_stress_pipeline.py",
         "tests/acceptance/test_fs1_facility_share_fanout.py",
+        "tests/acceptance/test_tieouts_pipeline.py",
         "tests/contracts/test_config.py",
         "tests/contracts/test_corep_rwea_carrier.py",
         "tests/fixtures/ccr/failed_trade_builder.py",
@@ -6377,8 +6382,11 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/ccf.py",
+        "engine/crm/guarantees.py",
         "engine/hierarchy/facility_fx.py",
         "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/graph.py",
+        "engine/hierarchy/namespace.py",
         "engine/hierarchy/unify.py",
         "engine/sft/fccm.py",
         "engine/sft/netting.py",
@@ -6405,6 +6413,7 @@
         "tests/fixtures/reporting_offbs_portfolio.py",
         "tests/properties/corpus.py",
         "tests/properties/test_source_conservation.py",
+        "tests/unit/crm/test_cross_approach_ccf.py",
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/reporting/corep/test_c08_01_ccf_rows.py",
         "tests/unit/rulebook/test_provisions_features.py",
@@ -6412,6 +6421,8 @@
         "tests/unit/test_ccf.py",
         "tests/unit/test_ccf_obs_product_regime_map.py",
         "tests/unit/test_ccf_uk_resi_commitment_derivation.py",
+        "tests/unit/test_engine_only_risk_types.py",
+        "tests/unit/test_facility_graph_validation.py",
         "tests/unit/test_facility_undrawn_commitments.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_p1_267_sa_ccf_residual.py"
@@ -8858,7 +8869,8 @@
         "contracts/errors.py",
         "data/schemas.py",
         "engine/crm/protection_screen.py",
-        "engine/crm/protection_value.py"
+        "engine/crm/protection_value.py",
+        "engine/hierarchy/namespace.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_10_art_213_ucp_eligibility.py"

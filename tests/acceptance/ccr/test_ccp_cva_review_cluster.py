@@ -280,14 +280,31 @@ class TestCC08OwnFundsRowsTakeNoCreditRiskMitigation:
 
 @pytest.mark.parametrize("regime", _REGIMES)
 def test_cc08_own_funds_rows_are_never_irb(regime: str) -> None:
-    """An F-IRB-permissioned, internally rated counterparty still gets 12.5 x own funds."""
+    """An F-IRB-permissioned, internally rated counterparty still gets 12.5 x own funds.
+
+    The default-fund row's counterparty is deliberately NOT ``entity_type =
+    "ccp"`` (a CCP booked as an ordinary corporate): only the own-funds-line
+    predicate, not the CCP routing branch, can keep it SA.
+    """
     # Arrange
     base = build_raw_data_bundle_ccr_irb1()
     ft1 = {**_FT1, "counterparty_reference": CCR_IRB1_COUNTERPARTY_REF}
+    # Art. 309(1) non-QCCP: K = DF = 100,000 -> RWEA 1,250,000.
+    dfc = {
+        "contribution_id": "DF_IRB",
+        "ccp_reference": CCR_IRB1_COUNTERPARTY_REF,
+        "is_qccp_ccp": False,
+        "df_i_contribution_amount": 100_000.0,
+        "df_cm_total_contributions": 1_000_000.0,
+        "k_ccp_published": 1_000_000.0,
+    }
+    own_funds_inputs = _ccr_bundle(failed_trades=[ft1], default_fund_contributions=[dfc])
     bundle = dataclasses.replace(
         base,
         ccr=dataclasses.replace(
-            base.ccr, failed_trades=_ccr_bundle(failed_trades=[ft1]).failed_trades
+            base.ccr,
+            failed_trades=own_funds_inputs.failed_trades,
+            default_fund_contributions=own_funds_inputs.default_fund_contributions,
         ),
         model_permissions=seal_raw_table(create_ccr_irb1_model_permission(), "model_permissions"),
     )
@@ -301,6 +318,8 @@ def test_cc08_own_funds_rows_are_never_irb(regime: str) -> None:
     assert rows["ccr__NS_IRB_001"]["approach_applied"] == "foundation_irb"
     assert rows["ft__FT1"]["approach_applied"] == "standardised"
     assert rows["ft__FT1"]["rwa_final"] == pytest.approx(_FT1_RWA, rel=1e-9)
+    assert rows["dfc__DF_IRB"]["approach_applied"] == "standardised"
+    assert rows["dfc__DF_IRB"]["rwa_final"] == pytest.approx(1_250_000.0, rel=1e-9)
 
 
 # ---------------------------------------------------------------------------

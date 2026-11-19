@@ -3,7 +3,8 @@ The conversion-factor buckets of the off-balance-sheet breakdowns — one home.
 
 Pipeline position:
     sealed aggregator-exit ledger (``ccf``, ``ccf_modelled``, ``ead_modelled``,
-    ``is_revolving``, ``reporting_approach_origin``)
+    ``is_revolving``, ``is_obs_commitment``, ``is_purchased_receivable_commitment``,
+    ``reporting_approach_origin``)
         -> here (which bucket a leg's conversion factor falls in)
         -> corep/c08_01_rows.py (OF 08.01 rows 0031, 0032, 0001, 0033, 0034, 0035)
         -> corep/c07.py (OF 07.00 columns 0160, 0170, 0171, 0180, 0190)
@@ -35,16 +36,22 @@ holds this module to the pack).
 
 THE OWN-ESTIMATE ROW WINS OVER THE VALUE MATCH. An A-IRB leg is reported in row
 0035 when it carries an own estimate of EAD (Art. 166D(3), ``ead_modelled``), or
-when it is a revolving commitment with an own estimate of conversion factor
+when it is a revolving loan commitment with an own estimate of conversion factor
 (Art. 166D(1)(a), ``ccf_modelled``) applied. The precedence is load-bearing: an
 own estimate floored at half of a 40% item is 0.20 and would otherwise be filed
-in the 20% row. The engine's eligibility test (revolving AND a Table A1 factor
-below 100%) is not sealed per leg, so "the own estimate was applied" is read as
-"applied factor below 100%": an own estimate of exactly 100% is therefore filed
-in row 0034 with identical figures. Sealing the engine's own flag makes it
-exact. Each limb is read only where its columns exist, so a frame that carries
-neither, or carries them empty (a legacy-ledger projection maps no own estimate),
-files every leg by its value.
+in the 20% row. The engine's eligibility test (``engine/ccf.py::_compute_ccf``:
+``is_revolving`` AND ``is_obs_commitment`` — an issued item under a revolving
+facility is not a commitment, Art. 166D(1)(b) — AND not a flagged revolving
+purchased-receivables commitment, whose Art. 166A(5) factor is fixed, AND a
+Table A1 factor below 100%) is not sealed per leg, so it is mirrored here from
+the leg's columns and "the own estimate was applied" is read as "applied factor
+below 100%": an own estimate of exactly 100% is therefore filed in row 0034 with
+identical figures. Sealing the engine's own flag makes it exact. Each limb is
+read only where its columns exist — an absent ``is_obs_commitment`` reads as a
+commitment and an absent ``is_purchased_receivable_commitment`` as unflagged,
+the engine's own defaults — so a frame that carries neither own estimate, or
+carries them empty (a legacy-ledger projection maps no own estimate), files
+every leg by its value.
 
 A leg whose factor matches no bucket and is not an own estimate is in no row
 (``None``); ``corep/c08_01_rows.warn_if_unbucketed`` reports any money that
@@ -52,7 +59,7 @@ leaves the breakdown that way.
 
 References:
 - PRA PS1/26 Art. 111(1) Table A1 (conversion factors 10% / 20% / 40% / 50% /
-  100%); Art. 166C(1); Art. 166D(1)(a) and (3)
+  100%); Art. 166A(5); Art. 166C(1); Art. 166D(1)(a), (1)(b) and (3)
 - PRA PS1/26 Annex II §3.3.3, OF 08.01 rows 0031, 0032, 0001, 0033, 0034, 0035
   (p.116)
 - Bank of England Banking Taxonomy v4.1.1, module PRA001, table ``OF08.01.01.01``
@@ -101,6 +108,8 @@ _ORIGIN_APPROACH: Final = "reporting_approach_origin"
 _OWN_EAD: Final = "ead_modelled"
 _OWN_CCF: Final = "ccf_modelled"
 _REVOLVING: Final = "is_revolving"
+_COMMITMENT: Final = "is_obs_commitment"
+_PURCHASED_RECEIVABLE: Final = "is_purchased_receivable_commitment"
 _FULL_CONVERSION: Final = 1.0
 
 
@@ -139,7 +148,7 @@ def of08_01_ccf_row_expr(cols: set[str]) -> pl.Expr | None:
 @cites("PS1/26, paragraph 166D")
 def _own_estimate(cols: set[str], factor: pl.Expr) -> pl.Expr:
     """Is the leg an A-IRB exposure whose exposure value rests on an own
-    estimate — of EAD (Art. 166D(3)) or, on a revolving commitment, of the
+    estimate — of EAD (Art. 166D(3)) or, on a revolving loan commitment, of the
     conversion factor applied (Art. 166D(1)(a))? Each limb only where its
     columns exist."""
     if _ORIGIN_APPROACH not in cols:
@@ -149,7 +158,7 @@ def _own_estimate(cols: set[str], factor: pl.Expr) -> pl.Expr:
         limbs.append(pl.col(_OWN_EAD).is_not_null())
     if {_OWN_CCF, _REVOLVING} <= cols:
         limbs.append(
-            pl.col(_REVOLVING).fill_null(value=False)
+            _own_ccf_eligible(cols)
             & pl.col(_OWN_CCF).is_not_null()
             & (factor != _FULL_CONVERSION).fill_null(value=False)
         )
@@ -157,3 +166,25 @@ def _own_estimate(cols: set[str], factor: pl.Expr) -> pl.Expr:
         return pl.lit(value=False)
     is_airb = (pl.col(_ORIGIN_APPROACH) == AIRB).fill_null(value=False)
     return is_airb & pl.any_horizontal(limbs).fill_null(value=False)
+
+
+@cites("PS1/26, paragraph 166D")
+@cites("PS1/26, paragraph 166.5")
+def _own_ccf_eligible(cols: set[str]) -> pl.Expr:
+    """The engine's Basel 3.1 own-estimate population, read from the leg.
+
+    Mirrors ``engine/ccf.py::CCFCalculator._compute_ccf``: Art. 166D(1)(a) admits
+    an own estimate only "for revolving loan commitments", and a commitment is
+    "not itself an issued off-balance sheet item" (``is_obs_commitment``; a null
+    cannot evidence one), so an issued item under a revolving facility files by
+    its Table A1 factor (CM-03). A flagged revolving purchased-receivables
+    commitment takes the fixed Art. 166A(5) factor and is never an own estimate
+    (TR-02). An absent flag column is the engine's default: a commitment, and
+    not a purchased-receivables commitment.
+    """
+    eligible = pl.col(_REVOLVING).fill_null(value=False)
+    if _COMMITMENT in cols:
+        eligible = eligible & pl.col(_COMMITMENT).fill_null(value=False)
+    if _PURCHASED_RECEIVABLE in cols:
+        eligible = eligible & ~pl.col(_PURCHASED_RECEIVABLE).fill_null(value=False)
+    return eligible

@@ -35,7 +35,7 @@ the bought-currency leg; for a CDS, "long" is the protection-seller.
 Engine: `src/rwa_calc/engine/ccr/supervisory_delta.py::compute_supervisory_delta_linear`.
 
 ```python
---8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:58:81"
+--8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:80:103"
 ```
 
 ## European options — Art. 279a(2)
@@ -77,14 +77,32 @@ where:
 | Equity — index       | 0.75 | `SA_CCR_OPTION_VOLATILITY_EQUITY_IDX`     |
 | Commodity — electricity | 1.50 | `SA_CCR_OPTION_VOLATILITY_COMMODITY_ELECTRICITY` |
 | Commodity — other       | 0.70 | `SA_CCR_OPTION_VOLATILITY_COMMODITY_OTHER`       |
+| Other risks (Art. 277(1)(f)) | 1.50 | `sa_ccr_option_volatility_other`            |
+
+PRA CCR (CRR) Part Art. 279a(1)(a) Table 1 (unchanged by PS1/26) carries the
+same values: "Commodity | Electricity | 150%", "Other commodities (excluding
+electricity) | 70%", "Others | All | 150%". A commodity option takes the
+electricity volatility when its `commodity_type` is `ELECTRICITY` and the
+other-commodity volatility otherwise; an option mapped to the other-risks
+category — including a trade whose `asset_class` is missing or unrecognised
+(CCR021) — takes 150%.
+
+!!! warning "Corrected — skeptic review of CC-06 (2026-11)"
+    Until this review the engine keyed σ on `asset_class` only and held no entry
+    for `commodity` or `other`, so every commodity option and every other-risks
+    option had a null delta and **no add-on**, with no error — including the
+    CCR021 / CCR022 fallback trades the input gate reported as priced.
 
 The TRADE_SCHEMA fixture carries only the coarse asset class (`credit`,
 `equity`) without distinguishing single-name vs index. The engine defaults
 the lookup to the **index** volatility for both `credit` and `equity` —
 matching the lower-volatility leg of CRE52.47 and the P8.13 OPT_003
-expected value. Firms that carry single-name vs index distinction in
-upstream data should populate `asset_class` as `credit_sn` / `credit_idx`
-/ `equity_sn` / `equity_idx` to override.
+expected value. The sub-class tokens `credit_sn` / `credit_idx` /
+`equity_sn` / `equity_idx` are **not** SA-CCR risk categories: since review
+CC-06 `asset_class` must be one of the six Art. 277(1) categories, and any
+other value is priced in the other-risks category and reported as DQ006 and
+CCR021 (see [hedging-sets.md](hedging-sets.md)). The `is_index` column does
+not yet select the single-name volatility.
 
 ### Sign rule — bought vs sold
 
@@ -95,7 +113,7 @@ this as a `pl.when(...).then(...).otherwise(...)` cascade, not a single
 `±` magnitude:
 
 ```python
---8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:149:165"
+--8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:193:206"
 ```
 
 Rows where `option_strike` is null fall back to the linear ±1 branch per
@@ -140,7 +158,7 @@ Art. 279a(1) — same fallback contract as the option function.
 Engine: `src/rwa_calc/engine/ccr/supervisory_delta.py::compute_supervisory_delta_cdo_tranche`.
 
 ```python
---8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:182:225"
+--8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:223:266"
 ```
 
 ## Pipeline ordering

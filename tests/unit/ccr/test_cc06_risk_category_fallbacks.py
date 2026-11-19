@@ -241,6 +241,45 @@ def test_other_adjusted_notional_prefers_unit_price_then_duration_scaled_notiona
     assert out["I"]["adjusted_notional"] == 123.0
 
 
+def test_other_adjusted_notional_never_falls_below_the_notional() -> None:
+    """A short trade's SD < 1, so method (c)'s |notional| (10m) wins over 10m × SD.
+
+    Reporting 2026-03-31, maturity 2026-09-30: E = 183/365.25 = 0.501027,
+    SD = (e^(-0.05 × 0.04) - e^(-0.05 × E)) / 0.05 = 0.454843 — the duration-scaled
+    amount would be 4,548,430.52; the adjusted notional is 10,000,000.
+    """
+    # Arrange
+    reporting = date(2026, 3, 31)
+    frame = pl.LazyFrame(
+        [
+            {
+                "trade_id": "S",
+                "asset_class": "other",
+                "notional": 10_000_000.0,
+                "market_price": None,
+                "number_of_units": None,
+                "start_date": reporting,
+                "maturity_date": date(2026, 9, 30),
+                "adjusted_notional": None,
+            }
+        ],
+        schema_overrides={
+            "adjusted_notional": pl.Float64,
+            "market_price": pl.Float64,
+            "number_of_units": pl.Float64,
+        },
+    )
+
+    # Act
+    out = compute_adjusted_notional_other(frame, reporting).collect()
+
+    # Assert
+    assert out["adjusted_notional"][0] == pytest.approx(10_000_000.0, rel=1e-12), (
+        "the max(1, SD) floor did not apply: a 6-month other-risks trade was "
+        "scaled down by its supervisory duration"
+    )
+
+
 def test_other_add_on_nets_only_identical_risk_drivers() -> None:
     """Art. 277a(1)(f) / 280f: same underlying nets; unknown driver is its own set.
 

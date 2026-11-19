@@ -258,3 +258,116 @@ def test_null_quality_credit_equals_explicit_non_rated_leg(regime: str) -> None:
         nr_rows["ccr__NS1"]["ead_ccr"], rel=1e-12
     )
     assert [e for e in nr_errors if e.code in _CCR_CODES] == []
+
+
+# ---------------------------------------------------------------------------
+# Options on a fallback category, and a trade with no netting_set_id at all
+# (skeptic review of CC-06).
+# ---------------------------------------------------------------------------
+
+#: Long at-the-money call, P = K = 100. T = (maturity - start) / 365 per
+#: compute_supervisory_delta_option: CRR 1826 / 365 = 5.002740; B31 1827 / 365 =
+#: 5.005479. d1 = 0.5 × σ × sqrt(T); δ = Φ(d1).
+#: Art. 279a(1)(a) Table 1: "Commodity | Electricity | 150%", "Other commodities
+#: (excluding electricity) | 70%", "Others | All | 150%".
+#:   σ = 150%: CRR δ = 0.953278640, B31 δ = 0.953323489
+#:   σ =  70%: CRR δ = 0.783138928, B31 δ = 0.783201861
+_ATM_CALL = {
+    "option_type": "call",
+    "option_strike": 100.0,
+    "option_underlying_price": 100.0,
+}
+
+#: (scenario, regime) -> (addon_aggregate, ead_ccr). Before this review each was 0.
+#:   other risks ('weather' -> CCR021): 0.08 × δ × 10m × SD
+#:       CRR 3,342,950.856 -> EAD 4,680,131.198; B31 3,344,734.250 -> 4,682,627.949
+#:   commodity, null type -> ELECTRICITY (CCR022): 0.40 × δ × 10m
+#:       CRR 3,813,114.560 -> EAD 5,338,360.383; B31 3,813,293.957 -> 5,338,611.540
+#:   commodity OIL_GAS (no fallback, no error): 0.18 × δ(70%) × 10m
+#:       CRR 1,409,650.071 -> EAD 1,973,510.099; B31 1,409,763.350 -> 1,973,668.691
+_OPTION_EXPECTED = {
+    ("other_option", "crr"): (3_342_950.8559, 4_680_131.1983),
+    ("other_option", "b31"): (3_344_734.2496, 4_682_627.9495),
+    ("commodity_option_null_type", "crr"): (3_813_114.5596, 5_338_360.3835),
+    ("commodity_option_null_type", "b31"): (3_813_293.9572, 5_338_611.5400),
+    ("commodity_option_oil_gas", "crr"): (1_409_650.0706, 1_973_510.0989),
+    ("commodity_option_oil_gas", "b31"): (1_409_763.3504, 1_973_668.6905),
+}
+
+_OPTION_SCENARIOS = {
+    "other_option": ({"asset_class": "weather", **_ATM_CALL}, ("CCR021", "asset_class")),
+    "commodity_option_null_type": (
+        {
+            "asset_class": "commodity",
+            "market_price": 100.0,
+            "number_of_units": 100_000.0,
+            **_ATM_CALL,
+        },
+        ("CCR022", "commodity_type"),
+    ),
+    "commodity_option_oil_gas": (
+        {
+            "asset_class": "commodity",
+            "commodity_type": "OIL_GAS",
+            "market_price": 100.0,
+            "number_of_units": 100_000.0,
+            **_ATM_CALL,
+        },
+        None,
+    ),
+}
+
+
+@pytest.mark.parametrize("regime", ["crr", "b31"])
+@pytest.mark.parametrize("scenario", list(_OPTION_SCENARIOS))
+def test_option_in_a_fallback_category_is_priced_with_its_supervisory_volatility(
+    scenario: str, regime: str
+) -> None:
+    """An option keeps a non-zero add-on: σ comes from Art. 279a Table 1 for its category.
+
+    Defect pinned: no supervisory volatility existed for the other-risks or the
+    commodity category, so δ was null and the option's add-on 0 — while CCR021 /
+    CCR022 reported the trade as priced in its fallback category.
+    """
+    # Arrange
+    overrides, expected_error = _OPTION_SCENARIOS[scenario]
+    expected_addon, expected_ead = _OPTION_EXPECTED[scenario, regime]
+
+    # Act
+    rows, errors = _run(regime, [{"trade_id": "T1", **overrides}])
+
+    # Assert
+    row = rows["ccr__NS1"]
+    assert row["addon_aggregate"] == pytest.approx(expected_addon, rel=1e-6), (
+        f"{scenario}/{regime}: addon {row['addon_aggregate']:,.2f}; 0 means the option's "
+        "supervisory delta was null (no σ for its risk category)"
+    )
+    assert row["ead_ccr"] == pytest.approx(expected_ead, rel=1e-6)
+    ccr_errors = [(e.code, e.field_name) for e in errors if e.code in _CCR_CODES]
+    assert ccr_errors == ([] if expected_error is None else [expected_error])
+
+
+@pytest.mark.parametrize("regime", ["crr", "b31"])
+def test_trade_with_null_netting_set_id_is_priced_alone_and_reported(regime: str) -> None:
+    """A null netting_set_id is an orphan too: its own row, no counterparty, CCR023.
+
+    Defect pinned: the stand-in netting set was keyed on the null id, which no
+    join matches, so the trade was still dropped while CCR023 reported it priced.
+    """
+    # Arrange
+    _, ir_ead = _EXPECTED["ir_casing_variant", regime]
+    trades = [
+        {"trade_id": "T1", "asset_class": "interest_rate"},
+        {"trade_id": "T2", "asset_class": "interest_rate", "netting_set_id": None},
+    ]
+
+    # Act
+    rows, errors = _run(regime, trades)
+
+    # Assert
+    orphans = [row for ref, row in rows.items() if ref != "ccr__NS1"]
+    assert rows["ccr__NS1"]["ead_ccr"] == pytest.approx(ir_ead, rel=1e-9)
+    assert len(orphans) == 1, f"expected one stand-in row for T2, got {sorted(rows)}"
+    assert orphans[0]["ead_ccr"] == pytest.approx(ir_ead, rel=1e-9)
+    assert orphans[0]["counterparty_reference"] is None
+    assert [e.code for e in errors if e.code == "CCR023"] == ["CCR023"]

@@ -1350,19 +1350,19 @@ Last generated: 2026-11-19.
 
 ### CRR Art. 279a — Supervisory delta
 
-??? quote "`compute_supervisory_delta_linear` — src/rwa_calc/engine/ccr/supervisory_delta.py:64"
+??? quote "`compute_supervisory_delta_linear` — src/rwa_calc/engine/ccr/supervisory_delta.py:80"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:64:87"
+    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:80:103"
     ```
 
-??? quote "`compute_supervisory_delta_option` — src/rwa_calc/engine/ccr/supervisory_delta.py:90"
+??? quote "`compute_supervisory_delta_option` — src/rwa_calc/engine/ccr/supervisory_delta.py:106"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:90:185"
+    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:106:220"
     ```
 
-??? quote "`compute_supervisory_delta_cdo_tranche` — src/rwa_calc/engine/ccr/supervisory_delta.py:188"
+??? quote "`compute_supervisory_delta_cdo_tranche` — src/rwa_calc/engine/ccr/supervisory_delta.py:223"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:188:231"
+    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:223:266"
     ```
 
 

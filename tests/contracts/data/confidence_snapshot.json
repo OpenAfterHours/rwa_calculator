@@ -4854,7 +4854,9 @@
         "sa_ccr_option_volatility_fx@b31",
         "sa_ccr_option_volatility_fx@crr",
         "sa_ccr_option_volatility_ir@b31",
-        "sa_ccr_option_volatility_ir@crr"
+        "sa_ccr_option_volatility_ir@crr",
+        "sa_ccr_option_volatility_other@b31",
+        "sa_ccr_option_volatility_other@crr"
       ],
       "source_files": [
         "data/schemas.py",
@@ -8926,8 +8928,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "48831820def290292483343bd4b05440d2ff2080554c138372adb13f8edde22d",
-    "crr": "38e6281b758fc9717e28d28a749dfecb8f79a5e30cf2a422a056bd6c9cb465c5"
+    "b31": "06200608d5fe880c308ab005eded916831e12140aef86645ef881d5e2c2d46df",
+    "crr": "74add3fbf813f4c3b3f18112efec664bd3479ae2ef4378991b26312e070ccdff"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

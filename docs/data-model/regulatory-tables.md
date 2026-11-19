@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `38e6281b758fc971`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 240 entries, content hash `48831820def29029`
+- **CRR** (`crr` @ 2026-01-01) — 208 entries, content hash `74add3fbf813f4c3`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 241 entries, content hash `06200608d5fe880c`
 
 ## Regime features
 
@@ -198,6 +198,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `sa_ccr_option_volatility_equity_sn` | `1.20` | `1.20` | CRR Art. 279a |
 | `sa_ccr_option_volatility_fx` | `0.15` | `0.15` | CRR Art. 279a |
 | `sa_ccr_option_volatility_ir` | `0.50` | `0.50` | CRR Art. 279a |
+| `sa_ccr_option_volatility_other` | `1.50` | `1.50` | CRR Art. 279a |
 | `sa_ccr_start_floor_years` | `0.04` | `0.04` | CRR Art. 279b |
 | `sa_ccr_supervisory_duration_rate` | `0.05` | `0.05` | CRR Art. 279b |
 | `sa_ccr_supervisory_factor_equity_idx` | `0.20` | `0.20` | CRR Art. 280 |

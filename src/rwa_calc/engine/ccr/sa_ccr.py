@@ -44,6 +44,11 @@ CCR_LEGAL_ENFORCEABILITY_ERROR_CODE = "CCR001"
 #: Regulatory citation attached to the CCR001 warning.
 CCR_LEGAL_ENFORCEABILITY_REG_REF = "CRR Art. 272(4); Art. 295-297"
 
+#: Prefix of the stand-in ``netting_set_id`` given to a trade whose own
+#: ``netting_set_id`` is null (``<prefix><trade_id>``), so that no join keyed on
+#: the null id can drop it (see :func:`attach_orphan_trade_netting_sets`).
+MISSING_NETTING_SET_ID_PREFIX = "__no_netting_set__"
+
 
 # NOTE: No ``@cites("CRR Art. 274")`` — watchfire's bundled rulebook index
 # (rulebook_version 2026-05-15) does not yet contain CRR Art. 274. Article
@@ -105,6 +110,11 @@ def attach_orphan_trade_netting_sets(raw_ccr: RawCCRBundle) -> RawCCRBundle:
     fallback weight with alpha = 1.4. The orphan is reported as CCR023 by the
     input gate (``contracts/ccr_input_checks.py``).
 
+    A trade whose ``netting_set_id`` is null is an orphan too, but no join keyed
+    on a null id matches anything, so it would still be dropped. It is first given
+    the stand-in id ``MISSING_NETTING_SET_ID_PREFIX + trade_id`` (one per trade:
+    with no netting agreement there is nothing to net it with).
+
     Lazy: the stand-ins are an anti-join plus a keyed left join (which yields the
     netting-set frame's own columns, all null), so a book with no orphan trade
     gains nothing.
@@ -113,14 +123,21 @@ def attach_orphan_trade_netting_sets(raw_ccr: RawCCRBundle) -> RawCCRBundle:
         raw_ccr: Aggregate CCR input bundle (derivatives only).
 
     Returns:
-        ``raw_ccr`` with the stand-in rows appended to its netting-set frame.
+        ``raw_ccr`` with null trade ``netting_set_id`` values replaced by their
+        stand-in ids and the stand-in rows appended to its netting-set frame.
 
     References:
         CRR Art. 272(4); CCR (CRR) Part Art. 274(1).
     """
     netting_sets_lf = raw_ccr.netting_sets.netting_sets
+    trades_lf = raw_ccr.trades.trades.with_columns(
+        pl.coalesce(
+            pl.col("netting_set_id"),
+            pl.concat_str([pl.lit(MISSING_NETTING_SET_ID_PREFIX), pl.col("trade_id")]),
+        ).alias("netting_set_id")
+    )
     orphan_ids = (
-        raw_ccr.trades.trades.select("netting_set_id")
+        trades_lf.select("netting_set_id")
         .unique()
         .join(netting_sets_lf.select("netting_set_id"), on="netting_set_id", how="anti")
     )
@@ -129,6 +146,7 @@ def attach_orphan_trade_netting_sets(raw_ccr: RawCCRBundle) -> RawCCRBundle:
     )
     return dataclasses.replace(
         raw_ccr,
+        trades=TradeBundle(trades=trades_lf, errors=list(raw_ccr.trades.errors)),
         netting_sets=NettingSetBundle(
             netting_sets=pl.concat([netting_sets_lf, stand_ins], how="diagonal_relaxed"),
             errors=list(raw_ccr.netting_sets.errors),

@@ -32,8 +32,8 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `38e6281b758fc971`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `48831820def29029`
+- **CRR** (`crr` @ 2026-01-01) — content hash `74add3fbf813f4c3`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `06200608d5fe880c`
 
 ## Summary
 
@@ -169,7 +169,7 @@ Package version `0.3.34`. Resolved packs:
 | 277a | 0 | 6 | 7 | 0 | 25 | MEDIUM † |
 | 278 | 1 | 4 | 5 | 0 | 30 | MEDIUM |
 | 279 | 8 | 0 | 3 | 0 | 0 | LOW |
-| 279a | 3 | 20 | 5 | 0 | 11 | MEDIUM |
+| 279a | 3 | 22 | 5 | 0 | 11 | MEDIUM |
 | 279b | 0 | 4 | 5 | 0 | 39 | MEDIUM † |
 | 279c | 0 | 10 | 4 | 0 | 31 | MEDIUM † |
 | 280 | 1 | 26 | 4 | 0 | 25 | MEDIUM |

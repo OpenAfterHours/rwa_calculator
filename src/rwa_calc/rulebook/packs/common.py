@@ -236,6 +236,16 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.70"),
         citation=Citation("CRR", "279a", "(2) Table 3 other commodity option volatility"),
     ),
+    # CCR (CRR) Part Art. 279a(1)(a) Table 1 (unchanged by PS1/26): "Others | All |
+    # 150%" — the supervisory volatility of an option mapped to the Art. 277(1)(f)
+    # other-risks category, including a trade whose asset_class is missing or
+    # unrecognised (CCR021). Without it such an option had a null delta and a
+    # zero add-on.
+    "sa_ccr_option_volatility_other": ScalarParam(
+        name="sa_ccr_option_volatility_other",
+        value=Decimal("1.50"),
+        citation=Citation("CRR", "279a", "(1)(a) Table 1 other-risks option volatility"),
+    ),
     # CDO tranche supervisory-delta closed-form coefficients (CRR Art. 279a(3) /
     # BCBS CRE52.43): |delta| = 15 / ((1 + 14*A) * (1 + 14*D)).
     "sa_ccr_cdo_tranche_numerator": ScalarParam(

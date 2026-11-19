@@ -268,8 +268,9 @@ def _shared_reference_findings(survivors: pl.DataFrame) -> list[CalculationError
                 crm_warning(
                     ERROR_GUARANTEE_REFERENCE_INCONSISTENT,
                     f"Guarantee '{ref}' is entered more than once for the same "
-                    "beneficiary; its rows are one contract and share one cap, so the "
-                    "repeated row adds no cover beyond it.",
+                    "beneficiary; its rows are one contract: a repeat from the same "
+                    "guarantor adds no cover (the largest row is used), and rows from "
+                    "different guarantors share the contract's cap.",
                     regulatory_reference="CRR / PS1/26 Art. 213(1)(b), 233(1)",
                 )
             )

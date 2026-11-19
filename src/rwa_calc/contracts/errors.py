@@ -308,7 +308,9 @@ ERROR_TRANCHED_PROTECTION_NOT_RECOGNISED = "CRM027"
 # amount_covered and allocated pro-rata to each row's covered demand. This
 # warning fires when those rows state DIFFERENT amount_covered values (the
 # largest is used as the cap) and when one guarantee_reference is entered more
-# than once for the same beneficiary (one per guarantee_reference and cause).
+# than once for the same beneficiary (a repeat from the same guarantor is one
+# undertaking: only its largest row is used) - one per guarantee_reference and
+# cause.
 ERROR_GUARANTEE_REFERENCE_INCONSISTENT = "CRM028"
 # Not eligible unfunded credit protection (CRR / PS1/26 Art. 213(1)(b)-(d) and
 # Art. 215(1)(b)): a letter of comfort, comfort letter or keepwell is not an

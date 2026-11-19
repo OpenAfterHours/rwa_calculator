@@ -729,9 +729,12 @@ Rows that share a `guarantee_reference` are **one contract with one cap**. Its c
 largest `amount_covered` on its rows, read before multi-level expansion rescales the
 amount) is shared across the rows pro-rata to each row's covered demand `min(G, E)`, so
 the contract is never recognised more than once — also when the same contract is entered
-at counterparty and at loan level. This is how a pool guarantee over obligors in different
-counterparty or facility trees is stated. Rows that disagree on the amount (the largest is
-used) or repeat one beneficiary raise **`CRM028`** (Art. 213(1)(b): the extent of the
+at counterparty and at loan level. A contract repeated for the same beneficiary and
+guarantor restates one undertaking, so only its largest row is used — the cap alone could
+not stop that double count for a percentage-only contract, which states no amount. This is
+how a pool guarantee over obligors in different counterparty or facility trees is stated.
+Rows that disagree on the amount (the largest is used) or repeat one beneficiary raise
+**`CRM028`** (Art. 213(1)(b): the extent of the
 protection must be clearly defined and incontrovertible).
 
 ### CDS Restructuring Exclusion (Art. 233(2))

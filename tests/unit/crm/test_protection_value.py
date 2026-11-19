@@ -323,6 +323,45 @@ class TestSharedCap:
 
         assert out["amount_covered"].to_list() == pytest.approx([5.0, 5.0])
 
+    @pytest.mark.parametrize(
+        ("row", "expected"),
+        [
+            # Percentage only: no amount, so no contract cap - pre-repair 4 + 4 = 8.
+            ({"percentage_covered": 0.5}, 4.0),
+            # Percentage with a cap of 5: 0.5 x 8 = 4, once - pre-repair 5 (cap-bound).
+            ({"percentage_covered": 0.5, "amount_covered": 5.0}, 4.0),
+            # CDS notional 16 on E = 8: 233(2)(b) on the one undertaking - pre-repair
+            # 4.8 + 4.8 (the split later capped the sum at E = 8).
+            (_cds(amount_covered=16.0), 4.8),
+        ],
+        ids=["percentage", "percentage-with-cap", "oversized-cds"],
+    )
+    def test_repeated_row_for_one_beneficiary_is_one_undertaking(
+        self, row: dict[str, Any], expected: float
+    ) -> None:
+        """The same contract entered twice for L1 by the same guarantor counts once.
+
+        Art. 233(1): G is "the amount that the protection provider has undertaken
+        to pay" - one contract, one undertaking per obligation, however many rows
+        state it (CRM028 names the repeat).
+        """
+        repeated = {"guarantee_reference": "DUP", "beneficiary_reference": "L1", **row}
+        out = _value(_guarantees(repeated, repeated), _exposures(L1=8.0))
+
+        assert out["amount_covered"].sum() == pytest.approx(expected)
+
+    def test_repeated_reference_for_different_guarantors_keeps_both_rows(self) -> None:
+        """Co-guarantors under one reference are not repeats: both rows share the cap of 5."""
+        out = _value(
+            _guarantees(
+                {"guarantee_reference": "CO", "guarantor": "GUAR", "amount_covered": 5.0},
+                {"guarantee_reference": "CO", "guarantor": "GUAR2", "amount_covered": 5.0},
+            ),
+            _exposures(L1=8.0),
+        )
+
+        assert out["amount_covered"].to_list() == pytest.approx([2.5, 2.5])
+
     def test_shared_cap_precedes_the_restructuring_cut(self) -> None:
         """Paragraph 1 (the contract's G) before paragraph 2: 2.5 x 0.6 = 1.5 each."""
         rows = [
@@ -374,7 +413,14 @@ class TestSharedCapAcrossExpansion:
         assert out["amount_covered"].to_list() == pytest.approx([6.0, 4.0])
 
     def test_same_contract_at_two_levels_is_not_double_counted(self) -> None:
-        """The same 10 entered at counterparty AND loan level recognises at most 10 in total."""
+        """The same 10 entered at counterparty AND loan level recognises at most 10 in total.
+
+        Recognised cover is min(G, E) per exposure (Art. 235(1)(a): Eg = min{GA, E};
+        the split caps G at E). On EXP001 the loan-level row (G = 10) and the
+        expanded share (6) restate one undertaking, so only the larger is used:
+        min(10, 6) + min(4, 4) = 10. Summing G alone would read 14 here.
+        """
+        exposure_value = {"EXP001": 6.0, "EXP002": 4.0}
         out = self._expand_and_value(
             _guarantees(
                 {
@@ -391,5 +437,9 @@ class TestSharedCapAcrossExpansion:
                 },
             )
         )
+        recognised = sum(
+            min(g, exposure_value[ref])
+            for ref, g in zip(out["beneficiary_reference"], out["amount_covered"], strict=True)
+        )
 
-        assert out["amount_covered"].sum() == pytest.approx(10.0)
+        assert recognised == pytest.approx(10.0)

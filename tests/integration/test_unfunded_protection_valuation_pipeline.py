@@ -170,6 +170,21 @@ CASES: dict[str, _Case] = {
         5.0,
         (ERROR_GUARANTEE_REFERENCE_INCONSISTENT,),
     ),
+    # GT-01: one contract (50% of L1, no amount, so no cap) entered twice for L1
+    # by the same guarantor is ONE undertaking: 0.5 x 8 = 4, once, with CRM028.
+    # CRR 4 x 0.5 + 4 = 6.0; B31 4 x 0.3 + 4 = 5.2. Before the skeptic repair the
+    # two rows were summed to 8 (4.0 / 2.4) while CRM028 said the repeat added
+    # nothing; 9824d8a happened to recognise 4 (it kept the first percentage).
+    "gt01-repeated-percentage-row": _Case(
+        _ONE_LOAN,
+        (
+            _guarantee(guarantee_reference="DUP", percentage_covered=0.5),
+            _guarantee(guarantee_reference="DUP", percentage_covered=0.5),
+        ),
+        {"crr": 6.0, "b31": 5.2},
+        4.0,
+        (ERROR_GUARANTEE_REFERENCE_INCONSISTENT,),
+    ),
     # GT-01: a counterparty-level contract of 10 over CP-A's loans of 8 and 4 is
     # expanded pro-rata (6.67 + 3.33) and must keep its full 10 — its cap is
     # read before expansion. CRR 10 x 0.5 + 2 = 7.0; B31 10 x 0.3 + 2 = 5.0.

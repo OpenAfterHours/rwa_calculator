@@ -569,7 +569,7 @@ collateral = pl.DataFrame({
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `guarantee_reference` | `String` | Yes | Identifies one protection **contract**. Rows that share a reference are one contract with **one** cap (Art. 233(1): G is the amount the provider undertook to pay): the total recognised across them is capped at the contract's `amount_covered` and shared pro-rata to each row's covered demand, min(G, E). Sharing a reference across beneficiaries is how to state a pool / aggregate-cap guarantee over obligors in different counterparty or facility trees. Rows that state different `amount_covered` values (the largest is used), or repeat one beneficiary, raise **CRM028** |
+| `guarantee_reference` | `String` | Yes | Identifies one protection **contract**. Rows that share a reference are one contract with **one** cap (Art. 233(1): G is the amount the provider undertook to pay): the total recognised across them is capped at the contract's `amount_covered` and shared pro-rata to each row's covered demand, min(G, E). Sharing a reference across beneficiaries is how to state a pool / aggregate-cap guarantee over obligors in different counterparty or facility trees. Rows that state different `amount_covered` values (the largest is used), or repeat one beneficiary, raise **CRM028**; a repeat for the same beneficiary from the same guarantor is one undertaking, so only its largest row is used |
 | `guarantee_type` | `String` | No | Free-text descriptor. Read for two families only — see [`guarantee_type` values](#guarantee-type-values) below |
 | `guarantor` | `String` | Yes | Guarantor counterparty reference |
 | `currency` | `String` | No | ISO 4217 currency code |

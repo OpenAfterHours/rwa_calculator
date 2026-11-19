@@ -13,7 +13,10 @@ Key responsibilities:
   G = min(percentage x E, amount).
 - One contract, one cap: rows sharing a ``guarantee_reference`` are one
   undertaking, so their total G is capped at the contract amount and the cap is
-  shared pro-rata to each row's covered demand min(G, E).
+  shared pro-rata to each row's covered demand min(G, E). A contract repeated
+  for the same beneficiary and guarantor is one undertaking on that obligation:
+  only its largest row is used (this also covers the percentage form, which has
+  no amount to cap).
 - Art. 233(2): a credit derivative that does not include restructuring as a
   credit event is valued at 60% of G where G <= E (the 40% reduction, point (a))
   and at no more than 60% of E where G > E (point (b)).
@@ -58,6 +61,9 @@ logger = logging.getLogger(__name__)
 
 # One protection contract: rows sharing it share one cap (null = no contract).
 _CONTRACT_KEY = "guarantee_reference"
+
+# One contract on one obligation from one provider: repeated rows are one undertaking.
+_UNDERTAKING_KEYS = [_CONTRACT_KEY, "beneficiary_reference", "guarantor"]
 
 # Columns the valuation reads that an input may legitimately omit.
 _VALUATION_COLUMNS: dict[str, ColumnSpec] = {
@@ -109,9 +115,11 @@ def value_unfunded_protection(
         how="left",
     )
 
-    guarantees = guarantees.with_columns(
-        resolve_guarantee_amount_expr("amount_covered"),
-    ).pipe(_apply_shared_cap)
+    guarantees = (
+        guarantees.with_columns(resolve_guarantee_amount_expr("amount_covered"))
+        .pipe(_keep_one_row_per_undertaking)
+        .pipe(_apply_shared_cap)
+    )
     guarantees = _apply_restructuring_exclusion(guarantees, pack)
     guarantees = _apply_fx_mismatch(guarantees, pack, guar_ccy, has_exp_ccy=exp_ccy is not None)
     return guarantees.drop(
@@ -183,6 +191,42 @@ def resolve_guarantee_amount_expr(alias: str) -> pl.Expr:
         .otherwise(amount)
         .fill_null(0.0)
         .alias(alias)
+    )
+
+
+def _keep_one_row_per_undertaking(guarantees: pl.LazyFrame) -> pl.LazyFrame:
+    """
+    Use one row per (contract, beneficiary, guarantor): the one with the largest G.
+
+    A ``guarantee_reference`` repeated for the same beneficiary and guarantor
+    restates one undertaking on one obligation (Art. 233(1)), so the repeat adds
+    no cover — the screen raises CRM028 for it. The contract cap cannot do this
+    alone: a percentage-only contract has no amount to cap, and the cap of a
+    "x% up to an amount" contract can exceed its one undertaking. Dropping the
+    repeat (rather than sharing G across the rows) also keeps the Art. 233(2)
+    test of G against E on the whole undertaking. Rows with no reference are
+    separate contracts and are all kept. The first of equal rows is kept.
+    """
+    guarantees = guarantees.with_columns(
+        partition_by_nullable(
+            pl.col("amount_covered").max().over(_UNDERTAKING_KEYS),
+            _CONTRACT_KEY,
+            pl.col("amount_covered"),
+        ).alias("_undertaking_g"),
+        partition_by_nullable(
+            pl.int_range(pl.len()).over(_UNDERTAKING_KEYS), _CONTRACT_KEY, pl.lit(0)
+        ).alias("_undertaking_pos"),
+    )
+    first_largest = partition_by_nullable(
+        pl.when(pl.col("amount_covered") == pl.col("_undertaking_g"))
+        .then(pl.col("_undertaking_pos"))
+        .min()
+        .over(_UNDERTAKING_KEYS),
+        _CONTRACT_KEY,
+        pl.col("_undertaking_pos"),
+    )
+    return guarantees.filter(pl.col("_undertaking_pos") == first_largest).drop(
+        "_undertaking_g", "_undertaking_pos"
     )
 
 

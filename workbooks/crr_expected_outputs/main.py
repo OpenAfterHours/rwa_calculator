@@ -153,7 +153,7 @@ def _():
         {"scenario_id": "CRR-A4", "exposure_class": "INSTITUTION", "rw": 0.30, "sf": 1.0},
         {"scenario_id": "CRR-A5", "exposure_class": "RETAIL_MORTGAGE", "rw": 0.35, "sf": 1.0},
         {"scenario_id": "CRR-A6", "exposure_class": "RETAIL_MORTGAGE", "rw": 0.374, "sf": 1.0},
-        {"scenario_id": "CRR-A7", "exposure_class": "CRE", "rw": 0.50, "sf": 1.0},
+        {"scenario_id": "CRR-A7", "exposure_class": "CRE", "rw": 1.00, "sf": 1.0},
         {"scenario_id": "CRR-A8", "exposure_class": "CORPORATE", "rw": 1.00, "sf": 1.0},
         {"scenario_id": "CRR-A9", "exposure_class": "RETAIL", "rw": 0.75, "sf": 1.0},
         {"scenario_id": "CRR-A10", "exposure_class": "CORPORATE_SME", "rw": 1.00, "sf": 0.7619},

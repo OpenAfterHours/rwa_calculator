@@ -6,7 +6,7 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `da32b6fe45e729e0`
 - **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
 
 ## Regime features
@@ -167,6 +167,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `pse_unrated_default_rw` | `1.00` | `1.00` | CRR Art. 116 |
 | `qccp_client_cleared_rw` | `0.04` | `0.04` | CRR Art. 306 |
 | `qccp_proprietary_rw` | `0.02` | `0.02` | CRR Art. 306 |
+| `re_art_124_1_secured_value_cap` | `1.00` | — | CRR Art. 124 |
 | `re_split_cre_secured_ltv_cap` | `0.50` | `0.55` | CRR Art. 126 / PS1/26, paragraph 124H |
 | `re_split_rre_secured_ltv_cap` | `0.80` | `0.55` | CRR Art. 125 / PS1/26, paragraph 124F |
 | `restructuring_exclusion_haircut` | `0.40` | `0.40` | CRR Art. 233(2) |
@@ -1543,7 +1544,7 @@ Named parameter sets for one formula (`FormulaParams`).
 ### `commercial_re_params`
 
 **CRR** — CRR Art. 126
- *(commercial RE LTV<=50%+income 50% / else 100%)*
+ *(commercial RE LTV<=50% not property-dependent 50% / else 100%)*
 
 | Parameter | Value |
 |---|---|

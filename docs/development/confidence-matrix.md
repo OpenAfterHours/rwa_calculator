@@ -32,7 +32,7 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `4dff1c383e4b0a89`
+- **CRR** (`crr` @ 2026-01-01) — content hash `da32b6fe45e729e0`
 - **Basel 3.1** (`b31` @ 2027-01-01) — content hash `e55b27a31950b2d5`
 
 ## Summary
@@ -71,12 +71,12 @@ Package version `0.3.34`. Resolved packs:
 | 119 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 120 | 1 | 2 | 13 | 6 | 94 | HIGH |
 | 121 | 4 | 3 | 8 | 9 | 20 | HIGH |
-| 122 | 2 | 4 | 6 | 11 | 74 | HIGH |
+| 122 | 2 | 4 | 6 | 11 | 75 | HIGH |
 | 123 | 3 | 7 | 13 | 2 | 29 | HIGH |
-| 124 | 2 | 2 | 11 | 2 | 15 | HIGH |
-| 125 | 3 | 3 | 20 | 2 | 27 | HIGH |
-| 126 | 2 | 4 | 11 | 2 | 15 | HIGH |
-| 127 | 1 | 4 | 3 | 2 | 8 | HIGH |
+| 124 | 3 | 3 | 14 | 2 | 19 | HIGH |
+| 125 | 4 | 3 | 20 | 2 | 29 | HIGH |
+| 126 | 3 | 4 | 11 | 2 | 18 | HIGH |
+| 127 | 1 | 4 | 4 | 2 | 8 | HIGH |
 | 128 | 0 | 3 | 6 | 0 | 5 | MEDIUM |
 | 129 | 3 | 2 | 5 | 2 | 4 | HIGH |
 | 131 | 2 | 1 | 5 | 0 | 9 | MEDIUM |
@@ -223,21 +223,21 @@ Package version `0.3.34`. Resolved packs:
 | 120 | 0 | 6 | 12 | 2 | 36 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 121 | 1 | 1 | 7 | 4 | 17 | HIGH |
-| 122 | 2 | 7 | 7 | 5 | 49 | HIGH |
+| 122 | 2 | 7 | 7 | 5 | 50 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 123 | 1 | 4 | 3 | 5 | 17 | HIGH |
 | 123A | 1 | 1 | 5 | 0 | 14 | MEDIUM |
 | 123B | 1 | 5 | 8 | 0 | 13 | MEDIUM |
 | 124 | 3 | 1 | 13 | 0 | 9 | MEDIUM |
-| 124A | 1 | 0 | 1 | 0 | 5 | MEDIUM |
-| 124C | 1 | 0 | 10 | 0 | 3 | MEDIUM |
+| 124A | 1 | 0 | 1 | 0 | 6 | MEDIUM |
+| 124C | 1 | 0 | 11 | 0 | 5 | MEDIUM |
 | 124E | 1 | 2 | 2 | 0 | 2 | MEDIUM |
 | 124F | 2 | 4 | 12 | 2 | 29 | HIGH |
 | 124G | 0 | 3 | 1 | 2 | 6 | HIGH |
-| 124H | 1 | 5 | 6 | 1 | 5 | HIGH |
-| 124I | 0 | 4 | 2 | 2 | 3 | HIGH |
-| 124J | 0 | 2 | 1 | 0 | 4 | MEDIUM |
+| 124H | 1 | 5 | 6 | 1 | 7 | HIGH |
+| 124I | 0 | 4 | 2 | 2 | 4 | HIGH |
+| 124J | 0 | 2 | 1 | 0 | 5 | MEDIUM |
 | 124K | 0 | 2 | 3 | 2 | 6 | HIGH |
 | 124L | 0 | 4 | 3 | 1 | 7 | HIGH |
 | 126 | 0 | 0 | 0 | 0 | 2 | GAP |

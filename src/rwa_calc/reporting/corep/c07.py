@@ -1726,17 +1726,17 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
             # NO QUALIFICATION TERM, deliberately. Art. 125 is headed
             # "Exposures fully and completely secured by mortgages on
             # residential property", so the row is in principle the qualifying
-            # subset — but under CRR this engine applies the Art. 125 treatment
-            # to EVERY residential-RE-class leg (the part above the
-            # Art. 125(2)(d) 80% limit is blended within the same branch, not
-            # reclassified: engine/sa/risk_weights.py::
-            # _crr_append_real_estate_branches), and ``is_qualifying_re`` is the
-            # Art. 124A Basel 3.1 flag, which no CRR risk-weight path reads. So
-            # the Art. 125 population and the residential population coincide
-            # here, and adding ``c07_qualifying_re`` would narrow on a flag with
-            # no CRR meaning — reproducing on this row the C 07.00-vs-C 09.01
-            # disagreement recorded as P1.353, which is blocked on acquiring the
-            # published row layout. Revisit with P1.353 / P1.292.
+            # subset. Under CRR the engine applies the Art. 125 treatment to
+            # every residential-RE-class leg (the part above the Art. 125(2)(d)
+            # 80% limit is blended within the same branch, not reclassified)
+            # EXCEPT one whose property is attested ``is_qualifying_re=False``,
+            # which since review CL-07 takes Art. 124(1)'s 100%
+            # (engine/sa/crr_real_estate.py). That leg is still class (i) and
+            # still residential-property-secured; whether the row's "Article 125
+            # CRR" reference excludes it is a reporting-scope decision of the
+            # P1.353 family (operator-gated), NOT taken here — adding
+            # ``c07_qualifying_re`` would also narrow on null-as-True, the P1.292
+            # default. Revisit with P1.353 / P1.292.
             return _terms((_SHEET_KEY_COL, _RE_SHEET_KEY), ("property_type", "residential"))
         if ref == "0050":
             return _terms(("c07_ppu", True))

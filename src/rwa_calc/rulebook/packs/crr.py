@@ -1373,7 +1373,26 @@ ENTRIES: dict[str, RuleEntry] = {
             "rw_low_ltv": Decimal("0.50"),
             "rw_standard": Decimal("1.00"),
         },
-        citation=Citation("CRR", "126", "commercial RE LTV<=50%+income 50% / else 100%"),
+        # ``rw_low_ltv`` 50% needs Art. 126(2)(b): the risk must NOT materially
+        # depend on the property's cash flows (review RE-17 / P1.263 — the gate
+        # was inverted). ``rw_standard`` is Art. 124(1)'s 100% for any immovable
+        # property whose Art. 125 / 126 conditions are not met, residential
+        # included (engine/sa/crr_real_estate.py).
+        citation=Citation(
+            "CRR", "126", "commercial RE LTV<=50% not property-dependent 50% / else 100%"
+        ),
+    ),
+    # CRR Art. 124(1) third sentence: "The part of an exposure that is treated as
+    # fully secured by immovable property shall not be greater than the pledged
+    # amount of the market value" — the secured part of an exposure whose
+    # Art. 125 / 126 conditions are not met (an explicit is_qualifying_re=False,
+    # review CL-07) is sized up to 100% of the property value, both in the SA
+    # weight (engine/sa/crr_real_estate.py) and the loan-split secured row
+    # (engine/re_split/splitter.py), in place of the 80% / 50% preferential caps.
+    "re_art_124_1_secured_value_cap": ScalarParam(
+        name="re_art_124_1_secured_value_cap",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "124", "(1) secured part capped at the property market value"),
     ),
     # ------------------------------------------------------------------
     # Reporting template inventory (Phase 7 S6). The COREP credit-risk +

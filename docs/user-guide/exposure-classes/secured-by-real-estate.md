@@ -404,10 +404,10 @@ RWA = 10,000,000 × 100% = 10,000,000
 |--------|-------------------------|------------------------------|
 | Framework structure | Art. 125 (residential) + Art. 126 (commercial) | Art. 124–124L unified RE class |
 | Residential RW (retail) | 35% on ≤80% LTV portion, 75% above (Art. 125) | LTV bands 20%–105% per Art. 124F/G |
-| Commercial RW | 50% if Art. 126(2) conditions met, else counterparty RW | Loan-splitting 60%/cpty (Art. 124H) or 100/110% (Art. 124I) |
-| Qualifying-criteria gate | Art. 125(2) / 126(2) conditions | Art. 124A six-criterion gate |
+| Commercial RW | 50% on the part up to 50% of value where the Art. 126(2) conditions are met — including (b), repayment **not** materially dependent on the property (`is_income_producing=False`); otherwise Art. 124(1) 100% | Loan-splitting 60%/cpty (Art. 124H) or 100/110% (Art. 124I) |
+| Qualifying-criteria gate | Art. 125(2) / 126(2) conditions: `is_qualifying_re=False` attests they are not met → Art. 124(1) 100% on the part secured up to the property value (null keeps the preferential weight) | Art. 124A six-criterion gate |
 | ADC | No standalone class (Art. 128 high-risk omitted by SI 2021/1078) | Art. 124K — 150% standard / 100% qualifying |
-| Income-producing distinction | Implicit in Art. 126 own-use test | Explicit Art. 124E material-dependency test |
+| Income-producing distinction | Art. 126(2)(b): an income-producing (materially dependent) commercial exposure does not get 50% | Explicit Art. 124E material-dependency test |
 | Mixed-use split | Implicit (predominant security) | Explicit Art. 124(4) proportional split |
 | Output floor | N/A | RE exposures contribute to 72.5% SA-equivalent floor |
 
@@ -433,8 +433,8 @@ Art. 124J; supervisory enforcement is the remedy.
 |-------|------|-------------|
 | `is_adc` | bool | Collateral row. Routes to Art. 124K; bypasses LTV-band logic |
 | `is_presold` | bool | Collateral row. Together with `is_adc=True`, applies Art. 124K(2) qualifying-residential 100% RW |
-| `is_qualifying_re` | bool | Asserts the six Art. 124A(1) criteria are met; `False` routes to Art. 124J |
-| `is_income_producing` | bool | Routes to whole-loan tables (Art. 124G/I) instead of loan-splitting (Art. 124F/H) |
+| `is_qualifying_re` | bool | Asserts the six Art. 124A(1) criteria are met; `False` routes to Art. 124J. Under CRR, `False` attests the Art. 125(2) / 126(2) conditions are not met → Art. 124(1) 100% |
+| `is_income_producing` | bool | Routes to whole-loan tables (Art. 124G/I) instead of loan-splitting (Art. 124F/H). Under CRR, `True` denies the Art. 126 50% commercial weight (Art. 126(2)(b)) |
 | `property_type` | enum | `"residential"` or `"commercial"` — drives RESI vs CRE branching |
 | `property_value` | Decimal | Art. 124D-compliant qualifying valuation (firm-supplied) |
 | `property_ltv` | Float64 | Total Art. 124C(1)–(3) stacked LTV (incl. prior charges). Derived from `market_value` when omitted (`RE006`) |

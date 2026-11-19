@@ -1135,6 +1135,7 @@
         "tests/fixtures/reporting_netting_portfolio.py",
         "tests/fixtures/reporting_offbs_portfolio.py",
         "tests/integration/test_model_permissions_pipeline.py",
+        "tests/integration/test_re_qualification_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/derivations/sa_crr.py",
@@ -1225,6 +1226,7 @@
       "article": "124",
       "code_functions": [
         "rwa_calc.engine.classify.re_evidence::withhold_unevidenced_re_class",
+        "rwa_calc.engine.sa.crr_real_estate::crr_art_124_1_rw_expr",
         "rwa_calc.engine.sa.risk_weights::_crr_append_real_estate_branches"
       ],
       "confidence": "HIGH",
@@ -1236,6 +1238,7 @@
       ],
       "pack_entries": [
         "b31_art_124e_three_property_limit_applies@crr",
+        "re_art_124_1_secured_value_cap@crr",
         "sa_re_split_art_124_4_all_or_nothing@crr"
       ],
       "source_files": [
@@ -1246,10 +1249,13 @@
         "engine/re_split/__init__.py",
         "engine/re_split/carriers.py",
         "engine/re_split/flagging.py",
+        "engine/re_split/params.py",
         "engine/re_split/splitter.py",
+        "engine/sa/crr_real_estate.py",
         "engine/sa/re_class.py",
         "engine/sa/re_residual_rw.py",
-        "engine/sa/risk_weights.py"
+        "engine/sa/risk_weights.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
@@ -1260,12 +1266,16 @@
         "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/fixtures/reporting_row_scope_portfolio.py",
         "tests/integration/test_re_evidence_pipeline.py",
+        "tests/integration/test_re_qualification_pipeline.py",
         "tests/integration/test_re_split_carrier_conservation.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/sa_crr.py",
+        "tests/unit/crr/test_crr_re_qualification.py",
         "tests/unit/reporting/corep/test_c07.py",
         "tests/unit/sa/test_re_ltv_evidence_gate.py",
+        "tests/unit/test_b31_other_re.py",
         "tests/unit/test_re_split_carrier_classification.py",
+        "tests/unit/test_re_split_qualification.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -1275,7 +1285,8 @@
       "code_functions": [
         "rwa_calc.engine.classify.re_evidence::re_evidence_expr",
         "rwa_calc.engine.hierarchy.re_ltv::derive_missing_ltv",
-        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
+        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split",
+        "rwa_calc.engine.sa.crr_real_estate::crr_residential_re_rw_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1304,9 +1315,9 @@
         "engine/re_split/flagging.py",
         "engine/re_split/params.py",
         "engine/re_split/splitter.py",
+        "engine/sa/crr_real_estate.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/re_residual_rw.py",
-        "engine/sa/risk_weights.py",
         "engine/stages/re_split.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
@@ -1318,6 +1329,7 @@
         "tests/contracts/test_collapse_additivity.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/fixtures/reporting_row_scope_portfolio.py",
+        "tests/fixtures/single_exposure.py",
         "tests/integration/test_re_evidence_pipeline.py",
         "tests/integration/test_re_split_carrier_conservation.py",
         "tests/integration/test_re_split_pipeline.py",
@@ -1338,6 +1350,7 @@
         "tests/unit/sa/test_re_ltv_evidence_gate.py",
         "tests/unit/test_b31_loan_split_parts.py",
         "tests/unit/test_re_ltv_and_adc_hierarchy.py",
+        "tests/unit/test_re_split_qualification.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -1346,7 +1359,8 @@
       "article": "126",
       "code_functions": [
         "rwa_calc.engine.aggregator.aggregator::_add_exposure_class_applied",
-        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
+        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split",
+        "rwa_calc.engine.sa.crr_real_estate::crr_commercial_re_rw_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1371,18 +1385,21 @@
         "engine/re_split/flagging.py",
         "engine/re_split/params.py",
         "engine/re_split/splitter.py",
-        "engine/sa/crr_risk_weight_tables.py",
-        "engine/sa/risk_weights.py"
+        "engine/sa/crr_real_estate.py",
+        "engine/sa/crr_risk_weight_tables.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
+        "tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
+        "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_181/p1_181.py",
         "tests/fixtures/reporting_portfolio.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/integration/test_re_qualification_pipeline.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/properties/corpus.py",
@@ -1413,6 +1430,7 @@
       ],
       "source_files": [
         "engine/sa/calculator.py",
+        "engine/sa/crr_real_estate.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/risk_weights.py"
       ],
@@ -6527,6 +6545,7 @@
         "tests/fixtures/p2_18/p2_18.py",
         "tests/fixtures/p5_15/p5_15.py",
         "tests/fixtures/reporting_netting_portfolio.py",
+        "tests/integration/test_re_qualification_pipeline.py",
         "tests/integration/test_re_split_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
@@ -6764,6 +6783,7 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_141_art_124_4_all_or_nothing_gate.py",
         "tests/fixtures/p1_141/p1_141.py",
+        "tests/fixtures/single_exposure.py",
         "tests/oracle/drivers.py",
         "tests/properties/test_regime_deltas.py",
         "tests/unit/sa/test_re_ltv_evidence_gate.py"
@@ -6790,12 +6810,15 @@
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/re_ltv.py",
         "engine/irb/formulas.py",
-        "engine/re_split/__init__.py"
+        "engine/re_split/__init__.py",
+        "engine/re_split/splitter.py"
       ],
       "test_files": [
         "tests/integration/test_re_evidence_pipeline.py",
+        "tests/integration/test_re_qualification_pipeline.py",
         "tests/robustness/strategies.py",
-        "tests/unit/test_re_ltv_and_adc_hierarchy.py"
+        "tests/unit/test_re_ltv_and_adc_hierarchy.py",
+        "tests/unit/test_re_split_qualification.py"
       ],
       "watchfire_index_gap": false
     },
@@ -6945,8 +6968,10 @@
       "test_files": [
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/integration/test_re_qualification_pipeline.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/sa_b31.py",
+        "tests/unit/sa/test_b31_cre_124h3_junior.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -6973,6 +6998,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_scenario_b31_a_sa.py",
+        "tests/integration/test_re_qualification_pipeline.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/unit/test_b31_re_junior_charges.py"
       ],
@@ -6995,6 +7021,7 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_141_art_124_4_all_or_nothing_gate.py",
         "tests/fixtures/p1_141/p1_141.py",
+        "tests/unit/crr/test_crr_re_qualification.py",
         "tests/unit/sa/test_re_ltv_evidence_gate.py",
         "tests/unit/test_b31_other_re.py"
       ],
@@ -8933,7 +8960,7 @@
   ],
   "pack_content_hashes": {
     "b31": "e55b27a31950b2d5054b24363f5efed20d693859bdc1d0fa95798fdd055f0594",
-    "crr": "4dff1c383e4b0a89bd8c242d32e8375386aa2c3aa86566ea25149506862aa157"
+    "crr": "da32b6fe45e729e060149666a3b7ca32e82c1614755beb442c35bca403f087b8"
   },
   "package_version": "0.3.34",
   "scoring_rule": {

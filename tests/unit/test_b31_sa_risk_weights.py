@@ -1558,18 +1558,22 @@ class TestCRRRegression:
         expected_rw = 0.80 * 0.35 + 0.20 * 0.75  # 43%
         assert float(result["risk_weight"]) == pytest.approx(expected_rw, rel=0.01)
 
-    def test_crr_commercial_re_low_ltv_with_income_50pct(
+    def test_crr_commercial_re_low_ltv_not_dependent_50pct(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR commercial RE LTV ≤ 50% with income cover → 50% (unchanged)."""
+        """CRR commercial RE LTV ≤ 50%, not property-dependent → 50% (Art. 126(2)(b)).
+
+        Pinned ``has_income_cover=True`` → 50% (the inverted gate) until review
+        RE-17 / P1.263.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("600000"),
             exposure_class="COMMERCIAL_RE",
             ltv=Decimal("0.40"),
-            has_income_cover=True,
+            has_income_cover=False,
             config=crr_config,
         )
 

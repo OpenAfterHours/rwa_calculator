@@ -178,12 +178,16 @@ _FRAMEWORKS: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 #     the whole equity table sits in row 2 — 22,080,833.33 + the CIU legs'
 #     28,000,000 (Art. 132(2) 1,250% fall-back on 2,000,000 and a 75% mandate
 #     weight on 4,000,000) = 50,080,833.33.
+# rich (crr) rows 1 / 2 / 29 rose by 5,000,000.00 with review RE-17 (P1.263):
+#     the rich book's income-producing commercial mortgage (10,000,000, LTV 0.5)
+#     took the inverted CRR Art. 126 50%; Art. 126(2)(b) denies it, so Art. 124(1)
+#     100% — 10,000,000 x (1.00 - 0.50). UK 4a is untouched.
 _EXPECTED: dict[tuple[str, str], dict[str, float | None]] = {
     ("rich", "crr"): {
-        "1": 170_050_803.769868,
-        _ROW_SA: 17_353_450.0,
+        "1": 175_050_803.769868,
+        _ROW_SA: 22_353_450.0,
         _ROW_EQUITY_SIMPLE: 25_100_000.0,
-        "29": 170_050_803.769868,
+        "29": 175_050_803.769868,
     },
     ("rich", "b31"): {
         "1": 168_185_313.4668259,

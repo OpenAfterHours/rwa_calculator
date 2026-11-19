@@ -89,10 +89,13 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
 from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr, lift_central_bank_cqs
 from rwa_calc.engine.sa.covered_bond import b31_unrated_cb_rw_expr, crr_unrated_cb_rw_expr
 from rwa_calc.engine.sa.cqs_lift import lift_institution_cqs
+from rwa_calc.engine.sa.crr_real_estate import (
+    crr_commercial_re_rw_expr,
+    crr_re_conditions_not_met_expr,
+    crr_residential_re_rw_expr,
+)
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-    COMMERCIAL_RE_PARAMS,
-    CORPORATE_RISK_WEIGHTS,
     CRR_CORPORATE_SME_RW,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
@@ -123,10 +126,8 @@ from rwa_calc.engine.sa.jurisdiction import (
     pse_short_term_eligible_expr,
 )
 from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
-from rwa_calc.engine.sa.re_residual_rw import crr_art_124_1_unsecured_cp_rw_expr
 from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
 from rwa_calc.engine.sa.sovereign_derived import (
-    cqs_table_lookup_expr,
     crr_art_121_4_trade_finance_expr,
     sovereign_derived_rw_expr,
 )
@@ -257,16 +258,9 @@ _ECA_MEIP_RW = lookup_float_map(_CRR_PACK.lookup("eca_meip_risk_weights"))
 # CRR-specific scalars (Art. 112-134).
 _SA_CRR_RW: dict[str, float] = {
     "high_risk": scalar_value(_CRR_PACK.scalar_param("high_risk_rw")),
-    # Residential mortgage loan-splitting (Art. 125). ``rw_high_ltv`` is NOT
-    # read here: the weight on the above-threshold part is Art. 124(1)'s
-    # referral to the counterparty (see engine/sa/re_residual_rw.py), which
-    # resolves to that 75% only for an Art. 123 retail obligor.
+    # Art. 125(2)(d) 80% limit, for the Art. 127(3) defaulted-RRE share. The
+    # Art. 124-126 real-estate weights are in engine/sa/crr_real_estate.py.
     "resi_ltv_threshold": float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"]),
-    "resi_rw_low": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"]),
-    # Commercial RE (Art. 126)
-    "cre_ltv_threshold": float(COMMERCIAL_RE_PARAMS["ltv_threshold"]),
-    "cre_rw_low": float(COMMERCIAL_RE_PARAMS["rw_low_ltv"]),
-    "cre_rw_standard": float(COMMERCIAL_RE_PARAMS["rw_standard"]),
     # Institution short-term (Art. 121, original maturity <=3m)
     "inst_st_low": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS1]),
     "inst_st_mid": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4]),
@@ -766,53 +760,22 @@ def _crr_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 
 @cites("CRR Art. 124")
 def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
-    """Append CRR commercial-then-residential RE branches (Art. 125-126).
+    """Append CRR commercial-then-residential RE branches (Art. 124-126).
 
-    The preferential weights need an LTV: Art. 125(2)(d) / 126(2)(d) cap them
-    at 80% / 50% "of the market value of the property", and the hierarchy
-    derives one wherever a valued property is linked (``hierarchy/re_ltv.py``).
-    A null LTV used to fill to 0.0 here — the 35% band (review RE-10). Now an
-    RRE row without one (a bare mortgage label, review CL-08) falls through to
-    its counterparty-class weight, and CRE without one takes Art. 124(1) 100%.
+    The weights live in ``engine/sa/crr_real_estate.py``: Art. 126 50% only
+    where the risk does not materially depend on the property's cash flows
+    (review RE-17), Art. 125 35% up to 80% of value, and Art. 124(1) wherever
+    an exposure is attested as not meeting their conditions (review CL-07).
+    The preferential weights need an LTV: an RRE row without one (a bare
+    mortgage label, review CL-08) falls through to its counterparty-class
+    weight; CRE without one takes Art. 124(1) 100%.
     """
-    ltv = pl.col("ltv")
-    # CRR Art. 126(2)(d) proportion split for CRE with income cover and LTV > 50%:
-    # min(1, 50% / LTV) of the exposure at 50%, the rest at the counterparty's
-    # unsecured RW (Art. 124(1)); at LTV <= 50% the clamp gives the flat 50%.
-    cre_secured_share = pl.min_horizontal(pl.lit(1.0), _SA_CRR_RW["cre_ltv_threshold"] / ltv)
-    cre_residual_share = pl.lit(1.0) - cre_secured_share
-    # CRR Art. 124(1): the CRE residual takes the Art. 122 corporate CQS weight,
-    # NOT a fixed 100%, looked up directly so it still fires on rows the
-    # real-estate splitter reclassified to COMMERCIAL_MORTGAGE.
-    cre_residual_rw = cqs_table_lookup_expr(
-        "cqs",
-        CORPORATE_RISK_WEIGHTS,
-        pl.lit(float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])),
-    )
-    # CRR Art. 124(1) on the Art. 125 blend: the part above 80% takes the obligor's
-    # OWN unsecured ladder (Art. 123 retail ahead of Art. 122) — usually a natural person.
-    resi_residual_rw = crr_art_124_1_unsecured_cp_rw_expr()
     return (
         # Commercial RE must precede residential — see is_commercial_re_class.
-        # CRR Art. 126: LTV + income cover.
         chain.when(is_commercial_re_class(uc))
-        .then(
-            pl.when(pl.col("has_income_cover").fill_null(False) & ltv.is_not_null())
-            .then(
-                _SA_CRR_RW["cre_rw_low"] * cre_secured_share + cre_residual_rw * cre_residual_share
-            )
-            .otherwise(pl.lit(_SA_CRR_RW["cre_rw_standard"]))
-        )
-        # CRR Art. 125 LTV split.
-        .when(is_residential_re_class(uc) & ltv.is_not_null())
-        .then(
-            pl.when(ltv <= _SA_CRR_RW["resi_ltv_threshold"])
-            .then(pl.lit(_SA_CRR_RW["resi_rw_low"]))
-            .otherwise(
-                _SA_CRR_RW["resi_rw_low"] * _SA_CRR_RW["resi_ltv_threshold"] / ltv
-                + resi_residual_rw * (ltv - _SA_CRR_RW["resi_ltv_threshold"]) / ltv
-            )
-        )
+        .then(crr_commercial_re_rw_expr())
+        .when(is_residential_re_class(uc) & pl.col("ltv").is_not_null())
+        .then(crr_residential_re_rw_expr())
     )
 
 
@@ -1535,21 +1498,21 @@ def _crr_defaulted_re_secured_share(upper_class: pl.Expr) -> pl.Expr:
     non-positive ``ltv``: without a usable LTV there is no defensible secured
     share, and defaulting it to "fully secured" would hand out the 100% leg on
     missing data — the anti-conservative failure mode this batch keeps finding.
+    An exposure attested as NOT meeting the Art. 125(2) conditions
+    (``is_qualifying_re`` False, review CL-07) is not secured "in accordance
+    with Article 125" either, so it stays on Art. 127(1) whole.
 
     **Art. 127(4) (commercial property) is deliberately NOT implemented here.**
-    Its trigger is "secured … in accordance with Article 126", and the engine's
-    only proxy for the Art. 126(2) qualifying test is ``has_income_cover``,
-    which **P1.263 records as carrying the INVERTED sense** on the CRR branch.
-    Because this blend REDUCES RWA, building the commercial limb on a flag that
-    is known to be backwards would grant relief to the wrong population.
-    Gating on the CRE class alone would be broader than the article allows,
-    also in the relieving direction. Deferred to P1.315, after P1.263 settles
-    the flag's meaning.
+    Its trigger is "secured … in accordance with Article 126". P1.263 (review
+    RE-17) has now settled the Art. 126(2)(b) flag — the 50% goes to an
+    exposure whose ``has_income_cover`` is False — so the commercial limb is
+    unblocked but still owed: P1.315, not built here.
     """
     ltv = pl.col("ltv")
     is_rre_only = is_residential_re_class(upper_class) & ~is_commercial_re_class(upper_class)
+    is_art_125_secured = is_rre_only & ~crr_re_conditions_not_met_expr()
     return (
-        pl.when(is_rre_only & ltv.is_not_null() & (ltv > 0.0))
+        pl.when(is_art_125_secured & ltv.is_not_null() & (ltv > 0.0))
         .then(pl.min_horizontal(pl.lit(1.0), pl.lit(_SA_CRR_RW["resi_ltv_threshold"]) / ltv))
         .otherwise(pl.lit(None).cast(pl.Float64))
     )

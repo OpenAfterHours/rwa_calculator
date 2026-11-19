@@ -9,23 +9,34 @@ Pipeline position:
 
 Key responsibilities:
 - Build and seal the 4-frame CounterpartyLookup (dedup org mappings,
-  ultimate parents, rating inheritance, enriched counterparties).
+  ultimate parents, rating inheritance, enriched counterparties — including the
+  consolidated group size figures, ``with_group_size_figures``).
 - Resolve counterparty and facility parent graphs via eager dict traversal
   (ultimate parent, root facility, ancestor closure).
 - Shared facility-mapping helpers (root resolution, child-type filtering).
+- Make the facility-mapping graph the tree every consumer assumes
+  (review findings RC-01 / RC-02 / SF-03): one parent per sub-facility (the
+  lowest reference, DQ021), every member of a cycle a root (DQ022), and one
+  root per loan / contingent (that of its lowest-referenced parent) —
+  deterministically, whatever the row order.
 - Emit DQ004 duplicate-key and HIE003 depth-truncation warnings.
 
 References:
 - CRR Art. 4(1)(39): Group of connected clients (hierarchy resolution)
 - CRR Art. 230-231: collateral cascade over nested facility hierarchies
   (ancestor closure consumer lives in the CRM stage)
+- CRR Art. 4(1)(56) / PS1/26 Glossary "conversion factor": a commitment's
+  undrawn amount is "determined by the advised limit", which one drawing
+  reduces once; CRR / PS1/26 Art. 111(1): every commitment is measured
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.bundles import CounterpartyLookup
 from rwa_calc.contracts.edges import CP_LOOKUP_EDGES, RAW_TABLE_EDGES, seal
@@ -33,12 +44,30 @@ from rwa_calc.contracts.errors import (
     ERROR_DUPLICATE_KEY,
     ERROR_HIERARCHY_DEPTH,
     CalculationError,
+    facility_mapping_cycle_warning,
+    facility_multi_parent_warning,
 )
+from rwa_calc.data.schemas import VALID_CHILD_TYPES
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.hierarchy.ratings import build_rating_inheritance_lazy
 from rwa_calc.engine.utils import has_required_columns
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class FacilityGraph:
+    """The facility -> facility edges the hierarchy stage walks, made a forest.
+
+    ``edges`` holds one row per sub-facility (``child_facility_reference`` ->
+    ``parent_facility_reference``), sorted, with at most one parent per child
+    and no cycle; None when the mappings frame cannot carry an edge.
+    ``errors`` are the DQ021 / DQ022 WARNINGs naming every repair made to get
+    there — empty for a well-formed hierarchy.
+    """
+
+    edges: pl.DataFrame | None
+    errors: tuple[CalculationError, ...] = ()
 
 
 def build_counterparty_lookup(
@@ -132,6 +161,12 @@ def build_ultimate_parent_lazy(
     - ultimate_parent_reference: Its deepest reachable parent (the true
       root, or the parent at ``max_depth`` if the chain was truncated)
     - hierarchy_depth: Number of levels traversed
+    - ancestor_references: every org ancestor on the chain (parent, grand-
+      parent, ... up to the ultimate parent), excluding the entity itself.
+      Read by ``with_group_size_figures`` — the SME turnover and the
+      Art. 147(4C) revenue are "taken at the highest level of consolidation",
+      and an apex with no figures (a fund, a holding company) must not hide
+      the consolidating parent beneath it.
     - truncated: True iff the chain was cut off at ``max_depth``; consumed
       by ``build_counterparty_lookup`` to synthesise HIE003 WARNINGs and
       stripped before the LazyFrame is exposed on ``CounterpartyLookup``.
@@ -159,19 +194,155 @@ def build_ultimate_parent_lazy(
             "entity": "counterparty_reference",
             "root": "ultimate_parent_reference",
             "depth": "hierarchy_depth",
+            "ancestors": "ancestor_references",
         }
     ).lazy()
+
+
+def collect_facility_graph(facility_mappings: pl.LazyFrame) -> FacilityGraph:
+    """Collect the facility -> facility edges once (small data) and make them a forest.
+
+    Both facility graph lookups (:func:`build_facility_root_lookup`,
+    :func:`build_facility_ancestor_closure`) walk this edge set, so the
+    hierarchy stage collects it once and hands it to both via ``edges=``.
+
+    The mappings are consumed everywhere as a TREE, and nothing used to make
+    them one (review findings RC-02 / SF-03):
+
+    - a sub-facility with two parents had its root picked by a last-wins dict
+      over an unordered ``unique()``, so the RWA changed from run to run;
+    - a cycle made every member somebody's child, and only roots emit an
+      undrawn row, so every member's commitment vanished.
+
+    Both are malformed input. The repair is deterministic and conservative, and
+    each instance is named: a second parent is dropped — the sub-facility keeps
+    its LOWEST-referenced parent (DQ021) — and every member of a cycle becomes a
+    root of its own, keeping its own limit and undrawn commitment (DQ022). No
+    commitment is dropped and none is netted against another twice.
+
+    Null ``child_type`` values (legacy mappings) yield no facility-typed rows.
+
+    Returns:
+        :class:`FacilityGraph` — the forest's edges (``child_facility_reference``
+        / ``parent_facility_reference``, sorted) and the repairs' warnings.
+    """
+    if not has_required_columns(
+        facility_mappings, {"parent_facility_reference", "child_reference"}
+    ):
+        return FacilityGraph(edges=None)
+    raw = (
+        facility_mappings.filter(
+            pl.col("child_type").fill_null("").str.to_lowercase() == "facility"
+        )
+        .select(
+            [
+                pl.col("child_reference").alias("child_facility_reference"),
+                pl.col("parent_facility_reference"),
+            ]
+        )
+        .unique()
+        .collect()
+    )
+    return _resolve_facility_forest(raw)
+
+
+def collect_facility_edges(facility_mappings: pl.LazyFrame) -> pl.DataFrame | None:
+    """The forest edges of :func:`collect_facility_graph`, without its warnings.
+
+    For callers that need only the edges (the root lookup and the ancestor
+    closure when no ``edges=`` was handed in); the hierarchy stage itself calls
+    :func:`collect_facility_graph` so the repairs are reported.
+
+    Returns:
+        DataFrame with ``child_facility_reference`` / ``parent_facility_reference``,
+        or None when the mappings frame cannot carry any edge (missing columns).
+    """
+    return collect_facility_graph(facility_mappings).edges
+
+
+def resolve_exposure_mappings(
+    facility_mappings: pl.LazyFrame,
+    facility_edges: pl.DataFrame | None,
+    root_lookup: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """The facility mappings every hierarchy consumer reads, made a tree.
+
+    - Facility rows are replaced by the forest of :func:`collect_facility_graph`
+      (one parent per sub-facility, no cycle).
+    - A loan / contingent mapped under facilities of MORE THAN ONE ROOT keeps
+      only the mappings under ONE root: the root of its lowest-referenced parent
+      (review finding RC-01 — a drawing is made under one commitment; reducing
+      every root it was mapped to understated the undrawn exposure). Mappings to
+      several facilities of THAT root are all kept: an overlapping sub-limit
+      genuinely constrains the same drawing, so each sub-limit's own headroom is
+      reduced by it, while ``facility_undrawn.facility_utilisation_rows`` reduces
+      the root's headroom once (SF-03). DQ021 names every such child
+      (``facility_warnings``).
+    - Every other row (a null or unrecognised ``child_type``, a null reference)
+      passes through unchanged.
+
+    Lazy: the primary root is a group-by over the mapping rows, joined back.
+
+    Args:
+        facility_mappings: The sealed facility mappings.
+        facility_edges: The forest edges (:func:`collect_facility_graph`); None
+            — the mappings cannot carry an edge, i.e. lack the reference
+            columns — returns ``facility_mappings`` unchanged (no schema is
+            re-resolved here: the graph collection already answered that).
+        root_lookup: :func:`build_facility_root_lookup` over those edges.
+
+    Returns:
+        A LazyFrame with the mappings' three columns.
+    """
+    if facility_edges is None:
+        return facility_mappings
+    columns = ["parent_facility_reference", "child_reference", "child_type"]
+    kind = pl.col("child_type").str.to_lowercase()
+    is_facility = kind.eq_missing("facility")
+    is_exposure = (
+        kind.is_in(sorted(VALID_CHILD_TYPES - {"facility"})).eq_missing(True)
+        & pl.col("parent_facility_reference").is_not_null()
+        & pl.col("child_reference").is_not_null()
+    )
+
+    others = facility_mappings.filter(~is_facility & ~is_exposure).select(columns)
+    forest = facility_edges.lazy().select(
+        pl.col("parent_facility_reference"),
+        pl.col("child_facility_reference").alias("child_reference"),
+        pl.lit("facility").alias("child_type"),
+    )
+    parts = [others, forest]
+
+    exposure_rows = resolve_to_root_facility(
+        facility_mappings.filter(is_exposure).select(columns).with_columns(kind.alias("_kind")),
+        root_lookup,
+    )
+    primary_roots = exposure_rows.group_by(["_kind", "child_reference"]).agg(
+        pl.col("aggregation_facility")
+        .sort_by("parent_facility_reference")
+        .first()
+        .alias("_primary_root")
+    )
+    parts.append(
+        exposure_rows.join(primary_roots, on=["_kind", "child_reference"], how="inner")
+        .filter(pl.col("aggregation_facility") == pl.col("_primary_root"))
+        .select(columns)
+    )
+    return pl.concat(parts, how="vertical_relaxed")
 
 
 def build_facility_root_lookup(
     facility_mappings: pl.LazyFrame,
     max_depth: int = 10,
+    *,
+    edges: pl.DataFrame | None = None,
 ) -> pl.LazyFrame:
     """
     Build root facility lookup using eager graph traversal.
 
-    Collects the small facility edge data eagerly, resolves the full graph
-    via dict traversal, and returns the result as a LazyFrame.
+    Collects the small facility edge data eagerly (or reuses ``edges``),
+    resolves the full graph via dict traversal, and returns the result as a
+    LazyFrame.
 
     Args:
         facility_mappings: Facility mappings with ``parent_facility_reference``,
@@ -179,6 +350,8 @@ def build_facility_root_lookup(
                          (sealed at the loader edge, so ``child_type``
                          always exists — typed null when unreported).
         max_depth: Maximum hierarchy depth to traverse
+        edges: Facility edges already collected by :func:`collect_facility_edges`
+            (None: collect them here)
 
     Returns:
         LazyFrame with columns:
@@ -194,29 +367,8 @@ def build_facility_root_lookup(
         }
     )
 
-    if not has_required_columns(
-        facility_mappings, {"parent_facility_reference", "child_reference"}
-    ):
-        return empty_result
-
-    # Filter to facility→facility relationships and collect (small data).
-    # Null child_type values (legacy mappings) yield no facility-typed
-    # rows — facility_edges is empty and the height==0 short-circuit fires.
-    facility_edges = (
-        facility_mappings.filter(
-            pl.col("child_type").fill_null("").str.to_lowercase() == "facility"
-        )
-        .select(
-            [
-                pl.col("child_reference").alias("child_facility_reference"),
-                pl.col("parent_facility_reference"),
-            ]
-        )
-        .unique()
-        .collect()
-    )
-
-    if facility_edges.height == 0:
+    facility_edges = edges if edges is not None else collect_facility_edges(facility_mappings)
+    if facility_edges is None or facility_edges.height == 0:
         return empty_result
 
     # The HIE003 channel is counterparty-scoped; drop the new ``truncated``
@@ -226,7 +378,7 @@ def build_facility_root_lookup(
         child_col="child_facility_reference",
         parent_col="parent_facility_reference",
         max_depth=max_depth,
-    ).drop("truncated")
+    ).drop("truncated", "ancestors")
 
     return resolved.rename(
         {
@@ -240,6 +392,8 @@ def build_facility_root_lookup(
 def build_facility_ancestor_closure(
     facility_mappings: pl.LazyFrame,
     max_depth: int = 10,
+    *,
+    edges: pl.DataFrame | None = None,
 ) -> pl.LazyFrame:
     """Build the facility ancestor closure for multi-level collateral cascade.
 
@@ -256,6 +410,8 @@ def build_facility_ancestor_closure(
             ``child_reference`` and ``child_type`` (sealed at the loader
             edge, so ``child_type`` always exists).
         max_depth: Maximum hierarchy depth to traverse.
+        edges: Facility edges already collected by :func:`collect_facility_edges`
+            (None: collect them here).
 
     Returns:
         LazyFrame with columns:
@@ -269,26 +425,8 @@ def build_facility_ancestor_closure(
             "ancestor_facilities": pl.List(pl.String),
         }
     )
-    if not has_required_columns(
-        facility_mappings, {"parent_facility_reference", "child_reference"}
-    ):
-        return empty_result
-
-    facility_edges = (
-        facility_mappings.filter(
-            pl.col("child_type").fill_null("").str.to_lowercase() == "facility"
-        )
-        .select(
-            [
-                pl.col("child_reference").alias("child_facility_reference"),
-                pl.col("parent_facility_reference"),
-            ]
-        )
-        .unique()
-        .collect()
-    )
-
-    if facility_edges.height == 0:
+    facility_edges = edges if edges is not None else collect_facility_edges(facility_mappings)
+    if facility_edges is None or facility_edges.height == 0:
         return empty_result
 
     closure = _resolve_ancestors_eager(
@@ -360,6 +498,83 @@ def filter_mappings_by_child_type(
     )
 
 
+@cites("CRR Art. 153(4)")
+@cites("PS1/26, paragraph 147")
+@cites("PS1/26, paragraph 153")
+def with_group_size_figures(
+    enriched: pl.LazyFrame,
+    counterparties: pl.LazyFrame,
+    ultimate_parents: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """Add ``group_annual_revenue`` / ``group_total_assets`` — the consolidated figures.
+
+    Each size test sizes the enterprise on its group, not on the legal entity:
+
+    - PS1/26 glossary, SME: "a micro, small or medium enterprise with an annual
+      turnover of not more than GBP 44 million where: (1) the annual turnover
+      shall be calculated on the basis of the highest consolidated accounts of
+      the group to which the enterprise belongs, if any".
+    - PS1/26 Art. 153(4): "the total annual revenue for the consolidated group of
+      which the entity is a part"; UK CRR Art. 153(4): "the total annual sales
+      for the consolidated group of which the firm is a part".
+    - PS1/26 Art. 147(4C)(b)(ii): annual revenue "taken at the highest level of
+      consolidation which is performed and at which audited financial statements
+      are available".
+    - PS1/26 glossary, large financial sector entity: total assets "taken at the
+      highest level of consolidation at which audited financial statements are
+      available".
+
+    A parent's own ``annual_revenue`` / ``total_assets`` are, by convention, its
+    consolidated audited figures, which subsume the subsidiary. The group figure
+    is the MAX over the entity and EVERY org ancestor on its de-duplicated parent
+    chain (``ancestor_references`` from :func:`build_ultimate_parent_lazy`): the
+    highest consolidation with a figure, so an apex without accounts (a fund, a
+    sovereign owner, a dormant holding company) does not hide the consolidating
+    parent beneath it, and neither a small subsidiary figure nor a smaller
+    (data-anomalous) parent figure lets a large group off — the conservative
+    direction for every test that reads these. ``max_horizontal`` ignores nulls:
+    a figure-less entity under a figure-bearing ancestor takes the ancestor's, an
+    entity with no ancestors keeps its own, all-null stays null.
+
+    Computed here, on the raw counterparty frame, rather than in the classifier:
+    the walk is the hierarchy's, and the classifier would otherwise re-reference
+    the whole counterparty-lookup plan per ancestor join. 3-year averaging
+    (Art. 147(4C)(b)(ii) "average annual amount over the last three years") is
+    NOT applied: the schema carries one point-in-time figure. Ancestors absent
+    from the counterparty table contribute nothing; the per-entity aggregate is
+    unique, so the join back never fans out.
+    """
+    ancestors = ultimate_parents.select(
+        pl.col("counterparty_reference").alias("_grp_cp"),
+        pl.col("ancestor_references").alias("_grp_ancestor"),
+    ).explode("_grp_ancestor")
+    figures = counterparties.select(
+        pl.col("counterparty_reference").alias("_grp_ancestor"),
+        pl.col("annual_revenue").alias("_grp_revenue"),
+        pl.col("total_assets").alias("_grp_assets"),
+    )
+    ancestor_max = (
+        ancestors.join(figures, on="_grp_ancestor", how="inner")
+        .group_by("_grp_cp")
+        .agg(
+            pl.col("_grp_revenue").max().alias("_grp_ancestor_revenue"),
+            pl.col("_grp_assets").max().alias("_grp_ancestor_assets"),
+        )
+    )
+    return (
+        enriched.join(
+            ancestor_max, left_on="counterparty_reference", right_on="_grp_cp", how="left"
+        )
+        .with_columns(
+            pl.max_horizontal("annual_revenue", "_grp_ancestor_revenue").alias(
+                "group_annual_revenue"
+            ),
+            pl.max_horizontal("total_assets", "_grp_ancestor_assets").alias("group_total_assets"),
+        )
+        .drop("_grp_ancestor_revenue", "_grp_ancestor_assets")
+    )
+
+
 def _enrich_counterparties_with_hierarchy(
     counterparties: pl.LazyFrame,
     org_mappings: pl.LazyFrame,
@@ -374,6 +589,8 @@ def _enrich_counterparties_with_hierarchy(
     - counterparty_has_parent: bool
     - parent_counterparty_reference: str | null
     - ultimate_parent_reference: str | null
+    - group_annual_revenue / group_total_assets: max over the entity and every
+      org ancestor (``with_group_size_figures``)
     - counterparty_hierarchy_depth: int
     - cqs, pd, internal_pd, external_cqs, internal_model_id: from ratings
     """
@@ -431,7 +648,7 @@ def _enrich_counterparties_with_hierarchy(
         )
     )
 
-    return enriched
+    return with_group_size_figures(enriched, counterparties, ultimate_parents)
 
 
 def _dedup_org_mappings(
@@ -552,6 +769,9 @@ def _resolve_graph_eager(
         - root (Utf8): The deepest reachable parent (true root if reached,
           otherwise the parent at depth ``max_depth`` when truncated)
         - depth (Int32): Number of levels traversed
+        - ancestors (List[Utf8]): every node the walk passed, parent first and
+          root last, the entity itself excluded (the org graph's group size
+          figures read it; the facility root lookup drops it)
         - truncated (Boolean): True iff the traversal exited because of the
           ``max_depth`` guard rather than reaching the natural root. Callers
           use this column to synthesise HIE003 WARNINGs.
@@ -567,17 +787,20 @@ def _resolve_graph_eager(
     entities: list[str] = []
     roots: list[str] = []
     depths: list[int] = []
+    paths: list[list[str]] = []
     truncated: list[bool] = []
 
     for entity in parent_of:
         current = entity
         depth = 0
         visited: set[str] = {current}
+        path: list[str] = []
         while current in parent_of and depth < max_depth:
             next_parent = parent_of[current]
             if next_parent in visited:
                 break  # Cycle detected
             visited.add(next_parent)
+            path.append(next_parent)
             current = next_parent
             depth += 1
         # Truncation: depth limit reached AND chain still has further parents.
@@ -588,6 +811,7 @@ def _resolve_graph_eager(
         entities.append(entity)
         roots.append(current)
         depths.append(depth)
+        paths.append(path)
         truncated.append(was_truncated)
 
     return pl.DataFrame(
@@ -595,12 +819,14 @@ def _resolve_graph_eager(
             "entity": entities,
             "root": roots,
             "depth": depths,
+            "ancestors": paths,
             "truncated": truncated,
         },
         schema={
             "entity": pl.String,
             "root": pl.String,
             "depth": pl.Int32,
+            "ancestors": pl.List(pl.String),
             "truncated": pl.Boolean,
         },
     )
@@ -663,3 +889,76 @@ def _resolve_ancestors_eager(
         {"descendant": descendants, "ancestor": ancestors},
         schema={"descendant": pl.String, "ancestor": pl.String},
     )
+
+
+def _resolve_facility_forest(raw: pl.DataFrame) -> FacilityGraph:
+    """Turn collected facility edges into a forest, naming every repair.
+
+    Deterministic by construction: the edges are read in sorted order, a
+    sub-facility keeps its lowest-referenced parent, and cycles are found by
+    walking the resulting one-parent graph from each node in sorted order. Every
+    member of a cycle loses its own parent edge (becomes a root); an edge INTO a
+    cycle member from outside the cycle is kept.
+    """
+    parents: dict[str, list[str]] = {}
+    for child, parent in sorted(
+        (c, p)
+        for c, p in zip(
+            raw["child_facility_reference"].to_list(),
+            raw["parent_facility_reference"].to_list(),
+            strict=True,
+        )
+        if c is not None and p is not None
+    ):
+        parents.setdefault(child, []).append(parent)
+
+    errors: list[CalculationError] = [
+        facility_multi_parent_warning(
+            child_reference=child,
+            child_type="facility",
+            parents=listed,
+            kept=listed[0],
+            ignored=listed[1:],
+        )
+        for child, listed in parents.items()
+        if len(listed) > 1
+    ]
+    parent_of = {child: listed[0] for child, listed in parents.items()}
+
+    cycles = _find_cycles(parent_of)
+    errors.extend(facility_mapping_cycle_warning(members=members) for members in cycles)
+    on_cycle = {member for members in cycles for member in members}
+
+    kept = sorted((c, p) for c, p in parent_of.items() if c not in on_cycle)
+    edges = pl.DataFrame(
+        {
+            "child_facility_reference": [c for c, _ in kept],
+            "parent_facility_reference": [p for _, p in kept],
+        },
+        schema={"child_facility_reference": pl.String, "parent_facility_reference": pl.String},
+    )
+    return FacilityGraph(edges=edges, errors=tuple(errors))
+
+
+def _find_cycles(parent_of: dict[str, str]) -> list[tuple[str, ...]]:
+    """Every cycle of a one-parent graph, each as its sorted members.
+
+    A walk from each node (in sorted order) follows parents until it reaches a
+    root, a node an earlier walk finished, or a node already on THIS walk — the
+    last is a cycle, made of the walk from that node on. A self-loop is a cycle
+    of one.
+    """
+    finished: set[str] = set()
+    cycles: list[tuple[str, ...]] = []
+    for start in sorted(parent_of):
+        path: list[str] = []
+        on_path: set[str] = set()
+        node = start
+        while node in parent_of and node not in finished and node not in on_path:
+            path.append(node)
+            on_path.add(node)
+            node = parent_of[node]
+        if node in on_path:
+            cycles.append(tuple(sorted(path[path.index(node) :])))
+        finished.update(path)
+    return cycles

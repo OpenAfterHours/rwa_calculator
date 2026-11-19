@@ -86,10 +86,12 @@ Adjusted_RWA = 6,400,000 × 0.826 = £5,286,400
 
 ### SME Definition
 
-CRR Art. 4(1)(128D) imports the SME definition from Commission Recommendation 2003/361/EC Art. 2 ("medium-sized" tier). For **general SME classification** (sub-class, retail-pool eligibility, IRB Art. 153(4) correlation), an entity qualifies as an SME if:
+CRR Art. 4(1)(128D) imports the SME definition from Commission Recommendation 2003/361/EC Art. 2 ("medium-sized" tier). For **general SME classification** (sub-class, retail-pool eligibility, IRB Art. 153(4) correlation), an entity qualifies as an SME if, measured on its **consolidated group** (the largest figure among the counterparty and its `org_mapping` parents — Art. 153(4) "the consolidated group of which the firm is a part"):
 
-- Annual turnover ≤ EUR 50m (~GBP 43.7m), **OR**
-- Total assets ≤ EUR 43m (~GBP 37.6m) — used only when `annual_revenue` is null.
+- Annual turnover below EUR 50m (~GBP 43.7m), **OR**
+- Total assets below EUR 43m (~GBP 37.6m) — used only when no turnover is known in the group.
+
+**E* on a solo or sub-consolidated run** counts the debt owed to the whole banking group — Art. 501(1): "the total amount owed to the institution, its subsidiaries, its parent undertakings and other subsidiaries of those parent undertakings". On a scoped run the calculator adds what the SME owes to the reporting group's other registry entities to the run's own E* (see [Multi-Entity Reporting](../../features/multi-entity-reporting.md#group-wide-obligor-aggregates)).
 
 For the **Art. 501 supporting factor itself**, the rule is narrower. Art. 501(2)(c) reads: *"only the annual turnover shall be taken into account"*. The total-assets fallback therefore does **not** apply to the supporting factor — a counterparty identified as SME via assets receives the `CORPORATE_SME` exposure class and the IRB correlation reduction, but `supporting_factor = 1.0` (no Art. 501 capital relief).
 
@@ -99,7 +101,7 @@ For the **Art. 501 supporting factor itself**, the rule is narrower. Art. 501(2)
 3. Tax returns
 4. Estimated based on relationship data
 
-**Total-assets fallback:** When `annual_revenue` is null on the counterparty row, the classifier reads `total_assets` and applies the Commission Rec 2003/361/EC balance-sheet threshold instead. The decision is recorded on the exposure frame as `sme_size_source` ∈ {`turnover`, `assets`, `null`}. The IRB SME correlation adjustment under CRR Art. 153(4) third subparagraph correspondingly substitutes total assets for `S` in the formula when annual sales are not a meaningful indicator.
+**Total-assets fallback (CRR only):** When no `annual_revenue` is known for the counterparty or any of its group parents, the classifier reads the group's `total_assets` and applies the Commission Rec 2003/361/EC balance-sheet threshold instead. Basel 3.1 has no such fallback (PS1/26 glossary SME: turnover only). The decision is recorded on the exposure frame as `sme_size_source` ∈ {`turnover`, `assets`, `null`}. The IRB SME correlation adjustment under CRR Art. 153(4) third subparagraph correspondingly substitutes total assets for `S` in the formula when annual sales are not a meaningful indicator.
 
 ## Infrastructure Supporting Factor
 

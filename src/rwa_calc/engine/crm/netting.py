@@ -33,6 +33,7 @@ from watchfire import cites
 from rwa_calc.contracts.errors import (
     ERROR_CROSS_COUNTERPARTY_NETTING,
     ERROR_CURRENCY_MISMATCH,
+    ERROR_ON_DEMAND_NETTED_DEPOSIT,
     crm_warning,
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
@@ -139,13 +140,18 @@ def generate_netting_collateral(
     original term — the earliest maturity is when the pool's protection first
     begins to lapse and maximises the mismatch haircut (shortest t → smallest
     (t-0.25)/(T-0.25)), and the shortest original term is the one most likely to
-    trip the Art. 237(2)(a) <1y gate. A null deposit maturity (or no
-    ``reporting_date``) leaves the residual null, handled permissively downstream
-    — absent maturity data cannot establish a mismatch, the convention ordinary
-    financial collateral without a supplied residual follows, and the downstream
-    10y default is unchanged (so this is NOT an anti-conservative fill); a null
-    original term (no ``value_date``) likewise leaves the Art. 237(2)(a) gate
-    permissive.
+    trip the Art. 237(2)(a) <1y gate. A deposit's ``maturity_date`` is the
+    earliest date it can be withdrawn (Art. 238(1)), so a deposit with NONE is
+    repayable on demand (review NT-03): a pool holding one has residual t = 0,
+    whatever its dated deposits say, and against a later-maturing loan the
+    Art. 237(1) three-month gate removes the relief (one CRM024 per agreement).
+    The measured alternative this replaced — the null left the residual null and
+    the downstream 10y default kept full protection — made a current-account
+    balance the most favourable input there was. Only an on-demand loan (null
+    ``maturity_date``) still nets in full against an on-demand pool: both legs
+    can be called today, a matched pair. With no ``reporting_date`` the residual
+    stays null as before; a null original term (no ``value_date``) leaves the
+    Art. 237(2)(a) gate permissive.
 
     Args:
         exposures: Exposures with ead_for_crm, on_bs_for_ead, exposure_type set
@@ -243,11 +249,15 @@ def generate_netting_collateral(
     deposit_original_years = (
         pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)
     ).cast(pl.Float64) / 365.0
+    # NT-03: a deposit with no maturity_date is repayable on demand. ``min()``
+    # skips nulls, so the pool also records whether it holds one: its earliest
+    # withdrawal date is then "now", whatever the dated deposits beside it say.
     netting_pool = (
         negative_loans.group_by([*perimeter_keys, "_denomination", "currency"])
         .agg(
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
             pl.col("maturity_date").min().alias("_pool_deposit_maturity_date"),
+            pl.col("maturity_date").is_null().any().alias("_pool_has_on_demand"),
             deposit_original_years.min().alias("_pool_deposit_orig_maturity"),
         )
         .rename({"_denomination": "_pool_original_currency", "currency": "_pool_currency"})
@@ -271,6 +281,9 @@ def generate_netting_collateral(
         "on_bs_for_ead",
         # The loan's denomination, named as the pool key it is matched against.
         pl.col("_denomination").alias("_pool_original_currency"),
+        # The loan's own maturity: null = an on-demand balance, which an
+        # on-demand deposit protects in full (NT-03).
+        pl.col("maturity_date").alias("_loan_maturity_date"),
     )
     # Audit records, from one collect: CRM016 for any agreement spanning more than
     # one counterparty (Art. 195/205(a) — the offset itself applies) and, under the
@@ -284,6 +297,8 @@ def generate_netting_collateral(
             errors,
             perimeter_is_agreement=perimeter_is_agreement,
             same_currency_only=same_currency_only,
+            sibling_keys=sibling_keys,
+            reporting_date=reporting_date,
         )
     if not same_currency_only:
         positive_siblings = positive_siblings.drop("_pool_original_currency")
@@ -318,8 +333,27 @@ def generate_netting_collateral(
     # HaircutCalculator.apply_maturity_mismatch, so a deposit and loan sharing a
     # maturity date net in full (t == T, no phantom mismatch). A null pool
     # maturity date yields a null residual either way.
+    #
+    # NT-03 - a pool holding an on-demand deposit (null maturity_date) can be
+    # withdrawn now: its residual t is 0. PS1/26 Art. 238(1) takes, for on-
+    # balance-sheet netting, "the time to the earlier of (a) the date when the
+    # netting agreement may terminate or be terminated and (b) the date when the
+    # deposit with the institution can be withdrawn or the loan to the
+    # institution called"; CRR Art. 238(1) "the time to the earliest date at which
+    # the protection may terminate or be terminated". Before NT-03 the null was
+    # dropped by ``min()`` (or left the residual null, the 10-year default), so a
+    # current-account balance netted in full against a term loan - the most
+    # favourable treatment of any input. The one carve-out is a beneficiary loan
+    # that is itself on demand (null maturity_date): both legs can be called
+    # today, a matched pair with no mismatch, so the residual stays null and the
+    # downstream default keeps full protection.
+    on_demand = pl.col("_pool_has_on_demand")
     residual_expr = (
-        (
+        pl.when(on_demand & pl.col("_loan_maturity_date").is_null())
+        .then(pl.lit(None, dtype=pl.Float64))
+        .when(on_demand)
+        .then(pl.lit(0.0))
+        .otherwise(
             (pl.col("_pool_deposit_maturity_date").cast(pl.Date) - pl.lit(reporting_date))
             .dt.total_days()
             .cast(pl.Float64)
@@ -349,7 +383,13 @@ def generate_netting_collateral(
         pl.lit("cash").alias("collateral_type"),
         pl.col("_pool_currency").alias("currency"),
         pl.col("_pool_original_currency").alias("original_currency"),
-        pl.col("_pool_deposit_maturity_date").alias("maturity_date"),
+        # An on-demand pool has no withdrawal DATE to state (its residual is
+        # carried explicitly above), so it states none rather than the dated
+        # deposits' minimum, which the haircut stage would read back (CL-02).
+        pl.when(on_demand)
+        .then(pl.lit(None, dtype=pl.Date))
+        .otherwise(pl.col("_pool_deposit_maturity_date"))
+        .alias("maturity_date"),
         pl.col("market_value"),
         pl.lit(None).cast(pl.Float64).alias("nominal_value"),
         pl.lit(None).cast(pl.Float64).alias("pledge_percentage"),
@@ -383,15 +423,20 @@ def _record_netting_audit(
     *,
     perimeter_is_agreement: bool,
     same_currency_only: bool,
+    sibling_keys: list[str],
+    reporting_date: date | None,
 ) -> None:
     """Emit the on-B/S netting audit records from ONE targeted collect.
 
     CRM016 for every agreement spanning more than one counterparty (both
-    perimeter states), and — only under the same-currency rule — CRM003 for every
+    perimeter states); — only under the same-currency rule — CRM003 for every
     deposit pool that nets nothing because no loan under its perimeter shares its
-    denomination. Both are small offending-key frames (the accepted DQ-emission
-    idiom, P1.264), tagged and materialised in ONE collect so the generator keeps
-    the single eager site it had before the currency record existed.
+    denomination; and CRM024 for every agreement where an on-demand deposit is
+    matched to a loan maturing after the reporting date (NT-03), where the
+    Art. 237(1) three-month gate removes the relief. All are small offending-key
+    frames (the accepted DQ-emission idiom, P1.264), tagged and materialised in
+    ONE collect so the generator keeps the single eager site it had before the
+    currency record existed.
     """
     queries = [_spanning_agreements(exposures).with_columns(pl.lit("CRM016").alias("_record"))]
     if same_currency_only:
@@ -400,13 +445,20 @@ def _record_netting_audit(
                 netting_pool, positive_siblings, perimeter_keys
             ).with_columns(pl.lit("CRM003").alias("_record"))
         )
+    if reporting_date is not None:
+        queries.append(
+            _on_demand_deposit_agreements(
+                netting_pool, positive_siblings, sibling_keys, reporting_date
+            ).with_columns(pl.lit("CRM024").alias("_record"))
+        )
     records = pl.concat(queries, how="diagonal").collect()
     # Partition in Python: an eager DataFrame.filter is itself a collect.
-    rows: dict[str, list[dict[str, Any]]] = {"CRM016": [], "CRM003": []}
+    rows: dict[str, list[dict[str, Any]]] = {"CRM016": [], "CRM003": [], "CRM024": []}
     for row in records.iter_rows(named=True):
         rows[row["_record"]].append(row)
     _append_cross_counterparty_warnings(rows["CRM016"], errors, perimeter_is_agreement)
     _append_unrecognised_currency_warnings(rows["CRM003"], errors)
+    _append_on_demand_deposit_warnings(rows["CRM024"], errors)
 
 
 def _spanning_agreements(exposures: pl.LazyFrame) -> pl.LazyFrame:
@@ -462,6 +514,50 @@ def _unrecognised_currency_pools(
             "netting_pool",
         )
     )
+
+
+def _on_demand_deposit_agreements(
+    netting_pool: pl.LazyFrame,
+    positive_siblings: pl.LazyFrame,
+    sibling_keys: list[str],
+    reporting_date: date,
+) -> pl.LazyFrame:
+    """Agreements whose on-demand deposits are matched to a later-maturing loan.
+
+    The pools and loans ``generate_netting_collateral`` itself matches, kept
+    where the pool holds a deposit with no maturity date (NT-03: residual t = 0)
+    and the loan matures after the reporting date (T > 0), so t < T and the
+    Art. 237(1) three-month gate removes the protection.
+    """
+    return (
+        positive_siblings.join(netting_pool, on=sibling_keys, how="inner")
+        .filter(
+            pl.col("_pool_has_on_demand") & (pl.col("_loan_maturity_date") > pl.lit(reporting_date))
+        )
+        .group_by("netting_agreement_reference")
+        .agg(pl.col("exposure_reference").n_unique().alias("_n_loans"))
+    )
+
+
+def _append_on_demand_deposit_warnings(
+    agreements: list[dict[str, Any]],
+    errors: list[CalculationError],
+) -> None:
+    """One CRM024 per agreement whose on-demand deposits lose their netting relief."""
+    for row in agreements:
+        errors.append(
+            crm_warning(
+                ERROR_ON_DEMAND_NETTED_DEPOSIT,
+                f"Netting agreement '{row['netting_agreement_reference']}': deposits with "
+                f"no maturity_date are treated as repayable on demand, so the protection's "
+                f"residual maturity is zero (Art. 238(1): the time to the date the deposit "
+                f"can be withdrawn), and against the {row['_n_loans']} loan(s) maturing "
+                f"later the Art. 237(1) three-month gate removes the netting relief. Where a "
+                f"deposit cannot be withdrawn before a date (notice period, fixed term, "
+                f"restricted account), give that date as its maturity_date.",
+                regulatory_reference="CRR/PS1-26 Art. 237(1)/238(1)",
+            )
+        )
 
 
 def _append_cross_counterparty_warnings(

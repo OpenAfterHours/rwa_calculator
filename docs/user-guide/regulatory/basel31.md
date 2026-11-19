@@ -413,7 +413,12 @@ pre-sale/pre-lease contracts with substantial forfeitable deposits cover a signi
 portion of total contracts, or the borrower has substantial equity at risk (Art. 124K(2)).
 Commercial ADC always receives 150%.
 
-Set `is_adc = True` and optionally `is_presold = True` in the input data. The `is_adc` flag
+Set `is_adc = True` and optionally `is_presold = True` on the **collateral** row of the
+property (the flags reach every exposure the property secures, at loan, facility or
+counterparty level); `is_adc` is also derived from a loan/facility `is_under_construction`
+flag or a development-finance `product_type`. ADC needs a corporate or SPE borrower — a
+natural person's self-build is never ADC. `is_presold = True` attests Art. 124K(2)(a) and
+(b)(i); the (b)(ii) equity-at-risk limb has no input, so it stays at 150%. The `is_adc` flag
 overrides all LTV-based RE treatment. See the
 [ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate-adc-exposures-art-124k)
 for full qualifying conditions.
@@ -460,9 +465,21 @@ borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/2
 CRE20.76). Art. 123A governs retail qualifying criteria, not currency mismatch. The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral
 haircut used in CRM (CRR Art. 224).
 
-To trigger the multiplier, set `cp_borrower_income_currency` on each exposure. When it differs from
-`currency`, the 1.5x multiplier is applied automatically and the `currency_mismatch_multiplier_applied`
+Set the counterparty's `borrower_income_currency`. When it differs from the exposure's lending
+currency — its denomination (`original_currency` once FX conversion has run), not the reporting
+currency — the 1.5x multiplier is applied automatically and the `currency_mismatch_multiplier_applied`
 output column is set to `True`. COREP memorandum row 0380 is populated from this flag.
+
+When `borrower_income_currency` is **null** the Art. 123B(3) fallback applies: the 1.5x is applied
+unless the lending currency equals the obligor's domestic currency (`local_currency`, else the domestic
+currency of `country_code` — GB → GBP, EU member states from the pack). Warning **SA010** counts these
+exposures, split by whether they were incurred before 1 January 2027 (the article's own scope) or
+after, when Art. 123B(1) requires the income currency to be known.
+
+A natural person that fails the regulatory-retail criteria (GBP 880,000 aggregate, or
+`is_managed_as_retail` not True) stays in the **retail** class under Basel 3.1 — PS1/26 Art. 123(1)(a)
+— at the Art. 123(3)(c) 100% weight, so the multiplier reaches it too. Under CRR the same obligor leaves
+the retail class for corporate (CRR Art. 123, last sub-paragraph).
 
 #### Defaulted Exposures
 

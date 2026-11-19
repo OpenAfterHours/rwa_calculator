@@ -120,9 +120,36 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: per declared foreign key and per unique key; the aggregator resolves the
 #: post-floor ledger once for its four summary builders; the CRM facility
 #: lookup reuses the names its caller already resolved.
+#: 2026-11-18 (review cluster "undrawn", CM-01/CM-02/CM-11): ``collect_schema``
+#: 113 -> 112 in both regimes. The hierarchy stage now collects the facility ->
+#: facility edges ONCE (``graph.collect_facility_edges``) and hands them to both
+#: the root lookup and the ancestor closure, dropping one schema resolution and
+#: one collect; the collect it frees pays for the new HIE004-HIE006 warnings
+#: collect (``facility_warnings``), so ``collect`` is unchanged.
+#: 2026-11-18 (review IV-01): ``collect`` 85 -> 84 (CRR) and 83 -> 82 (B31) as
+#: the classifier's post-materialise DQ008 and CLS010 roll-ups were folded into
+#: one select (``audit.collect_classified_frame_warnings``), which also carries
+#: the new SA006 project-finance-phase count without a collect of its own.
+#: 2026-11-18 (collateral review CL-01/02/04/09/14): ``collect_schema`` 113 ->
+#: 112 in both regimes. ``HaircutCalculator.apply_haircuts`` reads its optional
+#: inputs through one ``ensure_columns`` call instead of four presence-guarded
+#: schema resolutions, and the CRM018 / CRM019 recorders became one scan that
+#: also emits CRM023 / CRM026; the CRM025 (CCR-only pledge) recorder added one
+#: ``collect`` where the merged scan removed one, so ``collect`` is unchanged.
+#: 2026-11-18 (review cluster "group", RC-05/RC-16): ``collect`` 83 -> 82 (B31)
+#: as the classifier's counterparty-size warnings (CLS008/009/011 plus the new
+#: CLS015/016) are counted in ONE select instead of a CLS009 collect and a
+#: separate Basel 3.1 collect. CRR unchanged (it paid only the CLS009 collect).
+#: 2026-11-19 (review cluster "dq", RC-10/RC-11/RC-01/RC-02/SF-03/CC-19):
+#: ``collect`` one fewer in each regime (on its own branch 85 -> 84 CRR, 83 -> 82 B31). The four new data-quality
+#: findings add no materialisation: DQ019 rides the duplicate-key collect, DQ020
+#: the input gate's ``collect_all``, DQ021 / DQ022 the facility-edge and
+#: facility-warnings collects. And ``validate_duplicate_keys`` now sorts in its
+#: plan instead of on the collected frame, whose eager ``sort`` was a second
+#: lazy collect of its own.
 _BANKED: dict[str, dict[str, int]] = {
-    "CRR": {"collect": 85, "collect_schema": 113, "collect_all": 8},
-    "B31": {"collect": 83, "collect_schema": 113, "collect_all": 9},
+    "CRR": {"collect": 83, "collect_schema": 111, "collect_all": 8},
+    "B31": {"collect": 80, "collect_schema": 111, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

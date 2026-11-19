@@ -7,7 +7,9 @@ Pipeline position:
 Layout:
 - ``resolver`` — ``resolve_scope`` plus the registry-tree / membership /
   booking-filter / intragroup-elimination transform functions and the SCP
-  data-quality diagnostics
+  data-quality diagnostics; ``resolve_group_population`` (the whole reporting
+  group's population, for the group-wide retail-threshold / Art. 501 E*
+  obligor aggregates of a solo or sub-consolidated run)
 
 The stage no-ops when no reporting entity is configured, so an unscoped run is
 byte-identical to today (hard invariant I1). The ``run(ctx, rulepack,
@@ -24,4 +26,7 @@ References:
 
 from __future__ import annotations
 
+from rwa_calc.engine.scope.resolver import (
+    resolve_group_population as resolve_group_population,
+)
 from rwa_calc.engine.scope.resolver import resolve_scope as resolve_scope

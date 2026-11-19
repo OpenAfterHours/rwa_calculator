@@ -8,9 +8,13 @@ Pipeline position:
 
 Key responsibilities:
 - Calculate undrawn headroom per root/standalone facility (limit minus
-  aggregated descendant loan drawn + contingent nominal).
+  aggregated descendant loan drawn + contingent nominal), every amount first
+  put in the facility's own currency (``facility_fx``; CM-02 / SF-01).
+- Emit the undrawn row of an uncommitted (``committed=False``) facility too,
+  priced in the UCC bucket ``LR`` (CM-01).
 - Expand Multiple Option Facility (MOF) parents into per-sub CCF-descending
-  waterfall rows plus an optional residual row.
+  waterfall rows plus an optional residual row, each sub-line governed by its
+  OWN ``committed`` flag (SF-02).
 - Facility Share candidate fan-out: emit one undrawn CANDIDATE row per member
   counterparty, each carrying the FULL headroom, so every member is priced by
   the real downstream pipeline and the aggregator can pick the riskiest.
@@ -22,16 +26,21 @@ Key responsibilities:
 The allocation of a shared facility's undrawn commitment to one member is
 **firm policy grounded in conservatism, not regulation** — neither CRR nor
 PS1/26 defines a facility share or prescribes how to attribute a commitment
-several obligors may draw. It therefore carries no ``@cites`` of its own; the
-EAD it produces cites the CCF articles below. See
+several obligors may draw. The allocation therefore carries no ``@cites`` of
+its own; the EAD it produces cites the CCF articles below. See
 ``docs/plans/facility-share-riskiest-member.md``.
 
 References:
+- CRR Art. 4(1)(56) / PRA PS1/26 Glossary "conversion factor": the undrawn
+  amount of a commitment, "the extent of the commitment being determined by the
+  advised limit"
+- PRA PS1/26 Glossary "commitment" / Art. 111 Table A1 row (7) and CRR Annex I
+  4(a): an unconditionally cancellable commitment is a commitment (10% / 0%)
 - CRR Art. 166(8)(d) / Art. 166(10): commitment vs issued-item CCF buckets
 - CRR Art. 195 / 219: on-balance-sheet netting of drawn balances
 - CRR Art. 147(5) / CRE30.55: QRRE classification fields
 - PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential mortgage commitments
-- PRA PS1/26 Art. 166E(5): revolving purchased-receivables commitments
+- PRA PS1/26 Art. 166A(5): revolving purchased-receivables commitments
 - PRA PS1/26 Art. 124(3) / Art. 124K: under-construction (ADC) flag
 - PRA PS1/26 Art. 162(2A)(k): revolving M via facility termination date
 """
@@ -42,8 +51,14 @@ import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.engine.ccf import sa_ccf_expression
+from rwa_calc.engine.hierarchy.facility_fx import (
+    build_facility_fx,
+    facility_currency_lookup,
+    with_facility_currency_factor,
+)
 from rwa_calc.engine.hierarchy.graph import (
     filter_mappings_by_child_type,
     resolve_to_root_facility,
@@ -53,8 +68,14 @@ from rwa_calc.engine.utils import has_required_columns
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.engine.hierarchy.facility_fx import FacilityFx
 
 logger = logging.getLogger(__name__)
+
+#: The canonical Annex I / Table A1 bucket of an undrawn commitment the
+#: institution may cancel unconditionally at any time (CRR Annex I 4(a) 0%;
+#: PS1/26 Table A1 row (7) 10%) - what every ``committed=False`` row is priced as.
+UCC_RISK_TYPE = "LR"
 
 
 def calculate_facility_undrawn(
@@ -65,6 +86,7 @@ def calculate_facility_undrawn(
     facility_root_lookup: pl.LazyFrame | None = None,
     counterparty_lookup: CounterpartyLookup | None = None,
     config: CalculationConfig | None = None,
+    fx_rates: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """
     Calculate undrawn amounts for facilities.
@@ -93,6 +115,21 @@ def calculate_facility_undrawn(
     Both preserve the original facility values in audit columns
     (``original_counterparty_reference``, ``mof_risk_type_source``).
 
+    **Uncommitted facilities (CM-01).** ``committed=False`` is an accepted
+    commitment the institution may cancel unconditionally at any time — PS1/26
+    Glossary "commitment" includes "any such arrangement that may be: (1)
+    unconditionally cancelled by the institution at any time without prior notice
+    to the obligor". Its undrawn row IS emitted, in the UCC bucket ``LR``
+    (PS1/26 Table A1 row (7) 10%; CRR Annex I 4(a) 0%) whatever ``risk_type`` it
+    declared (HIE004 names a contradictory one). A limit never offered to and
+    accepted by the obligor is not a commitment at all and must not be supplied
+    as headroom: its ``limit`` should be the accepted amount, or 0.
+
+    **Currency (CM-02 / SF-01).** Each drawing is put in its facility's currency
+    at the run's FX rates before it is netted (:mod:`facility_fx`); one the run
+    cannot convert is not netted (HIE005). ``fx_rates`` is the raw rate table —
+    this runs before ``engine/fx`` rebases the unified frame.
+
     Args:
         facilities: Facilities with limit, risk_type, and other CCF fields
         loans: Loans with drawn_amount
@@ -105,7 +142,9 @@ def calculate_facility_undrawn(
             signature because it is part of the hierarchy stage's calling
             contract and the SA-preview it once fed may not silently come back.
         config: Calculation configuration (frame switch for the MOF waterfall's
-            SA CCF weighting basis)
+            SA CCF weighting basis; reporting currency and the FX on/off switch)
+        fx_rates: The run's FX rates (``currency_from`` / ``currency_to`` /
+            ``rate``), or None when none were supplied
 
     Returns:
         LazyFrame with facility_undrawn exposure records
@@ -141,9 +180,16 @@ def calculate_facility_undrawn(
         )
     )
 
-    loan_drawn_totals = _aggregate_loan_drawn_per_facility(loans, facility_mappings, root_lookup)
+    fx = build_facility_fx(fx_rates, config)
+    facility_currency = facility_currency_lookup(
+        facilities, key="_netting_facility", currency="_netting_currency"
+    )
+
+    loan_drawn_totals = _aggregate_loan_drawn_per_facility(
+        loans, facility_mappings, root_lookup, facility_currency, fx
+    )
     contingent_totals = _aggregate_contingent_per_facility(
-        contingents, facility_mappings, root_lookup
+        contingents, facility_mappings, root_lookup, facility_currency, fx
     )
 
     facility_with_drawn = _compute_facility_undrawn_per_root(
@@ -184,6 +230,8 @@ def calculate_facility_undrawn(
         contingents,
         facility_mappings,
         is_basel_3_1,
+        facility_currency,
+        fx,
     )
 
     # Fan out Facility Shares into one candidate row per member. Runs AFTER the
@@ -203,16 +251,104 @@ def calculate_facility_undrawn(
 
     select_exprs = _undrawn_select_expressions()
 
-    # Create exposure records for facilities with undrawn > 0 AND committed=True.
-    # Uncommitted (unconditionally cancellable) facilities generate no synthetic
-    # undrawn exposure: the bank can refuse to lend, so no commitment EAD/RWA is
-    # held against the unused headroom. Loans/contingents already mapped to the
-    # facility are unaffected — they remain independent exposure rows. The
-    # ``committed`` column is loader-defaulted to True via
-    # ``apply_boolean_column_defaults`` (data/column_spec.py), so we can read
-    # it directly without a defensive fill_null.
-    return facility_with_drawn.filter((pl.col("undrawn_amount") > 0) & pl.col("committed")).select(
-        select_exprs
+    # Create exposure records for every facility with undrawn > 0, committed or
+    # not. An uncommitted facility is an accepted UCC commitment (PS1/26 Table A1
+    # row (7) 10%; CRR Annex I 4(a) 0%), so its row is kept and priced as LR by
+    # ``_undrawn_select_expressions`` — it used to be filtered out here, which
+    # deleted the Basel 3.1 10% commitment outright (review finding CM-01).
+    return facility_with_drawn.filter(pl.col("undrawn_amount") > 0).select(select_exprs)
+
+
+def facility_utilisation_rows(
+    frame: pl.LazyFrame,
+    child_type: str,
+    facility_mappings: pl.LazyFrame,
+    root_lookup: pl.LazyFrame,
+    facility_currency: pl.LazyFrame,
+    fx: FacilityFx,
+    *,
+    to_root: bool,
+) -> pl.LazyFrame:
+    """One row per (loan or contingent, facility whose headroom it consumes).
+
+    The amount is the one headroom netting reads: a loan's ``drawn_amount``,
+    where a negative balance counts only under a ``netting_agreement_reference``
+    (CRR Art. 195 / 219, PS1/26 Art. 195 / 219 — an unreferenced negative is a
+    data-quality case clamped to 0); a contingent's ``nominal_amount`` floored at
+    0. ``_fx_factor`` puts that amount in the facility's currency
+    (:func:`facility_fx.with_facility_currency_factor`) and is null where the run
+    holds no rate for it, so a sum of ``_amount * _fx_factor`` skips the amount:
+    the headroom is never reduced by an amount the run cannot measure.
+
+    Args:
+        frame: The loans or contingents frame.
+        child_type: ``"loan"`` or ``"contingent"`` — the mapping child type.
+        facility_mappings: Mappings between facilities and children.
+        root_lookup: Output of :func:`graph.build_facility_root_lookup`.
+        facility_currency: :func:`facility_fx.facility_currency_lookup` keyed
+            ``_netting_facility`` -> ``_netting_currency``.
+        fx: The run's resolved rates.
+        to_root: Net against the ROOT facility (the headroom of a root or
+            standalone facility) or against the DIRECTLY mapped facility (an MOF
+            sub-facility's own headroom).
+
+    Returns:
+        LazyFrame with ``_netting_facility``, ``_amount``, ``_amount_currency``
+        and ``_fx_factor`` (plus ``_netting_currency`` when FX conversion is on).
+    """
+    if child_type == "loan":
+        reference = pl.col("loan_reference")
+        drawn = pl.col("drawn_amount")
+        amount = (
+            pl.when((drawn < 0) & pl.col("netting_agreement_reference").is_null())
+            .then(pl.lit(0.0))
+            .otherwise(drawn)
+        )
+    else:
+        reference = pl.col("contingent_reference")
+        amount = pl.col("nominal_amount").clip(lower_bound=0.0)
+
+    mappings = filter_mappings_by_child_type(facility_mappings, child_type).select(
+        pl.col("child_reference"), pl.col("parent_facility_reference")
+    )
+    if to_root:
+        # SF-03: a child mapped under two sub-limits of one root reaches that root
+        # twice; it is one drawing against one advised limit (CRR Art. 4(1)(56)),
+        # so it reduces the root's headroom once. The MAPPING pairs are made unique
+        # per (child, root) before the join, so two input rows that share a
+        # reference (DQ004) still each count. Each sub-limit's own headroom
+        # (``to_root=False``) is still reduced by the drawing - an overlapping
+        # sub-limit genuinely constrains it.
+        targets = (
+            resolve_to_root_facility(mappings, root_lookup)
+            .select(
+                pl.col("child_reference"),
+                pl.col("aggregation_facility").alias("_netting_facility"),
+            )
+            .unique(maintain_order=True)
+        )
+    else:
+        targets = mappings.rename({"parent_facility_reference": "_netting_facility"})
+
+    mapped = frame.select(
+        reference.alias("_child_reference"),
+        amount.alias("_amount"),
+        pl.col("currency").alias("_amount_currency"),
+    ).join(targets, left_on="_child_reference", right_on="child_reference", how="inner")
+
+    if fx.enabled:
+        # ``maintain_order="left"`` keeps the rows in the order the netting sums
+        # read them before this join existed, so a same-currency facility's
+        # totals are summed over the same sequence of values.
+        mapped = mapped.join(
+            facility_currency, on="_netting_facility", how="left", maintain_order="left"
+        )
+    return with_facility_currency_factor(
+        mapped,
+        fx,
+        amount_currency="_amount_currency",
+        facility_currency="_netting_currency",
+        factor="_fx_factor",
     )
 
 
@@ -277,6 +413,8 @@ def _aggregate_loan_drawn_per_facility(
     loans: pl.LazyFrame,
     facility_mappings: pl.LazyFrame,
     root_lookup: pl.LazyFrame,
+    facility_currency: pl.LazyFrame,
+    fx: FacilityFx,
 ) -> pl.LazyFrame:
     """Sum drawn amounts per (root or standalone) facility, netting-aware.
 
@@ -286,29 +424,16 @@ def _aggregate_loan_drawn_per_facility(
     booked under an on-balance-sheet netting agreement and reduce facility
     utilisation. Negative drawn amounts without a netting agreement
     reference are clamped to 0 (data-quality guard), preserving the
-    historical behaviour.
+    historical behaviour. Every amount is summed in the root facility's
+    currency; one the run cannot convert is left out (HIE005).
     """
-    loan_mappings = filter_mappings_by_child_type(facility_mappings, "loan")
-
-    loan_with_parent = loans.join(
-        loan_mappings,
-        left_on="loan_reference",
-        right_on="child_reference",
-        how="inner",
+    rows = facility_utilisation_rows(
+        loans, "loan", facility_mappings, root_lookup, facility_currency, fx, to_root=True
     )
-
-    loan_with_parent = resolve_to_root_facility(loan_with_parent, root_lookup)
-
-    drawn_expr = (
-        pl.when((pl.col("drawn_amount") < 0) & pl.col("netting_agreement_reference").is_null())
-        .then(pl.lit(0.0))
-        .otherwise(pl.col("drawn_amount"))
-    )
-
-    return loan_with_parent.group_by("aggregation_facility").agg(
-        [
-            drawn_expr.sum().alias("total_drawn"),
-        ]
+    return (
+        rows.group_by("_netting_facility")
+        .agg((pl.col("_amount") * pl.col("_fx_factor")).sum().alias("total_drawn"))
+        .rename({"_netting_facility": "aggregation_facility"})
     )
 
 
@@ -316,6 +441,8 @@ def _aggregate_contingent_per_facility(
     contingents: pl.LazyFrame | None,
     facility_mappings: pl.LazyFrame,
     root_lookup: pl.LazyFrame,
+    facility_currency: pl.LazyFrame,
+    fx: FacilityFx,
 ) -> pl.LazyFrame:
     """Sum positive contingent nominal amounts per (root or standalone) facility.
 
@@ -329,22 +456,19 @@ def _aggregate_contingent_per_facility(
                 "total_contingent": pl.Float64,
             }
         )
-
-    contingent_mappings = filter_mappings_by_child_type(facility_mappings, "contingent")
-
-    contingent_with_parent = contingents.join(
-        contingent_mappings,
-        left_on="contingent_reference",
-        right_on="child_reference",
-        how="inner",
+    rows = facility_utilisation_rows(
+        contingents,
+        "contingent",
+        facility_mappings,
+        root_lookup,
+        facility_currency,
+        fx,
+        to_root=True,
     )
-
-    contingent_with_parent = resolve_to_root_facility(contingent_with_parent, root_lookup)
-
-    return contingent_with_parent.group_by("aggregation_facility").agg(
-        [
-            pl.col("nominal_amount").clip(lower_bound=0.0).sum().alias("total_contingent"),
-        ]
+    return (
+        rows.group_by("_netting_facility")
+        .agg((pl.col("_amount") * pl.col("_fx_factor")).sum().alias("total_contingent"))
+        .rename({"_netting_facility": "aggregation_facility"})
     )
 
 
@@ -495,6 +619,8 @@ def _apply_facility_share_fanout(
     )
 
 
+@cites("CRR Art. 111")
+@cites("PS1/26, paragraph 111")
 def _undrawn_select_expressions() -> list[pl.Expr]:
     """List of select expressions that shape ``facility_with_drawn`` into the
     canonical facility_undrawn exposure schema.
@@ -577,9 +703,15 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False),
         pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0),
         pl.col("seniority"),
+        # CM-01: an uncommitted row (a facility, an MOF residual, or a sub-line -
+        # whose ``mof_risk_type`` is already LR) is an accepted UCC commitment:
+        # PS1/26 Table A1 row (7) 10%, CRR Annex I 4(a) 0%. A declared non-LR
+        # risk_type on it is overridden (HIE004 names it).
         pl.coalesce(
             pl.col("mof_risk_type"),
-            pl.col("risk_type"),
+            pl.when(pl.col("committed").eq_missing(False))
+            .then(pl.lit(UCC_RISK_TYPE))
+            .otherwise(pl.col("risk_type")),
         ).alias("risk_type"),
         pl.col("mof_risk_type_source"),
         pl.col("underlying_risk_type"),
@@ -601,7 +733,7 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         # commitment flag carried through to the CCF stage so the 50%
         # override fires under Basel 3.1.
         pl.col("is_uk_residential_mortgage_commitment"),
-        # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn
+        # PRA PS1/26 Art. 166A(5): revolving purchased-receivables undrawn
         # purchase commitment flag carried through to the CCF stage so the
         # OC (40%) / LR (10%) routing fires under Basel 3.1.
         pl.col("is_purchased_receivable_commitment"),
@@ -643,6 +775,8 @@ def _expand_mof_facility_undrawn(
     contingents: pl.LazyFrame | None,
     facility_mappings: pl.LazyFrame,
     is_basel_3_1: bool,
+    facility_currency: pl.LazyFrame,
+    fx: FacilityFx,
 ) -> pl.LazyFrame:
     """Expand Multiple Option Facility (MOF) parent rows into per-sub waterfall rows.
 
@@ -652,22 +786,35 @@ def _expand_mof_facility_undrawn(
     parent's own ``risk_type`` and ``counterparty_reference``.
 
     For MOF parents, the parent row is replaced by:
-        - One waterfall row per committed descendant sub-facility with
+        - One waterfall row per eligible descendant sub-facility with
           positive headroom, sorted by descending SA CCF (tie-break:
           alphabetical risk_type, then descendant reference).
         - At most one residual row when ``parent_headroom`` exceeds the
           sum of sub allocations — emitted at the parent's own ``risk_type``
           and ``counterparty_reference``.
 
-    Allocation rule per parent:
-        sub_headroom_i = max(0, sub_limit_i - sub_drawn_i)         # per-sub netting
+    Allocation rule per parent (every amount in the PARENT's currency):
+        sub_headroom_i = max(0, sub_limit_i - sub_drawn_i)         # per-sub netting,
+                         x fx(sub currency -> parent currency)      # in the sub's currency
         cum_i          = sum(sub_headroom_j for j <= i)
         allocation_i   = min(sub_headroom_i,
                              max(0, parent_headroom - cum_{i-1}))
 
-    Uncommitted (``committed=False``) sub-facilities are skipped entirely —
-    the bank can refuse to lend on them, so they carry no commitment EAD and
-    do not consume parent headroom.
+    A sub-facility's OWN ``committed`` flag governs its row (review finding
+    SF-02 — sub rows carry the parent's columns, so the final ``committed``
+    filter that CM-01 removed used to drop every committed sub-line under an
+    uncommitted umbrella; the sub's flag now acts only through its
+    ``mof_risk_type`` and its eligibility below). An uncommitted sub-line is a UCC
+    commitment (CM-01): it is weighted and emitted in the ``LR`` bucket, and it
+    takes a slice of the umbrella's headroom only where the umbrella has not
+    already committed that headroom — an uncommitted umbrella (whose residual is
+    UCC as well) or one with no limit. Under a committed umbrella with a limit
+    the whole headroom is the umbrella's commitment, so the cancellable sub-line
+    takes nothing and the residual keeps the umbrella's risk type, as before.
+
+    A sub-facility whose limit cannot be expressed in the parent's currency (no
+    FX rate, HIE005) has a null headroom and takes no slice; the residual
+    carries it.
 
     Args:
         facility_with_drawn: One row per parent with ``_is_mof_parent`` flag,
@@ -680,6 +827,8 @@ def _expand_mof_facility_undrawn(
         contingents: Contingents frame (optional); same role as loans.
         facility_mappings: Mappings between facilities and children.
         is_basel_3_1: Frame switch passed to :func:`sa_ccf_expression`.
+        facility_currency: Facility -> currency lookup for per-sub netting.
+        fx: The run's resolved rates (:func:`facility_fx.build_facility_fx`).
 
     Returns:
         LazyFrame with the same column shape as the input, plus three
@@ -699,66 +848,38 @@ def _expand_mof_facility_undrawn(
     mof_parents = expanded.filter(pl.col("_is_mof_parent"))
 
     # Per-sub netting: aggregate loans/contingents at the directly-mapped
-    # facility level (NOT rolled up to root). This is what lets the waterfall
-    # reflect actual sub-level utilisation rather than parent-level totals.
-
-    def _per_sub_drawn(
-        frame: pl.LazyFrame | None,
-        ref_col: str,
-        amount_col: str,
-        child_type: str,
-        out_col: str,
-    ) -> pl.LazyFrame:
+    # facility level (NOT rolled up to root), in that facility's currency. This
+    # is what lets the waterfall reflect actual sub-level utilisation rather
+    # than parent-level totals.
+    def _per_sub_drawn(frame: pl.LazyFrame | None, child_type: str, out_col: str) -> pl.LazyFrame:
         if frame is None:
             return pl.LazyFrame(schema={"_sub_ref": pl.String, out_col: pl.Float64})
-        child_mappings = filter_mappings_by_child_type(facility_mappings, child_type)
-        # Mirror the netting-aware aggregation used at root level: a negative
-        # drawn loan only offsets sub-facility utilisation when the loan is
-        # carrying a netting_agreement_reference (CRR Art. 195/219). For
-        # contingents (no netting reference) the historical clip-at-0 applies.
-        select_cols = [pl.col(ref_col), pl.col(amount_col)]
-        has_netting_flag = child_type == "loan" and amount_col == "drawn_amount"
-        if has_netting_flag:
-            select_cols.append(pl.col("netting_agreement_reference"))
-            amount_expr = (
-                pl.when((pl.col(amount_col) < 0) & pl.col("netting_agreement_reference").is_null())
-                .then(pl.lit(0.0))
-                .otherwise(pl.col(amount_col))
-            )
-        else:
-            amount_expr = pl.col(amount_col).clip(lower_bound=0.0)
+        rows = facility_utilisation_rows(
+            frame,
+            child_type,
+            facility_mappings,
+            root_lookup,
+            facility_currency,
+            fx,
+            to_root=False,
+        )
         return (
-            frame.select(select_cols)
-            .join(
-                child_mappings.select(
-                    [pl.col("child_reference"), pl.col("parent_facility_reference")]
-                ),
-                left_on=ref_col,
-                right_on="child_reference",
-                how="inner",
-            )
-            .group_by("parent_facility_reference")
-            .agg(amount_expr.sum().alias(out_col))
-            .rename({"parent_facility_reference": "_sub_ref"})
+            rows.group_by("_netting_facility")
+            .agg((pl.col("_amount") * pl.col("_fx_factor")).sum().alias(out_col))
+            .rename({"_netting_facility": "_sub_ref"})
         )
 
-    loan_per_sub = _per_sub_drawn(
-        loans, "loan_reference", "drawn_amount", "loan", "sub_drawn_loans"
-    )
-    cont_per_sub = _per_sub_drawn(
-        contingents,
-        "contingent_reference",
-        "nominal_amount",
-        "contingent",
-        "sub_drawn_contingents",
-    )
+    loan_per_sub = _per_sub_drawn(loans, "loan", "sub_drawn_loans")
+    cont_per_sub = _per_sub_drawn(contingents, "contingent", "sub_drawn_contingents")
 
     # Pull sub-facility attributes from the facilities frame — risk_type,
-    # counterparty, limit, and the committed flag (defaulting to True).
+    # counterparty, limit, currency and the committed flag (defaulting to True).
     # Scratch: `_sub_*` columns drive the per-sub waterfall — `_sub_risk_type`
     # / `_sub_counterparty` are written into the sub-row's `mof_risk_type` /
     # `share_counterparty_reference`; `_sub_limit` feeds `sub_headroom`;
-    # `_sub_committed` filters out unconditionally cancellable sub-facilities;
+    # `_sub_committed` gates which umbrellas an uncommitted sub-line may take
+    # headroom from (its UCC pricing is already in `_sub_risk_type`);
+    # `_sub_currency` converts the sub's headroom into the parent's currency;
     # `_sub_ref` is the join key and is also baked into `_exposure_suffix`
     # so each waterfall row gets a unique `<facility>_UNDRAWN_<sub>` reference.
     # All scratch columns are dropped via `helper_cols` before concat.
@@ -767,15 +888,21 @@ def _expand_mof_facility_undrawn(
     sub_facilities = facilities.select(
         [
             pl.col("facility_reference").alias("_sub_ref"),
-            pl.col("risk_type").alias("_sub_risk_type"),
+            # CM-01: an uncommitted sub-line is a UCC commitment, weighted and
+            # emitted in the LR bucket whatever risk_type it declared.
+            pl.when(pl.col("committed").eq_missing(False))
+            .then(pl.lit(UCC_RISK_TYPE))
+            .otherwise(pl.col("risk_type"))
+            .alias("_sub_risk_type"),
             pl.col("counterparty_reference").alias("_sub_counterparty"),
             pl.col("limit").alias("_sub_limit"),
             pl.col("committed").alias("_sub_committed"),
+            pl.col("currency").alias("_sub_currency"),
         ]
     )
 
     # Build (parent, sub) frame — only descendants that exist as actual
-    # facilities and are committed participate in the waterfall.
+    # facilities with a risk type participate in the waterfall.
     descendants = (
         root_lookup.select(
             [
@@ -784,7 +911,6 @@ def _expand_mof_facility_undrawn(
             ]
         )
         .join(sub_facilities, on="_sub_ref", how="inner")
-        .filter(pl.col("_sub_committed"))
         .filter(pl.col("_sub_risk_type").is_not_null())
         .join(loan_per_sub, on="_sub_ref", how="left")
         .join(cont_per_sub, on="_sub_ref", how="left")
@@ -800,7 +926,8 @@ def _expand_mof_facility_undrawn(
             sub_sa_ccf=sa_ccf_expression(risk_type_col="_sub_risk_type", is_basel_3_1=is_basel_3_1),
         )
         .with_columns(
-            sub_headroom=(pl.col("_sub_limit") - pl.col("sub_drawn")).clip(lower_bound=0.0)
+            # In the SUB's currency; converted to the parent's below.
+            _sub_own_headroom=(pl.col("_sub_limit") - pl.col("sub_drawn")).clip(lower_bound=0.0)
         )
     )
 
@@ -810,11 +937,33 @@ def _expand_mof_facility_undrawn(
         [
             pl.col("facility_reference"),
             pl.col("undrawn_amount").alias("_parent_headroom"),
+            pl.col("committed").alias("_parent_committed"),
+            pl.col("currency").alias("_parent_currency"),
         ]
     )
 
     waterfall = (
         descendants.join(parent_headroom, on="facility_reference", how="inner")
+        # An uncommitted sub-line takes a slice only of headroom the umbrella has
+        # not already committed: an uncommitted umbrella, or one with no limit.
+        # Under a committed, limited umbrella the headroom stays with the
+        # umbrella's own risk type (the residual) - so CRR RWA, where LR is 0%,
+        # cannot fall by moving it into the sub-line's UCC bucket.
+        .filter(
+            pl.col("_sub_committed").ne_missing(False)
+            | pl.col("_parent_committed").eq_missing(False)
+            | pl.col("_parent_headroom").is_null()
+        )
+        .pipe(
+            with_facility_currency_factor,
+            fx,
+            amount_currency="_sub_currency",
+            facility_currency="_parent_currency",
+            factor="_sub_fx_factor",
+        )
+        # The sub's headroom in the PARENT's currency, which the waterfall caps
+        # and emits in. Null where no rate exists (HIE005): no slice is taken.
+        .with_columns(sub_headroom=pl.col("_sub_own_headroom") * pl.col("_sub_fx_factor"))
         .sort(
             ["facility_reference", "sub_sa_ccf", "_sub_risk_type", "_sub_ref"],
             descending=[False, True, False, False],
@@ -843,14 +992,19 @@ def _expand_mof_facility_undrawn(
         "_sub_counterparty",
         "_sub_limit",
         "_sub_committed",
+        "_sub_currency",
         "sub_drawn_loans",
         "sub_drawn_contingents",
         "sub_drawn",
         "sub_sa_ccf",
+        "_sub_own_headroom",
+        "_sub_fx_factor",
         "sub_headroom",
         "cum_sub_headroom",
         "allocation",
         "_parent_headroom",
+        "_parent_committed",
+        "_parent_currency",
     ]
     sub_rows = (
         mof_parents.join(waterfall, on="facility_reference", how="inner")
@@ -868,7 +1022,8 @@ def _expand_mof_facility_undrawn(
 
     # Residual: parent_headroom - sum(allocation). Emitted only when positive,
     # at parent's own risk_type / counterparty (mof_risk_type stays null so
-    # select_exprs falls back through pl.coalesce to the parent's risk_type).
+    # select_exprs falls back through pl.coalesce to the parent's risk_type -
+    # the UCC bucket when the parent itself is uncommitted).
     parent_alloc_total = waterfall.group_by("facility_reference").agg(
         pl.col("allocation").sum().alias("_total_alloc")
     )

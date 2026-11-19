@@ -21,6 +21,11 @@ Key responsibilities:
   ``intragroup_zero_rw_eligible`` carrier so the SA final-RW override applies
   the CRR Art. 113(6) 0% risk weight. Guarantees whose guarantor is a member
   are internal protection at the consolidated level and are dropped there.
+- Publish the whole reporting group's population (``resolve_group_population``)
+  so a solo / sub-consolidated run can count the debt an obligor owes to the
+  OTHER group entities in the retail threshold (CRR Art. 123(c); PS1/26
+  Art. 123/123A/147(5)) and the SME supporting factor's E* (CRR Art. 501(1)).
+  The run's own population is still filtered; only those aggregates widen.
 - Accumulate reporting-scope data-quality issues as ``CalculationError``s on
   the bundle (never raise): SCP001 (unattributable book), SCP002 (mapping to
   unknown entity), SCP003 (intragroup tag to unknown entity), SCP004 (invalid
@@ -42,6 +47,8 @@ References:
 - CRR Part One Title II (Art. 6, 11-18): individual / sub-consolidated /
   consolidated levels of application; consolidation eliminates intragroup
   exposures, solo books include them.
+- CRR Art. 123(c) / Art. 501(1); PS1/26 Art. 123(1)(b)(ii), 123A(1)(b)(ii),
+  147(5)(a)(ii): group-wide "amount owed" obligor aggregates.
 - docs/plans/multi-entity-reporting.md: scope resolver specification.
 """
 
@@ -52,6 +59,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.edges import RAW_TABLE_EDGES, SFT_TABLE_EDGES, seal
 from rwa_calc.contracts.errors import CalculationError
@@ -166,6 +174,53 @@ def resolve_scope(
         cug_eligible=cug_eligible,
     )
     return _with_errors(filtered, bundle, errors)
+
+
+@cites("CRR Art. 123")
+@cites("CRR Art. 501")
+@cites("PS1/26, paragraph 123A")
+def resolve_group_population(
+    bundle: RawDataBundle, config: CalculationConfig
+) -> RawDataBundle | None:
+    """The whole reporting group's population, for the group-wide obligor aggregates.
+
+    The retail threshold and the SME supporting factor's E* count debt owed to
+    the WHOLE banking group, not only to the reporting entity: CRR Art. 123(c)
+    "the total amount owed to the institution and parent undertakings and its
+    subsidiaries"; CRR Art. 501(1) E* "the total amount owed to the institution,
+    its subsidiaries, its parent undertakings and other subsidiaries of those
+    parent undertakings"; PS1/26 Art. 123A(1)(b)(ii) / 123(1)(b)(ii) /
+    147(5)(a)(ii) "owed to the institution, its parent undertakings, its
+    subsidiaries and subsidiaries of its parent undertakings". Every registry
+    entity sits under the registry root, so every in-registry book is owed to
+    one of those undertakings.
+
+    Returns the bundle filtered to EVERY in-registry book, with rows tagged
+    intragroup to a registry entity removed (a claim on a group entity is not a
+    debt of a third-party obligor) — exactly the population a consolidated run at
+    the registry root sees. Returns ``None`` when the run's own population is
+    already that population (a consolidated / sub-consolidated run at the root)
+    or when no scope resolves (invalid registry, unknown entity — ``resolve_scope``
+    reports those as SCP004 / SCP006): the caller then has nothing to add, and the
+    run stays byte-identical to today's. The caller (the scope stage adapter) only
+    calls this on a scoped run; frames stay lazy.
+    """
+    registry_df = _collect_optional(bundle.reporting_entities, "reporting_entities")
+    entity_set, children, registry_reason = _analyse_registry(registry_df)
+    requested = config.reporting_entity
+    if registry_reason is not None or requested not in entity_set:
+        return None
+    if _membership(requested, config.reporting_basis, children) == entity_set:
+        return None
+
+    mapping_df = _collect_optional(bundle.book_entity_mappings, "book_entity_mappings")
+    valid_map, _all_books, _unknown = _analyse_mapping(mapping_df, entity_set)
+    logger.debug(
+        "scope: group population over %d entities / %d books for obligor aggregates",
+        len(entity_set),
+        len(valid_map),
+    )
+    return _filter_bundle(bundle, frozenset(valid_map), entity_set, drop_intragroup=True)
 
 
 # =============================================================================

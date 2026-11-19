@@ -325,7 +325,10 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
         )
     )
 
-    # CRR-A7: Commercial RE 40% LTV - 50% RW
+    # CRR-A7: Income-producing commercial RE 40% LTV. The collateral is
+    # is_income_producing (the property shared with B31-A7, Art. 124I), so CRR
+    # Art. 126(2)(b) — repayment NOT materially dependent on the property — is
+    # not met: Art. 124(1) 100%. Was 50% under the inverted gate (review RE-17).
     ead_a7 = Decimal("400000")
     ltv_a7 = Decimal("0.40")
     rw_a7, rw_desc_a7 = get_commercial_re_rw(ltv_a7, has_income_cover=True)
@@ -335,7 +338,7 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
         CRRScenarioOutput(
             scenario_id="CRR-A7",
             scenario_group="CRR-A",
-            description="Commercial RE 40% LTV - 50% RW",
+            description="Income-producing commercial RE 40% LTV - Art. 124(1) 100% RW",
             regulatory_framework="CRR",
             approach="SA",
             exposure_class="CRE",
@@ -353,7 +356,7 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=float(rwa_a7),
             expected_loss=None,
-            regulatory_reference="CRR Art. 126",
+            regulatory_reference="CRR Art. 124(1), 126(2)(b)",
             calculation_notes=f"{rw_desc_a7}",
         )
     )

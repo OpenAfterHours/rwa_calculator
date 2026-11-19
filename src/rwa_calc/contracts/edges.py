@@ -916,6 +916,35 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "commercial_collateral_value_uncapped": EdgeColumn(dtype=pl.Float64),
         "has_facility_property_collateral": EdgeColumn(dtype=pl.Boolean),
         "re_collateral_non_qualifying": EdgeColumn(dtype=pl.Boolean),
+        # Collateral-level ADC flags, any-True per beneficiary and OR-ed across
+        # the direct / facility / counterparty levels (review RE-01 / RE-02).
+        # The classifier ORs ``re_collateral_is_adc`` into ``is_adc`` and carries
+        # ``re_collateral_is_presold`` as ``is_presold``. Optional with a False
+        # default so synthetic CCR rows (concatenated after the hierarchy) read
+        # "no ADC collateral".
+        "re_collateral_is_adc": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="PS1/26 Art. 124(3) / 124K(1)",
+        ),
+        "re_collateral_is_presold": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="PS1/26 Art. 124K(2)",
+        ),
+        # True where ``ltv`` was derived from the linked property value because
+        # no LTV was supplied (review RE-10; ``engine/hierarchy/re_ltv.py``).
+        "ltv_derived": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="PS1/26 Art. 124C",
+        ),
         "exposure_for_retail_threshold": EdgeColumn(dtype=pl.Float64),
         "lending_group_reference": EdgeColumn(
             dtype=pl.String,
@@ -924,6 +953,20 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         ),
         "lending_group_total_exposure": EdgeColumn(dtype=pl.Float64),
         "lending_group_adjusted_exposure": EdgeColumn(dtype=pl.Float64),
+        # Solo / sub-consolidated runs only (engine/hierarchy/group_obligor.py):
+        # the retail-threshold amount, net of residential cover, the obligor or
+        # its lending group owes to the reporting group's OTHER entities. The
+        # classifier adds it to lending_group_adjusted_exposure for the
+        # threshold test (CRR Art. 123(c); PS1/26 Art. 123A(1)(b)(ii)).
+        "out_of_scope_group_adjusted_exposure": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="CRR Art. 123(c)",
+            null_meaning=(
+                "null = unscoped / whole-group run, or no debt owed to other group "
+                "entities — the run's own aggregate is the whole amount owed"
+            ),
+        ),
     }
 
 
@@ -1004,6 +1047,7 @@ CCR_EXIT_EDGE: EdgeContract = EdgeContract(
                     "credit": pl.Float64,
                     "equity": pl.Float64,
                     "commodity": pl.Float64,
+                    "other": pl.Float64,
                 }
             ),
             citation="CRR Art. 277",
@@ -1072,6 +1116,25 @@ CP_LOOKUP_COUNTERPARTIES_EDGE: EdgeContract = EdgeContract(
         "counterparty_type": EdgeColumn(dtype=pl.String),
         "parent_counterparty_reference": EdgeColumn(dtype=pl.String),
         "ultimate_parent_reference": EdgeColumn(dtype=pl.String),
+        # Consolidated group size figures (hierarchy/graph.py
+        # ::with_group_size_figures): the max over the entity and every org
+        # ancestor (PS1/26 glossary SME (1) "highest consolidated accounts of
+        # the group"; Art. 147(4C)(b)(ii); Art. 153(4)). Optional so a
+        # hand-built lookup without them classifies on its own figures.
+        "group_annual_revenue": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="PS1/26 Art. 147(4C)",
+            null_meaning="null = no revenue anywhere in the group (or a hand-built "
+            "lookup): the classifier falls back to the entity's own annual_revenue",
+        ),
+        "group_total_assets": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="PS1/26 Art. 153(4)",
+            null_meaning="null = no total assets anywhere in the group (or a hand-built "
+            "lookup): the classifier falls back to the entity's own total_assets",
+        ),
         "counterparty_hierarchy_depth": EdgeColumn(dtype=pl.Int32),
         "cqs": EdgeColumn(dtype=pl.Int8),
         "pd": EdgeColumn(dtype=pl.Float64),
@@ -1176,6 +1239,14 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         "sl_type": EdgeColumn(dtype=pl.String),
         "slotting_category": EdgeColumn(dtype=pl.String, citation="CRR Art. 153(5)"),
         "is_hvcre": EdgeColumn(dtype=pl.Boolean),
+        "sl_project_phase": EdgeColumn(
+            dtype=pl.String,
+            citation="PS1/26 Art. 122B(2)(c)",
+            null_meaning=(
+                "null = not project finance, or (CRR) no phase supplied; under Basel 3.1 "
+                "an unsupplied project-finance phase resolves to pre_operational"
+            ),
+        ),
         # Exposure classification (CRR Art. 112/147; PS1/26 Art. 112/147)
         "exposure_class_sa": EdgeColumn(dtype=pl.String),
         "exposure_class_irb": EdgeColumn(dtype=pl.String),
@@ -1184,6 +1255,7 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         "is_mortgage": EdgeColumn(dtype=pl.Boolean),
         "is_infrastructure": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501a"),
         "is_adc": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 124K"),
+        "is_presold": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 124K(2)"),
         "qualifies_as_retail": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 123"),
         "retail_threshold_exclusion_applied": EdgeColumn(dtype=pl.Boolean),
         "requires_fi_scalar": EdgeColumn(dtype=pl.Boolean),
@@ -1824,6 +1896,7 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
                     "credit": pl.Float64,
                     "equity": pl.Float64,
                     "commodity": pl.Float64,
+                    "other": pl.Float64,
                 }
             ),
             required=False,
@@ -2000,7 +2073,7 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         # (_add_reporting_projection). reporting_class/_origin and the
         # approach twins are aliases of the sealed columns above;
         # reporting_leg_role names the physical __G_/__REM guarantee split
-        # (Art. 234 tranche legs __REM_FL/__REM_SEN are `retained`);
+        # (the __REM leg is `retained`);
         # reporting_method materialises the STD/FIRB/AIRB/SLOTTING/EQUITY
         # label of the post-substitution approach; reporting_ead/_rw alias
         # ead_final/risk_weight AFTER the residual multiplier and floor.
@@ -2215,8 +2288,10 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "equity_type": EdgeColumn(dtype=pl.String, required=False),
         # The CRR equity method actually applied by the equity calculator
         # (``sa`` = Art. 133, ``irb_simple`` = Art. 155(2), ``pd_lgd`` =
-        # Art. 155(3)). CONDITIONAL (inject=False): the equity path emits it, so
-        # it is present on any run carrying an equity book (null on non-equity
+        # Art. 155(3), ``irb_fixed_rw`` = an IRB firm's Art. 48(4) 250% leg
+        # outside Art. 155, C 10.01 row 0110). CONDITIONAL (inject=False): the
+        # equity path emits it, so it is present on any run carrying an equity
+        # book (null on non-equity
         # legs via the diagonal concat) and simply absent from an equity-free
         # run — never injected, so the eager-backed seal stays a shallow
         # DataFrame.lazy() wrap (mirrors the other equity-run-only columns).

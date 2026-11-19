@@ -19,7 +19,8 @@ References:
 - CRR Art. 150(1): PPU election (CRR path keeps IRB routing available)
 - PRA PS1/26 Art. 147A(1)(a)-(e): B31 approach restrictions
   (sovereign-like SA-only, institution no-AIRB, FSE / large-corp no-AIRB,
-  IPRE / HVCRE slotting-only)
+  IPRE / HVCRE slotting-only for a firm whose IRB permission covers them)
+- PRA PS1/26 Art. 107(1): IRB approaches, slotting included, need permission
 - CRR Art. 300-311 / CRE54.14-15: CCP trade exposures → SA
 - Art. 155 / CRE60: equity SA-only under Basel 3.1
 """
@@ -43,7 +44,11 @@ from rwa_calc.domain.enums import (
     SpecialisedLendingType,
 )
 from rwa_calc.engine.classify.attributes import natural_person_expr
-from rwa_calc.engine.classify.permissions import build_permission_exprs
+from rwa_calc.engine.classify.permissions import (
+    build_permission_exprs,
+    build_sl_irb_permission_expr,
+)
+from rwa_calc.engine.crm.own_funds_lines import own_funds_line_expr
 from rwa_calc.engine.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
@@ -100,9 +105,14 @@ def assign_approach(
     # uses pl.lit().cast() — no fill_null — so the check-11 baseline is untouched;
     # a typed null leaves the OR-arm inert on lending rows. Mirrors the
     # ccr_effective_maturity handling in engine/irb/transforms.py::prepare_columns.
+    # ``risk_type`` likewise: the own-funds-line branch (CC-08) reads it, and
+    # minimal classifier frames built by tests may not carry it.
     exposures = ensure_columns(
         exposures,
-        {"ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False)},
+        {
+            "ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False),
+            "risk_type": ColumnSpec(pl.String, default=None, required=False),
+        },
     )
 
     # IRB requires an internal rating (PD from the firm's IRB model).
@@ -119,6 +129,12 @@ def assign_approach(
         has_internal_rating=has_internal_rating,
         has_modelled_lgd=has_modelled_lgd,
         has_model_permissions=has_model_permissions,
+    )
+
+    # Art. 147A(1)(c) with Art. 107(1): the IPRE / HVCRE forced slotting binds
+    # only where an IRB permission covers the row (and no Art. 148/150 SA row).
+    sl_irb_permitted = build_sl_irb_permission_expr(
+        config, has_model_permissions=has_model_permissions
     )
 
     # Step 2: B3.1 Art. 147A restrictions (no-op under CRR)
@@ -138,6 +154,7 @@ def assign_approach(
         firb_expr=firb_expr,
         sl_airb=sl_airb,
         sl_slotting=sl_slotting,
+        sl_irb_permitted=sl_irb_permitted,
         has_internal_rating=has_internal_rating,
         has_modelled_lgd=has_modelled_lgd,
         pack=resolved_pack,
@@ -191,16 +208,17 @@ def _apply_b31_approach_restrictions(
     # restriction applies ONLY to counterparties of entity_type ==
     # "corporate". Non-corporate entity types are governed by their own
     # Art. 147A sub-clauses and must never trip this branch. The revenue
-    # test reads ``cp_group_annual_revenue`` — the counterparty's own
-    # turnover rolled up its ultimate-parent chain (attributes.
-    # with_group_annual_revenue) — because Art. 147(4C)(b)(ii) prescribes
+    # test reads ``cp_group_annual_revenue`` — the max of the counterparty's
+    # own turnover and every org ancestor's (hierarchy/graph.py
+    # ::with_group_size_figures) — because Art. 147(4C)(b)(ii) prescribes
     # revenue "taken at the highest level of consolidation", so a small
     # subsidiary of a large group is F-IRB-only. Within the corporate slice:
     #   - When the group revenue is non-null, compare to the large-corp
     #     threshold (GBP 440m).
-    #   - When group revenue is null but total_assets indicates the
-    #     counterparty is SME-sized (assets < EUR 43m per Commission
-    #     Rec 2003/361/EC Art. 2), it is definitively not large.
+    #   - When group revenue is null but the GROUP's total assets indicate
+    #     the counterparty is SME-sized (assets < EUR 43m per Commission
+    #     Rec 2003/361/EC Art. 2), it is definitively not large. Group, not
+    #     own, assets: a small entity of a large group is not SME-sized.
     #   - Otherwise (both fields null, or null revenue with assets that
     #     don't resolve the question) treat conservatively as large;
     #     CLS008 is emitted to flag the missing data.
@@ -218,8 +236,8 @@ def _apply_b31_approach_restrictions(
                 )
             )
         )
-        .when(pl.col("cp_total_assets").is_not_null())
-        .then(pl.col("cp_total_assets") >= balance_sheet_threshold)
+        .when(pl.col("cp_group_total_assets").is_not_null())
+        .then(pl.col("cp_group_total_assets") >= balance_sheet_threshold)
         .otherwise(pl.lit(True))
     )
     # Art. 147A(1)(b): genuine institution exposures → F-IRB only (no
@@ -262,6 +280,7 @@ def _build_approach_expr(
     firb_expr: pl.Expr,
     sl_airb: pl.Expr,
     sl_slotting: pl.Expr,
+    sl_irb_permitted: pl.Expr,
     has_internal_rating: pl.Expr,
     has_modelled_lgd: pl.Expr,
     pack: ResolvedRulepack | None = None,
@@ -269,16 +288,26 @@ def _build_approach_expr(
     """Compose the ``pl.when`` decision ladder for ``approach``.
 
     Branch order (top wins):
-    1. Managed-as-retail without LGD → SA
-    2. Art. 114(4) EU domestic sovereign → SA (forced 0% RW)
-    3. CCP trade exposures → SA (CRE54.14-15)
-    4. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting
-    5. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
-    6. SL slotting fallback (no internal rating required)
-    7. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
-    8. F-IRB (model or org-wide)
-    9. Equity → EQUITY approach
-    10. Otherwise → SA
+    1. Own-funds lines (settlement risk, CCP default fund) → SA (CC-08)
+    2. Managed-as-retail without LGD → SA
+    3. Art. 114(4) EU domestic sovereign → SA (forced 0% RW)
+    4. CCP trade exposures → SA (CRE54.14-15)
+    5. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting, where an IRB
+       permission covers the row (``sl_irb_permitted``); otherwise the row
+       falls through and, holding no SL permission, lands on SA
+    6. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
+    7. SL slotting fallback (no internal rating required)
+    8. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
+    9. F-IRB (model or org-wide)
+    10. Equity → EQUITY approach
+    11. Otherwise → SA
+
+    Branch 1 is first because the row is not a credit exposure at all: its
+    ``drawn_amount`` is an own-funds requirement (CRR Art. 378 "own funds
+    requirement for settlement risk"; CCR (CRR) Part Art. 308(3) / 309(2) RWEA =
+    own funds x 12.5), which only the SA chain's 12.5 pin converts correctly.
+    Routed to IRB, FT1's 50,000 own funds became RWEA 45,764 (CRR) / 265,881
+    (Basel 3.1) instead of 625,000.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
@@ -306,12 +335,16 @@ def _build_approach_expr(
         )
     )
 
-    # Art. 147A(1)(c): IPRE/HVCRE → slotting only (overrides model perms)
+    # Art. 147A(1)(c): IPRE/HVCRE → slotting only, overriding an F-IRB / A-IRB
+    # permission — but only for a row an IRB permission covers. An SA-only firm
+    # (Art. 107(1)) and an Art. 148/150 SA permission (limb (i)) keep SA.
     b31_ipre_hvcre_forced_slotting = pl.lit(False)
     if resolved_pack.feature("approach_restrictions_b31_applicable"):
         b31_ipre_hvcre_forced_slotting = (
-            pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
-        ) & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
+            (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
+            & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
+            & sl_irb_permitted
+        )
 
     # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
     is_ccp = pl.col("cp_entity_type") == "ccp"
@@ -319,7 +352,9 @@ def _build_approach_expr(
     is_sl = pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
 
     return (
-        pl.when(managed_as_retail_without_lgd)
+        pl.when(own_funds_line_expr())
+        .then(pl.lit(ApproachType.SA.value))
+        .when(managed_as_retail_without_lgd)
         .then(pl.lit(ApproachType.SA.value))
         .when(is_eu_domestic_sovereign)
         .then(pl.lit(ApproachType.SA.value))
@@ -364,12 +399,16 @@ def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
     - rgla_* / pse_* rows, whose SA labels RGLA / PSE differ from the IRB
       CGCB / INSTITUTION class (CRR Art. 147(3)/147(4)(b)).
-    - natural persons expelled from retail to CORPORATE by the SA
-      regulatory-retail monetary cap / granularity limb but kept in the IRB
-      retail class (CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i) — the cap
-      conditions the SME limb only). ``sync_irb_exposure_class`` restores
-      their ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
-      ``exposure_class`` so the retail IRB formula applies.
+    - natural persons expelled from retail to CORPORATE by the CRR SA
+      regulatory-retail monetary cap but kept in the IRB retail class (CRR
+      Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i) — the cap conditions the SME
+      limb only). ``sync_irb_exposure_class`` restores their
+      ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
+      ``exposure_class`` so the retail IRB formula applies. Under Basel 3.1 the
+      divergence can run the other way (RE-03): a non-regulatory natural person
+      stays SA RETAIL_OTHER (PS1/26 Art. 123(1)(a)) while an individually
+      managed one is IRB CORPORATE (Art. 147(5)(c)); the same predicate aligns
+      it to CORPORATE on the IRB leg.
 
     - CRR non-named ``mdb`` rows, whose IRB class is INSTITUTION (Art.
       147(4)(c)) while their SA class stays MDB — the ``preserve_derived_irb_class``

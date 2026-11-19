@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 223 entries, content hash `774ef42c3b8e15a7`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 256 entries, content hash `282c880fc41e4227`
 
 ## Regime features
 
@@ -28,11 +28,12 @@ On/off behaviour switches (`Feature`).
 | `collateral_haircut_maturity_bands_revised` | off | on | CRR Art. 224 / PS1/26, paragraph 224 |
 | `crr_non_named_mdb_institution_irb_class` | on | off | CRR Art. 147 / PS1/26, paragraph 147 |
 | `crr_retail_re_portfolio_lgd_floor` | on | off | CRR Art. 164 / PS1/26, paragraph 164 |
-| `cva_ba_cva` | — | on | PS1/26, paragraph 4.1 |
+| `cva_ba_cva` | off | on | CRR Art. 382 / PS1/26, paragraph 4.1 |
 | `double_default_treatment` | on | off | CRR Art. 153(3) / PS1/26, paragraph 153 |
 | `equity_irb_approaches_available` | on | off | CRR Art. 155 / PS1/26, paragraph 133 |
 | `equity_revised_sa_risk_weights` | off | on | CRR Art. 133 / PS1/26, paragraph 133 |
 | `equity_transitional` | off | on | CRR Art. 133 / PS1/26, paragraph 4.1 |
+| `fcm_hfx_applies_to_non_financial` | off | on | CRR Art. 230 / PS1/26, paragraph 230 |
 | `firb_fixed_supervisory_maturity` | on | off | CRR Art. 162(1) / PS1/26, paragraph 162 |
 | `firb_fse_senior_lgd_split` | off | on | CRR Art. 161(1)(a) / PS1/26, paragraph 161 |
 | `firb_min_collateralisation_threshold_applies` | on | off | CRR Art. 230 / PS1/26, paragraph 230 |
@@ -41,17 +42,23 @@ On/off behaviour switches (`Feature`).
 | `firb_uses_sa_ccf` | off | on | CRR Art. 166 / PS1/26, paragraph 166C |
 | `intragroup_zero_rw` | on | on | CRR Art. 113 / PS1/26, paragraph 113 |
 | `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
+| `irb_purchased_receivable_commitment_ccf_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166A |
+| `lfse_assets_at_highest_consolidation` | off | on | CRR Art. 142(1)(4) / PS1/26, paragraph 153 |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
+| `non_qualifying_retail_leaves_retail_class` | on | off | CRR Art. 123 / PS1/26, paragraph 123 |
 | `on_bs_netting_perimeter_is_agreement` | on | on | CRR Art. 195 / PS1/26, paragraph 195 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
-| `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_floor_trade_residual_strict` | off | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_maturity_floor` | on | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
 | `output_floor` | off | on | CRR Art. 92 / PS1/26, paragraph 92 |
 | `post_model_adjustments` | off | on | CRR Art. 153 / PS1/26, paragraph 154 |
 | `regulatory_thresholds_fx_derived` | on | off | CRR Art. 123 / PS1/26, paragraph 147 |
 | `retail_art_123a_two_path_applicable` | off | on | CRR Art. 123 / PS1/26, paragraph 123A |
 | `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
+| `sa_ccr_alpha_nfc_carve_out_applicable` | off | on | CRR Art. 274(2) / PS1/26, paragraph 274 |
 | `sa_currency_mismatch_multiplier` | off | on | CRR Art. 123 / PS1/26, paragraph 123B |
 | `sa_due_diligence_override` | off | on | CRR Art. 110 / PS1/26, paragraph 110A |
+| `sa_pf_phase_defaults_pre_operational` | off | on | CRR Art. 122 / PS1/26, paragraph 122B |
 | `sa_re_split_art_124_4_all_or_nothing` | off | on | CRR Art. 124 / PS1/26, paragraph 124 |
 | `sa_re_split_cre_rental_coverage_required` | on | off | CRR Art. 126 / PS1/26, paragraph 124H |
 | `sa_re_split_revised_parameters` | off | on | CRR Art. 125 / PS1/26, paragraph 124F |
@@ -64,6 +71,8 @@ On/off behaviour switches (`Feature`).
 | `sa_unrated_institution_sovereign_floor_applies` | off | on | CRR Art. 121 / PS1/26, paragraph 121 |
 | `slotting_guarantee_substitution` | on | on | CRR Art. 235 / PS1/26, paragraph 235 |
 | `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
+| `sme_size_assets_fallback` | on | off | CRR Art. 4(1)(128D) / PS1/26, paragraph 122 |
+| `sme_turnover_threshold_inclusive` | off | on | CRR Art. 153(4) / PS1/26, paragraph 122 |
 | `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |
 | `ucp_unilateral_change_ineligible` | off | on | CRR Art. 213 / PS1/26, paragraph 213 |
 
@@ -98,7 +107,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `b31_residential_general_secured_rw` | — | `0.20` | PS1/26, paragraph 124F |
 | `b31_residential_income_junior_ltv_threshold` | — | `0.50` | PS1/26, paragraph 124G |
 | `b31_residential_income_junior_multiplier` | — | `1.25` | PS1/26, paragraph 124G |
-| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123 |
+| `b31_retail_granularity_limit` | — | `0.002` | PS1/26, paragraph 123A |
 | `b31_retail_non_regulatory_rw` | — | `1.00` | PS1/26, paragraph 123 |
 | `b31_retail_payroll_loan_rw` | — | `0.35` | PS1/26, paragraph 123 |
 | `b31_retail_transactor_rw` | — | `0.45` | PS1/26, paragraph 123 |
@@ -107,6 +116,9 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `b31_rre_residual_rw_retail_sme` | — | `0.75` | PS1/26, paragraph 124L |
 | `b31_rre_residual_rw_social_housing_floor` | — | `0.75` | PS1/26, paragraph 124L |
 | `b31_subordinated_debt_rw` | — | `1.50` | PS1/26, paragraph 133 |
+| `ccp_dfc_floor_capital_ratio` | `0.08` | `0.08` | CRR Art. 308(2) |
+| `ccp_dfc_floor_risk_weight` | `0.02` | `0.02` | CRR Art. 308(2) |
+| `ccp_dfc_qccp_unfunded_rw` | `0.00` | `0.00` | CRR Art. 310 |
 | `ccr_wwr_specific_lgd_override` | `1.0` | `1.0` | CRR Art. 291 |
 | `crr_corporate_sme_rw` | `1.00` | — | CRR Art. 122 |
 | `crr_defaulted_provision_threshold` | `0.20` | — | CRR Art. 127 |
@@ -122,6 +134,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `equity_netting_min_hedge_years` | `1.0` | — | CRR Art. 155(2) |
 | `equity_pd_lgd_maturity` | `5.0` | — | CRR Art. 165 |
 | `equity_pd_lgd_no_default_info_scaling` | `1.5` | — | CRR Art. 155(3) |
+| `equity_significant_investment_rw` | `2.50` | — | CRR Art. 133 |
 | `failed_trade_dvp_mult_16_30` | `0.50` | `0.50` | CRR Art. 378 |
 | `failed_trade_dvp_mult_31_45` | `0.75` | `0.75` | CRR Art. 378 |
 | `failed_trade_dvp_mult_46_plus` | `1.00` | `1.00` | CRR Art. 378 |
@@ -144,6 +157,8 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `io_zero_rw` | `0.00` | `0.00` | CRR Art. 118 |
 | `irb_maturity_floor_collateralised_deriv_years` | `0.02739726027397260273972602740` | `0.02739726027397260273972602740` | CRR Art. 162(2) |
 | `irb_maturity_floor_repo_sft_years` | `0.01369863013698630136986301370` | `0.01369863013698630136986301370` | CRR Art. 162(2) |
+| `irb_purchased_receivable_commitment_ccf` | — | `0.40` | PS1/26, paragraph 166A |
+| `irb_purchased_receivable_commitment_ucc_ccf` | — | `0.10` | PS1/26, paragraph 166A |
 | `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
 | `mdb_named_zero_rw` | `0.00` | `0.00` | CRR Art. 117 |
 | `mdb_unrated_rw` | `0.50` | `0.50` | PS1/26, paragraph 117 |
@@ -167,8 +182,10 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `pse_unrated_default_rw` | `1.00` | `1.00` | CRR Art. 116 |
 | `qccp_client_cleared_rw` | `0.04` | `0.04` | CRR Art. 306 |
 | `qccp_proprietary_rw` | `0.02` | `0.02` | CRR Art. 306 |
+| `re_art_124_1_secured_value_cap` | `1.00` | — | CRR Art. 124 |
 | `re_split_cre_secured_ltv_cap` | `0.50` | `0.55` | CRR Art. 126 / PS1/26, paragraph 124H |
 | `re_split_rre_secured_ltv_cap` | `0.80` | `0.55` | CRR Art. 125 / PS1/26, paragraph 124F |
+| `restructuring_exclusion_exposure_cap` | `0.60` | `0.60` | CRR Art. 233(2)(b) |
 | `restructuring_exclusion_haircut` | `0.40` | `0.40` | CRR Art. 233(2) |
 | `retail_commercial_re_portfolio_lgd_floor` | `0.15` | — | CRR Art. 164 |
 | `retail_residential_re_portfolio_lgd_floor` | `0.10` | — | CRR Art. 164 |
@@ -178,7 +195,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `rgla_uk_local_auth_rw` | `0.20` | `0.20` | CRR Art. 115 |
 | `rgla_unrated_default_rw` | `1.00` | `1.00` | CRR Art. 115 |
 | `sa_ccr_alpha` | `1.4` | `1.4` | CRR Art. 274(2) |
-| `sa_ccr_alpha_carve_out` | `1.0` | `1.0` | CRR Art. 274(2) |
+| `sa_ccr_alpha_carve_out` | — | `1.0` | PS1/26, paragraph 274 |
 | `sa_ccr_cdo_tranche_coefficient` | `14` | `14` | CRR Art. 279a |
 | `sa_ccr_cdo_tranche_numerator` | `15` | `15` | CRR Art. 279a |
 | `sa_ccr_correlation_commodity` | `0.40` | `0.40` | CRR Art. 280 |
@@ -197,12 +214,15 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `sa_ccr_option_volatility_equity_sn` | `1.20` | `1.20` | CRR Art. 279a |
 | `sa_ccr_option_volatility_fx` | `0.15` | `0.15` | CRR Art. 279a |
 | `sa_ccr_option_volatility_ir` | `0.50` | `0.50` | CRR Art. 279a |
+| `sa_ccr_option_volatility_other` | `1.50` | `1.50` | CRR Art. 279a |
 | `sa_ccr_start_floor_years` | `0.04` | `0.04` | CRR Art. 279b |
 | `sa_ccr_supervisory_duration_rate` | `0.05` | `0.05` | CRR Art. 279b |
 | `sa_ccr_supervisory_factor_equity_idx` | `0.20` | `0.20` | CRR Art. 280 |
 | `sa_ccr_supervisory_factor_equity_sn` | `0.32` | `0.32` | CRR Art. 280 |
 | `sa_ccr_supervisory_factor_fx` | `0.04` | `0.04` | CRR Art. 280 |
 | `sa_ccr_supervisory_factor_ir` | `0.005` | `0.005` | CRR Art. 280 |
+| `sa_ccr_supervisory_factor_other` | `0.08` | `0.08` | CRR Art. 280 |
+| `sa_sovereign_floor_trade_exemption_original_maturity_years` | — | `1` | PS1/26, paragraph 121 |
 | `slotting_short_maturity_threshold_years` | `2.5` | `2.5` | CRR Art. 153(5) |
 
 ## Integer parameters
@@ -819,7 +839,7 @@ Key column: `risk_type`
 | `LR` | `0.00` |
 
 **Basel 3.1** — PS1/26, paragraph 111
- *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
+ *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7))*
 
 Key column: `risk_type`
 
@@ -838,7 +858,7 @@ Key column: `risk_type`
 **Both regimes** — CRR Art. 280
  *(Table 1 commodity SF by bucket)*
 
-Key column: `commodity_type`; default `0.18`
+Key column: `commodity_type`; default `0.40`
 
 | Key | Value |
 |---|---|
@@ -1222,7 +1242,7 @@ Key column: `country_code`
 
 ### `obs_product_to_risk_type`
 
-**Both regimes** — CRR Art. 111
+**CRR** — CRR Art. 111
  *(Annex I OBS product -> risk_type bucket)*
 
 Key column: `obs_product`
@@ -1230,12 +1250,53 @@ Key column: `obs_product`
 | Key | Value |
 |---|---|
 | `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
+| `DOCUMENTARY_CREDIT` | `MR_ISSUED` |
+| `SHIPPING_GUARANTEE` | `MR_ISSUED` |
+| `CUSTOMS_BOND` | `MR_ISSUED` |
+| `TAX_BOND` | `MR_ISSUED` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
+| `TRADE_LC` | `MLR` |
 | `PERFORMANCE_BOND` | `MLR` |
 | `WARRANTY` | `MLR` |
 | `TENDER_BOND` | `MLR` |
 | `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
+
+**Basel 3.1** — PS1/26, paragraph 111
+ *(Table A1 OBS product -> risk_type bucket)*
+
+Key column: `obs_product`
+
+| Key | Value |
+|---|---|
+| `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
 | `DOCUMENTARY_CREDIT` | `MLR` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
 | `TRADE_LC` | `MLR` |
+| `SHIPPING_GUARANTEE` | `MLR` |
+| `CUSTOMS_BOND` | `MLR` |
+| `TAX_BOND` | `MLR` |
+| `PERFORMANCE_BOND` | `MLR` |
+| `WARRANTY` | `MLR` |
+| `TENDER_BOND` | `MLR` |
+| `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
 
 ## Banded tables
 
@@ -1543,7 +1604,7 @@ Named parameter sets for one formula (`FormulaParams`).
 ### `commercial_re_params`
 
 **CRR** — CRR Art. 126
- *(commercial RE LTV<=50%+income 50% / else 100%)*
+ *(commercial RE LTV<=50% not property-dependent 50% / else 100%)*
 
 | Parameter | Value |
 |---|---|

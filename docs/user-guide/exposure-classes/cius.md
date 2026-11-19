@@ -109,6 +109,17 @@ Where a level-1 CIU itself holds units in a level-2 CIU:
 | Look-through at level 1 → look-through at level 2 → look-through at level 3 | Permitted only if **previous level used look-through** | Strict cascade |
 | Look-through breaks at any level | All subsequent levels → **fallback** | — |
 
+**In the calculator.** The `ciu_holdings` table carries no look-through or mandate
+data for a level-2 CIU, so a holding whose `exposure_class` is `ciu` is weighted at the
+**1,250% fallback** on its value (the level-2 "any other scenario"), in both regimes.
+The same weight applies to a holding whose class the engine cannot identify — a null or
+a value outside the `ExposureClass` vocabulary (`securitisation`, `subordinated_debt`,
+`sovereign`, …) — because it cannot be weighted "as if directly held" (Art. 132A(1));
+the input gate reports those values as `SA008`. A `high_risk` holding takes the
+Art. 128 150% under Basel 3.1 (100% under CRR, where Art. 128 is omitted). See the
+holding-class table in the
+[CRR equity specification](../../specifications/crr/equity-approach.md).
+
 ## Third-Party Calculation Reliance (Art. 132(4))
 
 An institution lacking the data to compute Art. 132A approaches itself may rely on a

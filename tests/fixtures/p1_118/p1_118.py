@@ -53,10 +53,10 @@ Hand-calculation (CRR, CalculationConfig.crr(), reporting_date=2026-01-01):
         EAD   = 10,000,000 × 0.20 = 2,000,000
         M     = 0.7452y  (residual; 1-day floor from Art. 162(4) — above 1 day)
         b     = (0.11852 - 0.05478 × ln(0.005))^2 ≈ 0.30706
-        MA    = (1 + (0.7452 - 2.5) × 0.30706) / (1 - 1.5 × 0.30706) ≈ 0.9432
-        K     = (LGD × N[(G(PD) + √(R/(1-R)) × G(0.999)) / √(1-R)] - PD × LGD) × MA
-              ≈ 0.056437
-        RWA   = K × 12.5 × 1.06 × EAD ≈ 1,495,568
+        MA    = (1 + (M - 2.5) × b) / (1 - 1.5 × b)
+        RW    = (LGD × N[(G(PD) + √R × G(0.999)) / √(1-R)] - PD × LGD) × MA × 12.5 × 1.06
+              ≈ 0.521535
+        RWA   = RW × EAD ≈ 1,043,070
 
     Row B (is_short_term_trade_lc=False):
         CCF   = 0.75  (Art. 166(8)(d): general MLR OBS item)
@@ -68,7 +68,7 @@ Hand-calculation (CRR, CalculationConfig.crr(), reporting_date=2026-01-01):
 
     Key assertions:
         EAD_A (2,000,000) << EAD_B (7,500,000) — CCF effect
-        RWA_A (≈1,495,568) << RWA_B (≈5,946,191) — combined CCF + MA effect
+        RWA_A (≈1,043,070) << RWA_B — combined CCF + MA effect
 
 References:
     - CRR Art. 166(9): 20% CCF for short-term self-liquidating documentary credits
@@ -151,18 +151,18 @@ EXPECTED_EAD_B: float = NOMINAL_AMOUNT * CCF_GENERAL_MLR  # 7,500,000
 RESIDUAL_MATURITY_YEARS: float = 272 / 365.0  # ≈ 0.7452y
 
 # F-IRB effective maturity:
-#   Row A: 1-day floor (Art. 162(4) trade LC exception) → M = 1/365 ≈ 0.00274y
-#          Engine sets maturity = 1/365 literally when has_one_day_maturity_floor=True.
-#          It does NOT treat 1/365 as a floor; it overwrites the residual with 1/365.
-#          The engine-implementer must derive has_one_day_maturity_floor=True from
-#          is_short_term_trade_lc=True (pre-fix the flag is read as-is → False → M=1.0y).
+#   Row A: 1-day floor (Art. 162(3)(b) trade exception) → M = max(1/365, 0.7452) = 0.7452y.
+#          The engine derives has_one_day_maturity_floor=True from
+#          is_short_term_trade_lc=True; the one-day value is a MINIMUM on the residual
+#          maturity, not a fixed M (review TR-11 — until then the engine overwrote the
+#          residual with 1/365 and this constant pinned that collapse).
 #   Row B: 1-year floor (Art. 162(2) standard) → M = max(1.0, 0.7452) = 1.0y
-EXPECTED_M_A: float = 1.0 / 365.0  # ≈ 0.00274y — 1-day floor (engine sets M directly)
+EXPECTED_M_A: float = RESIDUAL_MATURITY_YEARS  # ≈ 0.7452y — residual, above the 1-day floor
 EXPECTED_M_B: float = 1.0  # standard 1-year floor
 
 # F-IRB K and RWA (rounded to nearest integer for acceptance test tolerance).
-# See module docstring for hand-calculation working.
-EXPECTED_RWA_A: float = 1_495_568.0  # approx; test should allow ±1 rounding
+# Row A re-derived with tests/oracle/derivations/formulas.py at M = 272/365.
+EXPECTED_RWA_A: float = 1_043_070.0  # approx; test should allow ±1 rounding
 EXPECTED_RWA_B: float = 5_946_191.0  # approx; test should allow ±1 rounding
 
 

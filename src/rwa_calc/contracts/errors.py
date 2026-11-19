@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 
@@ -162,11 +163,87 @@ ERROR_UNREADABLE_INPUT_DTYPE = "DQ014"
 # Table A1 Row 3/5's 50%/40%, none of which the preparer chose. Distinct from
 # DQ006, which fires only when a NON-null string fails the domain (P1.267).
 ERROR_UNRESOLVED_OBS_RISK_TYPE = "DQ016"
+# Contingent booked on a COMMITMENT risk_type (MR = NIF / RUF, OC = other
+# commitment) while ``is_obs_commitment`` is False — the contingent default,
+# i.e. an issued item. The two inputs contradict each other; under CRR F-IRB the
+# row takes the Art. 166(10)(b) issued-item 50% instead of the Art. 166(8)(d)
+# 75% for "other credit lines, note issuance facilities (NIFs), and revolving
+# underwriting facilities (RUFs)". Not auto-resolved: an issued medium-risk item
+# mis-coded MR would then be overstated (CM-09).
+ERROR_ISSUED_ITEM_ON_COMMITMENT_RISK_TYPE = "DQ017"
+# One ``exposure_reference`` claimed by more than one exposure namespace — a loan
+# and a contingent sharing a reference, or a user row named like an engine-minted
+# one (``<facility>_UNDRAWN``, ``ccr__<netting set>``, ``ft__``, ``dfc__``) or like
+# an equity exposure (review finding RC-10). Uniqueness was only ever declared PER
+# TABLE (``TABLE_UNIQUE_KEYS``), so such a pair was plausible input, and every
+# join keyed on the bare reference merged the two rows: the IRB model-permission
+# de-duplication kept one of them (the other's capital left the total) and a
+# guarantee on the loan covered the contingent too. ERROR, one per colliding
+# reference. The hierarchy stage keeps the rows apart by re-keying each colliding
+# loan / contingent to ``<reference>#<type>`` and resolving every typed pointer to
+# it (facility mapping, short-term rating scope, CRM beneficiary, securitisation
+# allocation) by its declared type (``engine/hierarchy/namespace.py``).
+ERROR_EXPOSURE_REFERENCE_COLLISION = "DQ019"
+# An amount in a currency other than the reporting currency with no FX rate into
+# it (review finding RC-11). ``engine/fx`` keeps such an amount in its source
+# currency's units and every downstream GBP threshold, total and template reads it
+# as reporting currency — a 1:1 conversion that understates (KWD) or overstates
+# (ZAR) depending on the currency, which is why the defect is the silence, not a
+# direction. ERROR, one per currency, naming the rows and amounts per table.
+# Emitted by ``contracts/validation.py::_validate_missing_fx_rates`` (the
+# pipeline-entry input gate); not raised when conversion is off.
+ERROR_FX_RATE_MISSING = "DQ020"
+# A facility-mapping child (sub-facility, loan or contingent) mapped under more than
+# one parent facility (review findings RC-01 / RC-02 / SF-03). A facility hierarchy
+# is a tree; a second parent used to make a sub-facility's root depend on row order
+# and made a loan consume the headroom of every parent it was mapped to. WARNING:
+# the hierarchy stage resolves the graph deterministically and conservatively (one
+# parent per sub-facility, the lowest reference; one root per loan / contingent,
+# that of its lowest-referenced parent; one reduction per root) and names the
+# resolution here.
+ERROR_FACILITY_MAPPING_MULTI_PARENT = "DQ021"
+# Facility mappings that form a cycle (review finding RC-02). Every member used to
+# be treated as somebody's sub-facility, so NONE emitted its undrawn commitment.
+# WARNING: every facility on the cycle is treated as a root of its own instead.
+ERROR_FACILITY_MAPPING_CYCLE = "DQ022"
+# A risk type only the ENGINE mints (``CCR_DERIVATIVE`` / ``CCR_SFT`` /
+# ``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE``) supplied on a LENDING table
+# (review finding CC-19). Those tags route a row to a counterparty-credit-risk
+# treatment — the ``standardised_ccr`` approach label, the repo-style IRB
+# maturity, the CCR rows of C 07.00, the 1250% own-funds conversion — whose
+# exposure value comes from the CCR methods or the FCCM (CRR Art. 111(2); PS1/26
+# Art. 111(2) / (2A)), never from an Annex I / Table A1 CCF on a nominal amount.
+# ERROR. The hierarchy stage disregards the two CCR routing tags (rewritten to
+# ``DQ023:<tag>``: the row keeps the residual CCF of an unrecognised risk type and
+# loses the CCR routing) and honours the two own-funds tags, whose 1250% weight
+# disregarding would cut (``data/schemas.py::DISREGARDED_ENGINE_ONLY_RISK_TYPES``).
+# Replaces the DQ006 such a value would otherwise draw.
+ERROR_ENGINE_ONLY_RISK_TYPE = "DQ023"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
 ERROR_MISSING_PARENT = "HIE002"
 ERROR_HIERARCHY_DEPTH = "HIE003"
+# Facility undrawn commitments (engine/hierarchy/facility_warnings.py). All three
+# are WARNINGs: each names a facility whose undrawn row the hierarchy stage built
+# on a treatment the input did not state outright, so the number is visible
+# rather than silently chosen.
+#
+# ``committed=False`` with a non-null risk_type other than the UCC bucket LR. An
+# uncommitted facility is an accepted, unconditionally cancellable commitment
+# (PS1/26 Glossary "commitment"; Table A1 row (7) 10%; CRR Annex I 4(a) 0%), so
+# its undrawn row is priced as LR whatever the row declared.
+ERROR_UNCOMMITTED_FACILITY_RISK_TYPE = "HIE004"
+# A loan / contingent drawn in a currency other than its facility's, or a
+# sub-facility limit in a currency other than its umbrella's, with no FX rate in
+# the run to express it in the facility currency. The amount is NOT netted
+# against the headroom (the undrawn commitment is measured gross of it) rather
+# than subtracted in raw units (CRR Art. 4(1)(56): the commitment's extent is
+# "determined by the advised limit").
+ERROR_FACILITY_HEADROOM_FX_RATE_MISSING = "HIE005"
+# A facility with a null ``limit`` that is not an umbrella (MOF parent): its
+# undrawn commitment cannot be measured, so no undrawn row is generated.
+ERROR_FACILITY_LIMIT_MISSING = "HIE006"
 
 # Classification error codes
 ERROR_UNKNOWN_EXPOSURE_CLASS = "CLS001"
@@ -182,6 +259,29 @@ ERROR_LARGE_CORP_REVENUE_NULL = "CLS008"
 ERROR_LFSE_ASSETS_NULL = "CLS009"
 ERROR_QRRE_GATE_DEMOTION = "CLS010"
 ERROR_LARGE_CORP_GROUP_ROLLUP = "CLS011"
+# A slotting-approach exposure with no recognised slotting_category (null, or
+# not a SlottingCategory value). CRR / PS1/26 Art. 153(5) weight a slotted
+# exposure by the grade the institution assigns; the engine applies the cited
+# pack default ("satisfactory") and, with this WARNING, no longer does so
+# silently. Emitted by the classifier's post-materialise roll-up.
+ERROR_SLOTTING_CATEGORY_MISSING = "CLS012"
+# Null counterparty entity_type (RC-12). ``entity_type`` is the single source of
+# the exposure class (CRR / PS1/26 Art. 112, Table A2), and a null matches no row
+# of the class map, so the classifier files the exposure under OTHER (100% SA)
+# and the obligor's ECAI rating is never read. An unrecognised NON-null string
+# already draws DQ006; the null drew nothing at all. One WARNING per run naming
+# the counterparties. The fallback class itself is deliberately unchanged — the
+# true class, and so the direction of error, is unknowable from the row.
+ERROR_NULL_ENTITY_TYPE = "CLS013"
+# Basel 3.1 SME size undetermined: the PS1/26 glossary SME definition is
+# turnover-only ("an annual turnover of not more than GBP 44 million"), so a
+# corporate with no annual revenue (own or group) whose total assets would have
+# met the Commission Rec 2003/361/EC balance-sheet limb is NOT treated as an SME.
+ERROR_SME_REVENUE_NULL_B31 = "CLS015"
+# SME size test decided by the consolidated group: the entity's OWN figures pass
+# the SME test but the highest-consolidation group figures do not (PS1/26
+# glossary SME (1); CRR Art. 4(1)(128D) / Art. 153(4) "consolidated group").
+ERROR_SME_GROUP_SIZE_FLIP = "CLS016"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -290,6 +390,182 @@ ERROR_UNRECOGNISED_COLLATERAL_TYPE = "CRM021"
 # It does NOT restate an Art. 199 drop — an unattested pledge is already zeroed
 # before C* is evaluated, and CRM014 owns that cause.
 ERROR_BELOW_MIN_COLLATERALISATION = "CRM022"
+# Tranched unfunded protection (CRR Art. 234 / PS1/26 Art. 234(1), with Art.
+# 235(2)): a guarantee that covers a BAND of the loss distribution — an
+# attachment_amount above zero, or any detachment_amount — rather than a
+# pro-rata share transfers risk "in one or more tranches", which Art. 234 sends
+# to the securitisation framework (Chapter 5), and Art. 235(2) allows the
+# risk-weight substitution only where the protected and unprotected parts are of
+# equal seniority. This engine does not run Chapter 5 for such protection, so the
+# guarantee is NOT recognised (the exposure keeps the obligor's own basis, the
+# Art. 268(1) upper bound of the Chapter 5 result) and this warning names it (one
+# per guarantee row).
+ERROR_TRANCHED_PROTECTION_NOT_RECOGNISED = "CRM027"
+# One guarantee_reference entered inconsistently across rows. Rows sharing a
+# guarantee_reference are ONE contract with ONE cap (Art. 233(1): G is the amount
+# the provider undertook to pay; Art. 213(1)(b): its extent must be clearly
+# defined): the total recognised across the rows is capped at the contract's
+# amount_covered and allocated pro-rata to each row's covered demand. This
+# warning fires when those rows state DIFFERENT amount_covered values (the
+# largest is used as the cap) and when one guarantee_reference is entered more
+# than once for the same beneficiary (a repeat from the same guarantor is one
+# undertaking: only its largest row is used) - one per guarantee_reference and
+# cause.
+ERROR_GUARANTEE_REFERENCE_INCONSISTENT = "CRM028"
+# Not eligible unfunded credit protection (CRR / PS1/26 Art. 213(1)(b)-(d) and
+# Art. 215(1)(b)): a letter of comfort, comfort letter or keepwell is not an
+# explicitly documented obligation assumed by the provider to pay on the
+# obligor's default, so a guarantee row whose guarantee_type names one is NOT
+# recognised and this warning names it (one per guarantee row).
+ERROR_NOT_ELIGIBLE_PROTECTION_TYPE = "CRM029"
+# guarantee_type names a credit derivative while protection_type does not
+# (protection_type defaults to "guarantee" when absent). The row is treated as
+# the credit derivative its guarantee_type says it is — so the CRR / PS1/26
+# Art. 233(2) restructuring-exclusion treatment applies when
+# includes_restructuring is False — and this warning records the disagreement
+# (one per guarantee row).
+ERROR_PROTECTION_TYPE_MISMATCH = "CRM030"
+
+# SFT (Financial Collateral Comprehensive Method) error codes — emitted by the
+# peer sft_fccm stage (engine/sft/). The older CCR codes (CCR001/010/011/020) are
+# declared beside their SA-CCR producers; these three are the SFT FCCM ones.
+#
+# SFT collateral not recognised in E* (CRR / PS1-26 Art. 223(1): volatility
+# adjustments are applied "when valuing financial collateral"; Art. 197/198 list
+# the eligible items). A collateral row whose type is not one the SFT path can
+# price from the Art. 224 Tables 1/3 (real estate, receivables, other physical,
+# a bare "bond" with no issuer class, CIU units, an unknown string), or a debt
+# security whose CQS fails Art. 197(1)(b)-(d), contributes NOTHING to the
+# CVA·(1-HC-HFX) term; so does a row keyed to a netting set holding no SFT trade.
+# One WARNING per collateral row.
+ERROR_SFT_COLLATERAL_NOT_RECOGNISED = "CCR027"
+# SFT netting set without an eligible master netting agreement (CRR / PS1-26
+# Art. 220(1): the netted E* applies to "exposures subject to an eligible master
+# netting agreement"; Art. 206(1)(a)-(d) eligibility; PS1/26 Art. 111(2A)). A
+# netting set holding more than one trade whose trades do not ALL carry both
+# under_master_netting_agreement and is_legally_enforceable is split into one
+# single-trade set per trade (Art. 223(5) per transaction); collateral rows on it
+# that are not linked to one of its trades by trade_id are not recognised. One
+# WARNING per affected netting set.
+ERROR_SFT_NETTING_NOT_RECOGNISED = "CCR028"
+# SFT netting set spanning more than one counterparty (CRR / PS1-26 Art. 220(4):
+# E* is "the exposure value of the exposure to the counterparty"; a master
+# netting agreement is bilateral). The engine would otherwise book the whole set
+# against the first counterparty's risk weight; the set is instead split into one
+# single-trade set per trade, each against its own counterparty, and this ERROR
+# names the counterparties. One ERROR per affected netting set.
+ERROR_SFT_MULTI_COUNTERPARTY_NETTING_SET = "CCR029"
+# Collateral currency unknown (CRR Art. 223(2)/224 Table 4, PS1/26 Art. 230(1)(b);
+# review CL-14): a collateral row whose currency (pre-conversion
+# ``original_currency``, else ``currency``) is null cannot show that it matches
+# the exposure's currency, so it is treated as currency-mismatched and takes the
+# H_fx volatility adjustment wherever H_fx applies to its type (financial
+# collateral in both regimes; non-financial under Basel 3.1). Its value is also
+# left unconverted by FX conversion. One rolled-up warning per run naming up to
+# five references. Life insurance is excluded — CRM020 owns that case.
+ERROR_COLLATERAL_CURRENCY_UNKNOWN = "CRM023"
+# Netted deposit repayable on demand (CRR/PS1-26 Art. 238(1), Art. 237(1);
+# review NT-03): a deposit under an on-balance-sheet netting agreement with no
+# maturity_date is withdrawable on demand, so the protection's residual maturity
+# is zero — "the time to the earliest date at which the protection may terminate"
+# (PS1/26 Art. 238(1)(b): "the date when the deposit ... can be withdrawn"). Where
+# it nets against a loan with a later maturity, the Art. 237(1) three-month gate
+# removes the relief; this warning (one per netting agreement) records that. An
+# on-demand deposit against an on-demand loan (both maturities null) is a matched
+# pair and still nets.
+ERROR_ON_DEMAND_NETTED_DEPOSIT = "CRM024"
+# Loan-table collateral pledged only to counterparty-credit-risk rows (CRR
+# Art. 223(5A), PS1/26 Art. 191A(4); review CL-04 / CC-07): collateral pools and
+# direct links from the collateral table never reduce an SA-CCR derivative, FCCM
+# SFT, failed-trade or default-fund row — their collateral is taken into account
+# in the CCR Part's own calculation (ccr_collateral / sft_collateral). A pledge
+# whose ONLY beneficiaries are such rows therefore mitigates nothing; one rolled-
+# up warning per run names the items. Guarantees still apply to CCR rows.
+ERROR_CCR_ONLY_COLLATERAL_POOL = "CRM025"
+# Non-Art. 197 collateral flagged as eligible financial collateral (CRR/PS1-26
+# Art. 197(1), 199(1); review CL-01): is_eligible_financial_collateral is the
+# firm's Art. 197 attestation, and only an Art. 197 type (cash, debt securities,
+# equity, gold, securitisation positions, covered bonds) can reduce an SA
+# exposure value under the Financial Collateral Comprehensive Method, or be
+# substituted under the Simple Method (Art. 222). A flagged immovable-property,
+# receivable, other-physical, life-insurance or unrecognised row is ignored for
+# both (it stays available to the
+# F-IRB Foundation Collateral Method under its own Art. 199 attestation, and
+# life insurance to Art. 232). One rolled-up warning per run.
+ERROR_NON_ART197_FLAGGED_FINANCIAL = "CRM026"
+
+# SA-CCR trade-input codes (review CC-06). Raised by the input gate
+# (contracts/ccr_input_checks.py), one row-named ERROR per offending trade, for the
+# inputs that used to give a netting set a silently zero add-on or drop the trade.
+# Each names the conservative treatment engine/ccr applies instead; the result is
+# still produced. (CCR001 / CCR010 / CCR011 / CCR020 live beside the gates that
+# raise them under engine/ccr/.)
+#
+# Unrecognised risk category (CRR Art. 277(1)): the trade's asset_class is missing
+# or is not one of the six risk categories (case-insensitive). It is priced in the
+# Art. 277(1)(f) other-risks category (Art. 280f, SF 8%) as its own hedging set.
+ERROR_CCR_UNRECOGNISED_RISK_CATEGORY = "CCR021"
+# Unrecognised risk factor (CRR Art. 277a(1)(c)/(e), Art. 280): a credit trade's
+# credit_quality or a commodity trade's commodity_type is missing or outside the
+# supervisory-factor table. The trade takes the highest factor of that table
+# (credit single name NON_RATED, credit index HY, commodity ELECTRICITY).
+ERROR_CCR_UNRECOGNISED_RISK_FACTOR = "CCR022"
+# Orphan trade (CRR Art. 272(4), CCR (CRR) Part Art. 274(1)): the trade's
+# netting_set_id names no row in the netting-set table. It is priced as its own
+# non-enforceable netting set with no counterparty (unrated fallback weight,
+# alpha 1.4) rather than dropped.
+ERROR_CCR_ORPHAN_TRADE = "CCR023"
+
+# Counterparty credit risk / CVA codes reserved for the 2026-11 review's ccp_cva
+# cluster (CCR030-CCR034). The other CCR codes (CCR001 / CCR010 / CCR011 /
+# CCR020) are declared beside their producers under engine/ccr/.
+#
+# BA-CVA coverage (PS1/26 CVA Risk Part 4.1 / 1.2 "covered transaction", CC-16):
+# a counterparty with OTC derivative netting sets has no row in the BA-CVA
+# counterparty input, so it has no sector, credit quality or M_NS and its CVA
+# own funds are silently zero (the BA-CVA join drops it). One WARNING per such
+# counterparty. QCCP derivatives (exclusion (1)(a)) and counterparties listed
+# with cva_in_scope=False are not warned. Basel 3.1 only (cva_ba_cva Feature).
+ERROR_CVA_COUNTERPARTY_NOT_SUPPLIED = "CCR030"
+
+# Failed-trade side unknown (CRR Art. 378, CC-09): a DvP failed trade whose
+# ``is_purchase`` is null and whose agreed price differs from the market value.
+# The loss side decides the charge ("where the difference could involve a loss
+# for the credit institution"), so the engine charges the absolute difference —
+# conservative for either side — and names the trade with one WARNING.
+ERROR_FAILED_TRADE_SIDE_UNKNOWN = "CCR031"
+
+# Default-fund allocation inputs missing (CCR (CRR) Part Art. 308(2), CC-10): a
+# QCCP pre-funded contribution with no K_CCP or no DF_CM cannot be allocated its
+# share of the CCP's hypothetical capital. The engine charges the 8% x 2% x DF_i
+# floor — the one arm of the Art. 308(2) max it can still evaluate, a LOWER
+# bound — and names the contribution with one ERROR, since the charge can
+# understate. (A null used to reach the SA chain and give RWEA 0 silently.)
+ERROR_DFC_ALLOCATION_INPUT_MISSING = "CCR032"
+# SA-CCR collateral, margin-term and reporting-currency codes (review cluster
+# saccr_b). Built by engine/ccr from the same expressions that price the netting
+# set, decoded by contracts/ccr_collateral_checks.py and appended by the ccr / sft
+# stages; one row-named entry per finding up to a sample cap.
+#
+# CCR collateral item not recognised (CCR (CRR) Part Art. 276(1)(a)/(b), Art. 197,
+# Art. 274(1)): the item is not Art. 197 eligible financial collateral (a
+# non-financial type, a debt security below the Art. 197(1)(b)/(d) credit quality,
+# an equity outside a main index), or it was pledged against a netting set that is
+# not legally enforceable and holds more than one trade, so it cannot be attributed
+# to the single-transaction netting sets Art. 274(1) substitutes. WARNING: the item
+# is left out of VM and NICA (no relief if received, no add-on if posted).
+ERROR_CCR_COLLATERAL_NOT_RECOGNISED = "CCR024"
+# Margin terms conflict (CCR (CRR) Part Art. 275(2), Art. 285): a netting set and
+# the margin agreement it names both state a margin threshold, minimum transfer
+# amount, NICA or MPOR, and the two differ. WARNING: the capital-conservative
+# value is used (the larger TH / MTA / MPOR, the smaller signed NICA).
+ERROR_CCR_MARGIN_TERMS_CONFLICT = "CCR025"
+# No spot rate to the reporting currency (CCR (CRR) Part Art. 279b(3), Art. 275):
+# a trade, CCR collateral item, SFT or SFT collateral item is denominated in a
+# currency with no fx_rates row to the reporting currency. ERROR: its amounts are
+# used unconverted (the FXConverter's own pass-through for a missing rate) so the
+# exposure value is not in the reporting currency.
+ERROR_CCR_NO_REPORTING_CURRENCY_RATE = "CCR026"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
@@ -316,6 +592,30 @@ ERROR_MISSING_RISK_WEIGHT = "SA002"
 ERROR_INVALID_LTV = "SA003"
 ERROR_DUE_DILIGENCE_NOT_PERFORMED = "SA004"
 ERROR_EQUITY_IN_MAIN_TABLE = "SA005"
+# Basel 3.1 project-finance exposure whose project_phase is null or outside the
+# input vocabulary. PS1/26 Art. 122B(3) defines the operational phase by
+# evidenced conditions, so the exposure is treated as pre-operational (the
+# Art. 122B(2)(c) 130% weight when unrated). WARNING; emitted by the
+# classifier's post-materialise roll-up (engine/classify/audit.py).
+ERROR_PF_PHASE_UNEVIDENCED = "SA006"
+# A ``ciu_holdings`` row whose ``exposure_class`` is null or outside the
+# ``ExposureClass`` vocabulary (``securitisation``, ``subordinated_debt``, a
+# typo). The engine cannot weight such an underlying "as if directly held"
+# (PS1/26 Art. 132A(1)), so a look-through fund holding it takes the Art. 132(2)
+# 1,250% fall-back on that slice. WARNING from the input-domain gate; the weight
+# itself is applied by ``engine/equity/calculator.py::_holding_rw_expr``.
+ERROR_CIU_HOLDING_CLASS_UNSUPPORTED = "SA008"
+# Borrower income currency unknown on an Art. 123B-scope exposure (RE-05). PS1/26
+# Art. 123B(3): where an institution "is unable to identify those exposures with a
+# currency mismatch" it "shall apply the risk weight multiplier of 1.5 to all
+# unhedged retail exposures, and unhedged residential real estate exposures ...,
+# except where the lending currency is the same as the domestic currency of the
+# country of residence of the obligor". The engine applies that fallback wherever
+# ``borrower_income_currency`` is null — verbatim for exposures incurred before
+# 1 January 2027 (123B(3)(b)), as a conservative proxy for later ones, where
+# 123B(1) obliges the institution to know the income currency. One WARNING per
+# run with the count, split by value date.
+ERROR_INCOME_CURRENCY_UNKNOWN = "SA010"
 
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"
@@ -325,6 +625,14 @@ ERROR_RE_NON_ELIGIBLE_COLLATERAL = "RE001"
 ERROR_RE_ZERO_EFFECTIVE_CAP = "RE002"
 ERROR_RE_MIXED_PROPERTY_TYPES = "RE003"
 ERROR_RE_CRR_RENTAL_COVERAGE_FAILED = "RE004"
+# Real-estate evidence (CL-08 / RE-10). RE005: a real-estate class (a mortgage
+# product label) with no linked property collateral and no LTV — the
+# preferential real-estate weights are withheld (CRR Art. 124(1)/125(1); PS1/26
+# glossary "real estate exposure", Art. 124A(1)(a)). RE006: an LTV derived from
+# the linked property value because no ``property_ltv`` was supplied (PS1/26
+# Art. 124C(1)-(3)).
+ERROR_RE_NO_PROPERTY_EVIDENCE = "RE005"
+ERROR_RE_LTV_DERIVED = "RE006"
 
 # Securitisation allocator validation codes (phase 1: flag + exclude).
 # References: CRR Art. 109, Art. 244-246 (significant risk transfer);
@@ -334,6 +642,13 @@ ERROR_SEC_INVALID_PCT = "SEC002"
 ERROR_SEC_UNKNOWN_REFERENCE = "SEC003"
 ERROR_SEC_DUPLICATE = "SEC004"
 ERROR_SEC_FULLY_SECURITISED = "SEC005"
+# An allocation row whose ``significant_risk_transfer`` is explicitly False
+# carves nothing out: CRR Art. 244(1) / 245(1) let the originator exclude the
+# underlying exposures only where significant credit risk has been transferred
+# (limb (a)) or every retained position takes 1,250% / is deducted (limb (b)),
+# and the engine has no securitisation-position route to evidence limb (b). The
+# exposure stays on balance sheet at its full weight; WARNING, one per run.
+ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER = "SEC006"
 
 # Configuration error codes
 ERROR_INVALID_CONFIG = "CFG001"
@@ -388,6 +703,17 @@ ERROR_NON_FINITE_INPUT = "AGG002"
 # (never dropped), but the member it was capitalised against was not chosen by
 # the policy metric, and that must not be silent.
 ERROR_FACILITY_SHARE_FALLBACK = "AGG003"
+
+# Group-wide obligor aggregation code. On a solo / sub-consolidated run the
+# retail threshold (CRR Art. 123(c); PS1/26 Art. 123(1)(b)(ii) / 123A(1)(b)(ii) /
+# 147(5)(a)(ii)) counts the amount the obligor owes to the institution, its parent
+# undertakings, its subsidiaries and subsidiaries of its parent undertakings —
+# i.e. every entity in the reporting-entity registry, not only the run's books.
+# A WARNING naming the rows that failed the threshold ONLY because of debt booked
+# in other group entities, so a solo classification that differs from what the
+# solo books alone show is never silent. Counted over natural persons and
+# SME-sized obligors only — the obligors the retail threshold governs.
+ERROR_GROUP_THRESHOLD_FROM_OTHER_ENTITIES = "AGG004"
 
 # Parallel-run reconciliation error codes (legacy-vs-ours comparison).
 # Non-fatal: reconciliation degrades gracefully (skips the affected
@@ -520,6 +846,245 @@ def hierarchy_error(
     )
 
 
+def uncommitted_facility_risk_type_warning(
+    *, facility_reference: str, risk_type: str
+) -> CalculationError:
+    """Create a HIE004 warning: an uncommitted facility declared a non-UCC risk_type.
+
+    ``committed=False`` is the documented encoding of an accepted commitment the
+    institution may cancel unconditionally at any time. Its undrawn headroom is
+    therefore priced in the UCC bucket (``LR``: PS1/26 Table A1 row (7) 10%; CRR
+    Annex I 4(a) 0%) and the declared ``risk_type`` is not used. The warning
+    exists because the two inputs contradict each other: either the line is not
+    unconditionally cancellable (set ``committed=True``) or its risk type is LR.
+    ``exposure_reference`` carries the facility reference (the undrawn row's
+    ``source_exposure_reference``).
+
+    References:
+    - PRA PS1/26 Glossary "commitment"; Art. 111 Table A1 row (7)
+    - CRR Art. 111, Annex I item 4(a)
+    """
+    return CalculationError(
+        code=ERROR_UNCOMMITTED_FACILITY_RISK_TYPE,
+        message=(
+            f"Facility '{facility_reference}' has committed=False (an accepted, "
+            "unconditionally cancellable commitment) but declares risk_type "
+            f"'{risk_type}'. Its undrawn headroom is priced in the UCC bucket LR "
+            "(PS1/26 Table A1 row (7); CRR Annex I 4(a)); set committed=True if the "
+            "line cannot be cancelled unconditionally."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.HIERARCHY,
+        exposure_reference=facility_reference,
+        regulatory_reference="PS1/26 Art. 111 Table A1 row (7); CRR Annex I 4(a)",
+        field_name="risk_type",
+        expected_value="LR (or committed=True)",
+        actual_value=risk_type,
+    )
+
+
+def facility_headroom_fx_rate_missing_warning(
+    *,
+    facility_reference: str,
+    currency: str,
+    facility_currency: str,
+    umbrella_reference: str | None = None,
+) -> CalculationError:
+    """Create a HIE005 warning: an amount could not be put in its facility's currency.
+
+    Undrawn headroom is ``limit - utilisation`` in the FACILITY's currency, so a
+    drawing in another currency is converted at the run's FX rates before it is
+    netted. Where the run holds no rate for one side, the amount is not netted —
+    the headroom is never reduced by an amount the run cannot measure — and this
+    warning names the facility and the currency. With ``umbrella_reference`` set,
+    the facility is a sub-facility whose own limit could not be expressed in its
+    umbrella's currency, so it takes no slice of the umbrella's waterfall (the
+    umbrella's residual row carries that headroom instead).
+
+    References:
+    - CRR Art. 4(1)(56); PRA PS1/26 Glossary "conversion factor"
+    - CRR Art. 111(1); PRA PS1/26 Art. 111(1)(b)
+    """
+    if umbrella_reference is None:
+        effect = (
+            f"Utilisation in {currency} could not be converted into the facility "
+            f"currency {facility_currency}: the run holds no FX rate for it. Those "
+            "amounts were not netted, so the facility's undrawn commitment is "
+            "measured gross of them."
+        )
+    else:
+        effect = (
+            f"Its {currency} limit could not be expressed in the currency "
+            f"{facility_currency} of umbrella '{umbrella_reference}': the run holds "
+            "no FX rate for it. The sub-facility takes no slice of the umbrella's "
+            "waterfall; the umbrella's residual row carries that headroom."
+        )
+    return CalculationError(
+        code=ERROR_FACILITY_HEADROOM_FX_RATE_MISSING,
+        message=f"Facility '{facility_reference}': {effect} Supply the missing fx_rates row.",
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.HIERARCHY,
+        exposure_reference=facility_reference,
+        regulatory_reference="CRR Art. 4(1)(56); PS1/26 Glossary 'conversion factor'",
+        field_name="currency",
+        expected_value=facility_currency,
+        actual_value=currency,
+    )
+
+
+def facility_limit_missing_warning(*, facility_reference: str) -> CalculationError:
+    """Create a HIE006 warning: a facility has no limit, so no undrawn commitment.
+
+    The extent of a commitment is "determined by the advised limit" (CRR Art.
+    4(1)(56); PS1/26 Glossary "conversion factor"). With ``limit`` null the
+    undrawn amount is unknown, and the engine does not invent one: no undrawn row
+    is generated. Not raised for an umbrella (a facility with sub-facilities),
+    where a null limit legitimately means "no cap above the sub-limits".
+
+    References:
+    - CRR Art. 4(1)(56); PRA PS1/26 Glossary "conversion factor"
+    """
+    return CalculationError(
+        code=ERROR_FACILITY_LIMIT_MISSING,
+        message=(
+            f"Facility '{facility_reference}' has no limit, so its undrawn "
+            "commitment cannot be measured and no undrawn exposure row was "
+            "generated. Supply the advised limit (or 0 if nothing was committed)."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.HIERARCHY,
+        exposure_reference=facility_reference,
+        regulatory_reference="CRR Art. 4(1)(56); PS1/26 Glossary 'conversion factor'",
+        field_name="limit",
+    )
+
+
+def facility_warning_summary(
+    *,
+    code: str,
+    omitted: int,
+    sample_cap: int,
+    detail: str,
+    category: ErrorCategory = ErrorCategory.HIERARCHY,
+) -> CalculationError:
+    """Create the one summary that closes a sampled HIE004-HIE006 / DQ021 group.
+
+    The facility-undrawn warnings follow the estate's ``sample_cap`` contract
+    (as DQ005 / DQ013 do): up to ``sample_cap`` facilities are named one per
+    warning, then this single WARNING carries the truthful count of the rest,
+    so a systemic gap — a whole multi-currency book with no FX table — stays
+    readable instead of raising one warning per facility. ``actual_value``
+    holds the omitted count; ``exposure_reference`` is None (no one facility).
+    ``category`` follows the code it closes (DATA_QUALITY for DQ021).
+    """
+    return CalculationError(
+        code=code,
+        message=(
+            f"{omitted} additional facility warning(s) omitted beyond "
+            f"sample_cap={sample_cap}: {detail}"
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=category,
+        actual_value=str(omitted),
+    )
+
+
+def facility_multi_parent_warning(
+    *,
+    child_reference: str,
+    child_type: str,
+    parents: Sequence[str],
+    kept: str,
+    ignored: Sequence[str] = (),
+) -> CalculationError:
+    """Create a DQ021 warning for a facility-mapping child with several parents.
+
+    A facility hierarchy is a tree, and every consumer of ``facility_mappings``
+    assumed one: a sub-facility's root was taken from a last-wins dict over an
+    unordered ``unique()`` (so RWA changed from run to run), and a loan or
+    contingent consumed the headroom of EVERY facility it was mapped to (review
+    findings RC-01 / RC-02 / SF-03). The hierarchy stage now resolves the
+    mapping deterministically, and this warning says how:
+
+    - ``child_type == "facility"``: ``kept`` is the one parent the sub-facility
+      is attached to (the lowest reference); ``ignored`` the parents dropped.
+    - a loan / contingent: ``kept`` is the ROOT whose headroom it reduces — the
+      root of its lowest-referenced parent. Every mapping under that root is
+      kept (an overlapping sub-limit genuinely constrains the same drawing), but
+      the root's headroom is reduced once. ``ignored`` lists the parents under
+      any other root; those facilities' commitments are measured gross of it.
+
+    Reference: CRR Art. 4(1)(56) / PS1/26 Glossary "conversion factor" — the
+    undrawn amount is that of "the commitment ... determined by the advised
+    limit", which one drawing reduces once.
+    """
+    listed = ", ".join(parents)
+    if child_type == "facility":
+        resolution = (
+            f"A facility hierarchy is a tree, so it is attached to '{kept}' (the "
+            "lowest reference) only: its limit, drawings and undrawn slice count "
+            "once, under that parent. The parent no longer depends on row order."
+        )
+    elif ignored:
+        resolution = (
+            f"It reduces the headroom under root '{kept}' only (the root of its "
+            f"lowest-referenced parent); the mapping(s) to {', '.join(ignored)} are "
+            "ignored, so those facilities' undrawn commitments are measured gross "
+            "of it rather than reduced a second time."
+        )
+    else:
+        resolution = (
+            f"All of them hang under root '{kept}': it reduces each mapped "
+            f"sub-limit's own headroom, but '{kept}''s headroom only once."
+        )
+    return CalculationError(
+        code=ERROR_FACILITY_MAPPING_MULTI_PARENT,
+        message=(
+            f"[facility_mappings] {child_type} '{child_reference}' is mapped under "
+            f"{len(parents)} parent facilities ({listed}). {resolution}"
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=child_reference,
+        regulatory_reference="CRR Art. 4(1)(56); PS1/26 Glossary 'conversion factor'",
+        field_name="parent_facility_reference",
+        expected_value="one parent facility per child",
+        actual_value=listed,
+    )
+
+
+def facility_mapping_cycle_warning(*, members: Sequence[str]) -> CalculationError:
+    """Create a DQ022 warning for facility mappings that form a cycle.
+
+    Every facility on a cycle is somebody's child, and only root / standalone
+    facilities emit an undrawn row, so a cycle used to delete every member's
+    undrawn commitment with no error (review finding RC-02: a two-facility
+    cycle took EAD from 2.25m to 0.5m). The hierarchy stage now treats every
+    member as a root of its own — each keeps its own limit and emits its own
+    undrawn commitment, netted only by its own children — which is the
+    conservative reading of a graph that names no root.
+
+    ``members`` is the cycle, sorted; ``actual_value`` holds it joined.
+    """
+    listed = ", ".join(members)
+    return CalculationError(
+        code=ERROR_FACILITY_MAPPING_CYCLE,
+        message=(
+            f"[facility_mappings] facilities {listed} form a cycle of parent "
+            "mappings, so none of them has a root. Each is treated as a root "
+            "facility of its own: it keeps its own limit and emits its own undrawn "
+            "commitment instead of every member being dropped as a sub-facility."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=members[0] if members else None,
+        regulatory_reference="CRR Art. 111(1); PS1/26 Art. 111(1)",
+        field_name="parent_facility_reference",
+        expected_value="an acyclic facility hierarchy",
+        actual_value=listed,
+    )
+
+
 def crm_warning(
     code: str,
     message: str,
@@ -629,6 +1194,122 @@ def beel_on_non_defaulted_exposure_warning(*, n: int) -> CalculationError:
         ),
         regulatory_reference="PS1/26 Art. 181(1)(h)(ii); CRR Art. 158(5)",
         field_name="beel",
+    )
+
+
+def pf_phase_unevidenced_warning(*, n: int) -> CalculationError:
+    """Create the SA006 warning for project-finance rows with no recognised phase.
+
+    PRA PS1/26 Art. 122B(2)(c) weights an unrated project-finance exposure
+    130% in the pre-operational phase and 100% in the operational phase
+    (80% when also high quality, Art. 122B(4)); Art. 122B(3) defines the
+    operational phase by conditions the firm must show. A null or
+    unrecognised ``project_phase`` therefore demonstrates nothing, and the
+    engine treats the exposure as pre-operational. One aggregate warning
+    carries the count, mirroring the classifier roll-ups (CLS010, DQ008).
+    """
+    return CalculationError(
+        code=ERROR_PF_PHASE_UNEVIDENCED,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"{n} project-finance exposure(s) carry no recognised project_phase "
+            "(null, or not one of pre_operational / operational / "
+            "high_quality_operational). PS1/26 Art. 122B(3) requires the "
+            "operational phase to be demonstrated, so they are treated as "
+            "pre-operational: 130% under Art. 122B(2)(c) when unrated."
+        ),
+        regulatory_reference="PRA PS1/26 Art. 122B(2)(c) / Art. 122B(3)",
+        field_name="project_phase",
+    )
+
+
+def slotting_category_missing_warning(*, n: int) -> CalculationError:
+    """Create the CLS012 warning for slotted rows with no recognised grade.
+
+    CRR Art. 153(5) and PRA PS1/26 Art. 153(5) assign a slotted exposure the
+    risk weight of the category the institution grades it into; an exposure
+    with no grade has not been slotted. The engine keeps the cited pack
+    default (``satisfactory``, which the slotting weight and expected-loss
+    tables carry as their ``default``) — whether a missing grade should
+    instead take ``weak`` is an open owner decision (review IV-09) — and this
+    aggregate warning, carrying the row count, makes the substitution visible.
+    """
+    return CalculationError(
+        code=ERROR_SLOTTING_CATEGORY_MISSING,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"{n} slotting exposure(s) carry no recognised slotting_category (null, "
+            "or not one of strong / good / satisfactory / weak / default). They are "
+            "weighted at the 'satisfactory' grade, the pack default, for both the "
+            "risk weight and the expected-loss rate. Art. 153(5) weights a slotted "
+            "exposure by the grade the institution assigns: an obligor that is in "
+            "fact weak is understated, one in default is misstated."
+        ),
+        regulatory_reference="CRR Art. 153(5) / PRA PS1/26 Art. 153(5)",
+        field_name="slotting_category",
+    )
+
+
+def no_property_evidence_warning(*, n_standardised: int, n_other: int) -> CalculationError:
+    """Create the RE005 warning: a real-estate class with no evidence of security.
+
+    A mortgage product label is not security. The PS1/26 glossary defines a
+    real estate exposure as "an ADC exposure or an exposure secured by a charge
+    on immovable property", and CRR Art. 125(1) reaches only exposures "fully
+    and completely secured by mortgages on residential property". An exposure
+    whose class came from its product label alone, with no property collateral
+    linked at any level and no LTV supplied, is therefore not given
+    the preferential real-estate weights: a Standardised-Approach row takes the
+    class of its counterparty, and an IRB row keeps its IRB class while its
+    Standardised-equivalent weight (the Basel 3.1 output floor) is the
+    counterparty-class weight. One roll-up per run, counting both populations.
+    """
+    return CalculationError(
+        code=ERROR_RE_NO_PROPERTY_EVIDENCE,
+        message=(
+            f"{n_standardised + n_other} exposure(s) carry a mortgage product label but "
+            "no property collateral is linked to them and no LTV is "
+            "supplied, so they are not treated as secured by real estate: "
+            f"{n_standardised} Standardised-Approach exposure(s) take their "
+            f"counterparty's exposure class, and {n_other} IRB exposure(s) keep their "
+            "IRB class with a counterparty-class Standardised-equivalent weight. "
+            "Link the property (collateral_type 'real_estate' with market_value) or "
+            "supply property_ltv to claim the real-estate treatment."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="CRR Art. 124(1), 125(1); PS1/26 Art. 124, 124A(1)(a)",
+        field_name="property_ltv",
+    )
+
+
+def ltv_derived_warning(*, n: int) -> CalculationError:
+    """Create the RE006 warning: an LTV derived because none was supplied.
+
+    PS1/26 Art. 124C(1): "The loan-to-value (LTV) ... is the amount of the loan
+    divided by the value of the property"; (2) the amount of the loan includes
+    the outstanding amount and any undrawn committed amount; (3) it includes
+    loans secured by charges ranking ahead. Where a property is linked to an
+    exposure with a ``market_value`` but no ``property_ltv``, the hierarchy stage
+    derives the LTV that way rather than leaving it null (which used to price
+    CRR at the 35% band and Basel 3.1 at an LTV of 100%). The derivation is a
+    substitution for a missing input, so it is reported, once per run.
+    """
+    return CalculationError(
+        code=ERROR_RE_LTV_DERIVED,
+        message=(
+            f"property_ltv not supplied on {n} exposure(s) secured by a linked property; "
+            "the LTV was derived as (drawn + accrued interest + undrawn committed "
+            "amount) / property market value, plus any prior-charge LTV "
+            "(PS1/26 Art. 124C(1)-(3)). Supply property_ltv to use the firm's own "
+            "Art. 124C / Art. 124D figure."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="PS1/26 Art. 124C(1)-(3); CRR Art. 125(2)(d), 126(2)(d)",
+        field_name="property_ltv",
     )
 
 
@@ -766,6 +1447,128 @@ def unresolved_obs_risk_type_warning(
     )
 
 
+def issued_item_on_commitment_risk_type_warning(*, context: str, n: int) -> CalculationError:
+    """Create a DQ017 warning for a contingent on a commitment bucket marked as issued.
+
+    ``risk_type`` is ``MR`` (the NIF / RUF commitment bucket) or ``OC`` (other
+    commitments) but ``is_obs_commitment`` is False — the contingent default,
+    which marks an issued item. Under CRR F-IRB the engine follows the flag and
+    prices the row on the Art. 166(10)(b) issued-item 50% rather than the
+    Art. 166(8)(d) 75% the bucket names, and under Basel 3.1 A-IRB the row is not a
+    revolving loan commitment, so no own estimate of conversion factor or EAD
+    applies (PS1/26 Art. 166D(1)(b)); the SA factor is the same either way.
+    The contradiction is reported, not resolved: setting the flag for the
+    preparer would overstate an issued medium-risk item that was simply coded
+    ``MR`` instead of ``MR_ISSUED`` (CM-09).
+
+    References:
+    - CRR Art. 166(8)(d): NIFs / RUFs / other credit lines 75%
+    - CRR Art. 166(10)(b): issued medium-risk items 50%
+    - PRA PS1/26 Art. 166D(1): A-IRB own estimates for revolving loan commitments only
+    """
+    return CalculationError(
+        code=ERROR_ISSUED_ITEM_ON_COMMITMENT_RISK_TYPE,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[{context}] {n} row(s) carry a commitment 'risk_type' (MR = NIF / RUF, "
+            "OC = other commitment) but 'is_obs_commitment' is False (an issued "
+            "item, the contingent default). Under CRR F-IRB they take the "
+            "Art. 166(10)(b) issued-item 50% instead of the Art. 166(8)(d) 75%, and "
+            "under Basel 3.1 A-IRB they are not revolving loan commitments, so no own "
+            "estimate applies (PS1/26 Art. 166D(1)(b)) — set 'is_obs_commitment' True "
+            "for a commitment booked as a contingent, or use 'MR_ISSUED' for an issued "
+            "medium-risk item."
+        ),
+        field_name="is_obs_commitment",
+        regulatory_reference="CRR Art. 166(8)(d); Art. 166(10)(b); PS1/26 Art. 166D(1)",
+    )
+
+
+def unsupported_ciu_holding_class_warning(*, n: int, values: list[str]) -> CalculationError:
+    """Create an SA008 warning for CIU holdings with an unidentified exposure class.
+
+    ``ciu_holdings.exposure_class`` carries no categorical domain of its own, so
+    a value the engine does not know -- ``securitisation``, ``subordinated_debt``,
+    a typo, a null -- used to fall through the (exposure_class, CQS) join to a
+    flat 100%. PS1/26 Art. 132A(1) weights each underlying "as if directly held",
+    which an unidentified class cannot be, so the look-through calculation takes
+    the Art. 132(2) 1,250% fall-back for that slice of the fund (Art. 132(2)
+    permits "a combination of the approaches"). This warning names the values.
+
+    References:
+    - PRA PS1/26 Art. 132(2), 132A(1); CRR Art. 132 as it applied before
+      revocation (PRA Rulebook Credit Risk: Standardised Approach (CRR) Part)
+    """
+    return CalculationError(
+        code=ERROR_CIU_HOLDING_CLASS_UNSUPPORTED,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ciu_holdings] {n} row(s) carry an exposure_class outside the "
+            f"ExposureClass vocabulary ({', '.join(values)}). An underlying the "
+            "engine cannot identify cannot be risk weighted as if directly held, so "
+            "a look-through fund holding it takes the 1,250% fall-back on that "
+            "holding's value."
+        ),
+        field_name="exposure_class",
+        regulatory_reference="PS1/26 Art. 132(2), 132A(1)",
+    )
+
+
+def failed_trade_side_unknown_warning(*, failed_trade_id: str) -> CalculationError:
+    """Create a CCR031 warning for a DvP failed trade whose side is not supplied.
+
+    CRR Art. 378 charges the price difference "where the difference could
+    involve a loss for the credit institution" — a seller loses when the market
+    value has fallen below the agreed price, a purchaser when it has risen above
+    it. With ``is_purchase`` null the engine cannot tell which, so it charges the
+    absolute difference (conservative for either side); this warning names the
+    trade so the preparer can supply the side (review item CC-09).
+    """
+    return CalculationError(
+        code=ERROR_FAILED_TRADE_SIDE_UNKNOWN,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ccr.failed_trades] DvP failed trade {failed_trade_id!r} has no "
+            "'is_purchase', so the side that can lose is unknown: the absolute price "
+            "difference is charged (CRR Art. 378). Supply 'is_purchase' to charge only "
+            "a loss-making difference."
+        ),
+        exposure_reference=f"ft__{failed_trade_id}",
+        field_name="is_purchase",
+        regulatory_reference="CRR Art. 378",
+    )
+
+
+def dfc_allocation_input_missing_error(
+    *, contribution_id: str, missing: list[str]
+) -> CalculationError:
+    """Create a CCR032 error for a QCCP pre-funded contribution Art. 308(2) cannot allocate.
+
+    CCR (CRR) Part Art. 308(2): ``K_i = max(K_CCP x DF_i / (DF_CCP + DF_CM),
+    8% x 2% x DF_i)``. Without ``K_CCP`` or ``DF_CM`` (both communicated by the
+    CCP under EMIR Art. 50c) only the floor can be evaluated, so the engine
+    charges it as a lower bound and this error names the contribution — the
+    true requirement can be higher (review item CC-10).
+    """
+    return CalculationError(
+        code=ERROR_DFC_ALLOCATION_INPUT_MISSING,
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[ccr.default_fund_contributions] QCCP pre-funded contribution "
+            f"{contribution_id!r} has no {' or '.join(repr(m) for m in missing)}, so its "
+            "share of K_CCP cannot be allocated (CRR Art. 308(2)): only the 8% x 2% x DF_i "
+            "floor is charged, which can understate. Supply the CCP's published values."
+        ),
+        exposure_reference=f"dfc__{contribution_id}",
+        field_name=missing[0],
+        regulatory_reference="CRR Art. 308(2)",
+    )
+
+
 def orphan_reference_error(
     *,
     table: str,
@@ -896,6 +1699,163 @@ def duplicate_input_key_error(
         field_name=column,
         expected_value="one row per key",
         actual_value=str(count),
+    )
+
+
+def exposure_reference_collision_error(
+    *,
+    reference: str,
+    namespaces: Sequence[str],
+    qualified: Sequence[str],
+) -> CalculationError:
+    """Create a DQ019 error for an exposure_reference claimed by several namespaces.
+
+    ``namespaces`` names every table (or engine-minted family) that produces an
+    exposure row with this reference; ``qualified`` the references the
+    colliding loan / contingent rows are published under instead
+    (``<reference>#loan`` / ``<reference>#contingent``), empty when none of the
+    claimants is a lending row the stage can re-key.
+
+    One per colliding reference and uncapped, for the reason
+    :func:`duplicate_input_key_error` gives: the finding is a property of a
+    row, and a sampled collision leaves the un-sampled ones as merged as before.
+    Severity is ERROR: before the re-key the two rows merged downstream (the
+    IRB model-permission de-duplication kept one of them; a guarantee on one
+    covered both), so the input was reporting one exposure's capital twice or
+    not at all, and even after it a pointer that does not say which row it
+    means (``beneficiary_type`` ``'exposure'`` or null) matches neither.
+
+    Reference: CRR / PS1/26 Art. 111(1) — each item's exposure value is
+    measured; Art. 213(1)(a) — "the credit protection is direct".
+    """
+    listed = ", ".join(namespaces)
+    if qualified:
+        resolution = (
+            "The rows are kept apart: each colliding loan / contingent is published "
+            f"as {', '.join(repr(q) for q in qualified)}, and every pointer to it "
+            "(facility mapping, short-term rating scope, collateral / guarantee / "
+            "provision beneficiary, securitisation allocation) is resolved by its "
+            "declared type. A pointer whose type does not say which row it means "
+            "(beneficiary_type 'exposure' or null) now matches neither."
+        )
+    else:
+        resolution = (
+            "None of the claimants is a loan or contingent row the hierarchy stage "
+            "can re-key, so the rows may still merge downstream."
+        )
+    return CalculationError(
+        code=ERROR_EXPOSURE_REFERENCE_COLLISION,
+        message=(
+            f"exposure_reference '{reference}' is claimed by more than one exposure "
+            f"namespace ({listed}). Uniqueness was declared per table only, and every "
+            "join keyed on the bare reference merges the rows. "
+            f"{resolution} Give every exposure a reference unique across tables."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=reference,
+        regulatory_reference="CRR Art. 111(1); Art. 213(1)(a)",
+        field_name="exposure_reference",
+        expected_value="one exposure namespace per reference",
+        actual_value=listed,
+    )
+
+
+def fx_rate_missing_error(
+    *,
+    currency: str,
+    base_currency: str,
+    rows: int,
+    detail: str,
+) -> CalculationError:
+    """Create a DQ020 error for amounts in a currency with no rate into the base.
+
+    ``engine/fx`` converts an amount only where ``fx_rates`` holds a
+    ``currency -> base_currency`` rate; any other amount passes through in its
+    SOURCE currency's units while its row keeps the source currency code, and
+    every downstream threshold, total and template then reads it as reporting
+    currency — a 1:1 conversion nobody chose (review finding RC-11). The
+    direction depends on the currency (1m KWD read as GBP understates by ~60%,
+    1m ZAR overstates ~20x), so the defect is the silence, which this ends. The
+    amounts are still passed through unconverted: the engine has no rate to
+    apply and must not invent one.
+
+    ``detail`` lists the affected rows and amounts per table; ``actual_value``
+    is the currency, ``expected_value`` the missing pair.
+    """
+    return CalculationError(
+        code=ERROR_FX_RATE_MISSING,
+        message=(
+            f"No FX rate {currency} -> {base_currency} in fx_rates: {rows} row(s) "
+            f"carry {currency} amounts ({detail}), which are NOT converted and are "
+            f"read as {base_currency} by every threshold, total and template "
+            f"downstream. Supply the {currency} -> {base_currency} rate."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        field_name="currency",
+        expected_value=f"an fx_rates row {currency} -> {base_currency}",
+        actual_value=currency,
+    )
+
+
+def engine_only_risk_type_error(
+    *,
+    table: str,
+    column: str,
+    value: str,
+    count: int,
+    disregarded: bool,
+) -> CalculationError:
+    """Create a DQ023 error for an engine-only risk type on a lending table.
+
+    ``CCR_DERIVATIVE`` / ``CCR_SFT`` / ``CCR_DEFAULT_FUND`` /
+    ``SETTLEMENT_FAILED_TRADE`` tag the rows the counterparty-credit-risk stages
+    mint. On a lending row the first two used to be accepted silently and
+    route it to the CCR treatment — a contingent priced at a CCF on its nominal
+    amount yet labelled ``standardised_ccr`` and reported on C 07.00's CCR
+    rows, a ``CCR_SFT`` row given the repo-style IRB maturity (review finding
+    CC-19). The exposure value of a derivative or an SFT is not an Annex I /
+    Table A1 CCF on a nominal amount at all (CRR Art. 111(2); PS1/26 Art. 111(2)
+    / (2A)).
+
+    ``disregarded`` says what the hierarchy stage does with the value
+    (``data/schemas.py::DISREGARDED_ENGINE_ONLY_RISK_TYPES``). True for the two
+    CCR routing tags: the value is rewritten to ``DQ023:<TAG>``, an explicit but
+    unrecognised risk type, so the row keeps the residual CCF it had —
+    ``obs_product`` is not consulted, an explicit risk type outranks it — and
+    loses only the CCR routing. False for the two own-funds tags: their 1250%
+    weight is kept, since disregarding it would cut the row's RWA. Lending
+    tables carry ``is_sft`` for a repo-style maturity.
+    """
+    canonical = value.strip().upper()
+    if disregarded:
+        treatment = (
+            f"The value is disregarded: it is rewritten to 'DQ023:{canonical}', an "
+            "unrecognised risk type, so the row keeps the CCF residual it had "
+            "(obs_product is not consulted - an explicit risk_type outranks it) and "
+            "loses only the counterparty-credit-risk routing."
+        )
+    else:
+        treatment = (
+            "The value is honoured: it selects the 1250% own-funds conversion, which "
+            "the row keeps, because disregarding the tag would lower its capital."
+        )
+    return CalculationError(
+        code=ERROR_ENGINE_ONLY_RISK_TYPE,
+        message=(
+            f"[{table}] '{column}' = '{value}' on {count} row(s): this risk type is "
+            "minted by the counterparty-credit-risk stages for their own rows and is "
+            f"not a lending-table category. {treatment} Book derivatives, SFTs, "
+            "failed trades and default-fund contributions in the CCR / SFT inputs, "
+            "or flag a repo-style loan with is_sft."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="CRR Art. 111(2); PS1/26 Art. 111(2) / (2A)",
+        field_name=column,
+        expected_value="a lending risk type (FR, FRC, MR, MR_ISSUED, OC, MLR, LR)",
+        actual_value=value,
     )
 
 

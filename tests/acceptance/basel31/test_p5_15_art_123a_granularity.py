@@ -1,54 +1,47 @@
 """
-P5.15 — Basel 3.1 Art. 123A(1)(b)(ii): 0.2% retail portfolio granularity sub-condition.
+P5.15 / RE-04 — the optional 0.2% retail granularity test, and its default (off).
 
 Pipeline position:
     Loader → HierarchyResolver → Classifier → CRMProcessor → SACalculator → Aggregator
 
-Scenario design:
-    The current ``_build_qualifies_as_retail_expr`` enforces only the GBP 880k
-    aggregate-threshold limb of Art. 123A(1)(b)(ii).  It omits the *second* limb of
-    the same sub-paragraph: "no single exposure may exceed 0.2% of the total retail
-    portfolio."  This scenario adds that cross-row granularity test as a self-contained
-    Polars window expression inside the classifier.
+Premise correction (RE-04, 2026-11). P5.15 added the 0.2%-of-portfolio test as "the
+second limb of Art. 123A(1)(b)(ii)". PS1/26 has no such limb. Art. 123A(1)(b) reads,
+verbatim:
 
-    All obligors in the fixture are:
-        - cp_entity_type="individual" (natural-person → Art. 123A(1)(b) path)
-        - cp_is_managed_as_retail=True (pool-management limb already satisfied)
-        - sme_size_metric_gbp=null (SME auto-qualify branch does NOT fire)
-        - drawn ≤ GBP 2,000 (well below GBP 880k — threshold limb cannot trip)
+    "(ii) the total amount (including defaulted exposures) owed to the institution,
+    its parent undertakings, its subsidiaries and subsidiaries of its parent
+    undertakings by the obligor or group of connected clients, excluding all
+    residential real estate exposures, does not exceed GBP 880,000;
+    (iii) the exposure is one of a significant number of exposures with similar
+    characteristics such that the risks associated with such exposures are
+    substantially reduced."
 
-    Portfolio (502 obligors, Basel 3.1, SA-only):
-        - 500 control obligors: GBP 1,000 each
-        - RETAIL-BREACH:       GBP 2,000
-        - RETAIL-CONTROL-PASS: GBP 1,000
-        portfolio_total = 503,000 GBP
-        0.2% limit      = 0.002 × 503,000 = 1,006.00 GBP
+A text search of PS1/26 Appendix 1 finds no retail "0.2%" or "granular" limb — the
+0.2% test is BCBS CRE20.66, which the PRA did not adopt. So the engine default is
+``enforce_retail_granularity=False``; a firm may still ELECT the 0.2% test as its
+method of evidencing the qualitative (iii). This change LOWERS Basel 3.1 RWA for any
+natural person the 0.2% test used to exclude (for a portfolio under 500 obligors,
+every one of them). And under RE-03 an obligor failing the elected test is a
+non-regulatory retail exposure (Art. 123(3)(c) 100%), not a corporate.
 
-    RETAIL-BREACH:        2,000 / 503,000 = 0.003976 > 0.002 → FAIL (granularity)
-        → qualifies_as_retail = False → CORPORATE → RW = 100% → RWA = 2,000
-    RETAIL-CONTROL-PASS:  1,000 / 503,000 = 0.001988 < 0.002 → PASS
-        → qualifies_as_retail = True  → RETAIL_OTHER → RW = 75%  → RWA = 750
+Portfolio (502 obligors, Basel 3.1, SA-only, all natural persons, managed as retail,
+all far below GBP 880k):
+    - 500 control obligors: GBP 1,000 each
+    - RETAIL-BREACH:       GBP 2,000
+    - RETAIL-CONTROL-PASS: GBP 1,000
+    portfolio_total = 503,000; 0.2% limit = 1,006.00
 
-    Anti-confound: assert lending_group_adjusted_exposure(BREACH) < 880,000 to
-    confirm the threshold limb (GBP 880k) is NOT what drives the re-route.
-
-Pre-fix failure mode (current engine, Wave 3 target):
-    RETAIL-BREACH lands in retail_other (RW=0.75, RWA=1,500) because the
-    granularity limb is not implemented.  The primary assertion
-        assert exposure_class == "corporate"
-    FAILS with:
-        AssertionError: assert 'retail_other' == 'corporate'
-
-Post-fix expected behaviour (Wave 4):
-    RETAIL-BREACH: exposure_class=corporate, risk_weight=1.00, rwa_final=2,000.
-    RETAIL-CONTROL-PASS: exposure_class=retail_other, risk_weight=0.75, rwa_final=750.
+Elected method (``enforce_retail_granularity=True``):
+    RETAIL-BREACH: 2,000 / 503,000 = 0.003976 > 0.002 → not regulatory retail
+        → RETAIL_OTHER (Art. 123(1)(a)) at 100% (Art. 123(3)(c)) → RWA 2,000
+    RETAIL-CONTROL-PASS: 0.001988 < 0.002 → regulatory retail 75% → RWA 750
+Default config (no 0.2% test):
+    RETAIL-BREACH: regulatory retail 75% → RWA 1,500 (was 2,000 under the old default)
 
 Regulatory references:
-    - PRA PS1/26 Art. 123A(1)(b)(ii): retail granularity sub-condition (0.2%)
-    - PRA PS1/26 Art. 122 Table 6: unrated corporate SA RW = 100%
-    - PRA PS1/26 Art. 123(3)(b): regulatory retail SA RW = 75%
-    - BCBS CRE20.66: granularity criterion
-    - engine/classify/: _build_qualifies_as_retail_expr (insertion point)
+    - PRA PS1/26 Art. 123(1)(a), 123(3)(b)/(c), 123A(1)(b)(ii)/(iii)
+    - BCBS CRE20.66: the 0.2% criterion (not adopted by the PRA)
+    - engine/classify/attributes.py: _build_qualifies_as_retail_expr
     - tests/fixtures/p5_15/p5_15.py: portfolio constants
 """
 
@@ -65,13 +58,15 @@ from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p5_15.p5_15 import (
     BREACH_DRAWN,
-    EXPECTED_RW_CORPORATE,
+    EXPECTED_RW_NON_REGULATORY_RETAIL,
     EXPECTED_RW_RETAIL,
     EXPECTED_RWA_BREACH,
+    EXPECTED_RWA_BREACH_DEFAULT,
     EXPECTED_RWA_PASS,
     GRANULARITY_LIMIT,
     LOAN_BREACH,
     LOAN_CONTROL_PASS,
+    NUM_CTRL_OBLIGORS,
     PASS_DRAWN,
     PORTFOLIO_TOTAL,
     build_p5_15_bundle,
@@ -88,14 +83,12 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p5_15"
 _RW_TOL = 1e-6
 _RWA_TOL = 0.50  # 50p
 
-# GBP 880k aggregate threshold (Art. 123A(1)(b)(ii) first limb)
+# GBP 880k aggregate threshold (Art. 123A(1)(b)(ii) — its only limb)
 _RETAIL_THRESHOLD_GBP = 880_000.0
 
-# Pre-fix (current engine) values for RETAIL-BREACH
-# Engine does not implement the granularity limb → breach stays retail
-_PRE_FIX_EXPOSURE_CLASS_BREACH = "retail_other"
-_PRE_FIX_RW_BREACH = 0.75
-_PRE_FIX_RWA_BREACH = BREACH_DRAWN * _PRE_FIX_RW_BREACH  # 1,500.0
+# Values for RETAIL-BREACH when the 0.2% test is NOT applied (the default)
+_LIMB_OFF_RW_BREACH = EXPECTED_RW_RETAIL
+_LIMB_OFF_RWA_BREACH = EXPECTED_RWA_BREACH_DEFAULT  # 1,500.0
 
 
 # ---------------------------------------------------------------------------
@@ -103,15 +96,16 @@ _PRE_FIX_RWA_BREACH = BREACH_DRAWN * _PRE_FIX_RW_BREACH  # 1,500.0
 # ---------------------------------------------------------------------------
 
 
-def _b31_sa_config() -> CalculationConfig:
+def _b31_sa_config(*, enforce_retail_granularity: bool) -> CalculationConfig:
     """Basel 3.1 SA-only config with 2027 reporting date (post-effective date)."""
     return CalculationConfig.basel_3_1(
         reporting_date=_REPORTING_DATE,
         permission_mode=PermissionMode.STANDARDISED,
+        enforce_retail_granularity=enforce_retail_granularity,
     )
 
 
-def _run_b31_pipeline() -> pl.DataFrame:
+def _run_b31_pipeline(*, enforce_retail_granularity: bool = True) -> pl.DataFrame:
     """
     Run the P5.15 fixture portfolio through the Basel 3.1 SA pipeline.
 
@@ -122,7 +116,7 @@ def _run_b31_pipeline() -> pl.DataFrame:
     Return:  Collected SA results DataFrame.
     """
     bundle = build_p5_15_bundle(fixtures_dir=_FIXTURES_DIR)
-    config = _b31_sa_config()
+    config = _b31_sa_config(enforce_retail_granularity=enforce_retail_granularity)
     results = PipelineOrchestrator().run_with_data(bundle, config)
     assert results.sa_results is not None, (
         "P5.15: SA results should not be None under PermissionMode.STANDARDISED. "
@@ -174,124 +168,53 @@ def pass_row(p5_15_b31_sa_results: pl.DataFrame) -> dict:
 
 
 # ===========================================================================
-# RETAIL-BREACH tests (load-bearing — FAIL pre-fix)
+# RETAIL-BREACH tests — the 0.2% test ELECTED (optional firm method)
 # ===========================================================================
 
 
-class TestP515RetailBreachGranularityFires:
+class TestP515RetailBreachElectedGranularity:
     """
-    RETAIL-BREACH: a natural-person obligor whose single exposure (GBP 2,000)
-    exceeds 0.2% of the total retail portfolio (1,006 GBP limit at this scale).
+    RETAIL-BREACH with ``enforce_retail_granularity=True``: a natural-person obligor
+    whose single exposure (GBP 2,000) exceeds 0.2% of the retail portfolio (1,006).
 
-    Pre-fix (current engine): granularity limb absent → obligor stays in
-    retail_other (qualifies_as_retail=True, RW=0.75, RWA=1,500).
-
-    Post-fix: the engine adds the 0.2% window expression to
-    _build_qualifies_as_retail_expr.  RETAIL-BREACH fails the granularity limb
-    → qualifies_as_retail=False → re-routes to CORPORATE (Art. 123(3)(c) /
-    classifier.py L896-901) → RW=1.00 (Art. 122 Table 6) → RWA=2,000.
-
-    The load-bearing assertion is exposure_class == "corporate".  All other
-    assertions in this class follow from that classification decision.
+    The elected test treats the obligor as failing Art. 123A(1)(b)(iii), so it is
+    not regulatory retail. Under PS1/26 Art. 123(1)(a) it is still a retail exposure
+    and Art. 123(3)(c) weights it at 100% (RE-03) — the class is RETAIL_OTHER, not
+    CORPORATE as the pre-RE-03 engine had it. The RWA (2,000) is unchanged by RE-03
+    because the unrated corporate weight was also 100%.
     """
 
-    # -------------------------------------------------------------------------
-    # LOAD-BEARING: exposure_class re-route (FAILS pre-fix)
-    # -------------------------------------------------------------------------
-
-    def test_p5_15_breach_exposure_class_is_corporate(self, breach_row: dict) -> None:
-        """
-        RETAIL-BREACH: exposure_class = "corporate" after granularity re-route.
-
-        Art. 123A(1)(b)(ii): a retail candidate whose single exposure exceeds
-        0.2% of the total retail portfolio does not qualify as retail.
-        Art. 123(3)(c) / classifier re-route: qualifies_as_retail=False on a
-        natural-person retail_other row → re-classed to CORPORATE.
-
-        Arrange: RETAIL-BREACH drawn=2,000, portfolio_total=503,000.
-                 granularity_ratio = 2,000 / 503,000 = 0.003976 > 0.002 → FAIL.
-                 All conditions other than the granularity limb pass
-                 (threshold < 880k, managed-as-retail=True, non-SME).
-        Act:     Basel 3.1 SA pipeline → exposure_class.
-        Assert:  exposure_class == "corporate".
-
-        Pre-fix failure:
-            Current engine does not implement the granularity limb.
-            exposure_class == "retail_other" (qualifies_as_retail stays True).
-            assert 'retail_other' == 'corporate'  →  FAILS.
-        """
-        # Assert — LOAD-BEARING, FAILS pre-fix
+    def test_p5_15_breach_stays_retail_other(self, breach_row: dict) -> None:
+        """RETAIL-BREACH: exposure_class = "retail_other" (Art. 123(1)(a), RE-03)."""
         actual_class = breach_row["exposure_class"]
-        assert actual_class == "corporate", (
-            f"P5.15 BREACH: exposure_class should be 'corporate' after "
-            f"Art. 123A(1)(b)(ii) granularity re-route. "
-            f"Got {actual_class!r}. "
-            f"granularity_ratio = {BREACH_DRAWN:,.0f} / {PORTFOLIO_TOTAL:,.0f} "
-            f"= {BREACH_DRAWN / PORTFOLIO_TOTAL:.6f} > 0.002 → qualifies_as_retail must be False. "
-            f"Pre-fix: granularity limb absent → exposure stays retail_other "
-            f"(qualifies_as_retail=True, RW={_PRE_FIX_RW_BREACH:.2f}, "
-            f"RWA={_PRE_FIX_RWA_BREACH:,.0f})."
+        assert actual_class == "retail_other", (
+            f"P5.15 BREACH: a natural person failing the elected 0.2% test is a "
+            f"non-regulatory RETAIL exposure under PS1/26 Art. 123(1)(a); got {actual_class!r}."
         )
 
     def test_p5_15_breach_qualifies_as_retail_is_false(self, breach_row: dict) -> None:
-        """
-        RETAIL-BREACH: qualifies_as_retail = False (granularity limb fails).
-
-        Arrange/Act: as above.
-        Assert:  qualifies_as_retail == False.
-
-        Pre-fix failure:
-            qualifies_as_retail == True (granularity limb not implemented).
-        """
+        """RETAIL-BREACH: qualifies_as_retail = False (elected 0.2% test fails)."""
         actual = breach_row["qualifies_as_retail"]
         assert actual is False, (
             f"P5.15 BREACH: qualifies_as_retail should be False "
-            f"(Art. 123A(1)(b)(ii) granularity limb breached: "
-            f"{BREACH_DRAWN:,.0f} / {PORTFOLIO_TOTAL:,.0f} > 0.002). "
-            f"Got qualifies_as_retail={actual!r}. "
-            f"Pre-fix: True (granularity limb absent)."
+            f"({BREACH_DRAWN:,.0f} / {PORTFOLIO_TOTAL:,.0f} > 0.002). Got {actual!r}."
         )
 
     def test_p5_15_breach_risk_weight_is_100_pct(self, breach_row: dict) -> None:
-        """
-        RETAIL-BREACH: risk_weight = 1.00 (Art. 122 Table 6, unrated corporate, Basel 3.1).
-
-        Post-fix: exposure_class=corporate, unrated → RW=1.00.
-        Pre-fix:  exposure_class=retail_other → RW=0.75.
-
-        Arrange/Act: as above.
-        Assert:  risk_weight ≈ 1.00 (abs=1e-6).
-
-        Pre-fix failure: assert 0.75 == pytest.approx(1.00).
-        """
+        """RETAIL-BREACH: risk_weight = 1.00 (PS1/26 Art. 123(3)(c) non-regulatory retail)."""
         rw = float(breach_row["risk_weight"])
-        assert rw == pytest.approx(EXPECTED_RW_CORPORATE, abs=_RW_TOL), (
-            f"P5.15 BREACH: risk_weight should be {EXPECTED_RW_CORPORATE:.2f} "
-            f"(Art. 122 Table 6 unrated corporate, Basel 3.1). "
-            f"Got {rw:.6f}. "
-            f"Pre-fix value: {_PRE_FIX_RW_BREACH:.2f} "
-            f"(retail_other RW — granularity limb not applied)."
+        assert rw == pytest.approx(EXPECTED_RW_NON_REGULATORY_RETAIL, abs=_RW_TOL), (
+            f"P5.15 BREACH: risk_weight should be {EXPECTED_RW_NON_REGULATORY_RETAIL:.2f} "
+            f"(Art. 123(3)(c)). Got {rw:.6f}. Default-config value would be "
+            f"{_LIMB_OFF_RW_BREACH:.2f}."
         )
 
     def test_p5_15_breach_rwa_is_2000(self, breach_row: dict) -> None:
-        """
-        RETAIL-BREACH: rwa_final = 2,000 (EAD 2,000 × RW 100%, no SME factor under B31).
-
-        Post-fix: 2,000 × 1.00 = 2,000.
-        Pre-fix:  2,000 × 0.75 = 1,500.
-
-        Arrange/Act: as above.
-        Assert:  rwa_final ≈ 2,000 (abs=0.50).
-
-        Pre-fix failure: assert 1,500 == pytest.approx(2,000).
-        """
+        """RETAIL-BREACH: rwa_final = 2,000 (EAD 2,000 x RW 100%)."""
         rwa = float(breach_row["rwa_final"])
         assert rwa == pytest.approx(EXPECTED_RWA_BREACH, abs=_RWA_TOL), (
-            f"P5.15 BREACH: rwa_final should be {EXPECTED_RWA_BREACH:,.2f} "
-            f"(EAD {BREACH_DRAWN:,.0f} × RW {EXPECTED_RW_CORPORATE:.2f}). "
-            f"Got {rwa:,.2f}. "
-            f"Pre-fix value: {_PRE_FIX_RWA_BREACH:,.2f} "
-            f"(retail RW still applied — granularity branch absent)."
+            f"P5.15 BREACH: rwa_final should be {EXPECTED_RWA_BREACH:,.2f}. Got {rwa:,.2f}. "
+            f"Default-config value would be {_LIMB_OFF_RWA_BREACH:,.2f}."
         )
 
     # -------------------------------------------------------------------------
@@ -302,50 +225,26 @@ class TestP515RetailBreachGranularityFires:
         self, breach_row: dict
     ) -> None:
         """
-        RETAIL-BREACH: lending_group_adjusted_exposure < 880,000 (threshold limb did NOT fire).
+        RETAIL-BREACH: lending_group_adjusted_exposure < 880,000.
 
-        If the GBP 880k threshold (Art. 123A(1)(b)(ii) first limb) fired, the
-        re-route would also produce qualifies_as_retail=False, but for a different
-        reason.  This assertion proves the failure is attributable solely to the
-        new 0.2% granularity limb — not the threshold limb.
-
-        Arrange: RETAIL-BREACH drawn=2,000 (max across all 502 loans is 2,000).
-        Act:     lending_group_adjusted_exposure from SA result.
-        Assert:  lending_group_adjusted_exposure < 880,000.
+        Proves the failure is attributable to the elected 0.2% test alone, not the
+        Art. 123A(1)(b)(ii) GBP 880k aggregate test.
         """
         lgae = float(breach_row["lending_group_adjusted_exposure"])
         assert lgae < _RETAIL_THRESHOLD_GBP, (
             f"P5.15 BREACH anti-confound: lending_group_adjusted_exposure "
-            f"{lgae:,.2f} should be < {_RETAIL_THRESHOLD_GBP:,.0f} "
-            f"(GBP 880k threshold must NOT have fired — the granularity limb alone "
-            f"drives the re-route). "
-            f"Got {lgae:,.2f}."
+            f"{lgae:,.2f} should be < {_RETAIL_THRESHOLD_GBP:,.0f}."
         )
 
     def test_p5_15_breach_supporting_factor_is_1(self, breach_row: dict) -> None:
-        """
-        RETAIL-BREACH: supporting_factor = 1.0 (SME supporting factor removed under B31).
-
-        Basel 3.1 removes the CRR Art. 501 SME supporting factor (0.7619).
-        A corporate exposure under B31 has supporting_factor = 1.0.
-
-        Arrange/Act: as above.
-        Assert:  supporting_factor ≈ 1.0 (abs=1e-6).
-        """
+        """RETAIL-BREACH: supporting_factor = 1.0 (no SME supporting factor under B31)."""
         sf = float(breach_row["supporting_factor"])
         assert sf == pytest.approx(1.0, abs=_RW_TOL), (
-            f"P5.15 BREACH: supporting_factor should be 1.0 "
-            f"(Basel 3.1 removes the SME supporting factor). "
-            f"Got {sf:.6f}."
+            f"P5.15 BREACH: supporting_factor should be 1.0. Got {sf:.6f}."
         )
 
     def test_p5_15_breach_ead_is_2000(self, breach_row: dict) -> None:
-        """
-        RETAIL-BREACH: ead_final = 2,000 (drawn 2,000, undrawn 0, interest 0, no CRM).
-
-        Arrange/Act: as above.
-        Assert:  ead_final ≈ 2,000 (abs=0.50).
-        """
+        """RETAIL-BREACH: ead_final = 2,000 (drawn 2,000, undrawn 0, interest 0, no CRM)."""
         ead = float(breach_row["ead_final"])
         assert ead == pytest.approx(BREACH_DRAWN, abs=_RWA_TOL), (
             f"P5.15 BREACH: ead_final should be {BREACH_DRAWN:,.0f}. Got {ead:,.2f}."
@@ -353,7 +252,57 @@ class TestP515RetailBreachGranularityFires:
 
 
 # ===========================================================================
-# RETAIL-CONTROL-PASS tests (GREEN now, must stay green post-fix)
+# RE-04 — the DEFAULT config applies no 0.2% test (PS1/26 has no such limb)
+# ===========================================================================
+
+
+@pytest.fixture(scope="module")
+def p5_15_default_config_results() -> pl.DataFrame:
+    """The same 502-obligor portfolio under the default Basel 3.1 config."""
+    bundle = build_p5_15_bundle(fixtures_dir=_FIXTURES_DIR)
+    config = CalculationConfig.basel_3_1(
+        reporting_date=_REPORTING_DATE, permission_mode=PermissionMode.STANDARDISED
+    )
+    assert config.enforce_retail_granularity is False, (
+        "RE-04: the default must not apply a 0.2% limb PS1/26 Art. 123A does not contain"
+    )
+    results = PipelineOrchestrator().run_with_data(bundle, config)
+    assert results.sa_results is not None
+    return results.sa_results.collect()
+
+
+class TestP515DefaultConfigHasNoGranularityLimb:
+    """RE-04: under the default config the breaching obligor is regulatory retail.
+
+    Hand calculation: 2,000 x 75% (Art. 123(3)(b)) = 1,500 — down from 2,000 under
+    the old default, which applied a limb PS1/26 Art. 123A does not contain.
+    """
+
+    def test_breach_qualifies_as_regulatory_retail(
+        self, p5_15_default_config_results: pl.DataFrame
+    ) -> None:
+        row = _get_row(p5_15_default_config_results, LOAN_BREACH)
+        assert row["qualifies_as_retail"] is True
+        assert row["exposure_class"] == "retail_other"
+
+    def test_breach_rwa_is_1500(self, p5_15_default_config_results: pl.DataFrame) -> None:
+        row = _get_row(p5_15_default_config_results, LOAN_BREACH)
+        assert float(row["risk_weight"]) == pytest.approx(EXPECTED_RW_RETAIL, abs=_RW_TOL)
+        assert float(row["rwa_final"]) == pytest.approx(EXPECTED_RWA_BREACH_DEFAULT, abs=_RWA_TOL)
+
+    def test_whole_portfolio_is_regulatory_retail(
+        self, p5_15_default_config_results: pl.DataFrame
+    ) -> None:
+        """Every one of the 502 obligors is regulatory retail at 75%."""
+        assert p5_15_default_config_results.height == NUM_CTRL_OBLIGORS + 2
+        assert p5_15_default_config_results["qualifies_as_retail"].all()
+        assert p5_15_default_config_results["rwa_final"].sum() == pytest.approx(
+            PORTFOLIO_TOTAL * EXPECTED_RW_RETAIL, abs=1.0
+        )
+
+
+# ===========================================================================
+# RETAIL-CONTROL-PASS tests — the 0.2% test elected, obligor below it
 # ===========================================================================
 
 
@@ -366,7 +315,7 @@ class TestP515ControlPassGranularityPasses:
     (1,000 / 503,000 = 0.001988 < 0.002) are satisfied.
     qualifies_as_retail=True → stays RETAIL_OTHER → RW=0.75 → RWA=750.
 
-    These tests pass today (pre-fix) and must remain green post-fix.
+    These pinned the original P5.15 implementation and are unchanged by RE-04.
     They verify the granularity implementation does not incorrectly re-route
     exposures that are comfortably within the 0.2% limit.
     """
@@ -448,87 +397,35 @@ class TestP515ControlPassGranularityPasses:
 
 
 # ===========================================================================
-# Cross-arm invariant: granularity discriminates correctly between breach and pass
+# Cross-arm invariant: the elected test discriminates between breach and pass
 # ===========================================================================
 
 
 class TestP515GranularityDiscriminates:
     """
-    Cross-arm invariant: the granularity branch re-routes RETAIL-BREACH to
-    corporate but leaves RETAIL-CONTROL-PASS in retail_other.
-
-    Pre-fix: both arms have exposure_class=retail_other (granularity absent).
-    Post-fix: exactly one arm (RETAIL-BREACH) is corporate.
-
-    This guard catches regression in both directions after Wave 4:
-    - Over-broad: granularity fires for the passing arm.
-    - Under-narrow: granularity still does not fire for the breaching arm.
+    With the 0.2% test elected, exactly one arm (RETAIL-BREACH) is non-regulatory;
+    both arms stay in the retail class (PS1/26 Art. 123(1)(a), RE-03).
     """
 
-    def test_p5_15_exactly_one_arm_reclassed_to_corporate(
-        self, breach_row: dict, pass_row: dict
-    ) -> None:
-        """
-        Exactly one arm has exposure_class == "corporate": RETAIL-BREACH only.
-
-        Pre-fix: zero arms have corporate (granularity absent).
-        Post-fix: exactly one arm (RETAIL-BREACH) is corporate.
-
-        Arrange: breach_row (loan_ref=LOAN_BREACH) and pass_row (loan_ref=LOAN_CONTROL_PASS).
-        Act:     exposure_class from each result row.
-        Assert:  breach exposure_class=corporate, pass exposure_class=retail_other.
-
-        The primary failure mode is the same as the load-bearing test:
-            breach_row["exposure_class"] == "retail_other"  →  FAILS.
-        """
-        breach_class = breach_row["exposure_class"]
-        pass_class = pass_row["exposure_class"]
-
-        assert breach_class == "corporate", (
-            f"P5.15 cross-arm: RETAIL-BREACH (loan={LOAN_BREACH!r}) should be 'corporate' "
-            f"post-fix. Got {breach_class!r}. "
-            f"granularity_ratio_breach={BREACH_DRAWN / PORTFOLIO_TOTAL:.6f} > 0.002 → must re-route. "
-            f"Pre-fix: both arms are 'retail_other' (granularity limb absent)."
-        )
-        assert pass_class == "retail_other", (
-            f"P5.15 cross-arm: RETAIL-CONTROL-PASS (loan={LOAN_CONTROL_PASS!r}) should "
-            f"stay 'retail_other'. Got {pass_class!r}. "
-            f"granularity_ratio_pass={PASS_DRAWN / PORTFOLIO_TOTAL:.6f} < 0.002 → must NOT re-route."
-        )
+    def test_p5_15_exactly_one_arm_non_regulatory(self, breach_row: dict, pass_row: dict) -> None:
+        """RETAIL-BREACH fails the elected test, RETAIL-CONTROL-PASS passes it."""
+        assert breach_row["qualifies_as_retail"] is False
+        assert pass_row["qualifies_as_retail"] is True
+        assert breach_row["exposure_class"] == "retail_other"
+        assert pass_row["exposure_class"] == "retail_other"
 
     def test_p5_15_rwa_delta_between_breach_and_pass(
         self, breach_row: dict, pass_row: dict
     ) -> None:
         """
-        RWA delta: breach obligor pays GBP 1,250 more than it would as retail.
-
-        Post-fix:
-            rwa_final(BREACH) = 2,000 (CORPORATE 100%)
-            rwa_final(PASS)   = 750   (RETAIL 75%)
-            delta = 2,000 - 750 = 1,250
-        Pre-fix:
-            rwa_final(BREACH) = 1,500 (retail, no granularity)
-            rwa_final(PASS)   = 750
-            delta = 750
-
-        Arrange: both rows.
-        Act:     rwa_final(breach) - rwa_final(pass).
-        Assert:  delta ≈ 1,250 (abs=1.00).
-
-        Pre-fix failure: delta = 750 ≠ 1,250.
+        RWA delta: 2,000 (non-regulatory 100%) - 750 (regulatory 75%) = 1,250.
         """
         rwa_breach = float(breach_row["rwa_final"])
         rwa_pass = float(pass_row["rwa_final"])
-        delta = rwa_breach - rwa_pass
         expected_delta = EXPECTED_RWA_BREACH - EXPECTED_RWA_PASS  # 2,000 - 750 = 1,250
-
-        assert delta == pytest.approx(expected_delta, abs=1.0), (
-            f"P5.15 cross-arm: rwa_final delta should be {expected_delta:,.0f} "
-            f"(breach={EXPECTED_RWA_BREACH:,.0f} - pass={EXPECTED_RWA_PASS:,.0f}). "
-            f"Got breach={rwa_breach:,.2f}, pass={rwa_pass:,.2f}, "
-            f"delta={delta:,.2f}. "
-            f"Pre-fix delta={_PRE_FIX_RWA_BREACH - EXPECTED_RWA_PASS:,.0f} "
-            f"(breach stays retail at RW={_PRE_FIX_RW_BREACH:.2f})."
+        assert rwa_breach - rwa_pass == pytest.approx(expected_delta, abs=1.0), (
+            f"P5.15 cross-arm: rwa_final delta should be {expected_delta:,.0f}. "
+            f"Got breach={rwa_breach:,.2f}, pass={rwa_pass:,.2f}."
         )
 
 

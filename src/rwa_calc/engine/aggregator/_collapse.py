@@ -5,8 +5,8 @@ Internal module — not part of the public API.
 
 Our results frame splits a single loan into multiple rows:
 - guarantee splits carry ``parent_exposure_reference`` and a suffixed
-  ``exposure_reference`` (``__G_<guarantor>`` / ``__REM`` / ``__REM_FL`` /
-  ``__REM_SEN``) — see engine/crm/guarantees.py;
+  ``exposure_reference`` (``__G_<guarantor>`` / ``__REM``) — see
+  engine/crm/guarantees.py;
 - real-estate splits carry ``split_parent_id`` — see engine/re_split/.
 
 A legacy calculator typically reports one row per loan, so before reconciling we

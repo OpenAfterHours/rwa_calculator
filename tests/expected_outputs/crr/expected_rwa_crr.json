@@ -205,7 +205,7 @@
     {
       "scenario_id": "CRR-A7",
       "scenario_group": "CRR-A",
-      "description": "Commercial RE 40% LTV - 50% RW",
+      "description": "Income-producing commercial RE 40% LTV - Art. 124(1) 100% RW",
       "regulatory_framework": "CRR",
       "approach": "SA",
       "exposure_class": "CRE",
@@ -218,13 +218,13 @@
       "cqs": null,
       "ltv": 0.4,
       "turnover": null,
-      "risk_weight": 0.5,
-      "rwa_before_sf": 200000.0,
+      "risk_weight": 1.0,
+      "rwa_before_sf": 400000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 200000.0,
+      "rwa_after_sf": 400000.0,
       "expected_loss": null,
-      "regulatory_reference": "CRR Art. 126",
-      "calculation_notes": "50% RW (LTV 40% <= 50% with income cover)"
+      "regulatory_reference": "CRR Art. 124(1), 126(2)(b)",
+      "calculation_notes": "100% RW (Art. 124(1): Art. 126 conditions not met)"
     },
     {
       "scenario_id": "CRR-A13",

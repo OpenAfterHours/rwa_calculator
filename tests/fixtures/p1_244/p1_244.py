@@ -240,7 +240,8 @@ def build_p1_244_control_only_raw_bundle() -> RawDataBundle:
     """Return a RawDataBundle with ONLY the QRRE-eligible control facility.
 
     Every (a)/(b) gate passes, so no row is gate-demoted and the CLS010 warning
-    must NOT fire — the negative control for ``collect_qrre_gate_demotion_warnings``.
+    must NOT fire — the negative control for the CLS010 roll-up in
+    ``audit.collect_classified_frame_warnings``.
     """
     refs = [f"{CP_INDIVIDUAL}_{n}" for n in range(3)]
     control_only = pl.LazyFrame(
@@ -375,9 +376,17 @@ _SUBTYPES_SCHEMA: dict[str, PolarsDataType] = {
     "cp_is_natural_person": pl.Boolean,
     "cp_is_financial_sector_entity": pl.Boolean,
     "cp_total_assets": pl.Float64,
+    "cp_group_total_assets": pl.Float64,
     "cp_apply_fi_scalar": pl.Boolean,
     "sme_size_metric_gbp": pl.Float64,
     "sme_size_source": pl.String,
+    # Real-estate evidence (review CL-08): the mortgage branch reads these
+    # hierarchy_exit columns to decide whether a mortgage label is backed by
+    # a linked property or an LTV.
+    "property_collateral_value": pl.Float64,
+    "has_facility_property_collateral": pl.Boolean,
+    "property_type": pl.String,
+    "ltv": pl.Float64,
 }
 
 
@@ -420,9 +429,14 @@ def make_subtypes_frame(
             "cp_is_natural_person": [cp_is_natural_person],
             "cp_is_financial_sector_entity": [False],
             "cp_total_assets": [None],
+            "cp_group_total_assets": [None],
             "cp_apply_fi_scalar": [False],
             "sme_size_metric_gbp": [None],
             "sme_size_source": [None],
+            "property_collateral_value": [0.0],
+            "has_facility_property_collateral": [False],
+            "property_type": [None],
+            "ltv": [None],
         },
         schema=_SUBTYPES_SCHEMA,
     )

@@ -5,9 +5,9 @@ Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer (engine/ccf.py,
     data/schemas.py)
 
-Scenario design (P2.32 / B31-D.CCF10 — PRA PS1/26 Art. 166E(5)):
+Scenario design (P2.32 / B31-D.CCF10 — PRA PS1/26 Art. 166A(5)):
 
-    Under Basel 3.1 (PRA PS1/26 Art. 166E(5)), undrawn purchase commitments for
+    Under Basel 3.1 (PRA PS1/26 Art. 166A(5)), undrawn purchase commitments for
     *revolving* purchased-receivables facilities receive a specific CCF treatment:
 
         - 40% by default (Art. 111(1) Table A1 Row 5 "Other Commitments" / OC).
@@ -27,7 +27,7 @@ Scenario design (P2.32 / B31-D.CCF10 — PRA PS1/26 Art. 166E(5)):
 
     The MR row (PR_COMMIT_MR) is the strongest discriminator: without the
     override, ``risk_type="MR"`` would resolve to CCF = 0.50; with the
-    Art. 166E(5) override it resolves to CCF = 0.40 (EAD = 400,000 vs 500,000).
+    Art. 166A(5) override it resolves to CCF = 0.40 (EAD = 400,000 vs 500,000).
 
     Four facility rows exercise the logic:
 
@@ -35,7 +35,7 @@ Scenario design (P2.32 / B31-D.CCF10 — PRA PS1/26 Art. 166E(5)):
             risk_type="OC", is_purchased_receivable_commitment=True,
             is_revolving=True.
             Expected under CalculationConfig.basel_3_1():
-                ccf = 0.40  (Art. 166E(5) main limb)
+                ccf = 0.40  (Art. 166A(5) main limb)
                 ead_from_ccf = 400_000.00
                 ead_pre_crm  = 400_000.00
 
@@ -43,7 +43,7 @@ Scenario design (P2.32 / B31-D.CCF10 — PRA PS1/26 Art. 166E(5)):
             risk_type="LR", is_purchased_receivable_commitment=True,
             is_revolving=True.
             Expected under CalculationConfig.basel_3_1():
-                ccf = 0.10  (Art. 166E(5) UCC / LR exception)
+                ccf = 0.10  (Art. 166A(5) UCC / LR exception)
                 ead_from_ccf = 100_000.00
                 ead_pre_crm  = 100_000.00
 
@@ -51,7 +51,7 @@ Scenario design (P2.32 / B31-D.CCF10 — PRA PS1/26 Art. 166E(5)):
             risk_type="MR", is_purchased_receivable_commitment=True,
             is_revolving=True.
             Expected under CalculationConfig.basel_3_1():
-                ccf = 0.40  (Art. 166E(5) overrides the generic MR = 0.50)
+                ccf = 0.40  (Art. 166A(5) overrides the generic MR = 0.50)
                 ead_from_ccf = 400_000.00  [pre-fix: 500_000.00]
                 ead_pre_crm  = 400_000.00
 
@@ -81,7 +81,7 @@ Hand-calculation (Basel 3.1, CalculationConfig.basel_3_1()):
         SA_CCF_B31["MR"] = 0.50  (ccf.py line 74, overridden for flagged rows)
 
     CRR control (PR_COMMIT_40_CRR):
-        Art. 166E(5) is Basel-3.1-only.  The flag is present in the parquet
+        Art. 166A(5) is Basel-3.1-only.  The flag is present in the parquet
         but the engine must not branch on it under CRR.  CRR OC CCF = 0.50
         (SA) or 0.75 (F-IRB OC path — Art. 166(8)(d)).
 
@@ -92,7 +92,7 @@ Implementation note:
     engine-implementer will register (pl.Boolean, default False).
 
 References:
-    - PRA PS1/26 App 1 Art. 166E(5) (ps126app1.pdf p.118): CCF on undrawn
+    - PRA PS1/26 App 1 Art. 166A(5) (ps126app1.pdf p.118): CCF on undrawn
       purchase commitments for revolving purchased receivables.
     - Art. 111(1) Table A1 Row 5 (OC = 40%) and Row 7 (LR/UCC = 10%).
     - CRR Art. 166(8)(c): revolving purchased-receivables UCC → 0% (no-op
@@ -130,7 +130,7 @@ SCENARIO_ID_CRR: str = "CRR-D.CCF9"
 COUNTERPARTY_REF: str = "CP_PR_CORP_001"
 
 # Facility references
-FAC_REF_OC: str = "PR_COMMIT_40"  # B3.1: CCF = 0.40 (OC / Art.166E(5) main limb)
+FAC_REF_OC: str = "PR_COMMIT_40"  # B3.1: CCF = 0.40 (OC / Art.166A(5) main limb)
 FAC_REF_LR: str = "PR_COMMIT_10"  # B3.1: CCF = 0.10 (LR/UCC exception)
 FAC_REF_MR: str = "PR_COMMIT_MR"  # B3.1: CCF = 0.40 (overrides generic MR = 0.50)
 FAC_REF_CRR: str = "PR_COMMIT_40_CRR"  # CRR control: flag is no-op
@@ -143,16 +143,16 @@ VALUE_DATE: date = date(2027, 1, 1)
 MATURITY_DATE: date = date(2030, 6, 30)  # > 1y to qualify as committed OC
 
 # Expected outputs (Basel 3.1)
-EXPECTED_CCF_OC: float = 0.40  # Art. 166E(5) main limb → SA_CCF_B31["OC"]
-EXPECTED_CCF_LR: float = 0.10  # Art. 166E(5) UCC/LR exception → SA_CCF_B31["LR"]
-EXPECTED_CCF_MR: float = 0.40  # Art. 166E(5) override — generic MR=0.50 → 0.40
+EXPECTED_CCF_OC: float = 0.40  # Art. 166A(5) main limb → SA_CCF_B31["OC"]
+EXPECTED_CCF_LR: float = 0.10  # Art. 166A(5) UCC/LR exception → SA_CCF_B31["LR"]
+EXPECTED_CCF_MR: float = 0.40  # Art. 166A(5) override — generic MR=0.50 → 0.40
 
 EXPECTED_EAD_OC: float = 400_000.00  # 1_000_000 × 0.40
 EXPECTED_EAD_LR: float = 100_000.00  # 1_000_000 × 0.10
 EXPECTED_EAD_MR: float = 400_000.00  # 1_000_000 × 0.40 (pre-fix: 500_000)
 
 # Pre-fix (generic MR) expected output — used by tests to confirm the fix fires
-PRE_FIX_CCF_MR: float = 0.50  # SA_CCF_B31["MR"] without Art. 166E(5) override
+PRE_FIX_CCF_MR: float = 0.50  # SA_CCF_B31["MR"] without Art. 166A(5) override
 PRE_FIX_EAD_MR: float = 500_000.00
 
 # Regulatory scalar cross-references (ccf.py lines)
@@ -272,7 +272,7 @@ def create_p232_facilities() -> pl.DataFrame:
     """
     Return all four P2.32 facility rows as a DataFrame.
 
-    Three Basel 3.1 rows (OC / LR / MR) exercise the Art. 166E(5) CCF routing.
+    Three Basel 3.1 rows (OC / LR / MR) exercise the Art. 166A(5) CCF routing.
     One CRR control row confirms the flag is a no-op under CRR.  All rows have
     ``is_revolving=True``, ``is_obs_commitment=True``, and
     ``is_purchased_receivable_commitment=True``.
@@ -440,8 +440,8 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"  CRR row ({FAC_REF_CRR}): risk_type=OC, flag=True (CRR control — flag no-op)")
     print()
     print("  Regulatory scalars (ccf.py):")
-    print(f"    SA_CCF_B31['OC'] = {SA_CCF_B31_OC}  (Art. 166E(5) main limb)")
-    print(f"    SA_CCF_B31['LR'] = {SA_CCF_B31_LR}  (Art. 166E(5) UCC/LR exception)")
+    print(f"    SA_CCF_B31['OC'] = {SA_CCF_B31_OC}  (Art. 166A(5) main limb)")
+    print(f"    SA_CCF_B31['LR'] = {SA_CCF_B31_LR}  (Art. 166A(5) UCC/LR exception)")
     print(f"    SA_CCF_B31['MR'] = {SA_CCF_B31_MR}  (generic MR — overridden for flagged rows)")
 
 

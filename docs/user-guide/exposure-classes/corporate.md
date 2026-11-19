@@ -16,20 +16,27 @@ Corporate exposures include:
 
 ## SME Definition
 
-An entity qualifies as an **SME** if:
+An entity is sized on its **group's** consolidated accounts, not its own: the
+calculator takes the largest annual revenue (and, under CRR, total assets) among
+the counterparty and every parent above it in `org_mapping`.
 
-| Criterion | Threshold (EUR) | Threshold (GBP @ 0.88) |
-|-----------|-----------------|------------------------|
-| Annual turnover | ≤ EUR 50m | ≤ GBP 44m |
-| **OR** Total assets | ≤ EUR 43m | ≤ GBP 37.84m |
+| Criterion | CRR | Basel 3.1 |
+|-----------|-----|-----------|
+| Group annual turnover | below EUR 50m (converted at the run's EUR/GBP rate) | **not more than GBP 44m** (PS1/26 glossary; GBP 44,000,000 exactly is an SME) |
+| Group total assets, when no turnover is known | below EUR 43m (Commission Rec 2003/361/EC) | not used — the PS1/26 SME definition is turnover-only |
 
 ```python
-def is_sme(counterparty):
-    return (
-        counterparty.annual_turnover <= 50_000_000 or  # EUR
-        counterparty.total_assets <= 43_000_000         # EUR
-    )
+def is_sme(group_turnover, group_assets, regime):
+    if regime == "basel_3_1":
+        return group_turnover is not None and 0 < group_turnover <= 44_000_000  # GBP
+    if group_turnover is not None:
+        return 0 < group_turnover < 50_000_000 * eur_gbp_rate
+    return group_assets is not None and 0 < group_assets < 43_000_000 * eur_gbp_rate
 ```
+
+A small subsidiary of a large group is therefore **not** an SME (warning CLS016),
+and under Basel 3.1 a corporate with no revenue anywhere in its group is not an SME
+(warning CLS015 when its assets would have qualified under CRR).
 
 ## Risk Weights (SA)
 

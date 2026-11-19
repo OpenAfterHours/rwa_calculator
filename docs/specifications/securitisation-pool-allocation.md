@@ -32,7 +32,7 @@ via the data source registry.
 | `pool_reference` | String | Yes | Free-text pool / SPV identifier. |
 | `allocation_pct` | Float64 | Yes | Fraction transferred to this pool. Each row must be in `(0, 1]`; per-exposure sums must be in `[0, 1]`. |
 | `transfer_type` | String | No | `traditional` (default) or `synthetic`. Carried for future use; not consumed in phase 1. |
-| `significant_risk_transfer` | Boolean | No | SRT assertion by the firm (default `True`). Phase 1 trusts the flag — the engine does not validate Art. 244–246 conditions. |
+| `significant_risk_transfer` | Boolean | No | SRT assertion by the firm (default `True` — a null or absent value is read as `True`; changing that default is an owner decision). An explicit `False` carves **nothing** out: CRR Art. 244(1) / 245(1) permit the exclusion only where significant credit risk has been transferred (limb (a)) or every retained position takes 1,250% / is deducted (limb (b)), and the engine has no securitisation-position route to evidence limb (b). The row is reported as `SEC006` and its share stays on balance sheet at full weight. The engine does not validate the Art. 244–246 conditions behind a `True`. |
 | `effective_date` | Date | No | Carried for audit trail. |
 
 When `exposure_type = "facility"`, the allocation applies to the
@@ -50,8 +50,10 @@ on_balance_sheet_rwa  = rwa_final  × securitisation_residual_pct
 on_balance_sheet_el   = expected_loss × securitisation_residual_pct
 ```
 
-where `securitisation_residual_pct = 1 - sum(allocation_pct)`, clipped
-to `[0, 1]`. Per-pool contributions are derived by exploding the
+where `securitisation_residual_pct = 1 - sum(allocation_pct)` over the
+rows that assert significant risk transfer, clipped to `[0, 1]` (a row
+with `significant_risk_transfer = False` is not a carve-out — see
+`SEC006`). Per-pool contributions are derived by exploding the
 `securitisation_pool_allocations` struct list and multiplying by each
 `allocation_pct`:
 
@@ -61,6 +63,8 @@ pool_X_ead = ead_final × allocation_pct_X     # for each pool in the struct lis
 
 The two sets reconcile: `residual + sum(pool_pct) = 1` (when not
 over-allocated) implies `on_balance_sheet_ead + sum(pool_ead) = ead_final`.
+The struct list carries only the carved-out (SRT-asserting) slices, so the
+identity holds with a `SEC006` row present; its share is in the residual.
 
 ## Why late multiplication (not pre-CRM scaling)?
 
@@ -89,15 +93,16 @@ order effect is a known phase-1 limitation (see below).
 
 ## Validation rules
 
-The allocator stage runs five validation checks in order:
+The allocator stage runs six validation checks in order:
 
 | Code | Trigger | Severity | Outcome |
 |---|---|---|---|
 | `SEC002` | `allocation_pct <= 0` or `> 1` or null | ERROR | Row dropped before per-exposure aggregation. |
 | `SEC003` | `exposure_reference` does not resolve to any loan / contingent / facility | WARNING | Row dropped. |
 | `SEC004` | Duplicate `(exposure_reference, pool_reference)` | WARNING | First row kept, others dropped. |
-| `SEC001` | Per-exposure sum > 1 (after dedup) | ERROR | All pool slices dropped for that exposure; residual_pct = 1.0; `audit_status = "over_allocated"`. |
-| `SEC005` | Per-exposure sum == 1 (residual = 0) | WARNING | Exposure flows through pipeline with zero on-balance-sheet contribution; `audit_status = "fully_securitised"`. |
+| `SEC006` | `significant_risk_transfer` is explicitly `False` | WARNING | No carve-out for that row: it is excluded from the residual and the pool slices (but still counted by `SEC001`); `audit_status = "no_significant_risk_transfer"`. CRR Art. 244(1) / 245(1). One rolled-up warning naming up to five exposures. |
+| `SEC001` | Per-exposure sum > 1 (after dedup, every valid row including `SEC006` rows) | ERROR | All pool slices dropped for that exposure; residual_pct = 1.0; `audit_status = "over_allocated"`. |
+| `SEC005` | Per-exposure carved-out sum == 1 (residual = 0) | WARNING | Exposure flows through pipeline with zero on-balance-sheet contribution; `audit_status = "fully_securitised"`. |
 
 All errors accumulate in `RawDataBundle.errors` (the loader-validation
 channel) so the original `SEC###` codes survive verbatim into
@@ -150,7 +155,14 @@ pipeline stage runs unmodified; the new columns ride through.
   deferred to phase 2.
 - **No SRT validation**: the engine trusts the firm's
   `significant_risk_transfer` flag. Art. 244–246 conditions (operational
-  requirements, third-party investor, etc.) are not checked.
+  requirements, third-party investor, etc.) are not checked. It does honour
+  an explicit `False` (no carve-out, `SEC006`); a null keeps the `True`
+  default.
+- **No limb (b) route**: Art. 244(1)(b) / 245(1)(b) also allow the exclusion
+  where the originator weights every retained securitisation position at
+  1,250% or deducts it. With no securitisation-position input the engine
+  cannot evidence that, so a firm relying on limb (b) alone is refused the
+  carve-out (conservative; tracked with the securitisation framework, P7.4).
 - **No securitisation-framework RWA**: pool slices carry a placeholder
   `total_rwa_placeholder = standard_rwa × allocation_pct` for memorandum
   reporting only. SEC-SA / SEC-IRBA / SEC-ERBA calculation, retained

@@ -205,10 +205,11 @@ def _crr_config(*, irb: bool = False) -> CalculationConfig:
 
 
 def _b31_config(*, irb: bool = False) -> CalculationConfig:
-    """Basel 3.1 with the Art. 123A(1)(b)(ii) granularity limb disabled.
+    """Basel 3.1 with the optional 0.2% granularity test off (the default since RE-04).
 
-    P5.15's 0.2%-of-portfolio limb re-classes every retail row in a book this
-    thin to CORPORATE, erasing the population under test before the QRRE gate is
+    P5.15's 0.2%-of-portfolio test (BCBS CRE20.66, not a PS1/26 limb) would fail
+    every retail row in a book this thin as regulatory retail, erasing the
+    population under test before the QRRE gate is
     reached. ``tests/fixtures/p1_244`` uses the same documented isolation switch.
     """
     return CalculationConfig.basel_3_1(

@@ -9,12 +9,16 @@ Pipeline position:
 
 Key responsibilities:
 - Join the 20+ ``cp_*`` counterparty columns and derive the consolidated
-  SME size metric (``sme_size_metric_gbp`` / ``sme_size_source``).
-- Roll counterparty revenue up the ultimate-parent chain into
-  ``cp_group_annual_revenue`` for the Art. 147(4C)(b)(ii) large-corporate
-  F-IRB-only subclass test (``with_group_annual_revenue``).
+  SME size metric (``sme_size_metric_gbp`` / ``sme_size_source``) from the
+  group figures.
+- Read the hierarchy's consolidated figures (max over the entity and EVERY
+  org ancestor) into ``cp_group_annual_revenue`` / ``cp_group_total_assets``
+  (``group_size_exprs``): the highest-consolidation figures read by the SME
+  size test, the Art. 147(4C)(b)(ii) large-corporate F-IRB-only subclass test
+  and (Basel 3.1) the large-FSE asset test.
 - Join specialised-lending metadata (``sl_type`` / ``slotting_category`` /
-  ``is_hvcre``).
+  ``is_hvcre`` / ``sl_project_phase``) and resolve the project-finance phase
+  the exposure is treated as being in (``resolve_sl_project_phase``).
 - Derive every flag that depends only on raw input columns
   (``derive_independent_flags``): exposure classes, is_mortgage,
   is_defaulted, is_adc, qualifies_as_retail, has_income_cover, …
@@ -33,11 +37,15 @@ Scratch-column coupling (load-bearing):
 References:
 - CRR Art. 112 / Art. 147: SA / IRB exposure-class mapping by entity type
 - CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC Art. 2: SME size test
+  (CRR: turnover or balance-sheet total); PS1/26 glossary SME: turnover only,
+  "not more than GBP 44 million", on "the highest consolidated accounts of the
+  group to which the enterprise belongs"; Art. 153(4) "consolidated group"
 - CRR Art. 123: retail threshold; PS1/26, paragraph 123A: retail criteria
 - CRR Art. 178 / Art. 153: default detection (counterparty + row-level)
 - PRA PS1/26 Art. 124(3) / Art. 124K: ADC classification
 - PRA PS1/26 Art. 124E: three-property income-producing re-route
 - CRR Art. 128 (UK-omitted by SI 2021/1078) / PS1/26 Art. 128: high-risk class
+- PRA PS1/26 Art. 122B(2)(c)-(5): project-finance phase weights
 """
 
 from __future__ import annotations
@@ -50,7 +58,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.schemas import NATURAL_PERSON_ENTITY_TYPES
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.domain.enums import ExposureClass, ProjectPhase, SpecialisedLendingType
 from rwa_calc.engine.entity_class_maps import (
     entity_type_to_irb_class,
     entity_type_to_sa_class,
@@ -72,8 +80,9 @@ logger = logging.getLogger(__name__)
 # int-to-int against ``cp_qualifying_property_count`` (no float coercion).
 _B31_PACK = resolve("b31", date(2027, 1, 1))
 _RRE_THREE_PROPERTY_LIMIT = _B31_PACK.int_param("b31_rre_three_property_limit").value
-# PRA PS1/26 Art. 123A(1)(b)(ii) single-obligor 0.2% retail-granularity cap
-# (Decimal, float()-ed at the call site below) — read direct from the b31 pack.
+# Optional 0.2% retail-granularity test (BCBS CRE20.66) a firm may elect to evidence
+# PS1/26 Art. 123A(1)(b)(iii) — NOT a PS1/26 limb (RE-04). Decimal, float()-ed at the
+# call site below; read direct from the b31 pack.
 _RETAIL_GRANULARITY_LIMIT = _B31_PACK.scalar("b31_retail_granularity_limit")
 
 
@@ -101,20 +110,23 @@ def add_counterparty_attributes(
 
     Also derives the consolidated SME size metric used by every
     classification gate (corporate-SME, retail-SME, SL-SME, Art. 123
-    reclassification, Art. 123A retail qualification, Art. 147A(1)(d)
-    large-corporate F-IRB restriction) and by the IRB Art. 153(4)
-    correlation adjustment:
-    - sme_size_metric_gbp = coalesce(cp_annual_revenue, cp_total_assets)
+    reclassification, Art. 123A retail qualification) and by the IRB
+    Art. 153(4) correlation adjustment, from the GROUP figures:
+    - sme_size_metric_gbp = coalesce(cp_group_annual_revenue, cp_group_total_assets)
     - sme_size_source     = "turnover" | "assets" | null
-    Art. 501 supporting factor deliberately ignores this column and
-    keys off cp_annual_revenue directly (Art. 501(2)(c)).
+    The SME definition sizes the enterprise on its group — PS1/26 glossary SME
+    (1) "the annual turnover shall be calculated on the basis of the highest
+    consolidated accounts of the group to which the enterprise belongs";
+    Art. 153(4) (both regimes) "the consolidated group of which the entity is a
+    part". Whether the "assets" source can make an SME is the regime's
+    ``sme_size_assets_fallback`` Feature (``is_sme_by_size_expr``).
+    The Art. 501 supporting factor additionally requires the entity's own
+    ``cp_annual_revenue`` (Art. 501(2)(b) turnover-only gate).
 
-    Also surfaces ``cp_group_annual_revenue`` — the highest-level-of-
-    consolidation revenue signal for the Art. 147(4C)(b)(ii) large-corporate
-    F-IRB-only subclass test (``with_group_annual_revenue``): the counterparty's
-    own turnover rolled up its ultimate-parent chain. This is deliberately
-    distinct from ``cp_annual_revenue`` (the entity's own turnover) so the group
-    test and the entity-level SME / supporting-factor tests read different bases.
+    ``cp_group_annual_revenue`` / ``cp_group_total_assets`` are the
+    highest-level-of-consolidation figures the hierarchy put on the lookup (the
+    max over the entity and every org ancestor, ``group_size_exprs``).
+    ``cp_annual_revenue`` / ``cp_total_assets`` stay the entity's own figures.
 
     The lookup is sealed against ``CP_LOOKUP_COUNTERPARTIES_EDGE``
     (``CounterpartyLookup.__post_init__``), so every declared column is
@@ -122,6 +134,7 @@ def add_counterparty_attributes(
     its own null-VALUE semantics (e.g. ``cp_is_managed_as_retail``
     ``fill_null(True)`` in ``_build_qualifies_as_retail_expr``).
     """
+    group_revenue, group_assets = group_size_exprs()
     select_cols = [
         pl.col("counterparty_reference"),
         pl.col("entity_type").str.to_lowercase().alias("cp_entity_type"),
@@ -148,8 +161,8 @@ def add_counterparty_attributes(
         # CCP fields (CRR Art. 300-311, CRE54.14-15)
         pl.col("is_ccp_client_cleared").alias("cp_is_ccp_client_cleared"),
         # QCCP flag (CRR Art. 272 Def (88)) — gates the Art. 306(1) 2%/4% trade
-        # exposure pin so a ``ccp`` entity_type with an explicit is_qccp=False
-        # falls through to the standard institution ladder (Art. 107(2)(a)).
+        # exposure pin; a ``ccp`` entity_type with an explicit is_qccp=False is
+        # classified CORPORATE (Art. 107(2)(b), see derive_independent_flags).
         pl.col("is_qccp").alias("cp_is_qccp"),
         # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
         pl.col("borrower_income_currency").alias("cp_borrower_income_currency"),
@@ -175,15 +188,15 @@ def add_counterparty_attributes(
         # derivative exposure routes through F-IRB/A-IRB instead of falling back
         # to SA (CRR Art. 153(1) corporate IRB; CRR Art. 162(2)(b) derivative M).
         pl.col("internal_model_id").alias("cp_internal_model_id"),
-        # Group-consolidated revenue signal — PS1/26 Art. 147(4C)(b)(ii) large-
-        # corporate F-IRB subclass test (see with_group_annual_revenue). Distinct
-        # from cp_annual_revenue (the entity's own turnover, which continues to
-        # drive the Art. 4(1)(128D) SME size test and the Art. 501 supporting
-        # factor); this column carries the highest-level-of-consolidation figure.
-        pl.col("group_annual_revenue").alias("cp_group_annual_revenue"),
+        # Highest-level-of-consolidation figures (see group_size_exprs):
+        # the SME size test, the PS1/26 Art. 147(4C)(b)(ii) large-corporate
+        # subclass test and the Basel 3.1 large-FSE asset test read these;
+        # cp_annual_revenue / cp_total_assets stay the entity's own figures.
+        group_revenue.alias("cp_group_annual_revenue"),
+        group_assets.alias("cp_group_total_assets"),
     ]
 
-    cp_cols = with_group_annual_revenue(counterparties).select(select_cols)
+    cp_cols = counterparties.select(select_cols)
 
     joined = exposures.join(
         cp_cols,
@@ -191,82 +204,31 @@ def add_counterparty_attributes(
         how="left",
     )
 
-    # SME size metric (CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC):
-    # turnover when present, total assets otherwise. Every SME
-    # classification gate downstream reads sme_size_metric_gbp together
-    # with sme_size_source so the threshold can be turnover- or
-    # balance-sheet-keyed without re-reading the raw cp_ columns.
-    # Null on both fields → null metric → no SME treatment.
-    joined = joined.with_columns(
-        [
-            pl.coalesce([pl.col("cp_annual_revenue"), pl.col("cp_total_assets")]).alias(
-                "sme_size_metric_gbp"
-            ),
-            pl.when(pl.col("cp_annual_revenue").is_not_null())
-            .then(pl.lit("turnover"))
-            .when(pl.col("cp_total_assets").is_not_null())
-            .then(pl.lit("assets"))
-            .otherwise(pl.lit(None, dtype=pl.String))
-            .alias("sme_size_source"),
-        ]
+    # SME size metric on the consolidated group's figures: turnover when
+    # present, total assets otherwise. Every SME classification gate
+    # downstream reads sme_size_metric_gbp together with sme_size_source so
+    # the threshold can be turnover- or balance-sheet-keyed without re-reading
+    # the raw cp_ columns. Null on both fields → null metric → no SME treatment.
+    metric, source = sme_size_exprs(
+        pl.col("cp_group_annual_revenue"), pl.col("cp_group_total_assets")
     )
-    return joined
+    return joined.with_columns(metric.alias("sme_size_metric_gbp"), source.alias("sme_size_source"))
 
 
-@cites("PS1/26, paragraph 147")
-def with_group_annual_revenue(counterparties: pl.LazyFrame) -> pl.LazyFrame:
-    """Add ``group_annual_revenue`` — the highest-consolidation revenue signal.
+def group_size_exprs() -> tuple[pl.Expr, pl.Expr]:
+    """The consolidated revenue and total assets read off a counterparty lookup row.
 
-    PS1/26 Art. 147(4C)(b)(ii) assigns a corporate to the financial-/large-
-    corporates F-IRB-only subclass (Art. 147A(1)(e)) when its annual revenue
-    exceeds GBP 440m, "taken at the highest level of consolidation which is
-    performed and at which audited financial statements are available". The
-    engine approximates that group figure by rolling the counterparty's own
-    ``annual_revenue`` up its resolved ``ultimate_parent_reference`` chain: a
-    parent's own ``annual_revenue`` is, by convention, its consolidated audited-
-    accounts turnover (which subsumes the subsidiary), so the ultimate parent —
-    the top of the group — carries the highest-consolidation figure.
-
-    The MAX of own and ultimate-parent revenue is taken (not a coalesce that
-    prefers one source), so the group can never be understated by a small
-    subsidiary figure AND a large subsidiary is never let off by a smaller
-    (data-anomalous) parent figure — both are the conservative direction for a
-    test that FORCES F-IRB (own-LGD A-IRB is typically lower RWA than the F-IRB
-    supervisory LGD). ``max_horizontal`` ignores nulls, so a null own revenue
-    under a revenue-bearing parent yields the parent figure, a top-level entity
-    (null ``ultimate_parent_reference`` → no self-join match) yields its own, and
-    both-null yields null (the caller's total_assets / conservative-large default
-    at ``_apply_b31_approach_restrictions`` then applies unchanged).
-
-    3-year averaging (Art. 147(4C)(b)(ii) second sentence — "average annual
-    amount over the last three years") is NOT applied: the counterparty schema
-    carries a single point-in-time ``annual_revenue``. The most-recent-figure
-    convention is used; supplying multi-year revenue would be new schema
-    machinery and is a documented deferral.
-
-    The lookup keys on the (unique) ``counterparty_reference``, so the
-    ultimate-parent self-join matches at most one row and never fans out. When
-    the ultimate parent is absent from the counterparty table the join misses
-    and the own figure stands.
+    ``max(own, group)`` of the lookup's ``group_annual_revenue`` /
+    ``group_total_assets`` (the hierarchy's max over the entity and every org
+    ancestor — ``engine/hierarchy/graph.py::with_group_size_figures``) and the
+    entity's own figure: identical to the group figure on a hierarchy-built
+    lookup, and the own figure on a hand-built one that carries no group
+    columns. Shared by the counterparty-attribute join and the CLS0xx audit so
+    both size on one definition.
     """
-    parent_revenue = counterparties.select(
-        pl.col("counterparty_reference").alias("_grp_parent_ref"),
-        pl.col("annual_revenue").alias("_grp_parent_revenue"),
-    )
     return (
-        counterparties.join(
-            parent_revenue,
-            left_on="ultimate_parent_reference",
-            right_on="_grp_parent_ref",
-            how="left",
-        )
-        .with_columns(
-            pl.max_horizontal(
-                pl.col("annual_revenue"),
-                pl.col("_grp_parent_revenue"),
-            ).alias("group_annual_revenue")
-        )
-        .drop("_grp_parent_revenue")
+        pl.max_horizontal("annual_revenue", "group_annual_revenue"),
+        pl.max_horizontal("total_assets", "group_total_assets"),
     )
 
 
@@ -276,13 +238,23 @@ def join_specialised_lending(
 ) -> pl.LazyFrame:
     """Join specialised lending metadata onto exposures by counterparty.
 
-    Adds ``sl_type``, ``slotting_category``, ``is_hvcre``. When no SL
-    data is supplied, the columns are added as null literals so
-    downstream helpers can rely on their presence.
+    Adds ``sl_type``, ``slotting_category``, ``is_hvcre`` and
+    ``sl_project_phase`` (the input ``project_phase``, sealed onto the raw
+    specialised-lending edge so always present). The phase was once dropped
+    here, which left the PS1/26 Art. 122B(2)(c)/(4) phase weights
+    unreachable from the loader (review IV-01). When no SL data is
+    supplied, the columns are added as null literals so downstream helpers
+    can rely on their presence.
     """
     if sl_data is not None:
         return exposures.join(
-            sl_data.select(["counterparty_reference", "sl_type", "slotting_category", "is_hvcre"]),
+            sl_data.select(
+                "counterparty_reference",
+                "sl_type",
+                "slotting_category",
+                "is_hvcre",
+                pl.col("project_phase").alias("sl_project_phase"),
+            ),
             on="counterparty_reference",
             how="left",
         )
@@ -290,6 +262,62 @@ def join_specialised_lending(
         pl.lit(None).cast(pl.String).alias("sl_type"),
         pl.lit(None).cast(pl.String).alias("slotting_category"),
         pl.lit(None).cast(pl.Boolean).alias("is_hvcre"),
+        pl.lit(None).cast(pl.String).alias("sl_project_phase"),
+    )
+
+
+@cites("PS1/26, paragraph 122B")
+def resolve_sl_project_phase(
+    exposures: pl.LazyFrame,
+    *,
+    pack: ResolvedRulepack,
+) -> pl.LazyFrame:
+    """Resolve the phase a project-finance exposure is treated as being in.
+
+    PRA PS1/26 Art. 122B(2)(c): "project finance exposures shall be assigned
+    a risk weight of 130% during the pre-operational phase, and (subject to
+    paragraph 4) 100% during the operational phase"; Art. 122B(3) defines the
+    operational phase as the one in which the project entity has "(a) a
+    positive net cash-flow that is sufficient to cover any remaining
+    contractual obligations relating to the completion of the project; and
+    (b) declining long-term debt". The operational phase is therefore a
+    condition the firm shows, and a project-finance row whose
+    ``project_phase`` is null or outside ``ProjectPhase`` is treated as
+    PRE_OPERATIONAL (owner decision, review IV-01). Recognised values are
+    lower-cased, matching the case-insensitive input-domain gate.
+
+    Gated on the ``sa_pf_phase_defaults_pre_operational`` pack Feature (Basel
+    3.1 only — CRR has no SA phase weights, so the supplied value is carried
+    unchanged). ``_sl_project_phase_defaulted`` marks the defaulted rows for
+    the SA006 roll-up in ``audit.collect_classified_frame_warnings``; it is
+    intra-stage scratch, stripped by the classifier-exit seal.
+
+    The resolved ``sl_project_phase`` is the carrier the SA risk weight
+    (``engine/sa/b31_risk_weight_tables.py::b31_sa_sl_rw_expr``, including
+    the output-floor SA-equivalent of slotted rows) and the OF 07.00
+    project-finance phase rows read, so the reported phase and the applied
+    weight cannot disagree.
+    """
+    if not pack.feature("sa_pf_phase_defaults_pre_operational"):
+        return exposures.with_columns(pl.lit(False).alias("_sl_project_phase_defaulted"))
+
+    phase = pl.col("sl_project_phase").str.to_lowercase()
+    is_project_finance = (
+        pl.col("sl_type")
+        .str.to_lowercase()
+        .eq_missing(SpecialisedLendingType.PROJECT_FINANCE.value)
+    )
+    unevidenced = is_project_finance & (
+        phase.is_null() | ~phase.is_in([member.value for member in ProjectPhase])
+    )
+    return exposures.with_columns(
+        pl.when(unevidenced)
+        .then(pl.lit(ProjectPhase.PRE_OPERATIONAL.value))
+        .when(is_project_finance)
+        .then(phase)
+        .otherwise(pl.col("sl_project_phase"))
+        .alias("sl_project_phase"),
+        unevidenced.alias("_sl_project_phase_defaulted"),
     )
 
 
@@ -324,19 +352,21 @@ def derive_independent_flags(
       for retail treatment without needing conditions 1/3.
     - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
       retail pool (cp_is_managed_as_retail=True). Null defaults to True for
-      backward compatibility.
+      backward compatibility (the loader seals an omitted flag to False).
     - CRR: threshold check only (no Art. 123A).
+    ``qualifies_as_retail`` is REGULATORY retail; whether a failing row leaves
+    the retail class is decided in ``subtypes.classify_exposure_subtypes``.
 
     ADC derivation (PRA PS1/26 Art. 124(3) / Art. 124K):
     - Derives ``is_adc=True`` for corporate (non-natural-person) exposures
       whose financed property is under construction (``is_under_construction``
       on the loan/facility) or whose product type signals development finance.
+    - A real-estate collateral row flagged ``is_adc=True`` (propagated by the
+      hierarchy stage as ``re_collateral_is_adc``) is a third signal, OR-ed in
+      behind the same corporate gate; its ``is_presold`` is carried as
+      ``is_presold`` for the Art. 124K(2) weight.
     - Natural persons fail the corporate gate even when
       ``is_under_construction=True``.
-    - Any pre-existing non-null ``is_adc`` on the input row (e.g. propagated
-      from collateral by upstream stages) takes precedence via
-      ``pl.coalesce`` so the derivation cannot override an explicit
-      user-supplied flag.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     max_retail_exposure = float(
@@ -401,6 +431,26 @@ def derive_independent_flags(
             .alias("_irb_class"),
         )
 
+    # CRR Art. 107(2)(b) = PS1/26 Art. 107(2)(b): exposures to a NON-qualifying
+    # CCP are treated "as exposures to a corporate" — the Section 9 trade
+    # exposures too, since CCR (CRR) Part Art. 306(1)(b) gives them "the risk
+    # weight ... as set out in Article 107(2)(b)". ``is_qccp`` False demotes,
+    # and the loader defaults an unsupplied column to False (an unreported
+    # qualification is not shown), so only a supplied True — or an explicit
+    # null — keeps the base map's institution class (Art. 107(2)(a)), the
+    # convention the Art. 306 pin reads (CC-11; the class used to stay
+    # institution for both).
+    is_non_qualifying_ccp = pl.col("cp_entity_type").eq_missing("ccp") & pl.col(
+        "cp_is_qccp"
+    ).eq_missing(False)
+    exposures = exposures.with_columns(
+        pl.when(is_non_qualifying_ccp)
+        .then(pl.lit(ExposureClass.CORPORATE.value))
+        .otherwise(pl.col(name))
+        .alias(name)
+        for name in ("_sa_class", "_irb_class")
+    )
+
     sl_class = pl.lit(ExposureClass.SPECIALISED_LENDING.value)
     # Art. 112 Table A2: Under SA, specialised lending is a corporate sub-type
     # (Art. 112(1)(g)), not a separate exposure class.  exposure_class_sa reflects
@@ -445,10 +495,13 @@ def derive_independent_flags(
             pl.col("_pt_upper").str.contains("INFRASTRUCTURE").alias("is_infrastructure"),
             # --- ADC classification (PRA PS1/26 Art. 124(3) / Art. 124K) ---
             # Derive ``is_adc`` from the loan/facility ``is_under_construction``
-            # flag (or a development-finance product_type) gated on a corporate
-            # / non-natural-person counterparty. Coalesce with any pre-existing
-            # ``is_adc`` value so an explicit user-supplied flag wins.
+            # flag, a development-finance product_type or the linked collateral's
+            # ``is_adc``, gated on a corporate / non-natural-person counterparty.
             _build_is_adc_expr(schema_names),
+            # PS1/26 Art. 124K(2)(b)(i) pre-sale / pre-lease attestation from the
+            # linked real-estate collateral (review RE-02); read only on the
+            # Basel 3.1 ADC branch (``b31_adc_rw_expr``).
+            pl.col("re_collateral_is_presold").alias("is_presold"),
             # --- Retail threshold check + Art. 123A conditions (B31) ---
             _build_qualifies_as_retail_expr(config, max_retail_exposure, pack=resolved_pack),
             pl.when(pl.col("residential_collateral_value") > 0)
@@ -475,34 +528,79 @@ def derive_independent_flags(
 # =========================================================================
 
 
+@cites("CRR Art. 153(4)")
+@cites("PS1/26, paragraph 122")
 def is_sme_by_size_expr(
-    config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+    metric: pl.Expr | None = None,
+    source: pl.Expr | None = None,
 ) -> pl.Expr:
     """
     Return an expression that flags a counterparty as SME-sized.
 
-    Reads ``sme_size_metric_gbp`` (= coalesce(annual_revenue, total_assets))
-    and ``sme_size_source`` ("turnover" | "assets" | null), comparing
-    against the appropriate threshold for each source. Implements CRR
-    Art. 4(1)(128D) / Commission Recommendation 2003/361/EC Art. 2:
-    annual turnover < EUR 50m OR balance-sheet total < EUR 43m. Returns
-    False when both fields are null.
+    Reads ``sme_size_metric_gbp`` (= coalesce(group annual revenue, group total
+    assets), see ``add_counterparty_attributes``) and ``sme_size_source``
+    ("turnover" | "assets" | null) — or the ``metric`` / ``source`` expressions
+    a caller passes to size on other figures (the CLS016 audit's own-figure
+    test). Returns False when both figures are null. The regime decides the
+    shape of the test through two cited pack Features:
 
-    CRR Art. 501 supporting factor (Art. 501(2)(c)) is keyed on annual
-    turnover only and is gated separately in sa/supporting_factors.py.
+    - ``sme_size_assets_fallback``: whether a balance-sheet total can make an
+      SME. CRR: yes — Art. 4(1)(128D) defines SME by Commission Rec 2003/361/EC,
+      whose Annex Art. 2 admits a turnover OR a balance-sheet limb. Basel 3.1:
+      no — the PS1/26 glossary SME is "a micro, small or medium enterprise with
+      an annual turnover of not more than GBP 44 million", turnover only (total
+      assets substitute only inside the Art. 153(4) correlation, "when total
+      annual revenue is not a meaningful indicator of entity size", which this
+      size test does not model).
+    - ``sme_turnover_threshold_inclusive``: Basel 3.1 "not more than GBP 44
+      million" is inclusive (``<=``); CRR keeps the strict ``<`` of Art. 153(4)
+      "less than EUR 50 million".
+
+    CRR Art. 501 supporting factor (Art. 501(2)(b)) is keyed on annual
+    turnover only and is gated separately in engine/supporting_factors.py.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     turnover_threshold = float(
         regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate)
     )
+    size = pl.col("sme_size_metric_gbp") if metric is None else metric
+    size_source = pl.col("sme_size_source") if source is None else source
+    within_turnover = (
+        size <= turnover_threshold
+        if resolved_pack.feature("sme_turnover_threshold_inclusive")
+        else size < turnover_threshold
+    )
+    turnover_branch = (size_source == "turnover") & (size > 0) & within_turnover
+    if not resolved_pack.feature("sme_size_assets_fallback"):
+        return turnover_branch
     balance_sheet_threshold = float(
         regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
     )
-    metric = pl.col("sme_size_metric_gbp")
-    source = pl.col("sme_size_source")
-    turnover_branch = (source == "turnover") & (metric > 0) & (metric < turnover_threshold)
-    assets_branch = (source == "assets") & (metric > 0) & (metric < balance_sheet_threshold)
+    assets_branch = (size_source == "assets") & (size > 0) & (size < balance_sheet_threshold)
     return turnover_branch | assets_branch
+
+
+def sme_size_exprs(revenue: pl.Expr, assets: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
+    """The SME size metric and its source from a revenue and a total-assets figure.
+
+    ``(coalesce(revenue, assets), "turnover" | "assets" | null)`` — turnover
+    when present, the balance-sheet total otherwise, null when neither is
+    known. ``add_counterparty_attributes`` feeds it the consolidated group
+    figures; the CLS016 audit feeds it the entity's own figures too, so both
+    sides of that comparison are sized by one definition.
+    """
+    metric = pl.coalesce([revenue, assets])
+    source = (
+        pl.when(revenue.is_not_null())
+        .then(pl.lit("turnover"))
+        .when(assets.is_not_null())
+        .then(pl.lit("assets"))
+        .otherwise(pl.lit(None, dtype=pl.String))
+    )
+    return metric, source
 
 
 @cites("CRR Art. 147(5)")
@@ -535,15 +633,24 @@ def _build_is_adc_expr(schema_names: set[str]) -> pl.Expr:
     Derives ``is_adc=True`` when:
         - the financed property is under construction
           (``is_under_construction=True`` on the loan/facility), OR
-        - ``product_type`` indicates development finance / construction,
+        - ``product_type`` indicates development finance / construction, OR
+        - a real-estate collateral row linked to the exposure (at any level)
+          carries ``is_adc=True`` (``re_collateral_is_adc``, review RE-01 —
+          the flag the input documentation asks for, which before this was
+          read by nothing),
     AND the borrower passes the corporate gate:
         - counterparty entity_type is one of {corporate, company,
           specialised_lending}, AND
         - counterparty is NOT a natural person.
 
-    Any pre-existing non-null ``is_adc`` (e.g. propagated from collateral
-    upstream) wins via ``pl.coalesce`` — the derivation only fires when
-    ``is_adc`` is null on the input row.
+    The gate applies to the collateral flag too: the PS1/26 glossary defines
+    an ADC exposure as "an exposure to a corporate or special purpose entity
+    financing any land acquisition for development and construction
+    purposes, or financing development and construction of any residential
+    real estate or commercial real estate", so a natural person's
+    self-build stays on the real-estate tables. The flag is OR-ed, never
+    coalesced: the collateral column is loader-defaulted False, and a False
+    must not cancel a construction-loan derivation.
 
     Returns a ``pl.Expr`` aliased ``is_adc`` (Boolean).
     """
@@ -554,12 +661,14 @@ def _build_is_adc_expr(schema_names: set[str]) -> pl.Expr:
         ["corporate", "company", "specialised_lending"]
     )
     is_natural_person = pl.col("cp_is_natural_person").fill_null(False)
-    derived = is_corporate_entity & ~is_natural_person & (is_under_construction | is_adc_product)
+    adc_signal = is_under_construction | is_adc_product | pl.col("re_collateral_is_adc")
+    derived = is_corporate_entity & ~is_natural_person & adc_signal
 
-    # KEEP (presence guard on a non-contract column): ``is_adc`` is not
-    # declared on hierarchy_exit, so a sealed classifier input never
-    # carries it and the plain derivation applies. The coalesce branch
-    # preserves explicit-flag precedence for direct expression-level use.
+    # KEEP (presence guard on a non-contract column): an ``is_adc`` column is
+    # not declared on hierarchy_exit (the collateral flag arrives as
+    # ``re_collateral_is_adc``), so a sealed classifier input never carries
+    # it. The coalesce branch preserves explicit-flag precedence for direct
+    # expression-level use on hand-built frames.
     if "is_adc" in schema_names:
         return pl.coalesce(pl.col("is_adc"), derived).fill_null(False).alias("is_adc")
     return derived.alias("is_adc")
@@ -620,8 +729,8 @@ def _build_is_defaulted_expr() -> pl.Expr:
     and CRR Art. 158(5) define BEEL only for defaulted exposures, but
     firms whose A-IRB models emit a BEEL-style value alongside LGD on
     performing exposures would otherwise see those rows silently
-    reclassified as defaulted. The post-classification step
-    ``_collect_beel_on_non_defaulted_warnings`` flags the contradictory
+    reclassified as defaulted. The post-classification roll-up
+    ``audit.collect_classified_frame_warnings`` flags the contradictory
     combination (``is_defaulted=False ∧ beel>0``) as a DQ008 warning so
     the input contradiction is visible without changing routing.
     """
@@ -662,23 +771,36 @@ def _build_qualifies_as_retail_expr(
     Basel 3.1 Art. 123A adds two-path qualifying criteria:
     - Art. 123A(1)(a): SME entities (revenue > 0 and < GBP 44m) auto-qualify
       without needing pool management attestation.
-    - Art. 123A(1)(b)(ii): an obligor's aggregate exposure must not exceed
-      GBP 880k (threshold limb) AND no single obligor's aggregate exposure may
-      exceed 0.2% of the total regulatory-retail portfolio (granularity limb,
-      BCBS CRE20.66). Both limbs are Basel-3.1-only. The granularity limb is
-      gated on ``config.enforce_retail_granularity`` (default True) so it can
-      be suppressed under CRE20.66's national-discretion clause.
+    - Art. 123A(1)(b)(ii): the total owed by the obligor or group of connected
+      clients must not exceed GBP 880,000. That is the whole of the limb.
     - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
       retail pool (cp_is_managed_as_retail=True) to qualify.  Null values
       default to True for backward compatibility.
+    - OPTIONAL (RE-04): a firm may evidence (iii) quantitatively with the BCBS
+      CRE20.66 test — no obligor above 0.2% of the candidate-retail portfolio —
+      by setting ``config.enforce_retail_granularity`` (default False). PS1/26
+      contains no 0.2% limb; an earlier reading placed one in (b)(ii).
 
     References:
         PRA PS1/26 Art. 123A(1)(a)-(b), CRR Art. 123
     """
     # Hierarchy resolver now populates lending_group_adjusted_exposure with the
     # counterparty aggregate when no lending group exists, so the threshold
-    # check is a single comparison across both cases.
-    threshold_fail = pl.col("lending_group_adjusted_exposure") > max_retail_exposure
+    # check is a single comparison across both cases. On a solo /
+    # sub-consolidated run the amount owed to the reporting group's OTHER
+    # entities is added (``out_of_scope_group_adjusted_exposure``, null when
+    # nothing is owed elsewhere — sum_horizontal reads it as zero): CRR
+    # Art. 123(c) "owed to the institution and parent undertakings and its
+    # subsidiaries"; PS1/26 Art. 123A(1)(b)(ii) "owed to the institution, its
+    # parent undertakings, its subsidiaries and subsidiaries of its parent
+    # undertakings". The granularity limb below keeps the run's own figure.
+    threshold_fail = (
+        pl.sum_horizontal(
+            pl.col("lending_group_adjusted_exposure"),
+            pl.col("out_of_scope_group_adjusted_exposure"),
+        )
+        > max_retail_exposure
+    )
 
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if not resolved_pack.feature("retail_art_123a_two_path_applicable"):
@@ -691,13 +813,14 @@ def _build_qualifies_as_retail_expr(
         )
 
     # Basel 3.1: Art. 123A two-path qualifying criteria.
-    # Art. 123A(1)(a): SME auto-qualification — counterparty meets the
-    # Art. 4(1)(128D) SME size test (turnover < EUR 50m OR balance-sheet
-    # total < EUR 43m when turnover null).
+    # Art. 123A(1)(a): SME auto-qualification — the counterparty's group
+    # meets the PS1/26 glossary SME test (turnover not more than GBP 44m; no
+    # balance-sheet limb — see is_sme_by_size_expr).
     is_sme_for_art_123a = is_sme_by_size_expr(config, pack=resolved_pack)
 
-    # Art. 123A(1)(b)(ii) granularity limb (BCBS CRE20.66): no single obligor's
-    # aggregate exposure may exceed 0.2% of the total regulatory-retail
+    # Optional 0.2% granularity test (BCBS CRE20.66; an elected method of
+    # evidencing Art. 123A(1)(b)(iii), not a PS1/26 limb): no single obligor's
+    # aggregate exposure may exceed 0.2% of the total candidate-retail
     # portfolio. Candidate-retail rows are the entity-type RETAIL_OTHER
     # population (``_sa_class``); the denominator counts each obligor once by
     # dividing the per-obligor aggregate (``lending_group_adjusted_exposure``)
@@ -731,10 +854,8 @@ def _build_qualifies_as_retail_expr(
         .then(pl.lit(True))
     )
 
-    # Art. 123A(1)(b)(ii) granularity limb: > 0.2% of the retail portfolio.
-    # Gated on config.enforce_retail_granularity (default True) so the limb
-    # can be suppressed where granularity is assessed by another method under
-    # CRE20.66's national-discretion clause, or to isolate the other limbs.
+    # Elected 0.2% test: > 0.2% of the retail portfolio fails Art. 123A(1)(b)(iii)
+    # as the firm evidences it. Off by default (RE-04): PS1/26 has no such limb.
     if config.enforce_retail_granularity:
         expr = expr.when(granularity_fail).then(pl.lit(False))
 

@@ -19,14 +19,29 @@ Art. 111(1)(c) commitment-to-issue lower-of rule:
 - Requires ``underlying_risk_type`` field on the exposure (optional; null = no cap).
 
 Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D):
-- Art. 166D(1)(a): Own-estimate CCFs permitted ONLY for revolving facilities
+- Art. 166D(1)(a): Own-estimate CCFs permitted ONLY for revolving loan COMMITMENTS
+  (``is_revolving`` and ``is_obs_commitment``) — an issued item under a revolving
+  facility is not a commitment and takes the SA factor (Art. 166D(1)(b))
 - Non-revolving A-IRB must use SA CCFs from Table A1
 - Revolving facilities with 100% SA CCF (Table A1 Row 2) cannot use own-estimates
 - All own-estimate CCFs floored at 50% of SA CCF (CRE32.27)
+- Art. 166D(3)/(4): the single own estimate of EAD (``ead_modelled``) reaches the
+  same revolving loan commitments only (never an issued item, a non-revolving
+  commitment or an Art. 166A(5) purchased-receivables commitment)
 - Art. 166D(5): Three EAD floor tests for A-IRB:
   (a) CCF floor = 50% x SA CCF (implemented in _compute_ccf)
   (b) Facility-level EAD floor = on-BS EAD + 50% x F-IRB off-BS EAD (Art. 166D(3))
   (c) Fully-drawn EAD floor = on-BS EAD ignoring Art. 166D (Art. 166D(4))
+
+PS1/26 Art. 166A(5) (IRB only): a revolving purchased-receivables undrawn purchase
+commitment takes a fixed 40% (10% if unconditionally cancellable) on F-IRB, slotting
+and A-IRB; the SA keeps its Table A1 bucket.
+
+PS1/26 Table A1 Row 4(b): a UK residential mortgage commitment takes 50%; the flag is
+tri-state and, when unstated, derived from the row's evidence (Basel 3.1 only).
+
+The ``obs_product`` -> risk_type map is regime-specific (CRR Annex I vs Table A1) and
+is read from the resolved pack.
 
 CCF is part of exposure measurement, not credit risk mitigation.
 It converts nominal/notional amounts to credit-equivalent EAD.
@@ -68,7 +83,8 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.schemas import OBS_PRODUCT_SYNONYMS, RISK_TYPE_SYNONYMS
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.eu_sovereign import denomination_currency_expr
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
@@ -94,12 +110,6 @@ _OC_SHORT_MATURITY_CCF = scalar_value(_CRR_PACK.scalar_param("oc_short_maturity_
 # the 50% MR CCF applies. The split keys on ORIGINAL, not residual, maturity —
 # sourced via IntParam (S13-c).
 _OC_SHORT_MATURITY_THRESHOLD_DAYS = _CRR_PACK.int_param("oc_short_maturity_threshold_days").value
-# CRR Annex I / Art. 111(1) concrete OBS product -> abstract risk_type bucket,
-# rebound from the common pack at module load (framework-invariant — CRR Annex I
-# == PRA PS1/26 Table A1). Consumed by build_product_to_risk_type_expr below.
-_ANNEX1_PRODUCT_RISK_TYPE: dict[str, str] = dict(
-    _CRR_PACK.category_map("obs_product_to_risk_type").entries
-)
 
 
 def _normalize_risk_type(risk_type_col: str) -> pl.Expr:
@@ -117,22 +127,26 @@ def _normalize_risk_type(risk_type_col: str) -> pl.Expr:
 
 # CRR Annex I product bands are given regulatory effect by Art. 111(1); the
 # watchfire parser only accepts an article-based citation, so the Annex I mapping
-# is attributed to Art. 111.
+# is attributed to Art. 111 (PS1/26 Table A1 is the same article's Column A).
 @cites("CRR Art. 111")
+@cites("PS1/26, paragraph 111")
 def build_product_to_risk_type_expr(
+    product_map: Mapping[str, str],
     product_col: str = "obs_product",
 ) -> pl.Expr:
     """Build a Polars expression mapping a concrete OBS product to its risk_type.
 
-    Resolves the abstract Annex I ``risk_type`` bucket (FR / MLR / ...) from a
-    normalised concrete product key via the ``obs_product_to_risk_type`` rulepack
-    CategoryMap (rebound to ``_ANNEX1_PRODUCT_RISK_TYPE`` at module load). The
-    mapping is framework-invariant (CRR Annex I == PRA PS1/26 Table A1 for every
-    product in scope). Unknown / unmapped products and nulls produce a null
-    result, so the caller can leave the existing ``risk_type`` resolution
-    untouched.
+    Resolves the ``risk_type`` bucket (FR / MR_ISSUED / MLR / ...) from a
+    normalised concrete product key via ``product_map`` — the RESOLVED pack's
+    ``obs_product_to_risk_type`` CategoryMap. The map is regime-specific (CM-07):
+    CRR Annex I 2(a) / 2(b)(i) put plain documentary credits and shipping /
+    customs / tax bonds in medium risk (50%) where PS1/26 Table A1 row 6 gives
+    them 20%, so the caller passes the map of the regime it is computing.
+    Unknown / unmapped products and nulls produce a null result, so the caller
+    can leave the existing ``risk_type`` resolution untouched.
 
     Args:
+        product_map: Canonical product key -> risk_type bucket, from the pack.
         product_col: Name of the obs_product column on the frame.
 
     Returns:
@@ -143,7 +157,7 @@ def build_product_to_risk_type_expr(
     lowered = casted.str.to_lowercase()
     canonical = lowered.replace_strict(OBS_PRODUCT_SYNONYMS, default=casted.str.to_uppercase())
     return canonical.replace_strict(
-        _ANNEX1_PRODUCT_RISK_TYPE,
+        dict(product_map),
         default=pl.lit(None, dtype=pl.Utf8),
     )
 
@@ -286,8 +300,8 @@ def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
 
     Art. 166(8) bespoke CCFs (is_obs_commitment=True, matching commitment):
         (a) UCC credit lines (LR) -> 0%; (b) short-term trade LCs
-        (MLR + is_short_term_trade_lc) -> 20%; (d) other credit lines /
-        NIFs / RUFs (MR/MLR/OC commitments) -> 75%.
+        (MR_ISSUED / MLR + is_short_term_trade_lc) -> 20%; (d) other
+        credit lines / NIFs / RUFs (MR/MLR/OC commitments) -> 75%.
     Art. 166(10) residual fallback (is_obs_commitment=False):
         (a) full risk -> 100%; (b) medium -> 50%; (c) medium/low -> 20%;
         (d) low -> 0%.
@@ -304,6 +318,15 @@ def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
     # rides the same Art. 166(8)(d) commitment / Art. 166(10)(b) issued split,
     # so it never diverges to the otherwise default (P2.30).
     is_mr_or_oc = canonical.is_in(["MR", "MR_ISSUED", "OC"])
+    # Art. 166(8)(b) reaches "short-term letters of credit arising from the
+    # movement of goods ... for both the issuing and confirming institutions"
+    # whatever their Annex I category: a documentary credit not secured by its
+    # shipment is Annex I 2(a) MEDIUM risk (the CRR ``obs_product`` map books it
+    # MR_ISSUED, the issued-item medium-risk bucket), and it keeps the 20% when
+    # flagged as a short-term trade LC (TR-04). MR (NIF / RUF commitments) and
+    # OC (other commitments) are commitment buckets, never a letter of credit,
+    # so they stay on Art. 166(8)(d) even when the trade flag is set.
+    is_trade_lc_bucket = canonical.is_in(["MR_ISSUED", "MLR"])
     return (
         # FR/FRC -> 100% under both Art. 166(8) general and Art. 166(10)(a)
         pl.when(canonical.is_in(["FR", "FRC"]))
@@ -312,7 +335,7 @@ def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
         .when(canonical == "LR")
         .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["LR"]))
         # Art. 166(8)(b): short-term trade LC carve-out wins over both buckets
-        .when(is_mlr & is_trade_lc)
+        .when(is_trade_lc_bucket & is_trade_lc)
         .then(pl.lit(_FIRB_TRADE_LC_CCF))
         # Art. 166(8)(d): credit lines / NIFs / RUFs -> 75%
         .when(is_commitment & (is_mr_or_oc | is_mlr))
@@ -348,7 +371,7 @@ class CCFCalculator:
     - A-IRB: own estimates under CRR; restricted to revolving under Basel 3.1
 
     Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D(1)(a)):
-    - Own-estimate CCFs ONLY for revolving facilities with SA CCF < 100%
+    - Own-estimate CCFs ONLY for revolving loan commitments with SA CCF < 100%
     - Non-revolving A-IRB: must use SA CCFs from Table A1
     - Revolving with 100% SA CCF: must use SA CCF (Table A1 Row 2 carve-out)
     - All own CCFs floored at 50% of SA CCF (CRE32.27)
@@ -376,9 +399,10 @@ class CCFCalculator:
           when ``is_obs_commitment=True`` -> 75%
         - F-IRB Art. 166(10) fallback: issued OBS items (``is_obs_commitment=False``)
           -> 100% FR / 50% MR / 20% MLR / 0% LR
-        - F-IRB Art. 166(8)(b): MLR with ``is_short_term_trade_lc=True`` -> 20%
+        - F-IRB Art. 166(8)(b): MLR / MR_ISSUED with ``is_short_term_trade_lc`` -> 20%
         - A-IRB CRR: Uses ccf_modelled if provided, otherwise falls back to SA
-        - A-IRB B31: Own CCF only for revolving (non-100% SA); else SA CCF (Art. 166D)
+        - A-IRB B31: Own CCF only for revolving loan commitments (non-100% SA);
+          else SA CCF (Art. 166D); Art. 166A(5) purchased receivables fixed
         - Art. 111(1)(c): When underlying_risk_type is specified, CCF is capped
           at the lower of the commitment's CCF and the underlying OBS item's CCF
 
@@ -397,7 +421,12 @@ class CCFCalculator:
         has_provision_cols = "nominal_after_provision" in names and "provision_on_drawn" in names
 
         exposures, added_cols = self._ensure_columns(exposures, names, has_provision_cols)
-        exposures = self._compute_ccf(exposures, config, pack=pack)
+        # The exposure's own (pre-FX) denomination: the FX stage overwrites
+        # ``currency`` with the reporting currency (RE-14 UK evidence).
+        denomination_ccy = denomination_currency_expr(names)
+        exposures = self._compute_ccf(
+            exposures, config, pack=pack, denomination_ccy=denomination_ccy
+        )
         exposures = self._compute_ead(exposures, has_provision_cols, config, pack=pack)
         exposures = self._build_audit_trail(
             exposures, original_has_risk_type, original_has_underlying, original_has_interest
@@ -450,14 +479,26 @@ class CCFCalculator:
             ("interest", pl.lit(0.0).alias("interest")),
             ("is_revolving", pl.lit(False).alias("is_revolving")),
             ("ead_modelled", pl.lit(None).cast(pl.Float64).alias("ead_modelled")),
-            # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): default False so the
-            # residential-property commitment override is a no-op when callers
-            # (e.g. unit tests) construct exposures without the flag.
+            # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): a tri-state flag (null =
+            # not stated, derived under Basel 3.1 from the evidence columns
+            # below — RE-14). Absent means not stated; with the evidence columns
+            # also absent the derivation is null and the override a no-op.
             (
                 "is_uk_residential_mortgage_commitment",
-                pl.lit(False).alias("is_uk_residential_mortgage_commitment"),
+                pl.lit(None).cast(pl.Boolean).alias("is_uk_residential_mortgage_commitment"),
             ),
-            # PRA PS1/26 Art. 166E(5): default False so the revolving
+            # Row 4(b) derivation evidence (RE-14). Always present on the
+            # pipeline's CRM entry edge; null when callers (e.g. unit tests)
+            # construct exposures without them, which derives nothing.
+            ("exposure_class", pl.lit(None).cast(pl.String).alias("exposure_class")),
+            (
+                "residential_collateral_value",
+                pl.lit(None).cast(pl.Float64).alias("residential_collateral_value"),
+            ),
+            ("property_type", pl.lit(None).cast(pl.String).alias("property_type")),
+            ("cp_country_code", pl.lit(None).cast(pl.String).alias("cp_country_code")),
+            ("currency", pl.lit(None).cast(pl.String).alias("currency")),
+            # PRA PS1/26 Art. 166A(5): default False so the revolving
             # purchased-receivables commitment CCF routing is a no-op when
             # callers (e.g. unit tests) construct exposures without the flag.
             (
@@ -498,17 +539,20 @@ class CCFCalculator:
         config: CalculationConfig,
         *,
         pack: ResolvedRulepack | None = None,
+        denomination_ccy: pl.Expr,
     ) -> pl.LazyFrame:
         """Compute CCF based on risk type and approach.
 
         Determines SA and F-IRB CCFs from risk_type, then selects the final CCF
         based on the exposure's approach (SA/F-IRB/A-IRB).
 
-        CRR Annex I / Art. 111(1) obs_product fill: before resolving CCFs, any row
-        whose ``risk_type`` is null/empty has its ``risk_type`` resolved from the
-        concrete ``obs_product`` key via ANNEX1_PRODUCT_RISK_TYPE (framework-
-        invariant). An explicit ``risk_type`` always wins — the fill is gated on
-        the existing value being null/empty.
+        CRR Annex I / PS1/26 Table A1 obs_product fill: before resolving CCFs, any
+        row whose ``risk_type`` is null/empty has its ``risk_type`` resolved from
+        the concrete ``obs_product`` key via the resolved pack's
+        ``obs_product_to_risk_type`` map — regime-specific, since Annex I and
+        Table A1 classify documentary credits and shipping / customs / tax bonds
+        differently (CM-07). An explicit ``risk_type`` always wins — the fill is
+        gated on the existing value being null/empty.
 
         Applies the PRA PS1/26 Art. 111(1) Table A1 Row 4(b) override: a UK
         residential-property commitment (``is_uk_residential_mortgage_commitment``)
@@ -519,19 +563,26 @@ class CCFCalculator:
         References:
         - CRR Art. 111(1) / Annex I: SA CCF buckets.
         - CRR Art. 166(8)(a)-(d): F-IRB bespoke supervisory CCFs.
-        - CRR Art. 166(9): own-estimate (modelled) A-IRB CCFs are admissible
-          only within the Art. 166(8) product scope.
+        - CRR Art. 166(8): own-estimate (modelled) A-IRB CCFs are admissible
+          only within the Art. 166(8)(a)-(d) product scope.
         - CRR Art. 166(10): residual supervisory fallback for issued OBS items
           outside the Art. 166(8) scope.
+        - PS1/26 Art. 166A(5): the fixed IRB purchased-receivables commitment CCF.
+        - PS1/26 Art. 166D(1): A-IRB own estimates only for revolving loan
+          commitments; every other item takes the SA factor.
         """
-        # CRR Annex I / Art. 111(1): resolve risk_type from the concrete OBS
-        # product when (and only when) no explicit risk_type was supplied. Explicit
-        # risk_type always wins; an unmapped/null product yields null and leaves
-        # risk_type unchanged.
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
+        # CRR Annex I / PS1/26 Table A1: resolve risk_type from the concrete OBS
+        # product when (and only when) no explicit risk_type was supplied, using
+        # the regime's own map. Explicit risk_type always wins; an unmapped/null
+        # product yields null and leaves risk_type unchanged.
         risk_type_is_blank = (
             pl.col("risk_type").cast(pl.Utf8, strict=False).fill_null("").str.len_chars() == 0
         )
-        product_risk_type = build_product_to_risk_type_expr("obs_product")
+        product_risk_type = build_product_to_risk_type_expr(
+            resolved_pack.category_map("obs_product_to_risk_type").entries
+        )
         exposures = exposures.with_columns(
             pl.when(risk_type_is_blank & product_risk_type.is_not_null())
             .then(product_risk_type)
@@ -539,7 +590,6 @@ class CCFCalculator:
             .alias("risk_type"),
         )
 
-        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         # S9c: the F-IRB-uses-SA-CCF routing gate (Art. 166C) reads the cited pack
         # Feature; sa_ccf_expression / _firb_ccf_for_col keep their is_basel_3_1 bool
         # plumbing params (Option B). All CCF VALUES stay static data-layer tables.
@@ -582,8 +632,7 @@ class CCFCalculator:
         # defines the F-IRB / Slotting CCF as the Art. 111 SA CCF (P1.251).
         # No effect under CRR (Table A1 is Basel 3.1 only) — see the gate below.
         if is_b31:
-            exposures = self._apply_uk_residential_mortgage_ccf(exposures)
-            exposures = self._apply_purchased_receivable_ccf(exposures)
+            exposures = self._apply_uk_residential_mortgage_ccf(exposures, denomination_ccy)
 
         # PS1/26 Art. 111(1)(c): commitment-to-issue lower-of rule — "the lower
         # of (i) the CCF applicable to the underlying OBS item and (ii) the CCF
@@ -624,19 +673,32 @@ class CCFCalculator:
                 .alias("_firb_ccf_from_risk_type"),
             )
 
+        # PS1/26 Art. 166A(5): the IRB-only, final purchased-receivables
+        # commitment CCF. Written to the IRB carrier only — the SA keeps its
+        # Table A1 bucket — and applied last so nothing above can move it (TR-02).
+        applies_166a5 = resolved_pack.feature("irb_purchased_receivable_commitment_ccf_applies")
+        if applies_166a5:
+            exposures = self._apply_purchased_receivable_ccf(exposures, resolved_pack)
+
         # A-IRB CCF: use modelled value, with Basel 3.1 restrictions
         ccf_modelled_expr = pl.col("ccf_modelled").cast(pl.Float64, strict=False)
         if is_b31:
-            # Basel 3.1 Art. 166D(1)(a): own-estimate CCFs only for revolving
-            # facilities whose SA CCF is not 100% (Table A1 Row 2 carve-out).
-            # Non-revolving A-IRB must use SA CCFs from Table A1.
-            # Revolving with SA CCF < 100%: own CCF with 50% SA floor (CRE32.27).
+            # Basel 3.1 Art. 166D(1)(a): own-estimate CCFs only "for revolving
+            # loan commitments which would not be subject to a 100% conversion
+            # factor" under Art. 111; (b) "for all other off-balance sheet items"
+            # the SA conversion factor. A "commitment" is, by the PS1/26 glossary,
+            # "not itself an issued off-balance sheet item", so an issued LC or
+            # guarantee booked under a revolving facility (``is_obs_commitment``
+            # False — it inherits the parent's ``is_revolving``) takes limb (b)
+            # (CM-03). A null commitment flag cannot evidence limb (a): the AND
+            # stays null and the fill sends it to the SA factor (conservative).
+            # Eligible rows: own CCF with the 50% SA floor (Art. 166D(5)(a)).
             airb_revolving_ccf = pl.max_horizontal(
                 ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
                 pl.col("_sa_ccf_from_risk_type")
                 * scalar_value(resolved_pack.scalar_param("airb_revolving_ccf_floor_multiplier")),
             )
-            is_eligible_for_own_ccf = pl.col("is_revolving").fill_null(False) & (
+            is_eligible_for_own_ccf = _is_revolving_loan_commitment() & (
                 pl.col("_sa_ccf_from_risk_type") < 1.0
             )
             airb_ccf = (
@@ -665,19 +727,30 @@ class CCFCalculator:
                 .otherwise(pl.col("_firb_ccf_from_risk_type"))
             )
 
+        if applies_166a5:
+            # Art. 166A(5) "shall ... 40%" (10% for a Table A1 point 7 UCC) binds
+            # the A-IRB too (Art. 166A(1) makes 166A govern every IRB route): no
+            # own-estimate limb, so the flagged row takes the IRB carrier outright.
+            airb_ccf = (
+                pl.when(_is_revolving_purchased_receivable_commitment())
+                .then(pl.col("_firb_ccf_from_risk_type"))
+                .otherwise(airb_ccf)
+            )
+
         # Select final CCF based on approach
         return exposures.with_columns(
             pl.when(pl.col("_nominal_is_zero"))
             .then(pl.lit(0.0))
             .when(pl.col("approach") == ApproachType.AIRB.value)
             .then(airb_ccf)
-            .when(pl.col("approach") == ApproachType.FIRB.value)
-            .then(pl.col("_firb_ccf_from_risk_type"))
-            # CRR Art. 147(8): specialised-lending slotting is a corporate IRB
-            # exposure, so its OBS EAD is governed by Art. 166(8) — the F-IRB CCF
-            # (e.g. MR -> 75%), not the SA 50%. Under Basel 3.1, Art. 166C makes
-            # F-IRB CCFs equal SA CCFs, so slotting stays on the SA path below.
-            .when((pl.col("approach") == ApproachType.SLOTTING.value) & (not is_b31))
+            # F-IRB and slotting read the IRB supervisory carrier. CRR Art. 147(8):
+            # specialised-lending slotting is a corporate IRB exposure, so its OBS
+            # EAD is governed by Art. 166(8) — the F-IRB CCF (e.g. MR -> 75%), not
+            # the SA 50%. Under Basel 3.1, Art. 166C(1) makes the F-IRB / slotting
+            # carrier the SA Table A1 factor (identical to the SA carrier) except
+            # where Art. 166A(5) — an IRB rule — fixes it for a revolving
+            # purchased-receivables commitment.
+            .when(pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.SLOTTING.value]))
             .then(pl.col("_firb_ccf_from_risk_type"))
             .otherwise(pl.col("_sa_ccf_from_risk_type"))
             .alias("ccf"),
@@ -750,31 +823,34 @@ class CCFCalculator:
     # PRA PS1/26 Art. 111(1) Table A1 Row 4(b), read into the F-IRB / Slotting
     # exposure value by Art. 166C(1). Art. 166C has no CRR equivalent and the
     # watchfire PS-instrument grammar only accepts numeric paragraphs, so Art.
-    # 166C para 1 is encoded as section 166.1 (see the Art. 166E(5) note below
+    # 166C para 1 is encoded as section 166.1 (see the Art. 166A(5) note below
     # and docs/development/citation-tracking.md on the PS1/26 form).
     @cites("PS1/26, paragraph 111")
     @cites("PS1/26, paragraph 166.1")
     def _apply_uk_residential_mortgage_ccf(
         self,
         exposures: pl.LazyFrame,
+        denomination_ccy: pl.Expr,
     ) -> pl.LazyFrame:
         """Apply the Table A1 Row 4(b) UK residential-mortgage commitment CCF.
 
         PRA PS1/26 Art. 111(1) Table A1 Row 4(b): "UK residential mortgage
         commitments that are not subject to a conversion factor of 10% or 100%"
-        attract a 50% conversion factor. When
-        ``is_uk_residential_mortgage_commitment`` is set, the otherwise-resolved
-        CCF is overridden to that Row 4 rate (50%), unless the row already sits in
-        the carve-out — the Row 7 UCC 10% or the Row 1/2 100% — in which case it
-        is left untouched. The carve-out is tested per carrier, against that
-        carrier's own resolved value.
+        attract a 50% conversion factor (Row 5, "any other commitment", is 40%).
+        A row is a Row 4(b) commitment when ``is_uk_residential_mortgage_
+        commitment`` is True, or — when the flag is null (not stated) — when
+        :func:`_derived_uk_residential_mortgage_commitment` evidences it (RE-14:
+        the flag was never derived, so an ordinary UK mortgage offer took 40%).
+        An explicit False is honoured. The otherwise-resolved CCF is overridden to
+        the Row 4 rate (50%) unless the row already sits in the carve-out — the
+        Row 7 UCC 10% or the Row 1/2 100% — in which case it is left untouched.
+        The carve-out is tested per carrier, against that carrier's own value.
 
-        Both the SA and the F-IRB carrier are patched: Art. 166C(1) sets the
-        F-IRB and Slotting off-balance-sheet exposure value using "the conversion
-        factor that would be applicable to the off-balance sheet item under the
-        Standardised Approach, as set out in ... Article 111", so Row 4(b)
-        governs the F-IRB conversion factor exactly as it governs the SA one
-        (P1.251). Slotting reads the SA carrier under Basel 3.1.
+        Both the SA and the IRB carrier are patched: Art. 166C(1) sets the F-IRB
+        and Slotting off-balance-sheet exposure value using "the conversion factor
+        that would be applicable to the off-balance sheet item under the
+        Standardised Approach, as set out in ... Article 111", so Row 4(b) governs
+        the F-IRB conversion factor exactly as it governs the SA one (P1.251).
 
         Basel-3.1-only: callers gate this on the ``firb_uses_sa_ccf`` pack Feature
         (S9c); Table A1 Row 4(b) is a PRA construct with no CRR Annex I
@@ -783,7 +859,11 @@ class CCFCalculator:
         row_4b_ccf = _SA_CCF_B31_MAP["MR"]
         carve_out_ccfs = (_SA_CCF_B31_MAP["LR"], _SA_CCF_B31_MAP["FR"])
 
-        is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
+        # A null that the evidence cannot settle stays null, and ``when(null)``
+        # takes the ``otherwise`` branch: the row keeps its bucket.
+        is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(
+            _derived_uk_residential_mortgage_commitment(denomination_ccy)
+        )
         sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
         firb_not_in_carve_out = ~pl.col("_firb_ccf_from_risk_type").is_in(carve_out_ccfs)
 
@@ -798,46 +878,44 @@ class CCFCalculator:
             .alias("_firb_ccf_from_risk_type"),
         )
 
-    # PRA PS1/26 Art. 166E(5) — no CRR equivalent; the watchfire PS-instrument
-    # grammar only accepts numeric paragraphs, so Art. 166E para 5 is encoded as
+    # PRA PS1/26 Art. 166A(5) — no CRR equivalent; the watchfire PS-instrument
+    # grammar only accepts numeric paragraphs, so Art. 166A para 5 is encoded as
     # section 166.5 (see docs/development/citation-tracking.md on the PS1/26 form).
     @cites("PS1/26, paragraph 166.5")
     def _apply_purchased_receivable_ccf(
         self,
         exposures: pl.LazyFrame,
+        pack: ResolvedRulepack,
     ) -> pl.LazyFrame:
-        """Apply the Art. 166E(5) revolving purchased-receivables CCF routing.
+        """Apply the Art. 166A(5) revolving purchased-receivables IRB CCF.
 
-        PRA PS1/26 Art. 166E(5): the undrawn purchase commitment of a *revolving*
-        purchased-receivables facility receives a fixed CCF — 40% by default
-        (Art. 111(1) Table A1 Row 5 "Other Commitments" / OC), dropping to 10%
-        where the commitment also meets the Table A1 Row 7 UCC criteria
-        (``risk_type == "LR"``). When ``is_purchased_receivable_commitment`` and
-        ``is_revolving`` are both True, the otherwise-resolved SA / F-IRB CCF is
-        overridden to this rate regardless of the row's generic risk_type bucket
-        (e.g. a flagged MR row routes to 40%, not the generic 50%).
+        PRA PS1/26 Art. 166A(5), second subparagraph: "An institution shall, for
+        undrawn purchase commitments for revolving purchased receivables,
+        calculate the exposure value using a conversion factor of 40%, except
+        where such commitments meet the criteria set out in point 7 of Column A of
+        Table A1 ... in which case the conversion factor shall be 10%." Point 7 is
+        the unconditionally cancellable commitment, i.e. the ``LR`` bucket. When
+        ``is_purchased_receivable_commitment`` and ``is_revolving`` are both True
+        the IRB carrier is overridden to that factor whatever the row's bucket.
 
-        Basel-3.1-only: callers gate this on the ``firb_uses_sa_ccf`` pack Feature
-        (S9c); there is no equivalent CRR purchased-receivables undrawn-commitment
-        CCF, so the flag is a no-op under CRR.
+        The rule sits in the IRB Part and governs every IRB route (Art. 166A(1):
+        F-IRB and slotting via 166C, A-IRB via 166D), so ONLY the IRB carrier
+        (``_firb_ccf_from_risk_type``) is patched; ``_compute_ccf`` hands it to
+        flagged A-IRB rows outright (no own-estimate limb). The Standardised
+        Approach has no such rule: an SA row keeps its Table A1 bucket — a
+        factoring line with recourse is Row 2(a) 100%, not 40% (TR-02).
+
+        Gated by the caller on the ``irb_purchased_receivable_commitment_ccf_
+        applies`` pack Feature (Basel 3.1 only; CRR Art. 166(8)(c) prices the
+        cancellable case through the LR bucket and has no fixed 40%).
         """
-        oc_ccf = _SA_CCF_B31_MAP["OC"]
-        ucc_ccf = _SA_CCF_B31_MAP["LR"]
-
-        is_pr_commitment = pl.col("is_purchased_receivable_commitment").fill_null(False) & pl.col(
-            "is_revolving"
-        ).fill_null(False)
-        # Table A1 Row 7 UCC criterion: the commitment is unconditionally
-        # cancellable (LR risk_type) -> 10%; otherwise the Row 5 OC 40% default.
-        is_ucc = pl.col("risk_type").fill_null("").str.to_lowercase().is_in(["lr", "low_risk"])
-        pr_ccf = pl.when(is_ucc).then(pl.lit(ucc_ccf)).otherwise(pl.lit(oc_ccf))
+        commitment_ccf = scalar_value(pack.scalar_param("irb_purchased_receivable_commitment_ccf"))
+        ucc_ccf = scalar_value(pack.scalar_param("irb_purchased_receivable_commitment_ucc_ccf"))
+        is_ucc = _normalize_risk_type("risk_type") == "LR"
+        pr_ccf = pl.when(is_ucc).then(pl.lit(ucc_ccf)).otherwise(pl.lit(commitment_ccf))
 
         return exposures.with_columns(
-            pl.when(is_pr_commitment)
-            .then(pr_ccf)
-            .otherwise(pl.col("_sa_ccf_from_risk_type"))
-            .alias("_sa_ccf_from_risk_type"),
-            pl.when(is_pr_commitment)
+            pl.when(_is_revolving_purchased_receivable_commitment())
             .then(pr_ccf)
             .otherwise(pl.col("_firb_ccf_from_risk_type"))
             .alias("_firb_ccf_from_risk_type"),
@@ -857,7 +935,9 @@ class CCFCalculator:
         provision columns were present in the original input.
 
         For A-IRB under Basel 3.1, applies Art. 166D(5) EAD floors:
-        (b) When ead_modelled is provided (Art. 166D(3) single-EAD approach):
+        (b) When ead_modelled is provided on a revolving loan commitment (Art.
+            166D(3) single-EAD approach; any other row ignores it and keeps its
+            Art. 166D(1)(b) / 166A(5) exposure value):
             EAD >= on-BS EAD + 50% x F-IRB off-BS EAD
             (Under B31, F-IRB uses SA CCFs per Art. 166C)
         (c) Fully-drawn EAD floor (Art. 166D(4)/(5)(c)):
@@ -884,7 +964,18 @@ class CCFCalculator:
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         if resolved_pack.feature("airb_ead_floor_applies"):
             is_airb = pl.col("approach") == ApproachType.AIRB.value
-            has_modelled_ead = pl.col("ead_modelled").is_not_null()
+            # Art. 166D(3)/(4): a single own estimate of EAD only for a revolving
+            # loan FACILITY — "instead of the exposure values that would otherwise
+            # be assigned to the revolving loan commitment". An issued item, a
+            # non-revolving commitment or a flagged revolving purchased-receivables
+            # commitment (Art. 166A(5) "shall ... 40%") keeps its paragraph 1 /
+            # 166A(5) exposure value whatever ``ead_modelled`` it carries.
+            own_ead_population = _is_revolving_loan_commitment()
+            if resolved_pack.feature("irb_purchased_receivable_commitment_ccf_applies"):
+                own_ead_population = (
+                    own_ead_population & ~_is_revolving_purchased_receivable_commitment()
+                )
+            has_modelled_ead = pl.col("ead_modelled").is_not_null() & own_ead_population
 
             # Floor (b): facility-level EAD floor for Art. 166D(3) single-EAD approach
             # EAD >= on-BS EAD + 50% x (nominal x SA_CCF)
@@ -973,3 +1064,67 @@ def create_ccf_calculator() -> CCFCalculator:
         CCFCalculator ready for use
     """
     return CCFCalculator()
+
+
+@cites("PS1/26, paragraph 166D")
+def _is_revolving_loan_commitment() -> pl.Expr:
+    """True for a revolving loan COMMITMENT — the PS1/26 Art. 166D own-estimate population.
+
+    Art. 166D(1)(a) (own conversion factor) and 166D(3)/(4) (single own estimate
+    of EAD) both reach only a revolving loan commitment: ``is_revolving`` AND
+    ``is_obs_commitment`` — a commitment is "not itself an issued off-balance
+    sheet item" (PS1/26 glossary), so an issued LC or guarantee booked under a
+    revolving facility is outside it (CM-03). A null in either cannot evidence
+    the rule, so the AND is filled False and the row takes the SA factor
+    (Art. 166D(1)(b)). Shared by the two routes so they can never test different
+    populations.
+    """
+    return (pl.col("is_revolving") & pl.col("is_obs_commitment")).fill_null(False)
+
+
+def _is_revolving_purchased_receivable_commitment() -> pl.Expr:
+    """True for an undrawn purchase commitment of a REVOLVING purchased-receivables facility.
+
+    The PS1/26 Art. 166A(5) population: ``is_purchased_receivable_commitment``
+    AND ``is_revolving``. A null in either cannot evidence the rule, so the AND
+    is filled False and the row keeps its ordinary conversion factor. Shared by
+    the IRB-carrier override and the A-IRB selection so the two can never test
+    different populations.
+    """
+    return (pl.col("is_purchased_receivable_commitment") & pl.col("is_revolving")).fill_null(False)
+
+
+def _derived_uk_residential_mortgage_commitment(denomination_ccy: pl.Expr) -> pl.Expr:
+    """Evidence that an unflagged row is a PS1/26 Table A1 Row 4(b) commitment (RE-14).
+
+    True only when every limb is evidenced on the row:
+
+    - a COMMITMENT (``is_obs_commitment``) — an issued item is never Row 4(b);
+    - a RETAIL MORTGAGE (``exposure_class == retail_mortgage``) actually secured on
+      residential property: the classifier also routes commercial-property-secured
+      retail rows to ``retail_mortgage``, so the residential evidence is what makes
+      it a *residential* mortgage. Two carriers, either suffices: an allocated
+      ``residential_collateral_value > 0``, or the linked property's
+      ``property_type == "residential"``. The second is needed because facility-
+      level collateral is allocated pro rata to DRAWN amounts, so a facility's
+      undrawn row carries ``residential_collateral_value`` 0 even when the whole
+      facility is secured on a house;
+    - UK. The data model carries no property location (P1.337), so "UK" is
+      evidenced by a GB obligor AND a GBP denomination — the engine's existing
+      UK-domestic test (``engine/sa/risk_weights.py``), read on the pre-FX
+      ``denomination_ccy``. A row failing either keeps its Row 5 40%: this never
+      moves a commitment it cannot show to be UK. A UK mortgage to a non-GB
+      obligor needs the flag set True; a GB obligor's non-UK property, False.
+
+    A null anywhere yields null or False, so an unevidenced row is left alone.
+    """
+    secured_on_residential_property = (pl.col("residential_collateral_value") > 0.0) | (
+        pl.col("property_type").str.to_lowercase() == "residential"
+    )
+    return (
+        pl.col("is_obs_commitment")
+        & (pl.col("exposure_class") == ExposureClass.RETAIL_MORTGAGE.value)
+        & secured_on_residential_property
+        & (pl.col("cp_country_code") == "GB")
+        & (denomination_ccy == "GBP")
+    )

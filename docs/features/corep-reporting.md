@@ -1313,10 +1313,13 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
         estimated, or where EADs are estimated directly"* go in row **0035**.
 
         - Each leg is placed by `corep/ccf_buckets.py`: row 0035 when its origin approach is
-          A-IRB and it carries an own estimate of EAD (`ead_modelled`, Art. 166D(3)) or is a
-          revolving commitment whose own estimate of conversion factor was applied
-          (`ccf_modelled`, Art. 166D(1)(a)); otherwise the Table A1 row its applied `ccf`
-          equals (rounded to four places). The own-estimate test wins: an own estimate floored
+          A-IRB and it is a revolving loan commitment (`is_revolving` and
+          `is_obs_commitment`, not a flagged Art. 166A(5) purchased-receivables commitment)
+          that carries an own estimate of EAD (`ead_modelled`, Art. 166D(3)) or whose own
+          estimate of conversion factor was applied (`ccf_modelled`, Art. 166D(1)(a)) — the
+          engine's own population for both routes; otherwise the Table A1 row its applied
+          `ccf` equals (rounded to four places). An issued item under a revolving facility
+          therefore files by its Table A1 factor. The own-estimate test wins: an own estimate floored
           at half of a 40% item is 0.20 and still goes in row 0035, not the 20% row.
         - An own estimate of exactly 100% is filed in row 0034 with identical figures: the
           engine's eligibility flag is not sealed per leg, so "applied" is read as "below 100%".

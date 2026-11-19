@@ -75,6 +75,10 @@ _SFT_TRADE_COLUMNS = {
     "under_master_netting_agreement",
     "qualifies_one_day_maturity_floor",
     "qualifies_mna_intermediate_floor",
+    # Review CC-14 — the Art. 206 eligibility attestation that, with
+    # under_master_netting_agreement, lets a multi-trade set net (Art. 220(1)).
+    # Additive, required=False, conservative default False.
+    "is_legally_enforceable",
     # P1.215 — A-IRB routing carrier for synthetic CCR rows (own-estimate
     # LGD). Additive, required=False, no default value (null = no modelled
     # LGD; feeds the classifier's has_modelled_lgd AIRB gate).
@@ -236,9 +240,10 @@ def test_mpor_floor_category_is_value_constrained() -> None:
     """mpor_floor_category must be value-constrained to the three Art. 285 floors."""
     constraints = getattr(schemas, "COLUMN_VALUE_CONSTRAINTS", None)
     assert constraints is not None
-    sft_trades = constraints.get("sft_trades")
+    sft_trades = constraints.get("sft.trades")
     assert sft_trades is not None, (
-        "COLUMN_VALUE_CONSTRAINTS must have an 'sft_trades' entry constraining "
+        "COLUMN_VALUE_CONSTRAINTS must have an 'sft.trades' entry (the bundle_frames "
+        "name; 'sft_trades' matched no frame until review CC-06) constraining "
         "mpor_floor_category (Phase 0b)."
     )
     assert sft_trades.get("mpor_floor_category") == {"repo_only", "other", "illiquid_or_large"}, (
@@ -266,6 +271,9 @@ _SFT_COLLATERAL_COLUMNS = {
     "currency",
     "issuer_cqs",
     "residual_maturity_years",
+    # Review CC-14 — optional link to the SFT trade the collateral was received
+    # against; read only when a netting set is split per trade (no eligible MNA).
+    "trade_id",
 }
 
 
@@ -292,6 +300,22 @@ def test_sft_collateral_schema_drops_sa_ccr_only_columns() -> None:
     assert not leaked, f"SFT_COLLATERAL_SCHEMA must drop SA-CCR-only columns: {sorted(leaked)}"
 
 
+def test_sft_trade_is_legally_enforceable_defaults_false() -> None:
+    """is_legally_enforceable must default False: an absent attestation never nets a set."""
+    spec = _spec(_get_schema("SFT_TRADE_SCHEMA"), "is_legally_enforceable")
+    assert spec.dtype == pl.Boolean
+    assert spec.required is False
+    assert spec.default is False, f"is_legally_enforceable must default False, got {spec.default!r}"
+
+
+def test_sft_collateral_trade_id_is_optional_nullable_string() -> None:
+    """trade_id on SFT collateral is an optional, nullable String with no default."""
+    spec = _spec(_get_schema("SFT_COLLATERAL_SCHEMA"), "trade_id")
+    assert spec.dtype == pl.String
+    assert spec.required is False
+    assert spec.default is None
+
+
 def test_sft_collateral_schema_market_value_default_is_zero() -> None:
     """market_value (CVA in the E* formula) must default to 0.0 (no collateral credit)."""
     spec = _spec(_get_schema("SFT_COLLATERAL_SCHEMA"), "market_value")
@@ -313,13 +337,18 @@ def test_valid_transaction_types_is_derivative_and_sft() -> None:
 
 
 def test_transaction_type_constraint_references_valid_transaction_types() -> None:
-    """COLUMN_VALUE_CONSTRAINTS['trades']['transaction_type'] must be VALID_TRANSACTION_TYPES."""
+    """COLUMN_VALUE_CONSTRAINTS['ccr.trades']['transaction_type'] must be VALID_TRANSACTION_TYPES.
+
+    Keyed ``ccr.trades`` (the bundle_frames name) — ``trades`` matched no frame and
+    left the constraint dormant until review CC-06.
+    """
     constraints = getattr(schemas, "COLUMN_VALUE_CONSTRAINTS", None)
     assert constraints is not None, (
         "rwa_calc.data.schemas does not expose 'COLUMN_VALUE_CONSTRAINTS'"
     )
-    trades = constraints.get("trades")
-    assert trades is not None, "COLUMN_VALUE_CONSTRAINTS must have a 'trades' entry"
+    trades = constraints.get("ccr.trades")
+    assert trades is not None, "COLUMN_VALUE_CONSTRAINTS must have a 'ccr.trades' entry"
     assert trades.get("transaction_type") == schemas.VALID_TRANSACTION_TYPES, (
-        "COLUMN_VALUE_CONSTRAINTS['trades']['transaction_type'] must equal VALID_TRANSACTION_TYPES"
+        "COLUMN_VALUE_CONSTRAINTS['ccr.trades']['transaction_type'] must equal "
+        "VALID_TRANSACTION_TYPES"
     )

@@ -32,7 +32,7 @@ SA-CCR methodology).
 | Sub-article | Coverage | BCBS cross-reference |
 |-------------|----------|----------------------|
 | Art. 274(2)     | `Exposure value = α · (RC + PFE)`, α = 1.4 default | CRE52.1 |
-| Art. 274(2) carve-out | α = 1 for trades with non-financial counterparties, pension scheme arrangements, or pension-default compensation entities | CRE52.1 footnote |
+| Art. 274(2) carve-out | **Basel 3.1 only** (new PS1/26 text): α = 1 for trades with non-financial counterparties, pension scheme arrangements, or pension-default compensation entities. Not in the CCR (CRR) Part in force to 31 Dec 2026 | CRE52.1 footnote |
 | Art. 274(2A)–(2B) | Transitional `alpha add-on` for legacy CVA-exempt trades (60% → 40% → 20% over 2027–2029) | n/a |
 | Art. 275         | Replacement cost `RC` — see [rc-calculation.md](rc-calculation.md) | CRE52.10–52.15 |
 | Art. 278         | PFE add-on and multiplier — see [pfe-multiplier.md](pfe-multiplier.md) | CRE52.16–52.25 |
@@ -71,7 +71,7 @@ inherited verbatim from BCBS CRE52.1 and from the original Basel III
 IMM-EAD calibration that pre-dates SA-CCR — it represents the same
 "alpha" that IMM users multiply by EEPE to get EAD under Art. 284(4).
 
-The Art. 274(2) carve-out to **α = 1** for non-financial
+The PS1/26 Art. 274(2) carve-out to **α = 1** for non-financial
 counterparties, pension scheme arrangements, and pension-default
 compensation entities removes the calibration uplift for end-user
 counterparties whose CVA exposure profile is materially lower than the
@@ -79,6 +79,21 @@ inter-bank book that SA-CCR was originally calibrated for. This
 carve-out aligns with the EMIR (Regulation (EU) No 648/2012) Article 2
 point-(9) / point-(10) definitions referenced verbatim in the PS1/26
 text.
+
+!!! warning "The carve-out is Basel 3.1 only — CRR applies α = 1.4 to every netting set"
+    The CCR (CRR) Part in force until 31 December 2026 reads, in full:
+    "Exposure value = α · (RC + PFE) where: RC = the replacement cost
+    calculated in accordance with Article 275 ; and PFE = the potential future
+    exposure calculated in accordance with Article 278 ; α = 1.4." The
+    "unless the counterparty is a non-financial counterparty ..." clause is new,
+    underlined text in PS1/26 Annex R (and the Art. 274(2A) "alpha add-on" is
+    only meaningful on that reading). The engine reads the cited pack Feature
+    `sa_ccr_alpha_nfc_carve_out_applicable` (CRR off, Basel 3.1 on): under CRR
+    `alpha_applied` is 1.4 whatever the `counterparty_type`; under Basel 3.1
+    `non_financial`, `pension_scheme` and `pension_default_comp` counterparties
+    take α = 1 (`sa_ccr_alpha_carve_out`, a Basel-3.1-only pack scalar). Until
+    review CC-01 (2026-11) the carve-out was applied under CRR too, understating
+    an NFC netting set's CRR EAD by 28.6%.
 
 !!! info "Transitional alpha add-on — Art. 274(2A) (legacy CVA-exempt trades)"
     For trades **entered into prior to 1 January 2027** with a
@@ -88,10 +103,10 @@ text.
     top of the α = 1 EAD. The add-on is defined as `EAD(α=1.4) −
     EAD(α=1)` and is phased in at **60% (2027) → 40% (2028) → 20%
     (2029) → 0% (2030+)**. The transitional does not apply to the
-    leverage-ratio EAD per Art. 274(2B). The engine implements only the
-    steady-state α = 1.4 path today (see `CCRConfig.alpha` below);
-    the transitional add-on is a documented gap and will be re-routed
-    here when the corresponding engine batch ships.
+    leverage-ratio EAD per Art. 274(2B). The engine applies it under
+    Basel 3.1 to netting sets flagged `is_legacy_cva_exempt` that carry the
+    α = 1 carve-out (`engine/ccr/pipeline_adapter.py::_attach_transitional_add_on`,
+    gated by the `ccr_transitional_alpha_addon_applicable` pack Feature).
 
 ## Engine entry point
 
@@ -131,15 +146,14 @@ The output column is:
 
 The `α` value defaults to `1.4` when `config` is `None`. When a
 `CCRConfig` instance is supplied, `compute_ead` reads
-`float(config.alpha)` and applies it to every row uniformly. This is
-the engine hook for the Art. 274(2) **α = 1 carve-out** (non-financial
-counterparties / pension schemes) — firms wiring the carve-out branch
-must invoke `compute_ead` twice, once with `α = 1.4` on the in-scope
-netting sets and once with `α = 1` on the carve-out netting sets, then
-concatenate the resulting frames. The current orchestrator at
-`engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures` applies the
-default `α = 1.4` to all netting sets — the per-counterparty carve-out
-gate is a documented engine gap (see the "Pending" note below).
+`float(config.alpha)` and applies it to every row uniformly — unless the
+frame carries a per-netting-set `alpha_applied` column, which takes
+precedence. The pipeline adapter
+(`engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures`) always supplies
+`alpha_applied`: 1.4 for every netting set under CRR, and under Basel 3.1
+1.0 for netting sets whose counterparty's `counterparty_type` is
+`non_financial`, `pension_scheme` or `pension_default_comp` (PS1/26
+Art. 274(2)), 1.4 otherwise.
 
 `CCRConfig` is defined at `src/rwa_calc/contracts/config.py` with
 `alpha: Decimal = Decimal("1.4")` as the default field value.
@@ -309,9 +323,10 @@ between CRR and Basel 3.1).
 
 ### Sensitivity to α — what happens if the carve-out fires
 
-If the same netting set were against a pension-scheme counterparty
-qualifying for the Art. 274(2) **α = 1** carve-out, the EAD would
-drop by a factor of `1.0 / 1.4 ≈ 0.714`:
+Under **Basel 3.1**, if the same netting set were against a
+pension-scheme counterparty qualifying for the PS1/26 Art. 274(2)
+**α = 1** carve-out, the EAD would drop by a factor of `1.0 / 1.4 ≈ 0.714`
+(under CRR it would not — the carve-out does not exist there):
 
 ```
 ead_ccr (carve-out)  = 1.0 × (0 + 499,828.85) ≈ 499,828.85
@@ -319,36 +334,29 @@ RWA (carve-out)      = 50% × 499,828.85       ≈ 249,914.43
 ```
 
 — a `28.6%` reduction in CCR-RWA on the same trade, which is the
-direct mechanical effect of removing the SA-CCR calibration uplift.
-The engine wiring for the carve-out gate is the pending follow-up
-noted above; the math itself is exercised by the `CCRConfig.alpha`
-override at the `compute_ead` boundary.
+direct mechanical effect of removing the SA-CCR calibration uplift. It is
+pinned through the pipeline in both regimes by
+`tests/acceptance/ccr/test_ccr_alpha_carveout.py`.
 
 ## Pending — engine gaps documented here
 
 The following items are not yet engine-wired but are documented for
 forward visibility:
 
-1. **Art. 274(2) α = 1 carve-out gate** — per-netting-set dispatch on
-   counterparty type (non-financial counterparty, pension scheme
-   arrangement, pension-default compensation entity) is not yet
-   implemented in `ccr_rows_to_exposures`. The math is exercised by
-   the `CCRConfig.alpha` override hook on `compute_ead`; the gate
-   itself awaits a follow-up batch.
-2. **Art. 274(2A) transitional `alpha add-on`** — the legacy
-   CVA-exempt phase-in (60% → 40% → 20% over 2027–2029) is not
-   implemented. When it ships, it will be a post-`compute_ead` overlay
-   that adds back `EAD(α=1.4) − EAD(α=1)` at the prescribed
-   percentage for the in-scope legacy trades.
-3. **Art. 274(2B) leverage-ratio exclusion** — the SA-CCR EAD that
+1. **Art. 274(2B) leverage-ratio exclusion** — the SA-CCR EAD that
    feeds the leverage-ratio numerator excludes the Art. 274(2A)
-   transitional add-on. Out of scope until the alpha add-on ships.
+   transitional add-on. Moot: the engine exposes no leverage-ratio EAD.
+
+(The Art. 274(2) α = 1 carve-out — Basel 3.1 only — and the Art. 274(2A)
+transitional add-on are wired; see above.)
 
 ## References
 
+- **PRA Rulebook Counterparty Credit Risk (CRR) Part — Article 274(2)**
+  (in force to 31 Dec 2026) — `Exposure value = α · (RC + PFE)`, α = 1.4.
 - **PRA PS1/26 Counterparty Credit Risk (CRR) Part — Article 274(2)** —
-  `Exposure value = α · (RC + PFE)`, α = 1.4 default, α = 1 carve-out
-  for non-financial counterparties / pension schemes.
+  α = 1.4 default, α = 1 carve-out for non-financial counterparties /
+  pension schemes (from 1 Jan 2027).
 - **PRA PS1/26 Counterparty Credit Risk (CRR) Part — Article 274(2A)** —
   transitional alpha add-on phase-in for legacy CVA-exempt trades
   (60% → 40% → 20% over 2027–2029).

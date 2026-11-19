@@ -32,7 +32,17 @@ Two category-level changes drive most of the impact:
 
 `obs_product_to_risk_type` is the map from product string to risk category — the
 classification step that decides *which* CCF applies, and the usual source of a wrong
-answer when a hand-calc disagrees with the engine.
+answer when a hand-calc disagrees with the engine. It is **regime-specific** (each pack
+carries its own): Table A1 row 6 covers every documentary credit and shipping, customs and
+tax bonds, which CRR Annex I partly placed in Medium Risk.
+
+`irb_purchased_receivable_commitment_ccf` (Art. 166A(5)) is an **IRB** rule and a final
+factor: it never reaches an SA row (the SA keeps its Table A1 bucket — factoring with
+recourse is Row 2) and leaves no A-IRB own-estimate limb. A-IRB own estimates are for
+revolving loan **commitments** only (Art. 166D(1)(a)); an issued item under a revolving
+facility takes the SA factor. The Row 4(b) UK residential mortgage commitment flag is
+tri-state: when unstated the engine derives it only for a retail-mortgage commitment
+secured on residential property to a GB obligor in GBP.
 
 `sa_revised_ccf_table` is the Feature gating the revised table; `ucp_unilateral_change_ineligible`
 records the Basel 3.1 tightening of what counts as unconditionally cancellable.
@@ -56,7 +66,7 @@ Key column: `risk_type`
 | `LR` | `0.00` |
 
 **Basel 3.1** — PS1/26, paragraph 111
- *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
+ *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7))*
 
 Key column: `risk_type`
 
@@ -76,7 +86,7 @@ Key column: `risk_type`
 
 ### `obs_product_to_risk_type`
 
-**Both regimes** — CRR Art. 111
+**CRR** — CRR Art. 111
  *(Annex I OBS product -> risk_type bucket)*
 
 Key column: `obs_product`
@@ -84,12 +94,53 @@ Key column: `obs_product`
 | Key | Value |
 |---|---|
 | `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
+| `DOCUMENTARY_CREDIT` | `MR_ISSUED` |
+| `SHIPPING_GUARANTEE` | `MR_ISSUED` |
+| `CUSTOMS_BOND` | `MR_ISSUED` |
+| `TAX_BOND` | `MR_ISSUED` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
+| `TRADE_LC` | `MLR` |
 | `PERFORMANCE_BOND` | `MLR` |
 | `WARRANTY` | `MLR` |
 | `TENDER_BOND` | `MLR` |
 | `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
+
+**Basel 3.1** — PS1/26, paragraph 111
+ *(Table A1 OBS product -> risk_type bucket)*
+
+Key column: `obs_product`
+
+| Key | Value |
+|---|---|
+| `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
 | `DOCUMENTARY_CREDIT` | `MLR` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
 | `TRADE_LC` | `MLR` |
+| `SHIPPING_GUARANTEE` | `MLR` |
+| `CUSTOMS_BOND` | `MLR` |
+| `TAX_BOND` | `MLR` |
+| `PERFORMANCE_BOND` | `MLR` |
+| `WARRANTY` | `MLR` |
+| `TENDER_BOND` | `MLR` |
+| `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
 
 | Name | CRR | Basel 3.1 | Citation |
 |---|---|---|---|
@@ -121,6 +172,9 @@ Key column: `risk_type`; default `0.50`
 | `airb_revolving_ccf_floor_multiplier` | — | `0.5` | PS1/26, paragraph 166D |
 | `airb_ead_floor_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166D |
 | `airb_obs_floor_b_multiplier` | — | `0.5` | PS1/26, paragraph 166D |
+| `irb_purchased_receivable_commitment_ccf_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166A |
+| `irb_purchased_receivable_commitment_ccf` | — | `0.40` | PS1/26, paragraph 166A |
+| `irb_purchased_receivable_commitment_ucc_ccf` | — | `0.10` | PS1/26, paragraph 166A |
 | `ucp_unilateral_change_ineligible` | off | on | CRR Art. 213 / PS1/26, paragraph 213 |
 <!-- END GENERATED: ccf-values -->
 

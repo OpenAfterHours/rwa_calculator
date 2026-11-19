@@ -117,11 +117,12 @@ H_fx_scaled = H_fx x sqrt(T_m / 10)
 | 10-day (capital market) | 8.00% |
 | 20-day (secured lending) | 11.31% |
 
-**Scope (unchanged from CRR — PS1/26 inherits the Art. 224 / Art. 230 / Art. 233 split):**
+**Scope (changed from CRR for funded non-financial collateral — review CL-09):**
 
 - **Financial collateral (Art. 224 comprehensive method)** — H_fx applies via Art. 224 Table 4.
 - **Unfunded credit protection (Art. 233(3))** — H_fx applies to guarantees and credit derivatives. Article 232 cross-references Art. 233(3) (PS1/26 also pulls in Art. 233(4)) for life insurance / credit-linked notes.
-- **Funded non-financial collateral (Arts. 229–230 — receivables, real estate, other physical)** — H_fx does **not** apply. The LGD\* formula uses the raw collateral value `C` against the C\* / C\*\* thresholds with no FX adjustment; FX risk is captured upstream by the spot-rate `FXConverter`. The engine gate (`engine/crm/haircuts.py`) excludes these types via `data/schemas.py:NON_FINANCIAL_COLLATERAL_TYPES`.
+- **Funded non-financial collateral under the Foundation Collateral Method (receivables, real estate, other physical)** — H_fx **does** apply. PS1/26 Art. 230(1) defines ES as "the current value of the collateral received after the application of: (a) the volatility adjustment applicable for the type of collateral (HC), as specified in paragraph 2; (b) a volatility adjustment for any currency mismatch between the exposure and the collateral (Hfx) in accordance with Articles 224, 226, and 227; (c) an adjustment for any maturity mismatch calculated in accordance with Articles 237 to 239", with no limit to financial collateral; Art. 231(1) restates (b) for each Ci of a mixed pool, and Art. 229(1)(b) uses `P / (1 − HC − Hfx)` on immovable property. So a currency-mismatched pledge is valued at `C × (1 − HC − Hfx)` — e.g. EUR property 100,000 securing a GBP loan at a 10-day period: `100,000 × (1 − 0.40 − 0.08) = 52,000`. This is the cited pack Feature `fcm_hfx_applies_to_non_financial` (enabled in `packs/b31.py`, disabled in `packs/crr.py`, where CRR Art. 230(1) compares the raw `C` with C\* / C\*\*), read by the H_fx expression in `engine/crm/haircuts.py`. It re-opens P1.198, which removed the term on the strength of the CRR reading.
+- **Collateral with no stated currency** — treated as currency-mismatched (H_fx applies wherever it applies to the type) and recorded by the `CRM023` warning: an unknown denomination cannot establish that there is no mismatch (review CL-14). Both regimes.
 
 ---
 
@@ -851,25 +852,29 @@ classes: PSM remains mandatory there under limb 1 above.)
 
 ## Tranched Coverage (Art. 234)
 
-Art. 234 governs **partial / tranched** unfunded credit protection — structures
-where the protection covers only part of the loss range on the underlying exposure
-(for example, a guarantee that absorbs losses between an attachment point and a
-detachment point, while the borrower retains the first-loss and senior tranches).
+PS1/26 Art. 234(1): "Where an institution transfers a part of the risk of a loan in one or
+more tranches, the institution shall comply with the requirements set out in Chapter 5 of
+Title II of Part Three of CRR. An institution shall consider materiality thresholds on
+payments below which no payment shall be made in the event of loss to be equivalent to
+retained first loss positions and to give rise to a tranched transfer of risk."
 
-Under Art. 234 the protected and unprotected tranches are treated as separate
-exposures, and the protection is recognised only on the covered tranche, with the
-risk weight or PD/LGD of the protection provider substituted via the appropriate
-method (RWSM under Art. 235 for SA / Slotting, or PSM under Art. 236 for IRB).
+Art. 235(2) allows the risk-weight substitution where GA < E "only where the protected and
+unprotected parts of the exposure are of equal seniority". A guarantee of a band of the
+loss (first loss or mezzanine) does not meet that, and the calculator does not run the
+securitisation framework for such protection. A guarantee row with an `attachment_amount`
+above zero, or any `detachment_amount`, is therefore **not recognised** (`CRM027`) and the
+exposure keeps its unprotected requirement — the Art. 268(1) upper bound of the Chapter 5
+result. The treatment is regime-invariant.
 
-!!! warning "Not Yet Implemented"
-    Art. 234 tranched / partial-coverage unfunded protection is not modelled. The
-    CRM processor treats unfunded credit protection as covering a single contiguous
-    portion of the exposure (the `covered_amount` field) and does not split the
-    underlying exposure into attachment / detachment tranches with separate risk
-    weights per tranche. Structured protection arrangements that cover only a
-    middle loss tranche are therefore mis-stated.
-    See IMPLEMENTATION_PLAN.md item **P1.30(e)** (Art. 234 partial protection
-    tranching) for the tracking entry and effort estimate.
+!!! warning "Not modelled"
+    Chapter 5 (SEC-SA) is not run for tranched protection, and deductibles / payment
+    thresholds have no input field — a policy with a threshold must not be entered as a
+    plain percentage guarantee under Basel 3.1.
+
+> **Details:** See [CRR CRM spec — Partial Protection and Tranching](../crr/credit-risk-mitigation.md#partial-protection-and-tranching-art-234-art-2352)
+> for the valuation of G (percentage with an amount cap, one cap per `guarantee_reference`),
+> the Art. 233(2) restructuring exclusion and the letter-of-comfort screen, which read the
+> same under both regimes.
 
 ---
 
@@ -1402,13 +1407,32 @@ The multiplier-affected exposures appear in:
 
 ### Implementation Status
 
-!!! warning "Implementation Status"
-    Engine support for Art. 123B is tracked in IMPLEMENTATION_PLAN.md. The calculator
-    currently requires an explicit `currency_mismatch_unhedged` input flag; automatic
-    identification (lending-currency vs income-currency comparison) and the Art. 123B(2)
-    90%-coverage hedge test are not performed. The Art. 123B(3) pre-2027 fallback is
-    likewise not implemented — portfolios with unknown mismatch status will not receive the
-    conservative blanket multiplier.
+`engine/sa/rw_adjustments.py::apply_currency_mismatch_multiplier` (pack Feature
+`sa_currency_mismatch_multiplier`, Basel 3.1 only, from the 1 January 2027
+commencement date):
+
+- **Scope** is by exposure class: `retail_other`, `retail_qrre`, `retail_mortgage`,
+  `residential_mortgage`. Under Basel 3.1 a natural person that fails the regulatory-retail
+  criteria stays `retail_other` (Art. 123(1)(a), 100% under Art. 123(3)(c)), so the
+  multiplier reaches it. There is no obligor-type gate yet (the Art. 123B(1)(b) SPE limb
+  and a corporate obligor holding an RRE-class leg are both out of the class-based
+  scope test's sight).
+- **Lending currency** is the exposure's denomination (`original_currency` once FX
+  conversion has run), never the reporting currency the converter writes into `currency`.
+- **Art. 123B(1)(a)**: `borrower_income_currency` (counterparty) populated and different
+  from the lending currency → 1.5x, capped at 150%.
+- **Art. 123B(3) fallback**: `borrower_income_currency` null → 1.5x unless the lending
+  currency equals the obligor's domestic currency — the counterparty `local_currency` when
+  supplied, else the domestic currency of `country_code` (GB → GBP; EU member states from
+  the pack map). An unmapped or null country with no `local_currency` cannot establish the
+  exception, so the multiplier applies. There is no country-of-employment input. A null
+  lending currency leaves both limbs unevaluable (no multiplier). The fallback is applied
+  whatever the exposure's `value_date`: for exposures incurred on or after 1 January 2027
+  Art. 123B(1) requires the income currency to be known, and the fallback is the
+  conservative proxy. Warning **SA010** counts the SA exposures in scope with no income
+  currency, split by value date.
+- **Art. 123B(2) hedge**: `is_hedged=True` or `hedge_coverage_ratio >= 0.90` (revolving
+  facilities rescaled to the fully-drawn base, Art. 123B(2A)) waives both limbs.
 
 ### References
 

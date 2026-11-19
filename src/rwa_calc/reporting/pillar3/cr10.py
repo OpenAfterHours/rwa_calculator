@@ -18,9 +18,11 @@ Cell semantics (recorded decisions, this slice):
   origin basis is the obligor basis by construction. CR10.5
   (CRR only) reads the Art. 155(2) simple-RW equity legs
   (``reporting_approach_origin == "equity"`` AND ``equity_method ==
-  "irb_simple"``) — Art. 133 SA equity and Art. 155(3) PD/LGD equity are
-  excluded, because the sealed ``reporting_method`` collapses every equity leg
-  to ``EQUITY`` and cannot tell the CRR equity methods apart on its own.
+  "irb_simple"``) — Art. 133 SA equity, Art. 155(3) PD/LGD equity and an IRB
+  firm's Art. 48(4) fixed-RW leg (``irb_fixed_rw``, excluded from Art. 155 by
+  its paragraph 1) are excluded, because the sealed ``reporting_method``
+  collapses every equity leg to ``EQUITY`` and cannot tell the CRR equity
+  methods apart on its own.
 - Subtemplates split on ``sl_type`` per the regime's Art. 153(5) table:
   CRR groups IPRE + HVCRE under CR10.2 and carries the CR10.5 equity
   simple-RW sheet (force-emitted even when empty); Basel 3.1 keeps HVCRE as

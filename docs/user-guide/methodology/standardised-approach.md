@@ -75,12 +75,20 @@ EAD = Committed_Amount × CCF
 
 The `risk_type` column determines the CCF for off-balance sheet exposures:
 
-| Risk Type | Code | SA CCF | Description |
-|-----------|------|--------|-------------|
-| Full Risk | FR | 100% | Guarantees, acceptances, credit derivatives |
-| Medium Risk | MR | 50% | NIFs, RUFs, standby LCs, committed undrawn |
-| Medium-Low Risk | MLR | 20% | Documentary credits, short-term trade finance |
-| Low Risk | LR | 0% | Unconditionally cancellable commitments |
+| Risk Type | Code | CRR SA CCF | Basel 3.1 SA CCF | Description |
+|-----------|------|------------|------------------|-------------|
+| Full Risk | FR | 100% | 100% | Credit substitutes: financial guarantees, acceptances, endorsements, credit derivatives, credit-substitute standby LCs |
+| Full Risk Commitment | FRC | 100% | 100% | Certain drawdown / with recourse: factoring, forward purchases, repos |
+| Medium Risk | MR | 50% | 50% | NIFs and RUFs |
+| Medium Risk Issued | MR_ISSUED | 50% | 50% | Other issued items that are not credit substitutes (CRR also: documentary credits not secured by the shipment, shipping guarantees, customs and tax bonds) |
+| Other Commitments | OC | 50% (> 1y) / 20% (≤ 1y) | 40% | Ordinary committed undrawn facilities |
+| Medium-Low Risk | MLR | 20% | 20% | Warranties, tender / performance bonds, non-credit-substitute standby LCs, self-liquidating documentary credits |
+| Low Risk | LR | 0% | 10% | Unconditionally cancellable commitments |
+
+Book ordinary commitments as `OC` (not `MR` / `MLR`) so both regimes price them
+correctly, and prefer the `obs_product` key for trade items — the two regimes
+classify documentary credits and shipping / customs / tax bonds differently. See
+[Input schemas](../../data-model/input-schemas.md#concrete-product-keys-obs_product).
 
 **Basel 3.1 Changes:**
 
@@ -92,6 +100,15 @@ The `risk_type` column determines the CCF for off-balance sheet exposures:
 | Undrawn Commitments (≥1yr) | 50% | 40% |
 | NIFs/RUFs | 50% | 50% |
 | Direct Credit Substitutes | 100% | 100% |
+
+!!! note "Encoding an unconditionally cancellable line"
+    A facility with `committed=False` is an accepted commitment the bank may cancel
+    unconditionally, and its undrawn headroom is still an exposure: the engine prices it in the
+    `LR` bucket whatever `risk_type` says (0% under CRR, 10% under Basel 3.1 — PS1/26 Table A1
+    row (7)), raising `HIE004` if `risk_type` contradicts it. `risk_type="LR"` on a committed
+    facility gives the same row. A limit that was never offered to and accepted by the obligor is
+    not a commitment at all: supply it with `limit` 0. Headroom is netted in the facility's own
+    currency — see [FX Conversion](fx-conversion.md#facility-headroom-netting).
 
 ## Credit Risk Mitigation
 

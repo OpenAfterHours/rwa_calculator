@@ -194,7 +194,8 @@ class TestB31GroupA_StandardisedApproach:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-A7: Income-producing commercial RE 40% LTV gets 100% RW (was CRR 50%).
+        B31-A7: Income-producing commercial RE 40% LTV gets 100% RW (CRR: also 100%,
+        Art. 124(1), since Art. 126(2)(b) denies an income-producing exposure the 50%).
 
         Input: £400,000 loan at 40% LTV with income dependence
         Expected: RWA = £400,000 (100% RW per PRA PS1/26 Art. 124I)

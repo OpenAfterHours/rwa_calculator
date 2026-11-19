@@ -47,12 +47,60 @@ in Art. 138 resolution.
 
 ### Lending Group Aggregation
 
-Lending groups aggregate exposure across related counterparties for threshold calculations (e.g., SME turnover, retail exposure limits).
+Lending groups aggregate exposure across related counterparties for the retail
+threshold (CRR Art. 123(c); PS1/26 Art. 123(1)(b)(ii) / 123A(1)(b)(ii) /
+147(5)(a)(ii)) and the SME supporting factor's E* (CRR Art. 501(1)). SME
+*turnover* is not a lending-group measure — it is sized on the org hierarchy's
+consolidated accounts (see [SME Detection](#sme-detection)).
 
 - Members are defined via `lending_mappings`
 - The parent counterparty is automatically included as a member
 - Duplicate membership is resolved (a counterparty appearing in multiple groups keeps only the first assignment)
 - Residential property exposures are excluded from retail aggregation per CRR Art. 123(c)
+
+#### Group-wide aggregates on solo and sub-consolidated runs
+
+Both aggregates count what the obligor owes to the whole banking group, not only
+to the reporting entity: CRR Art. 123(c) "the total amount owed to the
+institution and parent undertakings and its subsidiaries"; PS1/26
+Art. 123A(1)(b)(ii) "owed to the institution, its parent undertakings, its
+subsidiaries and subsidiaries of its parent undertakings"; CRR Art. 501(1) E*
+"owed to the institution, its subsidiaries, its parent undertakings and other
+subsidiaries of those parent undertakings". Every entity in the reporting-entity
+registry sits under the registry root, so every in-registry book is one of
+those undertakings.
+
+On a scoped run (`reporting_entity` set) whose population is smaller than the
+whole registry — an individual run, or a sub-consolidated / consolidated run
+below the root:
+
+1. The scope stage publishes `GROUP_POPULATION`: the feed filtered to **every**
+   in-registry book, with rows tagged intragroup to a registry entity removed
+   (`engine/scope/resolver.py::resolve_group_population`). It is the population
+   a consolidated run at the registry root sees.
+2. The hierarchy stage resolves that population with the same resolver (FX,
+   facility and counterparty-level collateral allocation) and, per obligor-group
+   key (`lending_group_reference`, else `counterparty_reference`), publishes what
+   the rest of the group adds: `max(whole group − the run's own books, 0)` for
+   the retail-threshold amount (net of residential cover) and for E*
+   (`engine/hierarchy/group_obligor.py`). Measuring both sides with one set of
+   rules means a residential pledge whose exposures span the scope boundary is
+   allocated as the whole-group run allocates it.
+3. The threshold half rides on the exposures as
+   `out_of_scope_group_adjusted_exposure`; the classifier tests
+   `lending_group_adjusted_exposure + out_of_scope_group_adjusted_exposure`
+   against the limit. The E* half is added once per group key by
+   `compute_e_star_group_drawn`.
+4. **AGG004** (WARNING) names the rows that failed the threshold only because of
+   debt booked in other group entities. Only natural persons and SME-sized
+   obligors are counted — the threshold governs those alone, so a large corporate
+   or a bank whose group-wide debt passes the limit raises nothing.
+
+Unscoped runs and whole-group runs (consolidated at the root) publish nothing and
+are unchanged. The Art. 123A granularity limb keeps reading the run's own
+`lending_group_adjusted_exposure`: it measures the reporting entity's retail
+portfolio. Limits: other entities' CCR / SFT exposures are not run through the
+group pass, and group entities whose books are not in the feed cannot be counted.
 
 ### Facility-to-Exposure Mapping
 
@@ -69,6 +117,30 @@ Facilities can form their own hierarchies (e.g., a master facility with sub-faci
 - **Facility-to-facility edges** are identified from `facility_mappings` where `child_type = "facility"`
 - The hierarchy is traversed upward (up to 10 levels) to find the **root facility** for each sub-facility
 - Output columns: `child_facility_reference`, `root_facility_reference`, `facility_hierarchy_depth`
+
+#### Graph validation (DQ021 / DQ022)
+
+Every consumer reads the mappings as a **tree**, so the stage makes them one before anything else
+reads them (`graph.collect_facility_graph`, `graph.resolve_exposure_mappings`; review findings
+RC-01 / RC-02 / SF-03). Each repair is deterministic — independent of row order — and named:
+
+1. **A sub-facility with several parents** keeps its lowest-referenced parent (`DQ021`). Its root
+   used to come from a last-wins dict over an unordered `unique()`, so the same input priced
+   differently from run to run.
+2. **A cycle** (`F1 -> F2 -> F1`, or a self-mapping) makes every member a root of its own
+   (`DQ022`); an edge into the cycle from outside it is kept. Every member used to be somebody's
+   child, and only roots emit an undrawn row, so every member's commitment vanished.
+3. **A loan / contingent under facilities of several roots** keeps only the mappings under the root
+   of its lowest-referenced parent (`DQ021` names the ignored ones): a drawing is made under one
+   commitment and must not reduce the headroom of every root it was mapped to.
+4. **A loan / contingent under several sub-limits of one root** keeps them all — each sub-limit's
+   own headroom is reduced by it — but `facility_utilisation_rows` reduces the root's headroom once
+   (the mapping pairs are made unique per child and root before the join).
+
+The rule each resolution serves: CRR Art. 4(1)(56) / PS1/26 Glossary "conversion factor" — the
+undrawn amount is that of "the commitment ... determined by the advised limit", which one drawing
+reduces once — and CRR / PS1/26 Art. 111(1), under which every commitment is measured. No article
+sets a graph rule; these shapes are malformed input, which is why the codes are WARNINGs.
 
 #### Undrawn Amount Aggregation
 
@@ -90,7 +162,33 @@ Key rules:
 - **Root/standalone facilities** produce undrawn exposure records
 - **Sub-facilities are excluded** from producing their own undrawn records (avoids double-counting)
 - Negative drawn amounts are clamped to zero before aggregation (negative balances do not increase headroom)
-- Only facilities with `undrawn_amount > 0` and `committed = True` generate exposure records
+- Every facility with `undrawn_amount > 0` generates an exposure record, committed or not. A
+  `committed = False` facility is an **accepted, unconditionally cancellable (UCC) commitment**
+  and its row is priced in the UCC bucket `LR` whatever `risk_type` it declares (PS1/26
+  Table A1 row (7) 10%; CRR Annex I 4(a) 0%; a declared non-LR type raises `HIE004`). PS1/26
+  Glossary "commitment": *"means any off-balance sheet contractual arrangement that has been
+  offered by the institution and accepted by the obligor ... This includes but is not limited to
+  any such arrangement that may be: (1) unconditionally cancelled by the institution at any time
+  without prior notice to the obligor"*. An internal limit never offered to and accepted by the
+  obligor is not a commitment at all: supply its `limit` as the accepted amount, or 0.
+- A facility with a null `limit` (other than an MOF umbrella, where null means "uncapped")
+  generates no record and raises `HIE006`: the commitment's extent is *"determined by the
+  advised limit"* (CRR Art. 4(1)(56)), so an unknown limit cannot be measured.
+
+**Currency.** The subtraction `limit − utilisation` is made in the **facility's** currency. Each
+loan's `drawn_amount` / contingent's `nominal_amount` is first converted at the run's FX rates:
+`amount × rate(child → reporting) / rate(facility → reporting)` (the reporting currency's own rate
+is 1). This runs inside unify, before the run's FX step rebases every row to the reporting
+currency, so the undrawn row is still stated in the facility's currency. Where the run holds no
+rate for either side, that amount is **not netted** — the headroom is never reduced by an amount
+the run cannot measure — and `HIE005` names the facility and the currency. Same-currency netting
+is unchanged, and with `apply_fx_conversion = False` amounts are netted as supplied (no amount in
+the run is rebased, so all are taken to share one unit of account).
+
+```
+GBP 10m line, EUR 5m drawn, EUR→GBP 0.85:   undrawn = 10m − 5m × 0.85 = 5.75m GBP
+(raw netting gave 5.0m; a JPY 1bn drawing at 0.005 used to clip the whole line to 0)
+```
 
 #### Multi-Option Facility (MOF) Waterfall Allocation
 
@@ -98,9 +196,9 @@ A **Multi-Option Facility** is any facility with at least one `child_type='facil
 
 **Allocation rule** (per MOF parent):
 
-1. Compute per-sub headroom: `sub_headroom = max(0, sub_limit − sub_drawn)`, where `sub_drawn` sums loans and contingents directly mapped to that sub (no roll-up).
-2. Compute parent headroom: `parent_headroom = max(0, parent_limit − total_drawn − total_contingent)` rolled up across the whole descendant tree.
-3. Sort committed sub-facilities by descending SA CCF, with deterministic tie-break on `risk_type` then `facility_reference`.
+1. Compute per-sub headroom: `sub_headroom = max(0, sub_limit − sub_drawn)`, where `sub_drawn` sums loans and contingents directly mapped to that sub (no roll-up), each converted into the **sub's** currency; then convert `sub_headroom` into the **parent's** currency, in which the waterfall caps and emits.
+2. Compute parent headroom: `parent_headroom = max(0, parent_limit − total_drawn − total_contingent)` rolled up across the whole descendant tree, each amount converted into the parent's currency.
+3. Sort the eligible sub-facilities (see the edge cases) by descending SA CCF, with deterministic tie-break on `risk_type` then `facility_reference`.
 4. Walk subs in order. Allocate `min(sub_headroom_i, max(0, parent_headroom − cum_{i-1}))` to each sub, where `cum_{i-1}` is the running sum of higher-CCF allocations.
 5. Emit one `facility_undrawn` row per sub with `allocation > 0`. Each row carries the **sub's** `risk_type` and `counterparty_reference`; provenance is captured in `mof_risk_type_source`.
 6. If `parent_headroom > sum(allocations)`, emit one **residual** row at the parent's own `risk_type` and `counterparty_reference` for the leftover headroom.
@@ -146,8 +244,10 @@ parent headroom = 100m − 20m = 80m
 
 **Edge cases**:
 
-- **Uncommitted sub** (`committed=False`): skipped entirely from the waterfall — no row, no headroom consumption. The bank can refuse to lend, so the sub carries no commitment EAD.
-- **Uncommitted parent** (`committed=False`): no rows emitted at all (existing behaviour preserved). Loans/contingents already mapped under the parent flow as their own exposure rows unaffected.
+- **Each sub-line's OWN `committed` flag governs its row.** (Sub rows used to inherit the parent's flag, so committed sub-lines under an uncommitted umbrella were dropped with no warning.)
+- **Committed sub under an uncommitted parent** (`committed=False` umbrella): the sub keeps its waterfall row at its own `risk_type`; the umbrella's residual is a UCC commitment, priced as `LR`. Example — umbrella 30m UCC, two committed `OC` sub-lines of 10m with 2m drawn on each: rows of 8m, 8m (`OC`) and a 10m residual (`LR`) — CRR EAD 8m, Basel 3.1 EAD 7.4m.
+- **Uncommitted sub** (`committed=False`): a UCC commitment, weighted and emitted in the `LR` bucket. It takes a slice of the parent's headroom only where the parent has not already committed that headroom — an uncommitted parent (whose residual is UCC too) or one with no limit. Under a **committed parent with a limit** it takes nothing: the whole headroom is the parent's commitment and stays at the parent's own `risk_type` in the residual (so moving it into the sub-line's 0% CRR / 10% Basel 3.1 bucket can never reduce capital).
+- **Sub-limit in a currency the run cannot convert into the parent's** (no FX rate): the sub takes no slice and `HIE005` names it; the residual carries that headroom.
 - **Sub with zero headroom** (fully drawn): drops out of the waterfall — emits no row.
 - **Sub-limits sum below parent limit**: residual at parent's own `risk_type` covers the gap.
 - **Standalone facility (no facility-typed children)**: single undrawn row with parent's own `risk_type` (non-MOF path unchanged).
@@ -233,10 +333,36 @@ PRA PS1/26 Art. 112 Table A2 defines 16 exposure classes with a strict priority 
 
 ### SME Detection
 
-Corporate counterparties are reclassified as CORPORATE_SME when:
+Corporate counterparties are reclassified as CORPORATE_SME when the **consolidated
+group's** size passes the regime's SME test:
 
-- **CRR:** Group turnover < EUR 50m (GBP converted to EUR at configured rate)
-- **Basel 3.1:** Group turnover < **GBP 44m** (direct GBP threshold per PRA PS1/26, calculated on highest consolidated accounts of the group; no FX conversion needed)
+- **CRR:** group turnover < EUR 50m (GBP converted at the configured rate), or —
+  when no turnover is known anywhere in the group — group balance-sheet total
+  < EUR 43m (Art. 4(1)(128D) → Commission Rec 2003/361/EC Annex Art. 2).
+- **Basel 3.1:** group turnover **not more than GBP 44m** — PS1/26 glossary SME:
+  "a micro, small or medium enterprise with an annual turnover of not more than
+  GBP 44 million where: (1) the annual turnover shall be calculated on the basis
+  of the highest consolidated accounts of the group to which the enterprise
+  belongs". Turnover only (no balance-sheet limb) and an inclusive bound: GBP
+  44,000,000 exactly is an SME. A corporate with no turnover anywhere in its group
+  is **not** an SME; **CLS015** names those whose total assets would have
+  qualified under the CRR balance-sheet limb.
+
+The regime differences are cited pack Features: `sme_size_assets_fallback` (CRR
+on, Basel 3.1 off) and `sme_turnover_threshold_inclusive` (Basel 3.1 on).
+
+**Group figures.** `cp_group_annual_revenue` / `cp_group_total_assets`
+(`hierarchy/graph.py::with_group_size_figures`, read by the classifier) are the **maximum** over the counterparty
+and **every** org ancestor — parent, grandparent, up to the ultimate parent
+(`ancestor_references`, from the hierarchy's org walk). A parent's own figures are
+by convention its consolidated audited accounts. Taking every ancestor means an
+apex without accounts (a fund, a sovereign owner, a holding company) does not hide
+the consolidating parent beneath it. The SME size metric, the Art. 153(4) IRB
+firm-size adjustment (`turnover_m`), the Art. 147(4C) large-corporate test and the
+Basel 3.1 large-FSE asset test all read these group figures. **CLS016** names
+counterparties whose own figures are SME-sized but whose group's are not. The
+Art. 501 supporting factor additionally requires the counterparty's own
+`annual_revenue` (Art. 501(2)(b) turnover-only gate).
 
 ### Retail Qualification
 
@@ -271,15 +397,25 @@ Conditions (5A)(d) low loss-rate volatility and (5A)(e) consistency with the
 sub-portfolio's risk characteristics are supervisory, portfolio-level attestations, not
 per-exposure inputs, and are out of scope for row-level classification.
 
-If the **SA regulatory-retail** thresholds are breached, the exposure loses its SA
-regulatory-retail (75%) treatment and its SA `exposure_class` is reclassified to
-CORPORATE.
+If the **SA regulatory-retail** criteria are not met, the exposure loses its SA
+regulatory-retail (75%) treatment. Where it then lands is a regime difference, carried by
+the pack Feature `non_qualifying_retail_leaves_retail_class`:
+
+- **CRR** — CRR Art. 123 (last sub-paragraph): exposures that do not comply "shall not be
+  eligible for the retail exposures class", so the SA `exposure_class` is reclassified to
+  CORPORATE.
+- **Basel 3.1** — PS1/26 Art. 123(1)(a) categorises every non-SME natural-person exposure
+  as retail; Art. 123A only decides whether it is *regulatory* retail. The row stays
+  RETAIL_OTHER as a non-regulatory retail exposure at 100% (Art. 123(3)(c)), and the
+  Art. 123B currency-mismatch multiplier (scoped by retail class) still reaches it. An
+  SME failing PS1/26 Art. 123(1)(b) is not a retail exposure and moves to CORPORATE_SME in
+  both regimes.
 
 !!! warning "SA regulatory retail (Art. 123/123A) vs IRB retail class (Art. 147(5)) — the monetary cap is SME-limb-only in IRB"
     The aggregate-owed cap above (`qualifies_as_retail`) implements the **SA**
     regulatory-retail test (CRR Art. 123 / PS1/26 Art. 123A), which caps natural
-    persons for the 75% treatment and — under Basel 3.1 — adds the Art. 123A(1)(b)(ii)
-    0.2% granularity limb. The **IRB** retail *exposure class* (CRR Art. 147(5)(a) /
+    persons for the 75% treatment (and, where a firm elects it, applies the optional
+    0.2% granularity test). The **IRB** retail *exposure class* (CRR Art. 147(5)(a) /
     PS1/26 Art. 147(5)(a)) is a **different** rule: it admits **(i)** exposures to
     natural persons with **no monetary cap** and no granularity limb, or **(ii)**
     exposures to an SME **provided** the total amount owed (excluding
@@ -287,9 +423,9 @@ CORPORATE.
     GBP 880,000 (PS1/26)**. The cap and granularity limb condition the **SME limb
     only**.
 
-    Consequently a natural person owing more than the cap is expelled from SA
-    regulatory retail (`exposure_class` → CORPORATE) but **stays in the IRB retail
-    class**: `sync_irb_exposure_class` restores such a row's `exposure_class_irb`
+    Consequently, under CRR, a natural person owing more than the cap is expelled
+    from SA regulatory retail (`exposure_class` → CORPORATE) but **stays in the IRB
+    retail class**: `sync_irb_exposure_class` restores such a row's `exposure_class_irb`
     to RETAIL_OTHER (subject to the Art. 147(5)(c) management-basis condition —
     `is_managed_as_retail` not explicitly False), and `_align_irb_exposure_class`
     propagates it to `exposure_class` for the IRB-routed leg so the retail A-IRB
@@ -297,7 +433,11 @@ CORPORATE.
     an entity type in `NATURAL_PERSON_ENTITY_TYPES` (`individual` / `natural_person`
     / `retail`); an unknown obligor is treated as NOT a natural person, so the cap
     keeps binding (conservative). The SME limb is unchanged — an SME above the cap
-    stays corporate.
+    stays corporate. Under Basel 3.1 the SA class already stays RETAIL_OTHER
+    (see above), so the divergence can only run the other way: a natural person with
+    `is_managed_as_retail` explicitly False fails Art. 147(5)(c) and its
+    `exposure_class_irb` is CORPORATE while the SA class is RETAIL_OTHER — the same
+    IRB class it had before RE-03, so IRB permission lookup and routing are unchanged.
 
 ### Basel 3.1 Retail Qualifying Criteria (Art. 123A)
 
@@ -307,13 +447,15 @@ Under Basel 3.1, Art. 123A has a two-path structure:
 - **Art. 123A(1)(b) — Natural person retail**: Three conditions must **all** be met:
 
 1. **Product type** (Art. 123A(1)(b)(i)): The exposure takes the form of revolving credits/lines of credit (credit cards, overdrafts), personal term loans/leases (instalment loans, auto loans, student loans), or small business facilities. Must not be a derivative, bond, or equity instrument. Mortgages are excluded (separate class).
-2. **Granularity** (Art. 123A(1)(b)(ii)): Total exposure to the obligor (or connected group) does not exceed **GBP 880,000**. No single exposure represents more than 0.2% of the retail portfolio.
+2. **Aggregate amount owed** (Art. 123A(1)(b)(ii)): Total amount owed by the obligor (or group of connected clients), excluding residential real estate exposures, does not exceed **GBP 880,000**. That is the whole of the limb — PS1/26 has **no** 0.2% granularity limb (the 0.2% test is BCBS CRE20.66, which the PRA did not adopt).
 3. **Pool management** (Art. 123A(1)(b)(iii)): The exposure is part of a **significant number of similarly managed exposures** with similar characteristics. This is a qualitative/attestation requirement, not a calculated check.
 
 !!! note "Implementation Status"
     - **Condition 1 (product type)**: Not enforced — the calculator relies on input data for product type classification. A dedicated `product_type` field would be needed to validate this condition programmatically.
-    - **Condition 2 (granularity threshold)**: Implemented — aggregate exposure threshold (GBP 880,000) is enforced via lending group aggregation.
-    - **Condition 3 (pool management)**: Implemented under Basel 3.1 — non-SME entities must have `is_managed_as_retail=True` to qualify. This field defaults to `True` for backward compatibility. SME entities auto-qualify per Art. 123A(1)(a) and are not subject to this condition.
+    - **Condition 2 (aggregate amount owed)**: Implemented — the GBP 880,000 threshold is enforced via lending group aggregation.
+    - **Optional 0.2% test**: a firm may evidence condition 3 quantitatively with the BCBS CRE20.66 test (no obligor above 0.2% of the candidate-retail portfolio) by setting `CalculationConfig.enforce_retail_granularity=True`. It is **off by default** (it was on by default until RE-04, applying a limb PS1/26 does not contain). An obligor failing it is non-regulatory retail at 100%.
+    - **Condition 3 (pool management)**: Implemented under Basel 3.1 — non-SME entities must have `is_managed_as_retail=True` to qualify. The loader seals an omitted flag to `False`, so a feed that omits it makes every natural person non-regulatory retail (100%); the classifier's own null default (`True`) is reached only on hand-built frames. SME entities auto-qualify per Art. 123A(1)(a) and are not subject to this condition.
+    - **Failure is not an exit from retail**: a natural person failing any condition stays RETAIL_OTHER at the Art. 123(3)(c) 100% weight (RE-03).
     - **SME auto-qualification (Art. 123A(1)(a))**: Explicitly implemented — SME counterparties bypass the three conditions under (b) and qualify for retail treatment directly.
 
 !!! note "No Art. 123A(d)"
@@ -323,11 +465,11 @@ Under Basel 3.1, Art. 123A has a two-path structure:
 
 Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500 million (GBP 440 million)** are classified as **large corporates** and, together with financial corporates, form the Art. 147(2)(c)(ii) subclass restricted to **F-IRB only** (cannot use A-IRB, per Art. 147A(1)(e)). This threshold is distinct from the SME firm-size adjustment threshold (EUR 50m / GBP 44m).
 
-**Group-consolidation basis (Art. 147(4C)(b)(ii)).** The revenue is measured "at the highest level of consolidation which is performed and at which audited financial statements are available" — the *group's* revenue, not the individual counterparty's. The classifier therefore rolls each corporate's own `annual_revenue` up its resolved `ultimate_parent_reference` chain into `cp_group_annual_revenue` before the test (`attributes.with_group_annual_revenue`): the signal is the **maximum** of the counterparty's own turnover and its ultimate parent's own turnover. A parent's own `annual_revenue` is, by convention, its consolidated audited-accounts figure (which subsumes its subsidiaries), so the ultimate parent — the top of the group — carries the highest-consolidation figure. A small subsidiary of a > GBP 440m group is therefore correctly F-IRB-only even when its own turnover is below the threshold. The `max` (rather than a source-preference coalesce) is the conservative direction for a test that *forces* F-IRB: neither a small subsidiary figure nor a data-anomalous small parent figure can let a large obligor escape.
+**Group-consolidation basis (Art. 147(4C)(b)(ii)).** The revenue is measured "at the highest level of consolidation which is performed and at which audited financial statements are available" — the *group's* revenue, not the individual counterparty's. The classifier therefore reads `cp_group_annual_revenue` (`hierarchy/graph.py::with_group_size_figures`): the **maximum** of the counterparty's own turnover and the turnover of every org ancestor. A parent's own `annual_revenue` is, by convention, its consolidated audited-accounts figure (which subsumes its subsidiaries). Taking every ancestor rather than only the ultimate parent matters when the apex performs no consolidation with a figure: under a null-revenue fund, the GBP 1bn mid-level holding company is the highest level "at which audited financial statements are available". A small subsidiary of a > GBP 440m group is therefore correctly F-IRB-only even when its own turnover is below the threshold. The `max` (rather than a source-preference coalesce) is the conservative direction for a test that *forces* F-IRB: neither a small subsidiary figure nor a data-anomalous small parent figure can let a large obligor escape.
 
-This is deliberately distinct from the entity-level `cp_annual_revenue`, which continues to drive the Art. 4(1)(128D) SME size test and the Art. 501 SME supporting factor — those read the counterparty's *own* turnover, not the group's.
+The SME size test reads the same group figures (see [SME Detection](#sme-detection)); only the Art. 501 supporting factor's turnover-present gate reads the counterparty's own `annual_revenue`.
 
-**Null composition.** `max_horizontal` ignores nulls, so a null own turnover under a revenue-bearing parent yields the parent figure; a standalone corporate (null `ultimate_parent_reference`) yields its own; both-null yields null, at which point the existing conservative default applies (a corporate whose group revenue is null and whose `total_assets` does not confirm SME size is treated as large and **CLS008** is emitted). A subsidiary with null own revenue under a large parent is thus resolved by the roll-up and no longer trips CLS008.
+**Null composition.** `max_horizontal` ignores nulls, so a null own turnover under a revenue-bearing parent yields the parent figure; a standalone corporate (null `ultimate_parent_reference`) yields its own; both-null yields null, at which point the existing conservative default applies (a corporate whose group revenue is null and whose **group** total assets do not confirm SME size is treated as large and **CLS008** is emitted). A subsidiary with null own revenue under a large parent is thus resolved by the roll-up and no longer trips CLS008.
 
 **Warning.** When the roll-up itself drives the restriction — the counterparty's own turnover is at/below GBP 440m but its group turnover exceeds it — a **CLS011** classification warning records that F-IRB was forced by the group rather than the entity, for audit transparency (mirroring the CLS010 pattern). CLS008 and CLS011 are mutually exclusive.
 
@@ -371,6 +513,8 @@ Under Basel 3.1, PRA PS1/26 Art. 147A mandates specific approaches by exposure s
 
 !!! note "Implementation Status — Implemented (P1.4 Complete)"
     Art. 147A restrictions are enforced via `IRBPermissions.full_irb_b31()`, which encodes the mandatory approach assignments for sovereign/institution/IPRE/HVCRE/FSE/large corporate/equity sub-classes. The classifier enforces IPRE and HVCRE slotting routing, and blocks FSE and large-corporate exposures from A-IRB (F-IRB only). Equity is restricted to SA. Sovereign sub-classes (RGLA, PSE, MDB, international org with 0% RW) are forced to SA.
+
+    The IPRE / HVCRE slotting is forced only where an IRB permission covers the exposure — an org-wide map granting slotting / F-IRB / A-IRB for `specialised_lending`, or a matching `model_permissions` row with no matching `standardised` (Art. 148 / 150) row. Art. 147A is an IRB-Part rule and Art. 107(1) makes every IRB approach, slotting included, subject to permission, so an SA-only firm (the default `PermissionMode.STANDARDISED` factory) and an Art. 150 SA permission keep IPRE / HVCRE on the Standardised Approach — limb (i) of Art. 147A(1)(c). See [Model Permissions](../basel31/model-permissions.md#iprehvcre-routing).
 
 !!! info "Retail Rows Are Carry-Forward from CRR Art. 151(7)"
     The three retail rows (mortgage, QRRE, other) in the Art. 147A table above restate
@@ -437,15 +581,27 @@ conjunction of:
 - the property purpose is development/construction of RRE or CRE (not a
   completed income-producing or owner-occupied building).
 
-**Current implementation.** The classifier consumes `is_adc` as a pre-set
-boolean on the exposure schema. The 100% concessionary branch of
-Art. 124K(2) (pre-sale/equity-at-risk) also depends on caller-supplied flags.
+**Current implementation.** `is_adc` is derived by the classifier
+(`engine/classify/attributes.py::_build_is_adc_expr`) from three signals —
+the loan/facility `is_under_construction` flag, a development-finance
+`product_type`, or an `is_adc=True` on any real-estate **collateral** row
+linked to the exposure (direct, facility or counterparty level, any-True per
+beneficiary; carried by the hierarchy stage as `re_collateral_is_adc`) — all
+behind the definition's corporate / SPE gate, so a natural person's
+self-build is never ADC. The collateral `is_presold` flag reaches the
+Art. 124K(2) branch the same way (`re_collateral_is_presold` → `is_presold`),
+but only when every property linked to the exposure is residential — a mixed
+residential / commercial security is not residential ADC and takes 150% in any row order.
+Before review RE-01 / RE-02 the collateral flags were read by nothing: ADC
+lending flagged only on its property was loan-split onto the regulatory-RE
+tables (B31 20% instead of 150%; CRR 35% instead of the corporate 100%), and
+the Art. 124K(2) 100% weight was unreachable.
 
-!!! warning "Not yet implemented — automatic ADC derivation"
-    See **IMPLEMENTATION_PLAN.md P1.140** (ADC classification derivation). The
-    Art. 124K(2) residential-only restriction on the 100% concessionary branch
-    has been fixed (P1.129, v0.1.186); automatic derivation of the
-    pre-sale / equity-at-risk triggers themselves remains part of P1.140.
+!!! note "Art. 124K(2)(b)(ii) — equity at risk — is not representable"
+    `is_presold=True` attests condition (a) (prudent underwriting) and limb
+    (b)(i) (pre-sale / pre-lease contracts). No input carries limb (b)(ii),
+    "the borrower has substantial equity at risk", so a residential ADC
+    exposure that qualifies only through it stays at the conservative 150%.
 
 ### Art. 124(4) mixed-use splitting
 

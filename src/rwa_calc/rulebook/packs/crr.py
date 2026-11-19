@@ -23,6 +23,7 @@ from decimal import Decimal
 
 from rwa_calc.domain.enums import CQS, EquityType
 from rwa_calc.rulebook.model import (
+    CategoryMap,
     Citation,
     DecisionTable,
     Feature,
@@ -121,6 +122,13 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "162(3)", "one-day M floor derivation for short-term trade finance"
         ),
     ),
+    # CRR Art. 162(3)(b) "with a residual maturity of up to one year" — INCLUSIVE,
+    # against PS1/26 Art. 162(3)(e) "less than one year" (strict).
+    "one_day_floor_trade_residual_strict": Feature(
+        name="one_day_floor_trade_residual_strict",
+        enabled=False,
+        citation=Citation("CRR", "162(3)", "(b) residual maturity of up to one year (inclusive)"),
+    ),
     "revolving_uses_termination_maturity": Feature(
         name="revolving_uses_termination_maturity",
         enabled=False,
@@ -163,7 +171,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # unilateral-CANCELLATION arm (a guarantee the provider can unilaterally
     # cancel is ineligible). The "or change" limb is a PS1/26 addition, so this
     # Feature is disabled under CRR; Basel 3.1 (packs/b31.py) overrides it True.
-    # Gates the change branch in engine/crm/guarantees.py::_gate_unilateral_protection.
+    # Gates the change branch in engine/crm/protection_screen.py (screen_unfunded_protection).
     "ucp_unilateral_change_ineligible": Feature(
         name="ucp_unilateral_change_ineligible",
         enabled=False,
@@ -295,6 +303,15 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "139", "inferred/issuer-level ECAI assessments apply to SL"),
     ),
+    # CRR has no SA project-finance phase weights (Art. 122B is Basel 3.1 only):
+    # an unrated SL exposure is an Art. 122 corporate, so the supplied
+    # project_phase is carried as-is and never defaulted. Gates
+    # engine/classify/attributes.py::resolve_sl_project_phase.
+    "sa_pf_phase_defaults_pre_operational": Feature(
+        name="sa_pf_phase_defaults_pre_operational",
+        enabled=False,
+        citation=Citation("CRR", "122", "no SA project-finance phase weights"),
+    ),
     # SA defaulted-exposure treatment (Art. 127): Basel 3.1 revises the unsecured
     # denominator basis (gross outstanding vs the CRR pre-provision ead_final) and
     # adds the Art. 127(3) residential-RE non-income flat-100% carve-out — see
@@ -312,7 +329,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # mismatch 1.5x multiplier (PS1/26 Art. 123B) and the due-diligence RW
     # override (PS1/26 Art. 110A) gate their whole functions in
     # engine/sa/rw_adjustments.py; the multiplier/cap/hedge-floor scalars and the
-    # Art. 123B(3) commencement-date check stay engine-side.
+    # PS1/26 commencement-date check stay engine-side.
     "sa_currency_mismatch_multiplier": Feature(
         name="sa_currency_mismatch_multiplier",
         enabled=False,
@@ -424,6 +441,53 @@ ENTRIES: dict[str, RuleEntry] = {
         # residual that P1.267 refuted. The residual is Annex I item 1(k) under
         # CRR and Table A1 Row 3/5 under B31; it lives in
         # engine/ccf.py::_sa_ccf_residual, not in a shared table fallback.
+    ),
+    # Concrete OBS product -> CRR Annex I risk_type bucket (given effect by
+    # Art. 111(1)). Category labels, not rates. NOT framework-invariant: Annex I
+    # puts "documentary credits issued or confirmed" (2(a)) and "shipping
+    # guarantees, customs and tax bonds" (2(b)(i)) in MEDIUM risk (50%), where
+    # PS1/26 Table A1 row 6 gives both 20% — b31.py carries that map (CM-07 /
+    # TR-04). Medium-risk ISSUED items take ``MR_ISSUED`` (the issued-item twin
+    # of MR, numerically identical in every CRR carrier; ``MR`` is the NIF/RUF
+    # commitment bucket). Only a documentary credit "in which underlying shipment
+    # acts as collateral" or another self-liquidating transaction is medium/low
+    # (3(a)(i), 20%): ``DOCUMENTARY_CREDIT_SHIPMENT_SECURED`` / ``TRADE_LC``.
+    # An explicit ``risk_type`` always wins. Consumed in engine/ccf.py.
+    "obs_product_to_risk_type": CategoryMap(
+        name="obs_product_to_risk_type",
+        key="obs_product",
+        citation=Citation("CRR", "111", "Annex I OBS product -> risk_type bucket"),
+        entries={
+            # Full risk (Annex I 1): (a) credit-substitute guarantees, (c)
+            # acceptances, (d) endorsements, (f) credit-substitute standby LCs.
+            "ACCEPTANCE": "FR",
+            "FINANCIAL_GUARANTEE": "FR",
+            "AVAL": "FR",
+            "ENDORSEMENT": "FR",
+            "STANDBY_LC_CREDIT_SUBSTITUTE": "FR",
+            # Full risk (Annex I 1(e)): transactions with recourse — a commitment.
+            "FACTORING_FACILITY": "FRC",
+            "INVOICE_DISCOUNT_FACILITY": "FRC",
+            # Medium risk (Annex I 2(a), 2(b)(i)): issued items, 50%.
+            "DOCUMENTARY_CREDIT": "MR_ISSUED",
+            "SHIPPING_GUARANTEE": "MR_ISSUED",
+            "CUSTOMS_BOND": "MR_ISSUED",
+            "TAX_BOND": "MR_ISSUED",
+            # Medium/low risk (Annex I 3(a)(i)): shipment-collateralised documentary
+            # credits and other self-liquidating trade transactions, 20%.
+            "DOCUMENTARY_CREDIT_SHIPMENT_SECURED": "MLR",
+            "TRADE_LC": "MLR",
+            # Medium/low risk (Annex I 3(a)(ii)-(iii)): warranties incl. tender and
+            # performance bonds and associated advance payment / retention
+            # guarantees; non-credit-substitute standby LCs, 20%.
+            "PERFORMANCE_BOND": "MLR",
+            "WARRANTY": "MLR",
+            "TENDER_BOND": "MLR",
+            "BID_BOND": "MLR",
+            "ADVANCE_PAYMENT_GUARANTEE": "MLR",
+            "RETENTION_GUARANTEE": "MLR",
+            "STANDBY_LC_NON_CREDIT_SUBSTITUTE": "MLR",
+        },
     ),
     # CRR Art. 166(10) F-IRB residual fallback for issued OBS items not in scope
     # of Art. 166(8). Selected by the engine when is_obs_commitment=False.
@@ -653,6 +717,21 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "133", "Art. 133(2) 100% flat / Art. 132(2) CIU 1250%"),
         default=Decimal("1.00"),
     ),
+    # CRR Art. 133(2): equity "assigned a 250 % risk weight in accordance with
+    # Article 48(4)" -- the non-deducted amount of a significant investment in a
+    # financial sector entity (Art. 48 now sits in the PRA Rulebook Own Funds
+    # (CRR) Part). Art. 155(1) excludes such amounts from the IRB equity
+    # approaches, so the weight applies on the SA, IRB-simple and PD/LGD paths
+    # alike; consumed by engine/equity/calculator.py for legs flagged
+    # ``is_significant_investment``. CRR-only entry: the Basel 3.1 chain is not
+    # changed here (PS1/26 Art. 133(6)(c) interplay is P1.393).
+    "equity_significant_investment_rw": ScalarParam(
+        name="equity_significant_investment_rw",
+        value=Decimal("2.50"),
+        citation=Citation(
+            "CRR", "133", "(2) 250% for amounts risk weighted under Art. 48(4) (sig. investments)"
+        ),
+    ),
     # IRB Simple equity risk weights (CRR Art. 155(2)): PE-diversified 190%,
     # exchange-traded 290%, all other 370%. CRR-only (Basel 3.1 removes IRB equity).
     "equity_irb_simple_risk_weights": LookupTable(
@@ -787,6 +866,19 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "123", "single aggregate-exposure retail threshold check"),
     ),
+    # CRR Art. 123, last sub-paragraph: "Exposures that do not comply with the
+    # criteria referred to in points (a) to (c) of the first subparagraph shall not
+    # be eligible for the retail exposures class." So a RETAIL_OTHER row that fails
+    # ``qualifies_as_retail`` LEAVES the retail class (-> CORPORATE). PS1/26 has no
+    # such exit for natural persons (see packs/b31.py). Gates the branch in
+    # engine/classify/subtypes.py::classify_exposure_subtypes (RE-03).
+    "non_qualifying_retail_leaves_retail_class": Feature(
+        name="non_qualifying_retail_leaves_retail_class",
+        enabled=True,
+        citation=Citation(
+            "CRR", "123", "non-compliant exposures not eligible for the retail exposure class"
+        ),
+    ),
     # CRR regulatory monetary thresholds: the EUR source amounts (CRR Art. 123/123A/
     # 501/142(1)(4)) converted to GBP at the run's EUR/GBP rate. The pack holds the
     # FX-INVARIANT EUR bases; the engine applies × eur_gbp_rate (a market input that
@@ -819,6 +911,28 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "147", "no COREP corporate exposure-subclass split under CRR"),
     ),
+    # SME / large-FSE size-test shape (engine/classify/attributes.py
+    # ::is_sme_by_size_expr, engine/classify/subtypes.py); Basel 3.1 overrides all
+    # three. CRR Art. 4(1)(128D) defines SME by Commission Rec 2003/361/EC, whose
+    # Annex Art. 2 admits a turnover OR a balance-sheet limb; the engine keeps its
+    # strict turnover test (Art. 153(4) "less than EUR 50 million"). CRR
+    # Art. 142(1)(4)(a) sizes a large FSE on total assets "calculated on an
+    # individual or consolidated basis", so the entity's own assets stay the basis.
+    "sme_size_assets_fallback": Feature(
+        name="sme_size_assets_fallback",
+        enabled=True,
+        citation=Citation("CRR", "4(1)(128D)", "SME per Rec 2003/361/EC: turnover or assets"),
+    ),
+    "sme_turnover_threshold_inclusive": Feature(
+        name="sme_turnover_threshold_inclusive",
+        enabled=False,
+        citation=Citation("CRR", "153(4)", "SME turnover 'less than EUR 50 million' (strict)"),
+    ),
+    "lfse_assets_at_highest_consolidation": Feature(
+        name="lfse_assets_at_highest_consolidation",
+        enabled=False,
+        citation=Citation("CRR", "142(1)(4)", "(a) assets on an individual or consolidated basis"),
+    ),
     # IRB SME-correlation turnover basis (Art. 153(4)): CRR converts GBP turnover
     # to EUR via eur_gbp_rate then clips EUR 5-50m; Basel 3.1 uses GBP-native
     # thresholds directly (no FX conversion). The Feature selects the branch in
@@ -846,6 +960,18 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "166", "no A-IRB EAD floor tests under CRR"),
     ),
+    # PS1/26 Art. 166A(5) fixed 40% / 10% purchased-receivables commitment CCF has
+    # no CRR counterpart: CRR Art. 166(8)(c) gives a revolving purchased-
+    # receivables commitment that is unconditionally cancellable 0% (the LR
+    # bucket) and otherwise the ordinary Art. 166(8)(d) / Annex I treatment.
+    # Declared so pack.feature() never KeyErrors (see packs/b31.py).
+    "irb_purchased_receivable_commitment_ccf_applies": Feature(
+        name="irb_purchased_receivable_commitment_ccf_applies",
+        enabled=False,
+        citation=Citation(
+            "CRR", "166", "(8)(c) no fixed purchased-receivables commitment CCF under CRR"
+        ),
+    ),
     # SA CCF table selection (CRR Annex I vs PS1/26 Table A1: OC 50→40%, LR 0→10%).
     # Distinct from firb_uses_sa_ccf (which decides WHETHER F-IRB uses SA CCFs); this
     # selects WHICH SA CCF table. Gates the pro-rata weighting basis in
@@ -865,6 +991,26 @@ ENTRIES: dict[str, RuleEntry] = {
         name="ccr_transitional_alpha_addon_applicable",
         enabled=False,
         citation=Citation("CRR", "274", "no SA-CCR transitional alpha add-on under CRR"),
+    ),
+    # SA-CCR alpha (CCR (CRR) Part Art. 274(2), version in force to 31 Dec 2026):
+    # "Exposure value = α · (RC + PFE) ... α = 1.4." — one alpha for every netting
+    # set. The α = 1 non-financial / pension-scheme carve-out is new PS1/26 text
+    # (Annex R Art. 274(2)), so it is off under CRR: alpha_applied is 1.4 whatever
+    # the counterparty_type. Gates engine/ccr/pipeline_adapter.py::_attach_alpha_applied.
+    "sa_ccr_alpha_nfc_carve_out_applicable": Feature(
+        name="sa_ccr_alpha_nfc_carve_out_applicable",
+        enabled=False,
+        citation=Citation("CRR", "274(2)", "α = 1.4 for every counterparty; no NFC carve-out"),
+    ),
+    # BA-CVA (PS1/26 Credit Valuation Adjustment Risk Part Ch.4) is not in force
+    # under CRR, whose CVA own funds are Title VI (Art. 381-386; the Art. 384
+    # standardised method is not implemented). Declared explicitly so the
+    # aggregation stage's regime gate reads a cited False instead of raising on
+    # an absent entry — which it did for a CRR run carrying CVA inputs.
+    "cva_ba_cva": Feature(
+        name="cva_ba_cva",
+        enabled=False,
+        citation=Citation("CRR", "382", "CRR CVA risk is Title VI, not the PS1/26 BA-CVA"),
     ),
     # FCSM equity collateral (Art. 222(3)). The collateralised portion takes "the
     # risk weight that they would assign under Chapter 2 ... where the lending
@@ -909,6 +1055,25 @@ ENTRIES: dict[str, RuleEntry] = {
         name="firb_min_collateralisation_threshold_applies",
         enabled=True,
         citation=Citation("CRR", "230", "30% C*/C** minimum collateralisation threshold applies"),
+    ),
+    # Currency-mismatch volatility adjustment (H_fx) on NON-financial collateral
+    # (receivables, immovable property, other physical) under the F-IRB collateral
+    # path. CRR Art. 230(1) tests "the ratio of the value of the collateral (C) to
+    # the exposure value (E)" against the Table 5 C*/C** levels and names no
+    # currency adjustment, and Art. 223(1)'s "adjustment reflecting currency
+    # volatility" is scoped to "financial collateral for the purposes of the
+    # Financial Collateral Comprehensive Method". So CRR keeps H_fx on financial
+    # collateral only. Basel 3.1 enables it (packs/b31.py, PS1/26 Art. 230(1)(b)).
+    # Gates the H_fx expression in engine/crm/haircuts.py (review CL-09).
+    "fcm_hfx_applies_to_non_financial": Feature(
+        name="fcm_hfx_applies_to_non_financial",
+        enabled=False,
+        citation=Citation(
+            "CRR",
+            "230",
+            "(1) C compared with C*/C** with no currency-mismatch adjustment; Art. 223(1) "
+            "currency volatility adjustment applies to financial collateral only",
+        ),
     ),
     # AIRB LGD collateral method (PS1/26 Art. 169A/169B): Basel 3.1 introduces the
     # Foundation Collateral Method election and the Art. 169B LGD-modelling /
@@ -1373,7 +1538,26 @@ ENTRIES: dict[str, RuleEntry] = {
             "rw_low_ltv": Decimal("0.50"),
             "rw_standard": Decimal("1.00"),
         },
-        citation=Citation("CRR", "126", "commercial RE LTV<=50%+income 50% / else 100%"),
+        # ``rw_low_ltv`` 50% needs Art. 126(2)(b): the risk must NOT materially
+        # depend on the property's cash flows (review RE-17 / P1.263 — the gate
+        # was inverted). ``rw_standard`` is Art. 124(1)'s 100% for any immovable
+        # property whose Art. 125 / 126 conditions are not met, residential
+        # included (engine/sa/crr_real_estate.py).
+        citation=Citation(
+            "CRR", "126", "commercial RE LTV<=50% not property-dependent 50% / else 100%"
+        ),
+    ),
+    # CRR Art. 124(1) third sentence: "The part of an exposure that is treated as
+    # fully secured by immovable property shall not be greater than the pledged
+    # amount of the market value" — the secured part of an exposure whose
+    # Art. 125 / 126 conditions are not met (an explicit is_qualifying_re=False,
+    # review CL-07) is sized up to 100% of the property value, both in the SA
+    # weight (engine/sa/crr_real_estate.py) and the loan-split secured row
+    # (engine/re_split/splitter.py), in place of the 80% / 50% preferential caps.
+    "re_art_124_1_secured_value_cap": ScalarParam(
+        name="re_art_124_1_secured_value_cap",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "124", "(1) secured part capped at the property market value"),
     ),
     # ------------------------------------------------------------------
     # Reporting template inventory (Phase 7 S6). The COREP credit-risk +

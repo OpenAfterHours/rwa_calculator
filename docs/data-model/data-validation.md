@@ -175,6 +175,60 @@ The function validates these tables (when present in the bundle):
 | `equity_exposures` | `equity_type` |
 | `guarantees` | `beneficiary_type` |
 | `facility_mappings` | `child_type` |
+| `ccr.trades` | `transaction_type`, `asset_class`, `commodity_type`, `credit_quality` |
+| `sft.trades` | `mpor_floor_category` |
+
+The two CCR / SFT keys are the names `bundle_frames()` registers the nested
+frames under. Until review CC-06 (2026-11) they were keyed `trades` /
+`sft_trades`, matched no frame, and validated nothing.
+
+#### SA-CCR trade inputs priced with a fallback — CCR021 / CCR022 / CCR023
+
+A missing or unrecognised SA-CCR risk input used to give its netting set a
+silently zero add-on (or drop the trade). The engine now prices each one
+conservatively (`engine/ccr/risk_categories.py`,
+`engine/ccr/sa_ccr.py::attach_orphan_trade_netting_sets`) and the input gate
+reports it — one row-named **ERROR** per trade (up to five per finding, then a
+summary carrying the omitted count), category `DATA_QUALITY`
+(`contracts/ccr_input_checks.py`). Matching is case-insensitive, exactly as in
+the engine, so `"Interest_Rate"` or `"ig"` is recognised and raises nothing.
+
+| Code | Trigger (derivative trades; SFT rows are CCR020's) | Engine treatment |
+|------|---------------------------------------------------|------------------|
+| `CCR021` | `asset_class` null or not one of `interest_rate`, `fx`, `credit`, `equity`, `commodity`, `other` (CRR Art. 277(1)) | Priced in the other-risks category (Art. 280f, SF 8%) as its own hedging set |
+| `CCR022` | Credit trade with `credit_quality` null or outside `IG` / `HY` / `NON_RATED`; commodity trade with `commodity_type` null or outside the five buckets (Art. 277a(1)(c)/(e), Art. 280) | Highest factor of the table: single-name `NON_RATED` (6%), index `HY` (1.06%), commodity `ELECTRICITY` (40%) |
+| `CCR023` | `netting_set_id` names no row in `ccr.netting_sets` | Priced as its own non-enforceable netting set with no counterparty (unrated fallback weight, α 1.4; Art. 274(1)). An entity-scoped run (reporting entity set) keeps trades only through their netting set's booking, so it excludes the trade |
+
+#### SA-CCR collateral, CSA terms and reporting currency — CCR024 / CCR025 / CCR026
+
+Raised by the `ccr_sa_ccr` and `sft_fccm` stages rather than the input gate,
+because two of them need the run configuration (the reporting currency, the
+haircut table). Each is built from the same `engine/ccr` expression that prices
+the netting set (`engine/ccr/findings.py`) and decoded in
+`contracts/ccr_collateral_checks.py`: up to five row-named errors per finding,
+then a summary carrying the omitted count, category `DATA_QUALITY`.
+
+| Code | Severity | Trigger | Engine treatment |
+|------|----------|---------|------------------|
+| `CCR024` | WARNING | A `ccr.ccr_collateral` item that is not Art. 197 eligible financial collateral (non-financial type, debt security below the Art. 197(1)(b)/(d) credit quality, equity without `is_main_index`, credit-linked note), or one pledged against a non-enforceable netting set holding several trades (CCR (CRR) Part Art. 276(1)(a)/(b), Art. 274(1)) | Left out of VM and NICA: no relief if received, no exposure if posted. A single-trade non-enforceable set's collateral follows its synthetic netting set |
+| `CCR025` | WARNING | A netting set and the margin agreement it names both state `margin_threshold`, `minimum_transfer_amount`, `nica` or `mpor_days`, with different values (Art. 275(2), Art. 285) | The conservative value: the larger TH / MTA / MPOR, the smaller signed NICA |
+| `CCR026` | ERROR | A CCR trade, CCR collateral item, SFT or SFT collateral item whose `currency` is null or has no `fx_rates` row to the reporting currency (Art. 279b(3), Art. 275; CRR Art. 223(5)) | Amounts used unconverted (the FXConverter's own treatment of a missing rate); the netting set's exposure value is not in the reporting currency |
+
+A collateral item naming no netting set at all is the `ccr.ccr_collateral`
+foreign key's `DQ005` (below), not `CCR024`.
+
+#### CCR / SFT obligor links — DQ005 / DQ001
+
+`TABLE_FOREIGN_KEYS` also declares the CCR and SFT obligor links, read by
+`validate_referential_integrity()`: `ccr.netting_sets.counterparty_reference`,
+`sft.trades.counterparty_reference`, `ccr.failed_trades.counterparty_reference`
+and `ccr.default_fund_contributions.ccp_reference`, each against
+`counterparties.counterparty_reference`. An unresolvable reference keeps its
+row (the synthetic CCR / SFT / settlement / default-fund row is still priced,
+with every obligor attribute null) and raises `DQ005`; a null one raises `DQ001`.
+`ccr.ccr_collateral.netting_set_id` is declared against
+`ccr.netting_sets.netting_set_id` the same way: an item naming no netting set is
+not recognised and raises `DQ005`.
 
 **Performance:** Internally uses `_validate_table_columns_batched()`, which checks
 every constrained column of a table in one plan; that plan, the table's declared-domain
@@ -203,7 +257,7 @@ The pipeline validates data at stage boundaries:
 
 ```
 Load → [seal_lenient: DQ001 + dtype cast] → [scrub_non_finite_values: DQ011]
-     → [validate_bundle_values: DQ006/DQ010/DQ012/IRB001/IRB002/IRB003/IRB008/CRM009-011]
+     → [validate_bundle_values: DQ005/DQ006/DQ010/DQ012/IRB001/IRB002/IRB003/IRB008/CRM009-011/CCR021-023]
      → Hierarchy → Classify → CRM → Calculators → Aggregate
      → [validate_aggregated_bundle: OUT001-004]
 ```

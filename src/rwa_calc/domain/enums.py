@@ -345,6 +345,26 @@ class SpecialisedLendingType(StrEnum):
     """High-volatility commercial real estate"""
 
 
+class ProjectPhase(StrEnum):
+    """
+    Project-finance phases for the Basel 3.1 SA weights (PRA PS1/26 Art. 122B).
+
+    The ``specialised_lending.project_phase`` input vocabulary. Art. 122B(3)
+    defines the operational phase by conditions the firm must show, so a
+    project-finance exposure with no recognised phase is treated as
+    PRE_OPERATIONAL under Basel 3.1.
+    """
+
+    PRE_OPERATIONAL = "pre_operational"
+    """Before the Art. 122B(3) operational conditions are met (130%)"""
+
+    OPERATIONAL = "operational"
+    """Art. 122B(3) operational phase (100%)"""
+
+    HIGH_QUALITY_OPERATIONAL = "high_quality_operational"
+    """Operational and high quality per Art. 122B(5) (80%, Art. 122B(4))"""
+
+
 class PropertyType(StrEnum):
     """
     Property types for real estate collateral.
@@ -430,14 +450,23 @@ class RiskType(StrEnum):
     """
     Off-balance sheet risk categories for CCF determination.
 
-    Based on CRR Art. 111 CCF categories.
+    The CRR Annex I categories (via CRR Art. 111) and their PRA PS1/26 Art. 111
+    Table A1 rows. The SAME code can carry a different factor per regime (OC,
+    LR) and the two regimes classify some products differently — CRR Annex I
+    2(a)/2(b)(i) puts documentary credits not secured by the shipment and
+    shipping / customs / tax bonds in medium risk (50%) where Table A1 row 6
+    gives them 20% — so a product-level input should use ``obs_product`` and
+    let the regime's pack map choose the code (CM-07 / CM-08).
     """
 
     FR = "full_risk"
     """
-    Full Risk - 100% CCF under SA and F-IRB (Table A1 Row 1)
+    Full Risk - 100% CCF under SA and F-IRB (Table A1 Row 1, CRR Annex I 1)
 
-    -- Direct credit substitutes, guarantees, acceptances, credit derivatives
+    -- Issued credit substitutes: financial guarantees having the character of
+       credit substitutes, credit derivatives, acceptances, endorsements, and
+       irrevocable standby LCs that ARE credit substitutes (Annex I 1(f) /
+       Table A1 Row 1(e)). A standby LC that is not a credit substitute is MLR.
     """
 
     FRC = "full_risk_commitment"
@@ -459,44 +488,64 @@ class RiskType(StrEnum):
 
     MR = "medium_risk"
     """
-    Medium Risk - 50% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
+    Medium Risk - 50% CCF under SA (Table A1 Row 4(a)), 75% under CRR F-IRB
+    (Art. 166(8)(d)) when ``is_obs_commitment=True``
 
-    CRR Annex I Row 4: medium-risk *commitments* — NIFs, RUFs, standby LCs,
-    committed undrawn facilities (``is_obs_commitment=True``). Distinct from
-    Row 3 issued OBS items, which carry ``RiskType.MR_ISSUED``.
+    Medium-risk *commitments*: NIFs and RUFs (CRR Annex I 2(b)(iii)). NOT for
+    ordinary committed undrawn facilities — those are ``OC`` (CRR 50% / 20% by
+    original maturity, Basel 3.1 Row 5 40%; as ``MR`` they would take 50%
+    under Basel 3.1) — and NOT for standby LCs (``FR`` when a credit
+    substitute, ``MLR`` when not). Distinct from issued OBS items, which carry
+    ``RiskType.MR_ISSUED``.
     """
 
     MR_ISSUED = "medium_risk_issued"
     """
-    Medium Risk Issued - 50% CCF under SA (CRR Annex I Row 3)
+    Medium Risk Issued - 50% CCF under SA (Table A1 Row 3, CRR Annex I 2)
 
-    CRR Annex I Row 3: "other" issued medium-risk off-balance-sheet items —
-    performance bonds, bid bonds, warranties, shipping guarantees, and standby
-    LCs that are not direct credit substitutes (``is_obs_commitment=False``).
-    Same 50% SA CCF as Row 4 (RiskType.MR) but conceptually distinct: the bank
-    has *issued* a contingent rather than *committed* to extend credit. Mirrors
-    MR's F-IRB issued-OBS behaviour (Art. 166(10)(b) -> 50%).
+    Issued medium-risk off-balance-sheet items (``is_obs_commitment=False``):
+    Table A1 Row 3 "other issued off-balance sheet items that do not have the
+    character of credit substitutes"; under CRR also documentary credits issued
+    or confirmed that are not secured by the shipment (Annex I 2(a)) and
+    shipping guarantees, customs and tax bonds (2(b)(i)) — the CRR
+    ``obs_product`` map books those here, while Basel 3.1 Table A1 row 6 gives
+    them 20% (MLR). Performance / tender / bid bonds, warranties and
+    non-credit-substitute standby LCs are MLR (20%) in BOTH regimes (Annex I
+    3(a)(ii)-(iii), Table A1 Row 6(b)-(c)), not MR_ISSUED. Same 50% SA CCF as
+    ``MR`` but conceptually distinct: the bank has *issued* a contingent rather
+    than *committed* to extend credit. CRR F-IRB: Art. 166(10)(b) -> 50%, or
+    the Art. 166(8)(b) 20% for a short-term trade LC.
     """
 
     MLR = "medium_low_risk"
     """
-    Medium Low Risk - 20% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
+    Medium Low Risk - 20% CCF under SA (Table A1 Row 6, CRR Annex I 3(a));
+    CRR F-IRB 20% for an issued item (Art. 166(10)(c)), 75% for a commitment
 
-    -- Documentary credits, trade finance, short-term self-liquidating
+    -- Issued trade / performance items: warranties, tender and performance
+       bonds, advance payment and retention guarantees, non-credit-substitute
+       guarantees and standby LCs, self-liquidating (shipment-secured)
+       documentary credits; under Basel 3.1 also every documentary credit and
+       shipping / customs / tax bonds (Row 6(a), (d)).
+    -- NOT for commitments: the CRR "MLR for a commitment of up to one year"
+       encoding (Annex I 3(b)(i)) takes Row 6's 20% under Basel 3.1 instead of
+       Row 5's 40% — use ``OC``, which applies the CRR maturity split itself.
     """
 
     OC = "other_commit"
     """
     Other Commitments - 40% CCF under Basel 3.1 SA (PRA Art. 111 Table A1 Row 5)
 
-    -- All other commitments not in FR/MR/MLR/LR categories.
-    Under CRR, these were 0% (same as LR); Basel 3.1 introduces the 40% category.
+    -- Every ordinary committed undrawn facility not in another row. Under CRR
+       the engine splits it on ORIGINAL maturity: 50% above one year (Annex I
+       2(b)(ii)), 20% up to one year (3(b)(i)); CRR F-IRB 75% (Art. 166(8)(d)).
     """
 
     LR = "low_risk"
     """
-    Low Risk - 0% CCF under SA and F-IRB
-    -- Unconditionally cancellable commitments
+    Low Risk - unconditionally cancellable commitments
+    -- CRR: 0% under SA (Annex I 4) and F-IRB (Art. 166(8)(a)).
+    -- Basel 3.1: 10% under SA and F-IRB (Table A1 Row 7, via Art. 166C).
     """
 
     # CCR provenance tags (CRR Art. 271). Surface members so consumers can
@@ -522,6 +571,17 @@ class RiskType(StrEnum):
     ``E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))``. The ``ccr_method`` column
     carries the ``"fccm_sft"`` discriminator on rows tagged with CCR_SFT.
     """
+
+    # Own-funds lines minted by the CCR stage. Their ``drawn_amount`` is an own
+    # funds REQUIREMENT, not an exposure value: the SA chain pins RW to 12.5
+    # (Art. 92(3)(ca) / CCR Part Art. 308(3), 309(2)), the classifier keeps them
+    # SA and the CRM stage gives them no mitigation (engine/crm/own_funds_lines.py).
+    # Engine-minted only — not accepted on any input table.
+    SETTLEMENT_FAILED_TRADE = "SETTLEMENT_FAILED_TRADE"
+    """Settlement-risk own funds for an unsettled transaction (CRR Art. 378-380)."""
+
+    CCR_DEFAULT_FUND = "CCR_DEFAULT_FUND"
+    """Own funds for a CCP default-fund contribution (CCR (CRR) Part Art. 307-310)."""
 
 
 class PermissionMode(StrEnum):
@@ -624,6 +684,19 @@ class EquityApproach(StrEnum):
     with supervisory parameters from Art. 165 — PD floors (165(1)), LGD 65%/90%
     (165(2)), and fixed M = 5 years (165(3)). A 1.5x scaling applies where the
     institution lacks Art. 178 default-definition data (155(3)).
+    """
+
+    IRB_FIXED_RISK_WEIGHT = "irb_fixed_rw"
+    """
+    CRR equity of an IRB firm that attracts a fixed risk weight OUTSIDE the
+    Art. 155 approaches (CRR only): today the Art. 48(4) 250% leg
+    (``is_significant_investment``), which Art. 155(1) excludes from paragraphs
+    2-4. COREP Annex II, C 10.01 row 0110 "Equity exposures subject to risk
+    weights": equity "which attract a fixed risk weight treatment (without however
+    being explicitly treated according to the Simple Risk Weight approach or the
+    (temporary or permanent) partial use of the credit risk standardised
+    approach)" -- so IRB-umbrella equity (C 02.00 row 0420), neither Art. 155(2)
+    simple-RW equity (Pillar 3 CR10.5, OV1 UK 4a) nor SA equity (C 07.00).
     """
 
 

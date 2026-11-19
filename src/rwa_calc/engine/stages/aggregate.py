@@ -12,9 +12,11 @@ Key responsibilities:
 - Merge BRANCH_ERRORS into the result bundle with their original codes
   (verbatim pre-fold merge point — before the facade's loader/CCR/
   pipeline-error merge).
-- BA-CVA roll-up (P8.60/P8.62/P8.63): when BA-CVA counterparty inputs are
-  present AND the ``cva_ba_cva`` pack Feature is enabled (Basel 3.1 only),
-  compute the portfolio RWEA_CVA off the SA-CCR synthetic rows already on the
+- BA-CVA roll-up (P8.60/P8.62/P8.63): when the firm has an SA-CCR derivatives
+  book AND the ``cva_ba_cva`` pack Feature is enabled (Basel 3.1 only), name
+  every derivative counterparty missing from the BA-CVA counterparty input with
+  a CCR030 WARNING (CC-16), and — when that input is present — compute the
+  portfolio RWEA_CVA off the SA-CCR synthetic derivative rows already on the
   aggregated results frame and surface it on ``AggregatedResultBundle.cva_rwa``
   alongside the descriptive ``cva_method`` (``"BA-CVA"`` for both the reduced
   and full sub-cases) and ``cva_hedges_recognised`` (``True`` when at least one
@@ -56,6 +58,7 @@ from rwa_calc.engine.orchestrator import (
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.context import PipelineContext
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.engine.cva import BaCvaResult
     from rwa_calc.rulebook import RulepackV0
 
@@ -90,7 +93,9 @@ def run(
     if branch_errors:
         result = replace(result, errors=list(result.errors) + list(branch_errors))
 
-    cva = _ba_cva_roll_up(ctx, rulepack, result.results)
+    cva, cva_errors = _ba_cva_roll_up(ctx, rulepack, result.results)
+    if cva_errors:
+        result = replace(result, errors=list(result.errors) + cva_errors)
     if cva is not None and cva.rwea is not None:
         # ``cva_rwa`` is additive to the default-risk total (Σ rwa_final); it is
         # not folded into ``rwa_final`` (PS1/26 Own Funds 4(b)). It is also
@@ -123,31 +128,43 @@ def _ba_cva_roll_up(
     ctx: PipelineContext,
     rulepack: RulepackV0,
     results: pl.LazyFrame,
-) -> BaCvaResult | None:
-    """Compute the portfolio BA-CVA result, or None when out of scope.
+) -> tuple[BaCvaResult | None, list[CalculationError]]:
+    """Compute the portfolio BA-CVA result and its coverage warnings.
 
-    No-op when the firm supplies no BA-CVA counterparty inputs (every existing
-    portfolio) or the regime disables the ``cva_ba_cva`` pack Feature (CRR) —
-    the regime gate is a cited pack Feature, never a ``config.is_basel_3_1``
-    branch. The returned :class:`BaCvaResult` carries both the RWEA and the
+    Out of scope — ``(None, [])`` — when the regime disables the ``cva_ba_cva``
+    pack Feature (CRR; the regime gate is a cited pack Feature, never a
+    ``config.is_basel_3_1`` branch) or the firm has no SA-CCR derivatives book.
+    With a derivatives book, every derivative counterparty missing from the
+    BA-CVA counterparty input is named by a CCR030 WARNING (CC-16) — including
+    the case where no CVA input was supplied at all, which used to return
+    nothing. The returned :class:`BaCvaResult` carries both the RWEA and the
     single ``hedges_recognised`` discriminator (``True`` when at least one
     eligible hedge fed the full-K path) so the roll-up never re-derives the
     full-vs-reduced condition.
 
     References:
-        PRA PS1/26 Credit Valuation Adjustment Risk Part Ch.4.2-4.10;
+        PRA PS1/26 Credit Valuation Adjustment Risk Part 1.2, 4.1, Ch.4.2-4.10;
         Own Funds Part 4(b).
     """
     data = ctx.get(RAW_DATA)
-    if data.cva_counterparties is None:
-        return None
+    if data.ccr is None:
+        return None, []
     if not rulepack.pack.feature("cva_ba_cva"):
         logger.debug("cva_ba_cva feature disabled for regime - skipping BA-CVA roll-up")
-        return None
+        return None, []
 
-    from rwa_calc.engine.cva import compute_ba_cva_rwa
+    from rwa_calc.engine.cva import compute_ba_cva_rwa, uncovered_cva_counterparty_errors
 
     ccr_rows = results.filter(pl.col("exposure_reference").str.starts_with(_CCR_EXPOSURE_PREFIX))
+    errors = uncovered_cva_counterparty_errors(ccr_rows, data.cva_counterparties)
+    if errors:
+        logger.warning(
+            "%d derivative counterparty(ies) have no BA-CVA input row - no CVA charge for them",
+            len(errors),
+        )
+    if data.cva_counterparties is None:
+        return None, errors
+
     cva = compute_ba_cva_rwa(data.cva_counterparties, ccr_rows, rulepack.pack, data.cva_hedges)
     if cva.rwea is not None:
         logger.info(
@@ -155,4 +172,4 @@ def _ba_cva_roll_up(
             cva.rwea,
             cva.hedges_recognised,
         )
-    return cva
+    return cva, errors

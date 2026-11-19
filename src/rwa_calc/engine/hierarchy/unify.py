@@ -10,7 +10,11 @@ Key responsibilities:
   (including the ONB/OFB drawn-vs-nominal switch and the FCCM / Pool-B
   pass-through columns).
 - Concat loans + contingents + synthetic facility_undrawn rows into the
-  single unified exposures frame.
+  single unified exposures frame, and return the facility-undrawn warnings
+  (HIE004-HIE006) and facility-mapping repairs (DQ021 / DQ022) as the stage's
+  errors. The facility graph edges are collected once here, made a forest,
+  and shared by the root lookup and ancestor closure; every consumer reads the
+  resolved mappings (``graph.resolve_exposure_mappings``).
 - Attach facility metadata (parent/root facility refs, hierarchy depth,
   ancestor closure) and delegate QRRE propagation + rating attach to
   ``enrich``.
@@ -20,7 +24,7 @@ References:
 - CRR Art. 223(5): FCCM exposure volatility haircut (HE) inputs
 - CRR Art. 159(1)(c)/(d): Pool B inputs (AVAs, other own-funds reductions)
 - CRR Art. 230-231: facility-level collateral cascade (ancestor closure)
-- PRA PS1/26 Art. 111(1) Table A1 Row 4(b) / Art. 166E(5): commitment flags
+- PRA PS1/26 Art. 111(1) Table A1 Row 4(b) / Art. 166A(5): commitment flags
 - PRA PS1/26 Art. 124(3) / Art. 124K: under-construction (ADC) flag
 - PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased receivables F-IRB LGD subtype
 """
@@ -32,14 +36,21 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.schemas import (
+    DISREGARDED_ENGINE_ONLY_RISK_TYPES,
+    DISREGARDED_RISK_TYPE_PREFIX,
+)
 from rwa_calc.engine.hierarchy.enrich import (
     attach_counterparty_rating,
     propagate_facility_qrre_columns,
 )
 from rwa_calc.engine.hierarchy.facility_undrawn import calculate_facility_undrawn
+from rwa_calc.engine.hierarchy.facility_warnings import collect_facility_undrawn_warnings
 from rwa_calc.engine.hierarchy.graph import (
     build_facility_ancestor_closure,
     build_facility_root_lookup,
+    collect_facility_graph,
+    resolve_exposure_mappings,
 )
 
 if TYPE_CHECKING:
@@ -57,6 +68,7 @@ def unify_exposures(
     facility_mappings: pl.LazyFrame,
     counterparty_lookup: CounterpartyLookup,
     config: CalculationConfig | None = None,
+    fx_rates: pl.LazyFrame | None = None,
 ) -> tuple[pl.LazyFrame, list[CalculationError]]:
     """
     Unify loans, contingents, and facility undrawn into a single exposures LazyFrame.
@@ -64,10 +76,16 @@ def unify_exposures(
     Creates three types of exposures:
     - loan: Drawn amounts from loans
     - contingent: Off-balance sheet items (guarantees, LCs, etc.)
-    - facility_undrawn: Undrawn facility headroom (limit - drawn loans)
+    - facility_undrawn: Undrawn facility headroom (limit - drawn loans), every
+      drawing first put in the facility's currency at ``fx_rates``
+
+    ``fx_rates`` is the run's raw rate table: headroom is netted here, BEFORE
+    ``engine/fx`` rebases the unified frame, so it is needed to compare a
+    drawing with a limit in another currency (review findings CM-02 / SF-01).
 
     Returns:
-        Tuple of (unified exposures LazyFrame, list of errors)
+        Tuple of (unified exposures LazyFrame, list of errors) — the errors
+        are the HIE004 / HIE005 / HIE006 facility-undrawn warnings.
     """
     # Output schema invariants — the unified exposures frame must surface these
     # columns for downstream calculators (EAD / LGD / maturity). Listed here as
@@ -80,6 +98,13 @@ def unify_exposures(
 
     errors: list[CalculationError] = []
 
+    # CC-19: a CCR routing tag on a lending row (DQ023 at the input gate) is
+    # disregarded before any consumer reads it — undrawn rows and MOF subs
+    # included — so no lending row is routed to the CCR treatment. The 1250%
+    # own-funds tags draw the same DQ023 but are honoured (schemas.py).
+    contingents = _disregard_engine_only_risk_types(contingents)
+    facilities = _disregard_engine_only_risk_types(facilities)
+
     loans_unified = _coerce_loans_to_unified(loans)
     exposure_frames: list[pl.LazyFrame] = [loans_unified]
 
@@ -88,8 +113,21 @@ def unify_exposures(
         exposure_frames.append(contingents_unified)
 
     # Build facility root lookup for multi-level hierarchies, then add
-    # synthetic facility_undrawn exposures for the unused headroom.
-    facility_root_lookup = build_facility_root_lookup(facility_mappings)
+    # synthetic facility_undrawn exposures for the unused headroom. The facility
+    # edges are collected ONCE and shared by the root lookup and the ancestor
+    # closure below; the collect that saves pays for the warnings collect.
+    # RC-01 / RC-02 / SF-03: the graph is made the tree every consumer assumes
+    # (one parent per sub-facility, cycle members as roots - DQ021 / DQ022), and
+    # every consumer below reads the RESOLVED mappings (one root per loan /
+    # contingent); the raw ones are kept only to name each repair (DQ021).
+    facility_graph = collect_facility_graph(facility_mappings)
+    errors.extend(facility_graph.errors)
+    facility_edges = facility_graph.edges
+    facility_root_lookup = build_facility_root_lookup(facility_mappings, edges=facility_edges)
+    raw_facility_mappings = facility_mappings
+    facility_mappings = resolve_exposure_mappings(
+        facility_mappings, facility_edges, facility_root_lookup
+    )
     facility_undrawn = calculate_facility_undrawn(
         facilities,
         loans,
@@ -98,14 +136,32 @@ def unify_exposures(
         facility_root_lookup,
         counterparty_lookup=counterparty_lookup,
         config=config,
+        fx_rates=fx_rates,
     )
     exposure_frames.append(facility_undrawn)
+    if facilities is not None:
+        # HIE004 / HIE005 / HIE006: every treatment of a facility's undrawn row
+        # the input did not state outright, named rather than silently chosen.
+        errors.extend(
+            collect_facility_undrawn_warnings(
+                facilities,
+                loans,
+                contingents,
+                facility_mappings,
+                facility_root_lookup,
+                fx_rates=fx_rates,
+                config=config,
+                raw_facility_mappings=raw_facility_mappings,
+            )
+        )
 
     # Combine all exposure types into the unified frame, then enrich with
     # parent/root facility mapping, QRRE-relevant facility-level columns,
     # and counterparty rating fields needed by downstream stages.
     exposures = pl.concat(exposure_frames, how="diagonal_relaxed")
-    exposures = _join_facility_metadata(exposures, facility_mappings, facility_root_lookup)
+    exposures = _join_facility_metadata(
+        exposures, facility_mappings, facility_root_lookup, facility_edges
+    )
     exposures = propagate_facility_qrre_columns(exposures, facilities)
     exposures = attach_counterparty_rating(exposures, counterparty_lookup)
 
@@ -168,7 +224,7 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
         pl.lit(None).cast(pl.Float64).alias("ead_modelled"),  # N/A for drawn loans
         pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
         pl.lit(None).cast(pl.Boolean).alias("is_obs_commitment"),  # N/A for drawn loans
-        # PRA PS1/26 Art. 111(1) Table A1 Row 4(b) and Art. 166E(5): both
+        # PRA PS1/26 Art. 111(1) Table A1 Row 4(b) and Art. 166A(5): both
         # commitment flags are off-balance-sheet only and are not declared
         # on LOAN_SCHEMA — a sealed loans frame never carries them, so emit
         # False purely for schema alignment.
@@ -198,6 +254,7 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
             ("ltv", pl.Float64),
             ("property_type", pl.String),
             ("has_income_cover", pl.Boolean),
+            ("is_qualifying_re", pl.Boolean),
             ("is_defaulted", pl.Boolean),
             # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased receivables F-IRB LGD subtype.
             ("purchased_receivables_subtype", pl.String),
@@ -326,7 +383,7 @@ def _coerce_contingents_to_unified(
             .then(pl.lit(None).cast(pl.Boolean))
             .otherwise(pl.col("is_uk_residential_mortgage_commitment"))
             .alias("is_uk_residential_mortgage_commitment"),
-            # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn
+            # PRA PS1/26 Art. 166A(5): revolving purchased-receivables undrawn
             # purchase commitment flag. Meaningful only for undrawn (OFB)
             # contingents; nullified for drawn (ONB) rows, mirroring
             # is_uk_residential_mortgage_commitment.
@@ -355,6 +412,7 @@ def _join_facility_metadata(
     exposures: pl.LazyFrame,
     facility_mappings: pl.LazyFrame,
     facility_root_lookup: pl.LazyFrame,
+    facility_edges: pl.DataFrame | None = None,
 ) -> pl.LazyFrame:
     """Attach ``parent_facility_reference``, ``exposure_has_parent``,
     ``root_facility_reference``, and ``facility_hierarchy_depth`` to the
@@ -376,13 +434,13 @@ def _join_facility_metadata(
         facility_mappings.filter(
             pl.col("child_type").fill_null("").str.to_lowercase() != "facility"
         )
-        .select(
-            [
-                pl.col("child_reference"),
-                pl.col("parent_facility_reference").alias("mapped_parent_facility"),
-            ]
-        )
-        .unique(subset=["child_reference"], keep="first")
+        # One parent per exposure, and always the same one: the lowest reference.
+        # ``resolve_exposure_mappings`` has already confined a multi-parent child
+        # to the facilities of one root (DQ021), so this is a parent under the
+        # root whose headroom the exposure reduces. It used to be ``keep="first"``
+        # over an unordered frame.
+        .group_by("child_reference")
+        .agg(pl.col("parent_facility_reference").min().alias("mapped_parent_facility"))
     )
 
     exposures = exposures.join(
@@ -412,7 +470,7 @@ def _join_facility_metadata(
     # down nested facility hierarchies. Facilities absent from the closure
     # (roots / single-level) fall back to the 1-element [parent] list, which
     # makes the CRM cascade reduce to the legacy single-level allocation.
-    ancestor_lists = build_facility_ancestor_closure(facility_mappings)
+    ancestor_lists = build_facility_ancestor_closure(facility_mappings, edges=facility_edges)
     exposures = (
         exposures.join(
             ancestor_lists.select(
@@ -474,4 +532,36 @@ def _join_facility_metadata(
             ]
         )
         .drop(["_frl_root", "_frl_depth"])
+    )
+
+
+def _disregard_engine_only_risk_types(frame: pl.LazyFrame | None) -> pl.LazyFrame | None:
+    """Prefix a CCR routing risk type on a lending row so nothing routes on it.
+
+    ``CCR_DERIVATIVE`` / ``CCR_SFT`` are minted by the counterparty-credit-risk
+    stages for their own netting-set rows; the Basel 3.1 SA approach relabel,
+    the repo-style F-IRB maturity and its sub-1-year floor waiver, the QCCP
+    sovereign-floor exemption and the C 07.00 CCR rows all key on the exact
+    tag. On a loans / contingents / facilities row the tag is malformed input
+    (DQ023; CRR Art. 111(2), PS1/26 Art. 111(2) / (2A): such exposure values
+    never come from a CCF), so it is rewritten to
+    ``DISREGARDED_RISK_TYPE_PREFIX + tag``. Not nulled: an explicit
+    unrecognised risk type keeps the CCF residual it had and outranks
+    ``obs_product`` (``engine/ccf.py``), so the CCF cannot fall, and none of the
+    removed treatments raised capital, so the RWA cannot either. The 1250%
+    own-funds tags (``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE``) are left
+    alone: :data:`~rwa_calc.data.schemas.DISREGARDED_ENGINE_ONLY_RISK_TYPES`.
+    """
+    if frame is None:
+        return None
+    engine_only = sorted(DISREGARDED_ENGINE_ONLY_RISK_TYPES)
+    return frame.with_columns(
+        pl.when(pl.col(column).str.strip_chars().str.to_uppercase().is_in(engine_only))
+        .then(
+            pl.lit(DISREGARDED_RISK_TYPE_PREFIX)
+            + pl.col(column).str.strip_chars().str.to_uppercase()
+        )
+        .otherwise(pl.col(column))
+        .alias(column)
+        for column in ("risk_type", "underlying_risk_type")
     )

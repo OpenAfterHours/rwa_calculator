@@ -187,7 +187,7 @@ class _Run:
 #   A-IRB 16,085,419.21 + slotting 52,500,000.00 = 116,829,480.13; standardised =
 #   the SA book + equity + CIU = 51,355,833.33. They sum to the whole portfolio
 #   (== C 02.00 row 0010 TREA). Column d is the book's whole sa_rwa:
-#   195,130,833.33 — including equity's own 2,500,000 and the CIU legs' 28,000,000
+#   217,630,833.33 — including equity's own 2,500,000 and the CIU legs' 28,000,000
 #   standardised-equivalent RWA (B31 equity is SA-only, Art. 147A; the aggregator
 #   populates an equity-table leg's sa_rwa as its rwa — R4). The A-IRB and SA legs
 #   both carry the P1.373 supporting-factor overlap pair (RP-LN-SME-INFRA,
@@ -195,6 +195,12 @@ class _Run:
 #   contributes unrelieved RWA under Basel 3.1.
 #   Row 0020 is a populated ZERO — the book has no CCR, which is a claim the
 #   calculator can make; Total therefore equals row 0010.
+#
+#   **Review IV-01 raised column d by 22,500,000 in rows 0010 and 0080** (and
+#   nothing else): RP-LN-SL, the 75,000,000 slotted project-finance loan, has no
+#   project_phase, and PS1/26 Art. 122B(3) makes the operational phase a condition
+#   the firm must show — so its SA-equivalent is the Art. 122B(2)(c)
+#   pre-operational 130%, not 100%: 75,000,000 x 0.30.
 #
 #   **P2.54 widened column b and the c/d TOTALS by 28,000,000 — and row 0010 did
 #   NOT move.** The two Art. 112(1)(o) CIU legs land in row 0070 "Residual RWA",
@@ -218,14 +224,14 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "a": 116_829_480.13349256,
             "b": 23_355_833.333333332,
             "c": 140_185_313.4668259,
-            "d": 167_130_833.3333333,
+            "d": 189_630_833.3333333,
         },
         "0020": {"a": 0.0, "b": 0.0, "c": 0.0, "d": 0.0},
         "0080": {
             "a": 116_829_480.13349256,
             "b": 51_355_833.33333333,
             "c": 168_185_313.4668259,
-            "d": 195_130_833.3333333,
+            "d": 217_630_833.3333333,
         },
     },
     "ccr": {

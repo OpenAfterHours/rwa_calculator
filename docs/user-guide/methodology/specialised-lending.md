@@ -145,11 +145,11 @@ For every specialised-lending row, set:
 
 | Loader column | Type | Meaning | Driver of subgrade? |
 |---------------|------|---------|---------------------|
-| `slotting_category` | `str` (one of `"strong"`, `"good"`, `"satisfactory"`, `"weak"`, `"default"`) | The coarse five-bucket category. Must be set before the calculator can look up a risk weight. | Yes — selects the row of Table A. |
+| `slotting_category` | `str` (one of `"strong"`, `"good"`, `"satisfactory"`, `"weak"`, `"default"`, case-insensitive) | The coarse five-bucket category. Must be set before the calculator can look up a risk weight: a slotted row with a null or unrecognised category is weighted at the `satisfactory` pack default (risk weight and expected-loss rate) and the run raises the **CLS012** warning with the row count. | Yes — selects the row of Table A. |
 | `is_hvcre` | `bool` (default `False`) | High-Volatility CRE flag. PRA PS1/26 introduces a separate, elevated table for HVCRE; under CRR this flag has no UK legal basis (see code divergence D3.22). | Yes — selects the HVCRE table vs. the standard Non-HVCRE table. |
 | `residual_maturity_years` | `float` | Years to maturity. The calculator derives `is_short_maturity = residual_maturity_years < 2.5` if not already set. | Yes (CRR only — see warning below). |
 | `is_short_maturity` | `bool` (optional, derived from `residual_maturity_years`) | Pre-computed maturity flag. A pre-existing value is never overwritten. | Yes (CRR only). |
-| `sl_type` | `str` (one of `"project_finance"`, `"object_finance"`, `"commodities_finance"`, `"ipre"`, `"hvcre"`) | Specialised-lending sub-type. Does not affect the slotting table directly except that PRA PS1/26 routes IPRE / HVCRE to slotting unconditionally. | No (does not change the column lookup). |
+| `sl_type` | `str` (one of `"project_finance"`, `"object_finance"`, `"commodities_finance"`, `"ipre"`, `"hvcre"`) | Specialised-lending sub-type. Does not affect the slotting table directly except that PRA PS1/26 routes IPRE / HVCRE to slotting wherever an IRB permission covers them (an SA-only firm keeps them on SA). | No (does not change the column lookup). |
 
 There is **no** `slotting_subgrade` column. The A/B/C/D refinement is derived, not declared.
 
@@ -334,16 +334,42 @@ The pre-operational / operational distinction only affects risk weights under th
 (Art. 122B(2)(c)), not under IRB slotting:
 
 ```python
-# Basel 3.1 SA applies different weights for PF by project phase
+# Basel 3.1 SA applies different weights for unrated PF by project phase
 if framework == "BASEL_3_1" and approach == "SA" and lending_type == "PROJECT_FINANCE":
-    if phase == "pre_operational":
-        rw = 1.30  # 130% (Art. 122B(2)(c))
-    elif phase == "high_quality_operational":
-        rw = 0.80  # 80% (Art. 122B(4))
-    else:
+    if phase == "operational":
         rw = 1.00  # 100% operational (Art. 122B(2)(c))
+    elif phase == "high_quality_operational":
+        rw = 0.80  # 80% (Art. 122B(4)); the Art. 122B(5) criteria must be met
+    else:
+        rw = 1.30  # 130% pre-operational (Art. 122B(2)(c)) — also null / unrecognised
 # For IRB slotting, all PF uses standard non-HVCRE weights regardless of phase
 ```
+
+The phase is the `project_phase` column of the specialised-lending input. Art. 122B(3)
+defines the operational phase by conditions the firm must show (net cash flow covering the
+remaining completion obligations, declining long-term debt), so under Basel 3.1 a
+project-finance row with **no recognised phase is treated as pre-operational** and the run
+raises the **SA006** warning. The resolved phase also sets the output-floor SA-equivalent of a
+slotted project-finance row. CRR has no SA phase weights: an unrated SL exposure is a 100%
+corporate whatever its phase.
+
+### Subordinated Specialised Lending (Basel 3.1 SA)
+
+A loan with `seniority = "subordinated"` to a specialised-lending obligor — a mezzanine
+project-finance tranche, say — takes the **150%** Art. 133(5) weight under the Basel 3.1 SA,
+ahead of its Art. 122B type weight and of any rated-corporate weight (Table A2 ranks
+subordinated debt above the corporate class, of which specialised lending is a sub-class).
+CRR keeps the corporate 100%.
+
+### IPRE / HVCRE: Slotting Requires an IRB Permission (Basel 3.1)
+
+PS1/26 Art. 147A(1)(c) routes IPRE and HVCRE to the Slotting Approach, or to the
+Standardised Approach where an Art. 148 / 150 permission applies. Slotting is an IRB approach
+and needs permission (Art. 107(1), Art. 143(2A)), so the engine slots an IPRE / HVCRE row only
+when the run grants a slotting, F-IRB or A-IRB permission for specialised lending that covers
+it. An SA-only firm keeps IPRE / HVCRE on the Standardised Approach (an ADC HVCRE row then
+takes the Art. 124K 150%). See
+[Model Permissions](../../specifications/basel31/model-permissions.md#iprehvcre-routing).
 
 ## HVCRE Treatment
 

@@ -64,12 +64,15 @@ def run(
         logger.debug("no CCR inputs - skipping SA-CCR stage")
         return ctx
 
+    from rwa_calc.contracts.ccr_collateral_checks import collect_findings
     from rwa_calc.engine.ccr import (
         apply_legal_enforceability_gate,
         apply_wwr_gate,
+        attach_orphan_trade_netting_sets,
         ccr_rows_to_exposures,
         partition_out_sft_rows,
     )
+    from rwa_calc.engine.ccr.findings import derivative_findings
 
     resolved = ctx.get(RESOLVED_HIERARCHY)
 
@@ -89,21 +92,46 @@ def run(
     # non-enforceable netting sets are split into single-trade synthetic
     # NSes before the EAD chain runs, then the Art. 291(4)-(5) WWR gate so
     # specific-WWR trades break out into their own synthetic netting sets
-    # (LGD = 100%).
-    raw_ccr_gated = apply_wwr_gate(apply_legal_enforceability_gate(derivatives_only))
+    # (LGD = 100%). A trade whose netting set is missing from the input gets a
+    # non-enforceable stand-in first, so it is priced alone rather than dropped
+    # (review CC-06; reported as CCR023 by the input gate).
+    raw_ccr_gated = apply_wwr_gate(
+        apply_legal_enforceability_gate(attach_orphan_trade_netting_sets(derivatives_only))
+    )
     # Unified error channel: the gates' CCR001/CCR010/CCR011 diagnostics
     # reach the result verbatim — original code/severity/category preserved.
     ctx = append_stage_errors(ctx, *raw_ccr_gated.errors)
+    # Review cluster saccr_b: CCR025 margin-term conflicts, CCR024 collateral left
+    # out of VM / NICA and CCR026 amounts with no rate to the reporting currency —
+    # built from the same engine/ccr expressions that price the netting sets.
+    ctx = append_stage_errors(
+        ctx,
+        *collect_findings(
+            derivative_findings(
+                derivatives_only, raw_ccr_gated, data.fx_rates, run_config, rulepack.pack
+            )
+        ),
+    )
     ccr_exposure_rows = ccr_rows_to_exposures(
         raw_ccr_gated,
         run_config.ccr,
         run_config.reporting_date,
         base_currency=run_config.base_currency,
         fx_rates=data.fx_rates,
-        # CRR Art. 274(2): the counterparty frame carries the
-        # ``counterparty_type`` discriminator that selects the per-NS
-        # supervisory alpha (1.0 carve-out vs 1.4 default).
+        # Art. 276(1)(d): CCR collateral takes the run regime's Art. 224 haircuts;
+        # Art. 279b(3): amounts are rebased to the reporting currency unless the
+        # run has FX conversion switched off.
+        calculation_config=run_config,
+        rulepack=rulepack.pack,
+        rebase_amounts=run_config.apply_fx_conversion,
+        # Art. 274(2): the counterparty frame carries the ``counterparty_type``
+        # discriminator that selects the per-NS supervisory alpha — the α = 1
+        # NFC / pension carve-out is PS1/26 text, so it is gated on the cited
+        # pack Feature (off under CRR, where α = 1.4 for every netting set).
         counterparties=data.counterparties,
+        alpha_nfc_carve_out_applicable=rulepack.pack.feature(
+            "sa_ccr_alpha_nfc_carve_out_applicable"
+        ),
         # PRA PS1/26 Art. 274(2A): the transitional alpha add-on is
         # Basel 3.1 only — gate it on the cited pack Feature so it never
         # fires under CRR. The add-on branch keeps its ``is_basel_3_1`` bool
@@ -124,17 +152,15 @@ def run(
     concat_frames = [resolved.exposures, ccr_exposure_rows]
 
     # CCR Art. 378/379 settlement risk: when the firm reports failed (DvP /
-    # non-DvP free-delivery) settlements, compute their own-funds / RWA via
-    # ``compute_failed_trade_rwa`` and shape each row into a synthetic SA
-    # exposure (drawn_amount = own_funds_requirement, RW pinned to 12.5 in the
-    # SA override chain) so the failed-trade RWA reaches the aggregated totals.
+    # non-DvP free-delivery) settlements, shape each into a synthetic ``ft__``
+    # row — an own-funds line (drawn_amount = own funds, RW pinned to 12.5) or,
+    # for an Art. 379 Column 3 free delivery, an ordinary credit exposure — so
+    # the settlement-risk RWA reaches the aggregated totals.
     if data.ccr.failed_trades is not None:
-        from rwa_calc.engine.ccr.failed_trades import compute_failed_trade_rwa
+        from rwa_calc.engine.ccr.failed_trades import failed_trade_exposure_rows
 
-        failed_trade_rows = _failed_trade_rows_to_exposures(
-            data.ccr.failed_trades.failed_trades,
-            run_config,
-            compute_failed_trade_rwa,
+        failed_trade_rows = failed_trade_exposure_rows(
+            data.ccr.failed_trades.failed_trades, run_config
         )
         concat_frames.append(
             enrich_ccr_rows_with_ratings(failed_trade_rows, resolved.counterparty_lookup)
@@ -169,52 +195,6 @@ def run(
     return ctx.put(RESOLVED_HIERARCHY, new_resolved)
 
 
-def _failed_trade_rows_to_exposures(
-    failed_trades: pl.LazyFrame,
-    run_config: CalculationConfig,
-    compute_failed_trade_rwa: Callable[[pl.LazyFrame, CalculationConfig], pl.LazyFrame],
-) -> pl.LazyFrame:
-    """Shape failed-trade own-funds requirements into synthetic SA exposure rows.
-
-    CCR Art. 378/379 settlement risk: each failed trade carries an own-funds
-    requirement (DvP price-difference x multiplier, or non-DvP exposure). The
-    synthetic row sets ``drawn_amount = own_funds_requirement`` and tags itself
-    with ``risk_type = "SETTLEMENT_FAILED_TRADE"`` so the SA override chain pins
-    its risk weight to the own-funds->RWA factor (12.5, Art. 92(3)(ca)); the
-    downstream EAD x RW then reproduces the upstream ``failed_trade_rwa``.
-
-    References:
-        CRR Art. 378 + Table 1; CRR Art. 379(1) + Table 2; CRR Art. 92(3)(ca).
-    """
-    computed = compute_failed_trade_rwa(failed_trades, run_config)
-    return computed.select(
-        pl.concat_str([pl.lit("ft__"), pl.col("failed_trade_id")]).alias("exposure_reference"),
-        # Reconciliation base: keep the ``ft__`` namespace (no legacy
-        # per-exposure equivalent; avoids collision with a loan reference).
-        pl.concat_str([pl.lit("ft__"), pl.col("failed_trade_id")]).alias(
-            "source_exposure_reference"
-        ),
-        pl.lit("ccr_failed_trade").alias("exposure_type"),
-        pl.col("counterparty_reference"),
-        pl.lit(run_config.reporting_date).alias("value_date"),
-        pl.lit(run_config.reporting_date).alias("maturity_date"),
-        pl.col("own_funds_requirement").alias("drawn_amount"),
-        pl.lit(0.0).alias("interest"),
-        pl.lit(0.0).alias("undrawn_amount"),
-        pl.lit(0.0).alias("nominal_amount"),
-        pl.lit("senior").alias("seniority"),
-        pl.lit("SETTLEMENT_FAILED_TRADE").alias("risk_type"),
-        pl.lit("failed_trade").alias("ccr_method"),
-        # Audit columns reconciling the synthetic row back to Art. 378/379.
-        pl.col("regulatory_band"),
-        pl.col("multiplier_or_rw"),
-        pl.col("own_funds_requirement"),
-        pl.col("failed_trade_rwa"),
-        pl.col("price_difference"),
-        pl.col("exposure_amount"),
-    )
-
-
 def _dfc_rows_to_exposures(
     default_fund_contributions: pl.LazyFrame,
     run_config: CalculationConfig,
@@ -222,9 +202,11 @@ def _dfc_rows_to_exposures(
 ) -> pl.LazyFrame:
     """Shape default-fund-contribution K_CM into synthetic SA exposure rows.
 
-    CCR Art. 308/309 CCP default-fund contributions: each contribution
-    carries a clearing-member capital requirement (K_CM = K_CCP x DF_i /
-    DF_CM, Art. 308(2)). The synthetic row sets ``drawn_amount = k_cm`` and
+    CCR Art. 307-310 CCP default-fund contributions: each contribution
+    carries an own-funds requirement ``k_cm`` — Art. 308(2) max(K_CCP x DF_i /
+    (DF_CCP + DF_CM), 8% x 2% x DF_i) for a QCCP pre-funded contribution,
+    Art. 309(1) K = DF + UC for a non-QCCP, 0 for an Art. 310 QCCP unfunded
+    contribution. The synthetic row sets ``drawn_amount = k_cm`` and
     tags itself with ``risk_type = "CCR_DEFAULT_FUND"`` so the SA override
     chain pins its risk weight to the own-funds->RWA factor (12.5, Art.
     92(3)(ca)); the downstream EAD x RW then reproduces the upstream

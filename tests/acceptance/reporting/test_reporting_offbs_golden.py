@@ -405,7 +405,7 @@ def test_crr_exposure_value_derivation_closes() -> None:
 def test_documentary_credit_resolves_its_risk_type_from_obs_product(regime_key: str) -> None:
     """``obs_product`` drives the Art. 111(1) risk_type fill end-to-end.
 
-    ``CT_DOC_CREDIT`` carries ``obs_product="DOCUMENTARY_CREDIT"`` and NO
+    ``CT_DOC_CREDIT`` carries ``obs_product="DOCUMENTARY_CREDIT_SHIPMENT_SECURED"`` and NO
     explicit ``risk_type``. The hierarchy stage used to drop ``obs_product``, so
     the fill in ``engine/ccf.py`` was unreachable from a full pipeline run and
     this row fell to the conservative 50% MR default. Pinned end-to-end because

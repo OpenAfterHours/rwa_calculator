@@ -16,10 +16,12 @@ Scenario:
 
         Expected engine behaviour:
             1. Engine derives has_one_day_maturity_floor=True from
-               is_short_term_trade_lc=True (CRR Art. 162(4) carve-out).
-            2. irb/namespace.py prepare_columns then sets maturity = 1/365 ≈ 0.00274y
-               directly (not as a floor — it overwrites the computed residual).
-            3. irb_maturity_m = 1/365 ≈ 0.00274y.
+               is_short_term_trade_lc=True (CRR Art. 162(3)(b) carve-out).
+            2. The one-day value replaces the one-year MINIMUM: M = max(1/365,
+               residual) = 0.7452y. (Until review TR-11 the engine overwrote the
+               residual with 1/365 and this test pinned that collapse; CRR
+               Art. 162(3): "M shall be at least one-day".)
+            3. irb_maturity_m = 272/365 ≈ 0.7452y.
 
     Row B — TF_LC_002 (CP_TRADE_002):
         is_short_term_trade_lc=False
@@ -33,16 +35,17 @@ Engine bug (pre-fix):
     directly from the input column.  It does NOT derive the flag from
     `is_short_term_trade_lc`.  With has_one_day_maturity_floor=False on both rows,
     both rows fall through to the standard maturity_date chain with a 1.0y clip floor,
-    so Row A's irb_maturity_m is incorrectly 1.0y instead of 1/365 ≈ 0.00274y.
+    so Row A's irb_maturity_m is incorrectly 1.0y instead of the 0.7452y residual.
 
-    Test failure before fix: irb_maturity_m for TF_LC_001 ≈ 1.0 != ≈ 0.00274.
+    Test failure before fix: irb_maturity_m for TF_LC_001 ≈ 1.0 != ≈ 0.7452.
 
 References:
     - CRR Art. 162(4): 1-day effective maturity floor for short-term
       self-liquidating trade transactions (incl. documentary credits).
     - CRR Art. 162(2): standard 1-year M floor for all other IRB exposures.
-    - src/rwa_calc/engine/irb/namespace.py lines 299-307: prepare_columns maturity chain
-      (sets maturity = 1/365 when has_one_day_maturity_floor=True)
+    - src/rwa_calc/engine/irb/transforms.py::_build_maturity_exprs: maturity chain
+      (M = max(1/365, residual) when has_one_day_maturity_floor=True and the
+      residual is under one year)
     - tests/fixtures/p1_118/p1_118.py: fixture constants and builders
 """
 
@@ -78,10 +81,10 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_118"
 # Tolerances
 # ---------------------------------------------------------------------------
 
-# EXPECTED_M_A = 1/365 ≈ 0.00274y (1-day floor, engine sets M directly).
+# EXPECTED_M_A = 272/365 ≈ 0.7452y (residual, above the one-day floor).
 # EXPECTED_M_B = 1.0y (standard 1-year floor).
-# A tolerance of ±0.002y (~0.73 days) unambiguously separates 0.00274y from
-# 1.0y and is tight enough to catch any residual-maturity leakage.
+# A tolerance of ±0.002y (~0.73 days) unambiguously separates 0.7452y from both
+# 1.0y and the collapsed 1/365 ≈ 0.00274y the engine produced before TR-11.
 _M_TOL = 0.002  # ±0.002y (≈ 0.73 days)
 
 
@@ -151,19 +154,15 @@ def _get_irb_row(result: AggregatedResultBundle, contingent_ref: str) -> dict:
 
 class TestP1118Art1624ShortTermTradeFinanceMDerivation:
     """
-    P1.118 — CRR Art. 162(4): when ``is_short_term_trade_lc=True``, the engine
-    must derive ``has_one_day_maturity_floor=True`` and set M = 1/365 ≈ 0.00274y.
+    P1.118 — CRR Art. 162(3)(b): when ``is_short_term_trade_lc=True``, the engine
+    must derive ``has_one_day_maturity_floor=True`` and floor M at one day
+    instead of one year: M = max(1/365, residual) = 0.7452y.
 
-    Engine mechanics (irb/namespace.py lines 299-307):
-        When ``has_one_day_maturity_floor=True``, prepare_columns sets
-        ``maturity = 1/365`` *directly* — not as a minimum floor but as an
-        override that replaces the residual-maturity computation.
-        The engine-implementer must add derivation logic so that
-        ``is_short_term_trade_lc=True`` → ``has_one_day_maturity_floor=True``
-        before this branch is evaluated.
+    Engine mechanics (irb/transforms.py ``_build_maturity_exprs``): the one-day
+    value is a MINIMUM on the residual maturity, not a fixed M (review TR-11).
 
     Row A (is_short_term_trade_lc=True):
-        irb_maturity_m = 1/365 ≈ 0.00274y  (1-day-floor set by engine)
+        irb_maturity_m = 272/365 ≈ 0.7452y  (residual; the 1-year floor is lifted)
     Row B (is_short_term_trade_lc=False):
         irb_maturity_m = 1.0y  (standard 1-year floor, residual 0.7452y < 1.0y)
 
@@ -187,23 +186,23 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
         return _get_irb_row(result, CONTINGENT_REF_B)
 
     # ------------------------------------------------------------------
-    # Primary assertion — Row A: 1-day floor sets M = 1/365 ≈ 0.00274y
+    # Primary assertion — Row A: 1-day floor lets the 0.7452y residual through
     # ------------------------------------------------------------------
 
     def test_p1_118_row_a_maturity_equals_one_day_floor(self, row_a: dict) -> None:
         """
-        Row A (is_short_term_trade_lc=True) must have irb_maturity_m = 1/365 ≈ 0.00274y.
+        Row A (is_short_term_trade_lc=True) must have irb_maturity_m = 272/365 ≈ 0.7452y.
 
-        Engine path (irb/namespace.py lines 299-307):
-            when has_one_day_maturity_floor=True → maturity = 1/365 (literal assignment).
-        The engine-implementer must derive has_one_day_maturity_floor=True from
-        is_short_term_trade_lc=True (Art. 162(4) carve-out).
+        Engine path (irb/transforms.py ``_build_maturity_exprs``): the derived
+        has_one_day_maturity_floor=True replaces the 1-year minimum with a one-day
+        minimum, so the sub-1y residual flows through (CRR Art. 162(3): "M shall be
+        at least one-day"; review TR-11 removed the former literal 1/365).
 
         Arrange: TF_LC_001, is_short_term_trade_lc=True, has_one_day_maturity_floor=False
                  (engine must derive True from is_short_term_trade_lc).
                  Reporting date 2026-01-01, maturity_date 2026-09-30 (272 days residual).
         Act:     full CRR F-IRB pipeline.
-        Assert:  irb_maturity_m ≈ 1/365 ≈ 0.00274y (±0.002y).
+        Assert:  irb_maturity_m ≈ 272/365 ≈ 0.7452y (±0.002y).
 
         Pre-fix: irb_maturity_m = 1.0y (standard 1-year floor, flag not derived).
         """
@@ -214,15 +213,13 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
         )
         m_a = row_a["irb_maturity_m"]
 
-        # Assert — EXPECTED_M_A = 1/365 ≈ 0.00274y
+        # Assert — EXPECTED_M_A = 272/365 ≈ 0.7452y
         assert m_a == pytest.approx(EXPECTED_M_A, abs=_M_TOL), (
             f"TF_LC_001 (is_short_term_trade_lc=True) irb_maturity_m={m_a:.5f}y "
-            f"!= expected {EXPECTED_M_A:.5f}y (1-day floor: 1/365). "
+            f"!= expected {EXPECTED_M_A:.5f}y (residual above the 1-day floor). "
             f"If irb_maturity_m ≈ 1.0y the engine is applying the standard 1-year "
-            f"floor (Art. 162(2)) instead of the 1-day carve-out (Art. 162(4)). "
-            f"The engine must derive has_one_day_maturity_floor=True from "
-            f"is_short_term_trade_lc=True, which triggers maturity=1/365 in "
-            f"namespace.py prepare_columns lines 299-307."
+            f"floor (Art. 162(2)) instead of the 1-day carve-out (Art. 162(3)(b)); "
+            f"if ≈ 0.00274y it is setting M to one day instead of flooring at it."
         )
 
     # ------------------------------------------------------------------
@@ -261,10 +258,10 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
 
     def test_p1_118_row_a_maturity_strictly_less_than_row_b(self, row_a: dict, row_b: dict) -> None:
         """
-        Row A (1-day floor, M≈0.00274y) must be strictly lower than Row B (M=1.0y).
+        Row A (1-day floor, M≈0.7452y) must be strictly lower than Row B (M=1.0y).
 
-        After the fix, M_A = 1/365 ≈ 0.00274y and M_B = 1.0y.
-        The gap (~0.997y) is far wider than _M_TOL (0.002y).
+        M_A = 272/365 ≈ 0.7452y and M_B = 1.0y.
+        The gap (~0.255y) is far wider than _M_TOL (0.002y).
 
         Arrange / Act: as above.
         Assert:  row_a.irb_maturity_m < row_b.irb_maturity_m - _M_TOL.
@@ -278,7 +275,7 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
         assert m_a < m_b - _M_TOL, (
             f"TF_LC_001.irb_maturity_m ({m_a:.5f}y) is not strictly less than "
             f"TF_LC_002.irb_maturity_m ({m_b:.4f}y) by more than {_M_TOL}y. "
-            f"Expected M_A ≈ 0.00274y (1-day floor) << M_B = 1.0y (1-year floor). "
+            f"Expected M_A ≈ 0.7452y (1-day floor) < M_B = 1.0y (1-year floor). "
             f"If both are 1.0y the 1-day floor is not being derived from "
             f"is_short_term_trade_lc."
         )

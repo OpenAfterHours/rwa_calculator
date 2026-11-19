@@ -17,6 +17,7 @@ Key responsibilities:
 - Compose the SA transform functions via ``.pipe`` in the correct regulatory order
 - Emit SA-equivalent RWA (``sa_rwa``) on unified frames for the output floor
 - Warn on equity-class rows routed through the main SA table (SA005)
+- Count Art. 123B-scope rows with no borrower income currency (SA010, Basel 3.1)
 - Translate bundle errors into ``CalculationError`` instances
 
 References:
@@ -52,6 +53,9 @@ from rwa_calc.engine.sa.rw_adjustments import (
     apply_intragroup_zero_rw,
     apply_life_insurance_rw_mapping,
     apply_third_party_deposit_rw_mapping,
+    income_currency_unknown_census_exprs,
+    income_currency_unknown_warnings,
+    with_income_currency_census_columns,
 )
 from rwa_calc.rulebook import RulepackV0
 
@@ -98,7 +102,8 @@ class SACalculator:
             exposures: Unified frame with all approaches
             config: Calculation configuration
             errors: Optional error accumulator for data quality warnings
-                (SA004 due diligence, SF001 SME aggregation, SA005 equity)
+                (SA004 due diligence, SF001 SME aggregation, SA005 equity,
+                SA010 Art. 123B(3) income currency unknown)
 
         Returns:
             Unified frame with SA columns populated for SA rows
@@ -118,7 +123,7 @@ class SACalculator:
         is_sa_branch = is_sa_branch_approach()
 
         if errors is not None:
-            self._warn_equity_in_main_table(exposures, errors)
+            self._collect_entry_warnings(exposures, config, errors, pack=resolved_pack)
 
         # Risk weights + CRM substitution + guarantee + mismatch + due diligence.
         # Runs unconditionally — also provides SA-equivalent RW for the
@@ -185,13 +190,14 @@ class SACalculator:
             exposures: Pre-filtered SA rows only
             config: Calculation configuration
             errors: Optional error accumulator for data quality warnings
-                (SA004 due diligence, SF001 SME aggregation, SA005 equity)
+                (SA004 due diligence, SF001 SME aggregation, SA005 equity,
+                SA010 Art. 123B(3) income currency unknown)
 
         Returns:
             LazyFrame with SA RWA columns populated
         """
         if errors is not None:
-            self._warn_equity_in_main_table(exposures, errors)
+            self._collect_entry_warnings(exposures, config, errors, pack=pack)
 
         exposures = (
             exposures.pipe(apply_risk_weights, config, pack=pack)
@@ -221,11 +227,22 @@ class SACalculator:
         return exposures
 
     @staticmethod
-    def _warn_equity_in_main_table(
+    def _collect_entry_warnings(
         exposures: pl.LazyFrame,
+        config: CalculationConfig,
         errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> None:
-        """Emit SA005 info if equity-class rows may be in main exposure table.
+        """Emit SA005 and SA010 from ONE collect over the calculator's input.
+
+        SA010 (PS1/26 Art. 123B(3), RE-05) counts the Art. 123B-scope rows with
+        no borrower income currency; its aggregates come from
+        ``rw_adjustments.income_currency_unknown_census_exprs`` and are empty
+        under CRR. Folding them into the SA005 check's collect keeps the
+        pipeline's fixed collect budget unchanged.
+
+        SA005 — equity-class rows may be in the main exposure table.
 
         Equity exposures in the main loan/contingent tables receive correct SA
         equity risk weights (250% Basel 3.1, 100% CRR) but miss full equity
@@ -239,19 +256,25 @@ class SACalculator:
         which is set by the classifier for equity-class rows.
         """
         schema = exposures.collect_schema()
-        if "approach" not in schema.names():  # arch-exempt: early-exit guard
-            return
+        census = income_currency_unknown_census_exprs(config, schema.names(), pack=pack)
         # Approach == "equity" is only set for equity-class rows from the main
-        # tables. We detect this via a lightweight one-row collect to avoid
-        # materialising the full frame.
-        has_equity = (
-            exposures.filter(pl.col("approach") == ApproachType.EQUITY.value)
-            .head(1)
-            .collect()
-            .height
-            > 0
+        # tables; a frame with no ``approach`` column (hand-built) skips SA005.
+        checks_equity = "approach" in schema.names()  # arch-exempt: SA005 needs the approach
+        equity = (
+            [(pl.col("approach") == ApproachType.EQUITY.value).any().alias("_has_equity")]
+            if checks_equity
+            else []
         )
-        if has_equity:
+        if not census and not equity:
+            return
+        if census:
+            exposures = with_income_currency_census_columns(exposures, schema.names())
+        # The calculator's input is eager-backed (re_split_exit edge), so this
+        # one aggregate collect is cheap.
+        counts = exposures.select(*equity, *census).collect()
+        if census:
+            errors.extend(income_currency_unknown_warnings(counts))
+        if checks_equity and counts["_has_equity"].item():
             errors.append(
                 CalculationError(
                     code=ERROR_EQUITY_IN_MAIN_TABLE,

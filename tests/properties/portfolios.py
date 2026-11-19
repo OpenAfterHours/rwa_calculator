@@ -276,10 +276,10 @@ def config_for(regime: str) -> CalculationConfig:
     """The ``CalculationConfig`` for a named regime in :data:`REGIMES`.
 
     ``enforce_retail_granularity=False`` under Basel 3.1 for the reason the
-    reporting goldens record: Art. 123A(1)(b)(ii)'s 0.2%-of-portfolio granularity
-    limb is unsatisfiable for a compact portfolio, and CRE20.66 leaves it to
-    national discretion. With it on, every generated retail obligor reclassifies
-    to corporate and the retail properties test nothing.
+    reporting goldens record (and the production default since RE-04): the
+    optional 0.2%-of-portfolio test (BCBS CRE20.66, not a PS1/26 limb) is
+    unsatisfiable for a compact portfolio. Elected, every generated retail obligor
+    fails regulatory retail and the retail properties test nothing.
     """
     _framework, reporting_date = REGIMES[regime]
     if regime == "CRR":

@@ -266,11 +266,11 @@ def apply_legal_enforceability_gate(raw_ccr: RawCCRBundle) -> RawCCRBundle:
     netting benefit is recognised."""
 ```
 
-Source: [`src/rwa_calc/engine/ccr/sa_ccr.py::apply_legal_enforceability_gate`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/sa_ccr.py#L83-L210)
-(lines 83–210).
+Source: [`src/rwa_calc/engine/ccr/sa_ccr.py::apply_legal_enforceability_gate`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/sa_ccr.py#L140-L298)
+(lines 140–298).
 
 ```python
---8<-- "src/rwa_calc/engine/ccr/sa_ccr.py:83:210"
+--8<-- "src/rwa_calc/engine/ccr/sa_ccr.py:140:298"
 ```
 
 ### Inputs (`RawCCRBundle`)
@@ -622,8 +622,8 @@ for forward visibility:
 - **BCBS CRE50.05–50.10, CRE52.05, CRE55.05–55.23** — Basel-level
   methodology and the underlying Basel III calibration of the
   contractual-netting recognition framework.
-- [`src/rwa_calc/engine/ccr/sa_ccr.py::apply_legal_enforceability_gate`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/sa_ccr.py#L83-L210) —
-  engine implementation (lines 83–210) of the Art. 272(4) gate.
+- [`src/rwa_calc/engine/ccr/sa_ccr.py::apply_legal_enforceability_gate`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/sa_ccr.py#L140-L298) —
+  engine implementation (lines 140–298).of the Art. 272(4) gate.
 - [`src/rwa_calc/engine/stages/ccr.py::run`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/ccr.py) —
   the `ccr_sa_ccr` registry stage (declared in `engine/registry.py`,
   folded by `orchestrator.run_stages` inside a `stage_timer`) that runs

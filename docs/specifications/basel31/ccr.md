@@ -8,11 +8,14 @@ unchanged supervisory factors at Art. 280 Table 1) retained. There are
 no Basel 3.1 SA-CCR per-article specs in this directory because there
 are no per-article rule changes — only two cross-framework deltas worth
 flagging at the Basel 3.1 layer (the Art. 274(2) α carve-out wording and
-the explicit Art. 92(2A) output-floor inclusion of SA-CCR EAD).
+the explicit Art. 92(2A) output-floor inclusion of SA-CCR EAD), plus the
+netting-set inputs the Basel 3.1 BA-CVA charge reads from SA-CCR.
 
 !!! info "Calculator parity by default"
     Calculator behaviour is identical between CRR and Basel 3.1 modes
-    for the SA-CCR EAD chain (`compute_adjusted_notional_*` →
+    for the SA-CCR EAD chain — except the supervisory alpha, where the
+    Art. 274(2) α = 1 carve-out and the Art. 274(2A) add-on apply under
+    Basel 3.1 only (delta (a) below) — (`compute_adjusted_notional_*` →
     `compute_supervisory_delta_*` → `compute_maturity_factor_*` →
     `assign_hedging_set` → `compute_addon_per_asset_class` →
     `compute_rc_unmargined` → `compute_pfe` → `compute_ead`). No
@@ -65,28 +68,32 @@ corresponding RWA) for in-scope end-user counterparties by a factor of
 `1 / 1.4 ≈ 0.714` — see the worked sensitivity at
 [`crr/ccr/ead-composition.md#sensitivity-to-α`](../crr/ccr/ead-composition.md#sensitivity-to-α-what-happens-if-the-carve-out-fires).
 
-!!! warning "Engine status — α = 1 carve-out gate not yet wired"
-    The α value is configurable via `CCRConfig.alpha` (defaults to
-    `Decimal("1.4")` at `src/rwa_calc/contracts/config.py`), and the
-    composition function at
-    `src/rwa_calc/engine/ccr/sa_ccr.py::compute_ead` applies whatever
-    α is supplied uniformly across the input frame. However, the
-    **per-counterparty dispatch gate** that would route non-financial
-    counterparty / pension-scheme netting sets through `α = 1` while
-    keeping the rest at `α = 1.4` is **not yet implemented** in
-    `engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures` —
-    today's orchestrator applies the default `α = 1.4` to every
-    netting set. Firms requiring the carve-out must invoke
-    `compute_ead` twice with two `CCRConfig` instances and
-    concatenate the results. Tracked in the project root
-    `IMPLEMENTATION_PLAN.md` as a documented engine gap; the math
-    itself is exercised by the `CCRConfig.alpha` override hook.
+!!! info "Engine status — carve-out wired, Basel 3.1 only"
+    `engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures` joins the
+    counterparty's `counterparty_type` onto each netting set and sets
+    `alpha_applied = 1` for `non_financial`, `pension_scheme` and
+    `pension_default_comp` counterparties, `1.4` otherwise. The selection is
+    gated by the cited pack Feature `sa_ccr_alpha_nfc_carve_out_applicable`,
+    which is **on under Basel 3.1 and off under CRR**: the CCR (CRR) Part in
+    force to 31 December 2026 says only "α = 1.4", and the carve-out sentence
+    above is new, underlined PS1/26 text. A CRR run therefore applies α = 1.4
+    to every netting set (review CC-01 — before it, the carve-out leaked into
+    CRR and understated an NFC netting set's EAD by 28.6%).
+
+!!! note "Engine status — α per netting set"
+    The SA-CCR adapter (`engine/ccr/pipeline_adapter.py`) joins the
+    counterparty's `counterparty_type` onto each netting set and reduces
+    it to an `alpha_applied` scalar (1 for a non-financial or
+    pension-scheme counterparty, 1.4 otherwise; an absent type reads as
+    1.4). `compute_pfe` / `compute_ead` read that column, and the
+    synthetic `ccr__` row carries it so `ead_ccr = alpha_applied ×
+    (RC + PFE)` reconciles. BA-CVA divides by the same per-netting-set
+    value — see [(c) below](#c-ba-cva-netting-set-inputs-and-coverage-cva-risk-part-4).
 
 The companion Art. 274(2A) **transitional alpha add-on** for legacy
-CVA-exempt trades (60% → 40% → 20% phase-in over 2027–2029) is
-documented on the CRR EAD-composition page and remains a separate
-engine gap — see
-[`crr/ccr/ead-composition.md#pending`](../crr/ccr/ead-composition.md#pending-engine-gaps-documented-here).
+CVA-exempt trades (60% → 40% → 20% phase-in over 2027–2029) is applied to
+`is_legacy_cva_exempt` netting sets on the α = 1 carve-out — see
+[`crr/ccr/ead-composition.md`](../crr/ccr/ead-composition.md).
 
 ### (b) Output-floor inclusion of SA-CCR EAD (Art. 92(2A))
 
@@ -123,14 +130,74 @@ own-funds adjustment. See
 [`crr/ccr/ead-composition.md#interaction-with-the-basel-31-output-floor`](../crr/ccr/ead-composition.md#interaction-with-the-basel-31-output-floor)
 for the engine-side routing of the synthetic CCR row into both legs.
 
+### (c) BA-CVA netting-set inputs and coverage (CVA Risk Part 4)
+
+The Basic Approach to CVA risk (`engine/cva/ba_cva.py`, `cva_ba_cva`
+Feature — Basel 3.1 only; the CRR pack declares it off) reads one row per
+covered derivative netting set from the SA-CCR synthetic `ccr__` rows
+and joins the BA-CVA counterparty input (`cva_counterparties`:
+sector, credit-quality band, `M_NS`, `cva_in_scope`). PS1/26 CVA Risk
+Part 4.3 defines the netting-set terms of `SCVA_c`:
+
+> "EAD_NS is the exposure at default of the netting set, calculated in
+> the same manner in which the firm calculates exposure at default for
+> determining own funds requirements for counterparty credit risk, in
+> accordance with either Sections 3 to 5 of Counterparty Credit Risk
+> (CRR) Part or Section 6 of Chapter 6 of Title II of Part Three of
+> CRR; ... α = the value of α as specified in the Counterparty Credit
+> Risk (CRR) Part"
+
+So the engine (review item CC-15, 2026-11):
+
+- uses the netting set's SA-CCR exposure value `ead_ccr` as `EAD_NS` —
+  not the post-CRM `ead_final`, which lending-side CRM can reduce and
+  guarantee substitution splits across legs (a split netting set is
+  counted once);
+- divides each netting set by its own `alpha_applied` (1 for a
+  non-financial or pension-scheme counterparty) rather than by 1.4 for
+  every netting set — the old reading understated an NFC's `SCVA_c` by
+  `1 − 1/1.4 ≈ 28.6%` (NFC, EAD 10m, M 5, `OTHER` / `IG`: RWEA
+  12,837,454.56 → 17,972,436.38);
+- excludes FCCM SFT rows (`risk_type = "CCR_SFT"`): an SFT is a covered
+  transaction only when fair-valued and its CVA risk material (Part
+  1.2), neither of which the input carries.
+
+**Coverage warning CCR030 (CC-16).** Part 4.1 requires own funds for
+CVA risk on every covered transaction, and Part 1.2 makes every
+derivative a covered transaction except, among others, *"(a)
+derivatives transacted directly with a qualifying central
+counterparty"*. A counterparty with derivative netting sets but no
+`cva_counterparties` row has no sector, credit quality or `M_NS`, so it
+would drop out of the BA-CVA join with a zero charge. The engine emits
+one **CCR030** data-quality WARNING per such counterparty (also when
+the CVA input is absent altogether), naming the counterparty. Not
+warned: derivatives with a QCCP (the same predicate as the Art. 306 pin),
+SFT rows, and counterparties listed with `cva_in_scope = False` — the
+way to record a Part 3.2 exemption or a client-clearing exclusion
+(1)(b)–(d) that the input cannot otherwise express. The charge itself
+is not defaulted; the warning names the gap.
+
+### (d) Collateral haircuts follow the Basel 3.1 Art. 224 table
+
+PS1/26 Annex R leaves Art. 274(3), 275, 276 and 278 unamended, so collateral,
+margin-agreement terms, the Art. 274(3) cap and the Art. 275(3) shared-agreement
+RC work as under CRR
+([rc-calculation.md](../crr/ccr/rc-calculation.md#collateral-the-art-2743-cap-and-shared-csas)).
+The one regime difference is the volatility adjustment Art. 276(1)(d) takes from
+Art. 223 / 224: a Basel 3.1 run values SA-CCR collateral with the PS1/26
+Art. 224 table (five maturity bands; main-index equity 20%, gold 20%), read
+through the `collateral_haircut_maturity_bands_revised` Feature exactly as for
+lending collateral. Main-index equity variation margin at a 10-day MPOR is
+therefore worth 80% of its value under Basel 3.1 against 85% under CRR.
+
 ---
 
 ## CRR per-article specifications (canonical content)
 
 The complete SA-CCR rule set — formulas, hedging-set partition rules,
 supervisory factors, worked CCR-A acceptance scenarios — lives on the
-CRR per-article pages. The two deltas above are the **only** Basel 3.1
-overlays; everything else is unchanged.
+CRR per-article pages. The SA-CCR deltas above are the **only** Basel
+3.1 overlays on the EAD chain; everything else is unchanged.
 
 - [SA-CCR (CRR) overview](../crr/ccr/index.md) — pipeline shape, asset-class coverage, scenario roadmap
 - [Adjusted notional](../crr/ccr/adjusted-notional.md) — Art. 279b per-asset-class `d`
@@ -164,6 +231,8 @@ overlays; everything else is unchanged.
   SEC-IRBA, IAA, IMM, or IMA; SA-CCR is **not** on the exclusion list.
 - **PRA PS1/26 Art. 92(5)** — output-floor 4-year transitional schedule
   (60% / 65% / 70% / 72.5%).
+- **PRA PS1/26 CVA Risk Part 1.2, 4.1, 4.3** — "covered transaction",
+  BA-CVA scope, and the `SCVA_c` netting-set terms (`EAD_NS`, α).
 - **Regulation (EU) No 648/2012 (EMIR) Art. 2(9), Art. 2(10)** —
   definitions of "non-financial counterparty" and "pension scheme
   arrangement" underpinning the Art. 274(2) α = 1 carve-out.
@@ -172,7 +241,7 @@ overlays; everything else is unchanged.
 - **[Output floor (Basel 3.1)](output-floor.md)** — full TREA formula,
   PRA transitional schedule, OF-ADJ own-funds adjustment.
 - **[SA-CCR (CRR) — EAD composition](../crr/ccr/ead-composition.md)** —
-  engine entry point, `CCRConfig.alpha` override hook, synthetic
-  exposure-row contract, CCR-A1 worked example, and pending engine
-  gaps (Art. 274(2) carve-out dispatch, Art. 274(2A) transitional
-  alpha add-on, Art. 274(2B) leverage-ratio exclusion).
+  engine entry point, per-netting-set `alpha_applied`, synthetic
+  exposure-row contract, CCR-A1 worked example, the Art. 274(2)
+  carve-out (Basel 3.1 only) and Art. 274(2A) transitional alpha
+  add-on, and the moot Art. 274(2B) leverage-ratio exclusion.

@@ -65,11 +65,11 @@ STRUCTURAL reason rather than an incidental one. That matters twice over:
 For the same reason the acceptance bundle must be built with ``fx_rates=None``:
 a rate row rewrites ``currency`` in the converter and silently re-arms the floor.
 
-Each leg gets its OWN counterparty. That is required, not tidiness:
-``sovereign_cqs`` is a counterparty column, and ``_broadcast_trade_lc_flag``
-(engine/hierarchy/enrich.py) OR-aggregates ``is_short_term_trade_lc``
-per counterparty and broadcasts it, so sharing a counterparty between
-LN-TRADE5Y and LN-SOV1 would spread the trade flag onto the moving leg.
+Each leg gets its OWN counterparty, because ``sovereign_cqs`` is a
+counterparty column. (When this fixture was written a counterparty-level
+broadcast of ``is_short_term_trade_lc`` also made sharing a counterparty
+unsafe; review TR-01 removed it — a loan now inherits the flag only from its
+own parent facility via ``facility_mappings``.)
 
 Hand-calculation (CRR, EAD = drawn_amount = GBP 1,000,000 per leg)
 -----------------------------------------------------------------
@@ -244,8 +244,9 @@ def create_p1316_facilities() -> pl.DataFrame:
     """Return one facility per leg — the only carrier of ``is_short_term_trade_lc``.
 
     The flag is a FACILITY column (``unify.py`` sets it null for drawn loans and
-    ``_broadcast_trade_lc_flag`` OR-aggregates it per counterparty), so the
-    Art. 121(4) leg can only be built through a parent facility.
+    ``enrich.propagate_facility_qrre_columns`` inherits it from the loan's own
+    parent facility), so the Art. 121(4) leg can only be built through a
+    parent facility.
     """
     rows = [
         {

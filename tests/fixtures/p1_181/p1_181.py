@@ -13,7 +13,8 @@ Key responsibilities:
 - Produce two rating rows: null-CQS for unrated, CQS=1 for the CQS-1 counterparty.
 
 Regulatory rule under test (UK CRR Art. 126(2)(d)):
-    Where CRE has income cover (rental income >= 1.5x interest), split the exposure:
+    Where the Art. 126(2) conditions are met — including (b), repayment not
+    materially dependent on the property (``has_income_cover=False``) — split:
       - Portion not exceeding 50% of property value → 50% risk weight (Art. 126(2)(a)/(b))
       - Residual portion above 50% MV → unsecured counterparty risk weight (Art. 124(1))
     "Unsecured counterparty risk weight" means the Art. 122 corporate CQS lookup, NOT
@@ -202,7 +203,10 @@ class _Loan:
 
     All three exposures share:
         - drawn_amount=1_000_000 GBP (EAD = drawn_amount, interest=0)
-        - has_income_cover=True: triggers Art. 126(2) income-cover gate
+        - has_income_cover=False: repayment does NOT materially depend on the
+          property (Art. 126(2)(b) met). Was True under the inverted gate fixed by
+          review RE-17 / P1.263 — the flag is "materially dependent", which
+          denies the 50%.
         - property_type="commercial": routes to _is_commercial_re_class()
         - is_defaulted=False: standard (non-defaulted) CRE path
         - qualifies_as_retail=False: not a retail CRE exposure
@@ -224,6 +228,9 @@ class _Loan:
     property_type: str
     is_defaulted: bool
     qualifies_as_retail: bool
+    # CRR Art. 126(2) attestation, incl. PRA Credit Risk Part rule 4.1 (to
+    # 31 Dec 2026): the Art. 126 50% needs an explicit True.
+    is_qualifying_re: bool = True
 
     def to_dict(self) -> dict:
         return {
@@ -242,6 +249,7 @@ class _Loan:
             "property_type": self.property_type,
             "is_defaulted": self.is_defaulted,
             "qualifies_as_retail": self.qualifies_as_retail,
+            "is_qualifying_re": self.is_qualifying_re,
         }
 
 
@@ -297,6 +305,7 @@ _LOAN_FIXTURE_SCHEMA: dict[str, PolarsDataType] = {
     "property_type": pl.String,
     "is_defaulted": pl.Boolean,
     "qualifies_as_retail": pl.Boolean,
+    "is_qualifying_re": pl.Boolean,
 }
 
 
@@ -371,7 +380,7 @@ def create_p1181_loans() -> pl.DataFrame:
             book_code="BANKING",
             is_sft=False,
             ltv=LTV_LOW,  # 0.40 — below 50% LTV threshold
-            has_income_cover=True,  # income cover met → Art. 126(2) applies
+            has_income_cover=False,  # not property-dependent → Art. 126(2)(b) met
             property_type="commercial",
             is_defaulted=False,
             qualifies_as_retail=False,
@@ -393,7 +402,7 @@ def create_p1181_loans() -> pl.DataFrame:
             book_code="BANKING",
             is_sft=False,
             ltv=LTV_HIGH,  # 0.80 — above 50% LTV threshold → proportion split
-            has_income_cover=True,
+            has_income_cover=False,
             property_type="commercial",
             is_defaulted=False,
             qualifies_as_retail=False,
@@ -415,7 +424,7 @@ def create_p1181_loans() -> pl.DataFrame:
             book_code="BANKING",
             is_sft=False,
             ltv=LTV_HIGH,  # 0.80 — above 50% LTV threshold
-            has_income_cover=True,
+            has_income_cover=False,
             property_type="commercial",
             is_defaulted=False,
             qualifies_as_retail=False,

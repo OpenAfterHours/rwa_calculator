@@ -29,7 +29,7 @@ from rwa_calc.data.schemas import (
     FX_RATES_SCHEMA,
     RATINGS_SCHEMA,
 )
-from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, ExposureClass
 
 
 def _domain(schema: dict, column: str):
@@ -655,3 +655,63 @@ class TestNumericInputDomainGate:
         )
 
         assert validate_bundle_values(bundle) == []
+
+
+class TestCIUHoldingClassGate:
+    """IV-05: SA008 names a ``ciu_holdings.exposure_class`` outside the vocabulary.
+
+    The engine weights such a holding at the Art. 132(2) 1,250% fall-back
+    (``engine/equity/calculator.py::_holding_rw_expr``); this gate makes the
+    substitution visible. The vocabulary is ``ExposureClass`` itself, compared
+    case-insensitively (the engine upper-cases before its join, and the shipped
+    fixtures spell ``CORPORATE`` / ``EQUITY``).
+    """
+
+    @staticmethod
+    def _bundle(classes: list[str | None]) -> RawDataBundle:
+        return make_raw_bundle(
+            facilities=pl.LazyFrame({"facility_reference": pl.Series([], dtype=pl.String)}),
+            loans=pl.LazyFrame({"loan_reference": pl.Series([], dtype=pl.String)}),
+            counterparties=pl.LazyFrame({"counterparty_reference": pl.Series([], dtype=pl.String)}),
+            facility_mappings=pl.LazyFrame(
+                {"parent_facility_reference": pl.Series([], dtype=pl.String)}
+            ),
+            ciu_holdings=pl.LazyFrame(
+                {
+                    "fund_reference": ["F1"] * len(classes),
+                    "holding_reference": [f"H{i}" for i in range(len(classes))],
+                    "exposure_class": classes,
+                    "holding_value": [100.0] * len(classes),
+                },
+                schema_overrides={"exposure_class": pl.String},
+            ),
+        )
+
+    @staticmethod
+    def _sa008(errors: list) -> list:
+        return [e for e in errors if e.code == "SA008"]
+
+    def test_out_of_vocabulary_classes_raise_one_warning_naming_them(self):
+        # Arrange
+        bundle = self._bundle(["securitisation", "subordinated_debt", "corporate", None])
+
+        # Act
+        sa008 = self._sa008(validate_bundle_values(bundle))
+
+        # Assert
+        assert len(sa008) == 1
+        error = sa008[0]
+        assert error.severity == ErrorSeverity.WARNING
+        assert error.category == ErrorCategory.DATA_QUALITY
+        assert error.field_name == "exposure_class"
+        assert "3 row(s)" in error.message
+        for value in ("securitisation", "subordinated_debt", "null"):
+            assert value in error.message
+
+    def test_every_exposure_class_member_is_accepted_in_any_case(self):
+        # Arrange
+        members = [m.value for m in ExposureClass]
+        bundle = self._bundle(members + [m.upper() for m in members])
+
+        # Act / Assert
+        assert self._sa008(validate_bundle_values(bundle)) == []

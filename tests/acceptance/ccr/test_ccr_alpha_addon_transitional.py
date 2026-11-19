@@ -52,12 +52,14 @@ Load-bearing RED assertions (fail on unfixed engine):
 Scenarios that pass (regression guards):
     ADDON-2 (non-legacy NFC @2027): add-on must NOT fire (None or 0.0 accepted).
     ADDON-3 (legacy financial @2027): α=1.4 gate excludes the add-on (passes now).
-    ADDON-4 (legacy NFC under CRR): framework gate suppresses the add-on (passes now).
+    ADDON-4 (legacy NFC under CRR): framework gate suppresses the add-on, and CRR
+        has no α = 1 carve-out either, so EAD = 1.4 × PFE (review CC-01).
 
 References:
     - PRA PS1/26 Art. 274(2A) — transitional alpha add-on (60%/40%/20%)
     - PRA PS1/26 Art. 274(2B) — leverage-ratio exclusion (out of engine scope)
-    - CRR Art. 274(2) — EAD = α × (RC + PFE); α=1.4 default; α=1.0 carve-out
+    - CRR Art. 274(2) — EAD = α × (RC + PFE); α = 1.4 for every netting set
+    - PRA PS1/26 Art. 274(2) — α = 1 carve-out for NFC / pension (Basel 3.1 only)
     - EMIR Art. 2(9) — non-financial counterparty definition
     - tests/fixtures/ccr/p829_addon_builder.py — P8.29 fixture builders
     - tests/expected_outputs/ccr/CCR-A1.json — authoritative pfe_addon / EAD anchors
@@ -846,15 +848,17 @@ class TestCCRAlphaAddon4FrameworkGate:
     never fire regardless of is_legacy_cva_exempt or counterparty_type.
 
     Expected behaviour:
-        ead_ccr == α=1.0 × pfe_addon (CRR carve-out, no transitional uplift)
+        ead_ccr == α=1.4 × pfe_addon (CRR has no NFC carve-out — CCR (CRR) Part
+        Art. 274(2) "α = 1.4" — and no transitional uplift)
         transitional_add_on == 0.0 or absent
 
-    Both assertions PASS on the unfixed engine.
+    Review CC-01 inverted the EAD assertion: it previously pinned α = 1.0 under CRR,
+    i.e. the Basel 3.1 carve-out leaking into the current-UK-CRR run.
     """
 
-    def test_addon4_ead_equals_pfe_under_crr(self, addon4_crr_row: dict) -> None:
+    def test_addon4_ead_equals_alpha_14_times_pfe_under_crr(self, addon4_crr_row: dict) -> None:
         """
-        ADDON-4 @ CRR 2027: ead_ccr == 1.0 × pfe_addon (α=1.0 carve-out, no add-on).
+        ADDON-4 @ CRR 2027: ead_ccr == 1.4 × pfe_addon (no carve-out, no add-on).
 
         Arrange:
             CP-NFC-ADDON-01 (non_financial, is_legacy_cva_exempt=True), NS-NFC-ADDON-01,
@@ -862,26 +866,25 @@ class TestCCRAlphaAddon4FrameworkGate:
         Act:
             Full CRR SA pipeline (framework = CRR, NOT Basel 3.1).
         Assert:
-            ead_ccr == approx(pfe_addon, rel=1e-9) — EAD equals PFE since RC=0 and α=1.0.
-
-        This PASSES on the unfixed engine.  Post-fix regression guard:
-        CRR framework must suppress the transitional add-on.
+            ead_ccr == approx(1.4 × pfe_addon, rel=1e-9) — RC=0 and α=1.4.
 
         References:
-            CRR Art. 274(2) — EAD = α × (RC + PFE), no transitional provision.
-            PRA PS1/26 Art. 274(2A) — Basel 3.1 only.
+            PRA CCR (CRR) Part Art. 274(2) — "Exposure value = α · (RC + PFE) ...
+            α = 1.4." (no carve-out before PS1/26).
+            PRA PS1/26 Art. 274(2) / (2A) — carve-out and add-on, Basel 3.1 only.
         """
-        # Arrange — under CRR α=1.0 carve-out: EAD = pfe_addon (RC=0)
+        # Arrange — under CRR alpha is 1.4 for every netting set: EAD = 1.4 × pfe_addon
         pfe = addon4_crr_row["pfe_addon"]
-        expected_ead = pfe * 1.0
+        expected_ead = 1.4 * pfe
 
         # Assert
+        assert addon4_crr_row["alpha_applied"] == 1.4
         actual_ead = addon4_crr_row["ead_ccr"]
         assert actual_ead == pytest.approx(expected_ead, rel=1e-9), (
             f"CCR-ALPHA-ADDON-4 @CRR-2027: expected ead_ccr={expected_ead:,.3f} "
-            f"(CRR framework, α=1.0 × pfe={pfe:,.3f}), got {actual_ead:,.3f}. "
-            "The transitional add-on is Basel 3.1 only (PRA PS1/26 Art. 274(2A)). "
-            "CRR does not have an Art. 274(2A) provision."
+            f"(CRR framework, α=1.4 × pfe={pfe:,.3f}), got {actual_ead:,.3f}. "
+            "The α = 1 carve-out and the transitional add-on are Basel 3.1 only "
+            "(PRA PS1/26 Art. 274(2) / 274(2A))."
         )
 
     def test_addon4_transitional_add_on_is_zero_under_crr(self, addon4_crr_row: dict) -> None:

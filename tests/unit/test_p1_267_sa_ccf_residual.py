@@ -330,6 +330,29 @@ def test_an_unrecognised_risk_type_string_still_raises_dq006_not_dq016() -> None
     assert not [e for e in errors if e.code == ERROR_UNRESOLVED_OBS_RISK_TYPE]
 
 
+def test_an_uncommitted_facility_raises_no_dq016() -> None:
+    """``committed=False`` never reaches the residual DQ016 reports on.
+
+    Since review finding CM-01 the hierarchy stage prices every uncommitted
+    facility's undrawn row in the UCC bucket LR (PS1/26 Table A1 row (7); CRR
+    Annex I 4(a)) whatever its risk_type, so "the CCF residual applies" would be
+    a false statement about it.
+    """
+    # Arrange
+    bundle = make_raw_bundle(
+        facilities=_bundle_with_facility(None, None).facilities.with_columns(
+            pl.lit(False).alias("committed")
+        ),
+        counterparties=pl.LazyFrame({"counterparty_reference": ["CP001"]}),
+    )
+
+    # Act
+    errors = validate_bundle_values(bundle)
+
+    # Assert
+    assert not [e for e in errors if e.code == ERROR_UNRESOLVED_OBS_RISK_TYPE]
+
+
 def test_a_zero_limit_raises_no_dq016() -> None:
     """No amount, no capital consequence, no warning."""
     # Arrange

@@ -158,19 +158,22 @@ class TestResidentialMortgageRiskWeights:
 class TestCommercialRERiskWeights:
     """Tests for commercial RE risk weights (CRR Art. 126)."""
 
-    def test_low_ltv_with_income_cover(self) -> None:
-        """LTV <= 50% with income cover gets 50% RW."""
-        rw, _ = calculate_commercial_re_rw(Decimal("0.40"), has_income_cover=True)
+    def test_low_ltv_not_materially_dependent(self) -> None:
+        """LTV <= 50%, repayment not dependent on the property: 50% (Art. 126(2)(b)).
+
+        Pinned the inverted gate (income cover -> 50%) until review RE-17 / P1.263.
+        """
+        rw, _ = calculate_commercial_re_rw(Decimal("0.40"), has_income_cover=False)
         assert rw == Decimal("0.50")
 
-    def test_low_ltv_without_income_cover(self) -> None:
-        """LTV <= 50% without income cover gets 100% RW."""
-        rw, _ = calculate_commercial_re_rw(Decimal("0.40"), has_income_cover=False)
+    def test_low_ltv_materially_dependent(self) -> None:
+        """LTV <= 50%, income-producing: Art. 126(2)(b) fails -> 100%."""
+        rw, _ = calculate_commercial_re_rw(Decimal("0.40"), has_income_cover=True)
         assert rw == Decimal("1.00")
 
     def test_high_ltv(self) -> None:
-        """LTV > 50% gets 100% RW regardless of income cover."""
-        rw, _ = calculate_commercial_re_rw(Decimal("0.60"), has_income_cover=True)
+        """LTV > 50% gets 100% RW on the whole in this scalar summary."""
+        rw, _ = calculate_commercial_re_rw(Decimal("0.60"), has_income_cover=False)
         assert rw == Decimal("1.00")
 
 

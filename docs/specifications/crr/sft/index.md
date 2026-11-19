@@ -84,9 +84,16 @@ where:
 | `HFX` | Haircut for any **currency mismatch** between collateral and exposure | Art. 224 Table 4 (8%; 0 when currencies match) |
 
 The supervisory haircuts `H_10` (10-business-day daily-revaluation holding
-period) come from the CRR Art. 224 Table 1 lookup by collateral type / issuer
-CQS / residual maturity. The **applied** haircut is the full three-factor
-expression:
+period) come from the Art. 224 Table 1 / Table 3 lookup by collateral type /
+issuer CQS / residual maturity, **of the run's regime**: a Basel 3.1 run reads
+the PRA PS1/26 Art. 224(1) tables (five maturity bands `0–1y / 1–3y / 3–5y /
+5–10y / 10y+`; equities 20% main index / 30% other listed; gold 20%), a CRR run
+the CRR Art. 224 tables (three bands `0–1y / 1–5y / 5y+`; equities 15% / 25%;
+gold 15%). The selector is the cited rulepack Feature
+`collateral_haircut_maturity_bands_revised`, the same one the lending-side CRM
+reads; the values are listed in the
+[regulatory tables](../../../data-model/regulatory-tables.md). The **applied**
+haircut is the full three-factor expression:
 
 ```
 H = H_10 · sqrt( T_M / 10 ) · sqrt( (N_R + T_M − 1) / T_M )
@@ -109,6 +116,60 @@ security), `HC` (collateral security) and `HFX` (the 8% currency-mismatch
 base, Art. 224 Table 4 / Art. 233(4)). Both the haircut table and the
 business-day periods resolve from the rulepack — the FCCM engine declares no
 regulatory scalars of its own (project data/engine separation rule).
+
+### Which securities and collateral are recognised (Art. 197/198, 223(1), 224(4))
+
+The SFT path prices exactly the types the Art. 224 Tables 1 and 3 cover —
+`data/schemas.py::SFT_FCCM_HAIRCUT_LOOKUP_TYPES`: cash / deposit, gold,
+government bonds (`govt_bond`, `sovereign_bond`, `government_bond`, `gilt`),
+corporate and covered bonds (`corp_bond`, `corporate_bond`, `covered_bond` —
+covered bonds are institution debt, Art. 197(1)(c), priced in the Table 1
+"points (c) and (d)" column) and equities (`equity`, `shares`, `stock`; no
+main-index flag on the SFT path, so always the other-listed value). Debt
+securities must also pass the Art. 197(1) credit-quality test: government
+CQS 1–4, corporate / covered CQS 1–3.
+
+| Side | Eligible item | Anything else |
+|---|---|---|
+| **Collateral received** (`HC`) | Recognised at `C·(1 − HC − HFX)` | **Not recognised** — contributes nothing to `E*` (Art. 223(1) values *financial* collateral; real estate, receivables, other physical, a bare `bond` with no issuer class, CIU units, an unrated / low-CQS bond or an unknown string are not Art. 197/198 items on this path) and one **`CCR027`** warning names the row |
+| **Security lent / sold** (`HE`) | Its Table 1 / 3 value | The **Art. 224(4)** adjustment for "non-eligible securities and commodities lent or sold": the non-main-index listed-equity value (25% CRR / 30% PS1/26 at 10 days). It is applied as a **floor** — a type the engine cannot identify as a security at all (`other_physical`, an unknown string) keeps its higher 40% fall-through rather than being lowered. A null `exposure_collateral_type` is cash lent (`HE = 0`) |
+
+Before review item CC-13 an ineligible security lent took `HE = 0` (an unrated
+corporate bond lent 100m against 95m cash gave `E* = 5,000,000`; it is now
+22,677,669.53 CRR / 26,213,203.44 Basel 3.1) and property collateral was fully
+recognised (`E* = 0`; now 100m plus `CCR027`).
+
+### Netting sets: one `E*` only under an eligible bilateral master netting agreement
+
+Trades sharing a `netting_set_id` are netted into one `E*` (the gross
+`Σ E·(1+HE) − Σ C·(1−HC−HFX)`, never below the Art. 220(3) net-position formula,
+which is not modelled) **only** when the set is covered by an *eligible* master
+netting agreement with *one* counterparty
+([`engine/sft/netting.py::apply_sft_netting_gate`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/sft/netting.py)):
+
+- **Art. 220(1)** — the netted `E*` is for "the exposures subject to an
+  eligible master netting agreement"; **Art. 206(1)(a)–(d)** sets the
+  eligibility conditions; **PS1/26 Art. 111(2A)** — under a master netting
+  agreement the exposure value is "a single exposure value at netting set
+  level", otherwise per transaction (Art. 223(5)).
+- Eligibility is attested per trade by **both** `under_master_netting_agreement`
+  and `is_legally_enforceable` (each defaults to `False`). A set nets only when
+  every trade carries both.
+- **Art. 220(4)** — `E*` is the exposure "to the counterparty": a set naming
+  more than one `counterparty_reference` can never net.
+
+Any other set holding more than one trade is **split** into one single-trade
+set per trade, `<netting_set_id>__split__<trade_id>` (output reference
+`ccr__<netting_set_id>__split__<trade_id>`), each booked against its own
+counterparty. A trade whose `trade_id` is null or shared with another trade of
+the set is keyed by its position instead (`…__split__<trade_id>__row<n>`), so it
+can never fold back into a pooled set. Collateral on a split set follows its
+trade through the optional collateral `trade_id`; a row with no link to exactly
+one of that set's trades cannot be attributed to a single transaction and is
+**not recognised**. Each split set
+raises **`CCR028`** (warning — no eligible MNA) or **`CCR029`** (error — more
+than one counterparty), naming any collateral rows dropped. A single-trade set
+is never affected.
 
 ### Two mutually-exclusive branches (margined vs unmargined)
 
@@ -149,13 +210,16 @@ Engine entry point:
 from rwa_calc.engine.sft.fccm import sft_bundle_to_exposures
 
 # E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))   (CRR Art. 223(5))
-# Reads RawSFTBundle, writes one synthetic exposure row per netting set.
+# Reads RawSFTBundle, writes one synthetic exposure row per (post-gate) netting
+# set and returns the CCR027 / CCR028 / CCR029 diagnostics alongside:
+rows, errors = sft_bundle_to_exposures(raw_sft, reporting_date, rulepack=pack)
 ```
 
 Source: [`src/rwa_calc/engine/sft/fccm.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/sft/fccm.py)
 — reuses `lookup_collateral_haircut`, `scale_haircut_for_liquidation_period`
 and `FX_HAIRCUT` from `engine/crm/haircut_tables.py` (pack-bound), which is
-its **only** cross-package engine dependency.
+its **only** cross-package engine dependency; the netting gate lives beside it
+in `engine/sft/netting.py`.
 
 ---
 
@@ -278,16 +342,22 @@ scenarios land):
 | In scope | Out of scope (reserved / deferred) |
 |---|---|
 | FCCM (Art. 220–223), the only implemented method | VaR method (Art. 221) — `SFTConfig.method = "var"`, fails loud |
-| Single-trade, single-counterparty netting sets (Art. 220(1)(a)) | IMM method (Art. 283) — `SFTConfig.method = "imm"`, fails loud |
+| Netting under an eligible bilateral MNA (Art. 220(1), 206), gross sum; per-trade otherwise | IMM method (Art. 283) — `SFTConfig.method = "imm"`, fails loud |
 | Unmargined SFTs (Art. 224(2)(b) 5-BD liquidation period) | Own-estimate / VaR haircuts |
 | Margined FCCM (Art. 285 MPOR; `F + N − 1`, dispute doubling) | Art. 227(2)(a)–(h) 0% core-market-participant carve-out |
-| Standardised supervisory haircuts (Art. 220(3)(a)(i)) | |
+| Standardised supervisory haircuts of the run's regime (Art. 220(3)(a)(i); PS1/26 Art. 224(1)) | Art. 220(3) net-position formula (the gross sum used is never lower) |
+| Art. 197/198 eligibility of SFT securities and collateral (Art. 223(1), 224(4)) | CIU collateral look-through (Art. 224(5)); main-index equity flag on SFT inputs |
 
 ---
 
 ## References
 
-- **CRR Art. 220(1)(a)** — single-counterparty SFT / master-netting-set scope.
+- **CRR / PS1/26 Art. 206(1)** — eligibility conditions for master netting agreements covering SFTs.
+- **CRR / PS1/26 Art. 220(1), 220(4)** — netted `E*` only under an eligible master netting agreement, as the exposure to *the* counterparty.
+- **PS1/26 Art. 111(2A)** — single exposure value at netting-set level only under a master netting agreement.
+- **CRR / PS1/26 Art. 223(1)** — volatility adjustments value *financial* collateral.
+- **CRR / PS1/26 Art. 224(4)** — non-eligible securities and commodities lent: the non-main-index listed-equity volatility adjustment.
+- **PRA PS1/26 Art. 224(1) Tables 1 and 3** — the Basel 3.1 supervisory haircuts (five maturity bands).
 - **CRR Art. 220(3)(a)(i)** — standardised supervisory haircuts.
 - **CRR Art. 223(5)** — `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))`.
 - **CRR Art. 224 Table 1** — `H_10` supervisory haircuts by collateral type / CQS / residual maturity.

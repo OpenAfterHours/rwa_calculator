@@ -118,25 +118,15 @@ HOW TIGHT EACH COLLATERAL CASE ACTUALLY IS — AND WHICH SIX ARE LOOSE:
     and is recorded here because enumerating the family beats building to the members
     someone quoted (`LESSONS.md` C6).
 
-    **Finding 2 — the ``mitigated`` CONTROL carries ~25% DEAD headroom, and that is
-    the more serious of the two.** All four of its cases survive x1.01 and fall by
-    x1.34 (ceiling ~x1.333). The mechanism
-    is on the INPUT side, in ``_input_pledged``: ``mitigated`` pledges 6,000,000 of
-    which 1,500,000 is written ``collateral_type="bond"``, a string
-    ``VALID_COLLATERAL_TYPES`` accepts but ``COLLATERAL_TYPE_CATEGORY`` does not
-    dispatch (see ``_UNCATEGORISED_INPUT_TYPES``). The expected side counts that
-    pledge; the engine's category carriers drop it. So the bound is inflated by
-    exactly the dropped 1,500,000 and both bases sit at 4,500,000, 75% of it.
-
-    This matters because ``mitigated`` is the DECLARED CONTROL — it pledges but does
-    not split, and its greenness is what makes the other portfolios' reds attributable
-    to the splitter rather than to collateral handling generally. A control that is
-    green partly because it is slack is a weak control, and saying so is the point of
-    this block. It is a consequence of the separate ``bond``-dispatch plan item, not a
-    defect in this test, and closing that item tightens the control automatically: the
-    ``market_value`` arm would then read 6,000,000 against a 6,000,000 bound (exactly
-    tight) and the ``adjusted`` arm would retain only the legitimate Art. 224 haircut
-    on the bond.
+    **Finding 2 — CLOSED by review CL-11: the ``mitigated`` CONTROL carried ~25%
+    DEAD headroom.** All four of its cases survived x1.01 and fell by x1.34 (ceiling
+    ~x1.333), because 1,500,000 of its 6,000,000 pledge is written
+    ``collateral_type="bond"`` and the engine categorised a ``bond`` "other", so its
+    category carriers dropped that pledge while the expected side counted it (both
+    bases sat at 4,500,000, 75% of the bound). A ``bond`` is now categorised by its
+    issuer, and the corpus bond is a sovereign issue, so the ``market_value`` arm
+    reads the whole pledge and the ``adjusted`` arm keeps only the legitimate
+    Art. 224 haircut on the bond — the control is no longer slack.
 
     Neither finding is a licence to drop a case. Both remain parametrised with their
     assertions unchanged, because a case that cannot be reddened is a FINDING about the
@@ -310,12 +300,13 @@ C08_COLLATERAL_COLUMNS: dict[str, str] = {
 #: set that could bucket nothing and quietly make the expected side 0.00
 #: (`LESSONS.md` B2/B3). This dict is the recorded GAP in that mapping, and it has
 #: exactly one entry: ``bond`` is in ``VALID_COLLATERAL_TYPES``, so the loader accepts
-#: it, but it is absent from ``FINANCIAL_COLLATERAL_TYPES`` (the CRM dispatcher
-#: recognises ``government_bond`` / ``corporate_bond``), so a pledge written as
-#: ``bond`` is accepted and then categorised "other", reporting in no CRM column at
-#: all. The ``mitigated`` portfolio's 1,500,000 bond pledge is exactly that case, and
-#: it is why its financial carrier reads 4,500,000 against 6,000,000 pledged: the
-#: slack is a DROPPED PLEDGE, not a haircut.
+#: it, but its category is decided by its ``issuer_type`` (review CL-11:
+#: ``BOND_COLLATERAL_TYPES`` / ``engine/crm/expressions.py::issued_bond_expr``), so it
+#: has no single entry in a type -> category map. Every corpus bond is a sovereign
+#: issue (``portfolios._collateral``), which the engine now categorises financial, so
+#: the input side counts it as financial too. Before CL-11 the engine categorised it
+#: "other" and the ``mitigated`` portfolio's 1,500,000 bond pledge reported in no
+#: CRM column — its financial carrier read 4,500,000 against 6,000,000 pledged.
 #:
 #: :func:`test_the_uncategorised_input_types_are_exactly_the_recorded_gap` pins this
 #: set, so closing the gap in ``schemas.py`` reddens this file and tells the fixer to

@@ -58,12 +58,14 @@ class Margin:
     margin_agreement_id: str
     counterparty_reference: str
 
-    # Optional with defaults (5) — match ColumnSpec defaults in MARGIN_AGREEMENT_SCHEMA.
-    margin_threshold: float = 0.0
-    minimum_transfer_amount: float = 0.0
-    nica: float = 0.0
-    # CRR Art. 285(2)(b): minimum MPOR for standard margined netting sets = 10 business days.
-    mpor_days: int = 10
+    # Optional nullable (4) — the CSA terms; null = "not stated on the CSA"
+    # (MARGIN_AGREEMENT_SCHEMA, review CC-03). The margined maturity factor
+    # floors an unstated MPOR at the CRR Art. 285(2)(b) 10 business days.
+    margin_threshold: float | None = None
+    minimum_transfer_amount: float | None = None
+    nica: float | None = None
+    mpor_days: int | None = None
+    # Optional with default (1).
     is_segregated_im: bool = False
 
     # Optional nullable (3).
@@ -96,8 +98,7 @@ def make_margin(**overrides: Any) -> Margin:
     """
     Return a ``Margin`` with regulatory-minimum defaults, optionally overridden.
 
-    Default values use the regulatory minimum MPOR of 10 days (CRR Art.
-    285(2)(b)), zero threshold and MTA, zero NICA, and non-segregated IM.
+    Defaults leave the CSA terms unstated (null) and the IM non-segregated.
 
     Args:
         **overrides: Any ``Margin`` field keyword arguments.
@@ -108,10 +109,10 @@ def make_margin(**overrides: Any) -> Margin:
     defaults: dict[str, Any] = {
         "margin_agreement_id": "MA_001",
         "counterparty_reference": "CP_001",
-        "margin_threshold": 0.0,
-        "minimum_transfer_amount": 0.0,
-        "nica": 0.0,
-        "mpor_days": 10,
+        "margin_threshold": None,
+        "minimum_transfer_amount": None,
+        "nica": None,
+        "mpor_days": None,
         "is_segregated_im": False,
         "remargining_frequency_days": None,
         "dispute_count_qtr": None,

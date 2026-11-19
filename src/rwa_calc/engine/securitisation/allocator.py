@@ -31,9 +31,19 @@ Validation codes (see contracts/errors.py for canonical strings):
   loan / contingent / facility -- row dropped.
 - SEC004 DUPLICATE: two rows share the same ``(exposure_reference,
   pool_reference)`` -- first row kept, others dropped.
-- SEC005 FULLY_SECURITISED: per-exposure sum == 1.0 (residual = 0) --
-  informational only; exposure flows through pipeline with zero
-  on-balance-sheet contribution.
+- SEC005 FULLY_SECURITISED: per-exposure carved-out sum == 1.0
+  (residual = 0) -- informational only; exposure flows through pipeline with
+  zero on-balance-sheet contribution.
+- SEC006 NO_SIGNIFICANT_RISK_TRANSFER: a row whose
+  ``significant_risk_transfer`` is explicitly False carves nothing out -- it
+  stays in ``total_allocated_pct`` (so SEC001 still sees it) but not in the
+  residual or the pool slices, and the exposure's ``audit_status`` reads
+  ``no_significant_risk_transfer``. CRR Art. 244(1) / 245(1) permit the
+  exclusion only where significant credit risk has been transferred (limb
+  (a)) or every retained position takes 1,250% / is deducted (limb (b)); the
+  engine has no securitisation-position route to evidence limb (b). A NULL
+  flag keeps the schema's documented True default (an owner decision, not
+  changed here), so only an explicit False is refused.
 
 References:
 - CRR Art. 109: gateway to securitisation framework
@@ -56,6 +66,7 @@ from rwa_calc.contracts.errors import (
     ERROR_SEC_DUPLICATE,
     ERROR_SEC_FULLY_SECURITISED,
     ERROR_SEC_INVALID_PCT,
+    ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER,
     ERROR_SEC_OVER_ALLOCATED,
     ERROR_SEC_UNKNOWN_REFERENCE,
     CalculationError,
@@ -73,6 +84,7 @@ logger = logging.getLogger(__name__)
 
 # Regulatory reference for securitisation significant risk transfer criteria
 CRR_ART_244 = "CRR Art. 244"
+CRR_ART_244_245_EXCLUSION = "CRR Art. 244(1) / 245(1)"
 
 # Schema of the resolved lookup frame returned by ``allocate``. Centralised
 # here so the hierarchy resolver and aggregator can build empty placeholder
@@ -234,8 +246,18 @@ class SecuritisationAllocator:
             )
 
         # ------------------------------------------------------------------
+        # Step 3b: SEC006 -- a row whose significant_risk_transfer is an
+        # explicit False carves nothing out (CRR Art. 244(1) / 245(1)).
+        # ------------------------------------------------------------------
+        is_carve_out = _srt_asserted_expr()
+        retained = raw.filter(~is_carve_out)
+        if retained.height > 0:
+            errors.append(_no_srt_warning(retained))
+
+        # ------------------------------------------------------------------
         # Step 4: per-exposure aggregation. Group into struct list and
-        # compute total_allocated_pct.
+        # compute total_allocated_pct (every valid row, for SEC001) and the
+        # carved-out pct (rows asserting SRT only, for the residual).
         # ------------------------------------------------------------------
         aggregated = (
             raw.lazy()
@@ -247,8 +269,12 @@ class SecuritisationAllocator:
                             pl.col("pool_reference"),
                             pl.col("allocation_pct"),
                         ]
-                    ).alias("securitisation_pool_allocations"),
+                    )
+                    .filter(is_carve_out)
+                    .alias("securitisation_pool_allocations"),
                     pl.col("allocation_pct").sum().alias("total_allocated_pct"),
+                    pl.col("allocation_pct").filter(is_carve_out).sum().alias("_carved_out_pct"),
+                    (~is_carve_out).any().alias("_has_retained_row"),
                 ]
             )
         ).collect()
@@ -278,14 +304,15 @@ class SecuritisationAllocator:
             )
 
         # ------------------------------------------------------------------
-        # Step 6: SEC005 -- per-exposure sum == 1 (residual = 0). Inform-
-        # ational only -- the exposure flows through the pipeline with
-        # zero on-balance-sheet contribution.
+        # Step 6: SEC005 -- per-exposure CARVED-OUT sum == 1 (residual = 0).
+        # Informational only -- the exposure flows through the pipeline
+        # with zero on-balance-sheet contribution. A row refused under
+        # SEC006 is not carved out, so it cannot make an exposure "fully
+        # securitised".
         # ------------------------------------------------------------------
-        fully = aggregated.filter(
-            (pl.col("total_allocated_pct") >= 1.0 - _SUM_TOLERANCE)
-            & (pl.col("total_allocated_pct") <= 1.0 + _SUM_TOLERANCE)
-        )
+        is_over = pl.col("total_allocated_pct") > 1.0 + _SUM_TOLERANCE
+        is_fully = ~is_over & (pl.col("_carved_out_pct") >= 1.0 - _SUM_TOLERANCE)
+        fully = aggregated.filter(is_fully)
         if fully.height > 0:
             errors.append(
                 securitisation_warning(
@@ -304,11 +331,6 @@ class SecuritisationAllocator:
         # residual_pct = 1.0 and an empty pool_allocations list so the
         # aggregator does not double-count them.
         # ------------------------------------------------------------------
-        is_over = pl.col("total_allocated_pct") > 1.0 + _SUM_TOLERANCE
-        is_fully = (pl.col("total_allocated_pct") >= 1.0 - _SUM_TOLERANCE) & (
-            pl.col("total_allocated_pct") <= 1.0 + _SUM_TOLERANCE
-        )
-
         empty_struct_list = pl.lit([]).cast(
             pl.List(
                 pl.Struct(
@@ -324,7 +346,7 @@ class SecuritisationAllocator:
             [
                 pl.when(is_over)
                 .then(pl.lit(1.0))
-                .otherwise((pl.lit(1.0) - pl.col("total_allocated_pct")).clip(lower_bound=0.0))
+                .otherwise((pl.lit(1.0) - pl.col("_carved_out_pct")).clip(lower_bound=0.0))
                 .alias("securitisation_residual_pct"),
                 pl.when(is_over)
                 .then(empty_struct_list)
@@ -332,6 +354,8 @@ class SecuritisationAllocator:
                 .alias("securitisation_pool_allocations"),
                 pl.when(is_over)
                 .then(pl.lit("over_allocated"))
+                .when(pl.col("_has_retained_row"))
+                .then(pl.lit("no_significant_risk_transfer"))
                 .when(is_fully)
                 .then(pl.lit("fully_securitised"))
                 .otherwise(pl.lit("ok"))
@@ -483,3 +507,48 @@ def _collect_known_references(data: RawDataBundle) -> set[tuple[str, str]]:
         for ref in df[ref_col].drop_nulls().to_list():
             known.add((str(ref), exposure_type))
     return known
+
+
+@cites("CRR Art. 244(1)")
+@cites("CRR Art. 245(1)")
+def _srt_asserted_expr() -> pl.Expr:
+    """True for an allocation row the originator may carve out of its RWEA.
+
+    CRR Art. 244(1) (traditional) and 245(1) (synthetic) let the originator
+    exclude the underlying exposures only where "(a) significant credit risk
+    associated with the underlying exposures has been transferred to third
+    parties" or "(b) the originator institution applies a 1 250 % risk weight to
+    all securitisation positions it holds in the securitisation or deducts these
+    securitisation positions from Common Equity Tier 1 items". The engine has no
+    securitisation-position route (no way to evidence limb (b)), so the carve-out
+    rests on the firm's ``significant_risk_transfer`` assertion alone.
+
+    ``ne_missing(False)``: an explicit False is refused; a NULL keeps the
+    schema's documented ``default=True`` (the loader seal already fills it, so a
+    null reaches here only from a frame built around the seal). Changing that
+    default is an owner decision, not this function's.
+    """
+    return pl.col("significant_risk_transfer").ne_missing(False)
+
+
+def _no_srt_warning(retained: pl.DataFrame, *, sample: int = 5) -> CalculationError:
+    """SEC006: allocation rows asserting no significant risk transfer, retained on balance sheet.
+
+    Names up to ``sample`` distinct exposure references, then counts the rest.
+    """
+    refs = retained.get_column("exposure_reference").unique(maintain_order=True).to_list()
+    named = ", ".join(str(ref) for ref in refs[:sample])
+    more = f" (+{len(refs) - sample} more)" if len(refs) > sample else ""
+    return securitisation_warning(
+        code=ERROR_SEC_NO_SIGNIFICANT_RISK_TRANSFER,
+        message=(
+            f"{retained.height} securitisation allocation row(s) set "
+            "significant_risk_transfer=False; no carve-out applied, so the "
+            "allocated share stays on balance sheet at its full risk weight "
+            f"(exposures: {named}{more}). The originator may exclude underlying "
+            "exposures only where significant credit risk has been transferred or "
+            "every retained securitisation position takes 1,250% / is deducted."
+        ),
+        severity=ErrorSeverity.WARNING,
+        regulatory_reference=CRR_ART_244_245_EXCLUSION,
+    )

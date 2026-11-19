@@ -269,13 +269,15 @@ and their census is ratcheted by arch_check check 11:
 
 | Location | What | Why |
 |---|---|---|
-| `engine/hierarchy/graph.py` | Graph-edge collects (ultimate parent / facility root / facility ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
+| `engine/hierarchy/graph.py` | Graph-edge collects (ultimate parent; the facility → facility edges, collected ONCE by `collect_facility_edges` and shared by the facility root lookup and ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
+| `engine/hierarchy/facility_warnings.py` | The HIE004 / HIE005 / HIE006 facility-undrawn warnings, one small plan collected once | Warning rows (empty on clean input) must become `CalculationError`s in the stage that made the decisions; paid for by the shared facility-edge collect above, so the per-run `collect` count did not rise |
 | `engine/hierarchy/ratings.py` | Best internal/external rating lookups (`pl.collect_all`) | Small per-counterparty frames referenced by multiple downstream joins |
 | `engine/crm/collateral.py:363` | 3 collateral lookup collects (`pl.collect_all`) | Each lookup feeds multiple downstream joins; without materialisation the `group_by`/`select` re-evaluates at each reference |
 | `engine/crm/processor.py:982` | Guarantee + counterparty + rating-inheritance lookups (`pl.collect_all`) | Prevents parquet re-scans; small frames |
 | `engine/crm/processor.py` (`_apply_own_issue_collateral_gate`) | The collateral dimension, materialised once after the Art. 194(4) gate (`materialise_frame`, flag included, on every path) | ~10 later consumers — the third-party-deposit split, the link allocator, the type check, the AIRB misdirection finder, the lookup joins, the life-insurance and deposit aggregates — each re-executed the netting concat and the gate's joins for itself; the CRM015 / CRM006 / CRM020 / CRM021 recorders now scan memory |
 | `engine/crm/collateral.py` (`apply_collateral`, after `apply_haircuts`) | The post-haircut collateral frame, materialised once (`materialise_frame`) | The CRM018 / CRM019 / CRM002 / CRM014 recorders and the allocation aggregates each re-executed the lookup joins and the haircut chain (~10 ms apiece on a 150-row run) |
-| `contracts/validation.py`, `engine/utils.py` (`has_rows`), `sa/calculator.py` (`_warn_equity_in_main_table`), `irb/formulas.py` (scalar wrapper) | Validation / diagnostics / scalar helpers | Off the hot path or `.head(1)`-sized |
+| `engine/crm/protection_screen.py` (`screen_unfunded_protection`) | The raw guarantee rows with their eligibility-screen flags, collected once when an error channel is passed | The CRM012 / CRM027 / CRM028 / CRM029 / CRM030 messages name concrete rows; the guarantee plan then continues from the collected frame instead of re-executing the input scan |
+| `contracts/validation.py`, `engine/utils.py` (`has_rows`), `sa/calculator.py` (`_collect_entry_warnings`: SA005 + the SA010 census in one aggregate collect), `irb/formulas.py` (scalar wrapper) | Validation / diagnostics / scalar helpers | Off the hot path or `.head(1)`-sized |
 
 The two `materialise_frame` rows are not in check 11's census (the pattern it counts is a
 raw `.collect()` / `collect_all(` line); what bounds them is the per-run collect budget in

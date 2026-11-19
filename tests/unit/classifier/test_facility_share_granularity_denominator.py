@@ -1,5 +1,6 @@
 """
-Art. 123A(1)(b)(ii): facility-share candidate rows must not move the denominator.
+The elected 0.2% retail granularity test: facility-share candidate rows must not
+move its denominator.
 
 Pipeline position:
     HierarchyResolver (candidate fan-out) -> ExposureClassifier
@@ -7,8 +8,11 @@ Pipeline position:
 
 The limb, and why the fan-out is a hazard for it
 ------------------------------------------------
-PS1/26 Art. 123A(1)(b)(ii) (BCBS CRE20.66) requires that no single obligor's
-aggregate exposure exceed 0.2% of the total regulatory-retail portfolio. The
+The BCBS CRE20.66 test — no single obligor's aggregate exposure above 0.2% of
+the total regulatory-retail portfolio — is NOT a PS1/26 limb (RE-04, 2026-11:
+Art. 123A(1)(b)(ii) is the GBP 880,000 aggregate test alone). The engine keeps it
+as an optional firm method of evidencing Art. 123A(1)(b)(iii), behind
+``enforce_retail_granularity`` (default False); this file elects it. The
 engine builds that portfolio total as a PORTFOLIO-WIDE sum with no ``.over()``:
 each retail-candidate row contributes ``lending_group_adjusted_exposure`` divided
 by its obligor's line count, so an obligor is counted once however many rows it
@@ -18,7 +22,7 @@ The candidate fan-out adds synthetic rows to that population. The design of
 record treats this as the one site where decision D4's "no special-casing" is
 unsafe, on the reasoning that extra rows inflate the denominator and so lower
 every obligor's share against the 0.2% limit — which would be anti-conservative,
-keeping an obligor in retail that should have re-routed to corporate.
+keeping an obligor regulatory retail that should have failed the test.
 
 What the measurement says, which is not what the design predicted
 -----------------------------------------------------------------
@@ -57,7 +61,7 @@ regulatory retail sits above it at 75%, so no fixture that proves the
 floor-aware allocation metric can also carry a retail obligor.
 
 References:
-- PS1/26 Art. 123A(1)(b)(ii); BCBS CRE20.66 — the 0.2% granularity limb.
+- BCBS CRE20.66 — the 0.2% test; PS1/26 Art. 123A(1)(b)(iii) — what it evidences.
 - CRR Art. 147 — "total amount owed" is the drawn amount.
 - src/rwa_calc/engine/classify/attributes.py::_build_qualifies_as_retail_expr
 - docs/plans/facility-share-riskiest-member.md Section 4 (D4).
@@ -223,7 +227,7 @@ def _bundle(rows: list[dict[str, object]]) -> ResolvedHierarchyBundle:
 
 
 def _config() -> CalculationConfig:
-    """Basel 3.1 with the granularity limb ENFORCED — the production default."""
+    """Basel 3.1 with the optional 0.2% test ELECTED (off by default since RE-04)."""
     return CalculationConfig.basel_3_1(
         reporting_date=_REPORTING_DATE, enforce_retail_granularity=True
     )
@@ -268,7 +272,9 @@ def test_the_near_limit_obligor_sits_on_the_granularity_boundary() -> None:
     Arrange: a two-obligor retail book whose smaller obligor is placed at the
              exact 0.2% boundary, then 0.1% either side of it.
     Act:     classify each.
-    Assert:  just under qualifies as retail; just over is re-routed to corporate.
+    Assert:  just under qualifies as regulatory retail; just over does not, and
+             (RE-03) stays in the retail class as non-regulatory retail —
+             PS1/26 Art. 123(1)(a) keeps a natural person retail.
 
     This is the adequacy assertion for everything below. The invariance claim
     "candidate rows do not move the denominator" is only worth making on a
@@ -294,7 +300,7 @@ def test_the_near_limit_obligor_sits_on_the_granularity_boundary() -> None:
         "aggregate does not change the verdict, so an equal move in the "
         "DENOMINATOR would not either and the invariance test below is vacuous"
     )
-    assert over_class == ExposureClass.CORPORATE.value
+    assert over_class == ExposureClass.RETAIL_OTHER.value
 
 
 # ---------------------------------------------------------------------------

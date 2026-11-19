@@ -183,9 +183,14 @@ def _build_frame(n_rows: int) -> pl.LazyFrame:
         "cp_is_natural_person": pl.lit(True),
         "cp_is_financial_sector_entity": pl.lit(False),
         "cp_total_assets": pl.lit(None, dtype=pl.Float64),
+        "cp_group_total_assets": pl.lit(None, dtype=pl.Float64),
         "cp_apply_fi_scalar": pl.lit(False),
         "sme_size_metric_gbp": pl.lit(None, dtype=pl.Float64),
         "sme_size_source": pl.lit(None, dtype=pl.String),
+        "property_collateral_value": pl.lit(0.0),
+        "has_facility_property_collateral": pl.lit(False),
+        "property_type": pl.lit(None, dtype=pl.String),
+        "ltv": pl.lit(None, dtype=pl.Float64),
     }
 
     missing = set(_INPUT_SCHEMA) - set(columns)

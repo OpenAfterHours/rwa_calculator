@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **New error and warning codes from the product review** (errors are marked;
+  the rest are warnings): `HIE004` uncommitted facility declaring a risk type
+  other than LR (priced LR); `HIE005` drawing or sub-limit that cannot be
+  converted into the facility's currency (not netted); `HIE006` null limit on a
+  facility that is not an umbrella; `DQ017` commitment-coded contingent without
+  `is_obs_commitment`; `DQ019` (error) exposure reference used by more than one
+  table; `DQ020` (error) currency with no FX rate into the base currency;
+  `DQ021` exposure or sub-facility mapped under more than one parent (lowest
+  kept); `DQ022` facility mapping cycle; `DQ023` (error) engine-only CCR risk
+  type on an input facility or contingent; `SA006` Basel 3.1 project finance
+  with no recognised phase (treated as pre-operational); `SA008` CIU holding
+  class outside the exposure-class vocabulary (1,250%); `SA010` Basel 3.1
+  borrower income currency unknown (Art. 123B multiplier applied); `CLS012`
+  slotted exposure with no recognised slotting category; `CLS013` null
+  `entity_type`; `CLS015` Basel 3.1 corporate with no turnover (not an SME);
+  `CLS016` SME status changed by consolidated group figures; `AGG004` retail
+  threshold failed only because of other group entities' books; `RE005` mortgage
+  label with no property evidence; `RE006` LTV derived from the property value;
+  `SEC006` securitisation allocation without significant risk transfer (kept on
+  balance sheet); `CRM023` collateral currency unknown; `CRM024` netted deposit
+  treated as repayable on demand; `CRM025` loan-table collateral pledged only to
+  counterparty-credit-risk rows; `CRM026` non-Art. 197 collateral flagged as
+  eligible financial collateral; `CRM027` tranched protection not recognised;
+  `CRM028` guarantee reference entered inconsistently; `CRM029` letter of
+  comfort or keepwell not recognised; `CRM030` `guarantee_type` names a credit
+  derivative; `CCR021` (error) unrecognised SA-CCR asset class; `CCR022` (error)
+  unrecognised credit quality or commodity type; `CCR023` (error) trade with no
+  netting set; `CCR024` CCR collateral not recognised; `CCR025` margin terms
+  conflict; `CCR026` (error) no spot rate to the reporting currency; `CCR027`
+  SFT collateral not recognised; `CCR028` SFT netting not recognised; `CCR029`
+  (error) SFT netting set with more than one counterparty; `CCR030` derivative
+  counterparty with no BA-CVA input; `CCR031` failed-trade side unknown;
+  `CCR032` (error) default-fund allocation input missing.
 - **New warning code `CFG003`** (`ERROR_EQUITY_TRANSITIONAL_CONFIG`, exported
   from `rwa_calc.contracts`): see the equity transitional entry under Fixed.
 - **Validation results name the known issues with the Bank's published rules.**
@@ -158,6 +191,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **Input schema changes from the product review.** New optional columns:
+  `is_inflation` on SA-CCR trades (default False); `collateral_role` (`"vm"`,
+  the default, or `"im"`) and `is_main_index` on `ccr_collateral`;
+  `is_legally_enforceable` on SFT trades (default False) and `trade_id` on SFT
+  collateral; `is_purchase` on failed trades; `df_ccp_prefunded` on default-fund
+  contributions (absent reads as 0); `is_qualifying_re` on loans (the loan-row twin of
+  the collateral flag). Columns that existed but were not read now
+  take effect: collateral `is_adc` and `is_presold` (the latter attests Art.
+  124K(2)(a) and (b)(i)), specialised-lending `project_phase`,
+  `significant_risk_transfer` on securitisation allocations and, under CRR,
+  `is_significant_investment` on equity. `obs_product` accepts new keys (among
+  them `FINANCIAL_GUARANTEE`, `AVAL`, `ENDORSEMENT`,
+  `STANDBY_LC_CREDIT_SUBSTITUTE`, `STANDBY_LC_NON_CREDIT_SUBSTITUTE`,
+  `FACTORING_FACILITY`, `INVOICE_DISCOUNT_FACILITY`,
+  `DOCUMENTARY_CREDIT_SHIPMENT_SECURED`, `ADVANCE_PAYMENT_GUARANTEE`,
+  `RETENTION_GUARANTEE`, `SHIPPING_GUARANTEE`, `CUSTOMS_BOND`, `TAX_BOND`) and
+  its documented synonyms. `guarantee_type` values `letter_of_comfort`,
+  `comfort_letter`, `keepwell` and `keepwell_agreement` are not eligible
+  protection, and `credit_derivative`, `cds`, `credit_default_swap`,
+  `total_return_swap` and `trs` make the row a credit derivative. On margin
+  agreements, threshold, minimum transfer amount and MPOR default to null
+  (unstated) instead of 0, 0 and 10 days. `settlement_type`, `asset_class`,
+  `credit_quality` and `commodity_type` are read case-insensitively and checked
+  against their value lists (`DQ006`). `risk_type` on facilities and contingents
+  no longer accepts the engine-only CCR values (`DQ023`).
+- **Behaviour changes that need attention to input data.** A facility with
+  `committed=False` now emits an undrawn row (10% under Basel 3.1); an internal
+  limit never offered to and accepted by the customer is not a commitment, so
+  give it the accepted amount, or 0, as its limit.
+  `is_uk_residential_mortgage_commitment` is tri-state: True and False are
+  honoured, and under Basel 3.1 a null is derived from a GB obligor's GBP retail
+  mortgage commitment with residential evidence, so set False for non-UK
+  property. `enforce_retail_granularity` defaults to False, in the `basel_3_1()`
+  and `crr()` factories too; set True to keep the 0.2% test as evidence for Art.
+  123A(1)(b)(iii). Under CRR, `is_income_producing` on commercial-property
+  collateral now decides the Art. 126 50% weight, the 50% needs
+  `is_qualifying_re=True` (PRA rule 4.1 / 4.1A), and `is_qualifying_re=False`
+  means the Art. 125/126 conditions are not met. SFT books under a master
+  agreement must set both `under_master_netting_agreement` and
+  `is_legally_enforceable` to keep netting. Supply an FX rate for every currency
+  in the book: a facility drawing with no rate is no longer netted. Basel 3.1
+  project-finance rows need `project_phase`, CIU holdings need an exposure-class
+  name, and retail and residential loans need `borrower_income_currency`. In the
+  output, references shared by a loan and a contingent become `<ref>#loan` and
+  `<ref>#contingent`, an engine-only risk type reads `DQ023:<TAG>`, CCR and SFT
+  rows carry the reporting currency in `currency` and the trade currency in
+  `original_currency`, an IRB firm's Art. 48(4) equity carries `equity_method`
+  `irb_fixed_rw`, and `sft_bundle_to_exposures` returns `(rows, errors)`.
 - **`CRM013` now names the cause** — "a natural person ... is not an eligible
   provider of unfunded credit protection under Art. 201(1)/(2)" for a natural
   person; the corporate message is unchanged.
@@ -467,6 +548,294 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **Product-by-product review (2026-11-18): regulatory fixes across commitments,
+  trade finance, specialised lending, equity, real estate, retail, credit risk
+  mitigation, group perimeter, data quality and counterparty credit risk.** The
+  [product and structure review](../plans/product-review-2026-11-18.md) traced
+  each banking product and credit structure through the calculator and checked
+  its treatment against the PRA PS1/26 rules (Basel 3.1, in force from 1 January
+  2027) and the current UK CRR. Every fix below was made test-first, and each
+  group was then reviewed adversarially; defects that review found are fixed
+  here as well. RWA moves in both directions, mostly upward under Basel 3.1: the
+  commonest defect was a missing, unknown or ambiguous input that silently
+  produced a plausible, lower RWA. Where a fix lowers RWA, the rule text that
+  requires it is quoted in the code and tests. Review IDs are in parentheses;
+  reporting goldens moved only where a bullet says so, and the items named as
+  remaining are on the backlog.
+- **Cancellable lines, foreign-currency drawings and committed sub-facilities
+  keep their undrawn headroom.** A facility with `committed=False` is an
+  unconditionally cancellable commitment (PS1/26 Glossary "commitment"; CRR
+  Annex I 4(a)) and now emits its undrawn row in the LR bucket (CM-01): on a GBP
+  10m line to an unrated corporate, Basel 3.1 EAD 0 → 1,000,000 (Table A1 row
+  (7), 10%); under CRR the row appears at CCF 0, so CRR SA and F-IRB do not
+  move. In both regimes, committed sub-facilities under an uncommitted umbrella
+  emit their own rows (SF-02): CRR EAD 0 → 8,000,000 (book RWA 4.0m → 12.0m),
+  Basel 3.1 EAD 0 → 7,400,000 (4.0m → 11.4m). In both regimes, a drawing in
+  another currency is converted into the facility's currency before it reduces
+  the headroom, sub-limits included (CM-02, SF-01; CRR Art. 4(1)(56)): GBP 10m
+  line with EUR 5m drawn at 0.85, undrawn 5,000,000 → 5,750,000 (CRR EAD
+  2,500,000 → 2,875,000; Basel 3.1 2,000,000 → 2,300,000). A drawing with no
+  rate is not netted (`HIE005`); a non-umbrella facility with a null limit
+  raises `HIE006`, and no number moves (CM-11, SF-12).
+- **Credit conversion factors follow each regime's own table and scope.** The
+  product-to-CCF map is now separate per regime (CM-07): CRR Annex I
+  2(a)/2(b)(i) makes documentary credits, shipping guarantees and customs and
+  tax bonds medium risk (CRR SA documentary credit on 1m: 200,000 → 500,000),
+  while Basel 3.1 Table A1 row 6 gives them 20%; under CRR F-IRB a flagged
+  short-term trade letter of credit keeps the Art. 166(8)(b) 20%, and an
+  unflagged one goes 0.20 → 0.50 (TR-04). In both regimes, missing product keys
+  and documented synonyms no longer fall to the `DQ006` residual (TR-07, CM-12;
+  Basel 3.1 `STANDBY_LC_CREDIT_SUBSTITUTE` 0.50 → 1.00). Basel 3.1 only:
+  own-estimate CCFs and EADs are limited to revolving loan commitments (Art.
+  166D(1), (3)), so an issued letter of credit goes RWA 82,105.74 → 164,211.49
+  (CM-03); the Art. 166A(5) 40% is IRB-only, so a flagged SA factoring line goes
+  400,000 → 1,000,000 (TR-02); and a null
+  `is_uk_residential_mortgage_commitment` is derived, giving row 4(b) 50% (RWA
+  8,000 → 10,000; RE-14). `risk_type` guidance is corrected (CM-08). Partial:
+  `DQ017` now flags a commitment-coded contingent without `is_obs_commitment`
+  (CM-09); setting the flag on the shared test fixture remains on the backlog.
+  Basel 3.1 only: the guaranteed part of an IRB exposure with an SA guarantor
+  took the CRR Annex I factor; it now takes the Table A1 one (unconditionally
+  cancellable 0% → 10%, other commitment 50% → 40%).
+- **Trade-finance treatment applies only to exposures that qualify.** In both
+  regimes a loan takes the trade letter-of-credit flag only from its own
+  facility, no longer from its counterparty's other facilities (TR-01; PS1/26
+  Art. 121(4), CRR Art. 162(3)(b)): a Basel 3.1 SA standalone 150-day loan of
+  GBP 1m goes RWA 200,000 → 400,000, while under CRR SA a loan to an unrated
+  bank with a CQS 1 sovereign now takes Art. 121(1) Table 5, 1,000,000 →
+  200,000. Retail dilution-risk receivables take the Art. 153(1) corporate
+  correlation that Art. 157(1) requires, in both regimes (TR-03): CRR RWA
+  102,442.72 → 169,194.90, Basel 3.1 A-IRB 128,858.76 → 212,823.78. The Basel
+  3.1 Art. 162(3)(e) one-day maturity floor for trade finance under one year is
+  switched on, and the floor now sets M to the residual maturity (at least one
+  day) where CRR runs had used 1/365, keeping the Art. 162(2A)(k) date for
+  revolving drawings (TR-05): 182-day documentary credit, Basel 3.1 81,857.10 →
+  71,949.68, CRR 74,114.53 → 85,800.00. Basel 3.1 only: the Art. 121(6)(b)
+  sovereign-floor exemption needs an original maturity under one year (TR-10):
+  365-day trade LC 80,000 → 200,000. Remaining, on the backlog: loans drawn
+  under a trade facility still escape that floor (TR-06), and the Art. 157(4)
+  dilution maturity (TR-08).
+- **Basel 3.1 specialised lending reads the project phase, needs a slotting
+  permission and takes the subordinated-debt weight.** Basel 3.1 only. The
+  project-finance phase is now read (IV-01; Art. 122B(2)(c), 122B(4)): an
+  unrated exposure of 1,000,000 goes to 1,300,000 pre-operational and 800,000
+  high-quality operational, and a null or unrecognised phase is treated as
+  pre-operational (Art. 122B(3)), 1,300,000, with `SA006`. IPRE and HVCRE were
+  forced into slotting even at a standardised-only firm; slotting now needs an
+  IRB permission (IV-02, RG-01; Art. 147A(1)(c)): HVCRE ADC 950,000 → 1,500,000,
+  IPRE strong 700,000 → 1,000,000. The Art. 133(5) 150% subordinated-debt weight
+  now covers specialised lending (IV-03): 1,000,000 → 1,500,000. For slotted
+  rows only the output-floor SA equivalent moves: in the Basel 3.1 reporting
+  goldens a slotted project with no phase goes 75m → 97.5m and S-TREA
+  195,130,833.33 → 217,630,833.33. Partial: a null or unrecognised
+  `slotting_category` raises `CLS012` in both regimes but still defaults to
+  satisfactory, 115% (IV-09); the choice of default, and whether Art. 122(8)
+  rather than Art. 122B sets the floor weight of slotted exposures, remain on
+  the backlog as owner decisions.
+- **Securitisation carve-outs need risk transfer, and unknown CIU holdings and
+  CRR significant investments take their full weight.** In both regimes, an
+  allocation with `significant_risk_transfer=False` no longer removes the
+  exposure (IV-04; CRR Art. 244(1), 245(1)): a fully allocated GBP 1m unrated
+  corporate goes RWA 0 → 1,000,000, with `SEC006`; a null flag still reads as
+  True. In CIU look-through, a nested CIU, a null class or a class outside the
+  exposure-class vocabulary takes the 1,250% fall-back, in both regimes (IV-05;
+  PS1/26 Art. 132(2), 132(5), 132A(1)): per 100 held, `ciu`, `securitisation`
+  and `subordinated_debt` go 100 → 1,250 (the last two with `SA008`), and so
+  does a name such as `sovereign`; `high_risk` goes 100 → 150 under Basel 3.1
+  (Art. 128) and stays 100 under CRR. CRR only: equity flagged
+  `is_significant_investment` takes 250% (Art. 133(2), 48(4); IV-06): SA 100 →
+  250; on the IRB paths, which Art. 155(1) excludes, simple 290 and 370 → 250
+  and PD/LGD 287.8 and 418.8 → 250, with no expected loss. An IRB firm reports
+  these holdings under Equity IRB (C 02.00 row 0420), as COREP Annex II C 10.01
+  row 0110 requires.
+- **Real-estate weights need property evidence, and ADC and pre-sale flags on
+  collateral are read.** In both regimes, collateral `is_adc=True` makes the
+  loan an ADC exposure (RE-01; PS1/26 Art. 124(3), 124K(1)): a 500,000 corporate
+  loan on a 1,000,000 residential property goes 0.20 / 100,000 → 1.50 / 750,000
+  (Basel 3.1) and 0.35 / 175,000 → 1.00 / 500,000 (CRR). Basel 3.1 only:
+  collateral `is_presold` now reaches the Art. 124K(2) 100%, 1.50 / 750,000 →
+  1.00 / 500,000 (RE-02), but only where every linked property is residential,
+  so a loan on a pre-sold residential and a commercial ADC property takes 150%
+  in either input order (500,000 → 750,000 when the residential row came first).
+  In both regimes, a mortgage-labelled loan with no linked property and no LTV
+  takes the class it would otherwise have, with `RE005` (CL-08): 80,000 loan,
+  CRR 0.35 / 28,000 → 0.75 / 60,000, Basel 3.1 0.4475 / 35,800 → 0.75 / 60,000.
+  A missing LTV is derived per Art. 124C(2) and (3), with `RE006` (RE-10):
+  95,000 on 100,000, CRR 33,250 → 39,250, Basel 3.1 42,512.50 → 41,000. Open
+  owner decision: under CRR a rated corporate's collateral-flagged ADC loan
+  takes the corporate weight (CQS 1: 175,000 → 100,000), where Art. 124(1)
+  points to 100%.
+- **CRR real-estate qualifying conditions are honoured, and the Basel 3.1
+  whole-loan commercial weight is completed.** CRR only: an explicit
+  `is_qualifying_re=False` now means the Art. 125(2)/126(2) conditions are not
+  met, so Art. 124(1) gives 100% up to the property value (CL-07, RE-09):
+  natural-person mortgage of 80,000 at LTV 0.4, 0.35 / 28,000 → 1.00 / 80,000; a
+  null flag behaves as before. CRR only: the Art. 126 50% test was inverted; it
+  now applies where repayment does not materially depend on the property's
+  income (collateral `is_income_producing` False) and the exposure is not ADC
+  (RE-17): owner-occupied 400,000 → 200,000, income-producing 200,000 → 400,000;
+  the CRR reporting goldens gain 5,000,000 RWEA (C 07.00 row 0200 → 0230). The
+  50% also needs the firm's attestation, `is_qualifying_re=True`: PRA Credit
+  Risk Part rule 4.1 / 4.1A (to 31 December 2026) admit Art. 126 for commercial
+  property only where a loss condition measured on PRA market data is met, which
+  no input carries, so a null takes Art. 124(1) 100% (400,000 for the same
+  owner-occupied loan). `is_qualifying_re` is accepted on the loan row too. Basel 3.1 only:
+  the Art. 124H(3) whole-loan weight keeps the Art. 124C LTV, uses all of Art.
+  124I and takes the obligor's corporate weight (CL-10): CQS 5 behind a prior
+  charge 70,000 → 96,250; CQS 1 400,000 → 240,000. Remaining, on the backlog:
+  income-producing non-retail residential property under Basel 3.1 (RE-15).
+- **Basel 3.1 retail: natural persons stay retail, an unknown income currency
+  triggers Art. 123B, and the 0.2% granularity test is optional.** Basel 3.1
+  only, except `CLS013`. A natural person who fails regulatory retail stays
+  retail at the Art. 123(3)(c) 100% instead of becoming a corporate, so Art.
+  123B reaches it (RE-03): EUR 1,000,000 loan to a GBP earner, corporate 1.00 /
+  1,000,000 → retail_other 1.50 / 1,500,000 (under the Art. 122(6)
+  investment-grade election 135% falls to 100%). A null
+  `borrower_income_currency` takes the 1.5 multiplier unless the loan is in the
+  obligor's domestic currency (Art. 123B(3)), with `SA010` (RE-05): EUR mortgage
+  of 80,000 at LTV 0.4, 0.20 / 16,000 → 0.30 / 24,000. The lending currency is
+  now the loan's own, not the reporting currency, which had inverted the
+  multiplier when FX rates were supplied (GBP earner 13,600 → 20,400; EUR earner
+  20,400 → 13,600). `enforce_retail_granularity` defaults to False, since Art.
+  123A(1)(b)(ii) is the GBP 880,000 test alone (RE-04): ten natural persons of
+  20,000 each, 200,000 → 150,000. A null `entity_type` raises `CLS013` in both
+  regimes; the 100% fallback is unchanged (RC-12). Open owner decision: whether
+  the Art. 123B(3) fallback reaches obligors other than natural persons (RE-06).
+- **Unfunded credit protection is valued at what the provider undertook to
+  pay.** Both regimes; examples are on a loan of 8. The Art. 233(2)(a) 40% cut
+  for a credit derivative without restructuring now also applies when cover is
+  stated as a percentage (GT-05), and Art. 233(2)(b) caps such cover at 60% of
+  the exposure (GT-06): covered 8.0 → 4.8, RWA CRR 4.0 → 5.6, Basel 3.1 2.4 →
+  4.64. With both `percentage_covered` and `amount_covered` given, the lower
+  applies (GT-02; Art. 233(1)): "50% up to 5" covers 5.0 → 4.0. Tranched
+  protection is not recognised, with `CRM027` (GT-03; Art. 234(1), 235(2)): a
+  [2,6) band on a loan of 10, CRR 8.0 → 10.0, Basel 3.1 7.2 → 10.0. Rows sharing
+  a `guarantee_reference` are one contract with one cap, and a row repeated for
+  one beneficiary counts once, with `CRM028` (GT-01): cap 5 over loans of 8 and
+  6 covers 10.0 → 5.0. Letters of comfort and keepwells are not eligible
+  (`CRM029`), and a `guarantee_type` naming a credit derivative is treated as
+  one (`CRM030`) (GT-07; Art. 215(1)(b)). Two percentage contracts from one
+  guarantor on one loan now both count, as Art. 233(1) requires, which lowers
+  RWA. Remaining, on the backlog: a null maturity or cancellability still gets
+  full relief (GT-08).
+- **Funded credit protection: maturity, currency mismatch, eligibility and
+  isolation from counterparty credit risk.** Both regimes unless stated. A
+  missing collateral residual maturity is derived from `maturity_date` (CL-02;
+  Art. 238(1)): cash dated one year against a five-year loan, SA EAD 0 →
+  84,222.66 (CRR) / 84,167.30 (Basel 3.1). Basel 3.1 only: F-IRB applies the Hfx
+  haircut to non-financial collateral (CL-09; Art. 230(1)(b)): RWA 57,495.66 →
+  60,781.12. A null collateral currency is a mismatch, with `CRM023` (CL-14): E*
+  35,000 → 39,000. A netted deposit with no maturity date is repayable on
+  demand, with `CRM024` (NT-03; Art. 238(1)(b)): loan EAD 2,000 → 6,000.
+  Lending-table collateral no longer reduces SA-CCR, SFT, failed-trade or
+  default-fund rows, with `CRM025` (CL-04, CC-07; CRR Art. 223(5A), PS1/26 Art.
+  191A(4)): netting-set EAD 0 → 5,480,017.52 (CRR) / 5,044,928.35 (Basel 3.1).
+  The SA recognises only Art. 197 collateral, with `CRM026` (CL-01): flagged
+  receivable EAD 0 → 100,000 (CRR), 40,000 → 100,000 (Basel 3.1). A bond is
+  classed by its issuer, which lowers RWA (CL-11): F-IRB LGD 0.45 → 0.2295
+  (CRR), 0.40 → 0.204 (Basel 3.1). The Simple Method gives a EUR deposit
+  securing a GBP loan the Art. 222(3) 20% floor. Remaining, on the backlog:
+  Simple Method netting and its Art. 239(1) maturity gate (NT-06).
+- **Solo and sub-consolidated runs size retail and SME thresholds on the whole
+  group.** Both regimes unless stated. The retail threshold (PS1/26 Art.
+  123(1)(b)(ii), 123A(1)(b)(ii); CRR Art. 123(c)) and the Art. 501 E* count debt
+  owed to every entity of the reporting group, with `AGG004` where other
+  entities' books decide it (RC-07, RG-02, RE-12): a natural person owing 600k
+  to each of two entities, 450,000 → 600,000; a CRR SME with 2m in each, RWA
+  1,523,800.00 → 1,603,838.85. SME size and IRB turnover use the highest
+  consolidated figures over every parent, with `CLS016` where the group changes
+  the outcome (RC-05, RC-06): a 10m-revenue subsidiary of a 1bn group, Basel 3.1
+  850,000 → 1,000,000, CRR 761,900 → 1,000,000; a top parent with no revenue no
+  longer hides a 1bn intermediate parent (Basel 3.1 A-IRB 568,750 → SA
+  1,000,000); a subsidiary with no figures under a 30m parent becomes a Basel
+  3.1 SME, 1,000,000 → 850,000. Basel 3.1 only: the large financial sector
+  entity test reads group assets, and an SME has turnover of not more than GBP
+  44m with no assets fallback (RC-16): no turnover and 10m assets, 850,000 →
+  1,000,000 with `CLS015`; exactly 44,000,000, 1,000,000 → 850,000. Open owner
+  decision: whether the CRR EUR 50m bound is inclusive.
+- **Ambiguous references, facility mappings and missing FX rates are reported
+  instead of silently priced.** Both regimes. A reference used by both a loan
+  and a contingent raises a `DQ019` error and the rows are kept apart as
+  `<ref>#loan` and `<ref>#contingent` (RC-10): a guarantee on loan X1 plus
+  contingent X1, EAD 1,000,000 / RWA 0 → 2,000,000 / 1,000,000. A currency with
+  no rate into the base currency raises a `DQ020` error; its amounts stay
+  unconverted (RC-11). A loan mapped under facilities of different roots keeps
+  its lowest-referenced parent, with `DQ021` (RC-01): EAD/RWA 2,000,000 →
+  2,500,000. Facility cycles are broken, each member becoming its own root, with
+  `DQ022`, and a sub-facility with several parents keeps the lowest reference
+  (RC-02): cycle 500,000 → 2,250,000; a multi-parent sub-facility that gave 3.5m
+  or 4.3m from run to run gives 3,500,000. A loan under two sub-limits of one
+  root reduces the root's headroom once (SF-03): CRR undrawn EAD 30m → 40m,
+  Basel 3.1 24m → 32m. An engine-only CCR risk type on a facility or contingent
+  raises a `DQ023` error and loses its CCR routing (CC-19): CRR F-IRB M 0.5 →
+  3.504 years.
+- **SFTs use the Basel 3.1 haircuts, haircut ineligible securities lent, and net
+  only under an enforceable master agreement.** Basel 3.1 only: SFTs were priced
+  on the CRR haircut table and now use PS1/26 Art. 224(1) Tables 1 and 3
+  (CC-12): 100m cash lent against 120m listed equity, E* 1,213,203.44 →
+  5,455,844.12; the finer bond bands lower the CCR-FLOOR-2 golden EAD
+  64,133,710.53 → 63,275,282.90. Both regimes: a security lent that is not
+  eligible collateral takes the Art. 224(4) non-main-index equity haircut
+  instead of none (CC-13): unrated corporate bond lent 100m against 95m cash, E*
+  5,000,000 → 22,677,669.53 (CRR) and 26,213,203.44 (Basel 3.1). Collateral that
+  cannot be valued is not recognised, with `CCR027` (100m property or
+  receivables against 100m cash lent: E* 0 → 100,000,000). Both regimes: a
+  multi-trade netting set nets only if every trade states
+  `under_master_netting_agreement` and the new `is_legally_enforceable` and
+  there is one counterparty (CC-14; Art. 206, 220(1)); otherwise each trade
+  stands alone, with `CCR028`, or a `CCR029` error for several counterparties:
+  E* 52,121,320.34 → 0 + 100,000,000. Remaining, on the backlog: the Art. 220(3)
+  net-position formula (the gross sum is used).
+- **SA-CCR: CRR alpha is 1.4 for every counterparty, interest-rate hedging sets
+  are per currency, and incomplete trades are priced.** CRR only: alpha 1 for
+  non-financial and pension counterparties is new PS1/26 text, so CRR applies
+  1.4 (CC-01; Art. 274(2)): a 10-year GBP 100m swap, EAD 3,914,298.228 →
+  5,480,017.519 (+40%). Both regimes: interest-rate trades form one hedging set
+  per currency, inflation trades apart (CC-04; Art. 277a(1)(a)): GBP payer plus
+  USD receiver, EAD 0 → 6,136,887.74 (CRR) / 6,139,872.77 (Basel 3.1). Partial,
+  both regimes (CC-06): an unknown `asset_class` goes to the other-risks
+  category (Art. 277(1)(f), 280f) with a `CCR021` error, EAD 0 → 4,909,510.19
+  (CRR); a missing `credit_quality` or `commodity_type` takes the highest factor
+  with a `CCR022` error (0 → 3,682,132.64 and 0 → 5,600,000); a trade with no
+  netting set is priced alone with a `CCR023` error instead of being dropped;
+  and commodity and other-risks options carry the Art. 279a supervisory
+  volatility instead of a zero add-on. Remaining, on the backlog: an FX trade
+  with no rate for a leg still gets a zero add-on with no error, a null
+  `mtm_value` reads as 0, and an option with no underlying price uses a linear
+  delta.
+- **SA-CCR reads netting-set collateral and margin terms, and converts trades
+  into the reporting currency.** Both regimes. `ccr_collateral` is now valued
+  with the Art. 224 haircuts (CC-02; Art. 276): received items reduce
+  replacement cost, posted items increase it, and unrecognised items raise
+  `CCR024`: 1.5m cash posted at CMV −1m, EAD 41,750.91 / 41,802.08 →
+  1,006,844.39 / 1,006,993.64 (CRR / Basel 3.1). Threshold, minimum transfer
+  amount, NICA and MPOR stated on the margin agreement now count, the
+  conservative value is taken where they conflict with the netting set
+  (`CCR025`), and a margined set's EAD is capped at its unmargined value (CC-03;
+  Art. 274(3), 275(3)): threshold 10m stated on the CSA only, 1,492,098.09 →
+  1,706,993.64 (Basel 3.1); the cap lowers the CCR-A13 golden EAD 3,492,231.05 →
+  3,213,857.52 and CCR-A14 6,974,799.28 → 3,213,857.52. Notionals, market values
+  and collateral are converted at spot (CC-05; Art. 279b(3)), with a `CCR026`
+  error where no rate exists: a JPY 10bn swap, previously 200 times the
+  equivalent GBP swap, is now 1,534,221.93 (CRR) / 1,534,968.19 (Basel 3.1). For
+  owner review: whether the unmargined comparison for the cap counts variation
+  margin.
+- **Settlement risk, CCP default-fund contributions, CCP exposures and BA-CVA
+  follow the own-funds rules.** Both regimes unless stated. Failed-trade and
+  default-fund rows are own-funds amounts × 12.5 and no longer pass through IRB,
+  CRM, supporting factors or the defaulted weight (CC-08; CRR Art. 378,
+  92(3)(ca); CCR Part Art. 308(3), 309(2)): FT1 via F-IRB 45,764 (CRR) / 265,881
+  (Basel 3.1) → 625,000. Default-fund capital follows Art. 308(2), 309(1) and
+  310 (CC-10): non-QCCP 10m, 12.5m → 125m; QCCP 5.0m → 4,166,666.67; QCCP
+  unfunded 5.0m → 0; a missing K_CCP or DF_CM charges the floor with a `CCR032`
+  error (0 → 200,000). The 2%/4% weight needs a trade exposure to a QCCP, and a
+  non-QCCP is a corporate (CC-11; Art. 107(2)): loan to a CQS 2 QCCP, 2% → 50%
+  (CRR) / 30% (Basel 3.1). Basel 3.1 only: BA-CVA uses each netting set's own
+  alpha and CCR EAD (CC-15), 12,837,454.56 → 17,972,436.38, and a derivative
+  counterparty with no BA-CVA input raises `CCR030` (CC-16). Failed trades read
+  the buy or sell side and charge Art. 379 Column 3 free deliveries (CC-09): FT2
+  0 → 625,000, FT3 0 → 200,000, `DVP` in capitals 0 → 6,250,000. Open owner
+  decision: Column 3 exposures are missing from Pillar 3 CR4/CR5.
 - **CAPITAL — RWA DOWN, only where a non-zero `unrecognised_exposure_scalar` is
   configured: the Basel 3.1 unrecognised exposure adjustment no longer uplifts
   Foundation IRB legs.** PS1/26 Art. 166D(6) confines the adjustment to facilities

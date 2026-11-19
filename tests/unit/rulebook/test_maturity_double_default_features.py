@@ -9,7 +9,8 @@ regime so a pack typo fails here, before the engine-level behaviour tests.
 
 References:
 - CRR Art. 162(1): F-IRB SFT supervisory maturity (CRR-only).
-- CRR Art. 162(3): short-term-trade one-day maturity floor derivation (CRR-only).
+- CRR Art. 162(3)(b) / PRA PS1/26 Art. 162(3)(e): short-term-trade one-day maturity floor
+  derivation (both regimes; residual bound inclusive under CRR, strict under Basel 3.1).
 - PRA PS1/26 Art. 162(2A)(k): revolving facilities use the termination date (B31-only).
 - CRR Art. 153(3), 202-203: double-default treatment (CRR-only).
 """
@@ -28,7 +29,11 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 # (feature name, enabled under CRR, enabled under Basel 3.1)
 _FEATURE_MATRIX = [
     ("firb_sft_supervisory_maturity", True, False),
-    ("one_day_maturity_floor", True, False),
+    # PS1/26 Art. 162(3)(e) retains the self-liquidating-trade one-day floor
+    # (review TR-05: the Basel 3.1 pack had it off and this row pinned that).
+    ("one_day_maturity_floor", True, True),
+    # CRR Art. 162(3)(b) "up to one year" vs PS1/26 Art. 162(3)(e) "less than one year".
+    ("one_day_floor_trade_residual_strict", False, True),
     ("revolving_uses_termination_maturity", False, True),
     ("double_default_treatment", True, False),
 ]

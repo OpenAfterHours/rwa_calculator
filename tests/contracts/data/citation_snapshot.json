@@ -44,8 +44,12 @@
   "rwa_calc.engine.ccf::_firb_ccf_for_col": [
     "CRR Art. 166"
   ],
+  "rwa_calc.engine.ccf::_is_revolving_loan_commitment": [
+    "PS1/26, paragraph 166D"
+  ],
   "rwa_calc.engine.ccf::build_product_to_risk_type_expr": [
-    "CRR Art. 111"
+    "CRR Art. 111",
+    "PS1/26, paragraph 111"
   ],
   "rwa_calc.engine.ccf::sa_ccf_expression": [
     "CRR Art. 111"
@@ -68,6 +72,14 @@
   "rwa_calc.engine.ccr.ccp::apply_ccp_risk_weight": [
     "CRR Art. 306"
   ],
+  "rwa_calc.engine.ccr.default_fund::compute_dfc_capital": [
+    "CRR Art. 308(2)",
+    "CRR Art. 309(1)",
+    "CRR Art. 310"
+  ],
+  "rwa_calc.engine.ccr.exposure_value::compose_exposure_value": [
+    "CRR Art. 278"
+  ],
   "rwa_calc.engine.ccr.hedging_sets::assign_hedging_set": [
     "CRR Art. 277"
   ],
@@ -80,11 +92,26 @@
   "rwa_calc.engine.ccr.maturity_factor::compute_maturity_factor_unmargined": [
     "CRR Art. 279"
   ],
+  "rwa_calc.engine.ccr.maturity_factor::margined_mpor_days": [
+    "CRR Art. 279"
+  ],
   "rwa_calc.engine.ccr.pfe::compute_addon_per_asset_class": [
     "CRR Art. 277"
   ],
   "rwa_calc.engine.ccr.pfe::compute_pfe": [
     "CRR Art. 278"
+  ],
+  "rwa_calc.engine.ccr.pfe::pfe_multiplier": [
+    "CRR Art. 278"
+  ],
+  "rwa_calc.engine.ccr.risk_categories::compute_addon_other": [
+    "CRR Art. 280"
+  ],
+  "rwa_calc.engine.ccr.risk_categories::compute_adjusted_notional_other": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.risk_categories::map_trade_risk_categories": [
+    "CRR Art. 277"
   ],
   "rwa_calc.engine.ccr.supervisory_delta::compute_supervisory_delta_cdo_tranche": [
     "CRR Art. 279a"
@@ -118,28 +145,53 @@
     "CRR Art. 147",
     "PS1/26, paragraph 147"
   ],
+  "rwa_calc.engine.classify.attributes::is_sme_by_size_expr": [
+    "CRR Art. 153(4)",
+    "PS1/26, paragraph 122"
+  ],
   "rwa_calc.engine.classify.attributes::natural_person_expr": [
     "CRR Art. 147(5)",
     "PS1/26, paragraph 147"
   ],
-  "rwa_calc.engine.classify.attributes::with_group_annual_revenue": [
-    "PS1/26, paragraph 147"
+  "rwa_calc.engine.classify.attributes::resolve_sl_project_phase": [
+    "PS1/26, paragraph 122B"
+  ],
+  "rwa_calc.engine.classify.audit::_null_entity_type_warnings": [
+    "CRR Art. 112",
+    "PS1/26, paragraph 112"
+  ],
+  "rwa_calc.engine.classify.audit::collect_group_threshold_warnings": [
+    "CRR Art. 123",
+    "PS1/26, paragraph 123A"
   ],
   "rwa_calc.engine.classify.classifier::ExposureClassifier.classify": [
     "CRR Art. 112",
     "CRR Art. 147"
+  ],
+  "rwa_calc.engine.classify.permissions::build_sl_irb_permission_expr": [
+    "PS1/26, paragraph 147A"
   ],
   "rwa_calc.engine.classify.permissions::resolve_model_permissions": [
     "CRR Art. 143",
     "CRR Art. 148",
     "CRR Art. 150"
   ],
+  "rwa_calc.engine.classify.re_evidence::re_evidence_expr": [
+    "CRR Art. 125",
+    "PS1/26, paragraph 124A"
+  ],
+  "rwa_calc.engine.classify.re_evidence::withhold_unevidenced_re_class": [
+    "CRR Art. 124",
+    "PS1/26, paragraph 124"
+  ],
   "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes": [
     "CRR Art. 153(2)",
     "CRR Art. 142(1)(4)",
     "CRR Art. 154(4)",
+    "CRR Art. 123",
     "PS1/26, paragraph 153",
-    "PS1/26, paragraph 147"
+    "PS1/26, paragraph 147",
+    "PS1/26, paragraph 123"
   ],
   "rwa_calc.engine.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
@@ -195,9 +247,17 @@
   "rwa_calc.engine.crm.eligibility::financial_collateral_ineligible_expr": [
     "CRR Art. 197"
   ],
+  "rwa_calc.engine.crm.expressions::ccr_engine_row_expr": [
+    "CRR Art. 223",
+    "PS1/26, paragraph 191A"
+  ],
   "rwa_calc.engine.crm.expressions::flag_netting_rows": [
     "CRR Art. 219",
     "PS1/26 Art. 219"
+  ],
+  "rwa_calc.engine.crm.expressions::issued_bond_expr": [
+    "CRR Art. 197",
+    "PS1/26 Art. 197"
   ],
   "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr": [
     "CRR Art. 223(4)",
@@ -205,6 +265,10 @@
   ],
   "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr": [
     "PS1/26 Art. 230(1)"
+  ],
+  "rwa_calc.engine.crm.expressions::sa_fccm_type_eligible_expr": [
+    "CRR Art. 197",
+    "PS1/26 Art. 197"
   ],
   "rwa_calc.engine.crm.guarantees::_apply_maturity_mismatch_to_guarantees": [
     "CRR Art. 217",
@@ -215,11 +279,7 @@
     "CRR Art. 235"
   ],
   "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows": [
-    "CRR Art. 234"
-  ],
-  "rwa_calc.engine.crm.guarantees::_gate_unilateral_protection": [
-    "CRR Art. 213",
-    "PS1/26, paragraph 213"
+    "CRR Art. 235"
   ],
   "rwa_calc.engine.crm.guarantees::apply_guarantees": [
     "CRR Art. 213",
@@ -247,6 +307,14 @@
   "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch": [
     "CRR Art. 237",
     "CRR Art. 238"
+  ],
+  "rwa_calc.engine.crm.haircuts::collateral_currency_mismatch_expr": [
+    "CRR Art. 224",
+    "PS1/26 Art. 230"
+  ],
+  "rwa_calc.engine.crm.haircuts::with_derived_residual_maturity": [
+    "CRR Art. 238",
+    "PS1/26 Art. 238"
   ],
   "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns": [
     "CRR Art. 232(3)",
@@ -276,6 +344,29 @@
   ],
   "rwa_calc.engine.crm.processor::CRMProcessor.get_crm_unified_bundle": [
     "CRR Art. 194"
+  ],
+  "rwa_calc.engine.crm.protection_screen::screen_unfunded_protection": [
+    "CRR Art. 213",
+    "PS1/26, paragraph 213",
+    "CRR Art. 215",
+    "PS1/26, paragraph 215",
+    "CRR Art. 234",
+    "PS1/26, paragraph 234"
+  ],
+  "rwa_calc.engine.crm.protection_value::_apply_fx_mismatch": [
+    "CRR Art. 233",
+    "PS1/26, paragraph 233"
+  ],
+  "rwa_calc.engine.crm.protection_value::_apply_restructuring_exclusion": [
+    "CRR Art. 233",
+    "PS1/26, paragraph 233"
+  ],
+  "rwa_calc.engine.crm.protection_value::resolve_guarantee_amount_expr": [
+    "CRR Art. 233"
+  ],
+  "rwa_calc.engine.crm.protection_value::value_unfunded_protection": [
+    "CRR Art. 233",
+    "PS1/26, paragraph 233"
   ],
   "rwa_calc.engine.crm.provisions::resolve_provisions": [
     "CRR Art. 111"
@@ -331,10 +422,19 @@
   "rwa_calc.engine.equity.calculator::_ciu_computed_rw_expr": [
     "PS1/26, paragraph 132"
   ],
+  "rwa_calc.engine.equity.calculator::_crr_significant_investment_expr": [
+    "CRR Art. 133(2)",
+    "CRR Art. 155(1)"
+  ],
   "rwa_calc.engine.equity.calculator::_had_irb_permission_at_2026_year_end": [
     "CRR Art. 143",
     "CRR Art. 153(5)",
     "PS1/26, paragraph 4.1"
+  ],
+  "rwa_calc.engine.equity.calculator::_holding_rw_expr": [
+    "PS1/26, paragraph 132",
+    "PS1/26, paragraph 132A",
+    "PS1/26, paragraph 128"
   ],
   "rwa_calc.engine.equity.calculator::_standardised_transitional_scope_expr": [
     "PS1/26, paragraph 4.2",
@@ -348,6 +448,9 @@
   "rwa_calc.engine.eu_sovereign::build_eu_domestic_currency_expr": [
     "CRR Art. 114",
     "CRR Art. 141"
+  ],
+  "rwa_calc.engine.eu_sovereign::country_domestic_currency_expr": [
+    "PS1/26, paragraph 123B"
   ],
   "rwa_calc.engine.eu_sovereign::funding_currency_expr": [
     "CRR Art. 114",
@@ -373,6 +476,27 @@
     "CRR Art. 136",
     "CRR Art. 138",
     "CRR Art. 139"
+  ],
+  "rwa_calc.engine.hierarchy.facility_fx::with_facility_currency_factor": [
+    "CRR Art. 4(1)"
+  ],
+  "rwa_calc.engine.hierarchy.facility_undrawn::_undrawn_select_expressions": [
+    "CRR Art. 111",
+    "PS1/26, paragraph 111"
+  ],
+  "rwa_calc.engine.hierarchy.graph::with_group_size_figures": [
+    "CRR Art. 153(4)",
+    "PS1/26, paragraph 147",
+    "PS1/26, paragraph 153"
+  ],
+  "rwa_calc.engine.hierarchy.group_obligor::whole_group_increments": [
+    "CRR Art. 123",
+    "CRR Art. 501",
+    "PS1/26, paragraph 123A"
+  ],
+  "rwa_calc.engine.hierarchy.re_ltv::derive_missing_ltv": [
+    "CRR Art. 125",
+    "PS1/26, paragraph 124C"
   ],
   "rwa_calc.engine.irb.adjustments::apply_post_model_adjustments": [
     "PS1/26, paragraph 153",
@@ -428,12 +552,24 @@
   "rwa_calc.engine.irb.formulas::calculate_maturity_adjustment": [
     "CRR Art. 162"
   ],
+  "rwa_calc.engine.irb.formulas::risk_weight_function_correlation_expr": [
+    "CRR Art. 157",
+    "PS1/26, paragraph 157"
+  ],
+  "rwa_calc.engine.irb.formulas::risk_weight_function_maturity_adjustment_expr": [
+    "CRR Art. 154",
+    "CRR Art. 157"
+  ],
   "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa": [
     "CRR Art. 122",
     "CRR Art. 235"
   ],
   "rwa_calc.engine.irb.guarantee::apply_guarantee_substitution": [
     "CRR Art. 161(3)"
+  ],
+  "rwa_calc.engine.irb.transforms::_effective_one_day_floor_flag": [
+    "CRR Art. 162(3)",
+    "PS1/26, paragraph 162"
   ],
   "rwa_calc.engine.irb.transforms::apply_firb_lgd": [
     "CRR Art. 161",
@@ -470,12 +606,19 @@
   "rwa_calc.engine.sa.b31_risk_weight_tables::_create_b31_covered_bond_df": [
     "PS1/26, paragraph 129"
   ],
+  "rwa_calc.engine.sa.b31_risk_weight_tables::b31_sa_sl_rw_expr": [
+    "PS1/26, paragraph 122B"
+  ],
   "rwa_calc.engine.sa.b31_risk_weight_tables::get_b31_combined_cqs_risk_weights": [
     "PS1/26, paragraph 122"
   ],
   "rwa_calc.engine.sa.b31_risk_weight_tables::with_b31_loan_split_parts": [
     "PS1/26, paragraph 124F",
     "PS1/26, paragraph 124H"
+  ],
+  "rwa_calc.engine.sa.ccp_exposures::qccp_trade_exposure_expr": [
+    "CRR Art. 107(2)",
+    "CRR Art. 306(1)"
   ],
   "rwa_calc.engine.sa.central_bank::ecb_rw_expr": [
     "CRR Art. 114(3)",
@@ -499,6 +642,15 @@
     "CRR Art. 117(1)",
     "CRR Art. 107(2)",
     "PS1/26, paragraph 117"
+  ],
+  "rwa_calc.engine.sa.crr_real_estate::crr_art_124_1_rw_expr": [
+    "CRR Art. 124"
+  ],
+  "rwa_calc.engine.sa.crr_real_estate::crr_commercial_re_rw_expr": [
+    "CRR Art. 126"
+  ],
+  "rwa_calc.engine.sa.crr_real_estate::crr_residential_re_rw_expr": [
+    "CRR Art. 125"
   ],
   "rwa_calc.engine.sa.crr_risk_weight_tables::_create_covered_bond_df": [
     "CRR Art. 129"
@@ -590,9 +742,6 @@
     "PS1/26, paragraph 127",
     "CRR Art. 127"
   ],
-  "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt": [
-    "PS1/26, paragraph 133"
-  ],
   "rwa_calc.engine.sa.risk_weights::_leased_residual_rw_expr": [
     "CRR Art. 137",
     "CRR Art. 134"
@@ -605,9 +754,11 @@
   "rwa_calc.engine.sa.risk_weights::apply_risk_weights": [
     "CRR Art. 112"
   ],
-  "rwa_calc.engine.sa.rw_adjustments::apply_currency_mismatch_multiplier": [
-    "PS1/26, paragraph 123B",
+  "rwa_calc.engine.sa.rw_adjustments::_unknown_income_mismatch_expr": [
     "PS1/26, paragraph 123B.3"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::apply_currency_mismatch_multiplier": [
+    "PS1/26, paragraph 123B"
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_due_diligence_override": [
     "PS1/26, paragraph 110A"
@@ -628,6 +779,12 @@
   "rwa_calc.engine.sa.rw_adjustments::apply_third_party_deposit_rw_mapping": [
     "CRR Art. 232"
   ],
+  "rwa_calc.engine.sa.rw_adjustments::income_currency_unknown_census_exprs": [
+    "PS1/26, paragraph 123B"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::income_currency_unknown_warnings": [
+    "PS1/26, paragraph 123B"
+  ],
   "rwa_calc.engine.sa.sovereign_derived::crr_art_121_4_trade_finance_expr": [
     "CRR Art. 121"
   ],
@@ -635,10 +792,22 @@
     "CRR Art. 121",
     "PS1/26, paragraph 121"
   ],
+  "rwa_calc.engine.sa.subordinated_debt::is_b31_subordinated_debt": [
+    "PS1/26, paragraph 133"
+  ],
+  "rwa_calc.engine.scope.resolver::resolve_group_population": [
+    "CRR Art. 123",
+    "CRR Art. 501",
+    "PS1/26, paragraph 123A"
+  ],
   "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate": [
     "CRR Art. 109",
     "CRR Art. 244",
     "PS1/26, paragraph 147A"
+  ],
+  "rwa_calc.engine.securitisation.allocator::_srt_asserted_expr": [
+    "CRR Art. 244(1)",
+    "CRR Art. 245(1)"
   ],
   "rwa_calc.engine.sft.fccm::_derive_ccr_sft_maturity_years": [
     "CRR Art. 162",
@@ -647,13 +816,23 @@
   "rwa_calc.engine.sft.fccm::_derive_margining_terms": [
     "CRR Art. 285"
   ],
+  "rwa_calc.engine.sft.fccm::_exposure_haircut_unscaled": [
+    "CRR Art. 224",
+    "PS1/26, paragraph 224"
+  ],
   "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures": [
     "CRR Art. 220",
     "CRR Art. 223",
     "CRR Art. 224",
     "CRR Art. 226",
     "CRR Art. 271",
-    "CRR Art. 285"
+    "CRR Art. 285",
+    "PS1/26, paragraph 224"
+  ],
+  "rwa_calc.engine.sft.netting::apply_sft_netting_gate": [
+    "CRR Art. 206",
+    "CRR Art. 220",
+    "PS1/26, paragraph 220"
   ],
   "rwa_calc.engine.slotting.calculator::SlottingCalculator.calculate_branch": [
     "CRR Art. 153(5)"
@@ -679,6 +858,9 @@
     "CRR Art. 501"
   ],
   "rwa_calc.engine.supporting_factors::compute_e_star_group_drawn": [
+    "CRR Art. 501"
+  ],
+  "rwa_calc.engine.supporting_factors::e_star_contribution_expr": [
     "CRR Art. 501"
   ],
   "rwa_calc.reporting.corep.c02::generate_c02_00": [
@@ -767,6 +949,10 @@
   ],
   "rwa_calc.reporting.corep.ccf_buckets::_own_estimate": [
     "PS1/26, paragraph 166D"
+  ],
+  "rwa_calc.reporting.corep.ccf_buckets::_revolving_loan_commitment": [
+    "PS1/26, paragraph 166D",
+    "PS1/26, paragraph 166.5"
   ],
   "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr": [
     "PS1/26, paragraph 111",

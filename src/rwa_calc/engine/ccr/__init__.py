@@ -48,6 +48,7 @@ from rwa_calc.engine.ccr.pipeline_adapter import (  # noqa: E402
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined  # noqa: E402
 from rwa_calc.engine.ccr.sa_ccr import (  # noqa: E402
     apply_legal_enforceability_gate,
+    attach_orphan_trade_netting_sets,
     compute_ead,
 )
 from rwa_calc.engine.ccr.supervisory_delta import (  # noqa: E402
@@ -62,6 +63,7 @@ __all__ = [
     "apply_wwr_gate",
     "assign_hedging_set",
     "assign_ir_maturity_bucket",
+    "attach_orphan_trade_netting_sets",
     "ccr_rows_to_exposures",
     "compute_addon_per_asset_class",
     "compute_adjusted_notional_ir",

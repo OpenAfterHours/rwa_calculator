@@ -7,7 +7,14 @@ annual sales when sales are not a meaningful indicator).
 
 Scope assertions:
 - Corporate with annual_revenue=null and total_assets=GBP 20m is classified
-  CORPORATE_SME under both CRR and Basel 3.1 via the assets fallback.
+  CORPORATE_SME under CRR via the assets fallback, and is NOT an SME under
+  Basel 3.1 (CLS015). RC-16 (2026-11 review) re-pointed the two Basel 3.1 pins
+  that asserted the fallback: the PS1/26 glossary SME is "a micro, small or
+  medium enterprise with an annual turnover of not more than GBP 44 million"
+  — turnover only, no balance-sheet limb (the pack Feature
+  ``sme_size_assets_fallback`` is off in the b31 pack). Total assets substitute
+  only inside the Art. 153(4) correlation, "when total annual revenue is not a
+  meaningful indicator of entity size", which this size test does not model.
 - Sme_size_source on the exposure frame distinguishes turnover- vs assets-driven
   SME identification.
 - Large-by-assets (revenue=null, assets=GBP 500m) is NOT SME and trips the
@@ -72,21 +79,30 @@ def crr_config() -> CalculationConfig:
 class TestSMEByAssets:
     """Corporate with null annual_revenue and total_assets=GBP 20m."""
 
-    def test_b31_classified_as_corporate_sme(
+    def test_b31_without_turnover_is_not_an_sme(
         self, classifier: ExposureClassifier, b31_config: CalculationConfig
     ) -> None:
+        """PS1/26 glossary SME is turnover-only: GBP 20m assets do not make an SME."""
         bundle = _add_internal_pd(make_sme_by_assets_bundle())
         result = classifier.classify(bundle, b31_config)
         df = result.all_exposures.collect()
-        assert df["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
+        assert df["exposure_class"][0] == ExposureClass.CORPORATE.value
 
-    def test_b31_is_sme_flag_true(
+    def test_b31_is_sme_flag_false(
         self, classifier: ExposureClassifier, b31_config: CalculationConfig
     ) -> None:
         bundle = _add_internal_pd(make_sme_by_assets_bundle())
         result = classifier.classify(bundle, b31_config)
         df = result.all_exposures.collect()
-        assert df["is_sme"][0] is True
+        assert df["is_sme"][0] is False
+
+    def test_b31_cls015_names_the_missing_turnover(
+        self, classifier: ExposureClassifier, b31_config: CalculationConfig
+    ) -> None:
+        """The assets-only SME the CRR limb would have accepted is surfaced, not silent."""
+        bundle = _add_internal_pd(make_sme_by_assets_bundle())
+        result = classifier.classify(bundle, b31_config)
+        assert [e.code for e in result.classification_errors].count("CLS015") == 1
 
     def test_sme_size_source_is_assets(
         self, classifier: ExposureClassifier, b31_config: CalculationConfig

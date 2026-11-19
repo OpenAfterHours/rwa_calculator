@@ -200,7 +200,9 @@ class TestCRRCommercialSplit:
         secured = _by_role(df, "secured")
         residual = _by_role(df, "residual")
         assert secured["ead_final"] == pytest.approx(100.0)
-        assert secured["has_income_cover"] is True  # CRR Art. 126(2)(d)
+        # Not property-dependent (Art. 126(2)(b)): the inverted gate's True
+        # was removed by review RE-17 / P1.263.
+        assert secured["has_income_cover"] is False
         assert residual["ead_final"] == pytest.approx(0.0)
 
     def test_rental_not_met_no_split(self) -> None:
@@ -755,7 +757,9 @@ class TestCRRMixedCollateral:
         assert rre["ltv"] == pytest.approx(0.80)
         assert cre["ead_final"] == pytest.approx(100.0)
         assert cre["exposure_class"] == "commercial_mortgage"
-        assert cre["has_income_cover"] is True  # CRR Art. 126(2)(d)
+        # Not property-dependent (Art. 126(2)(b)): the inverted gate's True
+        # was removed by review RE-17 / P1.263.
+        assert cre["has_income_cover"] is False
         assert cre["ltv"] == pytest.approx(0.50)
         assert residual["ead_final"] == pytest.approx(20.0)
         assert residual["exposure_class"] == "CORPORATE"

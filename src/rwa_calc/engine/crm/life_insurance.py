@@ -12,6 +12,8 @@ Key responsibilities:
 - Map insurer risk weight to secured portion risk weight via the Art. 232(3) table
 - Set life_ins_* columns on exposure frame for SA calculator RW blending
 - No EAD reduction for SA (life insurance uses RW mapping, not EAD reduction)
+- Keep counterparty-credit-risk rows out of every pool, share and direct pledge
+  (CRR Art. 223(5A) / PS1/26 Art. 191A(4))
 - IRB LGD handled separately via the waterfall (LGDS = 40%)
 
 Assumption: the exposure, facility (``parent_facility_reference``) and counterparty
@@ -35,7 +37,9 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN, crm_warning
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import LIFE_INSURANCE_COLLATERAL_TYPES
+from rwa_calc.engine.crm.expressions import ccr_engine_row_expr
 from rwa_calc.engine.eu_sovereign import denomination_currency_expr
 from rwa_calc.engine.utils import partition_by_nullable
 from rwa_calc.rulebook.compile import scalar_value
@@ -113,7 +117,10 @@ def compute_life_insurance_columns(
     (``counterparty_reference``) — and a facility/counterparty pledge is shared
     pro-rata by EAD across the covered exposures (Art. 230-231 pooling). Reference
     namespaces are disjoint, so a key resolves at exactly one level; a direct
-    exposure pledge therefore benefits only that exposure.
+    exposure pledge therefore benefits only that exposure. A counterparty-credit-
+    risk row (``ccr_engine_row_expr``) is no pool member: it takes no share and no
+    direct pledge, and is left out of every pro-rata denominator (CRR
+    Art. 223(5A) / PS1/26 Art. 191A(4); review CL-04 / CC-07).
 
     Art. 233(3) FX reduction: the 8% cut is applied PER POLICY (cut-then-sum), each
     policy's own denomination (``original_currency`` pre-FX, else ``currency``)
@@ -203,6 +210,14 @@ def compute_life_insurance_columns(
     exp_ref_col = "exposure_reference" if "exposure_reference" in exp_names else "loan_reference"
     ead_col = "ead_gross" if "ead_gross" in exp_names else "ead"
     ead = pl.col(ead_col).fill_null(0.0)
+    # Review CL-04 / CC-07: an SA-CCR / FCCM SFT / failed-trade / default-fund row
+    # already reflects its collateral under the CCR Part, so it shares in no pledge
+    # (weight 0) and sizes into no pro-rata total. A null risk_type is not one.
+    exposures = ensure_columns(
+        exposures, {"risk_type": ColumnSpec(pl.String, required=False)}, present=exp_names
+    )
+    is_ccr = ccr_engine_row_expr()
+    pool_ead = pl.when(is_ccr).then(pl.lit(0.0)).otherwise(ead)
     # Materialise the exposure denomination once as a join key for the matched-
     # currency lookup (the Art. 233(3) test compares policy vs exposure currency).
     exposures = exposures.with_columns(denomination_currency_expr(exp_names).alias("_exp_ccy"))
@@ -212,14 +227,19 @@ def compute_life_insurance_columns(
     # reference (weight 1.0); a facility / counterparty pledge is shared pro-rata by
     # EAD across that key's exposures. Reference namespaces are disjoint, so a key
     # fires at exactly one level (a direct pledge benefits only its own exposure).
-    levels: list[tuple[str, pl.Expr, str]] = [(exp_ref_col, pl.lit(1.0), "d")]
+    direct_weight = pl.when(is_ccr).then(pl.lit(0.0)).otherwise(pl.lit(1.0))
+    levels: list[tuple[str, pl.Expr, str]] = [(exp_ref_col, direct_weight, "d")]
     if "parent_facility_reference" in exp_names:
         levels.append(
-            ("parent_facility_reference", _pro_rata_weight(ead, "parent_facility_reference"), "f")
+            (
+                "parent_facility_reference",
+                _pro_rata_weight(pool_ead, "parent_facility_reference"),
+                "f",
+            )
         )
     if "counterparty_reference" in exp_names:
         levels.append(
-            ("counterparty_reference", _pro_rata_weight(ead, "counterparty_reference"), "c")
+            ("counterparty_reference", _pro_rata_weight(pool_ead, "counterparty_reference"), "c")
         )
 
     value_terms: list[pl.Expr] = []

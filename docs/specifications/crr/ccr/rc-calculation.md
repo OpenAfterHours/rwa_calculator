@@ -73,10 +73,10 @@ where:
   every trade in the netting set. Positive `V` means the netting set is
   in-the-money to the bank (counterparty owes); negative `V` means
   out-of-the-money (bank owes).
-- `C` = `c_net` — the **net collateral** held against the netting set,
-  haircut-adjusted per the Title II CRM rules and signed positive when
-  held by the bank. Collateral pledged *by* the bank (negative `c_net`)
-  enlarges `V − C` and therefore RC.
+- `C` = NICA — the **net collateral** of the netting set, volatility-adjusted
+  per Art. 276 and signed positive when received. Collateral posted *by* the
+  bank (negative) enlarges `V − C` and therefore RC. See
+  [Collateral, the Art. 274(3) cap and shared CSAs](#collateral-the-art-2743-cap-and-shared-csas).
 
 The `max(·, 0)` floor reflects the asymmetric default payoff: a bank
 cannot owe the counterparty a positive replacement cost — if the
@@ -152,32 +152,18 @@ economic floors:
 | `TH + MTA − NICA` | The CSA's permitted uncollateralised buffer               | The CSA is operating as designed but the netting set is only marginally in-the-money — RC is pinned to the buffer the bank tolerates before calling. |
 | `0`               | The same default-asymmetry floor as Art. 275(1)            | Both arms are negative (e.g. the netting set is out-of-the-money *and* `NICA > TH + MTA`). |
 
-### NICA — Net Independent Collateral Amount (Art. 271(7))
+### NICA — Net Independent Collateral Amount
 
-NICA is **independent collateral** — collateral posted up-front that
-secures the netting set regardless of mark-to-market — measured net of
-the directional flow:
+CCR (CRR) Part Art. 1.2: "the sum of the volatility-adjusted value of net
+collateral received or posted, as applicable, to the netting set other than
+variation margin." Received collateral counts positive and posted collateral
+negative (Art. 276(1)(c)); posted collateral that is segregated and bankruptcy
+remote is not recognised in NICA (Art. 276(1)(g)), because it would be returned
+on the counterparty's default.
 
-```
-NICA = (independent collateral held by the bank from the counterparty)
-     + (segregated initial margin held by the bank from the counterparty)
-     − (independent collateral pledged by the bank to the counterparty,
-        non-segregated)
-```
-
-The asymmetry between "segregated IM held" (included) and
-"non-segregated IM pledged" (subtracted) is deliberate: segregated IM
-posted *by* the bank is bankruptcy-remote and would be returned on the
-counterparty's default, so it does not reduce NICA on the bank's
-balance sheet. Non-segregated IM the bank pledges is at risk and so
-shows up negatively.
-
-NICA enters Art. 275(2) **subtractively** because it reduces the
-buffer above which a margin call would be triggered: a counterparty
-that has posted £200,000 of segregated IM and a CSA with TH = £50,000,
-MTA = £10,000 has effectively a negative buffer
-(`50,000 + 10,000 − 200,000 = −140,000`), so the IM contributes
-directly to RC reduction up to (but not below) the zero floor.
+NICA enters Art. 275(2) **subtractively** in both arms: received independent
+collateral lowers the buffer above which a margin call would be triggered, and
+posted independent collateral raises it.
 
 ### TH — Threshold (Art. 272(7))
 
@@ -364,23 +350,22 @@ netting_sets joined with per-NS v_net, c_net, addon_aggregate
 
 The orchestrator at
 [`engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/pipeline_adapter.py)
-currently routes only the **unmargined** branch — every netting set is
-treated as unmargined for the CCR-A1 / CCR-A2 acceptance scenarios.
-The margined function is implemented end-to-end and pinned by the
-unit-test suite, but is not yet routed through the orchestrator
-pending the margined-netting-set acceptance batch (CCR-A3, pending
-engine batch P8.35–P8.38).
+routes both branches: every netting set is priced on the unmargined basis, a
+margined one on the margined basis as well, and
+[`engine/ccr/exposure_value.py::compose_exposure_value`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/exposure_value.py)
+picks the reported value (see
+[Collateral, the Art. 274(3) cap and shared CSAs](#collateral-the-art-2743-cap-and-shared-csas)).
 
 ### Inputs
 
 | Column | Source | Schema | Notes |
 |--------|--------|--------|-------|
-| `v_net`             | `pipeline_adapter` per-NS aggregation of `trade.mtm_value` | `Float64`         | Signed; `fill_null(0.0)` on empty NS. |
-| `c_net`             | `pipeline_adapter` per-NS aggregation of `ccr_collateral.collateral_value` | `Float64` | Signed; haircut adjustment applied upstream of the aggregation per Title II. |
+| `v_net`             | per-NS sum of `trade.mtm_value`, rebased to the reporting currency (Art. 279b(3)) | `Float64` | CMV; signed; 0 on a netting set with no trades. |
+| `vm_net` / `nica_collateral` / `collateral_unmargined` | `engine/ccr/collateral.py::value_ccr_collateral` over `ccr.ccr_collateral` | `Float64` | Volatility-adjusted, signed (received +, posted −); see below. |
 | `is_margined`       | `NETTING_SET_SCHEMA.is_margined`                               | `Boolean` (default `False`) | Margined-branch gate. |
-| `margin_threshold`  | `NETTING_SET_SCHEMA.margin_threshold`                          | `Float64` (nullable)        | `TH`; null when `is_margined = False`. |
-| `minimum_transfer_amount` | `NETTING_SET_SCHEMA.minimum_transfer_amount`             | `Float64` (nullable)        | `MTA`; null when `is_margined = False`. |
-| `nica`              | `NETTING_SET_SCHEMA.nica`                                      | `Float64` (nullable)        | Per Art. 271(7); null when `is_margined = False`. |
+| `margin_threshold`  | `NETTING_SET_SCHEMA` coalesced with `MARGIN_AGREEMENT_SCHEMA` (`engine/ccr/margin_terms.py`) | `Float64` | `TH`; the larger on a conflict (CCR025); 0 when neither states it. |
+| `minimum_transfer_amount` | as `margin_threshold`                                    | `Float64` | `MTA`; same rules. |
+| `nica`              | as `margin_threshold`                                          | `Float64` (nullable) | A stated NICA term (reporting currency, signed), the smaller on a conflict; ADDED to the itemised NICA, so collateral itemised in `ccr.ccr_collateral` must not be entered here too. |
 
 ### Outputs
 
@@ -389,12 +374,75 @@ engine batch P8.35–P8.38).
 | `rc_unmargined` | `compute_rc_unmargined` | `Float64`               | Always populated. Floored at 0. |
 | `rc_margined`   | `compute_rc_margined`   | `Float64` (nullable)    | Null when `is_margined = False`; floored at 0 otherwise. |
 
-The two columns coexist on the NS-grain frame so the orchestrator can
-coalesce them into a single effective RC without re-running either
-stage. The synthetic exposure row emitted by `pipeline_adapter` carries
-`rc_unmargined` on every row today (margined branch not yet wired);
-once margined routing lands, both columns travel through to the
-COREP-reconciliation surface.
+`rc_unmargined` is the unmargined-basis RC of every netting set (the
+Art. 274(3) cap's basis for a margined one); `rc_margined` is the Art. 275(2)
+RC of a margined netting set, or its share of the Art. 275(3) agreement RC;
+`rc` is the RC of the basis the reported exposure value is taken on.
+
+## Collateral, the Art. 274(3) cap and shared CSAs
+
+Review cluster saccr_b (CC-02, CC-03). Before it, `c_net` was read from a
+`collateral_value` column the loaded schema never has, so every netting set took
+`C = 0`, the margin agreement's TH / MTA / NICA / MPOR had no reader, and there
+was no Art. 274(3) cap. PS1/26 Annex R leaves Art. 274(3), 275, 276 and 278
+unamended, so the rules below apply under both regimes; only the Art. 224
+haircut table differs.
+
+**Collateral (Art. 276).** Each `ccr.ccr_collateral` item is valued at its
+volatility-adjusted value with the run regime's Art. 224 supervisory haircuts
+(the lending CRM `HaircutCalculator` and its Art. 197 gates): received
+`C · (1 − HC − Hfx)` (Art. 223(2)), posted `C · (1 + HC + Hfx)` (Art. 276(2)),
+received positive and posted negative (Art. 276(1)(c)). Only Art. 197 eligible
+collateral is recognised (Art. 276(1)(a)/(b)): cash, gold, debt securities at
+the Art. 197(1)(b)/(d) credit quality and equities with `is_main_index`
+(Art. 197(1)(f) — the Art. 198 listed-equity extension does not apply);
+anything else is CCR024. Liquidation period (Art. 276(3)): the MPOR of a
+margined netting set; for an unmargined one the longest remaining maturity of
+its trades capped at 250 business days. `Hfx` is waived only where the item is
+denominated in the single currency of every trade (both legs of an FX trade
+count) of its netting set; the schema has no settlement currency, so a
+multi-currency set or an item with no currency takes it — the larger magnitude
+for a posted item and the smaller relief for a received one.
+`haircut_override` is not read: Art. 276(1)(d) excludes own-estimate haircuts.
+
+**VM and NICA.** On a margined netting set `collateral_role` splits each item
+into VM (`"vm"`, the default) or NICA (`"im"`) — Art. 276(1)(e). On the
+unmargined basis every item is NICA (Art. 275(1)). Segregated, bankruptcy-remote
+posted collateral is left out of NICA (Art. 276(1)(g)); posted VM keeps its
+negative sign.
+
+**The Art. 274(3) cap.** "The exposure value of a netting set that is subject to
+a contractual margin agreement shall be capped at the exposure value of the same
+netting set not subject to any form of margin agreement." A margined netting set
+is priced on both bases — margined: `RC = max(CMV − VM − NICA, TH + MTA − NICA,
+0)`, `z = CMV − VM − NICA`, MPOR maturity factor; unmargined: `RC = max(CMV −
+NICA, 0)` with every recognised item (VM included, at the one-year horizon) as
+NICA, `z = CMV − NICA`, unmargined maturity factor — and takes the lesser
+exposure value. Where the cap binds, the row reports the unmargined `rc`,
+`pfe_multiplier`, `pfe_addon` and `addon_aggregate`, so
+`ead_ccr = α · (rc + pfe_addon)` still reconciles; `rc_margined` still shows the
+margined RC. Counting the VM held on the unmargined basis is this engine's
+reading of "not subject to any form of margin agreement": the collateral is held
+either way, and without a margin agreement it is independent collateral.
+
+**Shared margin agreements (Art. 275(3), 278(2)).** Margined netting sets naming
+the same `margin_agreement_id` take one replacement cost for the agreement,
+
+```
+RC_MA = max{Σ_i max{CMV_i, 0} − max{VM_MA + NICA_MA, 0}, 0}
+      + max{Σ_i min{CMV_i, 0} − min{VM_MA + NICA_MA, 0}, 0}
+```
+
+and each its own PFE "as if [it was] not subject to any form of a margin
+agreement" (unmargined maturity factor, `z_i = CMV_i − NICA_i`). `RC_MA` is
+apportioned to the netting sets in proportion to their unmargined RC (equally
+when those are all zero) — the allocation is the engine's choice, the agreement
+total is the article's — and the Art. 274(3) cap is applied to the agreement
+total. The agreement's stated NICA term counts once (its own statement, else
+the sum of the netting sets').
+
+**Pinned by** `tests/acceptance/ccr/test_saccr_b_collateral_margin_fx.py` (both
+regimes) and `tests/unit/ccr/test_saccr_b_collateral_terms_currency.py`.
 
 ---
 

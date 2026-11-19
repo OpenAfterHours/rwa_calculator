@@ -513,11 +513,12 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
-    # CRR Annex I paras 1-4 / Art. 111(1): a normalised concrete OBS product key
-    # (e.g. "ACCEPTANCE", "PERFORMANCE_BOND", "DOCUMENTARY_CREDIT"), distinct from
-    # the free-text ``product_type``. When ``risk_type`` is null/empty the CCF
-    # engine resolves the abstract Annex I risk_type bucket from this product via
-    # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
+    # CRR Annex I / PS1/26 Art. 111 Table A1: a normalised concrete OBS product
+    # key (e.g. "ACCEPTANCE", "PERFORMANCE_BOND", "SHIPPING_GUARANTEE"), distinct
+    # from the free-text ``product_type``. When ``risk_type`` is null/empty the
+    # CCF engine resolves the risk_type bucket from this product via the
+    # regime's ``obs_product_to_risk_type`` pack map (VALID_OBS_PRODUCTS below).
+    # Explicit ``risk_type`` always wins.
     "obs_product": ColumnSpec(pl.String, required=False),
     "ccf_modelled": ColumnSpec(pl.Float64, required=False, domain=_CCF_DOMAIN),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
@@ -527,20 +528,24 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Facilities default to True because a facility row is, by construction, a
     # commitment / credit line.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=True, required=False),
-    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
-    # secured by residential property attract a 50% CCF. When True under Basel
-    # 3.1 the CCF engine overrides the otherwise-resolved SA CCF to the MR /
-    # Row 4(b) rate (50%), unless that CCF is already 10% or 100% (the Row 4(b)
-    # "not subject to a 10% or 100% conversion factor" carve-out). No effect
-    # under CRR (Table A1 is Basel 3.1 only).
-    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 166E(5): undrawn purchase commitments for *revolving*
-    # purchased-receivables facilities attract a 40% CCF by default (Table A1
-    # Row 5 "Other Commitments"), dropping to 10% where the commitment also
-    # meets the Table A1 Row 7 UCC criteria (LR risk_type). When True under
-    # Basel 3.1 the CCF engine routes the row to the OC (40%) / LR (10%) rate
-    # regardless of the otherwise-resolved risk_type. No effect under CRR
-    # (Art. 166E(5) is Basel 3.1 only).
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): "UK residential mortgage
+    # commitments that are not subject to a conversion factor of 10% or 100%"
+    # take 50% (Row 5 "any other commitment" is 40%). TRI-STATE, deliberately no
+    # default (RE-14): True / False are honoured; null (not stated) is derived
+    # under Basel 3.1 — True for a retail-mortgage commitment secured on
+    # residential property to a GB obligor in GBP (engine/ccf.py::
+    # _derived_uk_residential_mortgage_commitment). A default of False made the
+    # flag unreachable unless set by hand, so UK mortgage offers took 40%. The
+    # 10% / 100% carve-out always applies. No effect under CRR.
+    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, required=False),
+    # PRA PS1/26 Art. 166A(5) (IRB Part): an undrawn purchase commitment for
+    # *revolving* purchased receivables takes a fixed 40% conversion factor, or
+    # 10% where it meets the Table A1 point 7 UCC criteria (LR risk_type). When
+    # True (with ``is_revolving``) under Basel 3.1 the CCF engine applies that
+    # factor to F-IRB, slotting AND A-IRB rows (no own estimate) whatever the
+    # row's risk_type. The rule is IRB-only: an SA row keeps its Table A1 bucket
+    # (a factoring / invoice discount line "with recourse" is Row 2(a) FRC 100%;
+    # an ordinary purchase commitment is Row 5 OC 40%). No effect under CRR.
     "is_purchased_receivable_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -749,6 +754,11 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # is withheld (conservative), matching the engine's fill_null(False)
     # handling and the CLASSIFIER_OUTPUT_SCHEMA default.
     "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
+    # The loan-row twin of the collateral ``is_qualifying_re`` (CRR Art. 125(2) /
+    # 126(2) attestation; Basel 3.1 Art. 124A), for property data carried on the
+    # loan. The CRR Art. 126 50% needs an explicit True (PRA Credit Risk Part rule
+    # 4.1 / 4.1A). A linked collateral row's value wins over this one.
+    "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
     # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
     # application): non-null tags this exposure as an intragroup claim on the
     # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
@@ -795,10 +805,10 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
-    # CRR Annex I paras 1-4 / Art. 111(1): normalised concrete OBS product key.
+    # CRR Annex I / PS1/26 Table A1: normalised concrete OBS product key.
     # Mirrored from FACILITY_SCHEMA; when ``risk_type`` is null/empty the CCF
-    # engine resolves the Annex I risk_type bucket from this product via
-    # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
+    # engine resolves the risk_type bucket from this product via the regime's
+    # ``obs_product_to_risk_type`` pack map. Explicit ``risk_type`` always wins.
     "obs_product": ColumnSpec(pl.String, required=False),
     "ccf_modelled": ColumnSpec(pl.Float64, required=False, domain=_CCF_DOMAIN),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
@@ -808,13 +818,16 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # Override to True for genuine commitment-style contingents (e.g., an
     # NIF / RUF booked as a contingent), in which case Art. 166(8)(d) -> 75% applies.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
-    # secured by residential property attract a 50% CCF. Mirrored from
-    # FACILITY_SCHEMA for parity; see the FACILITY_SCHEMA notes for full detail.
-    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn purchase
-    # commitment flag. Mirrored from FACILITY_SCHEMA for parity; see the
-    # FACILITY_SCHEMA notes for full detail.
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): UK residential mortgage
+    # commitment flag, tri-state (null = derive). Mirrored from FACILITY_SCHEMA
+    # for parity; see the FACILITY_SCHEMA notes for full detail. A contingent is
+    # an issued item by default (``is_obs_commitment`` False) and is never
+    # derived — set the flag (or ``is_obs_commitment``) for a mortgage offer
+    # booked as a contingent.
+    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, required=False),
+    # PRA PS1/26 Art. 166A(5): revolving purchased-receivables undrawn purchase
+    # commitment flag (IRB rows only). Mirrored from FACILITY_SCHEMA for parity;
+    # see the FACILITY_SCHEMA notes for full detail.
     "is_purchased_receivable_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 178 row-level default flag. See FACILITY_SCHEMA for full notes.
     "is_defaulted": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -994,10 +1007,11 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     # trade-exposure RW (and the Art. 307 4% client-cleared route). Defaults
     # to False so pre-existing fixtures route to the non-QCCP / SA fallback.
     "is_qccp": ColumnSpec(pl.Boolean, default=False, required=False),
-    # CRR Art. 274(2) second sub-paragraph: SA-CCR supervisory-alpha discriminator.
+    # PS1/26 Art. 274(2) (Basel 3.1 only): SA-CCR supervisory-alpha discriminator.
     # "financial" (default) → alpha = 1.4; "non_financial" (EMIR Art. 2(9)),
     # "pension_scheme" (EMIR Art. 2(10)) and "pension_default_comp" → alpha = 1.0
-    # carve-out. Read by engine/ccr/pipeline_adapter.py to compute the per-row
+    # carve-out under Basel 3.1. Ignored under CRR (alpha = 1.4 for every netting
+    # set, CCR (CRR) Part Art. 274(2)). Read by engine/ccr/pipeline_adapter.py to compute the per-row
     # ``alpha_applied`` scalar. Defaults to "financial" so pre-existing CCR
     # fixtures (which never set this column) keep the standard alpha = 1.4.
     "counterparty_type": ColumnSpec(pl.String, default="financial", required=False),
@@ -1240,13 +1254,15 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     #   "both"        — out of scope for the current implementation; treated
     #                   as "none" with a CRM warning.
     "look_through_election": ColumnSpec(pl.String, default="none", required=False),
-    # CRR Art. 234: tranching of credit protection. When a guarantee protects a
-    # mezzanine loss band rather than first loss, ``attachment_amount`` (a) marks
-    # where protection begins and ``detachment_amount`` (d) where it ends. The
-    # obligor retains a first-loss tranche [0, a) and a senior tranche [d, EAD]
-    # at its own risk weight, while [a, d) is substituted to the guarantor. Null
-    # on both => first-loss attach (a = 0), preserving legacy single-remainder
-    # behaviour.
+    # CRR Art. 234 / PS1/26 Art. 234(1): tranched protection. A guarantee that
+    # protects a BAND of the loss distribution — ``attachment_amount`` (a) above
+    # zero, or any ``detachment_amount`` (d) — transfers risk "in one or more
+    # tranches", which Art. 234 sends to the securitisation framework, and Art.
+    # 235(2) allows the risk-weight substitution only where the protected and
+    # unprotected parts are of equal seniority. The engine does not run that
+    # framework for such protection, so the row is NOT recognised (CRM027) and
+    # the exposure keeps the obligor's own basis. Leave both null for a guarantee
+    # of a pro-rata share of the exposure, or of all of it.
     "attachment_amount": ColumnSpec(pl.Float64, required=False),
     "detachment_amount": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 6 / 11-18: non-null tags the guarantor as the named group
@@ -1515,9 +1531,10 @@ SECURITISATION_ALLOCATION_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 244 (traditional) vs Art. 245 (synthetic). Carried for future
     # use by the securitisation RWA framework — not consumed in phase 1.
     "transfer_type": ColumnSpec(pl.String, default="traditional", required=False),
-    # SRT assertion by the firm. Phase 1 trusts this flag — the engine does
-    # not validate the Art. 244-246 conditions. When False, exposure carve-out
-    # is still applied (firm's responsibility to set correctly).
+    # SRT assertion by the firm. The engine does not validate the Art. 244-246
+    # conditions behind a True. An explicit False carves nothing out (CRR
+    # Art. 244(1) / 245(1); SEC006, engine/securitisation/allocator.py); a null
+    # or absent value takes this default True (an owner decision, IV-04).
     "significant_risk_transfer": ColumnSpec(pl.Boolean, default=True, required=False),
     "effective_date": ColumnSpec(pl.Date, required=False),
 }
@@ -1548,7 +1565,11 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # Required (8) — primary key + core economic terms.
     "trade_id": ColumnSpec(pl.String),
     "netting_set_id": ColumnSpec(pl.String),
-    # "interest_rate" | "fx" | "credit" | "equity" | "commodity"
+    # CRR Art. 277(1) risk category — one of VALID_SA_CCR_ASSET_CLASSES:
+    # "interest_rate" | "fx" | "credit" | "equity" | "commodity" | "other".
+    # Case-insensitive. A missing or unrecognised value is priced in the
+    # Art. 277(1)(f) other-risks category and reported as CCR021 (review CC-06).
+    # Inflation trades are "interest_rate" (Art. 277(4)(a)) with is_inflation.
     "asset_class": ColumnSpec(pl.String),
     # "derivative" — REQUIRED on every CCR (derivative) trade row. The "sft"
     # value remains valid in VALID_TRANSACTION_TYPES (the guard detects it), but
@@ -1638,7 +1659,7 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 280 Table 2: credit-quality discriminator for the credit asset
     # class supervisory factor lookup. Valid values {"IG", "HY", "NON_RATED"};
     # null for non-credit rows (IR / FX / equity / commodity). Keyed by
-    # COLUMN_VALUE_CONSTRAINTS["trades"]["credit_quality"] for input validation.
+    # COLUMN_VALUE_CONSTRAINTS["ccr.trades"]["credit_quality"] for input validation.
     "credit_quality": ColumnSpec(pl.String, required=False),
     # PRA PS1/26 Art. 274(2A): firm-supplied legacy CVA-exemption flag. True
     # when the trade was entered into prior to 1 Jan 2027 AND the counterparty
@@ -1650,6 +1671,14 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # see no transitional add-on. See SA_CCR_TRANSITIONAL_ADDON_PHASE in
     # data/tables/sa_ccr_factors.py.
     "is_legacy_cva_exempt": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 277(4)(a) / Art. 277a(1) second sub-paragraph (unchanged by PS1/26):
+    # an interest-rate trade whose primary risk driver is an inflation variable is
+    # mapped to the interest-rate category but "shall be assigned to separate
+    # hedging sets, other than the hedging sets established for transactions ...
+    # that do not have an inflation variable as the primary risk driver" — one
+    # per currency. Default False (a nominal-rate trade); null reads as False.
+    # Read by engine/ccr/pfe.py::_compute_addon_ir (review CC-04).
+    "is_inflation": ColumnSpec(pl.Boolean, default=False, required=False),
     # IRB effective-maturity (Art. 162) input flags (3) — CCR/SFT IRB
     # effective-maturity fix Phase 2. SA-CCR derivatives are IN SCOPE for the
     # carrier (an internally-rated CP routes the synthetic CCR_DERIVATIVE row to
@@ -1698,8 +1727,12 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     # legality confirmed).
     "is_legally_enforceable": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_margined": ColumnSpec(pl.Boolean, default=False, required=False),
-    # Optional nullable (6) — margined RC / MF parameters; null when
-    # ``is_margined`` is False.
+    # Optional nullable (6) — margined RC / MF parameters. TH / MTA / NICA /
+    # mpor_days are coalesced with the same terms on the margin agreement named
+    # by ``margin_agreement_id`` (engine/ccr/margin_terms.py, review CC-03): a
+    # conflict takes the conservative value and is CCR025; an unstated TH / MTA
+    # is 0. TH / MTA / NICA are reporting-currency amounts; NICA is signed and
+    # ADDED to the NICA itemised in ccr.ccr_collateral (never enter one twice).
     "netting_agreement_type": ColumnSpec(pl.String, required=False),
     "margin_threshold": ColumnSpec(pl.Float64, required=False),
     "minimum_transfer_amount": ColumnSpec(pl.Float64, required=False),
@@ -1709,10 +1742,9 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     # Optional with defaults (2) — consumed by the margined maturity-factor
     # (Art. 279c(2)) MPOR cascade (Art. 285(3)(b) and Art. 285(4)).
     # ``number_of_trades``: netting-set trade count used to determine whether
-    # the large-netting-set 20-day MPOR floor applies (Art. 285(3)(b):
-    # threshold > 5000 trades).  Null-safe default 0 means no large-NS uplift
-    # when the count is unknown, consistent with the conservative-default
-    # pattern elsewhere in this schema.
+    # the large-netting-set 20-day MPOR floor applies (Art. 285(3)(a):
+    # threshold > 5000 trades "at any point during a quarter"). The engine uses
+    # max(stated, trades in the input) — the input is a lower bound (CC-03).
     "number_of_trades": ColumnSpec(pl.Int32, default=0, required=False),
     # ``has_illiquid_collateral_or_hard_to_replace_otc``: True when the
     # netting set contains illiquid collateral or hard-to-replace OTC trades
@@ -1751,14 +1783,21 @@ MARGIN_AGREEMENT_SCHEMA: dict[str, ColumnSpec] = {
     # Required (2).
     "margin_agreement_id": ColumnSpec(pl.String),
     "counterparty_reference": ColumnSpec(pl.String),
-    # Optional with defaults (5).
-    "margin_threshold": ColumnSpec(pl.Float64, default=0.0, required=False),
-    "minimum_transfer_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
-    "nica": ColumnSpec(pl.Float64, default=0.0, required=False),
-    # CRR Art. 285(2)(b): minimum Margin Period of Risk for standard margined
-    # netting sets is 10 business days. Default to the regulatory minimum so
-    # SA-CCR PFE add-on uses it when ``mpor_days`` is not explicitly supplied.
-    "mpor_days": ColumnSpec(pl.Int32, default=10, required=False),
+    # Optional nullable (4) — the CSA terms. Read by engine/ccr/margin_terms.py
+    # (review CC-03), which coalesces each with the same-named NETTING_SET_SCHEMA
+    # column (netting-set value first). No default-fill: a null is "not stated
+    # on the CSA", which must stay distinguishable from an explicit 0 so a
+    # netting-set value is not reported as conflicting with a fabricated one
+    # (CCR025). TH / MTA / NICA are reporting-currency amounts (the schema has no
+    # currency column); NICA is signed (received +, posted -, CCR (CRR) Part
+    # Art. 276(1)(c)) and is ADDED to the NICA itemised in ccr.ccr_collateral, so
+    # an amount itemised there must not be entered here too.
+    "margin_threshold": ColumnSpec(pl.Float64, required=False),
+    "minimum_transfer_amount": ColumnSpec(pl.Float64, required=False),
+    "nica": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 285: firm-supplied MPOR floor (business days). Null => the
+    # Art. 285(2)(b) 10-BD floor the margined maturity factor applies anyway.
+    "mpor_days": ColumnSpec(pl.Int32, required=False),
     "is_segregated_im": ColumnSpec(pl.Boolean, default=False, required=False),
     # Optional nullable (3).
     "remargining_frequency_days": ColumnSpec(pl.Int32, required=False),
@@ -1767,19 +1806,36 @@ MARGIN_AGREEMENT_SCHEMA: dict[str, ColumnSpec] = {
 }
 
 #: CCR-specific collateral input. Keyed by ``netting_set_id`` (structurally
-#: different from ``COLLATERAL_SCHEMA`` which is keyed by beneficiary). Haircut
-#: lookup reuses the supervisory haircut tables in ``engine/crm/`` (Art. 224).
+#: different from ``COLLATERAL_SCHEMA`` which is keyed by beneficiary). Valued by
+#: ``engine/ccr/collateral.py`` (review CC-02) into the VM / NICA of CCR (CRR)
+#: Part Art. 275-276 with the run regime's Art. 224 supervisory haircuts
+#: (``engine/crm/haircuts.py``).
 CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # Required (3).
     "ccr_collateral_reference": ColumnSpec(pl.String),
     "netting_set_id": ColumnSpec(pl.String),
     "collateral_type": ColumnSpec(pl.String),
-    # Optional with defaults (3).
-    # CRR Art. 275(1) replacement cost: C (net collateral). Conservative
-    # default: 0.0 (no collateral credit when value unknown).
+    # Optional with defaults (5).
+    # Market value C before the Art. 223 volatility adjustment, in ``currency``
+    # (rebased to the reporting currency by the engine, Art. 279b(3)). Unsigned:
+    # the direction is ``is_posted_by_firm``. Default 0.0 (no collateral).
     "market_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    # Art. 276(1)(c): received collateral is recognised with a positive sign,
+    # posted collateral with a negative sign.
     "is_posted_by_firm": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 276(1)(g): posted collateral segregated from the counterparty's assets
+    # (bankruptcy remote) is not recognised in NICA.
     "is_segregated": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 275(2) / 276(1)(e): "vm" (variation margin) or "im" (independent
+    # collateral -> NICA); one item is never both. Read only on a margined netting
+    # set; on an unmargined one every item is NICA (Art. 275(1)). Default "vm":
+    # for received collateral VM gives less relief than NICA (it does not reduce
+    # the TH + MTA - NICA floor term), the common case on a CSA.
+    "collateral_role": ColumnSpec(pl.String, default="vm", required=False),
+    # Art. 197(1)(f): an equity is eligible collateral only when it is included in
+    # a main index (Art. 276(1)(a)/(b) admit Art. 197 collateral only — the
+    # Art. 198 listed-equity extension does not apply). Default False.
+    "is_main_index": ColumnSpec(pl.Boolean, default=False, required=False),
     # Optional nullable (5).
     "currency": ColumnSpec(pl.String, required=False),
     "issuer_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
@@ -1787,8 +1843,23 @@ CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "residual_maturity_years": ColumnSpec(
         pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
     ),
+    # Not read: Art. 276(1)(d) values SA-CCR collateral with the Art. 224
+    # supervisory volatility adjustments only ("institutions shall not use the
+    # method set out in Article 225"), so an own-estimate haircut has no route in.
     "haircut_override": ColumnSpec(pl.Float64, required=False, domain=_HAIRCUT_DOMAIN),
 }
+
+#: Valid ``CCR_COLLATERAL_SCHEMA.collateral_role`` values (CCR (CRR) Part
+#: Art. 275(2) VM vs NICA; Art. 276(1)(e) — no item in both).
+VALID_CCR_COLLATERAL_ROLES: set[str] = {"vm", "im"}
+
+#: The normalised collateral types (``engine/crm/eligibility.py::
+#: normalise_collateral_type_expr`` tokens) that SA-CCR may recognise: CCR (CRR)
+#: Part Art. 276(1)(a)/(b) admit Art. 197 collateral only — (a) cash, (b)/(d)
+#: debt securities, (f) equities in a main index, (g) gold — still subject to the
+#: Art. 197 credit-quality and main-index gates of ``HaircutCalculator``. Read by
+#: ``engine/ccr/collateral.py`` (review CC-02); anything else is CCR024.
+SA_CCR_RECOGNISED_COLLATERAL_TYPES: set[str] = {"cash", "gold", "govt_bond", "corp_bond", "equity"}
 
 
 # =============================================================================
@@ -1864,7 +1935,7 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # 'repo_only' => F=5 (Art. 285(2)(a)); 'other' => F=10 (Art. 285(2)(b));
     # 'illiquid_or_large' => F=20 (Art. 285(3)). The actual F is read from cited
     # pack scalars — never hardcoded in engine. Value-constrained via
-    # VALID_MPOR_FLOOR_CATEGORIES in COLUMN_VALUE_CONSTRAINTS['sft_trades'].
+    # VALID_MPOR_FLOOR_CATEGORIES in COLUMN_VALUE_CONSTRAINTS["sft.trades"].
     "mpor_floor_category": ColumnSpec(pl.String, default="repo_only", required=False),
     # has_margin_dispute_doubling: True => apply the Art. 285(4) doubling of F
     # (> 2 margin-call disputes over the preceding two quarters, each exceeding
@@ -1906,6 +1977,18 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # under an MNA but lacking it falls to the 162(2A)(f) 1-year catch-all.
     # Default False (conservative). (PS1/26 Art. 162(2A)(c)/(d).)
     "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # is_legally_enforceable: the master netting agreement covering this SFT meets
+    # the Art. 206(1)(a)-(d) conditions (legally effective and enforceable in all
+    # relevant jurisdictions incl. insolvency; close-out right; netting of gains
+    # and losses; prompt liquidation / set-off of collateral). Together with
+    # ``under_master_netting_agreement`` it makes the MNA ELIGIBLE (Art. 220(1)):
+    # a netting set holding more than one trade is netted into one E* only when
+    # EVERY trade carries both flags and the set has one counterparty; otherwise
+    # each trade is its own exposure (CCR028 / CCR029, engine/sft/netting.py).
+    # Default False (conservative): an absent attestation never unlocks netting.
+    # A single-trade netting set is unaffected either way. (CRR / PS1-26
+    # Art. 206, 220(1); PS1/26 Art. 111(2A).)
+    "is_legally_enforceable": ColumnSpec(pl.Boolean, default=False, required=False),
     # Own-estimate LGD carrier for A-IRB routing of the synthetic CCR/SFT row
     # (P1.215, mirrors ``ccr_effective_maturity``). A netting-set/trade that
     # routes to A-IRB carries the firm's modelled LGD here — the synthetic
@@ -1947,13 +2030,21 @@ SFT_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "residual_maturity_years": ColumnSpec(
         pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
     ),
+    # Optional nullable (1) — the SFT trade (``SFT_TRADE_SCHEMA.trade_id``) this
+    # collateral was received against. Read only when the netting set is NOT
+    # covered by an eligible master netting agreement and is therefore split
+    # into one exposure per trade (CRR / PS1-26 Art. 220(1), 223(5)): a linked
+    # row moves with its trade; an unlinked row cannot be attributed to a single
+    # transaction and is not recognised (CCR028). Ignored on a netted set and on
+    # a single-trade set, where the collateral is netting-set-keyed as before.
+    "trade_id": ColumnSpec(pl.String, required=False),
 }
 
 #: Valid values for the CCR/SFT trade discriminator ``transaction_type``
 #: (TRADE_SCHEMA). A bad value silently mis-routes an SFT into the SA-CCR
 #: Art. 274 chain (≈0 EAD) instead of FCCM (Art. 271(2)), so it is value-
-#: constrained via ``COLUMN_VALUE_CONSTRAINTS`` below. Enforced once the CCR/SFT
-#: trade frame is wired into ``validate_bundle_values`` (later separation phase).
+#: constrained via ``COLUMN_VALUE_CONSTRAINTS["ccr.trades"]`` below (live since
+#: review CC-06 keyed it on the ``bundle_frames`` table name).
 VALID_TRANSACTION_TYPES: set[str] = {"derivative", "sft"}
 
 #: Valid values for the margined-SFT MPOR floor selector ``mpor_floor_category``
@@ -1961,7 +2052,7 @@ VALID_TRANSACTION_TYPES: set[str] = {"derivative", "sft"}
 #: floor F (branch (b) only): ``repo_only`` => F=5 (Art. 285(2)(a)); ``other`` =>
 #: F=10 (Art. 285(2)(b)); ``illiquid_or_large`` => F=20 (Art. 285(3)). A bad value
 #: would silently mis-floor the MPOR, so it is value-constrained via
-#: ``COLUMN_VALUE_CONSTRAINTS['sft_trades']`` below. The actual F value is read
+#: ``COLUMN_VALUE_CONSTRAINTS['sft.trades']`` below. The actual F value is read
 #: from cited pack scalars in the engine — this set only constrains the input.
 VALID_MPOR_FLOOR_CATEGORIES: set[str] = {"repo_only", "other", "illiquid_or_large"}
 
@@ -1980,6 +2071,12 @@ VALID_MPOR_FLOOR_CATEGORIES: set[str] = {"repo_only", "other", "illiquid_or_larg
 #   reserves the flags; engine currently treats them as no-op false).
 # - CRR Art. 380: system-wide failure waiver (schema reserves the flag).
 
+#: Eligible ``settlement_type`` values (compared case-insensitively by the input
+#: gate and by ``engine/ccr/failed_trades.py``): Art. 378 DvP and Art. 379
+#: free delivery. Any other value gets no settlement-risk charge, so it is
+#: reported (DQ006) rather than silently zeroed (review item CC-09).
+VALID_SETTLEMENT_TYPES = {"dvp", "non_dvp_free_delivery"}
+
 #: Failed-trade input schema. ``settlement_type`` discriminates the two
 #: branches: ``"dvp"`` rows require ``agreed_settlement_price`` +
 #: ``current_market_value``; ``"non_dvp_free_delivery"`` rows require
@@ -1997,6 +2094,12 @@ FAILED_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # DvP-only (Art. 378 Table 1 inputs) — null for non-DvP rows.
     "agreed_settlement_price": ColumnSpec(pl.Float64, required=False),
     "current_market_value": ColumnSpec(pl.Float64, required=False),
+    # DvP-only: the side of the trade (Art. 378 "where the difference could
+    # involve a loss"). True = the firm is to receive the instrument and pay the
+    # agreed price (loses when MV > agreed); False = the firm is to deliver it
+    # (loses when MV < agreed). Null = unknown: the engine charges the absolute
+    # difference and raises CCR031 — never a silent seller-only reading (CC-09).
+    "is_purchase": ColumnSpec(pl.Boolean, required=False),
     # Non-DvP-only (Art. 379(1) Table 2 inputs) — null for DvP rows.
     "value_transferred": ColumnSpec(pl.Float64, required=False),
     "current_positive_exposure": ColumnSpec(pl.Float64, required=False),
@@ -2021,29 +2124,45 @@ FAILED_TRADE_SCHEMA: dict[str, ColumnSpec] = {
 # CCP default-fund contributions.
 #
 # References:
-# - CRR Art. 308(2): K_CCP hypothetical capital + K_CM clearing-member
-#   allocation (K_CM = K_CCP x DF_i / DF_CM).
-# - CRR Art. 308(3): QCCP pre-funded own-funds (RWEA = K_CM x 12.5).
-# - CRR Art. 309(1)/(2): non-QCCP / unfunded treatment (same arithmetic).
+# - CRR Art. 308(2): QCCP pre-funded own funds
+#   K_i = max(K_CCP x DF_i / (DF_CCP + DF_CM), 8% x 2% x DF_i).
+# - CRR Art. 308(3): QCCP pre-funded RWEA = K_i x 12.5.
+# - CRR Art. 309(1)/(2): non-QCCP K = DF + UC (the contributions themselves);
+#   RWEA = K x 12.5.
+# - CRR Art. 310: unfunded contributions to a QCCP take a 0% risk weight.
 
 #: Default-fund-contribution input schema. ``is_qccp_ccp`` discriminates the
-#: Art. 308 (QCCP) vs Art. 309 (non-QCCP) branch; ``is_unfunded_commitment``
-#: selects the Art. 309 unfunded leg. The firm supplies ``k_ccp_published``
-#: (K_CCP), ``df_i_contribution_amount`` (DF_i) and
-#: ``df_cm_total_contributions`` (DF_CM); the engine derives K_CM and RWEA.
-#: Optional booleans default False per Art. 308/309 scope rules.
+#: Art. 308/310 (QCCP) vs Art. 309 (non-QCCP) branch; ``is_unfunded_commitment``
+#: marks an unfunded contribution (Art. 309 UC for a non-QCCP, Art. 310 0% for a
+#: QCCP). ``df_i_contribution_amount`` is the row's own contribution — DF_i when
+#: pre-funded, UC when unfunded. ``k_ccp_published`` (K_CCP), ``df_ccp_prefunded``
+#: (DF_CCP) and ``df_cm_total_contributions`` (DF_CM) are read only on the
+#: Art. 308(2) QCCP pre-funded branch. Optional booleans default False.
 DF_CONTRIBUTION_SCHEMA: dict[str, ColumnSpec] = {
     # Required — primary key + CCP reference.
     "contribution_id": ColumnSpec(pl.String),
     "ccp_reference": ColumnSpec(pl.String),
-    # QCCP flag (CRR Art. 272 Def (88)): True -> Art. 308, False -> Art. 309.
+    # QCCP flag (CRR Art. 272 Def (88)): True -> Art. 308/310, False -> Art. 309.
     "is_qccp_ccp": ColumnSpec(pl.Boolean, default=False, required=False),
-    # Art. 308(2) clearing-member allocation inputs.
-    "df_i_contribution_amount": ColumnSpec(pl.Float64),  # DF_i (>= 0)
-    "df_cm_total_contributions": ColumnSpec(pl.Float64),  # DF_CM (> 0 — denominator)
+    # The row's own contribution: DF_i (pre-funded) or UC (unfunded), >= 0.
+    "df_i_contribution_amount": ColumnSpec(pl.Float64),
+    # Art. 308(2) QCCP pre-funded allocation inputs, as communicated by the CCP
+    # (EMIR Art. 50c). DF_CM > 0 is the denominator's clearing-member term.
+    "df_cm_total_contributions": ColumnSpec(pl.Float64),
+    # DF_CCP — the CCP's own pre-funded financial resources. Optional: an absent
+    # value is read as 0 by the engine, which can only RAISE K_i (smaller
+    # denominator), so omitting it is conservative, never a silent relief.
+    "df_ccp_prefunded": ColumnSpec(
+        pl.Float64,
+        required=False,
+        domain=NumericDomain(
+            lower=0.0,
+            reason="DF_CCP is a stock of pre-funded resources and cannot be negative",
+        ),
+    ),
     # Art. 308(2) K_CCP supplied by the firm (simulation out of scope).
     "k_ccp_published": ColumnSpec(pl.Float64),  # K_CCP (>= 0)
-    # Art. 309 unfunded-commitment flag — meaningful only when is_qccp_ccp=False.
+    # Unfunded-contribution flag: Art. 309 UC (non-QCCP) or Art. 310 (QCCP, 0%).
     "is_unfunded_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
@@ -2130,6 +2249,42 @@ ASSET_CLASS_SHORT_CODE: dict[str, str] = {
     "credit": "CR",
     "equity": "EQ",
     "commodity": "CO",
+}
+
+#: The six CRR Art. 277(1) SA-CCR risk categories, as ``TRADE_SCHEMA.asset_class``
+#: tokens: "(a) interest rate risk; (b) foreign exchange risk; (c) credit risk;
+#: (d) equity risk; (e) commodity risk; (f) other risks." Regime-invariant (PS1/26
+#: leaves Art. 277 unamended). Matching is case-insensitive. Read by
+#: ``engine/ccr/risk_categories.py`` (a value outside the set is priced in the
+#: other-risks category) and by the CCR021 input check
+#: (``contracts/ccr_input_checks.py``) — the two must flag the same rows.
+VALID_SA_CCR_ASSET_CLASSES: set[str] = {
+    "interest_rate",
+    "fx",
+    "credit",
+    "equity",
+    "commodity",
+    "other",
+}
+
+#: The credit-quality keys of the SA-CCR credit supervisory-factor tables
+#: (``sa_ccr_supervisory_factors_credit_sn`` / ``_idx``, CRR Art. 280). Case-
+#: insensitive. A credit trade whose ``credit_quality`` is missing or outside the
+#: set takes the highest factor of its sub-class table (CCR022). Kept equal to
+#: the pack keys by tests/unit/ccr/test_cc06_risk_category_fallbacks.py.
+VALID_SA_CCR_CREDIT_QUALITIES: set[str] = {"IG", "HY", "NON_RATED"}
+
+#: The commodity hedging-set keys of ``sa_ccr_supervisory_factors_commodity``
+#: (CRR Art. 277a(1)(e), Art. 280). Case-insensitive. A commodity trade whose
+#: ``commodity_type`` is missing or outside the set is assigned to the hedging set
+#: with the highest supervisory factor (CCR022). Kept equal to the pack keys by
+#: tests/unit/ccr/test_cc06_risk_category_fallbacks.py.
+VALID_SA_CCR_COMMODITY_TYPES: set[str] = {
+    "ELECTRICITY",
+    "OIL_GAS",
+    "METALS",
+    "AGRICULTURAL",
+    "OTHER",
 }
 
 
@@ -2280,6 +2435,18 @@ FINANCIAL_COLLATERAL_TYPES: list[str] = [
     "corporate_bond",
     "equity",
     "credit_linked_note",
+    # The Art. 197 debt-security / equity synonyms the haircut lookup
+    # (``engine/crm/eligibility.py::normalise_collateral_type_expr``) already
+    # resolves to a financial class. Listed here so the CATEGORY agrees with the
+    # haircut: before review CL-11 they fell to the "other" category (CRM021, the
+    # F-IRB Art. 199 gate) while taking a debt-security haircut.
+    "govt_bond",
+    "sovereign_bond",
+    "gilt",
+    "corp_bond",
+    "securitisation",
+    "shares",
+    "stock",
 ]
 
 RECEIVABLE_COLLATERAL_TYPES: list[str] = ["receivables", "trade_receivables"]
@@ -2308,6 +2475,16 @@ COVERED_BOND_COLLATERAL_TYPES: list[str] = ["covered_bond", "covered_bonds"]
 
 LIFE_INSURANCE_COLLATERAL_TYPES: list[str] = ["life_insurance"]
 
+# The canonical generic debt-security input type. Its CRM category is decided by
+# its ``issuer_type``, not by the type string: ``engine/crm/expressions.py``
+# dispatches a ``bond`` whose issuer resolves to an Art. 197(1)(b)-(d)/(h) debt
+# security (sovereign / pse / institution / corporate / securitisation) to the
+# financial category, and any other ``bond`` to other physical — the same
+# resolution ``normalise_collateral_type_expr`` gives the Art. 224 haircut
+# lookup (review CL-11). Deliberately absent from COLLATERAL_TYPE_CATEGORY,
+# which maps a type string to ONE category.
+BOND_COLLATERAL_TYPES: list[str] = ["bond"]
+
 # Every collateral_type string ``collateral_category_expr`` recognises, unioned
 # from the six sets above so it cannot drift from them. A value OUTSIDE this set
 # falls through that expression's ``.otherwise()`` to the "other" category, where
@@ -2323,6 +2500,7 @@ RECOGNISED_COLLATERAL_TYPES: list[str] = [
     *LIFE_INSURANCE_COLLATERAL_TYPES,
     *COVERED_BOND_COLLATERAL_TYPES,
     *FINANCIAL_COLLATERAL_TYPES,
+    *BOND_COLLATERAL_TYPES,
     *RECEIVABLE_COLLATERAL_TYPES,
     *REAL_ESTATE_COLLATERAL_TYPES,
     *OTHER_PHYSICAL_COLLATERAL_TYPES,
@@ -2347,6 +2525,39 @@ CREDIT_LINKED_NOTE_COLLATERAL_TYPES: list[str] = ["credit_linked_note"]
 # non-main-index-equity listing-eligibility gate (P1.271).
 EQUITY_COLLATERAL_TYPES: list[str] = ["equity", "shares", "stock"]
 
+# SFT FCCM (engine/sft/fccm.py): the security / collateral type strings the SFT
+# path prices from the Art. 224 Tables 1 and 3, each mapped to the key
+# ``engine/crm/haircut_tables.py::lookup_collateral_haircut`` prices it under.
+# A type OUTSIDE this map is not eligible financial collateral on the SFT path:
+# - received as COLLATERAL it is not recognised in E* (CRR / PS1-26 Art. 223(1)
+#   applies volatility adjustments "when valuing financial collateral"; the
+#   eligible items are listed in Art. 197/198) and CCR027 names the row;
+# - LENT or SOLD (the exposure side) it takes the Art. 224(4) volatility
+#   adjustment for "non-eligible securities and commodities", i.e. the
+#   non-main-index listed equity value.
+# Covered bonds are debt securities issued by institutions (Art. 197(1)(c)) and
+# price in the Table 1 "points (c) and (d)" column, as the lending-side CRM does
+# (engine/crm/eligibility.py::normalise_collateral_type_expr). A bare "bond" is
+# deliberately absent: SFT_COLLATERAL_SCHEMA carries no issuer class, so the
+# Art. 197(1)(b) column cannot be told from the (c)/(d) one. CIU units are absent
+# pending the Art. 224(5) look-through (P1.199).
+SFT_FCCM_HAIRCUT_LOOKUP_TYPES: dict[str, str] = {
+    "cash": "cash",
+    "deposit": "cash",
+    "gold": "gold",
+    "govt_bond": "govt_bond",
+    "sovereign_bond": "govt_bond",
+    "government_bond": "govt_bond",
+    "gilt": "govt_bond",
+    "corp_bond": "corp_bond",
+    "corporate_bond": "corp_bond",
+    "covered_bond": "corp_bond",
+    "covered_bonds": "corp_bond",
+    "equity": "equity",
+    "shares": "equity",
+    "stock": "equity",
+}
+
 # Art. 227(2)(a): collateral types eligible for zero-haircut treatment in repos.
 # Both the exposure and collateral must be cash or 0%-RW sovereign debt securities.
 ZERO_HAIRCUT_ELIGIBLE_TYPES: list[str] = [
@@ -2358,20 +2569,49 @@ ZERO_HAIRCUT_ELIGIBLE_TYPES: list[str] = [
     "gilt",
 ]
 
-# Subset of real estate types that are NOT eligible financial collateral
-# (used for SA EAD reduction eligibility check).
-NON_ELIGIBLE_RE_TYPES: list[str] = [
-    "real_estate",
-    "property",
-    "rre",
-    "cre",
-    "residential_property",
-    "commercial_property",
+# risk_type tags the counterparty-credit-risk engines put on the synthetic rows
+# they mint (SA-CCR derivative netting sets, FCCM SFT netting sets, failed-trade
+# settlement rows, CCP default-fund contributions). Their exposure value already
+# reflects collateral under the CCR Part, so the CRM stage keeps loan-table
+# collateral pools away from them (CRR Art. 223(5A) / PS1/26 Art. 191A(4);
+# engine/crm/expressions.py::ccr_engine_row_expr).
+CCR_ENGINE_RISK_TYPES: list[str] = [
+    "CCR_DERIVATIVE",
+    "CCR_SFT",
+    "SETTLEMENT_FAILED_TRADE",
+    "CCR_DEFAULT_FUND",
 ]
 
 # Beneficiary types treated as direct attachment to a single exposure
 # (vs. facility-level or counterparty-level pro-rata allocation).
 DIRECT_BENEFICIARY_TYPES: list[str] = ["exposure", "loan", "contingent"]
+
+# ``guarantee_type`` is a free-text descriptor; the engine reads it only to
+# recognise the two families below. Values are matched after lower-casing and
+# folding spaces / hyphens to underscores (``"Letter of Comfort"`` matches).
+#
+# Not eligible unfunded credit protection (CRR / PS1/26 Art. 213(1)(b)-(d),
+# Art. 215(1)(b)): a letter of comfort or a keepwell is not "an explicitly
+# documented obligation assumed by the guarantor" to pay on the obligor's
+# default, so such a row is dropped with a CRM029 warning.
+NON_ELIGIBLE_GUARANTEE_TYPES: list[str] = [
+    "letter_of_comfort",
+    "comfort_letter",
+    "keepwell",
+    "keepwell_agreement",
+]
+
+# ``guarantee_type`` values naming a credit derivative (Art. 204(1)). A row with
+# one of these whose ``protection_type`` is not ``credit_derivative`` is treated
+# as a credit derivative (Art. 233(2) applies when restructuring is excluded) and
+# raises a CRM030 warning.
+CREDIT_DERIVATIVE_GUARANTEE_TYPES: list[str] = [
+    "credit_derivative",
+    "credit_default_swap",
+    "cds",
+    "total_return_swap",
+    "trs",
+]
 
 # Canonical mapping from accepted collateral_type string to its CRM category.
 # Single source of truth for engine-side categorisation. Engine code can use
@@ -2386,20 +2626,21 @@ COLLATERAL_TYPE_CATEGORY: dict[str, str] = {
     **dict.fromkeys(LIFE_INSURANCE_COLLATERAL_TYPES, "life_insurance"),
 }
 
-# Non-financial funded collateral types recognised under CRR Art. 230
-# (Foundation Collateral Method). These types are NOT subject to the Art. 224
-# Table 4 FX volatility haircut (H_fx) — Art. 233 H_fx is scoped to unfunded
-# credit protection (guarantees / CDS), and Arts. 229–230 (the funded
-# non-financial path) make no mention of an FX adjustment. FX risk on these
-# collateral values is captured upstream by the spot-rate ``FXConverter``.
+# Non-financial funded collateral types recognised under Art. 230 (the F-IRB /
+# Foundation Collateral Method path). Their Art. 230 HC is not scaled by the
+# Art. 226 liquidation period, and whether they take the Art. 224 Table 4
+# currency-mismatch adjustment (H_fx) is the cited pack Feature
+# ``fcm_hfx_applies_to_non_financial``: CRR Art. 230(1) compares the raw value C
+# with C* / C** and names no currency adjustment (disabled), while PS1/26
+# Art. 230(1)(b) builds ES "after the application of ... a volatility adjustment
+# for any currency mismatch between the exposure and the collateral (Hfx)" for
+# every Foundation Collateral Method type (enabled; review CL-09).
 #
-# Used by ``engine/crm/haircuts.py`` to gate the H_fx expression so that the
-# Art. 230 LGD* formula receives the raw (FX-rebased) collateral value C
-# without an additional volatility charge.
+# Used by ``engine/crm/haircuts.py`` for the HC scaling and the H_fx gate.
 #
 # References:
-#   CRR Art. 229–230: Foundation Collateral Method (no H_fx in formula)
-#   CRR Art. 233:    Unfunded credit protection scope of H_fx
+#   CRR Art. 229–230: Foundation Collateral Method (no H_fx in the CRR formula)
+#   PS1/26 Art. 230(1)(b) / 231(1): H_fx on every FCM collateral type
 NON_FINANCIAL_COLLATERAL_TYPES: list[str] = [
     *RECEIVABLE_COLLATERAL_TYPES,
     *REAL_ESTATE_COLLATERAL_TYPES,
@@ -2454,14 +2695,16 @@ VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
-# CRR Art. 274(2) second sub-paragraph: the supervisory alpha carve-out
+# PS1/26 Art. 274(2) (Basel 3.1 only — new text from 1 Jan 2027; the CCR (CRR)
+# Part in force to 31 Dec 2026 has alpha = 1.4 for every netting set): the
+# supervisory alpha carve-out
 # (alpha = 1.0 instead of the 1.4 default) applies to derivative netting sets
 # whose counterparty is a non-financial counterparty (EMIR Art. 2(9)), a
 # pension scheme arrangement (EMIR Art. 2(10)), or a pension-scheme
 # default-fund-contribution position. "financial" is the default — standard
 # alpha = 1.4. Consumed by engine/ccr/pipeline_adapter.py to select the per-row
-# ``alpha_applied`` scalar (see SA_CCR_ALPHA / SA_CCR_ALPHA_CARVE_OUT in
-# data/tables/sa_ccr_factors.py).
+# ``alpha_applied`` scalar (pack entries ``sa_ccr_alpha`` / ``sa_ccr_alpha_carve_out``,
+# gated by the ``sa_ccr_alpha_nfc_carve_out_applicable`` Feature).
 VALID_CCR_COUNTERPARTY_TYPES = {
     "financial",
     "non_financial",
@@ -2469,8 +2712,8 @@ VALID_CCR_COUNTERPARTY_TYPES = {
     "pension_default_comp",
 }
 
-# The subset of VALID_CCR_COUNTERPARTY_TYPES that qualifies for the CRR
-# Art. 274(2) alpha = 1.0 carve-out (non-financial / pension-scheme / pension
+# The subset of VALID_CCR_COUNTERPARTY_TYPES that qualifies for the PS1/26
+# Art. 274(2) alpha = 1.0 carve-out (Basel 3.1 only) (non-financial / pension-scheme / pension
 # default-fund-contribution). "financial" is excluded — it keeps alpha = 1.4.
 # engine/ccr/pipeline_adapter.py membership-tests ``counterparty_type`` against
 # this set so the category strings are not inlined in engine scope.
@@ -2537,36 +2780,147 @@ RISK_TYPE_SYNONYMS: dict[str, str] = {
 # to ignore the true ones (P1.354).
 VALID_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_INPUT | set(RISK_TYPE_SYNONYMS)
 
-# CRR Annex I paras 1-4 / Art. 111(1): canonical normalised OBS *product* keys
-# accepted on the ``obs_product`` column. Each maps (via ANNEX1_PRODUCT_RISK_TYPE
-# in data/tables/ccf.py) to an abstract Annex I risk_type bucket. Distinct from
-# the free-text ``product_type``.
+# Risk types that only the ENGINE mints, on the rows its counterparty-credit-risk
+# stages build: ``CCR_DERIVATIVE`` (SA-CCR netting sets), ``CCR_SFT`` (FCCM SFT
+# netting sets), ``CCR_DEFAULT_FUND`` (CCP default-fund contributions) and
+# ``SETTLEMENT_FAILED_TRADE`` (failed trades; both ``engine/stages/ccr.py``). They
+# are canonical OUTPUT vocabulary, not a lending category: on a loans /
+# contingents / facilities row they routed the item to a CCR treatment while it
+# was still priced at a CCF on its nominal amount (review finding CC-19). The
+# exposure value of a derivative or an SFT comes from the CCR methods or the
+# FCCM, never from an Annex I / Table A1 CCF (CRR Art. 111(2); PS1/26 Art. 111(2)
+# / (2A)). A lending table carrying one draws DQ023 (``contracts/validation.py``);
+# what the hierarchy stage does with the value is
+# :data:`DISREGARDED_ENGINE_ONLY_RISK_TYPES`.
+ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset(
+    {"CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND", "SETTLEMENT_FAILED_TRADE"}
+)
+
+# The engine-only tags the hierarchy stage DISREGARDS on a lending row
+# (``engine/hierarchy/unify.py``): the two CCR routing tags. Every treatment they
+# select - the Basel 3.1 ``standardised_ccr`` label, the repo-style 0.5-year CRR
+# F-IRB maturity and the sub-1-year maturity-floor waiver, the QCCP trade
+# exemption from the Art. 121(6) sovereign floor, the C 07.00 CCR rows - is one
+# the row is not priced under, and none raises its capital, so removing them
+# cannot lower RWA. The two OWN-FUNDS tags are reported (DQ023) but HONOURED:
+# ``CCR_DEFAULT_FUND`` / ``SETTLEMENT_FAILED_TRADE`` select the SA chain's 1250%
+# own-funds conversion (``engine/sa/risk_weights.py``), the weight such a row
+# carried before CC-19, and disregarding them would cut its SA RWA - and the Basel
+# 3.1 output floor's SA-equivalent - by up to 92%, an RWA reduction no rule text
+# or owner decision makes.
+DISREGARDED_ENGINE_ONLY_RISK_TYPES: frozenset[str] = frozenset({"CCR_DERIVATIVE", "CCR_SFT"})
+
+#: The input amounts ``engine/fx`` rebases to the reporting currency, per raw
+#: table, read by ``contracts/validation.py::_validate_missing_fx_rates`` to
+#: report (DQ020) the rows whose
+#: currency has no rate into ``base_currency`` and therefore pass through 1:1
+#: (review finding RC-11). Each table's ``currency`` column is the one the
+#: converter joins on; a facility's currency is its undrawn rows' currency.
+FX_CONVERTED_AMOUNT_COLUMNS: dict[str, tuple[str, ...]] = {
+    "loans": ("drawn_amount", "interest"),
+    "contingents": ("nominal_amount",),
+    "facilities": ("limit",),
+    "collateral": ("market_value",),
+    "guarantees": ("amount_covered",),
+    "provisions": ("amount",),
+    "equity_exposures": ("carrying_value",),
+}
+
+# What the hierarchy stage rewrites a DISREGARDED engine-only risk type on a lending
+# row to: this prefix + the upper-cased value (``"DQ023:CCR_SFT"``). Deliberately NOT null.
+# An explicit but unrecognised risk type outranks ``obs_product`` and takes the CCF
+# residual (``engine/ccf.py``), exactly as the tag did before; nulling it would let
+# ``obs_product`` re-price the row. The prefix removes ONLY the CCR routing, which
+# keys on the exact tag, and leaves the supplied value readable in the output.
+DISREGARDED_RISK_TYPE_PREFIX = "DQ023:"
+
+# The domain accepted on a LENDING table's ``risk_type`` / ``underlying_risk_type``:
+# every accepted spelling except the engine-only tags above. A value outside it is
+# DQ006, except an engine-only tag, which is reported once, as DQ023.
+LENDING_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_ACCEPTED - ENGINE_ONLY_RISK_TYPES
+
+# CRR Annex I paras 1-4 / PS1/26 Art. 111(1) Table A1: canonical normalised OBS
+# *product* keys accepted on the ``obs_product`` column. Each maps, via the
+# REGIME-SPECIFIC ``obs_product_to_risk_type`` CategoryMap in
+# ``rulebook/packs/{crr,b31}.py``, to a risk_type bucket. The two maps differ —
+# CRR Annex I 2(a)/2(b)(i) puts plain documentary credits and shipping / customs /
+# tax bonds in medium risk (50%) where Table A1 row 6 gives them 20% (CM-07).
+# Distinct from the free-text ``product_type``. Every member must map in BOTH
+# packs (``tests/unit/test_ccf_obs_product_regime_map.py``): DQ016 tests only
+# the ABSENCE of a product, so an unmapped member would price on the residual
+# with no warning.
 VALID_OBS_PRODUCTS = {
+    # Full risk / Table A1 row 1 (credit substitutes)
     "ACCEPTANCE",
+    "FINANCIAL_GUARANTEE",
+    "AVAL",
+    "ENDORSEMENT",
+    "STANDBY_LC_CREDIT_SUBSTITUTE",
+    # Full-risk commitments / Table A1 row 2(a): transactions with recourse
+    "FACTORING_FACILITY",
+    "INVOICE_DISCOUNT_FACILITY",
+    # Trade finance: documentary credits issued or confirmed (CRR medium risk,
+    # B31 row 6(a)); shipment-collateralised / self-liquidating (both 20%)
+    "DOCUMENTARY_CREDIT",
+    "DOCUMENTARY_CREDIT_SHIPMENT_SECURED",
+    "TRADE_LC",
+    # Shipping guarantees, customs and tax bonds (CRR 2(b)(i) 50%, B31 row 6(d) 20%)
+    "SHIPPING_GUARANTEE",
+    "CUSTOMS_BOND",
+    "TAX_BOND",
+    # Warranties / performance-type guarantees, non-credit-substitute SBLCs (20%)
     "PERFORMANCE_BOND",
     "WARRANTY",
     "TENDER_BOND",
     "BID_BOND",
-    "DOCUMENTARY_CREDIT",
-    "TRADE_LC",
+    "ADVANCE_PAYMENT_GUARANTEE",
+    "RETENTION_GUARANTEE",
+    "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
 }
 
 # Lowercase synonyms accepted on input for the obs_product column. Maps every
 # permitted spelling to its canonical uppercase form in VALID_OBS_PRODUCTS.
-# Consumed by build_product_to_risk_type_expr in data/tables/ccf.py so product
+# Consumed by engine/ccf.py::build_product_to_risk_type_expr so product
 # matching is case-insensitive. Mirrors RISK_TYPE_SYNONYMS in shape.
 OBS_PRODUCT_SYNONYMS: dict[str, str] = {
     "acceptance": "ACCEPTANCE",
     "bankers_acceptance": "ACCEPTANCE",
+    "financial_guarantee": "FINANCIAL_GUARANTEE",
+    "aval": "AVAL",
+    "endorsement": "ENDORSEMENT",
+    "standby_lc_credit_substitute": "STANDBY_LC_CREDIT_SUBSTITUTE",
+    "standby_lc_financial": "STANDBY_LC_CREDIT_SUBSTITUTE",
+    "sblc_financial": "STANDBY_LC_CREDIT_SUBSTITUTE",
+    "factoring_facility": "FACTORING_FACILITY",
+    "factoring": "FACTORING_FACILITY",
+    "invoice_discount_facility": "INVOICE_DISCOUNT_FACILITY",
+    "invoice_discounting": "INVOICE_DISCOUNT_FACILITY",
+    "documentary_credit": "DOCUMENTARY_CREDIT",
+    "doc_credit": "DOCUMENTARY_CREDIT",
+    "documentary_credit_shipment_secured": "DOCUMENTARY_CREDIT_SHIPMENT_SECURED",
+    "self_liquidating_dc": "DOCUMENTARY_CREDIT_SHIPMENT_SECURED",
+    "trade_lc": "TRADE_LC",
+    "shipping_guarantee": "SHIPPING_GUARANTEE",
+    "customs_bond": "CUSTOMS_BOND",
+    "tax_bond": "TAX_BOND",
     "performance_bond": "PERFORMANCE_BOND",
     "perf_bond": "PERFORMANCE_BOND",
     "warranty": "WARRANTY",
     "tender_bond": "TENDER_BOND",
     "bid_bond": "BID_BOND",
-    "documentary_credit": "DOCUMENTARY_CREDIT",
-    "doc_credit": "DOCUMENTARY_CREDIT",
-    "trade_lc": "TRADE_LC",
+    "advance_payment_guarantee": "ADVANCE_PAYMENT_GUARANTEE",
+    "retention_guarantee": "RETENTION_GUARANTEE",
+    "standby_lc_non_credit_substitute": "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
+    "standby_lc_performance": "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
+    "sblc_performance": "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
 }
+
+# The domain actually ACCEPTED on the ``obs_product`` input column: canonical
+# keys plus every documented synonym. Same reasoning as VALID_RISK_TYPES_ACCEPTED
+# (P1.354): ``validate_column_values`` lower-cases both sides, so the documented
+# ``bankers_acceptance`` / ``perf_bond`` / ``doc_credit`` drew a DQ006 while the
+# CCF stage priced them correctly (CM-12).
+VALID_OBS_PRODUCTS_ACCEPTED = VALID_OBS_PRODUCTS | set(OBS_PRODUCT_SYNONYMS)
 
 VALID_BS_TYPES = {"ONB", "OFB"}
 
@@ -2688,6 +3042,8 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
     "ccr.netting_sets": "netting_set_id",
     "ccr.margin_agreements": "margin_agreement_id",
     "ccr.ccr_collateral": "ccr_collateral_reference",
+    "ccr.failed_trades": "failed_trade_id",
+    "ccr.default_fund_contributions": "contribution_id",
     "sft.trades": "trade_id",
     "sft.collateral": "sft_collateral_reference",
 }
@@ -2717,12 +3073,59 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
 #:   left join), double-counting capital. This is the exposure-table analogue of
 #:   the ``org_mappings`` duplicate-child fan-out that ``DQ004`` already reports
 #:   from ``engine/hierarchy/graph.py``.
+#:
+#: ``guarantees`` is deliberately absent: rows sharing a ``guarantee_reference``
+#: are ONE contract with one cap (the pool / aggregate-cap form, Art. 233(1)),
+#: valued once by ``engine/crm/protection_value.py``; inconsistent sharing is
+#: reported there as ``CRM028``, not as a duplicate key.
 TABLE_UNIQUE_KEYS: dict[str, str] = {
     "loans": "loan_reference",
     "contingents": "contingent_reference",
     "facilities": "facility_reference",
     "counterparties": "counterparty_reference",
 }
+
+#: The exposure_reference NAMESPACES: every input whose key becomes an exposure
+#: row's ``exposure_reference``, as ``bundle_frames`` key -> (key column, prefix
+#: the engine puts on it). Read by ``contracts/validation.py::
+#: validate_duplicate_keys``: a reference claimed by more than one namespace is
+#: DQ019 (review finding RC-10). ``TABLE_UNIQUE_KEYS`` above states uniqueness
+#: per table only, so a loan and a contingent sharing a reference were plausible
+#: input — and every join keyed on the bare reference merged them (the IRB
+#: model-permission de-duplication kept one; a guarantee on one covered both).
+#:
+#: The prefixed entries are the engine-minted rows: ``ccr__<netting_set_id>`` for
+#: SA-CCR (``engine/ccr/pipeline_adapter.py``) and FCCM SFT
+#: (``engine/sft/fccm.py``) netting sets, ``ft__`` / ``dfc__`` for failed trades
+#: and CCP default-fund contributions (``engine/stages/ccr.py``). A facility's
+#: undrawn rows are the one minted family not listed here, because their
+#: reference is the facility's PLUS a suffix: see
+#: :data:`FACILITY_UNDRAWN_REFERENCE_INFIX`. A ``facilities`` reference is not an
+#: exposure reference at all — ``facility_reference == loan_reference`` is a
+#: legitimate pattern (``engine/hierarchy/unify.py::_join_facility_metadata``).
+EXPOSURE_REFERENCE_NAMESPACES: dict[str, tuple[str, str]] = {
+    "loans": ("loan_reference", ""),
+    "contingents": ("contingent_reference", ""),
+    "equity_exposures": ("exposure_reference", ""),
+    "ccr.trades": ("netting_set_id", "ccr__"),
+    "sft.trades": ("netting_set_id", "ccr__"),
+    "ccr.failed_trades": ("failed_trade_id", "ft__"),
+    "ccr.default_fund_contributions": ("contribution_id", "dfc__"),
+}
+
+#: The infix of every engine-minted facility-undrawn reference:
+#: ``<facility_reference>_UNDRAWN`` plus an optional ``_<sub>`` / ``_RESIDUAL``
+#: (MOF waterfall) or ``@<member>`` (Facility Share) suffix
+#: (``engine/hierarchy/facility_undrawn.py``). A loan / contingent / equity
+#: reference of that shape for an existing facility claims the minted namespace
+#: too (DQ019).
+FACILITY_UNDRAWN_REFERENCE_INFIX = "_UNDRAWN"
+
+#: The separator the hierarchy stage puts between a colliding loan / contingent
+#: reference and its exposure type when it keeps the rows apart
+#: (``engine/hierarchy/namespace.py``): ``X1`` -> ``X1#loan`` / ``X1#contingent``.
+#: DQ019's message names the re-keyed references with it.
+EXPOSURE_REFERENCE_QUALIFIER = "#"
 
 #: Declared referential links, keyed by the REFERENCING table. Read generically
 #: by ``contracts/validation.py::validate_referential_integrity``.
@@ -2819,6 +3222,77 @@ TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
             ),
         ),
     ),
+    # Review CC-06: the CCR / SFT obligor links. Each synthetic CCR / SFT /
+    # settlement / default-fund row takes its counterparty from these columns, so
+    # an unresolvable one re-prices the row exactly as an unresolvable loan
+    # obligor does — silently, before this declaration.
+    "ccr.netting_sets": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 271 / Art. 274 — the SA-CCR exposure value of a netting "
+                "set is risk-weighted against its counterparty. A netting set whose "
+                "counterparty_reference resolves to no counterparty row reaches the "
+                "SA calculator with every obligor attribute null, classifies to "
+                "'other' at the 100% fallback weight, and takes alpha = 1.4."
+            ),
+        ),
+    ),
+    # Review CC-02: a CCR collateral item is netted into the netting set it names.
+    "ccr.ccr_collateral": (
+        ForeignKey(
+            column="netting_set_id",
+            parent_table="ccr.netting_sets",
+            parent_column="netting_set_id",
+            reason=(
+                "CCR (CRR) Part Art. 275-276 — collateral enters the replacement "
+                "cost and PFE multiplier of the netting set it names. An item whose "
+                "netting_set_id resolves to no netting set is not recognised: "
+                "received collateral gives no relief and posted collateral adds no "
+                "exposure."
+            ),
+        ),
+    ),
+    "sft.trades": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 220-223 — the FCCM E* of a securities-financing "
+                "transaction is risk-weighted against its counterparty. An "
+                "unresolvable counterparty_reference classifies the synthetic SFT "
+                "row to 'other' at the 100% fallback weight."
+            ),
+        ),
+    ),
+    "ccr.failed_trades": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 378-379 — a failed trade's settlement-risk row carries "
+                "its counterparty. An unresolvable counterparty_reference leaves "
+                "every obligor attribute null on the synthetic row."
+            ),
+        ),
+    ),
+    "ccr.default_fund_contributions": (
+        ForeignKey(
+            column="ccp_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CCR (CRR) Part Art. 308-309 — a default-fund contribution is "
+                "attributed to its CCP. An unresolvable ccp_reference leaves every "
+                "obligor attribute (including the QCCP flag) null on the synthetic "
+                "row."
+            ),
+        ),
+    ),
 }
 
 
@@ -2827,9 +3301,9 @@ TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
-        "risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "obs_product": VALID_OBS_PRODUCTS,
+        "risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "obs_product": VALID_OBS_PRODUCTS_ACCEPTED,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
     "loans": {
@@ -2840,16 +3314,16 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "contingents": {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
-        "risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "obs_product": VALID_OBS_PRODUCTS,
+        "risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": LENDING_RISK_TYPES_ACCEPTED,
+        "obs_product": VALID_OBS_PRODUCTS_ACCEPTED,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
         "exposure_collateral_type": VALID_COLLATERAL_TYPES,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
         "scra_grade": VALID_SCRA_GRADES,
-        # CRR Art. 274(2) second sub-paragraph — SA-CCR alpha carve-out discriminator.
+        # PS1/26 Art. 274(2) — SA-CCR alpha carve-out discriminator (Basel 3.1 only).
         "counterparty_type": VALID_CCR_COUNTERPARTY_TYPES,
     },
     "collateral": {
@@ -2910,28 +3384,34 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "cva_hedge_rw_sector": VALID_CVA_RW_SECTORS,
         "cva_hedge_rw_rating_band": VALID_CVA_RW_RATING_BANDS,
     },
-    # P8.33 — CRR Art. 277(3)(b) / CRE52.67 commodity hedging-set partition.
-    # UPPER-CASE bucket keys to match ``SA_CCR_SUPERVISORY_FACTORS_COMMODITY``
-    # in ``data/tables/sa_ccr_factors.py`` — load-bearing for the P8.37
-    # supervisory-factor join.
-    "trades": {
-        # SFT/FCCM separation — the CCR/SFT trade discriminator. Dormant until
-        # the CCR/SFT trade frame is added to validate_bundle_values'
-        # frame_mapping (like commodity_type/credit_quality below today).
+    # The SA-CCR trade table. Keyed ``ccr.trades`` — the name
+    # ``contracts/validation.py::bundle_frames`` registers the frame under. It was
+    # keyed ``trades`` until review CC-06, which matched no frame, so every entry
+    # here was dormant. The engine's conservative treatment of a missing or
+    # unrecognised value is reported separately as CCR021 / CCR022.
+    "ccr.trades": {
+        # SFT/FCCM separation — the CCR/SFT trade discriminator.
         "transaction_type": VALID_TRANSACTION_TYPES,
-        "commodity_type": {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"},
-        # P8.35 — CRR Art. 280 Table 2 credit-quality discriminator: keyed off
-        # ``SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN`` / ``..._CREDIT_IDX`` in
-        # ``data/tables/sa_ccr_factors.py``.
-        "credit_quality": {"IG", "HY", "NON_RATED"},
+        # CRR Art. 277(1) risk category.
+        "asset_class": VALID_SA_CCR_ASSET_CLASSES,
+        # CRR Art. 277a(1)(e) commodity hedging sets (UPPER-CASE pack keys).
+        "commodity_type": VALID_SA_CCR_COMMODITY_TYPES,
+        # CRR Art. 280 credit-quality keys of the credit supervisory factors.
+        "credit_quality": VALID_SA_CCR_CREDIT_QUALITIES,
     },
     # SFT/FCCM separation Phase 0b — the margined-SFT MPOR floor selector. A bad
-    # value would silently mis-floor the Art. 285 margin period of risk. Dormant
-    # until the SFT trade frame is added to validate_bundle_values' frame_mapping
-    # (mirrors the 'trades' entry above), but declared here as the single source
-    # of truth for the input domain.
-    "sft_trades": {
+    # value would silently mis-floor the Art. 285 margin period of risk. Keyed
+    # ``sft.trades`` (the bundle_frames name; ``sft_trades`` until review CC-06).
+    "sft.trades": {
         "mpor_floor_category": VALID_MPOR_FLOOR_CATEGORIES,
+    },
+    # CRR Art. 378 / 379 — the failed-trade branch discriminator (CC-09).
+    "ccr.failed_trades": {
+        "settlement_type": VALID_SETTLEMENT_TYPES,
+    },
+    # Review CC-02 — the Art. 275(2) VM / NICA split of an SA-CCR collateral item.
+    "ccr.ccr_collateral": {
+        "collateral_role": VALID_CCR_COLLATERAL_ROLES,
     },
 }
 
@@ -2962,8 +3442,8 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "cp_is_investment_grade": ColumnSpec(pl.Boolean, default=False, required=False),
     "cp_is_ccp_client_cleared": ColumnSpec(pl.Boolean, required=False),
     # CRR Art. 272 Def (88) — qualifying-CCP flag. Gates the Art. 306(1) 2%/4%
-    # QCCP trade-exposure pin: only an explicit False demotes a ``ccp``
-    # entity_type to the standard institution ladder (Art. 107(2)(a)).
+    # QCCP trade-exposure pin: only an explicit False makes a ``ccp``
+    # entity_type a non-QCCP, classified corporate (Art. 107(2)(b), CC-11).
     "cp_is_qccp": ColumnSpec(pl.Boolean, required=False),
     "cp_scra_grade": ColumnSpec(pl.String, required=False),
     "cp_sovereign_cqs": ColumnSpec(pl.Int32, required=False),
@@ -3091,7 +3571,7 @@ RAW_EXPOSURE_SCHEMA = {
     "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
-    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(8)(b))
     "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(4))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
@@ -3134,7 +3614,7 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
-    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(8)(b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # Counterparty hierarchy additions
     "counterparty_has_parent": pl.Boolean,
@@ -3176,7 +3656,7 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     "underlying_risk_type": pl.String,  # Art. 111(1)(c) - OBS item type for commitment-to-issue
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
-    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
+    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(8)(b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     # A-IRB LGD modelling (Art. 169A/169B)
     "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate

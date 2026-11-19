@@ -341,7 +341,6 @@ def _split_unified_frame(
         .with_columns(
             _secured_columns(
                 component="rre",
-                is_basel_3_1=is_basel_3_1,
                 ead_col=ead_col,
                 schema_names=schema_names,
             )
@@ -353,7 +352,6 @@ def _split_unified_frame(
         .with_columns(
             _secured_columns(
                 component="cre",
-                is_basel_3_1=is_basel_3_1,
                 ead_col=ead_col,
                 schema_names=schema_names,
             )
@@ -429,6 +427,9 @@ def _annotate_with_components(
     secured_qualifying_expr = (
         pl.when(force_other_re).then(pl.lit(False)).otherwise(parent_qualifying)
     )
+    # CRR (review CL-07): an explicit is_qualifying_re=False attests that the
+    # Art. 125 / 126 conditions are not met. Null is "not reported" (P1.292).
+    non_qualifying = parent_qualifying.eq_missing(False)
     ead_safe = pl.col(ead_col).fill_null(0.0)
     rre_secured_expr, cre_secured_expr = _allocation_exprs(
         is_basel_3_1=is_basel_3_1,
@@ -441,6 +442,7 @@ def _annotate_with_components(
         cre_eligible_expr=cre_eligible_expr,
         prior_charge=prior_charge,
         force_other_re=force_other_re,
+        non_qualifying=non_qualifying,
     )
     return (
         exposures.with_columns(
@@ -595,6 +597,7 @@ def _allocation_exprs(
     cre_eligible_expr: pl.Expr,
     prior_charge: pl.Expr,
     force_other_re: pl.Expr,
+    non_qualifying: pl.Expr,
 ) -> tuple[pl.Expr, pl.Expr]:
     """Return (rre_secured_ead_expr, cre_secured_ead_expr) per regime.
 
@@ -602,6 +605,10 @@ def _allocation_exprs(
       exposure"). RRE consumes up to its 80% LTV cap on the full EAD,
       then CRE picks up the remainder up to its 50% LTV cap (Art. 126
       with rental coverage gate already enforced via cre_eligible).
+      An exposure attested as NOT meeting the Art. 125 / 126 conditions
+      (``non_qualifying``, review CL-07) is secured up to the property's
+      market value instead — Art. 124(1)'s 100% part — and the SA stage
+      weights that row at 100% (``engine/sa/crr_real_estate.py``).
     - **B3.1**: pro-rata by collateral value (PRA PS1/26 Art. 124(4)).
       Each component's secured EAD = min(EAD × component_share, cap_pct
       × component_value), where component_share = component_v / (rre_v +
@@ -651,6 +658,9 @@ def _allocation_exprs(
         rre_secured = pl.when(rre_eligible_expr).then(rre_capped).otherwise(pl.lit(0.0))
         cre_secured = pl.when(cre_eligible_expr).then(cre_capped).otherwise(pl.lit(0.0))
     else:
+        # CRR Art. 124(1): no preferential cap without the Art. 125/126 conditions.
+        rre_cap_eur = _crr_art_124_1_cap(rre_cap_eur, rrep, rre_v_expr, non_qualifying)
+        cre_cap_eur = _crr_art_124_1_cap(cre_cap_eur, crep, cre_v_expr, non_qualifying)
         # CRR sequential RRE-first: RRE first against full EAD, CRE on the remainder.
         rre_secured = (
             pl.when(rre_eligible_expr)
@@ -667,10 +677,31 @@ def _allocation_exprs(
     return rre_secured, cre_secured
 
 
+def _crr_art_124_1_cap(
+    preferential_cap_eur: pl.Expr,
+    params: SplitParameters,
+    component_value: pl.Expr,
+    non_qualifying: pl.Expr,
+) -> pl.Expr:
+    """CRR secured cap: the market value where the Art. 125 / 126 conditions fail.
+
+    CRR Art. 124(1): "The part of an exposure that is treated as fully secured
+    by immovable property shall not be greater than the pledged amount of the
+    market value". That part takes 100% when the conditions are not met, so the
+    80% / 50% preferential limits no longer bound it.
+    """
+    if params.non_qualifying_secured_ltv_cap is None:
+        return preferential_cap_eur
+    return (
+        pl.when(non_qualifying)
+        .then(params.non_qualifying_secured_ltv_cap * component_value)
+        .otherwise(preferential_cap_eur)
+    )
+
+
 def _secured_columns(
     *,
     component: str,
-    is_basel_3_1: bool,
     ead_col: str,
     schema_names: set[str],
 ) -> list[pl.Expr]:
@@ -699,11 +730,12 @@ def _secured_columns(
         # calculator routes it through Art. 124J (Other RE) instead of the
         # preferential Art. 124F / 124H tables.
         pl.col("_re_secured_qualifying").alias("is_qualifying_re"),
-        # CRR CRE splits set has_income_cover=True so Art. 126's
-        # `(ltv <= 0.50) & has_income_cover` returns the 50% RW.
-        # B3.1 + RRE always pass False so the general Art. 124F/H
-        # path is taken (income-producing branches are bypassed).
-        _has_income_cover_for_component(is_basel_3_1, meta.prop_type).alias("has_income_cover"),
+        # Not materially dependent on the property's cash flows: split
+        # candidates exclude income-producing rows (re_split/flagging.py), so
+        # every secured row takes the preferential path — CRR Art. 126(2)(b)
+        # (review RE-17: CRR CRE rows used to be set True, the inverted gate's
+        # key to 50%), PS1/26 Art. 124F / 124H rather than 124G / 124I.
+        pl.lit(False).alias("has_income_cover"),
         scale_provision_expr(numerator=meta.secured_ead_col, parent_ead_col=ead_col).alias(
             "provision_allocated"
         ),
@@ -765,18 +797,28 @@ def _residual_columns(*, ead_col: str, schema_names: set[str]) -> list[pl.Expr]:
 
 
 def _new_ltv_for_whole_expr(ead_col: str) -> pl.Expr:
-    """LTV for whole-mode rows: full EAD over the eligible property value.
+    """LTV for whole-mode rows: the row's own Art. 124C LTV, else EAD / value.
 
     Whole mode is only emitted by the classifier for B3.1 pure-CRE non-
     NP/SME corporates (Art. 124H(3)), so the eligible property value is
-    the CRE component value.
+    the CRE component value. The row is 1:1 with its parent, so the LTV the
+    hierarchy supplied (the firm's ``property_ltv``, or the one derived from
+    the loan and the property value) still describes it — and only that one
+    carries PS1/26 Art. 124C(3): "The amount of the loan which is used for the
+    calculation of the LTV shall include all other loans secured with charges
+    ranking in priority ahead of or pari passu with the charge that the
+    exposure is secured by", and the full undrawn commitment of Art. 124C(2).
+    Review CL-10: overwriting it with EAD / value dropped both, so a loan of
+    70 behind a prior charge of 20 on a property of 100 was banded at 0.7
+    rather than 0.9. EAD / value is the fallback where no LTV exists.
     """
     prop = pl.col("_re_cre_value")
-    return (
+    ead_over_value = (
         pl.when(prop > 0.0)
         .then(pl.col(ead_col).fill_null(0.0) / prop)
         .otherwise(pl.lit(None, dtype=pl.Float64))
     )
+    return pl.coalesce(pl.col("ltv"), ead_over_value)
 
 
 def _new_ltv_for_component_expr(component: str) -> pl.Expr:
@@ -789,21 +831,6 @@ def _new_ltv_for_component_expr(component: str) -> pl.Expr:
     prop = pl.col(meta.component_value_col)
     secured = pl.col(meta.secured_ead_col)
     return pl.when(prop > 0.0).then(secured / prop).otherwise(pl.lit(None, dtype=pl.Float64))
-
-
-def _has_income_cover_for_component(is_basel_3_1: bool, prop_type: str) -> pl.Expr:
-    """has_income_cover for a per-component secured row.
-
-    CRR Art. 126(2)(d): True for CRE splits (rental coverage met is a
-    precondition of CRE-eligibility — already enforced upstream).
-    Residential splits do not depend on income cover.
-
-    B3.1 Art. 124F/H general path requires has_income_cover=False so the
-    Art. 124G/I income-producing branches are bypassed.
-    """
-    if is_basel_3_1 or prop_type == "residential":
-        return pl.lit(False)
-    return pl.lit(True)
 
 
 def _accumulate_split_errors(

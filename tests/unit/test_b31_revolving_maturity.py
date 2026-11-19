@@ -325,3 +325,62 @@ class TestB31RevolvingMaturity:
         result = _pad(lf).pipe(prepare_columns, b31_config).collect()
         # No is_revolving column → treated as non-revolving → M from maturity_date ≈ 1.0
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.05)
+
+
+class TestOneDayFloorKeepsTheRevolvingTerminationDate:
+    """The Art. 162(3) one-day minimum does not displace the Art. 162(2A)(k) M.
+
+    PS1/26 Art. 162(2A)(k): "for revolving exposures, M shall be determined using
+    the maximum contractual termination date of the facility. An institution shall
+    not use the repayment date of the current drawing." PS1/26 Art. 162(3): "in
+    applying the calculation methods set out in paragraph 2A for qualifying
+    short-term exposures ..., M shall be at least one day, instead of the minimum
+    set in paragraph 2A." The carve-out replaces the MINIMUM of the paragraph 2A
+    method; it does not swap the method for the drawing's repayment date. A
+    90-day trade drawing (2030-06-30 -> 2030-09-28) under a revolving facility
+    terminating 2033-06-30 therefore keeps M = 3.0, not 90/365 (skeptic finding on
+    review TR-05 / TR-11).
+    """
+
+    @staticmethod
+    def _drawing(termination: date) -> pl.LazyFrame:
+        return pl.LazyFrame(
+            {
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity_date": [date(2030, 9, 28)],  # 90 days: the current drawing
+                "facility_termination_date": [termination],
+                "is_revolving": [True],
+                "is_short_term_trade_lc": [True],
+                "exposure_class": ["CORPORATE"],
+            }
+        )
+
+    def test_long_termination_date_stands(self, b31_config: CalculationConfig) -> None:
+        # Arrange — termination 3.0y away: the one-day minimum cannot bind
+        lf = self._drawing(date(2033, 6, 30))
+
+        # Act
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
+
+        # Assert
+        assert result["has_one_day_maturity_floor"][0] is True
+        assert result["maturity"][0] == pytest.approx(3.0, abs=1e-12), (
+            "the Art. 162(3) rung priced a revolving drawing on its own repayment "
+            "date, which Art. 162(2A)(k) forbids"
+        )
+
+    def test_short_termination_date_takes_the_one_day_minimum(
+        self, b31_config: CalculationConfig
+    ) -> None:
+        # Arrange — termination 0.5y away (2030-06-30 -> 2030-12-29 = 182 days):
+        # the paragraph 2A(k) value is under one year, so the one-day minimum lets
+        # it through instead of lifting it to the one-year minimum
+        lf = self._drawing(date(2030, 12, 29))
+
+        # Act
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
+
+        # Assert
+        assert result["maturity"][0] == pytest.approx(182 / 365, abs=1e-12)

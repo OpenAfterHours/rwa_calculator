@@ -498,7 +498,7 @@ def test_candidate_rows_do_not_move_the_retail_threshold_aggregate() -> None:
 
     That is worth an assertion of its own because the design of record predicted
     the opposite: it expected the fan-out to inflate this carrier and, through
-    it, the Art. 123A(1)(b)(ii) granularity denominator. It cannot. Pinning the
+    it, the optional 0.2% granularity-test denominator. It cannot. Pinning the
     measurement here means a future change that starts counting undrawn amounts
     in the retail threshold reddens HERE, next to the reason, rather than
     surfacing as a moved COREP row.

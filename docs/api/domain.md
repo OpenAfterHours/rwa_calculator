@@ -225,10 +225,13 @@ Off-balance sheet risk categories for CCF determination (CRR Art. 111):
 
 ```python
 class RiskType(StrEnum):
-    FR = "full_risk"        # 100% CCF (SA and F-IRB) — direct credit substitutes, guarantees
-    MR = "medium_risk"      # 50% CCF (SA), 75% (F-IRB) — NIFs, RUFs, standby LCs
-    MLR = "medium_low_risk" # 20% CCF (SA), 75% (F-IRB) — documentary credits, trade finance
-    LR = "low_risk"         # 0% CCF — unconditionally cancellable commitments
+    FR = "full_risk"                 # 100% — credit substitutes (incl. credit-substitute SBLCs)
+    FRC = "full_risk_commitment"     # 100% — certain-drawdown / with-recourse commitments
+    MR = "medium_risk"               # 50% (CRR F-IRB 75% commitment) — NIFs, RUFs
+    MR_ISSUED = "medium_risk_issued" # 50% — other issued non-credit-substitute items
+    OC = "other_commit"              # CRR 50%/20% by original maturity; Basel 3.1 40%
+    MLR = "medium_low_risk"          # 20% — warranties, performance bonds, non-substitute SBLCs
+    LR = "low_risk"                  # CRR 0%, Basel 3.1 10% — unconditionally cancellable
 ```
 
 ### IFRS 9

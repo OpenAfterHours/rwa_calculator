@@ -411,8 +411,10 @@ exposure using the A-IRB methods in Art. 162(2).
     **below** the [Art. 162(3) one-day
     carve-out](#art-1623-one-day-maturity-floor-exceptions) and below an explicit
     `effective_maturity` input. An F-IRB row with the election on **and**
-    `has_one_day_maturity_floor` set therefore resolves to one day (1/365 ≈ 0.00274 years),
-    not 2.5 years — a large RWA reduction.
+    `has_one_day_maturity_floor` set **and a residual maturity under one year** therefore
+    resolves to `max(residual, 1/365)` rather than 2.5 years. (Since review TR-11 the carve-out
+    is a one-day **minimum**: it no longer sets M to one day whatever the residual, and at a
+    residual of one year or more it does not fire, so the fixed value stands there.)
 
     **The primary text does not support that ordering.** Art. 162(3) contains no
     "notwithstanding paragraphs 1 and 2" clause. It reaches exposures only because
@@ -430,7 +432,8 @@ exposure using the A-IRB methods in Art. 162(2).
     SFT rows carrying a one-day floor, beyond the scope of adding the 2.5-year election.
     Because `firb_fixed_maturity` defaults to `False`, the 2.5-year limb is **opt-in only and
     inert at the default**: no live number is exposed by it. Pinned by
-    `test_one_day_floor_still_outranks_the_fixed_value`.
+    `test_one_day_floor_still_outranks_the_fixed_value` and
+    `test_one_day_floor_cannot_shorten_the_fixed_value_beyond_one_year`.
 
     The same precedence question applies to an explicit `effective_maturity` input outranking
     the fixed value (`test_firm_supplied_effective_maturity_still_outranks_the_fixed_value`):
@@ -476,10 +479,15 @@ financing, including:
 
 !!! info "Implementation Note — `has_one_day_maturity_floor` Flag + the `ccr_effective_maturity` carrier"
     The code implements Art. 162(3) via a boolean flag `has_one_day_maturity_floor`. When the
-    flag is set, the IRB maturity chain (`engine/irb/transforms.py::_build_maturity_exprs`)
-    **does** drive the effective-maturity column down to one day (`1/365 ≈ 0.00274` years), and
-    the maturity adjustment then suppresses its own 1-year floor so the sub-1-year `M` survives
-    into `MA`. The flag has a *second*, independent consumer — CRM maturity-mismatch
+    flag is set and the residual maturity (from `maturity_date`) is under one year, the IRB
+    maturity chain (`engine/irb/transforms.py::_build_maturity_exprs`) sets
+    `M = max(residual, 1/365)` — the one day is a **minimum**, not a value (review TR-11: the
+    engine used to set `M = 1/365` whatever the residual, so a 9-month trade LC was priced as a
+    one-day exposure) — and the maturity adjustment then suppresses its own 1-year floor so the
+    sub-1-year `M` survives into `MA`. With a residual of one year or more, or no
+    `maturity_date`, the ordinary chain value stands. The engine also **derives** the flag from
+    `is_short_term_trade_lc = True` when the residual is up to one year (Art. 162(3)(b),
+    inclusive; Basel 3.1's 162(3)(e) bound is strict). The flag has a *second*, independent consumer — CRM maturity-mismatch
     ineligibility (Art. 237(2): any mismatch zeroes protection value for one-day-floor
     exposures) — but it is **not** only a CRM-side flag.
 

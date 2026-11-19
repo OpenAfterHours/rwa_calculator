@@ -469,7 +469,12 @@ def _loans() -> pl.DataFrame:
             property_type="residential",
             ltv=0.60,
         ),
-        # Commercial real estate with income cover (preferential 50% CRE RW gate).
+        # Income-producing commercial real estate (has_income_cover = materially
+        # dependent on the property's cash flows): Basel 3.1 Art. 124I 100%; CRR
+        # Art. 126(2)(b) fails, so Art. 124(1) 100%. Until review RE-17 / P1.263
+        # the inverted CRR gate gave this leg the 50% preferential weight; the
+        # CRR 50% real-estate row is kept live by the re-split portfolio's
+        # LN_CRE_CORP (not property-dependent, LTV 0.5).
         _loan(
             LN_CRE,
             CP_CRE,

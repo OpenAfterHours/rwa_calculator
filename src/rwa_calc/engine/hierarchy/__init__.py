@@ -10,9 +10,14 @@ Layout:
 - ``graph``            — counterparty/facility graph resolution + CP lookup
 - ``ratings``          — dual rating-inheritance resolution
 - ``facility_undrawn`` — synthetic undrawn rows (MOF / Facility Share)
+- ``facility_fx``      — drawings put in their facility's currency before
+  headroom netting
+- ``facility_warnings`` — HIE004 / HIE005 / HIE006 facility-undrawn warnings
 - ``unify``            — loans/contingents/undrawn -> unified exposure frame
 - ``enrich``           — unified-frame decoration (QRRE, ratings, RE, LTV,
   lending group)
+- ``re_ltv``           — PS1/26 Art. 124C LTV derivation for a property
+  supplied without ``property_ltv``
 
 The ``run(ctx, rulepack, run_config)`` adapter that wires this domain into the
 fold lives at ``engine/stages/hierarchy.py``, not here: ``engine/stages/`` is

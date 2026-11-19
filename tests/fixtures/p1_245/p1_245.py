@@ -3,14 +3,16 @@ P1.245 — group-consolidation revenue roll-up (PS1/26 Art. 147(4C)(b)(ii) w/ 14
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/classify/attributes.py::with_group_annual_revenue +
+    (engine/hierarchy/graph.py::with_group_size_figures +
      engine/classify/approach.py large-corp F-IRB gate)
 
 Key responsibilities:
 - Provide a classify-level ``ResolvedHierarchyBundle`` builder
-  (``make_classify_bundle``) whose two-counterparty lookup carries an explicit
-  ``ultimate_parent_reference`` link, so the classifier's roll-up can be
-  exercised WITHOUT the hierarchy stage (unit tests).
+  (``make_classify_bundle``) whose two-counterparty lookup carries the
+  ``group_annual_revenue`` the hierarchy stage computes (max of own and the
+  parent's), so the classifier's large-corp gate can be exercised WITHOUT the
+  hierarchy stage (unit tests). The roll-up itself is the hierarchy's
+  (``tests/unit/classifier/test_group_size_figures.py``).
 - Provide a full-pipeline ``RawDataBundle`` builder (``build_p1_245_raw_bundle``)
   whose ``org_mappings`` drive the hierarchy stage's ultimate-parent resolution,
   so the roll-up is proved end-to-end (loader -> hierarchy -> classifier -> ...).
@@ -96,6 +98,7 @@ _CP_LOOKUP_SCHEMA: dict[str, PolarsDataType] = {
     "parent_counterparty_reference": pl.String,
     "ultimate_parent_reference": pl.String,
     "counterparty_hierarchy_depth": pl.Int32,
+    "group_annual_revenue": pl.Float64,
     "cqs": pl.Int8,
 }
 
@@ -153,6 +156,16 @@ def _sub_and_parent_counterparties(
         ultimate_col.append(None)
         depth.append(0)
 
+    # The hierarchy's group figure: the max over the entity and its ancestors
+    # (engine/hierarchy/graph.py::with_group_size_figures).
+    sub_group = max(
+        (v for v in (sub_revenue, parent_revenue if parent_ref else None) if v is not None),
+        default=None,
+    )
+    group_revenue: list[float | None] = [sub_group]
+    if parent_ref is not None:
+        group_revenue.append(parent_revenue)
+
     n = len(refs)
     return pl.LazyFrame(
         {
@@ -167,6 +180,7 @@ def _sub_and_parent_counterparties(
             "counterparty_has_parent": has_parent,
             "parent_counterparty_reference": parent_col,
             "ultimate_parent_reference": ultimate_col,
+            "group_annual_revenue": group_revenue,
             "counterparty_hierarchy_depth": depth,
             "cqs": [None] * n,
         },
@@ -227,9 +241,9 @@ def make_classify_bundle(
 ) -> ResolvedHierarchyBundle:
     """Return a classify-level bundle for one subsidiary + (optional) parent.
 
-    The subsidiary carries an explicit ``ultimate_parent_reference`` so the
-    classifier's ``with_group_annual_revenue`` roll-up runs without the
-    hierarchy stage. ``parent_ref=None`` produces a standalone corporate.
+    The subsidiary carries the hierarchy's ``group_annual_revenue`` so the
+    classifier's large-corp gate runs without the hierarchy stage.
+    ``parent_ref=None`` produces a standalone corporate.
     """
     counterparties = _sub_and_parent_counterparties(
         sub_ref=sub_ref,

@@ -18,6 +18,8 @@ Key responsibilities:
   itself derived from the same declarations
 - Non-finite (NaN / +-inf) input scrubbing
 - Collateral-link referential integrity
+- SA-CCR trade inputs priced with a conservative fallback (CCR021-CCR023,
+  ``contracts/ccr_input_checks.py``)
 - Regulatory output bounds on the aggregated results frame
 
 Every per-table check in the bundle gate is a ``_TableCheck`` — a lazy plan
@@ -44,11 +46,13 @@ References:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
+from rwa_calc.contracts.ccr_input_checks import ccr_trade_errors, ccr_trade_findings
 from rwa_calc.contracts.errors import (
     ERROR_CCF_OUT_OF_RANGE,
     ERROR_COLLATERAL_LINK_DUPLICATE,
@@ -73,18 +77,27 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
     absent_reference_error,
+    dfc_allocation_input_missing_error,
     duplicate_input_key_error,
+    engine_only_risk_type_error,
+    exposure_reference_collision_error,
+    failed_trade_side_unknown_warning,
+    fx_rate_missing_error,
+    issued_item_on_commitment_risk_type_warning,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
     orphan_reference_error,
     unresolved_obs_risk_type_warning,
+    unsupported_ciu_holding_class_warning,
 )
 from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
+from rwa_calc.domain.enums import ExposureClass
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
+    from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.data.column_spec import ColumnDomain, ForeignKey
 
 # Regulatory reference for collateral link validation (CRM)
@@ -97,6 +110,9 @@ COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
 #: rows carry an amount; duplicated rather than imported because check 12 bars
 #: ``contracts/`` from importing ``engine/``.
 _ZERO_AMOUNT_TOLERANCE = 1e-10
+
+#: The categorical columns whose engine-only values report as DQ023, not DQ006.
+_RISK_TYPE_COLUMNS: frozenset[str] = frozenset({"risk_type", "underlying_risk_type"})
 
 
 # =============================================================================
@@ -410,7 +426,26 @@ def _invalid_column_value_error(
     count: int,
     valid_values: set[str],
 ) -> CalculationError:
-    """The DQ006 warning for one distinct out-of-set value of a categorical column."""
+    """The error for one distinct out-of-set value of a categorical column.
+
+    DQ006 WARNING, except for an engine-only risk type (``data/schemas.py::
+    ENGINE_ONLY_RISK_TYPES``) on a lending table's risk-type column: that value
+    is outside the lending domain for a reason the generic code cannot say —
+    the row would be routed to a counterparty-credit-risk treatment it is not
+    priced under — so it is reported once, as DQ023 ERROR (review finding
+    CC-19), saying whether the hierarchy stage disregards it.
+    """
+    from rwa_calc.data.schemas import DISREGARDED_ENGINE_ONLY_RISK_TYPES, ENGINE_ONLY_RISK_TYPES
+
+    canonical = str(bad_value).strip().upper()
+    if column in _RISK_TYPE_COLUMNS and canonical in ENGINE_ONLY_RISK_TYPES:
+        return engine_only_risk_type_error(
+            table=context,
+            column=column,
+            value=str(bad_value),
+            count=count,
+            disregarded=canonical in DISREGARDED_ENGINE_ONLY_RISK_TYPES,
+        )
     sorted_valid = sorted(valid_values)
     return CalculationError(
         code=ERROR_INVALID_COLUMN_VALUE,
@@ -479,6 +514,8 @@ def bundle_frames(bundle: RawDataBundle) -> dict[str, pl.LazyFrame | None]:
 def validate_bundle_values(
     bundle: RawDataBundle,
     constraints: dict[str, dict[str, set[str]]] | None = None,
+    *,
+    config: CalculationConfig | None = None,
 ) -> list[CalculationError]:
     """
     Validate the input domain of every column in a RawDataBundle.
@@ -489,11 +526,22 @@ def validate_bundle_values(
     - **Declared domains** — every ``ColumnSpec.domain`` the table's schema
       declares and the frame carries (:func:`_validate_declared_domains`),
       one aggregate plan per table, with the offending row named.
-    - **Categorical domains** against the constraints registry (DQ006), all
-      columns batched into a single plan.
+    - **Categorical domains** against the constraints registry (DQ006, or
+      DQ023 for an engine-only risk type on a lending table), all columns
+      batched into a single plan.
     - **Exposure-table rules** — unreferenced negative on-balance amounts
       (DQ010).
     - **Ratings** — the short-term rating scope contract (DQ002).
+    - **SA-CCR trades** — inputs engine/ccr prices with a conservative fallback:
+      unrecognised risk category (CCR021), credit quality / commodity type
+      (CCR022), netting set missing from the netting-set table (CCR023)
+      (:mod:`rwa_calc.contracts.ccr_input_checks`).
+
+    And, when ``config`` is supplied, one cross-table check: every amount in a
+    currency with no FX rate into the reporting currency (DQ020,
+    :func:`_validate_missing_fx_rates`), which needs the run's
+    ``base_currency`` and ``apply_fx_conversion`` and is therefore skipped by
+    the configless file-loader call and raised by the pipeline entry.
 
     Every per-table check is a :class:`_TableCheck`; all of them are executed
     in ONE ``pl.collect_all`` (:func:`_run_table_checks`) and decoded in
@@ -511,6 +559,8 @@ def validate_bundle_values(
     Args:
         bundle: RawDataBundle to validate
         constraints: Override constraints dict; defaults to COLUMN_VALUE_CONSTRAINTS
+        config: The run's configuration; enables the configuration-dependent
+            checks (DQ020). None skips them.
 
     Returns:
         List of CalculationError objects for any invalid values found
@@ -530,6 +580,16 @@ def validate_bundle_values(
         checks.extend(
             _table_checks(lf, table_name, constraints.get(table_name, {}), columns[table_name])
         )
+    # SA-CCR trade inputs that engine/ccr prices with a conservative fallback
+    # (CCR021 risk category, CCR022 risk factor, CCR023 orphan trade). A
+    # cross-table plan (trades + netting sets) riding the same single collect.
+    ccr_findings = ccr_trade_findings(bundle, columns.get("ccr.trades", frozenset()))
+    if ccr_findings is not None:
+        checks.append(_TableCheck(plan=ccr_findings, decode=ccr_trade_errors))
+    if config is not None:
+        fx_check = _validate_missing_fx_rates(frames, columns, config)
+        if fx_check is not None:
+            checks.append(fx_check)
     all_errors = _run_table_checks(checks)
 
     # Cross-table referential integrity for the M:N collateral-links table.
@@ -604,11 +664,30 @@ def _table_checks(
     if table_name in {"facilities", "contingents"}:
         checks.append(_validate_unresolved_obs_risk_type(lf, table_name, columns))
 
+    # CRR Art. 166(8)(d) vs 166(10)(b): a contingent on a commitment bucket that
+    # is still marked as an issued item (the contingent default) — CM-09.
+    if table_name == "contingents":
+        checks.append(_validate_issued_item_on_commitment_risk_type(lf, table_name, columns))
+
     # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
     # carry a scope (which exposure they attach to). Flag rows that violate
     # the is_short_term ↔ scope_type/scope_id contract.
     if table_name == "ratings":
         checks.append(_validate_short_term_rating_scope(lf, columns))
+
+    # PS1/26 Art. 132A(1): a look-through holding is weighted "as if directly
+    # held"; a class outside the ExposureClass vocabulary cannot be, and the
+    # engine weights it at the Art. 132(2) 1,250% fall-back (SA008).
+    if table_name == "ciu_holdings":
+        checks.append(_validate_ciu_holding_classes(lf, columns))
+    # CRR Art. 378: a DvP failed trade's loss depends on its side (CC-09).
+    if table_name == "ccr.failed_trades":
+        checks.append(_validate_failed_trade_side(lf, columns))
+
+    # CCR (CRR) Part Art. 308(2): a QCCP pre-funded contribution needs K_CCP and
+    # DF_CM to be allocated its share (CC-10).
+    if table_name == "ccr.default_fund_contributions":
+        checks.append(_validate_dfc_allocation_inputs(lf, columns))
     return [check for check in checks if check is not None]
 
 
@@ -961,6 +1040,9 @@ def _collateral_link_valid_beneficiaries(bundle: RawDataBundle) -> pl.LazyFrame:
 #: collect below rather than evaluated as two separate queries.
 _KIND_ORPHAN = "orphan"
 _KIND_ABSENT = "absent"
+#: And for the two key findings of ``validate_duplicate_keys`` (DQ004 / DQ019).
+_KIND_DUPLICATE = "duplicate"
+_KIND_COLLISION = "collision"
 
 
 def validate_referential_integrity(
@@ -1058,11 +1140,16 @@ def validate_duplicate_keys(
     *,
     columns: Mapping[str, frozenset[str]] | None = None,
 ) -> list[CalculationError]:
-    """Flag input tables whose natural key names more than one row (``DQ004``).
+    """Flag natural keys naming more than one row (``DQ004``) or namespace (``DQ019``).
 
     Reads ``data/schemas.py``'s ``TABLE_UNIQUE_KEYS`` — the tables where a
-    repeated key is silent data loss rather than a visible fan-out. One
-    ``.collect()`` for the whole registry.
+    repeated key is silent data loss rather than a visible fan-out — and its
+    ``EXPOSURE_REFERENCE_NAMESPACES``: uniqueness WITHIN a table is not enough,
+    because every input that becomes an exposure row shares one
+    ``exposure_reference`` space, and a loan and a contingent (or a user row
+    and an engine-minted ``ccr__`` / ``ft__`` / ``dfc__`` / ``<facility>_UNDRAWN``
+    row, or an equity exposure) sharing a reference merged in every join keyed
+    on it (review finding RC-10). One ``.collect()`` for both registries.
 
     **Uncapped, one error per duplicated key**, breaking with the ``sample_cap``
     contract the rest of this module follows. The reason is that the two other
@@ -1102,23 +1189,122 @@ def validate_duplicate_keys(
             .with_columns(
                 pl.lit(table).alias("_table"),
                 pl.lit(key_column).alias("_column"),
+                pl.lit(_KIND_DUPLICATE).alias("_kind"),
             )
         )
+    collisions = _namespace_collision_plan(frames, names)
+    if collisions is not None:
+        plans.append(collisions)
 
     if not plans:
         return []
 
-    duplicated = pl.concat(plans, how="vertical").collect()
-    return [
-        duplicate_input_key_error(
-            table=row["_table"],
-            column=row["_column"],
-            value=row["_value"],
-            count=int(row["_count"]),
-            names_a_counterparty=row["_table"] == "counterparties",
+    # Ordered in the plan and split in Python: an eager DataFrame filter / sort
+    # runs a lazy collect of its own, a materialisation per kind for nothing.
+    found = pl.concat(plans, how="vertical").sort(["_kind", "_table", "_value"]).collect()
+    errors: list[CalculationError] = []
+    collisions: list[CalculationError] = []
+    for row in found.iter_rows(named=True):
+        if row["_kind"] == _KIND_COLLISION:
+            collisions.append(_namespace_collision_error(row["_value"], row["_table"].split(", ")))
+            continue
+        errors.append(
+            duplicate_input_key_error(
+                table=row["_table"],
+                column=row["_column"],
+                value=row["_value"],
+                count=int(row["_count"]),
+                names_a_counterparty=row["_table"] == "counterparties",
+            )
         )
-        for row in duplicated.sort(["_table", "_value"]).iter_rows(named=True)
+    return errors + collisions
+
+
+def _namespace_collision_plan(
+    frames: Mapping[str, pl.LazyFrame | None],
+    names: Mapping[str, frozenset[str]],
+) -> pl.LazyFrame | None:
+    """Every exposure_reference two namespaces claim, shaped as a duplicate-key row.
+
+    Each namespace of ``EXPOSURE_REFERENCE_NAMESPACES`` contributes its keys
+    (with the prefix the engine puts on a minted one), and a facility claims
+    every user reference shaped ``<facility>_UNDRAWN[_<x>|@<x>]`` — the
+    references its undrawn rows are minted under. ``_table`` carries the sorted
+    claimants, ``_count`` how many, ``_kind`` the collision marker, so the plan
+    unions into the duplicate-key concat and costs no collect of its own.
+    """
+    from rwa_calc.data.schemas import (
+        EXPOSURE_REFERENCE_NAMESPACES,
+        FACILITY_UNDRAWN_REFERENCE_INFIX,
+    )
+
+    claims: list[pl.LazyFrame] = []
+    user_references: list[pl.LazyFrame] = []
+    for namespace, (key_column, prefix) in EXPOSURE_REFERENCE_NAMESPACES.items():
+        lf = frames.get(namespace)
+        if lf is None or key_column not in names.get(namespace, frozenset()):
+            continue
+        reference = pl.col(key_column).cast(pl.String)
+        if prefix:
+            reference = pl.lit(prefix) + reference
+        claim = lf.select(reference.alias("_value"), pl.lit(namespace).alias("_namespace"))
+        claims.append(claim)
+        if not prefix:
+            user_references.append(claim.select("_value"))
+
+    facilities = frames.get("facilities")
+    if facilities is not None and user_references and "facility_reference" in names["facilities"]:
+        minted = re.escape(FACILITY_UNDRAWN_REFERENCE_INFIX)
+        stems = facilities.select(
+            pl.col("facility_reference").cast(pl.String).alias("_stem")
+        ).unique()
+        claims.append(
+            pl.concat(user_references, how="vertical")
+            .with_columns(
+                pl.col("_value").str.extract(rf"^(.*){minted}(?:[_@].*)?$", 1).alias("_stem")
+            )
+            .join(stems, on="_stem", how="semi")
+            .select(pl.col("_value"), pl.lit("facilities").alias("_namespace"))
+        )
+
+    if not claims:
+        return None
+    return (
+        pl.concat(claims, how="vertical")
+        .drop_nulls("_value")
+        .unique()
+        .group_by("_value")
+        .agg(
+            pl.col("_namespace").sort().str.join(", ").alias("_table"),
+            pl.len().cast(pl.UInt32).alias("_count"),
+        )
+        .filter(pl.col("_count") > 1)
+        .select(
+            pl.col("_value"),
+            pl.col("_count"),
+            pl.col("_table"),
+            pl.lit("exposure_reference").alias("_column"),
+            pl.lit(_KIND_COLLISION).alias("_kind"),
+        )
+    )
+
+
+def _namespace_collision_error(reference: str, namespaces: list[str]) -> CalculationError:
+    """The DQ019 for one colliding reference, naming the keys it is re-keyed to.
+
+    Only a loan or contingent row is re-keyed (``engine/hierarchy/namespace.py``);
+    an equity exposure or an engine-minted row keeps its reference.
+    """
+    from rwa_calc.data.schemas import EXPOSURE_REFERENCE_QUALIFIER
+
+    qualified = [
+        f"{reference}{EXPOSURE_REFERENCE_QUALIFIER}{exposure_type}"
+        for table, exposure_type in (("contingents", "contingent"), ("loans", "loan"))
+        if table in namespaces
     ]
+    return exposure_reference_collision_error(
+        reference=reference, namespaces=namespaces, qualified=qualified
+    )
 
 
 def _checkable_parent(
@@ -1321,6 +1507,45 @@ def _validate_short_term_rating_scope(
     return _TableCheck(plan=plan, decode=decode)
 
 
+def _validate_ciu_holding_classes(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Flag CIU holdings whose ``exposure_class`` the engine cannot identify (SA008).
+
+    ``ciu_holdings.exposure_class`` has no categorical domain declared, so the
+    DQ006 pass never sees it. A null, or a value outside the ``ExposureClass``
+    vocabulary (compared case-insensitively -- the engine upper-cases before its
+    risk-weight join), is weighted at the Art. 132(2) 1,250% fall-back by
+    ``engine/equity/calculator.py::_holding_rw_expr``, because PS1/26
+    Art. 132A(1) weights each underlying "as if directly held" and an
+    unidentified one cannot be. One rolled-up warning naming the distinct
+    values (null spelled ``null``).
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
+    """
+    if "exposure_class" not in schema_names:
+        return None
+
+    vocabulary = [member.value for member in ExposureClass]
+    holding_class = pl.col("exposure_class").cast(pl.String, strict=False)
+    unsupported = holding_class.is_null() | ~holding_class.str.to_lowercase().is_in(vocabulary)
+    plan = lf.filter(unsupported).select(
+        pl.len().alias("n"),
+        holding_class.fill_null("null").unique().sort().implode().alias("values"),
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        n = frame.item(0, "n")
+        if not n:
+            return []
+        values = [str(value) for value in frame.item(0, "values")]
+        return [unsupported_ciu_holding_class_warning(n=n, values=values)]
+
+    return _TableCheck(plan=plan, decode=decode)
+
+
 def _validate_negative_amounts_without_netting(
     lf: pl.LazyFrame,
     context: str,
@@ -1366,6 +1591,89 @@ def _validate_negative_amounts_without_netting(
     return _TableCheck(plan=plan, decode=decode)
 
 
+def _validate_missing_fx_rates(
+    frames: Mapping[str, pl.LazyFrame | None],
+    columns: Mapping[str, frozenset[str]],
+    config: CalculationConfig,
+) -> _TableCheck | None:
+    """Report every currency the FX conversion has no rate for (DQ020).
+
+    ``engine/fx`` converts an amount only where ``fx_rates`` holds a
+    ``currency -> base_currency`` rate; every other amount passes through in its
+    source currency's units, keeps its currency code, and is read as reporting
+    currency by every threshold, total and template downstream (review finding
+    RC-11 - a 1:1 that understates or overstates by currency). This mirrors the
+    converter exactly: its exact-match ``currency == base_currency`` test, its
+    ``currency_to == base_currency`` rate rows, a null rate counting as none,
+    and no table at all meaning no rate for anything. A null currency is not
+    reported - there is no mismatch to measure and the converter leaves the
+    row alone for that reason, not for want of a rate. With conversion switched
+    off nothing is converted on purpose and nothing is reported.
+
+    The tables and amounts are ``data/schemas.py::FX_CONVERTED_AMOUNT_COLUMNS``
+    (a facility's currency is its undrawn rows'). One ERROR per currency,
+    naming rows and amounts per table; the amounts are left as they are - the
+    engine has no rate and must not invent one.
+    """
+    from rwa_calc.data.schemas import FX_CONVERTED_AMOUNT_COLUMNS
+
+    if not config.apply_fx_conversion:
+        return None
+    base = config.base_currency
+    plans: list[pl.LazyFrame] = []
+    for table, amount_columns in FX_CONVERTED_AMOUNT_COLUMNS.items():
+        frame = frames.get(table)
+        table_columns = columns.get(table, frozenset())
+        present = [c for c in amount_columns if c in table_columns]
+        if frame is None or "currency" not in table_columns or not present:
+            continue
+        # ``sum_horizontal`` ignores a null amount rather than nulling the sum.
+        amount = pl.sum_horizontal([pl.col(c).cast(pl.Float64, strict=False) for c in present])
+        plans.append(
+            frame.filter(pl.col("currency").is_not_null() & (pl.col("currency") != base)).select(
+                pl.col("currency").cast(pl.String).alias("_currency"),
+                amount.alias("_amount"),
+                pl.lit(table).alias("_table"),
+            )
+        )
+    if not plans:
+        return None
+
+    unconverted = pl.concat(plans, how="vertical")
+    fx_rates = frames.get("fx_rates")
+    if fx_rates is not None:
+        rated = (
+            fx_rates.filter((pl.col("currency_to") == base) & pl.col("rate").is_not_null())
+            .select(pl.col("currency_from").cast(pl.String).alias("_currency"))
+            .unique()
+        )
+        unconverted = unconverted.join(rated, on="_currency", how="anti")
+    plan = (
+        unconverted.group_by(["_currency", "_table"])
+        .agg(pl.len().alias("_rows"), pl.col("_amount").sum().alias("_amount"))
+        .sort(["_currency", "_table"])
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        by_currency: dict[str, list[dict[str, Any]]] = {}
+        for row in frame.iter_rows(named=True):
+            by_currency.setdefault(str(row["_currency"]), []).append(row)
+        return [
+            fx_rate_missing_error(
+                currency=currency,
+                base_currency=base,
+                rows=sum(int(row["_rows"]) for row in rows),
+                detail="; ".join(
+                    f"{row['_table']}: {row['_rows']} row(s), {float(row['_amount']):,.2f}"
+                    for row in rows
+                ),
+            )
+            for currency, rows in by_currency.items()
+        ]
+
+    return _TableCheck(plan=plan, decode=decode)
+
+
 def _validate_unresolved_obs_risk_type(
     lf: pl.LazyFrame,
     context: str,
@@ -1382,12 +1690,13 @@ def _validate_unresolved_obs_risk_type(
     ``obs_product`` is the second route to a category
     (``engine/ccf.py::build_product_to_risk_type_expr``), so a row is only
     unresolved when BOTH are absent. The test is *absence*, not
-    unmappability: every member of ``VALID_OBS_PRODUCTS`` maps to a bucket in
-    the ``obs_product_to_risk_type`` pack CategoryMap, so a NON-null
-    ``obs_product`` either resolves or already draws a DQ006 for failing its
-    declared domain. Reading the CategoryMap here would need
-    ``contracts/`` -> ``rwa_calc.rulebook``, which check 12 forbids; the
-    equivalence is pinned instead by
+    unmappability: every accepted ``obs_product`` spelling maps to a bucket in
+    BOTH regime packs' ``obs_product_to_risk_type`` CategoryMap (the maps are
+    regime-specific — CM-07), so a NON-null ``obs_product`` either resolves or
+    already draws a DQ006 for failing its declared domain. Reading the
+    CategoryMap here would need ``contracts/`` -> ``rwa_calc.rulebook``, which
+    check 12 forbids; the equivalence is pinned instead by
+    ``tests/unit/test_ccf_obs_product_regime_map.py`` (both regimes) and
     ``tests/unit/test_p1_267_sa_ccf_residual.py``.
 
     The check is confined to rows with a non-zero off-balance amount: at zero
@@ -1413,6 +1722,12 @@ def _validate_unresolved_obs_risk_type(
     if "obs_product" in schema_names:
         product = pl.col("obs_product").cast(pl.Utf8, strict=False).fill_null("")
         unresolved = unresolved & (product.str.strip_chars() == "")
+    # An uncommitted facility is an accepted unconditionally cancellable
+    # commitment, priced in the UCC bucket LR by the hierarchy stage whatever its
+    # risk_type (PS1/26 Table A1 row (7); CRR Annex I 4(a); review finding
+    # CM-01) - it never reaches the residual this warning reports on.
+    if "committed" in schema_names:
+        unresolved = unresolved & ~pl.col("committed").eq_missing(other=False)
 
     # Mirrors ``engine/ccf.py``'s ``_nominal_is_zero`` predicate rather than
     # testing ``!= 0.0``: that is the expression which decides whether the CCF
@@ -1431,6 +1746,158 @@ def _validate_unresolved_obs_risk_type(
         return [unresolved_obs_risk_type_warning(context=context, amount_column=amount_column, n=n)]
 
     return _TableCheck(plan=lf.select((unresolved & has_amount).sum().alias("n")), decode=decode)
+
+
+def _validate_issued_item_on_commitment_risk_type(
+    lf: pl.LazyFrame,
+    context: str,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Flag contingents booked on a COMMITMENT bucket while marked as issued items.
+
+    ``MR`` is the NIF / RUF commitment bucket and ``OC`` "other commitments", but
+    a contingent defaults to ``is_obs_commitment = False`` (an issued item), so a
+    NIF booked as a contingent without the flag takes the CRR Art. 166(10)(b) 50%
+    under F-IRB instead of the Art. 166(8)(d) 75% — with no signal. Every
+    spelling ``RISK_TYPE_SYNONYMS`` resolves to MR or OC is matched; an absent
+    ``is_obs_commitment`` column is the loader default False. Confined to rows
+    with a non-zero ``nominal_amount``, like DQ016, because at zero the CCF
+    cannot affect capital (CM-09).
+
+    References:
+    - CRR Art. 166(8)(d), Art. 166(10)(b)
+    """
+    if "risk_type" not in schema_names or "nominal_amount" not in schema_names:
+        return None
+
+    from rwa_calc.data.schemas import RISK_TYPE_SYNONYMS
+
+    commitment_spellings = sorted(
+        spelling for spelling, code in RISK_TYPE_SYNONYMS.items() if code in {"MR", "OC"}
+    )
+    on_commitment_bucket = (
+        pl.col("risk_type")
+        .cast(pl.Utf8, strict=False)
+        .str.to_lowercase()
+        .is_in(commitment_spellings)
+    )
+    marked_issued = (
+        ~pl.col("is_obs_commitment").fill_null(value=False)
+        if "is_obs_commitment" in schema_names
+        else pl.lit(value=True)
+    )
+    has_amount = (
+        pl.col("nominal_amount").cast(pl.Float64, strict=False).fill_null(0.0).abs()
+        >= _ZERO_AMOUNT_TOLERANCE
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        n = frame.item()
+        if not n:
+            return []
+        return [issued_item_on_commitment_risk_type_warning(context=context, n=n)]
+
+    flagged = (on_commitment_bucket & marked_issued & has_amount).fill_null(value=False)
+    return _TableCheck(plan=lf.select(flagged.sum().alias("n")), decode=decode)
+
+
+def _validate_failed_trade_side(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Name each DvP failed trade whose unknown side changes its charge (CCR031).
+
+    CRR Art. 378 charges the price difference "where the difference could
+    involve a loss for the credit institution", which is ``agreed - MV`` for a
+    sale and ``MV - agreed`` for a purchase. ``engine/ccr/failed_trades.py``
+    charges the absolute difference when ``is_purchase`` is null. A trade whose
+    agreed price equals its market value is charged nothing either way, so only
+    a DvP row with a null side AND a difference is named — one warning per
+    trade, keyed on its ``ft__`` exposure reference. A table that omits the
+    ``is_purchase`` column altogether leaves every side unknown, exactly as a
+    null does. Runs inside the batched input gate, so it adds no collect of its
+    own.
+
+    References:
+    - CRR Art. 378 (PS1/26 Art. 92(3)(ca) keeps Title V in CRR)
+    """
+    required = {"failed_trade_id", "settlement_type"}
+    required |= {"agreed_settlement_price", "current_market_value"}
+    if not required <= schema_names:
+        return None
+    side_unknown = (
+        pl.col("is_purchase").is_null() if "is_purchase" in schema_names else pl.lit(value=True)
+    )
+    plan = (
+        lf.filter(
+            pl.col("settlement_type").str.to_lowercase().eq_missing("dvp")
+            & side_unknown
+            & (pl.col("agreed_settlement_price") != pl.col("current_market_value"))
+        )
+        .select("failed_trade_id")
+        .sort("failed_trade_id")
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        return [
+            failed_trade_side_unknown_warning(failed_trade_id=ref)
+            for ref in frame["failed_trade_id"].to_list()
+        ]
+
+    return _TableCheck(plan=plan, decode=decode)
+
+
+def _validate_dfc_allocation_inputs(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Name each QCCP pre-funded contribution missing K_CCP or DF_CM (CCR032).
+
+    CCR (CRR) Part Art. 308(2) allocates ``K_CCP x DF_i / (DF_CCP + DF_CM)``
+    to the clearing member, floored at ``8% x 2% x DF_i``.
+    ``engine/ccr/default_fund.py`` charges the floor when either input is null;
+    this names every such row — one ERROR per contribution, keyed on its
+    ``dfc__`` exposure reference — because the floor is a lower bound, not the
+    requirement. Unfunded contributions (Art. 310) and non-QCCP rows (Art.
+    309(1), K = DF + UC) read neither input and are not named. Runs inside the
+    batched input gate, so it adds no collect of its own.
+
+    References:
+    - CRR Art. 308(2) (PRA CCR (CRR) Part; PS1/26 Annex R leaves it unamended)
+    """
+    required = {"contribution_id", "is_qccp_ccp", "k_ccp_published", "df_cm_total_contributions"}
+    if not required <= schema_names:
+        return None
+    is_unfunded = (
+        pl.col("is_unfunded_commitment").eq_missing(True)
+        if "is_unfunded_commitment" in schema_names
+        else pl.lit(value=False)
+    )
+    no_k_ccp = pl.col("k_ccp_published").is_null()
+    no_df_cm = pl.col("df_cm_total_contributions").is_null()
+    plan = (
+        lf.filter(pl.col("is_qccp_ccp").eq_missing(True) & ~is_unfunded & (no_k_ccp | no_df_cm))
+        .select("contribution_id", no_k_ccp.alias("no_k_ccp"), no_df_cm.alias("no_df_cm"))
+        .sort("contribution_id")
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        return [
+            dfc_allocation_input_missing_error(
+                contribution_id=row["contribution_id"],
+                missing=[
+                    name
+                    for name, absent in (
+                        ("k_ccp_published", row["no_k_ccp"]),
+                        ("df_cm_total_contributions", row["no_df_cm"]),
+                    )
+                    if absent
+                ],
+            )
+            for row in frame.iter_rows(named=True)
+        ]
+
+    return _TableCheck(plan=plan, decode=decode)
 
 
 def _validate_table_columns_batched(

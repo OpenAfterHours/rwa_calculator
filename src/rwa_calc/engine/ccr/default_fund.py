@@ -1,42 +1,45 @@
 """
-Default-fund-contribution (CCP) capital calculator — CRR Art. 308 / Art. 309.
+Default-fund-contribution (CCP) own-funds calculator — CRR Art. 307-310.
 
 Pipeline position:
     Standalone CCR sub-stage. Consumes
     ``RawCCRBundle.default_fund_contributions`` (one row per clearing-member
-    default-fund contribution) and emits a per-row LazyFrame with the
-    clearing-member capital requirement (K_CM), the resulting RWEA, and a
-    regulatory-band attribution.
+    default-fund contribution) and emits a per-row LazyFrame with the own-funds
+    requirement (``k_cm``), the resulting RWEA, and a regulatory-band
+    attribution. ``engine/stages/ccr.py`` shapes each row into a synthetic
+    ``dfc__`` SA exposure (``drawn_amount = k_cm``, RW pinned to 12.5).
 
-Key responsibilities:
-- Allocate the CCP hypothetical capital (K_CCP, firm-supplied) to the
-  clearing member per CRR Art. 308(2):
-  ``K_CM = K_CCP x (DF_i / DF_CM)``.
-- Convert the own-funds requirement to RWEA via the own-funds -> RWA factor
-  (12.5, CRR Art. 92(3)(ca)): ``dfc_rwea = K_CM x 12.5``. This serves both
-  the QCCP pre-funded leg (Art. 308(3)) and the non-QCCP / unfunded legs
-  (Art. 309(2)) — the arithmetic is identical.
-- Attribute each row to a stable ``regulatory_band`` string for downstream
-  audit / aggregation: ``dfc_qccp_prefunded`` (QCCP, Art. 308),
-  ``dfc_non_qccp_prefunded`` (non-QCCP pre-funded, Art. 309), and
-  ``dfc_non_qccp_unfunded`` (non-QCCP unfunded, Art. 309).
+Key responsibilities — one branch per Art. 307 limb:
+- Art. 308(2), QCCP pre-funded:
+  ``K_i = max(K_CCP x DF_i / (DF_CCP + DF_CM), 8% x 2% x DF_i)``.
+- Art. 309(1), non-QCCP (pre-funded or unfunded): ``K = DF + UC`` — the
+  contribution itself is the own-funds requirement, row by row.
+- Art. 310, QCCP unfunded: a 0% risk weight, so no own funds.
+- Art. 308(3) / 309(2): RWEA = K x 12.5 (own-funds -> RWA, Art. 92(3)(ca)).
+- Attribute each row to a stable ``regulatory_band``: ``dfc_qccp_prefunded``,
+  ``dfc_qccp_unfunded``, ``dfc_non_qccp_prefunded``, ``dfc_non_qccp_unfunded``.
+
+Rule text (PRA Rulebook CCR (CRR) Part; PS1/26 Annex R re-states only the
+308(3) / 309(2) cross-references, so both regimes share these numerics):
+- Art. 308(2): "K_i = max{ K_CCP . DF_i / (DF_CCP + DF_CM) , 8% . 2% . DF_i }"
+  where "DF_CCP = the pre-funded financial resources of the CCP".
+- Art. 309(1): "K = DF + UC where ... DF = the pre-funded contributions to the
+  default fund of a non-qualifying CCP; and UC = the unfunded contributions".
+- Art. 310: "An institution shall apply a 0% risk weight to its unfunded
+  contributions to the default fund of a QCCP."
+
+An absent ``df_ccp_prefunded`` (DF_CCP) is read as 0. That can only shrink the
+Art. 308(2) denominator, so K_i can only rise — the fallback is conservative.
 
 Out of scope (left for follow-up tickets):
 - The Art. 308(2) K_CCP hypothetical-capital simulation itself (the firm
-  supplies ``k_ccp_published``).
-- Multi-CCP / multi-default-fund netting and the Art. 308(4)/(5) total cap.
-- The Art. 309 K_CCP cap / 1250%-vs-deduction alternative.
-- The Art. 308 capital-ratio (i_2 / c) adjustment and the 2% floor on the
-  QCCP trade-exposure leg (that is Art. 306 / ``ccp.py``).
+  supplies ``k_ccp_published``, as the CCP communicates it under EMIR Art. 50c).
+- The Art. 303(2) cap (QCCP trade + DF own funds <= the non-QCCP equivalent),
+  which can only lower the charge.
 
 References:
-- CRR Art. 308(2): K_CCP hypothetical capital + K_CM clearing-member
-  allocation.
-- CRR Art. 308(3): QCCP pre-funded own-funds (RWEA = K_CM x 12.5).
-- CRR Art. 309(1)/(2): non-QCCP / unfunded treatment (same arithmetic).
-- CRR Art. 92(3)(ca): own-funds -> RWA factor (12.5).
-- PRA PS1/26: Art. 308/309 numerics carried into PS1/26 unchanged.
-- BCBS CRE54.18-54.32.
+- CRR Art. 307-310; CRR Art. 92(3)(ca) (own-funds -> RWA factor 12.5).
+- BCBS CRE54.31-54.40.
 """
 
 from __future__ import annotations
@@ -45,8 +48,11 @@ import logging
 from datetime import date
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.schemas import DF_CONTRIBUTION_SCHEMA
 from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
@@ -54,69 +60,90 @@ logger = logging.getLogger(__name__)
 
 # Regulatory-band discriminators (audit / aggregation keys).
 _BAND_QCCP_PREFUNDED: str = "dfc_qccp_prefunded"
+_BAND_QCCP_UNFUNDED: str = "dfc_qccp_unfunded"
 _BAND_NON_QCCP_PREFUNDED: str = "dfc_non_qccp_prefunded"
 _BAND_NON_QCCP_UNFUNDED: str = "dfc_non_qccp_unfunded"
 
-# CRR Art. 92(3)(ca) own-funds -> RWA factor (12.5), resolved from the
-# rulepack once at module load (regime-invariant; resolved against "crr").
+# Regime-invariant Section 9 parameters, resolved from the rulepack once at
+# module load (resolved against "crr"; the common pack serves both regimes).
 _PACK = resolve("crr", date(2026, 1, 1))
 _OWN_FUNDS_TO_RWA_FACTOR = scalar_value(_PACK.scalar_param("own_funds_to_rwa_factor"))
+_FLOOR_CAPITAL_RATIO = scalar_value(_PACK.scalar_param("ccp_dfc_floor_capital_ratio"))
+_FLOOR_RISK_WEIGHT = scalar_value(_PACK.scalar_param("ccp_dfc_floor_risk_weight"))
+_QCCP_UNFUNDED_RW = scalar_value(_PACK.scalar_param("ccp_dfc_qccp_unfunded_rw"))
 
 
-# NOTE: No ``@cites("CRR Art. 308")`` / ``@cites("CRR Art. 309")`` —
-# watchfire's bundled rulebook index does not yet contain CRR Title II
-# Chapter 6 Section 9 (CCP exposures) Art. 308-309. Article attribution is
-# preserved in the docstring; re-extending the watchfire CRR index for the
-# CCP articles is a separate follow-up (mirrors the failed_trades.py waiver
-# for Art. 378-380 and the existing rc.py / sa_ccr.py waivers for Art.
-# 274/275).
+@cites("CRR Art. 308(2)")
+@cites("CRR Art. 309(1)")
+@cites("CRR Art. 310")
 def compute_dfc_capital(
     default_fund_contributions: pl.LazyFrame,
     config: CalculationConfig,  # noqa: ARG001 — numerics identical under CRR and PS1/26
 ) -> pl.LazyFrame:
-    """Compute clearing-member capital (K_CM) and RWEA per CRR Art. 308 / 309.
+    """Compute the default-fund own-funds requirement and RWEA per Art. 307-310.
 
     Args:
         default_fund_contributions: LazyFrame matching
-            ``DF_CONTRIBUTION_SCHEMA`` — one row per clearing-member
-            default-fund contribution. Required columns: ``contribution_id``,
-            ``ccp_reference``, ``df_i_contribution_amount`` (DF_i),
-            ``df_cm_total_contributions`` (DF_CM), ``k_ccp_published``
-            (K_CCP), plus the optional ``is_qccp_ccp`` /
-            ``is_unfunded_commitment`` branch flags.
-        config: Calculation configuration. The Art. 308/309 arithmetic is
+            ``DF_CONTRIBUTION_SCHEMA`` — one row per contribution. Read:
+            ``contribution_id``, ``ccp_reference``, ``is_qccp_ccp``,
+            ``is_unfunded_commitment``, ``df_i_contribution_amount`` (DF_i or
+            UC), and on the QCCP pre-funded branch only ``k_ccp_published``
+            (K_CCP), ``df_ccp_prefunded`` (DF_CCP) and
+            ``df_cm_total_contributions`` (DF_CM).
+        config: Calculation configuration. The Section 9 arithmetic is
             identical under CRR and PRA PS1/26, so the framework field is not
             branched on — the parameter is kept for signature consistency
             with sibling CCR calculators.
 
     Returns:
-        LazyFrame with one row per input row, carrying:
-        ``contribution_id``, ``ccp_reference``, ``is_qccp_ccp``,
-        ``is_unfunded_commitment``, ``k_ccp_published``, ``k_cm`` (Art.
-        308(2) clearing-member allocation), ``dfc_rwea`` (Art. 308(3)/309(2)
-        K_CM x 12.5), and ``regulatory_band``.
+        LazyFrame with one row per input row, carrying ``contribution_id``,
+        ``ccp_reference``, ``is_qccp_ccp``, ``is_unfunded_commitment``,
+        ``k_ccp_published``, ``k_cm`` (the Art. 307 own-funds requirement of the
+        row's branch), ``dfc_rwea`` (``k_cm`` x 12.5) and ``regulatory_band``.
 
     References:
-        CRR Art. 308(2) (K_CM = K_CCP x DF_i / DF_CM);
-        CRR Art. 308(3) (QCCP pre-funded RWEA = K_CM x 12.5);
-        CRR Art. 309(1)/(2) (non-QCCP / unfunded — same arithmetic);
-        CRR Art. 92(3)(ca) (own-funds -> RWA factor = 12.5).
+        CRR Art. 308(2)/(3); CRR Art. 309(1)/(2); CRR Art. 310;
+        CRR Art. 92(3)(ca).
     """
     is_qccp = pl.col("is_qccp_ccp")
     is_unfunded = pl.col("is_unfunded_commitment")
+    contribution = pl.col("df_i_contribution_amount")
 
-    # Art. 308(2): clearing-member allocation of the CCP hypothetical capital.
+    # Art. 308(2): the CCP's own pre-funded resources join the clearing members'
+    # in the denominator; an absent DF_CCP is read as 0 (conservative, see the
+    # module docstring) — coalesce, not a fill: the column stays as supplied.
+    denominator = pl.coalesce(pl.col("df_ccp_prefunded"), pl.lit(0.0)) + pl.col(
+        "df_cm_total_contributions"
+    )
+    # Art. 308(2) is a max, so the floor is a lower bound whatever K_CCP is: with
+    # K_CCP or DF_CM missing the share is null, ``max_horizontal`` skips it and
+    # the floor is charged, and the input gate names the row (CCR032, ERROR — the
+    # floor can understate). A null used to survive here and reach the SA chain
+    # as a null drawn amount: EAD 0, RWEA 0, and no null-EAD error ever fired.
+    k_qccp_prefunded = pl.max_horizontal(
+        pl.col("k_ccp_published") * contribution / denominator,
+        _FLOOR_CAPITAL_RATIO * _FLOOR_RISK_WEIGHT * contribution,
+    )
+    # Art. 310: RWEA = UC x 0%, so K = RWEA / 12.5.
+    k_qccp_unfunded = contribution * _QCCP_UNFUNDED_RW / _OWN_FUNDS_TO_RWA_FACTOR
+
+    # Art. 309(1): K = DF + UC — each row carries one of the two terms.
     k_cm = (
-        pl.col("k_ccp_published")
-        * (pl.col("df_i_contribution_amount") / pl.col("df_cm_total_contributions"))
-    ).alias("k_cm")
+        pl.when(is_qccp & is_unfunded)
+        .then(k_qccp_unfunded)
+        .when(is_qccp)
+        .then(k_qccp_prefunded)
+        .otherwise(contribution)
+        .alias("k_cm")
+    )
 
-    # Art. 308(3) / 309(2): RWEA = K_CM x 12.5 (own-funds -> RWA, Art. 92(3)(ca)).
+    # Art. 308(3) / 309(2): RWEA = K x 12.5 (own-funds -> RWA, Art. 92(3)(ca)).
     dfc_rwea = (pl.col("k_cm") * _OWN_FUNDS_TO_RWA_FACTOR).alias("dfc_rwea")
 
-    # Regulatory band string (audit / aggregation key).
     regulatory_band = (
-        pl.when(is_qccp)
+        pl.when(is_qccp & is_unfunded)
+        .then(pl.lit(_BAND_QCCP_UNFUNDED))
+        .when(is_qccp)
         .then(pl.lit(_BAND_QCCP_PREFUNDED))
         .when(is_unfunded)
         .then(pl.lit(_BAND_NON_QCCP_UNFUNDED))
@@ -124,8 +151,15 @@ def compute_dfc_capital(
         .alias("regulatory_band")
     )
 
+    # The frame arrives as the caller built it (the API bundle is not loader-
+    # sealed), so the OPTIONAL schema columns — DF_CCP among them — are added
+    # here with their declared defaults rather than assumed.
+    optional_columns = {
+        name: spec for name, spec in DF_CONTRIBUTION_SCHEMA.items() if not spec.required
+    }
     return (
-        default_fund_contributions.with_columns([k_cm])
+        ensure_columns(default_fund_contributions, optional_columns)
+        .with_columns([k_cm])
         .with_columns([dfc_rwea, regulatory_band])
         .select(
             [

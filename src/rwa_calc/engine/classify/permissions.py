@@ -14,7 +14,8 @@ Key responsibilities:
   ``_model_permission_diagnostic`` scratch column.
 - Build the five permission expressions consumed by the approach ladder
   (``build_permission_exprs``) from model-level / IRB-mode / org-wide
-  sources.
+  sources, plus the specialised-lending IRB-permission gate on the Basel 3.1
+  IPRE / HVCRE forced slotting (``build_sl_irb_permission_expr``).
 - Roll the diagnostic column up into CLS006 warnings
   (``emit_model_permission_diagnostics`` — eager, post-materialise).
 
@@ -23,6 +24,8 @@ References:
 - CRR Art. 148: sequential implementation (roll-out) across classes
 - CRR Art. 150: permanent partial use (PPU) — SA-precedence carve-out
 - CRR Art. 147(3)-(4): RGLA / PSE IRB-class keying for permission lookup
+- PRA PS1/26 Art. 107(1) / Art. 147A(1)(c): IPRE / HVCRE slotting needs an IRB
+  permission, and an Art. 148 / 150 SA permission keeps SA
 """
 
 from __future__ import annotations
@@ -44,7 +47,6 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.errors import CalculationError
 
 logger = logging.getLogger(__name__)
-
 
 # =========================================================================
 # Model-level permission resolution (optional)
@@ -94,6 +96,13 @@ def resolve_model_permissions(
     exposures = exposures.with_columns(
         pl.coalesce(pl.col("model_id"), pl.col("cp_internal_model_id")).alias("model_id")
     )
+
+    # One identity per INPUT row, which the join below fans out and the windows
+    # and de-duplication fold back. Not the reference: two rows can share one
+    # (review finding RC-10, DQ019) — an SA-CCR and an SFT netting set with one
+    # id both mint ``ccr__<id>`` with ``exposure_type`` ``ccr_netting_set``, and
+    # keying the fold on (reference, type) still deleted one of them.
+    exposures = exposures.with_row_index("_mp_exposure_row")
 
     # The model_permissions frame is sealed at the loader edge
     # (raw_model_permissions), so the optional columns country_codes /
@@ -192,17 +201,17 @@ def resolve_model_permissions(
     # SA-precedence override is applied AFTER the .max() roll-up so any SA
     # row with permission_valid=True flips all IRB flags to False.
     result = result.with_columns(
-        pl.col("_sa_block_match").max().over("exposure_reference").alias("_sa_block"),
-        pl.col("_mp_row_joined").max().over("exposure_reference").alias("_mp_joined_any"),
-        pl.col("_sa_ppu_reason").max().over("exposure_reference").alias("ppu_reason"),
+        pl.col("_sa_block_match").max().over("_mp_exposure_row").alias("_sa_block"),
+        pl.col("_mp_row_joined").max().over("_mp_exposure_row").alias("_mp_joined_any"),
+        pl.col("_sa_ppu_reason").max().over("_mp_exposure_row").alias("ppu_reason"),
     ).with_columns(
-        (pl.col("_airb_match").max().over("exposure_reference") & ~pl.col("_sa_block")).alias(
+        (pl.col("_airb_match").max().over("_mp_exposure_row") & ~pl.col("_sa_block")).alias(
             "model_airb_permitted"
         ),
-        (pl.col("_firb_match").max().over("exposure_reference") & ~pl.col("_sa_block")).alias(
+        (pl.col("_firb_match").max().over("_mp_exposure_row") & ~pl.col("_sa_block")).alias(
             "model_firb_permitted"
         ),
-        (pl.col("_slotting_match").max().over("exposure_reference") & ~pl.col("_sa_block")).alias(
+        (pl.col("_slotting_match").max().over("_mp_exposure_row") & ~pl.col("_sa_block")).alias(
             "model_slotting_permitted"
         ),
     )
@@ -235,6 +244,15 @@ def resolve_model_permissions(
     # not depend on the physical row order of the input parquet. The
     # priority key keeps the most-informative diagnostic on the surviving
     # row (null > filter_rejected > unmatched_model_id > null_model_id).
+    #
+    # One row per INPUT row (``_mp_exposure_row``), not per reference: a loan and a
+    # contingent sharing a reference were collapsed here into ONE row, the
+    # other's capital leaving the total (review finding RC-10). The hierarchy
+    # stage re-keys colliding lending rows apart (DQ019,
+    # engine/hierarchy/namespace.py), but the engine-minted rows it cannot
+    # re-key — an SA-CCR and an SFT netting set sharing an id — still meet here
+    # with one reference and one type. The reference stays the leading sort key,
+    # so the output order is what it was.
     diagnostic_priority = (
         pl.when(pl.col("_model_permission_diagnostic").is_null())
         .then(pl.lit(0))
@@ -250,6 +268,7 @@ def resolve_model_permissions(
         .sort(
             [
                 "exposure_reference",
+                "_mp_exposure_row",
                 "_diagnostic_priority",
                 "mp_approach",
                 "mp_country_codes",
@@ -258,7 +277,7 @@ def resolve_model_permissions(
             nulls_last=True,
             maintain_order=True,
         )
-        .unique(subset=["exposure_reference"], keep="first", maintain_order=True)
+        .unique(subset=["_mp_exposure_row"], keep="first", maintain_order=True)
         .select(
             pl.exclude(
                 "mp_exposure_class",
@@ -275,6 +294,7 @@ def resolve_model_permissions(
                 "_mp_row_joined",
                 "_mp_joined_any",
                 "_diagnostic_priority",
+                "_mp_exposure_row",
             )
         )
     )
@@ -370,6 +390,58 @@ def build_permission_exprs(
         config, has_internal_rating
     )
     return airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting
+
+
+@cites("PS1/26, paragraph 147A")
+def build_sl_irb_permission_expr(
+    config: CalculationConfig,
+    *,
+    has_model_permissions: bool,
+) -> pl.Expr:
+    """Does an IRB permission cover this specialised-lending row?
+
+    The gate on the Basel 3.1 IPRE / HVCRE forced slotting. PS1/26 Art. 107(1):
+    institutions "shall apply either the Standardised Approach ... or, if
+    permitted by the PRA in accordance with ... Article 143, the IRB Approach"
+    — and the Slotting Approach is one of the Art. 143(2A) IRB approaches.
+    Art. 147A(1)(c) then directs, for IPRE and HVCRE, "(i) the Standardised
+    Approach for exposures where permission has been granted under Article
+    148 or Article 150; or (ii) the Slotting Approach for all other IPRE
+    exposures and HVCRE exposures". Limb (ii) therefore binds only a firm
+    whose IRB permission covers the exposure, and never over an Art. 148 /
+    150 standardised permission (review IV-02 / RG-01).
+
+    Per permission source (same three as ``build_permission_exprs``):
+
+    - **Model-level**: any of the row's slotting / F-IRB / A-IRB model
+      permission flags. ``resolve_model_permissions`` has already cleared all
+      three where a matching ``standardised`` row exists (the Art. 148 / 150
+      SA-precedence block), so that limb needs no separate term. No PD or LGD
+      requirement — slotting needs neither — but, as for every model-level
+      permission (and for the PF / OF / CF slotting branch), the row must
+      carry a ``model_id`` that a permission row matches: an IPRE / HVCRE row
+      with no internal rating holds no permission and stays on SA.
+    - **IRB mode without model_permissions**: nothing is permitted.
+    - **Org-wide** (``PermissionMode.STANDARDISED``, optionally with an
+      explicit ``irb_permissions`` map): the specialised-lending class grants
+      slotting, F-IRB or A-IRB. The default SA-only map grants none.
+    """
+    if has_model_permissions:
+        return (
+            pl.col("model_slotting_permitted")
+            | pl.col("model_firb_permitted")
+            | pl.col("model_airb_permitted")
+        )
+    if config.permission_mode == PermissionMode.IRB:
+        return pl.lit(False)
+    # irb_permissions is derived non-None in CalculationConfig.__post_init__.
+    permissions = config.irb_permissions
+    return pl.lit(
+        any(
+            permissions.is_permitted(ExposureClass.SPECIALISED_LENDING, approach)  # ty: ignore[unresolved-attribute]
+            for approach in (ApproachType.SLOTTING, ApproachType.FIRB, ApproachType.AIRB)
+        )
+    )
 
 
 def _build_orgwide_permission_exprs(

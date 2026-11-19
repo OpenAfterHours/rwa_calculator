@@ -280,8 +280,11 @@ This treatment is unchanged from CRR.
 
 Under Basel 3.1, exposures are routed to slotting based on specialised lending type:
 
-**IPRE / HVCRE (Art. 147A(2)):** Must use slotting. These sub-types cannot use F-IRB or A-IRB
-under Basel 3.1 (unless the firm has specific A-IRB approval, which is rare).
+**IPRE / HVCRE (Art. 147A(1)(c)):** Must use slotting where an IRB permission covers the
+exposure — they cannot use F-IRB or A-IRB under Basel 3.1, so an F-IRB / A-IRB / slotting
+permission for specialised lending yields slotting. With no IRB permission (Art. 107(1)), or
+with an Art. 148 / 150 standardised permission (limb (i)), they stay on the Standardised
+Approach. See [Model Permissions](model-permissions.md#iprehvcre-routing).
 
 **PF, OF, CF:** Routed to slotting when:
 

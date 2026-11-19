@@ -559,35 +559,43 @@ class TestResidentialMortgageRiskWeights:
 class TestCommercialRERiskWeights:
     """Tests for commercial real estate LTV treatment."""
 
-    def test_low_ltv_with_income_cover_fifty_percent(
+    def test_low_ltv_not_materially_dependent_fifty_percent(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRE LTV <= 50% with income cover should get 50% RW."""
-        result = calculate_single_sa_exposure(
-            sa_calculator,
-            ead=Decimal("600000"),
-            exposure_class="COMMERCIAL_RE",
-            ltv=Decimal("0.40"),
-            has_income_cover=True,
-            config=crr_config,
-        )
+        """CRE LTV <= 50%, repayment NOT dependent on the property: 50% (Art. 126).
 
-        assert result["risk_weight"] == pytest.approx(0.50)
-
-    def test_low_ltv_without_income_cover_hundred_percent(
-        self,
-        sa_calculator: SACalculator,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """CRE LTV <= 50% without income cover should get 100% RW."""
+        ``has_income_cover`` is "materially dependent on the property's cash
+        flows"; Art. 126(2)(b) grants 50% only where it is False. This test
+        pinned the inverted gate (True -> 50%) until review RE-17 / P1.263.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("600000"),
             exposure_class="COMMERCIAL_RE",
             ltv=Decimal("0.40"),
             has_income_cover=False,
+            config=crr_config,
+            # The CRR Art. 126 50% needs the firm's attestation of the Art. 126(2)
+            # conditions, PRA Credit Risk Part rule 4.1 / 4.1A included.
+            is_qualifying_re=True,
+        )
+
+        assert result["risk_weight"] == pytest.approx(0.50)
+
+    def test_low_ltv_materially_dependent_hundred_percent(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRE LTV <= 50%, income-producing: Art. 126(2)(b) fails -> Art. 124(1) 100%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("600000"),
+            exposure_class="COMMERCIAL_RE",
+            ltv=Decimal("0.40"),
+            has_income_cover=True,
             config=crr_config,
         )
 
@@ -600,7 +608,41 @@ class TestCommercialRERiskWeights:
 
 
 class TestCCPRiskWeights:
-    """Qualifying CCP exposures get prescribed risk weights, not CQS-based."""
+    """Qualifying CCP TRADE exposures get prescribed risk weights, not CQS-based.
+
+    CC-11 (2026-11 review): every frame here now says it is a trade
+    (``risk_type = CCR_DERIVATIVE``). The tests were named "trade exposure" but
+    carried no trade marker, so they pinned the old reading that any row with a
+    ``ccp`` counterparty takes 2% / 4%. CRR Art. 107(2): "For all other types of
+    exposures to a central counterparty, institutions shall treat those exposures
+    as follows: (a) as exposures to an institution for other types of exposures
+    to a qualifying CCP" — see ``test_ccp_non_trade_exposure_is_an_institution``.
+    """
+
+    def test_ccp_non_trade_exposure_is_an_institution(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A loan to a QCCP (no trade marker) takes the CQS 1 institution 20%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["CCP_LOAN"],
+                "ead_final": [5_000_000.0],
+                "exposure_class": ["INSTITUTION"],
+                "cqs": [1],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "cp_entity_type": ["ccp"],
+                "cp_is_ccp_client_cleared": [False],
+            }
+        ).lazy()
+
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
+
+        # Pre-fix: 2% (the QCCP pin keyed on the counterparty alone).
+        assert df["risk_weight"][0] == pytest.approx(0.20)
 
     def test_ccp_proprietary_trade_gets_2pct_rw(
         self,
@@ -617,6 +659,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [False],
             }
         ).lazy()
@@ -641,6 +684,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [True],
             }
         ).lazy()
@@ -665,6 +709,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [None],
             }
         ).lazy()
@@ -689,6 +734,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [True],
             }
         ).lazy()
@@ -714,6 +760,7 @@ class TestCCPRiskWeights:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [False],
             }
         ).lazy()
@@ -744,6 +791,7 @@ class TestCCPRiskWeightsBasel31:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [False],
             }
         ).lazy()
@@ -768,6 +816,7 @@ class TestCCPRiskWeightsBasel31:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "cp_entity_type": ["ccp"],
+                "risk_type": ["CCR_DERIVATIVE"],
                 "cp_is_ccp_client_cleared": [True],
             }
         ).lazy()

@@ -48,6 +48,18 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.40"),
         citation=Citation("CRR", "233(2)", "credit-derivative restructuring-exclusion 40% haircut"),
     ),
+    # CDS restructuring-exclusion exposure cap (CRR Art. 233(2)(b) / PRA PS1/26
+    # Art. 233(2)(b)): where such a credit derivative's notional exceeds the
+    # exposure value, the protection is valued at no more than 60% of the
+    # exposure value. A separate statement from the 40% reduction in point (a),
+    # held separately so neither is derived from the other. Regime-invariant.
+    "restructuring_exclusion_exposure_cap": ScalarParam(
+        name="restructuring_exclusion_exposure_cap",
+        value=Decimal("0.60"),
+        citation=Citation(
+            "CRR", "233(2)(b)", "restructuring-exclusion cap at 60% of the exposure value"
+        ),
+    ),
     # Art. 232(3) life-insurance funded-protection RW map: insurer SA risk weight
     # -> secured-portion risk weight (banded; a band applies when the insurer RW
     # is <= its upper bound). Regime-invariant (CRR Art. 232 retained unchanged
@@ -64,17 +76,14 @@ ENTRIES: dict[str, RuleEntry] = {
         input="insurer_risk_weight",
         citation=Citation("CRR", "232", "(3) life-insurance secured-portion RW map"),
     ),
+    # The α = 1.4 default is regime-invariant. The α = 1 carve-out for
+    # non-financial / pension-scheme counterparties is NOT: it is new PS1/26 text
+    # (Annex R Art. 274(2)), so ``sa_ccr_alpha_carve_out`` lives in the b31 pack
+    # and is gated by the ``sa_ccr_alpha_nfc_carve_out_applicable`` Feature.
     "sa_ccr_alpha": ScalarParam(
         name="sa_ccr_alpha",
         value=Decimal("1.4"),
         citation=Citation("CRR", "274(2)"),
-    ),
-    # CRR Art. 274(2) second sub-paragraph — alpha=1.0 carve-out for non-financial
-    # / pension-scheme counterparties (EMIR Art. 2(9)/2(10)). Regime-invariant.
-    "sa_ccr_alpha_carve_out": ScalarParam(
-        name="sa_ccr_alpha_carve_out",
-        value=Decimal("1.0"),
-        citation=Citation("CRR", "274(2)", "alpha=1.0 carve-out for NFC / pension-scheme"),
     ),
     # Financial Collateral Simple Method (CRR Art. 222 / PRA PS1/26 Art. 222).
     # Single-regime: PS1/26 retains Art. 222 unchanged for SA exposures.
@@ -195,6 +204,25 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("12.5"),
         citation=Citation("CRR", "92", "(3)(ca) own-funds -> RWA conversion 1/0.08"),
     ),
+    # CCP default-fund contributions (CCR (CRR) Part Section 9). Regime-invariant:
+    # PS1/26 Annex R re-states only the Art. 308(3) / 309(2) cross-references, so
+    # the Art. 308(2) formula and Art. 310 carry into Basel 3.1 unchanged.
+    # Art. 308(2): K_i = max{ K_CCP . DF_i / (DF_CCP + DF_CM) , 8% . 2% . DF_i }.
+    "ccp_dfc_floor_capital_ratio": ScalarParam(
+        name="ccp_dfc_floor_capital_ratio",
+        value=Decimal("0.08"),
+        citation=Citation("CRR", "308(2)", "QCCP pre-funded DF floor: the 8% in 8% . 2% . DF_i"),
+    ),
+    "ccp_dfc_floor_risk_weight": ScalarParam(
+        name="ccp_dfc_floor_risk_weight",
+        value=Decimal("0.02"),
+        citation=Citation("CRR", "308(2)", "QCCP pre-funded DF floor: the 2% in 8% . 2% . DF_i"),
+    ),
+    "ccp_dfc_qccp_unfunded_rw": ScalarParam(
+        name="ccp_dfc_qccp_unfunded_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "310", "0% RW on unfunded contributions to a QCCP default fund"),
+    ),
     # SA-CCR supervisory option volatilities (CRR Art. 279a(2) / BCBS CRE52.47
     # Table 3) for the Black-Scholes Phi(d1) supervisory delta. Regime-invariant.
     # The two commodity volatilities are carried for table completeness; the
@@ -238,6 +266,16 @@ ENTRIES: dict[str, RuleEntry] = {
         name="sa_ccr_option_volatility_commodity_other",
         value=Decimal("0.70"),
         citation=Citation("CRR", "279a", "(2) Table 3 other commodity option volatility"),
+    ),
+    # CCR (CRR) Part Art. 279a(1)(a) Table 1 (unchanged by PS1/26): "Others | All |
+    # 150%" — the supervisory volatility of an option mapped to the Art. 277(1)(f)
+    # other-risks category, including a trade whose asset_class is missing or
+    # unrecognised (CCR021). Without it such an option had a null delta and a
+    # zero add-on.
+    "sa_ccr_option_volatility_other": ScalarParam(
+        name="sa_ccr_option_volatility_other",
+        value=Decimal("1.50"),
+        citation=Citation("CRR", "279a", "(1)(a) Table 1 other-risks option volatility"),
     ),
     # CDO tranche supervisory-delta closed-form coefficients (CRR Art. 279a(3) /
     # BCBS CRE52.43): |delta| = 15 / ((1 + 14*A) * (1 + 14*D)).
@@ -393,7 +431,21 @@ ENTRIES: dict[str, RuleEntry] = {
         },
         key="commodity_type",
         citation=Citation("CRR", "280", "Table 1 commodity SF by bucket"),
-        default=Decimal("0.18"),
+        # A commodity trade with a missing / unrecognised commodity_type is
+        # assigned to the highest-factor hedging set (ELECTRICITY) by
+        # engine/ccr/risk_categories.py — the conservative fallback reported as
+        # CCR022 (review CC-06). The default states that applied factor; it was
+        # 0.18 (OTHER), which no code path read.
+        default=Decimal("0.40"),
+    ),
+    # CRR Art. 280f(2) (unchanged by PS1/26): "SF Other = the supervisory factor
+    # for the other risk category with a value equal to 8%". Applied to trades
+    # mapped to the Art. 277(1)(f) other-risks category, including a trade whose
+    # asset_class is missing or unrecognised (CCR021).
+    "sa_ccr_supervisory_factor_other": ScalarParam(
+        name="sa_ccr_supervisory_factor_other",
+        value=Decimal("0.08"),
+        citation=Citation("CRR", "280", "280f(2) other-risks supervisory factor"),
     ),
     # SA-CCR specific wrong-way-risk LGD override (CRR Art. 291(5)(c)): 100%.
     "ccr_wwr_specific_lgd_override": ScalarParam(
@@ -872,27 +924,9 @@ ENTRIES: dict[str, RuleEntry] = {
             "SE": "SEK",  # Swedish krona
         },
     ),
-    # Concrete OBS product -> abstract Annex I risk_type bucket (CRR Annex I
-    # paras 1-4 / Art. 111(1)), relocated from data/tables (S13-f). Category
-    # labels (product key -> FR/MLR/...), not rates. Framework-invariant: every
-    # product resolves to the same risk_type under CRR Annex I and PS1/26 Table
-    # A1; the framework split lives downstream in the sa_ccf lookup. Consumed in
-    # Python via Expr.replace_strict in engine/ccf.py (default=None for unmapped).
-    "obs_product_to_risk_type": CategoryMap(
-        name="obs_product_to_risk_type",
-        key="obs_product",
-        citation=Citation("CRR", "111", "Annex I OBS product -> risk_type bucket"),
-        entries={
-            # Bankers' acceptances: direct credit substitutes -> 100% CCF (FR).
-            "ACCEPTANCE": "FR",
-            # Non-direct-credit-substitute guarantees -> 20% (MLR), Annex I Row 6(b).
-            "PERFORMANCE_BOND": "MLR",
-            "WARRANTY": "MLR",
-            "TENDER_BOND": "MLR",
-            "BID_BOND": "MLR",
-            # Self-liquidating trade-related letters of credit -> 20%, Row 6(a).
-            "DOCUMENTARY_CREDIT": "MLR",
-            "TRADE_LC": "MLR",
-        },
-    ),
+    # NOTE: ``obs_product_to_risk_type`` is deliberately NOT here. It used to be,
+    # documented as "framework-invariant", but CRR Annex I and PS1/26 Table A1
+    # classify documentary credits and shipping / customs / tax bonds differently
+    # (Annex I 2(a)/2(b)(i) medium risk 50% vs Table A1 row 6(a)/(d) 20%), so each
+    # regime pack carries its own cited map (CM-07 / TR-04).
 }

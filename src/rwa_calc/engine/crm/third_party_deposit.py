@@ -17,6 +17,8 @@ Key responsibilities:
   SA calculator's risk-weight blend.
 - Under F-IRB the substitution analogue is deferred: a third-party deposit gives
   NO benefit (conservative) and raises CRM017.
+- A counterparty-credit-risk row takes no third-party deposit (CRR Art. 223(5A) /
+  PS1/26 Art. 191A(4)).
 
 The holder institution's risk weight is derived from the deposit row's
 ``issuer_cqs`` (a cash deposit is a claim on the institution holding it, so its
@@ -39,11 +41,13 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import ERROR_THIRD_PARTY_DEPOSIT_FIRB_DEFERRED, crm_warning
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
     INSTITUTION_DEPOSIT_HOLDER_TYPES,
     THIRD_PARTY_DEPOSIT_COLLATERAL_TYPES,
 )
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.crm.expressions import ccr_engine_row_expr
 from rwa_calc.engine.sa.guarantor_rw import build_institution_guarantor_rw_expr
 
 if TYPE_CHECKING:
@@ -103,7 +107,10 @@ def compute_third_party_deposit_columns(
     fallback for an unrated Basel 3.1 holder — the deposit carries no SCRA grade,
     so the conservative fallback binds). A populated NON-institution holder is out
     of scope: no benefit (it is already excluded from the 0% cash path) + CRM017.
-    Under F-IRB the substitution is deferred: no benefit + CRM017.
+    Under F-IRB the substitution is deferred: no benefit + CRM017. A deposit
+    pledged to a counterparty-credit-risk row (``ccr_engine_row_expr``) gives it
+    nothing: its exposure value already reflects its collateral under the CCR
+    Part (CRR Art. 223(5A) / PS1/26 Art. 191A(4); review CL-04 / CC-07).
 
     ``gate_frame`` is the frame the CRM017 gate is evaluated on: an already
     materialised frame with the same rows, reference and ``approach`` as
@@ -167,9 +174,12 @@ def compute_third_party_deposit_columns(
         )
 
     exposures = (
-        exposures.join(agg, left_on=exp_ref, right_on="beneficiary_reference", how="left")
+        ensure_columns(
+            exposures, {"risk_type": ColumnSpec(pl.String, required=False)}, present=exp_names
+        )
+        .join(agg, left_on=exp_ref, right_on="beneficiary_reference", how="left")
         .with_columns(
-            pl.when(is_firb)
+            pl.when(is_firb | ccr_engine_row_expr())
             .then(pl.lit(0.0))
             .otherwise(pl.min_horizontal(inst_value, ead))
             .alias("third_party_deposit_value"),

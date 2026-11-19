@@ -7,7 +7,11 @@ Pipeline position:
 Key responsibilities:
 - Apply supervisory haircuts by collateral type, CQS, and maturity
 - Framework-conditional logic: CRR (Art. 224) vs Basel 3.1 (CRE22.52-53)
-- FX mismatch haircuts (8%, same under both frameworks)
+- FX mismatch haircuts (8%, same under both frameworks); a null collateral
+  currency is a mismatch; non-financial collateral takes H_fx under Basel 3.1
+  only (pack Feature ``fcm_hfx_applies_to_non_financial``, PS1/26 Art. 230(1)(b))
+- Collateral residual maturity derived from ``maturity_date`` when not supplied
+  (Art. 238(1))
 - Art. 227 zero-haircut conditions for repo-style transactions
 - Maturity mismatch adjustments (CRR Art. 237-238)
 - Art. 237(2) ineligibility: original maturity <1yr, 1-day M floor exposures
@@ -64,6 +68,19 @@ _PACK = resolve("crr", date(2026, 1, 1))
 _ZERO_HAIRCUT_MAX_SOVEREIGN_CQS = _PACK.int_param("zero_haircut_max_sovereign_cqs").value
 _LIQUIDATION_PERIOD_REPO = _PACK.int_param("liquidation_period_repo").value
 _LIQUIDATION_PERIOD_SECURED_LENDING = _PACK.int_param("liquidation_period_secured_lending").value
+
+# Optional collateral inputs ``apply_haircuts`` reads. Production collateral
+# carries every one (``COLLATERAL_SCHEMA``, plus the exposure lookups' SFT flag);
+# a direct caller's hand-built frame may not, and gets each as a typed null that
+# takes the same default its absence did.
+_HAIRCUT_OPTIONAL_COLUMNS: dict[str, ColumnSpec] = {
+    "liquidation_period_days": ColumnSpec(pl.Int32, required=False),
+    "exposure_is_sft": ColumnSpec(pl.Boolean, required=False),
+    "revaluation_frequency_days": ColumnSpec(pl.Int32, required=False),
+    "original_currency": ColumnSpec(pl.String, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
+    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+}
 
 
 @dataclass
@@ -157,6 +174,17 @@ class HaircutCalculator:
             key_dtypes={"cqs": pl.Int8},
         )
 
+        # The optional inputs this method reads, injected as typed nulls when a
+        # direct caller's frame lacks them (production collateral carries every
+        # one), so each expression below reads one column instead of branching on
+        # its presence. A null takes the same default the absent column did.
+        collateral = ensure_columns(collateral, _HAIRCUT_OPTIONAL_COLUMNS)
+
+        # Review CL-02 — the residual maturity both the Art. 224 Table 1 band and
+        # the Art. 237-239 mismatch read, derived from the collateral's own
+        # maturity_date when residual_maturity_years is not supplied.
+        collateral = with_derived_residual_maturity(collateral, config.reporting_date)
+
         # Add maturity band for bond haircut lookup
         collateral = collateral.with_columns(
             [self._maturity_band_expression(is_b31).alias("maturity_band")]
@@ -171,23 +199,12 @@ class HaircutCalculator:
         # P1.186: derive default liquidation period from exposure_is_sft when no
         # explicit liquidation_period_days is supplied. Non-SFT secured lending
         # defaults to 20 days (Art. 224(2)(a)), SFT/repo to 5 days (Art. 224(2)(c)).
-        schema = collateral.collect_schema()
-        has_liq_period = "liquidation_period_days" in schema.names()
-        has_sft_col = "exposure_is_sft" in schema.names()
-
-        if has_sft_col:
-            sft_default = (
-                pl.when(pl.col("exposure_is_sft").fill_null(False))
-                .then(pl.lit(_LIQUIDATION_PERIOD_REPO))
-                .otherwise(pl.lit(_LIQUIDATION_PERIOD_SECURED_LENDING))
-            )
-        else:
-            sft_default = pl.lit(_LIQUIDATION_PERIOD_SECURED_LENDING)
-
-        if has_liq_period:
-            liq = pl.col("liquidation_period_days").fill_null(sft_default).cast(pl.Float64)
-        else:
-            liq = sft_default.cast(pl.Float64)
+        sft_default = (
+            pl.when(pl.col("exposure_is_sft").fill_null(False))
+            .then(pl.lit(_LIQUIDATION_PERIOD_REPO))
+            .otherwise(pl.lit(_LIQUIDATION_PERIOD_SECURED_LENDING))
+        )
+        liq = pl.col("liquidation_period_days").fill_null(sft_default).cast(pl.Float64)
         scaling_factor = (liq / 10.0).sqrt()
 
         # Art. 226(1): non-daily mark-to-market / non-daily-remargining adjustment.
@@ -195,14 +212,10 @@ class HaircutCalculator:
         # sqrt((N_R + T_m - 1) / T_m). Null or N_R <= 1 leaves the multiplier at 1.0.
         # PS1/26 carries Art. 226(1) forward unchanged so the same gate applies under
         # Basel 3.1 — selection is on collateral input, not framework.
-        has_reval_freq = "revaluation_frequency_days" in schema.names()
-        if has_reval_freq:
-            n_r = pl.col("revaluation_frequency_days").fill_null(1).cast(pl.Float64)
-            reval_factor = (
-                pl.when(n_r > 1.0).then(((n_r + liq - 1.0) / liq).sqrt()).otherwise(pl.lit(1.0))
-            )
-        else:
-            reval_factor = pl.lit(1.0)
+        n_r = pl.col("revaluation_frequency_days").fill_null(1).cast(pl.Float64)
+        reval_factor = (
+            pl.when(n_r > 1.0).then(((n_r + liq - 1.0) / liq).sqrt()).otherwise(pl.lit(1.0))
+        )
 
         # Scale collateral haircut by liquidation period, then apply the Art. 226(1)
         # non-daily-revaluation multiplier (order matters per the spec composition
@@ -231,39 +244,33 @@ class HaircutCalculator:
         # (sourced from the exposure's `original_currency` in the processor) both
         # carry the true pre-conversion currency pair.
         #
-        # Scope: H_fx is the comprehensive-method volatility adjustment for
-        # *financial* collateral (Art. 224 Table 4). Funded non-financial
-        # collateral (real_estate, receivables, other_physical) is recognised
-        # under Art. 230 (Foundation Collateral Method), whose LGD* formula uses
-        # the raw collateral value C against C* / C** thresholds with no FX
-        # adjustment. Art. 233 H_fx is unfunded-protection only (guarantees /
-        # CDS — see engine/crm/guarantees.py). FX risk on Art. 230 collateral
-        # is captured upstream by the spot-rate FXConverter rebasing.
+        # Scope: H_fx is the Art. 224 Table 4 volatility adjustment. Financial
+        # collateral takes it in both regimes (CRR Art. 223(1)). Funded
+        # NON-financial collateral (real_estate, receivables, other_physical) is
+        # the cited pack Feature ``fcm_hfx_applies_to_non_financial`` (review
+        # CL-09): CRR Art. 230(1) compares the raw value C with C* / C** and names
+        # no currency adjustment (disabled), while PS1/26 Art. 230(1) builds ES
+        # "after the application of ... (b) a volatility adjustment for any
+        # currency mismatch between the exposure and the collateral (Hfx) in
+        # accordance with Articles 224, 226, and 227" for every Foundation
+        # Collateral Method type (enabled). Art. 233 H_fx is the separate
+        # unfunded-protection twin (engine/crm/guarantees.py).
         #
         # Art. 227: zero-haircut repos waive ALL volatility adjustments including H_fx.
         fx_base = scalar_value(resolved_pack.scalar_param("fx_haircut"))
-        schema_names = collateral.collect_schema().names()
-        has_zero_flag = "_is_zero_haircut" in schema_names
-        # Per-row fallback, not per-frame: frames are diagonal-concatenated (user
-        # collateral + synthetic netting rows), so a row can lack the audit value
-        # while the column exists — and ``null != x`` is null, which would switch
-        # H_fx off silently rather than fall back (escape log 2026-11-13).
-        coll_ccy = (
-            pl.coalesce("original_currency", "currency")
-            if "original_currency" in schema_names
-            else pl.col("currency")
-        )
+        hfx_applies_to_type = ~pl.col("collateral_type").is_in(
+            NON_FINANCIAL_COLLATERAL_TYPES
+        ) | pl.lit(resolved_pack.feature("fcm_hfx_applies_to_non_financial"))
         # Art. 226(1) symmetry: FX haircut is also subject to the non-daily-
         # revaluation scaling — apply ``reval_factor`` after the Art. 226(2)
         # liquidation-period factor, mirroring the collateral haircut path.
-        is_financial = ~pl.col("collateral_type").is_in(NON_FINANCIAL_COLLATERAL_TYPES)
         fx_expr = (
-            pl.when((coll_ccy != pl.col("exposure_currency")) & is_financial)
+            pl.when(pl.col("_is_zero_haircut"))
+            .then(pl.lit(0.0))
+            .when(collateral_currency_mismatch_expr() & hfx_applies_to_type)
             .then(pl.lit(fx_base) * scaling_factor * reval_factor)
             .otherwise(pl.lit(0.0))
         )
-        if has_zero_flag:
-            fx_expr = pl.when(pl.col("_is_zero_haircut")).then(pl.lit(0.0)).otherwise(fx_expr)
         collateral = collateral.with_columns([fx_expr.alias("fx_haircut")])
 
         # Calculate adjusted value after haircuts
@@ -290,33 +297,28 @@ class HaircutCalculator:
         #   _cln_ineligible           — Art. 218 credit-linked note not attested
         #                               own-issued (P1.274); the 0% cash haircut is
         #                               left intact (valuation ≠ eligibility).
-        names = collateral.collect_schema().names()
-        ineligible_flags = [
-            f
-            for f in ("_bond_ineligible", "_equity_listing_ineligible", "_cln_ineligible")
-            if f in names
+        # ``_apply_collateral_haircuts`` writes all three flags, and the Art. 227
+        # ``_is_zero_haircut`` scratch, on every row.
+        ineligible_flags = ["_bond_ineligible", "_equity_listing_ineligible", "_cln_ineligible"]
+        is_ineligible = pl.any_horizontal([pl.col(f) for f in ineligible_flags])
+        cleared = [
+            pl.when(is_ineligible)
+            .then(pl.lit(0.0))
+            .otherwise(pl.col("value_after_haircut"))
+            .alias("value_after_haircut")
         ]
-        if ineligible_flags:
-            is_ineligible = pl.any_horizontal([pl.col(f) for f in ineligible_flags])
-            collateral = collateral.with_columns(
+        # Also enforce is_eligible_financial_collateral = False for ineligible rows.
+        # The flag is NOT injected when absent: a frame without it (a direct
+        # caller's) keeps the type-only eligibility ``_apply_collateral_unified``
+        # applies to such frames.
+        if "is_eligible_financial_collateral" in collateral.collect_schema().names():
+            cleared.append(
                 pl.when(is_ineligible)
-                .then(pl.lit(0.0))
-                .otherwise(pl.col("value_after_haircut"))
-                .alias("value_after_haircut")
+                .then(pl.lit(False))
+                .otherwise(pl.col("is_eligible_financial_collateral"))
+                .alias("is_eligible_financial_collateral")
             )
-            # Also enforce is_eligible_financial_collateral = False for ineligible rows
-            if "is_eligible_financial_collateral" in names:
-                collateral = collateral.with_columns(
-                    pl.when(is_ineligible)
-                    .then(pl.lit(False))
-                    .otherwise(pl.col("is_eligible_financial_collateral"))
-                    .alias("is_eligible_financial_collateral")
-                )
-            collateral = collateral.drop(ineligible_flags)
-
-        # Clean up Art. 227 temp column
-        if "_is_zero_haircut" in collateral.collect_schema().names():
-            collateral = collateral.drop("_is_zero_haircut")
+        collateral = collateral.with_columns(cleared).drop([*ineligible_flags, "_is_zero_haircut"])
 
         # Add haircut audit trail
         collateral = collateral.with_columns(
@@ -737,12 +739,7 @@ class HaircutCalculator:
         # and does not floor it. A null exposure maturity defaults to 5y — the
         # most conservative recognised maturity, mirroring the guarantee twin.
         exposure_maturity_years_expr = (
-            (
-                (pl.col("exposure_maturity").cast(pl.Date) - pl.lit(reporting_date))
-                .dt.total_days()
-                .cast(pl.Float64)
-                / 365.25
-            )
+            residual_years_expr("exposure_maturity", reporting_date)
             .clip(upper_bound=5.0)
             .fill_null(5.0)
         )
@@ -1005,6 +1002,77 @@ def create_haircut_calculator() -> HaircutCalculator:
         HaircutCalculator ready for use
     """
     return HaircutCalculator()
+
+
+@cites("CRR Art. 238")
+@cites("PS1/26 Art. 238")
+def with_derived_residual_maturity(collateral: pl.LazyFrame, reporting_date: date) -> pl.LazyFrame:
+    """Fill a null collateral ``residual_maturity_years`` from its ``maturity_date``.
+
+    CRR Art. 238(1) and PS1/26 Art. 238(1) take "the maturity of the credit
+    protection to be the time to the earliest date at which the protection may
+    terminate or be terminated", and PS1/26 Art. 237(1) finds a maturity
+    mismatch "when the residual maturity of the credit protection is less than
+    that of the protected exposure". A pledge supplied with only its
+    ``maturity_date`` states that date; before review CL-02 nothing read it, so
+    the null residual took the mismatch step's 10-year default and a one-year
+    deposit protected a five-year loan in full. A supplied residual wins; the
+    date is used only where the residual is null, and a row with neither stays
+    null (the downstream defaults are unchanged). The residual counts days
+    /365.25 from the reporting date — the basis ``apply_maturity_mismatch``
+    measures the EXPOSURE residual on, so a pledge and a loan sharing one
+    maturity date compare equal (no phantom mismatch). The same residual feeds
+    the Art. 224 Table 1 maturity band, which Table 1 also keys on "residual
+    maturity". Expects both columns present (``apply_haircuts`` injects them).
+    """
+    return collateral.with_columns(
+        pl.coalesce(
+            pl.col("residual_maturity_years"), residual_years_expr("maturity_date", reporting_date)
+        ).alias("residual_maturity_years")
+    )
+
+
+def residual_years_expr(date_col: str, reporting_date: date) -> pl.Expr:
+    """Years from ``reporting_date`` to the date in ``date_col`` (days / 365.25).
+
+    The one day-count the collateral maturity-mismatch step uses for BOTH sides,
+    the exposure residual T and the protection residual t, so equal dates give
+    t == T exactly. Null where the date is null; negative once the date has
+    passed.
+    """
+    return (pl.col(date_col).cast(pl.Date) - pl.lit(reporting_date)).dt.total_days().cast(
+        pl.Float64
+    ) / 365.25
+
+
+@cites("CRR Art. 224")
+@cites("PS1/26 Art. 230")
+def collateral_currency_mismatch_expr() -> pl.Expr:
+    """True where the collateral cannot be shown to share the exposure's currency.
+
+    Compares pre-FX-conversion denominations: after ``FXConverter`` has rebased
+    values, ``currency`` is the reporting currency on both sides, so the
+    collateral's denomination is ``original_currency``, falling back per row to
+    ``currency`` (frames are diagonal-concatenated — user collateral plus the
+    synthetic netting rows — so a row can lack the audit value while the column
+    exists; escape log 2026-11-13). ``exposure_currency`` is the exposure's own
+    denomination from the processor's lookups.
+
+    A NULL collateral denomination is a mismatch (review CL-14): CRR Art. 223(2)
+    and PS1/26 Art. 230(1)(b) apply H_fx for "any currency mismatch between the
+    exposure and the collateral", and an unknown denomination cannot establish
+    that there is none. ``null != x`` is null, which switched H_fx off silently;
+    the null test makes it the conservative True. A null EXPOSURE currency with a
+    known collateral one stays null (no H_fx), as before.
+    """
+    denomination = collateral_denomination_expr()
+    return denomination.is_null() | (denomination != pl.col("exposure_currency"))
+
+
+def collateral_denomination_expr() -> pl.Expr:
+    """The collateral's own currency: ``original_currency`` (pre-FX-conversion),
+    else ``currency`` per row. Null when the row states neither."""
+    return pl.coalesce("original_currency", "currency")
 
 
 def _resolve_pack_for_haircut(

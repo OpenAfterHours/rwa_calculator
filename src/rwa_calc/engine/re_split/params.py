@@ -14,6 +14,8 @@ Key responsibilities:
   this module only derives the float-typed records the splitter consumes.
 
 References:
+- CRR Art. 124(1): the part treated as secured is at most the market value
+  (the cap for an exposure whose Art. 125 / 126 conditions are not met).
 - CRR Art. 125: Residential mortgage 35% on portion up to 80% LTV.
 - CRR Art. 126: Commercial real estate 50% on portion up to 50% LTV.
 - PRA PS1/26 Art. 124F: B3.1 RRE loan-splitting — 20% on portion up to 55% of
@@ -45,18 +47,30 @@ class SplitParameters:
             ``max(0, secured_ltv_cap - prior_charge_ltv)`` per Art. 124F(2).
             CRR has no analogous reduction; junior charges are handled via
             collateral eligibility instead.
+        non_qualifying_secured_ltv_cap: CRR only — the cap for an exposure
+            attested as NOT meeting the Art. 125 / 126 conditions
+            (``is_qualifying_re=False``, review CL-07). Art. 124(1) weights
+            the part "treated as fully secured by immovable property", which
+            "shall not be greater than the pledged amount of the market
+            value", at 100%: so 1.0 x property value. None under Basel 3.1,
+            whose non-qualifying rows go to Art. 124J on the 124F/H cap.
     """
 
     secured_ltv_cap: float
     uses_prior_charge_reduction: bool = False
+    non_qualifying_secured_ltv_cap: float | None = None
 
 
-# CRR Art. 125/126 — secured-LTV caps from the rulepack (RRE 80%, CRE 50%).
+# CRR Art. 125/126 — secured-LTV caps from the rulepack (RRE 80%, CRE 50%), and
+# the Art. 124(1) market-value cap for an exposure whose conditions are not met.
+_CRR_ART_124_1_CAP = scalar_value(_CRR_PACK.scalar_param("re_art_124_1_secured_value_cap"))
 RE_SPLIT_PARAMS_CRR_RESIDENTIAL = SplitParameters(
     secured_ltv_cap=scalar_value(_CRR_PACK.scalar_param("re_split_rre_secured_ltv_cap")),
+    non_qualifying_secured_ltv_cap=_CRR_ART_124_1_CAP,
 )
 RE_SPLIT_PARAMS_CRR_COMMERCIAL = SplitParameters(
     secured_ltv_cap=scalar_value(_CRR_PACK.scalar_param("re_split_cre_secured_ltv_cap")),
+    non_qualifying_secured_ltv_cap=_CRR_ART_124_1_CAP,
 )
 
 # PRA PS1/26 Art. 124F/124H — B3.1 caps (RRE/CRE 55%) with prior-charge reduction.

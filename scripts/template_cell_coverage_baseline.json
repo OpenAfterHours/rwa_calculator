@@ -228,23 +228,26 @@
     "excludes": {
       "tests/fixtures/reporting_funded_protection_portfolio.py": "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a config electing the Art. 222 SIMPLE Method (_fcsm_config); registered against _sa_config, which defaults to comprehensive, the fixture sits in the gate with its own feature silenced - C 07.00 col 0070 reads 0.00 under comprehensive and non-zero under SIMPLE on the identical bundle, and dropping its two runs left this census at 210 live / 129 dead unchanged, so it contributed no liveness. Registered CORRECTLY it exposes two ERROR-severity supervisory breaks (boe_b0471, v0308_m) that predate the carrier fix, so the registration is filed as a Tier 1 item with the Art. 222 defect rather than banked here. Its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Registering it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 51.1
+    "seconds": 62.0
   },
   "counts": {
     "template_column_pairs": 339,
-    "live": 245,
-    "dead": 94,
+    "live": 246,
+    "dead": 93,
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
-    "frames": 1046,
-    "numeric_cells": 355383,
-    "non_null_cells": 64765,
-    "non_zero_cells": 18379,
-    "cell_fill_pct": 5.17
+    "frames": 1045,
+    "numeric_cells": 361121,
+    "non_null_cells": 63084,
+    "non_zero_cells": 18221,
+    "cell_fill_pct": 5.05
   },
   "caveats": [
-    "reporting/facility-share-binding/b31: OF 02.00: the engine's post-floor total (1699200.00) differs from max(U-TREA 1245491.29, floor 1643200.00) by 56000.00 \u2014 the engine floors the modelled subset only"
+    "reporting/ccr/b31: 1 derivative counterparty(ies) have no BA-CVA input row - no CVA charge for them",
+    "reporting/facility-share-binding/b31: OF 02.00: the engine's post-floor total (1699200.00) differs from max(U-TREA 1245491.29, floor 1643200.00) by 56000.00 \u2014 the engine floors the modelled subset only",
+    "corpus/off_balance_sheet/crr: input-domain gate raised 1 error(s) not already on the bundle",
+    "corpus/off_balance_sheet/b31: input-domain gate raised 1 error(s) not already on the bundle"
   ],
   "caveat_identities": [
     "reporting/facility-share-binding/b31: OF <amount>: the engine's post-floor total (<amount>) differs from max(U-TREA <amount>, floor <amount>) by <amount> \u2014 the engine floors the modelled subset only"
@@ -665,12 +668,6 @@
       "status": "always_zero"
     },
     {
-      "id": "p3/cr5/o",
-      "reason_code": "NO_FIXTURE",
-      "reason": "SA exposures by risk weight, bucket CRR Other/Deducted / B31 70% - no exposure in the estate is weighted here.",
-      "status": "always_zero"
-    },
-    {
       "id": "p3/cr5/t",
       "reason_code": "NO_FIXTURE",
       "reason": "SA exposures by risk weight, bucket B31 105% - no exposure in the estate is weighted here.",
@@ -1021,6 +1018,7 @@
     "p3/cr5/k",
     "p3/cr5/l",
     "p3/cr5/m",
+    "p3/cr5/o",
     "p3/cr5/p",
     "p3/cr5/q",
     "p3/cr5/r",

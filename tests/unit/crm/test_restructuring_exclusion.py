@@ -288,6 +288,53 @@ class TestCDSRestructuringExclusionHaircut:
         assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
 
 
+class TestRestructuringExclusionCoverForms:
+    """GT-05 / GT-06: Art. 233(2) through the CRM processor, in both regimes.
+
+    PS1/26 Art. 233(2) (CRR identical): "(a) where the amount that the protection
+    provider has undertaken to pay is not higher than the exposure value, the
+    institution shall reduce the value of the credit protection calculated under
+    paragraph 1 by 40%; (b) where the amount that the protection provider has
+    undertaken to pay is higher than the exposure value, the institution shall
+    ensure that the value of the credit protection shall be no higher than 60% of
+    the exposure value."
+    """
+
+    @pytest.mark.parametrize("framework", ["crr", "b31"])
+    def test_percentage_cds_takes_the_cut(
+        self,
+        crm_processor: CRMProcessor,
+        crr_config: CalculationConfig,
+        basel31_config: CalculationConfig,
+        framework: str,
+    ) -> None:
+        """GT-05: 100% cover stated as a percentage -> 1M x 0.6 = 600k (was 1M)."""
+        config = crr_config if framework == "crr" else basel31_config
+        guarantees = _make_credit_derivative(amount=0.0, includes_restructuring=False)
+        guarantees = guarantees.with_columns(pl.lit(1.0).alias("percentage_covered"))
+
+        df = _run_crm(crm_processor, config, _make_exposure(), guarantees)
+
+        assert df["guaranteed_portion"].sum() == pytest.approx(600_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(400_000.0, rel=1e-6)
+
+    @pytest.mark.parametrize("framework", ["crr", "b31"])
+    def test_oversized_cds_is_capped_at_60_percent_of_exposure(
+        self,
+        crm_processor: CRMProcessor,
+        crr_config: CalculationConfig,
+        basel31_config: CalculationConfig,
+        framework: str,
+    ) -> None:
+        """GT-06: notional 2M on a 1M exposure -> no higher than 600k (was 1M)."""
+        config = crr_config if framework == "crr" else basel31_config
+        guarantees = _make_credit_derivative(amount=2_000_000.0, includes_restructuring=False)
+
+        df = _run_crm(crm_processor, config, _make_exposure(), guarantees)
+
+        assert df["guaranteed_portion"].sum() == pytest.approx(600_000.0, rel=1e-6)
+
+
 class TestCombinedFXAndRestructuringHaircuts:
     """Both FX mismatch and restructuring exclusion haircuts applied together."""
 
@@ -305,8 +352,8 @@ class TestCombinedFXAndRestructuringHaircuts:
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
-        # FX first: 500k × (1 - 0.08) = 460k
-        # Then restructuring: 460k × (1 - 0.40) = 276k
+        # Art. 233(2) first: 500k × (1 - 0.40) = 300k
+        # Then Art. 233(3) FX: 300k × (1 - 0.08) = 276k
         assert df["guaranteed_portion"].sum() == pytest.approx(276_000.0, rel=1e-6)
         assert df["unguaranteed_portion"].sum() == pytest.approx(724_000.0, rel=1e-6)
         guar_row = df.filter(pl.col("guaranteed_portion") > 0)

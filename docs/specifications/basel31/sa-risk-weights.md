@@ -749,8 +749,8 @@ within `engine/sa/calculator.py`. Required input fields:
 | `currency` | String | Loan currency (ISO code) |
 | `cp_local_currency` | String | Counterparty's home jurisdiction currency |
 | `cp_sovereign_cqs` | Int | Sovereign CQS for floor RW lookup (Art. 114(1)/(2)) |
-| `is_short_term_trade_lc` | Bool | Marks self-liquidating trade ≤ 1 year for (b) carve-out |
-| `original_maturity_years` | Float | Maturity check for the (b) carve-out (< 1 year) |
+| `is_short_term_trade_lc` | Bool | Marks self-liquidating trade for the (b) carve-out (a drawn loan inherits it only from its own parent facility) |
+| `original_maturity_years` | Float | Maturity check for the (b) carve-out — strictly **less than** one year (pack scalar `sa_sovereign_floor_trade_exemption_original_maturity_years`); a 365-day item derives exactly 1.0 and is floored |
 
 When `cp_local_currency` is unavailable, the calculator falls back to a domestic-currency
 heuristic; upstream enrichment is recommended for accurate floor application.
@@ -1244,7 +1244,13 @@ The 1.5x multiplier is **capped at 150%** — exposures already at or above 150%
 further increased by this multiplier.
 
 Triggered by setting `cp_borrower_income_currency` in the input data to a currency different
-from the exposure currency. Output column: `currency_mismatch_multiplier_applied`.
+from the exposure's lending currency (its denomination — `original_currency` after FX conversion).
+Output column: `currency_mismatch_multiplier_applied`.
+
+**Income currency unknown (Art. 123B(3)).** A null `cp_borrower_income_currency` takes the 1.5x
+unless the lending currency equals the obligor's domestic currency (`cp_local_currency`, else the
+domestic currency of `cp_country_code`); warning **SA010** counts the exposures. Implementation and
+scope detail: [Credit Risk Mitigation, Art. 123B "Implementation Status"](credit-risk-mitigation.md).
 
 ---
 
@@ -1694,8 +1700,8 @@ The calculator uses two input fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `is_adc` | Boolean | Flags the exposure as ADC — routes to Art. 124K treatment, bypassing all RE LTV-band logic |
-| `is_presold` | Boolean | Flags the ADC exposure as meeting Art. 124K(2) qualifying conditions — reduces RW from 150% to 100% |
+| `is_adc` | Boolean | Flags the exposure as ADC — routes to Art. 124K treatment, bypassing all RE LTV-band logic. Supplied on the **collateral** row (any-True across every real-estate pledge linked to the exposure, at any level) or derived from the loan/facility `is_under_construction` flag or a development-finance `product_type`; all three sit behind the Glossary's corporate / SPE gate |
+| `is_presold` | Boolean | Supplied on the **collateral** row: attests Art. 124K(2) condition (a) and limb (b)(i) — reduces a residential ADC exposure's RW from 150% to 100% |
 
 **Code:** `b31_adc_rw_expr()` in `engine/sa/b31_risk_weight_tables.py` dispatches on `is_presold`.
 ADC sits at priority 4 in the Basel 3.1 SA when-chain (`engine/sa/calculator.py`), after
@@ -1704,10 +1710,19 @@ or income-producing treatment.
 
 !!! warning "Qualifying assessment is external"
     The calculator does not validate whether Art. 124K(2) conditions are met. The reporting
-    institution must pre-evaluate prudent underwriting standards and pre-sale/equity-at-risk
-    thresholds, then set `is_presold = True` accordingly. PRA does not define quantitative
-    thresholds for "substantial" or "significant portion" — these are institution-level
-    judgements subject to supervisory review.
+    institution must pre-evaluate prudent underwriting standards and the pre-sale /
+    pre-lease threshold, then set `is_presold = True` accordingly. PRA does not define
+    quantitative thresholds for "substantial" or "significant portion" — these are
+    institution-level judgements subject to supervisory review.
+
+!!! note "Limb (b)(ii) — substantial equity at risk — has no input"
+    No field attests "the borrower has substantial equity at risk", so a residential ADC
+    exposure qualifying only through that limb stays at the conservative 150%.
+
+Before review RE-01 / RE-02 (2026-11) the collateral `is_adc` / `is_presold` flags were
+read by nothing: a corporate development loan flagged ADC only on its property was
+loan-split onto Art. 124F (20% on the secured part — 100,000 instead of 750,000 on a
+500,000 loan), and Art. 124K(2) could not be reached at all.
 
 ### Key Scenarios
 
@@ -1804,7 +1819,14 @@ The calculator uses two input fields to implement Art. 124C:
 
 The reporting institution is responsible for computing the stacked LTV externally:
 the calculator consumes the pre-computed `property_ltv` value and assumes it already
-incorporates Art. 124C(2)–(3) components. The separate `prior_charge_ltv` field
+incorporates Art. 124C(2)–(3) components. Where a property is linked with a
+`market_value` but no `property_ltv`, the hierarchy stage **derives** the LTV
+(`engine/hierarchy/re_ltv.py`) as the Art. 124C(2) amount of the loan — drawn plus
+accrued interest plus undrawn committed amount — over the property value, plus
+`prior_charge_ltv` (Art. 124C(3)); a facility or counterparty pledge uses the total
+of every exposure it secures. A `RE006` warning reports the substitution. Where
+neither a linked property nor an LTV exists, the exposure is not treated as real
+estate at all (see *Evidence of security* below). The separate `prior_charge_ltv` field
 enables the calculator to determine the junior charge effect on the loan-splitting
 threshold (55% of property value for both RRE under Art. 124F(1) and CRE under
 Art. 124H(1)).
@@ -1819,6 +1841,23 @@ Art. 124H(1)).
       Art. 124F(1)(a), 60% CRE per Art. 124H(1)(a)))
     - A first-charge exposure has `prior_charge_ltv = 0.0`
     - An exposure behind a senior lien has `prior_charge_ltv > 0.0`
+
+### Evidence of security (review CL-08 / RE-10)
+
+A real-estate risk weight needs evidence that the exposure is "secured by a charge on
+immovable property" (PS1/26 Glossary, *real estate exposure*): a linked property (at any
+level, with or without a value), or an LTV. A mortgage `product_type` alone is not evidence.
+
+| Situation | Treatment |
+|-----------|-----------|
+| Valued property, `property_ltv` supplied | LTV as supplied (unchanged) |
+| Valued property, no `property_ltv` | LTV derived (above), `RE006` |
+| `ltv` on the loan row, no collateral link | LTV as supplied (now also when a collateral file exists that does not link to the loan) |
+| Property data but no value and no LTV | Art. 124J — Art. 124A(1)(d) cannot be met |
+| Mortgage label only (no property, no LTV) | Standardised Approach: the counterparty's class (e.g. regulatory retail 75%), `RE005`. IRB rows keep their IRB class; their Standardised-equivalent (output-floor) weight is the counterparty-class weight |
+
+Before this, a null LTV was filled to 100% here (Art. 124F at 44.75% for a natural
+person) whatever the loan and the property were.
 
 ---
 
@@ -2073,6 +2112,37 @@ RW = max(60%, min(counterparty_rw, income_producing_rw))
 ```
 
 This is a distinct third path alongside loan-splitting and income-producing tables.
+The real-estate splitter keeps the exposure whole (`re_split_mode = "whole"`,
+class `commercial_mortgage`). Three inputs to the formula (review CL-10):
+
+- **LTV** — the row keeps the Art. 124C LTV supplied (`property_ltv`, or the one
+  derived from the loan and the property value). It includes "all other loans secured
+  with charges ranking in priority ahead of or pari passu" (Art. 124C(3)) and the full
+  undrawn commitment (Art. 124C(2)); it was previously overwritten with
+  exposure value / property value, which dropped both. Exposure / value is the fallback
+  only where no LTV exists.
+- **`income_producing_rw`** — Art. 124H(3)(b)(ii) names "the risk weight that would be
+  assigned to the exposure under Article 124I if the exposure was materially
+  dependent", i.e. the whole article: where a charge not held by the institution ranks
+  ahead (`prior_charge_ltv > 0`), the Art. 124I(3) junior weight (100% / 125% / 137.5%),
+  not the Art. 124I(1)/(2) base table.
+- **`counterparty_rw`** — Art. 124L(1)(e), "the risk weight that would be assigned to an
+  unsecured exposure to that counterparty": the obligor's Art. 122(2) corporate weight by
+  CQS. A `commercial_mortgage` row has no CQS table of its own, so the weight used to be
+  the 100% null fill whatever the rating — the min() never bound on a CQS 5–6 obligor
+  and the 60% floor never reached a CQS 1–2 one. The re-classed row no longer carries
+  the obligor's original class, so the corporate table is applied to every obligor on
+  this path. That is exact only for an ordinary corporate: not unrated specialised
+  lending (Art. 122A-122B) and outside the Art. 122(6) investment-grade election
+  (65% / 135%). An institution, sovereign or PSE with commercial security is also
+  whole-loaned, and for it the corporate table is an approximation, usually at or above
+  its own weight but not always (an unrated SCRA grade C institution, 150%, reads 100%).
+
+CQS 5 corporate, 70,000 behind a 20,000 prior charge on a 100,000 property (LTV 0.9):
+max(60%, min(150%, 137.5%)) = **137.5%**, RWA 96,250 (previously 70,000 at an LTV of
+0.7 and a counterparty weight of 100%). CQS 1 corporate, 400,000 on 1,000,000:
+max(60%, min(20%, 100%)) = **60%**, RWA 240,000 (previously 400,000). Unrated: 100%,
+unchanged.
 
 ---
 
@@ -2116,6 +2186,34 @@ when the entity created to finance the project has both:
 Both limbs are mandatory. Pre-operational PF — including the construction phase and any
 period before declining long-term debt is established — receives the 130% weight under Art.
 122B(2)(c).
+
+!!! info "Engine treatment of the phase input"
+    The phase comes from `specialised_lending.project_phase` (`pre_operational` /
+    `operational` / `high_quality_operational`) and reaches the weight as `sl_project_phase`
+    through the classifier's specialised-lending join. Because the operational phase is a
+    condition the firm must show, a project-finance row whose phase is **null or
+    unrecognised is treated as pre-operational** (130% when unrated) and raises **SA006**
+    (`engine/classify/attributes.py::resolve_sl_project_phase`, gated on the Basel-3.1-only
+    pack Feature `sa_pf_phase_defaults_pre_operational`). Only the two operational values
+    buy the 100% / 80% weights. The same resolved phase drives the output-floor
+    SA-equivalent of a slotted project-finance row and the OF 07.00 rows 0024–0026. Until
+    review IV-01 the join dropped the phase, so every unrated PF row took 100%.
+
+### Subordinated Specialised Lending (Art. 133(5))
+
+> *"An institution shall assign a risk weight of 150% to an exposure that is a subordinated
+> debt instrument, an own funds instrument or an equity instrument and is not classified as
+> an equity exposure"* — Art. 133(5).
+
+Table A2 row (3) (subordinated debt, equity and other own funds instruments) ranks above the
+corporate class, of which specialised lending is a sub-class (Art. 122A). A subordinated
+(`seniority = "subordinated"`) SL row therefore takes **150%**, outranking both the Art.
+122B(2) type weights above and the rated-corporate table of Art. 122B(1), and keeps it when
+defaulted (row (3) also outranks row (5) default). The predicate
+(`engine/sa/subordinated_debt.py::is_b31_subordinated_debt`) covers institution, corporate
+and specialised-lending rows; the quasi-sovereign classes remain outside it pending an owner
+decision. CRR has no SA subordinated carve-out: an unrated subordinated SL row stays at the
+corporate 100%.
 
 ### High-Quality Operational PF — 80% Weight (Art. 122B(4))
 

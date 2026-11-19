@@ -163,6 +163,28 @@ class TestRedistributeNonBeneficial:
         rem = result.filter(pl.col("exposure_reference") == "EXP001__REM")
         assert rem["ead_after_collateral"][0] == pytest.approx(850.0, rel=1e-6)
 
+    def test_re_split_remainder_leg_is_still_the_remainder(self) -> None:
+        """A remainder the RE splitter has suffixed (``__REM_res``) is not a guarantor leg.
+
+        The calculators call this AFTER ``re_splitter``, which renames a split
+        remainder ``<parent>__REM`` to ``<parent>__REM_sec`` / ``__REM_res``. Read
+        as a non-beneficial guarantor leg it would be zeroed (850 -> 0) instead of
+        absorbing the unredistributed 250.
+        """
+        lf = _make_multi_guarantor_frame(
+            guarantors=[
+                {"ref": "G1", "beneficial": True, "portion": 100.0, "original": 150.0, "rw": 0.20},
+                {"ref": "G2", "beneficial": False, "portion": 300.0, "original": 300.0, "rw": 1.00},
+            ],
+            remainder_ead=600.0,
+        ).with_columns(pl.col("exposure_reference").str.replace(r"__REM$", "__REM_res"))
+
+        result = redistribute_non_beneficial(lf).collect()
+
+        rem = result.filter(pl.col("exposure_reference") == "EXP001__REM_res")
+        assert rem["ead_after_collateral"][0] == pytest.approx(850.0, rel=1e-6)
+        assert rem["unguaranteed_portion"][0] == pytest.approx(850.0, rel=1e-6)
+
     def test_single_guarantor_not_affected(self) -> None:
         """Single guarantor (no multi-split) passes through unchanged."""
         lf = pl.LazyFrame(

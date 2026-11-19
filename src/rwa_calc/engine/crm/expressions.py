@@ -31,6 +31,8 @@ from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
+    BOND_COLLATERAL_TYPES,
+    CCR_ENGINE_RISK_TYPES,
     COVERED_BOND_COLLATERAL_TYPES,
     FINANCIAL_COLLATERAL_TYPES,
     LIFE_INSURANCE_COLLATERAL_TYPES,
@@ -39,6 +41,7 @@ from rwa_calc.data.schemas import (
     RECEIVABLE_COLLATERAL_TYPES,
     RECOGNISED_COLLATERAL_TYPES,
 )
+from rwa_calc.engine.crm.eligibility import normalise_collateral_type_expr
 from rwa_calc.engine.kernels.allocation import (
     beneficiary_level_expr as kernel_beneficiary_level_expr,
 )
@@ -48,6 +51,11 @@ if TYPE_CHECKING:
     from collections.abc import Collection
 
     from rwa_calc.rulebook.resolve import ResolvedRulepack
+
+#: The loan-table collateral pooling basis / membership columns
+#: ``with_crm_pool_basis`` writes (scratch; dropped by the collateral step).
+CRM_POOL_BASIS = "_crm_pool_basis"
+CRM_POOL_MEMBER = "_crm_pool_member"
 
 # ---------------------------------------------------------------------------
 # Polars expression builders
@@ -220,12 +228,46 @@ def min_collateralisation_threshold_expr(pack: ResolvedRulepack) -> pl.Expr:
 
 
 def is_financial_collateral_type_expr() -> pl.Expr:
-    """Build expression returning True for financial collateral types."""
-    return _coll_type_lower().is_in(FINANCIAL_COLLATERAL_TYPES)
+    """Build expression returning True for financial collateral types.
+
+    Includes the canonical input type ``bond`` when its ``issuer_type`` resolves
+    it to an Art. 197(1)(b)-(d)/(h) debt security (``issued_bond_expr``), so the
+    category, the haircut and the SA eligibility read one resolution (review
+    CL-11). Reads ``issuer_type``.
+    """
+    return _coll_type_lower().is_in(FINANCIAL_COLLATERAL_TYPES) | issued_bond_expr()
+
+
+@cites("CRR Art. 197")
+@cites("PS1/26 Art. 197")
+def issued_bond_expr() -> pl.Expr:
+    """True for a ``bond`` row whose ``issuer_type`` names an Art. 197 issuer class.
+
+    ``bond`` is the canonical input type (``VALID_COLLATERAL_TYPES``); its
+    regulatory class is its ISSUER: CRR / PS1/26 Art. 197(1)(b) central
+    governments or central banks, (c) institutions, (d) other entities, (h)
+    securitisation positions. ``normalise_collateral_type_expr`` already resolves
+    ``bond`` + issuer to ``govt_bond`` / ``corp_bond`` / ``securitisation`` for
+    the Art. 224 haircut lookup (P1.233); before review CL-11 the CATEGORY ladder
+    did not, so a sovereign ``bond`` was "other" on the F-IRB path — gated as
+    unattested non-financial collateral (CRM014) or, attested, given the
+    other-physical LGDS — while ``government_bond`` took the 0% financial LGDS.
+    A ``bond`` with no recognised issuer is not resolved here: it stays what
+    the haircut path makes of it, other physical collateral.
+    """
+    return _coll_type_lower().is_in(BOND_COLLATERAL_TYPES) & normalise_collateral_type_expr().is_in(
+        ["govt_bond", "corp_bond", "securitisation"]
+    )
 
 
 def collateral_category_expr() -> pl.Expr:
-    """Build expression classifying collateral into COREP categories (C 08.01 cols 0170-0210)."""
+    """Build expression classifying collateral into COREP categories (C 08.01 cols 0170-0210).
+
+    A ``bond`` is categorised by its issuer (``issued_bond_expr``): financial
+    when the issuer resolves it to an Art. 197 debt security, else other
+    physical — the class ``normalise_collateral_type_expr`` gives it for the
+    haircut. Reads ``issuer_type``.
+    """
     ct = _coll_type_lower()
     return (
         pl.when(ct.is_in(LIFE_INSURANCE_COLLATERAL_TYPES))
@@ -234,8 +276,10 @@ def collateral_category_expr() -> pl.Expr:
         .then(pl.lit("cash"))
         .when(ct.is_in(COVERED_BOND_COLLATERAL_TYPES))
         .then(pl.lit("covered_bond"))
-        .when(ct.is_in(FINANCIAL_COLLATERAL_TYPES))
+        .when(ct.is_in(FINANCIAL_COLLATERAL_TYPES) | issued_bond_expr())
         .then(pl.lit("financial"))
+        .when(ct.is_in(BOND_COLLATERAL_TYPES))
+        .then(pl.lit("other_physical"))
         .when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
         .then(pl.lit("receivables"))
         .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
@@ -260,6 +304,74 @@ def unrecognised_collateral_type_expr() -> pl.Expr:
     the project's convention, not flagged as a defect.
     """
     return ~_coll_type_lower().is_in(RECOGNISED_COLLATERAL_TYPES)
+
+
+@cites("CRR Art. 197")
+@cites("PS1/26 Art. 197")
+def sa_fccm_type_eligible_expr() -> pl.Expr:
+    """True where the collateral TYPE can reduce an SA exposure value (review CL-01).
+
+    The Financial Collateral Comprehensive Method reduces an SA exposure value by
+    eligible FINANCIAL collateral only: CRR / PS1/26 Art. 197(1) lists the
+    "items [an institution may use] as eligible collateral under all approaches
+    and methods" — cash on deposit, debt securities, equities in a main index,
+    gold, securitisation positions — and Art. 199(1) admits immovable property,
+    receivables and other physical collateral only "in addition ... under the
+    IRB Approach" (CRR) / "under the Foundation Collateral Method" (PS1/26).
+    Life insurance is other funded protection (Art. 232), weighted rather than
+    netted. So ``is_eligible_financial_collateral`` (the firm's Art. 197
+    attestation) is honoured only on the cash / financial / covered-bond
+    categories of ``collateral_category_expr``; on any other row it is ignored
+    and CRM026 says so. An unrecognised type ("other") is not an Art. 197 type
+    either. Reads ``issuer_type`` (via the ``bond`` dispatch).
+    """
+    return collateral_category_expr().is_in(["cash", "financial", "covered_bond"])
+
+
+@cites("CRR Art. 223")
+@cites("PS1/26, paragraph 191A")
+def ccr_engine_row_expr() -> pl.Expr:
+    """True on a row the counterparty-credit-risk engines minted (review CL-04 / CC-07).
+
+    SA-CCR derivative netting sets (``CCR_DERIVATIVE``), FCCM SFT netting sets
+    (``CCR_SFT``), failed-trade settlement rows (``SETTLEMENT_FAILED_TRADE``)
+    and CCP default-fund rows (``CCR_DEFAULT_FUND``) carry an exposure value the
+    CCR Part already computed, collateral included. CRR Art. 223(5A): "in the
+    case of OTC derivative transactions, institutions using the methods laid
+    down in Sections 3, 4 and 5 of Chapter 3 of the Counterparty Credit Risk
+    (CRR) Part ... shall take into account the risk-mitigating effects of
+    collateral in accordance with the provisions laid down in [those
+    Sections]"; PS1/26 Art. 191A(4) applies Arts 192-239 to "funded credit
+    protection covering an exposure arising from a derivative instrument listed
+    in Annex II of CRR ... solely to the extent provisions elsewhere ...
+    cross-refer to such article. Absent such cross-reference, such articles shall
+    not apply". So the loan-table collateral pools must not reach these rows.
+    A null ``risk_type`` is not a CCR row. Reads ``risk_type``.
+    """
+    return pl.col("risk_type").cast(pl.String).str.to_uppercase().is_in(CCR_ENGINE_RISK_TYPES)
+
+
+def with_crm_pool_basis(
+    exposures: pl.LazyFrame, *, present: Collection[str] | None = None
+) -> pl.LazyFrame:
+    """Add the loan-table collateral pooling basis to an exposure frame.
+
+    ``_crm_pool_basis`` is ``ead_for_crm`` (the Art. 223(4) CCF-100% basis every
+    collateral pro-rata share is sized on), and 0.0 on a CCR-engine row
+    (``ccr_engine_row_expr``); ``_crm_pool_member`` is 1.0 / 0.0 alongside it for
+    the direct-level terms. Sharing pools on this basis keeps a CCR row out of
+    every denominator, so the lending rows of the same counterparty take the
+    whole pledge, and gives the CCR row no share of it. ``risk_type`` is
+    injected as a typed null for a direct caller's frame without it.
+    """
+    exposures = ensure_columns(
+        exposures, {"risk_type": ColumnSpec(pl.String, required=False)}, present=present
+    )
+    is_ccr = ccr_engine_row_expr()
+    return exposures.with_columns(
+        pl.when(is_ccr).then(pl.lit(0.0)).otherwise(pl.col("ead_for_crm")).alias(CRM_POOL_BASIS),
+        pl.when(is_ccr).then(pl.lit(0.0)).otherwise(pl.lit(1.0)).alias(CRM_POOL_MEMBER),
+    )
 
 
 # Waterfall ordering for Art. 231 sequential fill (lowest LGDS first).

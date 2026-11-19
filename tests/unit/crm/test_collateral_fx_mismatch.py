@@ -465,7 +465,14 @@ class TestNonFinancialCollateralNoFxHaircut:
     the raw collateral value C against C* / C** thresholds, with FX risk
     handled upstream by the spot-rate ``FXConverter``.
 
-    PRA PS1/26 inherits CRR's silence, so the fix is framework-agnostic.
+    That is the CRR reading only. PRA PS1/26 Art. 230(1) is NOT silent: ES is
+    "the current value of the collateral received after the application of:
+    (a) the volatility adjustment applicable for the type of collateral (HC) ...
+    (b) a volatility adjustment for any currency mismatch between the exposure
+    and the collateral (Hfx) in accordance with Articles 224, 226, and 227" —
+    for every Foundation Collateral Method type (review CL-09). The pack
+    Feature ``fcm_hfx_applies_to_non_financial`` carries the difference, and
+    the Basel 3.1 test below pins the H_fx that P1.198 had wrongly removed.
 
     Pre-fix the engine applied the 8% × √(T_m/10) charge uniformly across all
     collateral types whenever ``original_currency != exposure_currency`` —
@@ -513,11 +520,20 @@ class TestNonFinancialCollateralNoFxHaircut:
         "collateral_type",
         ["real_estate", "receivables", "other_physical"],
     )
-    def test_non_financial_collateral_fx_haircut_is_zero_basel_3_1(
+    def test_non_financial_collateral_takes_fx_haircut_basel_3_1(
         self,
         collateral_type: str,
     ) -> None:
-        """Framework-agnostic: PS1/26 inherits CRR Art. 230 silence on H_fx."""
+        """PS1/26 Art. 230(1)(b): a currency-mismatched non-financial pledge takes H_fx.
+
+        Review CL-09 (re-opening P1.198 on the verbatim read it was waiting for):
+        ES is built "after the application of ... (b) a volatility adjustment for
+        any currency mismatch between the exposure and the collateral (Hfx) in
+        accordance with Articles 224, 226, and 227". At a 10-day liquidation
+        period Table 4 gives 8%, and the Art. 230(2) HC is 40%, so the value
+        after haircut is 100,000 x (1 - 0.40 - 0.08) = 52,000. This test replaced
+        one that pinned H_fx = 0 under Basel 3.1.
+        """
         b31_config = CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31))
         collateral = _non_financial_collateral_lf(
             collateral_type=collateral_type,
@@ -529,11 +545,30 @@ class TestNonFinancialCollateralNoFxHaircut:
         calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, b31_config).collect()
 
-        assert result["fx_haircut"][0] == pytest.approx(0.0), (
-            f"Basel 3.1 non-financial collateral type '{collateral_type}' "
-            f"received fx_haircut={result['fx_haircut'][0]!r}; PS1/26 Art. 230 "
-            f"does not authorise H_fx for funded non-financial collateral."
+        assert result["fx_haircut"][0] == pytest.approx(0.08)
+        assert result["value_after_haircut"][0] == pytest.approx(52_000.0)
+
+    @pytest.mark.parametrize(
+        "collateral_type",
+        ["real_estate", "receivables", "other_physical"],
+    )
+    def test_matched_non_financial_collateral_takes_no_fx_haircut_basel_3_1(
+        self,
+        collateral_type: str,
+    ) -> None:
+        """No mismatch, no H_fx: the Basel 3.1 Feature gates the TYPE, not the test."""
+        b31_config = CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31))
+        collateral = _non_financial_collateral_lf(
+            collateral_type=collateral_type,
+            collateral_currency="GBP",
+            exposure_currency="GBP",
+            original_currency="GBP",
+            liquidation_period_days=10,
         )
+        result = HaircutCalculator().apply_haircuts(collateral, b31_config).collect()
+
+        assert result["fx_haircut"][0] == pytest.approx(0.0)
+        assert result["value_after_haircut"][0] == pytest.approx(60_000.0)
 
     @pytest.mark.parametrize(
         ("collateral_type", "synonym"),

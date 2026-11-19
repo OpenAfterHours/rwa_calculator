@@ -1112,6 +1112,30 @@ A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
     responsible for evidencing the Art. 125(2) conditions for any exposure
     routed to either bucket.
 
+!!! warning "The 35% needs evidence of security and an LTV (review CL-08 / RE-10)"
+    A mortgage `product_type` is not security: Art. 125(1) reaches only
+    exposures "fully and completely secured by mortgages on residential
+    property". The split needs an LTV — Art. 125(2)(d) caps the 35% part at
+    "80 % of the market value of the property in question".
+
+    - A property linked with a `market_value` but no `property_ltv`: the LTV is
+      **derived** as (drawn + accrued interest + undrawn committed amount) /
+      property value, plus `prior_charge_ltv`, and a `RE006` warning is raised.
+      CRR has no LTV-numerator article; the hierarchy stage has no exposure
+      value yet, and a conversion factor never exceeds 100%, so this amount is
+      never below the exposure value — the conservative bound.
+    - A linked property with no `market_value` and no LTV: still secured, but no
+      35% part can be established, so the loan takes the obligor's unsecured
+      weight (residential; Art. 124(1)) or 100% (commercial; Art. 124(1)).
+    - No linked property and no LTV (a bare mortgage label): the exposure takes
+      its counterparty's class — e.g. regulatory retail 75% (Art. 123) — and a
+      `RE005` warning is raised.
+
+    Before this, a null LTV was filled to 0.0 — the 35% band — whatever the
+    loan and the property were: a 150,000 loan on a 100,000 property priced at
+    35% (52,500) instead of the Art. 125 blend at LTV 1.5 (80,500), and a
+    mortgage-labelled loan with no property at all at 35% with no warning.
+
 ## Commercial Real Estate (CRR Art. 126)
 
 Exposures secured by mortgages on commercial immovable property. Art. 126(2)(d) applies a
@@ -1139,18 +1163,49 @@ secured_share = min(1.0, 0.50 / LTV)
 avg_RW = 0.50 × secured_share + counterparty_RW × (1.0 - secured_share)
 ```
 
-!!! note "Income Cover and Loss Rate Derogation"
-    Art. 126(2)(b) requires that repayment does not materially depend on cash flows from
-    the property. Art. 126(3)–(4) provides a derogation: where the PRA has determined that
-    loss rates for CRE-secured loans do not exceed 0.3% on the secured portion and 0.5%
-    overall, condition (b) may be waived (allowing income-dependent CRE to qualify).
+!!! note "Material dependence — the Art. 126(2)(b) gate (review RE-17 / P1.263)"
+    Art. 126(2)(b): "the risk of the borrower shall not materially depend upon the
+    performance of the underlying property or project, but on the underlying capacity of
+    the borrower to repay the debt from other sources". The calculator reads that test
+    from the collateral `is_income_producing` flag (carried as `has_income_cover`, the
+    same flag Basel 3.1 reads for Art. 124E): the 50% applies only where it is **False**.
+    An income-producing exposure takes Art. 124(1) — 100% on the part up to the property
+    value, the counterparty's unsecured weight on any excess (a flat 100% where no LTV
+    sizes the parts).
 
-!!! bug "Code Divergence (D3.36)"
-    The calculator implements Art. 126 as a **binary whole-loan** treatment (50% if
-    LTV ≤ 50% with income cover, 100% otherwise) rather than the proportion-based split
-    required by Art. 126(2)(d). For exposures with LTV > 50% that meet all qualifying
-    conditions, the code assigns 100% to the entire exposure instead of splitting: 50% on
-    the portion up to 50% MV and counterparty RW on the excess.
+    Until this fix the gate was inverted: `True` took the 50% and an owner-occupied
+    exposure took 100%. A commercial mortgage of 400,000 on a 1,000,000 office to a
+    natural person moves 200,000 → 400,000 when income-producing and 400,000 → 200,000
+    when owner-occupied.
+
+    The Art. 126(3)–(4) derogation from limb (b) (loss rates within 0.3% / 0.5% as
+    determined by the competent authority) is **not** applied. Until 31 December 2026 the
+    PRA Credit Risk Part rule 4.1 also allows the Art. 126 treatment of UK commercial
+    property "only where annual average losses stemming from lending secured by mortgages
+    on commercial property located in the UK did not exceed 0.5% of risk-weighted exposure
+    amounts over a representative period" — a market-data test the engine cannot see. A
+    firm that fails it (or any other Art. 126(2) condition) sets `is_qualifying_re = False`
+    on the property, which routes the exposure to Art. 124(1) (below).
+
+!!! note "Explicitly non-qualifying property (review CL-07 / RE-09)"
+    Art. 124(1): "An exposure or any part of an exposure fully secured by mortgage on
+    immovable property shall be assigned a risk weight of 100 %, where the conditions set
+    out in Article 125 or 126 are not met ... The part of an exposure that is treated as
+    fully secured by immovable property shall not be greater than the pledged amount of
+    the market value". Under CRR an explicit `is_qualifying_re = False` attests that the
+    Art. 125(2) / 126(2) conditions are not met, so the preferential 35% / 50% is withheld:
+
+    - a whole residential or commercial row takes 100% up to the property value and the
+      counterparty's unsecured weight on any excess (`engine/sa/crr_real_estate.py`);
+    - a loan-split secured row is sized up to 100% of the property value instead of the
+      80% / 50% preferential limit, and weighted at 100% (`re_art_124_1_secured_value_cap`);
+    - the Art. 127(3) 100% for a defaulted residential exposure "secured ... in accordance
+      with Article 125" is withheld, so the Art. 127(1) unsecured weight applies.
+
+    A null attestation keeps the preferential weight; making null non-qualifying is the
+    open item P1.292. Natural-person mortgage 80,000 on 200,000: 35% / 28,000 →
+    100% / 80,000. CQS 1 corporate 900,000 on a 1,000,000 home (loan-split):
+    300,000 → 900,000.
 
 ## LTV Definition for Basel 3.1 Real Estate (Art. 124C)
 
@@ -1601,7 +1656,7 @@ table.
 | CRR-A | Corporate unrated | 100% |
 | CRR-A | Retail exposure | 75% |
 | CRR-A | Residential mortgage LTV 60% | 35% |
-| CRR-A | CRE with income cover, LTV 45% | 50% |
+| CRR-A | CRE not materially dependent on the property, LTV 45% | 50% |
 | B31-A2 | Corporate CQS 2 (Basel 3.1) | 50% |
 | B31-A3 | Institution CQS 2 (Basel 3.1 ECRA, Art. 120 Table 3) | 30% |
 | B31-A8 | SME corporate (Basel 3.1) | 85% |
@@ -1628,6 +1683,7 @@ the remainder.
 |----------------|-----------------|------------|-------------|
 | CRR Art. 125 (RRE) | 80% LTV | 35% | counterparty CQS RW |
 | CRR Art. 126 (CRE, rental ≥ 1.5×) | 50% LTV | 50% | counterparty CQS RW |
+| CRR Art. 124(1) (`is_qualifying_re = False`) | 100% of property value | 100% | counterparty CQS RW |
 | B3.1 Art. 124F (RRE) | 55% × property value (less prior charges) | 20% | Art. 124L counterparty type |
 | B3.1 Art. 124H(1)-(2) (CRE NP/SME) | 55% × property value | 60% | counterparty CQS RW |
 | B3.1 Art. 124H(3) (CRE other) | whole-loan, no split | n/a | `max(60%, min(cp_rw, Art. 124I RW))` |

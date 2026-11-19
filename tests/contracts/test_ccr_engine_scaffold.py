@@ -49,6 +49,9 @@ _CCR_PUBLIC_FUNCTIONS: tuple[str, ...] = (
     "apply_wwr_gate",
     "assign_hedging_set",
     "assign_ir_maturity_bucket",
+    # Review CC-06: a trade whose netting set is missing gets a non-enforceable
+    # stand-in netting set (Art. 274(1)) instead of being dropped (CCR023).
+    "attach_orphan_trade_netting_sets",
     "ccr_rows_to_exposures",
     "compute_addon_per_asset_class",
     "compute_adjusted_notional_ir",

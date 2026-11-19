@@ -116,14 +116,23 @@ class TestSupervisorySubtypeReachesTheDispatch:
 
 
 class TestTodaysLgdValues:
-    """Absolute LGD/RWA pins. A fix that changes a VALUE here is out of scope."""
+    """Absolute LGD/RWA pins. A fix that changes a VALUE here is out of P1.351's scope.
+
+    The dilution row's RWA moved once, deliberately, under review TR-03 — not an
+    LGD change (its 0.75 is untouched) but the risk-weight FUNCTION: CRR
+    Art. 157(1) prices "dilution risk of purchased corporate and retail
+    receivables in accordance with the formula set out in Article 153(1)", so the
+    retail row takes the corporate correlation (0.164146 at PD 2%, not the
+    retail 0.094556). At M = 1 the maturity adjustment is 1, so RWA =
+    0.75 x (N(...) - 0.02) x 12.5 x 1.06 x 100,000 = 169,194.90 (was 102,442.72).
+    """
 
     @pytest.mark.parametrize(
         ("ref", "expected_lgd", "expected_rwa"),
         [
             (LOAN_REF_RETAIL_SENIOR, 0.45, 61_465.63),
             (LOAN_REF_RETAIL_SUB, 1.00, 136_590.29),
-            (LOAN_REF_RETAIL_DILUTION, 0.75, 102_442.72),
+            (LOAN_REF_RETAIL_DILUTION, 0.75, 169_194.90),
             (LOAN_REF_CORP_SENIOR, 0.45, 101_516.94),
             (LOAN_REF_RETAIL_NOSUBTYPE, 0.45, 61_465.63),
         ],

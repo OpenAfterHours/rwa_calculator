@@ -4,13 +4,13 @@ Every collateral type the INPUT CONTRACT accepts must reach a CRM dispatch branc
 Pipeline position:
     RawDataBundle (validate_bundle_values gates collateral_type against
         VALID_COLLATERAL_TYPES) -> CRMProcessor (engine/crm/expressions.py
-        dispatches on the six category lists) -> collateral value carriers
+        dispatches on the category lists) -> collateral value carriers
 
 What this proves:
 Two sets decide the fate of a pledge, in two layers that do not check each other.
 ``data/schemas.py::VALID_COLLATERAL_TYPES`` is the canonical INPUT set — a
 ``collateral_type`` outside it is rejected as a data-quality error.
-``RECOGNISED_COLLATERAL_TYPES``, derived from the six category lists
+``RECOGNISED_COLLATERAL_TYPES``, derived from the category lists
 ``engine/crm/expressions.py`` actually branches on, is what the ENGINE dispatches.
 
 A type in the first set but not the second lands in a split state: it is excluded
@@ -68,6 +68,7 @@ References:
 from __future__ import annotations
 
 from rwa_calc.data.schemas import (
+    BOND_COLLATERAL_TYPES,
     COVERED_BOND_COLLATERAL_TYPES,
     FINANCIAL_COLLATERAL_TYPES,
     LIFE_INSURANCE_COLLATERAL_TYPES,
@@ -90,32 +91,18 @@ from rwa_calc.data.schemas import (
 #: fail. An allowlist whose members are merely enumerated has the opposite
 #: property; this one is safe in the direction that matters.
 #:
-#: ``bond`` — accepted at ``schemas.py:1981``, absent from every category list.
-#: What it does NOT mean, measured: the pledge is not silently worth zero. It
-#: raises ``CRM021`` and receives RWA relief identical to ``government_bond``
-#: (-485,857.86 on a 500,000 pledge against a 1,000,000 exposure). So the
-#: visibility half needs no fix — ``CRM021`` already is that error — and the two
-#: real defects are recorded separately:
-#:   * the ANTI-CONSERVATIVE half — an arbitrary string in no set at all
-#:     (measured with ``banana``) still earns 217,157.29 of relief behind one
-#:     warning. That is about what an UNRECOGNISED type is granted, not about
-#:     which list a string is on, so no change here can address it.
-#:   * the REPORTING half, which is what THIS entry describes — the per-category
-#:     carriers, and the C 08.01/02 and CR7-A columns fed from them, omit a
-#:     pledge the EAD path already recognised.
-#:
-#: ⚠ LIMIT OF THE STALENESS RATCHET BELOW, recorded rather than left to be
-#: discovered. It fires if ``bond`` becomes dispatched or stops being accepted.
-#: It does NOT fire if the reporting half is fixed on the OTHER side — by making
-#: CR7-A and the category columns read the folded carrier — because ``bond``
-#: would then still be accepted and still undispatched, and this entry would
-#: still be truthful while having outlived its usefulness. Deleting it is part of
-#: that plan item's definition of done, and it is not something this file can
-#: enforce: the mechanical alternative is a forward reference to a fix nobody has
-#: designed, which is a worse gate than an honest note.
-KNOWN_UNDISPATCHED_TYPES: frozenset[str] = frozenset({"bond"})
+#: EMPTY since review CL-11. Its one entry was ``bond``, accepted by validation and
+#: absent from every category list, so a sovereign ``bond`` pledge was "other" on
+#: the F-IRB path (CRM014-gated, or the other-physical LGDS) and raised CRM021 on
+#: every path, while ``government_bond`` took the 0% financial LGDS. ``bond`` is
+#: now dispatched by its ISSUER (``BOND_COLLATERAL_TYPES`` /
+#: ``engine/crm/expressions.py::issued_bond_expr``): financial where the issuer
+#: resolves it to an Art. 197 debt security, other physical otherwise — the class
+#: the Art. 224 haircut lookup already gave it. The stale-entry ratchet below
+#: forced the entry out, which is what it is for.
+KNOWN_UNDISPATCHED_TYPES: frozenset[str] = frozenset()
 
-#: The six category lists ``engine/crm/expressions.py`` branches on, in the order
+#: The category lists ``engine/crm/expressions.py`` branches on, in the order
 #: its ``pl.when(...).when(...)`` ladders test them. Named explicitly rather than
 #: discovered by module introspection so that ADDING a seventh category without
 #: wiring it in here is visible in review.
@@ -123,6 +110,8 @@ DISPATCHED_CATEGORY_LISTS: tuple[tuple[str, list[str]], ...] = (
     ("life_insurance", LIFE_INSURANCE_COLLATERAL_TYPES),
     ("covered_bond", COVERED_BOND_COLLATERAL_TYPES),
     ("financial", FINANCIAL_COLLATERAL_TYPES),
+    # Issuer-dispatched: financial or other physical by ``issuer_type`` (CL-11).
+    ("bond (by issuer)", BOND_COLLATERAL_TYPES),
     ("receivables", RECEIVABLE_COLLATERAL_TYPES),
     ("real_estate", REAL_ESTATE_COLLATERAL_TYPES),
     ("other_physical", OTHER_PHYSICAL_COLLATERAL_TYPES),
@@ -189,7 +178,7 @@ def test_the_recognised_set_is_exactly_the_dispatched_categories() -> None:
     """``RECOGNISED_COLLATERAL_TYPES`` must equal the union of the branch lists.
 
     It is consumed as "everything the CRM engine understands", including by
-    ``engine/crm/expressions.py`` itself. Pinning it to the same six lists the
+    ``engine/crm/expressions.py`` itself. Pinning it to the same lists the
     dispatch ladders test keeps it from drifting into a third, subtly different
     opinion — and makes this file's other two assertions sound, since both are
     stated over that union.
@@ -199,7 +188,7 @@ def test_the_recognised_set_is_exactly_the_dispatched_categories() -> None:
 
     # Act / Assert
     assert set(RECOGNISED_COLLATERAL_TYPES) == dispatched, (
-        f"RECOGNISED_COLLATERAL_TYPES disagrees with the six dispatched category lists. "
+        f"RECOGNISED_COLLATERAL_TYPES disagrees with the dispatched category lists. "
         f"Only in RECOGNISED: {sorted(set(RECOGNISED_COLLATERAL_TYPES) - dispatched)}; "
         f"only in the category lists: {sorted(dispatched - set(RECOGNISED_COLLATERAL_TYPES))}."
     )

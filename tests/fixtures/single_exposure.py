@@ -75,6 +75,7 @@ def calculate_single_sa_exposure(
     is_equivalent_jurisdiction: bool | None = None,
     funding_currency: str | None = None,
     funding_currency_null: bool = False,
+    is_qualifying_re: bool | None = None,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch.
 
@@ -130,6 +131,9 @@ def calculate_single_sa_exposure(
         "cp_local_currency": [local_currency],
         "cp_institution_cqs": [institution_cqs],
         "is_hedged": [is_hedged],
+        # The real-estate qualification attestation (CRR Art. 125(2)/126(2);
+        # PS1/26 Art. 124A). None = not reported, the input contract's null.
+        "is_qualifying_re": pl.Series([is_qualifying_re], dtype=pl.Boolean),
     }
     if prior_charge_ltv is not None:
         data["prior_charge_ltv"] = [float(prior_charge_ltv)]

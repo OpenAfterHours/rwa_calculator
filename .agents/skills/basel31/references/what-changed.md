@@ -56,10 +56,12 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `collateral_haircut_maturity_bands_revised` | off | on | CRR Art. 224 / PS1/26, paragraph 224 |
 | `crr_non_named_mdb_institution_irb_class` | on | off | CRR Art. 147 / PS1/26, paragraph 147 |
 | `crr_retail_re_portfolio_lgd_floor` | on | off | CRR Art. 164 / PS1/26, paragraph 164 |
+| `cva_ba_cva` | off | on | CRR Art. 382 / PS1/26, paragraph 4.1 |
 | `double_default_treatment` | on | off | CRR Art. 153(3) / PS1/26, paragraph 153 |
 | `equity_irb_approaches_available` | on | off | CRR Art. 155 / PS1/26, paragraph 133 |
 | `equity_revised_sa_risk_weights` | off | on | CRR Art. 133 / PS1/26, paragraph 133 |
 | `equity_transitional` | off | on | CRR Art. 133 / PS1/26, paragraph 4.1 |
+| `fcm_hfx_applies_to_non_financial` | off | on | CRR Art. 230 / PS1/26, paragraph 230 |
 | `fcsm_equity_collateral_rw` | `1.00` | `2.50` | CRR Art. 222(3) / PS1/26, paragraph 222 |
 | `firb_fixed_supervisory_maturity` | on | off | CRR Art. 162(1) / PS1/26, paragraph 162 |
 | `firb_fse_senior_lgd_split` | off | on | CRR Art. 161(1)(a) / PS1/26, paragraph 161 |
@@ -68,11 +70,14 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `firb_sft_supervisory_maturity` | on | off | CRR Art. 162(1) / PS1/26, paragraph 162 |
 | `firb_uses_sa_ccf` | off | on | CRR Art. 166 / PS1/26, paragraph 166C |
 | `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
+| `irb_purchased_receivable_commitment_ccf_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166A |
 | `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
+| `lfse_assets_at_highest_consolidation` | off | on | CRR Art. 142(1)(4) / PS1/26, paragraph 153 |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
+| `non_qualifying_retail_leaves_retail_class` | on | off | CRR Art. 123 / PS1/26, paragraph 123 |
 | `on_bs_netting_liquidation_period` | `20` | `10` | CRR Art. 224 / PS1/26, paragraph 219 |
 | `on_bs_netting_same_currency_only` | on | off | CRR Art. 219 / PS1/26, paragraph 219 |
-| `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `one_day_floor_trade_residual_strict` | off | on | CRR Art. 162(3) / PS1/26, paragraph 162 |
 | `output_floor` | off | on | CRR Art. 92 / PS1/26, paragraph 92 |
 | `post_model_adjustments` | off | on | CRR Art. 153 / PS1/26, paragraph 154 |
 | `re_split_cre_secured_ltv_cap` | `0.50` | `0.55` | CRR Art. 126 / PS1/26, paragraph 124H |
@@ -80,8 +85,10 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `regulatory_thresholds_fx_derived` | on | off | CRR Art. 123 / PS1/26, paragraph 147 |
 | `retail_art_123a_two_path_applicable` | off | on | CRR Art. 123 / PS1/26, paragraph 123A |
 | `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
+| `sa_ccr_alpha_nfc_carve_out_applicable` | off | on | CRR Art. 274(2) / PS1/26, paragraph 274 |
 | `sa_currency_mismatch_multiplier` | off | on | CRR Art. 123 / PS1/26, paragraph 123B |
 | `sa_due_diligence_override` | off | on | CRR Art. 110 / PS1/26, paragraph 110A |
+| `sa_pf_phase_defaults_pre_operational` | off | on | CRR Art. 122 / PS1/26, paragraph 122B |
 | `sa_re_split_art_124_4_all_or_nothing` | off | on | CRR Art. 124 / PS1/26, paragraph 124 |
 | `sa_re_split_cre_rental_coverage_required` | on | off | CRR Art. 126 / PS1/26, paragraph 124H |
 | `sa_re_split_revised_parameters` | off | on | CRR Art. 125 / PS1/26, paragraph 124F |
@@ -93,6 +100,8 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `sa_sl_inferred_rating_disapplied` | off | on | CRR Art. 139 / PS1/26, paragraph 139 |
 | `sa_unrated_institution_sovereign_floor_applies` | off | on | CRR Art. 121 / PS1/26, paragraph 121 |
 | `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
+| `sme_size_assets_fallback` | on | off | CRR Art. 4(1)(128D) / PS1/26, paragraph 122 |
+| `sme_turnover_threshold_inclusive` | off | on | CRR Art. 153(4) / PS1/26, paragraph 122 |
 | `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |
 | `ucp_unilateral_change_ineligible` | off | on | CRR Art. 213 / PS1/26, paragraph 213 |
 <!-- END GENERATED: regime-divergence -->

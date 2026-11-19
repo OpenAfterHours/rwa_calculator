@@ -870,12 +870,16 @@ class TestCRRNoJuniorChargeEffect:
                 "ltv": [0.50],
                 "is_sme": [False],
                 "is_infrastructure": [False],
-                "has_income_cover": [True],
+                # Not property-dependent (Art. 126(2)(b)); was True under the
+                # inverted gate fixed by review RE-17 / P1.263.
+                "has_income_cover": [False],
                 "prior_charge_ltv": [0.20],
+                # The CRR Art. 126 50% needs the firm's attestation (PRA rule 4.1).
+                "is_qualifying_re": [True],
             }
         ).lazy()
         result = sa_calculator.calculate_branch(df, crr_config).collect().to_dicts()[0]
-        # CRR CRE with income + LTV ≤ threshold → 50% (Art. 126)
+        # CRR CRE not property-dependent + LTV ≤ threshold → 50% (Art. 126)
         assert float(result["risk_weight"]) == pytest.approx(0.50, abs=1e-4)
 
 

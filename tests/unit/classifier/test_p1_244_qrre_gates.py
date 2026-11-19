@@ -100,10 +100,11 @@ def crr_drawn_leg_classes(crr_config: CalculationConfig) -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def b31_drawn_leg_classes() -> dict[str, str]:
-    # Art. 123A(1)(b)(ii) granularity is Basel-3.1-only and, on this 2-obligor
-    # test portfolio, would demote BOTH drawn legs to CORPORATE regardless of
-    # is_secured — orthogonal noise for the QRRE unsecured gate. Disable it via
-    # the documented isolation switch so only the is_secured coupling on the
+    # The optional 0.2% granularity test (BCBS CRE20.66; not a PS1/26 limb, off
+    # by default since RE-04) would, on this 2-obligor test portfolio, fail BOTH
+    # drawn legs as regulatory retail regardless of is_secured — orthogonal noise
+    # for the QRRE unsecured gate. Kept explicitly off so only the is_secured
+    # coupling on the
     # drawn leg discriminates (the fully-undrawn bundle sidesteps this with
     # drawn=0, which the drawn leg cannot).
     config = CalculationConfig.basel_3_1(

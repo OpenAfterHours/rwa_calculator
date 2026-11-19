@@ -34,6 +34,7 @@ References:
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
@@ -43,10 +44,14 @@ from rwa_calc.domain.branch_reasons import (
     SovereignFloorReason,
     reason_dtype,
 )
-from rwa_calc.domain.enums import CQS, RiskType
+from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.branch_reason import BranchCase, decide
+from rwa_calc.engine.sa.ccp_exposures import qccp_trade_exposure_expr
 from rwa_calc.engine.sa.crr_risk_weight_tables import CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS
 from rwa_calc.engine.sa.sovereign_derived import cqs_table_lookup_expr
+
+if TYPE_CHECKING:
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +62,7 @@ def apply_sovereign_floor_for_institutions(
     exposures: pl.LazyFrame,
     is_domestic_currency_expr: pl.Expr,
     *,
-    applies: bool,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Apply sovereign RW floor for FX unrated institution exposures.
 
@@ -72,14 +77,18 @@ def apply_sovereign_floor_for_institutions(
     5", modifying an SCRA Grade A/B/C ladder CRR does not have; CRR instead
     handles the same concern structurally, since Art. 121(1) already derives
     the unrated institution's weight from its central government's credit
-    quality step. ``applies`` carries the regime decision from the cited pack
-    Feature ``sa_unrated_institution_sovereign_floor_applies`` (arch_check
+    quality step. The regime decision reads the cited pack Feature
+    ``sa_unrated_institution_sovereign_floor_applies`` from ``pack`` (arch_check
     check 17); when it is False every row is named
     ``REGIME_NOT_APPLICABLE`` and no risk weight is touched (P1.334).
 
     Exception: Self-liquidating trade-related contingent items arising
-    from the movement of goods with original maturity ≤ 1 year are not
-    subject to this floor (CRE20.22 footnote 13).
+    from the movement of goods with an original maturity of LESS THAN one
+    year are not subject to this floor (PS1/26 Art. 121(6)(b); CRE20.22
+    footnote 13). The bound is the pack scalar
+    ``sa_sovereign_floor_trade_exemption_original_maturity_years`` and the
+    comparison is strict — a 365-day item (original maturity 1.0y) is floored
+    (review TR-10).
 
     Exception: QCCP **trade** exposures, which CRR Art. 306 pins at 2%
     (clearing member's own) / 4% (client-cleared) as lex specialis. CRR
@@ -121,7 +130,7 @@ def apply_sovereign_floor_for_institutions(
     - CRR Art. 107(2) — only trade exposures and default fund contributions
       reach the Chapter 6 Section 9 regime
     """
-    if not applies:
+    if not pack.feature("sa_unrated_institution_sovereign_floor_applies"):
         # No value leg at all — every ``risk_weight`` passes through untouched.
         # The reason column is still emitted so the census can see that the rule
         # abstained for a regime reason rather than silently not running.
@@ -162,10 +171,14 @@ def apply_sovereign_floor_for_institutions(
         .otherwise(~is_domestic_currency_expr)
     )
 
-    # Exception: self-liquidating trade items ≤ 1yr original maturity
-    # (Art. 121(6) CRR / CRE20.22 footnote 13 — both key on ORIGINAL maturity).
+    # Exception: self-liquidating trade items with an original maturity of LESS
+    # THAN one year (PS1/26 Art. 121(6)(b) / CRE20.22 footnote 13 — both key on
+    # ORIGINAL maturity). Strict ``<``: "less than one year" (review TR-10).
+    trade_exemption_years = float(
+        pack.scalar("sa_sovereign_floor_trade_exemption_original_maturity_years")
+    )
     _is_trade_exempt = pl.col("is_short_term_trade_lc").fill_null(False) & (
-        pl.col("original_maturity_years").fill_null(5.0) <= 1.0
+        pl.col("original_maturity_years").fill_null(5.0) < trade_exemption_years
     )
 
     # Exception: QCCP TRADE exposures (CRR Art. 306 / CRE54.14-15), which the
@@ -173,31 +186,19 @@ def apply_sovereign_floor_for_institutions(
     # is lex specialis and admits no Art. 121(6) floor; flooring a 2% pin to the
     # Art. 114(1) unrated-sovereign residual overstates the leg 50x.
     #
-    # The predicate carries a TRADE-EXPOSURE term as well as the QCCP one, and
-    # that is the whole of its difference from the pin's own predicate in
-    # ``risk_weights.py``. CRR Art. 107(2) sends only trade exposures and default
-    # fund contributions to Chapter 6 Section 9; "all other types of exposures to
-    # a qualifying CCP" are treated "as exposures to an institution", so an
-    # ordinary loan to a QCCP stays squarely inside Art. 121(6). Copying the pin's
-    # predicate would exempt that loan too.
+    # The predicate is the SAME one the pin in ``risk_weights.py`` uses
+    # (``engine/sa/ccp_exposures.py``), trade-exposure term included. CRR Art.
+    # 107(2) sends only trade exposures and default fund contributions to Chapter
+    # 6 Section 9; "all other types of exposures to a qualifying CCP" are treated
+    # "as exposures to an institution", so an ordinary loan to a QCCP stays
+    # squarely inside Art. 121(6). Sharing one predicate (CC-11) keeps the floor's
+    # carve-out and the pin it protects from drifting apart again.
     #
     # Null-safe on every term WITHOUT a ``fill_null``: this case sits FIRST in the
     # chain below, and ``decide`` names a row UNKNOWN_FALLBACK the moment a
     # predicate ahead of it is indeterminate — so a null here would relabel the
-    # whole estate. ``eq_missing`` is total by construction, and
-    # ``is_null() | col`` is total by Kleene (the right operand can only be read
-    # when the left is False, i.e. when the column is known). That keeps the
-    # defensive surface off the ``engine_fill_null_sites`` ratchet.
-    #
-    # An absent ``cp_is_qccp`` is read as qualifying, matching the pin in
-    # ``risk_weights.py`` that set the weight this limb protects.
-    _is_ccr_trade_exposure = pl.col("risk_type").eq_missing(RiskType.CCR_DERIVATIVE.value) | pl.col(
-        "risk_type"
-    ).eq_missing(RiskType.CCR_SFT.value)
-    _is_qccp = pl.col("cp_entity_type").eq_missing("ccp") & (
-        pl.col("cp_is_qccp").is_null() | pl.col("cp_is_qccp")
-    )
-    _is_qccp_trade_exposure = _is_ccr_trade_exposure & _is_qccp
+    # whole estate. The shared predicate is total by construction.
+    _is_qccp_trade_exposure = qccp_trade_exposure_expr()
 
     # Floor applies to every unrated institution exposure in FX, excluding
     # trade-exempt items. No sovereign-CQS gate: ``_sovereign_rw`` is total

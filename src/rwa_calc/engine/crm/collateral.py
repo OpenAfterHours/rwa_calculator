@@ -6,7 +6,9 @@ Pipeline position:
 
 Key responsibilities:
 - Haircut application and maturity mismatch
-- Multi-level collateral allocation (direct / facility / counterparty)
+- Multi-level collateral allocation (direct / facility / counterparty), keeping
+  counterparty-credit-risk rows out of every loan-table pool (CRR Art. 223(5A) /
+  PS1/26 Art. 191A(4))
 - SA EAD reduction via eligible financial collateral
 - F-IRB LGD calculation with supervisory values
 - A-IRB LGD Modelling Collateral Method (Art. 169A/169B)
@@ -29,12 +31,16 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import (
+    ERROR_CCR_ONLY_COLLATERAL_POOL,
+    ERROR_COLLATERAL_CURRENCY_UNKNOWN,
     ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED,
     ERROR_INELIGIBLE_IRB_COLLATERAL,
+    ERROR_NON_ART197_FLAGGED_FINANCIAL,
     ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
     crm_warning,
 )
-from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, LIFE_INSURANCE_COLLATERAL_TYPES
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType, CRMCollateralMethod
 from rwa_calc.engine.crm.eligibility import (
     credit_linked_note_ineligible_expr,
@@ -42,18 +48,23 @@ from rwa_calc.engine.crm.eligibility import (
 )
 from rwa_calc.engine.crm.expressions import (
     CRM_ALLOC_COLUMNS,
+    CRM_POOL_BASIS,
+    CRM_POOL_MEMBER,
     WATERFALL_ORDER,
     beneficiary_level_expr,
+    ccr_engine_row_expr,
     collateral_category_expr,
     collateral_lgd_expr,
     flag_netting_rows,
     is_financial_collateral_type_expr,
     lgd_star_exposure_basis_expr,
     overcollateralisation_ratio_expr,
+    sa_fccm_type_eligible_expr,
     subordinated_unsecured_lgd,
     supervisory_lgd_values,
+    with_crm_pool_basis,
 )
-from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.haircuts import HaircutCalculator, collateral_denomination_expr
 from rwa_calc.engine.crm.min_collateralisation import (
     MIN_COLLATERALISATION_CATEGORIES,
     below_min_collateralisation_expr,
@@ -241,8 +252,15 @@ def apply_collateral(
         airb_lgd_preserved_expr(config, schema_names, pack=resolved_pack).alias("_is_airb_pool")
     )
 
-    # Pre-compute shared exposure lookups once
-    direct_lookup, facility_lookup, cp_lookup = build_exposure_lookups_fn(exposures)
+    # Pre-compute shared exposure lookups once, on the loan-table pooling basis:
+    # a CCR-engine row (SA-CCR / FCCM SFT / failed trade / default fund) sizes
+    # into no pool, pledge percentage or pro-rata total (CRR Art. 223(5A) /
+    # PS1/26 Art. 191A(4); ``with_crm_pool_basis``, review CL-04 / CC-07).
+    direct_lookup, facility_lookup, cp_lookup = build_exposure_lookups_fn(
+        with_crm_pool_basis(exposures, present=schema_names).with_columns(
+            pl.col(CRM_POOL_BASIS).alias("ead_for_crm")
+        )
+    )
 
     # Materialise the small lookup frames in parallel to prevent plan-tree
     # duplication. Each lookup is referenced in multiple downstream joins;
@@ -285,13 +303,14 @@ def apply_collateral(
         haircut_calculator.apply_haircuts(collateral, config, pack=pack)
     )
 
-    # CRR/PS1-26 Art. 197(1)(f)/198(1)(a) (P1.271) and Art. 218 (P1.274):
-    # apply_haircuts has already zeroed non-main-index / non-listed equity and
-    # non-own-issued credit-linked notes and cleared their eligibility flags;
-    # record CRM018 (rolled up) and CRM019 (per row).
+    # The eligibility findings of the haircut stage, from ONE scan of the
+    # materialised frame: CRM018 / CRM019 (equity listing, CLN own-issue — the
+    # rows apply_haircuts zeroed), CRM023 (unknown collateral currency taken as a
+    # mismatch) and CRM026 (a non-Art. 197 type flagged as financial collateral).
+    # CRM025: a loan-table pledge whose only beneficiaries are CCR-engine rows.
     if errors is not None:
-        _record_non_main_index_equity_ineligible(adjusted_collateral, errors)
-        _record_credit_linked_note_not_own_issued(adjusted_collateral, errors)
+        _record_haircut_stage_findings(adjusted_collateral, errors)
+        _record_ccr_only_pledges(exposures, adjusted_collateral, errors)
 
     adjusted_collateral = haircut_calculator.apply_maturity_mismatch(
         adjusted_collateral, config, errors=errors
@@ -508,23 +527,142 @@ def _record_ineligible_irb_collateral(
         )
 
 
-def _record_non_main_index_equity_ineligible(
+def _record_haircut_stage_findings(
     collateral: pl.LazyFrame,
     errors: list[CalculationError],
 ) -> None:
-    """Append ONE rolled-up CRM018 warning counting the equity collateral rows
-    ruled ineligible by the CRR/PS1-26 Art. 197(1)(f)/198(1)(a) listing gate.
+    """Append the haircut stage's eligibility findings from ONE scan.
 
-    Re-derives the SAME shared predicate ``HaircutCalculator.apply_haircuts``
-    zeroed on, over the materialised post-haircut frame, so the warning cannot
-    drift from the zeroed number. Rolled up to a count (the splitter's RE002-RE004
-    idiom): per-row emission floods the channel — 13k+ warnings at 100k-exposure
-    scale once made the re_split stage's error dedup quadratic.
+    Reads the materialised post-haircut frame once and emits:
+
+    - CRM018 (rolled up): equity collateral ruled ineligible by the CRR/PS1-26
+      Art. 197(1)(f)/198(1)(a) listing gate.
+    - CRM019 (one per row): credit-linked notes ruled ineligible by the Art. 218
+      own-issuance gate.
+    - CRM023 (rolled up, review CL-14): collateral with no stated currency, on
+      which ``collateral_currency_mismatch_expr`` applied the Art. 224 Table 4
+      H_fx. Life insurance is left to CRM020, which already records the same
+      conservative reading of an unknown policy currency.
+    - CRM026 (rolled up, review CL-01): rows flagged
+      ``is_eligible_financial_collateral`` whose type is not an Art. 197 type
+      (``sa_fccm_type_eligible_expr``), so the flag reduced no SA exposure value.
+
+    Each predicate is the SAME one the haircut / allocation step applied, so a
+    record cannot drift from the number it explains. The rolled-up records
+    name distinct collateral references (a linked item's slices are one item)
+    — per-row emission floods the channel at 100k-exposure scale.
     """
     names = collateral.collect_schema().names()
-    gate = equity_ineligible_expr(names, method=CRMCollateralMethod.COMPREHENSIVE)
-    count_df = collateral.select(gate.cast(pl.UInt32).sum().alias("gated")).collect()
-    count = int(count_df.item() or 0) if count_df.height > 0 else 0
+    # A direct caller's frame may not carry a reference (production always does).
+    collateral = ensure_columns(
+        collateral, {"collateral_reference": ColumnSpec(pl.String, required=False)}, present=names
+    )
+    equity_gate = equity_ineligible_expr(names, method=CRMCollateralMethod.COMPREHENSIVE)
+    cln_gate = credit_linked_note_ineligible_expr(names)
+    is_life = pl.col("collateral_type").str.to_lowercase().is_in(LIFE_INSURANCE_COLLATERAL_TYPES)
+    unknown_ccy = collateral_denomination_expr().is_null() & (pl.col("fx_haircut") > 0.0) & ~is_life
+    flagged = (
+        pl.col("is_eligible_financial_collateral")
+        if "is_eligible_financial_collateral" in names
+        else pl.lit(False)
+    )
+    non_art197 = flagged & ~sa_fccm_type_eligible_expr() & (pl.col("market_value") > 0.0)
+    ref = pl.col("collateral_reference").cast(pl.String)
+    found = collateral.select(
+        equity_gate.cast(pl.UInt32).sum().alias("equity"),
+        ref.filter(cln_gate).implode().alias("cln_refs"),
+        pl.col("beneficiary_reference")
+        .cast(pl.String)
+        .filter(cln_gate)
+        .implode()
+        .alias("cln_bens"),
+        ref.filter(unknown_ccy).unique().sort().implode().alias("ccy_refs"),
+        ref.filter(non_art197).unique().sort().implode().alias("art197_refs"),
+        pl.col("collateral_type")
+        .filter(non_art197)
+        .unique()
+        .sort()
+        .implode()
+        .alias("art197_types"),
+    ).collect()
+    row = found.row(0, named=True)
+    _append_equity_listing_record(int(row["equity"] or 0), errors)
+    for coll_ref, ben_ref in zip(row["cln_refs"], row["cln_bens"], strict=True):
+        _append_cln_record(coll_ref, ben_ref, errors)
+    _append_unknown_currency_record(row["ccy_refs"], errors)
+    _append_non_art197_record(row["art197_refs"], row["art197_types"], errors)
+
+
+def _record_ccr_only_pledges(
+    exposures: pl.LazyFrame,
+    collateral: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Append ONE rolled-up CRM025 for loan-table pledges that reach no exposure.
+
+    Review CL-04 / CC-07: loan-table collateral no longer reduces a CCR-engine
+    row (``ccr_engine_row_expr``) — CRR Art. 223(5A) / PS1/26 Art. 191A(4) put
+    the collateral of a derivative or SFT netting set in the CCR Part's own
+    calculation. A pledge whose ONLY beneficiaries are such rows — a direct
+    pledge on a ``ccr__`` / ``ft__`` / ``dfc__`` row, or a counterparty-level
+    pledge on a counterparty with CCR rows and no lending — therefore mitigates
+    nothing, and this record says so and where the collateral belongs
+    (``ccr_collateral`` / ``sft_collateral``). A counterparty with lending as
+    well gives the pledge to the lending rows, which is not a finding.
+    """
+    is_ccr = ccr_engine_row_expr()
+    exposures = ensure_columns(exposures, {"risk_type": ColumnSpec(pl.String, required=False)})
+    ccr_refs = exposures.filter(is_ccr).select(pl.col("exposure_reference").alias("_ref"))
+    ccr_only_cps = (
+        exposures.group_by("counterparty_reference")
+        .agg(
+            is_ccr.any().alias("_any_ccr"),
+            pl.when(is_ccr).then(pl.lit(False)).otherwise(pl.lit(True)).any().alias("_any_other"),
+        )
+        .filter(pl.col("_any_ccr") & ~pl.col("_any_other"))
+        .select(pl.col("counterparty_reference").alias("_ref"))
+    )
+    collateral = ensure_columns(
+        collateral,
+        {
+            "collateral_reference": ColumnSpec(pl.String, required=False),
+            "beneficiary_type": ColumnSpec(pl.String, required=False),
+        },
+    ).with_columns(beneficiary_level_expr().alias("_level"))
+    pledges = (
+        pl.concat(
+            [
+                collateral.filter(pl.col("_level") == "direct").join(
+                    ccr_refs, left_on="beneficiary_reference", right_on="_ref", how="semi"
+                ),
+                collateral.filter(pl.col("_level") == "counterparty").join(
+                    ccr_only_cps, left_on="beneficiary_reference", right_on="_ref", how="semi"
+                ),
+            ]
+        )
+        .select(pl.col("collateral_reference").cast(pl.String).unique().sort())
+        .collect()
+    )
+    if pledges.height == 0:
+        return
+    refs = pledges["collateral_reference"].to_list()
+    errors.append(
+        crm_warning(
+            ERROR_CCR_ONLY_COLLATERAL_POOL,
+            f"{len(refs)} loan-table collateral item(s) ({_name_some(refs)}) are pledged "
+            f"only to counterparty-credit-risk netting-set, failed-trade or default-fund "
+            f"rows, so they mitigate nothing: the exposure value of a derivative or SFT "
+            f"netting set already reflects its collateral under the Counterparty Credit "
+            f"Risk Part (CRR Art. 223(5A); PS1/26 Art. 191A(4) disapplies the CRM "
+            f"articles to it). Supply such collateral in ccr_collateral / "
+            f"sft_collateral instead.",
+            regulatory_reference="CRR Art. 223(5A) / PS1/26 Art. 191A(4)",
+        )
+    )
+
+
+def _append_equity_listing_record(count: int, errors: list[CalculationError]) -> None:
+    """CRM018 — one rolled-up record for the Art. 197(1)(f)/198(1)(a) equity gate."""
     if count <= 0:
         return
     errors.append(
@@ -541,39 +679,69 @@ def _record_non_main_index_equity_ineligible(
     )
 
 
-def _record_credit_linked_note_not_own_issued(
-    collateral: pl.LazyFrame,
-    errors: list[CalculationError],
+def _append_cln_record(
+    coll_ref: str | None, ben_ref: str | None, errors: list[CalculationError]
 ) -> None:
-    """Append one CRM019 warning per credit-linked note ruled ineligible by the
-    CRR/PS1-26 Art. 218 own-issuance gate.
-
-    Re-derives the SAME shared predicate ``HaircutCalculator.apply_haircuts``
-    zeroed on, over the materialised post-haircut frame (P1.264 idiom).
-    """
-    names = collateral.collect_schema().names()
-    gate = credit_linked_note_ineligible_expr(names)
-    select_cols: list[pl.Expr] = [gate.alias("_gated")]
-    select_cols.extend(
-        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
-    )
-    gated = collateral.filter(gate).select(select_cols).collect()
-    for row in gated.iter_rows(named=True):
-        coll_ref = row.get("collateral_reference")
-        ben_ref = row.get("beneficiary_reference")
-        errors.append(
-            crm_warning(
-                ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED,
-                f"Credit-linked note '{coll_ref}' securing exposure '{ben_ref}' is "
-                f"not attested issued by the lending institution (is_own_issued_cln "
-                f"is False/unset), so it does not qualify for Art. 218 cash-collateral "
-                f"treatment; a third-party CLN is materially correlated with its "
-                f"reference entity (Art. 194(4)). Its value is zeroed and it is "
-                f"excluded from credit risk mitigation.",
-                exposure_reference=ben_ref,
-                regulatory_reference="CRR/PS1-26 Art. 218",
-            )
+    """CRM019 — one record per credit-linked note the Art. 218 gate zeroed."""
+    errors.append(
+        crm_warning(
+            ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED,
+            f"Credit-linked note '{coll_ref}' securing exposure '{ben_ref}' is "
+            f"not attested issued by the lending institution (is_own_issued_cln "
+            f"is False/unset), so it does not qualify for Art. 218 cash-collateral "
+            f"treatment; a third-party CLN is materially correlated with its "
+            f"reference entity (Art. 194(4)). Its value is zeroed and it is "
+            f"excluded from credit risk mitigation.",
+            exposure_reference=ben_ref,
+            regulatory_reference="CRR/PS1-26 Art. 218",
         )
+    )
+
+
+def _append_unknown_currency_record(refs: list[str], errors: list[CalculationError]) -> None:
+    """CRM023 — one rolled-up record for collateral with no stated currency."""
+    if not refs:
+        return
+    errors.append(
+        crm_warning(
+            ERROR_COLLATERAL_CURRENCY_UNKNOWN,
+            f"{len(refs)} collateral item(s) ({_name_some(refs)}) state no currency, so "
+            f"no match with the exposure's currency can be shown: each is treated as "
+            f"currency-mismatched and takes the Art. 224 Table 4 volatility adjustment "
+            f"H_fx (scaled for its liquidation period), and its value is left "
+            f"unconverted by FX conversion. Populate the collateral currency.",
+            regulatory_reference="CRR Art. 223(2)/224 / PS1/26 Art. 230(1)(b)",
+        )
+    )
+
+
+def _append_non_art197_record(
+    refs: list[str], types: list[str], errors: list[CalculationError]
+) -> None:
+    """CRM026 — one rolled-up record for non-Art. 197 rows flagged as financial."""
+    if not refs:
+        return
+    errors.append(
+        crm_warning(
+            ERROR_NON_ART197_FLAGGED_FINANCIAL,
+            f"{len(refs)} collateral item(s) ({_name_some(refs)}) are flagged "
+            f"is_eligible_financial_collateral but their type ({', '.join(types)}) is not "
+            f"eligible financial collateral under Art. 197, so the flag is ignored for the "
+            f"Standardised Approach (the Financial Collateral Comprehensive Method's "
+            f"exposure-value reduction and the Simple Method's risk-weight substitution). "
+            f"Immovable property, receivables and other physical "
+            f"collateral are recognised only under the IRB / Foundation Collateral Method "
+            f"(Art. 199, is_eligible_irb_collateral); life insurance under Art. 232.",
+            regulatory_reference="CRR/PS1-26 Art. 197(1) / 199(1)",
+        )
+    )
+
+
+def _name_some(refs: list[str], limit: int = 5) -> str:
+    """The first ``limit`` references, and how many more there are."""
+    named = ", ".join(str(r) for r in refs[:limit])
+    more = len(refs) - limit
+    return f"{named}, and {more} more" if more > 0 else named
 
 
 @cites("CRR Art. 199")
@@ -653,6 +821,12 @@ def _apply_collateral_unified(
     # single-level inputs fall back to the 1-element [parent] list, which makes
     # the cascade in ``_cascade_facility_collateral`` reduce exactly to the
     # legacy single-level allocation.
+    # Review CL-04 / CC-07: the loan-table pooling basis (``with_crm_pool_basis``)
+    # every pro-rata share and direct term below is sized on — 0 on a CCR-engine
+    # row, so loan-table collateral never reaches one and its lending siblings
+    # take the whole pool.
+    exposures = with_crm_pool_basis(exposures, present=exposure_schema.names())
+
     if "ancestor_facilities" not in exposure_schema.names():
         if "parent_facility_reference" in exposure_schema.names():
             exposures = exposures.with_columns(
@@ -673,12 +847,24 @@ def _apply_collateral_unified(
         cp_ead_totals = cp_ead_totals.with_columns(cp_total_fills)
 
     collateral_schema = adjusted_collateral.collect_schema()
+    # The category ladder reads ``issuer_type`` (the ``bond`` dispatch, review
+    # CL-11); apply_haircuts always supplies it, a direct caller may not.
+    adjusted_collateral = ensure_columns(
+        adjusted_collateral,
+        {"issuer_type": ColumnSpec(pl.String, required=False)},
+        present=collateral_schema.names(),
+    )
 
     # --- Determine eligible expression for EAD reduction ---
+    # Review CL-01: the firm's Art. 197 attestation counts only on an Art. 197
+    # TYPE (``sa_fccm_type_eligible_expr``); a flagged property, receivable,
+    # other-physical, life-insurance or unrecognised row reduces no SA exposure
+    # value (CRM026). A frame with no flag at all (a direct caller's) is
+    # eligible by type alone.
     if "is_eligible_financial_collateral" in collateral_schema:
-        is_eligible = pl.col("is_eligible_financial_collateral")
+        is_eligible = pl.col("is_eligible_financial_collateral") & sa_fccm_type_eligible_expr()
     else:
-        is_eligible = ~pl.col("collateral_type").str.to_lowercase().is_in(NON_ELIGIBLE_RE_TYPES)
+        is_eligible = sa_fccm_type_eligible_expr()
 
     # --- Annotate collateral with LGD categories (using shared expressions) ---
     # Ensure the AIRB-model flag is present (default False) so the pool-aware
@@ -941,18 +1127,22 @@ def _apply_collateral_unified(
     # than the non-AIRB sub-pool. Dropping the gate while keeping the sub-pool
     # denominator would allocate the pledge in full to BOTH pools; sharing on
     # ``_cp_ead_total`` keeps it conserved. See ``_sum6_pool_agnostic``.
+    # The shares are sized on ``_crm_pool_basis`` (``ead_for_crm``, 0 on a
+    # CCR-engine row) — the basis the totals were built on, so they still sum
+    # to one over a counterparty's lending rows.
+    pool_basis = pl.col(CRM_POOL_BASIS)
     exposures = exposures.with_columns(
         [
             pl.when(in_non_airb & (pl.col("_cp_ead_total_non_airb") > 0))
-            .then(pl.col("ead_for_crm") / pl.col("_cp_ead_total_non_airb"))
+            .then(pool_basis / pl.col("_cp_ead_total_non_airb"))
             .otherwise(pl.lit(0.0))
             .alias("_cw_n"),
             pl.when(pl.col("_cp_ead_total") > 0)
-            .then(pl.col("ead_for_crm") / pl.col("_cp_ead_total"))
+            .then(pool_basis / pl.col("_cp_ead_total"))
             .otherwise(pl.lit(0.0))
             .alias("_cw_n_all"),
             pl.when(in_airb & (pl.col("_cp_ead_total_airb") > 0))
-            .then(pl.col("ead_for_crm") / pl.col("_cp_ead_total_airb"))
+            .then(pool_basis / pl.col("_cp_ead_total_airb"))
             .otherwise(pl.lit(0.0))
             .alias("_cw_a"),
             in_airb.cast(pl.Float64).alias("_airb_match"),
@@ -968,13 +1158,19 @@ def _apply_collateral_unified(
     # cascade (``_a_f``), counterparty via ``_cw_a``, and direct gated by
     # ``_airb_match``. Direct flagged collateral on a non-AIRB exposure is a
     # data-quality issue surfaced as CRM006 by the validation pass.
+    def _direct_terms(metric: str) -> pl.Expr:
+        # A direct pledge reaches its own exposure, unless that exposure is a
+        # CCR-engine row (``_crm_pool_member`` 0.0, review CL-04 / CC-07).
+        return (pl.col(f"{metric}_n_d") + pl.col(f"{metric}_a_d") * pl.col("_airb_match")) * pl.col(
+            CRM_POOL_MEMBER
+        )
+
     def _sum6(metric: str) -> pl.Expr:
         # Facility terms (``_f``) are already pro-rata-weighted and summed over
         # the exposure's ancestor facilities by ``_cascade_facility_collateral``,
         # so they enter the blend without a further weight multiply.
         return (
-            pl.col(f"{metric}_n_d")
-            + pl.col(f"{metric}_a_d") * pl.col("_airb_match")
+            _direct_terms(metric)
             + pl.col(f"{metric}_n_f")
             + pl.col(f"{metric}_a_f")
             + pl.col(f"{metric}_n_c") * pl.col("_cw_n")
@@ -994,8 +1190,7 @@ def _apply_collateral_unified(
     # moved the modelled LGD. The Foundation election is applied below.
     def _sum6_pool_agnostic(metric: str) -> pl.Expr:
         return (
-            pl.col(f"{metric}_n_d")
-            + pl.col(f"{metric}_a_d") * pl.col("_airb_match")
+            _direct_terms(metric)
             + pl.col(f"{metric}_n_f")
             + pl.col(f"{metric}_a_f")
             + pl.col(f"{metric}_n_c") * pl.col("_cw_n_all")
@@ -1136,6 +1331,8 @@ def _apply_collateral_unified(
             "_cw_a",
             "_airb_match",
             "_is_airb_pool",
+            CRM_POOL_BASIS,
+            CRM_POOL_MEMBER,
         ]
         + [f"_eff_{s}_a" for s in _wf_suffixes]
     )
@@ -1331,7 +1528,9 @@ def _cascade_facility_collateral(
     edges = (
         exposures.select(
             "exposure_reference",
-            "ead_for_crm",
+            # The loan-table pooling basis (0 on a CCR-engine row), named as the
+            # EAD basis the weights below are sized on.
+            pl.col(CRM_POOL_BASIS).alias("ead_for_crm"),
             pl.col("_is_airb_pool").fill_null(False).alias("_pool"),
             "ancestor_facilities",
         )

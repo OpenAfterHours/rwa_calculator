@@ -39,8 +39,8 @@ Package version `0.3.34`. Resolved packs:
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
-| CRR (Capital Requirements Regulation) | 35 | 59 | 10 | 37 | 14 | 155 |
-| PS1/26 (PRA Policy Statement) | 27 | 31 | 7 | 27 | 15 | 107 |
+| CRR (Capital Requirements Regulation) | 35 | 60 | 10 | 37 | 14 | 156 |
+| PS1/26 (PRA Policy Statement) | 27 | 32 | 7 | 29 | 13 | 108 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -69,7 +69,7 @@ Package version `0.3.34`. Resolved packs:
 | 117 | 3 | 2 | 9 | 3 | 18 | HIGH |
 | 118 | 2 | 2 | 2 | 1 | 6 | HIGH |
 | 119 | 1 | 0 | 1 | 0 | 0 | LOW |
-| 120 | 1 | 2 | 13 | 6 | 94 | HIGH |
+| 120 | 1 | 2 | 13 | 6 | 96 | HIGH |
 | 121 | 4 | 3 | 8 | 9 | 20 | HIGH |
 | 122 | 2 | 4 | 6 | 11 | 74 | HIGH |
 | 123 | 3 | 7 | 13 | 2 | 27 | HIGH |
@@ -128,6 +128,7 @@ Package version `0.3.34`. Resolved packs:
 | 201 | 1 | 0 | 3 | 9 | 6 | HIGH |
 | 203 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 205 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
+| 206 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 207 | 1 | 0 | 2 | 0 | 7 | MEDIUM |
 | 211 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
 | 212 | 0 | 0 | 2 | 0 | 0 | UNCITED |
@@ -137,11 +138,11 @@ Package version `0.3.34`. Resolved packs:
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
 | 219 | 2 | 1 | 12 | 0 | 16 | MEDIUM |
-| 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
+| 220 | 2 | 0 | 9 | 0 | 12 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 13 | HIGH |
-| 223 | 5 | 0 | 20 | 30 | 29 | HIGH |
-| 224 | 4 | 11 | 11 | 33 | 44 | HIGH |
+| 223 | 5 | 0 | 20 | 30 | 30 | HIGH |
+| 224 | 5 | 11 | 11 | 33 | 46 | HIGH |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
 | 227 | 0 | 2 | 3 | 0 | 1 | MEDIUM |
 | 228 | 0 | 0 | 1 | 25 | 2 | UNCITED |
@@ -212,7 +213,7 @@ Package version `0.3.34`. Resolved packs:
 | 62 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 92 | 3 | 4 | 26 | 0 | 39 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
-| 111 | 3 | 2 | 12 | 1 | 20 | HIGH |
+| 111 | 3 | 2 | 14 | 1 | 22 | HIGH |
 | 112 | 1 | 0 | 8 | 0 | 8 | MEDIUM |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 24 | HIGH |
@@ -220,7 +221,7 @@ Package version `0.3.34`. Resolved packs:
 | 116 | 2 | 0 | 3 | 2 | 8 | HIGH |
 | 117 | 2 | 3 | 6 | 2 | 9 | HIGH |
 | 118 | 0 | 0 | 1 | 1 | 5 | UNCITED |
-| 120 | 0 | 6 | 12 | 2 | 36 | HIGH |
+| 120 | 0 | 6 | 12 | 2 | 37 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 121 | 1 | 1 | 7 | 4 | 17 | HIGH |
 | 122 | 2 | 7 | 7 | 5 | 49 | HIGH |
@@ -278,20 +279,21 @@ Package version `0.3.34`. Resolved packs:
 | 191A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 194 | 1 | 0 | 2 | 0 | 3 | MEDIUM |
 | 195 | 0 | 1 | 1 | 0 | 2 | MEDIUM |
-| 197 | 0 | 0 | 0 | 0 | 5 | GAP |
+| 197 | 0 | 0 | 1 | 0 | 6 | UNCITED |
 | 198 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 199 | 1 | 0 | 2 | 0 | 5 | MEDIUM |
 | 200 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 201 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
 | 205 | 0 | 0 | 0 | 0 | 1 | GAP |
+| 206 | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 219 | 2 | 2 | 4 | 0 | 14 | MEDIUM |
-| 220 | 0 | 0 | 0 | 0 | 2 | GAP |
+| 220 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
 | 222 | 0 | 1 | 4 | 0 | 7 | MEDIUM |
-| 223 | 2 | 0 | 5 | 0 | 5 | MEDIUM |
-| 224 | 0 | 2 | 3 | 0 | 14 | MEDIUM |
+| 223 | 2 | 0 | 6 | 0 | 7 | MEDIUM |
+| 224 | 2 | 2 | 4 | 0 | 17 | MEDIUM |
 | 226 | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 227 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 228 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -335,6 +337,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 280c | 2 | 0 | 9 | — | — |
 | PS1/26 236 | 1 | 0 | 7 | — | — |
 | CRR 6 | 8 | 0 | 6 | — | — |
+| PS1/26 197 | 1 | 0 | 6 | — | CRR Art. 197 |
 | CRR 280b | 1 | 0 | 6 | — | — |
 | CRR 200 | 4 | 0 | 5 | — | — |
 | CRR 4 | 10 | 0 | 4 | — | PS1/26 para. 4 |
@@ -354,6 +357,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | PS1/26 122B | 1 | 0 | 2 | — | — |
 | PS1/26 166E | 4 | 0 | 2 | — | — |
 | PS1/26 181 | 4 | 0 | 2 | — | CRR Art. 181 |
+| PS1/26 206 | 1 | 0 | 2 | — | CRR Art. 206 |
 | CRR 215 | 2 | 0 | 2 | — | — |
 | PS1/26 226 | 1 | 0 | 2 | — | CRR Art. 226 |
 | CRR 307 | 1 | 0 | 2 | — | — |
@@ -393,7 +397,6 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 
 | Article | Oracle cases | Test refs | Anchored as |
 |---|---|---|---|
-| PS1/26 197 | 0 | 5 | CRR Art. 197 |
 | PS1/26 124A | 0 | 4 | — |
 | CRR 236 | 0 | 4 | — |
 | CRR 36 | 0 | 3 | — |
@@ -405,7 +408,6 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 | CRR 132A | 0 | 2 | — |
 | CRR 169 | 0 | 2 | — |
 | PS1/26 180 | 0 | 2 | — |
-| PS1/26 220 | 0 | 2 | CRR Art. 220 |
 | CRR 281 | 0 | 2 | — |
 | CRR 282 | 0 | 2 | — |
 | CRR 1 | 0 | 1 | PS1/26 para. 1 |

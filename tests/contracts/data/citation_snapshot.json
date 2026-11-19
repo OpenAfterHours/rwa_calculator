@@ -647,13 +647,23 @@
   "rwa_calc.engine.sft.fccm::_derive_margining_terms": [
     "CRR Art. 285"
   ],
+  "rwa_calc.engine.sft.fccm::_exposure_haircut_unscaled": [
+    "CRR Art. 224",
+    "PS1/26, paragraph 224"
+  ],
   "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures": [
     "CRR Art. 220",
     "CRR Art. 223",
     "CRR Art. 224",
     "CRR Art. 226",
     "CRR Art. 271",
-    "CRR Art. 285"
+    "CRR Art. 285",
+    "PS1/26, paragraph 224"
+  ],
+  "rwa_calc.engine.sft.netting::apply_sft_netting_gate": [
+    "CRR Art. 206",
+    "CRR Art. 220",
+    "PS1/26, paragraph 220"
   ],
   "rwa_calc.engine.slotting.calculator::SlottingCalculator.calculate_branch": [
     "CRR Art. 153(5)"

@@ -6,7 +6,9 @@ Pipeline position:
 
 Key responsibilities:
 - Translate the optional ``data.sft`` bundle (a :class:`RawSFTBundle`) into one
-  synthetic exposure row per SFT netting set with ``drawn_amount = E*``
+  synthetic exposure row per SFT netting set (after the Art. 220(1) master-
+  netting eligibility gate splits non-eligible sets per trade) with
+  ``drawn_amount = E*``
   (CRR Art. 223(5): E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))) and append those
   rows to the resolved exposures via ``diagonal_relaxed`` concat, so the unified
   pipeline consumes them without SFT-aware special-casing downstream.
@@ -22,6 +24,8 @@ Key responsibilities:
   columns (``source_netting_set_id`` / ``ccr_method`` / ``ead_ccr``). The SA-CCR
   stage and this stage both ``replace(resolved, exposures=...)`` sealing to
   ``ccr_exit``; the last writer's brand is what the classifier expects.
+- Forward the FCCM diagnostics (CCR027 / CCR028 / CCR029) to the unified
+  stage error channel.
 - No-op when ``data.sft is None`` (firm has no SFT book) and when the SFT trade
   frame is empty (zero rows -> nothing to append), exactly as the SA-CCR stage
   tolerates an empty / absent ``data.ccr``.
@@ -43,7 +47,7 @@ import polars as pl
 
 from rwa_calc.contracts.edges import CCR_EXIT_EDGE
 from rwa_calc.engine.materialise import materialise_sealed_edge
-from rwa_calc.engine.orchestrator import RAW_DATA, RESOLVED_HIERARCHY
+from rwa_calc.engine.orchestrator import RAW_DATA, RESOLVED_HIERARCHY, append_stage_errors
 from rwa_calc.engine.sft.fccm import sft_bundle_to_exposures
 from rwa_calc.engine.stages._ccr_shared import enrich_ccr_rows_with_ratings
 
@@ -94,14 +98,20 @@ def run(
 
     resolved = ctx.get(RESOLVED_HIERARCHY)
 
-    # Thread the RUN resolved pack (regime-correct Art. 162 maturity floors /
-    # feature) into the producer so the ``ccr_effective_maturity`` carrier reads
-    # the run regime, not the producer's module-level CRR ``_PACK``. ``rulepack``
+    # Thread the RUN resolved pack (regime-correct Art. 224 haircut table and
+    # Art. 162 maturity floors / feature) into the producer so the haircuts and
+    # the ``ccr_effective_maturity`` carrier read the run regime, not the
+    # producer's module-level CRR ``_PACK``. ``rulepack``
     # is the RulepackV0 facade; ``.pack`` is its content-hashed ResolvedRulepack
     # exposing ``.scalar_param`` / ``.feature`` (the helper's API).
-    sft_exposure_rows = sft_bundle_to_exposures(
+    # The FCCM core also returns its diagnostics — CCR027 (collateral not
+    # recognised, Art. 223(1)), CCR028 (no eligible master netting agreement,
+    # Art. 220(1)) and CCR029 (netting set spanning counterparties, Art. 220(4))
+    # — which reach the result verbatim through the unified stage error channel.
+    sft_exposure_rows, sft_errors = sft_bundle_to_exposures(
         data.sft, run_config.reporting_date, rulepack=rulepack.pack
     )
+    ctx = append_stage_errors(ctx, *sft_errors)
     # Inherit the resolved counterparty rating columns onto each SFT synthetic
     # row so the SA institution lookup (CRR Art. 120(1) Table 3, keyed off
     # ``cqs``) and any IRB routing (keyed off ``internal_pd``) see the same

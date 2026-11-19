@@ -270,7 +270,7 @@ Package version `0.3.34`. Resolved packs:
 | 166 | 3 | 0 | 2 | 0 | 0 | LOW |
 | 166A | 0 | 3 | 6 | 0 | 5 | MEDIUM |
 | 166C | 0 | 1 | 0 | 1 | 7 | HIGH |
-| 166D | 5 | 3 | 4 | 0 | 7 | MEDIUM |
+| 166D | 5 | 3 | 5 | 0 | 7 | MEDIUM |
 | 169A | 1 | 1 | 5 | 0 | 4 | MEDIUM |
 | 169B | 0 | 0 | 0 | 0 | 1 | GAP |
 | 180 | 0 | 0 | 0 | 0 | 2 | GAP |

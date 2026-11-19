@@ -83,12 +83,30 @@ without requiring an explicit row in the input table.
 
 Engine: `src/rwa_calc/engine/ccr/adjusted_notional.py::compute_adjusted_notional_fx`.
 
+## Other risks — Art. 279b(1)(d)
+
+"For transactions mapped to the other risks category, institutions shall
+calculate the adjusted notional amount on the basis of the most appropriate
+method among the methods set out in points (a), (b) and (c), depending on the
+nature and characteristics of the underlying instrument of the transaction."
+With no characterisation of the underlying beyond the trade's own columns, the
+engine takes `|market_price × number_of_units|` (method (c)) when both are
+supplied, and otherwise the larger of `|notional|` and `|notional| × SD(S, E)`
+(methods (c) and (a)), so the choice of method can never lower the add-on. This
+also prices a trade whose `asset_class` is missing or unrecognised, which is
+mapped to the other-risks category and reported as CCR021 — see
+[hedging-sets.md](hedging-sets.md#e2-other-risks-art-2771f-277a1f-280f).
+
+Engine: `src/rwa_calc/engine/ccr/risk_categories.py::compute_adjusted_notional_other`.
+
 ## Pipeline ordering
 
 ```
-trades → years_to_maturity
+trades → map_trade_risk_categories   (Art. 277(1); case folding + CCR021 / CCR022 fallbacks)
+       → years_to_maturity
        → compute_adjusted_notional_ir(reporting_date)
        → compute_adjusted_notional_fx(base_currency, fx_rates)    [if fx_rates is supplied]
+       → compute_adjusted_notional_credit / _equity / _commodity / _other
        → compute_supervisory_delta_linear
        → compute_maturity_factor_unmargined
        → assign_hedging_set

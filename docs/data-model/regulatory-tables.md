@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 206 entries, content hash `4dff1c383e4b0a89`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 238 entries, content hash `e55b27a31950b2d5`
+- **CRR** (`crr` @ 2026-01-01) — 207 entries, content hash `38e6281b758fc971`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 240 entries, content hash `48831820def29029`
 
 ## Regime features
 
@@ -50,6 +50,7 @@ On/off behaviour switches (`Feature`).
 | `regulatory_thresholds_fx_derived` | on | off | CRR Art. 123 / PS1/26, paragraph 147 |
 | `retail_art_123a_two_path_applicable` | off | on | CRR Art. 123 / PS1/26, paragraph 123A |
 | `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
+| `sa_ccr_alpha_nfc_carve_out_applicable` | off | on | CRR Art. 274(2) / PS1/26, paragraph 274 |
 | `sa_currency_mismatch_multiplier` | off | on | CRR Art. 123 / PS1/26, paragraph 123B |
 | `sa_due_diligence_override` | off | on | CRR Art. 110 / PS1/26, paragraph 110A |
 | `sa_re_split_art_124_4_all_or_nothing` | off | on | CRR Art. 124 / PS1/26, paragraph 124 |
@@ -178,7 +179,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `rgla_uk_local_auth_rw` | `0.20` | `0.20` | CRR Art. 115 |
 | `rgla_unrated_default_rw` | `1.00` | `1.00` | CRR Art. 115 |
 | `sa_ccr_alpha` | `1.4` | `1.4` | CRR Art. 274(2) |
-| `sa_ccr_alpha_carve_out` | `1.0` | `1.0` | CRR Art. 274(2) |
+| `sa_ccr_alpha_carve_out` | — | `1.0` | PS1/26, paragraph 274 |
 | `sa_ccr_cdo_tranche_coefficient` | `14` | `14` | CRR Art. 279a |
 | `sa_ccr_cdo_tranche_numerator` | `15` | `15` | CRR Art. 279a |
 | `sa_ccr_correlation_commodity` | `0.40` | `0.40` | CRR Art. 280 |
@@ -203,6 +204,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `sa_ccr_supervisory_factor_equity_sn` | `0.32` | `0.32` | CRR Art. 280 |
 | `sa_ccr_supervisory_factor_fx` | `0.04` | `0.04` | CRR Art. 280 |
 | `sa_ccr_supervisory_factor_ir` | `0.005` | `0.005` | CRR Art. 280 |
+| `sa_ccr_supervisory_factor_other` | `0.08` | `0.08` | CRR Art. 280 |
 | `slotting_short_maturity_threshold_years` | `2.5` | `2.5` | CRR Art. 153(5) |
 
 ## Integer parameters
@@ -838,7 +840,7 @@ Key column: `risk_type`
 **Both regimes** — CRR Art. 280
  *(Table 1 commodity SF by bucket)*
 
-Key column: `commodity_type`; default `0.18`
+Key column: `commodity_type`; default `0.40`
 
 | Key | Value |
 |---|---|

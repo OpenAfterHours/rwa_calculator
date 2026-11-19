@@ -291,6 +291,28 @@ ERROR_UNRECOGNISED_COLLATERAL_TYPE = "CRM021"
 # before C* is evaluated, and CRM014 owns that cause.
 ERROR_BELOW_MIN_COLLATERALISATION = "CRM022"
 
+# SA-CCR trade-input codes (review CC-06). Raised by the input gate
+# (contracts/ccr_input_checks.py), one row-named ERROR per offending trade, for the
+# inputs that used to give a netting set a silently zero add-on or drop the trade.
+# Each names the conservative treatment engine/ccr applies instead; the result is
+# still produced. (CCR001 / CCR010 / CCR011 / CCR020 live beside the gates that
+# raise them under engine/ccr/.)
+#
+# Unrecognised risk category (CRR Art. 277(1)): the trade's asset_class is missing
+# or is not one of the six risk categories (case-insensitive). It is priced in the
+# Art. 277(1)(f) other-risks category (Art. 280f, SF 8%) as its own hedging set.
+ERROR_CCR_UNRECOGNISED_RISK_CATEGORY = "CCR021"
+# Unrecognised risk factor (CRR Art. 277a(1)(c)/(e), Art. 280): a credit trade's
+# credit_quality or a commodity trade's commodity_type is missing or outside the
+# supervisory-factor table. The trade takes the highest factor of that table
+# (credit single name NON_RATED, credit index HY, commodity ELECTRICITY).
+ERROR_CCR_UNRECOGNISED_RISK_FACTOR = "CCR022"
+# Orphan trade (CRR Art. 272(4), CCR (CRR) Part Art. 274(1)): the trade's
+# netting_set_id names no row in the netting-set table. It is priced as its own
+# non-enforceable netting set with no counterparty (unrated fallback weight,
+# alpha 1.4) rather than dropped.
+ERROR_CCR_ORPHAN_TRADE = "CCR023"
+
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
 ERROR_LGD_OUT_OF_RANGE = "IRB002"

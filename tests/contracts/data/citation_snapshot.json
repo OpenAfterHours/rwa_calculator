@@ -86,6 +86,15 @@
   "rwa_calc.engine.ccr.pfe::compute_pfe": [
     "CRR Art. 278"
   ],
+  "rwa_calc.engine.ccr.risk_categories::compute_addon_other": [
+    "CRR Art. 280"
+  ],
+  "rwa_calc.engine.ccr.risk_categories::compute_adjusted_notional_other": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.risk_categories::map_trade_risk_categories": [
+    "CRR Art. 277"
+  ],
   "rwa_calc.engine.ccr.supervisory_delta::compute_supervisory_delta_cdo_tranche": [
     "CRR Art. 279a"
   ],

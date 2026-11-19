@@ -389,6 +389,17 @@ ENTRIES: dict[str, RuleEntry] = {
         # residual splits between Table A1 Row 5 (commitment) and Row 3 (issued
         # item), which one shared fallback cannot express (P1.267).
     ),
+    # PRA PS1/26 Art. 274(2) (Annex R, new text from 1 Jan 2027): "α = 1.4, unless
+    # the counterparty is a non-financial counterparty or a pension scheme
+    # arrangement or an entity established to provide compensation to members of a
+    # pension scheme arrangement in case of default, in which case, α = 1."
+    # Basel 3.1 only — the CCR (CRR) Part in force to 31 Dec 2026 has α = 1.4 for
+    # every netting set. Applied only where sa_ccr_alpha_nfc_carve_out_applicable.
+    "sa_ccr_alpha_carve_out": ScalarParam(
+        name="sa_ccr_alpha_carve_out",
+        value=Decimal("1.0"),
+        citation=Citation("PS1/26", "274", "(2) α = 1 for NFC / pension-scheme counterparties"),
+    ),
     # PRA PS1/26 Art. 274(2A) transitional alpha add-on phase fractions keyed by
     # reporting year (Basel 3.1 only). Years absent from the table (2030+) resolve
     # to 0 via .get(year, 0.0) in engine/ccr/pipeline_adapter.py.
@@ -706,6 +717,15 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation(
             "PS1/26", "274", "(2A) transitional alpha add-on for legacy CVA-exempt counterparties"
         ),
+    ),
+    # SA-CCR α = 1 carve-out (PRA PS1/26 Art. 274(2), new text from 1 Jan 2027):
+    # non-financial counterparties and pension scheme arrangements take α = 1
+    # (``sa_ccr_alpha_carve_out``). Overrides the CRR Feature; gates the per-NS
+    # alpha selection in engine/ccr/pipeline_adapter.py::_attach_alpha_applied.
+    "sa_ccr_alpha_nfc_carve_out_applicable": Feature(
+        name="sa_ccr_alpha_nfc_carve_out_applicable",
+        enabled=True,
+        citation=Citation("PS1/26", "274", "(2) α = 1 for NFC / pension-scheme counterparties"),
     ),
     "output_floor": Feature(
         name="output_floor",

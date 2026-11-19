@@ -34,6 +34,9 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 # (feature name, enabled under CRR, enabled under Basel 3.1)
 _FEATURE_MATRIX = [
     ("ccr_transitional_alpha_addon_applicable", False, True),
+    # Review CC-01: the PS1/26 Art. 274(2) α = 1 NFC / pension carve-out is new
+    # Basel 3.1 text — the CCR (CRR) Part in force to 31 Dec 2026 says "α = 1.4".
+    ("sa_ccr_alpha_nfc_carve_out_applicable", False, True),
 ]
 
 
@@ -42,3 +45,14 @@ def test_ccr_feature_values_per_regime(name: str, crr_enabled: bool, b31_enabled
     # Arrange / Act / Assert
     assert _CRR_PACK.feature(name) is crr_enabled
     assert _B31_PACK.feature(name) is b31_enabled
+
+
+def test_alpha_carve_out_scalar_is_basel_3_1_only() -> None:
+    """The α = 1 scalar is PS1/26 text: present in the b31 pack only (review CC-01)."""
+    # Arrange / Act
+    b31_value = _B31_PACK.scalar_param("sa_ccr_alpha_carve_out").value
+
+    # Assert
+    assert float(b31_value) == 1.0
+    with pytest.raises(KeyError):
+        _CRR_PACK.scalar_param("sa_ccr_alpha_carve_out")

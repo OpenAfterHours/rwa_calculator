@@ -994,10 +994,11 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     # trade-exposure RW (and the Art. 307 4% client-cleared route). Defaults
     # to False so pre-existing fixtures route to the non-QCCP / SA fallback.
     "is_qccp": ColumnSpec(pl.Boolean, default=False, required=False),
-    # CRR Art. 274(2) second sub-paragraph: SA-CCR supervisory-alpha discriminator.
+    # PS1/26 Art. 274(2) (Basel 3.1 only): SA-CCR supervisory-alpha discriminator.
     # "financial" (default) → alpha = 1.4; "non_financial" (EMIR Art. 2(9)),
     # "pension_scheme" (EMIR Art. 2(10)) and "pension_default_comp" → alpha = 1.0
-    # carve-out. Read by engine/ccr/pipeline_adapter.py to compute the per-row
+    # carve-out under Basel 3.1. Ignored under CRR (alpha = 1.4 for every netting
+    # set, CCR (CRR) Part Art. 274(2)). Read by engine/ccr/pipeline_adapter.py to compute the per-row
     # ``alpha_applied`` scalar. Defaults to "financial" so pre-existing CCR
     # fixtures (which never set this column) keep the standard alpha = 1.4.
     "counterparty_type": ColumnSpec(pl.String, default="financial", required=False),
@@ -1548,7 +1549,11 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # Required (8) — primary key + core economic terms.
     "trade_id": ColumnSpec(pl.String),
     "netting_set_id": ColumnSpec(pl.String),
-    # "interest_rate" | "fx" | "credit" | "equity" | "commodity"
+    # CRR Art. 277(1) risk category — one of VALID_SA_CCR_ASSET_CLASSES:
+    # "interest_rate" | "fx" | "credit" | "equity" | "commodity" | "other".
+    # Case-insensitive. A missing or unrecognised value is priced in the
+    # Art. 277(1)(f) other-risks category and reported as CCR021 (review CC-06).
+    # Inflation trades are "interest_rate" (Art. 277(4)(a)) with is_inflation.
     "asset_class": ColumnSpec(pl.String),
     # "derivative" — REQUIRED on every CCR (derivative) trade row. The "sft"
     # value remains valid in VALID_TRANSACTION_TYPES (the guard detects it), but
@@ -1638,7 +1643,7 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 280 Table 2: credit-quality discriminator for the credit asset
     # class supervisory factor lookup. Valid values {"IG", "HY", "NON_RATED"};
     # null for non-credit rows (IR / FX / equity / commodity). Keyed by
-    # COLUMN_VALUE_CONSTRAINTS["trades"]["credit_quality"] for input validation.
+    # COLUMN_VALUE_CONSTRAINTS["ccr.trades"]["credit_quality"] for input validation.
     "credit_quality": ColumnSpec(pl.String, required=False),
     # PRA PS1/26 Art. 274(2A): firm-supplied legacy CVA-exemption flag. True
     # when the trade was entered into prior to 1 Jan 2027 AND the counterparty
@@ -1650,6 +1655,14 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # see no transitional add-on. See SA_CCR_TRANSITIONAL_ADDON_PHASE in
     # data/tables/sa_ccr_factors.py.
     "is_legacy_cva_exempt": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 277(4)(a) / Art. 277a(1) second sub-paragraph (unchanged by PS1/26):
+    # an interest-rate trade whose primary risk driver is an inflation variable is
+    # mapped to the interest-rate category but "shall be assigned to separate
+    # hedging sets, other than the hedging sets established for transactions ...
+    # that do not have an inflation variable as the primary risk driver" — one
+    # per currency. Default False (a nominal-rate trade); null reads as False.
+    # Read by engine/ccr/pfe.py::_compute_addon_ir (review CC-04).
+    "is_inflation": ColumnSpec(pl.Boolean, default=False, required=False),
     # IRB effective-maturity (Art. 162) input flags (3) — CCR/SFT IRB
     # effective-maturity fix Phase 2. SA-CCR derivatives are IN SCOPE for the
     # carrier (an internally-rated CP routes the synthetic CCR_DERIVATIVE row to
@@ -1864,7 +1877,7 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # 'repo_only' => F=5 (Art. 285(2)(a)); 'other' => F=10 (Art. 285(2)(b));
     # 'illiquid_or_large' => F=20 (Art. 285(3)). The actual F is read from cited
     # pack scalars — never hardcoded in engine. Value-constrained via
-    # VALID_MPOR_FLOOR_CATEGORIES in COLUMN_VALUE_CONSTRAINTS['sft_trades'].
+    # VALID_MPOR_FLOOR_CATEGORIES in COLUMN_VALUE_CONSTRAINTS["sft.trades"].
     "mpor_floor_category": ColumnSpec(pl.String, default="repo_only", required=False),
     # has_margin_dispute_doubling: True => apply the Art. 285(4) doubling of F
     # (> 2 margin-call disputes over the preceding two quarters, each exceeding
@@ -1952,8 +1965,8 @@ SFT_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
 #: Valid values for the CCR/SFT trade discriminator ``transaction_type``
 #: (TRADE_SCHEMA). A bad value silently mis-routes an SFT into the SA-CCR
 #: Art. 274 chain (≈0 EAD) instead of FCCM (Art. 271(2)), so it is value-
-#: constrained via ``COLUMN_VALUE_CONSTRAINTS`` below. Enforced once the CCR/SFT
-#: trade frame is wired into ``validate_bundle_values`` (later separation phase).
+#: constrained via ``COLUMN_VALUE_CONSTRAINTS["ccr.trades"]`` below (live since
+#: review CC-06 keyed it on the ``bundle_frames`` table name).
 VALID_TRANSACTION_TYPES: set[str] = {"derivative", "sft"}
 
 #: Valid values for the margined-SFT MPOR floor selector ``mpor_floor_category``
@@ -1961,7 +1974,7 @@ VALID_TRANSACTION_TYPES: set[str] = {"derivative", "sft"}
 #: floor F (branch (b) only): ``repo_only`` => F=5 (Art. 285(2)(a)); ``other`` =>
 #: F=10 (Art. 285(2)(b)); ``illiquid_or_large`` => F=20 (Art. 285(3)). A bad value
 #: would silently mis-floor the MPOR, so it is value-constrained via
-#: ``COLUMN_VALUE_CONSTRAINTS['sft_trades']`` below. The actual F value is read
+#: ``COLUMN_VALUE_CONSTRAINTS['sft.trades']`` below. The actual F value is read
 #: from cited pack scalars in the engine — this set only constrains the input.
 VALID_MPOR_FLOOR_CATEGORIES: set[str] = {"repo_only", "other", "illiquid_or_large"}
 
@@ -2130,6 +2143,42 @@ ASSET_CLASS_SHORT_CODE: dict[str, str] = {
     "credit": "CR",
     "equity": "EQ",
     "commodity": "CO",
+}
+
+#: The six CRR Art. 277(1) SA-CCR risk categories, as ``TRADE_SCHEMA.asset_class``
+#: tokens: "(a) interest rate risk; (b) foreign exchange risk; (c) credit risk;
+#: (d) equity risk; (e) commodity risk; (f) other risks." Regime-invariant (PS1/26
+#: leaves Art. 277 unamended). Matching is case-insensitive. Read by
+#: ``engine/ccr/risk_categories.py`` (a value outside the set is priced in the
+#: other-risks category) and by the CCR021 input check
+#: (``contracts/ccr_input_checks.py``) — the two must flag the same rows.
+VALID_SA_CCR_ASSET_CLASSES: set[str] = {
+    "interest_rate",
+    "fx",
+    "credit",
+    "equity",
+    "commodity",
+    "other",
+}
+
+#: The credit-quality keys of the SA-CCR credit supervisory-factor tables
+#: (``sa_ccr_supervisory_factors_credit_sn`` / ``_idx``, CRR Art. 280). Case-
+#: insensitive. A credit trade whose ``credit_quality`` is missing or outside the
+#: set takes the highest factor of its sub-class table (CCR022). Kept equal to
+#: the pack keys by tests/unit/ccr/test_cc06_risk_category_fallbacks.py.
+VALID_SA_CCR_CREDIT_QUALITIES: set[str] = {"IG", "HY", "NON_RATED"}
+
+#: The commodity hedging-set keys of ``sa_ccr_supervisory_factors_commodity``
+#: (CRR Art. 277a(1)(e), Art. 280). Case-insensitive. A commodity trade whose
+#: ``commodity_type`` is missing or outside the set is assigned to the hedging set
+#: with the highest supervisory factor (CCR022). Kept equal to the pack keys by
+#: tests/unit/ccr/test_cc06_risk_category_fallbacks.py.
+VALID_SA_CCR_COMMODITY_TYPES: set[str] = {
+    "ELECTRICITY",
+    "OIL_GAS",
+    "METALS",
+    "AGRICULTURAL",
+    "OTHER",
 }
 
 
@@ -2454,14 +2503,16 @@ VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
-# CRR Art. 274(2) second sub-paragraph: the supervisory alpha carve-out
+# PS1/26 Art. 274(2) (Basel 3.1 only — new text from 1 Jan 2027; the CCR (CRR)
+# Part in force to 31 Dec 2026 has alpha = 1.4 for every netting set): the
+# supervisory alpha carve-out
 # (alpha = 1.0 instead of the 1.4 default) applies to derivative netting sets
 # whose counterparty is a non-financial counterparty (EMIR Art. 2(9)), a
 # pension scheme arrangement (EMIR Art. 2(10)), or a pension-scheme
 # default-fund-contribution position. "financial" is the default — standard
 # alpha = 1.4. Consumed by engine/ccr/pipeline_adapter.py to select the per-row
-# ``alpha_applied`` scalar (see SA_CCR_ALPHA / SA_CCR_ALPHA_CARVE_OUT in
-# data/tables/sa_ccr_factors.py).
+# ``alpha_applied`` scalar (pack entries ``sa_ccr_alpha`` / ``sa_ccr_alpha_carve_out``,
+# gated by the ``sa_ccr_alpha_nfc_carve_out_applicable`` Feature).
 VALID_CCR_COUNTERPARTY_TYPES = {
     "financial",
     "non_financial",
@@ -2469,8 +2520,8 @@ VALID_CCR_COUNTERPARTY_TYPES = {
     "pension_default_comp",
 }
 
-# The subset of VALID_CCR_COUNTERPARTY_TYPES that qualifies for the CRR
-# Art. 274(2) alpha = 1.0 carve-out (non-financial / pension-scheme / pension
+# The subset of VALID_CCR_COUNTERPARTY_TYPES that qualifies for the PS1/26
+# Art. 274(2) alpha = 1.0 carve-out (Basel 3.1 only) (non-financial / pension-scheme / pension
 # default-fund-contribution). "financial" is excluded — it keeps alpha = 1.4.
 # engine/ccr/pipeline_adapter.py membership-tests ``counterparty_type`` against
 # this set so the category strings are not inlined in engine scope.
@@ -2688,6 +2739,8 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
     "ccr.netting_sets": "netting_set_id",
     "ccr.margin_agreements": "margin_agreement_id",
     "ccr.ccr_collateral": "ccr_collateral_reference",
+    "ccr.failed_trades": "failed_trade_id",
+    "ccr.default_fund_contributions": "contribution_id",
     "sft.trades": "trade_id",
     "sft.collateral": "sft_collateral_reference",
 }
@@ -2819,6 +2872,62 @@ TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
             ),
         ),
     ),
+    # Review CC-06: the CCR / SFT obligor links. Each synthetic CCR / SFT /
+    # settlement / default-fund row takes its counterparty from these columns, so
+    # an unresolvable one re-prices the row exactly as an unresolvable loan
+    # obligor does — silently, before this declaration.
+    "ccr.netting_sets": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 271 / Art. 274 — the SA-CCR exposure value of a netting "
+                "set is risk-weighted against its counterparty. A netting set whose "
+                "counterparty_reference resolves to no counterparty row reaches the "
+                "SA calculator with every obligor attribute null, classifies to "
+                "'other' at the 100% fallback weight, and takes alpha = 1.4."
+            ),
+        ),
+    ),
+    "sft.trades": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 220-223 — the FCCM E* of a securities-financing "
+                "transaction is risk-weighted against its counterparty. An "
+                "unresolvable counterparty_reference classifies the synthetic SFT "
+                "row to 'other' at the 100% fallback weight."
+            ),
+        ),
+    ),
+    "ccr.failed_trades": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 378-379 — a failed trade's settlement-risk row carries "
+                "its counterparty. An unresolvable counterparty_reference leaves "
+                "every obligor attribute null on the synthetic row."
+            ),
+        ),
+    ),
+    "ccr.default_fund_contributions": (
+        ForeignKey(
+            column="ccp_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CCR (CRR) Part Art. 308-309 — a default-fund contribution is "
+                "attributed to its CCP. An unresolvable ccp_reference leaves every "
+                "obligor attribute (including the QCCP flag) null on the synthetic "
+                "row."
+            ),
+        ),
+    ),
 }
 
 
@@ -2849,7 +2958,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
         "scra_grade": VALID_SCRA_GRADES,
-        # CRR Art. 274(2) second sub-paragraph — SA-CCR alpha carve-out discriminator.
+        # PS1/26 Art. 274(2) — SA-CCR alpha carve-out discriminator (Basel 3.1 only).
         "counterparty_type": VALID_CCR_COUNTERPARTY_TYPES,
     },
     "collateral": {
@@ -2910,27 +3019,25 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "cva_hedge_rw_sector": VALID_CVA_RW_SECTORS,
         "cva_hedge_rw_rating_band": VALID_CVA_RW_RATING_BANDS,
     },
-    # P8.33 — CRR Art. 277(3)(b) / CRE52.67 commodity hedging-set partition.
-    # UPPER-CASE bucket keys to match ``SA_CCR_SUPERVISORY_FACTORS_COMMODITY``
-    # in ``data/tables/sa_ccr_factors.py`` — load-bearing for the P8.37
-    # supervisory-factor join.
-    "trades": {
-        # SFT/FCCM separation — the CCR/SFT trade discriminator. Dormant until
-        # the CCR/SFT trade frame is added to validate_bundle_values'
-        # frame_mapping (like commodity_type/credit_quality below today).
+    # The SA-CCR trade table. Keyed ``ccr.trades`` — the name
+    # ``contracts/validation.py::bundle_frames`` registers the frame under. It was
+    # keyed ``trades`` until review CC-06, which matched no frame, so every entry
+    # here was dormant. The engine's conservative treatment of a missing or
+    # unrecognised value is reported separately as CCR021 / CCR022.
+    "ccr.trades": {
+        # SFT/FCCM separation — the CCR/SFT trade discriminator.
         "transaction_type": VALID_TRANSACTION_TYPES,
-        "commodity_type": {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"},
-        # P8.35 — CRR Art. 280 Table 2 credit-quality discriminator: keyed off
-        # ``SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN`` / ``..._CREDIT_IDX`` in
-        # ``data/tables/sa_ccr_factors.py``.
-        "credit_quality": {"IG", "HY", "NON_RATED"},
+        # CRR Art. 277(1) risk category.
+        "asset_class": VALID_SA_CCR_ASSET_CLASSES,
+        # CRR Art. 277a(1)(e) commodity hedging sets (UPPER-CASE pack keys).
+        "commodity_type": VALID_SA_CCR_COMMODITY_TYPES,
+        # CRR Art. 280 credit-quality keys of the credit supervisory factors.
+        "credit_quality": VALID_SA_CCR_CREDIT_QUALITIES,
     },
     # SFT/FCCM separation Phase 0b — the margined-SFT MPOR floor selector. A bad
-    # value would silently mis-floor the Art. 285 margin period of risk. Dormant
-    # until the SFT trade frame is added to validate_bundle_values' frame_mapping
-    # (mirrors the 'trades' entry above), but declared here as the single source
-    # of truth for the input domain.
-    "sft_trades": {
+    # value would silently mis-floor the Art. 285 margin period of risk. Keyed
+    # ``sft.trades`` (the bundle_frames name; ``sft_trades`` until review CC-06).
+    "sft.trades": {
         "mpor_floor_category": VALID_MPOR_FLOOR_CATEGORIES,
     },
 }

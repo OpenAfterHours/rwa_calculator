@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-17.
+Last generated: 2026-11-19.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -1286,17 +1286,22 @@ Last generated: 2026-11-17.
     --8<-- "src/rwa_calc/engine/ccr/hedging_sets.py:96:191"
     ```
 
-??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:147"
+??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:160"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:147:216"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:160:235"
+    ```
+
+??? quote "`map_trade_risk_categories` — src/rwa_calc/engine/ccr/risk_categories.py:89"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/risk_categories.py:89:143"
     ```
 
 
 ### CRR Art. 278 — Transactions with a non-linear risk profile
 
-??? quote "`compute_pfe` — src/rwa_calc/engine/ccr/pfe.py:63"
+??? quote "`compute_pfe` — src/rwa_calc/engine/ccr/pfe.py:75"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:63:141"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:75:154"
     ```
 
 
@@ -1337,6 +1342,11 @@ Last generated: 2026-11-17.
     --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:126:239"
     ```
 
+??? quote "`compute_adjusted_notional_other` — src/rwa_calc/engine/ccr/risk_categories.py:146"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/risk_categories.py:146:191"
+    ```
+
 
 ### CRR Art. 279a — Supervisory delta
 
@@ -1353,6 +1363,14 @@ Last generated: 2026-11-17.
 ??? quote "`compute_supervisory_delta_cdo_tranche` — src/rwa_calc/engine/ccr/supervisory_delta.py:188"
     ```python
     --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:188:231"
+    ```
+
+
+### CRR Art. 280 — Calculation of risk positions
+
+??? quote "`compute_addon_other` — src/rwa_calc/engine/ccr/risk_categories.py:194"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccr/risk_categories.py:194:234"
     ```
 
 
@@ -1821,7 +1839,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:124"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 
@@ -1829,7 +1847,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:125"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 
@@ -1918,7 +1936,7 @@ Last generated: 2026-11-17.
 
 ??? quote "`apply_post_model_adjustments` — src/rwa_calc/engine/irb/adjustments.py:126"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:348"
+    --8<-- "src/rwa_calc/engine/irb/adjustments.py:124:349"
     ```
 
 

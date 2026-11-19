@@ -236,9 +236,10 @@ def test_mpor_floor_category_is_value_constrained() -> None:
     """mpor_floor_category must be value-constrained to the three Art. 285 floors."""
     constraints = getattr(schemas, "COLUMN_VALUE_CONSTRAINTS", None)
     assert constraints is not None
-    sft_trades = constraints.get("sft_trades")
+    sft_trades = constraints.get("sft.trades")
     assert sft_trades is not None, (
-        "COLUMN_VALUE_CONSTRAINTS must have an 'sft_trades' entry constraining "
+        "COLUMN_VALUE_CONSTRAINTS must have an 'sft.trades' entry (the bundle_frames "
+        "name; 'sft_trades' matched no frame until review CC-06) constraining "
         "mpor_floor_category (Phase 0b)."
     )
     assert sft_trades.get("mpor_floor_category") == {"repo_only", "other", "illiquid_or_large"}, (
@@ -313,13 +314,18 @@ def test_valid_transaction_types_is_derivative_and_sft() -> None:
 
 
 def test_transaction_type_constraint_references_valid_transaction_types() -> None:
-    """COLUMN_VALUE_CONSTRAINTS['trades']['transaction_type'] must be VALID_TRANSACTION_TYPES."""
+    """COLUMN_VALUE_CONSTRAINTS['ccr.trades']['transaction_type'] must be VALID_TRANSACTION_TYPES.
+
+    Keyed ``ccr.trades`` (the bundle_frames name) — ``trades`` matched no frame and
+    left the constraint dormant until review CC-06.
+    """
     constraints = getattr(schemas, "COLUMN_VALUE_CONSTRAINTS", None)
     assert constraints is not None, (
         "rwa_calc.data.schemas does not expose 'COLUMN_VALUE_CONSTRAINTS'"
     )
-    trades = constraints.get("trades")
-    assert trades is not None, "COLUMN_VALUE_CONSTRAINTS must have a 'trades' entry"
+    trades = constraints.get("ccr.trades")
+    assert trades is not None, "COLUMN_VALUE_CONSTRAINTS must have a 'ccr.trades' entry"
     assert trades.get("transaction_type") == schemas.VALID_TRANSACTION_TYPES, (
-        "COLUMN_VALUE_CONSTRAINTS['trades']['transaction_type'] must equal VALID_TRANSACTION_TYPES"
+        "COLUMN_VALUE_CONSTRAINTS['ccr.trades']['transaction_type'] must equal "
+        "VALID_TRANSACTION_TYPES"
     )

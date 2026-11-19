@@ -80,6 +80,7 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `regulatory_thresholds_fx_derived` | on | off | CRR Art. 123 / PS1/26, paragraph 147 |
 | `retail_art_123a_two_path_applicable` | off | on | CRR Art. 123 / PS1/26, paragraph 123A |
 | `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
+| `sa_ccr_alpha_nfc_carve_out_applicable` | off | on | CRR Art. 274(2) / PS1/26, paragraph 274 |
 | `sa_currency_mismatch_multiplier` | off | on | CRR Art. 123 / PS1/26, paragraph 123B |
 | `sa_due_diligence_override` | off | on | CRR Art. 110 / PS1/26, paragraph 110A |
 | `sa_re_split_art_124_4_all_or_nothing` | off | on | CRR Art. 124 / PS1/26, paragraph 124 |

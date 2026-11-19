@@ -712,16 +712,61 @@ The domestic-currency test is therefore evaluated against the **guarantee** curr
 
 This short-circuit takes precedence over the internal-rating routing: a sovereign guarantor with an internal PD and IRB permission still receives the 0% SA treatment when the guarantee is in the sovereign's domestic currency.
 
-### CDS Restructuring Exclusion Haircut (Art. 233(2) / Art. 216(1))
+### Valuation of G (Art. 233(1)) — amount, percentage and one cap per contract
 
-If a credit derivative does not include restructuring as a credit event:
-- Protection value is **reduced by 40%** (if protection amount ≤ exposure value)
-- Protection value is **capped at 60% of exposure value** (if protection amount > exposure value)
-- Exception: Art. 216(3) exemption applies where restructuring requires 100% vote amendment and the reference entity is subject to a well-established bankruptcy code
+Art. 233(1): G is "the amount that the protection provider has undertaken to pay in the
+event of the default or non-payment of the borrower". The calculator resolves it in
+[`engine/crm/protection_value.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/protection_value.py)
+after multi-level expansion, against E at the CCF=100% basis (`ead_for_crm`, Art. 235(1)(a)):
 
-## Partial Protection and Tranching (CRR Art. 233A / Art. 234)
+| Inputs | G |
+|---|---|
+| `amount_covered` only | `amount_covered` |
+| `percentage_covered` only (amount null or 0) | `percentage_covered × E` |
+| both | `min(percentage_covered × E, amount_covered)` — "x% of the exposure, up to the amount" |
 
-### Proportional Coverage (Art. 233A)
+Rows that share a `guarantee_reference` are **one contract with one cap**. Its cap (the
+largest `amount_covered` on its rows, read before multi-level expansion rescales the
+amount) is shared across the rows pro-rata to each row's covered demand `min(G, E)`, so
+the contract is never recognised more than once — also when the same contract is entered
+at counterparty and at loan level. A contract repeated for the same beneficiary and
+guarantor restates one undertaking, so only its largest row is used — the cap alone could
+not stop that double count for a percentage-only contract, which states no amount. This is
+how a pool guarantee over obligors in different counterparty or facility trees is stated.
+Rows that disagree on the amount (the largest is used) or repeat one beneficiary raise
+**`CRM028`** (Art. 213(1)(b): the extent of the
+protection must be clearly defined and incontrovertible).
+
+### CDS Restructuring Exclusion (Art. 233(2))
+
+For a credit derivative that does not include restructuring as a credit event
+(`includes_restructuring = False`), Art. 233(2), identical in CRR and PS1/26:
+
+- (a) where G is not higher than the exposure value, G is **reduced by 40%**
+  (pack `restructuring_exclusion_haircut`);
+- (b) where G is higher than the exposure value, the protection is valued at **no more
+  than 60% of the exposure value** (pack `restructuring_exclusion_exposure_cap`).
+
+The calculator applies it to every such credit derivative whether the cover was stated as
+an amount or as a percentage (G is resolved first), with E at the CCF=100% basis, and
+**before** the Art. 233(3) currency haircut. PS1/26 Art. 233(3) defines G there as "the
+value of the credit protection as determined by paragraph 1 and 2"; CRR calls it "the
+nominal amount of the credit protection". The calculator uses the PS1/26 order in both
+regimes — under CRR it is the more conservative order where the two differ (G > E with a
+currency mismatch).
+
+A `guarantee_type` naming a credit derivative (`credit_derivative`, `cds`,
+`credit_default_swap`, `total_return_swap`, `trs`) makes the row a credit derivative even
+where `protection_type` says otherwise; the disagreement raises **`CRM030`**.
+
+!!! note "Not implemented"
+    The PS1/26 Art. 216(3) derogation for corporate exposures (restructuring need not be a
+    credit event where a 100% vote is needed to amend the underlying and the domicile has a
+    well-established bankruptcy code) is not implemented: the cut always applies.
+
+## Partial Protection and Tranching (Art. 234 / Art. 235(2))
+
+### Proportional Coverage
 
 When unfunded credit protection covers only a proportion of the exposure:
 
@@ -729,16 +774,37 @@ When unfunded credit protection covers only a proportion of the exposure:
 - The **uncovered portion** retains the obligor's risk weight
 - The split is simple pro-rata: `covered = guarantee_amount / exposure_value`
 
+Art. 235(2) allows this only "where the protected and unprotected parts of the exposure
+are of equal seniority" — which is what a pro-rata share is.
+
 ### Tranched Coverage (Art. 234)
 
-When credit protection covers a specific tranche (first loss or mezzanine) rather than proportional coverage:
+CRR Art. 234: "Where an institution transfers a part of the risk of a loan in one or more
+tranches, the rules set out in Chapter 5 shall apply." (PS1/26 Art. 234(1) to the same
+effect, and adds that a materiality threshold below which no payment is made "shall" be
+treated as a retained first-loss position.) A guarantee of a band of the loss — first loss
+`[0, d)` or mezzanine `[a, d)` — is not of equal seniority with the retained parts, so
+Art. 235(2) forbids the substitution.
 
-- **First loss tranche**: The protection covers losses up to a specified threshold. The firm bears losses above the threshold. The protected portion uses the protection provider's risk weight; the retained senior tranche uses the obligor's risk weight.
-- **Second loss / mezzanine tranche**: More complex — the firm bears first losses up to the attachment point, protection covers the mezzanine band. The first loss portion may attract higher risk weights (up to 1250% for securitisation-like treatment).
-- **Maturity mismatch**: Standard maturity mismatch adjustment (Art. 239(2)/(3); Art. 238 governs maturity *measurement*) applies to the protected tranche.
+The calculator does not run Chapter 5 for such protection. A guarantee row with an
+`attachment_amount` above zero, or any `detachment_amount`, is therefore **not recognised**:
+the eligibility screen
+([`engine/crm/protection_screen.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/protection_screen.py))
+drops it before the split and raises **`CRM027`** naming it. The exposure keeps its
+unprotected requirement — the CRR Art. 268(1) upper bound of the Chapter 5 result.
 
 !!! note "Implementation Status"
-    Proportional coverage is implemented. Tranched coverage (Art. 234) is not yet implemented — all guarantee coverage is treated as proportional. This is a future enhancement for structured credit protection.
+    Proportional coverage is implemented. Tranched coverage is declined (no relief), never
+    substituted on the band. The previous P1.30(e) behaviour — splitting the exposure into
+    first-loss, protected and senior legs and substituting on the protected band — is
+    withdrawn. Deductibles / payment thresholds have no input field.
+
+### Letters of Comfort and Keepwells (Art. 213(1)(b)-(d), Art. 215(1)(b))
+
+A guarantee must be "an explicitly documented obligation assumed by the guarantor"
+(Art. 215(1)(b)). A row whose `guarantee_type` is `letter_of_comfort`, `comfort_letter`,
+`keepwell` or `keepwell_agreement` (matched case-insensitively, spaces and hyphens folded)
+is **not recognised** and raises **`CRM029`**.
 
 ## Cross-Approach CCF Substitution (CRR Art. 153(3))
 
@@ -1241,7 +1307,7 @@ unilaterally **cancel** it — and, under Basel 3.1's new wording, unilaterally 
 its terms so as to increase the effective cost of protection. The calculator enforces this
 base limb for guarantees and credit derivatives.
 
-The gate runs in [`engine/crm/guarantees.py::_gate_unilateral_protection`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/guarantees.py#L241-L282) inside `_prepare_guarantees`, on the raw per-protection rows **before** multi-level expansion (so exactly one warning is raised per ineligible protection):
+The gate runs in [`engine/crm/protection_screen.py::screen_unfunded_protection`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/protection_screen.py) inside `_prepare_guarantees`, on the raw per-protection rows **before** multi-level expansion (so exactly one warning is raised per ineligible protection):
 
 - Two nullable Boolean inputs drive it: `is_unilaterally_cancellable` and `is_unilaterally_changeable`.
 - A protection row flagged `is_unilaterally_cancellable` is dropped under **both** regimes.

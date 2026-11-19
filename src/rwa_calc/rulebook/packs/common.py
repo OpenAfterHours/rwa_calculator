@@ -48,6 +48,18 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.40"),
         citation=Citation("CRR", "233(2)", "credit-derivative restructuring-exclusion 40% haircut"),
     ),
+    # CDS restructuring-exclusion exposure cap (CRR Art. 233(2)(b) / PRA PS1/26
+    # Art. 233(2)(b)): where such a credit derivative's notional exceeds the
+    # exposure value, the protection is valued at no more than 60% of the
+    # exposure value. A separate statement from the 40% reduction in point (a),
+    # held separately so neither is derived from the other. Regime-invariant.
+    "restructuring_exclusion_exposure_cap": ScalarParam(
+        name="restructuring_exclusion_exposure_cap",
+        value=Decimal("0.60"),
+        citation=Citation(
+            "CRR", "233(2)(b)", "restructuring-exclusion cap at 60% of the exposure value"
+        ),
+    ),
     # Art. 232(3) life-insurance funded-protection RW map: insurer SA risk weight
     # -> secured-portion risk weight (banded; a band applies when the insurer RW
     # is <= its upper bound). Regime-invariant (CRR Art. 232 retained unchanged

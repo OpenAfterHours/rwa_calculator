@@ -1012,12 +1012,12 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Add the canonical per-leg reporting projection (Phase 7 S2).
 
     The results frame IS the two-leg substitution ledger — CRM physically splits
-    each guaranteed exposure into ``__G_<guarantor>`` guaranteed legs and
-    ``__REM`` / ``__REM_FL`` / ``__REM_SEN`` retained legs
-    (``engine/crm/guarantees.py``). This projection names that ledger once, on
-    the sealed exit, so no downstream consumer re-derives class/approach/method
-    or sniffs reference suffixes (COREP, Pillar 3, reconciliation, and the UI
-    all read these columns instead of re-picking among the raw twins):
+    each guaranteed exposure into ``__G_<guarantor>`` guaranteed legs and one
+    ``__REM`` retained leg (``engine/crm/guarantees.py``). This projection names
+    that ledger once, on the sealed exit, so no downstream consumer re-derives
+    class/approach/method or sniffs reference suffixes (COREP, Pillar 3,
+    reconciliation, and the UI all read these columns instead of re-picking among
+    the raw twins):
 
     - ``reporting_class`` — post-substitution class the RWA is bucketed under
       (Art. 235: guarantor class on guaranteed legs) = ``exposure_class_post_crm``.
@@ -1043,8 +1043,8 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
     - ``reporting_method`` — the STD/FIRB/AIRB/SLOTTING/EQUITY methodology label
       of the post-substitution approach (``method_label_expr`` materialised).
     - ``reporting_leg_role`` — ``guaranteed`` (the ``__G_`` leg,
-      ``is_guaranteed=True``), ``retained`` (the ``__REM*`` remainder /
-      Art. 234 tranche legs), or ``whole``. COREP C 07.00 substitution
+      ``is_guaranteed=True``), ``retained`` (the ``__REM`` remainder), or
+      ``whole``. COREP C 07.00 substitution
       outflow/inflow reconstruct as two sums over the ``guaranteed`` legs
       grouped by origin vs post-substitution class.
     - ``reporting_on_balance_sheet`` — declared at source from
@@ -1143,7 +1143,7 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
     projected here — the floor is a portfolio-level max and its per-row
     allocation is a recorded-decision slice of its own (Phase 7 plan S5).
     """
-    is_retained_leg = pl.col("exposure_reference").str.contains(r"__REM(?:_FL|_SEN)?$")
+    is_retained_leg = pl.col("exposure_reference").str.ends_with("__REM")
     leg_role = (
         pl.when(pl.col("is_guaranteed") == True)  # noqa: E712
         .then(pl.lit("guaranteed"))

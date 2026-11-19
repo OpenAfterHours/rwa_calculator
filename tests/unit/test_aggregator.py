@@ -1152,9 +1152,9 @@ class TestReportingProjection:
 
         One FIRB corporate exposure 60% guaranteed by an SA retail guarantor,
         already split into its ``__G_`` guaranteed leg (is_guaranteed=True,
-        guaranteed_portion=EAD) and ``__REM`` retained leg, plus an Art. 234
-        tranched pair (``__REM_FL`` / ``__REM_SEN``) from a second exposure and
-        one plain unguaranteed exposure.
+        guaranteed_portion=EAD) and ``__REM`` retained leg, the ``__REM`` leg of
+        a second exposure, an unguaranteed exposure whose reference merely
+        contains ``__REM`` mid-string, and one plain unguaranteed exposure.
         """
         return pad_irb_branch(
             pl.LazyFrame(
@@ -1162,8 +1162,8 @@ class TestReportingProjection:
                     "exposure_reference": [
                         "EXPG__G_GUAR01",
                         "EXPG__REM",
-                        "EXPT__REM_FL",
-                        "EXPT__REM_SEN",
+                        "EXPT__REM",
+                        "EXP__REMOTE",
                         "EXP_PLAIN",
                     ],
                     "counterparty_reference": ["B01", "B01", "B02", "B02", "B03"],
@@ -1346,14 +1346,14 @@ class TestReportingProjection:
         guarantee_leg_results: pl.LazyFrame,
         crr_config: CalculationConfig,
     ) -> None:
-        """guaranteed = the __G_ leg; retained = __REM/__REM_FL/__REM_SEN; else whole."""
+        """guaranteed = the __G_ leg; retained = a reference ending __REM; else whole."""
         df = self._aggregate_irb(aggregator, guarantee_leg_results, crr_config)
         roles = dict(zip(df["exposure_reference"], df["reporting_leg_role"], strict=True))
         assert roles == {
             "EXPG__G_GUAR01": "guaranteed",
             "EXPG__REM": "retained",
-            "EXPT__REM_FL": "retained",
-            "EXPT__REM_SEN": "retained",
+            "EXPT__REM": "retained",
+            "EXP__REMOTE": "whole",
             "EXP_PLAIN": "whole",
         }
 

@@ -171,7 +171,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # unilateral-CANCELLATION arm (a guarantee the provider can unilaterally
     # cancel is ineligible). The "or change" limb is a PS1/26 addition, so this
     # Feature is disabled under CRR; Basel 3.1 (packs/b31.py) overrides it True.
-    # Gates the change branch in engine/crm/guarantees.py::_gate_unilateral_protection.
+    # Gates the change branch in engine/crm/protection_screen.py (screen_unfunded_protection).
     "ucp_unilateral_change_ineligible": Feature(
         name="ucp_unilateral_change_ineligible",
         enabled=False,

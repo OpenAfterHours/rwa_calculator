@@ -2038,7 +2038,7 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         # (_add_reporting_projection). reporting_class/_origin and the
         # approach twins are aliases of the sealed columns above;
         # reporting_leg_role names the physical __G_/__REM guarantee split
-        # (Art. 234 tranche legs __REM_FL/__REM_SEN are `retained`);
+        # (the __REM leg is `retained`);
         # reporting_method materialises the STD/FIRB/AIRB/SLOTTING/EQUITY
         # label of the post-substitution approach; reporting_ead/_rw alias
         # ead_final/risk_weight AFTER the residual multiplier and floor.

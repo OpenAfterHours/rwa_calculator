@@ -1515,9 +1515,10 @@ SECURITISATION_ALLOCATION_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 244 (traditional) vs Art. 245 (synthetic). Carried for future
     # use by the securitisation RWA framework — not consumed in phase 1.
     "transfer_type": ColumnSpec(pl.String, default="traditional", required=False),
-    # SRT assertion by the firm. Phase 1 trusts this flag — the engine does
-    # not validate the Art. 244-246 conditions. When False, exposure carve-out
-    # is still applied (firm's responsibility to set correctly).
+    # SRT assertion by the firm. The engine does not validate the Art. 244-246
+    # conditions behind a True. An explicit False carves nothing out (CRR
+    # Art. 244(1) / 245(1); SEC006, engine/securitisation/allocator.py); a null
+    # or absent value takes this default True (an owner decision, IV-04).
     "significant_risk_transfer": ColumnSpec(pl.Boolean, default=True, required=False),
     "effective_date": ColumnSpec(pl.Date, required=False),
 }

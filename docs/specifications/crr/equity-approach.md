@@ -132,8 +132,14 @@ Art. 155 altogether. The engine applies this exclusion to legs flagged
 `is_significant_investment` (IV-06): on the simple-RW and PD/LGD paths they take the
 Art. 48(4) **250%** (pack `equity_significant_investment_rw`, CRR Art. 133(2)) instead of
 190% / 290% / 370% or the K formula, carry no Art. 158(7) EL and no Art. 155(3) cap, keep
-the `equity` exposure class, and are sealed `equity_method = "sa"` so Pillar 3 CR10.5 and
-C 02.00 row 0420 (Equity IRB) do not disclose them as Art. 155 equity. A `ciu` or
+the `equity` exposure class, and are sealed `equity_method = "irb_fixed_rw"`. That is
+IRB-umbrella equity for COREP: Annex II puts it in C 10.01 row 0110 "Equity exposures
+subject to risk weights" ("equity exposures which attract a fixed risk weight treatment
+(without however being explicitly treated according to the Simple Risk Weight approach or
+the (temporary or permanent) partial use of the credit risk standardised approach)",
+naming the Art. 48(4) positions; EBA Q&A 2013_670), so it reports in C 02.00 row 0420
+(Equity IRB) and never in C 07.00 or C 02.00 row 0210, while Pillar 3 CR10.5 and OV1
+UK 4a, which disclose only Art. 155(2) simple-RW equity, leave it out. A `ciu` or
 `central_bank` row keeps its own treatment whatever the flag says. The flag is the firm's
 assertion that the row is the **non-deducted** threshold amount — the engine performs no
 own-funds deduction. Short-position netting (Art. 155(2)) still runs before the weight is

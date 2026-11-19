@@ -19,8 +19,9 @@ Key responsibilities:
   ``equity_higher_risk``, ``risk_weight_pre_equity_transitional``)
 - Calculate RWA = EAD x RW
 - Tag the CRR method actually applied (``equity_method``: ``sa`` / ``irb_simple``
-  / ``pd_lgd``) so the reporting ledger can disclose Art. 155(2) simple-RW
-  equity in Pillar 3 CR10.5 without re-deriving the approach
+  / ``pd_lgd`` / ``irb_fixed_rw`` for an IRB firm's Art. 48(4) 250% leg) so the
+  reporting ledger can disclose Art. 155(2) simple-RW equity in Pillar 3 CR10.5
+  without re-deriving the approach
 - Build audit trail of calculations
 
 Basel 3.1 key changes from CRR:
@@ -750,8 +751,8 @@ class EquityCalculator:
         deducted in accordance with Part Two or subject to a 250 % risk weight
         in accordance with Article 48". It takes the Art. 48(4) 250% (lower than
         the 290% / 370% simple weights -- RWA-reducing, IV-06), no Art. 158(7)
-        EL, and is sealed ``equity_method == "sa"`` so CR10.5 and C 02.00's
-        Equity IRB row do not disclose it as simple-RW equity.
+        EL, and is sealed ``equity_method == "irb_fixed_rw"``: C 02.00 row 0420
+        (Equity IRB, via C 10.01 row 0110), never CR10.5's simple-RW rows.
         """
         exposures = self._net_short_positions(exposures)
 
@@ -810,7 +811,7 @@ class EquityCalculator:
             # Art. 155(2) simple-RW method tag — the discriminator Pillar 3
             # CR10.5 filters on (reporting_approach_origin == "equity" AND
             # equity_method == "irb_simple"). An Art. 48(4) leg is excluded
-            # from Art. 155 by its paragraph 1, so it is sealed ``sa``.
+            # from Art. 155 by its paragraph 1: sealed ``irb_fixed_rw``.
             _significant_investment_method_expr(
                 is_significant_investment, EquityApproach.IRB_SIMPLE
             ).alias("equity_method"),
@@ -1022,7 +1023,7 @@ class EquityCalculator:
             rwea_capped.alias("rwa_final"),
             # Art. 155(3) PD/LGD method tag — kept OUT of Pillar 3 CR10.5, which
             # discloses only the Art. 155(2) simple-RW method. The Art. 48(4)
-            # leg is not an Art. 155 leg and is sealed ``sa``.
+            # leg is not an Art. 155 leg and is sealed ``irb_fixed_rw``.
             _significant_investment_method_expr(
                 is_significant_investment, EquityApproach.PD_LGD
             ).alias("equity_method"),
@@ -1407,16 +1408,20 @@ def _crr_significant_investment_expr() -> pl.Expr:
 def _significant_investment_method_expr(
     is_significant_investment: pl.Expr, irb_method: EquityApproach
 ) -> pl.Expr:
-    """The sealed ``equity_method`` of a CRR IRB-path leg: ``sa`` for an Art. 48(4) leg.
+    """The sealed ``equity_method`` of a CRR IRB-path leg: ``irb_fixed_rw`` for Art. 48(4).
 
     Art. 155(1) excludes the 250% leg from the IRB equity approaches, so it is
-    not ``irb_simple`` / ``pd_lgd`` equity; ``sa`` records its weight's basis
-    (Art. 133(2) / Art. 48(4), the same as an SA firm's) and keeps it out of
-    Pillar 3 CR10.5 and C 02.00 row 0420 (Equity IRB).
+    not ``irb_simple`` / ``pd_lgd`` equity (Pillar 3 CR10.5 and OV1 UK 4a must
+    not disclose it as simple-RW equity). Nor is it SA equity: COREP Annex II,
+    C 10.01 row 0110, has an IRB firm report "equity exposures which attract a
+    fixed risk weight treatment (without however being explicitly treated
+    according to the Simple Risk Weight approach or the (temporary or permanent)
+    partial use of the credit risk standardised approach)", naming the Art. 48(4)
+    positions -- IRB-umbrella equity, C 02.00 row 0420, not row 0210 / C 07.00.
     """
     return (
         pl.when(is_significant_investment)
-        .then(pl.lit(EquityApproach.SA.value))
+        .then(pl.lit(EquityApproach.IRB_FIXED_RISK_WEIGHT.value))
         .otherwise(pl.lit(irb_method.value))
     )
 

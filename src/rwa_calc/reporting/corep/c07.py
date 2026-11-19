@@ -849,7 +849,11 @@ def _equity_admission(cols: set[str]) -> pl.Expr | None:
     Annex II ¶50 scopes the CRR template to "all exposures for which the own funds
     requirements are calculated in accordance with Chapter 2 of Title II of Part
     Three CRR" — Chapter 2 IS the Standardised Approach — so Art. 155(2)/(3)
-    IRB-method equity is correctly OUT under CRR, and the live EBA ERROR rule
+    IRB-method equity is correctly OUT under CRR (as is an IRB firm's Art. 48(4)
+    fixed-RW leg, ``irb_fixed_rw``: COREP Annex II C 10.01 row 0110, "without
+    however being explicitly treated according to ... the (temporary or
+    permanent) partial use of the credit risk standardised approach"), and the
+    live EBA ERROR rule
     ``v4244_i`` (``{C 02.00, r0210, c0010} == {C 07.00.a, r0010, c0220, s0016}``)
     pins exactly that boundary. ONE regime-blind expression serves both regimes,
     with no pack Feature and no ``is_crr`` branch, because

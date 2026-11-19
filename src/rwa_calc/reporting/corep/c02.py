@@ -71,7 +71,8 @@ Cell semantics (recorded decisions):
   post-floor total exceeds max(row 0010 col 0010, col 0030). Nothing here
   hides that: the difference is logged.
 - Equity RWA routes by the sealed ``equity_method`` discriminator (R6):
-  IRB-method equity (Art. 155(2) simple / Art. 155(3) PD-LGD — CRR only)
+  IRB-method equity (Art. 155(2) simple / Art. 155(3) PD-LGD, and an IRB firm's
+  Art. 48(4) fixed-RW leg, C 10.01 row 0110 — CRR only)
   reports at ``EQUITY_IRB`` and counts in the IRB total; SA-method equity
   (Art. 133 — the whole book under Basel 3.1, where Art. 147A removes IRB
   equity and OF 02.00 has no such row) reports in the SA breakdown (the SA

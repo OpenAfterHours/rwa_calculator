@@ -137,12 +137,22 @@ class TestCrrIrbSimpleSignificantInvestment:
         assert sig["rwa_final"] == pytest.approx(2_500_000.0)
 
     def test_significant_leg_is_not_an_article_155_leg(self) -> None:
-        """No Art. 158(7) simple-RW EL, and the sealed method is not ``irb_simple``.
+        """No Art. 158(7) simple-RW EL, and the sealed method is ``irb_fixed_rw``.
 
-        Pillar 3 CR10.5 and C 02.00 row 0420 read ``equity_method == irb_simple``
-        as Art. 155(2) equity; a 250% Art. 48(4) leg is excluded from Art. 155 by
-        its paragraph 1, so it is sealed ``sa`` (its weight's basis is Art. 133(2)
-        / Art. 48(4), the same as an SA firm's).
+        Pillar 3 CR10.5 and OV1 UK 4a read ``equity_method == irb_simple`` as
+        Art. 155(2) simple-RW equity; a 250% Art. 48(4) leg is excluded from
+        Art. 155 by its paragraph 1, so it must not carry that tag. Nor is it SA:
+        COREP Annex II, C 10.01 row 0110 "Equity exposures subject to risk
+        weights", verbatim: "Institutions applying the IRB approach shall report
+        risk weighted exposure amounts for those equity exposures which attract a
+        fixed risk weight treatment (without however being explicitly treated
+        according to the Simple Risk Weight approach or the (temporary or
+        permanent) partial use of the credit risk standardised approach). For
+        example, the risk weighted exposure amount of equity positions in
+        financial sector entities treated in accordance with Article 48(4) of the
+        CRR ... shall be reported in row 110." (EBA Q&A 2013_670 confirms.) So
+        the leg is sealed ``irb_fixed_rw``: IRB-umbrella equity (C 02.00 r0420),
+        not simple-RW equity and not SA equity (C 02.00 r0210 / C 07.00).
         """
         # Act
         sig = _row(
@@ -153,8 +163,26 @@ class TestCrrIrbSimpleSignificantInvestment:
         # Assert
         assert plain["equity_method"] == "irb_simple"
         assert plain["expected_loss"] == pytest.approx(8_000.0)
-        assert sig["equity_method"] == "sa"
+        assert sig["equity_method"] == "irb_fixed_rw"
         assert sig["expected_loss"] is None
+
+    def test_ciu_keeps_its_own_treatment_on_the_irb_simple_path(self) -> None:
+        """The predicate's CIU exclusion, on the one path where it is load-bearing.
+
+        On the SA chain the CIU branches precede the 250% branch, so a flagged CIU
+        there cannot tell whether the predicate excludes CIUs. The IRB simple
+        chain has no CIU branch: without the exclusion a flagged CIU would drop
+        to 250%. Asserted against its unflagged twin, so the CIU weight itself
+        (P1.380) is not pinned here.
+        """
+        # Act
+        sig = _row(_IRB, equity_type="ciu", ciu_approach="fallback", is_significant_investment=True)
+        plain = _row(_IRB, equity_type="ciu", ciu_approach="fallback")
+
+        # Assert
+        assert plain["risk_weight"] != pytest.approx(2.50), "control must not already be 250%"
+        assert sig["risk_weight"] == pytest.approx(plain["risk_weight"])
+        assert sig["equity_method"] == plain["equity_method"] == "irb_simple"
 
 
 class TestCrrPdLgdSignificantInvestment:
@@ -172,6 +200,22 @@ class TestCrrPdLgdSignificantInvestment:
         assert sig["rwa_final"] == pytest.approx(2_500_000.0)
         assert sig["rwa"] == pytest.approx(2_500_000.0)
         assert sig["expected_loss"] is None
-        assert sig["equity_method"] == "sa"
+        assert sig["equity_method"] == "irb_fixed_rw"
         assert sig["equity_pd_lgd_cap_binds"] is False
         assert sig["exposure_class"] == "equity"
+
+    def test_central_bank_keeps_its_own_treatment_on_the_pd_lgd_path(self) -> None:
+        """The predicate's central-bank exclusion, where it is load-bearing.
+
+        The SA and IRB simple chains test central bank first; the PD/LGD path has
+        no central-bank branch, so without the exclusion a flagged central-bank
+        leg would take 250% instead of the K formula its unflagged twin takes.
+        """
+        # Act
+        sig = _row(_PD_LGD, equity_type="central_bank", is_significant_investment=True)
+        plain = _row(_PD_LGD, equity_type="central_bank")
+
+        # Assert
+        assert plain["risk_weight"] != pytest.approx(2.50), "control must not already be 250%"
+        assert sig["risk_weight"] == pytest.approx(plain["risk_weight"])
+        assert sig["equity_method"] == plain["equity_method"] == "pd_lgd"

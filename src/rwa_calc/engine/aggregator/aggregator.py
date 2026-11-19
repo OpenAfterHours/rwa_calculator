@@ -317,7 +317,7 @@ class OutputAggregator:
         # rwa_ccr_default / rwa_ccr_qccp_trade — partition of the ``ccr__`` row
         # set by the QCCP trade-leg discriminator (cp_entity_type == "ccp" AND
         # cp_is_qccp.fill_null(True), mirroring the SA QCCP override). Default
-        # is the non-QCCP complement (CRR Art. 107(2)(a)); qccp_trade is the
+        # is the complement (bilateral and non-QCCP rows); qccp_trade is the
         # QCCP partition (CRR Art. 306(1)/(4)).
         rwa_ccr_default: float | None = None
         rwa_ccr_qccp_trade: float | None = None

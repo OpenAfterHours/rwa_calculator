@@ -1019,8 +1019,8 @@ def _prepare_risk_weight_lookup(
     # classes. Sentinel -1 for null CQS so the left join matches.
     upper = pl.col("exposure_class").str.to_uppercase()
 
-    # CRR Art. 117(1) / Art. 107(2)(a) — non-named MDBs and demoted non-QCCPs
-    # take the institution ladder; see engine/sa/cqs_lift.py.
+    # CRR Art. 117(1) / Art. 107(2)(b) — lift the own rating of non-named MDBs
+    # and non-QCCPs (now corporates, CC-11) into cqs; see engine/sa/cqs_lift.py.
     exposures = lift_institution_cqs(exposures, upper)
 
     # PS1/26 Art. 114(2A) — B31-Feature-gated; see engine/sa/central_bank.py.

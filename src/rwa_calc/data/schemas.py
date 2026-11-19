@@ -2995,8 +2995,8 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "cp_is_investment_grade": ColumnSpec(pl.Boolean, default=False, required=False),
     "cp_is_ccp_client_cleared": ColumnSpec(pl.Boolean, required=False),
     # CRR Art. 272 Def (88) — qualifying-CCP flag. Gates the Art. 306(1) 2%/4%
-    # QCCP trade-exposure pin: only an explicit False demotes a ``ccp``
-    # entity_type to the standard institution ladder (Art. 107(2)(a)).
+    # QCCP trade-exposure pin: only an explicit False makes a ``ccp``
+    # entity_type a non-QCCP, classified corporate (Art. 107(2)(b), CC-11).
     "cp_is_qccp": ColumnSpec(pl.Boolean, required=False),
     "cp_scra_grade": ColumnSpec(pl.String, required=False),
     "cp_sovereign_cqs": ColumnSpec(pl.Int32, required=False),

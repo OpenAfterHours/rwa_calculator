@@ -513,11 +513,12 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
-    # CRR Annex I paras 1-4 / Art. 111(1): a normalised concrete OBS product key
-    # (e.g. "ACCEPTANCE", "PERFORMANCE_BOND", "DOCUMENTARY_CREDIT"), distinct from
-    # the free-text ``product_type``. When ``risk_type`` is null/empty the CCF
-    # engine resolves the abstract Annex I risk_type bucket from this product via
-    # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
+    # CRR Annex I / PS1/26 Art. 111 Table A1: a normalised concrete OBS product
+    # key (e.g. "ACCEPTANCE", "PERFORMANCE_BOND", "SHIPPING_GUARANTEE"), distinct
+    # from the free-text ``product_type``. When ``risk_type`` is null/empty the
+    # CCF engine resolves the risk_type bucket from this product via the
+    # regime's ``obs_product_to_risk_type`` pack map (VALID_OBS_PRODUCTS below).
+    # Explicit ``risk_type`` always wins.
     "obs_product": ColumnSpec(pl.String, required=False),
     "ccf_modelled": ColumnSpec(pl.Float64, required=False, domain=_CCF_DOMAIN),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
@@ -527,20 +528,24 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Facilities default to True because a facility row is, by construction, a
     # commitment / credit line.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=True, required=False),
-    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
-    # secured by residential property attract a 50% CCF. When True under Basel
-    # 3.1 the CCF engine overrides the otherwise-resolved SA CCF to the MR /
-    # Row 4(b) rate (50%), unless that CCF is already 10% or 100% (the Row 4(b)
-    # "not subject to a 10% or 100% conversion factor" carve-out). No effect
-    # under CRR (Table A1 is Basel 3.1 only).
-    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 166E(5): undrawn purchase commitments for *revolving*
-    # purchased-receivables facilities attract a 40% CCF by default (Table A1
-    # Row 5 "Other Commitments"), dropping to 10% where the commitment also
-    # meets the Table A1 Row 7 UCC criteria (LR risk_type). When True under
-    # Basel 3.1 the CCF engine routes the row to the OC (40%) / LR (10%) rate
-    # regardless of the otherwise-resolved risk_type. No effect under CRR
-    # (Art. 166E(5) is Basel 3.1 only).
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): "UK residential mortgage
+    # commitments that are not subject to a conversion factor of 10% or 100%"
+    # take 50% (Row 5 "any other commitment" is 40%). TRI-STATE, deliberately no
+    # default (RE-14): True / False are honoured; null (not stated) is derived
+    # under Basel 3.1 — True for a retail-mortgage commitment secured on
+    # residential property to a GB obligor in GBP (engine/ccf.py::
+    # _derived_uk_residential_mortgage_commitment). A default of False made the
+    # flag unreachable unless set by hand, so UK mortgage offers took 40%. The
+    # 10% / 100% carve-out always applies. No effect under CRR.
+    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, required=False),
+    # PRA PS1/26 Art. 166A(5) (IRB Part): an undrawn purchase commitment for
+    # *revolving* purchased receivables takes a fixed 40% conversion factor, or
+    # 10% where it meets the Table A1 point 7 UCC criteria (LR risk_type). When
+    # True (with ``is_revolving``) under Basel 3.1 the CCF engine applies that
+    # factor to F-IRB, slotting AND A-IRB rows (no own estimate) whatever the
+    # row's risk_type. The rule is IRB-only: an SA row keeps its Table A1 bucket
+    # (a factoring / invoice discount line "with recourse" is Row 2(a) FRC 100%;
+    # an ordinary purchase commitment is Row 5 OC 40%). No effect under CRR.
     "is_purchased_receivable_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -795,10 +800,10 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
-    # CRR Annex I paras 1-4 / Art. 111(1): normalised concrete OBS product key.
+    # CRR Annex I / PS1/26 Table A1: normalised concrete OBS product key.
     # Mirrored from FACILITY_SCHEMA; when ``risk_type`` is null/empty the CCF
-    # engine resolves the Annex I risk_type bucket from this product via
-    # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
+    # engine resolves the risk_type bucket from this product via the regime's
+    # ``obs_product_to_risk_type`` pack map. Explicit ``risk_type`` always wins.
     "obs_product": ColumnSpec(pl.String, required=False),
     "ccf_modelled": ColumnSpec(pl.Float64, required=False, domain=_CCF_DOMAIN),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
@@ -808,13 +813,16 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # Override to True for genuine commitment-style contingents (e.g., an
     # NIF / RUF booked as a contingent), in which case Art. 166(8)(d) -> 75% applies.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
-    # secured by residential property attract a 50% CCF. Mirrored from
-    # FACILITY_SCHEMA for parity; see the FACILITY_SCHEMA notes for full detail.
-    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn purchase
-    # commitment flag. Mirrored from FACILITY_SCHEMA for parity; see the
-    # FACILITY_SCHEMA notes for full detail.
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): UK residential mortgage
+    # commitment flag, tri-state (null = derive). Mirrored from FACILITY_SCHEMA
+    # for parity; see the FACILITY_SCHEMA notes for full detail. A contingent is
+    # an issued item by default (``is_obs_commitment`` False) and is never
+    # derived — set the flag (or ``is_obs_commitment``) for a mortgage offer
+    # booked as a contingent.
+    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, required=False),
+    # PRA PS1/26 Art. 166A(5): revolving purchased-receivables undrawn purchase
+    # commitment flag (IRB rows only). Mirrored from FACILITY_SCHEMA for parity;
+    # see the FACILITY_SCHEMA notes for full detail.
     "is_purchased_receivable_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 178 row-level default flag. See FACILITY_SCHEMA for full notes.
     "is_defaulted": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -2537,36 +2545,88 @@ RISK_TYPE_SYNONYMS: dict[str, str] = {
 # to ignore the true ones (P1.354).
 VALID_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_INPUT | set(RISK_TYPE_SYNONYMS)
 
-# CRR Annex I paras 1-4 / Art. 111(1): canonical normalised OBS *product* keys
-# accepted on the ``obs_product`` column. Each maps (via ANNEX1_PRODUCT_RISK_TYPE
-# in data/tables/ccf.py) to an abstract Annex I risk_type bucket. Distinct from
-# the free-text ``product_type``.
+# CRR Annex I paras 1-4 / PS1/26 Art. 111(1) Table A1: canonical normalised OBS
+# *product* keys accepted on the ``obs_product`` column. Each maps, via the
+# REGIME-SPECIFIC ``obs_product_to_risk_type`` CategoryMap in
+# ``rulebook/packs/{crr,b31}.py``, to a risk_type bucket. The two maps differ —
+# CRR Annex I 2(a)/2(b)(i) puts plain documentary credits and shipping / customs /
+# tax bonds in medium risk (50%) where Table A1 row 6 gives them 20% (CM-07).
+# Distinct from the free-text ``product_type``. Every member must map in BOTH
+# packs (``tests/unit/test_ccf_obs_product_regime_map.py``): DQ016 tests only
+# the ABSENCE of a product, so an unmapped member would price on the residual
+# with no warning.
 VALID_OBS_PRODUCTS = {
+    # Full risk / Table A1 row 1 (credit substitutes)
     "ACCEPTANCE",
+    "FINANCIAL_GUARANTEE",
+    "AVAL",
+    "ENDORSEMENT",
+    "STANDBY_LC_CREDIT_SUBSTITUTE",
+    # Full-risk commitments / Table A1 row 2(a): transactions with recourse
+    "FACTORING_FACILITY",
+    "INVOICE_DISCOUNT_FACILITY",
+    # Trade finance: documentary credits issued or confirmed (CRR medium risk,
+    # B31 row 6(a)); shipment-collateralised / self-liquidating (both 20%)
+    "DOCUMENTARY_CREDIT",
+    "DOCUMENTARY_CREDIT_SHIPMENT_SECURED",
+    "TRADE_LC",
+    # Shipping guarantees, customs and tax bonds (CRR 2(b)(i) 50%, B31 row 6(d) 20%)
+    "SHIPPING_GUARANTEE",
+    "CUSTOMS_BOND",
+    "TAX_BOND",
+    # Warranties / performance-type guarantees, non-credit-substitute SBLCs (20%)
     "PERFORMANCE_BOND",
     "WARRANTY",
     "TENDER_BOND",
     "BID_BOND",
-    "DOCUMENTARY_CREDIT",
-    "TRADE_LC",
+    "ADVANCE_PAYMENT_GUARANTEE",
+    "RETENTION_GUARANTEE",
+    "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
 }
 
 # Lowercase synonyms accepted on input for the obs_product column. Maps every
 # permitted spelling to its canonical uppercase form in VALID_OBS_PRODUCTS.
-# Consumed by build_product_to_risk_type_expr in data/tables/ccf.py so product
+# Consumed by engine/ccf.py::build_product_to_risk_type_expr so product
 # matching is case-insensitive. Mirrors RISK_TYPE_SYNONYMS in shape.
 OBS_PRODUCT_SYNONYMS: dict[str, str] = {
     "acceptance": "ACCEPTANCE",
     "bankers_acceptance": "ACCEPTANCE",
+    "financial_guarantee": "FINANCIAL_GUARANTEE",
+    "aval": "AVAL",
+    "endorsement": "ENDORSEMENT",
+    "standby_lc_credit_substitute": "STANDBY_LC_CREDIT_SUBSTITUTE",
+    "standby_lc_financial": "STANDBY_LC_CREDIT_SUBSTITUTE",
+    "sblc_financial": "STANDBY_LC_CREDIT_SUBSTITUTE",
+    "factoring_facility": "FACTORING_FACILITY",
+    "factoring": "FACTORING_FACILITY",
+    "invoice_discount_facility": "INVOICE_DISCOUNT_FACILITY",
+    "invoice_discounting": "INVOICE_DISCOUNT_FACILITY",
+    "documentary_credit": "DOCUMENTARY_CREDIT",
+    "doc_credit": "DOCUMENTARY_CREDIT",
+    "documentary_credit_shipment_secured": "DOCUMENTARY_CREDIT_SHIPMENT_SECURED",
+    "self_liquidating_dc": "DOCUMENTARY_CREDIT_SHIPMENT_SECURED",
+    "trade_lc": "TRADE_LC",
+    "shipping_guarantee": "SHIPPING_GUARANTEE",
+    "customs_bond": "CUSTOMS_BOND",
+    "tax_bond": "TAX_BOND",
     "performance_bond": "PERFORMANCE_BOND",
     "perf_bond": "PERFORMANCE_BOND",
     "warranty": "WARRANTY",
     "tender_bond": "TENDER_BOND",
     "bid_bond": "BID_BOND",
-    "documentary_credit": "DOCUMENTARY_CREDIT",
-    "doc_credit": "DOCUMENTARY_CREDIT",
-    "trade_lc": "TRADE_LC",
+    "advance_payment_guarantee": "ADVANCE_PAYMENT_GUARANTEE",
+    "retention_guarantee": "RETENTION_GUARANTEE",
+    "standby_lc_non_credit_substitute": "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
+    "standby_lc_performance": "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
+    "sblc_performance": "STANDBY_LC_NON_CREDIT_SUBSTITUTE",
 }
+
+# The domain actually ACCEPTED on the ``obs_product`` input column: canonical
+# keys plus every documented synonym. Same reasoning as VALID_RISK_TYPES_ACCEPTED
+# (P1.354): ``validate_column_values`` lower-cases both sides, so the documented
+# ``bankers_acceptance`` / ``perf_bond`` / ``doc_credit`` drew a DQ006 while the
+# CCF stage priced them correctly (CM-12).
+VALID_OBS_PRODUCTS_ACCEPTED = VALID_OBS_PRODUCTS | set(OBS_PRODUCT_SYNONYMS)
 
 VALID_BS_TYPES = {"ONB", "OFB"}
 
@@ -2829,7 +2889,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "seniority": VALID_SENIORITY,
         "risk_type": VALID_RISK_TYPES_ACCEPTED,
         "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "obs_product": VALID_OBS_PRODUCTS,
+        "obs_product": VALID_OBS_PRODUCTS_ACCEPTED,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
     "loans": {
@@ -2842,7 +2902,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "bs_type": VALID_BS_TYPES,
         "risk_type": VALID_RISK_TYPES_ACCEPTED,
         "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
-        "obs_product": VALID_OBS_PRODUCTS,
+        "obs_product": VALID_OBS_PRODUCTS_ACCEPTED,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
         "exposure_collateral_type": VALID_COLLATERAL_TYPES,
     },

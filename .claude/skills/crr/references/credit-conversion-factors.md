@@ -33,7 +33,11 @@ category. Basel 3.1 replaces that split with a single flat "other commitments" f
 
 `obs_product_to_risk_type` is the map from product string to risk category. It is the
 classification step that decides *which* CCF applies, and the usual reason a hand-calc
-disagrees with the engine.
+disagrees with the engine. It is **regime-specific**: Annex I puts a documentary credit
+that is not secured by its shipment, and shipping guarantees, customs and tax bonds, in
+Medium Risk, where Basel 3.1 Table A1 moves them to its medium/low row — so never carry a
+CRR product mapping into a Basel 3.1 scenario, or back. Book ordinary commitments as `OC`
+(the engine applies the maturity split), not as `MR` / `MLR`.
 
 <!-- BEGIN GENERATED: crr-ccf-values -->
 ### `sa_ccf`
@@ -54,7 +58,7 @@ Key column: `risk_type`
 | `LR` | `0.00` |
 
 **Basel 3.1** — PS1/26, paragraph 111
- *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
+ *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 7))*
 
 Key column: `risk_type`
 
@@ -70,7 +74,7 @@ Key column: `risk_type`
 
 ### `obs_product_to_risk_type`
 
-**Both regimes** — CRR Art. 111
+**CRR** — CRR Art. 111
  *(Annex I OBS product -> risk_type bucket)*
 
 Key column: `obs_product`
@@ -78,12 +82,53 @@ Key column: `obs_product`
 | Key | Value |
 |---|---|
 | `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
+| `DOCUMENTARY_CREDIT` | `MR_ISSUED` |
+| `SHIPPING_GUARANTEE` | `MR_ISSUED` |
+| `CUSTOMS_BOND` | `MR_ISSUED` |
+| `TAX_BOND` | `MR_ISSUED` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
+| `TRADE_LC` | `MLR` |
 | `PERFORMANCE_BOND` | `MLR` |
 | `WARRANTY` | `MLR` |
 | `TENDER_BOND` | `MLR` |
 | `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
+
+**Basel 3.1** — PS1/26, paragraph 111
+ *(Table A1 OBS product -> risk_type bucket)*
+
+Key column: `obs_product`
+
+| Key | Value |
+|---|---|
+| `ACCEPTANCE` | `FR` |
+| `FINANCIAL_GUARANTEE` | `FR` |
+| `AVAL` | `FR` |
+| `ENDORSEMENT` | `FR` |
+| `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` |
+| `FACTORING_FACILITY` | `FRC` |
+| `INVOICE_DISCOUNT_FACILITY` | `FRC` |
 | `DOCUMENTARY_CREDIT` | `MLR` |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED` | `MLR` |
 | `TRADE_LC` | `MLR` |
+| `SHIPPING_GUARANTEE` | `MLR` |
+| `CUSTOMS_BOND` | `MLR` |
+| `TAX_BOND` | `MLR` |
+| `PERFORMANCE_BOND` | `MLR` |
+| `WARRANTY` | `MLR` |
+| `TENDER_BOND` | `MLR` |
+| `BID_BOND` | `MLR` |
+| `ADVANCE_PAYMENT_GUARANTEE` | `MLR` |
+| `RETENTION_GUARANTEE` | `MLR` |
+| `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` |
 
 | Name | CRR | Basel 3.1 | Citation |
 |---|---|---|---|

@@ -183,14 +183,17 @@ into medium risk (50%) or medium/low risk (20%).
 |-----------------|-----|-----------|
 | Full Risk (FR) | 100% | Guarantees with credit-substitute character, credit derivatives, acceptances, irrevocable standby LCs (credit substitute) |
 | Full Risk — Commitments (FRC) | 100% | Certain-drawdown commitments: repos, factoring, forward deposits, outright forward purchases, partly-paid shares (Annex I para 2) |
-| Medium Risk (MR) | 50% | Undrawn credit facilities with original maturity **> 1 year**; NIFs; RUFs (Annex I para 3) |
-| Medium/Low Risk (MLR) | 20% | Undrawn credit facilities with original maturity **≤ 1 year** (not unconditionally cancellable); documentary credits; trade-related LCs; warranties; performance bonds (Annex I para 4) |
+| Medium Risk (MR / MR_ISSUED / OC) | 50% | Undrawn credit facilities with original maturity **> 1 year**; NIFs; RUFs; documentary credits issued or confirmed that are **not** secured by the shipment; shipping guarantees, customs and tax bonds (Annex I para 2) |
+| Medium/Low Risk (MLR / OC) | 20% | Undrawn credit facilities with original maturity **≤ 1 year** (not unconditionally cancellable); documentary credits in which the underlying shipment acts as collateral and other self-liquidating transactions; warranties; tender and performance bonds; non-credit-substitute standby LCs (Annex I para 3) |
 | Low Risk (LR) | 0% | Unconditionally cancellable commitments (Annex I para 5) |
 
 !!! info "Maturity Distinction for Undrawn Commitments"
     The same undrawn credit facility receives different CCFs depending on its original
-    maturity: **> 1 year → 50%** (MR), **≤ 1 year → 20%** (MLR),
-    **unconditionally cancellable → 0%** (LR). Basel 3.1 removes this maturity split,
+    maturity: **> 1 year → 50%**, **≤ 1 year → 20%**,
+    **unconditionally cancellable → 0%** (LR). Book such a facility as `OC` and the
+    engine applies the split from its original maturity — encoding it as `MR` / `MLR`
+    instead prices it wrongly under Basel 3.1 (`MLR` would take Table A1 Row 6's 20%
+    rather than Row 5's 40%). Basel 3.1 removes this maturity split,
     replacing it with a flat 40% for all non-cancellable commitments
     (see [key differences](../../framework-comparison/key-differences.md#credit-conversion-factors)).
 

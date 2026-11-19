@@ -213,9 +213,13 @@ See [Classification](../features/classification.md) for the complete classificat
 | `seniority` | `String` | No | `senior` (default) or `subordinated` (affects F-IRB LGD) |
 | `risk_type` | `String` | No | Off-balance sheet risk category (see below) |
 | `underlying_risk_type` | `String` | No | Underlying-exposure risk type used by the CRM substitution path when the facility's own `risk_type` would otherwise mask the protection's true category |
+| `obs_product` | `String` | No | Concrete off-balance-sheet product key — the route to a bucket when `risk_type` is blank (see [Concrete product keys](#concrete-product-keys-obs_product)). An explicit `risk_type` always wins |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
-| `ead_modelled` | `Float64` | No | A-IRB modelled EAD — when populated and approach is A-IRB, replaces the `drawn_amount + ccf x undrawn_amount` derivation (CRR Art. 166(8a)) |
-| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
+| `ead_modelled` | `Float64` | No | Basel 3.1 A-IRB own estimate of EAD (PS1/26 Art. 166D(3)/(4)) — when populated on a **revolving loan commitment** (`is_revolving` and `is_obs_commitment`, not a flagged purchased-receivables commitment) it replaces the `drawn_amount + ccf x undrawn_amount` derivation, floored by Art. 166D(5)(b)/(c). Ignored on every other row and under CRR |
+| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (CRR Art. 166(8)(b)) |
+| `is_obs_commitment` | `Boolean` | No | `True` (facility default) for a commitment / credit line, `False` for an issued item. Selects CRR F-IRB Art. 166(8)(d) 75% vs the Art. 166(10) issued-item scale, the Basel 3.1 Table A1 Row 5 vs Row 3 residual, and Basel 3.1 A-IRB own-estimate eligibility (Art. 166D(1)(a): revolving loan **commitments** only) |
+| `is_uk_residential_mortgage_commitment` | `Boolean` | No | Basel 3.1 Table A1 Row 4(b) 50% UK residential mortgage commitment. **Tri-state, no default**: `True` / `False` are honoured; null is derived (see [UK residential mortgage commitments](#uk-residential-mortgage-commitments)). No effect under CRR |
+| `is_purchased_receivable_commitment` | `Boolean` | No | Undrawn purchase commitment for revolving purchased receivables (with `is_revolving`). Basel 3.1 **IRB rows only**: PS1/26 Art. 166A(5) fixes 40% (10% for an `LR` unconditionally cancellable one), no own estimate. SA rows keep their Table A1 bucket (factoring with recourse is `FRC` 100%). No effect under CRR. Default `False` |
 | `is_payroll_loan` | `Boolean` | No | Payroll-deduction / pension lending — qualifies for the Basel 3.1 35% retail RW (PS1/26 Art. 123(2)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
 | `has_one_day_maturity_floor` | `Boolean` | No | Set True for short-term self-liquidating trade exposures and certain capital-markets-driven exposures eligible for the 1-day `M` floor under CRR Art. 162(3) (otherwise the standard 1-year floor applies) |
@@ -244,24 +248,81 @@ See [Classification](../features/classification.md) for the complete classificat
 | `senior` | 45% | Senior unsecured claims |
 | `subordinated` | 75% | Subordinated claims |
 
-**Valid `risk_type` values (CRR Art. 111 CCF Categories):**
+**Valid `risk_type` values (CRR Art. 111 Annex I / PRA PS1/26 Art. 111 Table A1):**
 
-| Code | Full Value | SA CCF | F-IRB CCF | Description |
-|------|------------|--------|-----------|-------------|
-| `FR` | `full_risk` | 100% | 100% | Direct credit substitutes, guarantees, acceptances |
-| `MR` | `medium_risk` | 50% | 75% | NIFs, RUFs, standby LCs, committed undrawn |
-| `MLR` | `medium_low_risk` | 20% | 75% | Documentary credits, trade finance |
-| `LR` | `low_risk` | 0% | 0% | Unconditionally cancellable commitments |
+| Code | Full Value | CRR SA | CRR F-IRB | Basel 3.1 SA / F-IRB | Use for |
+|------|------------|--------|-----------|----------------------|---------|
+| `FR` | `full_risk` | 100% | 100% | 100% (Row 1) | Issued credit substitutes: financial guarantees, acceptances, endorsements, credit derivatives, **credit-substitute** standby LCs |
+| `FRC` | `full_risk_commitment` | 100% | 100% | 100% (Row 2) | Commitments with certain drawdown / with recourse: factoring and invoice discounting with recourse, forward purchases and deposits, repos, partly-paid shares |
+| `MR` | `medium_risk` | 50% | 75% commitment / 50% issued | 50% (Row 4(a)) | NIFs and RUFs only |
+| `MR_ISSUED` | `medium_risk_issued` | 50% | 50% | 50% (Row 3) | Other issued items that are not credit substitutes. Under CRR also documentary credits not secured by the shipment, shipping guarantees, customs and tax bonds (Annex I 2(a), 2(b)(i)) — which Basel 3.1 puts in Row 6 at 20%, so prefer `obs_product` for those |
+| `OC` | `other_commit` | 50% (> 1y original maturity) / 20% (≤ 1y) | 75% | 40% (Row 5) | **Every ordinary committed undrawn facility** (revolvers, term-loan drawdowns, overdrafts that are not unconditionally cancellable) |
+| `MLR` | `medium_low_risk` | 20% | 75% commitment / 20% issued | 20% (Row 6) | Issued trade / performance items: warranties, tender and performance bonds, advance payment and retention guarantees, **non-credit-substitute** standby LCs, self-liquidating (shipment-secured) documentary credits |
+| `LR` | `low_risk` | 0% | 0% | 10% (Row 7) | Unconditionally cancellable commitments |
 
-**Note:** Under F-IRB (CRR Art. 166(8)), MR and MLR both become 75% CCF.
+!!! warning "Book commitments as `OC`, not `MR` / `MLR`"
+    The CRR habit of encoding an undrawn facility as `MR` (> 1 year) or `MLR`
+    (≤ 1 year) prices wrongly under Basel 3.1: an `MLR` commitment takes Row 6's
+    20% instead of Row 5's 40% (understated) and an `MR` commitment Row 4's 50%
+    instead of 40%. `OC` gets both regimes right — the engine applies the CRR
+    original-maturity split itself. A standby LC is `FR` when it is a credit
+    substitute (100% in both regimes) and `MLR` when it is not (20%) — never `MR`.
 
-**F-IRB Exception (Art. 166(9)):** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. To flag these exposures, set `is_short_term_trade_lc = True` for MLR risk type items.
+A blank `risk_type` with no resolvable `obs_product` raises **DQ016** and takes the
+regime's residual: CRR Annex I 1(k) 100%; Basel 3.1 Row 5 40% for a commitment or
+Row 3 50% for an issued item.
+
+**F-IRB short-term trade LCs (CRR Art. 166(8)(b)):** short-term letters of credit
+arising from the movement of goods keep a 20% CCF under CRR F-IRB. Flag them with
+`is_short_term_trade_lc = True` on an issued-item bucket (`MLR`, or `MR_ISSUED` for a
+documentary credit not secured by its shipment). Basel 3.1 has no separate F-IRB
+carve-out — F-IRB uses the SA Table A1 factor (Art. 166C).
 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
-| `is_short_term_trade_lc` | `Boolean` | No | True for short-term trade LCs for goods movement (Art. 166(9) - retains 20% CCF under F-IRB) |
+| `is_short_term_trade_lc` | `Boolean` | No | True for short-term trade LCs for goods movement (CRR Art. 166(8)(b) — retains 20% CCF under F-IRB) |
 
-**A-IRB Modelled CCF:** For A-IRB exposures, provide the bank's own modelled CCF estimate (0.0 to 1.5) in `ccf_modelled`. Retail IRB CCFs can exceed 100% due to additional drawdown behaviour. When populated and approach is A-IRB, this value takes precedence over the risk_type lookup.
+### Concrete product keys (`obs_product`)
+
+When `risk_type` is blank the engine resolves it from `obs_product` through the
+regime's own map — the two regimes classify some products differently:
+
+| `obs_product` | CRR | Basel 3.1 |
+|---------------|-----|-----------|
+| `ACCEPTANCE`, `FINANCIAL_GUARANTEE`, `AVAL`, `ENDORSEMENT`, `STANDBY_LC_CREDIT_SUBSTITUTE` | `FR` 100% | `FR` 100% |
+| `FACTORING_FACILITY`, `INVOICE_DISCOUNT_FACILITY` | `FRC` 100% | `FRC` 100% |
+| `DOCUMENTARY_CREDIT` | `MR_ISSUED` 50% (Annex I 2(a)) | `MLR` 20% (Row 6(a)) |
+| `SHIPPING_GUARANTEE`, `CUSTOMS_BOND`, `TAX_BOND` | `MR_ISSUED` 50% (Annex I 2(b)(i)) | `MLR` 20% (Row 6(d)) |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED`, `TRADE_LC` | `MLR` 20% (Annex I 3(a)(i)) | `MLR` 20% |
+| `PERFORMANCE_BOND`, `WARRANTY`, `TENDER_BOND`, `BID_BOND`, `ADVANCE_PAYMENT_GUARANTEE`, `RETENTION_GUARANTEE`, `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | `MLR` 20% | `MLR` 20% |
+
+Keys are case-insensitive and these synonyms are accepted: `bankers_acceptance`,
+`sblc_financial` / `standby_lc_financial`, `factoring`, `invoice_discounting`,
+`doc_credit`, `self_liquidating_dc`, `perf_bond`, `sblc_performance` /
+`standby_lc_performance`. An unknown key raises **DQ006**.
+
+### UK residential mortgage commitments
+
+PS1/26 Table A1 Row 4(b) gives 50% to "UK residential mortgage commitments that are
+not subject to a conversion factor of 10% or 100%" (Row 5 "any other commitment" is
+40%). `is_uk_residential_mortgage_commitment` is tri-state:
+
+- `True` — Row 4(b) 50% (a 10% or 100% row is left alone);
+- `False` — never Row 4(b);
+- null (not stated) — **derived** under Basel 3.1: Row 4(b) when the row is a
+  commitment (`is_obs_commitment`), classified `retail_mortgage`, secured on
+  residential property (allocated residential collateral, or a linked property of
+  `property_type = residential`), to a `GB` obligor in a `GBP` denomination.
+
+The data model has no property location, so "UK" is evidenced by the obligor's
+country and the denomination; nothing else is derived. Set the flag `True` for a UK
+mortgage to a non-GB obligor and `False` for a GB obligor's mortgage on non-UK
+property. A contingent is an issued item by default and is never derived.
+
+**A-IRB Modelled CCF:** For A-IRB exposures, provide the bank's own modelled CCF estimate (0.0 to 1.5) in `ccf_modelled`. Retail IRB CCFs can exceed 100% due to additional drawdown behaviour. Where it is admissible it takes precedence over the risk_type lookup:
+
+- **CRR:** within the Art. 166(8) product scope — commitments (`is_obs_commitment`) and short-term trade LCs, never `FR` / `FRC`; issued items take the Art. 166(10) factor.
+- **Basel 3.1 (PS1/26 Art. 166D(1)):** only for **revolving loan commitments** — `is_revolving` **and** `is_obs_commitment`, with an SA factor below 100% — floored at 50% of the SA factor. Every other item, including an issued LC or guarantee booked under a revolving facility, takes the SA Table A1 factor. A flagged revolving purchased-receivables commitment takes the fixed Art. 166A(5) 40% / 10%.
 
 **Example:**
 
@@ -283,7 +344,7 @@ facilities = pl.DataFrame({
     "beel": [None, None],
     "is_revolving": [True, False],
     "seniority": ["senior", "senior"],
-    "risk_type": ["MR", "MR"],  # Medium risk - committed undrawn
+    "risk_type": ["OC", "OC"],  # Other commitments - committed undrawn
     "ccf_modelled": [None, None],  # No modelled CCF (use regulatory)
 })
 ```
@@ -426,9 +487,13 @@ loans = pl.DataFrame({
 | `seniority` | `String` | No | `senior` (default) or `subordinated` |
 | `risk_type` | `String` | No | Off-balance sheet risk category (see Facility schema) |
 | `underlying_risk_type` | `String` | No | Underlying-exposure risk type for CRM substitution (see Facility schema) |
-| `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
-| `ead_modelled` | `Float64` | No | A-IRB modelled EAD — replaces the CCF-derived value when populated under A-IRB (CRR Art. 166(8a)) |
-| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
+| `obs_product` | `String` | No | Concrete off-balance-sheet product key (see [Concrete product keys](#concrete-product-keys-obs_product)) |
+| `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5). Under Basel 3.1 an issued contingent is never eligible (Art. 166D(1)(b)) |
+| `ead_modelled` | `Float64` | No | Basel 3.1 A-IRB own estimate of EAD — revolving loan commitments only (PS1/26 Art. 166D(3)/(4); see Facility schema). Ignored on an issued contingent (`is_obs_commitment = False`) and under CRR |
+| `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (CRR Art. 166(8)(b)) |
+| `is_obs_commitment` | `Boolean` | No | Default `False` — a contingent is an issued item. Set `True` for a commitment booked as a contingent (e.g. a NIF / RUF: CRR F-IRB Art. 166(8)(d) 75%; or a mortgage offer). A contingent on a commitment `risk_type` (`MR`, `OC`) left `False` raises **DQ017** |
+| `is_uk_residential_mortgage_commitment` | `Boolean` | No | Basel 3.1 Table A1 Row 4(b) flag, tri-state — see Facility schema. Never derived for a row with `is_obs_commitment = False` |
+| `is_purchased_receivable_commitment` | `Boolean` | No | PS1/26 Art. 166A(5) revolving purchased-receivables commitment (IRB rows only) — see Facility schema |
 | `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor |
 | `is_sft` | `Boolean` | No | Securities Financing Transaction — see Facility schema |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26 |
@@ -456,9 +521,9 @@ contingents = pl.DataFrame({
     "lgd": [None, None, None],
     "beel": [None, None, None],
     "seniority": ["senior", "senior", "senior"],
-    "risk_type": ["FR", "MR", "MLR"],  # FR=100%, MR=50%/75%, MLR=20%/75%
+    "risk_type": ["FR", "MR_ISSUED", "MLR"],  # FR=100%, MR_ISSUED=50%, MLR=20%
     "ccf_modelled": [None, None, None],  # No modelled CCF
-    "is_short_term_trade_lc": [False, False, True],  # Third is Art. 166(9) exception
+    "is_short_term_trade_lc": [False, False, True],  # Third: CRR Art. 166(8)(b) 20%
     "bs_type": ["OFB", "OFB", "OFB"],  # Off-balance sheet (default)
 })
 ```

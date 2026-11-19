@@ -12,11 +12,24 @@ CCF application for off-balance sheet exposures under SA, F-IRB, and A-IRB.
 
 | CCF Category | CCF | Description |
 |-------------|-----|-------------|
-| Full Risk (FR) | 100% | Direct credit substitutes, guarantees, acceptances |
-| Full Risk Commitment (FRC) | 100% | Certain-drawdown commitments: repos, factoring, forward deposits/purchases, partly-paid shares (Annex I para 2) |
-| Medium Risk (MR) | 50% | Undrawn commitments > 1 year |
-| Medium-Low Risk (MLR) | 20% | Undrawn commitments ≤ 1 year, trade-related LCs |
-| Low Risk (LR) | 0% | Unconditionally cancellable commitments |
+| Full Risk (FR) | 100% | Issued credit substitutes: guarantees having the character of credit substitutes, credit derivatives, acceptances, endorsements, credit-substitute standby LCs (Annex I 1(a)-(d), (f)) |
+| Full Risk Commitment (FRC) | 100% | Certain-drawdown commitments / transactions with recourse: factoring and invoice discounting with recourse, repos, forward deposits/purchases, partly-paid shares (Annex I 1(e), (g)-(j)) |
+| Medium Risk — commitments (MR) | 50% | NIFs and RUFs (Annex I 2(b)(iii)) |
+| Medium Risk — issued items (MR_ISSUED) | 50% | Documentary credits issued or confirmed that are NOT secured by the shipment; shipping guarantees, customs and tax bonds (Annex I 2(a), 2(b)(i)) |
+| Other commitments (OC) | 50% / 20% | Undrawn credit facilities: 50% for an original maturity > 1 year, 20% for ≤ 1 year (Annex I 2(b)(ii) / 3(b)(i)) — the engine splits on original maturity |
+| Medium-Low Risk (MLR) | 20% | Issued medium/low-risk trade items: shipment-secured documentary credits and other self-liquidating transactions; warranties, tender and performance bonds, advance payment and retention guarantees, non-credit-substitute guarantees; non-credit-substitute standby LCs (Annex I 3(a)) |
+| Low Risk (LR) | 0% | Unconditionally cancellable commitments (Annex I 4) |
+
+!!! warning "Encode commitments as OC, not MR / MLR (CM-08)"
+    Book an ordinary committed undrawn facility as `OC` and let the engine apply the
+    CRR original-maturity split (50% / 20%) and the Basel 3.1 Row 5 40%. The older
+    guidance — "MR for commitments > 1 year, MLR for ≤ 1 year" — is CRR-only: run
+    under Basel 3.1 an `MLR` commitment takes the Row 6 20% instead of Row 5's 40%
+    (understated), and an `MR` commitment takes Row 4's 50% instead of 40%
+    (overstated). Likewise a standby LC is `FR` when it is a credit substitute
+    (Annex I 1(f) / Table A1 Row 1(e), 100%) and `MLR` when it is not (Annex I
+    3(a)(iii) / Row 6(c), 20%) — never `MR`; and performance / tender bonds and
+    warranties are `MLR`, not `MR_ISSUED`.
 
 ## F-IRB Approach (CRR Art. 166(8) and Art. 166(10))
 
@@ -48,7 +61,7 @@ a NIF/RUF can be tagged `is_obs_commitment=True` to opt back into 75%.
 | Full Risk (FR) | 100% | Issued FR items (guarantees, credit derivatives, acceptances) regardless of source | Art. 166(8) general / 166(10)(a) (numerically identical) |
 | Full Risk Commitment (FRC) | 100% | Certain-drawdown commitments — repos, factoring, forward deposits | Art. 166(8) general |
 | UCC (Low Risk) | 0% | Any LR row regardless of source | **Art. 166(8)(a)** / 166(10)(d) (numerically identical) |
-| Trade LCs (short-term, MLR) | 20% | `is_short_term_trade_lc=True` — overrides both Art. 166(8)(d) and 166(10)(c) | **Art. 166(8)(b)** |
+| Trade LCs (short-term, MR_ISSUED / MLR) | 20% | `is_short_term_trade_lc=True` on an issued-item bucket — overrides Art. 166(8)(d) and 166(10)(b)/(c). A documentary credit not secured by its shipment is Annex I 2(a) medium risk (`MR_ISSUED`) and keeps the 20% when flagged (TR-04) | **Art. 166(8)(b)** |
 | Revolving purchased receivables UCC | 0% | LR + UCC purchase commitments | **Art. 166(8)(c)** |
 | Other credit lines / NIFs / RUFs | 75% | `is_obs_commitment=True` AND risk_type in {MR, MLR, OC} | **Art. 166(8)(d)** |
 
@@ -56,8 +69,8 @@ a NIF/RUF can be tagged `is_obs_commitment=True` to opt back into 75%.
 
 | CCF Category | CCF | Applies when | Reference |
 |-------------|-----|--------------|-----------|
-| MR — issued OBS items | **50%** | `is_obs_commitment=False` AND risk_type=MR — performance bonds, warranties, tender bonds, non-credit-substitute documentary credits / standby LCs | **Art. 166(10)(b)** |
-| MLR — issued OBS items (non-trade-LC) | **20%** | `is_obs_commitment=False` AND risk_type=MLR AND `is_short_term_trade_lc=False` — self-liquidating documentary credits, shipping guarantees, customs/tax bonds | **Art. 166(10)(c)** |
+| MR / MR_ISSUED — issued OBS items | **50%** | `is_obs_commitment=False` AND risk_type in {MR, MR_ISSUED} — Annex I medium-risk issued items: documentary credits issued or confirmed that are not shipment-secured, shipping guarantees, customs and tax bonds (2(a), 2(b)(i)) | **Art. 166(10)(b)** |
+| MLR — issued OBS items (non-trade-LC) | **20%** | `is_obs_commitment=False` AND risk_type=MLR AND `is_short_term_trade_lc=False` — shipment-secured documentary credits and other self-liquidating transactions, warranties, tender / performance bonds, advance payment and retention guarantees, non-credit-substitute standby LCs (3(a)) | **Art. 166(10)(c)** |
 | OC — issued OBS items | **50%** | `is_obs_commitment=False` AND risk_type=OC — conservative MR-equivalent treatment (no dedicated Annex I bucket) | **Art. 166(10)(b)** (analogue) |
 
 !!! note "Art. 166(10) is self-contained — not a delegation to Art. 111"
@@ -89,13 +102,15 @@ a NIF/RUF can be tagged `is_obs_commitment=True` to opt back into 75%.
 |-----|-------------|-----|-----------|-------------|
 | 1 | Full Risk — issued items (FR) | 100% | 100% | Financial guarantees with character of credit substitutes; credit derivatives; acceptances; endorsements; irrevocable standby LCs serving as financial guarantees; other issued items with credit-substitute character |
 | 2 | Full Risk — commitments (FRC) | 100% | **100%** | Commitments with certain drawdown: factoring facilities, outright forward asset purchases, repos, forward deposits, partly-paid shares/securities |
-| 3 | Other issued OBS items (MR) | 50% | **50%** | Other issued OBS items that do not have the character of credit substitutes |
+| 3 | Other issued OBS items (MR_ISSUED) | 50% | **50%** | Other issued OBS items that do not have the character of credit substitutes |
 | 4 | NIFs/RUFs / UK resi mortgage (MR) | 50% | **50%** | (a) NIFs and RUFs; (b) UK residential mortgage commitments not subject to a CCF of 10% or 100% |
 | 5 | Other Commitments (OC) | 50%/20%* | **40%** | Any other commitment not subject to a CCF of 10%, 50%, or 100% |
-| 6 | Medium/Low Risk — issued items (MLR) | 20% | **20%** | (a) Documentary credits and other self-liquidating transactions; (b) warranties, tender/performance bonds, advance payment/retention guarantees; (c) irrevocable standby LCs (non-credit substitute); (d) shipping guarantees, customs and tax bonds |
+| 6 | Medium/Low Risk — issued items (MLR) | 20%† | **20%** | (a) Documentary credits issued or confirmed and other self-liquidating transactions; (b) warranties, tender/performance bonds, advance payment/retention guarantees; (c) irrevocable standby LCs (non-credit substitute); (d) shipping guarantees, customs and tax bonds |
 | 7 | Unconditionally Cancellable (LR) | 0% | **10%** | Undrawn commitments cancellable unconditionally at any time without notice, or with automatic cancellation due to obligor creditworthiness deterioration |
 
 *\* Under CRR, "other commitments" were split by maturity: 50% for >1 year (MR), 20% for <=1 year (MLR). Basel 3.1 replaces this with a flat 40% regardless of maturity.*
+
+*† Not all of Row 6 was 20% under CRR: Annex I 2(a) and 2(b)(i) put documentary credits that are not secured by the shipment, and shipping guarantees, customs and tax bonds, in MEDIUM risk (50%). Only shipment-secured / self-liquidating credits (3(a)(i)) were 20%. The `obs_product` map is therefore regime-specific (CM-07 / TR-04) — see [Concrete product keys](#concrete-product-keys-obs_product).*
 
 !!! warning "B31 Maturity Distinction Removed"
     CRR distinguished between commitments > 1 year (50% MR) and ≤ 1 year (20% MLR). Basel 3.1 **removes** this maturity-based split entirely. The commitment type alone determines the CCF category, not its maturity. All commitments not classified in another row receive the 40% "Other Commitments" CCF (Row 5).
@@ -107,7 +122,7 @@ a NIF/RUF can be tagged `is_obs_commitment=True` to opt back into 75%.
     Row 3 captures off-balance sheet **items** (not commitments) issued by the firm that do not have the character of credit substitutes (Row 1). Under CRR these were part of the "Medium Risk" category; Basel 3.1 retains the 50% CCF.
 
 !!! note "Row 4 — NIFs/RUFs and UK Residential Mortgage Commitments"
-    Row 4 captures two specific **commitment** types at 50%: (a) note issuance facilities (NIFs) and revolving underwriting facilities (RUFs); (b) UK residential mortgage commitments. Under CRR, NIFs/RUFs were Medium Risk (50%) in Annex I. Residential mortgage commitments had no separate CRR category — they were classified by maturity (>1yr = MR 50%, ≤1yr = MLR 20%). Both sub-categories map to `risk_type = MR` (medium_risk) in the code.
+    Row 4 captures two specific **commitment** types at 50%: (a) note issuance facilities (NIFs) and revolving underwriting facilities (RUFs); (b) UK residential mortgage commitments. Under CRR, NIFs/RUFs were Medium Risk (50%) in Annex I. Residential mortgage commitments had no separate CRR category — they were classified by maturity (>1yr = MR 50%, ≤1yr = MLR 20%). NIFs / RUFs map to `risk_type = MR`; a UK residential mortgage commitment is selected by the `is_uk_residential_mortgage_commitment` flag, which the engine also **derives** when it is not stated (RE-14 — see [UK residential mortgage commitments](#uk-residential-mortgage-commitments-row-4b-derivation)).
 
 !!! warning "PRA Deviation — UK Residential Mortgage Commitments (Row 4(b))"
     Row 4(b) is a **PRA-specific addition** not present in the BCBS framework (CRE20.93–20.98). Under BCBS, residential mortgage commitments would fall into the "any other commitment" bucket at 40% (Row 5). The PRA carved them out at **50%** to maintain a more conservative treatment, consistent with the CRR treatment for commitments >1 year. This prevents the Basel 3.1 maturity-distinction removal from inadvertently reducing capital for irrevocable mortgage offer letters. The Row 4(b) carve-out only applies to commitments that are not unconditionally cancellable (Row 7, 10%) and not certain-drawdown (Row 2, 100%). Because Art. 166C(1) sets the F-IRB and Slotting off-balance sheet exposure value using "the conversion factor that would be applicable to the off-balance sheet item under the Standardised Approach, as set out in ... Article 111", the Row 4(b) 50% factor applies on those approaches too — not only on the SA (P1.251).
@@ -150,7 +165,7 @@ Under Basel 3.1, F-IRB CCFs are aligned to **SA CCFs** (Art. 166C). The separate
 |-----|-------------|-----------|-----------------|-------------|
 | 1 | Full Risk — issued items (FR) | 100% | 100% | Financial guarantees, credit derivatives, acceptances, endorsements |
 | 2 | Full Risk — commitments (FRC) | 100% | **100%** | Commitments with certain drawdown: factoring, repos, forward purchases, partly-paid shares |
-| 3 | Other issued OBS items (MR) | 75% | **50%** | Other issued OBS items not of credit-substitute character |
+| 3 | Other issued OBS items (MR_ISSUED) | 75% | **50%** | Other issued OBS items not of credit-substitute character |
 | 4 | NIFs/RUFs / UK resi mortgage (MR) | 75% | **50%** | (a) NIFs and RUFs; (b) UK residential mortgage commitments not subject to 10% or 100% CCF |
 | 5 | Other Commitments (OC) | 75%* | **40%** | Any other commitment not subject to 10%, 50%, or 100% CCF |
 | 6 | Medium/Low Risk — issued items (MLR) | 75%/20%* | **20%** | Documentary credits, warranties, tender/performance bonds, guarantees (non-credit substitute), shipping guarantees |
@@ -172,10 +187,11 @@ Under Basel 3.1, F-IRB CCFs are aligned to **SA CCFs** (Art. 166C). The separate
 
 ## Basel 3.1 A-IRB Changes (PRA PS1/26 Art. 166D / CRE32.27)
 
-- Own CCF estimates **only permitted for revolving facilities** (Art. 166D(1)(a))
+- Own CCF estimates **only permitted for revolving loan commitments** (Art. 166D(1)(a): "for revolving loan commitments which would not be subject to a 100% conversion factor under ... Article 111: an own estimate of conversion factor")
 - **Exception**: revolving facilities subject to **100% SA CCF** (Table A1 Row 2 — factoring, repos, forward deposits) **cannot** use own-estimate CCFs even though revolving
-- All other off-balance sheet items must use **SA CCFs** (Table A1)
-- The revolving-only restriction is a data classification concern — exposures should carry an `is_revolving` flag; non-revolving AIRB facilities must use SA CCFs regardless of modelled estimates
+- All other off-balance sheet items must use **SA CCFs** (Table A1) — Art. 166D(1)(b) "for all other off-balance sheet items"
+- An **issued** item is never a revolving loan commitment, even when it is booked under a revolving facility and inherits that facility's `is_revolving`: the PS1/26 glossary defines a commitment as an arrangement "which is not itself an issued off-balance sheet item". The engine therefore requires `is_revolving` **and** `is_obs_commitment` (CM-03); a letter of credit or guarantee contingent (`is_obs_commitment=False`) takes its SA factor whatever `ccf_modelled` says. A null `is_obs_commitment` cannot evidence a commitment and takes the SA factor.
+- A revolving purchased-receivables commitment flagged `is_purchased_receivable_commitment` takes the fixed Art. 166A(5) factor, never an own estimate (TR-02 — see [Purchased receivables](#purchased-receivables-art-166a5))
 
 ### A-IRB CCF Floor (CRE32.27)
 
@@ -203,7 +219,9 @@ off-balance sheet components into one figure:
 
 - **Art. 166D(3)** — Partially/fully undrawn revolving facilities: a single EAD
   estimate replaces the separate on-BS item (Art. 166A(2)) and the revolving loan
-  commitment (Art. 166D(1)). Activated by providing a non-null `ead_modelled` value.
+  commitment (Art. 166D(1)). Activated by providing a non-null `ead_modelled` value on a
+  revolving loan commitment (`is_revolving` and `is_obs_commitment`, not a flagged
+  Art. 166A(5) purchased-receivables commitment); ignored on any other row.
 - **Art. 166D(4)** — Fully drawn revolving facilities: the own EAD estimate replaces
   the on-BS accounting value, recognising that a revolving facility's exposure can
   exceed its current drawn balance due to repayment-and-redraw dynamics.
@@ -314,7 +332,7 @@ Art. 166C.
 
 | Concrete product | `risk_type` | CCF | Reference |
 |------------------|-------------|-----|-----------|
-| Other issued OBS items (non-credit-substitute) | MR | 50% | Table A1 Row 3; Annex I para 3 |
+| Other issued OBS items (non-credit-substitute) | MR_ISSUED | 50% | Table A1 Row 3; Annex I para 2 |
 
 ### Table A1 Row 4 — NIFs/RUFs and UK residential mortgage commitments (MR, 50%)
 
@@ -327,7 +345,7 @@ of 10% or 100%."
 |------------------|-------------|-----|-----------|
 | Note Issuance Facility (NIF) | MR | 50% (B31) / 75% (CRR F-IRB) | Table A1 Row 4(a) |
 | Revolving Underwriting Facility (RUF) | MR | 50% (B31) / 75% (CRR F-IRB) | Table A1 Row 4(a) |
-| UK residential mortgage commitment (not UCC, not certain-drawdown) | MR | 50% | Table A1 Row 4(b) — **PRA-specific** |
+| UK residential mortgage commitment (not UCC, not certain-drawdown) | flag (derived when unstated) | 50% | Table A1 Row 4(b) — **PRA-specific** |
 
 ### Table A1 Row 5 — Other commitments (OC, 40%)
 
@@ -338,7 +356,7 @@ to a conversion factor of 10%, 50% or 100%."
 |------------------|-------------|-----|-----------|
 | Committed corporate revolver (not UCC) | OC | 40% (B31) | Table A1 Row 5 |
 | Committed term loan drawdown (not UCC, not NIF) | OC | 40% (B31) | Table A1 Row 5 |
-| Purchased-receivables undrawn purchase commitment (non-UCC revolving) | OC | 40% (B31) | Art. 166E(5) |
+| Purchased-receivables undrawn purchase commitment (non-UCC revolving), SA | OC | 40% (B31) | Table A1 Row 5 (the IRB 40% is Art. 166A(5)) |
 
 Under CRR the same commitment was split by maturity (>1yr → 50% MR; ≤1yr → 20%
 MLR). Basel 3.1 removes the maturity distinction.
@@ -354,13 +372,13 @@ substitutes; (d) shipping guarantees, customs and tax bonds.
 
 | Concrete product | `risk_type` | CCF | Reference |
 |------------------|-------------|-----|-----------|
-| Documentary credit (self-liquidating trade LC) | MLR | 20% | Table A1 Row 6(a) |
+| Documentary credit issued or confirmed (any) | MLR | 20% | Table A1 Row 6(a) — under CRR only a shipment-secured one is 20% (Annex I 3(a)(i)); otherwise 50% (2(a)) |
 | Performance bond / tender bond | MLR | 20% | Table A1 Row 6(b) |
 | Advance payment / retention guarantee | MLR | 20% | Table A1 Row 6(b) |
 | Warranty (non-credit-substitute) | MLR | 20% | Table A1 Row 6(b) |
 | Irrevocable standby LC (non-credit-substitute) | MLR | 20% | Table A1 Row 6(c) |
-| Shipping guarantee | MLR | 20% | Table A1 Row 6(d) |
-| Customs / tax bond | MLR | 20% | Table A1 Row 6(d) |
+| Shipping guarantee | MLR | 20% | Table A1 Row 6(d) — CRR Annex I 2(b)(i): 50% (MR_ISSUED) |
+| Customs / tax bond | MLR | 20% | Table A1 Row 6(d) — CRR Annex I 2(b)(i): 50% (MR_ISSUED) |
 
 ### Table A1 Row 7 — Unconditionally cancellable commitments (LR, 10% B31 / 0% CRR)
 
@@ -376,33 +394,82 @@ legislation."
 |------------------|-------------|-----------|-----------|-----------|
 | Retail revolving credit (UCC) — credit card undrawn headroom | LR | 10% | 0% | Table A1 Row 7; Annex I para 4(a) |
 | Corporate UCC facility | LR | 10% | 0% | Table A1 Row 7 |
-| Purchased-receivables undrawn purchase commitment meeting UCC criteria | LR | 10% | 0% | Art. 166E(5) exception |
+| Purchased-receivables undrawn purchase commitment meeting UCC criteria | LR | 10% | 0% | Table A1 Row 7 (IRB: Art. 166A(5) exception; CRR F-IRB Art. 166(8)(c)) |
 
-### Purchased receivables (Art. 166E)
+### Purchased receivables (Art. 166A(5))
 
-**PDF quote (PS1/26 App 1, p.118):** "An institution shall, for undrawn
-purchase commitments for revolving purchased receivables, calculate the
+**PDF quote (PS1/26 App 1, Art. 166A(5), p.118):** "An institution shall, for
+undrawn purchase commitments for revolving purchased receivables, calculate the
 exposure value using a conversion factor of 40%, except where such commitments
 meet the criteria set out in point 7 of Column A of Table A1 of paragraph 1 of
 Credit Risk Standardised Approach (CRR) Part Article 111, in which case the
 conversion factor shall be 10%."
 
-The default is 40% (Row 5 OC); only where the UCC criteria in Row 7 are met
-does the 10% CCF apply. This is a Basel 3.1 rule — CRR treated all purchased
-receivables commitments without a dedicated CCF.
+The article sits in the **IRB Part** (the Art. 166A-166D exposure-value
+provisions; there is no Art. 166E — the old "166E(5)" citation was wrong). Art.
+166A(1) makes 166A the general provision for every IRB route — F-IRB and slotting
+via 166C, A-IRB via 166D — so on those approaches a row flagged
+`is_purchased_receivable_commitment` (with `is_revolving`) takes exactly 40%, or
+10% when it is a Table A1 point 7 unconditionally cancellable commitment (`LR`).
+"Shall" leaves no own-estimate limb: an A-IRB row takes the 40% / 10% whatever
+`ccf_modelled` says.
 
-!!! warning "Not yet implemented — concrete-product to `risk_type` derivation"
-    Currently the engine requires callers to pre-tag `risk_type` on every
-    off-balance sheet exposure. No derivation from a concrete `product_type`
-    column exists. **IMPLEMENTATION_PLAN.md P2.31** tracks the proposed
-    product-to-risk-type mapping table. The purchased-receivables Art. 166E(5)
-    pathway (40% / 10% split based on UCC status) is also not implemented —
-    see **IMPLEMENTATION_PLAN.md P2.32**. The UK residential mortgage
-    commitment (Row 4(b)) 50% CCF is applied to any residential-flagged commitment
-    whose carrier CCF is neither 10% nor 100%, per Table A1 Row 4(b); automatic
-    derivation from a residential product type is
-    tracked under **IMPLEMENTATION_PLAN.md P2.33**. Row 3 vs Row 4 COREP
-    granularity is also a gap — see **P2.30**.
+The **Standardised Approach has no such rule**: an SA row keeps its Table A1
+bucket — a factoring or invoice discount line "with recourse" is Row 2(a) `FRC`
+100%; an ordinary revolving purchase commitment is Row 5 `OC` 40% (TR-02). The
+flag is a no-op under CRR, where Art. 166(8)(c) gives a cancellable revolving
+purchase commitment 0% through the `LR` bucket. The values are cited pack entries
+(`irb_purchased_receivable_commitment_ccf`,
+`irb_purchased_receivable_commitment_ucc_ccf`), gated by the
+`irb_purchased_receivable_commitment_ccf_applies` Feature.
+
+### UK residential mortgage commitments (Row 4(b) derivation)
+
+Row 4(b) gives 50% to "UK residential mortgage commitments that are not subject
+to a conversion factor of 10% or 100%"; Row 5 gives "any other commitment" 40%.
+`is_uk_residential_mortgage_commitment` is **tri-state** (no schema default):
+
+| Flag | Basel 3.1 treatment |
+|------|---------------------|
+| `True` | Row 4(b) 50% (unless the row's factor is 10% or 100%) |
+| `False` | Never Row 4(b) — the row keeps its bucket |
+| null (not stated) | Derived: Row 4(b) when the row is a commitment (`is_obs_commitment`), classified `retail_mortgage`, secured on residential property (an allocated `residential_collateral_value > 0` or the linked property's `property_type = residential`), to a `GB` obligor in a `GBP` denomination |
+
+Before RE-14 the flag defaulted to `False` and was never derived, so the undrawn
+limb of an ordinary UK mortgage facility took Row 5's 40% (limit 300,000, drawn
+200,000: CCF 40%, EAD 40,000, RWA 8,000 at 20%; Row 4(b) gives 50% / 50,000 /
+10,000). **"UK" is a proxy**: the data model carries no property location
+(IMPLEMENTATION_PLAN P1.337), so a row is derived only when both the obligor
+country and the denomination point to the UK; nothing else moves. Set the flag
+`True` for a UK mortgage to a non-GB obligor, and `False` for a GB obligor's
+mortgage on non-UK property. A contingent is an issued item by default and is
+never derived. The derivation is applied to the SA and IRB carriers alike
+(Art. 166C(1)) and has no effect under CRR.
+
+### Concrete product keys (`obs_product`)
+
+`obs_product` is an optional route to a bucket when `risk_type` is blank; an
+explicit `risk_type` always wins. The map is **regime-specific** — the
+`obs_product_to_risk_type` CategoryMap in `rulebook/packs/crr.py` (CRR Annex I)
+and `rulebook/packs/b31.py` (PS1/26 Table A1); see
+[Regulatory tables](../../data-model/regulatory-tables.md) for the generated
+values.
+
+| `obs_product` | CRR bucket (SA CCF) | Basel 3.1 bucket (SA CCF) |
+|---------------|---------------------|---------------------------|
+| `ACCEPTANCE`, `FINANCIAL_GUARANTEE`, `AVAL`, `ENDORSEMENT`, `STANDBY_LC_CREDIT_SUBSTITUTE` | FR (100%) | FR (100%) |
+| `FACTORING_FACILITY`, `INVOICE_DISCOUNT_FACILITY` | FRC (100%) | FRC (100%) |
+| `DOCUMENTARY_CREDIT` | **MR_ISSUED (50%)** — Annex I 2(a) | MLR (20%) — Row 6(a) |
+| `SHIPPING_GUARANTEE`, `CUSTOMS_BOND`, `TAX_BOND` | **MR_ISSUED (50%)** — Annex I 2(b)(i) | MLR (20%) — Row 6(d) |
+| `DOCUMENTARY_CREDIT_SHIPMENT_SECURED`, `TRADE_LC` | MLR (20%) — Annex I 3(a)(i) | MLR (20%) — Row 6(a) |
+| `PERFORMANCE_BOND`, `WARRANTY`, `TENDER_BOND`, `BID_BOND`, `ADVANCE_PAYMENT_GUARANTEE`, `RETENTION_GUARANTEE`, `STANDBY_LC_NON_CREDIT_SUBSTITUTE` | MLR (20%) — Annex I 3(a)(ii)-(iii) | MLR (20%) — Row 6(b)-(c) |
+
+Lower-case spellings and the documented synonyms in `OBS_PRODUCT_SYNONYMS`
+(e.g. `bankers_acceptance`, `perf_bond`, `doc_credit`, `sblc_financial`,
+`sblc_performance`, `self_liquidating_dc`) are accepted and raise no DQ006
+(CM-12). Under CRR F-IRB a `DOCUMENTARY_CREDIT` flagged
+`is_short_term_trade_lc` keeps the Art. 166(8)(b) 20%; unflagged it is an
+Art. 166(10)(b) 50% item.
 
 ### CRR Scenarios
 
@@ -414,8 +481,8 @@ receivables commitments without a dedicated CCF.
 | CRR-D.CCF4 | Low Risk (LR) — unconditionally cancellable | facility | 0% | 0% | Art. 111, Art. 166(8)(a) / 166(10)(d) |
 | CRR-D.CCF5 | Other Commitments (OC) >1yr | facility (commitment) | 50% | 75% | Art. 111, Art. 166(8)(d); maturity-dependent on SA |
 | CRR-D.CCF6 | Other Commitments (OC) ≤1yr | facility (commitment) | 20% | 75% | Art. 111, Art. 166(8)(d); maturity-dependent on SA |
-| **CRR-D.CCF7** | **MR — issued OBS item (performance bond)** | **contingent (issued)** | **50%** | **50%** | Art. 111, **Art. 166(10)(b)** |
-| **CRR-D.CCF8** | **MLR — issued OBS item (non-trade-LC documentary credit, shipping guarantee)** | **contingent (issued)** | **20%** | **20%** | Art. 111, **Art. 166(10)(c)** |
+| **CRR-D.CCF7** | **MR_ISSUED — issued OBS item (shipping guarantee; documentary credit not shipment-secured)** | **contingent (issued)** | **50%** | **50%** | Art. 111, **Art. 166(10)(b)** |
+| **CRR-D.CCF8** | **MLR — issued OBS item (performance bond, warranty, shipment-secured documentary credit not flagged as a short-term trade LC)** | **contingent (issued)** | **20%** | **20%** | Art. 111, **Art. 166(10)(c)** |
 
 ### Basel 3.1 Scenarios
 
@@ -429,4 +496,4 @@ receivables commitments without a dedicated CCF.
 | B31-D.CCF6 | Row 7 | Unconditionally Cancellable (LR) | 10% | Up from CRR 0% | Art. 111 Table A1 |
 | B31-D.CCF7 | — | F-IRB uses SA CCFs (Art. 166C alignment) | Per SA table | No distinct F-IRB schedule | Art. 166C |
 | B31-D.CCF8 | — | Commitment-to-issue lower-of rule | min(CCF_commitment, CCF_underlying) | New Art. 111(1)(c) | Art. 111(1)(c) |
-| B31-D.CCF9 | Row 4(b) | UK residential mortgage commitment (MR) | 50% | PRA-specific: carved out from 40% OC | Art. 111 Table A1 |
+| B31-D.CCF9 | Row 4(b) | UK residential mortgage commitment (flagged, or derived when unstated) | 50% | PRA-specific: carved out from 40% OC | Art. 111 Table A1 |

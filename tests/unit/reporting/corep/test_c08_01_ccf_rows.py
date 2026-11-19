@@ -19,7 +19,8 @@ The book below has an F-IRB leg in each Table A1 bucket and four A-IRB legs that
 separate the own-estimate row from a value match: a revolving own estimate, one
 FLOORED to 0.20 (half of a 40% item — by value it would land in the 20% row), a
 non-revolving leg that SUPPLIES an own estimate the engine may not apply (Art.
-166D(1)(b): the Table A1 factor), and a directly estimated EAD.
+166D(1)(b): the Table A1 factor), and a directly estimated EAD on a revolving
+facility (Art. 166D(3) reaches revolving loan facilities only).
 
 References:
 - PRA PS1/26 Annex II §3.3.3 rows 0031-0035 and 0001 (p.116)
@@ -71,7 +72,7 @@ LEGS: tuple[_Leg, ...] = (
     ("A_NONREV", _A, "contingent", 2_500.0, 0.5, 0.25, None, False, "CP_F", "0033"),
     ("A_OWN", _A, "facility_undrawn", 2_000.0, 0.3, 0.3, None, True, "CP_G", "0035"),
     ("A_FLOOR", _A, "facility_undrawn", 1_500.0, 0.2, 0.1, None, True, "CP_H", "0035"),
-    ("A_EAD", _A, "facility_undrawn", 1_800.0, 0.4, None, 900.0, False, "CP_J", "0035"),
+    ("A_EAD", _A, "facility_undrawn", 1_800.0, 0.4, None, 900.0, True, "CP_J", "0035"),
 )
 #: One drawn loan per sheet, carrying ccf 1.0, so an on-balance-sheet leg in a
 #: bucket would show as 6,000 / 3,000 too much there.

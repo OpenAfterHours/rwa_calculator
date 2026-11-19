@@ -22,7 +22,7 @@ References:
 - CRR Art. 223(5): FCCM exposure volatility haircut (HE) inputs
 - CRR Art. 159(1)(c)/(d): Pool B inputs (AVAs, other own-funds reductions)
 - CRR Art. 230-231: facility-level collateral cascade (ancestor closure)
-- PRA PS1/26 Art. 111(1) Table A1 Row 4(b) / Art. 166E(5): commitment flags
+- PRA PS1/26 Art. 111(1) Table A1 Row 4(b) / Art. 166A(5): commitment flags
 - PRA PS1/26 Art. 124(3) / Art. 124K: under-construction (ADC) flag
 - PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased receivables F-IRB LGD subtype
 """
@@ -199,7 +199,7 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
         pl.lit(None).cast(pl.Float64).alias("ead_modelled"),  # N/A for drawn loans
         pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
         pl.lit(None).cast(pl.Boolean).alias("is_obs_commitment"),  # N/A for drawn loans
-        # PRA PS1/26 Art. 111(1) Table A1 Row 4(b) and Art. 166E(5): both
+        # PRA PS1/26 Art. 111(1) Table A1 Row 4(b) and Art. 166A(5): both
         # commitment flags are off-balance-sheet only and are not declared
         # on LOAN_SCHEMA — a sealed loans frame never carries them, so emit
         # False purely for schema alignment.
@@ -357,7 +357,7 @@ def _coerce_contingents_to_unified(
             .then(pl.lit(None).cast(pl.Boolean))
             .otherwise(pl.col("is_uk_residential_mortgage_commitment"))
             .alias("is_uk_residential_mortgage_commitment"),
-            # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn
+            # PRA PS1/26 Art. 166A(5): revolving purchased-receivables undrawn
             # purchase commitment flag. Meaningful only for undrawn (OFB)
             # contingents; nullified for drawn (ONB) rows, mirroring
             # is_uk_residential_mortgage_commitment.

@@ -74,6 +74,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     absent_reference_error,
     duplicate_input_key_error,
+    issued_item_on_commitment_risk_type_warning,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
     orphan_reference_error,
@@ -603,6 +604,11 @@ def _table_checks(
     # domain test (P1.267).
     if table_name in {"facilities", "contingents"}:
         checks.append(_validate_unresolved_obs_risk_type(lf, table_name, columns))
+
+    # CRR Art. 166(8)(d) vs 166(10)(b): a contingent on a commitment bucket that
+    # is still marked as an issued item (the contingent default) — CM-09.
+    if table_name == "contingents":
+        checks.append(_validate_issued_item_on_commitment_risk_type(lf, table_name, columns))
 
     # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
     # carry a scope (which exposure they attach to). Flag rows that violate
@@ -1382,12 +1388,13 @@ def _validate_unresolved_obs_risk_type(
     ``obs_product`` is the second route to a category
     (``engine/ccf.py::build_product_to_risk_type_expr``), so a row is only
     unresolved when BOTH are absent. The test is *absence*, not
-    unmappability: every member of ``VALID_OBS_PRODUCTS`` maps to a bucket in
-    the ``obs_product_to_risk_type`` pack CategoryMap, so a NON-null
-    ``obs_product`` either resolves or already draws a DQ006 for failing its
-    declared domain. Reading the CategoryMap here would need
-    ``contracts/`` -> ``rwa_calc.rulebook``, which check 12 forbids; the
-    equivalence is pinned instead by
+    unmappability: every accepted ``obs_product`` spelling maps to a bucket in
+    BOTH regime packs' ``obs_product_to_risk_type`` CategoryMap (the maps are
+    regime-specific — CM-07), so a NON-null ``obs_product`` either resolves or
+    already draws a DQ006 for failing its declared domain. Reading the
+    CategoryMap here would need ``contracts/`` -> ``rwa_calc.rulebook``, which
+    check 12 forbids; the equivalence is pinned instead by
+    ``tests/unit/test_ccf_obs_product_regime_map.py`` (both regimes) and
     ``tests/unit/test_p1_267_sa_ccf_residual.py``.
 
     The check is confined to rows with a non-zero off-balance amount: at zero
@@ -1437,6 +1444,59 @@ def _validate_unresolved_obs_risk_type(
         return [unresolved_obs_risk_type_warning(context=context, amount_column=amount_column, n=n)]
 
     return _TableCheck(plan=lf.select((unresolved & has_amount).sum().alias("n")), decode=decode)
+
+
+def _validate_issued_item_on_commitment_risk_type(
+    lf: pl.LazyFrame,
+    context: str,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
+    """Flag contingents booked on a COMMITMENT bucket while marked as issued items.
+
+    ``MR`` is the NIF / RUF commitment bucket and ``OC`` "other commitments", but
+    a contingent defaults to ``is_obs_commitment = False`` (an issued item), so a
+    NIF booked as a contingent without the flag takes the CRR Art. 166(10)(b) 50%
+    under F-IRB instead of the Art. 166(8)(d) 75% — with no signal. Every
+    spelling ``RISK_TYPE_SYNONYMS`` resolves to MR or OC is matched; an absent
+    ``is_obs_commitment`` column is the loader default False. Confined to rows
+    with a non-zero ``nominal_amount``, like DQ016, because at zero the CCF
+    cannot affect capital (CM-09).
+
+    References:
+    - CRR Art. 166(8)(d), Art. 166(10)(b)
+    """
+    if "risk_type" not in schema_names or "nominal_amount" not in schema_names:
+        return None
+
+    from rwa_calc.data.schemas import RISK_TYPE_SYNONYMS
+
+    commitment_spellings = sorted(
+        spelling for spelling, code in RISK_TYPE_SYNONYMS.items() if code in {"MR", "OC"}
+    )
+    on_commitment_bucket = (
+        pl.col("risk_type")
+        .cast(pl.Utf8, strict=False)
+        .str.to_lowercase()
+        .is_in(commitment_spellings)
+    )
+    marked_issued = (
+        ~pl.col("is_obs_commitment").fill_null(value=False)
+        if "is_obs_commitment" in schema_names
+        else pl.lit(value=True)
+    )
+    has_amount = (
+        pl.col("nominal_amount").cast(pl.Float64, strict=False).fill_null(0.0).abs()
+        >= _ZERO_AMOUNT_TOLERANCE
+    )
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        n = frame.item()
+        if not n:
+            return []
+        return [issued_item_on_commitment_risk_type_warning(context=context, n=n)]
+
+    flagged = (on_commitment_bucket & marked_issued & has_amount).fill_null(value=False)
+    return _TableCheck(plan=lf.select(flagged.sum().alias("n")), decode=decode)
 
 
 def _validate_table_columns_batched(

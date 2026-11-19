@@ -123,9 +123,10 @@ for details.
         no effect under Basel 3.1.
 
 A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to Basel 3.1
-restrictions: own-estimate CCFs are limited to **revolving facilities only**
-(Art. 166D(1)(a)), with a floor of 50% of the SA CCF (CRE32.27). Non-revolving
-A-IRB exposures use SA CCFs. See [A-IRB CCF Restrictions](../../specifications/basel31/airb-calculation.md#a-irb-ccf-restrictions-art-166d)
+restrictions: own-estimate CCFs are limited to **revolving loan commitments**
+(Art. 166D(1)(a) — `is_revolving` and `is_obs_commitment`), with a floor of 50% of
+the SA CCF (CRE32.27). Non-revolving A-IRB exposures, and issued items (letters of
+credit, guarantees) even under a revolving facility, use SA CCFs (Art. 166D(1)(b)). See [A-IRB CCF Restrictions](../../specifications/basel31/airb-calculation.md#a-irb-ccf-restrictions-art-166d)
 for full details.
 
 > **Details:** See [Key Differences](../../framework-comparison/key-differences.md#credit-conversion-factors) for the complete CCF comparison table across CRR and Basel 3.1, and [CCF Specification](../../specifications/crr/credit-conversion-factors.md) for the full regulatory treatment.

@@ -26,7 +26,7 @@ so the same row can and does move column between the two.
     CT_GUARANTEE       | para 1(a) / Row 1 direct credit sub.     | 100%   | 100%
     CT_FRC_FWD         | para 2 FRC / Row 2 certain drawdown      | 100%   | 100%
     CT_STANDBY_MR      | para 2 issued / Row 3 non-substitute     |  50%   |  50%
-    CT_DOC_CREDIT      | para 3(a) / Row 6(a) self-liquidating LC |  20%   |  20%
+    CT_DOC_CREDIT      | 3(a)(i) / Row 6(a) shipment-secured LC   |  20%   |  20%
     FAC_NIF            | para 2 / Row 4(a) NIF                    |  50%   |  50%
     FAC_OC             | item 2(b) / Row 5 "other commitments"    |  50%   |  40%
     FAC_UCC            | para 4(a) / Row 7 uncond. cancellable    |   0%   |  10%
@@ -409,18 +409,26 @@ def _contingents() -> pl.DataFrame:
             "maturity_date": _MATURITY,
             "bs_type": "OFB",
         },
-        # CRR Annex I para 3(a) / Table A1 Row 6(a) — a self-liquidating
-        # documentary credit arising from the movement of goods. 20% in both
-        # regimes. ``risk_type`` is deliberately LEFT NULL: this row is the
-        # end-to-end proof of the Art. 111(1) obs_product -> risk_type fill
-        # (DOCUMENTARY_CREDIT -> MLR). If the ``obs_product`` projection through
-        # the hierarchy stage ever regresses, this row silently falls to the
-        # conservative 50% MR default and lands in the wrong CCF bucket.
+        # CRR Annex I 3(a)(i) / Table A1 Row 6(a) — a self-liquidating
+        # documentary credit "in which underlying shipment acts as collateral",
+        # arising from the movement of goods. 20% in both regimes. ``risk_type``
+        # is deliberately LEFT NULL: this row is the end-to-end proof of the
+        # Art. 111(1) obs_product -> risk_type fill (-> MLR). If the
+        # ``obs_product`` projection through the hierarchy stage ever regresses,
+        # this row silently falls to the residual (CRR 1(k) 100%, B31 Row 3 50%)
+        # and lands in the wrong CCF bucket.
+        #
+        # Keyed DOCUMENTARY_CREDIT_SHIPMENT_SECURED, not DOCUMENTARY_CREDIT, since
+        # the CM-07 / TR-04 fix (2026-11 review): CRR Annex I 2(a) puts a plain
+        # "documentary credit issued or confirmed" in MEDIUM risk (50%), so the
+        # plain key would move this row to CRR col 0180 and leave col 0170 — the
+        # only CRR 20% bucket in the estate — dead. The regime-divergent plain key
+        # is pinned end-to-end by tests/integration/test_ccf_regime_scope_pipeline.py.
         {
             "contingent_reference": CT_DOC_CREDIT,
             "counterparty_reference": CP_CORP,
             "product_type": "documentary_credit",
-            "obs_product": "DOCUMENTARY_CREDIT",
+            "obs_product": "DOCUMENTARY_CREDIT_SHIPMENT_SECURED",
             "nominal_amount": NOMINAL_DOC_CREDIT,
             "is_short_term_trade_lc": True,
             "currency": "GBP",
@@ -428,10 +436,14 @@ def _contingents() -> pl.DataFrame:
             "maturity_date": _MATURITY,
             "bs_type": "OFB",
         },
-        # CRR Annex I para 2 (issued items) / Table A1 Row 3 — an irrevocable
-        # standby letter of credit that does NOT have the character of a credit
-        # substitute. 50% in both regimes. MR_ISSUED (not MR) so the Row 3 vs
-        # Row 4 issued-item / commitment discriminator is the one under test.
+        # An issued medium-risk item booked MR_ISSUED: CRR Annex I para 2 /
+        # Table A1 Row 3 "other issued off-balance sheet items that do not have
+        # the character of credit substitutes". 50% in both regimes. MR_ISSUED
+        # (not MR) so the Row 3 vs Row 4 issued-item / commitment discriminator
+        # is the one under test. (The reference name is historical: an
+        # irrevocable standby LC that is NOT a credit substitute is 20% — CRR
+        # Annex I 3(a)(iii) / Table A1 Row 6(c) — so this row stands for a
+        # Row 3 item, not for a non-substitute SBLC; CM-08.)
         {
             "contingent_reference": CT_STANDBY_MR,
             "counterparty_reference": CP_CORP,

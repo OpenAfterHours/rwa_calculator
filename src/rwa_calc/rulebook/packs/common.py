@@ -76,17 +76,14 @@ ENTRIES: dict[str, RuleEntry] = {
         input="insurer_risk_weight",
         citation=Citation("CRR", "232", "(3) life-insurance secured-portion RW map"),
     ),
+    # The α = 1.4 default is regime-invariant. The α = 1 carve-out for
+    # non-financial / pension-scheme counterparties is NOT: it is new PS1/26 text
+    # (Annex R Art. 274(2)), so ``sa_ccr_alpha_carve_out`` lives in the b31 pack
+    # and is gated by the ``sa_ccr_alpha_nfc_carve_out_applicable`` Feature.
     "sa_ccr_alpha": ScalarParam(
         name="sa_ccr_alpha",
         value=Decimal("1.4"),
         citation=Citation("CRR", "274(2)"),
-    ),
-    # CRR Art. 274(2) second sub-paragraph — alpha=1.0 carve-out for non-financial
-    # / pension-scheme counterparties (EMIR Art. 2(9)/2(10)). Regime-invariant.
-    "sa_ccr_alpha_carve_out": ScalarParam(
-        name="sa_ccr_alpha_carve_out",
-        value=Decimal("1.0"),
-        citation=Citation("CRR", "274(2)", "alpha=1.0 carve-out for NFC / pension-scheme"),
     ),
     # Financial Collateral Simple Method (CRR Art. 222 / PRA PS1/26 Art. 222).
     # Single-regime: PS1/26 retains Art. 222 unchanged for SA exposures.
@@ -251,6 +248,16 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.70"),
         citation=Citation("CRR", "279a", "(2) Table 3 other commodity option volatility"),
     ),
+    # CCR (CRR) Part Art. 279a(1)(a) Table 1 (unchanged by PS1/26): "Others | All |
+    # 150%" — the supervisory volatility of an option mapped to the Art. 277(1)(f)
+    # other-risks category, including a trade whose asset_class is missing or
+    # unrecognised (CCR021). Without it such an option had a null delta and a
+    # zero add-on.
+    "sa_ccr_option_volatility_other": ScalarParam(
+        name="sa_ccr_option_volatility_other",
+        value=Decimal("1.50"),
+        citation=Citation("CRR", "279a", "(1)(a) Table 1 other-risks option volatility"),
+    ),
     # CDO tranche supervisory-delta closed-form coefficients (CRR Art. 279a(3) /
     # BCBS CRE52.43): |delta| = 15 / ((1 + 14*A) * (1 + 14*D)).
     "sa_ccr_cdo_tranche_numerator": ScalarParam(
@@ -405,7 +412,21 @@ ENTRIES: dict[str, RuleEntry] = {
         },
         key="commodity_type",
         citation=Citation("CRR", "280", "Table 1 commodity SF by bucket"),
-        default=Decimal("0.18"),
+        # A commodity trade with a missing / unrecognised commodity_type is
+        # assigned to the highest-factor hedging set (ELECTRICITY) by
+        # engine/ccr/risk_categories.py — the conservative fallback reported as
+        # CCR022 (review CC-06). The default states that applied factor; it was
+        # 0.18 (OTHER), which no code path read.
+        default=Decimal("0.40"),
+    ),
+    # CRR Art. 280f(2) (unchanged by PS1/26): "SF Other = the supervisory factor
+    # for the other risk category with a value equal to 8%". Applied to trades
+    # mapped to the Art. 277(1)(f) other-risks category, including a trade whose
+    # asset_class is missing or unrecognised (CCR021).
+    "sa_ccr_supervisory_factor_other": ScalarParam(
+        name="sa_ccr_supervisory_factor_other",
+        value=Decimal("0.08"),
+        citation=Citation("CRR", "280", "280f(2) other-risks supervisory factor"),
     ),
     # SA-CCR specific wrong-way-risk LGD override (CRR Art. 291(5)(c)): 100%.
     "ccr_wwr_specific_lgd_override": ScalarParam(

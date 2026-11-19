@@ -67,6 +67,7 @@ def run(
     from rwa_calc.engine.ccr import (
         apply_legal_enforceability_gate,
         apply_wwr_gate,
+        attach_orphan_trade_netting_sets,
         ccr_rows_to_exposures,
         partition_out_sft_rows,
     )
@@ -89,8 +90,12 @@ def run(
     # non-enforceable netting sets are split into single-trade synthetic
     # NSes before the EAD chain runs, then the Art. 291(4)-(5) WWR gate so
     # specific-WWR trades break out into their own synthetic netting sets
-    # (LGD = 100%).
-    raw_ccr_gated = apply_wwr_gate(apply_legal_enforceability_gate(derivatives_only))
+    # (LGD = 100%). A trade whose netting set is missing from the input gets a
+    # non-enforceable stand-in first, so it is priced alone rather than dropped
+    # (review CC-06; reported as CCR023 by the input gate).
+    raw_ccr_gated = apply_wwr_gate(
+        apply_legal_enforceability_gate(attach_orphan_trade_netting_sets(derivatives_only))
+    )
     # Unified error channel: the gates' CCR001/CCR010/CCR011 diagnostics
     # reach the result verbatim — original code/severity/category preserved.
     ctx = append_stage_errors(ctx, *raw_ccr_gated.errors)
@@ -100,10 +105,14 @@ def run(
         run_config.reporting_date,
         base_currency=run_config.base_currency,
         fx_rates=data.fx_rates,
-        # CRR Art. 274(2): the counterparty frame carries the
-        # ``counterparty_type`` discriminator that selects the per-NS
-        # supervisory alpha (1.0 carve-out vs 1.4 default).
+        # Art. 274(2): the counterparty frame carries the ``counterparty_type``
+        # discriminator that selects the per-NS supervisory alpha — the α = 1
+        # NFC / pension carve-out is PS1/26 text, so it is gated on the cited
+        # pack Feature (off under CRR, where α = 1.4 for every netting set).
         counterparties=data.counterparties,
+        alpha_nfc_carve_out_applicable=rulepack.pack.feature(
+            "sa_ccr_alpha_nfc_carve_out_applicable"
+        ),
         # PRA PS1/26 Art. 274(2A): the transitional alpha add-on is
         # Basel 3.1 only — gate it on the cited pack Feature so it never
         # fires under CRR. The add-on branch keeps its ``is_basel_3_1`` bool

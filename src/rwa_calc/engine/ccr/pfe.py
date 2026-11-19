@@ -9,14 +9,18 @@ Key responsibilities:
   supervisory-factor terms into per-netting-set add-ons and apply the
   PFE multiplier per CRR Art. 278.
 - Per CRR Art. 277a(1)(a), aggregate per-bucket effective notionals
-  D_b into per-asset-class add-ons using the supervisory cross-bucket
-  correlation matrix.
+  D_b into one add-on per interest-rate hedging set (one per currency, with
+  inflation-driven trades in separate hedging sets) using the supervisory
+  cross-bucket correlation matrix, and sum the hedging-set add-ons
+  (Art. 280a(1)).
 
 This batch (P8.4) ships the stub signature only; the body lands across
 P8.10 (sub-piece aggregation) and P8.16 (full PFE with multiplier).
 
 References:
-- CRR Art. 277a(1)(a): asset-class add-on cross-bucket aggregation.
+- CRR Art. 277a(1)(a): IR hedging set per currency (inflation separately);
+  cross-bucket aggregation within the hedging set.
+- CRR Art. 280a(1): AddOn_IR = sum over IR hedging sets.
 - CRR Art. 278: Potential future exposure (multiplier + add-on)
 - CRR Art. 280-280f: Asset-class add-ons (IR singleton path scoped here)
 """
@@ -30,9 +34,10 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.config import CCRConfig
-from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import TRADE_SCHEMA
 from rwa_calc.engine.ccr.rc import compute_rc_unmargined
+from rwa_calc.engine.ccr.risk_categories import compute_addon_other
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
@@ -58,6 +63,13 @@ _RHO_IR_BUCKET_13 = scalar_value(_PACK.scalar_param("sa_ccr_ir_bucket_correlatio
 _SF_CREDIT_SN_MAP = lookup_float_map(_PACK.lookup("sa_ccr_supervisory_factors_credit_sn"))
 _SF_CREDIT_IDX_MAP = lookup_float_map(_PACK.lookup("sa_ccr_supervisory_factors_credit_idx"))
 _SF_COMMODITY_MAP = lookup_float_map(_PACK.lookup("sa_ccr_supervisory_factors_commodity"))
+
+# The IR hedging-set key columns (Art. 277a(1)(a)). ``currency`` is required on
+# every loaded trade frame; the injection only serves minimal unit-test frames.
+_IR_HEDGING_SET_COLUMNS = {
+    "currency": ColumnSpec(pl.String, required=False),
+    "is_inflation": TRADE_SCHEMA["is_inflation"],
+}
 
 
 @cites("CRR Art. 278")
@@ -93,9 +105,10 @@ def compute_pfe(
         - ``rc_unmargined: Float64``  — Art. 275(1) replacement cost.
         - ``ead_ccr: Float64``        — Art. 274(2) EAD at α = 1.4.
 
-    Per-row α (CRR Art. 274(2) second sub-paragraph): when the caller supplies
-    a per-netting-set ``alpha_applied`` column (the SA-CCR adapter sets it to
-    1.0 for non-financial / pension-scheme counterparties and 1.4 otherwise),
+    Per-row α (Art. 274(2)): when the caller supplies a per-netting-set
+    ``alpha_applied`` column (the SA-CCR adapter sets it to 1.4 under CRR and,
+    under Basel 3.1 per PS1/26 Art. 274(2), to 1.0 for non-financial /
+    pension-scheme counterparties and 1.4 otherwise),
     the EAD step honours it per row. When the column is absent the scalar
     ``config.alpha`` / 1.4 is used for every row — this keeps the default path
     backward-compatible with callers that do not supply ``alpha_applied``.
@@ -105,7 +118,7 @@ def compute_pfe(
         BCBS CRE52.20-23.
     """
     alpha_value = float(config.alpha) if config is not None else 1.4
-    # CRR Art. 274(2) second sub-paragraph: prefer the per-row carve-out scalar
+    # Art. 274(2): prefer the per-row alpha scalar
     # (``alpha_applied``) when the caller has joined it onto the frame; fall back
     # to the scalar α for backward compatibility.
     has_alpha_col = "alpha_applied" in netting_sets.collect_schema().names()
@@ -169,6 +182,9 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
       AGRICULTURAL / OTHER) with within-bucket correlation ρ=0.40
       (Art. 280c) and no cross-bucket correlation (CRE52.69) via
       :func:`_compute_addon_commodity`.
+    - ``other``: Art. 280f other-risks category (SF 8%, one hedging set per
+      identical primary risk driver) via
+      :func:`~rwa_calc.engine.ccr.risk_categories.compute_addon_other`.
 
     Args:
         trades: LazyFrame at trade grain with at minimum ``netting_set_id``,
@@ -196,6 +212,7 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
     credit_addon = _compute_addon_credit(trades).rename({"asset_class_addon": "_credit_addon"})
     eq_addon = _compute_addon_equity(trades).rename({"asset_class_addon": "_eq_addon"})
     co_addon = _compute_addon_commodity(trades).rename({"asset_class_addon": "_co_addon"})
+    other_addon = compute_addon_other(trades).rename({"asset_class_addon": "_other_addon"})
 
     return (
         keys.join(ir_addon, on=["netting_set_id", "asset_class"], how="left")
@@ -203,6 +220,7 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
         .join(credit_addon, on=["netting_set_id", "asset_class"], how="left")
         .join(eq_addon, on=["netting_set_id", "asset_class"], how="left")
         .join(co_addon, on=["netting_set_id", "asset_class"], how="left")
+        .join(other_addon, on=["netting_set_id", "asset_class"], how="left")
         .with_columns(
             pl.coalesce(
                 pl.col("_ir_addon"),
@@ -210,6 +228,7 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
                 pl.col("_credit_addon"),
                 pl.col("_eq_addon"),
                 pl.col("_co_addon"),
+                pl.col("_other_addon"),
             ).alias("asset_class_addon")
         )
         .select(["netting_set_id", "asset_class", "asset_class_addon"])
@@ -217,18 +236,32 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def _compute_addon_ir(trades: pl.LazyFrame) -> pl.LazyFrame:
-    """IR asset-class add-on per CRR Art. 277a(1)(a).
+    """IR asset-class add-on per CRR Art. 277a(1)(a) and Art. 280a.
 
-    Aggregates per-trade effective notionals ``delta * d * MF`` into per-bucket
-    sums ``D_b``, then composes the asset-class add-on via the three-bucket
-    correlation matrix:
+    Hedging sets (Art. 277a(1)(a), unchanged by PS1/26): IR trades "shall be
+    assigned to the same hedging set only where their primary risk driver ... is
+    denominated in the same currency"; trades whose primary risk driver is an
+    inflation variable "shall be assigned to separate hedging sets" (also one per
+    currency). The hedging-set key is therefore (``currency``, ``is_inflation``),
+    with a null ``is_inflation`` read as a nominal-rate trade.
 
-        AddOn_IR = SF_IR * sqrt(
+    Within each hedging set j, per-trade effective notionals ``delta * d * MF``
+    are summed into the three maturity buckets and composed with the
+    cross-bucket correlations (Art. 280a(3)):
+
+        EffNot_j = sqrt(
             D_B1^2 + D_B2^2 + D_B3^2
             + 2 * rho_12 * D_B1 * D_B2
             + 2 * rho_23 * D_B2 * D_B3
             + 2 * rho_13 * D_B1 * D_B3
         )
+        AddOn_j  = SF_IR * EffNot_j                 (epsilon_j = 1, Art. 280)
+        AddOn_IR = sum_j AddOn_j                    (Art. 280a(1))
+
+    Before review CC-04 every currency of a netting set was pooled into ONE
+    hedging set, so a GBP payer offset a USD receiver of the same size to a zero
+    add-on. Pooling can only understate or tie (a norm of a sum is at most the
+    sum of the norms).
 
     Returns:
         LazyFrame keyed on (``netting_set_id``, ``asset_class="interest_rate"``)
@@ -239,44 +272,37 @@ def _compute_addon_ir(trades: pl.LazyFrame) -> pl.LazyFrame:
     rho_13 = _RHO_IR_BUCKET_13
     sf_ir = _SF_IR
 
+    trades = ensure_columns(trades, _IR_HEDGING_SET_COLUMNS)
     ir_trades = trades.filter(pl.col("asset_class") == "interest_rate")
 
-    # Per-trade effective notional = delta * d * MF (Art. 277a(1)(a)).
+    # Per-trade effective notional = delta * d * MF (Art. 280a(3)), and the
+    # inflation discriminator of the hedging-set key (null = nominal).
     trade_terms = ir_trades.with_columns(
         (
             pl.col("supervisory_delta") * pl.col("adjusted_notional") * pl.col("maturity_factor")
-        ).alias("effective_notional_trade")
+        ).alias("effective_notional_trade"),
+        pl.coalesce(pl.col("is_inflation"), pl.lit(False)).alias("_is_inflation"),
     )
 
-    # D_b per (netting_set_id, asset_class, maturity_bucket).
-    d_b = trade_terms.group_by(["netting_set_id", "asset_class", "maturity_bucket"]).agg(
-        pl.col("effective_notional_trade").sum().alias("d_bucket")
-    )
-
-    # Pivot the three IR buckets into wide columns per (netting_set_id, asset_class).
-    d_lt_1y = d_b.filter(pl.col("maturity_bucket") == "LT_1Y").select(
-        ["netting_set_id", "asset_class", pl.col("d_bucket").alias("d_b1")]
-    )
-    d_1y_5y = d_b.filter(pl.col("maturity_bucket") == "1Y_5Y").select(
-        ["netting_set_id", "asset_class", pl.col("d_bucket").alias("d_b2")]
-    )
-    d_gt_5y = d_b.filter(pl.col("maturity_bucket") == "GT_5Y").select(
-        ["netting_set_id", "asset_class", pl.col("d_bucket").alias("d_b3")]
-    )
-
-    keys = ir_trades.select(["netting_set_id", "asset_class"]).unique()
-
-    joined = (
-        keys.join(d_lt_1y, on=["netting_set_id", "asset_class"], how="left")
-        .join(d_1y_5y, on=["netting_set_id", "asset_class"], how="left")
-        .join(d_gt_5y, on=["netting_set_id", "asset_class"], how="left")
-        .with_columns(
-            [
-                pl.col("d_b1").fill_null(0.0),
-                pl.col("d_b2").fill_null(0.0),
-                pl.col("d_b3").fill_null(0.0),
-            ]
+    # D_b per hedging set: one conditional sum per maturity bucket. A bucket the
+    # hedging set has no trade in sums to 0.0 (no join, so a null currency still
+    # forms its own hedging set rather than dropping out of a keyed join).
+    def bucket_sum(bucket: str, alias: str) -> pl.Expr:
+        in_bucket = pl.col("maturity_bucket") == bucket
+        return (
+            pl.when(in_bucket)
+            .then(pl.col("effective_notional_trade"))
+            .otherwise(0.0)
+            .sum()
+            .alias(alias)
         )
+
+    per_hedging_set = trade_terms.group_by(
+        ["netting_set_id", "asset_class", "currency", "_is_inflation"]
+    ).agg(
+        bucket_sum("LT_1Y", "d_b1"),
+        bucket_sum("1Y_5Y", "d_b2"),
+        bucket_sum("GT_5Y", "d_b3"),
     )
 
     inner = (
@@ -288,8 +314,11 @@ def _compute_addon_ir(trades: pl.LazyFrame) -> pl.LazyFrame:
         + 2.0 * rho_13 * pl.col("d_b1") * pl.col("d_b3")
     )
 
-    return joined.with_columns((sf_ir * inner.sqrt()).alias("asset_class_addon")).select(
-        ["netting_set_id", "asset_class", "asset_class_addon"]
+    return (
+        per_hedging_set.with_columns((sf_ir * inner.sqrt()).alias("_addon_hs"))
+        .group_by(["netting_set_id", "asset_class"])
+        .agg(pl.col("_addon_hs").sum().alias("asset_class_addon"))
+        .select(["netting_set_id", "asset_class", "asset_class_addon"])
     )
 
 

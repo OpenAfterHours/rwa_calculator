@@ -992,6 +992,16 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "274", "no SA-CCR transitional alpha add-on under CRR"),
     ),
+    # SA-CCR alpha (CCR (CRR) Part Art. 274(2), version in force to 31 Dec 2026):
+    # "Exposure value = α · (RC + PFE) ... α = 1.4." — one alpha for every netting
+    # set. The α = 1 non-financial / pension-scheme carve-out is new PS1/26 text
+    # (Annex R Art. 274(2)), so it is off under CRR: alpha_applied is 1.4 whatever
+    # the counterparty_type. Gates engine/ccr/pipeline_adapter.py::_attach_alpha_applied.
+    "sa_ccr_alpha_nfc_carve_out_applicable": Feature(
+        name="sa_ccr_alpha_nfc_carve_out_applicable",
+        enabled=False,
+        citation=Citation("CRR", "274(2)", "α = 1.4 for every counterparty; no NFC carve-out"),
+    ),
     # FCSM equity collateral (Art. 222(3)). The collateralised portion takes "the
     # risk weight that they would assign under Chapter 2 ... where the lending
     # institution had a direct exposure to the collateral instrument" — a DERIVED

@@ -61,6 +61,10 @@ from rwa_calc.engine.ccr.maturity_factor import (
 )
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined
+from rwa_calc.engine.ccr.risk_categories import (
+    compute_adjusted_notional_other,
+    map_trade_risk_categories,
+)
 from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
@@ -68,15 +72,18 @@ from rwa_calc.rulebook.resolve import resolve
 logger = logging.getLogger(__name__)
 
 # SA-CCR supervisory alpha resolved from the rulepack once at module load (CRR
-# Art. 274(2); regime-invariant, resolved against "crr"). Closes the prior
+# Art. 274(2) α = 1.4; regime-invariant, resolved against "crr"). Closes the prior
 # dual-maintenance with data/tables/sa_ccr_factors.py.
 _PACK = resolve("crr", date(2026, 1, 1))
 _SA_CCR_ALPHA = scalar_value(_PACK.scalar_param("sa_ccr_alpha"))
-_SA_CCR_ALPHA_CARVE_OUT = scalar_value(_PACK.scalar_param("sa_ccr_alpha_carve_out"))
 
-# PRA PS1/26 Art. 274(2A) transitional alpha add-on phase fractions by reporting
-# year (Basel 3.1 only → resolved from the b31 pack). Years absent resolve to 0.
+# Basel-3.1-only alpha values (resolved from the b31 pack): the PS1/26
+# Art. 274(2) α = 1 carve-out for non-financial / pension-scheme counterparties
+# (applied only where the run's ``sa_ccr_alpha_nfc_carve_out_applicable`` Feature
+# is on — never under CRR) and the Art. 274(2A) transitional add-on phase
+# fractions by reporting year (years absent resolve to 0).
 _B31_PACK = resolve("b31", date(2027, 1, 1))
+_SA_CCR_ALPHA_CARVE_OUT = scalar_value(_B31_PACK.scalar_param("sa_ccr_alpha_carve_out"))
 _TRANSITIONAL_ADDON_PHASE = lookup_float_map(_B31_PACK.lookup("sa_ccr_transitional_addon_phase"))
 
 # ``"sft"`` is the TRADE_SCHEMA.transaction_type token for securities-financing
@@ -113,6 +120,7 @@ def ccr_rows_to_exposures(
     fx_rates: pl.LazyFrame | None = None,
     counterparties: pl.LazyFrame | None = None,
     is_basel_3_1: bool = False,
+    alpha_nfc_carve_out_applicable: bool = False,
 ) -> pl.LazyFrame:
     """Shape SA-CCR netting-set EADs into synthetic exposure rows.
 
@@ -145,7 +153,7 @@ def ccr_rows_to_exposures(
         ccr_method            = "sa_ccr"
         addon_aggregate       = per-NS asset-class add-on aggregate
         addon_by_asset_class  = Struct{interest_rate, fx, credit, equity,
-                                       commodity} per-class add-on breakdown
+                                       commodity, other} per-class add-on breakdown
         pfe_multiplier        = Art. 278(3) multiplier
         pfe_addon             = Art. 278(1) PFE
         rc_unmargined         = Art. 275(1) replacement cost
@@ -179,14 +187,19 @@ def ccr_rows_to_exposures(
         counterparties: Optional counterparty LazyFrame carrying
             ``counterparty_reference`` and ``counterparty_type`` (COUNTERPARTY_SCHEMA).
             Joined onto the netting-set frame to select the per-row supervisory
-            alpha (CRR Art. 274(2) second sub-paragraph): 1.0 for non-financial /
-            pension-scheme counterparties, 1.4 otherwise. When None — or when the
-            ``counterparty_type`` column is absent — every netting set keeps the
-            default alpha = 1.4, preserving pre-P8.28 behaviour.
+            alpha when ``alpha_nfc_carve_out_applicable`` is True (PS1/26
+            Art. 274(2)): 1.0 for non-financial / pension-scheme counterparties,
+            1.4 otherwise. When None — or when the ``counterparty_type`` column is
+            absent — every netting set keeps the default alpha = 1.4.
         is_basel_3_1: Framework flag gating the PRA PS1/26 Art. 274(2A)
             transitional alpha add-on. The add-on is Basel 3.1 only — under CRR
             (the default ``False``) it never fires regardless of the reporting
             date or the ``is_legacy_cva_exempt`` trade flag.
+        alpha_nfc_carve_out_applicable: The run's
+            ``sa_ccr_alpha_nfc_carve_out_applicable`` pack Feature. True under
+            Basel 3.1 (PS1/26 Art. 274(2) α = 1 carve-out); False under CRR, whose
+            CCR (CRR) Part Art. 274(2) sets α = 1.4 for every netting set. The
+            default ``False`` is the CRR rule and never lowers alpha.
 
     Returns:
         LazyFrame at netting-set grain with one synthetic exposure row per
@@ -198,11 +211,12 @@ def ccr_rows_to_exposures(
         PRA PS1/26 Art. 274(2A).
 
     The optional ``counterparties`` frame supplies the per-netting-set
-    supervisory-alpha discriminator: its ``counterparty_type`` column is joined
-    onto the netting-set frame (keyed on ``counterparty_reference``) and reduced
-    to an ``alpha_applied`` scalar per CRR Art. 274(2) second sub-paragraph
-    before :func:`compute_pfe` consumes it. Absent / null ``counterparty_type``
-    defaults to alpha = 1.4 (financial).
+    supervisory-alpha discriminator: under Basel 3.1 its ``counterparty_type``
+    column is joined onto the netting-set frame (keyed on
+    ``counterparty_reference``) and reduced to an ``alpha_applied`` scalar per
+    PS1/26 Art. 274(2) before :func:`compute_pfe` consumes it. Absent / null
+    ``counterparty_type`` defaults to alpha = 1.4 (financial). Under CRR every
+    netting set takes alpha = 1.4.
 
     When ``is_basel_3_1`` is True the trade-level ``is_legacy_cva_exempt`` flag
     (TRADE_SCHEMA) is collapsed to netting-set grain via ``any()`` and — for
@@ -210,7 +224,12 @@ def ccr_rows_to_exposures(
     fraction for ``reporting_date.year`` — a PRA PS1/26 Art. 274(2A)
     transitional add-on is computed and folded into ``ead_ccr``.
     """
-    trades_lf = raw_ccr.trades.trades
+    # Art. 277(1): map every trade to one of the six SA-CCR risk categories
+    # (case-insensitive; a missing / unrecognised asset_class is priced in the
+    # other-risks category) and apply the conservative credit-quality /
+    # commodity-type fallbacks — none of these inputs may contribute a silent
+    # zero add-on (review CC-06; reported as CCR021 / CCR022 by the input gate).
+    trades_lf = map_trade_risk_categories(raw_ccr.trades.trades)
     netting_sets_lf = raw_ccr.netting_sets.netting_sets
 
     # 1) Enrich trade-level frame with residual-maturity measures, then chain the
@@ -243,6 +262,9 @@ def ccr_rows_to_exposures(
     # Commodity adjusted notional per Art. 279b(1)(c) — coalesce-safe overlay,
     # no-op for non-commodity rows.
     trades_enriched = compute_adjusted_notional_commodity(trades_enriched)
+    # Other-risks adjusted notional per Art. 279b(1)(d) — overlay, no-op for the
+    # five named categories.
+    trades_enriched = compute_adjusted_notional_other(trades_enriched, reporting_date)
     # Supervisory delta per CRR Art. 279a: the option branch applies the
     # Black-Scholes Phi(d1) formula (Art. 279a(2)) when a trade carries both
     # ``option_strike`` and ``option_underlying_price`` and falls back to the
@@ -287,12 +309,12 @@ def ccr_rows_to_exposures(
     )
     # 2b) Per-NS struct breakdown of the per-asset-class add-on so the
     #     synthetic exposure row carries an auditable reconciliation of
-    #     ``addon_aggregate`` to its five Art. 277(1) asset-class components.
+    #     ``addon_aggregate`` to its six Art. 277(1) risk-category components.
     #     Missing asset classes in a netting set become 0.0 in the struct so
     #     ``sum(struct) == addon_aggregate`` holds for every NS row.
     #     LazyFrame-first: pivot via a group_by + conditional-sum over the
     #     five fixed asset-class labels rather than the eager-only pl.pivot.
-    asset_class_struct_fields = ["interest_rate", "fx", "credit", "equity", "commodity"]
+    asset_class_struct_fields = ["interest_rate", "fx", "credit", "equity", "commodity", "other"]
     addon_by_class_per_ns = (
         addon_per_class.group_by("netting_set_id")
         .agg(
@@ -415,12 +437,12 @@ def ccr_rows_to_exposures(
         pl.coalesce(pl.col("rc_margined"), pl.col("rc_unmargined")).alias("rc")
     )
 
-    # CRR Art. 274(2) second sub-paragraph: join the counterparty_type
+    # Per-NS supervisory alpha: 1.4 under CRR (CCR (CRR) Part Art. 274(2));
+    # under Basel 3.1 the PS1/26 Art. 274(2) carve-out joins the counterparty_type
     # discriminator (keyed on counterparty_reference, NOT cross-joined — the NS
-    # frame is already at counterparty grain via NETTING_SET_SCHEMA) and reduce
-    # it to a per-NS ``alpha_applied`` scalar. compute_pfe reads this column
-    # when present (else falls back to config_ccr.alpha / 1.4).
-    ns_frame = _attach_alpha_applied(ns_frame, counterparties)
+    # frame is already at counterparty grain via NETTING_SET_SCHEMA) and reduces
+    # it to a per-NS ``alpha_applied`` scalar. compute_pfe reads this column.
+    ns_frame = _attach_alpha_applied(ns_frame, counterparties, alpha_nfc_carve_out_applicable)
 
     ns_with_ead = compute_pfe(ns_frame, config_ccr)
 
@@ -496,10 +518,11 @@ def ccr_rows_to_exposures(
             pl.col("rc_unmargined"),
             pl.col("rc_margined"),
             pl.col("rc"),
-            # CRR Art. 274(2): the per-NS supervisory alpha actually applied
-            # (1.0 carve-out for non-financial / pension-scheme counterparties,
-            # 1.4 otherwise). Surfaced as an audit column so downstream tests /
-            # COREP exports can reconcile ead_ccr = alpha_applied * (rc + pfe).
+            # Art. 274(2): the per-NS supervisory alpha actually applied (1.4
+            # under CRR; under Basel 3.1 1.0 for non-financial / pension-scheme
+            # counterparties, 1.4 otherwise). Surfaced as an audit column so
+            # downstream tests / COREP exports can reconcile
+            # ead_ccr = alpha_applied * (rc + pfe).
             pl.col("alpha_applied"),
             # PRA PS1/26 Art. 274(2A): the phased transitional alpha add-on
             # folded into ead_ccr (0.0 unless the NS is legacy CVA-exempt, on
@@ -670,41 +693,51 @@ def _attach_mpor_cascade_inputs(
 def _attach_alpha_applied(
     ns_frame: pl.LazyFrame,
     counterparties: pl.LazyFrame | None,
+    carve_out_applicable: bool,
 ) -> pl.LazyFrame:
     """Attach the per-NS supervisory-alpha column ``alpha_applied``.
 
-    CRR Art. 274(2) second sub-paragraph: the default supervisory alpha is 1.4
-    (``SA_CCR_ALPHA``); netting sets whose counterparty is a non-financial
-    counterparty (EMIR Art. 2(9)), a pension-scheme arrangement (EMIR Art. 2(10))
-    or a pension-scheme default-fund-contribution position receive the
-    ``SA_CCR_ALPHA_CARVE_OUT`` (1.0). The discriminator is the COUNTERPARTY_SCHEMA
-    ``counterparty_type`` column, joined onto ``ns_frame`` keyed on
-    ``counterparty_reference`` (one NS row in, one NS row out — no fan-out).
+    CRR (CCR (CRR) Part Art. 274(2), in force to 31 Dec 2026): "α = 1.4" for
+    every netting set — ``carve_out_applicable`` is False and the column is the
+    constant ``SA_CCR_ALPHA``.
 
-    Backward-compatible defaults: when ``counterparties`` is None, lacks a
-    ``counterparty_type`` column (Python-bundle path that skips ``enforce_schema``),
-    or a row's ``counterparty_type`` is null, the netting set keeps alpha = 1.4.
+    Basel 3.1 (PS1/26 Art. 274(2)): "α = 1.4, unless the counterparty is a
+    non-financial counterparty or a pension scheme arrangement or an entity
+    established to provide compensation to members of a pension scheme
+    arrangement in case of default, in which case, α = 1." Netting sets whose
+    counterparty is a non-financial counterparty (EMIR Art. 2(9)), a
+    pension-scheme arrangement (EMIR Art. 2(10)) or a pension default-compensation
+    entity receive ``SA_CCR_ALPHA_CARVE_OUT`` (1.0). The discriminator is the
+    COUNTERPARTY_SCHEMA ``counterparty_type`` column, joined onto ``ns_frame``
+    keyed on ``counterparty_reference`` (one NS row in, one NS row out).
+
+    Defaults: when the carve-out is off, ``counterparties`` is None, it lacks a
+    ``counterparty_type`` column (Python-bundle path that skips
+    ``enforce_schema``), or a row's ``counterparty_type`` is null, the netting
+    set keeps alpha = 1.4.
 
     Args:
         ns_frame: Netting-set-grain LazyFrame carrying ``counterparty_reference``.
         counterparties: Optional counterparty LazyFrame (COUNTERPARTY_SCHEMA).
+        carve_out_applicable: The run's ``sa_ccr_alpha_nfc_carve_out_applicable``
+            pack Feature (Basel 3.1 True, CRR False).
 
     Returns:
         ``ns_frame`` with a new ``alpha_applied: Float64`` column.
 
     References:
-        CRR Art. 274(2) second sub-paragraph; EMIR Art. 2(9) / 2(10);
-        BCBS CRE52.1.
+        CRR Art. 274(2); PS1/26 Art. 274(2); EMIR Art. 2(9) / 2(10); BCBS CRE52.1.
     """
     carve_out = _SA_CCR_ALPHA_CARVE_OUT
     standard = _SA_CCR_ALPHA
 
     has_type = (
-        counterparties is not None
+        carve_out_applicable
+        and counterparties is not None
         and "counterparty_type" in counterparties.collect_schema().names()
     )
     if not has_type or counterparties is None:
-        # No discriminator available — every NS keeps the standard alpha = 1.4.
+        # CRR, or no discriminator available — every NS keeps alpha = 1.4.
         return ns_frame.with_columns(pl.lit(standard).alias("alpha_applied"))
 
     cp_type = counterparties.select(

@@ -16,7 +16,7 @@ Key design notes:
   the hedging set at this step — correlation lives at the aggregation step per
   Art. 277a + 280a/b).
 - Commodity is partitioned into five fixed buckets matching
-  COLUMN_VALUE_CONSTRAINTS["trades"]["commodity_type"]: ELECTRICITY, OIL_GAS,
+  COLUMN_VALUE_CONSTRAINTS["ccr.trades"]["commodity_type"]: ELECTRICITY, OIL_GAS,
   METALS, AGRICULTURAL, OTHER.
 - The short code for commodity is "CO" (from ASSET_CLASS_SHORT_CODE at
   schemas.py:952), NOT "CM".

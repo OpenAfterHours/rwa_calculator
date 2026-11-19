@@ -12,7 +12,9 @@ the explicit Art. 92(2A) output-floor inclusion of SA-CCR EAD).
 
 !!! info "Calculator parity by default"
     Calculator behaviour is identical between CRR and Basel 3.1 modes
-    for the SA-CCR EAD chain (`compute_adjusted_notional_*` →
+    for the SA-CCR EAD chain — except the supervisory alpha, where the
+    Art. 274(2) α = 1 carve-out and the Art. 274(2A) add-on apply under
+    Basel 3.1 only (delta (a) below) — (`compute_adjusted_notional_*` →
     `compute_supervisory_delta_*` → `compute_maturity_factor_*` →
     `assign_hedging_set` → `compute_addon_per_asset_class` →
     `compute_rc_unmargined` → `compute_pfe` → `compute_ead`). No
@@ -65,28 +67,22 @@ corresponding RWA) for in-scope end-user counterparties by a factor of
 `1 / 1.4 ≈ 0.714` — see the worked sensitivity at
 [`crr/ccr/ead-composition.md#sensitivity-to-α`](../crr/ccr/ead-composition.md#sensitivity-to-α-what-happens-if-the-carve-out-fires).
 
-!!! warning "Engine status — α = 1 carve-out gate not yet wired"
-    The α value is configurable via `CCRConfig.alpha` (defaults to
-    `Decimal("1.4")` at `src/rwa_calc/contracts/config.py`), and the
-    composition function at
-    `src/rwa_calc/engine/ccr/sa_ccr.py::compute_ead` applies whatever
-    α is supplied uniformly across the input frame. However, the
-    **per-counterparty dispatch gate** that would route non-financial
-    counterparty / pension-scheme netting sets through `α = 1` while
-    keeping the rest at `α = 1.4` is **not yet implemented** in
-    `engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures` —
-    today's orchestrator applies the default `α = 1.4` to every
-    netting set. Firms requiring the carve-out must invoke
-    `compute_ead` twice with two `CCRConfig` instances and
-    concatenate the results. Tracked in the project root
-    `IMPLEMENTATION_PLAN.md` as a documented engine gap; the math
-    itself is exercised by the `CCRConfig.alpha` override hook.
+!!! info "Engine status — carve-out wired, Basel 3.1 only"
+    `engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures` joins the
+    counterparty's `counterparty_type` onto each netting set and sets
+    `alpha_applied = 1` for `non_financial`, `pension_scheme` and
+    `pension_default_comp` counterparties, `1.4` otherwise. The selection is
+    gated by the cited pack Feature `sa_ccr_alpha_nfc_carve_out_applicable`,
+    which is **on under Basel 3.1 and off under CRR**: the CCR (CRR) Part in
+    force to 31 December 2026 says only "α = 1.4", and the carve-out sentence
+    above is new, underlined PS1/26 text. A CRR run therefore applies α = 1.4
+    to every netting set (review CC-01 — before it, the carve-out leaked into
+    CRR and understated an NFC netting set's EAD by 28.6%).
 
 The companion Art. 274(2A) **transitional alpha add-on** for legacy
-CVA-exempt trades (60% → 40% → 20% phase-in over 2027–2029) is
-documented on the CRR EAD-composition page and remains a separate
-engine gap — see
-[`crr/ccr/ead-composition.md#pending`](../crr/ccr/ead-composition.md#pending-engine-gaps-documented-here).
+CVA-exempt trades (60% → 40% → 20% phase-in over 2027–2029) is applied to
+`is_legacy_cva_exempt` netting sets on the α = 1 carve-out — see
+[`crr/ccr/ead-composition.md`](../crr/ccr/ead-composition.md).
 
 ### (b) Output-floor inclusion of SA-CCR EAD (Art. 92(2A))
 
@@ -172,7 +168,7 @@ overlays; everything else is unchanged.
 - **[Output floor (Basel 3.1)](output-floor.md)** — full TREA formula,
   PRA transitional schedule, OF-ADJ own-funds adjustment.
 - **[SA-CCR (CRR) — EAD composition](../crr/ccr/ead-composition.md)** —
-  engine entry point, `CCRConfig.alpha` override hook, synthetic
-  exposure-row contract, CCR-A1 worked example, and pending engine
-  gaps (Art. 274(2) carve-out dispatch, Art. 274(2A) transitional
-  alpha add-on, Art. 274(2B) leverage-ratio exclusion).
+  engine entry point, per-netting-set `alpha_applied`, synthetic
+  exposure-row contract, CCR-A1 worked example, the Art. 274(2)
+  carve-out (Basel 3.1 only) and Art. 274(2A) transitional alpha
+  add-on, and the moot Art. 274(2B) leverage-ratio exclusion.

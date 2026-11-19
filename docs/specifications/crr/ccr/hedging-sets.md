@@ -37,11 +37,22 @@ convention: PRA Art. numbers first, BCBS CRE52 codes second.
 
 ---
 
-## (a) Interest rate — Art. 277(2): three maturity buckets per currency
+## (a) Interest rate — Art. 277a(1)(a): one hedging set per currency
 
-Each interest-rate trade in a netting set is allocated to exactly one
-hedging set per the pair `(currency, maturity_bucket)`, where the maturity
-bucket is keyed on residual maturity `M` (years to maturity):
+Art. 277a(1)(a) (unchanged by PS1/26): "transactions mapped to the interest
+rate risk category shall be assigned to the same hedging set only where their
+primary risk driver ... is denominated in the same currency". Its second
+sub-paragraph puts trades whose primary risk driver is an **inflation**
+variable in "separate hedging sets, other than the hedging sets established
+for transactions ... that do not have an inflation variable as the primary
+risk driver" — again one per currency. Art. 277(4)(a) maps an inflation trade
+to the interest-rate category, so it is input as `asset_class =
+"interest_rate"` with `is_inflation = True` (`TRADE_SCHEMA`, default `False`;
+a null reads as nominal).
+
+The IR hedging-set key is therefore `(netting_set_id, currency,
+is_inflation)`. Within a hedging set each trade is allocated to one of three
+maturity buckets keyed on residual maturity `M` (years to maturity):
 
 | Bucket | Range | Code |
 |--------|-------|------|
@@ -59,17 +70,28 @@ residual maturity used for bucketing is `M = E` (years from the reporting
 date to the reference period end), the same `E` that feeds the supervisory
 duration in [adjusted-notional.md](adjusted-notional.md#interest-rate--art-279b1a).
 
-The composite hedging-set identifier emitted by the engine is:
+The composite identifier emitted by `assign_hedging_set` is:
 
 ```
 hedging_set_id = "IR-<netting_set_id>-<currency>-<maturity_bucket>"
 ```
 
 so a 7-year USD swap in netting set `NS_IR_01` lands in
-`IR-NS_IR_01-USD-GT_5Y`. Trades in different currencies live in different
-hedging sets even when the maturity bucket coincides — there is **no
-cross-currency offset** at the IR hedging-set level (that offset is supplied
-by the FX asset-class branch).
+`IR-NS_IR_01-USD-GT_5Y`. The identifier names the hedging set's bucket cell
+for audit; the add-on itself (`engine/ccr/pfe.py::_compute_addon_ir`) groups
+on the hedging-set key above, composes the three buckets of each hedging set
+with the Art. 280a(3) correlations, and **sums** the hedging-set add-ons
+(Art. 280a(1): `AddOn_IR = Σ_j AddOn_IR_j`). Trades in different currencies
+never offset — a GBP payer and a USD receiver of the same size carry two full
+add-ons, not zero.
+
+!!! warning "Corrected — review CC-04 (2026-11)"
+    Until review CC-04 the add-on grouped by `(netting_set_id, maturity_bucket)`
+    only, so every currency of a netting set was pooled into one hedging set:
+    GBP 100m long and USD 100m short of the same tenor gave `AddOn_IR = 0`
+    (EAD 0) in both regimes. This page already described the per-currency rule;
+    the engine did not implement it. Pooling can only understate (a norm of a
+    sum is at most the sum of the norms).
 
 ## (b) FX — Art. 277(3)(a): one hedging set per currency pair
 
@@ -143,9 +165,39 @@ the other four). The composite hedging-set identifier is:
 hedging_set_id = "CO-<netting_set_id>-<commodity_type>"
 ```
 
-Rows with a null `commodity_type` are dropped — there is no implicit
-fallback to the `OTHER` bucket, by design. The engine schema enumerates
-the five valid values at `data/schemas.py::COLUMN_VALUE_CONSTRAINTS`.
+`commodity_type` is matched case-insensitively against the five keys
+(`data/schemas.py::VALID_SA_CCR_COMMODITY_TYPES`, kept equal to the pack table
+by test). A commodity trade whose `commodity_type` is **null or unrecognised**
+is assigned to the hedging set with the highest supervisory factor
+(`ELECTRICITY`, 40%) and reported as **CCR022** — the conservative visible
+fallback. Before review CC-06 such a row was dropped, so a netting set whose
+only commodity trade lacked a type had a zero commodity add-on with no error.
+The pack table's published `default` states the factor applied (`0.40`).
+
+## (e2) Other risks — Art. 277(1)(f), 277a(1)(f), 280f
+
+Art. 277(1) maps every transaction to one of six risk categories; the sixth is
+**other risks** (`asset_class = "other"`). Its hedging sets follow
+Art. 277a(1)(f): trades share a hedging set "only where their primary risk
+driver ... is identical" — the engine keys this on `underlying_reference`, and a
+trade with no `underlying_reference` is its own hedging set. The add-on is
+Art. 280f: `AddOn_j = SF_Other × |EffNot_j|` with `SF_Other = 8%`
+(`sa_ccr_supervisory_factor_other`), summed over hedging sets. The adjusted
+notional (Art. 279b(1)(d), "the most appropriate method among ... (a), (b) and
+(c)") is `|market_price × number_of_units|` when both are supplied, otherwise
+the larger of `|notional|` and `|notional| × SD(S, E)`.
+
+`asset_class` is matched case-insensitively against the six categories
+(`data/schemas.py::VALID_SA_CCR_ASSET_CLASSES`): `"Interest_Rate"` is
+interest rate. A **null or unrecognised** `asset_class` (e.g. `"inflation"`,
+`"weather"`) is priced in the other-risks category as its own hedging set and
+reported as **CCR021**. Before review CC-06 such a trade contributed no add-on
+at all.
+
+The same rule for credit: a credit trade whose `credit_quality` is null or
+outside `IG` / `HY` / `NON_RATED` takes the highest factor of its table —
+single name `NON_RATED` (6%), index `HY` (1.06%) — and is reported as
+**CCR022**.
 
 ---
 
@@ -258,9 +310,11 @@ Signature: `assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame`.
 The function calls `assign_ir_maturity_bucket` first to populate
 `maturity_bucket` on IR rows, then dispatches a five-branch
 `when/then` ladder on `asset_class` to compose the `hedging_set_id`.
-Non-IR rows always carry `maturity_bucket = null`; commodity rows with a
-null `commodity_type` carry `hedging_set_id = null` (and are discarded
-downstream by the commodity add-on).
+Non-IR rows always carry `maturity_bucket = null`. Every trade has already
+been through `engine/ccr/risk_categories.py::map_trade_risk_categories`, so its
+`asset_class` is one of the six categories and a commodity trade always carries
+one of the five commodity keys; other-risks rows carry `hedging_set_id = null`
+(their hedging set is formed inside `compute_addon_other`).
 
 ## Pipeline ordering
 
@@ -323,8 +377,9 @@ The same three trades placed in three separate currencies would yield
 three separate hedging sets (`IR-NS_IR_DEMO-USD-LT_1Y`,
 `IR-NS_IR_DEMO-EUR-1Y_5Y`, `IR-NS_IR_DEMO-GBP-GT_5Y`) — each contributing
 its own quadratic form with the other two `D_Bk` terms set to zero, then
-**summed in quadrature** at the IR asset-class level per the standard
-Art. 277a(1)(a) per-currency decomposition.
+**summed** (no correlation across hedging sets) at the IR risk-category level
+per Art. 280a(1): `0.005 × (141,421,356 + 300,000,000 + 250,000,000) ≈
+3,457,107`.
 
 ### FX — per currency pair
 

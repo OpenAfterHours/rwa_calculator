@@ -25,6 +25,8 @@ from datetime import date
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.schemas import TRADE_SCHEMA
 from rwa_calc.engine.irb.stats_backend import normal_cdf
 from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
@@ -41,6 +43,13 @@ _OPT_VOL_CREDIT_SN = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_c
 _OPT_VOL_CREDIT_IDX = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_credit_idx"))
 _OPT_VOL_EQUITY_SN = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_equity_sn"))
 _OPT_VOL_EQUITY_IDX = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_equity_idx"))
+_OPT_VOL_COMMODITY_ELECTRICITY = scalar_value(
+    _PACK.scalar_param("sa_ccr_option_volatility_commodity_electricity")
+)
+_OPT_VOL_COMMODITY_OTHER = scalar_value(
+    _PACK.scalar_param("sa_ccr_option_volatility_commodity_other")
+)
+_OPT_VOL_OTHER = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_other"))
 _CDO_TRANCHE_NUMERATOR = scalar_value(_PACK.scalar_param("sa_ccr_cdo_tranche_numerator"))
 _CDO_TRANCHE_COEFFICIENT = scalar_value(_PACK.scalar_param("sa_ccr_cdo_tranche_coefficient"))
 
@@ -48,7 +57,9 @@ _CDO_TRANCHE_COEFFICIENT = scalar_value(_PACK.scalar_param("sa_ccr_cdo_tranche_c
 # Map TRADE_SCHEMA ``asset_class`` strings to the supervisory option volatility
 # from CRR Art. 279a(2) / BCBS CRE52.47. The fixture only carries the coarse
 # class (no single-name / index distinction); equity and credit default to the
-# index volatility (lower, matches the P8.13 OPT_003 expected value).
+# index volatility (lower, matches the P8.13 OPT_003 expected value). Commodity
+# is not keyed here: its volatility depends on ``commodity_type`` (electricity vs
+# every other commodity) and is selected in compute_supervisory_delta_option.
 _OPTION_VOLATILITY_BY_ASSET_CLASS: dict[str, float] = {
     "interest_rate": _OPT_VOL_IR,
     "fx": _OPT_VOL_FX,
@@ -58,7 +69,12 @@ _OPTION_VOLATILITY_BY_ASSET_CLASS: dict[str, float] = {
     "equity": _OPT_VOL_EQUITY_IDX,
     "equity_sn": _OPT_VOL_EQUITY_SN,
     "equity_idx": _OPT_VOL_EQUITY_IDX,
+    "other": _OPT_VOL_OTHER,
 }
+
+# Optional TRADE_SCHEMA column the commodity volatility reads; minimal unit-test
+# frames may omit it, so it is injected as a typed null.
+_COMMODITY_TYPE_COLUMN = {"commodity_type": TRADE_SCHEMA["commodity_type"]}
 
 
 @cites("CRR Art. 279a")
@@ -106,7 +122,10 @@ def compute_supervisory_delta_option(trades: pl.LazyFrame) -> pl.LazyFrame:
         K  = ``option_strike``
         T  = (maturity_date - start_date).days / 365  (calendar-day basis)
         sigma = supervisory option volatility from
-            ``SA_CCR_OPTION_VOLATILITY_*`` keyed off ``asset_class``.
+            ``sa_ccr_option_volatility_*`` keyed off ``asset_class`` — for a
+            commodity option, off ``commodity_type`` instead (CCR (CRR) Part
+            Art. 279a(1)(a) Table 1: "Commodity | Electricity | 150%", "Other
+            commodities (excluding electricity) | 70%"; "Others | All | 150%").
 
     Rows where ``option_strike`` is null fall back to the linear +/- 1 delta
     per Art. 279a(1), preserving the behaviour of
@@ -115,7 +134,7 @@ def compute_supervisory_delta_option(trades: pl.LazyFrame) -> pl.LazyFrame:
     Args:
         trades: LazyFrame with ``is_long``, ``asset_class``, ``option_type``,
             ``option_strike``, ``option_underlying_price``, ``start_date``,
-            and ``maturity_date`` columns.
+            and ``maturity_date`` columns (``commodity_type`` optional).
 
     Returns:
         The input LazyFrame with a new ``supervisory_delta: Float64`` column.
@@ -123,6 +142,7 @@ def compute_supervisory_delta_option(trades: pl.LazyFrame) -> pl.LazyFrame:
     References:
         CRR Art. 279a(2); BCBS CRE52.42; BCBS CRE52.47 (supervisory volatility).
     """
+    trades = ensure_columns(trades, _COMMODITY_TYPE_COLUMN)
     # Asset-class -> sigma lookup as a small in-memory frame for join.
     sigma_lookup = pl.LazyFrame(
         {
@@ -143,7 +163,22 @@ def compute_supervisory_delta_option(trades: pl.LazyFrame) -> pl.LazyFrame:
         pl.Float64
     ) / 365.0
 
-    sigma = pl.col("_option_sigma")
+    # Commodity sigma by commodity_type (Art. 279a(1)(a) Table 1). Before the
+    # skeptic review of CC-06 commodity had no entry, so every commodity option
+    # (including a CCR022 fallback trade) carried a null delta and no add-on.
+    is_electricity = (
+        pl.col("commodity_type").cast(pl.String).str.strip_chars().str.to_uppercase()
+        == "ELECTRICITY"
+    )
+    sigma = (
+        pl.when(pl.col("asset_class") == "commodity")
+        .then(
+            pl.when(is_electricity)
+            .then(pl.lit(_OPT_VOL_COMMODITY_ELECTRICITY))
+            .otherwise(pl.lit(_OPT_VOL_COMMODITY_OTHER))
+        )
+        .otherwise(pl.col("_option_sigma"))
+    )
     p = pl.col("option_underlying_price")
     k = pl.col("option_strike")
 

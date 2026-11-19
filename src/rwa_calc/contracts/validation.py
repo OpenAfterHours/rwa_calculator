@@ -18,6 +18,8 @@ Key responsibilities:
   itself derived from the same declarations
 - Non-finite (NaN / +-inf) input scrubbing
 - Collateral-link referential integrity
+- SA-CCR trade inputs priced with a conservative fallback (CCR021-CCR023,
+  ``contracts/ccr_input_checks.py``)
 - Regulatory output bounds on the aggregated results frame
 
 Every per-table check in the bundle gate is a ``_TableCheck`` — a lazy plan
@@ -49,6 +51,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
+from rwa_calc.contracts.ccr_input_checks import ccr_trade_errors, ccr_trade_findings
 from rwa_calc.contracts.errors import (
     ERROR_CCF_OUT_OF_RANGE,
     ERROR_COLLATERAL_LINK_DUPLICATE,
@@ -497,6 +500,10 @@ def validate_bundle_values(
     - **Exposure-table rules** — unreferenced negative on-balance amounts
       (DQ010).
     - **Ratings** — the short-term rating scope contract (DQ002).
+    - **SA-CCR trades** — inputs engine/ccr prices with a conservative fallback:
+      unrecognised risk category (CCR021), credit quality / commodity type
+      (CCR022), netting set missing from the netting-set table (CCR023)
+      (:mod:`rwa_calc.contracts.ccr_input_checks`).
 
     Every per-table check is a :class:`_TableCheck`; all of them are executed
     in ONE ``pl.collect_all`` (:func:`_run_table_checks`) and decoded in
@@ -533,6 +540,12 @@ def validate_bundle_values(
         checks.extend(
             _table_checks(lf, table_name, constraints.get(table_name, {}), columns[table_name])
         )
+    # SA-CCR trade inputs that engine/ccr prices with a conservative fallback
+    # (CCR021 risk category, CCR022 risk factor, CCR023 orphan trade). A
+    # cross-table plan (trades + netting sets) riding the same single collect.
+    ccr_findings = ccr_trade_findings(bundle, columns.get("ccr.trades", frozenset()))
+    if ccr_findings is not None:
+        checks.append(_TableCheck(plan=ccr_findings, decode=ccr_trade_errors))
     all_errors = _run_table_checks(checks)
 
     # Cross-table referential integrity for the M:N collateral-links table.

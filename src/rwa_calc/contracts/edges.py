@@ -1047,6 +1047,7 @@ CCR_EXIT_EDGE: EdgeContract = EdgeContract(
                     "credit": pl.Float64,
                     "equity": pl.Float64,
                     "commodity": pl.Float64,
+                    "other": pl.Float64,
                 }
             ),
             citation="CRR Art. 277",
@@ -1895,6 +1896,7 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
                     "credit": pl.Float64,
                     "equity": pl.Float64,
                     "commodity": pl.Float64,
+                    "other": pl.Float64,
                 }
             ),
             required=False,

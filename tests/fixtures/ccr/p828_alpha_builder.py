@@ -109,6 +109,7 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import polars as pl
@@ -299,8 +300,12 @@ def _build_counterparty(counterparty_type: str) -> pl.DataFrame:
     return base.with_columns(pl.lit(counterparty_type).alias("counterparty_type"))
 
 
-def _build_trade(trade_id: str, netting_set_id: str) -> pl.DataFrame:
-    """Return a single-row trades DataFrame using CCR-A1 golden economics."""
+def _build_trade(trade_id: str, netting_set_id: str, shift_years: int = 0) -> pl.DataFrame:
+    """Return a single-row trades DataFrame using CCR-A1 golden economics.
+
+    ``shift_years`` moves the start and maturity dates forward by whole years so
+    the same 10y-at-inception trade can be run at a Basel 3.1 reporting date.
+    """
     trade = make_trade(
         trade_id=trade_id,
         netting_set_id=netting_set_id,
@@ -308,13 +313,18 @@ def _build_trade(trade_id: str, netting_set_id: str) -> pl.DataFrame:
         transaction_type=CCR_A1_TRANSACTION_TYPE,
         notional=CCR_A1_NOTIONAL,
         currency=CCR_A1_CURRENCY,
-        maturity_date=CCR_A1_MATURITY_DATE,
-        start_date=CCR_A1_START_DATE,
+        maturity_date=_shift(CCR_A1_MATURITY_DATE, shift_years),
+        start_date=_shift(CCR_A1_START_DATE, shift_years),
         delta=CCR_A1_DELTA,
         is_long=CCR_A1_IS_LONG,
         mtm_value=CCR_A1_MTM,
     )
     return create_trades([trade])
+
+
+def _shift(d: date, years: int) -> date:
+    """Return ``d`` moved forward by whole calendar years (same month / day)."""
+    return d.replace(year=d.year + years)
 
 
 def _build_netting_set(netting_set_id: str, cp_ref: str) -> pl.DataFrame:
@@ -360,7 +370,7 @@ def _build_empty_lending_frames() -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFr
 # ---------------------------------------------------------------------------
 
 
-def build_p828_bundle(counterparty_type: str) -> RawDataBundle:
+def build_p828_bundle(counterparty_type: str, *, shift_years: int = 0) -> RawDataBundle:
     """
     Build a complete orchestrator-ready RawDataBundle for one P8.28 scenario.
 
@@ -372,9 +382,12 @@ def build_p828_bundle(counterparty_type: str) -> RawDataBundle:
 
     Args:
         counterparty_type: One of "non_financial", "pension_scheme", "financial".
-            "non_financial" → CCR-ALPHA-1 (CP-NFC-01, corporate, α=1.0)
-            "pension_scheme" → CCR-ALPHA-2 (CP-PENSION-01, corporate, α=1.0)
+            "non_financial" → CCR-ALPHA-1 (CP-NFC-01, corporate, α=1.0 under B31)
+            "pension_scheme" → CCR-ALPHA-2 (CP-PENSION-01, corporate, α=1.0 under B31)
             "financial"     → CCR-ALPHA-3 (CP-FIN-01, institution CQS 2, α=1.4)
+        shift_years: Whole years added to the trade's start / maturity dates
+            (0 = the CCR-A1 golden dates, for a 2026-01-15 CRR run; 1 = the
+            same trade at inception on 2027-01-15, for a Basel 3.1 run).
 
     Returns:
         Complete RawDataBundle suitable for PipelineOrchestrator.run_with_data.
@@ -406,7 +419,7 @@ def build_p828_bundle(counterparty_type: str) -> RawDataBundle:
     cp_ref, ns_id, trade_id, _entity_type, _name = _SCENARIO_MAP[counterparty_type]
 
     counterparty_df = _build_counterparty(counterparty_type)
-    trades_df = _build_trade(trade_id, ns_id)
+    trades_df = _build_trade(trade_id, ns_id, shift_years)
     netting_sets_df = _build_netting_set(ns_id, cp_ref)
     facilities, loans, facility_mappings, lending_mappings = _build_empty_lending_frames()
 
@@ -421,7 +434,7 @@ def build_p828_bundle(counterparty_type: str) -> RawDataBundle:
     )
 
 
-def build_p828_two_counterparty_book() -> RawDataBundle:
+def build_p828_two_counterparty_book(*, shift_years: int = 0) -> RawDataBundle:
     """
     Build a 2-counterparty, 2-NS, 2-trade bundle for keyed-join regression testing.
 
@@ -449,8 +462,8 @@ def build_p828_two_counterparty_book() -> RawDataBundle:
     fin_cp = _build_counterparty(P828_CP_TYPE_FINANCIAL)
     counterparties_df = pl.concat([nfc_cp, fin_cp])
 
-    nfc_trade = _build_trade(P828_TRADE_NFC_ID, P828_NS_NFC_ID)
-    fin_trade = _build_trade(P828_TRADE_FIN_ID, P828_NS_FIN_ID)
+    nfc_trade = _build_trade(P828_TRADE_NFC_ID, P828_NS_NFC_ID, shift_years)
+    fin_trade = _build_trade(P828_TRADE_FIN_ID, P828_NS_FIN_ID, shift_years)
     trades_df = pl.concat([nfc_trade, fin_trade])
 
     nfc_ns = _build_netting_set(P828_NS_NFC_ID, P828_CP_NFC_REF)

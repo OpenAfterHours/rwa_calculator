@@ -1112,6 +1112,30 @@ A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
     responsible for evidencing the Art. 125(2) conditions for any exposure
     routed to either bucket.
 
+!!! warning "The 35% needs evidence of security and an LTV (review CL-08 / RE-10)"
+    A mortgage `product_type` is not security: Art. 125(1) reaches only
+    exposures "fully and completely secured by mortgages on residential
+    property". The split needs an LTV — Art. 125(2)(d) caps the 35% part at
+    "80 % of the market value of the property in question".
+
+    - A property linked with a `market_value` but no `property_ltv`: the LTV is
+      **derived** as (drawn + accrued interest + undrawn committed amount) /
+      property value, plus `prior_charge_ltv`, and a `RE006` warning is raised.
+      CRR has no LTV-numerator article; the hierarchy stage has no exposure
+      value yet, and a conversion factor never exceeds 100%, so this amount is
+      never below the exposure value — the conservative bound.
+    - A linked property with no `market_value` and no LTV: still secured, but no
+      35% part can be established, so the loan takes the obligor's unsecured
+      weight (residential; Art. 124(1)) or 100% (commercial; Art. 124(1)).
+    - No linked property and no LTV (a bare mortgage label): the exposure takes
+      its counterparty's class — e.g. regulatory retail 75% (Art. 123) — and a
+      `RE005` warning is raised.
+
+    Before this, a null LTV was filled to 0.0 — the 35% band — whatever the
+    loan and the property were: a 150,000 loan on a 100,000 property priced at
+    35% (52,500) instead of the Art. 125 blend at LTV 1.5 (80,500), and a
+    mortgage-labelled loan with no property at all at 35% with no warning.
+
 ## Commercial Real Estate (CRR Art. 126)
 
 Exposures secured by mortgages on commercial immovable property. Art. 126(2)(d) applies a

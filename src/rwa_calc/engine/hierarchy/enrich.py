@@ -27,6 +27,8 @@ References:
 - PRA PS1/26 Art. 121(4): SCRA short-term trade-finance LC window (the
   trade-LC flag is inherited from the loan's parent facility only)
 - PRA PS1/26 Art. 124(4) / Art. 124A / Art. 124J: non-qualifying RE gate
+- PRA PS1/26 Art. 124C: LTV for a property supplied without one (``re_ltv``)
+- PRA PS1/26 Art. 124K: collateral-level ADC / pre-sold flags
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ from rwa_calc.contracts.errors import (
     unsolicited_rating_not_filtered_warning,
 )
 from rwa_calc.engine.entity_class_maps import ENTITY_TYPES_BY_SA_CLASS
+from rwa_calc.engine.hierarchy.re_ltv import derive_missing_ltv
 from rwa_calc.engine.kernels.allocation import (
     NO_DEFAULT,
     LevelSpec,
@@ -373,6 +376,7 @@ def enrich_with_property_coverage(
     Returns:
         Exposures with columns added: residential_collateral_value,
         property_collateral_value, has_facility_property_collateral,
+        re_collateral_is_adc, re_collateral_is_presold,
         exposure_for_retail_threshold
     """
     # Per CRR Article 147, "total amount owed" = drawn amount only (not undrawn)
@@ -395,6 +399,8 @@ def enrich_with_property_coverage(
                 pl.lit(0.0).alias("commercial_collateral_value_uncapped"),
                 pl.lit(False).alias("has_facility_property_collateral"),
                 pl.lit(False).alias("re_collateral_non_qualifying"),
+                pl.lit(False).alias("re_collateral_is_adc"),
+                pl.lit(False).alias("re_collateral_is_presold"),
                 pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
             ]
         )
@@ -600,12 +606,22 @@ def add_collateral_ltv(
     2. Facility: beneficiary_reference matches parent_facility_reference
     3. Counterparty: beneficiary_reference matches counterparty_reference
 
+    A real-estate row supplied WITHOUT a ``property_ltv`` still contributes its
+    property attributes (type, Art. 124A qualifying flag, income dependence,
+    prior charges); within a level a row that carries an LTV is preferred. The
+    loan row's own ``ltv`` is the last fallback, and where no LTV is supplied at
+    all it is derived from the linked property value
+    (:func:`re_ltv.derive_missing_ltv`, PS1/26 Art. 124C). Before this, a
+    null-LTV row was dropped whole — its ``is_qualifying_re=False`` or
+    commercial type with it — and any collateral file at all discarded the
+    loan-level ``ltv`` (review RE-10 / CL-08).
+
     Args:
         exposures: Unified exposures with exposure_reference
         collateral: Collateral data with beneficiary_reference and property_ltv (optional)
 
     Returns:
-        Exposures with ltv, property_type, has_income_cover, and
+        Exposures with ltv, ltv_derived, property_type, has_income_cover, and
         is_qualifying_re columns added
     """
     # Check if collateral is valid for LTV processing
@@ -614,8 +630,15 @@ def add_collateral_ltv(
     if not has_required_columns(collateral, required_cols):
         return _add_ltv_defaults_for_missing_collateral(exposures)
 
-    # Filter for collateral with LTV data
-    ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
+    # Rows with LTV data, plus real-estate rows without it (their property
+    # attributes still describe the security). A stable sort puts LTV-bearing
+    # rows first, so the per-level keep-first lookup below picks one of them
+    # whenever a beneficiary has any — the pre-fix choice for such a beneficiary.
+    ltv_collateral = collateral.filter(
+        pl.col("property_ltv").is_not_null()
+        | (pl.col("collateral_type").str.to_lowercase() == "real_estate")
+    ).sort(pl.col("property_ltv").is_null(), maintain_order=True)
+    exposures = exposures.with_columns(pl.col("ltv").alias("_loan_ltv"))
 
     # Multi-level linking: separate collateral by beneficiary_type, then
     # coalesce direct -> facility -> counterparty so the most specific
@@ -676,7 +699,7 @@ def add_collateral_ltv(
 
     # Earliest-prefix non-null wins; has_income_cover defaults to False when
     # no level provided a value.
-    return coalesce_attribute_levels(
+    exposures = coalesce_attribute_levels(
         exposures,
         prefixes=("direct", "facility", "cp"),
         specs=(
@@ -687,6 +710,10 @@ def add_collateral_ltv(
             ("prior_charge_ltv", "prior_charge_ltv", NO_DEFAULT),
         ),
     )
+    exposures = exposures.with_columns(pl.coalesce("ltv", "_loan_ltv").alias("ltv")).drop(
+        "_loan_ltv"
+    )
+    return derive_missing_ltv(exposures, collateral)
 
 
 def _join_facility_qrre_columns(
@@ -789,12 +816,13 @@ def _join_property_collateral_multi_level(
 
     Returns:
         Exposures with residential_collateral_value, property_collateral_value,
-        has_facility_property_collateral, and re_collateral_non_qualifying
-        columns added
+        has_facility_property_collateral, re_collateral_non_qualifying and the
+        collateral ADC flags re_collateral_is_adc / re_collateral_is_presold
+        (PS1/26 Art. 124K) added
     """
     is_residential = pl.col("property_type").str.to_lowercase() == "residential"
 
-    return allocate_multi_level(
+    allocated = allocate_multi_level(
         exposures,
         all_property_collateral,
         values={
@@ -809,8 +837,25 @@ def _join_property_collateral_multi_level(
             LevelSpec("counterparty", "counterparty_reference", weights="window"),
         ),
         any_positive={"has_facility_property_collateral": "property_collateral_value"},
-        flag_values={"re_collateral_non_qualifying": is_non_qualifying_re.any()},
+        # Review RE-01 / RE-02: the collateral-level ADC flags, any-True per
+        # beneficiary and OR-ed across levels (``is_adc`` / ``is_presold`` are
+        # loader-defaulted False, so ``any`` needs no fill).
+        flag_values={
+            "re_collateral_non_qualifying": is_non_qualifying_re.any(),
+            "re_collateral_is_adc": pl.col("is_adc").any(),
+            "re_collateral_is_presold": pl.col("is_presold").any(),
+            "_re_collateral_non_residential": (~is_residential.fill_null(False)).any(),
+        },
     )
+    # Art. 124K(2)'s 100% is for ADC financing residential development only, so
+    # the pre-sale flag holds only when every linked property is residential. A
+    # mixed residential / commercial security takes the 124K(1) 150% whatever
+    # the input row order (``property_type`` itself is keep-first by row order).
+    return allocated.with_columns(
+        (pl.col("re_collateral_is_presold") & ~pl.col("_re_collateral_non_residential")).alias(
+            "re_collateral_is_presold"
+        )
+    ).drop("_re_collateral_non_residential")
 
 
 def _add_ltv_defaults_for_missing_collateral(exposures: pl.LazyFrame) -> pl.LazyFrame:

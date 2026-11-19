@@ -523,6 +523,20 @@ def b31_real_estate_route(uc: pl.Expr) -> B31RealEstateRoute:
     backward-compatible default), so only an explicit False routes to Art. 124J.
     Commercial must be tested before residential: ``COMMERCIAL_MORTGAGE``
     contains ``MORTGAGE`` (``is_commercial_re_class``).
+
+    The LTV-driven branches (Art. 124F-124I) need an LTV. The hierarchy stage
+    derives one wherever a valued property is linked (``re_ltv.py``), so a null
+    ``ltv`` here means one of two things (review CL-08 / RE-10):
+
+    - property data but no value (a ``property_type`` with no market value and
+      no LTV): the exposure is secured, but Art. 124A(1)(d) — "the value of the
+      property is determined in accordance with Article 124D" — cannot be met,
+      so it is an "other real estate exposure" and takes Art. 124J;
+    - no property at all (a mortgage product label): not "an exposure secured
+      by a charge on immovable property" (PS1/26 glossary, real estate
+      exposure), so it falls through to its counterparty-class weight.
+
+    Before, both took the Art. 124F-124I tables at an assumed LTV of 100%.
     """
     is_re_class = (
         is_commercial_re_class(uc)
@@ -530,11 +544,13 @@ def b31_real_estate_route(uc: pl.Expr) -> B31RealEstateRoute:
         | (pl.col("property_type").fill_null("").is_in(["residential", "commercial"]))
     )
     is_non_qualifying = pl.col("is_qualifying_re").fill_null(True) == False  # noqa: E712
+    has_ltv = pl.col("ltv").is_not_null()
+    is_unvalued_property = pl.col("property_type").is_not_null() & ~has_ltv
     return B31RealEstateRoute(
         adc=pl.col("is_adc").fill_null(False),
-        other_re=is_non_qualifying & is_re_class,
-        commercial=is_commercial_re_class(uc),
-        residential=is_residential_re_class(uc),
+        other_re=(is_non_qualifying | is_unvalued_property) & is_re_class,
+        commercial=is_commercial_re_class(uc) & has_ltv,
+        residential=is_residential_re_class(uc) & has_ltv,
     )
 
 

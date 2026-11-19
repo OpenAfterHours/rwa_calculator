@@ -213,7 +213,11 @@ If criteria met:
 
 **Retail eligibility** per CRR Art. 123:
 
-1. **Mortgage detection**: Identifies mortgages via product_type pattern matching
+1. **Mortgage detection**: Identifies mortgages via product_type pattern matching or linked
+   property collateral. A label alone is not enough for the Standardised Approach: once the
+   approach is assigned, an SA mortgage with no linked property and no LTV takes the class
+   it would otherwise have (`engine/classify/re_evidence.py`, warning `RE005`); IRB rows keep
+   the IRB retail-mortgage class
 2. **Threshold check**: Aggregated exposure to lending group < retail threshold (EUR 1m CRR / GBP 880k Basel 3.1)
 3. **Residential exclusion**: Residential property collateral excluded from threshold (CRR Art. 123(c))
 

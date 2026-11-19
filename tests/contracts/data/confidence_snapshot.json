@@ -1216,6 +1216,7 @@
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_243/p1_243.py",
         "tests/fixtures/p2_17/p2_17.py",
+        "tests/integration/test_re_evidence_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/properties/portfolios.py",
@@ -1225,6 +1226,7 @@
         "tests/unit/crr/test_crr_sa.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_thresholds_features.py",
+        "tests/unit/sa/test_re_ltv_evidence_gate.py",
         "tests/unit/test_art123a_retail_criteria.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_classifier.py",
@@ -1238,6 +1240,7 @@
     {
       "article": "124",
       "code_functions": [
+        "rwa_calc.engine.classify.re_evidence::withhold_unevidenced_re_class",
         "rwa_calc.engine.sa.risk_weights::_crr_append_real_estate_branches"
       ],
       "confidence": "HIGH",
@@ -1253,7 +1256,9 @@
       ],
       "source_files": [
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
+        "engine/classify/re_evidence.py",
         "engine/re_split/__init__.py",
         "engine/re_split/carriers.py",
         "engine/re_split/flagging.py",
@@ -1270,10 +1275,12 @@
         "tests/fixtures/p1_181/p1_181.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/fixtures/reporting_row_scope_portfolio.py",
+        "tests/integration/test_re_evidence_pipeline.py",
         "tests/integration/test_re_split_carrier_conservation.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/reporting/corep/test_c07.py",
+        "tests/unit/sa/test_re_ltv_evidence_gate.py",
         "tests/unit/test_re_split_carrier_classification.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
@@ -1282,6 +1289,8 @@
     {
       "article": "125",
       "code_functions": [
+        "rwa_calc.engine.classify.re_evidence::re_evidence_expr",
+        "rwa_calc.engine.hierarchy.re_ltv::derive_missing_ltv",
         "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
       ],
       "confidence": "HIGH",
@@ -1302,6 +1311,9 @@
         "data/column_spec.py",
         "data/schemas.py",
         "domain/enums.py",
+        "engine/classify/audit.py",
+        "engine/classify/re_evidence.py",
+        "engine/hierarchy/re_ltv.py",
         "engine/pipeline.py",
         "engine/re_split/__init__.py",
         "engine/re_split/carriers.py",
@@ -1322,6 +1334,7 @@
         "tests/contracts/test_collapse_additivity.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/fixtures/reporting_row_scope_portfolio.py",
+        "tests/integration/test_re_evidence_pipeline.py",
         "tests/integration/test_re_split_carrier_conservation.py",
         "tests/integration/test_re_split_pipeline.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
@@ -1335,9 +1348,12 @@
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_regime_deltas.py",
         "tests/properties/test_source_conservation.py",
+        "tests/unit/classifier/test_re_evidence.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_re_split_features.py",
+        "tests/unit/sa/test_re_ltv_evidence_gate.py",
         "tests/unit/test_b31_loan_split_parts.py",
+        "tests/unit/test_re_ltv_and_adc_hierarchy.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -6684,9 +6700,11 @@
         "tests/fixtures/p1_94e/p1_94e.py",
         "tests/fixtures/p1_94f/p1_94f.py",
         "tests/fixtures/p5_15/p5_15.py",
+        "tests/integration/test_re_evidence_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/drivers.py",
+        "tests/unit/sa/test_re_ltv_evidence_gate.py",
         "tests/unit/test_b31_sa_risk_weights.py"
       ],
       "watchfire_index_gap": false
@@ -6775,6 +6793,7 @@
     {
       "article": "124",
       "code_functions": [
+        "rwa_calc.engine.classify.re_evidence::withhold_unevidenced_re_class",
         "rwa_calc.engine.re_split.flagging::_re_split_per_component_eligibility",
         "rwa_calc.engine.sa.risk_weights::_b31_append_real_estate_branches"
       ],
@@ -6786,8 +6805,11 @@
         "sa_re_split_art_124_4_all_or_nothing@b31"
       ],
       "source_files": [
+        "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/classify/attributes.py",
+        "engine/classify/re_evidence.py",
         "engine/classify/subtypes.py",
         "engine/hierarchy/enrich.py",
         "engine/hierarchy/facility_undrawn.py",
@@ -6804,6 +6826,7 @@
         "tests/fixtures/p1_140/p1_140.py",
         "tests/fixtures/p1_141/p1_141.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/integration/test_re_evidence_pipeline.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
@@ -6811,38 +6834,52 @@
     },
     {
       "article": "124A",
-      "code_functions": [],
-      "confidence": "GAP",
+      "code_functions": [
+        "rwa_calc.engine.classify.re_evidence::re_evidence_expr"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "engine/classify/re_evidence.py"
+      ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_141_art_124_4_all_or_nothing_gate.py",
         "tests/fixtures/p1_141/p1_141.py",
         "tests/oracle/drivers.py",
-        "tests/properties/test_regime_deltas.py"
+        "tests/properties/test_regime_deltas.py",
+        "tests/unit/sa/test_re_ltv_evidence_gate.py"
       ],
       "watchfire_index_gap": false
     },
     {
       "article": "124C",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.hierarchy.re_ltv::derive_missing_ltv"
+      ],
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/column_spec.py",
         "data/schemas.py",
+        "engine/classify/audit.py",
+        "engine/hierarchy/__init__.py",
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/re_ltv.py",
         "engine/irb/formulas.py",
         "engine/re_split/__init__.py"
       ],
       "test_files": [
-        "tests/robustness/strategies.py"
+        "tests/integration/test_re_evidence_pipeline.py",
+        "tests/robustness/strategies.py",
+        "tests/unit/test_re_ltv_and_adc_hierarchy.py"
       ],
       "watchfire_index_gap": false
     },
@@ -7042,6 +7079,7 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_141_art_124_4_all_or_nothing_gate.py",
         "tests/fixtures/p1_141/p1_141.py",
+        "tests/unit/sa/test_re_ltv_evidence_gate.py",
         "tests/unit/test_b31_other_re.py"
       ],
       "watchfire_index_gap": false
@@ -7061,13 +7099,17 @@
         "b31_adc_risk_weight@b31"
       ],
       "source_files": [
-        "contracts/edges.py"
+        "contracts/edges.py",
+        "engine/classify/attributes.py",
+        "engine/hierarchy/enrich.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_140_adc_classification_derivation.py",
         "tests/fixtures/p1_140/p1_140.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
-        "tests/oracle/derivations/sa_b31.py"
+        "tests/integration/test_re_evidence_pipeline.py",
+        "tests/oracle/derivations/sa_b31.py",
+        "tests/unit/test_re_ltv_and_adc_hierarchy.py"
       ],
       "watchfire_index_gap": false
     },

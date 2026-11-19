@@ -44,6 +44,7 @@ from watchfire import cites
 from rwa_calc.data.schemas import RGLA_PSE_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass, ExposureSubclass
 from rwa_calc.engine.classify.attributes import is_sme_by_size_expr, natural_person_expr
+from rwa_calc.engine.classify.re_evidence import RE_UNEVIDENCED_CLASS_COLUMN, re_evidence_expr
 from rwa_calc.engine.irb.formulas import firb_supervisory_lgd_values
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
@@ -120,7 +121,13 @@ def classify_exposure_subtypes(
     the schema does not carry and is deferred to a schema-enablement change;
     ``apply_fi_scalar`` is the interim override for known unregulated FSEs.
 
-    Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
+    A retail mortgage whose class rests on the product label alone (no linked
+    property, no LTV — ``re_evidence.re_evidence_expr``) also records the class
+    it would otherwise take in the scratch ``RE_UNEVIDENCED_CLASS_COLUMN``; the
+    classifier applies it to Standardised-Approach rows (review CL-08).
+
+    Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre, and
+    the scratch RE_UNEVIDENCED_CLASS_COLUMN
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     qrre_max_limit = float(
@@ -220,43 +227,52 @@ def classify_exposure_subtypes(
     ).fill_null(False)
     requires_fi_scalar = pl.col("cp_apply_fi_scalar").fill_null(False) | is_large_fse
 
+    # Retail mortgage — stays RETAIL_MORTGAGE regardless of threshold.
+    is_retail_mortgage = (pl.col("is_mortgage") == True) & (  # noqa: E712
+        (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+        | (pl.col("cp_entity_type") == "individual")
+    )
+    # The class the row takes when it is not a retail mortgage. Priority
+    # order: QRRE, SME retail, non-qualifying retail, corporate SME, keep.
+    non_mortgage_class = (
+        pl.when(
+            # QRRE: qualifying revolving retail under QRRE limit (Art. 147(5))
+            is_qrre
+        )
+        .then(pl.lit(ExposureClass.RETAIL_QRRE.value))
+        .when(
+            # SME retail that doesn't qualify → CORPORATE_SME
+            is_retail_sme
+        )
+        .then(pl.lit(ExposureClass.CORPORATE_SME.value))
+        .when(
+            # Other retail that doesn't qualify → CORPORATE
+            (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+            & (pl.col("qualifies_as_retail") == False)  # noqa: E712
+        )
+        .then(pl.lit(ExposureClass.CORPORATE.value))
+        .when(
+            # Corporate with SME revenue → CORPORATE_SME
+            is_corporate_sme
+        )
+        .then(pl.lit(ExposureClass.CORPORATE_SME.value))
+        .otherwise(pl.col("exposure_class"))
+    )
+
     return exposures.with_columns(
         [
             # --- exposure_class update (SME + retail + QRRE combined) ---
-            # Priority order: mortgage, QRRE, SME retail, non-qualifying retail,
-            # corporate SME, keep current.
-            pl.when(
-                # Retail mortgage — stays RETAIL_MORTGAGE regardless of threshold
-                (pl.col("is_mortgage") == True)  # noqa: E712
-                & (
-                    (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
-                    | (pl.col("cp_entity_type") == "individual")
-                )
-            )
+            pl.when(is_retail_mortgage)
             .then(pl.lit(ExposureClass.RETAIL_MORTGAGE.value))
-            .when(
-                # QRRE: qualifying revolving retail under QRRE limit (Art. 147(5))
-                is_qrre
-            )
-            .then(pl.lit(ExposureClass.RETAIL_QRRE.value))
-            .when(
-                # SME retail that doesn't qualify → CORPORATE_SME
-                is_retail_sme
-            )
-            .then(pl.lit(ExposureClass.CORPORATE_SME.value))
-            .when(
-                # Other retail that doesn't qualify → CORPORATE
-                (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
-                & (pl.col("qualifies_as_retail") == False)  # noqa: E712
-            )
-            .then(pl.lit(ExposureClass.CORPORATE.value))
-            .when(
-                # Corporate with SME revenue → CORPORATE_SME
-                is_corporate_sme
-            )
-            .then(pl.lit(ExposureClass.CORPORATE_SME.value))
-            .otherwise(pl.col("exposure_class"))
+            .otherwise(non_mortgage_class)
             .alias("exposure_class"),
+            # Review CL-08: a mortgage class resting on the product label alone
+            # (no linked property, no LTV) records its non-mortgage class for
+            # ``re_evidence.withhold_unevidenced_re_class`` to apply to
+            # Standardised-Approach rows once the approach is known.
+            pl.when(is_retail_mortgage & ~re_evidence_expr())
+            .then(non_mortgage_class)
+            .alias(RE_UNEVIDENCED_CLASS_COLUMN),
             # --- is_sme flag ---
             # True for: corporate SME, retail reclassified to CORPORATE_SME,
             # or specialised lending with SME counterparty (keeps SPECIALISED_LENDING class).

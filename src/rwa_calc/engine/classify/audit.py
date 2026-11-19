@@ -15,8 +15,10 @@ Key responsibilities:
   materialised classified frame, from ONE collect — DQ008 for
   ``is_defaulted=False ∧ beel>0`` rows, CLS010 for revolving retail rows a
   QRRE gate kept out of QRRE, SA006 for project-finance rows whose phase
-  was defaulted to pre-operational, and CLS012 for slotted rows with no
-  recognised grade (eager — must run post-materialise).
+  was defaulted to pre-operational, CLS012 for slotted rows with no
+  recognised grade, RE005 for a mortgage label without evidence of security
+  and RE006 for an LTV derived from the property value (eager — must run
+  post-materialise).
 - ``build_audit_trail``: per-exposure classification reason frame.
 
 References:
@@ -25,6 +27,9 @@ References:
   the roll-up flip warning (CLS011)
 - PS1/26 Art. 181(1)(h)(ii) / CRR Art. 158(5): BEEL defined for defaulted
   exposures only (DQ008 companion check)
+- PS1/26 Glossary "real estate exposure" / Art. 124A(1)(a), CRR Art. 125(1):
+  security, not a product label, makes an exposure real estate (RE005)
+- PS1/26 Art. 124C: LTV = amount of the loan / value of the property (RE006)
 - CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC Art. 2: SME fallback
   suppressing the CLS008 warning
 - CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b): QRRE gates (CLS010)
@@ -49,6 +54,8 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     beel_on_non_defaulted_exposure_warning,
     classification_warning,
+    ltv_derived_warning,
+    no_property_evidence_warning,
     pf_phase_unevidenced_warning,
     slotting_category_missing_warning,
 )
@@ -57,6 +64,7 @@ from rwa_calc.engine.classify.attributes import (
     natural_person_expr,
     with_group_annual_revenue,
 )
+from rwa_calc.engine.classify.re_evidence import re_evidence_count_exprs
 from rwa_calc.engine.classify.subtypes import (
     qrre_undrawn_cancellable_expr,
     qrre_unsecured_expr,
@@ -275,8 +283,13 @@ def collect_classified_frame_warnings(
       (case-insensitive, as the slotting lookup reads it). Both regimes. The
       slotting calculator weights it at the cited ``satisfactory`` default;
       this makes that visible (review IV-09, warning half).
+    - **RE005** — a mortgage product label with no evidence of real-estate
+      security (``re_evidence.re_evidence_count_exprs``; review CL-08).
+    - **RE006** — an LTV the hierarchy derived from the linked property value
+      (review RE-10). ``beel`` and ``ltv_derived`` are hierarchy_exit contract
+      columns — always present.
 
-    One collect for all four: ``engine_eager_collect_sites`` is a
+    One collect for all six: ``engine_eager_collect_sites`` is a
     non-increasing ratchet, so a new roll-up joins this select rather than
     adding a materialisation.
     """
@@ -299,6 +312,7 @@ def collect_classified_frame_warnings(
         (would_be_qrre_candidate & failed_qrre_gate).sum().alias("qrre_gate_demoted"),
         pl.col("_sl_project_phase_defaulted").sum().alias("pf_phase_defaulted"),
         slotted_without_grade.sum().alias("slotting_grade_missing"),
+        *[expr.alias(name) for name, expr in re_evidence_count_exprs().items()],
     ).collect()
 
     errors: list[CalculationError] = []
@@ -314,6 +328,15 @@ def collect_classified_frame_warnings(
     grade_missing_count = counts["slotting_grade_missing"].item()
     if grade_missing_count:
         errors.append(slotting_category_missing_warning(n=grade_missing_count))
+    re005_standardised = counts["re005_standardised"].item()
+    re005_other = counts["re005_other"].item()
+    if re005_standardised or re005_other:
+        errors.append(
+            no_property_evidence_warning(n_standardised=re005_standardised, n_other=re005_other)
+        )
+    re006_count = counts["re006"].item()
+    if re006_count:
+        errors.append(ltv_derived_warning(n=re006_count))
     return errors
 
 

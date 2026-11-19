@@ -467,15 +467,27 @@ conjunction of:
 - the property purpose is development/construction of RRE or CRE (not a
   completed income-producing or owner-occupied building).
 
-**Current implementation.** The classifier consumes `is_adc` as a pre-set
-boolean on the exposure schema. The 100% concessionary branch of
-Art. 124K(2) (pre-sale/equity-at-risk) also depends on caller-supplied flags.
+**Current implementation.** `is_adc` is derived by the classifier
+(`engine/classify/attributes.py::_build_is_adc_expr`) from three signals —
+the loan/facility `is_under_construction` flag, a development-finance
+`product_type`, or an `is_adc=True` on any real-estate **collateral** row
+linked to the exposure (direct, facility or counterparty level, any-True per
+beneficiary; carried by the hierarchy stage as `re_collateral_is_adc`) — all
+behind the definition's corporate / SPE gate, so a natural person's
+self-build is never ADC. The collateral `is_presold` flag reaches the
+Art. 124K(2) branch the same way (`re_collateral_is_presold` → `is_presold`),
+but only when every property linked to the exposure is residential — a mixed
+residential / commercial security is not residential ADC and takes 150% in any row order.
+Before review RE-01 / RE-02 the collateral flags were read by nothing: ADC
+lending flagged only on its property was loan-split onto the regulatory-RE
+tables (B31 20% instead of 150%; CRR 35% instead of the corporate 100%), and
+the Art. 124K(2) 100% weight was unreachable.
 
-!!! warning "Not yet implemented — automatic ADC derivation"
-    See **IMPLEMENTATION_PLAN.md P1.140** (ADC classification derivation). The
-    Art. 124K(2) residential-only restriction on the 100% concessionary branch
-    has been fixed (P1.129, v0.1.186); automatic derivation of the
-    pre-sale / equity-at-risk triggers themselves remains part of P1.140.
+!!! note "Art. 124K(2)(b)(ii) — equity at risk — is not representable"
+    `is_presold=True` attests condition (a) (prudent underwriting) and limb
+    (b)(i) (pre-sale / pre-lease contracts). No input carries limb (b)(ii),
+    "the borrower has substantial equity at risk", so a residential ADC
+    exposure that qualifies only through it stays at the conservative 150%.
 
 ### Art. 124(4) mixed-use splitting
 

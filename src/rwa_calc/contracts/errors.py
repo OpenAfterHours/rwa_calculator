@@ -402,6 +402,14 @@ ERROR_RE_NON_ELIGIBLE_COLLATERAL = "RE001"
 ERROR_RE_ZERO_EFFECTIVE_CAP = "RE002"
 ERROR_RE_MIXED_PROPERTY_TYPES = "RE003"
 ERROR_RE_CRR_RENTAL_COVERAGE_FAILED = "RE004"
+# Real-estate evidence (CL-08 / RE-10). RE005: a real-estate class (a mortgage
+# product label) with no linked property collateral and no LTV — the
+# preferential real-estate weights are withheld (CRR Art. 124(1)/125(1); PS1/26
+# glossary "real estate exposure", Art. 124A(1)(a)). RE006: an LTV derived from
+# the linked property value because no ``property_ltv`` was supplied (PS1/26
+# Art. 124C(1)-(3)).
+ERROR_RE_NO_PROPERTY_EVIDENCE = "RE005"
+ERROR_RE_LTV_DERIVED = "RE006"
 
 # Securitisation allocator validation codes (phase 1: flag + exclude).
 # References: CRR Art. 109, Art. 244-246 (significant risk transfer);
@@ -905,6 +913,67 @@ def slotting_category_missing_warning(*, n: int) -> CalculationError:
         ),
         regulatory_reference="CRR Art. 153(5) / PRA PS1/26 Art. 153(5)",
         field_name="slotting_category",
+    )
+
+
+def no_property_evidence_warning(*, n_standardised: int, n_other: int) -> CalculationError:
+    """Create the RE005 warning: a real-estate class with no evidence of security.
+
+    A mortgage product label is not security. The PS1/26 glossary defines a
+    real estate exposure as "an ADC exposure or an exposure secured by a charge
+    on immovable property", and CRR Art. 125(1) reaches only exposures "fully
+    and completely secured by mortgages on residential property". An exposure
+    whose class came from its product label alone, with no property collateral
+    linked at any level and no LTV supplied, is therefore not given
+    the preferential real-estate weights: a Standardised-Approach row takes the
+    class of its counterparty, and an IRB row keeps its IRB class while its
+    Standardised-equivalent weight (the Basel 3.1 output floor) is the
+    counterparty-class weight. One roll-up per run, counting both populations.
+    """
+    return CalculationError(
+        code=ERROR_RE_NO_PROPERTY_EVIDENCE,
+        message=(
+            f"{n_standardised + n_other} exposure(s) carry a mortgage product label but "
+            "no property collateral is linked to them and no LTV is "
+            "supplied, so they are not treated as secured by real estate: "
+            f"{n_standardised} Standardised-Approach exposure(s) take their "
+            f"counterparty's exposure class, and {n_other} IRB exposure(s) keep their "
+            "IRB class with a counterparty-class Standardised-equivalent weight. "
+            "Link the property (collateral_type 'real_estate' with market_value) or "
+            "supply property_ltv to claim the real-estate treatment."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="CRR Art. 124(1), 125(1); PS1/26 Art. 124, 124A(1)(a)",
+        field_name="property_ltv",
+    )
+
+
+def ltv_derived_warning(*, n: int) -> CalculationError:
+    """Create the RE006 warning: an LTV derived because none was supplied.
+
+    PS1/26 Art. 124C(1): "The loan-to-value (LTV) ... is the amount of the loan
+    divided by the value of the property"; (2) the amount of the loan includes
+    the outstanding amount and any undrawn committed amount; (3) it includes
+    loans secured by charges ranking ahead. Where a property is linked to an
+    exposure with a ``market_value`` but no ``property_ltv``, the hierarchy stage
+    derives the LTV that way rather than leaving it null (which used to price
+    CRR at the 35% band and Basel 3.1 at an LTV of 100%). The derivation is a
+    substitution for a missing input, so it is reported, once per run.
+    """
+    return CalculationError(
+        code=ERROR_RE_LTV_DERIVED,
+        message=(
+            f"property_ltv not supplied on {n} exposure(s) secured by a linked property; "
+            "the LTV was derived as (drawn + accrued interest + undrawn committed "
+            "amount) / property market value, plus any prior-charge LTV "
+            "(PS1/26 Art. 124C(1)-(3)). Supply property_ltv to use the firm's own "
+            "Art. 124C / Art. 124D figure."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="PS1/26 Art. 124C(1)-(3); CRR Art. 125(2)(d), 126(2)(d)",
+        field_name="property_ltv",
     )
 
 

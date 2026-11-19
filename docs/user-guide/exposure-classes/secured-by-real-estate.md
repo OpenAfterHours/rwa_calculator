@@ -122,6 +122,13 @@ Two input fields drive the calculator's LTV logic:
 | `property_ltv` | Total stacked LTV including all Art. 124C(2)–(3) components — used for risk-weight band lookup |
 | `prior_charge_ltv` | LTV contribution of prior/pari passu charges only — used to reduce the 55% loan-splitting threshold under Art. 124F(2) / 124H(2) and to trigger the 1.25× junior-charge multiplier under Art. 124G(2) |
 
+When `property_ltv` is omitted but the property carries a `market_value`, the LTV is
+derived as the Art. 124C(2) amount of the loan (drawn + accrued interest + undrawn
+committed) over the property value, plus `prior_charge_ltv`, and a `RE006` warning is
+raised. A mortgage `product_type` with **no** linked property and **no** LTV is not
+treated as real estate: it takes its counterparty's class (e.g. regulatory retail) and a
+`RE005` warning is raised — a product label is not "a charge on immovable property".
+
 > **Details:** See [Real Estate — LTV Definition (Art. 124C)](../../specifications/basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c) for the full numerator components, prior-charges worked example, and Art. 124D valuation rules including the self-build floor.
 
 ## Risk Weights — Residential RE (Art. 124F–124G)
@@ -248,10 +255,15 @@ The 100% concession is **residential-only** and requires **both**:
     - **(ii) Borrower equity at risk:** Substantial equity contribution
 
 !!! info "Two ADC input flags"
-    The calculator uses two boolean inputs: **`is_adc`** (routes to Art. 124K) and
-    **`is_presold`** (asserts Art. 124K(2) qualifying conditions are met). The PRA
-    does not define quantitative thresholds for "substantial" or "significant
-    portion" — these are firm-level judgements subject to supervisory review.
+    The calculator uses two boolean inputs on the **collateral** row: **`is_adc`**
+    (routes to Art. 124K) and **`is_presold`** (asserts Art. 124K(2) condition (a)
+    and limb (b)(i) are met). Either is any-True across every property linked to
+    the exposure, at loan, facility or counterparty level. `is_adc` is also derived
+    from `is_under_construction` / a development-finance `product_type`, and needs a
+    corporate or SPE borrower. Limb (b)(ii), substantial equity at risk, has no
+    input — such an exposure stays at 150%. The PRA does not define quantitative
+    thresholds for "substantial" or "significant portion" — these are firm-level
+    judgements subject to supervisory review.
 
 > **Details:** See [Real Estate — ADC Exposures (Art. 124K)](../../specifications/basel31/sa-risk-weights.md#real-estate--adc-exposures-art-124k) for the full qualifying conditions, CRR comparison (no Art. 124K under CRR; Art. 128 high-risk omitted by SI 2021/1078), and key scenarios.
 
@@ -419,13 +431,13 @@ Art. 124J; supervisory enforcement is the remedy.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `is_adc` | bool | Routes to Art. 124K; bypasses LTV-band logic |
-| `is_presold` | bool | Together with `is_adc=True`, applies Art. 124K(2) qualifying-residential 100% RW |
+| `is_adc` | bool | Collateral row. Routes to Art. 124K; bypasses LTV-band logic |
+| `is_presold` | bool | Collateral row. Together with `is_adc=True`, applies Art. 124K(2) qualifying-residential 100% RW |
 | `is_qualifying_re` | bool | Asserts the six Art. 124A(1) criteria are met; `False` routes to Art. 124J |
 | `is_income_producing` | bool | Routes to whole-loan tables (Art. 124G/I) instead of loan-splitting (Art. 124F/H) |
 | `property_type` | enum | `"residential"` or `"commercial"` — drives RESI vs CRE branching |
 | `property_value` | Decimal | Art. 124D-compliant qualifying valuation (firm-supplied) |
-| `property_ltv` | Float64 | Total Art. 124C(1)–(3) stacked LTV (incl. prior charges) |
+| `property_ltv` | Float64 | Total Art. 124C(1)–(3) stacked LTV (incl. prior charges). Derived from `market_value` when omitted (`RE006`) |
 | `prior_charge_ltv` | Float64 | Prior/pari-passu charge contribution to LTV (drives junior-charge logic) |
 | `counterparty_type` | enum | Drives Art. 124L counterparty RW for loan-splitting residual |
 

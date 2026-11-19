@@ -413,7 +413,12 @@ pre-sale/pre-lease contracts with substantial forfeitable deposits cover a signi
 portion of total contracts, or the borrower has substantial equity at risk (Art. 124K(2)).
 Commercial ADC always receives 150%.
 
-Set `is_adc = True` and optionally `is_presold = True` in the input data. The `is_adc` flag
+Set `is_adc = True` and optionally `is_presold = True` on the **collateral** row of the
+property (the flags reach every exposure the property secures, at loan, facility or
+counterparty level); `is_adc` is also derived from a loan/facility `is_under_construction`
+flag or a development-finance `product_type`. ADC needs a corporate or SPE borrower — a
+natural person's self-build is never ADC. `is_presold = True` attests Art. 124K(2)(a) and
+(b)(i); the (b)(ii) equity-at-risk limb has no input, so it stays at 150%. The `is_adc` flag
 overrides all LTV-based RE treatment. See the
 [ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate-adc-exposures-art-124k)
 for full qualifying conditions.

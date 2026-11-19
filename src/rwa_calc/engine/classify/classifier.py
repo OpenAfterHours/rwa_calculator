@@ -65,6 +65,7 @@ from rwa_calc.engine.classify.permissions import (
     emit_model_permission_diagnostics,
     resolve_model_permissions,
 )
+from rwa_calc.engine.classify.re_evidence import withhold_unevidenced_re_class
 from rwa_calc.engine.classify.subtypes import (
     classify_exposure_subtypes,
     derive_exposure_subclass,
@@ -170,6 +171,9 @@ class ExposureClassifier:
             has_model_permissions=has_model_permissions,
             pack=resolved_pack,
         )
+        # Review CL-08: a Standardised-Approach mortgage class resting on the
+        # product label alone takes its counterparty's class (needs ``approach``).
+        classified = withhold_unevidenced_re_class(classified)
         classified = derive_exposure_subclass(classified, config, pack=resolved_pack)
 
         # Stage-exit edge (producer-side): the diagnostic emits below run

@@ -15,7 +15,10 @@ Layout:
   expressions, CLS006 diagnostics
 - ``approach``       — approach decision ladder + B31 Art. 147A
   restrictions
-- ``audit``          — audit trail + input / BEEL data-quality warnings
+- ``audit``          — audit trail + input / row-count (BEEL, RE005,
+  RE006) data-quality warnings
+- ``re_evidence``    — evidence of real-estate security; withholds a
+  product-label-only mortgage class on Standardised-Approach rows
 
 RE loan-split candidate flagging is co-located with the splitter in
 ``engine/re_split/flagging.py`` (Slice 4) and invoked from ``classifier``.

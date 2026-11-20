@@ -5249,3 +5249,56 @@ requires every register reason on such a rule to cite the issue or rebut it.
 - **Lesson**: a fix to an averaging rule in one place (the Totals, then column
   0010) is a statement about every average with the same binding. Grep for the
   binding, not the column: the structural check now does it for C / OF 08.01-08.02.
+
+## 2026-11-20 — The Bank of England rule checks took time in the square of a return's countries, and no return in the estate reported more than two
+
+- **Defect**: `rwa_filer.boe.engine` read a summed reference by scanning every
+  cell the reference could read, at every evaluation (`_facts_bound` / `_read`
+  -> `_matching` -> `_at` -> `_place`), and joined the places a rule runs at
+  pair by pair (`_environments`). `boe_b0730` (OF 09.01 r0170 = `isum` of 15
+  rows) runs once per column and country, and its sum reads the listed rows at
+  every column and country, so its cost was evaluations x cells, both linear in
+  the country count. Measured on the `rich` portfolio's PRA001 return with its
+  OF 09.01 / OF 09.02 facts copied to more countries, the whole rule book
+  (`evaluate_rules`, 1,441 rules): 0.2 s at 2 countries, 3.5 s at 50, 12.4 s at
+  100, 54 s at 200; `trace_rules` (the evidence export and the dashboard) 118 s
+  at 200. Five rules (`boe_b0785`, `b0786`, `b0730`, `b0783`, `b0731`) carried
+  39 of 49 s in one 200-country run. Reported by the owner as the filer taking a
+  long time to go through each of the controls.
+- **Rule**: **Not a regulatory escape.** No verdict, count, recorded break or
+  trace changes.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/boe/engine.py`, the
+  per-evaluation scans in `_Evaluation` and the nested loop in `_environments`,
+  as they stood on master at `2667055`.
+- **Escape class**: `no-gate-exists`. Nothing measured how rule evaluation
+  scales with the size of an open axis.
+- **Why every gate missed it**: every fixture and golden return reports at most
+  two countries (`rich`: two on OF 09.01 / OF 09.02), where the whole rule book
+  runs in under 0.3 s. The Arelle-pinned oracles assert verdicts, not cost. The
+  root `benchmarks` job measures `rwa-calc`'s pipeline, not `rwa-filer`.
+- **Gate change**: `packages/rwa-filer/tests/boe/test_engine_scaling.py` runs the
+  44 PRA001 rules that read OF 09.01 / OF 09.02 alone on a return built from the
+  packaged pack, every cell of both tables at 10 and 40 countries. It asserts
+  that the five summed rules run once per column and country at both sizes
+  (adequacy, LESSONS C11), and that 4x the countries costs under 8x the time,
+  best of 3, with a 5 s budget as a second line. It is in the member's own suite,
+  so CI's `rwa-filer (isolated)` job runs it.
+- **Verified red**: against the unfixed engine at `2667055`:
+  `AssertionError: 40 countries took 16.577s against 1.150s for 10: 14.4x for 4x
+  the countries` (`1 failed in 75.70s`). With the fix: 3.7x to 4.0x, and the test
+  takes 4.5 s.
+- **The fix, stated narrowly**: `_Evaluation._keys_at` looks up a summed
+  reference's cells at an evaluation's place in an index built once per rule
+  (`_place_index`, over a cached `_matching`), returning the same cells in the
+  same order as the scan. `_outer_join` hash-joins the places on the axes they
+  share and returns the same set as joining every pair. Old and new engine were
+  compared on the 16 Basel 3.1 golden returns and on `rich` at 50, 100 and 200
+  countries: every `RuleResult` with every break recorded, and every
+  `trace_rules` evaluation and comparison, identical.
+- **Not covered**: open-row tables (C 34.06 counterparties, OF 08.02 obligor
+  grades) take the same path but were not scaled (P6.60). The Bank's sample
+  return (`test_sample_oracle.py`) needs the Bank's sample instance and was not
+  run; the referee differential runs on this change in CI.
+- **Lesson**: the second cost that grows with the square of an input and that no
+  correctness gate can see (the first: 2026-09-05, the classifier). Graduated on
+  this occurrence to the scaling test above; ledger row in `.claude/LESSONS.md`.

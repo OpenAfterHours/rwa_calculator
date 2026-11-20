@@ -546,6 +546,9 @@ class _Amount:
 
 #: A cell's key in a table: (sheet code, open-axis member, row, column).
 _CellKey = tuple[str | None, str | None, str, str]
+#: A selector's matching cells by where they sit: the axes a place names, then
+#: the place's values on those axes, then the cells there in ``_matching`` order.
+_PlaceIndex = dict[tuple[str, ...], dict[tuple[str, ...], list[_CellKey]]]
 
 
 @dataclass
@@ -901,6 +904,10 @@ class _Evaluation:
         self._branch: list[str] = []
         self._aliases = _key_aliases(rule.joins)
         self._selectors: dict[int, _Selector] = {}
+        #: Per selector, worked out once and kept for the rule's every
+        #: evaluation: the cells it accepts, and those cells by place.
+        self._matched: dict[int, list[_CellKey]] = {}
+        self._by_place: dict[int, _PlaceIndex] = {}
         scope = {group.table: group for group in rule.scope_groups}
         trees = [rule.tree, *([rule.where_tree] if rule.where_tree is not None else [])]
         self._references = [ref for tree in trees for ref in references(tree)]
@@ -992,11 +999,7 @@ class _Evaluation:
         for reference in self._references:
             selector = self._selectors[id(reference)]
             if reference.sequence:
-                facts = frozenset(
-                    self._fact(selector, key)
-                    for key in self._matching(selector)
-                    if self._at(selector, key, env)
-                )
+                facts = frozenset(self._fact(selector, key) for key in self._keys_at(selector, env))
                 entry: object = facts or None
             else:
                 key = self._cell(selector, env)
@@ -1035,20 +1038,7 @@ class _Evaluation:
             if not environments:
                 environments = partial
                 continue
-            merged: set[_Env] = set()
-            used: set[_Env] = set()
-            for env in environments:
-                hit = False
-                for place in partial:
-                    joined = _join(env, place)
-                    if joined is not None:
-                        merged.add(joined)
-                        used.add(place)
-                        hit = True
-                if not hit:
-                    merged.add(env)
-            merged.update(partial - used)
-            environments = _maximal(merged)
+            environments = _maximal(_outer_join(environments, partial))
         if not environments and self._rule.always_execute:
             return [()]
         return sorted(environments)
@@ -1208,8 +1198,54 @@ class _Evaluation:
         )
 
     def _matching(self, selector: _Selector) -> list[_CellKey]:
-        """The reported cells ``selector`` accepts, whatever the place."""
-        return [key for key in self._candidates(selector) if self._accepts(selector, key)]
+        """The reported cells ``selector`` accepts, whatever the place. Worked out once."""
+        found = self._matched.get(id(selector))
+        if found is None:
+            found = [key for key in self._candidates(selector) if self._accepts(selector, key)]
+            self._matched[id(selector)] = found
+        return found
+
+    def _keys_at(self, selector: _Selector, env: Mapping[str, str]) -> Sequence[_CellKey]:
+        """The cells of ``_matching(selector)`` that sit at ``env``, in that order.
+
+        A cell sits at ``env`` when it has a place (``_place``) and ``env``
+        holds that place's value on every axis the place names.
+
+        Looked up, not scanned. A summed reference is read at every evaluation,
+        and scanning every cell it could read for the few at this place made a
+        rule's cost the product of its evaluations and its cells — both of which
+        grow with an open axis, so a return's rules took time in the SQUARE of
+        its countries. Each matching cell's place is worked out once instead,
+        and the cells are indexed by it. The result may be the index's own list:
+        read it, never change it.
+        """
+        index = self._by_place.get(id(selector))
+        if index is None:
+            index = self._by_place[id(selector)] = self._place_index(selector)
+        if len(index) == 1:
+            ((axes, cells),) = index.items()
+            return cells.get(tuple(env.get(axis) for axis in axes), [])
+        # A cell with no member on an open axis has a place that does not name
+        # the axis (``_place``), so a selector can index places of two shapes.
+        # Each is looked up; the cells come back in ``_matching`` order.
+        found = {
+            key
+            for axes, cells in index.items()
+            for key in cells.get(tuple(env.get(axis) for axis in axes), ())
+        }
+        return [key for key in self._matching(selector) if key in found]
+
+    def _place_index(self, selector: _Selector) -> _PlaceIndex:
+        """``_matching(selector)`` by place: a cell with no place (``_place``) sits nowhere."""
+        index: _PlaceIndex = {}
+        for key in self._matching(selector):
+            place = self._place(selector, key)
+            if place is None:
+                continue
+            axes = tuple(axis for axis, _value in place)
+            values = tuple(value for _axis, value in place)
+            index.setdefault(axes, {}).setdefault(values, []).append(key)
+        return index
 
     @staticmethod
     def _candidates(selector: _Selector) -> list[_CellKey]:
@@ -1275,11 +1311,7 @@ class _Evaluation:
     def _read(self, reference: Reference, env: Mapping[str, str]) -> object:
         selector = self._selectors[id(reference)]
         if reference.sequence:
-            values = [
-                selector.data.cells[key]
-                for key in self._matching(selector)
-                if self._at(selector, key, env)
-            ]
+            values = [selector.data.cells[key] for key in self._keys_at(selector, env)]
             if values:
                 return values
             if reference.default is None:
@@ -1292,11 +1324,6 @@ class _Evaluation:
         if reference.default is None:
             raise _NotBound
         return _default(reference.default)
-
-    def _at(self, selector: _Selector, key: _CellKey, env: Mapping[str, str]) -> bool:
-        """Whether a cell sits at ``env`` on every axis the selector iterates."""
-        place = self._place(selector, key)
-        return place is not None and all(env.get(axis) == value for axis, value in place)
 
     def _cell(self, selector: _Selector, env: Mapping[str, str]) -> _CellKey | None:
         """The one cell a non-sequence reference reads at ``env``; ``None`` if it has none."""
@@ -1464,7 +1491,7 @@ class _Evaluation:
             label = _describe(reference)
             addresses.update(dict.fromkeys(self._addresses(reference, env)))
             if reference.sequence:
-                keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
+                keys = self._keys_at(selector, env)
                 values = [selector.data.cells[key] for key in keys]
                 amounts = [item.value for value in values if (item := _amount(value)) is not None]
                 cells.append(f"{label} = {len(values)} cell(s), sum {_number(math.fsum(amounts))}")
@@ -1550,7 +1577,7 @@ class _Evaluation:
         for reference in references(node):
             selector = self._selectors[id(reference)]
             if reference.sequence:
-                keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
+                keys = self._keys_at(selector, env)
                 read.update(dict.fromkeys(self._register(selector, key) for key in keys))
                 if not keys and reference.default is not None:
                     defaulted.append(_defaulted(reference, None))
@@ -1587,7 +1614,7 @@ class _Evaluation:
         """The cells one reference reads at ``env``; a cell read at its default is unreported."""
         selector = self._selectors[id(reference)]
         if reference.sequence:
-            keys = [key for key in self._matching(selector) if self._at(selector, key, env)]
+            keys = self._keys_at(selector, env)
             return [self._register(selector, key) for key in keys]
         key = self._cell(selector, env)
         if key is None:
@@ -1646,6 +1673,44 @@ def _check_functions(node: Node) -> None:
         _check_functions(node.then)
         if node.otherwise is not None:
             _check_functions(node.otherwise)
+
+
+def _outer_join(environments: set[_Env], partial: set[_Env]) -> set[_Env]:
+    """Each env joined with every place it agrees with; an env or place that meets none, as it is.
+
+    A hash join on the axes the two share. The places are grouped by the axes
+    they name and indexed by their values on the axes an env shares with them,
+    so an env meets only the places that agree with it, not every place: trying
+    every pair made the join's cost the product of the two sets, each of which
+    grows with an open axis. The same set as joining every pair with ``_join``.
+    """
+    groups: dict[tuple[str, ...], list[_Env]] = {}
+    for place in partial:
+        groups.setdefault(tuple(axis for axis, _value in place), []).append(place)
+    indexes: dict[tuple[tuple[str, ...], tuple[str, ...]], dict[tuple[str, ...], list[_Env]]] = {}
+    merged: set[_Env] = set()
+    used: set[_Env] = set()
+    for env in environments:
+        values = dict(env)
+        hit = False
+        for axes, places in groups.items():
+            shared = tuple(axis for axis in axes if axis in values)
+            index = indexes.get((axes, shared))
+            if index is None:
+                index = indexes[(axes, shared)] = {}
+                for place in places:
+                    named = dict(place)
+                    index.setdefault(tuple(named[axis] for axis in shared), []).append(place)
+            for place in index.get(tuple(values[axis] for axis in shared), ()):
+                joined = _join(env, place)
+                if joined is not None:
+                    merged.add(joined)
+                    used.add(place)
+                    hit = True
+        if not hit:
+            merged.add(env)
+    merged.update(partial - used)
+    return merged
 
 
 def _join(env: _Env, place: _Env) -> _Env | None:

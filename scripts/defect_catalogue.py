@@ -142,9 +142,9 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="lessons-b1-dead-carrier",
         category="lessons",
-        target="src/rwa_calc/reporting/corep/c07.py",
-        old='_CCF_CARRIERS: tuple[str, ...] = ("ccf", "ccf_applied")',
-        new='_CCF_CARRIERS: tuple[str, ...] = ("ccf_applied",)',
+        target="src/rwa_calc/reporting/corep/ccf_buckets.py",
+        old='CCF_CARRIERS: Final[tuple[str, ...]] = ("ccf", "ccf_applied")',
+        new='CCF_CARRIERS: Final[tuple[str, ...]] = ("ccf_applied",)',
         summary="CCF carrier ladder reduced to the name no pipeline run produces",
         rationale=(
             "LESSONS B1, measured: the C 07.00 CCF columns bucketed on "
@@ -170,14 +170,17 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="lessons-e3-subtotal-double-count",
         category="lessons",
         target="src/rwa_calc/reporting/corep/c07.py",
-        old='return sum((cells.get(ref) or 0.0) for ref in ("0050", "0060", "0070", "0080"))',
-        new='return sum((cells.get(ref) or 0.0) for ref in ("0040", "0050", "0060", "0070", "0080"))',
-        summary="C 07.00 subtotal counts a breakdown column and its parent",
+        old='return (cells["0040"] or 0.0) - (cells["0090"] or 0.0) + (cells["0100"] or 0.0)',
+        new='return (cells["0040"] or 0.0) - 2.0 * (cells["0090"] or 0.0) + (cells["0100"] or 0.0)',
+        summary="C 07.00 col 0110 deducts the substitution outflow twice",
         rationale=(
             "LESSONS E3: subtracting the breakdown AND the subtotal double-counts. "
-            "Inflow and outflow must bind the same capped magnitude; reading the "
-            "raw carrier on one side and the capped twin on the other CREATES "
-            "exposure."
+            "Col 0090 already IS 0050 + 0060 + 0070 + 0080, so a 0110 that removes "
+            "the components and 0090 deducts every outflow twice -- the defect "
+            "``_net_after_substitution``'s docstring records. This used to add col "
+            "0040 inside the 0090 subtotal, but the 0090 Formula's refs never "
+            "include 0040, so ``cells.get('0040')`` was always None and the "
+            "mutant moved nothing."
         ),
     ),
     # =========================================================================
@@ -200,8 +203,8 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="generic-corporate-correlation-low",
         category="generic",
         target=TARGET_IRB_FORMULAS,
-        old="r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
-        new="r_corporate = 0.14 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
+        old="return 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
+        new="return 0.14 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
         summary="Corporate asset correlation lower bound 0.12 -> 0.14",
         rationale=(
             "CRR Art. 153(1) / PS1/26 Art. 153(1)(c). Monotone in PD either way, "
@@ -233,8 +236,8 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="generic-correlation-decay",
         category="generic",
         target=TARGET_IRB_FORMULAS,
-        old="corporate_denom = 1.0 - math.exp(-50.0)",
-        new="corporate_denom = 1.0 - math.exp(-45.0)",
+        old="/ (1.0 - math.exp(-50.0))",
+        new="/ (1.0 - math.exp(-45.0))",
         summary="Corporate correlation decay factor -50 -> -45",
         rationale=(
             "The denominator is within 1e-20 of 1.0 either way, so this is a "
@@ -279,21 +282,33 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="generic-b31-institution-cqs2",
         category="generic",
         target=TARGET_B31_PACK,
-        old='    "institution_rw_b31_ecra": LookupTable(\n        name="institution_rw_b31_ecra",',
-        new='    "institution_rw_b31_ecra": LookupTable(\n        name="institution_rw_b31_ecra_MUTANT",',
-        summary="Basel 3.1 institution ECRA table renamed so its lookup misses",
+        old=(
+            '        name="institution_rw_b31_ecra",\n'
+            "        entries={\n"
+            '            CQS.CQS1: Decimal("0.20"),\n'
+            '            CQS.CQS2: Decimal("0.30"),'
+        ),
+        new=(
+            '        name="institution_rw_b31_ecra",\n'
+            "        entries={\n"
+            '            CQS.CQS1: Decimal("0.20"),\n'
+            '            CQS.CQS2: Decimal("0.50"),'
+        ),
+        summary="Basel 3.1 institution ECRA CQS 2 reverts to the CRR 50% weight",
         rationale=(
             "PS1/26 Art. 120(1) Table 3 gives CQS 2 a 30% weight where CRR gives "
-            "50%. A rename breaks the binding rather than the value, which is the "
-            "shape a refactor produces."
+            "50%: a Basel 3.1 table carrying the CRR value is the shape a copy-"
+            "paste between packs produces. This used to rename the table's "
+            "``name`` field, which nothing reads (lookups bind on the dict key), "
+            "so it moved no output and no gate could ever see it."
         ),
     ),
     Mutant(
         id="generic-corporate-correlation-high",
         category="generic",
         target=TARGET_IRB_FORMULAS,
-        old="r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
-        new="r_corporate = 0.12 * f_pd_corp + 0.22 * (1.0 - f_pd_corp)",
+        old="return 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
+        new="return 0.12 * f_pd_corp + 0.22 * (1.0 - f_pd_corp)",
         summary="Corporate asset correlation upper bound 0.24 -> 0.22",
         rationale=(
             "The other end of the same Art. 153(1) curve. Shares its ``old`` "

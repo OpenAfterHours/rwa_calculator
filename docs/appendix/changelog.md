@@ -548,6 +548,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **Validating a Basel 3.1 filing package no longer slows down with the square
+  of the countries it reports.** The Bank of England rule checks that
+  `export_filing_package` runs through `rwa-filer` took 12 s on a return with
+  100 countries on OF 09.01 / OF 09.02 and 54 s with 200; they now take 0.8 s
+  and 1.5 s, with the same verdicts. Needs the `rwa-filer` release that carries
+  the fix (see `packages/rwa-filer/CHANGELOG.md`). No figure changes.
 - **Product-by-product review (2026-11-18): regulatory fixes across commitments,
   trade finance, specialised lending, equity, real estate, retail, credit risk
   mitigation, group perimeter, data quality and counterparty credit risk.** The

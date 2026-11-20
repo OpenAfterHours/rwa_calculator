@@ -12,6 +12,22 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **The Bank of England rule checks no longer slow down with the square of the
+  countries a return reports.** On a PRA001 return the rules took 0.2 s with 2
+  countries on OF 09.01 / OF 09.02, 12 s with 100 and 54 s with 200; they now
+  take 0.8 s with 100 and 1.5 s with 200. Two loops in `rwa_filer.boe.engine`
+  cost evaluations x cells. A summed reference ("row 0170 = isum of the listed
+  rows", read once per column and country) scanned every cell it could ever
+  read at each evaluation. And the places a rule is evaluated at were joined
+  pair by pair. Each summed reference's cells are now indexed by place once per
+  rule, and the places are hash-joined on the axes they share. Verdicts, counts,
+  recorded breaks and traces are unchanged: identical on the 16 Basel 3.1 golden
+  returns and on returns with 50, 100 and 200 countries. `validate_return`,
+  `trace_return`, `rwa-filer validate` / `build`, the evidence export and the
+  dashboard all gain; tracing a 200-country return goes from 118 s to 5 s. Held
+  by `tests/boe/test_engine_scaling.py`.
+
 ---
 
 ## [0.1.5] - 2026-11-17

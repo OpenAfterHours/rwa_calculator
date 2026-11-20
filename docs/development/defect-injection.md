@@ -154,7 +154,7 @@ when reading any floor-related property as evidence.
 
 ## The catalogue
 
-22 mutants over 10 files, seeded in descending order of evidential weight.
+22 mutants over 11 files, seeded in descending order of evidential weight.
 
 | Category | Count | Source |
 |---|---|---|
@@ -400,6 +400,11 @@ Both are real, both are recorded in `scripts/injection_baseline.json` under
   - `generic-firb-corporate-stranded`, `generic-benefit-cap-inverted`,
     `generic-b31-institution-cqs2` and `generic-scaling-regime-inverted`.
 
+`lessons-e3-subtotal-double-count` and `generic-b31-institution-cqs2` were
+re-targeted on 2026-11-20 and now probe reachable (see "Catalogue drift" below),
+which leaves 6 of the 8. The other 6 were all caught by a gate in the
+2026-11-16 campaign, so they do not fail the trust check.
+
 Two causes so far:
 - C 02.00 rows that are empty in every RUNS portfolio (the A-IRB institutions and
   F-IRB specialised-lending lookups).
@@ -435,6 +440,32 @@ A run of the harness also used to leave `engine/irb/formulas.py` dirty. That fil
 is committed with CRLF endings, and `injected` restored the decoded text rather
 than the bytes. It now restores and verifies the bytes, so the next campaign is
 no longer refused on a dirty target.
+
+### Catalogue drift (2026-11-17 to 2026-11-20)
+
+From 2026-11-17 every nightly died in the catalogue self-test, about 13 seconds
+in, because four mutants' `old` strings had moved under them:
+
+- `lessons-b1-dead-carrier`: the CCF carrier ladder left `corep/c07.py` for
+  `corep/ccf_buckets.py` (`CCF_CARRIERS`, now shared by C 07.00 and OF 08.01).
+- `generic-corporate-correlation-low`, `-high` and `generic-correlation-decay`:
+  the Art. 153(1) corporate correlation now lives in
+  `engine/irb/formulas.py::_corporate_correlation_expr_from_pd`, the live path.
+
+All four are re-targeted at the new sites. Two more mutants were re-targeted
+because they could never move an output, which is what failed the trust check
+on every completed campaign before that:
+
+- `generic-b31-institution-cqs2` renamed the ECRA table's `name` field, which no
+  lookup reads (the pack binds on the dict key). It now reverts CQS 2 to the
+  CRR 50%.
+- `lessons-e3-subtotal-double-count` added col 0040 inside the 0090 subtotal,
+  but the 0090 `Formula`'s `refs` never include 0040, so the extra term was
+  always `None`. It now has col 0110 deduct 0090 twice, the defect
+  `_net_after_substitution` records.
+
+The self-test is the guard against the first kind; nothing but a campaign
+catches the second.
 
 ## Reading the board
 

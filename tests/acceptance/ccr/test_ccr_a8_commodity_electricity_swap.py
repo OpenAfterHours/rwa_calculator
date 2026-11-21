@@ -80,7 +80,6 @@ _EXPOSURE_REF: str = _EXPECTED["exposure_reference"]  # "ccr__NS_CO_002"
 # An engine that collapses ELECTRICITY → 0.18 would produce CCR-A8 RWA ≈ 126_000.
 # The threshold below is well above that degenerate value so the assertion
 # fails iff the ELECTRICITY SF is wrong.
-_CCR_A7_RWA: float = 126_000.0
 _CCR_A7_EAD: float = 252_000.0
 _DEGENERATE_RWA_THRESHOLD: float = _CCR_A7_EAD * 0.50  # = 126_000.0 (OIL_GAS SF)
 

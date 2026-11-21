@@ -470,6 +470,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference dump. Banked in `tests/contracts/test_pipeline_collect_budget.py`.
 
 ### Removed
+- **The `dev` and `all` extras, and `zensical` and `marimo` as runtime
+  dependencies (packaging).** `rwa-calc[dev]` and `rwa-calc[all]` published the
+  project's own pytest, ruff and ty as a feature of the calculator; an install
+  that still names either now gets the base package and a resolver warning. The
+  `ui` extra stays, empty, so `rwa-calc[ui]` installs without one. No module
+  under `src/rwa_calc` imports `zensical` (the docs site) or `marimo` (the
+  workbooks under `workbooks/`, which the wheel does not ship), so neither is
+  installed with `rwa-calc` any more; marimo's `loro` dependency had made every
+  install on a Python it has no wheel for build it from source. The whole
+  development toolchain is now `[dependency-groups].dev`, which a plain
+  `uv sync` installs: in a checkout `uv sync` is the dev environment, and
+  `uv sync --all-extras` and CI's `uv sync --extra dev` are no longer needed.
+  (`pyproject.toml`, `.github/workflows/`, `docs/getting-started/installation.md`)
+- **Tests, scripts, docs and `uv.lock` from the `rwa-calc` sdist (packaging).**
+  The sdist now holds exactly what builds the wheel: `src/`, `README.md`,
+  `LICENSE` and `pyproject.toml`. The rest serves the whole workspace and could
+  not be used from the sdist: run inside the extracted 0.3.34 sdist,
+  `tests/contracts` gave 36 failures against 1 in the checkout, because the
+  tests read files no sdist carries (`.github/`, `.claude/`, `AGENTS.md`,
+  `packages/rwa-filer`). `uv lock --check` there stops at the `rwa-filer`
+  workspace source. The tests and the lock are at the release tag.
+  `scripts/check_wheel_install.py` now builds each wheel from its sdist, as
+  `publish.yml` does, so a build input missing from the sdist fails the gate.
 - **BREAKING (reporting surface): the two exposure-class row maps are retired —
   `SA_EXPOSURE_CLASS_ROWS` is deleted, and `IRB_EXPOSURE_CLASS_ROWS` is narrowed
   to labels as `IRB_EXPOSURE_CLASS_LABELS`.** Both mapped `ExposureClass.value`

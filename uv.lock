@@ -1681,7 +1681,6 @@ dependencies = [
     { name = "fastexcel" },
     { name = "itsdangerous" },
     { name = "jinja2" },
-    { name = "marimo" },
     { name = "polars" },
     { name = "polars-normal-stats" },
     { name = "python-multipart" },
@@ -1689,43 +1688,6 @@ dependencies = [
     { name = "uvicorn" },
     { name = "watchfire" },
     { name = "xlsxwriter" },
-    { name = "zensical" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "hypothesis" },
-    { name = "marimo" },
-    { name = "mkdocstrings", extra = ["python"] },
-    { name = "numpy" },
-    { name = "pytest" },
-    { name = "pytest-benchmark" },
-    { name = "pytest-cov" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-    { name = "ty" },
-    { name = "uvicorn" },
-    { name = "zensical" },
-]
-dev = [
-    { name = "httpx" },
-    { name = "hypothesis" },
-    { name = "mkdocstrings", extra = ["python"] },
-    { name = "numpy" },
-    { name = "pytest" },
-    { name = "pytest-benchmark" },
-    { name = "pytest-cov" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-    { name = "ty" },
-    { name = "zensical" },
-]
-ui = [
-    { name = "fastapi" },
-    { name = "marimo" },
-    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -1734,49 +1696,36 @@ dev = [
     { name = "httpx" },
     { name = "hypothesis" },
     { name = "jsonschema" },
+    { name = "marimo" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "psutil" },
     { name = "pymupdf" },
+    { name = "pytest" },
     { name = "pytest-benchmark" },
+    { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
+    { name = "ty" },
     { name = "zensical" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.135.3" },
-    { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.115.0" },
     { name = "fastexcel", specifier = ">=0.19.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100.0" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "marimo", specifier = ">=0.19.6" },
-    { name = "marimo", marker = "extra == 'ui'", specifier = ">=0.5.0" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=0.24.0" },
-    { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26.0" },
     { name = "polars", specifier = ">=1.0.0" },
     { name = "polars-normal-stats", specifier = ">=0.2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.0" },
-    { name = "rwa-calc", extras = ["ui", "dev"], marker = "extra == 'all'" },
     { name = "rwa-filer", editable = "packages/rwa-filer" },
-    { name = "ty", marker = "extra == 'dev'" },
     { name = "uvicorn", specifier = ">=0.40.0" },
-    { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.27.0" },
     { name = "watchfire", specifier = "==0.3.1" },
     { name = "xlsxwriter", specifier = ">=3.1.0" },
-    { name = "zensical", specifier = ">=0.0.30" },
-    { name = "zensical", marker = "extra == 'dev'", specifier = ">=0.0.29" },
 ]
-provides-extras = ["ui", "dev", "all"]
+provides-extras = ["ui"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1784,15 +1733,19 @@ dev = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "hypothesis", specifier = ">=6.100.0" },
     { name = "jsonschema", specifier = ">=4.20.0" },
+    { name = "marimo", specifier = ">=0.19.6" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.0" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "pymupdf", specifier = ">=1.27.2.2" },
+    { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-benchmark", specifier = ">=5.2.3" },
+    { name = "pytest-cov", specifier = ">=4.0.0" },
     { name = "pytest-xdist", specifier = ">=3.5.0" },
     { name = "ruff", specifier = ">=0.14.14" },
-    { name = "zensical", specifier = ">=0.0.29" },
+    { name = "ty" },
+    { name = "zensical", specifier = ">=0.0.30" },
 ]
 
 [[package]]

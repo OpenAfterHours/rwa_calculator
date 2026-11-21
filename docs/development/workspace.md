@@ -244,8 +244,8 @@ unable to import `rwa_calc.api` (`watchfire`; escape log, 2026-11-14).
 ## Day-to-day commands
 
 ```bash
-# The whole dev environment (both packages, all extras)
-uv sync --all-extras
+# The whole dev environment (both packages and the `dev` group)
+uv sync
 
 # rwa-calc's tests — does NOT collect packages/
 uv run pytest tests/
@@ -279,7 +279,7 @@ unset UV_PROJECT_ENVIRONMENT
 
 !!! warning "`uv sync --package rwa-filer` rebuilds the active environment"
     Without `UV_PROJECT_ENVIRONMENT`, that command makes `.venv` hold the member
-    alone and removes everything else. Run `uv sync --all-extras` to restore it.
+    alone and removes everything else. Run `uv sync` to restore it.
 
 ## Releasing
 

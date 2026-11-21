@@ -41,7 +41,7 @@ The repo is a **uv workspace**. The root is still the `rwa-calc` project *and* t
 - **`rwa-filer` has two rule engines, on purpose — do not merge them casually.** `rwa_filer.boe` reads the Bank's v4.1.1 rule workbooks and evaluates each rule the way the taxonomy's formula is evaluated (one evaluation per combination of cells, per-reference defaults, rounding allowances from each fact's `decimals`, filing-indicator preconditions); it runs on a canonical return and is what `validate_return`, `rwa-filer validate/build` and `export_filing_package` use. Its verdicts are pinned to Arelle's, rule by rule, in `packages/rwa-filer/tests/boe/data/*oracle*.json`. Where the workbook text and the taxonomy's XBRL formula differ, the formula wins — it is what the gateway runs — which is why the packaged rule books are built with `rulebook import --taxonomy-package` and carry each formula's closed dimensions (`rwa_filer.boe.formulas`); a rule book rebuilt from the workbook alone silently loses that. `rwa_filer.validate.{index,evaluate,checker}` is the older template-level engine: it runs the EBA and BoE v4.1.1 template-level extracts on OUR frames through `filing/bindings.py` and `filing/sheet_maps.py`, and is what the supervisory register and the coverage ratchet measure. It cannot be retired until the generated estate is laid out as the taxonomy lays it out — the filing-mapping ratchet says how far that is. For Basel 3.1 the supervisory register also runs `rwa_filer.boe` on each filed return and holds every gateway break (`known_gateway_breaks`, its Error half equal to the filing-mapping baseline's) and every rule the two engines give opposite verdicts on (`known_engine_disagreements`), each reason labelled `publisher issue PI-nn` or `not PI-nn - ...` where the Bank's publisher-issue register names the rule.
 - **The dependency points one way.** `rwa-calc` depends on `rwa-filer`. **Nothing under `packages/rwa-filer/src/rwa_filer` may import `rwa_calc`** — `arch_check` check 23, no allowlist. The shared environment makes `rwa_calc` importable from everywhere, so an inverted import passes every test here and breaks only for someone who installs the `rwa-filer` wheel alone; that is why the gate reads the source, and why CI's `rwa-filer (isolated)` job runs the member's suite in an environment that holds it alone.
 - **A new `rwa-filer` runtime dependency goes in `packages/rwa-filer/pyproject.toml`**, never only in the root one — the shared environment would hide the omission until that isolated job.
-- **`uv sync --package rwa-filer` rebuilds `.venv` to hold the member alone** and removes everything else. Useful for reproducing the isolated job; run `uv sync --all-extras` afterwards to get the dev environment back (or point `UV_PROJECT_ENVIRONMENT` at a scratch directory first).
+- **`uv sync --package rwa-filer` rebuilds `.venv` to hold the member alone** and removes everything else. Useful for reproducing the isolated job; run `uv sync` afterwards to get the dev environment back (or point `UV_PROJECT_ENVIRONMENT` at a scratch directory first).
 - **Release rwa-filer first.** An installed `rwa-calc` resolves `rwa-filer` from PyPI, so an `rwa-calc` release that needs a new `rwa-filer` version must follow it: `python scripts/deploy.py --package rwa-filer <version>`, then the ordinary `rwa-calc` release — or `--package all`, which releases every workspace package in dependency order and waits for each on PyPI before its dependents. A new workspace member must be wired into `deploy.py::MEMBER_RELEASES`, `check_distribution.py::DIST_DIRS` and `publish.yml`; `tests/contracts/test_release_coverage.py` fails until it is.
 
 ### Key Design Patterns
@@ -310,12 +310,13 @@ here.
 
 - If the uv cache is read-only, use: `UV_CACHE_DIR=/tmp/claude-1000/uv-cache uv run ...`
 - If the network is blocked and uv cannot resolve deps: create the venv with
-  `UV_CACHE_DIR=/home/philm/.cache/uv uv sync --offline --extra all --python 3.13`, then run
+  `UV_CACHE_DIR=/home/philm/.cache/uv uv sync --offline --python 3.13`, then run
   directly via `.venv/bin/python -m pytest ...` etc.
-- The `all` extra there is load-bearing, not belt-and-braces. `pytest`, `pytest-cov` and `ty`
-  live only in `[project.optional-dependencies]`, never in `[dependency-groups]`, so a bare
-  `uv sync` uninstalls them and the validation gate then fails on a missing tool rather than on
-  a real defect.
+- Every tool the validation gate runs (`pytest`, `pytest-cov`, `ty`, `ruff`, `zensical`, ...)
+  lives in `[dependency-groups].dev`, which a bare `uv sync` installs. There is no `dev` or
+  `all` extra any more, so `--extra all` / `--all-extras` are not needed, and `--extra all`
+  fails. Never pass `--no-dev`: it strips the toolchain and the gate then fails on a missing
+  tool rather than on a real defect.
 - If `uv sync --offline` fails (missing simple indices): manually symlink packages from
   `/home/philm/.cache/uv/archive-v0/` into `.venv/lib/python3.13/site-packages/`. Ensure
   cp313-specific archives are used (not cp314).

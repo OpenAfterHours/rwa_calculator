@@ -20,12 +20,13 @@ here.
 
 - If the uv cache is read-only, use: `UV_CACHE_DIR=/tmp/claude-1000/uv-cache uv run ...`
 - If the network is blocked and uv cannot resolve deps: create the venv with
-  `UV_CACHE_DIR=/home/philm/.cache/uv uv sync --offline --extra all --python 3.13`, then run
+  `UV_CACHE_DIR=/home/philm/.cache/uv uv sync --offline --python 3.13`, then run
   directly via `.venv/bin/python -m pytest ...` etc.
-- The `all` extra there is load-bearing, not belt-and-braces. `pytest`, `pytest-cov` and `ty`
-  live only in `[project.optional-dependencies]`, never in `[dependency-groups]`, so a bare
-  `uv sync` uninstalls them and the validation gate then fails on a missing tool rather than on
-  a real defect.
+- Every tool the validation gate runs (`pytest`, `pytest-cov`, `ty`, `ruff`, `zensical`, ...)
+  lives in `[dependency-groups].dev`, which a bare `uv sync` installs. There is no `dev` or
+  `all` extra any more, so `--extra all` / `--all-extras` are not needed, and `--extra all`
+  fails. Never pass `--no-dev`: it strips the toolchain and the gate then fails on a missing
+  tool rather than on a real defect.
 - If `uv sync --offline` fails (missing simple indices): manually symlink packages from
   `/home/philm/.cache/uv/archive-v0/` into `.venv/lib/python3.13/site-packages/`. Ensure
   cp313-specific archives are used (not cp314).

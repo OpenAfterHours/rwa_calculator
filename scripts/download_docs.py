@@ -200,31 +200,6 @@ MANIFEST: list[DocEntry] = [
         url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/boe-banking-validations-deny-list-november-2026.xlsx",
         source=BOE_BANKS_REPORTING_LANDING,
     ),
-    # --- Reporting templates (manual download) ---
-    # DocEntry(
-    #     filename="0F07 - annex-i-of-07-00-credit-risk-sa-reporting-template.xlsx",
-    #     description="Credit risk SA reporting template (OF 07.00)",
-    #     url=None,
-    #     source=BOE_PS126_LANDING,
-    # ),
-    # DocEntry(
-    #     filename="CRR - corep-own-funds.xlsx",
-    #     description="CRR COREP own funds template",
-    #     url=None,
-    #     source=PRA_RULEBOOK,
-    # ),
-    # DocEntry(
-    #     filename="OF0801-annex-i-of-08-01-credit-risk-irb-reporting-template.xlsx",
-    #     description="Credit risk IRB reporting template (OF 08.01)",
-    #     url=None,
-    #     source=BOE_PS126_LANDING,
-    # ),
-    # DocEntry(
-    #     filename="OF0802-annex-i-of-08-02-credit-risk-irb-reporting-template.xlsx",
-    #     description="Credit risk IRB reporting template (OF 08.02)",
-    #     url=None,
-    #     source=BOE_PS126_LANDING,
-    # ),
 ]
 
 

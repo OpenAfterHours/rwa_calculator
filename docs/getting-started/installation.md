@@ -57,8 +57,10 @@ uv run python my_calculation.py   # your own script using rwa_calc
 uv run rwa-ui                     # the web UI, on http://localhost:8000
 ```
 
-The base package is all most users need: the web UI, the REST API, the Marimo workbooks
-and [`rwa-filer`](../rwa-filer/index.md) are all included.
+The base package is all you need: the web UI, the REST API and
+[`rwa-filer`](../rwa-filer/index.md) are all included. The Marimo
+[expected-output workbooks](../development/workbooks.md) are not part of the package;
+they run from a source checkout (see [Install from Source](#install-from-source)).
 
 ### Run the UI without a project
 
@@ -77,21 +79,17 @@ rwa-ui
 
 ### Optional Dependencies
 
-```bash
-# Development tools (pytest, ruff, ty, zensical)
-uv add "rwa-calc[dev]"
-
-# Everything (ui and dev dependencies)
-uv add "rwa-calc[all]"
-```
-
-The quotes stop shells such as zsh from reading the square brackets as a file pattern.
+`rwa-calc` has no optional dependencies to choose between.
 
 | Extra | Description |
 |-------|-------------|
-| `ui` | Kept for compatibility. Marimo, FastAPI and Uvicorn now ship in the base package |
-| `dev` | Development tools (pytest, ruff, ty, zensical, etc.) |
-| `all` | All optional dependencies combined |
+| `ui` | Kept for compatibility, and installs nothing extra. FastAPI and Uvicorn ship in the base package |
+
+The `dev` and `all` extras were removed after 0.3.34. They installed the project's own
+development tools (pytest, ruff, ty, zensical), which are of no use without the source
+tree. They now come with a source checkout; see [Install from Source](#install-from-source).
+An install that still names `rwa-calc[dev]` or `rwa-calc[all]` gets the base package
+and a warning that the extra does not exist.
 
 ---
 
@@ -105,11 +103,9 @@ repository:
 git clone https://github.com/OpenAfterHours/rwa_calculator.git
 cd rwa_calculator
 
-# Create .venv and install the locked dependencies
+# Create .venv and install the locked dependencies, development tools included
+# (pytest, ruff, ty, zensical, marimo)
 uv sync
-
-# Or include the development tools (pytest, ruff, ty, zensical)
-uv sync --all-extras
 
 # Download regulatory reference documents
 uv run python scripts/download_docs.py

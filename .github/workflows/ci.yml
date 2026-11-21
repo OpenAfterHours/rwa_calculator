@@ -57,7 +57,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       # `packages/` is the uv workspace member tree (packages/rwa-filer). It is
       # linted under the ROOT ruff configuration: a member pyproject.toml carries
@@ -81,7 +81,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       - name: ty
         run: uv run ty check src/rwa_calc/
@@ -99,7 +99,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py
@@ -223,8 +223,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      # Every other job shares the workspace DEV environment, where the dev extra
-      # and dependency group are installed, so a module that imports a dev-only
+      # Every other job shares the workspace DEV environment, where the dev
+      # dependency group is installed, so a module that imports a dev-only
       # distribution passes all of them. That is how every rwa-calc release from
       # 0.2.24 to 0.3.34 shipped unable to import rwa_calc.api: `watchfire` (the
       # `@cites` decorator, imported at module level by 79 modules) was declared
@@ -252,7 +252,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py
@@ -285,7 +285,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       # Exercises the spill-to-parquet edge path (config.spill_edges) so a
       # SpillError regression surfaces here, not in production out-of-core
@@ -305,7 +305,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py
@@ -336,7 +336,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py
@@ -363,7 +363,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py
@@ -396,7 +396,7 @@ jobs:
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync
 
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py

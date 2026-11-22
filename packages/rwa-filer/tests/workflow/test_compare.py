@@ -17,7 +17,15 @@ from datetime import date
 
 import pytest
 
-from compare_builders import CORPORATES, TABLE, corporate_return, unreported_return
+from compare_builders import (
+    CORPORATES,
+    OWN_FUNDS_CELLS,
+    OWN_FUNDS_TABLE,
+    TABLE,
+    corporate_return,
+    own_funds_return,
+    unreported_return,
+)
 from rwa_filer.boe.deny import DENY_DOWNGRADED, DenyEntry, DenyList
 from rwa_filer.boe.engine import CellAddress, Evaluation
 from rwa_filer.readers import SourceReading
@@ -328,6 +336,42 @@ def test_findings_name_the_two_returns_as_the_caller_does() -> None:
     comparison = compare({"total_overlay": 50_000.0}, {})
 
     assert comparison.findings[0].title.startswith("In the old system,")
+
+
+# ---------------------------------------------------------------------------
+# A table with no sheets
+# ---------------------------------------------------------------------------
+
+
+def test_returns_that_differ_only_in_a_table_with_no_sheets_are_compared() -> None:
+    """Own funds has no sheet axis: every differing cell's sheet is empty.
+
+    The escape this closes: the differing cells were put in a frame whose
+    ``sheet`` column, all empty, had no type, and joining it to the taxonomy's
+    cells raised - on any resubmission whose changes were all in such a table.
+    """
+    # Arrange
+    readings = [
+        SourceReading(ret=own_funds_return(amount)) for amount in (1_000_000.0, 1_500_000.0)
+    ]
+    pack = resolve_release(readings[0].ret.header.module).pack
+    table = pack.table(OWN_FUNDS_TABLE)
+    assert table is not None and table.fixed_axis is None and table.open_axis is None, (
+        f"{OWN_FUNDS_TABLE} has gained a sheet axis - this no longer tests a table without one"
+    )
+    for reading in readings:
+        assert check_structure(reading.ret, pack) == [], "the fixture must be a valid return"
+
+    # Act
+    comparison = compare_returns(*readings)
+
+    # Assert
+    (finding,) = comparison.findings
+    assert (finding.kind, finding.points_at) == (KIND_CALCULATION, POINTS_AT_INPUTS)
+    assert set(finding.cells) == {
+        (OWN_FUNDS_TABLE, None, None, row, column) for row, column in OWN_FUNDS_CELLS
+    }
+    assert comparison.counts()[CATEGORY_MATERIAL] == len(OWN_FUNDS_CELLS)
 
 
 # ---------------------------------------------------------------------------

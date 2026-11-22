@@ -20,6 +20,8 @@ How differences are linked into one finding
   agree on how those figures relate, so they differ for one reason.
 - Where such a total agrees and two of its components differ by equal and
   opposite amounts, the same figure is reported in a different row: a MOVE.
+  Of several components up (or down) by the same amount, the move names the
+  first in cell order, so the findings do not depend on Python's hash seed.
 - Differing cells on one row of one sheet, cells that are one data point shown
   in two places, and the same difference on an open-axis sheet and its total,
   are the same figure and are linked too.
@@ -33,9 +35,11 @@ References:
 
 from __future__ import annotations
 
+import math
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 from typing import TYPE_CHECKING, Final
 
 import polars as pl
@@ -147,7 +151,8 @@ class RowMove:
 
     Attributes:
         table / sheet / open_key: The sheet the move is on.
-        baseline_row / candidate_row: Where each return reports it.
+        baseline_row / candidate_row: Where each return reports it. Of rows
+            that moved by the same amount, the first in cell order.
         columns: The columns it moved in.
         amount: How much moved (the largest across ``columns``).
     """
@@ -338,6 +343,20 @@ def _one_sided(checks: list[_Check]) -> list[_Check]:
     return found
 
 
+def _first_at_each_total(checks: Iterable[_Check]) -> dict[Cell, _Check]:
+    """For each cell, the first of ``checks`` whose left side is that cell alone, in both files.
+
+    Worked out once for a finding's checks: looking each total up by scanning
+    them costs the square of their number, and a finding has a check per country.
+    """
+    found: dict[Cell, _Check] = {}
+    for check in checks:
+        left = {_cell(address) for item in check.by_side.values() for address in item.left}
+        if len(left) == 1:
+            found.setdefault(left.pop(), check)
+    return found
+
+
 def _one_sided_points(holder: str, broken_on: set[str | None]) -> str | None:
     """Which return a column only ``holder`` reports points at, from the rules it breaks.
 
@@ -475,6 +494,11 @@ class _Links:
         self._link_same_datapoint()
         self._link_open_siblings()
 
+    @cached_property
+    def _linkable_in_order(self) -> list[Cell]:
+        """The linkable cells in cell order, so a sum over them is the same whatever the hash seed."""
+        return sorted(self.linkable, key=_order)
+
     # -- union-find ---------------------------------------------------------------
 
     def _find(self, cell: Cell) -> Cell:
@@ -525,6 +549,10 @@ class _Links:
             if total in self.context.material and parts:
                 self.explained[total].update(parts)
             elif total not in self.context.material and len(parts) > 1:
+                # In cell order, not the order a set happened to hold them in: of two
+                # parts that differ by the same amount, which one a move names must not
+                # depend on Python's hash seed.
+                parts.sort(key=_order)
                 net = sum(self.context.delta(cell) for cell in parts)
                 tolerance = sum(self.context.allowance(cell) for cell in parts)
                 scale = sum(abs(self.context.delta(cell)) for cell in parts)
@@ -548,9 +576,12 @@ class _Links:
         ]
         if not fixed:
             return
+        # The types are stated, not inferred: where no differing cell has a sheet (own
+        # funds, CCR, netting) an inferred ``sheet`` column has no type and cannot be
+        # joined to the taxonomy's.
         frame = pl.DataFrame(
             [(cell[0], cell[1], cell[3], cell[4]) for cell in fixed],
-            schema=["table", "sheet", "row", "column"],
+            schema=dict.fromkeys(("table", "sheet", "row", "column"), pl.String),
             orient="row",
         )
         points = frame.join(
@@ -571,13 +602,84 @@ class _Links:
             if cell[2] is not None:
                 siblings[(cell[0], cell[1], cell[3], cell[4])].append(cell)
         for cells in siblings.values():
-            for first in cells:
-                for second in cells:
-                    gap = abs(self.context.delta(first) - self.context.delta(second))
-                    if _order(first) < _order(second) and gap <= (
-                        self.context.allowance(first) + self.context.allowance(second)
-                    ):
-                        self._join((first, second))
+            if len(cells) > 1:
+                self._link_siblings(cells)
+
+    def _link_siblings(self, cells: list[Cell]) -> None:
+        """Join every two of ``cells`` whose differences agree within their allowances together.
+
+        Two cells are linked when ``abs(delta - other delta) <= allowance +
+        other allowance``. The cells joined are exactly those that testing
+        every pair would join, found without testing every pair: that costs
+        the square of the number of countries, on every row and column.
+
+        Cells with the same difference and allowance are linked to each other
+        and to the same other cells, so one stands for them all. The rest are
+        put in order of difference, a list per allowance, and the lists are
+        walked two at a time (``_link_runs``): between two allowances the
+        reach is one number, so the cells within reach of a cell are a run of
+        the other list, and the run only moves forward as the cell does. The
+        cost is in the cells times the number of different allowances, which
+        is the number of accuracies the two files state, not of countries.
+        """
+        alike: dict[tuple[float, float], list[Cell]] = defaultdict(list)
+        for cell in cells:
+            alike[(self.context.delta(cell), self.context.allowance(cell))].append(cell)
+        if not all(
+            math.isfinite(delta) and math.isfinite(allowance) and allowance >= 0
+            for delta, allowance in alike
+        ):
+            # Infinity and not-a-number do not order, and a negative allowance does
+            # not link a cell to its own double: nothing above holds.
+            self._link_every_pair(cells)
+            return
+        by_allowance: dict[float, list[tuple[float, Cell]]] = defaultdict(list)
+        for delta, allowance in sorted(alike):
+            same = alike[(delta, allowance)]
+            self._join(same)
+            by_allowance[allowance].append((delta, same[0]))
+        classes = list(by_allowance.items())
+        for index, (allowance, first) in enumerate(classes):
+            for other, second in classes[index:]:
+                self._link_runs(first, second, allowance + other)
+
+    def _link_runs(
+        self, first: list[tuple[float, Cell]], second: list[tuple[float, Cell]], reach: float
+    ) -> None:
+        """Join each cell of ``first`` to every cell of ``second`` within ``reach`` of it.
+
+        Both are in order of difference, so the cells of ``second`` within reach
+        of a cell are a run, ``second[low:high]``, and neither end moves back
+        from one cell of ``first`` to the next.
+        """
+        low = high = 0
+        for delta, cell in first:
+            while (
+                low < len(second)
+                and second[low][0] < delta
+                and not abs(delta - second[low][0]) <= reach
+            ):
+                low += 1
+            joined = high
+            high = max(high, low)
+            while high < len(second) and abs(delta - second[high][0]) <= reach:
+                high += 1
+            if low < joined:
+                # second[low:joined] was within reach of an earlier cell as well, which
+                # joined all of it into one group: one link takes this cell into it.
+                self._join((cell, second[joined - 1][1]))
+            for _delta, other in second[max(low, joined) : high]:
+                self._join((cell, other))
+
+    def _link_every_pair(self, cells: list[Cell]) -> None:
+        """The same links, by testing every pair: for differences that do not order."""
+        for first in cells:
+            for second in cells:
+                gap = abs(self.context.delta(first) - self.context.delta(second))
+                if _order(first) < _order(second) and gap <= (
+                    self.context.allowance(first) + self.context.allowance(second)
+                ):
+                    self._join((first, second))
 
     # -- findings ---------------------------------------------------------------------
 
@@ -620,7 +722,8 @@ class _Links:
         drafts = []
         for (side, gap), checks in groups.items():
             totals = sorted({_cell(check.by_side[side].left[0]) for check in checks}, key=_order)
-            breakdown = tuple(self._breakdown(total, checks) for total in totals)
+            at_total = _first_at_each_total(checks)
+            breakdown = tuple(self._breakdown(total, at_total.get(total)) for total in totals)
             title, detail = self._total_words(side, gap, totals[0], breakdown, checks)
             drafts.append(
                 Discrepancy(
@@ -844,7 +947,7 @@ class _Links:
             return None
         baseline_rate, candidate_rate = (float(match.group(1)) for match in rates if match)
         net: dict[str, float] = defaultdict(float)
-        for cell in self.linkable:
+        for cell in self._linkable_in_order:
             on_sheet = (cell[0], cell[1], cell[2]) == (move.table, move.sheet, move.open_key)
             if on_sheet and cell[3] in (move.baseline_row, move.candidate_row):
                 net[cell[4]] += self.context.delta(cell)
@@ -860,7 +963,7 @@ class _Links:
         observed = net[column]
         tolerance = sum(
             self.context.allowance(cell)
-            for cell in self.linkable
+            for cell in self._linkable_in_order
             if cell[4] == column and cell[3] in (move.baseline_row, move.candidate_row)
         )
         return RateCheck(
@@ -870,19 +973,15 @@ class _Links:
             consistent=abs(implied - observed) <= max(tolerance, 1e-6 * abs(implied)),
         )
 
-    def _breakdown(self, total: Cell, checks: list[_Check]) -> TotalBreakdown | None:
+    def _breakdown(self, total: Cell, check: _Check | None) -> TotalBreakdown | None:
+        """``total``'s difference, split by ``check``: the first that has it alone on its left."""
         if total not in self.context.material:
             return None
         gaps = {SIDE_BASELINE: 0.0, SIDE_CANDIDATE: 0.0}
-        for check in checks:
-            if {_cell(address) for item in check.by_side.values() for address in item.left} != {
-                total
-            }:
-                continue
+        if check is not None:
             for side, item in check.by_side.items():
                 if item.left_value is not None and item.right_value is not None:
                     gaps[side] = item.left_value - item.right_value
-            break
         unexplained = gaps[SIDE_CANDIDATE] - gaps[SIDE_BASELINE]
         delta = self.context.delta(total)
         return TotalBreakdown(

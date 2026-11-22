@@ -437,27 +437,26 @@ def closing_dimensions(pack: TaxonomyPack, rule: Rule) -> set[str] | None:
     Such a rule is one neither the gateway nor this package can fire.
     """
     shut: set[str] = set()
+    # Both indexes are worked out once per pack and kept with it: a rule book
+    # holds thousands of references, and each used to filter the pack's whole
+    # cell table and rebuild every data point's dimension set again.
+    cells_by_table = pack.derived(_cells_by_table)
+    carried = pack.derived(_non_default_dimensions)
     for reference in references(rule.tree):
         table = pack.tables.get(reference.table or "")
         if table is None:
             continue
+        named = cells_by_table.get(table.code)
+        if named is None:
+            continue
         rows = {table.row_code(code) for code in reference.rows}
         columns = {table.column_code(code) for code in reference.columns}
         sheets = {table.sheet_code(code) for code in reference.sheets}
-        named = pack.cells.filter(pl.col("table") == table.code)
         for column, accepted in (("row", rows), ("column", columns), ("sheet", sheets)):
             if accepted:
                 named = named.filter(pl.col(column).is_in(sorted(accepted)))
         closed = rule.closed | rule.closed_by_variable.get(reference.variable or "", frozenset())
-        hits = [
-            closed
-            & {
-                dimension
-                for dimension, member in pack.datapoints[point].dimensions
-                if member.rpartition(":")[2] != DEFAULT_MEMBER
-            }
-            for point in named["datapoint"].unique().to_list()
-        ]
+        hits = [closed & carried[point] for point in named["datapoint"].unique().to_list()]
         if hits and all(hits):
             shut |= set().union(*hits)
     return shut or None
@@ -746,6 +745,30 @@ def _measure_samples(
             "filing_indicators": len(reading.ret.indicators or {}),
         }
     return measured
+
+
+def _cells_by_table(pack: TaxonomyPack) -> dict[str, pl.DataFrame]:
+    """The pack's cells, one frame per table, each in the pack's own row order.
+
+    Kept with the pack (``TaxonomyPack.derived``) for ``closing_dimensions``.
+    """
+    parts = pack.cells.partition_by("table", as_dict=True, maintain_order=True)
+    return {str(key[0]): frame for key, frame in parts.items()}
+
+
+def _non_default_dimensions(pack: TaxonomyPack) -> tuple[frozenset[str], ...]:
+    """For each data point, by number, the dimensions it carries at a non-default member.
+
+    Kept with the pack (``TaxonomyPack.derived``) for ``closing_dimensions``.
+    """
+    return tuple(
+        frozenset(
+            dimension
+            for dimension, member in point.dimensions
+            if member.rpartition(":")[2] != DEFAULT_MEMBER
+        )
+        for point in pack.datapoints
+    )
 
 
 # =============================================================================

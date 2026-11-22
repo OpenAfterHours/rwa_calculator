@@ -88,6 +88,11 @@ CLEAN_CSV = "table,sheet,row,column,value\nOF07.00.01.01,0008,0010,0010,0\n"
 
 #: The marker a child writes its probe after, on stderr.
 PROBE = "@@probe "
+#: Why "the collector ran" is read as collections in any generation. Which
+#: generation ``gc.get_stats()`` counts a young pass under depends on the
+#: interpreter: CPython 3.14.4's incremental collector counts them under
+#: generation 1 and never under 0, where 3.13 and 3.14.6 count them under 0.
+_COUNTED_ANYWHERE = "no collection ran in any generation while the collector was meant to be on"
 
 #: Runs the declared console script's target as the generated script does
 #: (``sys.exit(target())``), with a probe that reports at interpreter exit. The
@@ -658,7 +663,7 @@ def test_a_workbook_is_read_with_the_collector_on_and_the_command_ends_with_it_o
     # Assert — the workbook was read and validated; it collected while it was
     # read, and the collector is off again, as the entry had it, and frozen at exit.
     assert child.out.startswith("SUBMITTABLE"), child.out
-    assert child.probe["collections"][0] > 0
+    assert sum(child.probe["collections"]) > 0, _COUNTED_ANYWHERE
     assert child.probe["collector_on"] is False
     assert child.probe["frozen"] > 100_000
 
@@ -679,7 +684,7 @@ def test_the_switch_keeps_the_collector_on_and_the_heap_unfrozen(tmp_path: Path)
     assert child.probe["package"] == rwa_filer.__file__
     assert child.out.startswith("BLOCKED") and child.code == EXIT_FAILED
     assert child.probe["collector_on"] is True
-    assert child.probe["collections"][0] > 0
+    assert sum(child.probe["collections"]) > 0, _COUNTED_ANYWHERE
     assert child.probe["frozen"] == 0
 
 

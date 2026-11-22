@@ -7,6 +7,9 @@ __pycache__/
 *.parquet
 *.csv
 *.xlsx
+# ...except the regulation-text skill's committed article index (and its Codex mirror)
+!.claude/skills/regulation-text/index/*.csv
+!.agents/skills/regulation-text/index/*.csv
 
 site/
 tests/benchmarks/data/
@@ -39,3 +42,6 @@ brag-output*/
 .taxonomy/
 .referee-run/
 .arelle-venv/
+
+# regulation-text skill: official text converted on demand (never committed: PRA / BoE terms)
+.regulation-text/

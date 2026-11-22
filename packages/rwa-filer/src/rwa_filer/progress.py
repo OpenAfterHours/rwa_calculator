@@ -48,6 +48,10 @@ PHASE_RULES: Final = "rules"
 #: steps come in the order of these constants; a run may skip one (a return
 #: already in memory is not read; a validation writes nothing), never reorder.
 PHASE_WRITING: Final = "writing"
+#: Running the broken rules again on each part of a return's detail
+#: (``rwa_filer.workflow.attribution``), counted part by part. Not a step of a
+#: validation: it is asked for afterwards, to explain one.
+PHASE_BREAKDOWN: Final = "breakdown"
 
 #: Each step as a person reads it.
 PHASE_LABELS: Final = {
@@ -55,6 +59,7 @@ PHASE_LABELS: Final = {
     PHASE_STRUCTURE: "Checking the structure against the taxonomy",
     PHASE_RULES: "Evaluating the published rules",
     PHASE_WRITING: "Writing the filing package",
+    PHASE_BREAKDOWN: "Running the rules on each part of the return",
 }
 
 #: Seconds between two redraws of a live line: often enough to look alive, not

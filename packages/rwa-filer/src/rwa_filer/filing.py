@@ -68,6 +68,7 @@ if TYPE_CHECKING:
     from rwa_filer.evidence import EvidenceFile
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.progress import ProgressCallback
+    from rwa_filer.readers.detail import ReturnDetail
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.checker import Finding
@@ -158,6 +159,7 @@ def build_filing(
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
     progress: ProgressCallback | None = None,
+    detail: ReturnDetail | None = None,
 ) -> FilingPackage:
     """Validate ``ret`` and, if it may be filed, write its filing package.
 
@@ -192,6 +194,9 @@ def build_filing(
             ``validate_return``). Defaults to the run date.
         progress: Told which step the build is on: the validation's steps
             (``validate_return``), then writing the package when it is written.
+        detail: The rows ``ret`` was summed from, when it was read as a
+            detail (``readers.detail``). The manifest records which file, which
+            columns and how many rows; it has no ``detail`` entry otherwise.
 
     Returns:
         A ``FilingPackage``. Nothing is written when ``blocked_by`` is set.
@@ -264,6 +269,8 @@ def build_filing(
     manifest = _manifest(ret, validation, instance, options, instance_path, zip_path, identity)
     manifest["adjustments"] = [applied.as_record() for applied in adjustments]
     manifest["evidence"] = None if evidence_file is None else _evidence_record(evidence_file)
+    if detail is not None:
+        manifest["detail"] = detail.as_record()
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     logger.info(
         "filing package written: %s (%d bytes, %d fact(s)); submittable=%s",

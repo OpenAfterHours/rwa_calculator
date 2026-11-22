@@ -43,6 +43,38 @@
   <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.shortfall else '--pass' }})"></span>Templates covered</div><div class="value">{{ (view.templates | length) - (current.validation.report.templates_uncovered | length if current.validation.report else 0) }} of {{ view.templates | length }}</div><div class="sub">reported templates at least one rule ran on</div></div>
 </div>
 
+{% if breakdown %}
+<section class="panel" id="breakdown">
+  <div class="panel-head">
+    <h2>Summed from {{ breakdown.rows_summed | count }} row{{ "s" if breakdown.rows_summed != 1 }}</h2>
+    <a class="small" href="/returns/{{ current.return_id }}/investigate">Where the breaks come from</a>
+  </div>
+  <p class="small muted" style="margin: 0">Rows of <span class="mono">{{ breakdown.file }}</span> for the same cell are added together, and the sum is the figure validated and filed. The rows are kept, so any figure can be split by {{ breakdown.dimensions | map("first") | join(" or ") }}.</p>
+  <div class="stats">
+    <div class="stat"><div class="small muted">Rows read</div><div class="value">{{ breakdown.rows_read | count }}</div></div>
+    <div class="stat"><div class="small muted">Cells they make</div><div class="value">{{ breakdown.cells | count }}</div></div>
+    <div class="stat"><div class="small muted">Cells of several rows</div><div class="value">{{ breakdown.summed_cells | count }}</div></div>
+    {% if breakdown.line_ref %}<div class="stat"><div class="small muted">Repeats of a line reference dropped</div><div class="value">{{ breakdown.repeats_dropped | count }}</div></div>{% endif %}
+  </div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th scope="col">Breakdown column</th><th scope="col" class="num">Members</th><th scope="col" class="num">Cells fed by more than one</th><th scope="col"><span class="visually-hidden">Investigate</span></th></tr></thead>
+      <tbody>
+        {% for dimension, members, shared in breakdown.dimensions %}
+        <tr><td class="code">{{ dimension }}</td><td class="num">{{ members | count }}</td><td class="num">{{ shared | count }}</td><td class="num"><a href="{{ link('/returns/' ~ current.return_id ~ '/investigate', by=dimension) }}">Investigate</a></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted" style="margin: 0">{% if breakdown.line_ref %}Line reference <span class="mono">{{ breakdown.line_ref }}</span>: {{ "a reference given twice in one cell stopped the file" if breakdown.on_repeat == "stop" else "a reference given twice in one cell with the same figures was kept once" }}; none is left.{% else %}No line reference was named, so every row counts: two rows that agree on everything are two amounts, and both are added.{% endif %}</p>
+</section>
+{% elif current.reading.unread_columns %}
+<section class="panel" id="breakdown-offer">
+  <div class="panel-head"><h2>This file has columns that were not read</h2><a class="small" href="/returns/{{ current.return_id }}/investigate">Break the return down by them</a></div>
+  <p class="small muted" style="margin: 0"><span class="mono">{{ current.reading.unread_columns | join(", ") }}</span>. Opened with one as a breakdown column, each break can be traced to the rows behind it.</p>
+</section>
+{% endif %}
+
 {% if view.structure %}
 <section class="panel" id="structure-findings">
   <h2>Structure findings</h2>

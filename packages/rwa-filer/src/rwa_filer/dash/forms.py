@@ -13,6 +13,9 @@ Key responsibilities:
   attempted, so a refusal the form can make is never kept waiting behind the
   long work of reading and validating.
 - Keep the Open page and the Compare page reading a file the same way.
+- Take, optionally, the columns to break a fact table down by and the column
+  that holds each line's reference (``readers.detail``), and refuse at once an
+  answer to a repeat that is not one of the choices.
 
 References:
 - rwa_filer.readers.open_source — what opening a file means
@@ -29,7 +32,7 @@ from typing import TYPE_CHECKING, Final
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
-from rwa_filer.readers import HeaderFields, carries_header
+from rwa_filer.readers import DetailSpec, HeaderFields, carries_header
 
 if TYPE_CHECKING:
     from starlette.datastructures import FormData
@@ -38,7 +41,17 @@ if TYPE_CHECKING:
     from rwa_filer.progress import ProgressCallback
 
 #: The text fields of an open form, echoed back when a return cannot be opened.
-FORM_FIELDS: Final = ("path", "entity", "reference_date", "module", "currency", "taxonomy")
+FORM_FIELDS: Final = (
+    "path",
+    "entity",
+    "reference_date",
+    "module",
+    "currency",
+    "taxonomy",
+    "breakdown",
+    "line_ref",
+    "on_repeat",
+)
 
 
 @dataclass(frozen=True)
@@ -51,12 +64,15 @@ class OpenRequest:
         name: The name the person knows the file by.
         fields: The header the person typed in.
         taxonomy: The release asked for, by version, or ``None`` for the default.
+        detail: The columns to break the file down by, and its line reference;
+            ``None`` to read it as a return, one row per cell.
     """
 
     path: Path
     name: str
     fields: HeaderFields
     taxonomy: str | None
+    detail: DetailSpec | None = None
 
     def open(self, workspace: Workspace, progress: ProgressCallback | None = None) -> OpenedReturn:
         """Read and validate the file in ``workspace`` — the long part, told to ``progress``.
@@ -66,7 +82,12 @@ class OpenRequest:
             ReleaseNotFoundError: the taxonomy release could not be resolved.
         """
         return workspace.open(
-            self.path, self.fields, name=self.name, taxonomy=self.taxonomy, progress=progress
+            self.path,
+            self.fields,
+            name=self.name,
+            taxonomy=self.taxonomy,
+            progress=progress,
+            detail=self.detail,
         )
 
 
@@ -75,17 +96,21 @@ async def read_open_form(workspace: Workspace, form: FormData) -> OpenRequest:
 
     Raises:
         ValueError: nothing was named, the header is incomplete for a fact
-            table, or the date is not a date.
+            table, the date is not a date, or the breakdown asked for is not
+            one that can be read.
     """
     values = form_values(form)
     fields = header_fields(values)
+    detail = detail_spec(values)
     path, name = await _source(workspace, form, values["path"])
     if not carries_header(path) and not (fields.entity and fields.reference_date and fields.module):
         raise ValueError(
             f"{name} is a fact table, which carries no header: give the entity, the "
             "reference date and the module."
         )
-    return OpenRequest(path=path, name=name, fields=fields, taxonomy=values["taxonomy"] or None)
+    return OpenRequest(
+        path=path, name=name, fields=fields, taxonomy=values["taxonomy"] or None, detail=detail
+    )
 
 
 def form_values(form: FormData) -> dict[str, str]:
@@ -110,6 +135,19 @@ def header_fields(values: dict[str, str]) -> HeaderFields:
         module=values.get("module") or None,
         currency=values.get("currency") or None,
     )
+
+
+def detail_spec(values: dict[str, str]) -> DetailSpec | None:
+    """The breakdown the person asked for, or ``None`` for none.
+
+    Raises:
+        ValueError: the answer to a repeated line reference is not a choice, or
+            a column is named twice.
+    """
+    spec = DetailSpec.from_text(
+        values.get("breakdown"), values.get("line_ref"), values.get("on_repeat")
+    )
+    return spec if spec.active else None
 
 
 def page_number(text: str | None) -> int:

@@ -15,7 +15,9 @@ Key responsibilities:
 
 The expected columns are the canonical ones (``rwa_filer.model.FACT_SCHEMA``).
 Column names are matched case-insensitively and surrounding whitespace is
-ignored; extra columns are ignored.
+ignored; extra columns are ignored by ``read_parquet`` / ``read_csv`` and kept
+by ``read_table``, for a detail file whose extra columns say where each row
+came from (``rwa_filer.readers.detail``).
 
 References:
 - rwa_filer.model — the canonical fact schema
@@ -40,9 +42,7 @@ logger = logging.getLogger(__name__)
 
 def read_parquet(path: Path, header: ReturnHeader) -> CanonicalReturn:
     """Read a long-format Parquet fact table."""
-    frame = _rename_to_schema(pl.read_parquet(path))
-    logger.info("read %d rows from %s", frame.height, path.name)
-    return CanonicalReturn.from_frame(header, _rescue_text_values(frame))
+    return CanonicalReturn.from_frame(header, read_table(path))
 
 
 def read_csv(path: Path, header: ReturnHeader) -> CanonicalReturn:
@@ -51,9 +51,41 @@ def read_csv(path: Path, header: ReturnHeader) -> CanonicalReturn:
     Every column is read as text: the codes must keep their leading zeros, and
     ``value`` is parsed here, where a cell that will not parse can be kept.
     """
-    frame = _rename_to_schema(pl.read_csv(path, infer_schema=False, encoding="utf8-lossy"))
+    return CanonicalReturn.from_frame(header, read_table(path))
+
+
+def read_table(path: Path) -> pl.DataFrame:
+    """A Parquet or CSV fact table as read: the canonical columns named as the schema
+    names them, a text ``value`` that will not parse moved to ``text_value``, and
+    every other column kept as the file has it.
+
+    Raises:
+        ValueError: ``path`` is neither ``.parquet`` nor ``.csv``.
+    """
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        raw = pl.read_parquet(path)
+    elif suffix == ".csv":
+        raw = pl.read_csv(path, infer_schema=False, encoding="utf8-lossy")
+    else:
+        raise ValueError(f"{path.name} is not a fact table: expected .parquet or .csv")
+    frame = _rename_to_schema(raw)
     logger.info("read %d rows from %s", frame.height, path.name)
-    return CanonicalReturn.from_frame(header, _rescue_text_values(frame))
+    return _rescue_text_values(frame)
+
+
+def table_columns(path: Path) -> tuple[str, ...]:
+    """The column names of a Parquet or CSV fact table, read without its rows.
+
+    Raises:
+        ValueError: ``path`` is neither ``.parquet`` nor ``.csv``.
+    """
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        return tuple(pl.read_parquet_schema(path))
+    if suffix == ".csv":
+        return tuple(pl.read_csv(path, n_rows=0, infer_schema=False, encoding="utf8-lossy").columns)
+    raise ValueError(f"{path.name} is not a fact table: expected .parquet or .csv")
 
 
 # =============================================================================

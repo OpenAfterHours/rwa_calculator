@@ -33,7 +33,7 @@
 {% if grid.pages | length > 1 or grid.page.sheet or grid.page.open_key %}
 <nav class="sheet-tabs" aria-label="Sheets">
   {% for page in grid.pages %}
-  <a href="{{ link(base, table=grid.table, sheet=page.sheet or '', key=page.open_key or '') }}"{% if page == grid.page %} aria-current="true"{% endif %}>
+  <a href="{{ link(base, table=grid.table, sheet=page.sheet or '', key=page.open_key or '', by=by) }}"{% if page == grid.page %} aria-current="true"{% endif %}>
     <span class="code mono">{% if page.sheet %}z{{ page.sheet }}{% endif %}{% if page.open_key %} {{ page.open_key }}{% endif %} {% if page.marks %}<span class="chip chip-fail">{{ page.marks }} flagged</span>{% else %}<span class="chip chip-pass">clean</span>{% endif %}</span>
     <span class="name">{{ page.label }}</span>
   </a>
@@ -65,7 +65,7 @@
         <tr>
           <th scope="row" class="row-head" title="{{ row.label }}"><span class="code">{{ row.code }}</span>{{ row.label }}</th>
           {% for cell in row.cells %}
-          <td class="{% if not cell.reportable %}cell-locked{% endif %}{% if cell.tone %} cell-{{ cell.tone }}{% endif %}{% if cell.selected %} cell-selected{% endif %}{% if cell.override is not none %} cell-adjusted{% endif %}"{% if cell.override is not none %} title="Drafted: {{ cell.override }} (now {{ cell.text or 'empty' }})"{% endif %}><a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=row.code, col=cell.column, focus=grid.focus) }}" aria-label="Row {{ row.code }}, column {{ cell.column }}{% if cell.text %}, {{ cell.text }}{% elif not cell.reportable %}, not reportable{% else %}, empty{% endif %}{% if cell.marks %}, read by {{ cell.marks | length }} broken rule{{ 's' if cell.marks | length != 1 }}{% endif %}{% if cell.override is not none %}, override drafted{% endif %}">{{ cell.override if cell.override is not none else cell.text }}</a></td>
+          <td class="{% if not cell.reportable %}cell-locked{% endif %}{% if cell.tone %} cell-{{ cell.tone }}{% endif %}{% if cell.selected %} cell-selected{% endif %}{% if cell.override is not none %} cell-adjusted{% endif %}"{% if cell.override is not none %} title="Drafted: {{ cell.override }} (now {{ cell.text or 'empty' }})"{% endif %}><a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=row.code, col=cell.column, focus=grid.focus, by=by) }}" aria-label="Row {{ row.code }}, column {{ cell.column }}{% if cell.text %}, {{ cell.text }}{% elif not cell.reportable %}, not reportable{% else %}, empty{% endif %}{% if cell.marks %}, read by {{ cell.marks | length }} broken rule{{ 's' if cell.marks | length != 1 }}{% endif %}{% if cell.override is not none %}, override drafted{% endif %}">{{ cell.override if cell.override is not none else cell.text }}</a></td>
           {% endfor %}
         </tr>
         {% endfor %}
@@ -83,6 +83,38 @@
       <div class="small muted">{% if not cell.reportable %}Not reportable on this sheet{% elif cell.value %}Reported{% if cell.data_type %} · {{ cell.data_type }}{% endif %}{% else %}Reportable, not reported{% if cell.data_type %} · {{ cell.data_type }}{% endif %}{% endif %}</div>
       <div class="value">{{ cell.value or "—" }}</div>
     </div>
+    {% if breakdown and breakdown.split %}
+    {% set split = breakdown.split %}
+    <section class="breakdown" aria-label="Where this figure comes from" id="cell-breakdown">
+      <div class="breakdown-head">
+        <h3>Where this figure comes from</h3>
+        {% if split.dimensions | length > 1 %}
+        <nav class="seg" aria-label="Break down by">
+          {% for dimension in split.dimensions %}<a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=cell.row, col=cell.column, focus=grid.focus, by=dimension) }}"{% if dimension == split.dimension %} aria-current="true"{% endif %}>{{ dimension }}</a>{% endfor %}
+        </nav>
+        {% endif %}
+      </div>
+      <div class="shares">
+        {% for share in split.rows %}
+        <div class="share{% if share.flagged %} flagged{% endif %}">
+          <span class="share-name">{{ share.label }}</span>
+          <span class="share-bar" aria-hidden="true"><span style="width: {{ share.width }}%"></span></span>
+          <span class="share-value">{{ share.value }}</span>
+          <span class="share-pct">{{ share.share }}</span>
+        </div>
+        {% endfor %}
+        {% if split.unexplained %}
+        <div class="share unexplained">
+          <span class="share-name">Not in the detail</span>
+          <span class="share-bar" aria-hidden="true"></span>
+          <span class="share-value">{{ split.unexplained }}</span>
+          <span class="share-pct"></span>
+        </div>
+        {% endif %}
+      </div>
+      <p class="small muted" style="margin: 0">{{ split.detail_rows | count }} row{{ "s" if split.detail_rows != 1 }} of the file, from {{ split.rows | length }} {{ split.dimension }} member{{ "s" if split.rows | length != 1 }}.{% if split.unexplained %} The figure differs from the rows' total by an override drafted on it.{% else %} They add up to the figure exactly.{% endif %}{% if split.rows | selectattr("flagged") | list %} A member marked in amber breaks a rule below on its own figures.{% endif %}</p>
+    </section>
+    {% endif %}
     <h3>{{ "Broken rules that read this cell" if cell.marks else "No broken rule reads this cell" }}</h3>
     {% set cell_at = (grid.table, grid.page.sheet, grid.page.open_key, cell.row, cell.column) %}
     {% for item in cell.rules %}
@@ -91,6 +123,24 @@
       <div class="mark-head">{{ severity_chip(mark.severity) }}<span class="mono small muted">{{ mark.rule_id }}</span>{% if not mark.reported %}<span class="small muted">read at its default</span>{% endif %}</div>
       <p class="mark-label">{{ rule.row.label or "No label published" }}</p>
       {% for item in rule.issues %}{{ issue_callout(item) }}{% endfor %}
+      {% for split in (breakdown.breaks.get(mark.rule_id, ()) if breakdown else ()) %}
+      <section class="breakdown" aria-label="Who breaks it">
+        <div class="breakdown-head"><h3>Who breaks it{% if split.place %} · {{ split.place }}{% endif %}</h3><span class="small muted">the rule run again on each {{ breakdown.dimension }}'s rows alone</span></div>
+        <p class="verdict">{{ split.verdict }}</p>
+        <div class="table-wrap">
+          <table class="who">
+            <thead><tr><th scope="col">{{ breakdown.dimension }}</th><th scope="col">{{ split.left_label }}</th><th scope="col">{{ split.right_label }}</th><th scope="col">Out by</th></tr></thead>
+            <tbody>
+              {% for row in split.rows %}
+              <tr{% if row.breaks %} class="breaks"{% endif %}><td>{{ row.label }}{% if row.breaks %} <span class="chip chip-warn">BREAKS</span>{% endif %}</td><td>{{ row.left }}</td><td>{{ row.right }}</td><td>{{ row.gap }}</td></tr>
+              {% endfor %}
+              <tr class="whole"><td>{{ split.whole.label }}</td><td>{{ split.whole.left }}</td><td>{{ split.whole.right }}</td><td>{{ split.whole.gap }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        {% if split.unexplained %}<p class="small" style="margin: 0">{{ split.unexplained }}</p>{% endif %}
+      </section>
+      {% endfor %}
       <details class="mark-more" data-rule="{{ mark.rule_id }}"{% if focused %} open{% endif %}>
         <summary>Read the rule</summary>
         <div class="mark-body">
@@ -105,8 +155,9 @@
         </div>
       </details>
       <div class="mark-links">
-        <a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=cell.row, col=cell.column, focus='' if focused else mark.rule_id) }}"{% if focused %} aria-current="true"{% endif %}>{{ "Showing only its cells — show every break" if focused else "Show only this rule's cells" }}</a>
+        <a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=cell.row, col=cell.column, focus='' if focused else mark.rule_id, by=by) }}"{% if focused %} aria-current="true"{% endif %}>{{ "Showing only its cells — show every break" if focused else "Show only this rule's cells" }}</a>
         <a href="{{ link(rules_url, rule=mark.rule_id) }}">Open on the Rules page</a>
+        {% if breakdown %}<a href="{{ link('/returns/' ~ current.return_id ~ '/investigate', by=breakdown.dimension) }}">Every break, by {{ breakdown.dimension }}</a>{% endif %}
       </div>
     </div>
     {% endfor %}

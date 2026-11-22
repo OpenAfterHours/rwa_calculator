@@ -67,6 +67,7 @@ SECTIONS: Final = (
     Section("overview", "Overview", ""),
     Section("rules", "Rules", "/rules"),
     Section("templates", "Templates", "/templates"),
+    Section("investigate", "Investigate", "/investigate"),
     Section("filing", "Build & sign off", "/filing"),
     Section("compare", "Compare", "/compare"),
     Section("referee", "Referee (Arelle)", "/referee"),

@@ -26,6 +26,7 @@ Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
                        [--monetary-decimals N] [--evidence FILE] [--require-complete]
                        [--taxonomy VERSION] [--submission-date DATE]
+                       [--breakdown COLUMNS [--line-ref COLUMN] [--on-repeat stop|keep-one]]
                        [--progress | --no-progress]
         Validate a return (.parquet / .csv / .xlsx, or an XBRL instance .xbrl /
         .zip): structure against the taxonomy, then the published rules, as the
@@ -37,6 +38,13 @@ Commands:
         every command that reads a return takes it. --progress says on stderr
         which step the check is on and how many rules are done; it is on by
         default when stderr is a terminal (``validate``, ``build``, ``dash``).
+        --breakdown reads a fact table of several rows per cell: the rows of a
+        cell are added together, the named columns say where each came from,
+        and after the report each broken rule is traced to the members that
+        break it on their own figures. --line-ref names the column each line's
+        reference is in; one given twice in a cell stops the run, or with
+        --on-repeat keep-one an exact repeat is dropped. ``build`` takes the
+        same three, and its manifest records them.
     rwa-filer build FILE --out DIR [--monetary-decimals N] [--zip] [--force]
                     [--evidence FILE]
         Validate a return and write its filing package: the .xbrl instance, a
@@ -120,7 +128,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rwa_filer import __version__
 from rwa_filer.boe import deny_importer
@@ -137,12 +145,14 @@ from rwa_filer.model import LEI_SCHEME, CanonicalReturn, ReturnHeader
 from rwa_filer.progress import StreamProgress
 from rwa_filer.readers import (
     SUPPORTED_SUFFIXES,
+    DetailSpec,
     HeaderFields,
     SourceReading,
     carries_header,
     load_source,
     open_source,
 )
+from rwa_filer.readers.detail import ON_REPEAT_CHOICES, ON_REPEAT_STOP
 from rwa_filer.referee import (
     RefereePlanError,
     RefereeUnavailableError,
@@ -178,12 +188,19 @@ from rwa_filer.workflow.acts import (
     verify_filing,
 )
 from rwa_filer.workflow.adjustments import apply_adjustments, read_adjustments
+from rwa_filer.workflow.attribution import as_record as attribution_record
+from rwa_filer.workflow.attribution import attribute, describe
 from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.compare import render_text as render_comparison
 from rwa_filer.workflow.diff import diff_returns
 from rwa_filer.workflow.explain import Names
 from rwa_filer.workflow.signoff import SignOffError
 from rwa_filer.xbrl.writer import InstanceOptions
+
+if TYPE_CHECKING:
+    from rwa_filer.boe.catalogue import Rule
+    from rwa_filer.validate.returns import ReturnValidation
+    from rwa_filer.workflow.attribution import Attribution
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -272,6 +289,7 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     )
     validate.add_argument("file", type=Path, metavar="FILE", help="the return to validate")
     _add_header_arguments(validate)
+    _add_detail_arguments(validate)
     _add_accuracy_arguments(validate)
     validate.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     validate.add_argument(
@@ -293,6 +311,29 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     )
     _add_progress_argument(validate)
     validate.set_defaults(handler=_validate)
+
+
+def _add_detail_arguments(parser: argparse.ArgumentParser) -> None:
+    """The options that read a fact table as a detail, shared by ``validate`` and ``build``."""
+    parser.add_argument(
+        "--breakdown",
+        metavar="COLUMNS",
+        help="read a fact table of several rows per cell: its rows are added together, and "
+        "these columns (comma-separated, e.g. business_unit,source) say where each came from",
+    )
+    parser.add_argument(
+        "--line-ref",
+        metavar="COLUMN",
+        help="the column each line's own reference is in (a loan, a lease, a journal line): "
+        "one given twice in a cell is the same line counted twice",
+    )
+    parser.add_argument(
+        "--on-repeat",
+        choices=ON_REPEAT_CHOICES,
+        default=ON_REPEAT_STOP,
+        help="a line reference given twice in one cell: stop (default), or keep-one to keep "
+        "the first of rows that agree on everything and stop where they differ",
+    )
 
 
 def _add_accuracy_arguments(parser: argparse.ArgumentParser) -> None:
@@ -438,6 +479,7 @@ def _validate(args: argparse.Namespace) -> int:
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
 
+    breakdown = _attributions(source, validation)
     # The record costs a fingerprint per enforced rule and one of every fact, and
     # only --report and --format json read it: the text report is built from the
     # validation itself. A run that also writes evidence hands its identity block
@@ -447,6 +489,11 @@ def _validate(args: argparse.Namespace) -> int:
         record = to_record(
             source.ret, validation, identity=None if evidence is None else evidence.identity
         )
+        if breakdown:
+            record["breakdown"] = {
+                "detail": source.detail.as_record() if source.detail else None,
+                "by": [attribution_record(item) for item in breakdown],
+            }
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -463,6 +510,12 @@ def _validate(args: argparse.Namespace) -> int:
         if args.format == "json"
         else render_text(source.ret, validation)
     )
+    if breakdown and args.format != "json":
+        labels = {
+            rule.rule_id: (rule.label or "").rstrip("|").strip() for rule in _rules_of(validation)
+        }
+        for item in breakdown:
+            _out("\n" + "\n".join(describe(item, labels=labels)))
     if not validation.is_submittable:
         return EXIT_FAILED
     if args.require_complete and validation.status == VERDICT_INCOMPLETE:
@@ -478,7 +531,36 @@ def _load(args: argparse.Namespace, *, progress: StreamProgress | None = None) -
             it needs, or is not readable as what its suffix says it is.
         ReleaseNotFoundError: the taxonomy release could not be resolved.
     """
-    return open_source(args.file, _header_fields(args), taxonomy=args.taxonomy, progress=progress)
+    return open_source(
+        args.file,
+        _header_fields(args),
+        taxonomy=args.taxonomy,
+        progress=progress,
+        detail=_detail_spec(args),
+    )
+
+
+def _detail_spec(args: argparse.Namespace) -> DetailSpec | None:
+    """The detail ``--breakdown`` / ``--line-ref`` ask for; ``None`` for a command without them."""
+    breakdown, line_ref = getattr(args, "breakdown", None), getattr(args, "line_ref", None)
+    if not breakdown and not line_ref:
+        return None
+    return DetailSpec.from_text(breakdown, line_ref, getattr(args, "on_repeat", None))
+
+
+def _attributions(source: SourceReading, validation: ReturnValidation) -> list[Attribution]:
+    """Each breakdown column's attribution of the return's breaks; none without a detail."""
+    detail = source.detail
+    if detail is None:
+        return []
+    return [attribute(source.ret, validation, detail, dimension) for dimension in detail.dimensions]
+
+
+def _rules_of(validation: ReturnValidation) -> tuple[Rule, ...]:
+    """The rules the validation ran, for their published labels."""
+    if validation.rulebook is None:
+        return ()
+    return validation.rulebook.enforced(validation.pack.info.module)
 
 
 def _header_fields(args: argparse.Namespace) -> HeaderFields:
@@ -513,6 +595,7 @@ def _add_build_command(commands: argparse._SubParsersAction[argparse.ArgumentPar
         "--out", type=Path, required=True, metavar="DIR", help="where the files are written"
     )
     _add_header_arguments(build)
+    _add_detail_arguments(build)
     build.add_argument("--name", metavar="NAME", help="the files' base name")
     _add_accuracy_arguments(build)
     _add_evidence_argument(build)
@@ -592,6 +675,7 @@ def _build(args: argparse.Namespace) -> int:
                 source=source_identity(args.file),
                 submission_date=args.submission_date,
                 progress=progress,
+                detail=source.detail,
             )
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))

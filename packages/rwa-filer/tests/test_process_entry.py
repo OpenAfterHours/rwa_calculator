@@ -22,9 +22,12 @@ child process: this test session's own collector is never switched.
   or off — the dashboard command included;
 - every sub-command the parser knows is listed as one-shot or long-lived, and
   each long-lived one is shown to have its collector back before it serves;
-- with the collector off, the unreachable objects left by a ``validate`` of a
-  fact table are few and do not grow with the return. A workbook leaves more,
-  per sheet; its number is recorded and bounded.
+- with the collector off, the unreachable objects left by a ``validate`` are
+  few, and the SAME number at two sizes of one return, whether it is read from
+  a fact table, an XBRL instance or a workbook. The workbook reader makes
+  cyclic garbage for every sheet, so its read runs with the collector on;
+- ``RWA_FILER_COLLECTOR=on`` keeps the collector on, and the heap unfrozen,
+  for the whole command; any other value is today's policy.
 
 References:
 - packages/rwa-filer/src/rwa_filer/entry.py
@@ -36,11 +39,13 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import os
 import subprocess
 import sys
 import tomllib
 import zipfile
 from dataclasses import dataclass
+from datetime import date
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -51,14 +56,22 @@ import pytest
 import rwa_filer
 from pack_builders import VALID_LEI
 from rwa_filer.cli import EXIT_FAILED, EXIT_INCOMPLETE, EXIT_OK, build_parser, main
+from rwa_filer.model import ReturnHeader
+from rwa_filer.readers import read_return
+from rwa_filer.readers.excel import write_workbook
 from rwa_filer.release import resolve_release
+from rwa_filer.xbrl.writer import write_instance
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
 
 SCRIPT = "rwa-filer"
 #: What ``[project.scripts]`` must name: the process entry, not ``cli.main``.
 ENTRY = "rwa_filer.entry:run"
+#: The switch that keeps the collector on for a run, as the entry documents it.
+#: Every child starts without it unless a test sets it, so a developer's shell
+#: that sets it cannot change what these tests see.
+SWITCH = "RWA_FILER_COLLECTOR"
 
 HEADER_ARGS = ["--entity", VALID_LEI, "--reference-date", "2027-03-31", "--module", "PRA001"]
 BASE = f"{VALID_LEI}_PRA001_2027-03-31"
@@ -143,40 +156,53 @@ rwa_filer.dash.serve = lambda workspace, **options: seen.update(
     collector_on_while_serving=gc.isenabled()
 )
 gc.disable()
+before = gc.get_stats()
 code = main(sys.argv[1:])
-seen.update(code=code, collector_on_after=gc.isenabled(), frozen=gc.get_freeze_count())
+seen.update(
+    code=code,
+    collector_on_after=gc.isenabled(),
+    frozen=gc.get_freeze_count(),
+    collections=[a["collections"] - b["collections"] for a, b in zip(gc.get_stats(), before)],
+)
 sys.stderr.write({PROBE!r} + json.dumps(seen) + "\\n")
 """
 
-#: One command with the collector off, then a collection: what was unreachable.
+#: One command through the entry, then, just before the entry freezes the heap,
+#: a collection: what the command left unreachable for the end of the process.
 GARBAGE_CHILD = f"""
 import gc, json, sys
-gc.disable()
-from rwa_filer.cli import main
-code = main(sys.argv[1:])
-sys.stdout.flush()
-sys.stderr.write({PROBE!r} + json.dumps({{"code": code, "unreachable": gc.collect()}}) + "\\n")
+from rwa_filer.entry import run
+
+freeze = gc.freeze
+
+def probe_then_freeze():
+    sys.stdout.flush()
+    sys.stderr.write({PROBE!r} + json.dumps({{"unreachable": gc.collect()}}) + "\\n")
+    freeze()
+
+gc.freeze = probe_then_freeze
+sys.argv = [{SCRIPT!r}, *sys.argv[1:]]
+run()
 """
 
 #: The two geographical-breakdown tables, each with an open country axis: the
-#: return grows by one copy of their cells per country.
+#: return grows by one copy of their cells per country, and its workbook by one
+#: worksheet per table per country.
 OPEN_TABLES = ("OF09.01.01.01", "OF09.02.01.01")
 SMALL_COUNTRIES = 5
 LARGE_COUNTRIES = 40
-#: Unreachable objects a fact-table ``validate`` may leave with the collector
-#: off. Measured: 1,679 at 2,770, 5,540, 22,160 and 44,320 facts — the argument
-#: parser's cycles and nothing of the return's. The ceiling is about twice that.
+#: The return's input kinds, by suffix: each has its own reader.
+INPUT_KINDS = ("parquet", "xbrl", "xlsx")
+#: Unreachable objects a ``validate`` through the entry may leave for the end of
+#: the process. Measured, the same at 2,770 and 22,160 facts: 1,667 from a fact
+#: table and 1,694 from an XBRL instance — the argument parser's cycles and
+#: nothing of the return's — and 849 from a workbook, whose read ends with a
+#: collection. The ceiling is about twice the largest. One cycle per fact would
+#: add 19,390.
 MAX_UNREACHABLE = 3_500
-#: How far the count may move between the two sizes. Measured: not at all. One
-#: cycle per fact would add 19,390.
-MAX_UNREACHABLE_GROWTH = 100
-#: A workbook leaves cycles behind for every sheet it is read from (open
-#: archive members, their decompressors): measured 3,063 for the 18 sheets of
-#: the three tables below, blank or filled — about 77 a sheet on top of the
-#: 1,679; 22,583 for the 323 sheets of a whole PRA001 template.
+#: The blank workbook the ``template`` fixture writes: three tables, 18 sheets.
 WORKBOOK_TABLES = ("OF02.01.01.01", "OF07.00.01.01", "OF09.01.01.01")
 WORKBOOK_SHEETS = 18
-MAX_UNREACHABLE_PER_SHEET = 150
 
 
 @dataclass(frozen=True)
@@ -189,13 +215,18 @@ class Child:
     probe: dict[str, Any]
 
 
-def _child(source: str, *argv: str) -> Child:
-    """Run ``source`` in a fresh interpreter with ``argv`` and read its probe."""
+def _child(source: str, *argv: str, env: Mapping[str, str] | None = None) -> Child:
+    """Run ``source`` in a fresh interpreter with ``argv`` and read its probe.
+
+    The child gets this process's environment without ``SWITCH``, plus ``env``.
+    """
+    environment = {name: value for name, value in os.environ.items() if name != SWITCH}
     done = subprocess.run(  # noqa: S603 - this interpreter, the test's own source
         [sys.executable, "-c", source, *argv],
         capture_output=True,
         text=True,
         check=False,
+        env=environment | dict(env or {}),
     )
     probes = [line for line in done.stderr.splitlines() if line.startswith(PROBE)]
     assert len(probes) == 1, f"the child wrote {len(probes)} probe line(s):\n{done.stderr}"
@@ -244,6 +275,32 @@ def built(workdir: Path) -> Child:
         "--zip",
         "--no-timestamp",
     )
+
+
+@dataclass(frozen=True)
+class Sized:
+    """One return, written once in each input kind the command line reads."""
+
+    facts: int
+    sheets: int
+    files: dict[str, Path]
+
+
+@pytest.fixture(scope="module")
+def geographical(workdir: Path) -> dict[int, Sized]:
+    """The geographical return at two sizes, as a fact table, an XBRL instance and a workbook."""
+    pack = resolve_release("PRA001", "4.1.1").pack
+    header = ReturnHeader(
+        entity_identifier=VALID_LEI, reference_date=date(2027, 3, 31), module="PRA001"
+    )
+    sized = {}
+    for countries in (SMALL_COUNTRIES, LARGE_COUNTRIES):
+        files = {kind: workdir / f"geographical-{countries}.{kind}" for kind in INPUT_KINDS}
+        ret = read_return(_geographical_table(files["parquet"], countries), header)
+        files["xbrl"].write_bytes(write_instance(ret, pack).content)
+        sheets = write_workbook(pack, files["xlsx"], ret=ret)
+        sized[countries] = Sized(facts=ret.facts.height, sheets=sheets, files=files)
+    return sized
 
 
 @pytest.fixture(scope="module")
@@ -446,6 +503,24 @@ def test_main_called_by_a_host_with_its_collector_off_leaves_it_off(tmp_path: Pa
     assert child.probe["collector_on_after"] is False and child.probe["frozen"] == 0
 
 
+def test_a_workbook_read_for_a_host_with_its_collector_off_runs_no_collection(
+    template: tuple[Child, Path],
+) -> None:
+    """The workbook reader collects for the entry's one-shot policy only, never for a host."""
+    # Arrange — a blank workbook: every sheet is read, and none holds a fact.
+    wrote, workbook = template
+    assert f"{WORKBOOK_SHEETS} worksheet(s)" in wrote.out, wrote.out
+
+    # Act
+    child = _child(HOST_CHILD, "validate", str(workbook), *HEADER_ARGS)
+
+    # Assert — the workbook was read (a blank one is reported as holding no
+    # facts), and the host's collector stayed off throughout.
+    assert child.probe["code"] == EXIT_FAILED and "[STR009]" in child.out
+    assert child.probe["collections"] == [0, 0, 0]
+    assert child.probe["collector_on_after"] is False and child.probe["frozen"] == 0
+
+
 # ---------------------------------------------------------------------------
 # One-shot or long-lived: every sub-command is one or the other
 # ---------------------------------------------------------------------------
@@ -537,48 +612,89 @@ def test_a_long_lived_command_has_its_collector_back_before_it_serves(
 # ---------------------------------------------------------------------------
 
 
-def test_the_garbage_a_validate_leaves_does_not_grow_with_the_return(tmp_path: Path) -> None:
-    """With no collector, a cycle per fact or per evaluation would be memory per fact."""
-    # Arrange — the same tables at two sizes: eight times the facts.
-    small = _geographical_table(tmp_path / "small.parquet", SMALL_COUNTRIES)
-    large = _geographical_table(tmp_path / "large.parquet", LARGE_COUNTRIES)
-    facts = {path: pl.read_parquet(path).height for path in (small, large)}
-    assert facts[large] == 8 * facts[small] > 2_000, facts
-
-    # Act
-    few = _child(GARBAGE_CHILD, "validate", str(small), *HEADER_ARGS)
-    many = _child(GARBAGE_CHILD, "validate", str(large), *HEADER_ARGS)
-
-    # Assert — both validated every fact they were given; then the counts.
-    assert f", {facts[small]} facts, 2 tables" in few.out.splitlines()[0]
-    assert f", {facts[large]} facts, 2 tables" in many.out.splitlines()[0]
-    assert 0 < few.probe["unreachable"] <= MAX_UNREACHABLE, (
-        f"{few.probe['unreachable']} unreachable object(s) after a small validate; 1,679 when "
-        "this was written, the argument parser's cycles. A new option adds a few; a jump means "
-        "a command now creates cyclic garbage of its own"
-    )
-    assert abs(many.probe["unreachable"] - few.probe["unreachable"]) <= MAX_UNREACHABLE_GROWTH, (
-        f"{few.probe['unreachable']} unreachable object(s) at {facts[small]} facts, "
-        f"{many.probe['unreachable']} at {facts[large]}: validating now creates cyclic garbage "
-        "per fact, which a one-shot command (collector off) holds until it exits"
-    )
-
-
-def test_the_garbage_a_workbook_leaves_is_bounded_by_its_sheets(
-    template: tuple[Child, Path],
+@pytest.mark.parametrize("kind", INPUT_KINDS)
+def test_the_garbage_a_validate_leaves_does_not_grow_with_the_return(
+    kind: str, geographical: dict[int, Sized]
 ) -> None:
-    """The known cost of the policy: a workbook's reader leaves cycles for every sheet."""
-    # Arrange
-    wrote, workbook = template
-    assert f"{WORKBOOK_SHEETS} worksheet(s)" in wrote.out, wrote.out
+    """With no collector, a cycle per fact, sheet or evaluation would be memory per fact.
+
+    The same count at both sizes, not a bound per fact or per sheet: whatever a
+    command leaves for the end of the process must not depend on the return.
+    """
+    # Arrange — the same tables at two sizes: eight times the facts and the sheets.
+    small, large = geographical[SMALL_COUNTRIES], geographical[LARGE_COUNTRIES]
+    assert large.facts == 8 * small.facts > 2_000, (small, large)
+    assert large.sheets == 8 * small.sheets, (small, large)
 
     # Act
-    child = _child(GARBAGE_CHILD, "validate", str(workbook), *HEADER_ARGS)
+    few = _child(GARBAGE_CHILD, "validate", str(small.files[kind]), *HEADER_ARGS)
+    many = _child(GARBAGE_CHILD, "validate", str(large.files[kind]), *HEADER_ARGS)
 
-    # Assert — the workbook was read (a blank one is reported as holding no facts).
-    assert child.probe["code"] == EXIT_FAILED and "[STR009]" in child.out
-    ceiling = MAX_UNREACHABLE + MAX_UNREACHABLE_PER_SHEET * WORKBOOK_SHEETS
-    assert 0 < child.probe["unreachable"] <= ceiling
+    # Assert — both read and validated every fact they were given; then the counts.
+    assert f", {small.facts} facts, 2 tables" in few.out.splitlines()[0]
+    assert f", {large.facts} facts, 2 tables" in many.out.splitlines()[0]
+    assert 0 < few.probe["unreachable"] <= MAX_UNREACHABLE, (
+        f"{few.probe['unreachable']} unreachable object(s) after a small validate of a .{kind}; "
+        "at most 1,694 when this was written, the argument parser's cycles. A new option adds "
+        "a few; a jump means a command now creates cyclic garbage of its own"
+    )
+    assert many.probe["unreachable"] == few.probe["unreachable"], (
+        f"{few.probe['unreachable']} unreachable object(s) at {small.facts} facts, "
+        f"{many.probe['unreachable']} at {large.facts}, from a .{kind}: reading or validating "
+        "now leaves cyclic garbage that grows with the return, which a one-shot command "
+        "(collector off) holds until it exits"
+    )
+
+
+def test_a_workbook_is_read_with_the_collector_on_and_the_command_ends_with_it_off(
+    geographical: dict[int, Sized],
+) -> None:
+    """The workbook reader makes cyclic garbage for every sheet: its read collects, nothing else."""
+    # Act — through the entry, which switches the collector off for the command.
+    child = _child(
+        ENTRY_CHILD, "validate", str(geographical[SMALL_COUNTRIES].files["xlsx"]), *HEADER_ARGS
+    )
+
+    # Assert — the workbook was read and validated; it collected while it was
+    # read, and the collector is off again, as the entry had it, and frozen at exit.
+    assert child.out.startswith("SUBMITTABLE"), child.out
+    assert child.probe["collections"][0] > 0
+    assert child.probe["collector_on"] is False
+    assert child.probe["frozen"] > 100_000
+
+
+# ---------------------------------------------------------------------------
+# The switch: RWA_FILER_COLLECTOR=on
+# ---------------------------------------------------------------------------
+
+
+def test_the_switch_keeps_the_collector_on_and_the_heap_unfrozen(tmp_path: Path) -> None:
+    """The policy can be turned off without a release: the command runs as main() would."""
+    # Act
+    child = _child(
+        ENTRY_CHILD, "validate", str(_csv(tmp_path, BROKEN_CSV)), *HEADER_ARGS, env={SWITCH: "on"}
+    )
+
+    # Assert — this checkout's command line ran to a verdict, collecting all along.
+    assert child.probe["package"] == rwa_filer.__file__
+    assert child.out.startswith("BLOCKED") and child.code == EXIT_FAILED
+    assert child.probe["collector_on"] is True
+    assert child.probe["collections"][0] > 0
+    assert child.probe["frozen"] == 0
+
+
+@pytest.mark.parametrize("value", ["", "off", "ON", "1"])
+def test_any_other_value_of_the_switch_keeps_the_policy(value: str, tmp_path: Path) -> None:
+    # Act
+    child = _child(
+        ENTRY_CHILD, "validate", str(_csv(tmp_path, BROKEN_CSV)), *HEADER_ARGS, env={SWITCH: value}
+    )
+
+    # Assert — exactly "on" switches the policy off; anything else is today's policy.
+    assert child.out.startswith("BLOCKED") and child.code == EXIT_FAILED
+    assert child.probe["collector_on"] is False
+    assert child.probe["collections"] == [0, 0, 0]
+    assert child.probe["frozen"] > 100_000
 
 
 # =============================================================================

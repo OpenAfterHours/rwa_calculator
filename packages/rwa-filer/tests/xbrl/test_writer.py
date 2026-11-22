@@ -22,6 +22,7 @@ import pytest
 from pack_builders import SAMPLE_COMPILED, SAMPLE_VALID_FROM, build_pack, build_return
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
 from rwa_filer.taxonomy.pack import TaxonomyPack, load_pack, write_pack
+from rwa_filer.xbrl import writer
 from rwa_filer.xbrl.writer import (
     BASE_CONTEXT,
     NS_FIND,
@@ -162,6 +163,77 @@ def test_no_namespace_is_declared_that_the_file_does_not_use(pack: TaxonomyPack)
         "tst_dim",
         "tst_BA",
     }
+
+
+def test_a_fact_in_a_context_already_written_still_has_its_own_prefix_declared(
+    tmp_path: Path,
+) -> None:
+    """A context's prefixes are registered when it is first seen; a metric's with every fact.
+
+    Mutation evidence, measured 2026-11-22: registering the metric's prefix only
+    for a new context drops ``tst_m2`` here (the second fact reuses the first's
+    context) and the file no longer parses.
+    """
+    # Arrange — a pack whose ratio is a metric of ANOTHER namespace: the two facts
+    # below have the same members, so one context, and different metric prefixes.
+    compiled = copy.deepcopy(SAMPLE_COMPILED)
+    compiled["namespaces"]["tst_m2"] = "http://example.test/xbrl/dict/met2"
+    compiled["metrics"]["tst_m2:pi1"] = compiled["metrics"].pop("tst_met:pi1")
+    compiled["datapoints"] = [
+        ["tst_m2:pi1" if metric == "tst_met:pi1" else metric, *rest]
+        for metric, *rest in compiled["datapoints"]
+    ]
+    write_pack(compiled, tmp_path / "pack", valid_from=SAMPLE_VALID_FROM, valid_to=None)
+    two_namespaces = load_pack(tmp_path / "pack")
+    sample = ret(
+        ("T01.00.01.01", None, None, "0010", "0010", 5.0),
+        ("T01.00.01.01", None, None, "0010", "0020", 0.25),
+    )
+
+    # Act
+    content = write_instance(sample, two_namespaces).content
+    root = parse(content)
+
+    # Assert
+    contexts = [fact.get("contextRef") for fact in root if fact.get("contextRef")]
+    assert contexts == ["c1", "c1"], "the two facts must share one context"
+    assert {fact.tag for fact in root if fact.get("contextRef")} == {
+        f"{MET}mi1",
+        "{http://example.test/xbrl/dict/met2}pi1",
+    }
+    assert 'xmlns:tst_m2="http://example.test/xbrl/dict/met2"' in content.decode()
+
+
+def test_a_contexts_prefixes_are_registered_once_however_many_facts_share_it(
+    pack: TaxonomyPack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — count every prefix registration the document makes.
+    registered: list[str] = []
+    use = writer._Document._use
+
+    def counting(self: object, qname: str) -> None:
+        registered.append(qname)
+        use(self, qname)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(writer._Document, "_use", counting)
+    sample = ret(
+        ("T01.00.01.01", None, None, "0010", "0010", 5.0),
+        ("T01.00.01.01", None, None, "0010", "0020", 0.25),
+        ("T01.00.01.01", None, None, "0010", "0030", None, "note"),
+        ("T01.00.01.01", None, None, "0020", "0010", 7.0),
+    )
+
+    # Act
+    instance = write_instance(sample, pack)
+
+    # Assert — four facts in two contexts of one member each: a metric per fact,
+    # and a dimension and a member per CONTEXT (per fact it would be twelve).
+    assert (instance.facts, instance.contexts) == (4, 3), "facts must share a context"
+    assert sorted(registered) == sorted(
+        ["tst_met:mi1", "tst_met:pi1", "tst_met:si1", "tst_met:mi1"]
+        + ["tst_dim:BAS", "tst_BA:x1"]
+        + ["tst_dim:BAS", "tst_BA:x2"]
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from pack_builders import VALID_LEI
+from rwa_filer import cli
 from rwa_filer import release as release_module
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 from rwa_filer.release import resolve_release
@@ -175,6 +176,43 @@ def test_validate_writes_the_report_file_when_asked(
     # Assert
     capsys.readouterr()
     assert json.loads(report.read_text(encoding="utf-8"))["header"]["Module"] == "PRA001"
+
+
+@pytest.mark.parametrize("report_format", ["text", "json"])
+def test_the_verdict_is_printed_only_once_the_evidence_is_on_disk(
+    report_format: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The order is the contract: the evidence file first, the report after it.
+
+    A script that reads a complete report on standard output may take the run
+    for finished, so nothing is printed there until the evidence it names is
+    written, and nothing at all when writing it fails. Printing the verdict
+    first would show it sooner on a large return; that changes what a failed
+    run looks like, so it is the package owner's decision, not a speed-up.
+    """
+    # Arrange — an evidence write that notes what was already printed, then fails.
+    printed_before: list[str] = []
+
+    def failing(*_args: object, **_kwargs: object) -> None:
+        printed_before.append(capsys.readouterr().out)
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(cli, "write_evidence", failing)
+    command = ["validate", str(_csv(tmp_path)), *HEADER_ARGS, "--format", report_format]
+
+    # Act / Assert — the failure is not swallowed, and no report was or is printed.
+    with pytest.raises(OSError, match="No space left on device"):
+        main([*command, "--evidence", str(tmp_path / "run.evidence.jsonl")])
+    assert printed_before == [""], "the report was printed before the evidence was written"
+    assert capsys.readouterr().out == ""
+
+    # The same command without the failure does print: the probe above is live.
+    monkeypatch.undo()
+    main([*command, "--evidence", str(tmp_path / "run.evidence.jsonl")])
+    assert capsys.readouterr().out.startswith(("BLOCKED: PRA001", "{"))
 
 
 def test_a_fact_table_without_a_header_is_a_failure_not_a_traceback(

@@ -19,15 +19,41 @@ Mutation evidence (C1.11), each probe one change to ``boe/engine.py``, measured
 - recording only the first ``MAX_FAILURES`` failing evaluations of a rule: 3
   red — the independent check on ``POSITIVE`` (its counts no longer match the
   rule record) and ``test_every_failing_evaluation_is_recorded_however_many_there_are``.
+
+The writer's own work (the last section) is pinned separately: the tests above
+stay green on a side that drops cell id 0 or sorts its ids, and on every
+mistake in which rules' labels an evaluation is given. Each probe is one change
+to ``evidence.py``, measured 2026-11-22:
+
+- a side that treats cell id 0 as unreported (``if not number``) or sorts the
+  ids: red on
+  ``test_a_side_lists_what_it_read_in_reading_order_reported_cells_by_id``
+  alone (and the lookup count, for the first); the two lists swapped: red
+  there and on seven cases above;
+- labels looked up by issue instead of by rule, an unlabelled rule's
+  evaluations given ``[]`` where ``null`` belongs, no evaluation asked at all,
+  or a rule record without its labels: red on
+  ``test_only_an_unsatisfied_evaluation_of_a_labelled_rule_names_its_issues``
+  and nothing above;
+- the last block never written, a block written but not hashed, hashed but not
+  written, or the gathered lines never emptied: red on
+  ``test_the_file_does_not_depend_on_how_many_lines_a_block_holds`` (the first
+  and the third on most cases above as well).
+
+Its cost is gated by counts, not a clock: the last three tests. Each was seen
+red against the code it replaced, with every other test in the file green: two
+lookups per cell, a call for every evaluation, a write per line.
 """
 
 from __future__ import annotations
 
 import gzip
+import io
 import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -36,13 +62,15 @@ import jsonschema
 import polars as pl
 import pytest
 
-from boe_builders import T01, book, ref, rule
+from boe_builders import T01, T04, book, issue_register, ref, rule
 from compare_builders import corporate_return
 from pack_builders import VALID_LEI, build_pack, build_return
-from rwa_filer.boe.engine import MAX_FAILURES, Accuracy
+from rwa_filer import evidence as evidence_module
+from rwa_filer.boe.engine import MAX_FAILURES, Accuracy, CellAddress
 from rwa_filer.cli import EXIT_FAILED, main
 from rwa_filer.evidence import collect_evidence, read_evidence, write_evidence
-from rwa_filer.model import CanonicalReturn, ReturnHeader
+from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn, ReturnHeader
+from rwa_filer.release import release_for_pack
 from rwa_filer.schemas import EVIDENCE_SCHEMA, VALIDATION_REPORT_SCHEMA, load_schema
 from rwa_filer.validate.returns import validate_return
 
@@ -470,3 +498,259 @@ def test_before_the_bank_deactivated_it_the_rule_is_evidence_like_any_other(
         None,
     )
     assert any(not item["holds"] for item in evaluations(records, "boe_b0710"))
+
+
+# ---------------------------------------------------------------------------
+# The writer's own work: one pass per side, labels found by rule, block writes
+# ---------------------------------------------------------------------------
+
+
+def test_a_side_lists_what_it_read_in_reading_order_reported_cells_by_id(tmp_path: Path) -> None:
+    # Arrange — the left side reads r0030, r0020 c0020, r0010, r0020 c0010 in that
+    # order; the two r0020 cells are not reported. Adequacy: the cell with id 0
+    # (r0010 c0010, first in coordinate order) is read AFTER the cell with id 2,
+    # so neither a sorted list nor an id taken for "missing" can pass.
+    pack = build_pack(tmp_path / "pack")
+    ret = build_return(
+        pl.DataFrame(
+            [
+                (T01, None, None, "0030", "0010", 5.0, None),
+                (T01, None, None, "0010", "0010", 60.0, None),
+                (T01, None, None, "0010", "0020", 0.5, None),
+            ],
+            schema=SYNTHETIC,
+            orient="row",
+        )
+    )
+    mixed = rule(
+        "tst_0001",
+        f"{ref(T01, '0030', '0010')} i+ {ref(T01, '0020', '0020')} i+ "
+        f"{ref(T01, '0010', '0010')} i+ {ref(T01, '0020', '0010')} "
+        f"i= {ref(T01, '0010', '0020')}",
+        tables=(T01,),
+    )
+
+    # Act
+    records = written(tmp_path, ret, pack=pack, rulebook=book(mixed))
+
+    # Assert
+    ids = {
+        (item["row"], item["column"]): item["id"] for item in records if item["record"] == "cell"
+    }
+    assert ids == {("0010", "0010"): 0, ("0010", "0020"): 1, ("0030", "0010"): 2}
+    (evaluation,) = evaluations(records, "tst_0001")
+    assert evaluation["left"]["cells"] == [2, 0]
+    assert [(item["row"], item["column"]) for item in evaluation["left"]["unreported"]] == [
+        ("0020", "0020"),
+        ("0020", "0010"),
+    ]
+    assert evaluation["right"] == {"cells": [1], "unreported": []}
+
+
+def test_only_an_unsatisfied_evaluation_of_a_labelled_rule_names_its_issues(
+    tmp_path: Path,
+) -> None:
+    # Arrange — two broken rules, one of them labelled by a known issue whose
+    # footprint is open row g1. The labelled rule is evaluated once per open
+    # row: g1 breaks inside the footprint, g2 breaks outside it, g3 holds.
+    pack = build_pack(tmp_path / "pack")
+    per_row = rule("tst_0004", f"{ref(T04, c='0010')} >= 1000", tables=(T04,))
+    footing = rule(
+        "tst_0001",
+        f"{ref(T01, '0010', '0010')} i= {ref(T01, '0020', '0010')} i+ {ref(T01, '0030', '0010')}",
+        tables=(T01,),
+    )
+    amounts = {"g1": 500.0, "g2": 500.0, "g3": 2000.0}
+    facts = [(T04, None, None, row, "0005", None, row) for row in amounts]
+    facts += [(T04, None, None, row, "0010", amount, None) for row, amount in amounts.items()]
+    facts += [
+        (T01, None, None, "0010", "0010", 100.0, None),
+        (T01, None, None, "0020", "0010", 60.0, None),
+        (T01, None, None, "0030", "0010", 30.0, None),
+    ]
+    ret = build_return(pl.DataFrame(facts, schema=SYNTHETIC, orient="row"))
+    register = issue_register(per_row, footprint=[{"table": T04, "rows": ["g1"]}])
+    release = replace(
+        release_for_pack(pack, book(per_row, footing), today=date(2026, 11, 16)), issues=register
+    )
+
+    # Act
+    records = written(
+        tmp_path, ret, release=release, accuracy=Accuracy(DECIMALS_EXACT, DECIMALS_EXACT)
+    )
+
+    # Assert — ``None`` is "nothing to say", ``[]`` is "labelled, and not explained".
+    labelled = {
+        item["place"]["key:tst_dim:OGR"]: (item["holds"], item["publisher_issues"])
+        for item in evaluations(records, "tst_0004")
+    }
+    assert labelled == {"g1": (False, ["PI-01"]), "g2": (False, []), "g3": (True, None)}
+    (unlabelled,) = evaluations(records, "tst_0001")
+    assert (unlabelled["holds"], unlabelled["publisher_issues"]) == (False, None)
+    notes = {
+        item["rule_id"]: [note["issue"] for note in item["publisher_issues"]]
+        for item in records
+        if item["record"] == "rule"
+    }
+    assert notes == {"tst_0004": ["PI-01"], "tst_0001": []}
+
+
+def _per_line_gzip(plain: bytes) -> bytes:
+    """``plain`` compressed as a writer that hands the stream one line at a time would."""
+    raw = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as stream:
+        for line in plain.splitlines(keepends=True):
+            stream.write(line)
+    return raw.getvalue()
+
+
+def test_the_file_does_not_depend_on_how_many_lines_a_block_holds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Identical content, and identical ``.gz`` bytes on this zlib.
+
+    A block of one line is the writer that hashed and wrote line by line, so it
+    is the reference. The other sizes are: several blocks and a short last one,
+    one block that the lines fill exactly (nothing is left for a last block),
+    the shipped size, and one short block for the whole file.
+    """
+    # Arrange
+    evidence = collect_evidence(c01(POSITIVE))
+    shipped = evidence_module._BLOCK_LINES
+
+    def write(lines_per_block: int, name: str) -> tuple[bytes, tuple[Any, ...]]:
+        monkeypatch.setattr(evidence_module, "_BLOCK_LINES", lines_per_block)
+        path = tmp_path / str(lines_per_block) / name
+        file = write_evidence(evidence, path)
+        outcome = (file.sha256, file.content_sha256, file.evidence_id, dict(file.records))
+        return path.read_bytes(), outcome
+
+    plain, plain_file = write(1, "e.jsonl")
+    packed, packed_file = write(1, "e.jsonl.gz")
+    in_blocks = plain.count(b"\n") - 1  # every line but the trailer goes through a block
+    assert in_blocks > 1000, "too few lines to fill a block more than a few times"
+    short_last = next(size for size in (7, 11, 13) if in_blocks % size)
+    sizes = (short_last, in_blocks, shipped, 10**6)
+
+    # Act
+    plains = {size: write(size, "e.jsonl") for size in sizes}
+    packeds = {size: write(size, "e.jsonl.gz") for size in sizes}
+
+    # Assert
+    assert {size: outcome == (plain, plain_file) for size, outcome in plains.items()} == (
+        dict.fromkeys(sizes, True)
+    )
+    assert {size: outcome == (packed, packed_file) for size, outcome in packeds.items()} == (
+        dict.fromkeys(sizes, True)
+    )
+    assert gzip.decompress(packed) == plain
+    assert packed == _per_line_gzip(plain), "the compressed bytes moved (the content did not)"
+    content_sha256, evidence_id = plain_file[1:3]
+    assert packed_file[1:3] == (content_sha256, evidence_id)
+    assert packed_file[0] != plain_file[0], "sha256 is of the file as written, compressed or not"
+    document = read_evidence(tmp_path / str(short_last) / "e.jsonl.gz")
+    assert document.trailer["content_sha256"] == content_sha256
+    assert document.header["identity"]["evidence_id"] == evidence_id
+
+
+class _CountingCells(dict[CellAddress, int]):
+    """Cell ids that count how often they are asked about an address."""
+
+    def __init__(self, *args: Any) -> None:
+        super().__init__(*args)
+        self.lookups = 0
+
+    def get(self, key: CellAddress, default: Any = None) -> Any:
+        self.lookups += 1
+        return super().get(key, default)
+
+    def __getitem__(self, key: CellAddress) -> int:
+        self.lookups += 1
+        return super().__getitem__(key)
+
+    def __contains__(self, key: object) -> bool:
+        self.lookups += 1
+        return super().__contains__(key)
+
+
+def test_a_side_looks_each_cell_up_once() -> None:
+    # Arrange — an address is hashed in Python, so a lookup is the cost counted.
+    addresses = [CellAddress(T01, None, None, f"{row:04d}", "0010") for row in range(10, 90, 10)]
+    cells = _CountingCells({address: number for number, address in enumerate(addresses[::2])})
+
+    # Act
+    side = evidence_module._side(addresses, cells)
+
+    # Assert
+    assert (len(side["cells"]), len(side["unreported"])) == (4, 4), "both kinds must be read"
+    assert cells.lookups == len(addresses)
+
+
+def test_only_a_labelled_rule_has_its_evaluations_asked_about_issues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a labelled rule and an unlabelled one, eight evaluations each.
+    # The file is the same whichever are asked; the calls are not.
+    pack = build_pack(tmp_path / "pack")
+    labelled = rule("tst_0004", f"{ref(T04, c='0010')} >= 1000", tables=(T04,))
+    unlabelled = rule("tst_0005", f"{ref(T04, c='0010')} >= 0", tables=(T04,))
+    rows = [f"g{number}" for number in range(1, 9)]
+    facts = [(T04, None, None, row, "0005", None, row) for row in rows]
+    facts += [(T04, None, None, row, "0010", 500.0, None) for row in rows[:3]]
+    facts += [(T04, None, None, row, "0010", 2000.0, None) for row in rows[3:]]
+    ret = build_return(pl.DataFrame(facts, schema=SYNTHETIC, orient="row"))
+    register = issue_register(labelled, footprint=[{"table": T04, "rows": rows[:3]}])
+    release = replace(
+        release_for_pack(pack, book(labelled, unlabelled), today=date(2026, 11, 16)),
+        issues=register,
+    )
+    asked: list[str] = []
+    real = evidence_module.evaluation_issues
+
+    def counting(evaluation: Any, *args: Any) -> Any:
+        asked.append(evaluation.rule_id)
+        return real(evaluation, *args)
+
+    monkeypatch.setattr(evidence_module, "evaluation_issues", counting)
+
+    # Act
+    records = written(tmp_path, ret, release=release)
+
+    # Assert
+    assert len(evaluations(records, "tst_0005")) == 8, "the unlabelled rule must be evaluated"
+    assert asked == ["tst_0004"] * 8
+
+
+def test_the_compressed_file_is_written_a_block_at_a_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — count the writes that reach the gzip stream.
+    evidence = collect_evidence(c01(POSITIVE))
+    writes: list[int] = []
+    compressed = evidence_module._compressed
+
+    class Counting:
+        def __init__(self, raw: Any) -> None:
+            self._stream = compressed(raw)
+
+        def write(self, data: bytes) -> int:
+            writes.append(data.count(b"\n"))
+            return self._stream.write(data)
+
+        def close(self) -> None:
+            self._stream.close()
+
+    monkeypatch.setattr(evidence_module, "_compressed", Counting)
+    monkeypatch.setattr(evidence_module, "_BLOCK_LINES", 100)
+
+    # Act
+    file = write_evidence(evidence, tmp_path / "e.jsonl.gz")
+
+    # Assert — every block is full but the last, and the trailer is its own write.
+    in_blocks = sum(file.records.values()) + 1  # the body and the header
+    assert in_blocks > 1000, "too few lines for the count to tell a block from a line"
+    assert in_blocks % 100, "the lines fill the last block exactly: use another block size"
+    assert sum(writes) == in_blocks + 1
+    assert writes[:-2] == [100] * (in_blocks // 100)
+    assert writes[-2:] == [in_blocks % 100, 1]
+    read_evidence(file.path)

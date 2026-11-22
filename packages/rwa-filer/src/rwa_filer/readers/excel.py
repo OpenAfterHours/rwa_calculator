@@ -33,7 +33,9 @@ has no published rows: enter any identifier in column A, unique within the
 worksheet, and the row's key values in the key columns.
 
 Reading and writing a workbook needs ``openpyxl`` (the ``rwa-filer[excel]``
-extra).
+extra). openpyxl leaves reference cycles behind for every worksheet it reads,
+so a read runs with the cyclic garbage collector on, also under a command line
+that has switched it off for the command (``rwa_filer._gc.collector_running``).
 
 References:
 - rwa_filer.model — the canonical fact schema
@@ -49,6 +51,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 import polars as pl
 
+from rwa_filer._gc import collector_running
 from rwa_filer.extras import import_openpyxl
 from rwa_filer.inputs import load_workbook
 from rwa_filer.model import CODE_WIDTH, FACT_SCHEMA, CanonicalReturn, ReturnHeader
@@ -94,8 +97,14 @@ _COMMAND: Final = "<command>"
 # =============================================================================
 
 
+@collector_running()
 def read_workbook(path: Path, header: ReturnHeader | None = None) -> CanonicalReturn:
     """Read a workbook in the template layout into a canonical return.
+
+    Runs with the cyclic garbage collector on (``rwa_filer._gc.collector_running``):
+    the workbook library leaves cycles behind for every worksheet. Under a
+    command line that has switched the collector off, what the read left is
+    freed before this returns, instead of being held to the end of the command.
 
     Args:
         path: The ``.xlsx`` file.

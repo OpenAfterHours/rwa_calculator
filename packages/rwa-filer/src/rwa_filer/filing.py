@@ -2,7 +2,7 @@
 The filing package — one return, validated, as the files a firm submits and keeps.
 
 Pipeline position:
-    CanonicalReturn -> validate_return -> xbrl.write_instance
+    CanonicalReturn -> validate_return -> the XBRL writer (``xbrl.writer``)
         -> <name>.xbrl (+ <name>.zip) + <name>.manifest.json
     (with ``evidence=``)  ->  evidence.collect_evidence -> evidence.write_evidence
         -> the evidence file, its checksum recorded in the manifest
@@ -16,6 +16,9 @@ Key responsibilities:
   such a return cannot be expressed in the taxonomy at all. A broken published
   rule stops it by default, because the regulator would reject the file — and
   can be overridden, because a preparer sometimes needs the file to investigate.
+- Check the structure once. The validation checks it; the writer is then handed
+  the return already checked (``xbrl.writer._write_checked``), which is sound
+  only because the return and the pack written are the ones just validated.
 - Write the instance, and a zip beside it when the Filing Manual requires one
   (over 10 MB) or the caller asks for one.
 - Write a manifest: what was filed, against which taxonomy, with which checksum
@@ -54,7 +57,7 @@ from rwa_filer.progress import PHASE_WRITING, Progress, notify
 from rwa_filer.release import choose_release
 from rwa_filer.validate.report import to_record
 from rwa_filer.validate.returns import validate_return
-from rwa_filer.xbrl.writer import GENERATOR_ID, InstanceOptions, write_instance
+from rwa_filer.xbrl.writer import GENERATOR_ID, InstanceOptions, _write_checked
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -243,7 +246,10 @@ def build_filing(
         )
 
     notify(progress, Progress(PHASE_WRITING))
-    instance = write_instance(ret, validation.pack, options=options)
+    # The writer's own structure check is skipped, not its job: the validation
+    # above ran that check on this return against this pack, and the build
+    # stopped a few lines up unless it found nothing.
+    instance = _write_checked(ret, validation.pack, options)
     base = name or default_name(ret)
     directory.mkdir(parents=True, exist_ok=True)
     instance_path = directory / f"{base}{INSTANCE_SUFFIX}"

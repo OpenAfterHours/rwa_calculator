@@ -10,7 +10,11 @@ hang. What is pinned:
 - progress goes to stderr only, so stdout stays exactly the result — a JSON
   report piped onwards still parses;
 - the default follows stderr: on a terminal, a line rewritten in place and
-  cleared before the result; anywhere else, nothing, unless ``--progress`` asks.
+  cleared before the result; anywhere else, nothing, unless ``--progress`` asks;
+- a return the taxonomy does not accept is told so on stderr as soon as the
+  structure check returns, before the rules run — one line that stays — and
+  stdout, the report, the evidence and the exit code are the same bytes with
+  progress as without.
 """
 
 from __future__ import annotations
@@ -24,10 +28,22 @@ import pytest
 
 import rwa_filer.dash
 from dash_builders import BROKEN_CSV, CLEAN_CSV, HEADER_ARGS_CLI
-from rwa_filer.cli import EXIT_OK, main
+from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+#: A return the taxonomy does not accept: facts in rows their tables do not
+#: have, in two tables. Its rules still run, and break.
+MALFORMED_CSV = (
+    "table,sheet,row,column,value\n"
+    "OF07.00.01.01,0008,0010,0010,1000000\n"
+    "OF07.00.01.01,0008,9990,0010,5\n"
+    "OF07.00.01.01,0008,9991,0010,6\n"
+    "OF02.01.01.01,,9990,0010,7\n"
+)
+#: How the note on a malformed return starts, after the step it belongs to.
+NOTE_LEAD = "Checking the structure against taxonomy 4.1.1: "
 
 
 class _Terminal(io.StringIO):
@@ -41,6 +57,13 @@ class _Terminal(io.StringIO):
 def broken_csv(tmp_path: Path) -> Path:
     path = tmp_path / "broken.csv"
     path.write_text(BROKEN_CSV)
+    return path
+
+
+@pytest.fixture
+def malformed_csv(tmp_path: Path) -> Path:
+    path = tmp_path / "malformed.csv"
+    path.write_text(MALFORMED_CSV)
     return path
 
 
@@ -177,3 +200,108 @@ def test_dash_reports_how_far_opening_its_file_has_got_before_serving(
     assert served == [1]
     assert "Reading broken.csv" in err
     assert "(100%)" in err
+
+
+# ---------------------------------------------------------------------------
+# A return the taxonomy does not accept: told after the structure check
+# ---------------------------------------------------------------------------
+
+
+def test_a_malformed_return_is_told_so_before_the_rules_run(
+    tmp_path: Path, malformed_csv: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Arrange
+    report = tmp_path / "report.json"
+
+    # Act
+    code = main(
+        ["validate", str(malformed_csv), *HEADER_ARGS_CLI, "--progress", "--report", str(report)]
+    )
+
+    # Assert — the note says what the report says: how many, and the first.
+    lines = capsys.readouterr().err.splitlines()
+    record = json.loads(report.read_text())
+    count = record["summary"]["structure_findings"]
+    first = record["findings"][record["summary"]["release_findings"]]
+    assert code == EXIT_FAILED and count > 1 and first["code"].startswith("STR")
+    notes = [index for index, line in enumerate(lines) if line.startswith(NOTE_LEAD)]
+    rules = [index for index, line in enumerate(lines) if line.startswith("Evaluating")]
+    assert len(notes) == 1, lines
+    assert rules, "no rule ran: there was nothing for the note to come before"
+    assert notes[0] < rules[0]
+    assert lines[notes[0]].startswith(
+        f"{NOTE_LEAD}{count} finding(s); the first: [{first['code']}] {first['severity']}: "
+    )
+
+
+@pytest.mark.parametrize("output", ["text", "json"])
+def test_with_and_without_progress_a_malformed_return_gives_the_same_bytes(
+    output: str, tmp_path: Path, malformed_csv: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """stdout, the report, the evidence and the exit code: progress only ever adds to stderr."""
+    # Arrange
+    runs = {}
+
+    # Act
+    for switch in ("--progress", "--no-progress"):
+        folder = tmp_path / switch.strip("-")
+        folder.mkdir()
+        code = main(
+            [
+                "validate",
+                str(malformed_csv),
+                *HEADER_ARGS_CLI,
+                "--format",
+                output,
+                "--report",
+                str(folder / "report.json"),
+                "--evidence",
+                str(folder / "run.evidence.jsonl"),
+                "--no-timestamp",
+                switch,
+            ]
+        )
+        captured = capsys.readouterr()
+        runs[switch] = (
+            code,
+            captured.out,
+            (folder / "report.json").read_bytes(),
+            (folder / "run.evidence.jsonl").read_bytes(),
+            captured.err,
+        )
+
+    # Assert — the note was told in one run and not the other (stderr carries
+    # the evidence file's summary line in both); nothing else differs.
+    watched, unwatched = runs["--progress"], runs["--no-progress"]
+    assert NOTE_LEAD in watched[4] and NOTE_LEAD not in unwatched[4]
+    assert watched[0] == EXIT_FAILED and watched[1]
+    assert watched[:4] == unwatched[:4]
+
+
+def test_on_a_terminal_the_note_stays_and_the_live_line_is_still_cleared(
+    malformed_csv: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Arrange
+    terminal = _as_stderr(monkeypatch)
+
+    # Act
+    main(["validate", str(malformed_csv), *HEADER_ARGS_CLI])
+
+    # Assert — one line kept, the note; the live line after it blanked before the result.
+    kept, live = terminal.getvalue().split("\n")
+    assert kept.rsplit("\r", 1)[1].startswith(NOTE_LEAD + "2 finding(s); the first: [STR")
+    assert "\rEvaluating the published rules" in live
+    assert live.endswith("\r")
+    assert capsys.readouterr().out.startswith("BLOCKED")
+
+
+def test_a_malformed_return_says_nothing_on_stderr_when_progress_is_off(
+    malformed_csv: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Act — stderr is not a terminal, and --progress was not asked for.
+    code = main(["validate", str(malformed_csv), *HEADER_ARGS_CLI])
+
+    # Assert
+    captured = capsys.readouterr()
+    assert code == EXIT_FAILED and captured.out.startswith("BLOCKED")
+    assert captured.err == ""

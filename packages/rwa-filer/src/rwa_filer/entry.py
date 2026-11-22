@@ -12,10 +12,18 @@ Key responsibilities:
 - Hand the collector back to a command that goes on running
   (``keep_collecting``): the dashboard serves until it is interrupted, and a
   process that never ends must not run without a collector.
+- Say whether the policy holds right now (``collector_switched_off``), for the
+  one exception made to it: reading a workbook, which runs collected
+  (``rwa_filer._gc.collector_running``).
 - Touch nothing but the process it starts. ``rwa_filer.cli.main(argv)`` is the
   in-process API — the test suite and any host call it — and it never changes
   the collector; only ``run`` does, and ``keep_collecting`` undoes only what
   ``run`` did.
+- Let the policy be switched off without a release: with
+  ``RWA_FILER_COLLECTOR=on`` in the environment, ``run`` leaves the collector
+  as the interpreter started it (on) and does not freeze the heap, so the
+  command runs as ``main`` called in-process would. Exactly ``on``: any other
+  value, or none, is the policy described here.
 
 Why the collector is off
 ------------------------
@@ -83,10 +91,19 @@ measured here, not explained.
 
 A workbook is different: the library that reads it leaves cycles behind for
 every sheet — the archive members it opened and their decompressors, about 70
-objects a sheet, whatever the sheet holds. Validating a blank 323-sheet PRA001
-template ends with about 22,600 unreachable objects, and peaked at 386 MB
-instead of 328 MB. It is bounded by the workbook, and the process ends with
-the command.
+objects a sheet, whatever the sheet holds. So the workbook reader runs with the
+collector on (``rwa_filer._gc.collector_running``) and switches it off again
+when it is done, after one full collection: what it left is freed then, not at
+exit. Without that, validating workbooks of 59, 155 and 455 sheets ended with
+5,717, 11,861 and 31,061 unreachable objects, and the 455 peaked at 326 to
+350 MB over ten runs; with it, 849 at every size from 10 to 455 sheets, a
+peak of 248 to 271 MB, and 60 to 155 ms of collection for the read.
+
+Writing a workbook (``rwa-filer template``) is not covered: openpyxl's
+in-memory workbook is cyclic too, and a 323-sheet blank template ends with
+about 287,000 unreachable objects. Its peak memory measured the same as with
+the collector on (243 MB): the workbook is kept until it is saved either way,
+and the command ends when it is.
 
 References:
 - rwa_filer.referee.worker — the same policy, for the Arelle worker
@@ -97,11 +114,20 @@ References:
 from __future__ import annotations
 
 import gc
+import os
 import sys
-from typing import NoReturn
+from typing import Final, NoReturn
 
-#: Whether ``run`` switched the collector off for this process. ``keep_collecting``
-#: switches it back on only then, so a caller of ``cli.main`` keeps its own policy.
+#: The environment variable that switches the policy off for one run, and the
+#: one value that does: ``RWA_FILER_COLLECTOR=on`` keeps the collector on.
+_SWITCH: Final = "RWA_FILER_COLLECTOR"
+_KEEP_COLLECTING: Final = "on"
+
+#: Whether the collector is off by this policy now: ``run`` switched it off for
+#: this process's command, and ``keep_collecting`` has not handed it back. Only
+#: then does ``keep_collecting`` switch it on, so a caller of ``cli.main`` keeps
+#: its own policy; and only then does the workbook reader run collected
+#: (``rwa_filer._gc.collector_running``).
 _collector_switched_off = False
 
 
@@ -112,10 +138,15 @@ def run() -> NoReturn:
     should. It changes the garbage collector for the whole process (see the
     module docstring), which is right only for a process that exists to run one
     command. In-process callers use ``rwa_filer.cli.main``.
+
+    With ``RWA_FILER_COLLECTOR=on`` in the environment it changes nothing: the
+    collector stays as the interpreter started it and the heap is not frozen.
     """
     global _collector_switched_off
-    gc.disable()
-    _collector_switched_off = True
+    one_shot = os.environ.get(_SWITCH) != _KEEP_COLLECTING
+    if one_shot:
+        gc.disable()
+        _collector_switched_off = True
     try:
         # Imported here, after the collector is off: importing the command line
         # loads some 430 modules, and their objects all live to the end too.
@@ -124,8 +155,10 @@ def run() -> NoReturn:
         code = main()
     finally:
         # Also when the command raised or argparse exited: every way out of the
-        # process goes through the interpreter's shutdown.
-        gc.freeze()
+        # process goes through the interpreter's shutdown. Not under the switch:
+        # a frozen heap is the other half of the policy it turns off.
+        if one_shot:
+            gc.freeze()
     sys.exit(code)
 
 
@@ -138,7 +171,22 @@ def keep_collecting() -> None:
     server that runs for hours creates garbage for hours.
 
     Does nothing when the process did not come in through ``run``: an
-    in-process caller's collector is its own, on or off.
+    in-process caller's collector is its own, on or off. From here on the
+    process is no longer under the one-shot policy (``collector_switched_off``).
     """
+    global _collector_switched_off
     if _collector_switched_off:
         gc.enable()
+        _collector_switched_off = False
+
+
+def collector_switched_off() -> bool:
+    """Whether the collector is off because this process is running a one-shot command.
+
+    True from the moment ``run`` switches it off until ``keep_collecting``
+    hands it back; never in a process that did not come in through ``run``
+    (an in-process caller of ``cli.main``, a test session, a host), nor under
+    ``RWA_FILER_COLLECTOR=on``. ``rwa_filer._gc.collector_running`` reads it: it
+    makes an exception to this policy, so it acts only while the policy holds.
+    """
+    return _collector_switched_off

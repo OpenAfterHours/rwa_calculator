@@ -573,6 +573,13 @@ def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
     pack = chosen.pack
     notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version))
     structure = (*source_findings, *check_structure(ret, pack))
+    if structure:
+        # Told now, not with the report: the rules take most of the run, and a
+        # return the taxonomy does not accept is worth hearing about first.
+        first = structure[0]
+        sentence = first.message.split(". ", 1)[0].removesuffix(".")
+        found = f"{len(structure)} finding(s); the first: [{first.code}] {first.severity}: "
+        notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version, note=found + sentence))
     release_findings = tuple(check_reference_date(ret, pack))
     module = pack.info.module
     effective = accuracy or Accuracy()

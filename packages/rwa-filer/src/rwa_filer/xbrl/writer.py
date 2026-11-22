@@ -3,7 +3,9 @@ XBRL instance writer — a canonical return as the file the regulator accepts.
 
 Pipeline position:
     CanonicalReturn -> validate.structure (must be clean) -> write_instance
-        -> Instance(content: bytes)  ->  filing.build_filing  ->  <name>.xbrl
+        -> Instance(content: bytes)
+    filing.build_filing: validate_return (structure clean) -> _write_checked
+        -> Instance(content: bytes)  ->  <name>.xbrl
 
 Key responsibilities:
 - Turn each reported cell into the XBRL fact its data point defines: the metric
@@ -26,6 +28,11 @@ What the writer does NOT do: decide whether the return may be filed. It refuses
 a return that is not structurally expressible — a fact with no data point has no
 element to be written as — and nothing else. Rule breaks are the caller's
 decision (``filing.build_filing``).
+
+The check and the writing are two steps. ``write_instance`` is the public entry
+and always does both. A build has just made the same check as part of its
+validation, on the same return and pack, so it calls the second step alone
+(``_write_checked``): one structure check per build, not two.
 
 Numbers
 - A monetary value is written as known, to the penny, in units of the reporting
@@ -209,7 +216,21 @@ def write_instance(
             f"The return has {len(findings)} structure finding(s) and cannot be written; "
             f"the first is {findings[0].code}: {findings[0].message}"
         )
+    return _write_checked(ret, pack, options)
 
+
+def _write_checked(ret: CanonicalReturn, pack: TaxonomyPack, options: InstanceOptions) -> Instance:
+    """Write a return whose structure the caller has ALREADY checked against ``pack``.
+
+    Private, and it stays so: this is ``write_instance`` without the check that
+    makes it safe to call. It has two callers. ``write_instance`` checks and
+    then calls it. ``filing.build_filing`` calls it straight after its own
+    validation found no structure finding for this very return and this very
+    pack: the structure check is part of that validation, and running it again
+    on the same two objects could only find the same nothing. A caller holding
+    a return changed since it was checked, or a pack other than the one it was
+    checked against, has not checked it, and must use ``write_instance``.
+    """
     facts = _xbrl_facts(ret, pack)
     document = _Document(ret.header, pack, options)
     for fact in facts:
@@ -432,11 +453,16 @@ class _Document:
     def add(self, fact: _Fact) -> None:
         """Write one fact, registering the context, unit and prefixes it needs."""
         metric = self._pack.metrics[fact.metric]
-        context = self.contexts.setdefault(fact.members, f"c{len(self.contexts)}")
+        context = self.contexts.get(fact.members)
+        if context is None:
+            context = self.contexts[fact.members] = f"c{len(self.contexts)}"
+            # A context IS its members, so their prefixes are registered when it
+            # is first seen: most facts share a context with others (some 26,000
+            # facts over 11,000 contexts on a 200-country return).
+            for dimension, member, element in fact.members:
+                self._use(dimension)
+                self._use(element if element is not None else member)
         self._use(fact.metric)
-        for dimension, member, element in fact.members:
-            self._use(dimension)
-            self._use(element if element is not None else member)
 
         if metric.is_numeric:
             if fact.value is None:

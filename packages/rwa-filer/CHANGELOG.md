@@ -72,7 +72,8 @@ and released independently of `rwa-calc`; its release tags are prefixed
   restores what it found.
 - **The XBRL reader keeps one compact index per taxonomy pack** instead of
   rebuilding a 110 MB index of 61,428 data points on every read: 4.8 MB for
-  PRA001, built once per process.
+  PRA001, built once per process. A file that repeats a namespace declaration on
+  every fact reads as fast as one that declares it once.
 - **`rwa-filer compare` names the first of two tied rows.** Where two rows moved
   by the same amount, which one a move named depended on Python's hash seed; it
   is now the first in cell order (see Fixed).
@@ -82,7 +83,8 @@ and released independently of `rwa-calc`; its release tags are prefixed
   of a pair runs behind the progress page; the browser opens as soon as the
   server answers. **Download evidence** is collected once per validation and
   served from then on; its working file is named
-  `{return_id}.{token}.evidence.jsonl`, one per validation.
+  `{return_id}.{token}.evidence.jsonl`, one per validation, and is kept in the
+  session folder while the dashboard runs (a download may still be reading it).
 - **The declared Polars floor is now 1.24.0** (it was 1.0.0; see Fixed).
 
 ### Fixed

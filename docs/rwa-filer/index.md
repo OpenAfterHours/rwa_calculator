@@ -728,7 +728,8 @@ written, and records its checksum and `evidence_id` in the manifest, so a
 sign-off of the manifest covers the evidence too. The dashboard's overview
 offers the same file as **Download evidence**: it is collected once for each
 validation of the return and served from then on, so a second click is
-immediate and two clicks at once get the same whole file.
+immediate and two clicks at once get the same whole file. Each validation's file
+is kept in the dashboard's session folder until the dashboard stops.
 
 ## Writing the submission file
 

@@ -9,8 +9,8 @@ Pipeline position:
 Key responsibilities:
 - Code alignment looks each code up once per (table, axis, code), however many
   facts carry it: the number of code lookups is the same for a return and for
-  one with ten times its open rows, and never more than the codes the named
-  tables publish.
+  one with ten times its open rows. It follows the distinct codes as written -
+  for codes that name something, at most the codes the named tables publish.
 - A warm check does no per-table work for the tables a return does not name:
   against a module with twelve times the tables it filters the same frames
   and joins against the same cells as against the small one.

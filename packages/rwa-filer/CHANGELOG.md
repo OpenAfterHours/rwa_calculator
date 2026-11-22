@@ -65,9 +65,11 @@ and released independently of `rwa-calc`; its release tags are prefixed
   exception: openpyxl leaves cyclic garbage per sheet, so a workbook is read with
   the collector on and collected once at the end (peak memory on a 455-sheet
   workbook 326-350 MB -> 248-271 MB). `rwa-filer dash` hands the collector back
-  before it starts serving. `rwa_filer.cli.main(argv)` is unchanged and never
-  touches its caller's collector. Library code pauses the collector only while it
-  builds bulk reference data (a pack, an XBRL read), and restores what it found.
+  before it starts serving. `rwa_filer.cli.main(argv)` sets no collector policy
+  and leaves its caller's collector as it found it. Library code pauses the
+  collector while it builds bulk reference data (a pack, an XBRL read) - for the
+  whole interpreter, so other threads run uncollected for that time - and
+  restores what it found.
 - **The XBRL reader keeps one compact index per taxonomy pack** instead of
   rebuilding a 110 MB index of 61,428 data points on every read: 4.8 MB for
   PRA001, built once per process.

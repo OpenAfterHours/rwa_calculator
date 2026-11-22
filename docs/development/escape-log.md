@@ -5466,7 +5466,8 @@ and each gate was observed red against the code as it shipped before the fix.
 - **Verified red**: the job's commands, run here at Polars 1.23.0: `TypeError:
   DataFrame.join() got an unexpected keyword argument 'nulls_equal'`. At 1.24.0
   the suite passes (two tests that assumed the locked Polars were made
-  version-neutral in the same change). The job itself first runs in CI on this
+  version-neutral later in the same branch, in `10098ab`, so the job is green
+  from that commit on). The job itself first runs in CI on this
   branch.
 - **Not covered**: the other declared floors (starlette, uvicorn, jinja2,
   python-multipart) are not run either (plan item P6.63).

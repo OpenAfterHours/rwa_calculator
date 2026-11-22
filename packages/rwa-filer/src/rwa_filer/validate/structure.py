@@ -246,9 +246,10 @@ def _align_codes(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
     of an open-row table is the filer's own and is never touched.
 
     What a code becomes depends only on its table and its axis, so each axis
-    looks up its distinct (table, code) pairs once: the lookups are bounded by
-    the codes the named tables publish, however many facts or open rows there
-    are. Open-row tables are left out of the row axis BEFORE the pairs are
+    looks up its distinct (table, code) pairs once: the number of lookups
+    follows the distinct codes as written, not the number of facts or open
+    rows. For codes that name something it is bounded by the codes the named
+    tables publish; each distinct unknown code adds one more. Open-row tables are left out of the row axis BEFORE the pairs are
     taken, as each of their rows carries an identifier of its own.
     """
     if facts.is_empty():

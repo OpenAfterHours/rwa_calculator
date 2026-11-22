@@ -16,9 +16,11 @@ Key responsibilities:
   one exception made to it: reading a workbook, which runs collected
   (``rwa_filer._gc.collector_running``).
 - Touch nothing but the process it starts. ``rwa_filer.cli.main(argv)`` is the
-  in-process API — the test suite and any host call it — and it never changes
-  the collector; only ``run`` does, and ``keep_collecting`` undoes only what
-  ``run`` did.
+  in-process API — the test suite and any host call it — and it sets no
+  collector policy: only ``run`` does, and ``keep_collecting`` undoes only what
+  ``run`` did. (The library pauses the collector while it builds a taxonomy pack
+  or reads an XBRL instance, for the whole interpreter, and restores what it
+  found: ``rwa_filer._gc.collector_paused``.)
 - Let the policy be switched off without a release: with
   ``RWA_FILER_COLLECTOR=on`` in the environment, ``run`` leaves the collector
   as the interpreter started it (on) and does not freeze the heap, so the

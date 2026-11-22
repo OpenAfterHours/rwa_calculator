@@ -6,9 +6,12 @@ Pipeline position:
 
 Key responsibilities:
 - Parse the command line and dispatch to a subcommand. ``main(argv)`` is also
-  the in-process way to run a command: it changes nothing about the process it
-  is called in. What is right only for a process that runs one command and
-  ends — the garbage-collector policy — belongs to ``rwa_filer.entry``.
+  the in-process way to run a command: it leaves the process it is called in
+  as it found it. (While it loads a taxonomy pack or reads an XBRL instance the
+  library pauses the cyclic collector for the whole interpreter and then puts it
+  back - ``rwa_filer._gc.collector_paused``.) What is right only for a process
+  that runs one command and ends — the garbage-collector policy — belongs to
+  ``rwa_filer.entry``.
 - Write results to stdout and diagnostics to stderr, and return a process exit
   code. This module holds no validation or filing logic of its own.
 - Report a missing optional extra (``MissingExtraError``, from whichever

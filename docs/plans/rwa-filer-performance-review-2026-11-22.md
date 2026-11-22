@@ -162,8 +162,8 @@ same cells in the same order (13.7 → 0.9 s). `compare` asks for a trace withou
 comparison log it never reads (a further −14%).
 
 **6. Do the structure check per axis, not per cell.** Code alignment loops over the
-distinct codes of one axis at a time, bounded by the pack (4,939 pairs) whatever the
-return's size; the resolved frame is split by table once instead of filtered 208 times.
+distinct codes of one axis at a time, so its loop follows the distinct codes written
+(at most the pack's 4,939 for codes that name something), not the facts; the resolved frame is split by table once instead of filtered 208 times.
 *Structure check 54 → 21 ms on a typical return and 7.2 → 1.9 s at 955,000 facts; a
 firm-shaped return of 92,000 facts validates in 6.0 s instead of 8.6 s.*
 
@@ -249,7 +249,11 @@ which is that:
   container nor CI holds: it is the owner's run, and plan item P6.60 (d) stays open.
 
 Delivered as one pull request cut into one commit per work package, guards and change
-together, each commit green on its own, so a moved verdict can be bisected to a package.
+together, so a moved verdict can be bisected to a package. Each package was verified in
+its own worktree; one cross-package interaction was not seen until after the merge: the
+new Polars-floor CI job is red on the commits between `102b144` and `e5c4e76`, because
+a lazy-import probe added earlier asserted that `ssl` is not imported, and Polars 1.24
+imports it itself. `10098ab` fixes the probe; the job is green from there.
 
 ### Phase 2 — proposed, not in this change
 
@@ -382,7 +386,7 @@ the command line:
   explanation at 200 countries 12.3 s → 0.7 s; two facts carrying 18 open dimensions
   each took 2.16 s of CPU to read, now 0.01 s.
 - **The member test suite:** 1,843 tests in 216 s serially before; 2,414 tests (571 of
-  them new guards) in 191 s serially after, and about 70 s on three workers, as CI now
+  them new guards) in 191 s serially after, and about 66-70 s on four workers (`-n auto` on 4 cores), as CI now
   runs it.
 - **How the tool is launched** matters as much as several of the rows above: `uvx
   rwa-filer@latest --version` took 0.70-0.78 s against 0.24 s for an installed command,
@@ -428,7 +432,7 @@ P6.62-P6.65.
 
 - **Baseline and benchmark.** Sixteen golden Basel 3.1 PRA001 returns built through
   `rwa-calc`, plus the richest one copied out to 50 and 200 countries, as fact tables and
-  as written XBRL. Thirteen cold command-line cases, best of three.
+  as written XBRL. Fifteen cold command-line cases (`scripts/rwa_filer_benchmark.py`), best of three; the first baseline, taken before the script existed, timed thirteen of them.
 - **Equivalence snapshot.** 146 sections recorded from the unchanged code; timestamps,
   paths and the one digest that covers a timestamp are scrubbed, and a re-run reproduces
   the record exactly.

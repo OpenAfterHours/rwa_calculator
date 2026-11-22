@@ -123,10 +123,12 @@ everything.
 
 ### Seeing how far a check has got
 
-A typical PRA001 return validates in about a second and one reporting 200
-countries in about two; most of that is evaluating the published rules one by
-one. `validate`, `build` and `dash FILE` say on stderr which step they are on
-and how many rules are done:
+A typical PRA001 return validates in under a second, most of it start-up:
+Python, Polars and loading the taxonomy pack. The published rules take a
+fraction of a second there, and most of the time only on large returns: one
+reporting 200 countries takes about one and a half seconds. `validate`, `build`
+and `dash FILE` say on stderr which step they are on and how many rules are
+done:
 
 ```text
 Evaluating the published rules: 612 of 1,441 (42%) - 8s

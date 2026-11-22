@@ -53,6 +53,7 @@ import logging
 import math
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import IO, TYPE_CHECKING, Any, Final
 
 from rwa_filer.validate.identity import identity_record, source_identity
@@ -154,9 +155,15 @@ class Evidence:
     validation: ReturnValidation
     trace: RuleTrace | None
 
-    @property
+    @cached_property
     def identity(self) -> dict[str, Any]:
-        """The ``identity`` block the report and the file share."""
+        """The ``identity`` block the report and the file share.
+
+        Computed once and kept: it fingerprints every fact of the return, and
+        one run reads it for the evidence header, for the JSON record and for
+        the manifest. Every reader is handed this one block, so read it, do
+        not edit it.
+        """
         return identity_record(self.ret, self.validation)
 
 

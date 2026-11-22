@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from pack_builders import VALID_LEI
+from rwa_filer import release as release_module
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
+from rwa_filer.release import resolve_release
 
 HEADER_ARGS = ["--entity", VALID_LEI, "--reference-date", "2027-03-31", "--module", "PRA001"]
 
@@ -53,6 +55,45 @@ def test_taxonomy_list_shows_each_modules_status_in_each_release(
     )
     assert status in ("live", "future")
     assert "release(s) shipped: 4.1.1" in out
+
+
+def test_taxonomy_list_loads_no_taxonomy_pack(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A listing names each module's default release; it reads none of them."""
+    # Arrange — count the packs a release resolution asks for.
+    asked: list[str] = []
+    load = release_module.load_packaged
+
+    def counted(key: str) -> object:
+        asked.append(key)
+        return load(key)
+
+    monkeypatch.setattr(release_module, "load_packaged", counted)
+
+    # Act
+    code = main(["taxonomy", "list"])
+
+    # Assert — every shipped module is listed with its default, and no pack was loaded.
+    lines = [line.split() for line in capsys.readouterr().out.splitlines()[1:] if line.strip()]
+    defaults = [line for line in lines if len(line) == 7 and line[5] == "yes"]
+    assert code == EXIT_OK
+    assert len(defaults) >= 14, "the listing marks no default: nothing was resolved to count"
+    assert asked == []
+
+
+def test_taxonomy_list_marks_the_release_a_run_would_use(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The ``default`` column is ``resolve_release``'s answer, module by module."""
+    # Act
+    main(["taxonomy", "list"])
+
+    # Assert
+    lines = [line.split() for line in capsys.readouterr().out.splitlines()[1:] if line.strip()]
+    marked = {line[0]: line[1] for line in lines if len(line) == 7 and line[5] == "yes"}
+    assert len(marked) >= 14, "fewer modules than the shipped release has: the listing is short"
+    assert marked == {module: resolve_release(module).version for module in marked}
 
 
 def test_taxonomy_list_refuses_a_module_no_release_has(

@@ -2,10 +2,13 @@
 The ``rwa-filer`` command line.
 
 Pipeline position:
-    shell  ->  rwa_filer.cli.main  ->  the package's public API
+    shell  ->  rwa_filer.entry.run  ->  rwa_filer.cli.main  ->  the package's public API
 
 Key responsibilities:
-- Parse the command line and dispatch to a subcommand.
+- Parse the command line and dispatch to a subcommand. ``main(argv)`` is also
+  the in-process way to run a command: it changes nothing about the process it
+  is called in. What is right only for a process that runs one command and
+  ends — the garbage-collector policy — belongs to ``rwa_filer.entry``.
 - Write results to stdout and diagnostics to stderr, and return a process exit
   code. This module holds no validation or filing logic of its own.
 - Report a missing optional extra (``MissingExtraError``, from whichever
@@ -123,6 +126,7 @@ from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, lo
 from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
 from rwa_filer.boe.engine import Accuracy
 from rwa_filer.boe.issues_document import render_document, render_issue, render_listing
+from rwa_filer.entry import keep_collecting, run
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
@@ -139,6 +143,7 @@ from rwa_filer.referee import report as referee_report
 from rwa_filer.referee.differential import compare
 from rwa_filer.release import (
     ReleaseNotFoundError,
+    default_release_version,
     module_releases,
     release_deny_list,
     release_issues,
@@ -422,7 +427,15 @@ def _validate(args: argparse.Namespace) -> int:
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
 
-    record = to_record(source.ret, validation)
+    # The record costs a fingerprint per enforced rule and one of every fact, and
+    # only --report and --format json read it: the text report is built from the
+    # validation itself. A run that also writes evidence hands its identity block
+    # along, so the facts are fingerprinted once for the record and the file.
+    record: dict[str, Any] | None = None
+    if args.report is not None or args.format == "json":
+        record = to_record(
+            source.ret, validation, identity=None if evidence is None else evidence.identity
+        )
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -941,6 +954,10 @@ def _dash(args: argparse.Namespace) -> int:
         except (ValueError, ReleaseNotFoundError) as exc:
             return _fail(str(exc))
         start = f"/returns/{opened.return_id}"
+    # From here the command does not end with its work. Opening the file above was
+    # one-shot work, and the process entry runs that with the garbage collector
+    # off; a server must have it back before it starts.
+    keep_collecting()
     try:
         serve(
             workspace,
@@ -1020,7 +1037,9 @@ def _taxonomy_list(args: argparse.Namespace) -> int:
     )
     for module in modules:
         try:
-            default = resolve_release(module, today=today).version
+            # Only the version is printed: the release itself (its pack, rule book,
+            # deny list and issue register) is not loaded to name it.
+            default = default_release_version(module, today=today)
         except ReleaseNotFoundError:
             default = None
         for option in module_releases(module, today=today):
@@ -1707,4 +1726,6 @@ def _unwritable(path: Path | None, option: str, *, directory: bool = False) -> s
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # ``python -m rwa_filer.cli`` is a process started for one command, as the
+    # console script is: it goes through the same entry.
+    run()

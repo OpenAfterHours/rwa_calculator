@@ -55,8 +55,11 @@ arelle = [
     "arelle-release>=2.37",
 ]
 
+# The process entry, not `rwa_filer.cli:main`: it runs the one command with the
+# garbage collector off and freezes the heap before exit (rwa_filer/entry.py).
+# `main` stays the in-process API and changes nothing about its caller's process.
 [project.scripts]
-rwa-filer = "rwa_filer.cli:main"
+rwa-filer = "rwa_filer.entry:run"
 
 [project.urls]
 Homepage = "https://github.com/OpenAfterHours/rwa_calculator"

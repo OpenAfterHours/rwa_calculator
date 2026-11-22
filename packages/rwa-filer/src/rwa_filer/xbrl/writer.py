@@ -53,7 +53,6 @@ import logging
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Decimal
 from typing import TYPE_CHECKING, Final
-from xml.sax.saxutils import escape, quoteattr
 
 import polars as pl
 
@@ -75,6 +74,7 @@ from rwa_filer.validate.structure import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import date, datetime
 
     from rwa_filer.model import CanonicalReturn, ReturnHeader
@@ -419,6 +419,15 @@ class _Document:
         self._units: dict[str, str] = {}
         self._prefixes: set[str] = set()
         self._facts: list[str] = []
+        # Imported when a document is written, not with this module:
+        # xml.sax.saxutils imports urllib.request, and with it http.client, ssl,
+        # email and socket (34 modules). The reader imports this module for its
+        # namespace names, so a command that only reads a return would pay for
+        # all of them. Bound once here, so a fact costs no import of its own.
+        from xml.sax.saxutils import escape, quoteattr
+
+        self._escape: Callable[[str], str] = escape
+        self._quoteattr: Callable[[str], str] = quoteattr
 
     def add(self, fact: _Fact) -> None:
         """Write one fact, registering the context, unit and prefixes it needs."""
@@ -437,7 +446,7 @@ class _Document:
             stated = "INF" if decimals >= DECIMALS_EXACT else str(decimals)
             attributes = f'contextRef="{context}" decimals="{stated}" unitRef="{unit}"'
         else:
-            body = escape(self._text(fact, metric.data_type, metric.enumeration))
+            body = self._escape(self._text(fact, metric.data_type, metric.enumeration))
             attributes = f'contextRef="{context}"'
         self._facts.append(f"  <{fact.metric} {attributes}>{body}</{fact.metric}>")
 
@@ -458,8 +467,8 @@ class _Document:
 
         entity = (
             "    <xbrli:entity>\n"
-            f"      <xbrli:identifier scheme={quoteattr(header.entity_scheme)}>"
-            f"{escape(header.entity_identifier)}</xbrli:identifier>\n"
+            f"      <xbrli:identifier scheme={self._quoteattr(header.entity_scheme)}>"
+            f"{self._escape(header.entity_identifier)}</xbrli:identifier>\n"
             "    </xbrli:entity>\n"
             "    <xbrli:period>\n"
             f"      <xbrli:instant>{header.reference_date.isoformat()}</xbrli:instant>\n"
@@ -468,9 +477,8 @@ class _Document:
         lines = ['<?xml version="1.0" encoding="UTF-8"?>', self._generator()]
         declarations = " ".join(f'xmlns:{prefix}="{uri}"' for prefix, uri in namespaces.items())
         lines.append(f"<xbrli:xbrl {declarations}>")
-        lines.append(
-            f'  <link:schemaRef xlink:type="simple" xlink:href={quoteattr(pack.info.entry_point)}/>'
-        )
+        href = self._quoteattr(pack.info.entry_point)
+        lines.append(f'  <link:schemaRef xlink:type="simple" xlink:href={href}/>')
         for unit, measure in sorted(self._units.items()):
             lines.append(
                 f'  <xbrli:unit id="{unit}">\n'
@@ -478,15 +486,14 @@ class _Document:
                 "  </xbrli:unit>"
             )
         for members, context in self.contexts.items():
-            lines.append(
-                f'  <xbrli:context id="{context}">\n{entity}{_scenario(members)}  </xbrli:context>'
-            )
+            scenario = _scenario(members, self._escape)
+            lines.append(f'  <xbrli:context id="{context}">\n{entity}{scenario}  </xbrli:context>')
         lines.extend(self._facts)
         lines.append("  <find:fIndicators>")
         for code, filed in sorted(indicators.items()):
             flag = "" if filed else ' find:filed="false"'
             lines.append(
-                f'    <find:filingIndicator contextRef="{BASE_CONTEXT}"{flag}>{escape(code)}'
+                f'    <find:filingIndicator contextRef="{BASE_CONTEXT}"{flag}>{self._escape(code)}'
                 "</find:filingIndicator>"
             )
         lines.append("  </find:fIndicators>")
@@ -533,8 +540,11 @@ class _Document:
         return f'<?instance-generator id="{GENERATOR_ID}" version="{__version__}"{stamp}?>'
 
 
-def _scenario(members: tuple[_Member, ...]) -> str:
-    """A context's ``xbrli:scenario``, or nothing for the dimensionless context."""
+def _scenario(members: tuple[_Member, ...], escape: Callable[[str], str]) -> str:
+    """A context's ``xbrli:scenario``, or nothing for the dimensionless context.
+
+    ``escape`` is the document's XML text escape (see ``_Document.__init__``).
+    """
     if not members:
         return ""
     lines = ["    <xbrli:scenario>"]

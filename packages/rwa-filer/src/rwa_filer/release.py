@@ -226,14 +226,31 @@ def resolve_release(
     options = module_releases(wanted, today=run_date)
     if named is not None:
         return _named(wanted, named, options, entry_point, run_date)
-    candidates = tuple(
-        option
-        for option in options
-        if entry_point is None or option.info.entry_point == entry_point
-    )
-    if not candidates:
-        raise ReleaseNotFoundError(_nothing_for(wanted, entry_point))
-    return _release(_default(wanted, candidates), CHOSEN_DEFAULT, options, run_date)
+    chosen = _default_option(wanted, options, entry_point)
+    return _release(chosen, CHOSEN_DEFAULT, options, run_date)
+
+
+def default_release_version(module: str, *, today: date | None = None) -> str:
+    """The version ``resolve_release(module, today=today)`` uses, with nothing loaded.
+
+    For a caller that only names the default, such as a listing of every
+    module: resolving a release loads its taxonomy pack, rule book, deny list
+    and issue register, and the choice needs none of them — only each
+    release's dates for the module. It is made here by the step
+    ``resolve_release`` makes it by (``_default_option``), so the two cannot
+    give different answers.
+
+    Args:
+        module: The reporting module (case-insensitive).
+        today: The run date. Defaults to today.
+
+    Raises:
+        ReleaseNotFoundError: no shipped release has the module, or more than
+            one could be the default — as ``resolve_release`` raises them.
+    """
+    run_date = today or date.today()
+    wanted = _module_for(module, None, run_date)
+    return _default_option(wanted, module_releases(wanted, today=run_date), None).version
 
 
 def release_for_pack(
@@ -515,6 +532,25 @@ def _named(
             f"its own entry point. {_shipped_for(module, options)}"
         )
     return _release(match, CHOSEN_VERSION, options, run_date)
+
+
+def _default_option(
+    module: str, options: tuple[ModuleRelease, ...], entry_point: str | None
+) -> ModuleRelease:
+    """The release a run that names none uses, among those with the file's entry point.
+
+    Raises:
+        ReleaseNotFoundError: no option has the entry point (or there is no
+            option at all), or more than one could be the default.
+    """
+    candidates = tuple(
+        option
+        for option in options
+        if entry_point is None or option.info.entry_point == entry_point
+    )
+    if not candidates:
+        raise ReleaseNotFoundError(_nothing_for(module, entry_point))
+    return _default(module, candidates)
 
 
 def _default(module: str, candidates: tuple[ModuleRelease, ...]) -> ModuleRelease:

@@ -57,7 +57,7 @@ from rwa_filer.validate.returns import validate_return
 from rwa_filer.xbrl.writer import GENERATOR_ID, InstanceOptions, write_instance
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import date
     from pathlib import Path
 
@@ -207,6 +207,7 @@ def build_filing(
         today=today,
     )
     evidence_file = None
+    identity = None
     if evidence is not None:
         collected = collect_evidence(
             ret,
@@ -218,6 +219,9 @@ def build_filing(
             progress=progress,
         )
         validation = collected.validation
+        # The block the evidence header carries is the manifest's too: handed
+        # along, so one build fingerprints its facts once.
+        identity = collected.identity
         evidence_file = write_evidence(collected, evidence, generated_at=options.created_at)
     else:
         validation = validate_return(
@@ -251,7 +255,7 @@ def build_filing(
         _write_zip(zip_path, instance_path.name, instance.content)
 
     manifest_path = directory / f"{base}{MANIFEST_SUFFIX}"
-    manifest = _manifest(ret, validation, instance, options, instance_path, zip_path)
+    manifest = _manifest(ret, validation, instance, options, instance_path, zip_path, identity)
     manifest["adjustments"] = [applied.as_record() for applied in adjustments]
     manifest["evidence"] = None if evidence_file is None else _evidence_record(evidence_file)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -301,9 +305,14 @@ def _manifest(
     options: InstanceOptions,
     instance_path: Path,
     zip_path: Path | None,
+    identity: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    """What was written, against what, with which checksum, under which verdict."""
-    record = to_record(ret, validation)
+    """What was written, against what, with which checksum, under which verdict.
+
+    ``identity`` is the run's identity block where evidence was collected, so it
+    is not computed a second time; ``None`` has the record compute it.
+    """
+    record = to_record(ret, validation, identity=identity)
     return {
         "format": MANIFEST_FORMAT,
         "generator": {"id": GENERATOR_ID, "version": __version__},

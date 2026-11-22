@@ -9,6 +9,7 @@ The last section checks the same resolver against the real packaged data.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -28,11 +29,14 @@ from rwa_filer.release import (
     STATUS_FUTURE,
     STATUS_LIVE,
     STATUS_SUPERSEDED,
+    Release,
     ReleaseNotFoundError,
     choose_release,
+    default_release_version,
     long_date,
     release_for_pack,
     release_lines,
+    release_packs,
     release_record,
     resolve_release,
     shipped_releases,
@@ -224,6 +228,89 @@ def test_a_module_no_shipped_release_has_is_refused(releases: Releases) -> None:
         ReleaseNotFoundError, match=r"No shipped taxonomy release has module XYZ999"
     ):
         resolve_release("XYZ999", today=TODAY)
+
+
+# ---------------------------------------------------------------------------
+# The default's version, with nothing loaded
+# ---------------------------------------------------------------------------
+
+#: Four releases that never overlap, with a gap in 2027: on one run date or
+#: another every way the default is chosen — or refused — is reached.
+LADDER = (
+    ("4.0.0", date(2025, 1, 1), date(2025, 12, 31)),
+    ("4.1.0", date(2026, 1, 1), date(2026, 12, 31)),
+    ("4.2.0", date(2028, 1, 1), date(2028, 12, 31)),
+    ("4.3.0", date(2029, 1, 1), date(2029, 12, 31)),
+)
+#: Two releases live at once from 2027, and one release alone.
+OVERLAP = (("4.1.1", date(2027, 1, 1), None), ("4.1.2", date(2027, 1, 1), None))
+ALONE = (("4.1.1", date(2027, 1, 1), date(2027, 12, 31)),)
+SHIPPED = {"ladder": LADDER, "overlap": OVERLAP, "alone": ALONE}
+
+
+def _default_or_refusal(
+    resolve: Callable[..., str | Release], module: str, day: date
+) -> tuple[str, str]:
+    """What asking for the default gave: ``("version", v)`` or ``("refused", message)``."""
+    try:
+        chosen = resolve(module, today=day)
+    except ReleaseNotFoundError as refusal:
+        return "refused", str(refusal)
+    return "version", chosen if isinstance(chosen, str) else chosen.version
+
+
+@pytest.mark.parametrize(
+    ("shipped", "module", "day", "expected"),
+    [
+        pytest.param("ladder", SAMPLE_MODULE, date(2025, 6, 30), "4.0.0", id="the-live-one"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2028, 6, 30), "4.2.0", id="a-later-live-one"),
+        pytest.param("overlap", SAMPLE_MODULE, TODAY, "4.1.2", id="newest-of-two-live"),
+        pytest.param("alone", SAMPLE_MODULE, date(2026, 11, 15), "4.1.1", id="the-only-future"),
+        pytest.param("alone", SAMPLE_MODULE, date(2030, 1, 1), "4.1.1", id="a-lone-superseded"),
+        pytest.param("alone", SAMPLE_MODULE.lower(), TODAY, "4.1.1", id="module-in-lower-case"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2024, 6, 30), None, id="four-future"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2027, 6, 30), None, id="two-future-two-past"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2030, 6, 30), None, id="four-superseded"),
+        pytest.param("alone", "XYZ999", TODAY, None, id="no-release-has-the-module"),
+    ],
+)
+def test_the_defaults_version_is_what_resolving_the_release_gives(
+    releases: Releases, shipped: str, module: str, day: date, expected: str | None
+) -> None:
+    """The same version — or the same refusal, word for word."""
+    # Arrange
+    for version, valid_from, valid_to in SHIPPED[shipped]:
+        releases.add(version, valid_from, valid_to)
+
+    # Act
+    shortcut = _default_or_refusal(default_release_version, module, day)
+    resolved = _default_or_refusal(resolve_release, module, day)
+
+    # Assert — the expectation is written out, so the two cannot be wrong together.
+    assert resolved[0] == ("refused" if expected is None else "version")
+    assert expected is None or resolved[1] == expected
+    assert shortcut == resolved
+
+
+def test_the_defaults_version_is_found_without_loading_the_release(
+    releases: Releases, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a release whose pack, rule book, deny list and issues cannot be loaded.
+    releases.add("4.1.1", date(2027, 1, 1))
+
+    def unloadable(*_args: object) -> None:
+        raise AssertionError("the release was loaded to name its version")
+
+    for loader in ("load_packaged", "load_rulebook", "load_deny_list", "load_issues"):
+        monkeypatch.setattr(release_module, loader, unloadable)
+
+    # Act
+    version = default_release_version(SAMPLE_MODULE, today=TODAY)
+
+    # Assert — and resolving it does load: the stand-ins are where the loading goes.
+    assert version == "4.1.1"
+    with pytest.raises(AssertionError, match="the release was loaded"):
+        resolve_release(SAMPLE_MODULE, today=TODAY)
 
 
 # ---------------------------------------------------------------------------
@@ -455,3 +542,23 @@ def test_a_module_of_the_same_release_can_be_live_while_pra001_is_future() -> No
 
     assert resolve_release("LVR001", today=day).status == STATUS_LIVE
     assert resolve_release("PRA001", today=day).status == STATUS_FUTURE
+
+
+@pytest.mark.parametrize(
+    "day",
+    [date(2020, 1, 1), date(2026, 1, 15), date(2026, 11, 22), date(2027, 1, 1), date(2030, 6, 30)],
+    ids=lambda day: day.isoformat(),
+)
+def test_every_shipped_modules_default_version_is_its_resolved_releases(day: date) -> None:
+    """Past, present and future run dates, on every module the package ships."""
+    # Arrange
+    modules = sorted(
+        {info.module for version in shipped_releases() for info in release_packs(version)}
+    )
+    assert len(modules) >= 14, f"only {modules} shipped: the packaged data is not what this reads"
+
+    # Act
+    shortcut = {module: default_release_version(module, today=day) for module in modules}
+
+    # Assert
+    assert shortcut == {module: resolve_release(module, today=day).version for module in modules}

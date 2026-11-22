@@ -22,7 +22,8 @@ Key responsibilities:
 - Compare two opened returns once per pair: a comparison evaluates every rule
   on both, and a page redrawn to filter its cells must not do that again.
 - Write the evidence behind a validation's verdict once, and hand out that file
-  for every later download of it.
+  for every later download of it. A file handed out is never removed while the
+  session runs, so no download loses the file it was given.
 - Do each of those three — a validation, a comparison, an evidence file — once
   however many requests ask for it at the same moment: the first asker does the
   work, and the others wait for it and take its result instead of doing the same
@@ -195,7 +196,7 @@ class Workspace:
         self._working: dict[str, tuple[int, WorkingReturn]] = {}
         self._builds: dict[str, list[FilingRecord]] = {}
         self._comparisons: dict[tuple[str, str], ReturnComparison] = {}
-        #: Per return, the evidence written: the as-opened validation's and the one written last.
+        #: Per return, the evidence files later downloads are served (``evidence``).
         self._evidence: dict[str, tuple[_KeptEvidence, ...]] = {}
         #: The work under way, by what it makes; a second asker waits on it (``_once``).
         self._flights: dict[tuple[object, ...], _Flight[Any]] = {}
@@ -368,8 +369,13 @@ class Workspace:
         again rather than writing it a second time. Each file is written whole,
         under a name of its own, before it is first handed out, and never
         written again: no download can read a file while it is being written.
-        Of a return's files, the as-opened one and the one written last are
-        kept; any other is removed when a newer one is written.
+
+        Which files are kept for later downloads follows the return as it now
+        stands, not the order collections end in: the as-opened validation's,
+        the current drafts' (``working``), and the one just written. A file no
+        longer kept stays where it is, in the session's folder, and is never
+        removed while the session runs: a download may have been handed it and
+        not yet opened it.
         """
         validation, return_id = current.validation, current.return_id
 
@@ -378,15 +384,11 @@ class Workspace:
             return next((item.path for item in found if item.validation is validation), None)
 
         def keep(path: Path) -> None:
-            opened = self._returns.get(return_id)
-            as_opened = opened.validation if opened is not None else None
-            stays: list[_KeptEvidence] = []
-            goes: list[_KeptEvidence] = []
-            for item in self._evidence.get(return_id, ()):
-                (stays if item.validation is as_opened else goes).append(item)
-            self._evidence[return_id] = (*stays, _KeptEvidence(validation, path))
-            for item in goes:
-                _remove(item.path)
+            wanted = (*self._validations_drawn(return_id), validation)
+            listed = (*self._evidence.get(return_id, ()), _KeptEvidence(validation, path))
+            self._evidence[return_id] = tuple(
+                item for item in listed if any(item.validation is each for each in wanted)
+            )
 
         # Keyed on the validation itself: the flight keeps ``current`` alive, so the id is its own.
         return self._once(
@@ -444,6 +446,22 @@ class Workspace:
             return self._comparisons.get((baseline.return_id, candidate.return_id))
 
     # -- helpers ------------------------------------------------------------------
+
+    def _validations_drawn(self, return_id: str) -> tuple[ReturnValidation, ...]:
+        """The validations a page of the return can draw now; call it under the lock.
+
+        The as-opened one, which withdrawing every override draws again, and the
+        one of the drafts as they now stand, once ``working`` has it. A
+        validation of drafts since changed is neither: no page draws it again.
+        """
+        drawn: list[ReturnValidation] = []
+        opened = self._returns.get(return_id)
+        if opened is not None:
+            drawn.append(opened.validation)
+        found = self._working.get(return_id)
+        if found is not None and found[0] == self._revisions.get(return_id, 0):
+            drawn.append(found[1].current.validation)
+        return tuple(drawn)
 
     def _once[T](
         self,
@@ -544,14 +562,6 @@ def _write_evidence(current: OpenedReturn, folder: Path) -> Path:
     )
     path = folder / f"{current.return_id}.{secrets.token_hex(4)}.evidence.jsonl"
     return write_evidence(collected, path).path
-
-
-def _remove(path: Path) -> None:
-    """Delete a superseded evidence file; one a download still holds open stays (Windows)."""
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        logger.debug("could not remove %s", path, exc_info=True)
 
 
 def _reading(opened: OpenedReturn) -> SourceReading:

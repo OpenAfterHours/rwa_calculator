@@ -11,7 +11,10 @@ file while it was being sent, which could hand back a damaged file with HTTP 200
 
 The evidence is also written once per validation and handed out from then on: a
 second download, or the as-opened return's after every override is withdrawn,
-collects nothing again.
+collects nothing again. And no file a download was handed is removed under it:
+a download of an older validation that ends last, or a newer one written while
+an older download has not opened its file yet, used to delete the other's file —
+an HTTP 500, and the current validation's evidence collected a third time.
 
 How the tests line requests up without racing them: the work is held on a gate
 the test opens (``_Gate``), the requests are started, and the test waits until
@@ -23,12 +26,25 @@ many times the work was started.
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from starlette.responses import FileResponse
+from starlette.testclient import TestClient
 
+import rwa_filer.dash.pages as pages_module
 import rwa_filer.evidence as evidence_module
-from dash_builders import CELL, HEADER, PATIENCE, draft, make_fileable, parked_inside, wait_until
+from dash_builders import (
+    BASE_URL,
+    CELL,
+    HEADER,
+    PATIENCE,
+    draft,
+    make_fileable,
+    parked_inside,
+    wait_until,
+)
 from rwa_filer.dash import Workspace
 from rwa_filer.dash import workspace as workspace_module
 from rwa_filer.dash.pages import ReturnPages
@@ -37,9 +53,6 @@ from rwa_filer.workflow.adjustments import Adjustment
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
-
-    from starlette.testclient import TestClient
 
     from rwa_filer.dash import OpenedReturn
 
@@ -55,21 +68,47 @@ DOWNLOADS = 3
 
 
 class _Gate:
-    """Stands in for one piece of work: records each start, and holds it until opened."""
+    """Stands in for one piece of work: records each start, and holds it until opened.
 
-    def __init__(self, real: Callable[..., Any], *, failing_first: bool = False) -> None:
+    ``only_first`` holds the first start alone; every later one goes straight on.
+    """
+
+    def __init__(
+        self, real: Callable[..., Any], *, failing_first: bool = False, only_first: bool = False
+    ) -> None:
         self.real = real
         self.failing_first = failing_first
+        self.only_first = only_first
         self.starts: list[str] = []
         self.opened = threading.Event()
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         self.starts.append(threading.current_thread().name)
         first = len(self.starts) == 1
-        assert self.opened.wait(PATIENCE), "the test never opened the gate"
+        if first or not self.only_first:
+            assert self.opened.wait(PATIENCE), "the test never opened the gate"
         if first and self.failing_first:
             raise RuntimeError("the first attempt broke")
         return self.real(*args, **kwargs)
+
+
+class _HandOut:
+    """Stands in for the evidence page's file response: holds the first before it opens its file.
+
+    Between ``Workspace.evidence`` handing a download its file and the response
+    opening it there is a window; this holds the first download in it until
+    the test lets it go, and records each file handed out with its bytes then.
+    """
+
+    def __init__(self) -> None:
+        self.handed: list[tuple[Path, bytes]] = []
+        self.released = threading.Event()
+
+    def __call__(self, path: Path, *args: Any, **kwargs: Any) -> FileResponse:
+        self.handed.append((Path(path), Path(path).read_bytes()))
+        if len(self.handed) == 1:
+            assert self.released.wait(PATIENCE), "the test never let the response go"
+        return FileResponse(path, *args, **kwargs)
 
 
 class _Call:
@@ -282,25 +321,68 @@ def test_withdrawing_every_override_is_handed_the_as_opened_file_again(
     assert len(collections.starts) == 2
 
 
-def test_of_a_returns_evidence_files_the_as_opened_and_the_latest_are_kept(
-    client: TestClient, workspace: Workspace, broken: OpenedReturn
+def test_an_older_validations_collection_ending_last_leaves_the_current_file_kept(
+    client: TestClient, workspace: Workspace, broken: OpenedReturn, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Arrange
+    """What is kept follows the drafts as they stand, not which collection ended last.
+
+    The older download's collection used to remove the current validation's file
+    (perhaps already handed to its download) and forget it, so the next
+    download of the current validation collected a third time.
+    """
+    # Arrange — a download of the first draft's validation is collecting, held.
+    collections = _Gate(evidence_module.trace_return, only_first=True)
+    monkeypatch.setattr(evidence_module, "trace_return", collections)
     link = _evidence_link(broken)
     folder = workspace.directory / "evidence"
-    client.get(link)
-    as_opened = set(folder.iterdir())
     draft(client, broken, "0010", value="0", reason="Zero")
-    client.get(link)
-    superseded = set(folder.iterdir()) - as_opened
-
-    # Act — a newer draft's evidence is written.
+    older = _Call(lambda: client.get(link))
+    wait_until(lambda: len(collections.starts) == 1)
+    # A second draft follows it, and the current validation's download completes.
     draft(client, broken, "0030", remove="yes", reason="Out")
-    client.get(link)
+    current = client.get(link)
+    (current_file,) = folder.iterdir()
+    assert current.status_code == 200
+    assert not older.done.is_set(), "the older collection ended first: nothing to test"
+
+    # Act — the older collection ends last; then the current validation is downloaded again.
+    collections.opened.set()
+    older_answer = older.value()
+    again = client.get(link)
 
     # Assert
-    kept = set(folder.iterdir())
-    assert len(as_opened) == len(superseded) == 1
-    assert as_opened <= kept, "the as-opened file was removed"
-    assert not superseded & kept, "the superseded file is still there"
-    assert len(kept) == 2
+    assert older_answer.status_code == 200
+    assert older_answer.content != current.content, "both downloads were of one validation"
+    assert current_file.exists(), "the older collection removed the current validation's file"
+    assert len(collections.starts) == 2, "the current validation's evidence was collected again"
+    assert again.content == current.content
+
+
+def test_a_superseded_file_handed_out_and_not_yet_sent_is_still_sent_whole(
+    client: TestClient, broken: OpenedReturn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A newer validation's evidence used to remove the file an older download had just been
+    handed: the response then found no file to send, an HTTP 500."""
+    # Arrange — a download is handed the first draft's file and held before it opens it.
+    hand_out = _HandOut()
+    monkeypatch.setattr(pages_module, "FileResponse", hand_out)
+    lenient = TestClient(client.app, base_url=BASE_URL, raise_server_exceptions=False)
+    link = _evidence_link(broken)
+    draft(client, broken, "0010", value="0", reason="Zero")
+    older = _Call(lambda: lenient.get(link))
+    wait_until(lambda: len(hand_out.handed) == 1)
+    draft(client, broken, "0030", remove="yes", reason="Out")
+
+    # Act — the newer validation's evidence is written and sent; then the held download goes on.
+    newer = client.get(link)
+    assert not older.done.is_set(), "the held download was sent first: nothing to test"
+    hand_out.released.set()
+    answer = older.value()
+
+    # Assert — a newer file was written meanwhile, and the held one was sent, every byte.
+    (handed_file, handed_bytes), (newer_file, _) = hand_out.handed
+    assert newer.status_code == 200
+    assert newer_file != handed_file, "the newer download was handed the same file"
+    assert handed_bytes, "the handed file was empty"
+    assert answer.status_code == 200, "the handed-out file was removed before it was sent"
+    assert answer.content == handed_bytes

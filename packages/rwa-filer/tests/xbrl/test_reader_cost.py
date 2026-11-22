@@ -23,6 +23,7 @@ facts were read and placed — so a test cannot pass by reading nothing.
 from __future__ import annotations
 
 import gc
+import re
 import sys
 import threading
 from typing import TYPE_CHECKING, Any
@@ -66,6 +67,17 @@ def _collector() -> Iterator[None]:
 def _instance(pack: TaxonomyPack, rows: int) -> bytes:
     """``rows`` open rows: two facts and one context each."""
     return write_instance(many_rows_return(rows), pack).content
+
+
+def _redeclaring_on_each_fact(content: bytes, pack: TaxonomyPack) -> tuple[bytes, bytes]:
+    """``content`` with every fact declaring its own prefix, to the namespace the root gives it.
+
+    Returns the rewritten file and the declaration it repeats.
+    """
+    prefix = next(iter(pack.metrics)).partition(":")[0]
+    declaration = f' xmlns:{prefix}="{pack.namespaces[prefix]}"'.encode()
+    start_tag = re.compile(rb"(<" + re.escape(prefix.encode()) + rb":\w+)")
+    return start_tag.sub(lambda match: match.group(1) + declaration, content), declaration
 
 
 def _calls_to_read(content: bytes, pack: TaxonomyPack) -> tuple[int, InstanceReading]:
@@ -140,6 +152,37 @@ def test_a_file_declaring_its_namespaces_on_the_root_builds_one_scope(
     # Assert
     assert reading.facts == 2 * SMALL_ROWS and reading.findings == ()
     assert len(scopes) == 1, f"{len(scopes)} scopes built for a file with one set of prefixes"
+
+
+def test_a_file_repeating_the_roots_declaration_on_every_fact_still_builds_one_scope(
+    pack: TaxonomyPack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A declaration that changes nothing is no new set of prefixes.
+
+    Some writers declare a fact's own prefix on the fact, every time, with the
+    namespace the root already gives it. A scope per such declaration copied the
+    whole declaration list once per fact — 20,000 facts read in about 8 s and
+    1.77 GB, against 0.8 s for the same facts declared once on the root. The
+    function-call ratio above does not see this: the copy is one built-in call
+    however long the list it copies.
+    """
+    # Arrange
+    plain = _instance(pack, SMALL_ROWS)
+    content, declaration = _redeclaring_on_each_fact(plain, pack)
+    expected = read_instance(plain, pack=pack)
+    scopes = _count_calls(monkeypatch, reader, "_Scope")
+
+    # Act
+    reading = read_instance(content, pack=pack)
+
+    # Assert — the file repeats the root's declaration on every fact, and reads as without it.
+    assert plain.count(declaration) == 1, "the root does not declare the facts' prefix"
+    assert content.count(declaration) == 1 + reading.facts == 1 + 2 * SMALL_ROWS
+    assert reading.findings == ()
+    assert reading.ret.facts.equals(expected.ret.facts)
+    assert len(scopes) == 1, (
+        f"{len(scopes)} scopes built for a file whose {reading.facts} redeclarations change nothing"
+    )
 
 
 def test_a_context_shared_by_several_facts_is_worked_out_once(

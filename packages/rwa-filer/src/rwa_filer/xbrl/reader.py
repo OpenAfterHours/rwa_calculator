@@ -257,8 +257,15 @@ class _Scope:
 
     One is built per set of declarations, not per element: a filing declares
     its namespaces on the root, so one scope serves the whole file. A scope is
-    never added to — a later declaration starts a new one — and that is what
-    keeps ``clark``, the names already resolved under it, true.
+    never added to — a later declaration that maps a prefix to another
+    namespace starts a new one — and that is what keeps ``clark``, the names
+    already resolved under it, true. A declaration that repeats the mapping in
+    force changes nothing and starts nothing: a writer that declares a fact's
+    prefix on every fact still reads under one scope.
+
+    In force means declared anywhere earlier in the file, not only on the
+    element or its ancestors: that is the reader's reading today, and not XML
+    Namespaces scoping (plan item P6.66).
     """
 
     pairs: tuple[tuple[str, str], ...]
@@ -307,6 +314,9 @@ def _parse(data: bytes) -> _Document:
         ):
             if event == "start-ns":
                 prefix, uri = payload
+                if document.uris.get(prefix) == uri:
+                    # Repeats what is in force: no new scope, and nothing to copy into one.
+                    continue
                 prefixes.append((prefix, uri))
                 document.uris[prefix] = uri
                 scope = None
@@ -326,7 +336,7 @@ def _parse(data: bytes) -> _Document:
             if depth != 1:
                 continue
             if scope is None:
-                scope = _Scope(tuple(prefixes), dict(prefixes), {})
+                scope = _Scope(tuple(prefixes), dict(document.uris), {})
             _read_top_level(element, document, scope)
             element.clear()
     except ElementTree.ParseError as error:

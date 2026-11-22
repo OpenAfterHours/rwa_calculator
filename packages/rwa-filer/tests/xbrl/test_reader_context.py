@@ -17,7 +17,8 @@ of the whole return (who is reporting, as at when) is read from a context.
 Each test below is a shape the benchmark returns do not have. The expected
 values are what the path searches gave: the first identifier under any entity,
 the first instant under any period, a segment directly under any entity, and
-for a prefix the declaration read most recently.
+for a prefix the declaration read most recently — the reader's current
+reading, which is not XML Namespaces scoping (plan item P6.66).
 """
 
 from __future__ import annotations
@@ -244,14 +245,27 @@ def test_an_undeclared_prefix_has_no_namespace_and_a_bare_name_takes_the_default
 
 
 # ---------------------------------------------------------------------------
-# Namespace prefixes declared below the root
+# Namespace prefixes declared below the root — the reader's CURRENT reading
+#
+# The two tests below pin what the reader does today, which is NOT XML
+# Namespaces scoping: a declaration made on an inner element stays in force for
+# everything after it in the file, where XML Namespaces 1.0 confines it to that
+# element and its descendants. The fix is plan item P6.66; it changes these
+# readings, and these tests with them. Until then they keep a performance
+# change from altering the reading by accident.
 # ---------------------------------------------------------------------------
 
 _MEMBER = '<xbrldi:explicitMember dimension="d:DIM">m:x1</xbrldi:explicitMember>'
 
 
-def test_a_prefix_redeclared_inside_a_context_applies_to_it_and_to_all_that_follows() -> None:
-    """The same text, ``d:DIM``, is three contexts' dimension — in two namespaces."""
+def test_current_reading_a_prefix_redeclared_inside_a_context_stays_in_force_after_it() -> None:
+    """The same text, ``d:DIM``, is three contexts' dimension — in two namespaces.
+
+    Pins the reader's current reading, not XML Namespaces scoping: the
+    redeclaration sits on ``within``'s scenario, yet ``after`` is read under it
+    too. Scoped as XML Namespaces scopes it, ``after`` would read ``DIM_ONE``
+    (plan item P6.66).
+    """
     # Arrange
     body = (
         f'<context id="before">{ENTITY}{PERIOD}<scenario>{_MEMBER}</scenario></context>'
@@ -270,7 +284,14 @@ def test_a_prefix_redeclared_inside_a_context_applies_to_it_and_to_all_that_foll
     assert contexts["after"].members == ((f"{{{DIM_TWO}}}DIM", member),)
 
 
-def test_each_fact_and_unit_is_read_under_the_prefixes_declared_so_far() -> None:
+def test_current_reading_a_prefix_redeclared_on_a_fact_stays_in_force_for_later_units() -> None:
+    """Each fact and unit is read under every declaration made earlier in the file.
+
+    Pins the reader's current reading, not XML Namespaces scoping: the
+    redeclaration of ``iso4217`` sits on the fact ``second`` alone, yet the
+    unit ``late`` after it is read under it. Scoped as XML Namespaces scopes
+    it, ``late`` would read the root's ``iso4217`` (plan item P6.66).
+    """
     # Arrange — the second unit and fact follow an element that redeclares ``iso4217``.
     body = (
         f'<context id="c">{ENTITY}{PERIOD}</context>'

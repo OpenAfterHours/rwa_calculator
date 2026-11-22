@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import gc
 import sys
+import threading
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -176,12 +177,15 @@ class _Assembly:
     """
 
     def __init__(self) -> None:
+        # Only passes started on the thread that builds are this build's: under
+        # pytest-xdist another test file's thread may still call gc.collect().
+        self.thread = threading.get_ident()
         self.passes: list[int] = []
         self.enabled_at_assembly: bool | None = None
         self.passes_at_assembly: list[int] | None = None
 
     def watch(self, phase: str, info: dict[str, int]) -> None:
-        if phase == "start":
+        if phase == "start" and threading.get_ident() == self.thread:
             self.passes.append(info["generation"])
 
     def __call__(self, **fields: Any) -> InstanceReading:

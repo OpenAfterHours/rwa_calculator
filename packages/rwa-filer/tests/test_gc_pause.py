@@ -114,13 +114,19 @@ def test_no_collection_runs_inside_a_pause() -> None:
 
     Read at the end of the block, not after it: the collector may well run the
     moment it is switched back on, and that pass is not the pause's to prevent.
+
+    Only passes started on this thread are counted. Under pytest-xdist a worker
+    can still be running another test file's threads (a dashboard task, say),
+    and one that calls ``gc.collect()`` runs a pass whatever the switch says:
+    that pass is not this pause's either.
     """
     # Arrange
     gc.enable()
     passes: list[int] = []
+    this_thread = threading.get_ident()
 
     def watch(phase: str, info: dict[str, int]) -> None:
-        if phase == "start":
+        if phase == "start" and threading.get_ident() == this_thread:
             passes.append(info["generation"])
 
     def churn() -> list[list[int]]:
@@ -287,12 +293,17 @@ def test_what_a_block_left_is_freed_when_it_switches_the_collector_back_off() ->
 
 @pytest.mark.usefixtures("one_shot")
 def test_collections_run_inside_a_block_and_not_outside_it() -> None:
-    """A count: the same churn in a one-shot command, outside a block and inside one."""
+    """A count: the same churn in a one-shot command, outside a block and inside one.
+
+    Only passes started on this thread are counted, for the reason given in
+    ``test_no_collection_runs_inside_a_pause``.
+    """
     # Arrange
     passes: list[int] = []
+    this_thread = threading.get_ident()
 
     def watch(phase: str, info: dict[str, int]) -> None:
-        if phase == "start":
+        if phase == "start" and threading.get_ident() == this_thread:
             passes.append(info["generation"])
 
     def churn() -> list[list[int]]:

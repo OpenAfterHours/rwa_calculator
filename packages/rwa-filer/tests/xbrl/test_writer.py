@@ -587,13 +587,16 @@ def test_importing_the_writer_does_not_import_the_xml_escaping_module() -> None:
     be paid by every command that reads a return and writes none.
     """
     # Act — a fresh interpreter, so nothing this test session imported counts.
+    # Polars is imported first and whatever it brings is not the writer's: some
+    # Polars releases (1.24, the declared floor) import ``ssl`` themselves.
     loaded = subprocess.run(
         [
             sys.executable,
             "-c",
-            "import sys, rwa_filer.xbrl.writer;"
+            "import sys, polars; before = set(sys.modules);"
+            "import rwa_filer.xbrl.writer;"
             "names = ('rwa_filer.xbrl.writer', 'xml.sax.saxutils', 'urllib.request', 'ssl');"
-            "print(sorted(name for name in names if name in sys.modules))",
+            "print(sorted(name for name in names if name in set(sys.modules) - before))",
         ],
         capture_output=True,
         text=True,

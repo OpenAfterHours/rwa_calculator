@@ -66,7 +66,8 @@ from boe_builders import T01, T04, book, issue_register, ref, rule
 from compare_builders import corporate_return
 from pack_builders import VALID_LEI, build_pack, build_return
 from rwa_filer import evidence as evidence_module
-from rwa_filer.boe.engine import MAX_FAILURES, Accuracy, CellAddress
+from rwa_filer.boe.catalogue import Rule
+from rwa_filer.boe.engine import MAX_FAILURES, Accuracy, CellAddress, _trace_lean
 from rwa_filer.cli import EXIT_FAILED, main
 from rwa_filer.evidence import collect_evidence, read_evidence, write_evidence
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn, ReturnHeader
@@ -143,6 +144,31 @@ def test_the_evidence_reaches_the_verdict_validate_return_reaches(values: dict[s
     assert evidence.validation.findings == plain.findings
     assert evidence.trace is not None
     assert evidence.trace.results == plain.report.results  # type: ignore[union-attr]
+
+
+def test_evidence_refuses_a_trace_made_without_its_comparisons() -> None:
+    """``compare`` traces without the comparison log; evidence must never be written from that."""
+    # Arrange
+    ret = c01(POSITIVE)
+    full = collect_evidence(ret)
+    assert full.trace is not None
+    lean = _trace_lean(ret, full.validation.pack, list(_enforced(full)))
+    # The same rules ran (the evidence's trace has the deny list applied on top).
+    assert [result.rule_id for result in lean.results] == [
+        result.rule_id for result in full.trace.results
+    ]
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="made without its comparisons"):
+        evidence_module.Evidence(ret=ret, validation=full.validation, trace=lean)
+    assert evidence_module.Evidence(ret=ret, validation=full.validation, trace=full.trace)
+
+
+def _enforced(evidence: evidence_module.Evidence) -> tuple[Rule, ...]:
+    """The rules the evidence's validation ran."""
+    rulebook = evidence.validation.release.rulebook
+    assert rulebook is not None
+    return rulebook.enforced(evidence.validation.pack.info.module)
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,8 @@ References:
 
 from __future__ import annotations
 
+import pytest
+
 from compare_builders import (
     ALL_COUNTRIES,
     CORPORATE,
@@ -38,10 +40,11 @@ from compare_builders import (
     TIED_MOVE,
     geographical_return,
 )
-from rwa_filer.boe.engine import trace_rules
+from rwa_filer.boe.engine import RuleTrace, trace_rules
 from rwa_filer.readers import SourceReading
 from rwa_filer.release import resolve_release
 from rwa_filer.validate.structure import check_structure
+from rwa_filer.workflow import compare as compare_module
 from rwa_filer.workflow.compare import ReturnComparison, compare_returns
 from rwa_filer.workflow.explain import (
     KIND_CALCULATION,
@@ -231,3 +234,42 @@ def test_a_country_total_that_does_not_add_up_names_that_countrys_cell() -> None
     assert [(rule.rule_id, rule.baseline, rule.candidate) for rule in finding.rules] == [
         ("boe_b0730", STANDING_HOLDS, STANDING_BREAKS)
     ]
+
+
+# ---------------------------------------------------------------------------
+# The trace a comparison reads
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        {"restated": {("FR", CORPORATE, RWEA): 9_000.0, ("GB", CORPORATE, RWEA): 5_000.0}},
+        {"overlaid": {("FR", RWEA): 7_000.0}},
+        {"restated": TIED_MOVE},
+    ],
+    ids=["rule-linked", "does-not-add-up", "tied-move"],
+)
+def test_a_comparison_from_the_lean_trace_is_the_comparison_from_the_full_one(
+    monkeypatch: pytest.MonkeyPatch, candidate: dict[str, object]
+) -> None:
+    """compare traces without the comparison log, which it never reads: nothing it says moves."""
+    # Arrange
+    lean_calls: list[int] = []
+    lean = compare_module._trace_lean
+
+    def counted(*args: object, **kwargs: object) -> RuleTrace:
+        lean_calls.append(1)
+        return lean(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(compare_module, "_trace_lean", counted)
+    from_lean = compare({}, candidate)
+    monkeypatch.setattr(compare_module, "_trace_lean", trace_rules)
+
+    # Act
+    from_full = compare({}, candidate)
+
+    # Assert
+    assert lean_calls == [1, 1], "the comparison did not trace both returns the lean way"
+    assert from_lean.findings, "a comparison with nothing to explain would compare nothing"
+    assert from_lean.as_record() == from_full.as_record()

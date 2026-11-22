@@ -56,6 +56,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import IO, TYPE_CHECKING, Any, Final
 
+from rwa_filer.boe.engine import _LeanTrace
 from rwa_filer.validate.identity import identity_record, source_identity
 from rwa_filer.validate.issue_labels import evaluation_issues
 from rwa_filer.validate.report import (
@@ -162,6 +163,23 @@ class Evidence:
     ret: CanonicalReturn
     validation: ReturnValidation
     trace: RuleTrace | None
+
+    def __post_init__(self) -> None:
+        """Refuse a trace made without its comparisons.
+
+        ``compare`` traces without the log of comparisons inside a rule
+        (``boe.engine._trace_lean``), which it never reads. Evidence records that
+        log, so a lean trace written as evidence would be a record with its
+        comparisons missing and nothing to say so.
+
+        Raises:
+            ValueError: ``trace`` is a lean trace. A programming error, not a
+                condition in the data.
+        """
+        if isinstance(self.trace, _LeanTrace):
+            raise ValueError(
+                "evidence needs a full trace; this one was made without its comparisons"
+            )
 
     @cached_property
     def identity(self) -> dict[str, Any]:

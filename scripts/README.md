@@ -171,6 +171,26 @@ uv run python scripts/download_docs.py --list
 uv run python scripts/download_docs.py --dry-run
 ```
 
+### Claude Code cloud sessions
+
+Cloud sessions reach the regulators only if the environment allows these hosts:
+`www.bankofengland.co.uk`, `www.legislation.gov.uk`, `www.eba.europa.eu` (and
+`www.prarulebook.co.uk` for reading rulebook pages). Its setup script runs this script
+from the directory holding the checkout, and must never fail, because a failing setup
+script stops the session from starting:
+
+```bash
+if [ -d rwa_calculator ]; then
+  (cd rwa_calculator && timeout 600 python3 scripts/download_docs.py) \
+    || echo "Some regulation downloads failed; carrying on."
+fi
+exit 0
+```
+
+The script uses only the standard library, so it needs no `uv sync` first. What it
+fetches stays in the git-ignored `docs/assets/`: Bank of England and PRA text must not
+be committed to this public repository.
+
 ### Archive extraction
 
 A manifest entry may set `extract_member` / `extract_as` to pull one member out of a

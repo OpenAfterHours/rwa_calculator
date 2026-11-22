@@ -19,7 +19,7 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -31,6 +31,7 @@ from rwa_filer.boe.engine import (
     REASON_DEACTIVATED_BY_PUBLISHER,
     STATUS_NOT_EVALUATED,
     Accuracy,
+    RuleTrace,
     _LeanTrace,
     _trace_lean,
     trace_rules,
@@ -41,7 +42,7 @@ from rwa_filer.validate.execution import trace_as_run
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from rwa_filer.boe.engine import RuleResult, RuleTrace
+    from rwa_filer.boe.engine import RuleResult
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.taxonomy.pack import TaxonomyPack
 
@@ -151,3 +152,14 @@ def _cells_read(trace: RuleTrace, rule_id: str) -> dict[object, object]:
         for address in evaluation.cells
     }
     return {address: fact for address, fact in trace.cells.items() if address in read}
+
+
+def test_trace_as_run_carries_every_field_of_a_trace() -> None:
+    """``trace_as_run`` rebuilds a trace field by field; a field added later must be carried there."""
+    # Act
+    names = {field.name for field in fields(RuleTrace)}
+
+    # Assert
+    assert names == {"results", "evaluations", "cells"}, (
+        f"RuleTrace now has {sorted(names)}: give validate.execution.trace_as_run the new field"
+    )

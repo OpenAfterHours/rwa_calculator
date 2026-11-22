@@ -104,26 +104,26 @@ def trace_as_run(trace: RuleTrace, results: tuple[RuleResult, ...]) -> RuleTrace
     The evidence records the evaluations behind the verdict; a rule the gateway
     does not run has none. Its formula's counts stay on its result
     (``RuleResult.formula``). A cell only those evaluations read leaves too.
-    The trace is narrowed with ``replace``, so it stays the kind it was: a lean
+    The trace is rebuilt by its own class, so it stays the kind it was: a lean
     trace (``boe.engine._trace_lean``) stays one, and can still be told apart.
+    ``RuleTrace``'s three fields are all given here; a test holds the class to
+    those three, so a field added later cannot be dropped silently.
     """
     switched_off = {
         result.rule_id
         for result in results
         if result.reason == REASON_DEACTIVATED_BY_PUBLISHER and result.formula is not None
     }
+    kind = type(trace)
     if not switched_off:
-        same: RuleTrace = replace(trace, results=results)
-        return same
+        return kind(results=results, evaluations=trace.evaluations, cells=trace.cells)
     kept = tuple(item for item in trace.evaluations if item.rule_id not in switched_off)
     read = {address for evaluation in kept for address in evaluation.cells}
-    narrowed: RuleTrace = replace(
-        trace,
+    return kind(
         results=results,
         evaluations=kept,
         cells={address: fact for address, fact in trace.cells.items() if address in read},
     )
-    return narrowed
 
 
 def published_finding(result: RuleResult) -> str:

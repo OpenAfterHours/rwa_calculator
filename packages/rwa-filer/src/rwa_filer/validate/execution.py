@@ -47,7 +47,6 @@ from rwa_filer.boe.engine import (
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
-    RuleTrace,
 )
 
 if TYPE_CHECKING:
@@ -55,7 +54,7 @@ if TYPE_CHECKING:
     from datetime import date
 
     from rwa_filer.boe.deny import DenyEntry, DenyList
-    from rwa_filer.boe.engine import RuleResult
+    from rwa_filer.boe.engine import RuleResult, RuleTrace
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +104,8 @@ def trace_as_run(trace: RuleTrace, results: tuple[RuleResult, ...]) -> RuleTrace
     The evidence records the evaluations behind the verdict; a rule the gateway
     does not run has none. Its formula's counts stay on its result
     (``RuleResult.formula``). A cell only those evaluations read leaves too.
+    The trace is narrowed with ``replace``, so it stays the kind it was: a lean
+    trace (``boe.engine._trace_lean``) stays one, and can still be told apart.
     """
     switched_off = {
         result.rule_id
@@ -115,7 +116,8 @@ def trace_as_run(trace: RuleTrace, results: tuple[RuleResult, ...]) -> RuleTrace
         return replace(trace, results=results)
     kept = tuple(item for item in trace.evaluations if item.rule_id not in switched_off)
     read = {address for evaluation in kept for address in evaluation.cells}
-    return RuleTrace(
+    return replace(
+        trace,
         results=results,
         evaluations=kept,
         cells={address: fact for address, fact in trace.cells.items() if address in read},

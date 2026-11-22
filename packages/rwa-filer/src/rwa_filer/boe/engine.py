@@ -309,19 +309,7 @@ def evaluate_rules(  # noqa: PLR0913 - the return, its rules, and how to report 
     either way.
     """
     store = _Store(ret, pack, accuracy or Accuracy())
-    module = pack.info.module
-    results = [
-        _evaluate_rule(rule, store, module, max_failures=max_failures)
-        for rule in _counted(tuple(rules), progress)
-    ]
-    logger.info(
-        "evaluated %d rule(s) for %s: %d failed, %d not evaluated",
-        len(results),
-        module,
-        sum(result.status == STATUS_FAIL for result in results),
-        sum(result.status == STATUS_NOT_EVALUATED for result in results),
-    )
-    return results
+    return _evaluate_indexed(store, rules, progress=progress, max_failures=max_failures)
 
 
 @dataclass(frozen=True)
@@ -400,14 +388,7 @@ def trace_rules(  # noqa: PLR0913 - evaluate_rules's arguments
     ``evaluate_rules``.
     """
     store = _Store(ret, pack, accuracy or Accuracy())
-    module = pack.info.module
-    evaluations: list[Evaluation] = []
-    cells: dict[CellAddress, CellFact] = {}
-    results = tuple(
-        _evaluate_rule(rule, store, module, evaluations, cells, max_failures=max_failures)
-        for rule in _counted(tuple(rules), progress)
-    )
-    return RuleTrace(results=results, evaluations=tuple(evaluations), cells=cells)
+    return _trace_indexed(store, rules, progress=progress, max_failures=max_failures)
 
 
 @dataclass(frozen=True)
@@ -532,6 +513,122 @@ def effective_decimals(decimals: object, data_type: str, accuracy: Accuracy) -> 
 
 
 # =============================================================================
+# Private helpers — a return already indexed
+# =============================================================================
+
+
+def _evaluate_indexed(
+    store: _Store,
+    rules: Iterable[Rule],
+    *,
+    progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
+) -> list[RuleResult]:
+    """``evaluate_rules`` over a return that is already indexed (``store``).
+
+    For a caller inside the package that runs more than one pass over one
+    return — a validation's rule pass, then its publisher-issue pass — and
+    would otherwise index the return once per pass. Not for callers outside it:
+    nothing here checks that ``store`` is the return, the pack and the accuracy
+    the caller means, and a wrong one gives a wrong verdict silently.
+
+    Sharing one store between passes is sound because evaluating writes nothing
+    to it but an empty holder for a table with no reported cell, and tracing
+    nothing but a reported cell's address (``_TableData.addresses``) — each what
+    the next pass would have made, from the cell alone; everything worked out
+    per rule is kept on that rule's ``_Evaluation``, and what a trace collects
+    on the trace.
+    """
+    module = store.pack.info.module
+    results = [
+        _evaluate_rule(rule, store, module, max_failures=max_failures)
+        for rule in _counted(tuple(rules), progress)
+    ]
+    logger.info(
+        "evaluated %d rule(s) for %s: %d failed, %d not evaluated",
+        len(results),
+        module,
+        sum(result.status == STATUS_FAIL for result in results),
+        sum(result.status == STATUS_NOT_EVALUATED for result in results),
+    )
+    return results
+
+
+def _trace_indexed(
+    store: _Store,
+    rules: Iterable[Rule],
+    *,
+    progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
+    comparisons: bool = True,
+) -> RuleTrace:
+    """``trace_rules`` over a return that is already indexed; see ``_evaluate_indexed``.
+
+    With ``comparisons`` false, the trace is ``_trace_lean``'s.
+    """
+    module = store.pack.info.module
+    evaluations: list[Evaluation] = []
+    cells: dict[CellAddress, CellFact] = {}
+    results = tuple(
+        _evaluate_rule(
+            rule,
+            store,
+            module,
+            evaluations,
+            cells,
+            max_failures=max_failures,
+            comparisons=comparisons,
+        )
+        for rule in _counted(tuple(rules), progress)
+    )
+    kind = RuleTrace if comparisons else _LeanTrace
+    return kind(results=results, evaluations=tuple(evaluations), cells=cells)
+
+
+def _trace_lean(  # noqa: PLR0913 - trace_rules's arguments
+    ret: CanonicalReturn,
+    pack: TaxonomyPack,
+    rules: Iterable[Rule],
+    *,
+    accuracy: Accuracy | None = None,
+    progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
+) -> RuleTrace:
+    """``trace_rules`` without the comparisons: for a caller that reads only each side.
+
+    The results are ``trace_rules``'s, and so is every evaluation — its place,
+    verdict, relation, both sides' cells and both sides' values — except that
+    ``Evaluation.comparisons`` is empty. So each evaluation's ``cells`` holds
+    its sides' cells alone, and ``RuleTrace.cells`` lacks the cells only a
+    where clause reads (a where clause is no side of the rule), and holds the
+    rest in the order the sides first read them rather than the comparisons.
+    Logging every comparison with its operands was about half of what a trace
+    cost beyond the verdict (measured on a 200-country return), and a
+    comparison of two returns reads none of it.
+
+    Not for evidence, which records the comparisons. The trace returned is a
+    ``_LeanTrace``, so a caller can tell it from a full one; ``dataclasses.replace``
+    and ``validate.execution.trace_as_run`` keep it one.
+    """
+    store = _Store(ret, pack, accuracy or Accuracy())
+    return _trace_indexed(
+        store, rules, progress=progress, max_failures=max_failures, comparisons=False
+    )
+
+
+class _LeanTrace(RuleTrace):
+    """A ``RuleTrace`` made without the comparisons (``_trace_lean``): never evidence.
+
+    How a caller tells a lean trace from a full one: ``isinstance(trace,
+    _LeanTrace)``. A class, not a field: a field would be on every full trace
+    too, and so in everything that reads or records one. The class survives
+    ``dataclasses.replace``, copying and pickling; code that builds a new
+    ``RuleTrace`` from a lean one's parts makes one that looks full, so code
+    that narrows a trace uses ``replace`` (``validate.execution.trace_as_run``).
+    """
+
+
+# =============================================================================
 # Private helpers — the return, indexed for evaluation
 # =============================================================================
 
@@ -549,6 +646,8 @@ _CellKey = tuple[str | None, str | None, str, str]
 #: A selector's matching cells by where they sit: the axes a place names, then
 #: the place's values on those axes, then the cells there in ``_matching`` order.
 _PlaceIndex = dict[tuple[str, ...], dict[tuple[str, ...], list[_CellKey]]]
+#: The same, with each cell given by its position in ``_matching`` order.
+_PositionIndex = dict[tuple[str, ...], dict[tuple[str, ...], list[int]]]
 
 
 @dataclass
@@ -578,6 +677,10 @@ class _TableData:
     #: The dimensions each data point carries with a member other than the
     #: default — what a formula that closes a dimension turns away.
     carried: dict[int, frozenset[str]] = field(default_factory=dict)
+    #: A reported cell's address, made the first time a trace reads the cell
+    #: (``_Evaluation._register``) and shared by every evaluation that reads
+    #: it, where a trace made the address again at every read.
+    addresses: dict[_CellKey, CellAddress] = field(default_factory=dict)
 
     def add(self, key: _CellKey, value: object, point: int, decimals: object = None) -> None:
         self.cells[key] = value
@@ -598,6 +701,10 @@ class _Store:
         self.accuracy = accuracy
         self.reported = {code for code, filed in filing_indicators(ret, pack).items() if filed}
         self.tables: dict[str, _TableData] = {}
+        #: Per table with an open sheet axis: each key that names a member, and
+        #: the member it names (``_member``). Built when the table's first
+        #: keyed fact is placed.
+        self._members: dict[str, dict[str, str]] = {}
         types = [
             pack.metrics[point.metric].data_type if point.metric in pack.metrics else ""
             for point in pack.datapoints
@@ -694,15 +801,37 @@ class _Store:
         Dimensions), which is written by leaving the dimension out: on an axis
         that accepts it, that is a sheet like any other, so the fact is given
         the default's QName — the place the gateway evaluates it at.
+
+        A key is the member whose QName it is; else the first member, in the
+        axis's order, whose local name it is (``GB``); else it is kept as
+        written. Looked up in a dictionary made once per table: walking the
+        member list for each fact (252 members on the Bank's country axis) made
+        local-name keys — the form sources are told to write, and the form the
+        XBRL reader gives — cost three times as much to index as QNames.
         """
         axis = table.open_axis
         if axis is None:
             return None
         if open_key is None:
             return self._data(table).default_member
-        if open_key in axis.members:
-            return open_key
-        return next((m for m in axis.members if local_name(m) == open_key), open_key)
+        named = self._members.get(table.code)
+        if named is None:
+            named = self._members[table.code] = _members_by_key(axis.members)
+        return named.get(open_key, open_key)
+
+
+def _members_by_key(members: Sequence[str]) -> dict[str, str]:
+    """An open axis's members by each key that names one: its QName, or its local name.
+
+    The same answer as a walk of ``members`` for each key: a local name two
+    members share names the first of them, and a key that is one member's QName
+    names that member before any member it is merely the local name of.
+    """
+    named: dict[str, str] = {}
+    for member in members:
+        named.setdefault(local_name(member), member)
+    named.update({member: member for member in members})
+    return named
 
 
 def _shown_in_every_reported_table(
@@ -800,12 +929,22 @@ class _NotBound(Exception):  # noqa: N818 - control flow
     """A reference with no default has no reported cell: no evaluation here."""
 
 
+#: How ``_Evaluation._locate`` reads one axis of a cell: the place axis it is
+#: read at and the codes accepted there (``None`` for any), or — for an axis the
+#: reference does not iterate — ``(None, None, code)``, the one code it names.
+_AxisPlan = tuple[str | None, frozenset[str] | None, str | None]
+
+
 @dataclass(frozen=True)
 class _Selector:
     """A reference resolved against its table and the rule's scope.
 
-    For each axis: the codes the reference accepts (``None`` for "any"), and
-    whether the axis is iterated (in ``free``) or taken as a whole.
+    For each axis: the codes the reference accepts (``None`` for "any"). How a
+    cell is found at a place (the ``*_plan`` fields, ``member_axis``,
+    ``fixed_member``) and the place a cell sits at (``place_plan``) are worked
+    out here once for every evaluation of the rule, not again at each one.
+
+    Kept by ``id()`` and never compared or hashed: it holds the table's data.
     """
 
     reference: Reference
@@ -816,18 +955,25 @@ class _Selector:
     member: str | None
     member_excluded: bool
     value_member: str | None
-    free: frozenset[str]
-    key_axes: Mapping[str, str]
-    own_axes: Mapping[str, str]
     closed: frozenset[str]
+    column_plan: _AxisPlan
+    #: ``None`` for a table with no fixed sheet axis.
+    sheet_plan: _AxisPlan | None
+    #: ``None`` for a table with open rows: a row is found by its key.
+    row_plan: _AxisPlan | None
+    #: The place axis the open-axis member is read at, where the reference
+    #: does not fix one; else the member it fixes (``fixed_member``).
+    member_axis: str | None
+    fixed_member: str | None
+    #: Open rows: (key dimension, the place axis it is read at), by dimension.
+    key_plan: tuple[tuple[str, str], ...]
+    #: Each iterated axis, by name: (axis, its kind — ``r``, ``c``, ``z``,
+    #: ``open:`` or ``key:`` — and for a row key its dimension, else ``""``).
+    place_plan: tuple[tuple[str, str, str], ...]
 
     @property
     def table(self) -> Table:
         return self.data.table
-
-    def axis(self, kind: str) -> str:
-        """The name this selector's ``kind`` axis goes by in an evaluation's place."""
-        return self.own_axes.get(kind, kind)
 
 
 def _evaluate_rule(  # noqa: PLR0913 - the rule, where it runs, and what to keep of it
@@ -838,6 +984,7 @@ def _evaluate_rule(  # noqa: PLR0913 - the rule, where it runs, and what to keep
     cells: dict[CellAddress, CellFact] | None = None,
     *,
     max_failures: int | None = MAX_FAILURES,
+    comparisons: bool = True,
 ) -> RuleResult:
     severity = rule.severity(module)
 
@@ -857,7 +1004,9 @@ def _evaluate_rule(  # noqa: PLR0913 - the rule, where it runs, and what to keep
 
     try:
         evaluation = _Evaluation(rule, store, cells)
-        satisfied, failures, unsatisfied = evaluation.run(trace, max_failures)
+        satisfied, failures, unsatisfied = evaluation.run(
+            trace, max_failures, comparisons=comparisons
+        )
     except _Unsupported as unsupported:
         return not_evaluated(REASON_UNSUPPORTED, str(unsupported))
     except GrammarError as error:
@@ -897,21 +1046,39 @@ class _Evaluation:
     ) -> None:
         self._rule = rule
         self._store = store
+        #: The rule's parsed parts, read off it ONCE and used from here alone.
+        #: Selectors are keyed by ``id()`` of the reference nodes of these
+        #: trees, and the rule could hand out another parse of the same text
+        #: if asked again — two threads filling an unlocked cache did — whose
+        #: nodes no selector is keyed by.
+        self._tree = rule.tree
+        self._where = rule.where_tree
+        joins = rule.joins
         #: Tracing only: the reported cells read so far, and the comparisons
         #: the current evaluation has executed and where in the rule.
         self._cells_out = cells
         self._log: list[Comparison] | None = None
         self._branch: list[str] = []
-        self._aliases = _key_aliases(rule.joins)
+        self._aliases = _key_aliases(joins)
         self._selectors: dict[int, _Selector] = {}
         #: Per selector, worked out once and kept for the rule's every
         #: evaluation: the cells it accepts, and those cells by place.
         self._matched: dict[int, list[_CellKey]] = {}
         self._by_place: dict[int, _PlaceIndex] = {}
+        #: ... and, for a selector whose cells sit at places of two shapes,
+        #: their positions in ``_matched`` by place (``_keys_at``).
+        self._by_position: dict[int, _PositionIndex] = {}
+        #: ... and the cells it accepts as a set, to ask of one cell (``_accepting``).
+        self._accepted: dict[int, frozenset[_CellKey]] = {}
+        #: At the place being evaluated: the cell each selector reads there
+        #: (``_cell``), and the two values the rule's own comparison compared
+        #: (``_value``). Both are emptied at every place (``run``).
+        self._here: dict[int, _CellKey | None] = {}
+        self._operands: tuple[object, object] | None = None
         scope = {group.table: group for group in rule.scope_groups}
-        trees = [rule.tree, *([rule.where_tree] if rule.where_tree is not None else [])]
+        trees = [self._tree, *([self._where] if self._where is not None else [])]
         self._references = [ref for tree in trees for ref in references(tree)]
-        for item in rule.joins:
+        for item in joins:
             joined = [item.reference] if isinstance(item, JoinKey) else [item.left, item.right]
             self._references.extend(joined)
         # Open-axis dimensions a reference of the rule names a member of. Naming
@@ -931,17 +1098,27 @@ class _Evaluation:
     # -- the evaluations -----------------------------------------------------
 
     def run(
-        self, trace: list[Evaluation] | None = None, max_failures: int | None = MAX_FAILURES
+        self,
+        trace: list[Evaluation] | None = None,
+        max_failures: int | None = MAX_FAILURES,
+        *,
+        comparisons: bool = True,
     ) -> tuple[int, list[Failure], int]:
         """Every evaluation: counted, the first failures kept, each traced if asked.
 
         ``max_failures`` is how many failures are kept; ``None`` keeps them all.
+        A traced evaluation keeps the comparisons it executed unless
+        ``comparisons`` is false (``_trace_lean``).
         """
         satisfied = unsatisfied = 0
         failures: list[Failure] = []
         seen: set[tuple[object, ...]] = set()
         for env in self._environments():
-            if trace is not None:
+            # Everything below is read at this one place, so what was found at
+            # the last place is no answer here.
+            self._here = {}
+            self._operands = None
+            if trace is not None and comparisons:
                 self._log = []
             holds = self._verdict(env, seen)
             # Stop logging before anything re-reads the rule's sides to report
@@ -978,12 +1155,9 @@ class _Evaluation:
             return None
         seen.add(facts)
         try:
-            if (
-                self._rule.where_tree is not None
-                and self._branched("where", self._rule.where_tree, values) is not True
-            ):
+            if self._where is not None and self._branched("where", self._where, values) is not True:
                 return None
-            return self._branched("rule", self._rule.tree, values) is True
+            return self._branched("rule", self._tree, values) is True
         except (_NotBound, ZeroDivisionError):
             return None
 
@@ -1004,7 +1178,7 @@ class _Evaluation:
             else:
                 key = self._cell(selector, env)
                 entry = None
-                if key is not None and key in selector.data.cells and self._accepts(selector, key):
+                if key is not None and key in self._accepting(selector):
                     entry = self._fact(selector, key)
             if entry is None and reference.default is None:
                 return None
@@ -1026,7 +1200,7 @@ class _Evaluation:
         value; a reference with nothing reported at a place falls back there.
         """
         environments: set[_Env] = set()
-        for reference in references(self._rule.tree):
+        for reference in references(self._tree):
             selector = self._selectors[id(reference)]
             partial: set[_Env] = {
                 place
@@ -1046,31 +1220,30 @@ class _Evaluation:
     def _place(self, selector: _Selector, key: _CellKey) -> _Env | None:
         """The place a reported cell sits at, over the axes ``selector`` iterates."""
         sheet, member, row, column = key
-        place: dict[str, str] = {}
-        for axis in selector.free:
-            if axis == selector.axis(AXIS_ROW):
-                place[axis] = row
-            elif axis == selector.axis(AXIS_COLUMN):
-                place[axis] = column
-            elif axis == selector.axis(AXIS_SHEET):
+        place: list[tuple[str, str]] = []
+        for axis, kind, dimension in selector.place_plan:
+            if kind == AXIS_ROW:
+                place.append((axis, row))
+            elif kind == AXIS_COLUMN:
+                place.append((axis, column))
+            elif kind == AXIS_SHEET:
                 if sheet is None:
                     return None
-                place[axis] = sheet
-            elif axis.startswith(_AXIS_OPEN):
+                place.append((axis, sheet))
+            elif kind == _AXIS_OPEN:
                 # No member on an axis with no default sheet: a fact the axis
                 # cannot hold (the structure check's STR finding). It is read
                 # wherever the rest of the rule is; one at the default sheet
                 # has the default's member (``_Store._member``), and a place.
                 if member is None:
                     continue
-                place[axis] = member
+                place.append((axis, member))
             else:
-                dimension = selector.key_axes[axis]
                 value = selector.data.row_keys.get((sheet, member, row), {}).get(dimension)
                 if value is None:
                     return None
-                place[axis] = value
-        return tuple(sorted(place.items()))
+                place.append((axis, value))
+        return tuple(place)
 
     # -- selecting cells -----------------------------------------------------
 
@@ -1181,6 +1354,18 @@ class _Evaluation:
             name = f"{_AXIS_KEY}{self._aliases.get((table.code, key.dimension), key.dimension)}"
             key_axes[name] = key.dimension
             free.add(name)
+
+        def plan(kind: str, accepted: tuple[str, ...] | None) -> _AxisPlan:
+            """How ``_locate`` reads the ``kind`` axis: at the place, or at the one code named."""
+            name = own_axes.get(kind, kind)
+            if name in free:
+                return (name, None if accepted is None else frozenset(accepted), None)
+            return (None, None, accepted[0] if accepted else None)
+
+        member_axis = None
+        if open_axis is not None and (member is None or excluded):
+            shared = f"{_AXIS_OPEN}{open_axis.dimension}"
+            member_axis = own_axes.get(shared, shared)
         return _Selector(
             reference=reference,
             data=data,
@@ -1190,11 +1375,21 @@ class _Evaluation:
             member=member,
             member_excluded=excluded,
             value_member=value_member,
-            free=frozenset(free),
-            key_axes=key_axes,
-            own_axes=own_axes,
             closed=self._rule.closed
             | self._rule.closed_by_variable.get(reference.variable or "", frozenset()),
+            column_plan=plan(AXIS_COLUMN, columns),
+            sheet_plan=None if table.fixed_axis is None else plan(AXIS_SHEET, sheets),
+            row_plan=None if table.open_rows else plan(AXIS_ROW, rows),
+            member_axis=member_axis,
+            fixed_member=None if excluded else member,
+            # A table's key dimensions are distinct, so this is their order by
+            # dimension, as a cell's row is looked up by (``rows_by_key``).
+            key_plan=tuple(sorted((dimension, name) for name, dimension in key_axes.items())),
+            # In name order: the names are distinct, so a place built in this
+            # order is already sorted, as ``_Env`` is.
+            place_plan=tuple(
+                (name, _axis_kind(name, own_axes), key_axes.get(name, "")) for name in sorted(free)
+            ),
         )
 
     def _matching(self, selector: _Selector) -> list[_CellKey]:
@@ -1203,6 +1398,20 @@ class _Evaluation:
         if found is None:
             found = [key for key in self._candidates(selector) if self._accepts(selector, key)]
             self._matched[id(selector)] = found
+        return found
+
+    def _accepting(self, selector: _Selector) -> frozenset[_CellKey]:
+        """``_matching(selector)`` as a set: whether a cell is reported AND accepted, in one test.
+
+        The same answer as ``key in cells and _accepts(selector, key)`` for a
+        cell ``_cell`` finds: such a cell lies on the rows and columns the
+        selector names (or it names none), so it is among ``_candidates``
+        wherever it is reported. Asking it at every read ran the selector's
+        filters again on a cell they had already decided.
+        """
+        found = self._accepted.get(id(selector))
+        if found is None:
+            found = self._accepted[id(selector)] = frozenset(self._matching(selector))
         return found
 
     def _keys_at(self, selector: _Selector, env: Mapping[str, str]) -> Sequence[_CellKey]:
@@ -1227,13 +1436,21 @@ class _Evaluation:
             return cells.get(tuple(env.get(axis) for axis in axes), [])
         # A cell with no member on an open axis has a place that does not name
         # the axis (``_place``), so a selector can index places of two shapes.
-        # Each is looked up; the cells come back in ``_matching`` order.
-        found = {
-            key
-            for axes, cells in index.items()
-            for key in cells.get(tuple(env.get(axis) for axis in axes), ())
-        }
-        return [key for key in self._matching(selector) if key in found]
+        # Each shape is looked up, and the cells come back in ``_matching``
+        # order by their positions in it. Filtering ``_matching`` for the cells
+        # found instead read every cell the selector accepts at every
+        # evaluation: a few blank country cells were enough to bring back the
+        # cost in the square of the countries.
+        positions = self._by_position.get(id(selector))
+        if positions is None:
+            positions = self._by_position[id(selector)] = self._position_index(selector)
+        matching = self._matching(selector)
+        hit = sorted(
+            position
+            for axes, at in positions.items()
+            for position in at.get(tuple(env.get(axis) for axis in axes), ())
+        )
+        return [matching[position] for position in hit]
 
     def _place_index(self, selector: _Selector) -> _PlaceIndex:
         """``_matching(selector)`` by place: a cell with no place (``_place``) sits nowhere."""
@@ -1245,6 +1462,21 @@ class _Evaluation:
             axes = tuple(axis for axis, _value in place)
             values = tuple(value for _axis, value in place)
             index.setdefault(axes, {}).setdefault(values, []).append(key)
+        return index
+
+    def _position_index(self, selector: _Selector) -> _PositionIndex:
+        """``_place_index``, each cell given by its position in ``_matching(selector)``.
+
+        A cell listed twice there is at both positions, under its one place.
+        """
+        index: _PositionIndex = {}
+        for position, key in enumerate(self._matching(selector)):
+            place = self._place(selector, key)
+            if place is None:
+                continue
+            axes = tuple(axis for axis, _value in place)
+            values = tuple(value for _axis, value in place)
+            index.setdefault(axes, {}).setdefault(values, []).append(position)
         return index
 
     @staticmethod
@@ -1319,42 +1551,60 @@ class _Evaluation:
             return [] if reference.default.kind == DEFAULT_EMPTY else [_default(reference.default)]
 
         key = self._cell(selector, env)
-        if key is not None and key in selector.data.cells and self._accepts(selector, key):
+        if key is not None and key in self._accepting(selector):
             return selector.data.cells[key]
         if reference.default is None:
             raise _NotBound
         return _default(reference.default)
 
     def _cell(self, selector: _Selector, env: Mapping[str, str]) -> _CellKey | None:
-        """The one cell a non-sequence reference reads at ``env``; ``None`` if it has none."""
-        table = selector.table
+        """The one cell a non-sequence reference reads at ``env``; ``None`` if it has none.
 
-        def coordinate(kind: str, accepted: tuple[str, ...] | None) -> str | None:
-            axis = selector.axis(kind)
-            if axis in selector.free:
-                value = env.get(axis)
-                return value if accepted is None or value in accepted else None
-            return accepted[0] if accepted else None
+        Looked up once per place (``_locate``) and kept until the next one:
+        binding the references, evaluating the expression, tracing each
+        side and its comparisons and describing a failure all ask for the same
+        cell, at the one place ``run`` is evaluating. Each caller still decides
+        for itself what the cell is to it — reported and accepted, or reported
+        at all — so the answer kept is the cell alone.
+        """
+        here = self._here
+        if id(selector) in here:
+            return here[id(selector)]
+        found = here[id(selector)] = self._locate(selector, env)
+        return found
 
-        column = coordinate(AXIS_COLUMN, selector.columns)
+    def _locate(self, selector: _Selector, env: Mapping[str, str]) -> _CellKey | None:
+        """``_cell``, worked out: the selector's plans read at ``env``."""
+        axis, accepted, column = selector.column_plan
+        if axis is not None:
+            column = env.get(axis)
+            if accepted is not None and column not in accepted:
+                return None
         if column is None:
             return None
         sheet = None
-        if table.fixed_axis is not None:
-            sheet = coordinate(AXIS_SHEET, selector.sheets)
+        if selector.sheet_plan is not None:
+            axis, accepted, sheet = selector.sheet_plan
+            if axis is not None:
+                sheet = env.get(axis)
+                if accepted is not None and sheet not in accepted:
+                    return None
             if sheet is None:
                 return None
-        member = selector.member if not selector.member_excluded else None
-        open_axis = table.open_axis
-        if open_axis is not None and (selector.member is None or selector.member_excluded):
-            member = env.get(selector.axis(f"{_AXIS_OPEN}{open_axis.dimension}"))
-        if not table.open_rows:
-            row = coordinate(AXIS_ROW, selector.rows)
+        member = selector.fixed_member
+        if selector.member_axis is not None:
+            member = env.get(selector.member_axis)
+        if selector.row_plan is not None:
+            axis, accepted, row = selector.row_plan
+            if axis is not None:
+                row = env.get(axis)
+                if accepted is not None and row not in accepted:
+                    return None
             return None if row is None else (sheet, member, row, column)
-        wanted = {dimension: env.get(axis) for axis, dimension in selector.key_axes.items()}
-        if any(value is None for value in wanted.values()):
+        wanted = tuple((dimension, env.get(axis)) for dimension, axis in selector.key_plan)
+        if any(value is None for _dimension, value in wanted):
             return None
-        row_id = selector.data.rows_by_key.get((sheet, member, tuple(sorted(wanted.items()))))  # type: ignore[arg-type]
+        row_id = selector.data.rows_by_key.get((sheet, member, wanted))  # type: ignore[arg-type]
         return None if row_id is None else (sheet, member, row_id, column)
 
     # -- the expression ------------------------------------------------------
@@ -1382,6 +1632,10 @@ class _Evaluation:
         if isinstance(node, Binary):
             left, right = self._value(node.left, env), self._value(node.right, env)
             if node.is_comparison:
+                if node is self._tree:
+                    # What the trace states each side came to (``_traced``):
+                    # the values compared, rather than each side evaluated again.
+                    self._operands = (left, right)
                 holds = _compare(node.operator, left, right, node.interval)
                 if self._log is not None:
                     self._log.append(self._comparison(node, left, right, env, holds=holds))
@@ -1483,7 +1737,7 @@ class _Evaluation:
         cells: list[str] = []
         addresses: dict[CellAddress, None] = {}
         seen: set[int] = set()
-        for reference in references(self._rule.tree):
+        for reference in references(self._tree):
             if id(reference) in seen:
                 continue
             seen.add(id(reference))
@@ -1514,9 +1768,14 @@ class _Evaluation:
         self, env: _Env, *, holds: bool, comparisons: tuple[Comparison, ...] = ()
     ) -> Evaluation:
         """One evaluation as the trace keeps it: each side's cells and number."""
-        tree = self._rule.tree
+        tree = self._tree
         values = dict(env)
         if isinstance(tree, Binary) and tree.is_comparison:
+            # An evaluation is traced only once its verdict is reached, and the
+            # verdict of a rule that is one comparison is that comparison's.
+            operands = self._operands
+            assert operands is not None  # noqa: S101 - run() traces after the verdict
+            left, right = operands
             return Evaluation(
                 rule_id=self._rule.rule_id,
                 place=env,
@@ -1524,8 +1783,8 @@ class _Evaluation:
                 relation=tree.operator,
                 left=self._side(tree.left, values),
                 right=self._side(tree.right, values),
-                left_value=self._figure(tree.left, values),
-                right_value=self._figure(tree.right, values),
+                left_value=_figure(left),
+                right_value=_figure(right),
                 comparisons=comparisons,
             )
         return Evaluation(
@@ -1583,7 +1842,7 @@ class _Evaluation:
                     defaulted.append(_defaulted(reference, None))
                 continue
             key = self._cell(selector, env)
-            if key is not None and key in selector.data.cells and self._accepts(selector, key):
+            if key is not None and key in self._accepting(selector):
                 read[self._register(selector, key)] = None
             elif reference.default is not None:
                 cell = None if key is None else _address(selector.data, key, reported=False)
@@ -1598,9 +1857,12 @@ class _Evaluation:
 
     def _register(self, selector: _Selector, key: _CellKey) -> CellAddress:
         """A reported cell's address, recorded in the trace's cells if tracing."""
-        address = _address(selector.data, key, reported=True)
+        data = selector.data
+        address = data.addresses.get(key)
+        if address is None:
+            address = data.addresses[key] = _address(data, key, reported=True)
         if self._cells_out is not None and address not in self._cells_out:
-            self._cells_out[address] = self._store.fact(selector.data, key, address)
+            self._cells_out[address] = self._store.fact(data, key, address)
         return address
 
     def _side(self, node: Node, env: Mapping[str, str]) -> tuple[CellAddress, ...]:
@@ -1622,14 +1884,6 @@ class _Evaluation:
         if key in selector.data.cells:
             return [self._register(selector, key)]
         return [_address(selector.data, key, reported=False)]
-
-    def _figure(self, node: Node, env: Mapping[str, str]) -> float | None:
-        """``node``'s value as a number, or ``None`` where it is not one."""
-        try:
-            amount = _amount(self._value(node, env))
-        except (_NotBound, ZeroDivisionError):
-            return None
-        return None if amount is None else amount.value
 
 
 # =============================================================================
@@ -1673,6 +1927,23 @@ def _check_functions(node: Node) -> None:
         _check_functions(node.then)
         if node.otherwise is not None:
             _check_functions(node.otherwise)
+
+
+def _axis_kind(name: str, own_axes: Mapping[str, str]) -> str:
+    """What an iterated axis ``name`` reads off a cell: ``r``, ``c``, ``z``, ``open:`` or ``key:``.
+
+    ``own_axes`` maps an axis kind to the name a reference's own range of it
+    goes by (``c@v1``); a kind it does not map goes by its own name.
+    """
+    if name == own_axes.get(AXIS_ROW, AXIS_ROW):
+        return AXIS_ROW
+    if name == own_axes.get(AXIS_COLUMN, AXIS_COLUMN):
+        return AXIS_COLUMN
+    if name == own_axes.get(AXIS_SHEET, AXIS_SHEET):
+        return AXIS_SHEET
+    if name.startswith(_AXIS_OPEN):
+        return _AXIS_OPEN
+    return _AXIS_KEY
 
 
 def _outer_join(environments: set[_Env], partial: set[_Env]) -> set[_Env]:
@@ -1723,16 +1994,31 @@ def _join(env: _Env, place: _Env) -> _Env | None:
 
 
 def _maximal(environments: set[_Env]) -> set[_Env]:
-    """Drop any place that another place extends: the fuller one is the evaluation."""
+    """Drop any place that another place extends: the fuller one is the evaluation.
+
+    A place extends another when it names every axis the other names, with the
+    same values, and more. The places are grouped by the axes they name — a
+    handful of shapes — and a place is dropped when its values are among those
+    of a fuller shape's places, cut down to its own axes. Comparing every pair
+    of places made this cost the square of their number, which grows with an
+    open axis wherever a few cells sit at places of a shorter shape.
+    """
     if len({len(env) for env in environments}) <= 1:
         return environments
+    shapes: dict[tuple[str, ...], list[_Env]] = {}
+    for env in environments:
+        shapes.setdefault(tuple(axis for axis, _value in env), []).append(env)
     kept: set[_Env] = set()
-    as_sets = sorted((set(env) for env in environments), key=len, reverse=True)
-    fuller: list[set[tuple[str, str]]] = []
-    for candidate in as_sets:
-        if not any(candidate < other for other in fuller):
-            kept.add(tuple(sorted(candidate)))
-        fuller.append(candidate)
+    for shape, places in shapes.items():
+        named = set(shape)
+        extended: set[tuple[str, ...]] = set()
+        for fuller, others in shapes.items():
+            if named < set(fuller):
+                at = [fuller.index(axis) for axis in shape]
+                extended.update(tuple(other[index][1] for index in at) for other in others)
+        kept.update(
+            place for place in places if tuple(value for _axis, value in place) not in extended
+        )
     return kept
 
 
@@ -1782,6 +2068,12 @@ def _amount(value: object) -> _Amount | None:
     if isinstance(value, list):
         return _amount(value[0]) if len(value) == 1 else None
     return None
+
+
+def _figure(value: object) -> float | None:
+    """A value as a number, or ``None`` where it is not one (``Evaluation.left_value``)."""
+    amount = _amount(value)
+    return None if amount is None else amount.value
 
 
 def _arithmetic(

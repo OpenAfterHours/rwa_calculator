@@ -1,8 +1,8 @@
 # rwa-filer performance review: where a control run's time goes, and the plan to cut it
 
-**Status:** Draft proposal, 2026-11-22. The review is complete; four of its ten lenses and
-the proposal as a whole are still under challenge, and this page changes as those report.
-The [Outcome](#outcome) section is filled in as the phase 1 work lands. Every number below
+**Status:** Proposal, 2026-11-22; phase 1 in implementation. The review is complete, nine
+of its ten lenses have been independently challenged and the proposal as a whole has been
+red-teamed. The [Outcome](#outcome) section is filled in as the phase 1 work lands. Every number below
 was measured on the reference dev container (4 cores, 15 GB, Python 3.13, `rwa-filer`
 0.1.5) and is reproducible with the tools in the [appendix](#appendix-method).
 
@@ -26,11 +26,18 @@ and readers, XBRL, compare and diff, dashboard, developer gates, architecture) e
 measured their subsystem and prototyped their proposals in a scratch copy. Every lens was
 then handed to a **second, independent agent whose brief was to refute it**: re-measure
 with its own scripts, write its own prototype, and attack the equivalence argument with
-mutants. 70 findings went in. At the time of writing six lenses (43 findings) have been
-challenged: 26 confirmed, 13 reduced, 3 sent back for redesign and 1 marked unsafe, with
-37 further items the reviewers had missed. The challenges of the XBRL, compare, developer
-gates and architecture lenses are still running; their findings are marked below where a
-phase 1 item rests on one.
+mutants. 70 findings went in. Nine lenses (65 findings) have been challenged so far: 37
+confirmed, 21 reduced, 6 sent back for redesign and 1 marked unsafe, with 51 further
+items the reviewers had missed. The architecture lens's challenge is still running; the
+one phase 1 idea that rested on it alone (printing the verdict before the evidence) has
+been moved to the owner's decisions.
+
+The consolidated proposal was then **red-teamed as a whole** by three more teammates —
+correctness and regulatory risk, delivery and sequencing, and the user's outcome. All
+three returned "proceed, with changes", with two blockers: the acceptance standard named
+only our own snapshot and not the external referee, and the guards were planned to arrive
+with the changes rather than be in the repository. The [Acceptance](#acceptance) section,
+the cuts to phase 1 and the first two owner decisions below are the result.
 
 Two rules held throughout:
 
@@ -95,35 +102,46 @@ Two costs grow with the **square** of an input, and no gate sees either:
 
 These are not speed findings. Each is closed by an escape-log entry, not by its fix.
 
-| Defect | Evidence |
-|---|---|
-| `rwa-filer compare` dies with a Polars `SchemaError` traceback | 36 of 240 golden pairs |
-| The dashboard's evidence download can return a corrupted file with HTTP 200 when clicked twice | Two requests write the same file name at once; reproduced |
-| Two threads validating at once in a cold process crash | `KeyError` in the engine in 3 of 52 trials: an unlocked cached parse replaces a rule's tree after another thread keyed its selectors by the old one. The dashboard runs each task in its own thread |
-| A fact carrying many open dimensions stalls the XBRL reader | The reader tries every subset: about 1 s per fact at 18 dimensions, so a few hundred such facts stall for minutes |
-| The declared Polars floor is false | `polars>=1.0.0` is declared; the shipped code calls an API that arrived later |
+| Defect | Evidence | In phase 1 |
+|---|---|---|
+| `rwa-filer compare` dies with a Polars `SchemaError` traceback | 36 of 240 golden pairs: any resubmission whose differing fixed-table cells are all in sheet-less templates. The traceback's exit code equals "the returns differ" | Fixed |
+| `compare`'s JSON output depends on Python's hash seed | Set iteration order reaches the output where differences tie | Fixed |
+| The dashboard's evidence download can return a corrupted file with HTTP 200 when clicked twice | Two requests write the same file name at once; reproduced | Fixed |
+| Two threads validating at once in a cold process crash | `KeyError` in the engine in 3 of 52 trials: an unlocked cached parse replaces a rule's tree after another thread keyed its selectors by the old one. The dashboard runs each task in its own thread | Fixed |
+| A fact carrying many open dimensions stalls the XBRL reader | The reader tries every subset: 16,384 for one fact at 14 dimensions, about 1 s per fact at 18 | Fixed |
+| The declared Polars floor is false | `polars>=1.0.0` is declared; the shipped code calls an API that arrived later | Fixed |
+| `match_code` raises `ValueError` on a superscript digit in a code | Verified on shipped code | Plan item |
+| `read_evidence` raises `UnicodeDecodeError` on a damaged file | Verified on shipped code | Plan item |
+| A fact table whose open keys are written as QNames compares as different from itself | `validate` and `build` accept the form; `diff` and `compare` do not link it | Owner decision |
 
 ## The proposal
 
 ### Phase 1 — this change: every confirmed, verdict-neutral saving
 
 Nothing in phase 1 changes a verdict, a count, a recorded break or its order, a trace, a
-report, an evidence file or a written XBRL byte. The stated exceptions are the defect
-fixes above, which turn a crash into an answer.
+report on standard output, an evidence file or a written XBRL byte. The stated exceptions
+are the defect fixes above (a crash becomes an answer; `compare`'s output stops depending
+on the hash seed) and one addition on the progress line (item 8).
 
 **1. Stop collecting garbage that is not garbage.** The one-shot command line gets its own
 process entry that switches the cyclic collector off, and freezes the heap before exit so
-shutdown does not walk it either. The dashboard, which runs until interrupted, switches it
-back on before serving. Library code — pack load, rule-book load, XBRL read — pauses the
-collector for the length of the bulk build and restores the state it found, so the
-dashboard, `rwa-calc` and the test suite get the same saving without their collector
-policy being touched. The package already does exactly this for its Arelle worker.
+shutdown does not walk it either. `main(argv)` itself is untouched, so an in-process
+caller never has its collector changed. The dashboard, which runs until interrupted,
+switches it back on before serving. Reading a workbook keeps the collector running: that
+is the one input that does make cyclic garbage (with it off, peak memory grew by 111 MB
+on a 455-sheet workbook; with it on it is flat). `RWA_FILER_COLLECTOR=on` keeps the
+collector on for a run. Library code — pack load, XBRL read — pauses the collector for
+the length of the bulk build and restores the state it found, so the dashboard, `rwa-calc`
+and the test suite get the same saving without their collector policy being touched. The
+package already does exactly this for its Arelle worker.
 *Measured alone on unmodified code: `validate` 1.60 → 1.20 s, XBRL `validate` 2.36 →
 1.52 s, `diff` 2.45 → 1.24 s, `compare` −33%.*
 
 **2. Load the reference data once, and cheaply.** Build the pack's data points from
 dictionary-encoded pairs (0.46 → 0.14 s). Build the XBRL fact index once per pack and
-keep it with the pack (0.57 s → 0.13–0.23 s for the first read, nothing for later reads).
+keep it with the pack, in a compact form the collector does not have to walk (0.57 s →
+0.13–0.23 s for the first read, nothing for later reads; a tracked index would have cost
+0.5 s back at every exit).
 Cache the per-table code tuples and axis lookups that are recomputed on every access.
 Values that are a pure function of an immutable pack are kept on the pack object, so they
 live exactly as long as it does and a replaced pack starts empty.
@@ -138,8 +156,9 @@ the second pass disappears).
 
 **5. Take the per-rule constants out of the per-evaluation loop.** Cell and place plans
 worked out once per rule, an accepted-cell set per selector, one cell lookup per place
-shared by the verdict and the trace, the two sides of the top comparison kept instead of
-re-evaluated, one address object per reported cell. *Rule loop 1.8–2.0×; tracing a further
+shared by the verdict and the trace, one address object per reported cell, and — only if
+its guard can be made to bite, because the two challengers disagreed on it — the two
+sides of the top comparison kept instead of re-evaluated. *Rule loop 1.8–2.0×; tracing a further
 1.2–1.4×.* The member-less quadratic is replaced by an indexed lookup that returns the
 same cells in the same order (13.7 → 0.9 s). `compare` asks for a trace without the
 comparison log it never reads (a further −14%).
@@ -154,30 +173,38 @@ firm-shaped return of 92,000 facts validates in 6.0 s instead of 8.6 s.*
 most any data point leaves open (26,000-fact instance read 2.2–2.6 → 1.1–1.4 s; the
 pathological stall becomes 0.5 s).
 
-**8. Tell the user as soon as there is something to tell.** Print the verdict before the
-evidence file is written (the report arrives 24–29% sooner on `validate --evidence`).
-Build the JSON record only when `--report` or `--format json` reads it (44–105 ms on
-every text `validate`). Compute a run's identity block once. `build` does not check the
-structure a second time. `diff` of two fact tables does not load a rule book it never
+**8. Tell the user as soon as there is something to tell, and do no work nobody reads.**
+When the structure check returns, the progress line says how many structure findings
+there are and names the first, so a user with a structurally broken return is told after
+about a second instead of after the whole rule run (3.5 s on a firm-sized return);
+standard output and the report do not change. The JSON record is built only when
+`--report` or `--format json` reads it (44–105 ms on every text `validate`). A run's
+identity block is computed once. `build` does not check the structure a second time: a
+private, already-checked writer entry is called only from the build, and the public
+writer keeps its check. `diff` of two fact tables does not load a rule book it never
 reads (0.96 → 0.29 s). `taxonomy list` does not load 14 packs to print one word per line
 (1.4 → 0.15 s).
 
 **9. Evidence writing:** one pass per side instead of two lookups per cell, block writes
 on the compressed path, no per-evaluation scan of the labelled notes (−0.25 s of 2.5 s at
-26,000 facts, identical bytes).
+26,000 facts; identical content, and identical compressed bytes on the same zlib).
 
-**10. Compare and dashboard.** The explanation step buckets and sorts instead of testing
-every pair (6.7 → 0.4 s). The progress page answers the moment the work ends instead of
-at the next one-second poll (−0.3 to −1.0 s on every action over a second). A page asked
-for during a re-validation waits for that validation instead of starting a second one.
-The evidence download is written once per validation and served after that. The template
-grid's marks are worked out once per working return. Overrides are applied in Polars
-instead of through Python dictionaries. The browser opens when the server answers, not a
-fixed 0.8 s later.
+**10. Compare and dashboard.** The explanation step walks sorted differences with two
+pointers instead of testing every pair (6.7 → 0.4 s, and still linear when a group mixes
+rounding allowances). The progress page answers the moment the work ends instead of at
+the next one-second poll (−0.3 to −1.0 s on every action over a second). A page asked for
+during a re-validation waits for that validation instead of starting a second one. The
+evidence download is collected once per validation, by one request at a time, and served
+after that; the first comparison of a pair runs behind the progress page instead of as a
+frozen page. The browser opens when the server answers, not a fixed 0.8 s later.
 
-**11. Developer controls.** The member suite runs under `pytest-xdist` (1.8× on a loaded
-box), the reader-index change alone takes eleven test files from 72 to 33 s, and the two
-slowest tests get an indexed `closing_dimensions`.
+**11. Developer controls.** The reader-index change alone takes eleven test files from 72
+to 33 s. The member suite runs under `pytest-xdist`, as its own dev-only commit, with the
+scaling gates' verdict carried by call counts so parallel workers cannot flake them. The
+two slowest tests get an indexed `closing_dimensions`. The declared Polars floor is
+corrected and a CI step runs the pack, structure and reader tests at the floor. The
+benchmark and the behaviour-snapshot tool are committed, so the next change can be
+measured and proven the same way.
 
 ### Guards that land with the changes
 
@@ -204,22 +231,57 @@ mutant before the change it protects is made.
   call-count ratio (4× the input, under 4.4× the calls) beside the time ratio, and cover
   open rows, member-less facts and tracing, none of which is scaled today.
 
+### Acceptance
+
+The snapshot is our engine compared with itself. The change is accepted on these, none of
+which is that:
+
+- the member suite, with every new guard, and the root project's gates that read this
+  engine's verdicts: `tests/acceptance/reporting` (the supervisory validation register),
+  `tests/oracle`, `tests/contracts`, the reporting-coverage ratchet and the filing-mapping
+  ratchet, unchanged baselines;
+- the wheel-install check, since the console script gains a new entry;
+- **the Referee Differential green on the pull request, with no engine verdict
+  re-banked**: Arelle and `rwa_filer.boe` agree rule by rule on the golden returns. It
+  cannot run in the development container; it runs in CI on this change's paths;
+- the Bank's own sample instance (`test_sample_oracle.py`, `test_boe_sample.py`) is the one
+  oracle not available to this work. It needs the Bank's sample, which neither the
+  container nor CI holds: it is the owner's run, and plan item P6.60 (d) stays open.
+
+Delivered as one pull request cut into one commit per work package, guards and change
+together, each commit green on its own, so a moved verdict can be bisected to a package.
+
 ### Phase 2 — proposed, not in this change
 
 | Item | Why it waits |
 |---|---|
-| Incremental re-validation in a warm process: re-run only the rules whose tables changed | Largest remaining win for the dashboard (an edit on a 26,000-fact return 2.1 → 0.8 s). The challenger could not break its premise in 540 edits, but sent the design back: reuse must be decided by comparing content inside `validate_return`, not by a caller-supplied dirty list. Needs its own design and oracle |
-| A warm process for the command line (`validate --watch`, or several files per invocation) | The cold floor after phase 1 is interpreter + Polars import + pack load. Only a warm process gets below it: a repeat validation costs about 0.3 s. A new interface, so a product decision |
+| Incremental re-validation in a warm process: re-run only the rules whose tables changed | An edit on a 26,000-fact return costs 2.1 s today and about 1.1 s after phase 1; this would take it to about 0.8 s. The challenger could not break its premise in 540 edits, but sent the design back: reuse must be decided by comparing content inside `validate_return`, not by a caller-supplied dirty list. Needs its own design and oracle |
 | `compare`: evaluate once per pair, describe on demand | A further 3–4.4× on large comparisons; a large change to the trace model |
 | Skip parsing rules whose tables are not reported | About 60 ms after the faster parser. Changes which reason is reported for a rule that both fails to parse and is not reported, unless trust in the packaged books is stored somewhere; the proposed storage was rejected |
-| Workbook reading through a faster engine | About 0.2 s of a 2 s cold workbook validate; a new compiled dependency whose cell typing must match the current reader's exactly |
+| Workbook reading through a faster engine | About 0.2 s of a 2 s cold validate for a 54-sheet workbook, about 1 s of 2.6 s for a 450-sheet one; a new compiled dependency whose cell typing must match the current reader's exactly |
+| Overrides applied in Polars; the template grid's marks worked out once | About 3 ms and 8–10 ms on a typical return. The first feeds `build --adjustments`, where a row-order slip would move recorded breaks |
+| Pin the Arelle environment so the referee cache holds | CI-only; an unrelated package update costs a 13-minute re-run today. Cannot be verified in the development container |
 | Lazy imports across the whole command line | 30–60 ms on a control; about forty handler-local imports in the file every other change also edits |
-| Pin the Arelle environment so the referee cache holds | CI-only; saves about 12 minutes on a cache miss. Cannot be verified in this container |
 
 ### Decisions for the owner
 
-These change an output on purpose, so they are not taken here.
+These add an interface or change an output on purpose, so they are not taken here.
 
+- **A warm process for the command line — the one thing that makes a repeat run
+  instant.** After phase 1 a cold `validate` of a typical return is about 0.9 s, of which
+  about 0.6 s is still fixed cost that only a process that stays up can avoid: a repeat
+  validation in one process is 0.19 s for a fact table and 0.28 s for a workbook or XBRL
+  instance. The smallest safe form is `rwa-filer validate FILE --watch`: the existing
+  handler re-run in the same process whenever the file changes, with no daemon and no
+  rule memo. It is a new interface, so it is the owner's call; it is the recommended next
+  step.
+- **Print the verdict before the evidence file is written.** The report would arrive
+  24–29% sooner on `validate --evidence`. But today a failed evidence write leaves standard
+  output empty and exits 1; afterwards a script would see a complete "submittable" report
+  and exit 1, with a truncated evidence file at its final path. It needs an atomic
+  evidence write and a distinct exit code first.
+- **A structure-only or fail-fast switch**, for a user who wants the structure findings
+  and nothing else.
 - **Evidence compression level.** Level 6 instead of 9 saves 0.55–0.67 s of a 2.5 s
   evidence write at 26,000 facts; the `.gz` is 12.6% larger and its checksum (and the
   manifest's `evidence.sha256`) changes. Content digest and evidence id do not.
@@ -227,9 +289,9 @@ These change an output on purpose, so they are not taken here.
   from the local-name form. Normalise on read, or raise a structure finding.
 - **Positions of facts that share coordinates** follow an unstable sort. Define the order
   (coordinates, then input position) as a stated change.
-- **Memory.** Keeping the XBRL index with the pack holds 80–110 MB for the life of the
-  process in exchange for 0.5 s per later read. Phase 1 takes the trade for the compact
-  index only.
+- **How the tool is launched.** The README's `uvx rwa-filer@latest` checks PyPI on every
+  run. Measured in [Outcome](#outcome); if it is material, the advice for interactive use
+  becomes an installed tool.
 
 ### Rejected
 
@@ -241,25 +303,37 @@ reusing a dashboard validation for a build (changes a byte of a signed-off file)
 
 ## Expected result of phase 1
 
-From the challengers' combined prototypes (CPU seconds, loaded box) — to be replaced by
-measured wall-clock figures in the Outcome section:
+One of the red-team reviewers merged three of the lens prototypes (collector entry,
+release loading, rule engine) into a single tree and measured it; its standard output is
+byte-identical on every row. It lacks the trace, XBRL-reader, structure, compare and
+dashboard changes, so the full phase 1 should be somewhat faster. CPU seconds in both
+columns, best of 1–3 on a loaded box; the [Outcome](#outcome) section replaces this with
+wall-clock on a quiet one, base and new interleaved.
 
-| Command | Today | Expected |
+| Path | Today | Three-lens prototype |
 |---|---|---|
-| `validate` (fact table, 2,227 facts) | 1.70 s | 0.8–1.0 s |
-| `validate` (XBRL, 2,227 facts) | 2.57 s | 1.0–1.3 s |
-| `validate` (fact table, 25,987 facts) | 3.00 s | 1.6–2.0 s |
-| `validate --evidence` (25,987 facts) | 8.94 s | 5–6 s |
-| `compare` (25,987 vs 7,987 facts) | 12.11 s | 5–7 s |
-| `diff` (two instances) | 2.55 s | 1.0–1.2 s |
-| `diff` (two fact tables) | 0.98 s | 0.3–0.4 s |
-| Dashboard re-validation after an edit | — | 15–25% less CPU, and 0.3–1.0 s less waiting |
-| Member test suite | 216 s serial | under 120 s serial, about 60 s on four workers |
+| `validate`, 251 facts (the fixed floor) | 1.23 | 0.64 |
+| `validate`, 2,227 facts, fact table | 1.63 | 0.86 |
+| `validate`, 2,227 facts, workbook | 2.04 | 1.08 |
+| `validate`, 2,227 facts, XBRL | 2.48 | 1.15 |
+| `validate`, 25,987 facts, fact table | 3.42 | 1.59 |
+| `validate`, 25,987 facts, XBRL | 5.66 | 2.32 |
+| `validate --evidence`, 25,987 facts | 8.52 | 5.07 |
+| `build`, 25,987 facts | 4.49 | 2.40 |
+| `compare`, 2,227-fact pair | 4.00 | 1.43 |
+| `compare`, 25,987 vs 7,987 facts | 12.46 | 5.19 |
+| `diff`, two instances | 2.24 | 0.87 |
+| `validate`, 92,000 facts, fact table | 7.84 | 2.94 |
+| `validate`, 92,000 facts, XBRL (67 MB) | 15.04 | 7.26 |
+| `build`, 92,000 facts | 12.74 | 6.00 |
+| Dashboard edit, 2,227 facts | 0.30 | 0.19 |
+| Dashboard edit, 25,987 facts | 2.13 | 1.08 |
+| Repeat validation in a warm process, 2,227 facts | 0.34 | 0.19 |
 
-"Instant" in the sense of a keystroke is out of reach for a cold process: after phase 1
-the floor is about 0.17 s of imports plus the pack load, before any work. The dashboard
-is already the warm path (a repeat validation is about 0.3 s), and phase 2's first two
-items are what bring the command line to the same place.
+Phase 1 roughly halves every wait. It does not make a cold command instant: about 0.64 s
+of the 0.86 s for a typical return is still fixed cost — interpreter, Polars import, pack
+load — before any work. The dashboard is already the warm path, and the first decision
+for the owner above is what brings the command line to the same place.
 
 ## Outcome
 

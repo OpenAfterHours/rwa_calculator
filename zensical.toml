@@ -181,6 +181,7 @@ nav = [
       { "rwa-filer Evidence Export (implemented)" = "plans/rwa-filer-evidence-export.md" },
       { "Taxonomy Release Selection (implemented)" = "plans/taxonomy-release-selection.md" },
       { "Product & Structure Review (2026-11-18)" = "plans/product-review-2026-11-18.md" },
+      { "rwa-filer Performance Review (2026-11-22)" = "plans/rwa-filer-performance-review-2026-11-22.md" },
     ]},
   ]},
   { "Appendix" = [

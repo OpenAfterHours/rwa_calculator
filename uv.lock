@@ -1774,6 +1774,7 @@ dev = [
     { name = "jsonschema" },
     { name = "openpyxl" },
     { name = "pytest" },
+    { name = "pytest-xdist" },
 ]
 
 [package.metadata]
@@ -1794,6 +1795,7 @@ dev = [
     { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-xdist", specifier = ">=3.5.0" },
 ]
 
 [[package]]

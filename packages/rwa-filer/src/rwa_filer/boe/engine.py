@@ -1575,31 +1575,19 @@ class _Evaluation:
 
     def _locate(self, selector: _Selector, env: Mapping[str, str]) -> _CellKey | None:
         """``_cell``, worked out: the selector's plans read at ``env``."""
-        axis, accepted, column = selector.column_plan
-        if axis is not None:
-            column = env.get(axis)
-            if accepted is not None and column not in accepted:
-                return None
+        column = _axis_code(selector.column_plan, env)
         if column is None:
             return None
         sheet = None
         if selector.sheet_plan is not None:
-            axis, accepted, sheet = selector.sheet_plan
-            if axis is not None:
-                sheet = env.get(axis)
-                if accepted is not None and sheet not in accepted:
-                    return None
+            sheet = _axis_code(selector.sheet_plan, env)
             if sheet is None:
                 return None
         member = selector.fixed_member
         if selector.member_axis is not None:
             member = env.get(selector.member_axis)
         if selector.row_plan is not None:
-            axis, accepted, row = selector.row_plan
-            if axis is not None:
-                row = env.get(axis)
-                if accepted is not None and row not in accepted:
-                    return None
+            row = _axis_code(selector.row_plan, env)
             return None if row is None else (sheet, member, row, column)
         wanted = tuple((dimension, env.get(axis)) for dimension, axis in selector.key_plan)
         if any(value is None for _dimension, value in wanted):
@@ -1944,6 +1932,24 @@ def _axis_kind(name: str, own_axes: Mapping[str, str]) -> str:
     if name.startswith(_AXIS_OPEN):
         return _AXIS_OPEN
     return _AXIS_KEY
+
+
+def _axis_code(plan: _AxisPlan, env: Mapping[str, str]) -> str | None:
+    """The code one axis ``plan`` reads at ``env``; ``None`` where the cell has none there.
+
+    An axis the reference does not iterate reads the one code it names, as it
+    is. An iterated axis reads the place's code, and finds none where the place
+    names no code on it or one the reference does not accept. A plain function,
+    not a method: ``_Evaluation._locate`` calls it for each axis of each
+    reference at each place, and it needs nothing of the evaluation.
+    """
+    axis, accepted, code = plan
+    if axis is None:
+        return code
+    code = env.get(axis)
+    if accepted is not None and code not in accepted:
+        return None
+    return code
 
 
 def _outer_join(environments: set[_Env], partial: set[_Env]) -> set[_Env]:

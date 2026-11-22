@@ -82,7 +82,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from rwa_filer.boe.catalogue import Rule, RuleBook
-    from rwa_filer.taxonomy.pack import TaxonomyPack
+    from rwa_filer.boe.grammar import Reference
+    from rwa_filer.taxonomy.pack import Table, TaxonomyPack
 
 logger = logging.getLogger(__name__)
 
@@ -446,15 +447,10 @@ def closing_dimensions(pack: TaxonomyPack, rule: Rule) -> set[str] | None:
         table = pack.tables.get(reference.table or "")
         if table is None:
             continue
-        named = cells_by_table.get(table.code)
-        if named is None:
+        cells = cells_by_table.get(table.code)
+        if cells is None:
             continue
-        rows = {table.row_code(code) for code in reference.rows}
-        columns = {table.column_code(code) for code in reference.columns}
-        sheets = {table.sheet_code(code) for code in reference.sheets}
-        for column, accepted in (("row", rows), ("column", columns), ("sheet", sheets)):
-            if accepted:
-                named = named.filter(pl.col(column).is_in(sorted(accepted)))
+        named = _cells_named(cells, table, reference)
         closed = rule.closed | rule.closed_by_variable.get(reference.variable or "", frozenset())
         hits = [closed & carried[point] for point in named["datapoint"].unique().to_list()]
         if hits and all(hits):
@@ -769,6 +765,21 @@ def _non_default_dimensions(pack: TaxonomyPack) -> tuple[frozenset[str], ...]:
         )
         for point in pack.datapoints
     )
+
+
+def _cells_named(cells: pl.DataFrame, table: Table, reference: Reference) -> pl.DataFrame:
+    """The cells of ``table`` (``cells``, its frame) that ``reference`` names.
+
+    Narrowed to the rows, columns and sheets the reference lists, in the table's
+    own codes; an axis it lists nothing on is not narrowed.
+    """
+    rows = {table.row_code(code) for code in reference.rows}
+    columns = {table.column_code(code) for code in reference.columns}
+    sheets = {table.sheet_code(code) for code in reference.sheets}
+    for column, accepted in (("row", rows), ("column", columns), ("sheet", sheets)):
+        if accepted:
+            cells = cells.filter(pl.col(column).is_in(sorted(accepted)))
+    return cells
 
 
 # =============================================================================

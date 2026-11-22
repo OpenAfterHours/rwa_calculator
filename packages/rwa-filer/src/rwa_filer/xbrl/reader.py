@@ -391,14 +391,45 @@ def _read_context(element: ElementTree.Element, scope: _Scope) -> _Context:
     has_segment = False
     for section in element:
         if section.tag == _ENTITY:
-            for part in section:
-                if part.tag == _IDENTIFIER:
-                    if identifier is None:
-                        identifier = part
-                elif part.tag == _SEGMENT:
-                    has_segment = True
+            identifier, segment_here = _read_entity(section, identifier)
+            has_segment = has_segment or segment_here
         elif section.tag == _PERIOD and instant is None:
             instant = next((part for part in section if part.tag == _INSTANT), None)
+    return _Context(
+        identifier=(identifier.text or "").strip() if identifier is not None else "",
+        scheme=identifier.get("scheme", "") if identifier is not None else "",
+        instant=((instant.text or "").strip() or None) if instant is not None else None,
+        members=_context_members(element, scope),
+        has_segment=has_segment,
+    )
+
+
+def _read_entity(
+    entity: ElementTree.Element, identifier: ElementTree.Element | None
+) -> tuple[ElementTree.Element | None, bool]:
+    """One entity's children: the reporter so far, and whether a segment sits directly under it.
+
+    ``identifier`` is the one an earlier entity of the context gave, and is kept
+    where there is one: the reporter is the first identifier under ANY entity.
+    """
+    has_segment = False
+    for part in entity:
+        if part.tag == _IDENTIFIER:
+            if identifier is None:
+                identifier = part
+        elif part.tag == _SEGMENT:
+            has_segment = True
+    return identifier, has_segment
+
+
+def _context_members(element: ElementTree.Element, scope: _Scope) -> tuple[tuple[str, _Value], ...]:
+    """A context's dimension members wherever they sit in it, the explicit ones first.
+
+    Each is ``(dimension, (member, None))`` for an explicit member and
+    ``(dimension, (value, element))`` for a typed one, every name in them as
+    ``{uri}local``. A typed member with no child element holds no value and is
+    left out.
+    """
     clark = scope.clark_of
     members: list[tuple[str, _Value]] = []
     for explicit in element.iter(_EXPLICIT):
@@ -409,13 +440,7 @@ def _read_context(element: ElementTree.Element, scope: _Scope) -> _Context:
         child = next(iter(typed), None)
         if child is not None:
             members.append((dimension, ((child.text or "").strip(), child.tag)))
-    return _Context(
-        identifier=(identifier.text or "").strip() if identifier is not None else "",
-        scheme=identifier.get("scheme", "") if identifier is not None else "",
-        instant=((instant.text or "").strip() or None) if instant is not None else None,
-        members=tuple(members),
-        has_segment=has_segment,
-    )
+    return tuple(members)
 
 
 def _split(qname: str, prefixes: dict[str, str]) -> tuple[str, str]:
@@ -730,12 +755,27 @@ class _DataPointIndex:
                 if not typed.issubset(supplied):
                     continue
                 found = bucket.get(tuple(pair for pair in pairs if pair[0] not in supplied))
-                if found is None:
-                    continue
-                for number in (found,) if isinstance(found, int) else found:
-                    if self._accepts(number, set(supplied), members):
-                        matches.append(number)
+                # Only a hit pays for the call: most subsets fix no data point.
+                if found is not None:
+                    self._collect_accepting(found, supplied, members, matches)
         return matches
+
+    def _collect_accepting(
+        self,
+        found: int | tuple[int, ...],
+        supplied: tuple[str, ...],
+        members: dict[str, _Value],
+        matches: list[int],
+    ) -> None:
+        """Append to ``matches`` each data point in ``found`` that accepts ``supplied``.
+
+        ``found`` is one bucket entry of ``fixed``: the bare number of a data
+        point, or the numbers of several sharing their fixed members, in the
+        pack's order — the order they are appended in.
+        """
+        for number in (found,) if isinstance(found, int) else found:
+            if self._accepts(number, set(supplied), members):
+                matches.append(number)
 
     def _accepts(self, number: int, supplied: set[str], members: dict[str, _Value]) -> bool:
         opened = self.opened.get(number, ())

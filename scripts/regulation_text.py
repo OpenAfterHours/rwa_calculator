@@ -48,7 +48,7 @@ Index files (``.claude/skills/regulation-text/index/``):
 
 The index is generated from the repo (``@cites`` decorators under
 ``src/rwa_calc`` and the resolved rulepack citations) and the installed
-watchfire snapshot; ``tests/contracts/test_regulation_text_index.py`` fails
+watchfire snapshot; ``tests/contracts/test_regulation_text.py`` fails
 when it is stale, so a new citation cannot land without its index row.
 
 References:

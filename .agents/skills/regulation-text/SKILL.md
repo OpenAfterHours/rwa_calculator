@@ -90,7 +90,7 @@ rg 'engine/irb/formulas.py' .claude/skills/regulation-text/index/ # what does th
 
 - The index is **generated**: `uv run python scripts/regulation_text.py index` (it also
   refreshes the `.agents/skills` mirror). Run it after adding or changing a `@cites`
-  decorator or a pack `Citation`. `tests/contracts/test_regulation_text_index.py`
+  decorator or a pack `Citation`. `tests/contracts/test_regulation_text.py`
   fails while it is stale, so a new citation cannot land without its row.
 - Never hand-edit `b31.csv`, `crr.csv` or `other.csv`. Do hand-edit `corrections.csv`
   when an amending instrument changes an article after the PDF was published: one row

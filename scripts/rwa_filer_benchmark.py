@@ -17,9 +17,10 @@ Key responsibilities:
   the child's own CPU (user + system, from ``os.wait4``), best of N. Wall clock
   on a shared box moves by tens of per cent between identical runs; the CPU
   figure moves far less, so both are reported.
-- Compare builds: ``--against REV`` also times the ``rwa-filer`` of a git
-  revision (a commit, branch or tag), checked out in a worktree under
-  ``.rwa-filer-bench/builds/`` with an environment holding that member alone.
+- Compare builds: ``--against master`` (or ``merge-base``, where this branch
+  left master) also times the ``rwa-filer`` of that commit, checked out in a
+  worktree under ``.rwa-filer-bench/builds/`` with an environment holding that
+  member alone.
   The two run interleaved, case by case and round by round, so a change in the
   box's load falls on each of them alike.
 
@@ -31,10 +32,10 @@ taken, so that they can be taken again.
 Usage:
     uv run python scripts/rwa_filer_benchmark.py build
     uv run python scripts/rwa_filer_benchmark.py run
-    uv run python scripts/rwa_filer_benchmark.py run --against master --repeats 5 --only validate
+    uv run python scripts/rwa_filer_benchmark.py run --against merge-base --repeats 5 --only validate
 
-Every location is fixed (the returns, the baseline builds), and a revision is
-named, never a path: a script that builds a path from an operator's string is
+Every location is fixed (the returns, the baseline builds), and the baseline is
+chosen by name from a fixed list, never typed as a revision or a path: a script that builds a path from an operator's string is
 the file-read sink ``scripts/arch_check.py`` check 19 bans.
 
 References:
@@ -46,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -79,6 +81,20 @@ COUNTRY_COUNTS = (50, 200)
 ENTITY = "5493001KJTIIGC8Y1R12"
 REFERENCE_DATE = "2027-03-31"
 MODULE = "PRA001"
+#: The returns the cases read, as their arguments name them.
+RICH_PARQUET = "{returns}/rich.parquet"
+RICH_XBRL = "{returns}/rich.xbrl"
+RICH_200C_PARQUET = "{returns}/rich-200c.parquet"
+RICH_200C_XBRL = "{returns}/rich-200c.xbrl"
+RICH_50C_XBRL = "{returns}/rich-50c.xbrl"
+IRB_XBRL = "{returns}/irb-classes.xbrl"
+#: The baselines ``run --against`` can time beside this checkout, by name. Each is
+#: a git revision this script writes, not one an operator types: an argument a
+#: person (or an agent) passes never reaches git as anything but one of these.
+BASELINES: dict[str, tuple[str, ...]] = {
+    "master": ("rev-parse", "--verify", "origin/master^{commit}"),
+    "merge-base": ("merge-base", "HEAD", "origin/master"),
+}
 #: A fixed submission date, so an evidence export does not change with the day.
 SUBMISSION_DATE = "2026-11-22"
 
@@ -110,18 +126,16 @@ def _header(*argv: str) -> tuple[str, ...]:
 CASES: tuple[Case, ...] = (
     Case("--help", ("--help",)),
     Case("taxonomy list", ("taxonomy", "list")),
-    Case("validate rich.parquet (2.2k facts)", _header("validate", "{returns}/rich.parquet")),
-    Case("validate rich.xbrl (2.2k facts)", ("validate", "{returns}/rich.xbrl")),
+    Case("validate rich.parquet (2.2k facts)", _header("validate", RICH_PARQUET)),
+    Case("validate rich.xbrl (2.2k facts)", ("validate", RICH_XBRL)),
     Case("validate rich-50c.parquet (8k facts)", _header("validate", "{returns}/rich-50c.parquet")),
-    Case(
-        "validate rich-200c.parquet (26k facts)", _header("validate", "{returns}/rich-200c.parquet")
-    ),
-    Case("validate rich-200c.xbrl (26k facts)", ("validate", "{returns}/rich-200c.xbrl")),
+    Case("validate rich-200c.parquet (26k facts)", _header("validate", RICH_200C_PARQUET)),
+    Case("validate rich-200c.xbrl (26k facts)", ("validate", RICH_200C_XBRL)),
     Case(
         "validate --evidence rich.parquet",
         _header(
             "validate",
-            "{returns}/rich.parquet",
+            RICH_PARQUET,
             "--evidence",
             "{out}/rich.evidence.jsonl.gz",
             "--submission-date",
@@ -132,7 +146,7 @@ CASES: tuple[Case, ...] = (
         "validate --evidence rich-200c.parquet",
         _header(
             "validate",
-            "{returns}/rich-200c.parquet",
+            RICH_200C_PARQUET,
             "--evidence",
             "{out}/rich-200c.evidence.jsonl.gz",
             "--submission-date",
@@ -143,27 +157,27 @@ CASES: tuple[Case, ...] = (
     # refuses writes nothing, which would time only the validation.
     Case(
         "build rich.parquet",
-        _header("build", "{returns}/rich.parquet", "--out", "{out}/b", "--force"),
+        _header("build", RICH_PARQUET, "--out", "{out}/b", "--force"),
     ),
     Case(
         "build rich-200c.parquet",
-        _header("build", "{returns}/rich-200c.parquet", "--out", "{out}/b", "--force"),
+        _header("build", RICH_200C_PARQUET, "--out", "{out}/b", "--force"),
     ),
     Case(
         "compare rich.xbrl irb-classes.xbrl",
-        ("compare", "{returns}/rich.xbrl", "{returns}/irb-classes.xbrl"),
+        ("compare", RICH_XBRL, IRB_XBRL),
     ),
     Case(
         "compare rich-200c.xbrl rich-50c.xbrl",
-        ("compare", "{returns}/rich-200c.xbrl", "{returns}/rich-50c.xbrl"),
+        ("compare", RICH_200C_XBRL, RICH_50C_XBRL),
     ),
     Case(
         "diff rich.xbrl irb-classes.xbrl",
-        ("diff", "{returns}/rich.xbrl", "{returns}/irb-classes.xbrl"),
+        ("diff", RICH_XBRL, IRB_XBRL),
     ),
     Case(
         "diff rich.parquet irb-classes.parquet",
-        _header("diff", "{returns}/rich.parquet", "{returns}/irb-classes.parquet"),
+        _header("diff", RICH_PARQUET, "{returns}/irb-classes.parquet"),
     ),
 )
 
@@ -176,8 +190,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = commands.add_parser("run", help="time the commands")
     run.add_argument(
         "--against",
-        metavar="REV",
-        help="also time the rwa-filer of this git revision (a commit, branch or tag)",
+        choices=sorted(BASELINES),
+        help="also time the rwa-filer of master, or of where this branch left master",
     )
     run.add_argument("--repeats", type=int, default=3, help="runs per case and build")
     run.add_argument("--only", default="", help="time only the cases whose name contains this")
@@ -186,23 +200,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         return build_returns(RETURNS)
     filers = {"this checkout": Path(sys.executable).parent / _EXECUTABLE}
     if args.against:
-        filers = {args.against: baseline_filer(args.against), **filers}
+        filers = {args.against: baseline_filer(BASELINES[args.against]), **filers}
     return time_cases(RETURNS, filers, repeats=args.repeats, only=args.only)
 
 
-def baseline_filer(revision: str) -> Path:
-    """The ``rwa-filer`` of ``revision``, checked out and installed on its own.
+def baseline_filer(resolve: tuple[str, ...]) -> Path:
+    """The ``rwa-filer`` of the commit the git command ``resolve`` names, installed on its own.
 
-    The checkout is a detached worktree under ``BUILDS`` named by the commit,
-    kept between runs; its environment holds the rwa-filer member alone
-    (``uv sync --package rwa-filer``), which is all the command line needs.
+    ``resolve`` is one of ``BASELINES``' values. The checkout is a detached
+    worktree under ``BUILDS`` named by the commit, kept between runs; its
+    environment holds the rwa-filer member alone (``uv sync --package
+    rwa-filer``), which is all the command line needs.
     """
     commit = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", f"{revision}^{{commit}}"],
+        ["git", "-C", str(REPO_ROOT), *resolve],
         capture_output=True,
         text=True,
         check=True,
     ).stdout.strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise RuntimeError(f"git did not name a commit: {commit!r}")
     tree = BUILDS / commit[:12]
     if not tree.exists():
         subprocess.run(

@@ -146,9 +146,10 @@ def test_a_rule_parsed_afresh_at_every_read_is_evaluated_and_traced_as_the_rule_
     plain = _rule()
     fresh = _Reparsing(**{field.name: getattr(plain, field.name) for field in fields(plain)})
 
-    # Adequacy: no two reads of the rule's tree give one tree.
-    assert fresh.tree == fresh.tree
-    assert fresh.tree is not fresh.tree
+    # Adequacy: two reads of the rule's tree give equal trees, never one tree.
+    first_read, second_read = fresh.tree, fresh.tree
+    assert first_read == second_read
+    assert first_read is not second_read
     assert fresh.where_tree is not fresh.where_tree
 
     # Act

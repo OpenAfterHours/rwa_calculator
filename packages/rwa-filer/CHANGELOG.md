@@ -53,7 +53,7 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - (Next release changes will go here)
 - **Every check runs in about half the time or less.** Cold `rwa-filer`
   commands, wall clock, best of three, measured interleaved against the code
-  before this change (`scripts/rwa_filer_benchmark.py run --against 85cfe58`):
+  before this change (`scripts/rwa_filer_benchmark.py run --against merge-base`):
 
   | Command | Before | Now |
   |---|---|---|

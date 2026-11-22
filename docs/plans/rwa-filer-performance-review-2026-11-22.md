@@ -345,7 +345,8 @@ for the owner above is what brings the command line to the same place.
 
 Cold command line, the code before this change (`85cfe58`) and after it, interleaved case
 by case, best of three, wall clock and the child's own CPU (`uv run python
-scripts/rwa_filer_benchmark.py run --against 85cfe58`). The box was shared with review
+scripts/rwa_filer_benchmark.py run --against merge-base`, the branch point being
+`85cfe58` when it was run). The box was shared with review
 agents during the run, which falls on both columns alike.
 
 | Command | Before: wall / CPU | After: wall / CPU | Faster |

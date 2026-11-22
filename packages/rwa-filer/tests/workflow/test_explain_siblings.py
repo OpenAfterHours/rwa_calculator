@@ -88,8 +88,9 @@ def test_generated_groups_are_linked_exactly_as_testing_every_pair_links_them(mi
     cases = [_generated_case(generator, mixed=mixed) for _ in range(CASES)]
     expected = [[linked_by_every_pair(group) for group in case] for case in cases]
     sizes = [len(keys) for case in expected for links in case for keys in links]
-    assert sizes.count(1) > CASES and sum(size > 2 for size in sizes) > CASES, (
-        "the generated groups must hold both unlinked sheets and links of three or more"
+    assert sizes.count(1) > CASES, "the generated groups must hold unlinked sheets"
+    assert sum(size > 2 for size in sizes) > CASES, (
+        "the generated groups must hold links of three or more"
     )
 
     # Act

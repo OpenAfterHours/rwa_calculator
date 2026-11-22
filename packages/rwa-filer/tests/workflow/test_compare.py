@@ -356,7 +356,11 @@ def test_returns_that_differ_only_in_a_table_with_no_sheets_are_compared() -> No
     ]
     pack = resolve_release(readings[0].ret.header.module).pack
     table = pack.table(OWN_FUNDS_TABLE)
-    assert table is not None and table.fixed_axis is None and table.open_axis is None, (
+    assert table is not None, f"{OWN_FUNDS_TABLE} is not in the pack"
+    assert table.fixed_axis is None, (
+        f"{OWN_FUNDS_TABLE} has gained a sheet axis - this no longer tests a table without one"
+    )
+    assert table.open_axis is None, (
         f"{OWN_FUNDS_TABLE} has gained a sheet axis - this no longer tests a table without one"
     )
     for reading in readings:

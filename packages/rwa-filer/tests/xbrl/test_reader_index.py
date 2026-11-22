@@ -148,7 +148,8 @@ def test_each_pack_object_has_an_index_of_its_own(
         read_instance(content, pack=target)
 
     # Assert
-    assert twin is not pack and twin.datapoints is pack.datapoints
+    assert twin is not pack
+    assert twin.datapoints is pack.datapoints
     assert len(built) == 2, f"{len(built)} indexes built for two packs"
 
 
@@ -284,7 +285,8 @@ def test_reading_leaves_the_index_exactly_as_it_was_built(pack: TaxonomyPack) ->
     reading = read_instance(content, pack=pack)
 
     # Assert
-    assert len(_placed(reading)) == 2 and len(reading.findings) == 1
+    assert len(_placed(reading)) == 2
+    assert len(reading.findings) == 1
     assert pack.derived(reader._index_of) is index
     assert dataclasses.asdict(index) == as_built
     with pytest.raises(dataclasses.FrozenInstanceError):

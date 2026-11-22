@@ -150,7 +150,8 @@ def test_a_file_declaring_its_namespaces_on_the_root_builds_one_scope(
     reading = read_instance(content, pack=pack)
 
     # Assert
-    assert reading.facts == 2 * SMALL_ROWS and reading.findings == ()
+    assert reading.facts == 2 * SMALL_ROWS
+    assert reading.findings == ()
     assert len(scopes) == 1, f"{len(scopes)} scopes built for a file with one set of prefixes"
 
 
@@ -198,7 +199,8 @@ def test_a_context_shared_by_several_facts_is_worked_out_once(
     reading = read_instance(content, pack=pack)
 
     # Assert
-    assert reading.facts == 2 * SMALL_ROWS and reading.findings == ()
+    assert reading.facts == 2 * SMALL_ROWS
+    assert reading.findings == ()
     assert contexts == SMALL_ROWS + 1, "the file does not share a context between facts"
     assert 0 < len(worked_out) <= contexts, (
         f"members worked out {len(worked_out)} times for {contexts} contexts "

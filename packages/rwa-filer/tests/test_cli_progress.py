@@ -223,7 +223,9 @@ def test_a_malformed_return_is_told_so_before_the_rules_run(
     record = json.loads(report.read_text())
     count = record["summary"]["structure_findings"]
     first = record["findings"][record["summary"]["release_findings"]]
-    assert code == EXIT_FAILED and count > 1 and first["code"].startswith("STR")
+    assert code == EXIT_FAILED
+    assert count > 1
+    assert first["code"].startswith("STR")
     notes = [index for index, line in enumerate(lines) if line.startswith(NOTE_LEAD)]
     rules = [index for index, line in enumerate(lines) if line.startswith("Evaluating")]
     assert len(notes) == 1, lines
@@ -291,8 +293,10 @@ def test_with_and_without_progress_a_malformed_return_gives_the_same_bytes(
     # Assert — the note was told in one run and not the other (stderr carries
     # the evidence file's summary line in both); nothing else differs.
     watched, unwatched = runs["--progress"], runs["--no-progress"]
-    assert NOTE_LEAD in watched[4] and NOTE_LEAD not in unwatched[4]
-    assert watched[0] == EXIT_FAILED and watched[1]
+    assert NOTE_LEAD in watched[4]
+    assert NOTE_LEAD not in unwatched[4]
+    assert watched[0] == EXIT_FAILED
+    assert watched[1]
     assert watched[:4] == unwatched[:4]
 
 
@@ -321,5 +325,6 @@ def test_a_malformed_return_says_nothing_on_stderr_when_progress_is_off(
 
     # Assert
     captured = capsys.readouterr()
-    assert code == EXIT_FAILED and captured.out.startswith("BLOCKED")
+    assert code == EXIT_FAILED
+    assert captured.out.startswith("BLOCKED")
     assert captured.err == ""

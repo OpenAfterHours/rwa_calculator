@@ -141,9 +141,8 @@ def test_every_published_cell_parses_to_the_banked_tree(
     named = _moved_rules(measured["published_sample"], banked["published_sample"])
 
     # Assert — every rule book and kind, then the sampled rules by name.
-    assert not moved and not named, (
-        f"published cells parse differently in {moved}; sampled rules that moved: {named[:20]}"
-    )
+    assert not moved, f"published cells parse differently in {moved}"
+    assert not named, f"sampled rules that moved: {named[:20]}"
 
 
 def test_the_generated_corpus_parses_to_the_banked_outcomes(
@@ -169,7 +168,8 @@ def test_the_published_cells_are_every_cell_of_every_packaged_rule_book(
     rules = {name: len(_entries(name)) for name in available_rulebooks()}
 
     # Assert — every packaged rule book, three cells a rule and its where cell.
-    assert books.keys() == rules.keys() and len(rules) >= 11
+    assert books.keys() == rules.keys()
+    assert len(rules) >= 11
     for name, count in rules.items():
         assert [books[name][kind]["cells"] for kind in ("expression", "scope", "join")] == [
             count,

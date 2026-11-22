@@ -61,7 +61,8 @@ def test_every_reportable_cell_of_a_packaged_pack_is_placed_on_its_own_data_poin
     # Assert
     placed = resolved.filter(~pl.col(IS_KEY))
     keys = resolved.filter(pl.col(IS_KEY))
-    assert placed.height == cells.height and keys.height == key_columns(pack)
+    assert placed.height == cells.height
+    assert keys.height == key_columns(pack)
     assert sorted(placed.select(pl.col("value").cast(pl.Int64), "datapoint").rows()) == [
         (number, point) for number, point in enumerate(cells["datapoint"].to_list())
     ]

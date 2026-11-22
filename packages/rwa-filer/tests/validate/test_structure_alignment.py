@@ -149,7 +149,8 @@ def test_a_key_column_code_of_an_open_row_table_is_read_the_way_its_table_writes
     # Arrange
     written = respelt("0005", zeros)
     table = pack.tables[T04]
-    assert written not in table.key_codes and "0005" not in table.column_codes
+    assert written not in table.key_codes
+    assert "0005" not in table.column_codes
     ret = build_return(
         fact_frame(
             (T04, None, None, "1", written, 7.0, None),
@@ -266,7 +267,8 @@ def test_an_open_row_tables_row_identifiers_are_never_rewritten(tmp_path: Path) 
     """Two rows a filer called ``10`` and ``0010`` stay two rows."""
     # Arrange — the table PUBLISHES row 0010, so "10" would match it in a closed table.
     pack = build_alignment_pack(tmp_path)
-    assert pack.tables[T04].open_rows and "0010" in pack.tables[T04].row_codes
+    assert pack.tables[T04].open_rows
+    assert "0010" in pack.tables[T04].row_codes
     ret = build_return(
         fact_frame(
             (T04, None, None, "10", "0005", 1.0, None),
@@ -308,7 +310,8 @@ def test_each_table_reads_the_same_text_in_its_own_width(tmp_path: Path) -> None
     """``010`` is right as it stands in a three-digit table and lacks a zero in a four-digit one."""
     # Arrange
     pack = build_alignment_pack(tmp_path)
-    assert "010" in pack.tables[T08].row_codes and "0010" in pack.tables[T01].row_codes
+    assert "010" in pack.tables[T08].row_codes
+    assert "0010" in pack.tables[T01].row_codes
     ret = build_return(
         fact_frame(
             (T01, None, None, "010", "010", 100.0, None),
@@ -343,8 +346,10 @@ def test_a_packaged_three_digit_tables_codes_are_aligned_padded_or_not(
     # Arrange
     pack = load_packaged("mrl001-4.1.1")
     table = pack.tables[MRL001_TABLE]
-    assert "005" in table.row_codes and "010" in table.column_codes
-    assert row not in table.row_codes and column not in table.column_codes
+    assert "005" in table.row_codes
+    assert "010" in table.column_codes
+    assert row not in table.row_codes
+    assert column not in table.column_codes
     ret = packaged_return("MRL001", fact_frame((MRL001_TABLE, None, None, row, column, 1.0, None)))
 
     # Act
@@ -378,7 +383,9 @@ def test_the_key_column_of_a_packaged_three_digit_open_row_table_is_aligned() ->
     # Arrange
     pack = load_packaged("mrl003-4.1.1")
     table = pack.tables[MRL003_OPEN_ROW_TABLE]
-    assert table.open_rows and table.key_codes == ("999",) and "010" in table.column_codes
+    assert table.open_rows
+    assert table.key_codes == ("999",)
+    assert "010" in table.column_codes
     frame = pl.DataFrame(
         {
             "table": [MRL003_OPEN_ROW_TABLE, MRL003_OPEN_ROW_TABLE],

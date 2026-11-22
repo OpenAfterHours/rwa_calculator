@@ -532,9 +532,11 @@ def test_a_downgraded_rule_breaks_as_a_warning_and_keeps_what_the_formula_found(
     result = _reported(runs["designed"], "corpus_icmp_le")
 
     # Assert
-    assert result.deny is not None and result.deny.deny_type == DENY_DOWNGRADED
+    assert result.deny is not None
+    assert result.deny.deny_type == DENY_DOWNGRADED
     assert (result.status, result.severity) == (STATUS_FAIL, "WARNING")
-    assert result.formula is not None and result.formula.severity == "ERROR"
+    assert result.formula is not None
+    assert result.formula.severity == "ERROR"
 
 
 def test_a_deactivated_rule_leaves_the_trace_with_the_cell_only_it_read(
@@ -549,9 +551,11 @@ def test_a_deactivated_rule_leaves_the_trace_with_the_cell_only_it_read(
     result = _reported(run, "corpus_deactivated")
 
     # Assert
-    assert result.deny is not None and result.deny.deny_type == DENY_DEACTIVATED
+    assert result.deny is not None
+    assert result.deny.deny_type == DENY_DEACTIVATED
     assert (result.status, result.reason) == (STATUS_NOT_EVALUATED, REASON_DEACTIVATED_BY_PUBLISHER)
-    assert result.formula is not None and result.formula.evaluations == 1
+    assert result.formula is not None
+    assert result.formula.evaluations == 1
     assert "corpus_deactivated" in evaluations_by_rule(run.trace.evaluations)
     assert "corpus_deactivated" not in evaluations_by_rule(run.traced.evaluations)
     assert lone in run.trace.cells

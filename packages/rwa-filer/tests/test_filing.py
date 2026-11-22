@@ -368,7 +368,8 @@ def test_the_writer_called_on_its_own_still_refuses_what_a_build_would_stop(
     package = build_filing(broken, tmp_path / "out", pack=pack, rulebook=RULES)
 
     # Assert — the build stops it, and so does the writer anyone else calls.
-    assert package.blocked_by == BLOCKED_BY_STRUCTURE and not (tmp_path / "out").exists()
+    assert package.blocked_by == BLOCKED_BY_STRUCTURE
+    assert not (tmp_path / "out").exists()
     with pytest.raises(UnwritableReturnError, match="1 structure finding"):
         write_instance(broken, pack)
 

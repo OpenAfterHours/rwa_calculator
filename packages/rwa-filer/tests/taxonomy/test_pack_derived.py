@@ -91,8 +91,10 @@ def test_each_builder_keeps_its_own_value(tmp_path: Path) -> None:
     summary, count = pack.derived(_Summary), pack.derived(_table_count)
 
     # Assert
-    assert isinstance(summary, _Summary) and count == [len(pack.tables)]
-    assert pack.derived(_Summary) is summary and pack.derived(_table_count) is count
+    assert isinstance(summary, _Summary)
+    assert count == [len(pack.tables)]
+    assert pack.derived(_Summary) is summary
+    assert pack.derived(_table_count) is count
 
 
 def test_each_pack_keeps_its_own_value(tmp_path: Path) -> None:
@@ -106,7 +108,8 @@ def test_each_pack_keeps_its_own_value(tmp_path: Path) -> None:
     # Assert
     assert build.count == 2
     assert kept[0] is not kept[1]
-    assert (first.derived(build), second.derived(build)) == kept
+    again = first.derived(build), second.derived(build)
+    assert again == kept
 
 
 def test_a_builder_that_raises_keeps_nothing(tmp_path: Path) -> None:
@@ -126,7 +129,8 @@ def test_a_builder_that_raises_keeps_nothing(tmp_path: Path) -> None:
     second = pack.derived(build)
 
     # Assert
-    assert second == "built" and attempts == [0, 1]
+    assert second == "built"
+    assert attempts == [0, 1]
 
 
 def test_a_derived_value_lives_exactly_as_long_as_its_pack(tmp_path: Path) -> None:
@@ -185,7 +189,8 @@ def test_a_copied_or_unpickled_pack_starts_with_nothing_derived(
 
     # Assert
     assert build.count == 2
-    assert twin.datapoints == pack.datapoints and twin.cells.equals(pack.cells)
+    assert twin.datapoints == pack.datapoints
+    assert twin.cells.equals(pack.cells)
     assert set(vars(duplicate(pack))) == FIELD_NAMES
 
 
@@ -202,7 +207,8 @@ def test_a_pack_pickles_whatever_has_been_derived_from_it(tmp_path: Path) -> Non
 
     # Assert
     assert set(vars(twin)) == FIELD_NAMES
-    assert twin.datapoints == pack.datapoints and twin.tables == pack.tables
+    assert twin.datapoints == pack.datapoints
+    assert twin.tables == pack.tables
 
 
 def _lock(_pack: TaxonomyPack) -> Any:
@@ -271,6 +277,8 @@ def test_two_threads_that_build_at_once_are_handed_the_same_object(tmp_path: Pat
         thread.join(timeout=60)
 
     # Assert
-    assert len(built) == 2 and built[0] is not built[1], "the two builds did not overlap"
-    assert len(handed) == 2 and handed[0] is handed[1]
+    assert len(built) == 2, "the two builds did not overlap"
+    assert built[0] is not built[1], "the two builds did not overlap"
+    assert len(handed) == 2
+    assert handed[0] is handed[1]
     assert pack.derived(build) is handed[0]

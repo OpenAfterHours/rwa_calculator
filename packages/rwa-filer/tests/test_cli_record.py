@@ -141,7 +141,8 @@ def test_skipping_the_record_changes_neither_the_text_report_nor_the_record(
     printed = capsys.readouterr().out
 
     # Assert
-    assert text_alone.startswith("BLOCKED") and text_alone == text_with_report
+    assert text_alone.startswith("BLOCKED")
+    assert text_alone == text_with_report
     assert report.read_text(encoding="utf-8") == printed
     assert json.loads(printed)["summary"]["rule_findings"] > 0
 
@@ -175,7 +176,8 @@ def test_validate_with_evidence_fingerprints_the_facts_once(
     # Assert — all three were written (the path is live), from one fingerprint.
     printed = json.loads(capsys.readouterr().out)
     assert printed["identity"]["input"]["facts"] == 2
-    assert report.is_file() and evidence.is_file()
+    assert report.is_file()
+    assert evidence.is_file()
     assert len(fingerprints) == 1
 
 
@@ -201,7 +203,8 @@ def test_build_with_evidence_fingerprints_the_facts_once(
     # Assert — the manifest and the evidence file both carry the block, from one fingerprint.
     capsys.readouterr()
     assert code == EXIT_OK
-    assert (out / f"{BASE}.manifest.json").is_file() and evidence.is_file()
+    assert (out / f"{BASE}.manifest.json").is_file()
+    assert evidence.is_file()
     assert len(fingerprints) == 1
 
 
@@ -232,7 +235,8 @@ def test_the_identity_block_is_the_same_wherever_one_run_writes_it(
     printed = json.loads(capsys.readouterr().out)["identity"]
 
     # Assert
-    assert computed_alone["evidence_id"] and computed_alone["input"]["facts_sha256"]
+    assert computed_alone["evidence_id"]
+    assert computed_alone["input"]["facts_sha256"]
     assert printed == computed_alone
     assert json.loads(report.read_text(encoding="utf-8"))["identity"] == computed_alone
     assert read_evidence(evidence).header["identity"] == computed_alone

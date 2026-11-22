@@ -566,7 +566,8 @@ def test_choosing_a_release_chooses_or_refuses_exactly_as_resolving_it_does(
 
     # Assert — the expectation is written out, so the two cannot be wrong together.
     if isinstance(expected, str):
-        assert resolved[0] == "refused" and expected in resolved[1]
+        assert resolved[0] == "refused"
+        assert expected in resolved[1]
     else:
         assert resolved == expected
     assert checked == resolved

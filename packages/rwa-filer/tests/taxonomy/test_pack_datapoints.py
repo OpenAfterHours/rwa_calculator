@@ -114,7 +114,8 @@ def _frame(rows: list[tuple[Any, ...]]) -> pl.DataFrame:
 
 def test_the_comparison_covers_more_than_one_packaged_pack() -> None:
     """A parametrised test over an empty list passes by running nothing."""
-    assert PRA001_KEY in PACKAGED_KEYS and len(PACKAGED_KEYS) > 1
+    assert PRA001_KEY in PACKAGED_KEYS
+    assert len(PACKAGED_KEYS) > 1
 
 
 @pytest.mark.parametrize("key", PACKAGED_KEYS)

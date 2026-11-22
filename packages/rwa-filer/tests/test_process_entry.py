@@ -340,7 +340,8 @@ def test_the_console_script_is_declared_and_installed_as_the_process_entry() -> 
 def test_a_validate_through_the_entry_runs_no_garbage_collection(validated: Child) -> None:
     # Assert — the child ran this checkout's command line, and ran it to a verdict.
     assert validated.probe["package"] == rwa_filer.__file__
-    assert validated.probe["command_line_loaded"] and validated.out.startswith("BLOCKED")
+    assert validated.probe["command_line_loaded"]
+    assert validated.out.startswith("BLOCKED")
     # Not a young, a middle or a full collection, from loading the entry to the exit.
     assert validated.probe["collector_on"] is False
     assert validated.probe["collections"] == [0, 0, 0]
@@ -449,7 +450,8 @@ def test_a_workbook_written_through_the_entry_is_a_complete_archive(
     child, workbook = template
 
     # Assert — a zip with its central directory, every member's checksum good.
-    assert child.code == EXIT_OK and child.probe["frozen"] > 0
+    assert child.code == EXIT_OK
+    assert child.probe["frozen"] > 0
     assert f"{WORKBOOK_SHEETS} worksheet(s)" in child.out
     with zipfile.ZipFile(workbook) as archive:
         assert archive.testzip() is None
@@ -469,8 +471,10 @@ def test_the_module_run_as_a_script_goes_through_the_entry() -> None:
     child = _child(source, "--version")
 
     # Assert
-    assert child.code == 0 and child.out.startswith("rwa-filer ")
-    assert child.probe["collector_on"] is False and child.probe["frozen"] > 0
+    assert child.code == 0
+    assert child.out.startswith("rwa-filer ")
+    assert child.probe["collector_on"] is False
+    assert child.probe["frozen"] > 0
 
 
 # ---------------------------------------------------------------------------
@@ -489,8 +493,10 @@ def test_main_called_in_process_leaves_the_collector_as_it_found_it(
     code = main(["validate", str(_csv(tmp_path, BROKEN_CSV)), *HEADER_ARGS])
 
     # Assert — a test session, or a host, must never have its collector changed.
-    assert code == EXIT_FAILED and capsys.readouterr().out.startswith("BLOCKED")
-    assert (gc.isenabled(), gc.get_freeze_count(), gc.get_threshold()) == before
+    assert code == EXIT_FAILED
+    assert capsys.readouterr().out.startswith("BLOCKED")
+    after = (gc.isenabled(), gc.get_freeze_count(), gc.get_threshold())
+    assert after == before
 
 
 def test_main_called_by_a_host_with_its_collector_off_leaves_it_off(tmp_path: Path) -> None:
@@ -505,7 +511,8 @@ def test_main_called_by_a_host_with_its_collector_off_leaves_it_off(tmp_path: Pa
     # still off and its heap unfrozen.
     assert child.probe["code"] == EXIT_OK
     assert child.probe["collector_on_while_serving"] is False
-    assert child.probe["collector_on_after"] is False and child.probe["frozen"] == 0
+    assert child.probe["collector_on_after"] is False
+    assert child.probe["frozen"] == 0
 
 
 def test_a_workbook_read_for_a_host_with_its_collector_off_runs_no_collection(
@@ -521,9 +528,11 @@ def test_a_workbook_read_for_a_host_with_its_collector_off_runs_no_collection(
 
     # Assert — the workbook was read (a blank one is reported as holding no
     # facts), and the host's collector stayed off throughout.
-    assert child.probe["code"] == EXIT_FAILED and "[STR009]" in child.out
+    assert child.probe["code"] == EXIT_FAILED
+    assert "[STR009]" in child.out
     assert child.probe["collections"] == [0, 0, 0]
-    assert child.probe["collector_on_after"] is False and child.probe["frozen"] == 0
+    assert child.probe["collector_on_after"] is False
+    assert child.probe["frozen"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -682,7 +691,8 @@ def test_the_switch_keeps_the_collector_on_and_the_heap_unfrozen(tmp_path: Path)
 
     # Assert — this checkout's command line ran to a verdict, collecting all along.
     assert child.probe["package"] == rwa_filer.__file__
-    assert child.out.startswith("BLOCKED") and child.code == EXIT_FAILED
+    assert child.out.startswith("BLOCKED")
+    assert child.code == EXIT_FAILED
     assert child.probe["collector_on"] is True
     assert sum(child.probe["collections"]) > 0, _COUNTED_ANYWHERE
     assert child.probe["frozen"] == 0
@@ -696,7 +706,8 @@ def test_any_other_value_of_the_switch_keeps_the_policy(value: str, tmp_path: Pa
     )
 
     # Assert — exactly "on" switches the policy off; anything else is today's policy.
-    assert child.out.startswith("BLOCKED") and child.code == EXIT_FAILED
+    assert child.out.startswith("BLOCKED")
+    assert child.code == EXIT_FAILED
     assert child.probe["collector_on"] is False
     assert child.probe["collections"] == [0, 0, 0]
     assert child.probe["frozen"] > 100_000
@@ -722,7 +733,8 @@ def _geographical_table(path: Path, countries: int) -> Path:
     frames = []
     for table in OPEN_TABLES:
         axis = pack.tables[table].open_axis
-        assert axis is not None and len(axis.members) >= countries, table
+        assert axis is not None, table
+        assert len(axis.members) >= countries, table
         cells = pack.cells.filter(pl.col("table") == table).select("table", "row", "column")
         keys = pl.DataFrame({"open_key": axis.members[:countries]})
         frames.append(cells.join(keys, how="cross").with_columns(pl.lit(0.0).alias("value")))

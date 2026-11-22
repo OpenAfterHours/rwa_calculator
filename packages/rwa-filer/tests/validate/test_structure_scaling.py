@@ -163,7 +163,8 @@ def test_a_warm_check_does_the_same_frame_work_against_a_module_with_many_more_t
 ) -> None:
     # Arrange
     wide = build_wide_pack(tmp_path / "wide", copies=WIDE_COPIES)
-    assert len(wide.tables) >= 12 * len(pack.tables) and wide.cells.height >= 12 * pack.cells.height
+    assert len(wide.tables) >= 12 * len(pack.tables)
+    assert wide.cells.height >= 12 * pack.cells.height
     ret = stripped_return(SMALL_ROWS)
     place = PLACERS[placer]
     # Warm: whatever is kept per pack is built on the first call, and not measured.
@@ -176,5 +177,6 @@ def test_a_warm_check_does_the_same_frame_work_against_a_module_with_many_more_t
 
     # Assert
     joined = [rows for kind, rows in small if kind == "join"]
-    assert joined and max(joined) > 0, "no cell was joined: the gate measures nothing"
+    assert joined, "no cell was joined: the gate measures nothing"
+    assert max(joined) > 0, "no cell was joined: the gate measures nothing"
     assert large == small

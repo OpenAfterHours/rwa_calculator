@@ -125,7 +125,8 @@ def test_reading_a_rule_parses_each_of_its_cells_once(
         fresh for name in available_rulebooks() for fresh in _unread(name) if not fresh.truncated
     ]
     wheres = sum(1 for fresh in rules if fresh.where)
-    assert len(rules) > 3_000 and wheres > 0, "the packaged rule books are not what is counted"
+    assert len(rules) > 3_000, "the packaged rule books are not what is counted"
+    assert wheres > 0, "the packaged rule books are not what is counted"
 
     # Act — every part in the order given, then every part again.
     for fresh in rules:
@@ -158,7 +159,8 @@ def test_a_cold_engine_run_parses_each_cell_of_each_enforced_rule_once(
     for info in available_packs():
         pack = load_packaged(info.key)
         packaged = release_rulebook(info.version, info.module)
-        assert packaged is not None and packaged.file is not None
+        assert packaged is not None
+        assert packaged.file is not None
         rules = rulebook_from(_payload(packaged.file)).enforced(info.module)
         header = ReturnHeader(VALID_LEI, max(info.valid_from, date(2027, 3, 31)), info.module)
         empty = CanonicalReturn(
@@ -176,7 +178,8 @@ def test_a_cold_engine_run_parses_each_cell_of_each_enforced_rule_once(
 
     # Assert — every rule of every pack reached its evaluation, which reads all
     # four parts; and each cell went to the grammar once.
-    assert len(expected) > 10 and sum(pack["parse_scope"] for pack in expected.values()) > 2_000
+    assert len(expected) > 10
+    assert sum(pack["parse_scope"] for pack in expected.values()) > 2_000
     assert not unrun, unrun[:10]
     assert parsed == expected
 
@@ -200,7 +203,8 @@ def test_a_rules_parts_are_the_same_objects_in_whatever_order_they_are_read(
     again = {part: getattr(full, part) for part in reversed(order)}
 
     # Assert
-    assert first["parse_error"] is None and again["parse_error"] is None
+    assert first["parse_error"] is None
+    assert again["parse_error"] is None
     for part in PARSED:
         assert first[part], f"{part} is empty: one empty tuple is every empty tuple"
         assert again[part] is first[part], part
@@ -292,7 +296,8 @@ def test_a_rule_is_still_frozen_compared_by_its_fields_and_unhashable() -> None:
 def test_a_copy_with_another_cell_is_parsed_for_itself() -> None:
     # Arrange — a readable rule, read.
     full = _full_rule()
-    assert full.parse_error is None and full.tree
+    assert full.parse_error is None
+    assert full.tree
 
     # Act — the same rule with another expression, and with one that cannot be read.
     reworded = replace(full, expression=f"{ref(T02, '0020', '0010')} != 0")
@@ -347,7 +352,8 @@ def test_the_first_cell_that_cannot_be_read_is_the_one_reported(
     reason = broken.parse_error
 
     # Assert — and a part before the broken one is still there to be read.
-    assert reason is not None and reason.startswith(reported), reason
+    assert reason is not None, reason
+    assert reason.startswith(reported), reason
     if "expression" not in cells:
         assert broken.tree == _full_rule().tree
 

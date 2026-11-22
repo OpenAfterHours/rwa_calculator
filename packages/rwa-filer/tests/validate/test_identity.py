@@ -82,7 +82,10 @@ def test_the_facts_digest_of_awkward_numbers_and_text_is_pinned() -> None:
     ]
     ret = build_return(pl.DataFrame(rows, schema={**SCHEMA, "decimals": pl.Int32}, orient="row"))
     values = ret.facts["value"].drop_nulls().to_list()
-    assert values == [1e-05, 1e22, 0.0, 0.1] and math.copysign(1.0, values[2]) == -1.0, (
+    assert values == [1e-05, 1e22, 0.0, 0.1], (
+        "the return must still hold the awkward numbers, the sign of -0.0 included"
+    )
+    assert math.copysign(1.0, values[2]) == -1.0, (
         "the return must still hold the awkward numbers, the sign of -0.0 included"
     )
     assert "one\x01two" in ret.facts["text_value"].to_list(), "the control character must survive"

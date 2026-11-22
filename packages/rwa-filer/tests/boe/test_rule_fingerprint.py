@@ -92,7 +92,8 @@ def test_every_packaged_fingerprint_is_the_banked_one() -> None:
         for rule_id in now["sample"][name]
         if now["sample"][name][rule_id] != banked["sample"][name].get(rule_id)
     )
-    assert not moved and not named, f"fingerprints moved in {moved}; sampled rules: {named[:20]}"
+    assert not moved, f"fingerprints moved in {moved}"
+    assert not named, f"sampled rules whose fingerprints moved: {named[:20]}"
 
 
 # =============================================================================
@@ -121,7 +122,8 @@ def test_a_fingerprint_asked_for_again_is_what_a_rule_with_nothing_kept_works_ou
 
     # Assert — the corpus can see a wrong key: it holds rules whose fingerprint
     # differs from one module asked to the next.
-    assert asked > 5_000 and module_dependent > 500, (asked, module_dependent)
+    assert asked > 5_000, (asked, module_dependent)
+    assert module_dependent > 500, (asked, module_dependent)
     assert not stale, stale[:20]
 
 
@@ -192,7 +194,8 @@ def test_a_fingerprint_is_digested_once_for_each_severity_however_often_asked(
         return real(content)
 
     monkeypatch.setattr(catalogue, "canonical_sha256", counting)
-    assert rules > 3_000 and rules < severities < len(asks), (rules, severities, len(asks))
+    assert rules > 3_000, (rules, severities, len(asks))
+    assert rules < severities < len(asks), (rules, severities, len(asks))
 
     # Act — three reports' worth.
     taken = []

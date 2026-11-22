@@ -268,7 +268,8 @@ def test_equal_tables_stay_equal_whatever_each_has_kept(tmp_path: Path) -> None:
 
     # Assert
     assert table == untouched
-    assert (repr(table), hash(table)) == before
+    after = (repr(table), hash(table))
+    assert after == before
 
 
 # ---------------------------------------------------------------------------
@@ -318,5 +319,6 @@ def test_a_code_lookup_matches_against_one_kept_tuple(
 
     # Assert
     assert answers == {written}
-    assert len(handed) == 100 and all(handed), "the lookups did not reach the matcher with codes"
+    assert len(handed) == 100, "the lookups did not reach the matcher with codes"
+    assert all(handed), "the lookups did not reach the matcher with codes"
     assert len({id(codes) for codes in handed}) == 1

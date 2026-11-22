@@ -125,7 +125,8 @@ def test_structure_findings_are_told_when_the_check_returns_before_the_rules(
     # Assert — the return is malformed, and its rules ran all the same.
     structure = validation.structure
     assert len(structure) > 1, "one finding cannot show that the count is the count"
-    assert validation.report is not None and validation.report.rules_executed > 0
+    assert validation.report is not None
+    assert validation.report.rules_executed > 0
     version = malformed.release.version
     assert heard[0] == Progress(PHASE_STRUCTURE, subject=version)
     assert (heard[1].phase, heard[1].subject) == (PHASE_STRUCTURE, version)

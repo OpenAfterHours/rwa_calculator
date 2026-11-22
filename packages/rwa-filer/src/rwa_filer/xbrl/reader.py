@@ -729,7 +729,7 @@ class _DataPointIndex:
             for supplied in combinations(candidates, size):
                 if not typed.issubset(supplied):
                     continue
-                found = bucket.get(tuple([pair for pair in pairs if pair[0] not in supplied]))
+                found = bucket.get(tuple(pair for pair in pairs if pair[0] not in supplied))
                 if found is None:
                     continue
                 for number in (found,) if isinstance(found, int) else found:
@@ -776,7 +776,7 @@ def _index_of(pack: TaxonomyPack) -> _DataPointIndex:
         left_open = [pair for pair in pairs if pair[1].startswith("*")]
         if left_open:
             opened[number] = tuple(left_open)
-            pairs = tuple([pair for pair in pairs if not pair[1].startswith("*")])
+            pairs = tuple(pair for pair in pairs if not pair[1].startswith("*"))
         # In order and each once already, as every packaged pack lists them:
         # then the pack's own tuple is the key, and nothing is allocated.
         if not all(map(lt, pairs, pairs[1:])):

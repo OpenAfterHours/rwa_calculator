@@ -796,4 +796,4 @@ def _shared_pairs(
         .sort("_at")
     )
     values = list(zip(distinct["dimensions"].to_list(), distinct["members"].to_list(), strict=True))
-    return tuple([values[number] for number in numbered["_pair"].to_list()]), sizes
+    return tuple(values[number] for number in numbered["_pair"].to_list()), sizes

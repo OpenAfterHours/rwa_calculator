@@ -626,8 +626,7 @@ class _Links:
         for cell in cells:
             alike[(self.context.delta(cell), self.context.allowance(cell))].append(cell)
         if not all(
-            math.isfinite(delta) and math.isfinite(allowance) and allowance >= 0
-            for delta, allowance in alike
+            math.isfinite(key[0]) and math.isfinite(key[1]) and key[1] >= 0 for key in alike
         ):
             # Infinity and not-a-number do not order, and a negative allowance does
             # not link a cell to its own double: nothing above holds.
@@ -657,7 +656,9 @@ class _Links:
             while (
                 low < len(second)
                 and second[low][0] < delta
-                and not abs(delta - second[low][0]) <= reach
+                # Finite on both sides (non-finite groups were linked pair by
+                # pair above), so "more than reach" is "not within reach".
+                and abs(delta - second[low][0]) > reach
             ):
                 low += 1
             joined = high

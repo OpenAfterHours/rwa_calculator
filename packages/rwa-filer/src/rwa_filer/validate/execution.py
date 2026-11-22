@@ -113,15 +113,17 @@ def trace_as_run(trace: RuleTrace, results: tuple[RuleResult, ...]) -> RuleTrace
         if result.reason == REASON_DEACTIVATED_BY_PUBLISHER and result.formula is not None
     }
     if not switched_off:
-        return replace(trace, results=results)
+        same: RuleTrace = replace(trace, results=results)
+        return same
     kept = tuple(item for item in trace.evaluations if item.rule_id not in switched_off)
     read = {address for evaluation in kept for address in evaluation.cells}
-    return replace(
+    narrowed: RuleTrace = replace(
         trace,
         results=results,
         evaluations=kept,
         cells={address: fact for address, fact in trace.cells.items() if address in read},
     )
+    return narrowed
 
 
 def published_finding(result: RuleResult) -> str:

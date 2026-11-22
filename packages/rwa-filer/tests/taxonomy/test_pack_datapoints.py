@@ -207,7 +207,12 @@ def test_a_polars_whose_explode_has_no_empty_list_argument_gives_the_same_shared
         if options:
             refused.extend(options)
             raise TypeError(f"explode() got an unexpected keyword argument {next(iter(options))!r}")
-        return explode(table, *columns, empty_as_null=True)
+        try:
+            return explode(table, *columns, empty_as_null=True)
+        except TypeError:
+            # The installed Polars is itself one that predates the argument,
+            # and its explode already behaves as the stand-in means to.
+            return explode(table, *columns)
 
     monkeypatch.setattr(pl.DataFrame, "explode", as_it_was)
 

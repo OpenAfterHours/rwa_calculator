@@ -214,6 +214,40 @@ jobs:
           sys.exit(1 if problems else 0)
           PY
 
+  # rwa-filer declares the lowest Polars it supports, and a user who installs
+  # the wheel alone may get exactly that version. Every other job runs on the
+  # locked Polars, so a call that needs a newer one passes there and fails only
+  # for that user: `polars>=1.0.0` was declared for months while the structure
+  # check called a `join` argument that arrived in 1.24. The floor is read from
+  # the member's own pyproject, so raising it cannot leave this job behind.
+  rwa-filer-polars-floor:
+    name: rwa-filer (Polars floor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install rwa-filer with the lowest Polars it declares
+        run: |
+          floor=$(python3 - <<'PY'
+          import re, tomllib
+          with open("packages/rwa-filer/pyproject.toml", "rb") as handle:
+              dependencies = tomllib.load(handle)["project"]["dependencies"]
+          (floor,) = [m.group(1) for d in dependencies if (m := re.fullmatch(r"polars>=([0-9.]+)", d))]
+          print(floor)
+          PY
+          )
+          echo "Declared Polars floor: $floor"
+          uv venv /tmp/polars-floor --python 3.13
+          uv pip install --python /tmp/polars-floor/bin/python \
+            "polars==$floor" ./packages/rwa-filer pytest pytest-xdist openpyxl httpx jsonschema
+
+      - name: Run rwa-filer tests at the floor
+        working-directory: packages/rwa-filer
+        run: /tmp/polars-floor/bin/python -m pytest tests -q -n auto --dist=loadfile
+
   wheel-install:
     name: Wheel Install (clean environment)
     runs-on: ubuntu-latest

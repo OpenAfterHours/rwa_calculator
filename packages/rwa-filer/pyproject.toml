@@ -28,7 +28,7 @@ classifiers = [
 # any `rwa_calc` import under src/rwa_filer, and CI runs these tests in an
 # environment that holds this package alone.
 dependencies = [
-    "polars>=1.0.0",
+    "polars>=1.24.0",
     # `rwa-filer dash`, the local web dashboard. Required rather than an extra so
     # that `uvx rwa-filer dash` works as typed: an extra would need
     # `uvx --from 'rwa-filer[dash]' rwa-filer dash`. A small, pure-Python stack —

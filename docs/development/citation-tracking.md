@@ -86,6 +86,17 @@ uv run python scripts/generate_citation_matrix.py
 
 The script invokes `uv run watchfire matrix --format json` once per indexed instrument (CRR, PS1/26), uses Python's `ast` module to resolve each citation site's full function range, and writes article-grouped Markdown with `??? quote` collapsibles and `--8<-- "path:start:end"` snippet directives. Wire it into CI on push-to-master if you want the published site to track every commit. If a citation site can't be resolved to a function definition (renamed function, refactored file), the script falls back to a fixed line window and emits a "Generator warnings" section at the bottom of the page so the issue is visible rather than silent.
 
+## Article index (regulation-text skill)
+
+`scripts/regulation_text.py index` joins every `@cites` decorator (all stacked
+decorators, read with `ast`, so the PS1/26 half of a dual citation is kept) and
+every pack `Citation` to the article it names, and writes one row per article to
+`.claude/skills/regulation-text/index/{b31,crr,other}.csv`, alongside the
+heading, CRR correspondence and note markers from watchfire's bundled snapshot.
+`tests/contracts/test_regulation_text.py` fails while the index is stale, so
+regenerate it after adding or changing a citation. `show` on an article prints
+that row and the article's text (see the skill's `SKILL.md`).
+
 ## Regression test
 
 `tests/contracts/test_watchfire_coverage.py` pins the inventory: each whitelisted function is asserted to carry the expected canonical citation tuple. Adding a new `@cites(...)` decorator means adding a row to that test's `WHITELIST`. Removing a decorator means removing the matching row. The test guards against accidental decorator deletion during refactors — the failure surfaces as a named parameterised assertion rather than a silent matrix shrink.

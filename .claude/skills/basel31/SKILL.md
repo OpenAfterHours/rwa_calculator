@@ -32,8 +32,9 @@ So, when you need a number:
 2. **Or grep the pack directly**: `rg 'b31_corporate_risk_weights' src/rwa_calc/rulebook/packs/`.
 3. **Or read the whole rendered pack**: `docs/data-model/regulatory-tables.md`.
 
-Do **not** try to extract values from the source PDFs for routine lookups. Most agents
-cannot read `docs/assets/*.pdf` at all, and PS1/26 renumbers articles — the
+Do **not** try to extract values from the source PDFs for routine lookups. When you
+need what an article *says* (not a value), use the `regulation-text` skill
+(`uv run python scripts/regulation_text.py show "PS1/26 124F"`). PS1/26 renumbers articles — the
 `[Note: corresponds to Article NNN]` line, not the printed number, tells you which CRR
 article a PS1/26 article maps to. Use the PDFs to *audit* a pack value you have reason to
 doubt, and when you do, fix the **pack**.

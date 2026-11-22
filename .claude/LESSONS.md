@@ -83,12 +83,20 @@ anyone.** The C3 oracle build sourced all 123 of its regulatory constants from
 article text this way and found two real engine defects that the skill
 transcriptions would not have settled.
 
-**Detect.** Extract the text yourself:
+**Detect.** Get the article with the `regulation-text` skill, which downloads and
+converts the PDF on first use (also in a cloud session) and says plainly when it
+can only offer its labelled snapshot:
+
+```bash
+uv run python scripts/regulation_text.py show "CRR 121"     # or "PS1/26 124F"
+```
+
+Or extract the text yourself:
 
 ```bash
 uv run python -c "
 import fitz  # pymupdf is installed; pypdf is not
-doc = fitz.open(r'C:\Users\philm\PycharmProjects\rwa_calculator\docs\assets\crr.pdf')
+doc = fitz.open('docs/assets/crr.pdf')
 print(doc[119].get_text())          # CRR Art. 121 + Table 5
 "
 ```
@@ -96,7 +104,8 @@ print(doc[119].get_text())          # CRR Art. 121 + Table 5
 Two mechanics that otherwise waste a cycle:
 
 - `docs/assets/` is **gitignored**, so the PDFs are absent from every git
-  worktree. Use an ABSOLUTE path into the main checkout.
+  worktree. Use an absolute path into the main checkout (`regulation_text.py`
+  finds the main checkout's copy, and shares one converted cache, by itself).
 - Search for the article rather than guessing the page: iterate
   `doc[i].get_text()` looking for `"Article 121"`, then read the `[Note:
   corresponds to Article NNN]` line (see A3) rather than the heading number.

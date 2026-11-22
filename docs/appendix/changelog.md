@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - (Next release changes will go here)
+- **`regulation-text` skill: an article's text on demand, and the code that
+  implements it.** `uv run python scripts/regulation_text.py show "PS1/26 124F"`
+  (or `"CRR 501a"`) prints a committed index entry (heading, the CRR article it
+  corresponds to, "Provision left blank" / "not in PRA Rulebook" markers, the
+  `@cites` functions and rulepack entries that cite it), then the article's text:
+  cut from the official PDF, which is downloaded and converted on first use into a
+  git-ignored cache, or, when the regulator hosts are blocked, watchfire's labelled
+  snapshot. The index (`.claude/skills/regulation-text/index/`) is generated from
+  the code and gated by `tests/contracts/test_regulation_text.py`; the Basel 3.1
+  text itself is never committed.
 - **New error and warning codes from the product review** (errors are marked;
   the rest are warnings): `HIE004` uncommitted facility declaring a risk type
   other than LR (priced LR); `HIE005` drawing or sub-limit that cannot be

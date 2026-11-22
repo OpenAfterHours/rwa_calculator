@@ -27,7 +27,8 @@ When you need a number:
 3. **Or read the whole rendered pack**: `docs/data-model/regulatory-tables.md`.
 
 Use `docs/assets/crr.pdf` to *audit* a pack value you have reason to doubt — not for
-routine lookup. If the PDF and the pack disagree, the fix goes in the **pack**.
+routine lookup. To read one article, use the `regulation-text` skill
+(`uv run python scripts/regulation_text.py show "CRR 501a"`). If the PDF and the pack disagree, the fix goes in the **pack**.
 
 ## Quick Navigation
 

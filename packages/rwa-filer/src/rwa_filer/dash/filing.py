@@ -275,6 +275,7 @@ def build_package(
         adjustments=applied,
         source=opened.validation.source,
         progress=progress,
+        detail=opened.reading.detail,
     )
     ledger = None
     if package.written and author is not None and package.instance_path is not None:

@@ -350,6 +350,74 @@ that is unique within the table and sheet, and each row also carries a fact in
 every key column (for example the obligor grade in column `0005` of
 `OF08.02.01.01`). The key is what the row's figures are reported under.
 
+### A fact table with several rows per cell
+
+A firm's figures rarely arrive one row per cell. They come from several
+systems and business units, with journals on top. Give `validate` or `build`
+the columns that say where each row came from, and the fact table is read as a
+detail: the rows of a cell are added together, and the sum is the figure
+validated and filed.
+
+```csv
+table,sheet,row,column,value,business_unit,source,line_id
+OF07.00.01.01,0008,0070,0200,33090000,Asset Finance,LEASING-SYS,LS-00412
+OF07.00.01.01,0008,0070,0200,12770000,Asset Finance,LEASING-SYS,LS-00413
+OF07.00.01.01,0008,0070,0200,3500000,Commercial Banking,JNL-2027-0412,JN-0412-07
+```
+
+```bash
+uvx rwa-filer@latest validate detail.csv --breakdown business_unit,source --line-ref line_id \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+```
+
+After the usual report, each broken rule is traced to the members that break it
+on their own figures — the rule run again on each member's rows alone:
+
+```text
+Where the breaks come from, by business_unit: 18 of 18 broken evaluation(s) break on one business_unit's figures alone (6 member(s), 87 rule(s) run again).
+  boe_b0471 (Error), 4 break(s)
+    This represents the calculation of end exposure value post CRM post off-Balance sheet conversion factors
+    Asset Finance breaks all 4, out by +6,000,000
+  ...
+Hold in the return, break on one business_unit's figures alone: 12 evaluation(s).
+  boe_b0708 (Error), 4 place(s)
+    Corporate & Institutional breaks all 4, out by +250,000
+    Private Banking breaks all 4, out by -250,000
+```
+
+The second list is what a total hides: a rule the return meets that a member's
+own figures break, usually two figures wrong in opposite directions. Only rules
+over amounts are searched. `--format json` and `--report` carry the same under
+`breakdown`; the dashboard's Investigate page lays it out
+([The dashboard](dash.md)).
+
+What is read, and what is refused:
+
+- **Breakdown columns** are matched ignoring case and surrounding spaces. A row
+  that leaves one empty is a member of its own, named `no <column>`. A fact
+  column (`table`, `row`, ...) cannot be one.
+- **Only amounts are added.** Several rows for a cell whose data type is not
+  monetary — a percentage, a count, a date, an enumeration, text — stop the
+  file and name the cells. Give such a cell one row.
+- **A line reference** (`--line-ref`) is the identifier each line has in its own
+  system: a loan, a lease, a journal line. One loan feeds many cells, so a
+  reference appears once in each cell it feeds. The same reference twice in one
+  cell is the same line counted twice, and stops the file, naming the cells and
+  the file's lines. With `--on-repeat keep-one`, a repeat that agrees with the
+  earlier row on everything is dropped instead (the count is reported), and one
+  that differs still stops the file. The check matters because no published
+  rule catches a whole extract loaded twice: every total doubles with its parts.
+- **Without a line reference** every row counts: two rows that agree on
+  everything are two amounts, and both are added.
+- **Asked for nothing**, a fact table is read exactly as before: one row per
+  cell, and a cell given twice is structure finding `STR005`.
+
+Breakdown columns are read from a fact table (`.parquet` or `.csv`) only. A
+workbook or an XBRL instance carries only the summed figures. `build` takes the
+same options, and the manifest records the detail file, its columns and how
+many rows made the return under `detail`; a manifest built without one has no
+`detail` entry.
+
 ### The workbook
 
 `rwa-filer template` writes a blank workbook for a module: one worksheet per
@@ -1152,6 +1220,11 @@ and the register is empty.
 ```bash
 # The dashboard in a browser, with a return opened in it (see the dashboard guide)
 uvx rwa-filer@latest dash return.xbrl
+
+# A fact table of several rows per cell: summed, then each break traced to the
+# business units and sources that make it
+uvx rwa-filer@latest validate detail.csv --breakdown business_unit,source --line-ref line_id \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 
 # A return beside the one your current system produces, and why they differ
 uvx rwa-filer@latest compare current-system.xbrl rwa-filer.xbrl

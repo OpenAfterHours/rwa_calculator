@@ -49,6 +49,17 @@ The form also names the taxonomy release to validate against; left at its
 default, it is the release live for the return's module. Returns you open stay
 listed until the dashboard is stopped.
 
+Under **Break it down (optional)**, a fact table can be opened as a detail:
+several rows per cell, each saying in its own columns where it came from — a
+business unit, a source system, a journal. Name those columns, and optionally
+the column holding each line's own reference (see
+[A fact table with several rows per cell](index.md#a-fact-table-with-several-rows-per-cell)).
+The rows of a cell are added together, and the sum is the figure validated and
+filed; the rows are kept, so the Templates and Investigate pages can split any
+figure by those columns. A file opened without them can be broken down later
+from its Overview or Investigate page, which list the columns the file has that
+were not read.
+
 **While a return is validated.** A small return opens straight onto its
 overview. If the work is still going after a second, which a full PRA001 return
 always is, a progress page replaces the frozen form. It shows each step
@@ -140,6 +151,36 @@ a rule is open, and a rule opened on one cell stays open as you pick others in
 the same browser tab. **Show only this rule's cells** greys out every other
 rule's marks; **Open on the Rules page** shows the rule with its first breaks
 and how many there are in all.
+
+For a return opened with breakdown columns, the panel also says **where this
+figure comes from**: the picked cell split by one of the columns (a switch
+moves between them), each member's amount and share. A member that breaks,
+on its own figures, a broken rule reading the cell is marked in amber; a
+figure an override has changed shows the change as *Not in the detail*. Each
+broken rule reading the cell then says **who breaks it**: the rule run again
+on each member's rows alone, every member's two sides of the comparison beside
+the return's, and one sentence saying where the gap is — "All of the 100,000 is
+in Asset Finance. The other 3 business_unit members meet the rule on their own
+figures."
+
+**Investigate.** For a return opened with breakdown columns: every broken rule
+against the members of one column, each run again on that member's rows alone.
+The table has one row per broken rule and one column per member that breaks
+something, with how many of the rule's breaks the member is in and by how much,
+beside the return's own gap. Members' gaps add up to the return's for a rule
+that is a sum or a difference; where they do not (an override drafted on a
+summed figure, a rule that is not a plain sum), the remainder is shown as in no
+member, never spread over them. Below it, **Hold in the return, break inside a
+member** lists the evaluations a total hides: a rule the return meets that a
+member's own figures break, usually two figures wrong in opposite directions.
+Only rules over amounts are searched, as a percentage or a count cannot be
+judged on part of the rows. Picking a member shows the rules it breaks, each
+with a link to the cell on the template grid, a note to copy and send to
+whoever owns the member's figures, and its figures as CSV. The first time a
+column is asked for, the rules are run on every member behind the progress
+page; the result is kept until the drafted overrides change. A return opened
+without breakdown columns shows the columns its file has and opens it again
+with the ones you pick.
 
 **Build & sign off.** The same three acts as `rwa-filer build`, `signoff` and
 `verify`, recording the same things:

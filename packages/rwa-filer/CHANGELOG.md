@@ -7,7 +7,30 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **Breakdown columns: trace each broken rule to the business unit, source
+  system or journal that makes it.** A fact table can now give several rows per
+  cell, each saying in its own columns where it came from. `rwa-filer validate`
+  and `build` take `--breakdown COLUMNS`: the rows of a cell are added together
+  into the figure that is validated and filed, and kept beside the return
+  (`rwa_filer.readers.detail`; `open_source(..., detail=DetailSpec(...))`).
+  `rwa_filer.workflow.attribution.attribute` runs each broken rule again on
+  every member's rows alone and sets each member's figures beside the return's,
+  so a break traces to the members that break it on their own figures. The
+  members' gaps add up to the return's for a rule that is a sum or a
+  difference, and what they do not account for is shown on its own. It also
+  finds the breaks a total hides: a rule the return meets that a member's own
+  figures break, over amounts only. `--line-ref COLUMN` names each line's own
+  reference: one given twice in a cell is a line counted twice, which stops the
+  file, or with `--on-repeat keep-one` is dropped where the rows agree. Several
+  rows for a cell that is not an amount (a percentage, a count, text) stop the
+  file. The manifest records the detail under `detail`. In the dashboard, the
+  Open form takes the same options, the template grid's cell panel splits the
+  picked cell by member and says who breaks each rule reading it, and a new
+  **Investigate** page sets every broken rule against the members, lists the
+  breaks the total hides, and drafts a note to send for each member. A return
+  opened without breakdown columns can be broken down by the columns its file
+  carries. Asked for nothing, a fact table is read exactly as before, and every
+  existing output is unchanged.
 
 ### Changed
 - (Next release changes will go here)

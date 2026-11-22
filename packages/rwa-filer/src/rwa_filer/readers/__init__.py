@@ -5,6 +5,8 @@ Pipeline position:
     file (.parquet / .csv / .xlsx)  ->  read_return  ->  CanonicalReturn
     any supported file  ->  open_source  ->  SourceReading (return + its release)
         ->  validate.validate_return
+    detail file (.parquet / .csv) + DetailSpec  ->  open_source
+        ->  SourceReading (the summed return + the rows it was summed from)
 
 Key responsibilities:
 - Read each supported file format into the one canonical shape
@@ -17,11 +19,15 @@ Key responsibilities:
 - Never lose a fact silently. A cell a reader cannot make sense of is kept, as
   text, so the structure check reports it — a reader that dropped it would turn
   a filer's typo into an unreported figure.
+- Read a fact table as a detail when asked (``detail.DetailSpec``): several rows
+  per cell, summed, with the columns that say where each row came from kept
+  beside the return. Asked for nothing, a fact table is read exactly as before.
 
 Module map:
 - ``tabular`` — long-format fact tables: Parquet and CSV
 - ``excel``   — the workbook layout (one worksheet per table and sheet), and
                 the blank-template writer that produces it
+- ``detail``  — a fact table of several rows per cell, summed into the return
 
 References:
 - rwa_filer.model — the canonical fact schema
@@ -34,6 +40,15 @@ from typing import TYPE_CHECKING
 
 from rwa_filer.model import LEI_SCHEME, ReturnHeader
 from rwa_filer.progress import PHASE_READING, Progress, notify
+from rwa_filer.readers.detail import (
+    DETAIL_SUFFIXES,
+    DetailSpec,
+    ReturnDetail,
+    check_amounts,
+    read_detail,
+    require_fact_table,
+    unread_columns,
+)
 from rwa_filer.readers.tabular import read_csv, read_parquet
 from rwa_filer.release import resolve_release
 
@@ -50,7 +65,9 @@ if TYPE_CHECKING:
 __all__ = [
     "INSTANCE_SUFFIXES",
     "SUPPORTED_SUFFIXES",
+    "DetailSpec",
     "HeaderFields",
+    "ReturnDetail",
     "SourceReading",
     "carries_header",
     "load_source",
@@ -80,11 +97,18 @@ class SourceReading:
         findings: What the source holds that could not be read as part of the
             module. Empty for a fact table or workbook, whose every cell is
             checked by the structure checks instead.
+        detail: The rows the return was summed from, when the file was read
+            as a detail (``open_source(..., detail=...)``); ``None`` otherwise.
+        unread_columns: A fact table's columns that reading it as a return
+            left out, as the file names them — the columns it could be broken
+            down by. Empty for any other file, and for one read as a detail.
     """
 
     ret: CanonicalReturn
     release: Release | None = None
     findings: tuple[Finding, ...] = ()
+    detail: ReturnDetail | None = None
+    unread_columns: tuple[str, ...] = ()
 
     @property
     def pack(self) -> TaxonomyPack | None:
@@ -120,6 +144,7 @@ def open_source(
     taxonomy: str | None = None,
     today: date | None = None,
     progress: ProgressCallback | None = None,
+    detail: DetailSpec | None = None,
 ) -> SourceReading:
     """Read a file a person named, as ``rwa-filer validate`` and the dashboard do.
 
@@ -135,10 +160,17 @@ def open_source(
         today: The run date the default release is worked out for.
         progress: Told when the reading starts (``rwa_filer.progress``): a
             large workbook or instance takes seconds to read.
+        detail: Read a fact table as a detail: its rows summed into cells, the
+            breakdown columns and line reference it names kept beside the
+            return (``readers.detail``). ``None``, or a spec that names no
+            column, reads the file as before.
 
     Raises:
         ValueError: the file is missing, of an unsupported type, lacks a header
-            it needs, or is not readable as what its suffix says it is.
+            it needs, or is not readable as what its suffix says it is; or a
+            detail is asked of a file that is not a fact table, names a column
+            the file does not have, or holds rows that cannot be summed
+            (``readers.detail.DetailError``, a ``ValueError``).
         ReleaseNotFoundError: the release could not be resolved for the
             return's module.
     """
@@ -150,9 +182,18 @@ def open_source(
         accepted = ", ".join((*SUPPORTED_SUFFIXES, *INSTANCE_SUFFIXES))
         raise ValueError(f"unsupported file type {path.suffix!r}; expected one of {accepted}")
     notify(progress, Progress(PHASE_READING, subject=path.name))
-    source = load_source(
-        path, _header(fields, required=not carries_header(path)), taxonomy=taxonomy, today=today
-    )
+    if detail is not None and detail.active:
+        require_fact_table(path)
+        header = _header(fields, required=True)
+        assert header is not None  # noqa: S101 - required=True raises rather than return None
+        ret, rows = read_detail(path, header, detail)
+        source = SourceReading(ret=ret, detail=rows)
+    else:
+        source = load_source(
+            path, _header(fields, required=not carries_header(path)), taxonomy=taxonomy, today=today
+        )
+        if suffix in DETAIL_SUFFIXES:
+            source = replace(source, unread_columns=unread_columns(path))
     overrides = {
         "entity_identifier": fields.entity,
         "reference_date": fields.reference_date,
@@ -164,10 +205,13 @@ def open_source(
     if changed:
         ret = source.ret
         source = replace(source, ret=replace(ret, header=replace(ret.header, **changed)))
-    if source.release is not None:
-        return source
-    release = resolve_release(source.ret.header.module, taxonomy, today=today)
-    return replace(source, release=release)
+    if source.release is None:
+        source = replace(
+            source, release=resolve_release(source.ret.header.module, taxonomy, today=today)
+        )
+    if source.detail is not None and source.pack is not None:
+        check_amounts(source.detail, source.pack)
+    return source
 
 
 def load_source(

@@ -8,7 +8,9 @@ row order, the file the facts came in) moves nothing.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 from datetime import date
 from pathlib import Path
 
@@ -57,6 +59,54 @@ def test_the_facts_digest_ignores_row_order_and_follows_every_value() -> None:
     # Assert
     assert forward == backward
     assert forward != changed
+
+
+def test_the_facts_digest_of_awkward_numbers_and_text_is_pinned() -> None:
+    """The digest feeds every ``evidence_id``: one byte written differently moves them all.
+
+    The expected hex is the digest of exactly the lines written out below, as
+    the package wrote them when this test was added: each number as Python's
+    ``json`` writes a float (``1e-05``, ``1e+22``, ``-0.0``), each text as JSON
+    escapes it, non-ASCII text as UTF-8 and not as ``\\u`` escapes.
+    """
+    # Arrange
+    rows = [
+        (T01, None, None, "0010", "0010", 1e-05, None, 2),
+        (T01, None, None, "0010", "0020", 1e22, None, None),
+        (T01, None, None, "0020", "0010", -0.0, None, 0),
+        (T01, None, None, "0020", "0020", 0.1, None, None),
+        (T01, None, None, "0010", "0030", None, 'a "quoted" word', None),
+        (T01, None, None, "0020", "0030", None, "C:\\data\\return", None),
+        (T01, None, None, "0030", "0030", None, "one\x01two", None),
+        (T01, None, None, "0030", "0010", None, "Zürich – 東京", None),
+    ]
+    ret = build_return(pl.DataFrame(rows, schema={**SCHEMA, "decimals": pl.Int32}, orient="row"))
+    values = ret.facts["value"].drop_nulls().to_list()
+    assert values == [1e-05, 1e22, 0.0, 0.1] and math.copysign(1.0, values[2]) == -1.0, (
+        "the return must still hold the awkward numbers, the sign of -0.0 included"
+    )
+    assert "one\x01two" in ret.facts["text_value"].to_list(), "the control character must survive"
+    lines = [
+        '{"header":{"Currency":"GBP","Entity identifier":"5493001KJTIIGC8Y1R12",'
+        '"Entity identifier scheme":"http://standards.iso.org/iso/17442","Module":"TST001",'
+        '"Reference date":"2027-03-31"},"indicators":null}',
+        '["T01.00.01.01",null,null,"0010","0010",1e-05,null,2]',
+        '["T01.00.01.01",null,null,"0010","0020",1e+22,null,null]',
+        '["T01.00.01.01",null,null,"0010","0030",null,"a \\"quoted\\" word",null]',
+        '["T01.00.01.01",null,null,"0020","0010",-0.0,null,0]',
+        '["T01.00.01.01",null,null,"0020","0020",0.1,null,null]',
+        '["T01.00.01.01",null,null,"0020","0030",null,"C:\\\\data\\\\return",null]',
+        '["T01.00.01.01",null,null,"0030","0010",null,"Zürich – 東京",null]',
+        '["T01.00.01.01",null,null,"0030","0030",null,"one\\u0001two",null]',
+    ]
+    expected = "040f6c62e08cbce19f6128ff8f553cb9929e6e31fac97315e538c4cc82037bc0"
+    assert hashlib.sha256("".join(f"{line}\n" for line in lines).encode()).hexdigest() == expected
+
+    # Act
+    digest = facts_sha256(ret)
+
+    # Assert
+    assert digest == expected
 
 
 def test_the_evidence_id_follows_the_accuracy_but_not_the_source_file(tmp_path: Path) -> None:

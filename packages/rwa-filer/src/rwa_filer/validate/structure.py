@@ -17,6 +17,11 @@ Key responsibilities:
 - Catch the conditions the regulator's gateway rejects a whole file for and
   that no published arithmetic rule looks at: a figure in a greyed-out cell, the
   same cell reported twice, one data point reported with two different values.
+- Cost what the return names, not what the module has: codes are looked up
+  once per (table, axis, code), facts are split by table once, and only the
+  cells of the tables the return reports are joined against. What is read
+  from the pack on every call is worked out once per pack and kept with it
+  (``TaxonomyPack.derived``).
 
 Why this runs first: a published rule that sums a row cannot tell a figure in
 the wrong cell from a correct one — it only sees that its own cells are empty,
@@ -35,6 +40,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Final
 
@@ -42,14 +48,14 @@ import polars as pl
 
 from rwa_filer.model import COORDINATE_COLUMNS, LEI_SCHEME
 from rwa_filer.rules.catalogue import SEVERITY_ERROR, SEVERITY_WARNING
-from rwa_filer.taxonomy.pack import DIMENSION_EXPLICIT
+from rwa_filer.taxonomy.pack import DIMENSION_EXPLICIT, Table
 from rwa_filer.validate.checker import FactPosition, Finding
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Mapping
 
     from rwa_filer.model import CanonicalReturn
-    from rwa_filer.taxonomy.pack import OpenKey, Table, TaxonomyPack
+    from rwa_filer.taxonomy.pack import OpenKey, TaxonomyPack
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +147,9 @@ def check_structure(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
     # table does not have is also, trivially, in no reportable cell — saying so
     # twice would send a reader to fix a row code that is correct.
     resolved = _resolve_cells(known.with_row_index(_FACT_INDEX), pack)
-    bad_sheet = _sheet_offenders(resolved, pack)
-    bad_key = _open_key_offenders(resolved, pack)
+    by_table = _split_by_table(resolved)
+    bad_sheet = _sheet_offenders(resolved, by_table, pack)
+    bad_key = _open_key_offenders(resolved, by_table, pack)
     misplaced = pl.concat([bad_sheet, bad_key], how="vertical")[_FACT_INDEX].to_list()
     findings.extend(_sheet_findings(bad_sheet, pack))
     findings.extend(_open_key_findings(bad_key, pack))
@@ -237,19 +244,21 @@ def _align_codes(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
     one of its table's only in leading zeros names that row; anything else is
     left exactly as given, for the checks below to report. The row identifier
     of an open-row table is the filer's own and is never touched.
+
+    What a code becomes depends only on its table and its axis, so each axis
+    looks up its distinct (table, code) pairs once: the lookups are bounded by
+    the codes the named tables publish, however many facts or open rows there
+    are. Open-row tables are left out of the row axis BEFORE the pairs are
+    taken, as each of their rows carries an identifier of its own.
     """
     if facts.is_empty():
         return facts
-    replacements: dict[str, dict[tuple[str, str], str]] = {"row": {}, "column": {}, "sheet": {}}
-    seen = facts.select("table", "row", "column", "sheet").unique()
-    for code, row, column, sheet in seen.iter_rows():
-        table = pack.tables[code]
-        if row is not None and not table.open_rows and (fixed := table.row_code(row)) != row:
-            replacements["row"][(code, row)] = fixed
-        if column is not None and (fixed := table.column_code(column)) != column:
-            replacements["column"][(code, column)] = fixed
-        if sheet is not None and (fixed := table.sheet_code(sheet)) != sheet:
-            replacements["sheet"][(code, sheet)] = fixed
+    closed_rows = facts.filter(~pl.col("table").is_in(list(_frames(pack).open_tables)))
+    replacements: dict[str, dict[tuple[str, str], str]] = {
+        "row": _code_fixes(closed_rows, "row", pack, Table.row_code),
+        "column": _code_fixes(facts, "column", pack, Table.column_code),
+        "sheet": _code_fixes(facts, "sheet", pack, Table.sheet_code),
+    }
     for axis, mapping in replacements.items():
         if not mapping:
             continue
@@ -266,6 +275,18 @@ def _align_codes(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
     return facts
 
 
+def _code_fixes(
+    facts: pl.DataFrame, axis: str, pack: TaxonomyPack, align: Callable[[Table, str], str]
+) -> dict[tuple[str, str], str]:
+    """``{(table, code as written): code as the table writes it}`` where the two differ."""
+    fixes: dict[tuple[str, str], str] = {}
+    written = facts.select("table", axis).filter(pl.col(axis).is_not_null()).unique()
+    for code, given in written.iter_rows():
+        if (fixed := align(pack.tables[code], given)) != given:
+            fixes[(code, given)] = fixed
+    return fixes
+
+
 def _resolve_cells(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
     """Join facts to the pack's reportable cells.
 
@@ -276,27 +297,123 @@ def _resolve_cells(facts: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
 
     A fact in a KEY column of an open-row table is marked ``is_key`` and has no
     data point: the key is the dimension member the row is reported under.
+
+    Only the cells of the tables ``facts`` name are joined against, so what a
+    call costs follows the return and not the size of the module.
     """
-    open_tables = [code for code, table in pack.tables.items() if table.open_rows]
+    frames = _frames(pack)
+    named = facts["table"].unique(maintain_order=True).to_list()
+    open_tables = list(frames.open_tables)
+    closed = (
+        facts.filter(~pl.col("table").is_in(open_tables))
+        .join(
+            frames.closed_cells.of(named),
+            on=["table", "row", "column", "sheet"],
+            how="left",
+            nulls_equal=True,
+        )
+        .with_columns(pl.lit(False).alias(IS_KEY))
+    )
+    opened = (
+        facts.filter(pl.col("table").is_in(open_tables))
+        .join(
+            frames.open_cells.of(named),
+            on=["table", "column", "sheet"],
+            how="left",
+            nulls_equal=True,
+        )
+        .join(frames.keys.of(named), on=["table", "column"], how="left")
+        .with_columns(pl.col(IS_KEY).fill_null(False))
+    )
+    return pl.concat([closed, opened.select(closed.columns)], how="vertical")
+
+
+def _split_by_table(frame: pl.DataFrame) -> dict[str, pl.DataFrame]:
+    """``frame``'s rows, table by table, in the order the tables first appear.
+
+    Each part holds its table's rows in the frame's own order. That order is
+    load-bearing: the sort that lays out a finding's positions is not stable,
+    so where facts share their coordinates, the order their positions come out
+    in depends on the order they go in.
+    """
+    return {
+        table: part
+        for (table,), part in frame.partition_by("table", as_dict=True, maintain_order=True).items()
+    }
+
+
+@dataclass(frozen=True)
+class _ByTable:
+    """One of the pack's frames split by table, so a check reads only the tables it names."""
+
+    parts: Mapping[str, pl.DataFrame]
+    #: The frame's columns with no rows, for a return that names none of its tables.
+    empty: pl.DataFrame
+
+    @classmethod
+    def split(cls, frame: pl.DataFrame) -> _ByTable:
+        """``frame`` split by its ``table`` column."""
+        return cls(parts=_split_by_table(frame), empty=frame.clear())
+
+    def of(self, tables: Iterable[str]) -> pl.DataFrame:
+        """The rows of ``tables``, one table after another."""
+        chosen = [self.parts[code] for code in tables if code in self.parts]
+        return pl.concat(chosen, how="vertical") if chosen else self.empty
+
+
+@dataclass(frozen=True)
+class _PackFrames:
+    """What the structure check reads from a pack on every call, worked out once per pack.
+
+    Kept with the pack (``TaxonomyPack.derived``), so it lasts exactly as long
+    as the pack does, and a pack rebuilt with ``dataclasses.replace`` works
+    out its own. Shared by every check of the pack: never changed once built.
+    """
+
+    #: The open-row tables, in the pack's order.
+    open_tables: tuple[str, ...]
+    #: The reportable cells of the closed-row tables.
+    closed_cells: _ByTable
+    #: The reportable cells of the open-row tables, without the (empty) row code.
+    open_cells: _ByTable
+    #: Every key column of an open-row table, marked ``is_key``.
+    keys: _ByTable
+    #: The data type of each data point's metric, by data point.
+    data_types: pl.DataFrame
+
+
+def _frames(pack: TaxonomyPack) -> _PackFrames:
+    """``pack``'s frames: worked out on the first check of the pack, then read from it."""
+    return pack.derived(_pack_frames)
+
+
+def _pack_frames(pack: TaxonomyPack) -> _PackFrames:
+    """Work out ``pack``'s ``_PackFrames`` (the recipe ``TaxonomyPack.derived`` keeps them by)."""
+    open_tables = tuple(code for code, table in pack.tables.items() if table.open_rows)
+    in_open_table = pl.col("table").is_in(list(open_tables))
     cells = pack.cells.select("table", "row", "column", "sheet", "datapoint")
     keys = pl.DataFrame(
         [(code, key, True) for code in open_tables for key in pack.tables[code].key_codes],
         schema={"table": pl.String, "column": pl.String, IS_KEY: pl.Boolean},
         orient="row",
     )
-
-    closed = (
-        facts.filter(~pl.col("table").is_in(open_tables))
-        .join(cells, on=["table", "row", "column", "sheet"], how="left", nulls_equal=True)
-        .with_columns(pl.lit(False).alias(IS_KEY))
+    data_types = pl.DataFrame(
+        {
+            "datapoint": list(range(len(pack.datapoints))),
+            "data_type": [
+                pack.metrics[point.metric].data_type if point.metric in pack.metrics else "unknown"
+                for point in pack.datapoints
+            ],
+        },
+        schema={"datapoint": pl.UInt32, "data_type": pl.String},
     )
-    opened = (
-        facts.filter(pl.col("table").is_in(open_tables))
-        .join(cells.drop("row"), on=["table", "column", "sheet"], how="left", nulls_equal=True)
-        .join(keys, on=["table", "column"], how="left")
-        .with_columns(pl.col(IS_KEY).fill_null(False))
+    return _PackFrames(
+        open_tables=open_tables,
+        closed_cells=_ByTable.split(cells.filter(~in_open_table)),
+        open_cells=_ByTable.split(cells.filter(in_open_table).drop("row")),
+        keys=_ByTable.split(keys),
+        data_types=data_types,
     )
-    return pl.concat([closed, opened.select(closed.columns)], how="vertical")
 
 
 # =============================================================================
@@ -380,12 +497,18 @@ def _duplicates(facts: pl.DataFrame) -> list[Finding]:
     )
 
 
-def _sheet_offenders(resolved: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
-    """Facts naming a sheet the table does not have, or omitting one it needs."""
+def _sheet_offenders(
+    resolved: pl.DataFrame, by_table: Mapping[str, pl.DataFrame], pack: TaxonomyPack
+) -> pl.DataFrame:
+    """Facts naming a sheet the table does not have, or omitting one it needs.
+
+    ``by_table`` is ``resolved`` split by table; the tables are taken in the
+    pack's order, so the offenders come out in the order they always have.
+    """
     rows: list[pl.DataFrame] = []
     for code, table in pack.tables.items():
-        part = resolved.filter(pl.col("table") == code)
-        if part.is_empty():
+        part = by_table.get(code)
+        if part is None:
             continue
         valid = table.sheet_codes
         bad = (
@@ -416,12 +539,17 @@ def _sheet_expectation(table: Table) -> str:
     return f"`sheet` must be one of {', '.join(codes)}"
 
 
-def _open_key_offenders(resolved: pl.DataFrame, pack: TaxonomyPack) -> pl.DataFrame:
-    """Facts whose open-axis member the table does not accept, is missing or unexpected."""
+def _open_key_offenders(
+    resolved: pl.DataFrame, by_table: Mapping[str, pl.DataFrame], pack: TaxonomyPack
+) -> pl.DataFrame:
+    """Facts whose open-axis member the table does not accept, is missing or unexpected.
+
+    ``by_table`` is ``resolved`` split by table, read in the pack's order.
+    """
     rows: list[pl.DataFrame] = []
     for code, table in pack.tables.items():
-        part = resolved.filter(pl.col("table") == code)
-        if part.is_empty():
+        part = by_table.get(code)
+        if part is None:
             continue
         axis = table.open_axis
         if axis is None:
@@ -481,12 +609,13 @@ def _row_key_findings(resolved: pl.DataFrame, pack: TaxonomyPack) -> list[Findin
     unkeyed: list[pl.DataFrame] = []
     invalid: list[pl.DataFrame] = []
     repeated: list[pl.DataFrame] = []
-    for code, table in pack.tables.items():
-        if not table.open_rows:
+    open_tables = _frames(pack).open_tables
+    by_table = _split_by_table(resolved.filter(pl.col("table").is_in(list(open_tables))))
+    for code in open_tables:
+        part = by_table.get(code)
+        if part is None:
             continue
-        part = resolved.filter(pl.col("table") == code)
-        if part.is_empty():
-            continue
+        table = pack.tables[code]
         keys = part.filter(pl.col(IS_KEY)).with_columns(key_text().alias(_KEY_TEXT))
         data = part.filter(~pl.col(IS_KEY))
         for key in table.open_keys:
@@ -576,17 +705,7 @@ def _type_findings(resolved: pl.DataFrame, pack: TaxonomyPack) -> list[Finding]:
     mapped = resolved.filter(pl.col("datapoint").is_not_null())
     if mapped.is_empty():
         return []
-    types = pl.DataFrame(
-        {
-            "datapoint": list(range(len(pack.datapoints))),
-            "data_type": [
-                pack.metrics[point.metric].data_type if point.metric in pack.metrics else "unknown"
-                for point in pack.datapoints
-            ],
-        },
-        schema={"datapoint": pl.UInt32, "data_type": pl.String},
-    )
-    typed = mapped.join(types, on="datapoint", how="left")
+    typed = mapped.join(_frames(pack).data_types, on="datapoint", how="left")
     numeric = pl.col("data_type").is_in(["monetary", "percentage", "integer", "decimal"])
     text = pl.col("text_value")
     wrong = (
@@ -623,7 +742,7 @@ def _inconsistent_datapoints(resolved: pl.DataFrame, pack: TaxonomyPack) -> list
     cell, and what tells the rows apart is their key — they are different
     facts, not one fact reported twice.
     """
-    open_tables = [code for code, table in pack.tables.items() if table.open_rows]
+    open_tables = list(_frames(pack).open_tables)
     mapped = resolved.filter(
         pl.col("datapoint").is_not_null() & ~pl.col("table").is_in(open_tables)
     )

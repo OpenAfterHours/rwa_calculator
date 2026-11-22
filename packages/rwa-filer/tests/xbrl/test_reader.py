@@ -18,6 +18,7 @@ import polars as pl
 import pytest
 
 from pack_builders import VALID_LEI, build_pack, build_return
+from reader_builders import HandFact, instance_of
 from rwa_filer.model import CanonicalReturn
 from rwa_filer.taxonomy.pack import TaxonomyPack
 from rwa_filer.validate.structure import check_structure
@@ -175,6 +176,32 @@ def test_a_data_point_shown_in_two_reported_tables_is_placed_in_both(pack: Taxon
     assert [row[0] for row in cells(reading)] == ["T05.00.01.01", "T05.00.01.02"]
 
 
+def test_cells_come_out_in_the_order_of_the_files_facts_and_of_the_packs_cells(
+    pack: TaxonomyPack,
+) -> None:
+    """Row order is not sorted away downstream: it is the order rule breaks are recorded in."""
+    # Arrange — the first fact is shown by two tables; the other two are out of row order.
+    content = instance_of(
+        pack,
+        [
+            HandFact("tst_met:mi7", (), "9"),
+            HandFact("tst_met:mi1", (("tst_dim:BAS", "tst_BA:x2"),), "2"),
+            HandFact("tst_met:mi1", (("tst_dim:BAS", "tst_BA:x1"),), "1"),
+        ],
+    )
+
+    # Act
+    reading = read_instance(content, pack=pack)
+
+    # Assert
+    assert reading.ret.facts.select("table", "row", "value").rows() == [
+        ("T05.00.01.01", "0010", 9.0),
+        ("T05.00.01.02", "0010", 9.0),
+        ("T01.00.01.01", "0020", 2.0),
+        ("T01.00.01.01", "0010", 1.0),
+    ]
+
+
 def test_a_zipped_instance_is_read_the_same(pack: TaxonomyPack, tmp_path: Path) -> None:
     # Arrange
     content = write_instance(ret(("T01.00.01.01", None, None, "0010", "0010", 5.0)), pack).content
@@ -310,6 +337,30 @@ def test_a_breach_names_every_fact_or_context_it_is_about(pack: TaxonomyPack) ->
         "tst_met:mi1 in context other",
     ]
     assert [p.source_ref for p in by_rule["2.9"].positions] == ["context other"]
+
+
+def test_a_context_no_fact_refers_to_is_reported_as_unused_whatever_it_holds(
+    pack: TaxonomyPack,
+) -> None:
+    """Only a context some fact uses is put in the pack's terms; this one cannot be."""
+    # Arrange — one dimension given twice, as a listed member and as a typed value.
+    extra = f"""
+  <context id="odd">
+    <entity><identifier scheme="http://standards.iso.org/iso/17442">{VALID_LEI}</identifier></entity>
+    <period><instant>2027-03-31</instant></period>
+    <scenario>
+      <xbrldi:explicitMember dimension="d:BAS">ba:x1</xbrldi:explicitMember>
+      <xbrldi:typedMember dimension="d:BAS"><d:ID>tst_BA:x1</d:ID></xbrldi:typedMember>
+    </scenario>
+  </context>"""
+
+    # Act
+    reading = read_instance(foreign(extra), pack=pack)
+
+    # Assert
+    assert [(f.code, f.subject) for f in reading.findings] == [(FINDING_FILING_RULE, "2.7")]
+    assert [p.source_ref for p in reading.findings[0].positions] == ["context odd"]
+    assert len(cells(reading)) == 1
 
 
 def test_a_fact_that_is_no_data_point_is_located_by_what_it_reports(pack: TaxonomyPack) -> None:

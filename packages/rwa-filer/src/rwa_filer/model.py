@@ -61,7 +61,7 @@ from typing import TYPE_CHECKING, Final
 import polars as pl
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 # =============================================================================
 # Constants
@@ -233,33 +233,7 @@ class CanonicalReturn:
                 or a value column is not a fact table; that is a programming
                 error in the reader, not a condition in the data.)
         """
-        missing = [name for name in REQUIRED_FACT_COLUMNS if name not in frame.columns]
-        if missing:
-            raise ValueError(
-                f"Fact table is missing required column(s) {', '.join(missing)}; "
-                f"expected at least {', '.join(REQUIRED_FACT_COLUMNS)}"
-            )
-
-        present = [name for name in FACT_SCHEMA.names() if name in frame.columns]
-        absent = [name for name in FACT_SCHEMA.names() if name not in frame.columns]
-        facts = (
-            frame.select(present)
-            .with_columns(pl.lit(None, dtype=FACT_SCHEMA[name]).alias(name) for name in absent)
-            .with_columns(
-                _text(pl.col("table")).alias("table"),
-                _code(pl.col("sheet"), frame.schema.get("sheet")).alias("sheet"),
-                _text(pl.col("open_key")).alias("open_key"),
-                _code(pl.col("row"), frame.schema.get("row")).alias("row"),
-                _code(pl.col("column"), frame.schema.get("column")).alias("column"),
-                _finite(pl.col("value")).alias("value"),
-                _text(pl.col("text_value")).alias("text_value"),
-                pl.col("decimals").cast(pl.Int32, strict=False).alias("decimals"),
-            )
-            .select(FACT_SCHEMA.names())
-            .cast(FACT_SCHEMA)
-            .filter(pl.col("value").is_not_null() | pl.col("text_value").is_not_null())
-        )
-        return cls(header=header, facts=facts, indicators=indicators)
+        return cls(header=header, facts=normalise_facts(frame), indicators=indicators)
 
     @property
     def tables(self) -> tuple[str, ...]:
@@ -269,6 +243,56 @@ class CanonicalReturn:
     def table_facts(self, table: str) -> pl.DataFrame:
         """The facts of one table."""
         return self.facts.filter(pl.col("table") == table)
+
+
+# =============================================================================
+# Normalising a source's frame
+# =============================================================================
+
+
+def normalise_facts(frame: pl.DataFrame, *, keep: Sequence[str] = ()) -> pl.DataFrame:
+    """``frame`` normalised onto ``FACT_SCHEMA``, as ``CanonicalReturn.from_frame`` takes it.
+
+    ``keep`` names columns outside the schema to carry along, each as trimmed
+    text with blank folded to null: the breakdown and line-reference columns of
+    a detail file (``rwa_filer.readers.detail``), which must be normalised the
+    same way as the facts they are summed into, row for row.
+
+    Raises:
+        ValueError: a required column is missing, or ``keep`` names a column
+            of the schema or one the frame does not have. (Programming errors
+            in the reader, not conditions in the data.)
+    """
+    missing = [name for name in REQUIRED_FACT_COLUMNS if name not in frame.columns]
+    if missing:
+        raise ValueError(
+            f"Fact table is missing required column(s) {', '.join(missing)}; "
+            f"expected at least {', '.join(REQUIRED_FACT_COLUMNS)}"
+        )
+    clashing = [name for name in keep if name in FACT_SCHEMA or name not in frame.columns]
+    if clashing:
+        raise ValueError(f"cannot keep column(s) {', '.join(clashing)} beside the facts")
+
+    present = [name for name in FACT_SCHEMA.names() if name in frame.columns]
+    absent = [name for name in FACT_SCHEMA.names() if name not in frame.columns]
+    return (
+        frame.select(*present, *keep)
+        .with_columns(pl.lit(None, dtype=FACT_SCHEMA[name]).alias(name) for name in absent)
+        .with_columns(
+            _text(pl.col("table")).alias("table"),
+            _code(pl.col("sheet"), frame.schema.get("sheet")).alias("sheet"),
+            _text(pl.col("open_key")).alias("open_key"),
+            _code(pl.col("row"), frame.schema.get("row")).alias("row"),
+            _code(pl.col("column"), frame.schema.get("column")).alias("column"),
+            _finite(pl.col("value")).alias("value"),
+            _text(pl.col("text_value")).alias("text_value"),
+            pl.col("decimals").cast(pl.Int32, strict=False).alias("decimals"),
+            *(_text(pl.col(name)).alias(name) for name in keep),
+        )
+        .select(*FACT_SCHEMA.names(), *keep)
+        .cast({**dict(FACT_SCHEMA.items()), **dict.fromkeys(keep, pl.String)})
+        .filter(pl.col("value").is_not_null() | pl.col("text_value").is_not_null())
+    )
 
 
 # =============================================================================

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% from "_macros.html" import severity_chip %}
+{% block title %}Investigate · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set base = "/returns/" ~ current.return_id ~ "/investigate" %}
+{% set grid_url = "/returns/" ~ current.return_id ~ "/templates" %}
+{% set rules_url = "/returns/" ~ current.return_id ~ "/rules" %}
+<div class="page-head">
+  <div style="min-width: 0">
+    <div class="small muted">Investigate</div>
+    <h1>Where the breaks come from</h1>
+    <p class="lede">Every broken rule, run again on each part of the return by itself. A part that breaks a rule on its own figures is where to look; one that meets it is not.</p>
+  </div>
+  {% if view and view.dimensions | length > 1 %}
+  <nav class="seg" aria-label="Break down by">
+    {% for dimension in view.dimensions %}<a href="{{ link(base, by=dimension) }}"{% if dimension == view.dimension %} aria-current="true"{% endif %}>{{ dimension }}</a>{% endfor %}
+  </nav>
+  {% endif %}
+</div>
+
+{% if not view %}
+{% set unread = current.reading.unread_columns %}
+<section class="panel" id="no-breakdown">
+  <h2>This return was opened without breakdown columns</h2>
+  <p class="small">To see which business unit, source system or other part of the return a break comes from, open the file with a column that says where each row came from. Rows for the same cell are then added together, and the sum is the figure validated and filed.</p>
+  {% if unread %}
+  <form method="post" action="/returns/{{ current.return_id }}/breakdown" style="display: flex; flex-direction: column; gap: 14px">
+    <fieldset class="panel" style="padding: 14px; margin: 0">
+      <legend class="small" style="font-weight: 600">Break the return down by</legend>
+      <div class="choices">
+        {% for column in unread %}<label class="check"><input type="checkbox" name="breakdown" value="{{ column }}"><span class="mono">{{ column }}</span></label>{% endfor %}
+      </div>
+    </fieldset>
+    <div class="fields">
+      <label class="field">Line reference <span class="hint">optional: the ID each line has in its own system</span>
+        <select name="line_ref">
+          <option value="">None</option>
+          {% for column in unread %}<option value="{{ column }}">{{ column }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field">If a line reference is given twice in one cell
+        <select name="on_repeat">
+          <option value="stop">Stop and list the repeats</option>
+          <option value="keep-one">Keep one where the rows agree; stop where they differ</option>
+        </select>
+      </label>
+    </div>
+    <div class="btn-row"><button class="btn btn-primary" type="submit">Open it broken down</button><span class="small muted">The file is read again; the return opened now stays open beside it.</span></div>
+  </form>
+  {% else %}
+  <p class="small muted" style="margin: 0">{% if current.path.suffix.lower() in (".csv", ".parquet") %}This file has no columns beyond the fact table's own.{% else %}Breakdown columns are read from a fact table (.parquet or .csv): a workbook or an XBRL instance carries only the summed figures.{% endif %} Add a column such as <span class="mono">business_unit</span> with one row per part of each cell, and open the file with it.</p>
+  {% endif %}
+</section>
+{% else %}
+
+<div class="tiles">
+  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.broken else '--pass' }})"></span>Breaks in the return</div><div class="value">{{ view.broken | count }}</div><div class="sub">{{ view.error_rules }} Error rule{{ "s" if view.error_rules != 1 }} · {{ view.warning_rules }} Warning rule{{ "s" if view.warning_rules != 1 }}</div></div>
+  <div class="tile"><div class="label">Traced to one {{ view.dimension }}</div><div class="value">{{ view.traced | count }} of {{ view.broken | count }}</div><div class="sub">break on one member's figures alone</div></div>
+  <div class="tile"><div class="label">Members behind them</div><div class="value">{{ view.breaking | length }} of {{ view.members }}</div><div class="sub">{{ view.breaking[:3] | join(" · ") }}{% if view.breaking | length > 3 %} and {{ view.breaking | length - 3 }} more{% endif %}</div></div>
+  <div class="tile"><div class="label">Hidden by the total</div><div class="value">{{ view.hidden_count | count }}</div><div class="sub">hold in the return, break inside a member</div></div>
+</div>
+
+<section class="panel" id="matrix">
+  <div class="panel-head"><h2>Who is out, on which rule, by how much</h2><span class="small muted">each member's own gap: one side of the rule less the other</span></div>
+  {% if view.rows %}
+  <div class="table-wrap">
+    <table class="mx">
+      <thead>
+        <tr>
+          <th scope="col">Broken rule</th>
+          <th scope="col">The return</th>
+          {% for column in view.columns %}<th scope="col"{% if column.selected %} class="picked"{% endif %}><a href="{{ link(base, by=view.dimension, m=column.index) }}"{% if column.selected %} aria-current="true"{% endif %}>{{ column.label }}</a></th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in view.rows %}
+        <tr>
+          <td>{{ severity_chip(row.severity) }}<a class="rule" href="{{ link(rules_url, rule=row.rule_id) }}">{{ row.rule_id }}</a><span class="what clamp" title="{{ row.label }}">{{ row.label or "No label published" }}</span><span class="what">{{ row.breaks }} break{{ "s" if row.breaks != 1 }}</span></td>
+          <td class="whole"><span class="none mono" style="color: var(--strong)">{{ row.whole }}</span>{% if row.unexplained %}<span class="small muted" style="display: block">{{ row.unexplained }} in no member</span>{% endif %}</td>
+          {% for hit in row.cells %}
+          {% set column = view.columns[loop.index0] %}
+          <td{% if column.selected %} class="picked"{% endif %}>{% if hit %}<a class="hit hit-{{ hit.tone }}" href="{{ link(base, by=view.dimension, m=column.index) }}">{{ hit.amount }}<small>{{ ("all " ~ hit.of) if hit.count == hit.of and hit.of > 2 else ("both" if hit.count == hit.of and hit.of == 2 else (hit.count ~ " of " ~ hit.of)) }}</small></a>{% else %}<span class="none">—</span>{% endif %}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted" style="margin: 0">A dash means the member meets the rule on its own rows, or has no figure in the cells it reads.{% if view.clean %} Meet every broken rule on their own figures: {{ view.clean[:12] | join(", ") }}{% if view.clean | length > 12 %} and {{ view.clean | length - 12 }} more{% endif %}.{% endif %}</p>
+  {% else %}
+  <p class="muted" style="margin: 0">No rule breaks in this return.</p>
+  {% endif %}
+</section>
+
+<div class="split">
+  <div class="wide">
+    <section class="panel" id="hidden">
+      <div class="panel-head"><h2>Hold in the return, break inside a member</h2><span class="small muted">{{ view.hidden_count | count }} place{{ "s" if view.hidden_count != 1 }}</span></div>
+      <p class="small muted" style="margin: 0">None of these blocks the return. They are listed because a figure that only ties in total is usually two figures that are wrong. Only rules over amounts are searched: a percentage or a count cannot be judged on part of the rows.</p>
+      {% if view.hidden %}
+      <div class="rule-list">
+        {% for row in view.hidden %}
+        <a class="rule-item" href="{{ link(rules_url, rule=row.rule_id) }}">
+          <span class="top">{{ severity_chip(row.severity) }}<span class="mono small muted">{{ row.rule_id }}</span><span class="evals">{{ row.places }} place{{ "s" if row.places != 1 }}</span></span>
+          <span class="label">{{ row.label or "No label published" }}</span>
+          <span class="where">{{ row.members }} · {{ row.where }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="small" style="margin: 0">Nothing: every {{ view.dimension }} meets, on its own figures, each rule the return meets.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="narrow" aria-label="The member picked">
+    {% if view.panel %}
+    {% set panel = view.panel %}
+    <section class="panel" id="member">
+      <div><div class="small muted">{{ view.dimension }}</div><h2>{{ panel.label }}</h2></div>
+      <p class="small muted" style="margin: 0">{{ panel.rows | count }} row{{ "s" if panel.rows != 1 }} of the file</p>
+      <div class="stat"><div class="small muted">Breaks traced to it</div><div class="value">{{ panel.broken_count | count }} of {{ view.broken | count }}</div>{% if panel.hidden_count %}<div class="small muted">and {{ panel.hidden_count }} more the total hides</div>{% endif %}</div>
+      {% for item in panel.breaks %}
+      <div class="rule-item">
+        <span class="top">{{ severity_chip(item.severity) }}<span class="mono small muted">{{ item.rule_id }}</span><span class="evals">{{ item.places }} place{{ "s" if item.places != 1 }}</span></span>
+        <span class="label">{{ item.sentence }}</span>
+        {% if item.cell %}<a class="small" href="{{ link(grid_url, table=item.cell[0], sheet=item.cell[1] or '', key=item.cell[2] or '', row=item.cell[3], col=item.cell[4], focus=item.rule_id, by=view.dimension) }}">See it on the template</a>{% endif %}
+      </div>
+      {% endfor %}
+      <h3>A note to send</h3>
+      <pre class="note" id="member-note">{{ panel.note }}</pre>
+      <div class="btn-row">
+        <button class="btn btn-primary" type="button" id="copy-note">Copy the note</button>
+        <a class="btn" href="{{ link(base ~ '.csv', by=view.dimension, m=panel.index) }}">Download its figures (.csv)</a>
+      </div>
+    </section>
+    {% else %}
+    <section class="panel"><p class="muted" style="margin: 0">No {{ view.dimension }} breaks a rule on its own figures.</p></section>
+    {% endif %}
+    <section class="panel">
+      <h2>Every member, every rule</h2>
+      <p class="small muted" style="margin: 0">The return's figures beside each member's, for every traced evaluation: {{ view.rules_run }} rule{{ "s" if view.rules_run != 1 }} run again on each of {{ view.members }} member{{ "s" if view.members != 1 }}.</p>
+      <a class="btn" href="{{ link(base ~ '.csv', by=view.dimension) }}">Download all (.csv)</a>
+    </section>
+  </aside>
+</div>
+<script>
+  // Copy the note; without script it can still be selected and copied by hand.
+  document.getElementById("copy-note")?.addEventListener("click", async (event) => {
+    const text = document.getElementById("member-note")?.textContent || "";
+    try { await navigator.clipboard.writeText(text); event.target.textContent = "Copied"; }
+    catch { window.getSelection()?.selectAllChildren(document.getElementById("member-note")); }
+  });
+</script>
+{% endif %}
+{% endblock %}
+{% block command %}{% if view %}<div>Same breakdown on the command line: <span class="mono" style="color: var(--fg)">rwa-filer validate {{ current.name }} --breakdown {{ view.dimensions | join(",") }}</span></div>{% endif %}{% endblock %}

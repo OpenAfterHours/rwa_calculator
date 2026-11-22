@@ -21,6 +21,10 @@ Key responsibilities:
   page drawn after a change validates; every later one reuses its result.
 - Compare two opened returns once per pair: a comparison evaluates every rule
   on both, and a page redrawn to filter its cells must not do that again.
+- Attribute a return's breaks to the members of a breakdown column once per
+  change of its drafted overrides (``workflow.attribution``): it runs the rules
+  again on every member's rows, and the Investigate page is drawn many times
+  from one such run.
 - Open a return again against another taxonomy release, beside the first.
 - Keep uploaded files under the one directory the session owns, under names a
   browser cannot steer outside it.
@@ -45,6 +49,7 @@ from rwa_filer.readers import HeaderFields, SourceReading, open_source
 from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.adjustments import AdjustmentError, apply_adjustments
+from rwa_filer.workflow.attribution import attribute
 from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.explain import Names
 
@@ -54,14 +59,18 @@ if TYPE_CHECKING:
     from rwa_filer.filing import FilingPackage
     from rwa_filer.model import CanonicalReturn
     from rwa_filer.progress import ProgressCallback
+    from rwa_filer.readers import DetailSpec, ReturnDetail
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import TaxonomyPack
     from rwa_filer.validate.returns import ReturnValidation
     from rwa_filer.workflow.adjustments import Adjustment, AppliedAdjustment
+    from rwa_filer.workflow.attribution import Attribution
     from rwa_filer.workflow.compare import ReturnComparison
 
 #: A cell's full address: table, sheet, open-axis key, row, column.
 Cell = tuple[str, str | None, str | None, str, str]
+#: What an attribution is kept under: the return's id, its drafts, the column.
+type _AttributionKey = tuple[str, tuple["Adjustment", ...], str]
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +122,11 @@ class OpenedReturn:
     def pack(self) -> TaxonomyPack:
         """The taxonomy the return was validated against."""
         return self.validation.pack
+
+    @property
+    def detail(self) -> ReturnDetail | None:
+        """The rows the return was summed from, when it was opened as a detail."""
+        return self.reading.detail
 
 
 @dataclass(frozen=True)
@@ -182,6 +196,8 @@ class Workspace:
         self._working: dict[str, tuple[int, WorkingReturn]] = {}
         self._builds: dict[str, list[FilingRecord]] = {}
         self._comparisons: dict[tuple[str, str], ReturnComparison] = {}
+        #: Keyed by return, the drafts applied to it, and the breakdown column.
+        self._attributions: dict[_AttributionKey, Attribution] = {}
         self._lock = threading.Lock()
 
     def open(
@@ -192,6 +208,7 @@ class Workspace:
         name: str | None = None,
         taxonomy: str | None = None,
         progress: ProgressCallback | None = None,
+        detail: DetailSpec | None = None,
     ) -> OpenedReturn:
         """Read and validate ``path``, and keep it under a new id.
 
@@ -202,13 +219,22 @@ class Workspace:
             taxonomy: The release to validate it against, by version; defaults
                 to the workspace's, else the default release for the module.
             progress: Told how far the reading and the validation have got.
+            detail: Read a fact table as a detail, its rows summed and kept
+                (``readers.detail``); ``None`` to read it as a return.
 
         Raises:
             ValueError: the file is missing, unsupported, lacks a header it
-                needs, or is not readable as what its suffix says it is.
+                needs, or is not readable as what its suffix says it is; or its
+                rows cannot be summed as the detail asks.
             ReleaseNotFoundError: the taxonomy release could not be resolved.
         """
-        reading = open_source(path, fields, taxonomy=taxonomy or self.taxonomy, progress=progress)
+        reading = open_source(
+            path,
+            fields,
+            taxonomy=taxonomy or self.taxonomy,
+            progress=progress,
+            detail=detail,
+        )
         validation = validate_return(
             reading.ret,
             release=reading.release,
@@ -236,16 +262,20 @@ class Workspace:
         taxonomy: str,
         *,
         progress: ProgressCallback | None = None,
+        detail: DetailSpec | None = None,
     ) -> OpenedReturn:
-        """Open ``opened``'s file again, against another taxonomy release.
+        """Open ``opened``'s file again, against another taxonomy release or another breakdown.
 
         The return keeps its header — the one it was opened with, overrides
         included — and is kept under a new id beside the first, so the two can
         be compared. Drafted overrides are not carried across: a cell one
         release accepts may not exist in another.
 
+        ``detail`` is the breakdown to read the file with this time; ``None``
+        keeps the one it was opened with (none, for a return opened as one).
+
         Raises:
-            ValueError: the file can no longer be read.
+            ValueError: the file can no longer be read, or not with that breakdown.
             ReleaseNotFoundError: the release cannot read it.
         """
         header = opened.ret.header
@@ -256,8 +286,14 @@ class Workspace:
             currency=header.currency,
             entity_scheme=header.entity_scheme,
         )
+        kept = opened.detail.spec if opened.detail is not None else None
         return self.open(
-            opened.path, fields, name=opened.name, taxonomy=taxonomy, progress=progress
+            opened.path,
+            fields,
+            name=opened.name,
+            taxonomy=taxonomy,
+            progress=progress,
+            detail=detail if detail is not None else kept,
         )
 
     def save_upload(self, filename: str, content: bytes) -> Path:
@@ -326,6 +362,46 @@ class Workspace:
                 self._working[return_id] = (revision, made)
         return made
 
+    # -- attributions ---------------------------------------------------------------
+
+    def attribution(
+        self,
+        working: WorkingReturn,
+        dimension: str,
+        *,
+        progress: ProgressCallback | None = None,
+    ) -> Attribution:
+        """``working``'s breaks attributed to the members of ``dimension``, worked out once.
+
+        Kept per return, per set of drafted overrides and per column: an
+        override moves the return's figures but not the detail's, so another
+        set of drafts is another attribution. The search for breaks the total
+        hides is included.
+
+        Raises:
+            KeyError: the return has no detail, or ``dimension`` is not one of
+                its breakdown columns.
+        """
+        detail = working.opened.detail
+        if detail is None:
+            raise KeyError(f"{working.opened.name} was not opened with breakdown columns")
+        key = _attribution_key(working, dimension)
+        with self._lock:
+            found = self._attributions.get(key)
+        if found is not None:
+            return found
+        made = attribute(
+            working.current.ret, working.current.validation, detail, dimension, progress=progress
+        )
+        with self._lock:
+            return self._attributions.setdefault(key, made)
+
+    def kept_attribution(self, working: WorkingReturn, dimension: str) -> Attribution | None:
+        """The attribution ``attribution`` would return, if it has been worked out; else ``None``."""
+        key = _attribution_key(working, dimension)
+        with self._lock:
+            return self._attributions.get(key)
+
     # -- builds -------------------------------------------------------------------
 
     def add_build(self, return_id: str, record: FilingRecord) -> int:
@@ -363,6 +439,15 @@ class Workspace:
             return self._comparisons.setdefault(key, made)
 
 
+def _attribution_key(working: WorkingReturn, dimension: str) -> _AttributionKey:
+    """What an attribution is kept under: the return, its drafts and the column.
+
+    The drafts themselves, not a count of changes: the same drafts give the
+    same return, however they came to be drafted.
+    """
+    return (working.opened.return_id, working.drafts, dimension)
+
+
 def _work_out(
     opened: OpenedReturn,
     drafts: tuple[Adjustment, ...],
@@ -393,7 +478,10 @@ def _work_out(
 def _reading(opened: OpenedReturn) -> SourceReading:
     """What reading the return established, with the release it was validated against."""
     return SourceReading(
-        ret=opened.reading.ret, release=opened.release, findings=opened.reading.findings
+        ret=opened.reading.ret,
+        release=opened.release,
+        findings=opened.reading.findings,
+        detail=opened.reading.detail,
     )
 
 

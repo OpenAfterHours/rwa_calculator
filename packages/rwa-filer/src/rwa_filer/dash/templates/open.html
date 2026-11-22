@@ -16,11 +16,29 @@
 <div class="split">
   <form class="wide" method="post" action="/open" enctype="multipart/form-data">
     {% call open_fields(values, modules, releases) %}
+      <details class="mark-more" id="breakdown-fields"{% if values.breakdown or values.line_ref %} open{% endif %}>
+        <summary>Break it down (optional)</summary>
+        <div class="fields" style="padding: 4px 0 8px">
+          <label class="field" style="flex: 2 1 260px">Breakdown columns <span class="hint">a fact table's columns that say where each row came from, separated by commas</span>
+            <input type="text" name="breakdown" value="{{ values.breakdown or '' }}" placeholder="business_unit, source" spellcheck="false" class="mono">
+          </label>
+          <label class="field">Line reference <span class="hint">the ID each line has in its own system</span>
+            <input type="text" name="line_ref" value="{{ values.line_ref or '' }}" placeholder="line_id" spellcheck="false" class="mono">
+          </label>
+          <label class="field">If a line reference is given twice in one cell
+            <select name="on_repeat">
+              <option value="stop"{% if values.on_repeat != "keep-one" %} selected{% endif %}>Stop and list the repeats</option>
+              <option value="keep-one"{% if values.on_repeat == "keep-one" %} selected{% endif %}>Keep one where the rows agree</option>
+            </select>
+          </label>
+        </div>
+        <p class="small muted" style="margin: 0 0 8px">With a breakdown column, several rows may give one cell: they are added together, and the sum is the figure validated and filed. Only amounts can be added; a percentage, a count, a date or text keeps one row. A line reference given twice in one cell is the same line counted twice.</p>
+      </details>
       <div class="btn-row">
         <button class="btn btn-primary" type="submit">Validate</button>
         <span class="small muted">Structure first, then the published rules. A full PRA001 return takes a while; you will see how far it has got.</span>
       </div>
-      <div class="command">Same check on the command line: <span class="mono">rwa-filer validate FILE --entity LEI --reference-date YYYY-MM-DD --module PRA001 [--taxonomy VERSION]</span></div>
+      <div class="command">Same check on the command line: <span class="mono">rwa-filer validate FILE --entity LEI --reference-date YYYY-MM-DD --module PRA001 [--taxonomy VERSION] [--breakdown COLUMNS --line-ref COLUMN]</span></div>
     {% endcall %}
   </form>
 

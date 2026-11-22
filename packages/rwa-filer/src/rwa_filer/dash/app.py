@@ -29,6 +29,7 @@ from starlette.staticfiles import StaticFiles
 from rwa_filer.dash import (
     compare_pages,
     filing_pages,
+    investigate_pages,
     pages,
     referee_pages,
     reference_pages,
@@ -74,6 +75,7 @@ def create_app(
     return Starlette(
         routes=[
             *pages.routes(context),
+            *investigate_pages.routes(context),
             *filing_pages.routes(context),
             *compare_pages.routes(context),
             *referee_pages.routes(context),

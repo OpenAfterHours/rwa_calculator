@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from pack_builders import VALID_LEI, build_header
-from rwa_filer.model import FACT_SCHEMA, LEI_SCHEME, CanonicalReturn, ReturnHeader
+from rwa_filer.model import FACT_SCHEMA, LEI_SCHEME, CanonicalReturn, ReturnHeader, normalise_facts
 
 # ---------------------------------------------------------------------------
 # Header
@@ -212,3 +212,38 @@ def test_filing_indicators_default_to_unset_and_are_kept_when_declared() -> None
     # Assert
     assert derived.indicators is None
     assert declared.indicators == {"T01.00": True, "T02.00": False}
+
+
+def test_normalise_facts_carries_kept_columns_beside_the_facts_as_trimmed_text() -> None:
+    # Arrange: integer codes, a blank unit, a numeric reference — as a detail file gives them.
+    frame = pl.DataFrame(
+        {
+            "table": ["T01", "T01", "T01"],
+            "row": [10, 20, 30],
+            "column": [10, 10, 10],
+            "value": [1.0, 2.0, None],
+            "unit": [" Retail ", "  ", "Corporate"],
+            "ref": [7, 8, 9],
+        }
+    )
+
+    # Act
+    facts = normalise_facts(frame, keep=["unit", "ref"])
+
+    # Assert: the facts exactly as from_frame makes them, the kept columns after.
+    assert facts.drop("unit", "ref").equals(CanonicalReturn.from_frame(build_header(), frame).facts)
+    assert facts.select("row", "unit", "ref").rows() == [
+        ("0010", "Retail", "7"),
+        ("0020", None, "8"),
+    ]
+
+
+def test_normalise_facts_refuses_to_keep_a_fact_column_or_a_missing_one() -> None:
+    # Arrange
+    frame = pl.DataFrame({"table": ["T01"], "row": ["0010"], "column": ["0010"], "value": [1.0]})
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="cannot keep column"):
+        normalise_facts(frame, keep=["row"])
+    with pytest.raises(ValueError, match="cannot keep column"):
+        normalise_facts(frame, keep=["unit"])

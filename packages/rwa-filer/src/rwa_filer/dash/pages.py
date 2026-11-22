@@ -17,6 +17,9 @@ Key responsibilities:
   shared with whoever else is looking at the same screen.
 - Hand over the evidence behind an opened return's verdict as the file
   ``rwa-filer validate --evidence`` writes.
+- For a return opened with breakdown columns, split the picked cell by one of
+  them, and set each member's figures beside the return's for the broken
+  rules that read it (``dash.breakdown``).
 
 References:
 - rwa_filer.cli — ``rwa-filer validate``, which these pages show the result of
@@ -31,6 +34,7 @@ from starlette.responses import FileResponse, RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.boe.engine import STATUS_FAIL
+from rwa_filer.dash.breakdown import breakdown_summary, cell_breakdown, pick_dimension
 from rwa_filer.dash.context import THEME_COOKIE, THEMES
 from rwa_filer.dash.forms import form_values, page_number, read_open_form
 from rwa_filer.dash.grid import template_grid
@@ -40,12 +44,16 @@ from rwa_filer.dash.views import overview, rules_page
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
 from rwa_filer.release import release_packs, shipped_releases
+from rwa_filer.workflow.attribution import attribute
 
 if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
+    from rwa_filer.dash.breakdown import CellBreakdown
     from rwa_filer.dash.context import DashContext
+    from rwa_filer.dash.grid import TemplateGrid
+    from rwa_filer.dash.workspace import WorkingReturn
     from rwa_filer.progress import ProgressCallback
 
 logger = logging.getLogger(__name__)
@@ -146,12 +154,14 @@ class ReturnPages:
     def overview(self, request: Request) -> Response:
         """Whether the return is fit to file, and the counts behind the answer."""
         working = self.context.working(request)
+        detail = working.opened.detail
         return self.context.render(
             request,
             "overview.html",
             working=working,
             section="overview",
             view=overview(working.current),
+            breakdown=breakdown_summary(detail) if detail is not None else None,
         )
 
     def rules(self, request: Request) -> Response:
@@ -204,12 +214,16 @@ class ReturnPages:
             column=query.get("col", ""),
             focus=query.get("focus", ""),
         )
+        detail = working.opened.detail
+        by = pick_dimension(detail, query.get("by", "")) if detail is not None else ""
         return self.context.render(
             request,
             "templates.html",
             working=working,
             section="templates",
             grid=grid,
+            by=by,
+            breakdown=self._cell_breakdown(working, grid, by),
             flash=self.context.take_flash(working.opened.return_id),
         )
 
@@ -233,6 +247,30 @@ class ReturnPages:
         return response
 
     # -- helpers ----------------------------------------------------------------
+
+    def _cell_breakdown(
+        self, working: WorkingReturn, grid: TemplateGrid | None, dimension: str
+    ) -> CellBreakdown | None:
+        """The picked cell split by ``dimension``, with its broken rules member by member.
+
+        Uses the Investigate page's attribution when it has been worked out;
+        otherwise runs only the rules that mark the cell, which is quick.
+        """
+        if grid is None or grid.cell is None or working.opened.detail is None:
+            return None
+        cell = (grid.table, grid.page.sheet, grid.page.open_key, grid.cell.row, grid.cell.column)
+        rule_ids = tuple(mark.rule_id for mark in grid.cell.marks)
+        attribution = None
+        if rule_ids:
+            attribution = self.context.workspace.kept_attribution(working, dimension) or attribute(
+                working.current.ret,
+                working.current.validation,
+                working.opened.detail,
+                dimension,
+                rule_ids=rule_ids,
+                search_hidden=False,
+            )
+        return cell_breakdown(working, cell, dimension, rule_ids, attribution)
 
     def _home(
         self,

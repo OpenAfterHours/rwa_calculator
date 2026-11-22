@@ -1,0 +1,627 @@
+{
+ "_comment": "Digests of what boe.grammar gives for every cell of every packaged rule book and for a seeded generated corpus: the repr of the tree, or the GrammarError message and position, in order. Banked from the parser before its character walks became compiled scans (commit 85cfe58). Re-banked only when the trees are meant to change, with tests/boe/test_grammar_golden.py's main - never by hand, and never to make a moved digest green.",
+ "generated": {
+  "crafted": {
+   "errors": 6754,
+   "features": {
+    "brace_in_string": {
+     "inputs": 2996,
+     "parsed": 66
+    },
+    "comma_in_brackets": {
+     "inputs": 3108,
+     "parsed": 1243
+    },
+    "comma_in_parentheses": {
+     "inputs": 3967,
+     "parsed": 1536
+    },
+    "comma_in_string": {
+     "inputs": 3002,
+     "parsed": 67
+    },
+    "empty_part": {
+     "inputs": 921,
+     "parsed": 8
+    },
+    "lone_bracket": {
+     "inputs": 2211,
+     "parsed": 266
+    },
+    "long": {
+     "inputs": 141,
+     "parsed": 53
+    },
+    "nested_reference": {
+     "inputs": 892,
+     "parsed": 0
+    },
+    "only_close_bracket": {
+     "inputs": 149,
+     "parsed": 20
+    },
+    "only_close_parenthesis": {
+     "inputs": 169,
+     "parsed": 19
+    },
+    "only_open_bracket": {
+     "inputs": 143,
+     "parsed": 13
+    },
+    "only_open_parenthesis": {
+     "inputs": 143,
+     "parsed": 11
+    },
+    "only_quote": {
+     "inputs": 2872,
+     "parsed": 526
+    },
+    "unicode": {
+     "inputs": 6041,
+     "parsed": 2336
+    },
+    "unterminated_reference": {
+     "inputs": 1188,
+     "parsed": 0
+    },
+    "unterminated_string": {
+     "inputs": 935,
+     "parsed": 1
+    }
+   },
+   "inputs": 12000,
+   "refusals": {
+    "a reference inside a reference": 1439,
+    "an empty part in a reference": 558,
+    "unterminated reference": 511,
+    "unterminated string inside a reference": 688
+   },
+   "sha256": "de7ede4240318a4542fafa8284c37a87d0aedccf23187b07d89962a329740429"
+  },
+  "mutated": {
+   "errors": 9759,
+   "features": {},
+   "inputs": 16000,
+   "refusals": {
+    "a reference inside a reference": 607,
+    "an empty part in a reference": 137,
+    "unterminated reference": 370,
+    "unterminated string inside a reference": 363
+   },
+   "sha256": "183fece0c28f894aa095eadf6ecec27a70ece4ff6b038f020e876124b4e168ba"
+  },
+  "soup": {
+   "errors": 28146,
+   "features": {},
+   "inputs": 40000,
+   "refusals": {
+    "a reference inside a reference": 7119,
+    "an empty part in a reference": 875,
+    "unterminated reference": 409,
+    "unterminated string inside a reference": 2589
+   },
+   "sha256": "ff76f622da588eed4c101080aef5aea73811f52b910e011ab54cc11aa6b24708"
+  }
+ },
+ "published": {
+  "banking_reporting-4.1.1.json": {
+   "expression": {
+    "cells": 1486,
+    "errors": 2,
+    "sha256": "07b0ee77a7b745eb61bbe066976015693cff50a69fadf58aa0ef35b50b8d0ab8"
+   },
+   "join": {
+    "cells": 1486,
+    "errors": 0,
+    "sha256": "1ad241a20b133c7b1cd39ff46cfc8846568e766ef34303e43123acabe7d9cfc4"
+   },
+   "scope": {
+    "cells": 1486,
+    "errors": 0,
+    "sha256": "3fb3aec3c370654010afbcedb9138a43c190063c9b780183243abab36aece75a"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "banking_reporting_sddt-4.1.1.json": {
+   "expression": {
+    "cells": 560,
+    "errors": 1,
+    "sha256": "20993728000dce1e791b6aef14693a33ba9c5e1d83b6a029633f2e0d38a20359"
+   },
+   "join": {
+    "cells": 560,
+    "errors": 0,
+    "sha256": "2bce0864164e4315ee8d4dbe8f6e8cddf9b8692ddf0d43cbf3667e0a7cda8086"
+   },
+   "scope": {
+    "cells": 560,
+    "errors": 0,
+    "sha256": "3bd92088f7bca7ae02b631a166fe6cc901a035dae7806a160a2fcbb80665bf24"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "capital_plus-4.1.1.json": {
+   "expression": {
+    "cells": 61,
+    "errors": 0,
+    "sha256": "223aa0f2ed96e561647a8c9d31f4df98a2353573942ee8de6953fbe52d470286"
+   },
+   "join": {
+    "cells": 61,
+    "errors": 0,
+    "sha256": "d6e792b73b1d11e9729ed95241bf9086d2ef798fd0b4b64d0d224edad9df6cee"
+   },
+   "scope": {
+    "cells": 61,
+    "errors": 0,
+    "sha256": "99f2a5acfde0bb13d5dd3791c59d96287ac6d7ea0f3a6581f9fa1c2481b5c3ba"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "capital_plus_sddt-4.1.1.json": {
+   "expression": {
+    "cells": 19,
+    "errors": 0,
+    "sha256": "4453ede2fbfe0330d4bf429596c202e7e9c4ae74cae4ce23c0cc78126bd073c7"
+   },
+   "join": {
+    "cells": 19,
+    "errors": 0,
+    "sha256": "cf6a3c8f6a2f9d7bef779a7d7da890f49029ee82768191fd9e0b084f50456405"
+   },
+   "scope": {
+    "cells": 19,
+    "errors": 0,
+    "sha256": "856bc1cced95fc264662d6597056dd4e58ddec30def46ea79e03f2044fbcc70e"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "financialstatements-4.1.1.json": {
+   "expression": {
+    "cells": 30,
+    "errors": 0,
+    "sha256": "8140d3b17050ebd771793a8593ff47a92044ceac0599f196fa0f3a79458f84dd"
+   },
+   "join": {
+    "cells": 30,
+    "errors": 0,
+    "sha256": "adf4a1078558961edaffbd237d70f37177340a3bb86f2daeb7028e3656558871"
+   },
+   "scope": {
+    "cells": 30,
+    "errors": 0,
+    "sha256": "103323dfbaf92380a68d8d13a174badd61661c69902f804717a5fbc4b9be564c"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "leverage_2023_05_11-4.1.1.json": {
+   "expression": {
+    "cells": 48,
+    "errors": 0,
+    "sha256": "753ec0727cded6ee4a71299c6ce46ac6506e5b3f3cdc43110f83323d4f6c933b"
+   },
+   "join": {
+    "cells": 48,
+    "errors": 0,
+    "sha256": "7ff56878f9b0cbe7867423b7256d1b54af3a4caae909df1df4e81c2aa77158cc"
+   },
+   "scope": {
+    "cells": 48,
+    "errors": 0,
+    "sha256": "5ee5a384e9c95223d3e1f5521759e4ea320e0ee4a21690fb6801f58295c9cbac"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "leverage_ratio-4.1.1.json": {
+   "expression": {
+    "cells": 61,
+    "errors": 0,
+    "sha256": "4c24172e42e423b7df3674b852fec0783590ac8b73e28c1971f7f55f53f66ad3"
+   },
+   "join": {
+    "cells": 61,
+    "errors": 0,
+    "sha256": "d6e792b73b1d11e9729ed95241bf9086d2ef798fd0b4b64d0d224edad9df6cee"
+   },
+   "scope": {
+    "cells": 61,
+    "errors": 0,
+    "sha256": "12f6b75c20df363d25e00ef44d177de8e54bc88bc5955bb711e1458fa9760b48"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "liquidity_pillarii-4.1.1.json": {
+   "expression": {
+    "cells": 1108,
+    "errors": 0,
+    "sha256": "4795c475782da699654d76dd71d0b64bcb2dcf12d16384278c5c2a7d25854e52"
+   },
+   "join": {
+    "cells": 1108,
+    "errors": 0,
+    "sha256": "45f1b9d676c3c6952e8feb563e8ab4847ac78a4d3567ef32a0d672a8a8e8fad1"
+   },
+   "scope": {
+    "cells": 1108,
+    "errors": 0,
+    "sha256": "bb354952706dd73c2987171eb6a90efec613fee00d74037f4760a9278532110b"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "mrel-4.1.1.json": {
+   "expression": {
+    "cells": 26,
+    "errors": 0,
+    "sha256": "a6e92e19558711ab9d167fce5a6037f19f281b76a5f62db56eabab7216ec4b25"
+   },
+   "join": {
+    "cells": 26,
+    "errors": 0,
+    "sha256": "41a8956c45e4a17a516c4ac2883e78496b4466d03443b70bfcf1f313bfe1b0b6"
+   },
+   "scope": {
+    "cells": 26,
+    "errors": 0,
+    "sha256": "56a6789aace4ebf943b5de38bd5fc49f7edd037d683f3aad9ecbc35966201b34"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  },
+  "step_in_risk-4.1.1.json": {
+   "expression": {
+    "cells": 27,
+    "errors": 0,
+    "sha256": "1318f269c82e81fb69db8ed01d46ed042e19673eadcc421b189ed85078b9d455"
+   },
+   "join": {
+    "cells": 27,
+    "errors": 0,
+    "sha256": "d4aa6e416693ee817e31871621f5c233c4cd97c852fa48e129f0e20a0bbc44df"
+   },
+   "scope": {
+    "cells": 27,
+    "errors": 0,
+    "sha256": "a8b3c2a308a36f731bb7f1ddcdae8dd542444dd14920563973b5e4b3599d2d40"
+   },
+   "where": {
+    "cells": 7,
+    "errors": 0,
+    "sha256": "36ebc020712d6d45c090f8bcf98ab5816011e9b5caefbea2fb9b98e424602a15"
+   }
+  },
+  "structural_reform-4.1.1.json": {
+   "expression": {
+    "cells": 387,
+    "errors": 0,
+    "sha256": "12f15c1fd5344c94ec830dea0e0520601491478068eb6204fa84d387bffa600d"
+   },
+   "join": {
+    "cells": 387,
+    "errors": 0,
+    "sha256": "0a21ef4160d77c27ec3e155dd241b662ca0821cc0203f1859e3cd387632faa0f"
+   },
+   "scope": {
+    "cells": 387,
+    "errors": 0,
+    "sha256": "5f333df62711ab9a43e1b36d56ec3680df4dd7c2431aadc665fb825b53c988a9"
+   },
+   "where": {
+    "cells": 0,
+    "errors": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  }
+ },
+ "published_sample": {
+  "banking_reporting-4.1.1.json": {
+   "boe_b0076": "7d00389ccf74b5ac",
+   "boe_b0194": "c531ac05c5aad18f",
+   "boe_b0202": "99faaec6d6496cb4",
+   "boe_b0218": "89e49454d9cf633a",
+   "boe_b0234": "d60859eaf44bf1c9",
+   "boe_b0253": "9ee69f00c5506f30",
+   "boe_b0269": "29b3369f8dcd2399",
+   "boe_b0287": "9ff5df0cb4fbcd2f",
+   "boe_b0304": "9264cd0f532d66e8",
+   "boe_b0314_1_15": "19225158df1a1eb9",
+   "boe_b0314_7": "8b8f90079d609fe4",
+   "boe_b0333": "55bfb6800d47f677",
+   "boe_b0351": "5617024466076510",
+   "boe_b0367_1": "46d875a05a5a4364",
+   "boe_b0370": "017806dbeafcbff2",
+   "boe_b0384": "b8f65306e46b5e06",
+   "boe_b0403": "32ed7ab93337f17c",
+   "boe_b0421": "f7b6adc2a0ed46de",
+   "boe_b0435": "fd7a8acc8a0b96a8",
+   "boe_b0447": "0c3317859a48e2da",
+   "boe_b0460_1": "9abbe7aab6c08b20",
+   "boe_b0488": "98b99f38a127177d",
+   "boe_b0504": "4afa9f7d585271cd",
+   "boe_b0518_1": "07ce723ab73ada9c",
+   "boe_b0539": "97f6f02ed9a51de7",
+   "boe_b0555": "19b1274af3d631e3",
+   "boe_b0579": "f1e64ca2f68e3848",
+   "boe_b0604": "15f210348972ed69",
+   "boe_b0624": "51a18c966e4537d1",
+   "boe_b0643": "00100241b0f19f13",
+   "boe_b0658": "391655dcd0db599d",
+   "boe_b0672_1": "e449dded01492b64",
+   "boe_b0689": "940ccb4d9a8ea984",
+   "boe_b0698_16": "8968253ee404e5b6",
+   "boe_b0699": "722c990ea62a548c",
+   "boe_b0710_3": "ed34429001655731",
+   "boe_b0723_3": "4064bee87dbba82f",
+   "boe_b0733_2": "cdb84ebf94b51342",
+   "boe_b0750": "4165ddd42f82a22d",
+   "boe_b0752_26": "50df841d62f46304",
+   "boe_b0752_8": "ea70bdbed6dafbb2",
+   "boe_b0771": "52e1f5fced948921",
+   "boe_b0793": "31cb8551cabb8df8",
+   "boe_b0814_05": "96d06be4950d21fe",
+   "boe_b0814_21": "02cdd9aab5697e46",
+   "boe_b0830": "ee610a7600226b3c",
+   "boe_b0849": "9f8e07dfec46a8f3",
+   "boe_b0867": "c12eb5e7f2932a1c",
+   "boe_b0885": "0a15201eaa84defb",
+   "boe_b0901": "c445ce87a6c8b9f2",
+   "boe_b0918": "db24849d49a589be",
+   "boe_b0922": "498daddd16ee9c8a",
+   "boe_b0936": "7fe2bbf04cb23bf3",
+   "boe_b0956": "dfffb4f4fafb30f7",
+   "boe_b0976": "7e131e9cd4387b5e",
+   "boe_b0992": "1c9b4da963f7dce7",
+   "boe_b1009": "52ae22740d11aafa",
+   "boe_b1025": "8a95676d237ddb2e",
+   "boe_b1041": "9ed1c8f8122c40fb",
+   "boe_b1057": "9264cd0f532d66e8",
+   "boe_b1076": "56f61b0ef221b79d",
+   "v0005_h": "38fb46c1abc42d51",
+   "v0179_m": "356c5494446534c3",
+   "v0230_m": "4effad7f0eec055b",
+   "v0246_m": "f708c648f671639f",
+   "v0571_m": "28b7d8312ebe1133",
+   "v0611_m": "e8975b9f3e50b7c9",
+   "v0637_m": "ce0d8b1dbd857210",
+   "v09817_m": "98c2a079ec288c7f",
+   "v09845_m": "0590258c035d17b5",
+   "v10302_s": "67ded2f4494ccf63",
+   "v10328_s": "901f36b4bd88f8d8",
+   "v10627_m": "382a6aa99d500b40",
+   "v2057_s": "d4cb6d90d258431f",
+   "v3770_s": "0a918053e80d3c5e",
+   "v3790_s": "e1228a2e7ee3670c",
+   "v4011_a": "0d339867dcb6b111",
+   "v4023_a": "0d339867dcb6b111",
+   "v4322_s": "f48e15f334f36953",
+   "v4812_m": "e5cb441e9af9c08f",
+   "v4852_m": "795b71e5e7cb26a9",
+   "v5852_h": "c562793a2d230c16",
+   "v6256_m": "a9da354c0096afa0",
+   "v6293_3_m": "a04dadc9a16e491e",
+   "v6327_m": "d8eb775c34081919",
+   "v6345_m": "ebe39268ba41bb05",
+   "v6357_m_5": "fb5005beb15c6a55",
+   "v6574_s": "ef2ddb1e4b7b0a78",
+   "v7329_m": "3071e66f7c705073",
+   "v7348_m": "1d52195e36178a46",
+   "v7371_m": "3b4de5116227f145",
+   "v7402_m": "b36fc792b2e67536",
+   "v7418_m": "0c6ec43872aa2ad7",
+   "v7667_a": "316b473956e310b7",
+   "v7750_s": "6a2cd38e48311b3b"
+  },
+  "banking_reporting_sddt-4.1.1.json": {
+   "boe_b0019_ss": "6feedfe5afcc4972",
+   "boe_b0035_ss": "653dd85e5d1875c1",
+   "boe_b0051_ss": "34acf0420cb8e113",
+   "boe_b0063_ss": "60a211234dbb5d4b",
+   "boe_b0076_11_ss": "6af7770224db7099",
+   "boe_b0079_ss": "12657b4fad803e16",
+   "boe_b0104_ss": "91fb3279db7d02ae",
+   "boe_b0120_ss": "19f32314d8eb78c0",
+   "boe_b0137_ss": "5eb9b6acca9b3cd0",
+   "boe_b0190": "ed639cad290e94b6",
+   "boe_b0219": "a325c3165e5d5ec9",
+   "boe_b0235": "13b80a9fc9b36419",
+   "boe_b0254": "1245271f8299edf4",
+   "boe_b0457": "6a8c7913c050c33d",
+   "boe_b0492": "8214bdfb436761c3",
+   "boe_b0509": "81546bbe4bed97e5",
+   "boe_b0600": "f75f02e0f6926426",
+   "boe_b0728": "bb1861ae7a6da5d7",
+   "boe_b0813": "6fc133eefd1aaac0",
+   "boe_b0962": "566921a542c31bc1",
+   "boe_b0982": "76a83ce1987cfbc1",
+   "boe_b0998": "001ffda83424c563",
+   "boe_b1015": "859465209e5304d3",
+   "boe_b1031": "7e5bf0244c47f59a",
+   "v0128_h": "63278b903952671f",
+   "v0187_m": "0b6305279bfae671",
+   "v0240_m": "d15ac356f46beef1",
+   "v11871_m": "edfeb76dde7189f2",
+   "v4023_a": "87f2e1a8aea11360",
+   "v4160_m": "f1184abd37e68b79",
+   "v6252_m": "b298c1f6c0ba6960",
+   "v6294_2_m": "cb1c6d3b72a84d3d",
+   "v7340_m": "568dc451d8a464f5",
+   "v7369_m": "c997a994311ea5cb",
+   "v7416_m": "fb8018102e1f7a82",
+   "v7671_s": "c5b511e1433b37bc"
+  },
+  "capital_plus-4.1.1.json": {
+   "boe_b0753": "efe6f792aa8b117f",
+   "v0182-2_m": "03f8bbf0c98b868c",
+   "v0217-1_m": "f9abaa1dc8d29791",
+   "v0238-1_m": "9d0f1114bfed9511"
+  },
+  "capital_plus_sddt-4.1.1.json": {
+   "boe_b0007_ss": "6b7efb28bec4b95f",
+   "v0185-2_m": "cbe63f3f02465a1a"
+  },
+  "financialstatements-4.1.1.json": {
+   "boe_b1_m": "2d8ddb99fea8f36b",
+   "boe_v0785_m_2": "deda9efa4732250b"
+  },
+  "leverage_2023_05_11-4.1.1.json": {
+   "boe_b0031": "7ddd2b9102da34de",
+   "boe_b0047": "70f77ebc555a5058",
+   "boe_b0063": "f3c961e9430e6349"
+  },
+  "leverage_ratio-4.1.1.json": {
+   "boe_b0001": "07798bd3ca21a9f7",
+   "boe_b0012": "15d129a4b4e513d2",
+   "v0702_m": "7e28972c3dcf1b27",
+   "v10244_h": "070870e7622cd70a"
+  },
+  "liquidity_pillarii-4.1.1.json": {
+   "boe_b2000_s": "fd0059f61f2cc907",
+   "boe_b2008_11_m": "9b186756bd1fb87e",
+   "boe_b2008_26_m": "d0ec572a0ba7e79d",
+   "boe_b2008_41_m": "b45255d6671da6a3",
+   "boe_b2008_56_m": "724b27651f70de3e",
+   "boe_b2008_70_m": "a4285c6c46ca5aff",
+   "boe_b2008_85_m": "7c4cac1844aa881e",
+   "boe_b2008_9_m": "5f235e5a24169339",
+   "boe_b2023_101_m": "b10de25027de4b97",
+   "boe_b2023_19_m": "c024297253847d7c",
+   "boe_b2023_34_m": "2c77f66da4475343",
+   "boe_b2023_49_m": "b254c3d11e4135c9",
+   "boe_b2023_63_m": "d8827f7a7cf3fc37",
+   "boe_b2023_78_m": "bd3ef8650fd5346a",
+   "boe_b2023_92_m": "6cebba9991e65d80",
+   "boe_b2027_107_m": "2ca7e90327751c07",
+   "boe_b2027_24_m": "de992fcd0fe2781a",
+   "boe_b2027_3_m": "9a5b102db22b629c",
+   "boe_b2027_54_m": "c6c9095b7520c3dd",
+   "boe_b2027_69_m": "c6ffd77b1d7ba50d",
+   "boe_b2027_83_m": "b9df6c1136fddb75",
+   "boe_b2027_98_m": "10a0ed18b2c7a378",
+   "boe_b2028_15_m": "d2ebb1e1d93e82e3",
+   "boe_b2028_30_m": "43f1a1a4eb1186f1",
+   "boe_b2028_45_m": "ca35dcfb804072f3",
+   "boe_b2028_5_m": "9e56cf399cf3d5ef",
+   "boe_b2028_74_m": "17e9e22dace6ca96",
+   "boe_b2028_89_m": "7f3ea81c88fd802f",
+   "boe_b2029_103_m": "0d6b66524a3cba4d",
+   "boe_b2029_20_m": "abf9afe7e3a0ba3b",
+   "boe_b2029_36_m": "54ff1aff2bba4a91",
+   "boe_b2029_50_m": "104d2301f5a97c66",
+   "boe_b2029_65_m": "eda4f103a5bff85e",
+   "boe_b2029_7_m": "536d15516ec135cc",
+   "boe_b2029_94_m": "6df040613717a949",
+   "boe_b2037_102_m": "eae30bd6027efdb0",
+   "boe_b2037_1_m": "d2aadbcd80b109e8",
+   "boe_b2037_35_m": "1e3dfec46c48fffb",
+   "boe_b2037_4_m": "bdf907e308407df8",
+   "boe_b2037_64_m": "d21d0961c90d848d",
+   "boe_b2037_79_m": "4819957b563673d8",
+   "boe_b2037_93_m": "52ce816651a84bbb",
+   "boe_b2049_s": "df10b37516ce2f00",
+   "boe_b2052_15_m": "9fde2889e4f3353c",
+   "boe_b2052_30_m": "d2d884126909354f",
+   "boe_b2052_45_m": "110fb4e03acc5b5c",
+   "boe_b2052_5_m": "d09c13e5cfbdc6a9",
+   "boe_b2052_74_m": "d61be0f357692747",
+   "boe_b2052_89_m": "22e25ccf71d15250",
+   "boe_b2056_100_m": "c59a70c10739b386",
+   "boe_b2056_18_m": "cedee26c939742a8",
+   "boe_b2056_33_m": "50d998a523d93485",
+   "boe_b2056_48_m": "8e84aa89af72f09d",
+   "boe_b2056_62_m": "22fafd75acb56697",
+   "boe_b2056_77_m": "86b9e00630a2534a",
+   "boe_b2056_91_m": "90fbc9615e0fce32",
+   "boe_b2057_106_m": "8657ca77eafd2e3c",
+   "boe_b2057_23_m": "2435a503b8f7480b",
+   "boe_b2057_39_m": "e2d7c0ade6389576",
+   "boe_b2057_53_m": "5a33a81c7671de9a",
+   "boe_b2057_68_m": "bf18fe871171a214",
+   "boe_b2057_82_m": "6cd7546b7a3619cf",
+   "boe_b2057_97_m": "23c9ffd6673a114e",
+   "boe_b2058_14_m": "55be96613122c15e",
+   "boe_b2058_29_m": "dca2a5b69985090c",
+   "boe_b2058_44_m": "917c52c0ae67644d",
+   "boe_b2058_59_m": "72bc2e990d250758",
+   "boe_b2058_73_m": "2990d19a2e184b20",
+   "boe_b2058_88_m": "e8c478296f140eaf",
+   "boe_b2061_s": "eeb74864b4a2bb43"
+  },
+  "mrel-4.1.1.json": {
+   "boe_b4000": "ea87a15328715283",
+   "boe_b4102": "56bbfeb0d376aa1d"
+  },
+  "step_in_risk-4.1.1.json": {
+   "boe_b1000": "2ea7949a44f6ec44",
+   "boe_b1002": "701a39818746b9d8",
+   "boe_b1013": "81c14730b8034314",
+   "boe_b1019": "2d769588ad6195b7",
+   "boe_b1023": "2c30a267a03f2ecf",
+   "boe_b1024": "2bfb1045d610f5e8",
+   "boe_b1033": "a05ce6c7cc9623b8",
+   "boe_b1034": "fa3f0703961c1657",
+   "boe_b1035": "ce6a14b4b405e0f2"
+  },
+  "structural_reform-4.1.1.json": {
+   "boe_b0079_m": "0cd8a6d5e00ad4c5",
+   "boe_b1004_m": "1556507341fa4a13",
+   "boe_b1020_m": "f77879da87b787d6",
+   "boe_b1036_m": "c4f9bab6332b077b",
+   "boe_b1052_m": "6d47164dbd991f79",
+   "boe_b1068_s": "5aa48e6e09ba7c8c",
+   "boe_b1084_m": "a9c3c5d14c23d3c1",
+   "boe_b1100_u": "1783b9eadf115f66",
+   "boe_b1135_m": "9c931ade919bc7b7",
+   "boe_b1151_t": "34bc9faa68c21aef",
+   "boe_v0765_m": "ebc84830e5bf4158",
+   "boe_v0830_m": "f709ec1145918381",
+   "boe_v0922_m": "1a141d36c7eaeb14",
+   "boe_v0944_m": "c49eb5306149c885",
+   "boe_v1677_m": "d863d4f7a4a2bb9c",
+   "boe_v1989_h": "8adba4a9f3a66be2",
+   "boe_v3084_h": "b6558bd234363447",
+   "boe_v3129_m": "3d94c418440a75a5",
+   "boe_v3486_i": "c726a90470bc1542",
+   "boe_v3997_u": "491711e3094da062",
+   "boe_v5020_m": "7edf098b580d3158",
+   "boe_v5205_m": "7b1ab9d06ab41c28",
+   "boe_v5569_h": "07d95f4a2db96368",
+   "boe_v7859_m": "2a6e78887364e5ac",
+   "boe_v8298_h": "c7f1f45cb465f8f4"
+  }
+ },
+ "seed": 20261122
+}

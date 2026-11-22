@@ -4,7 +4,9 @@ The progress page — how far a validation or a build has got, while it runs.
 Pipeline position:
     form handler  ->  TaskBoard.start  ->  follow(task)
         ->  the result at once (quick work)  |  303 to /tasks/{id}
-    browser  ->  /tasks/{id}  ->  task.html (reloads itself)  ->  303 to the result
+    browser  ->  /tasks/{id}  ->  task.html (asks again at once)
+        ->  /tasks/{id}?wait=1, held until the work ends or a second passes
+        ->  task.html again  |  303 to the result
 
 Key responsibilities:
 - Answer a form that started long work as it was answered before the work
@@ -13,7 +15,11 @@ Key responsibilities:
   Only work still going after that moment gets a progress page.
 - Draw the progress page: each step of the work, which are done and which is
   under way, how many rules are evaluated out of how many, and how long it has
-  been going — reloading itself until the work ends, then moving on.
+  been going — asking again until the work ends, then moving on.
+- Move on the moment the work ends. The page cannot ask sooner than a whole
+  second later by itself (it carries no script), so it asks again at once and
+  the wait is held here instead: a request that says it is waiting is answered
+  when the work ends, or after ``REFRESH_SECONDS`` with the progress so far.
 - Show nothing that was not measured: the rules are counted as the engine
   evaluates them, and the other steps are shown only as started or done.
 
@@ -33,6 +39,7 @@ from starlette.exceptions import HTTPException
 from starlette.responses import RedirectResponse
 from starlette.routing import Route
 
+from rwa_filer.dash.context import link
 from rwa_filer.dash.tasks import STATUS_DONE, STATUS_FAILED
 from rwa_filer.progress import PHASE_LABELS, elapsed
 
@@ -43,8 +50,13 @@ if TYPE_CHECKING:
     from rwa_filer.dash.context import DashContext
     from rwa_filer.dash.tasks import Task
 
-#: Seconds between reloads of the progress page.
+#: Seconds between two drawings of the progress page while the work goes on:
+#: the longest a waiting request is held before it is answered with the progress so far.
 REFRESH_SECONDS: Final = 1
+#: The query parameter, and its value, by which the progress page says its
+#: request may be held until the work ends.
+WAIT_PARAMETER: Final = "wait"
+WAITING: Final = "1"
 
 #: A step that has finished, the one under way, and one not reached yet.
 STEP_DONE: Final = "done"
@@ -116,10 +128,18 @@ class TaskPages:
         self.context = context
 
     def task(self, request: Request) -> Response:
-        """The work's progress while it runs; its result, or its refusal, once it has ended."""
+        """The work's progress while it runs; its result, or its refusal, once it has ended.
+
+        A request that says it is waiting is held until the work ends, for at
+        most ``REFRESH_SECONDS``. This handler is a plain function on purpose:
+        the server runs it in a worker thread, so the wait holds up no other
+        page. Made a coroutine, it would stop the whole server for the wait.
+        """
         task = self.context.tasks.get(str(request.path_params["task_id"]))
         if task is None:
             raise HTTPException(status_code=404, detail="No work is under way at that address.")
+        if task.running and request.query_params.get(WAIT_PARAMETER) == WAITING:
+            task.wait(REFRESH_SECONDS)
         ended = outcome(request, task)
         if ended is not None:
             return ended
@@ -130,6 +150,7 @@ class TaskPages:
             task=task,
             view=task_view(task, now=datetime.now(UTC)),
             refresh=REFRESH_SECONDS,
+            ask_again=link(f"/tasks/{task.task_id}", **{WAIT_PARAMETER: WAITING}),
         )
 
 

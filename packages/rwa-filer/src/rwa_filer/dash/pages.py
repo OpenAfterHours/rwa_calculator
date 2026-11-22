@@ -37,7 +37,6 @@ from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.task_pages import follow
 from rwa_filer.dash.views import overview, rules_page
-from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
 from rwa_filer.release import release_packs, shipped_releases
 
@@ -176,20 +175,15 @@ class ReturnPages:
 
         That is the return with its drafted overrides applied, as every page of
         it is drawn — so the evidence answers for what a build would file now.
-        Collected when asked for, at the accuracy the overview's verdict was
-        reached at, and written inside the session's workspace.
+        Collected the first time it is asked for, at the accuracy the overview's
+        verdict was reached at, and written inside the session's workspace once
+        per validation (``Workspace.evidence``): a later download, or one asked
+        for while it is collected, is handed the same file.
         """
         current = self.context.working(request).current
-        collected = collect_evidence(
-            current.ret,
-            release=current.release,
-            source_findings=current.reading.findings,
-            source=current.validation.source,
-        )
-        folder = self.context.workspace.directory / "evidence"
-        written = write_evidence(collected, folder / f"{current.return_id}.evidence.jsonl")
+        written = self.context.workspace.evidence(current)
         name = f"{current.path.stem}.evidence.jsonl"
-        return FileResponse(written.path, filename=name, media_type="application/x-ndjson")
+        return FileResponse(written, filename=name, media_type="application/x-ndjson")
 
     def templates(self, request: Request) -> Response:
         """One table of the return on its grid, with the broken rules' cells marked."""

@@ -21,6 +21,14 @@ Key responsibilities:
   page drawn after a change validates; every later one reuses its result.
 - Compare two opened returns once per pair: a comparison evaluates every rule
   on both, and a page redrawn to filter its cells must not do that again.
+- Write the evidence behind a validation's verdict once, and hand out that file
+  for every later download of it.
+- Do each of those three — a validation, a comparison, an evidence file — once
+  however many requests ask for it at the same moment: the first asker does the
+  work, and the others wait for it and take its result instead of doing the same
+  work beside it. A page asked for while its return is validated again, a second
+  tab, a second click: each would otherwise repeat seconds of work, and two
+  evidence downloads at once rewrote one file while it was being sent.
 - Open a return again against another taxonomy release, beside the first.
 - Keep uploaded files under the one directory the session owns, under names a
   browser cannot steer outside it.
@@ -29,6 +37,7 @@ Key responsibilities:
 References:
 - rwa_filer.readers.open_source — how a named file is read, as the CLI reads it
 - rwa_filer.validate.returns.validate_return — what "validated" means
+- rwa_filer.evidence — the evidence file, as ``rwa-filer validate --evidence`` writes it
 """
 
 from __future__ import annotations
@@ -39,8 +48,9 @@ import secrets
 import threading
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
+from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.readers import HeaderFields, SourceReading, open_source
 from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.returns import validate_return
@@ -49,6 +59,7 @@ from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.explain import Names
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from rwa_filer.filing import FilingPackage
@@ -72,6 +83,8 @@ _EVERY_FAILURE: Final = None
 _UNSAFE: Final = re.compile(r"[^A-Za-z0-9._-]+")
 #: The name an upload is given when nothing of its own name survives.
 _FALLBACK_NAME: Final = "upload"
+#: The folder of the workspace the evidence files are written to.
+_EVIDENCE_FOLDER: Final = "evidence"
 
 
 # =============================================================================
@@ -182,6 +195,10 @@ class Workspace:
         self._working: dict[str, tuple[int, WorkingReturn]] = {}
         self._builds: dict[str, list[FilingRecord]] = {}
         self._comparisons: dict[tuple[str, str], ReturnComparison] = {}
+        #: Per return, the evidence written: the as-opened validation's and the one written last.
+        self._evidence: dict[str, tuple[_KeptEvidence, ...]] = {}
+        #: The work under way, by what it makes; a second asker waits on it (``_once``).
+        self._flights: dict[tuple[object, ...], _Flight[Any]] = {}
         self._lock = threading.Lock()
 
     def open(
@@ -311,20 +328,73 @@ class Workspace:
 
         A page drawn after the drafts last changed gets the same object back,
         so only the first page drawn after a change pays for the validation.
-        ``progress`` is told how far that validation has got, when one is run.
+        One asked for while that validation runs — a page drawn while a drafted
+        override is validated, the open page listing the return — waits for it
+        and gets its result, rather than validating the same drafts beside it.
+        ``progress`` is told how far that validation has got, when this call is
+        the one that runs it.
         """
         return_id = opened.return_id
         with self._lock:
             revision = self._revisions.get(return_id, 0)
             drafts = tuple(self._adjustments.get(return_id, {}).values())
-            kept = self._working.get(return_id)
-        if kept is not None and kept[0] == revision:
-            return kept[1]
-        made = _work_out(opened, drafts, progress)
-        with self._lock:
+
+        def kept() -> WorkingReturn | None:
+            found = self._working.get(return_id)
+            return found[1] if found is not None and found[0] == revision else None
+
+        def keep(made: WorkingReturn) -> None:
+            # A validation of drafts changed since it started is not kept: no page shows it.
             if self._revisions.get(return_id, 0) == revision:
                 self._working[return_id] = (revision, made)
-        return made
+
+        return self._once(
+            ("working", return_id, revision),
+            kept,
+            lambda: _work_out(opened, drafts, progress),
+            keep,
+        )
+
+    # -- evidence -----------------------------------------------------------------
+
+    def evidence(self, current: OpenedReturn) -> Path:
+        """The evidence file behind ``current``'s verdict, collected and written once for it.
+
+        ``current`` is a return as its pages draw it — as opened, or with its
+        drafted overrides applied (``WorkingReturn.current``) — and the file is
+        what ``rwa-filer validate --evidence`` writes for it. It is kept per
+        validation, not per return: a second download is served the file the
+        first wrote, and withdrawing every override is served the as-opened file
+        again rather than writing it a second time. Each file is written whole,
+        under a name of its own, before it is first handed out, and never
+        written again: no download can read a file while it is being written.
+        Of a return's files, the as-opened one and the one written last are
+        kept; any other is removed when a newer one is written.
+        """
+        validation, return_id = current.validation, current.return_id
+
+        def kept() -> Path | None:
+            found = self._evidence.get(return_id, ())
+            return next((item.path for item in found if item.validation is validation), None)
+
+        def keep(path: Path) -> None:
+            opened = self._returns.get(return_id)
+            as_opened = opened.validation if opened is not None else None
+            stays: list[_KeptEvidence] = []
+            goes: list[_KeptEvidence] = []
+            for item in self._evidence.get(return_id, ()):
+                (stays if item.validation is as_opened else goes).append(item)
+            self._evidence[return_id] = (*stays, _KeptEvidence(validation, path))
+            for item in goes:
+                _remove(item.path)
+
+        # Keyed on the validation itself: the flight keeps ``current`` alive, so the id is its own.
+        return self._once(
+            ("evidence", id(validation)),
+            kept,
+            lambda: _write_evidence(current, self.directory / _EVIDENCE_FOLDER),
+            keep,
+        )
 
     # -- builds -------------------------------------------------------------------
 
@@ -346,21 +416,95 @@ class Workspace:
         """``candidate`` compared with ``baseline``, worked out once for the pair.
 
         An opened return never changes — overrides are drafted beside it — so a
-        pair's comparison holds for the session.
+        pair's comparison holds for the session. Asked for again while it is
+        being worked out, it is waited for, not worked out a second time.
         """
         key = (baseline.return_id, candidate.return_id)
-        with self._lock:
-            found = self._comparisons.get(key)
-        if found is not None:
-            return found
         names = (
             Names(baseline.name, candidate.name)
             if baseline.name != candidate.name
             else Names(f"{baseline.name} (earlier)", f"{candidate.name} (later)")
         )
-        made = compare_returns(_reading(baseline), _reading(candidate), names=names)
+
+        def keep(made: ReturnComparison) -> None:
+            self._comparisons[key] = made
+
+        return self._once(
+            ("comparison", *key),
+            lambda: self._comparisons.get(key),
+            lambda: compare_returns(_reading(baseline), _reading(candidate), names=names),
+            keep,
+        )
+
+    def kept_comparison(
+        self, baseline: OpenedReturn, candidate: OpenedReturn
+    ) -> ReturnComparison | None:
+        """The pair's comparison if it has been worked out; never works it out."""
         with self._lock:
-            return self._comparisons.setdefault(key, made)
+            return self._comparisons.get((baseline.return_id, candidate.return_id))
+
+    # -- helpers ------------------------------------------------------------------
+
+    def _once[T](
+        self,
+        key: tuple[object, ...],
+        kept: Callable[[], T | None],
+        make: Callable[[], T],
+        keep: Callable[[T], None],
+    ) -> T:
+        """What ``kept`` finds; else ``make``'s result, made once for all who ask meanwhile.
+
+        The first thread to ask for ``key`` makes it and hands it to ``keep``;
+        any other asking for ``key`` while it does waits for it and gets the
+        same result, kept or not. If ``make`` raises, the exception goes to the
+        thread that made it and no one is left waiting: a thread that was
+        waiting makes its own. ``kept`` and ``keep`` run under the workspace's
+        lock, ``make`` outside it.
+        """
+        while True:
+            with self._lock:
+                found = kept()
+                if found is not None:
+                    return found
+                flight = self._flights.get(key)
+                if flight is None:
+                    flight = self._flights[key] = _Flight[T]()
+                    break
+            flight.ended.wait()
+            if flight.made is not None:
+                return flight.made
+        try:
+            made = make()
+            flight.made = made
+            with self._lock:
+                keep(made)
+            return made
+        finally:
+            with self._lock:
+                del self._flights[key]
+            flight.ended.set()
+
+
+@dataclass(frozen=True, eq=False)
+class _KeptEvidence:
+    """An evidence file written for one validation of a return.
+
+    Attributes:
+        validation: The validation whose verdict the file answers for.
+        path: Where it was written, whole, before it was first handed out.
+    """
+
+    validation: ReturnValidation
+    path: Path
+
+
+class _Flight[T]:
+    """One piece of work under way in the workspace, and what it made once it has."""
+
+    def __init__(self) -> None:
+        self.ended = threading.Event()
+        #: Set before ``ended``; still ``None`` when the work raised.
+        self.made: T | None = None
 
 
 def _work_out(
@@ -388,6 +532,26 @@ def _work_out(
     return WorkingReturn(
         opened=opened, current=current, drafts=drafts, applied=applied, problem=None
     )
+
+
+def _write_evidence(current: OpenedReturn, folder: Path) -> Path:
+    """Collect ``current``'s evidence as ``rwa-filer validate --evidence`` does, into a new file."""
+    collected = collect_evidence(
+        current.ret,
+        release=current.release,
+        source_findings=current.reading.findings,
+        source=current.validation.source,
+    )
+    path = folder / f"{current.return_id}.{secrets.token_hex(4)}.evidence.jsonl"
+    return write_evidence(collected, path).path
+
+
+def _remove(path: Path) -> None:
+    """Delete a superseded evidence file; one a download still holds open stays (Windows)."""
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.debug("could not remove %s", path, exc_info=True)
 
 
 def _reading(opened: OpenedReturn) -> SourceReading:

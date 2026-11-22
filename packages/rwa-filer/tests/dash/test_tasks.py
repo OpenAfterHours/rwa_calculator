@@ -1,11 +1,12 @@
 """
-Long work in the dashboard: opening, re-validating and building a return show their progress.
+Long work in the dashboard: opening, re-validating, comparing and building show their progress.
 
 A full PRA001 return takes tens of seconds to validate. Before, the form that
 asked for it simply did not answer until it was done, and the page looked
 frozen. Now the work runs as a task: a form waits a moment for it, and work
 still going after that moment sends the person to a progress page that says
-which step is under way and how many rules are evaluated.
+which step is under way and how many rules are evaluated. A pair's first
+comparison, which traces every rule on both returns, is answered the same way.
 
 How the tests catch the work mid-run without racing it: the REAL validation
 runs, and the progress callback it is handed pauses on a gate partway through
@@ -13,6 +14,13 @@ the rules (``_Pause``). The page is read while the work is held there, so what
 it shows is the engine's own count, not one invented for the test. Every client
 here waits zero seconds, so the progress page is always what a form answers
 with while the work is held.
+
+The progress page asks again by itself, and the server holds that request until
+the work ends or a second has passed, so the page moves on the moment the work
+is done rather than at the next whole second. The tests of that never read a
+clock: the interval is set far beyond the test's patience where only the work
+ending may answer, and a request that is being held is found by where its
+thread is (``parked_inside``).
 """
 
 from __future__ import annotations
@@ -26,8 +34,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from starlette.testclient import TestClient
 
-from dash_builders import BASE_URL, CELL, GRID, HEADER, HEADER_FORM
-from rwa_filer.dash import create_app, filing_pages
+from dash_builders import BASE_URL, CELL, GRID, HEADER, HEADER_FORM, parked_inside, wait_until
+from rwa_filer.dash import create_app, filing_pages, task_pages
+from rwa_filer.dash import workspace as workspace_module
+from rwa_filer.dash.tasks import Task
 from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE, PHASE_WRITING
 
 if TYPE_CHECKING:
@@ -42,6 +52,9 @@ if TYPE_CHECKING:
 HELD_AT = 5
 #: Seconds any wait in these tests may last before it is a failure, not a hang.
 PATIENCE = 60.0
+#: A refresh interval no test outlasts: a held request answered under it was
+#: answered because the work ended, not because the interval ran out.
+NEVER = 10 * PATIENCE
 
 
 class _Pause:
@@ -148,7 +161,8 @@ def test_a_return_still_validating_shows_which_step_is_under_way(
     assert _state(page, PHASE_RULES) == "current"
     assert f"{HELD_AT} of {pause.total:,} rules evaluated" in _text(page)
     assert f'<progress id="task-progress" max="{pause.total}" value="{HELD_AT}">' in page
-    assert '<meta http-equiv="refresh" content="1">' in page
+    task_address = response.headers["location"]
+    assert f'<meta http-equiv="refresh" content="0; url={task_address}?wait=1">' in page
 
 
 def test_the_progress_page_moves_on_to_the_overview_when_the_work_is_done(
@@ -266,6 +280,221 @@ def test_opening_another_version_to_compare_shows_its_progress_too(
     # Assert
     assert "Validating clean.csv to compare" in page
     assert ended.headers["location"].startswith(f"/returns/{broken.return_id}/compare?against=")
+
+
+# ---------------------------------------------------------------------------
+# The progress page moves on the moment the work ends
+# ---------------------------------------------------------------------------
+
+
+class _Asked:
+    """One request made from a thread of its own, and its answer once it has one."""
+
+    def __init__(self, client: TestClient, address: str) -> None:
+        self.response: httpx.Response | None = None
+        self.answered = threading.Event()
+        self._thread = threading.Thread(target=self._ask, args=(client, address), daemon=True)
+        self._thread.start()
+
+    def _ask(self, client: TestClient, address: str) -> None:
+        try:
+            self.response = client.get(address, follow_redirects=False)
+        finally:
+            self.answered.set()
+
+    def answer(self) -> httpx.Response:
+        """The answer, waited for."""
+        assert self.answered.wait(PATIENCE), "the request was never answered"
+        assert self.response is not None, "the request failed"
+        return self.response
+
+
+@pytest.fixture
+def waits(monkeypatch: pytest.MonkeyPatch) -> list[float | None]:
+    """Each wait the progress page makes for a task's work, by how long it allowed."""
+    made: list[float | None] = []
+    real_wait = Task.wait
+
+    def recorded(task: Task, timeout: float | None) -> bool:
+        made.append(timeout)
+        return real_wait(task, timeout)
+
+    monkeypatch.setattr(Task, "wait", recorded)
+    return made
+
+
+def _held_task(client: TestClient, pause: _Pause, path: Path) -> str:
+    """Start opening ``path`` and hold it partway through its rules; the task's address."""
+    response = client.post("/open", data={"path": str(path), **HEADER_FORM}, follow_redirects=False)
+    assert response.status_code == 303, response.text
+    assert pause.reached.wait(PATIENCE), "the work never reached the rules"
+    return response.headers["location"]
+
+
+def test_a_progress_page_waited_on_answers_when_the_work_ends_and_not_before(
+    eager: TestClient, pause: _Pause, broken_csv: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — only the work ending can answer: the interval outlasts the test.
+    monkeypatch.setattr(task_pages, "REFRESH_SECONDS", NEVER)
+    address = _held_task(eager, pause, broken_csv)
+
+    # Act
+    asked = _Asked(eager, f"{address}?wait=1")
+    wait_until(lambda: parked_inside(task_pages.TaskPages.task) == 1 or asked.answered.is_set())
+    answered_while_held = asked.answered.is_set()
+    pause.released.set()
+    ended = asked.answer()
+
+    # Assert
+    assert not answered_while_held, "the page answered while the work was still going"
+    assert ended.status_code == 303
+    assert ended.headers["location"].startswith("/returns/")
+
+
+def test_a_progress_page_waited_on_is_drawn_again_while_the_work_goes_on(
+    eager: TestClient,
+    pause: _Pause,
+    broken_csv: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    waits: list[float | None],
+) -> None:
+    # Arrange — an interval short enough to sit out.
+    monkeypatch.setattr(task_pages, "REFRESH_SECONDS", 0.01)
+    address = _held_task(eager, pause, broken_csv)
+    waits.clear()
+
+    # Act
+    page = eager.get(f"{address}?wait=1", follow_redirects=False)
+    pause.released.set()
+
+    # Assert — it waited the interval, no longer, then drew the page and asked again.
+    assert waits == [0.01]
+    assert page.status_code == 200
+    assert f'content="0; url={address}?wait=1"' in page.text
+    assert f"{HELD_AT} of {pause.total:,} rules evaluated" in _text(unescape(page.text))
+
+
+def test_the_first_progress_page_is_drawn_without_waiting(
+    eager: TestClient,
+    pause: _Pause,
+    broken_csv: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    waits: list[float | None],
+) -> None:
+    """The page a form sends the person to shows where the work stands at once."""
+    # Arrange — short, so a page that waited anyway would still be drawn, and counted.
+    monkeypatch.setattr(task_pages, "REFRESH_SECONDS", 0.01)
+    address = _held_task(eager, pause, broken_csv)
+    waits.clear()
+
+    # Act
+    page = eager.get(address, follow_redirects=False)
+    pause.released.set()
+
+    # Assert
+    assert page.status_code == 200
+    assert waits == []
+
+
+def test_finished_work_answers_at_once_however_it_is_asked_for(
+    eager: TestClient, pause: _Pause, broken_csv: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — the work has ended; an answer that sat out the interval would outlast the test.
+    monkeypatch.setattr(task_pages, "REFRESH_SECONDS", NEVER)
+    address = _held_task(eager, pause, broken_csv)
+    pause.released.set()
+    wait_until(lambda: eager.get(address, follow_redirects=False).status_code == 303)
+
+    # Act
+    plain = eager.get(address, follow_redirects=False)
+    waited_on = _Asked(eager, f"{address}?wait=1").answer()
+
+    # Assert
+    assert plain.status_code == waited_on.status_code == 303
+    assert waited_on.headers["location"] == plain.headers["location"]
+
+
+def test_another_page_is_answered_while_a_progress_page_is_waited_on(
+    workspace: Workspace, pause: _Pause, broken_csv: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wait is held in a worker thread: held on the server's one loop, it would freeze every page."""
+    # Arrange — one loop for every request, as the real server has.
+    monkeypatch.setattr(task_pages, "REFRESH_SECONDS", NEVER)
+    with TestClient(create_app(workspace, progress_after=0.0), base_url=BASE_URL) as shared:
+        address = _held_task(shared, pause, broken_csv)
+        held = _Asked(shared, f"{address}?wait=1")
+        wait_until(lambda: parked_inside(task_pages.TaskPages.task) == 1)
+
+        # Act
+        other = _Asked(shared, "/")
+        answered = other.answered.wait(PATIENCE)
+        pause.released.set()
+        held.answer()
+
+    # Assert
+    assert answered, "a page asked for while another request waited was not answered"
+    assert other.answer().status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# A first comparison
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def comparing(monkeypatch: pytest.MonkeyPatch) -> threading.Event:
+    """Every comparison of two returns, held until the event is set."""
+    released, real_compare = threading.Event(), workspace_module.compare_returns
+
+    def compare_held(*args: Any, **kwargs: Any) -> Any:
+        assert released.wait(PATIENCE), "the test never let the comparison go on"
+        return real_compare(*args, **kwargs)
+
+    monkeypatch.setattr(workspace_module, "compare_returns", compare_held)
+    return released
+
+
+def test_a_first_comparison_shows_its_progress_then_the_comparison(
+    eager: TestClient,
+    workspace: Workspace,
+    broken: OpenedReturn,
+    clean_csv: Path,
+    comparing: threading.Event,
+) -> None:
+    # Arrange
+    clean = workspace.open(clean_csv, HEADER)
+    address = f"/returns/{broken.return_id}/compare?against={clean.return_id}"
+
+    # Act
+    response = eager.get(address, follow_redirects=False)
+    page = unescape(eager.get(response.headers["location"]).text)
+    comparing.set()
+    ended = _settle(eager, response)
+
+    # Assert — the progress page, then the page that was asked for.
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/tasks/")
+    assert "Comparing broken.csv with clean.csv" in page
+    assert _state(page, PHASE_RULES) == "current"
+    assert ended.headers["location"] == address
+    assert 'id="counts"' in eager.get(address).text
+
+
+def test_a_comparison_done_within_a_moment_is_drawn_at_once(
+    client: TestClient, workspace: Workspace, broken: OpenedReturn, clean_csv: Path
+) -> None:
+    """As before the comparison ran as a task: no progress page, no redirect."""
+    # Arrange
+    clean = workspace.open(clean_csv, HEADER)
+
+    # Act
+    response = client.get(
+        f"/returns/{broken.return_id}/compare?against={clean.return_id}", follow_redirects=False
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert 'id="counts"' in response.text
 
 
 # ---------------------------------------------------------------------------

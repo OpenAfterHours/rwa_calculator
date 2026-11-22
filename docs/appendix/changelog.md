@@ -201,6 +201,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs the EBA and BoE v4.0.0 extracts on the generated frames.
 
 ### Changed
+- **`rwa-filer` runs its checks in about half the time** (performance review,
+  `docs/plans/rwa-filer-performance-review-2026-11-22.md`): a typical PRA001
+  `validate` 1.7 s -> 0.8 s, an XBRL instance 2.4 s -> 0.9 s, a 26,000-fact return
+  3.7 s -> 1.4 s, `compare` 3.4 s -> 1.1 s, with no verdict, report, evidence or
+  written XBRL byte changed. On the way it fixed a `compare` crash on resubmissions
+  that change only sheet-less templates, a corrupted-download race in the
+  dashboard, a two-thread crash, an XBRL-reader stall and a false Polars floor
+  (`rwa-filer` now needs `polars>=1.24.0`). Details in `packages/rwa-filer/CHANGELOG.md`.
+  The root project gains `scripts/rwa_filer_benchmark.py`, a cold-process
+  benchmark of the `rwa-filer` commands.
 - **Input schema changes from the product review.** New optional columns:
   `is_inflation` on SA-CCR trades (default False); `collateral_role` (`"vm"`,
   the default, or `"im"`) and `is_main_index` on `ccr_collateral`;

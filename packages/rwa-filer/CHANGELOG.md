@@ -8,11 +8,103 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Added
 - (Next release changes will go here)
+- **The progress line names the first structure finding before the rules run.**
+  When `validate`, `build` or `dash FILE` checks a return whose structure is
+  wrong, stderr says so as soon as the check returns - `Checking the structure
+  against taxonomy 4.1.1: 11 finding(s); the first: [STR004] ...` - instead of
+  after the whole rule run. Standard output, the report and every exit code are
+  unchanged, and nothing is shown with progress off. `rwa_filer.progress.Progress`
+  gains `note` (default empty).
+- **`RWA_FILER_COLLECTOR=on`** keeps Python's garbage collector on for a run of
+  the `rwa-filer` command (see Changed), should the new policy ever need turning
+  off without a release.
+- `rwa_filer.release.release_choice(...)`: the release `resolve_release` would
+  use, chosen by the same rules and refused in the same words, with nothing
+  loaded; and `default_release_version(module)`.
+- `TaxonomyPack.derived(build)`: a value worked out from a pack, kept with that
+  pack object (gone when the pack goes; not carried by `replace`, copy or pickle;
+  no part of the pack's equality or `repr`).
 
 ### Changed
 - (Next release changes will go here)
+- **Every check runs in about half the time or less.** Cold `rwa-filer`
+  commands, wall clock, best of three, measured interleaved against the code
+  before this change (`scripts/rwa_filer_benchmark.py run --against 85cfe58`):
+
+  | Command | Before | Now |
+  |---|---|---|
+  | `validate`, 2,227 facts, fact table | 1.70 s | 0.78 s |
+  | `validate`, 2,227 facts, XBRL | 2.39 s | 0.85 s |
+  | `validate`, 25,987 facts, fact table | 3.73 s | 1.40 s |
+  | `validate`, 25,987 facts, XBRL | 5.71 s | 2.38 s |
+  | `validate --evidence`, 25,987 facts | 8.83 s | 4.51 s |
+  | `build`, 25,987 facts | 4.61 s | 2.16 s |
+  | `compare`, 25,987 vs 7,987 facts (XBRL) | 11.68 s | 3.83 s |
+  | `diff`, two XBRL instances | 2.39 s | 0.61 s |
+  | `diff`, two fact tables | 0.90 s | 0.25 s |
+  | `taxonomy list` | 1.21 s | 0.24 s |
+
+  No verdict, status, count, recorded break or its order, trace, report, evidence
+  byte or written XBRL byte changed: a 146-section behaviour snapshot of the old
+  code over 18 returns is identical, and goldens banked from it (an engine corpus
+  with open-row tables, member-less facts and QName keys; every parse of every
+  packaged rule; every data point of every pack) hold. What changed: the taxonomy
+  pack is built from shared pairs instead of 518,270 tuples; each rule is parsed
+  once, by a faster parser; the engine builds one fact store per validation,
+  works out per-rule plans once instead of per evaluation and looks each cell up
+  once per place; the structure check aligns codes per axis, not per cell; the
+  XBRL reader indexes the pack once; `compare` traces without the comparison log
+  it never reads and explains in linear time; and the one-shot command no longer
+  runs the garbage collector over data that lives to its end (below).
+- **The `rwa-filer` command runs through a new process entry,
+  `rwa_filer.entry:run`.** It runs the one command with Python's cyclic garbage
+  collector switched off and freezes the heap before exit. A command builds
+  hundreds of thousands of objects that live to its end - the taxonomy pack, the
+  rule book, the return - and the collector kept re-walking them to free almost
+  nothing, then walked them again at shutdown. Reading a workbook is the
+  exception: openpyxl leaves cyclic garbage per sheet, so a workbook is read with
+  the collector on and collected once at the end (peak memory on a 455-sheet
+  workbook 326-350 MB -> 248-271 MB). `rwa-filer dash` hands the collector back
+  before it starts serving. `rwa_filer.cli.main(argv)` is unchanged and never
+  touches its caller's collector. Library code pauses the collector only while it
+  builds bulk reference data (a pack, an XBRL read), and restores what it found.
+- **The XBRL reader keeps one compact index per taxonomy pack** instead of
+  rebuilding a 110 MB index of 61,428 data points on every read: 4.8 MB for
+  PRA001, built once per process.
+- **`rwa-filer compare` names the first of two tied rows.** Where two rows moved
+  by the same amount, which one a move named depended on Python's hash seed; it
+  is now the first in cell order (see Fixed).
+- **The dashboard** moves on from its progress page the moment the work ends
+  (it used to wait for the next one-second refresh); a page asked for during a
+  re-validation waits for it instead of validating again; the first comparison
+  of a pair runs behind the progress page; the browser opens as soon as the
+  server answers. **Download evidence** is collected once per validation and
+  served from then on; its working file is named
+  `{return_id}.{token}.evidence.jsonl`, one per validation.
+- **The declared Polars floor is now 1.24.0** (it was 1.0.0; see Fixed).
 
 ### Fixed
+- **`rwa-filer compare` crashed on a resubmission whose changes were all in
+  templates with no sheets** (own funds, CCR, netting): a Polars `SchemaError`
+  traceback, exit 1 - the same code as "the returns differ". 36 of 240 pairs of
+  golden returns. They now compare; the other 204 are unchanged.
+- **`compare`'s JSON could change between two runs of the same pair** (Python's
+  hash seed chose between tied rows).
+- **Two dashboard clicks on Download evidence could return a damaged file** with
+  HTTP 200: each click rewrote the one file while the other was being sent.
+- **Two validations started at once in a fresh process could crash** with a
+  `KeyError` in the rule engine (two threads each parsing a rule; the dashboard
+  runs each task in its own thread).
+- **A fact carrying many open dimensions stalled the XBRL reader**: it tried
+  every subset of them, 2^k (about a second a fact at 18). Bounded now by the most
+  dimensions any data point leaves open.
+- **A few facts with no member on an open axis made the rule checks quadratic in
+  the countries again** (40 blank-country cells on a 200-country return:
+  `validate_return` 3.2-3.6 s -> 1.4 s), and so was `compare`'s explanation step
+  (12.3 s -> 0.7 s at 200 countries).
+- **rwa-filer declared `polars>=1.0.0` but needed 1.24**: the structure check
+  calls a `join` argument that arrived then, so an older Polars failed every
+  `validate`. A CI job now runs the suite at the declared floor.
 - **The Bank of England rule checks no longer slow down with the square of the
   countries a return reports.** On a PRA001 return the rules took 0.2 s with 2
   countries on OF 09.01 / OF 09.02, 12 s with 100 and 54 s with 200; they now

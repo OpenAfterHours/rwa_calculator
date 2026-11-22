@@ -1,8 +1,8 @@
 # rwa-filer performance review: where a control run's time goes, and the plan to cut it
 
-**Status:** Proposal, 2026-11-22; phase 1 in implementation. The review is complete, nine
-of its ten lenses have been independently challenged and the proposal as a whole has been
-red-teamed. The [Outcome](#outcome) section is filled in as the phase 1 work lands. Every number below
+**Status:** Phase 1 implemented 2026-11-22 — see [Outcome](#outcome) for what each
+change bought, measured against the code before it. Phase 2 and the owner's decisions
+are plan item P6.61. Every number below
 was measured on the reference dev container (4 cores, 15 GB, Python 3.13, `rwa-filer`
 0.1.5) and is reproducible with the tools in the [appendix](#appendix-method).
 
@@ -26,11 +26,9 @@ and readers, XBRL, compare and diff, dashboard, developer gates, architecture) e
 measured their subsystem and prototyped their proposals in a scratch copy. Every lens was
 then handed to a **second, independent agent whose brief was to refute it**: re-measure
 with its own scripts, write its own prototype, and attack the equivalence argument with
-mutants. 70 findings went in. Nine lenses (65 findings) have been challenged so far: 37
-confirmed, 21 reduced, 6 sent back for redesign and 1 marked unsafe, with 51 further
-items the reviewers had missed. The architecture lens's challenge is still running; the
-one phase 1 idea that rested on it alone (printing the verdict before the evidence) has
-been moved to the owner's decisions.
+mutants. 70 findings went in, and all ten lenses were challenged: 39 confirmed, 23
+reduced, 7 sent back for redesign and 1 marked unsafe, with 54 further items the reviewers
+had missed.
 
 The consolidated proposal was then **red-teamed as a whole** by three more teammates —
 correctness and regulatory risk, delivery and sequencing, and the user's outcome. All
@@ -202,9 +200,11 @@ frozen page. The browser opens when the server answers, not a fixed 0.8 s later.
 to 33 s. The member suite runs under `pytest-xdist`, as its own dev-only commit, with the
 scaling gates' verdict carried by call counts so parallel workers cannot flake them. The
 two slowest tests get an indexed `closing_dimensions`. The declared Polars floor is
-corrected and a CI step runs the pack, structure and reader tests at the floor. The
-benchmark and the behaviour-snapshot tool are committed, so the next change can be
-measured and proven the same way.
+corrected and a CI job runs the whole member suite at the floor. The benchmark is committed
+(`scripts/rwa_filer_benchmark.py`), so the next change can be measured the same way. The
+behaviour snapshot is not: its record of the unchanged code is 510 MB. What it proved is held
+in the repository instead by the goldens this change banks from the unchanged code (the
+engine corpus, the parse golden, the per-pack equalities).
 
 ### Guards that land with the changes
 
@@ -337,8 +337,92 @@ for the owner above is what brings the command line to the same place.
 
 ## Outcome
 
-*To be completed when phase 1 lands: measured before/after for every row above, what was
-dropped and why, and the escape-log entries for the defects.*
+### What phase 1 bought
+
+Cold command line, the code before this change (`85cfe58`) and after it, interleaved case
+by case, best of three, wall clock and the child's own CPU (`uv run python
+scripts/rwa_filer_benchmark.py run --against 85cfe58`). The box was shared with review
+agents during the run, which falls on both columns alike.
+
+| Command | Before: wall / CPU | After: wall / CPU | Faster |
+|---|---|---|---|
+| `--help` | 0.30 / 0.30 s | 0.21 / 0.21 s | 1.4× |
+| `taxonomy list` | 1.21 / 1.24 s | 0.24 / 0.23 s | 5.0× |
+| `validate`, 2,227 facts, fact table | 1.70 / 1.81 s | 0.78 / 0.90 s | 2.2× |
+| `validate`, 2,227 facts, XBRL | 2.39 / 2.55 s | 0.85 / 0.92 s | 2.8× |
+| `validate`, 7,987 facts, fact table | 2.02 / 2.21 s | 0.86 / 0.98 s | 2.3× |
+| `validate`, 25,987 facts, fact table | 3.73 / 3.92 s | 1.40 / 1.55 s | 2.7× |
+| `validate`, 25,987 facts, XBRL | 5.71 / 5.83 s | 2.38 / 2.49 s | 2.4× |
+| `validate --evidence`, 2,227 facts | 2.27 / 2.38 s | 1.13 / 1.25 s | 2.0× |
+| `validate --evidence`, 25,987 facts | 8.83 / 8.93 s | 4.51 / 4.65 s | 2.0× |
+| `build`, 2,227 facts | 1.92 / 2.15 s | 0.83 / 0.93 s | 2.3× |
+| `build`, 25,987 facts | 4.61 / 4.94 s | 2.16 / 2.35 s | 2.1× |
+| `compare`, 2,227 vs 1,821 facts (XBRL) | 3.35 / 3.42 s | 1.12 / 1.23 s | 3.0× |
+| `compare`, 25,987 vs 7,987 facts (XBRL) | 11.68 / 11.71 s | 3.83 / 3.97 s | 3.0× |
+| `diff`, two XBRL instances | 2.39 / 2.42 s | 0.61 / 0.68 s | 3.9× |
+| `diff`, two fact tables | 0.90 / 0.92 s | 0.25 / 0.26 s | 3.6× |
+
+Against the three-lens prototype's CPU figures in the expected-result table above, the
+validate rows land within 0.2 s either way (0.90 against 0.86 s on a small fact table,
+2.49 against 2.32 s on the large XBRL instance; 0.92 against 1.15 s on the small one), and
+`compare`, `diff`, `build` and the evidence export beat it, because the lean trace, the
+linear explanation and the evidence and build changes were not in that prototype. Beyond
+the command line:
+
+- **A return with a structural error** is now told so on the progress line when the
+  structure check returns, 0.5 s into a 25,987-fact validation, instead of at the end.
+- **Dashboard:** the progress page answers when the work ends, not up to a second later;
+  a second Download evidence click on a 7,987-fact return 2.10 s → 0.17 s; a page asked for
+  during a re-validation no longer starts a second one; a pair's first comparison shows
+  progress instead of a page that hangs.
+- **Memory:** the XBRL reader's index of the pack 110 MB → 4.8 MB, kept once per process;
+  a 455-sheet workbook's peak 326-350 MB → 248-271 MB.
+- **Large and awkward returns,** where the old code was super-linear: 40 blank-country
+  cells on a 200-country return, `validate_return` 3.2-3.6 s → 1.4 s; `compare`'s
+  explanation at 200 countries 12.3 s → 0.7 s; two facts carrying 18 open dimensions
+  each took 2.16 s of CPU to read, now 0.01 s.
+- **The member test suite:** 1,843 tests in 216 s serially before; 2,414 tests (571 of
+  them new guards) in 191 s serially after, and about 70 s on three workers, as CI now
+  runs it.
+- **How the tool is launched** matters as much as several of the rows above: `uvx
+  rwa-filer@latest --version` took 0.70-0.78 s against 0.24 s for an installed command,
+  because `@latest` asks PyPI on every run. For repeated, interactive use,
+  `uv tool install rwa-filer` saves about half a second a command.
+
+### What was not done, and why
+
+| Item | Why |
+|---|---|
+| Printing the verdict before the evidence | An output change on failure (a complete "submittable" report on stdout, exit 1); the owner's call, recorded in P6.61 |
+| A warm process for the command line | A new interface; the owner's call and the recommended next step (P6.61 a) |
+| Overrides applied in Polars; the grid's marks cached | 3 ms and 8-10 ms on a typical return; the first feeds `build --adjustments` |
+| Skipping the parse of rules whose templates are not reported | About 60 ms after the faster parser, and it changes the reason reported for a rule that both fails to parse and is not reported (P6.61 d) |
+| A collector pause in the rule-book and issue-register loaders | Measured 6 and 2 young collections: nothing to win |
+| The writer's per-data-point fixed-member cache | 60-70 ms on a 26,000-fact build, a second cache for a small gain |
+| Handler-local imports across `cli.py`; signoff and verify imports | 30-60 ms on a control, in the file every other change also edited (P6.61 f) |
+| The evidence gzip level | Changes the `.gz` bytes and its checksum in manifests; the owner's call |
+| The dashboard's first evidence click as a task | A navigation that ends in a download leaves the progress page behind; the click still blocks for one collection |
+
+### Defects found and fixed on the way
+
+Each has its entry in `docs/development/escape-log.md` (2026-11-22), with its escape class,
+the gate that now catches it and the red that gate was seen against: the `compare` crash on
+sheet-less templates; `compare`'s dependence on the hash seed; the quadratic explanation
+step; the quadratic return of the rule engine on blank-country facts; the two-thread
+parsing crash; the XBRL reader's stall on many open dimensions; the false Polars floor; the
+dashboard's corrupted evidence download. Smaller ones found and not fixed are plan items
+P6.62-P6.65.
+
+### Not verified here
+
+- **The Referee Differential** (Arelle against `rwa_filer.boe`, rule by rule, on the golden
+  returns) cannot run in the development container; it runs in CI on this change's paths
+  and must be green with no engine verdict re-banked.
+- **The Bank's own sample instance** (`test_sample_oracle.py`, `test_boe_sample.py`) needs
+  a file neither the container nor CI holds: plan item P6.60 (d).
+- **Python 3.14**: the collector policy was measured on 3.14.6 by the cold-start
+  challenger and the reader's index on 3.14 by its implementer; the rest of phase 1 was
+  measured on 3.13 only.
 
 ## Appendix: method
 

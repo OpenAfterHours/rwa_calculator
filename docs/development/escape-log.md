@@ -5302,3 +5302,193 @@ requires every register reason on such a rule to cite the issue or rebut it.
 - **Lesson**: the second cost that grows with the square of an input and that no
   correctness gate can see (the first: 2026-09-05, the classifier). Graduated on
   this occurrence to the scaling test above; ledger row in `.claude/LESSONS.md`.
+
+---
+
+The eight entries below were found together on 2026-11-22, by the rwa-filer
+performance review (`docs/plans/rwa-filer-performance-review-2026-11-22.md`)
+rather than by eight separate `/postmortem` runs: ten review lenses and their
+independent challengers, measuring the package and attacking each other's
+prototypes, met them on the way. Each fix landed in the same branch as its gate,
+and each gate was observed red against the code as it shipped before the fix.
+
+## 2026-11-22 — `rwa-filer compare` crashed on an ordinary resubmission whose changes sat in templates with no sheets
+
+- **Defect**: `workflow/explain.py::_link_same_datapoint` built a Polars frame
+  of the differing cells from column names alone. When every differing
+  fixed-table cell sat in a template with no sheet axis (own funds, CCR,
+  netting), the `sheet` column held only nulls, was typed `Null`, and the join to
+  `pack.cells` raised `SchemaError`. `rwa-filer compare`, `compare_returns` and
+  the dashboard's Compare page all went through it. 36 of the 240 ordered pairs
+  of golden Basel 3.1 returns raised. The traceback exited 1, the code for "the
+  returns differ", so a script could not tell a crash from an answer.
+- **Rule**: **Not a regulatory escape.** No verdict is involved; a comparison
+  that should have been drawn was not.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/workflow/explain.py`, as of
+  `85cfe58`.
+- **Escape class**: `path-never-exercised`. Every compare test differed in a
+  sheeted template.
+- **Gate change**: `packages/rwa-filer/tests/workflow/test_compare.py::test_returns_that_differ_only_in_a_table_with_no_sheets_are_compared`
+  and `tests/workflow/test_compare_cli.py::test_a_difference_in_a_table_with_no_sheets_is_reported_not_raised`.
+- **Verified red**: both, on the unfixed code: `polars.exceptions.SchemaError:
+  datatypes of join keys don't match - `sheet`: null on left does not match
+  `sheet`: str on right`. With the fix, the 204 pairs that did not raise are
+  byte-identical.
+- **Not covered**: `cli._compare` catches only `ValueError` and
+  `ReleaseNotFoundError`, so the next internal error would also exit 1 like a
+  difference (plan item P6.62).
+
+## 2026-11-22 — `compare`'s JSON record depended on Python's hash seed
+
+- **Defect**: `explain._link_by_rules` built a move's parts by iterating a set
+  and `_moves_in` took the max and min over them, so of two rows that moved by the
+  same amount the row a move named followed hash order: two runs of `rwa-filer
+  compare --format json` on the same pair could disagree.
+- **Rule**: **Not a regulatory escape.** The figures are the same; which of two
+  tied rows a move names was not.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/workflow/explain.py`, as of
+  `85cfe58`.
+- **Escape class**: `no-gate-exists`. The evidence export has a two-seed test;
+  compare had none.
+- **Gate change**: `packages/rwa-filer/tests/workflow/test_compare_cli.py::test_the_json_record_is_the_same_whatever_the_hash_seed`
+  (two subprocesses, `PYTHONHASHSEED` 1 and 2, a pair with twelve ties) and
+  `tests/workflow/test_compare_open_axis.py::test_of_two_rows_up_by_the_same_amount_a_move_names_the_first_in_cell_order`,
+  which pins the rule now chosen: the first row in cell order.
+- **Verified red**: on the unfixed code, the two-seed test at `assert first ==
+  second`, and the order test under seeds 1, 2 and 3: `assert {('0080',
+  '00...080', '0070')} == {('0080', '0060')}`.
+
+## 2026-11-22 — `compare`'s explanation step took time in the square of a return's countries
+
+- **Defect**: `explain._link_open_siblings` tested every pair of countries in
+  every row and column, and each total of a does-not-add-up finding rescanned
+  every check of the finding. Explaining a systematic shift at 200 countries
+  took 12.3 s, more than the traces it explains.
+- **Rule**: **Not a regulatory escape.**
+- **Origin**: `packages/rwa-filer/src/rwa_filer/workflow/explain.py`, as of
+  `85cfe58`.
+- **Escape class**: `path-never-exercised`. No compare fixture had an open-axis
+  key at all, so no test ever explained two countries, let alone two hundred.
+- **Gate change**: `packages/rwa-filer/tests/workflow/test_explain_scaling.py`,
+  three shapes (one allowance, mixed allowances, every total overlaid): 4x the
+  countries may cost under 4.4x the function calls, adequacy first, CPU time as
+  a second line. The partition is held to a pairwise reference by
+  `test_explain_siblings.py`.
+- **Verified red**: on the unfixed code: `explaining 160 countries made
+  8,023,332 calls against 627,102 for 40: 12.8x for 4x the countries` (12.7x and
+  13.8x on the other two shapes).
+- **Lesson**: the third cost of this family (2026-09-05 the classifier,
+  2026-11-20 the rule engine). See the next entry and the ledger row.
+
+## 2026-11-22 — A few blank-country cells made the rule engine quadratic again
+
+- **Defect**: the 2026-11-20 fix indexed a summed reference's cells by place for
+  returns whose open-axis facts all carry a member. A return with a handful of
+  facts that do not (blank country cells in a CSV, say) took the engine's
+  two-shape branch: `_Evaluation._keys_at` scanned every matching cell at every
+  evaluation, and `_maximal` compared every pair of places. 40 such facts in a
+  200-country return took `validate_return` from 1.3 s to 3.2-3.6 s; a whole
+  member-less copy of the tables, 13.7 s for five rules.
+- **Rule**: **Not a regulatory escape.** The same cells came back in the same
+  order; only the cost moved.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/boe/engine.py`, as of
+  `85cfe58`.
+- **Escape class**: `path-never-exercised`. The 2026-11-20 scaling gate grows
+  the country axis with every fact keyed; no fixture and none of the 18
+  benchmark returns held one member-less fact.
+- **Gate change**: `packages/rwa-filer/tests/boe/test_engine_scaling.py::test_a_few_cells_with_no_country_leave_rule_evaluation_linear_in_the_countries`,
+  sized with a small fixed number of member-less cells, a call-count ratio
+  carrying the verdict; cell order and the maximal set are held by the engine
+  golden (`tests/boe/test_engine_equivalence.py`, banked from the unchanged
+  engine in `79c0a7f`), whose corpus holds 33 member-less facts among 2,400
+  keyed ones. Open-row tables and tracing are now scaled too (P6.60 a).
+- **Verified red**: on the unfixed engine: `120 countries took 8,662,737
+  function calls against 1,443,829 for 30: 6.00x for 4x the countries`.
+- **Lesson**: a scaling gate measures the shape it builds. The 2026-11-20 gate
+  built only the shape the defect it closed had; the next escape took the shape
+  beside it. Ledger row in `.claude/LESSONS.md`.
+
+## 2026-11-22 — Two validations started together in a cold process could crash the rule engine
+
+- **Defect**: `Rule.tree` and its siblings were unlocked `functools.cached_property`
+  values, and the engine keys a rule's selectors by the identity of the tree's
+  reference nodes, then read `rule.tree` again at each evaluation. Two threads
+  reading a rule nobody had parsed could each store a tree; a thread whose
+  selectors were keyed by the first raised `KeyError` at
+  `self._selectors[id(reference)]`. The dashboard runs each task in its own
+  thread. Measured: 2 crashes in 60 two-thread trials.
+- **Rule**: **Not a regulatory escape.** A crash, never a wrong verdict.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/boe/catalogue.py` and
+  `boe/engine.py`, as of `85cfe58`.
+- **Escape class**: `no-gate-exists`. No test ran two validations at once.
+- **Gate change**: two, one per half of the fix.
+  `packages/rwa-filer/tests/boe/test_catalogue_parse_once.py::test_two_threads_reading_a_part_at_once_are_given_one_object`
+  (forced interleavings: every part is stored once, by `dict.setdefault`), and
+  `tests/boe/test_engine_kept_trees.py`, deterministic with no threads: an
+  evaluation built, the rule's tree then replaced, the evaluation run.
+- **Verified red**: on the unfixed catalogue, all four parts of the first; on
+  the unfixed engine: `boe/engine.py:1030: KeyError: 140274525492080` (and
+  `:1312` for a replaced where clause), `3 failed in 0.35s`.
+
+## 2026-11-22 — A fact carrying many open dimensions stalled the XBRL reader
+
+- **Defect**: `xbrl/reader.py` matched a fact's dimensions to a data point by
+  trying every subset of the dimensions some data point leaves open: 2^k of them.
+  At k = 18 that is about a second per fact, so a malformed or hostile file with a
+  few hundred such facts stalled `validate` or the dashboard for minutes. No valid
+  fact has that shape; any file a user uploads can.
+- **Rule**: **Not a regulatory escape.** The result was right, eventually.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/xbrl/reader.py`, as of
+  `85cfe58`.
+- **Escape class**: `no-gate-exists`.
+- **Gate change**: `packages/rwa-filer/tests/xbrl/test_reader_open_subsets.py::test_a_fact_carrying_sixteen_open_dimensions_tries_a_bounded_number_of_subsets`
+  - a count of subsets tried, no clock. The size is now bounded by the most
+  dimensions any data point leaves open (0 on the 11 packs that have none).
+- **Verified red**: on the unfixed reader: `65542 subsets tried for three facts,
+  one of them carrying 16 open dimensions` (`assert 65542 <= 143`).
+
+## 2026-11-22 — rwa-filer declared Polars 1.0 and needed 1.24
+
+- **Defect**: `packages/rwa-filer/pyproject.toml` declared `polars>=1.0.0`.
+  `validate/structure.py` calls `DataFrame.join(nulls_equal=...)`, which
+  arrived in Polars 1.24, so a user who installed the wheel alone with an older
+  Polars got a `TypeError` on every `validate`.
+- **Rule**: **Not a regulatory escape.**
+- **Origin**: `packages/rwa-filer/pyproject.toml` and
+  `src/rwa_filer/validate/structure.py`, as of `85cfe58`.
+- **Escape class**: `no-gate-exists`. Every job, the isolated one included,
+  installs the locked Polars; nothing ran at the declared floor. The wheel-install
+  gate (2026-11-14) proves the declared dependencies import, not that the lowest
+  allowed versions work.
+- **Gate change**: the CI job `rwa-filer (Polars floor)` in
+  `.github/workflows/ci.yml`: the member installed with exactly the Polars its
+  pyproject declares, read from the file, and its whole suite run.
+- **Verified red**: the job's commands, run here at Polars 1.23.0: `TypeError:
+  DataFrame.join() got an unexpected keyword argument 'nulls_equal'`. At 1.24.0
+  the suite passes (two tests that assumed the locked Polars were made
+  version-neutral in the same change). The job itself first runs in CI on this
+  branch.
+- **Not covered**: the other declared floors (starlette, uvicorn, jinja2,
+  python-multipart) are not run either (plan item P6.63).
+
+## 2026-11-22 — Two clicks on the dashboard's evidence download could return a damaged file with HTTP 200
+
+- **Defect**: each click on Download evidence re-collected the evidence and
+  rewrote one file, `{return_id}.evidence.jsonl`, in the request. A second click
+  while the first response was still being sent truncated and rewrote the file
+  under it; the challenger reproduced NUL-filled bodies served as HTTP 200. A
+  long return takes seconds to collect, exactly when a second click happens.
+- **Rule**: **Not a regulatory escape**, but the file is the audit trail of a
+  filing: a damaged one is a broken record a user believes whole.
+- **Origin**: `packages/rwa-filer/src/rwa_filer/dash/workspace.py` and
+  `dash/pages.py`, as of `85cfe58`.
+- **Escape class**: `no-gate-exists`. No dashboard test made two requests at once.
+- **Gate change**: `packages/rwa-filer/tests/dash/test_single_flight.py::test_downloads_asked_for_at_once_are_one_collection_and_the_same_whole_file`,
+  with the collection held on a gate until three requests are parked inside it.
+  Each validation's evidence is now collected once, written whole under a name
+  of its own and only then handed out.
+- **Verified red**: on the unfixed code, deterministically on the mechanism:
+  `each download collected and wrote the evidence itself`, `assert 3 == 1`. The
+  damaged bytes themselves stay chance-dependent and are not asserted.
+- **Not covered**: `read_evidence` raises `UnicodeDecodeError`, not its own
+  "incomplete or altered" error, on a damaged file (plan item P6.64).

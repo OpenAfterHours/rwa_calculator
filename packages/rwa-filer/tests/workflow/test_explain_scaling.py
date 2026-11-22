@@ -31,7 +31,7 @@ parallel run of two systems that differ systematically - every country's
 figures off - is the comparison this tool exists for: at 200 countries the
 explanation took 6.7 s where 0.4 s suffices. No fixture had more than two
 countries, where it is invisible. It is the third quadratic of this family
-(rule evaluation 2026-09-05, summed references 2026-11-20).
+(the classifier 2026-09-05, rule evaluation 2026-11-20).
 
 Calls counted with ``sys.setprofile`` on this file's returns, 40 against 160
 countries (the count is the same on every run):

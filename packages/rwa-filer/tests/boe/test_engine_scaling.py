@@ -140,8 +140,7 @@ References:
 
 from __future__ import annotations
 
-import cProfile
-import pstats
+import sys
 import time
 from collections import Counter
 from datetime import date
@@ -159,6 +158,7 @@ from rwa_filer.validate.structure import local_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+    from types import FrameType
 
     from rwa_filer.boe.catalogue import Rule
     from rwa_filer.boe.engine import RuleResult
@@ -588,14 +588,27 @@ def _summed(results: list[RuleResult]) -> dict[str, RuleResult]:
 
 
 def _calls(act: Callable[[], object]) -> int:
-    """How many function calls ``act`` makes: a cost that reads no clock."""
-    profile = cProfile.Profile()
-    profile.enable()
+    """How many Python and C functions ``act`` calls on this thread: a cost that reads no clock.
+
+    ``sys.setprofile`` profiles the calling thread alone. ``cProfile`` on Python
+    3.12+ counts every thread's calls, and under pytest-xdist a worker may still
+    be running another test file's thread (a dashboard task), whose calls would
+    land in either count and move the ratio.
+    """
+    count = 0
+
+    def tick(_frame: FrameType, event: str, _arg: object) -> None:
+        nonlocal count
+        if event in ("call", "c_call"):
+            count += 1
+
+    previous = sys.getprofile()
+    sys.setprofile(tick)
     try:
         act()
     finally:
-        profile.disable()
-    return pstats.Stats(profile).total_calls  # type: ignore[attr-defined]
+        sys.setprofile(previous)
+    return count
 
 
 def _best_cpu(act: Callable[[], object]) -> float:

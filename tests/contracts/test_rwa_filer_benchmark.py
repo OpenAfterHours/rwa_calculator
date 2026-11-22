@@ -52,3 +52,18 @@ def test_the_benchmark_covers_every_command_the_review_measured() -> None:
 
     # Assert
     assert {"validate", "build", "compare", "diff", "taxonomy", "--help"} <= commands
+
+
+def test_a_case_whose_return_was_not_built_is_refused_before_anything_is_timed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing input would make its case a refusal, timed as if it were a run."""
+    # Arrange — only the return the 'build' check looks for exists.
+    (tmp_path / f"{benchmark.RICH}.parquet").write_bytes(b"")
+
+    # Act
+    code = benchmark.time_cases(tmp_path, {"never run": tmp_path / "rwa-filer"}, repeats=1)
+
+    # Assert
+    assert code == 2
+    assert "benchmark returns missing" in capsys.readouterr().err

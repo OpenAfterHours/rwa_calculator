@@ -283,6 +283,19 @@ def time_cases(returns: Path, filers: Mapping[str, Path], *, repeats: int, only:
         print(f"no benchmark returns in {returns}: run the 'build' command first", file=sys.stderr)
         return 2
     cases = [case for case in CASES if only in case.name]
+    missing = sorted(
+        {
+            part
+            for case in cases
+            for part in case.arguments(returns, Path("out"))
+            if part.startswith(str(returns)) and not Path(part).exists()
+        }
+    )
+    if missing:
+        # A return the build skipped (an .xbrl is written only for a return with
+        # no structure findings) would make its case a refusal timed as a run.
+        print(f"benchmark returns missing: {', '.join(missing)}", file=sys.stderr)
+        return 2
     print(f"| Case | {' | '.join(f'{label}: wall / CPU (s)' for label in filers)} |")
     print(f"|---|{'---|' * len(filers)}")
     for case in cases:
@@ -300,17 +313,28 @@ def _timed(filer: Path, case: Case, returns: Path) -> tuple[float, float]:
     """Run one case once in a fresh process: its wall clock and its own CPU, in seconds."""
     out = Path(tempfile.mkdtemp(prefix="rwa-filer-bench-"))
     try:
-        started = time.perf_counter()
-        process = subprocess.Popen(
-            [str(filer), *case.arguments(returns, out)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        _, status, usage = os.wait4(process.pid, 0)
-        wall = time.perf_counter() - started
+        errors = out / "stderr.txt"
+        with errors.open("wb") as stderr:
+            started = time.perf_counter()
+            process = subprocess.Popen(
+                [str(filer), *case.arguments(returns, out)],
+                stdout=subprocess.DEVNULL,
+                stderr=stderr,
+            )
+            _, status, usage = os.wait4(process.pid, 0)
+            wall = time.perf_counter() - started
         process.returncode = os.waitstatus_to_exitcode(status)
-        if process.returncode not in (0, 1):
-            raise RuntimeError(f"{case.name} with {filer} exited {process.returncode}")
+        # Exit 1 is also a verdict ("not submittable", "the returns differ"), so
+        # a refusal is told apart by the diagnostic the command writes for one.
+        refused = [
+            line
+            for line in errors.read_text(encoding="utf-8", errors="replace").splitlines()
+            if line.startswith("rwa-filer:")
+        ]
+        if process.returncode not in (0, 1) or refused:
+            raise RuntimeError(
+                f"{case.name} with {filer} exited {process.returncode}: {' '.join(refused)}"
+            )
         return wall, usage.ru_utime + usage.ru_stime
     finally:
         shutil.rmtree(out, ignore_errors=True)

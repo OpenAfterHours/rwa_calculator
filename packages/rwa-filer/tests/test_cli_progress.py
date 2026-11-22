@@ -234,6 +234,24 @@ def test_a_malformed_return_is_told_so_before_the_rules_run(
     )
 
 
+def test_the_note_names_an_open_key_finding_in_full_not_cut_at_its_example(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """STR004 lists accepted members as ``(252 accepted, e.g. x1, AL, AT)``: the "e.g." is not a full stop."""
+    # Arrange — one country cell on OF 09.01 keyed by a country the axis does not have.
+    path = tmp_path / "unknown-country.csv"
+    path.write_text("table,sheet,open_key,row,column,value\nOF09.01.01.01,,ZZ,0010,0010,5\n")
+
+    # Act
+    main(["validate", str(path), *HEADER_ARGS_CLI, "--progress"])
+
+    # Assert
+    (note,) = [line for line in capsys.readouterr().err.splitlines() if line.startswith(NOTE_LEAD)]
+    assert "[STR004]" in note, "the return no longer produces the open-key finding this checks"
+    told = note.rsplit(" - ", 1)[0]  # a log line ends with the time the step has taken
+    assert told.endswith("(252 accepted, e.g. x1, AL, AT)"), note
+
+
 @pytest.mark.parametrize("output", ["text", "json"])
 def test_with_and_without_progress_a_malformed_return_gives_the_same_bytes(
     output: str, tmp_path: Path, malformed_csv: Path, capsys: pytest.CaptureFixture[str]

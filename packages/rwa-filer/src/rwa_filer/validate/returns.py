@@ -577,9 +577,11 @@ def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
         # Told now, not with the report: the rules take most of the run, and a
         # return the taxonomy does not accept is worth hearing about first.
         first = structure[0]
-        sentence = first.message.split(". ", 1)[0].removesuffix(".")
         found = f"{len(structure)} finding(s); the first: [{first.code}] {first.severity}: "
-        notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version, note=found + sentence))
+        notify(
+            progress,
+            Progress(PHASE_STRUCTURE, subject=chosen.version, note=found + _lead(first.message)),
+        )
     release_findings = tuple(check_reference_date(ret, pack))
     module = pack.info.module
     effective = accuracy or Accuracy()
@@ -884,3 +886,22 @@ def _coverage_finding(report: RuleReport) -> Finding | None:
         expected="at least one rule executed on every reported template that has rules",
         actual=f"{report.rules_executed} rule(s) executed",
     )
+
+
+def _lead(message: str) -> str:
+    """A finding's message up to its first full stop, for the one-line progress note.
+
+    A full stop inside brackets does not end the sentence: STR004 says which
+    members an open axis accepts as ``(252 accepted, e.g. AD, AE, AF)``, and the
+    note would otherwise stop at the ``e.g``. A message with no full stop is
+    given whole.
+    """
+    depth = 0
+    for index, character in enumerate(message):
+        if character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth = max(depth - 1, 0)
+        elif character == "." and depth == 0 and message[index + 1 : index + 2] in (" ", ""):
+            return message[:index]
+    return message

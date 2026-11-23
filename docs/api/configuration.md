@@ -51,6 +51,7 @@ class CalculationConfig:
     equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
     eur_gbp_rate: Decimal = Decimal("0.8732")
     enable_double_default: bool = False
+    equity_pd_lgd: bool = False
     use_investment_grade_assessment: bool = False
     crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE
     airb_collateral_method: AIRBCollateralMethod | None = None
@@ -97,6 +98,7 @@ class CalculationConfig:
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
+        equity_pd_lgd: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
@@ -115,6 +117,7 @@ class CalculationConfig:
         - No output floor
         - 1.06 scaling factor for IRB K
         - Optional double-default treatment (Art. 153(3), 202)
+        - Optional Art. 155(3) PD/LGD approach for IRB equity
         """
 
     @classmethod
@@ -157,6 +160,7 @@ The full keyword list for each factory:
 | `permission_mode` | yes | yes | SA-only vs IRB routing |
 | `eur_gbp_rate` | yes | n/a (GBP-native) | CRR EUR-threshold FX |
 | `enable_double_default` | yes | n/a (Art. 153(3) blanked) | CRR Art. 153(3) — see [`enable_double_default`](#enable_double_default) |
+| `equity_pd_lgd` | yes | n/a (Art. 155 blanked; legacy-method input to rule 4.6 not yet implemented) | CRR Art. 155(3) PD/LGD equity — see [`equity_pd_lgd`](#equity_pd_lgd) |
 | `use_investment_grade_assessment` | n/a | yes | Art. 122(6)/(8) — see [`use_investment_grade_assessment`](#use_investment_grade_assessment) |
 | `crm_collateral_method` | yes | yes | Art. 191A SA financial collateral — see [`crm_collateral_method`](#crm_collateral_method) |
 | `airb_collateral_method` | n/a | yes | Art. 169A/169B A-IRB collateral — see [`airb_collateral_method`](#airb_collateral_method) |
@@ -275,6 +279,15 @@ assert config.eur_gbp_rate == Decimal("0.8800")
 
 `replace(...)` returns a new frozen instance — the original config is
 untouched, preserving the immutability contract.
+
+!!! warning "Pass `permission_mode` to the factory, not to `replace`"
+    `irb_permissions` is derived from `permission_mode` once, in
+    `__post_init__`, and only when it is `None`. A config built by a factory
+    already carries it, so `replace(config, permission_mode=PermissionMode.IRB)`
+    on a config built with the default `STANDARDISED` mode keeps the SA-only
+    permission map. The equity calculator then stays on Art. 133, even with
+    `equity_pd_lgd=True`. Pass `permission_mode` (and elections such as
+    `equity_pd_lgd`) to `CalculationConfig.crr()` / `.basel_3_1()` directly.
 
 !!! note "Regulatory values are not config fields"
     To vary a regulatory value (PD/LGD floors, supporting factors, monetary
@@ -449,6 +462,58 @@ worked example, see:
 
 - [User guide — CRM Double Default](../user-guide/methodology/crm.md#double-default-crr-only)
 - [CRR Specification — Credit Risk Mitigation](../specifications/crr/credit-risk-mitigation.md)
+
+### `equity_pd_lgd`
+
+| Field | Type | Default | Defined on |
+|-------|------|---------|-----------|
+| `equity_pd_lgd` | `bool` | `False` | `CalculationConfig`; keyword of `CalculationConfig.crr()` |
+
+The CRR Art. 155(3) election. Art. 155(1) lets a firm with IRB permission
+weight its equity under the simple risk weight approach (Art. 155(2)), the
+PD/LGD approach (Art. 155(3)) or internal models (Art. 155(4)). The engine
+implements the first two. Art. 155(1) allows a different approach for each
+equity portfolio; the engine has one firm-wide switch:
+
+- `False` (default): Art. 155(2) simple risk weights.
+- `True`: Art. 155(3) PD/LGD. This is the Art. 153(1) corporate formula
+  with the Art. 165 PD floors and LGDs and M = 5 years, plus the 1.5x scaling
+  where the firm lacks Art. 178 default-definition data.
+
+It has an effect only when all of the following hold:
+
+- **The firm has F-IRB or A-IRB permission** for some exposure class
+  (`permission_mode=PermissionMode.IRB`, or an explicit `irb_permissions`).
+  Slotting permission alone does not count. A firm without it stays on
+  Art. 133 whatever the flag says.
+- **The rows are on the `equity_exposures` input table.** Equity-class rows
+  in the main exposure tables are routed to the SA branch and never read
+  the flag.
+- **The run is under CRR.** PRA PS1/26 Art. 155 is "[Note: Provision left
+  blank]". Under `CalculationConfig.basel_3_1(...)` all equity takes the
+  Standardised Approach, so the factory has no such keyword and a field set
+  by `replace` is inert. However, the firm's legacy Art. 155 method stays
+  relevant in 2027–2029. PS1/26 Credit Risk: General Provisions rule 4.6
+  weights an IRB firm's equity at the higher of that method's weight and the
+  transitional weight. Rule 4.6 is not implemented yet; see
+  [`EquityTransitionalConfig`](#equitytransitionalconfig).
+
+```python
+from datetime import date
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
+
+config = CalculationConfig.crr(
+    reporting_date=date(2026, 12, 31),
+    permission_mode=PermissionMode.IRB,  # F-IRB / A-IRB permission
+    equity_pd_lgd=True,                  # Art. 155(3) PD/LGD equity
+)
+
+assert config.equity_pd_lgd is True
+```
+
+For the formula, the Art. 165 parameters and a worked example, see the
+[CRR Equity Approach Specification](../specifications/crr/equity-approach.md).
 
 ### `use_investment_grade_assessment`
 

@@ -24,8 +24,6 @@ References:
 
 from __future__ import annotations
 
-import dataclasses
-
 import polars as pl
 import pytest
 from tests.fixtures.p2_38.p2_38 import (
@@ -63,17 +61,13 @@ def _build_config() -> CalculationConfig:
     Build a CRR IRB config with equity_pd_lgd=False so the equity calculator
     routes to EquityApproach.IRB_SIMPLE (Art. 155(2)).
 
-    equity_pd_lgd defaults to False on CalculationConfig, so we use replace
-    only when the attribute exists (forward-compatible guard) — same pattern
-    as test_p1_153.
+    False is the factory default; it is passed explicitly to state the election.
     """
-    base = CalculationConfig.crr(
+    return CalculationConfig.crr(
         reporting_date=REPORTING_DATE,
         permission_mode=PermissionMode.IRB,
+        equity_pd_lgd=False,
     )
-    if hasattr(base, "equity_pd_lgd"):
-        return dataclasses.replace(base, equity_pd_lgd=False)
-    return base
 
 
 # ---------------------------------------------------------------------------

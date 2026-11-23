@@ -685,10 +685,17 @@ class CalculationConfig:
     # Inert under Basel 3.1 — PS1/26 Art. 162(1) is "[Note: Provision left blank]", so
     # the pack Feature ``firb_fixed_supervisory_maturity`` is off there.
     firb_fixed_maturity: bool = False
-    # CRR Art. 155(3): when True and the firm has IRB permissions under CRR,
-    # equity exposures use the PD/LGD approach (Art. 165 supervisory parameters)
-    # instead of the Art. 155(2) IRB Simple risk weights. Ignored under Basel 3.1
-    # (Art. 147A removes IRB equity — all equity uses SA).
+    # CRR Art. 155(3): firm election (a ``crr()`` keyword) between the Art. 155(3)
+    # PD/LGD approach (Art. 165 supervisory parameters) and the Art. 155(2) simple
+    # risk weights. It takes effect only for a firm with F-IRB or A-IRB permission
+    # (slotting alone does not count; an SA-only firm stays on Art. 133), and only
+    # for rows on the ``equity_exposures`` input table — main-table equity-class
+    # rows route to ApproachType.EQUITY and are weighted by engine/sa regardless.
+    # It is one firm-wide switch, a simplification of Art. 155(1)'s per-portfolio
+    # choice. Inert under Basel 3.1 at present (PS1/26 Art. 155 is "[Note:
+    # Provision left blank]", so the ``equity_irb_approaches_available`` pack
+    # Feature is off) — but the legacy Art. 155 method is still the PS1/26 General
+    # Provisions rule 4.6(1) input for an IRB firm in 2027-2029 (P1.389, open).
     equity_pd_lgd: bool = False
     # OPTIONAL firm method (RE-04): the BCBS CRE20.66 0.2%-of-portfolio test as a
     # quantitative way of evidencing PS1/26 Art. 123A(1)(b)(iii) ("one of a
@@ -832,6 +839,7 @@ class CalculationConfig:
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
         firb_fixed_maturity: bool = False,
+        equity_pd_lgd: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         enable_collateral_link_splitting: bool = True,
@@ -862,6 +870,7 @@ class CalculationConfig:
         - No post-model adjustments
         - 1.06 scaling factor for IRB K
         - Optional double default treatment (Art. 153(3), 202-203)
+        - Optional Art. 155(3) PD/LGD approach for IRB equity (``equity_pd_lgd``)
 
         Args:
             reporting_date: As-of date for calculation
@@ -872,6 +881,14 @@ class CalculationConfig:
                 exposures take the fixed supervisory M of 2.5y (repo-style stays 0.5y)
                 instead of the per-exposure Art. 162(2) derivation. Set it only for a
                 firm whose Art. 143 permission does not require the Art. 162(2) M.
+            equity_pd_lgd: Art. 155(3) election — when True, equity on the
+                ``equity_exposures`` input table takes the PD/LGD approach (Art. 153(1)
+                formula with the Art. 165 PD floors / LGDs and M = 5y) instead of the
+                Art. 155(2) simple risk weights. One firm-wide switch (Art. 155(1)
+                allows a per-portfolio choice). It needs F-IRB or A-IRB permission
+                (``permission_mode=PermissionMode.IRB`` here, or an explicit
+                ``irb_permissions``); an SA-only firm stays on Art. 133. Main-table
+                equity-class rows are weighted by the SA branch whatever it says.
             facility_share_metric: firm election for the facility-share allocation
                 metric. Inert under CRR (the output-floor Feature is off, so the
                 un-floored rule applies either way) and accepted here so a firm can
@@ -908,6 +925,7 @@ class CalculationConfig:
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
             firb_fixed_maturity=firb_fixed_maturity,
+            equity_pd_lgd=equity_pd_lgd,
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,
             enable_collateral_link_splitting=enable_collateral_link_splitting,

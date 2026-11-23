@@ -38,7 +38,6 @@ References:
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import date
 
 import polars as pl
@@ -80,24 +79,18 @@ _CURRENT_IRB_SIMPLE_EXCHANGE_TRADED_RWA = 2_900_000.0
 
 def _build_config_with_pdlgd_flag() -> CalculationConfig:
     """
-    Build a CRR IRB config, adding equity_pd_lgd=True when that field exists.
+    Build a CRR IRB config with the Art. 155(3) PD/LGD election made.
 
-    TODAY (pre-Wave-4): ``CalculationConfig`` does not have an ``equity_pd_lgd``
-    field. We guard with ``hasattr`` so the test does not raise AttributeError.
-    The test still reaches the assertion and fails on the golden numbers because
-    the engine routes through IRB_SIMPLE (290%) instead of PD/LGD (191.87%).
-
-    POST-WAVE-4: the engine-implementer adds ``equity_pd_lgd: bool = False`` to
-    ``CalculationConfig``. ``hasattr`` returns True and the replace call activates
-    the PD/LGD branch, making the test pass.
+    Built through the ``CalculationConfig.crr()`` keyword (P5.61), with
+    ``permission_mode`` passed to the factory itself: ``dataclasses.replace`` of
+    ``permission_mode`` on an SA-built config keeps its SA-only
+    ``irb_permissions`` map and silently routes equity to Art. 133.
     """
-    base = CalculationConfig.crr(
+    return CalculationConfig.crr(
         reporting_date=date(2026, 6, 30),
         permission_mode=PermissionMode.IRB,
+        equity_pd_lgd=True,
     )
-    if hasattr(base, "equity_pd_lgd"):
-        return dataclasses.replace(base, equity_pd_lgd=True)
-    return base
 
 
 def _build_equity_exposure_lf() -> pl.LazyFrame:
@@ -132,7 +125,7 @@ def _build_equity_exposure_lf() -> pl.LazyFrame:
 
 @pytest.fixture(scope="module")
 def crr_irb_pdlgd_config() -> CalculationConfig:
-    """CRR IRB config with equity_pd_lgd=True (forward-compatible guard)."""
+    """CRR IRB config with equity_pd_lgd=True."""
     return _build_config_with_pdlgd_flag()
 
 
@@ -228,7 +221,7 @@ class TestP1153_CRRart1553_PdLgdEquityApproach:
         """
         P1.153: _determine_approach must return PD_LGD ("pd_lgd") when equity_pd_lgd=True.
 
-        Arrange: CRR IRB config with equity_pd_lgd=True (forward-compatible guard).
+        Arrange: CRR IRB config with equity_pd_lgd=True.
         Act: equity_calculator._determine_approach(config).
         Assert: approach == "pd_lgd" (EquityApproach.PD_LGD.value once enum exists).
 

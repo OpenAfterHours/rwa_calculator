@@ -39,7 +39,6 @@ whole CRR chain leaking into it: PLAIN would fall from 250 to 100.
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import date
 
 import polars as pl
@@ -56,7 +55,9 @@ _IRB = CalculationConfig.crr(reporting_date=date(2026, 6, 30), permission_mode=P
 _CONFIGS: dict[str, CalculationConfig] = {
     "crr_sa": CalculationConfig.crr(reporting_date=date(2026, 6, 30)),
     "crr_irb_simple": _IRB,
-    "crr_pd_lgd": dataclasses.replace(_IRB, equity_pd_lgd=True),
+    "crr_pd_lgd": CalculationConfig.crr(
+        reporting_date=date(2026, 6, 30), permission_mode=PermissionMode.IRB, equity_pd_lgd=True
+    ),
     "b31": CalculationConfig.basel_3_1(reporting_date=date(2030, 6, 30)),
 }
 

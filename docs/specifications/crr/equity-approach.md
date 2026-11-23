@@ -127,6 +127,22 @@ consistently and not for regulatory arbitrage:
 2. **PD/LGD Approach** (Art. 155(3))
 3. **Internal Models Approach** (Art. 155(4))
 
+**How the engine selects the approach.** Under CRR, a firm with F-IRB or A-IRB
+permission for any exposure class weights the rows on its `equity_exposures`
+input table under Art. 155. Slotting permission alone does not count. By default
+it uses the simple risk weight approach. The `equity_pd_lgd` election on
+`CalculationConfig.crr()` selects the PD/LGD approach instead:
+
+```python
+CalculationConfig.crr(reporting_date=..., permission_mode=PermissionMode.IRB, equity_pd_lgd=True)
+```
+
+The election is one firm-wide switch, a simplification of Art. 155(1)'s
+per-portfolio choice. The Internal Models Approach is not implemented. A firm
+without F-IRB or A-IRB permission stays on Art. 133 whatever the election says.
+Equity-class rows in the main exposure tables take the SA weights and never read
+the election. See [`equity_pd_lgd`](../../api/configuration.md#equity_pd_lgd).
+
 Equity exposures deducted under Part Two or assigned 250% under Art. 48 are excluded from
 Art. 155 altogether. The engine applies this exclusion to legs flagged
 `is_significant_investment` (IV-06): on the simple-RW and PD/LGD paths they take the

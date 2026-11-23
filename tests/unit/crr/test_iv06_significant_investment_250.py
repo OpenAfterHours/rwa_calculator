@@ -36,7 +36,6 @@ Hand calculations (EAD 1,000,000):
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import date
 
 import polars as pl
@@ -50,7 +49,9 @@ _EAD = 1_000_000.0
 
 _SA = CalculationConfig.crr(reporting_date=date(2026, 6, 30))
 _IRB = CalculationConfig.crr(reporting_date=date(2026, 6, 30), permission_mode=PermissionMode.IRB)
-_PD_LGD = dataclasses.replace(_IRB, equity_pd_lgd=True)
+_PD_LGD = CalculationConfig.crr(
+    reporting_date=date(2026, 6, 30), permission_mode=PermissionMode.IRB, equity_pd_lgd=True
+)
 
 
 def _row(config: CalculationConfig, **attributes: object) -> dict:

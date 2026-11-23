@@ -362,8 +362,19 @@ def _sa_results_with_substitution() -> pl.LazyFrame:
     Scenario: Corporate exposure SA_CORP_2 has a guarantee from an institution.
     The guaranteed portion (500) flows out of corporate class into institution class.
 
+    Invariant this frame must keep: ``rwa_final = ead_final x risk_weight`` on
+    every row (Art. 113(2)). The frame carries no ``rwa_pre_factor`` and no
+    supporting-factor flag, so no reduction below that product is attributable
+    to Art. 501 / 501a — and under Basel 3.1 none exists at all. The two
+    corporate rows used to carry ``rwa_final`` 1,140 / 1,900 (a 0.95 copied from
+    ``_builders.py::_sa_results_with_phase2_cols`` before P5.66 corrected it
+    there); col 0215 falls back to ``rwa_final``, so that phantom 160 broke three
+    live published Error rules on row 0230: EBA ``v0325_m`` (CRR; corporate and
+    Total sheets), BoE ``boe_b0771`` (Basel 3.1 corporate sheet) and BoE
+    ``boe_b1014`` (Basel 3.1 Total sheet). Pinned by ``TestSubstitutionFrameRwea``.
+
     Moved here from ``test_cross.py`` (arch_check ``max_reporting_test_file_loc``
-    ratchet) — bodies verbatim.
+    ratchet).
     """
     return pl.LazyFrame(
         {
@@ -383,7 +394,7 @@ def _sa_results_with_substitution() -> pl.LazyFrame:
             "drawn_amount": [1000.0, 2000.0, 3000.0, 200.0],
             "undrawn_amount": [500.0, 0.0, 0.0, 50.0],
             "ead_final": [1200.0, 2000.0, 3000.0, 225.0],
-            "rwa_final": [1140.0, 1900.0, 600.0, 168.75],
+            "rwa_final": [1200.0, 2000.0, 600.0, 168.75],
             "risk_weight": [1.0, 1.0, 0.20, 0.75],
             "scra_provision_amount": [10.0, 20.0, 0.0, 2.0],
             "gcra_provision_amount": [5.0, 10.0, 15.0, 1.0],
@@ -465,6 +476,106 @@ class TestSubstitutionFlows:
         corp = _get_total_row(bundle.c07_00["corporate"])
         assert corp["0090"][0] == pytest.approx(-500.0)
         assert corp["0100"][0] == pytest.approx(0.0)
+
+
+#: The 100% risk-weight row of C 07.00 / OF 07.00.
+_RW_100_ROW = "0230"
+#: Art. 113(2) by hand: SA_CORP_1 1,200 x 1.0 + SA_CORP_2 2,000 x 1.0. SA_CORP_2's
+#: 2,000 still holds its guaranteed 500, because this frame is the legacy
+#: single-row substitution shape (LESSONS C11(c)). Reshaping it to the sealed
+#: split-leg shape makes this 2,700 by hand (1,200 + 1,500) — that is the reshape,
+#: not a regression.
+_RW_100_RWEA = 3_200.0
+#: Every carrier through which a frame could attribute an RWEA reduction to an
+#: Art. 501 / 501a supporting factor (``reporting/corep/supporting_factors.py``).
+_FACTOR_CARRIERS = (
+    "rwa_pre_factor",
+    "supporting_factor_applied",
+    "sme_supporting_factor_applied",
+    "infrastructure_factor_applied",
+)
+
+
+class TestSubstitutionFrameRwea:
+    """The substitution frame's RWEA is exposure value x risk weight, so the
+    100% risk-weight row reports its exposure value as its RWEA.
+
+    Why: ``_sa_results_with_substitution`` used to give both corporate rows an
+    unattributable 5% haircut (``rwa_final`` 1,140 / 1,900 against
+    ``ead_final x risk_weight`` 1,200 / 2,000, no factor flag) — the same
+    phantom P5.66 removed from ``_builders.py::_sa_results_with_phase2_cols``.
+    Col 0215 falls back to ``rwa_final`` when no ``rwa_pre_factor`` is sealed,
+    so the phantom 160 reached row 0230 and broke three live published Error
+    rules, scoped by sheet:
+
+    - CRR, corporate and Total sheets: EBA ``v0325_m``
+      ``{r0230, c0215} = {r0230, c0200}`` (all sheets).
+    - Basel 3.1, corporate sheet: BoE ``boe_b0771``
+      ``{r0230, c0220} = {r0230, c0200} * 1`` (z0002-0008, 0011-0013,
+      0015-0017; corporate is z0008).
+    - Basel 3.1, Total sheet: BoE ``boe_b1014``
+      ``{r0230, c0220} >= {r0230, c0200}`` (z0001, 0009, 0010 only).
+
+    No other test asserted an RWEA figure from this frame, so the suite passed
+    the same with and without the phantom.
+
+    References:
+    - Art. 113(2), both regimes: RWEA = exposure value x risk weight
+    - Art. 501 / 501a: the only CRR reductions; Basel 3.1 removes both
+    - COREP Annex II C 07.00 cols 0200/0215/0220; PS1/26 Annex II OF 07.00
+      cols 0200/0220 (no supporting-factor columns)
+    """
+
+    def test_the_frame_states_no_rwea_reduction(self) -> None:
+        """Adequacy: no factor carrier, and every row is ead x rw — so any gap
+        between row 0230's RWEA and its exposure value is the generator's."""
+        # Arrange
+        frame = _sa_results_with_substitution().collect()
+
+        # Act
+        carried = set(_FACTOR_CARRIERS) & set(frame.columns)
+        by_hand = (frame["ead_final"] * frame["risk_weight"]).to_list()
+
+        # Assert
+        assert carried == set(), "a factor carrier would make a reduction attributable"
+        assert frame["rwa_final"].to_list() == pytest.approx(by_hand)
+
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    @pytest.mark.parametrize("sheet", ["corporate", "total"])
+    def test_the_100pct_band_rwea_equals_its_exposure_value(
+        self, framework: str, sheet: str
+    ) -> None:
+        """Col 0220 on row 0230 is the exposure value at 100%. Under Basel 3.1
+        the corporate sheet is ``boe_b0771`` (=) and the Total sheet is
+        ``boe_b1014`` (>=); under CRR no published rule pins col 0220 here, so
+        the guard is the Annex II col 0220 definition."""
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution(), framework=framework)
+        band = bundle.c07_00[sheet].filter(pl.col("row_ref") == _RW_100_ROW).row(0, named=True)
+
+        # Assert
+        assert band["0220"] == pytest.approx(_RW_100_RWEA)
+        assert band["0220"] == pytest.approx(band["0200"])
+
+    @pytest.mark.parametrize("sheet", ["corporate", "total"])
+    def test_the_crr_100pct_band_pre_factor_rwea_equals_its_exposure_value(
+        self, sheet: str
+    ) -> None:
+        """CRR col 0215 on row 0230 equals col 0200 (EBA ``v0325_m``); Basel 3.1
+        has no col 0215."""
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution(), framework="CRR")
+        band = bundle.c07_00[sheet].filter(pl.col("row_ref") == _RW_100_ROW).row(0, named=True)
+
+        # Assert
+        assert band["0215"] == pytest.approx(_RW_100_RWEA)
+        assert band["0215"] == pytest.approx(band["0200"])
 
 
 def _irb_book_with_sa_guarantor() -> pl.LazyFrame:

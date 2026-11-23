@@ -306,7 +306,10 @@ Direction, relative to the single-row behaviour it replaced:
   already counted for them.
 - **A losing member's siblings gain the undrawn** in their partition-local
   totals, so the retail and qualifying-revolving thresholds can only be crossed
-  **upward**. Crossing upward moves an obligor to a less favourable treatment.
+  **upward**. For the qualifying-revolving limit the only member this can reach
+  is the facility's owner (see the residual below). Crossing upward usually
+  moves an obligor to a less favourable treatment; the residual below is where
+  it need not.
 - **The optional 0.2% retail granularity test's denominator does not move at
   all** (BCBS CRE20.66, elected through `enforce_retail_granularity`; PS1/26
   Art. 123A has no such limb). The
@@ -316,16 +319,57 @@ Direction, relative to the single-row behaviour it replaced:
   standardised class leave its term algebraically unchanged. The invariance is
   pinned by a test, not assumed.
 
-**One residual, disclosed rather than fixed.** A member demoted out of the
-qualifying revolving retail class by its enlarged obligor aggregate is priced on
-the ordinary retail correlation, which decays with PD, instead of the fixed
-qualifying-revolving correlation. Above a crossover PD the decaying correlation
-falls **below** the fixed one, so for such an obligor the demotion *lowers* RWA.
-The effect is partition-local — it touches only that member — and the crossover
-sits well above any ordinary revolving portfolio's PD; the correlations are in
-`engine/irb/formulas.py`. No fixture reaches it, so it is recorded as **owed
-coverage**: a share with a revolving retail member near the qualifying limit and
-a PD above the crossover.
+**One residual, measured.** The qualifying-revolving aggregate (CRR
+Art. 154(4)(c) / PS1/26 Art. 147(5A)(c)) counts each facility's limit once per
+member, through that member's first qualifying leg under the facility. Every
+member other than the owner is a member *because* it holds a loan or contingent
+under the facility, and that leg qualifies whenever the candidate does (it has
+nothing undrawn to cancel, and inherits the facility's revolving, unsecured and
+limit attributes), so it already carries the facility's limit and the candidate
+adds nothing. The one member a candidate can push over the limit is
+therefore the **facility's owner holding no leg of its own under the facility**.
+When it does, every qualifying-revolving row of the owner falls to other retail
+— its own cards included — even when the owner's candidate loses the share and
+is dropped. That is the row to measure, never the candidate.
+
+A demoted row is priced on the other-retail correlation, which decays with PD,
+instead of the fixed qualifying-revolving one, and whether that raises or lowers
+RWA is regime-specific:
+
+| Regime | What demotion changes | Crossover PD — demotion lowers RWA above it |
+|---|---|---|
+| CRR | correlation only (no A-IRB LGD input floor) | ln(13)/35 ≈ 7.33%, at any LGD |
+| Basel 3.1 | correlation **and** the Art. 164(4)(b) LGD input floor, which falls from the qualifying-revolving value to the other-unsecured value | 7.33% where modelled LGD is at or above the qualifying-revolving floor; ≈ 5.88% at 45%, ≈ 4.74% at 40%, ≈ 2.86% at or below the other-unsecured floor |
+
+So under Basel 3.1 the domain where demotion lowers RWA reaches ordinary
+revolving PDs once modelled LGD sits below the qualifying-revolving floor. The
+standardised-equivalent risk weight does not depend on the qualifying-revolving
+class, so a binding output floor can hide the fall: measure it on
+`rwa_pre_floor`.
+
+This is the rule's outcome, not a fan-out artefact. An owner who may draw the
+whole line has that line in its aggregate nominal exposure, and on an
+**unshared** facility the owner's ordinary undrawn row demotes the same cards to
+the penny: the owner's candidate contributes exactly what that row would.
+(Separately, a share drawn in full by another member emits no undrawn row at
+all, so the owner's aggregate then omits the facility's limit; that
+discontinuity is not measured here.) A change that kept
+such owners in the qualifying-revolving class would be RWA-reducing at ordinary
+PDs and would need its own regulatory argument. Measured on
+`tests/fixtures/facility_share_qrre_portfolio.py` by
+`tests/acceptance/test_p5_62_facility_share_qrre_demotion.py` (card exposure
+60,000; own-approach RWEA):
+
+| Regime | Owner PD / modelled LGD | Card in QRRE | Card demoted | Change |
+|---|---|---|---|---|
+| CRR | 10% / 60% | 71,141.52 | 64,060.30 | −7,081.22 |
+| CRR | 6% / 40% | 34,829.02 | 38,290.60 | +3,461.58 |
+| Basel 3.1 | 10% / 60% | 67,114.64 | 60,434.24 | −6,680.39 |
+| Basel 3.1 | 6% / 40% | 41,071.96 | 36,123.21 | −4,948.75 |
+
+The isolating mutation that excludes candidate rows from the aggregate
+(`tests/mutations/mutate_qrre_aggregate_counts_no_share_candidate.py`) keeps the
+card in the qualifying-revolving class and reddens those tests in each regime.
 
 The rejected alternative was an "own-inclusive" rule in which non-candidate rows
 see no candidate. It is exact for losers but drops the undrawn from the

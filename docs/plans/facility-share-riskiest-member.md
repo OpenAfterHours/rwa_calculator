@@ -500,6 +500,14 @@ Effort: S1 M · S2 M · S3 M · S4 S — **L overall**, two batches.
    ≈7.3% crossover. (The Art. 123A granularity-denominator fixture once listed here is no longer
    owed — the premise was refuted by measurement and the invariance is pinned; see Section 4.) A
    candidate-aware QRRE aggregate would need the obligor's PD at classification time.
+   **Measured (P5.62, 2026-11-23)**, and narrower than stated above: a non-owner member's own leg
+   under the share already carries `facility_limit`, so its candidate dedupes to nothing; only the
+   **owner holding no leg under the share** can be pushed over the limit, and its candidate adds
+   exactly what its undrawn row adds on an unshared facility. The crossover is ≈7.33% under CRR
+   at any LGD and under Basel 3.1 at LGD ≥ the QRRE floor, falling to ≈2.86% under Basel 3.1 at
+   LGD ≤ the other-unsecured floor (Art. 164(4)(b)). The demotion is the Art. 147(5A)(c) /
+   154(4)(c) outcome, not a defect. Pinned by
+   `tests/acceptance/test_p5_62_facility_share_qrre_demotion.py`; figures in the methodology page.
 4. **The Art. 110A due-diligence input never reaches the SA branch** (found by the fixture wave,
    2026-09-05). `due_diligence_performed` and `due_diligence_override_rw` are accepted by
    `LOAN_SCHEMA` / `CONTINGENTS_SCHEMA` but are not declared in

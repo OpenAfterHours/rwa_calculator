@@ -425,6 +425,34 @@ form `print(module.__file__)` cannot detect — the right file was patched, just
 late — so **any plugin run against a suite with module- or session-scoped fixtures
 must be session-scoped, and must count its applications.**
 
+## The facility-share QRRE demotion set
+
+Written for P5.62 (2026-11-23) — the measurement of decision D4 on the QRRE
+aggregate: a facility-share candidate counts toward its own member's
+Art. 147(5A)(c) / Art. 154(4)(c) aggregate, so the shared facility's OWNER (the
+one member with no leg of its own under it) is pushed over the limit and its own
+card is demoted, even though its candidate loses the share and is dropped. The
+tests pin current behaviour and were green on arrival, so this plugin is their
+only red. Baseline for `tests/acceptance/test_p5_62_facility_share_qrre_demotion.py`
+is **39 passed**.
+
+| plugin | what it changes | red / green | reddens |
+|---|---|---|---|
+| `mutate_qrre_aggregate_counts_no_share_candidate` | rows with `is_facility_share_candidate` masked out of the candidate set and candidate limit `qrre_obligor_aggregate_limit_expr` sums — nothing else | **16 / 23** | the card-flip, hand-calc (`cancellable` state only), direction and unshared-equivalence tests — **4 each, 2 per regime**, so each regime is red on its own (LESSONS C7) |
+
+- **The green 23 are the right 23.** The `not_cancellable` and `unshared` states
+  carry no qualifying candidate (the first fails the Art. 147(5A)(b) gate, the
+  second has none), so their hand-calcs cannot move; the sizing, input-shape and
+  winner tests describe the fixture, and the member still wins every share under
+  the mutation — which is the evidence that the card's delta is not confounded by
+  a winner change.
+- **The Basel 3.1 LGD-floor channel has its own red, without a plugin.** Pointing
+  the `retail_qrre` arm of `engine/irb/formulas.py`'s retail LGD-floor ladder at
+  `retail_other_unsecured` (applied on disk in a private worktree, then
+  reverted) scores **2 / 37**: the `BASEL_3_1-low_lgd-not_cancellable` hand-calc
+  and the `BASEL_3_1-low_lgd` direction. That is the only cell whose direction
+  the LGD floor decides — under CRR the same owner's demotion RAISES RWA.
+
 ## Writing another
 
 Five rules, all learned the expensive way in the batch that produced these:

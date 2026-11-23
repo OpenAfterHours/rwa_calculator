@@ -389,7 +389,12 @@ limit *value* differs, from the pack), so the gates are **not** regime-Featured.
 that fails any gate is left in **RETAIL_OTHER** (never mortgage, never expelled from
 retail); this is the conservative direction because QRRE's fixed 0.04 correlation is
 below the retail-other correlation at the low PDs typical of performing revolving
-retail (the two cross at PD ≈ 7.3%), so QRRE would understate RWA. A gate-driven
+retail (the two cross at PD ≈ 7.3%), so QRRE would understate RWA. Above the
+crossover the direction reverses, and under Basel 3.1 it reverses sooner: demotion
+also lowers the Art. 164(4)(b) LGD input floor, so with a modelled LGD below the QRRE
+floor the crossover falls (≈ 2.9% at or below the other-unsecured floor) — measured in
+[Facility Share Allocation](../facility-share-allocation.md#candidates-in-obligor-aggregates).
+A gate-driven
 demotion raises a single **CLS010** classification warning per run. The Art. 147(5A)
 **wage-account derogation** (a wage-account-linked collateralised facility is treated as
 unsecured) is applied via input semantics — set `is_secured=False` for such a facility.

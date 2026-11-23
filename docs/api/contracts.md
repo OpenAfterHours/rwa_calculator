@@ -432,10 +432,21 @@ class HierarchyResolverProtocol(Protocol):
         self,
         data: RawDataBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> ResolvedHierarchyBundle:
-        """Resolve all hierarchies and return enriched data."""
+        """Resolve all hierarchies and return enriched data.
+
+        ``pack`` is the run's resolved rulepack (the hierarchy stage passes
+        ``rulepack.pack``); ``None`` falls back to
+        ``RulepackV0.from_config(config).pack``."""
         ...
 ```
+
+The hierarchy stage always passes `pack=` (P1.370). A custom resolver injected through
+`PipelineOrchestrator(hierarchy_resolver=...)` must therefore accept `*, pack=None`; one with
+the older two-argument `resolve(data, config)` fails the whole run with
+`PIPELINE_HIERARCHY_RESOLVER` ("unexpected keyword argument 'pack'").
 
 #### `ClassifierProtocol`
 

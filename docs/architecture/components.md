@@ -101,7 +101,9 @@ class HierarchyResolverProtocol(Protocol):
     def resolve(
         self,
         raw_data: RawDataBundle,
-        config: CalculationConfig
+        config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,  # the run's pack (Art. 140(1) gate)
     ) -> ResolvedHierarchyBundle:
         """Resolve hierarchies and inherit attributes."""
         ...
@@ -194,7 +196,7 @@ class ClassifierProtocol(Protocol):
 
 ### Entity Type Mappings
 
-The classifier uses `entity_type` as the **single source of truth** for exposure class determination. Two separate mappings exist for SA and IRB approaches:
+The classifier uses `entity_type` as the **single source of truth** for exposure class determination. Two separate mappings exist for SA and IRB approaches. Both are rulepack `CategoryMap` entries (`entity_type_to_sa_class` / `entity_type_to_irb_class`), and every engine reader of the two maps reads them from the run's resolved pack through the accessors in `engine/entity_class_maps.py` — the classifier, the Art. 140(1) short-term-ECAI gate in the hierarchy resolver, the CRM guarantor-class derivation and the SA / IRB guarantee-branch fallbacks. Hand-written entity-type lists elsewhere (the ADC corporate gate in `classify/attributes.py`, the RGLA/PSE and sovereign-like lists in `data/schemas.py`) do not read these maps and do not follow the pack. The module-level constants named below are bindings against the default pack, kept for tests:
 
 **ENTITY_TYPE_TO_SA_CLASS** - Maps to SA exposure class for risk weight lookup:
 

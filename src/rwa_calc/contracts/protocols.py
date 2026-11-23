@@ -142,6 +142,8 @@ class HierarchyResolverProtocol(Protocol):
         self,
         data: RawDataBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> ResolvedHierarchyBundle:
         """
         Resolve all hierarchies and return enriched data.
@@ -149,6 +151,13 @@ class HierarchyResolverProtocol(Protocol):
         Args:
             data: Raw data bundle from loader
             config: Calculation configuration
+            pack: Optional resolved rulepack; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``. The
+                hierarchy stage always passes it (P1.370), so a custom
+                implementation injected through
+                ``PipelineOrchestrator(hierarchy_resolver=...)`` must accept
+                ``*, pack=None``: a two-argument ``resolve`` fails the run with
+                ``PIPELINE_HIERARCHY_RESOLVER``.
 
         Returns:
             ResolvedHierarchyBundle with hierarchy metadata added

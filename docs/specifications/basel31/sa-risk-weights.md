@@ -502,6 +502,15 @@ New in Basel 3.1 — for exposures with a specific short-term ECAI assessment:
     long-term CQS for the targeted exposure and routes the SA engine to
     Table 4A. See `RATINGS_SCHEMA` in `src/rwa_calc/data/schemas.py`.
 
+    Before overriding, the resolver applies the Art. 140(1) obligor-class gate:
+    the assessment is used only where the obligor's `entity_type` maps to the
+    `institution` or `corporate` SA class; otherwise it is ignored and a DQ009
+    warning is raised. The map is the run's resolved rulepack
+    `entity_type_to_sa_class` — the gate reads the same map the classifier
+    reads — so a pack overlay passed to
+    `PipelineOrchestrator.run_with_data(rulepack=...)` reaches both. The CRM
+    stage derives `guarantor_exposure_class` from the same pack map (P1.370).
+
 ### Rated Institution Due Diligence CQS Step-Up (Art. 120(4))
 
 Basel 3.1 introduces a class-specific CQS step-up rule for **rated** institution exposures

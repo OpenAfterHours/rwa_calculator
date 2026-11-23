@@ -137,7 +137,7 @@ def build_guarantor_rw_expr(
     """Build the full when/then chain that maps a guarantor to its SA RW.
 
     Dispatches on the guarantor's SA exposure class (derived from
-    ``ENTITY_TYPE_TO_SA_CLASS`` by the caller — e.g. the CRM processor)
+    the run pack's ``entity_type_to_sa_class`` by the caller — e.g. the CRM processor)
     rather than regex on entity_type, ensuring all valid entity types are
     covered. Reproduces the SA-side reference chain
     (``engine/sa/rw_adjustments.py::_build_guarantor_rw_expr``) branch-for-branch.

@@ -9,7 +9,9 @@ Key responsibilities:
   namespace also claims (the input gate's DQ019, review finding RC-10): the
   bundle handed to the resolver and the securitisation lookup are re-keyed by
   ``engine/hierarchy/namespace.py`` first. A no-op on a clean book.
-- Run ``HierarchyResolver.resolve`` over the raw data bundle.
+- Run ``HierarchyResolver.resolve`` over the raw data bundle with the run's
+  pack, so the Art. 140(1) short-term-ECAI gate reads the entity-type ->
+  SA-class map the classifier reads (P1.370).
 - Join the resolved securitisation lookup onto the unified exposures frame
   so residual_pct + pool_allocations ride through CRM and the calculators
   (canonical defaults are injected when no allocations were supplied).
@@ -74,7 +76,7 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run hierarchy resolution and attach the securitisation lookup."""
@@ -90,7 +92,9 @@ def run(
         ctx.get(SECURITISATION_RESOLVED), collided
     )
 
-    result = components.hierarchy_resolver.resolve(data, run_config)
+    # The run's pack, not one re-resolved from config: an injected overlay must
+    # reach the Art. 140(1) gate exactly as it reaches the classifier (P1.370).
+    result = components.hierarchy_resolver.resolve(data, run_config, pack=rulepack.pack)
 
     # Join the resolved securitisation lookup onto the unified exposures
     # frame. When no allocations were supplied, the helper still adds the
@@ -106,7 +110,9 @@ def run(
     group_population = ctx.get_or(GROUP_POPULATION, None)
     increments: pl.LazyFrame | None = None
     if group_population is not None:
-        whole_group = components.hierarchy_resolver.resolve(group_population, run_config)
+        whole_group = components.hierarchy_resolver.resolve(
+            group_population, run_config, pack=rulepack.pack
+        )
         increments = whole_group_increments(result.exposures, whole_group.exposures)
         new_exposures = attach_out_of_scope_threshold(new_exposures, increments)
     result = replace(

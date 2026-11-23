@@ -134,6 +134,8 @@ class HierarchyResolver:
         self,
         data: RawDataBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> ResolvedHierarchyBundle:
         """
         Resolve all hierarchies and return enriched data.
@@ -141,13 +143,18 @@ class HierarchyResolver:
         Steps:
         1. Build counterparty lookup (ultimate parents, rating inheritance)
         2. Unify exposures (loans + contingents + facility undrawn)
-        3. FX conversion (if configured)
-        4. Add collateral LTV
-        5. Enrich with property coverage & lending groups
+        3. Short-term ECAI override, behind the Art. 140(1) obligor-class gate
+        4. FX conversion (if configured)
+        5. Add collateral LTV
+        6. Enrich with property coverage & lending groups
 
         Args:
             data: Raw data bundle from loader.
             config: Calculation configuration.
+            pack: The run's resolved rulepack (the hierarchy stage passes
+                ``rulepack.pack``); ``None`` falls back to
+                ``RulepackV0.from_config(config).pack``. The Art. 140(1) gate
+                reads its ``entity_type_to_sa_class``, the classifier's map.
 
         Returns:
             ResolvedHierarchyBundle with enriched exposures and counterparty lookup.
@@ -198,6 +205,10 @@ class ExposureClassifier:
 #### Module-Level Constants
 
 ```python
+# rwa_calc.engine.entity_class_maps — bindings against the default (CRR) pack,
+# kept for tests and fixtures. Engine code calls the accessors with the run's
+# pack instead: entity_type_to_sa_class(pack), entity_type_to_irb_class(pack),
+# entity_types_by_sa_class(pack).
 ENTITY_TYPE_TO_SA_CLASS: dict[str, str]   # entity_type → SA exposure class
 ENTITY_TYPE_TO_IRB_CLASS: dict[str, str]  # entity_type → IRB exposure class
 ```

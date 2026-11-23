@@ -741,8 +741,8 @@ class TestStageErrorChannel:
         )
 
         class SentinelResolver:
-            def resolve(self, data, config):
-                result = HierarchyResolver().resolve(data, config)
+            def resolve(self, data, config, *, pack=None):
+                result = HierarchyResolver().resolve(data, config, pack=pack)
                 return replace(result, hierarchy_errors=[*result.hierarchy_errors, sentinel])
 
         pipeline = PipelineOrchestrator(hierarchy_resolver=SentinelResolver())

@@ -42,7 +42,7 @@ from rwa_calc.engine.crm.protection_value import (
     crm_basis_expr,
     value_unfunded_protection,
 )
-from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
+from rwa_calc.engine.entity_class_maps import entity_type_to_sa_class
 from rwa_calc.engine.kernels.allocation import (
     expand_items_pro_rata,
     explode_facility_membership,
@@ -130,6 +130,10 @@ def apply_guarantees(
         counterparty_lookup: For guarantor risk weights
         config: Calculation configuration
         rating_inheritance: For guarantor CQS lookup
+        pack: The run's resolved rulepack (``RulepackV0.from_config(config).pack``
+            when ``None``). Its ``entity_type_to_sa_class`` gives
+            ``guarantor_exposure_class`` — the same map the classifier reads
+            for the obligor's class.
         errors: Optional CRM error channel. When provided, guarantees dropped by
             the Art. 213(1)(c)(i) eligibility gate append a CRM012 warning each.
             CRM013 (Art. 201) is NOT raised here: the processor raises it from the
@@ -139,7 +143,10 @@ def apply_guarantees(
     Returns:
         Exposures with guarantee effects applied
     """
-    guarantees = _prepare_guarantees(guarantees, exposures, config, pack=pack, errors=errors)
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    guarantees = _prepare_guarantees(
+        guarantees, exposures, config, pack=resolved_pack, errors=errors
+    )
 
     exposures = exposures.with_columns(
         pl.col("exposure_reference").alias("parent_exposure_reference"),
@@ -157,10 +164,13 @@ def apply_guarantees(
 
     # Derive guarantor's exposure class from their entity type. Needed for
     # post-CRM reporting where the guaranteed portion is reported under the
-    # guarantor's exposure class.
+    # guarantor's exposure class, and for the guarantor RW. The map is the
+    # RUN's pack's, the one the classifier reads — never the CRR-bound module
+    # default — so an overlay reaches the guarantor's class as it reaches the
+    # obligor's (P1.370).
     exposures = exposures.with_columns(
         pl.col("guarantor_entity_type")
-        .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+        .replace_strict(entity_type_to_sa_class(resolved_pack), default="")
         .alias("guarantor_exposure_class"),
     )
 
@@ -169,7 +179,6 @@ def apply_guarantees(
     # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
     # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed
     # portion — the regime's own SA table (CRR Annex I, or PS1/26 Table A1).
-    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     exposures = _apply_cross_approach_ccf(
         exposures,
         present=join_cols,

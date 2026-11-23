@@ -112,9 +112,11 @@ def test_p1_311_the_crr_pack_is_unaffected_by_the_b31_override() -> None:
 def test_p1_311_the_default_binding_still_works_without_a_pack() -> None:
     """Callers that hold no pack still get a populated map.
 
-    Several consumers (the CRM guarantee branches) have no pack in scope and
-    read the module-level dicts. Those must keep working, so the accessors take
-    an optional pack rather than a required one.
+    No engine consumer calls without a pack any more: P1.370 found the CRM
+    guarantor-class derivation and the Art. 140(1) gate reading the module-level
+    dicts although the run's pack was available to both, and threaded it. The
+    no-pack default survives for tests and fixtures that import the module-level
+    constants, so the accessors keep an optional pack rather than a required one.
     """
     sa_map = entity_type_to_sa_class()
     irb_map = entity_type_to_irb_class()
@@ -135,23 +137,15 @@ def test_p1_311_the_inverse_index_follows_the_pack_it_is_given() -> None:
     disagree for exactly the rows a divergence affects — a subtler version of
     the defect being fixed.
 
-    **Scope, stated honestly: this is a forward guard, not a pin on a live
-    path.** The docstring used to name "the entity-level SA RW preview" as the
-    consumer; that preview
-    (``engine/sa/guarantor_rw.py::build_entity_rw_expr``) is deleted, and the
-    Art. 140(1) gate named above is the only remaining one. But the gate reads
-    the module-level ``ENTITY_TYPES_BY_SA_CLASS`` constant, which
-    ``entity_class_maps.py`` binds by calling this accessor with **no pack** at
-    import. So no production caller passes a pack to
-    ``entity_types_by_sa_class`` today, and this test is currently its only
-    pack-aware caller. That is the difference from the forward maps, which
-    ``engine/classify/attributes.py`` does call with the run's pack.
-
-    Keep the test rather than delete it: a regime-divergent SA class map is the
-    change P1.303 D4 anticipates, and the day the gate starts resolving through
-    the run's pack this is the assertion that says the two sides agree. Written
-    down because an unexercised parameter that looks exercised is how a
-    divergence lands silently on one of the two maps.
+    **Scope: this pins the accessor, not the gate.** The gate used to read the
+    module-level ``ENTITY_TYPES_BY_SA_CLASS`` constant, bound with no pack at
+    import, so this test was the accessor's only pack-aware caller. Since
+    P1.370 the gate calls ``entity_types_by_sa_class`` with the run's pack, and
+    the end-to-end pin — an overlaid pack reaching the gate and the CRM
+    guarantor class through ``PipelineOrchestrator.run_with_data`` — is
+    ``tests/integration/test_p1_370_entity_class_maps_follow_run_pack.py``.
+    This one stays as the unit-level guard that the index and the forward map
+    are derived from the same pack.
     """
     pack = resolve("b31", _REPORTING_DATE)
     entries = dict(pack.category_map("entity_type_to_sa_class").entries)

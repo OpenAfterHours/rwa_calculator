@@ -43,7 +43,8 @@ from rwa_calc.contracts.errors import (
     misscoped_short_term_rating_warning,
     unsolicited_rating_not_filtered_warning,
 )
-from rwa_calc.engine.entity_class_maps import ENTITY_TYPES_BY_SA_CLASS
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.entity_class_maps import entity_types_by_sa_class
 from rwa_calc.engine.hierarchy.re_ltv import derive_missing_ltv
 from rwa_calc.engine.kernels.allocation import (
     NO_DEFAULT,
@@ -58,6 +59,7 @@ from rwa_calc.engine.utils import has_required_columns, partition_by_nullable
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +167,8 @@ def apply_short_term_rating_override(
     ratings: pl.LazyFrame | None,
     counterparty_lookup: CounterpartyLookup | None = None,
     errors: list[CalculationError] | None = None,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Apply per-exposure short-term rating override.
 
@@ -190,6 +194,14 @@ def apply_short_term_rating_override(
     picking the row with the lowest CQS, breaking ties by latest
     ``rating_date``. This mirrors the external best-rating selection in
     ``ratings.build_rating_inheritance_lazy``.
+
+    Art. 140(1) obligor-class gate (only when ``counterparty_lookup`` is
+    given): a match is used only where the obligor's ``entity_type`` maps to the
+    ``institution`` or ``corporate`` SA class under ``pack``'s
+    ``entity_type_to_sa_class`` — the run's resolved pack, so the gate reads the
+    same map the classifier later reads (P1.370).
+    ``pack=None`` falls back to the module default binding in
+    ``engine/entity_class_maps.py``; pipeline runs always pass the run's pack.
 
     Always returns ``exposures`` augmented with a ``has_short_term_ecai``
     boolean column (False when no override matched).
@@ -235,6 +247,8 @@ def apply_short_term_rating_override(
     # be used ONLY for institution / corporate obligors. Join the raw entity_type
     # (from the counterparty lookup — no class column exists on the frame yet;
     # the classifier derives it later) and disqualify a match on any other class.
+    # The class is read through the RUN's pack (P1.370), so the gate reads the
+    # same entity_type_to_sa_class map the classifier reads.
     # A mis-scoped match is ignored: has_short_term_ecai stays False, cqs keeps
     # its counterparty-level value and _st_assessment_cqs stays null, so the row
     # AND the Art. 120(3)(c) spillover / Art. 140(2) contamination helpers that
@@ -243,9 +257,11 @@ def apply_short_term_rating_override(
     #   (4) contamination flags.
     has_gate = counterparty_lookup is not None
     if has_gate:
-        eligible = list(ENTITY_TYPES_BY_SA_CLASS["institution"]) + list(
-            ENTITY_TYPES_BY_SA_CLASS["corporate"]
-        )
+        by_class = entity_types_by_sa_class(pack)
+        eligible = [
+            *by_class.get(ExposureClass.INSTITUTION.value, ()),
+            *by_class.get(ExposureClass.CORPORATE.value, ()),
+        ]
         gate_lookup = counterparty_lookup.counterparties.select(
             pl.col("counterparty_reference"),
             pl.col("entity_type").str.to_lowercase().alias("_st_gate_entity_type"),

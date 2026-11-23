@@ -1,20 +1,30 @@
 """
-Entity-type -> exposure-class maps, rebound from the rulepack at module load.
+Entity-type -> exposure-class maps, bound from the run's resolved rulepack.
 
 Pipeline position:
-    Consumed across the engine wherever an ``entity_type`` input string must
-    resolve to its Standardised / IRB exposure class — the classifier
-    (``engine/classify/attributes.py``), the SA / IRB / CRM guarantee branches
-    (``crm/guarantees.py``, ``irb/guarantee.py``, ``sa/rw_adjustments.py``), and
-    the entity-level SA RW preview (``sa/guarantor_rw.py``).
+    Called, with the run's pack, by these engine sites: the classifier's two
+    forward maps (``engine/classify/attributes.py``), the Art. 140(1)
+    short-term-ECAI obligor-class gate (``engine/hierarchy/enrich.py``), the
+    CRM guarantor-class derivation (``crm/guarantees.py``), and the
+    guarantor-class fallbacks of the SA / IRB guarantee branches
+    (``sa/rw_adjustments.py``, ``irb/guarantee.py``) for frames built without
+    the CRM stage. These are the callers of the accessors below, not every
+    engine site that tests an ``entity_type`` against a class: hand-written
+    entity-type lists elsewhere (e.g. the ADC corporate gate in
+    ``classify/attributes.py``, the ``data/schemas.py`` RGLA/PSE and
+    sovereign-like lists) do not read this module and do not follow the pack.
 
 Key responsibilities:
 - Rebind the cited ``entity_type_to_sa_class`` / ``entity_type_to_irb_class``
   rulepack ``CategoryMap`` entries (CRR Art. 112 / 147) into plain ``dict``s for
   ``Expr.replace_strict`` — the rulepack is the value home; this module is the
   consumer-side binding so the engine never imports ``data/tables``.
-- Derive the inverse SA-class -> tuple-of-entity-types index used by the
-  entity-level SA RW preview (``sa/guarantor_rw.py``).
+- Derive the inverse SA-class -> tuple-of-entity-types index the Art. 140(1)
+  gate expands its eligible ``institution`` / ``corporate`` classes through.
+- Keep module-level bindings against a default pack for tests and fixtures
+  that hold no pack. No ``src/`` consumer reads them (P1.370): every caller of
+  the accessors passes the run's pack, so an overlay or a regime-divergent
+  override reaches each of those callers, not just the classifier.
 
 Each call site keeps its own ``replace_strict`` default (the residual ``OTHER``
 class in the classifier, an empty "no-class" sentinel in the guarantee
@@ -53,9 +63,10 @@ logger = logging.getLogger(__name__)
 # of which proposed a pack-map edit at this site and were dead on arrival.
 #
 # The accessors below take an optional resolved pack so a caller that already
-# holds one (the classifier, the SA guarantor preview) can bind the maps for
-# ITS regime. They return plain dicts, so every ``Expr.replace_strict`` call
-# site is unchanged.
+# holds one can bind the maps for ITS regime — and every caller of them does:
+# the classifier (P1.311), the Art. 140(1) gate, the CRM guarantor class and
+# the two guarantee-branch fallbacks (P1.370). They return plain dicts, so
+# every ``Expr.replace_strict`` call site is unchanged.
 #
 # Note the date below is immaterial: ``resolve()`` passes ``reporting_date``
 # only to its content hash and does not filter entries — measured, the entry
@@ -79,7 +90,10 @@ def entity_type_to_irb_class(pack: ResolvedRulepack | None = None) -> dict[str, 
 def entity_types_by_sa_class(pack: ResolvedRulepack | None = None) -> dict[str, tuple[str, ...]]:
     """Inverse of the SA map: SA exposure class -> tuple of entity_types.
 
-    Used by the entity-level SA RW preview (``sa/guarantor_rw.py``).
+    Used by the CRR / PS1/26 Art. 140(1) short-term-ECAI obligor-class gate
+    (``engine/hierarchy/enrich.py``) to expand the ``institution`` and
+    ``corporate`` classes into the entity types a short-term assessment may be
+    used for, from the run's pack.
     """
     sa_map = entity_type_to_sa_class(pack)
     return {
@@ -88,8 +102,10 @@ def entity_types_by_sa_class(pack: ResolvedRulepack | None = None) -> dict[str, 
     }
 
 
-# Module-level bindings against the default pack, retained for the call sites
-# that hold no pack. They are the accessors' output, so the two cannot diverge.
+# Module-level bindings against the default (CRR) pack, retained for tests and
+# fixtures that hold no pack. They are the accessors' output, so the two cannot
+# diverge. Engine code must call the accessors with the run's pack instead: a
+# constant bound here at import never sees an overlay or a b31 override.
 ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = entity_type_to_sa_class()
 ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = entity_type_to_irb_class()
 ENTITY_TYPES_BY_SA_CLASS: dict[str, tuple[str, ...]] = entity_types_by_sa_class()

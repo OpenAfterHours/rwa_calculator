@@ -651,7 +651,7 @@ def sync_irb_exposure_class(
     rgla_* / pse_* entity types are excluded because their SA and IRB
     classes are definitionally different (CRR Art. 147(3)/147(4)(b)) —
     ``exposure_class_irb`` already carries the correct CGCB / INSTITUTION
-    value from ``ENTITY_TYPE_TO_IRB_CLASS`` and must not be overwritten.
+    value from the pack's ``entity_type_to_irb_class`` and must not be overwritten.
 
     Non-named MDBs join that exclusion under CRR only (P1.276): CRR
     Art. 147(4)(c) assigns "exposures to multilateral development banks which

@@ -735,6 +735,12 @@ most favourable applicable grade across the three.
 Where an exposure has a specific short-term ECAI assessment, Art. 131 provides a dedicated
 CQS mapping. This applies to short-term assessments on institutions and corporates.
 
+Art. 140(1) confines short-term assessments to those two classes. The hierarchy resolver
+ignores a short-term rating (and raises DQ009) where the obligor's `entity_type` maps to any
+other SA class under the run's resolved rulepack `entity_type_to_sa_class`. The gate reads
+the same map the classifier and the CRM guarantor-class derivation read, so a pack overlay
+reaches all three (P1.370).
+
 **Table 7 — Short-Term ECAI Assessment Risk Weights (Art. 131)**
 
 | Short-Term CQS | Risk Weight |

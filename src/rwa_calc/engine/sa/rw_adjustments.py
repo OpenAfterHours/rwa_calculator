@@ -360,7 +360,7 @@ def apply_guarantee_substitution(
     # guarantor_country_code, guarantor_is_ccp_client_cleared). In
     # production these are set by the CRM processor; this fallback covers
     # tests that construct LazyFrames directly and skip the CRM stage.
-    exposures = _ensure_guarantee_substitution_columns(exposures)
+    exposures = _ensure_guarantee_substitution_columns(exposures, resolved_pack)
 
     # Preserve pre-CRM risk weight for regulatory reporting (pre-CRM vs
     # post-CRM views).
@@ -830,13 +830,16 @@ def apply_intragroup_zero_rw(
 # ---------------------------------------------------------------------------
 
 
-def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFrame:
+def _ensure_guarantee_substitution_columns(
+    exposures: pl.LazyFrame, pack: ResolvedRulepack
+) -> pl.LazyFrame:
     """Ensure optional guarantor columns exist before guarantee substitution.
 
     In production ``guarantor_exposure_class`` is set by the CRM processor
-    (``engine/crm/guarantees.py``) from ``ENTITY_TYPE_TO_SA_CLASS``. This
-    fallback covers unit tests that construct LazyFrames directly and skip
-    the CRM stage.
+    (``engine/crm/guarantees.py``) from the run pack's
+    ``entity_type_to_sa_class``. This fallback covers unit tests that construct
+    LazyFrames directly and skip the CRM stage; it derives the class from the
+    same ``pack`` the caller resolved, so the two paths read one map.
 
     Adds (if absent):
         guarantor_exposure_class        — derived from guarantor_entity_type
@@ -848,12 +851,12 @@ def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFr
     to_add: list[pl.Expr] = []
 
     if "guarantor_exposure_class" not in schema_names:
-        from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
+        from rwa_calc.engine.entity_class_maps import entity_type_to_sa_class
 
         to_add.append(
             pl.col("guarantor_entity_type")
             .fill_null("")
-            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+            .replace_strict(entity_type_to_sa_class(pack), default="")
             .alias("guarantor_exposure_class")
         )
     if "guarantor_country_code" not in schema_names:

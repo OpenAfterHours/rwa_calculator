@@ -56,10 +56,12 @@ from rwa_calc.engine.hierarchy.graph import (
 )
 from rwa_calc.engine.hierarchy.ratings import build_rating_inheritance_lazy
 from rwa_calc.engine.hierarchy.unify import unify_exposures
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,8 @@ class HierarchyResolver:
         self,
         data: RawDataBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> ResolvedHierarchyBundle:
         """
         Resolve all hierarchies and return enriched data.
@@ -88,10 +92,17 @@ class HierarchyResolver:
         Args:
             data: Raw data bundle from loader
             config: Calculation configuration
+            pack: Optional resolved rulepack — the run's, which the hierarchy
+                stage passes so an injected overlay is honoured; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``. Read by
+                the Art. 140(1) short-term-ECAI obligor-class gate, whose
+                entity-type -> SA-class map must be the one the classifier
+                reads (P1.370).
 
         Returns:
             ResolvedHierarchyBundle with hierarchy metadata added
         """
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         errors: list[CalculationError] = []
 
         counterparty_lookup, cp_errors = self._build_counterparty_lookup(
@@ -124,7 +135,7 @@ class HierarchyResolver:
         # counterparty as a whole; when present, they override the counterparty-
         # level long-term rating for SA risk-weight routing.
         exposures = self._apply_short_term_rating_override(
-            exposures, data.ratings, counterparty_lookup, errors
+            exposures, data.ratings, counterparty_lookup, errors, pack=resolved_pack
         )
 
         # Apply FX conversion so threshold calculations use consistent currency.
@@ -293,13 +304,18 @@ class HierarchyResolver:
         ratings: pl.LazyFrame | None,
         counterparty_lookup: CounterpartyLookup,
         errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Delegate to :func:`enrich.apply_short_term_rating_override`.
 
-        Threads the counterparty lookup (for the Art. 140(1) obligor-class gate)
-        and the run's error accumulator (for DQ009 mis-scope warnings).
+        Threads the counterparty lookup and the run's pack (for the Art. 140(1)
+        obligor-class gate) and the run's error accumulator (for DQ009
+        mis-scope warnings).
         """
-        return apply_short_term_rating_override(exposures, ratings, counterparty_lookup, errors)
+        return apply_short_term_rating_override(
+            exposures, ratings, counterparty_lookup, errors, pack=pack
+        )
 
     def _enrich_with_property_coverage(
         self,

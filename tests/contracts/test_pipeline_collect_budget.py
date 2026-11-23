@@ -48,7 +48,23 @@ The three callables are replaced on the CLASS / MODULE object through
 ``src/rwa_calc`` is intercepted regardless of how it spells the call, and the
 originals are restored at teardown. The counter is installed AFTER the bundle
 and config are built and read IMMEDIATELY after ``run_with_data`` returns, so
-the numbers cover the run and nothing else. ``collect_schema`` is counted at
+the numbers cover that window and nothing before or after it.
+
+A class / module patch is visible to EVERY thread in the process, so the
+window alone does not make the numbers the run's: until P5.74 any Polars work
+another thread did during it was counted too, and a reconciliation job an
+earlier test left running on the UI's background executor read as 2-3.5x the
+budget in both regimes - but only when the two files ran in one process, close
+together, which under xdist depends on which worker each file lands on.
+So the wrappers count only the thread that installed them, which is the thread
+that calls ``run_with_data``; calls from any other thread are tallied apart and
+must be zero (``test_the_run_materialises_only_on_the_calling_thread``), and
+the measurement first asserts no UI background job is running, so a leak of
+that kind fails with its cause named rather than as a count. The thread filter
+is exact only while the engine materialises on the calling thread - true
+today, and the zero-tally test is what says so if it stops being true.
+
+``collect_schema`` is counted at
 the Python method, so a Polars property that calls ``self.collect_schema()``
 internally (``LazyFrame.columns``, ``LazyFrame.schema``) counts once each time
 it is read - which is correct, because that is a schema resolution the run
@@ -60,19 +76,24 @@ References:
 - tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py (the sibling
   scaling guard from PR #488, same graduate-the-measurement shape)
 - .claude/LESSONS.md B4, C11, C12 (proof the patch applied), E1 (two-way)
+- tests/fixtures/ui_jobs.py and tests/conftest.py::_no_leaked_ui_job (P5.74:
+  the background-job leak this file was once order-dependent on)
 """
 
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
+from tests.fixtures.ui_jobs import running_ui_job_ids
 from tests.properties.portfolios import ExposureSpec, build_bundle, config_for
 
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.ui.app.progress import create_job
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -162,36 +183,62 @@ _REGIMES: tuple[str, ...] = tuple(_BANKED)
 
 @dataclass(frozen=True)
 class _Measurement:
-    """One regime's run: the counts it made, and the evidence it was a real run."""
+    """One regime's run: the counts it made, and the evidence it was a real run.
+
+    ``observed`` is what the run's own thread materialised - the budget.
+    ``off_thread`` is what any OTHER thread materialised while the run was being
+    counted, with ``live_threads`` naming the threads alive when it returned; it
+    is not budgeted, and must be zero (see
+    ``test_the_run_materialises_only_on_the_calling_thread``).
+    """
 
     regime: str
     observed: dict[str, int]
+    off_thread: dict[str, int]
+    live_threads: tuple[str, ...]
     ledger: pl.DataFrame
     errors: tuple[CalculationError, ...]
 
 
-def _install_counters(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
+def _install_counters(
+    monkeypatch: pytest.MonkeyPatch, other_threads: dict[str, int] | None = None
+) -> dict[str, int]:
     """Replace the three materialising callables with counting wrappers.
 
-    Returns the live counter dict. Asserts each patch actually landed
-    (LESSONS C12, mechanism 2: a patch that silently no-ops reads as a
-    dramatic improvement here, which is the opposite of what happened).
+    Returns the live counter dict, which counts ONLY calls made on the thread
+    that installed the wrappers - the thread that then calls ``run_with_data``.
+    The patch itself is on the class and the module, so every thread in the
+    process goes through it; without the filter, Polars work any other thread
+    did while the run was in flight was counted as the run's (P5.74: a UI
+    reconciliation job an earlier test left running read as 2-3.5x the budget).
+    Calls from any other thread are tallied into ``other_threads`` when it is
+    given, so they are reported rather than silently dropped.
+
+    Asserts each patch actually landed (LESSONS C12, mechanism 2: a patch that
+    silently no-ops reads as a dramatic improvement here, which is the opposite
+    of what happened).
     """
+    owner = threading.get_ident()
     counts: dict[str, int] = dict.fromkeys(_METRICS, 0)
+    foreign: dict[str, int] = dict.fromkeys(_METRICS, 0) if other_threads is None else other_threads
     original_collect = pl.LazyFrame.collect
     original_collect_schema = pl.LazyFrame.collect_schema
     original_collect_all = pl.collect_all
 
+    def tally(metric: str) -> None:
+        target = counts if threading.get_ident() == owner else foreign
+        target[metric] = target.get(metric, 0) + 1
+
     def counting_collect(self: pl.LazyFrame, *args: Any, **kwargs: Any) -> Any:
-        counts["collect"] += 1
+        tally("collect")
         return original_collect(self, *args, **kwargs)
 
     def counting_collect_schema(self: pl.LazyFrame, *args: Any, **kwargs: Any) -> Any:
-        counts["collect_schema"] += 1
+        tally("collect_schema")
         return original_collect_schema(self, *args, **kwargs)
 
     def counting_collect_all(*args: Any, **kwargs: Any) -> Any:
-        counts["collect_all"] += 1
+        tally("collect_all")
         return original_collect_all(*args, **kwargs)
 
     monkeypatch.setattr(pl.LazyFrame, "collect", counting_collect)
@@ -206,28 +253,62 @@ def _install_counters(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
     return counts
 
 
+def _assert_no_background_ui_job_running(regime: str) -> None:
+    """Measurement precondition: no UI background job is running in this process.
+
+    A UI job is a full pipeline run on ``rwa_calc.ui.app.progress``'s
+    module-level ``ThreadPoolExecutor``. The counters no longer count it (they
+    count the measuring thread only), so this is not what keeps the budget
+    right. It is here so that a job some earlier test dispatched and never
+    waited for fails HERE with its cause named, instead of surfacing - as it did
+    before P5.74 - as an unexplained count of up to 3.5x the banked one that
+    reproduced only when xdist happened to give both files to one worker.
+    ``"running"`` stands in for "its worker thread is still busy";
+    ``tests/fixtures/ui_jobs.py`` says why that holds.
+    """
+    running = sorted(running_ui_job_ids())
+    assert not running, (
+        f"{regime}: {len(running)} background UI job(s) from an earlier test are still "
+        f"running in this process: {running}. Each is a pipeline run on the UI's "
+        "ThreadPoolExecutor, doing Polars work on another thread while the budget is "
+        "measured. Find the test that dispatched it (tests/conftest.py::_no_leaked_ui_job "
+        "fails it by name when it runs in the same process) and make it wait for its job."
+    )
+
+
 @pytest.fixture(scope="module", params=_REGIMES)
 def measurement(request: pytest.FixtureRequest) -> Iterator[_Measurement]:
     """Run the one-row bundle once per regime under the counters.
 
-    Module-scoped so the three tests below share one run per regime; the
-    counters live inside a ``MonkeyPatch.context`` because a function-scoped
+    Module-scoped so the tests below share one run per regime; the counters
+    live inside a ``MonkeyPatch.context`` because a function-scoped
     ``monkeypatch`` cannot serve a module-scoped fixture.
     """
     regime: str = request.param
     # Arrange - everything that is NOT the run happens before the counters go in.
+    _assert_no_background_ui_job_running(regime)
     bundle = build_bundle((ExposureSpec(),))
     config = config_for(regime)
+    off_thread: dict[str, int] = dict.fromkeys(_METRICS, 0)
 
     with pytest.MonkeyPatch.context() as monkeypatch:
-        counts = _install_counters(monkeypatch)
+        counts = _install_counters(monkeypatch, other_threads=off_thread)
         # Act - the run, and a snapshot the instant it returns.
         result = PipelineOrchestrator().run_with_data(bundle, config)
         observed = dict(counts)
+        observed_off_thread = dict(off_thread)
+        live_threads = tuple(sorted(t.name for t in threading.enumerate()))
 
     # Read outside the patched region so the evidence collect is not counted.
     ledger = result.results.collect()
-    yield _Measurement(regime=regime, observed=observed, ledger=ledger, errors=tuple(result.errors))
+    yield _Measurement(
+        regime=regime,
+        observed=observed,
+        off_thread=observed_off_thread,
+        live_threads=live_threads,
+        ledger=ledger,
+        errors=tuple(result.errors),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +361,129 @@ def test_every_counter_fired(measurement: _Measurement) -> None:
         f"{measurement.observed}. If the engine now reaches this call by another "
         "name, extend _install_counters - do not bank a zero."
     )
+
+
+def test_the_run_materialises_only_on_the_calling_thread(measurement: _Measurement) -> None:
+    """No other thread did Polars work while the run was being counted.
+
+    The budget counts the calling thread only (``_install_counters``). That is
+    the whole run today - nothing under ``src/rwa_calc/engine`` starts a thread,
+    and its one Python UDF (the securitisation allocator's ``map_elements``)
+    does not materialise - but a future change that DID materialise off the
+    calling thread (a worker pool, a UDF that collects) would drop out of the
+    budget and read as an improvement someone might bank. This makes it a named
+    failure instead. The other source is a thread an earlier test left running;
+    the measurement precondition already names the UI's own background jobs.
+    """
+    # Arrange / Act
+    stray = {name: n for name, n in measurement.off_thread.items() if n}
+
+    # Assert
+    assert not stray, (
+        f"{measurement.regime}: Polars materialisations on threads other than the "
+        f"run's while it was counted: {stray}; threads alive when it returned: "
+        f"{list(measurement.live_threads)}. If the ENGINE now materialises off the "
+        "calling thread, extend _install_counters to count it - do not bank the drop. "
+        "If a thread an earlier test left running did this work, make that test wait."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Isolation - the counters see the run and nothing else
+# ---------------------------------------------------------------------------
+
+
+def _materialise_once() -> None:
+    """Make exactly one call of each counted kind on a trivial plan."""
+    plan = pl.LazyFrame({"a": [1]})
+    plan.collect()
+    plan.collect_schema()
+    pl.collect_all([plan])
+
+
+def test_counters_ignore_polars_work_on_other_threads() -> None:
+    """A materialisation on another thread is not part of the measured run.
+
+    The patch is on the CLASS and the MODULE, so every thread in the process
+    sees it. Before P5.74 every thread was also counted: a reconciliation job an
+    earlier test left running on the UI's module-level executor was counted as
+    part of the run. Measured on 2026-11-23, with that test run first in the same
+    process, the budget read 159/272/15 (CRR) and 284/298/23 (B31) against a
+    banked 83/111/8 and 80/111/9; how much it adds depends on how far the job has
+    got. The adequacy half proves the installing thread still counts, so this
+    cannot pass because counting broke altogether.
+    """
+    # Arrange
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        counts = _install_counters(monkeypatch)
+        _materialise_once()
+        on_own_thread = dict(counts)
+
+        # Act
+        worker = threading.Thread(target=_materialise_once, name="p5-74-other-thread")
+        worker.start()
+        worker.join()
+        after_other_thread = dict(counts)
+
+    # Assert
+    assert on_own_thread == dict.fromkeys(_METRICS, 1), (
+        f"the installing thread's own calls were not counted once each: {on_own_thread}"
+    )
+    assert after_other_thread == on_own_thread, (
+        "Polars calls made on ANOTHER thread were counted as part of the run: "
+        f"{on_own_thread} -> {after_other_thread}"
+    )
+
+
+def test_counters_report_polars_work_on_other_threads() -> None:
+    """Calls the thread filter excludes are tallied apart, not silently dropped.
+
+    ``test_the_run_materialises_only_on_the_calling_thread`` asserts that tally
+    is zero for the measured run; without this it could pass because the tally
+    never counts anything (LESSONS C11).
+    """
+    # Arrange
+    off_thread: dict[str, int] = dict.fromkeys(_METRICS, 0)
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        counts = _install_counters(monkeypatch, other_threads=off_thread)
+
+        # Act
+        worker = threading.Thread(target=_materialise_once, name="p5-74-other-thread")
+        worker.start()
+        worker.join()
+
+    # Assert - ">= 1", not "== 1": the tally is process-wide by design, so a
+    # thread another test left running may add to it, and that leak is named by
+    # the measurement precondition and tests/conftest.py, not here.
+    untallied = [name for name in _METRICS if off_thread[name] < 1]
+    assert not untallied, (
+        f"another thread's calls were not tallied into other_threads: {untallied}; "
+        f"tally {off_thread}"
+    )
+    assert counts == dict.fromkeys(_METRICS, 0), (
+        f"another thread's calls reached the budget: {counts}"
+    )
+
+
+def test_measurement_precondition_names_a_running_background_ui_job() -> None:
+    """A UI job still running when the measurement starts fails by name, not by count.
+
+    The job is registered through the real ``create_job``, so this also proves
+    the precondition reads the registry the UI actually writes to - a renamed
+    module would leave the check silently empty, and this test red.
+    """
+    # Arrange
+    job = create_job()
+    try:
+        # Act / Assert
+        with pytest.raises(AssertionError, match="still running in this process") as raised:
+            _assert_no_background_ui_job_running("CRR")
+        assert job.job_id in str(raised.value), "the precondition did not name the running job"
+    finally:
+        job.finish(success=True)
+
+    # Assert - a job that has left "running" is no longer reported.
+    assert job.job_id not in running_ui_job_ids()
 
 
 # ---------------------------------------------------------------------------

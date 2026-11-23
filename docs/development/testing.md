@@ -471,6 +471,32 @@ def test_calculation_accumulates_errors():
     assert any("Invalid PD" in e.message for e in result.errors)
 ```
 
+### Testing UI routes that start background jobs
+
+`POST /calculate` and `POST /reconciliation` do not run the pipeline in the request. Each
+hands a job to the UI's module-level `ThreadPoolExecutor` (`rwa_calc.ui.app.progress`) and
+answers with a 303 straight away. A test that posts one of these forms must wait for the job
+before it returns: post with `follow_redirects=False`, take the job id from the `Location`
+header, and poll `/jobs/{id}` until its `status` is no longer `"running"`. The `_wait_for_job`
+helpers in `tests/integration/test_ui_app.py` and `tests/unit/ui/test_ui_scope.py` do this.
+
+A job nobody waits for is a full pipeline run that carries on into the tests after it, on the
+same xdist worker. Three things go wrong:
+
+- Polars spies patched on the class (such as the collect budget in
+  `tests/contracts/test_pipeline_collect_budget.py`) count its work. Before P5.74 this made the
+  budget read 2-3.5x its banked counts, but only when the two files ran in one process, close
+  together, which under xdist depends on which worker each file lands on.
+- It takes CPU from timing tests.
+- It writes the real `~/.rwa_calc` once the test's `RWA_STATE_DIR` monkeypatch has been undone.
+
+The autouse guard `_no_leaked_ui_job` in `tests/conftest.py` fails any test that returns while
+a job it started is still running, and names the job ids. Sometimes a test needs only the
+synchronous part of a route and stubs `submit_job`. The stub must then close the job it is
+given, for example with `job.finish(success=True)`. The route registers the job with
+`create_job()` before it calls `submit_job`, and the registry is never pruned, so a job left
+open stays `"running"` for the rest of the process.
+
 ## The robustness suite (`tests/robustness/`)
 
 Every other suite in this estate is organised on one axis — **by regulatory

@@ -7,6 +7,8 @@ Currently provides:
   ``DataSourceConfig`` pointing at them. Used by CCR loader / fixture-builder
   tests that need a valid base CRR dataset before wiring optional CCR files.
 - The Polars thread-pool cap for the whole test session (see below).
+- ``_no_leaked_ui_job`` - an autouse guard that fails any test which returns
+  while a UI background job it dispatched is still running (P5.74).
 """
 
 from __future__ import annotations
@@ -38,10 +40,37 @@ import polars as pl  # noqa: E402
 import pytest  # noqa: E402
 
 from rwa_calc.engine.loader import DataSourceConfig  # noqa: E402
+from tests.fixtures.ui_jobs import running_ui_job_ids, ui_job_ids  # noqa: E402
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def _no_leaked_ui_job() -> Iterator[None]:
+    """Fail a test that returns while a UI job it dispatched is still running.
+
+    The calculator and reconciliation routes hand each run to the UI's
+    module-level ``ThreadPoolExecutor`` and answer with a 303 at once. A test
+    that posts the form and never waits leaves a full pipeline run going on
+    another thread into the tests after it. That is how
+    ``tests/contracts/test_pipeline_collect_budget.py`` came to read 2-3.5x its
+    banked counts whenever it followed one on the same worker (P5.74). This
+    fails the test that started the job, by name, instead. Wait on the job
+    (poll ``/jobs/{id}`` until it leaves ``"running"``) or, if the test needs
+    only the synchronous part of the route, stub ``submit_job`` with something
+    that also closes the job it is given - see ``tests/fixtures/ui_jobs.py``.
+    """
+    before = ui_job_ids()
+    yield
+    leaked = sorted(running_ui_job_ids() - before)
+    assert not leaked, (
+        f"this test returned while {len(leaked)} UI background job(s) it dispatched "
+        f"were still running: {leaked}. Each is a pipeline run on the UI's "
+        "ThreadPoolExecutor that would carry on into later tests. Wait for it "
+        "(poll /jobs/{id} until its status leaves 'running') before the test ends."
+    )
 
 
 @pytest.fixture

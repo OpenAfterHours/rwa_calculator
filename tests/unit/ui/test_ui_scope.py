@@ -16,6 +16,7 @@ Key responsibilities tested:
 
 from __future__ import annotations
 
+import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -107,6 +108,17 @@ def recon_dir(tmp_path: Path) -> str:
     )
     ours.rename({"ead_final": "EAD", "rwa_final": "RWA"}).write_csv(root / "legacy_output.csv")
     return str(root)
+
+
+def _wait_for_job(client: TestClient, job_id: str, timeout: float = 60.0) -> dict:
+    """Poll the job-status endpoint until the background run leaves 'running'."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = client.get(f"/jobs/{job_id}").json()
+        if status["status"] != "running":
+            return status
+        time.sleep(0.05)
+    raise AssertionError(f"job {job_id} did not finish within {timeout}s")
 
 
 # =============================================================================
@@ -415,7 +427,11 @@ def test_reconciliation_reuse_check_folds_scope_into_fingerprint(
     monkeypatch.setattr(run_index, "find_reusable", spy)
 
     def _post(**scope: str) -> None:
-        client.post(
+        # The route also dispatches a full reconciliation to the UI's background
+        # executor. Wait for it: a job left running carries a pipeline run into
+        # the tests after this one and writes ~/.rwa_calc once RWA_STATE_DIR is
+        # restored (P5.74; tests/conftest.py::_no_leaked_ui_job fails otherwise).
+        posted = client.post(
             "/reconciliation",
             data={
                 "data_path": recon_dir,
@@ -427,7 +443,10 @@ def test_reconciliation_reuse_check_folds_scope_into_fingerprint(
                 "reuse_calculation": "1",  # triggers the reuse-check
                 **scope,
             },
+            follow_redirects=False,
         )
+        assert posted.status_code == 303
+        _wait_for_job(client, posted.headers["location"].rsplit("/", 1)[1])
 
     # Act / Assert — a scoped reuse-check computes a scoped lookup fingerprint.
     _post(reporting_entity="ACME", reporting_basis="consolidated")

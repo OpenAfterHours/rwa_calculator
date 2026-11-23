@@ -282,7 +282,9 @@ and their census is ratcheted by arch_check check 11:
 The two `materialise_frame` rows are not in check 11's census (the pattern it counts is a
 raw `.collect()` / `collect_all(` line); what bounds them is the per-run collect budget in
 `tests/contracts/test_pipeline_collect_budget.py`, which counts every materialisation a
-one-row run makes and ratchets both ways. The remaining data-quality recorders that still
+one-row run makes on the thread that calls `run_with_data` and ratchets both ways. Calls
+from any other thread while the run is counted are tallied apart and must be zero (P5.74).
+The remaining data-quality recorders that still
 collect for themselves do so over one of these frames or over a stage edge —
 `crm_post_ead` for the CRM016 netting audit and the CRM017 deposit gate, `crm_exit` for
 CRM013 — never over the un-materialised stage plan.

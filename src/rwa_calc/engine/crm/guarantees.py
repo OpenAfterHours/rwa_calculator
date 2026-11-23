@@ -26,7 +26,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
+from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA, DIRECT_BENEFICIARY_TYPES
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import (
     drawn_for_ead,
@@ -259,11 +259,24 @@ def _prepare_guarantees(
 def _join_guarantor_counterparty(
     exposures: pl.LazyFrame, counterparty_lookup: pl.LazyFrame
 ) -> tuple[pl.LazyFrame, list[str]]:
-    """Join guarantor entity/country/CCP/SCRA; also returns the joined column names."""
+    """Join guarantor entity/country/CCP/SCRA; also returns the joined column names.
+
+    ``guarantor_is_natural_person`` is always joined: the Art. 201 gate
+    (``guarantor_eligibility``) declines a guarantor whose own counterparty row is
+    flagged a natural person, whatever its ``entity_type``. A lookup without the
+    column (a direct caller's) reads as the schema default, False; an unmatched
+    guarantor is null, which the gate reads as not flagged.
+    """
     cp_names = counterparty_lookup.collect_schema().names()
+    counterparty_lookup = ensure_columns(
+        counterparty_lookup,
+        {"is_natural_person": COUNTERPARTY_SCHEMA["is_natural_person"]},
+        present=cp_names,
+    )
     cp_select_cols = [
         pl.col("counterparty_reference"),
         pl.col("entity_type").str.to_lowercase().alias("guarantor_entity_type"),
+        pl.col("is_natural_person").alias("guarantor_is_natural_person"),
     ]
     if "country_code" in cp_names:
         cp_select_cols.append(pl.col("country_code").alias("guarantor_country_code"))

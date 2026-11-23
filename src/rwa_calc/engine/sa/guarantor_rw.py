@@ -160,6 +160,13 @@ def build_guarantor_rw_expr(
         Corporate (Art. 122 corporate CQS table)
         else -> null (no substitution)
 
+    An empty (or null) guarantor class prices nothing: every branch requires a
+    class, including the two that also read the entity type (CCP, named MDB).
+    That is how a guarantor declined by the Art. 201 gate
+    (``engine/crm/guarantor_eligibility.py``), which clears the class, and an
+    unmapped guarantor both reach null and so no substitution on the SA and
+    IRB paths alike.
+
     The unrated PSE / RGLA fallback is the documented SA-side approximation
     (no guarantor sovereign-CQS join exists in the CRM column production):
     a GB guarantor receives the 20% RGLA / PSE domestic-currency treatment,
@@ -227,7 +234,10 @@ def build_guarantor_rw_expr(
         )
         # CCP guarantors: 2% proprietary / 4% client-cleared
         # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights.
-        .when(pl.col(entity_type_col) == "ccp")
+        # Keyed on the entity type, so it must also require a guarantor class:
+        # the Art. 201 gate declines a guarantor by clearing its class, and a
+        # cleared class prices nothing (P1.395).
+        .when((pl.col(entity_type_col) == "ccp") & (gec != ""))
         .then(
             pl.when(pl.col(ccp_client_cleared_col).fill_null(False))
             .then(pl.lit(_QCCP_CLIENT_CLEARED_RW))

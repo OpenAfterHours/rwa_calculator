@@ -87,10 +87,19 @@ def assign_guarantor_approach(
       assessment (``guarantor_cqs``) or — Art. 201(2), IRB-beneficiary-only — an
       internal rating (``guarantor_internal_pd``) when the beneficiary is itself
       IRB.
-    - NATURAL PERSON (``guarantor_entity_type`` in
-      ``data.schemas.NATURAL_PERSON_ENTITY_TYPES``): in no limb of Art. 201(1) or
-      (2) in either regime, so never eligible — on an SA, slotting or F-IRB
-      beneficiary alike. CRR Art. 194(5) and PS1/26 Art. 194(6)(c) make the
+    - NATURAL PERSON (the guarantor's own ``is_natural_person`` flag, joined as
+      ``guarantor_is_natural_person``, OR ``guarantor_entity_type`` in
+      ``data.schemas.NATURAL_PERSON_ENTITY_TYPES`` — the classifier's
+      ``natural_person_expr`` signal, read on the guarantor rather than the
+      obligor): in no limb of Art. 201(1) or (2) in either regime, so never
+      eligible — on an SA, slotting or F-IRB beneficiary alike. The flag decides
+      whatever the booking: a sole trader booked ``corporate`` / ``company`` /
+      ``specialised_lending`` is not one of the "other corporate entities" of
+      Art. 201(1)(g)/(2), so neither its CQS nor its internal rating admits it
+      (P1.395). A flagged row booked under any other entity type (``sovereign``,
+      ``institution``, ``ccp``, ...) is contradictory input and is declined too,
+      domestic-CGCB short-circuit included — the conservative reading, surfaced
+      by its CRM013. CRR Art. 194(5) and PS1/26 Art. 194(6)(c) make the
       Art. 201 list a precondition for recognising unfunded protection. The one
       carve-out is an A-IRB (own-LGD) beneficiary: CRR Art. 108(2) routes its CRM
       to Chapter 3 (Art. 161(3) / 164(2) / 183, firm-specified guarantor types),
@@ -102,11 +111,17 @@ def assign_guarantor_approach(
 
     A rejected guarantor takes guarantor approach ``""`` — on BOTH the SA fallback
     and the IRB branch, since clearing the class alone would leave parameter
-    substitution running — and its ``guarantor_exposure_class`` is cleared, so the
-    covered leg reverts to the borrower's own basis. The leg is flagged on
+    substitution running — and its ``guarantor_exposure_class`` is cleared. Both
+    substitution paths price the covered leg with
+    ``engine/sa/guarantor_rw.py::build_guarantor_rw_expr``, which prices nothing
+    for an empty class (its CCP and named-MDB branches, which also read the
+    entity type, require a class too), so the leg is never beneficially
+    substituted and stays on the borrower's own basis: SA risk weight, IRB PD /
+    LGD and the output-floor SA-equivalent alike. The leg is flagged on
     ``_guarantor_ineligible`` for :func:`record_ineligible_guarantors` (CRM013).
     The other listed classes (sovereign, RGLA, MDB, international organisation,
-    PSE, institution, CCP) are not gated here.
+    PSE, institution, CCP) are not gated here, except a row flagged a natural
+    person (above).
     """
     # irb_permissions is derived non-None in CalculationConfig.__post_init__.
     irb_exposure_class_values = {
@@ -126,24 +141,29 @@ def assign_guarantor_approach(
 
     # Art. 201 gate. All inputs are non-null booleans (is_not_null / == on the
     # default-"" class and approach / is_in on the entity type apply_guarantees
-    # fills with ""), so no Kleene-null leaks into the gate. The class column can
-    # only ever say "corporate" (never "corporate_sme" — the entity->SA-class map
-    # has no such entity_type; SME-ness is derived later).
+    # fills with "" / eq_missing on the nullable natural-person flag), so no
+    # Kleene-null leaks into the gate. The class column can only ever say
+    # "corporate" (never "corporate_sme" — the entity->SA-class map has no such
+    # entity_type; SME-ness is derived later).
     is_corporate_guarantor = pl.col("guarantor_exposure_class") == "corporate"
     corporate_eligible = pl.col("guarantor_cqs").is_not_null() | (
         beneficiary_is_irb & pl.col("guarantor_internal_pd").is_not_null()
     )
-    is_natural_person_guarantor = pl.col("guarantor_entity_type").is_in(
+    # The GUARANTOR's own flag (joined by apply_guarantees), never the obligor's
+    # ``cp_is_natural_person``; a null flag (unmatched guarantor) is not flagged.
+    flagged_natural_person = pl.col("guarantor_is_natural_person").eq_missing(True)
+    is_natural_person_guarantor = flagged_natural_person | pl.col("guarantor_entity_type").is_in(
         list(NATURAL_PERSON_ENTITY_TYPES)
     )
     outside_art_201 = beneficiary_approach == ApproachType.AIRB.value
+    declined_as_natural_person = is_natural_person_guarantor & outside_art_201.not_()
     guarantor_ineligible = (
-        (is_corporate_guarantor & corporate_eligible.not_())
-        | (is_natural_person_guarantor & outside_art_201.not_())
+        (is_corporate_guarantor & corporate_eligible.not_()) | declined_as_natural_person
     ) & (pl.col("guaranteed_portion") > 0)
 
     return exposures.with_columns(
-        pl.when(is_domestic_cgcb_guarantor)
+        # A flagged CGCB is contradictory input; declined like any natural person.
+        pl.when(is_domestic_cgcb_guarantor & guarantor_ineligible.not_())
         .then(pl.lit("sa"))
         .when(
             beneficiary_is_irb
@@ -170,13 +190,18 @@ def assign_guarantor_approach(
         # Explicit revert (Art. 201): clear the guarantor class for an ineligible
         # guarantor so ``build_guarantor_rw_expr`` returns null -> non-beneficial
         # -> the covered leg reverts to the borrower's own basis. Mirrors the
-        # existing unmapped-guarantor (class "") no-substitution path.
+        # existing unmapped-guarantor (class "") no-substitution path. This holds
+        # only because every branch of that chain requires a non-empty class —
+        # its CCP branch keys on the entity type and was the one leak (P1.395);
+        # pinned per entity type by the P1.395 unit and pipeline tests.
         pl.when(guarantor_ineligible)
         .then(pl.lit(""))
         .otherwise(pl.col("guarantor_exposure_class"))
         .alias("guarantor_exposure_class"),
-        # Scratch for the processor's CRM013 recorder (stripped by the exit seal).
+        # Scratch for the processor's CRM013 recorder (stripped by the exit seal):
+        # the decline, and which limb made it, decided here once.
         guarantor_ineligible.alias("_guarantor_ineligible"),
+        declined_as_natural_person.alias("_guarantor_declined_as_natural_person"),
     )
 
 
@@ -191,23 +216,34 @@ def record_ineligible_guarantors(
     in-memory scan, where the flag's own site re-executed the guarantee split
     (23 ms of a 150-row run). Nothing is appended to ``errors`` between the two
     points, so CRM013 keeps its place in the list; the exit seal strips the flag.
-    The cause is read off ``guarantor_entity_type``: a natural person is outside
-    the Art. 201 list altogether, a corporate lacks the rating Art. 201(1)(g)/(2)
-    requires.
+    The cause is the limb the gate itself recorded on
+    ``_guarantor_declined_as_natural_person`` — never re-derived here, so the two
+    cannot drift: a natural person (flagged, or booked under a natural-person
+    entity type) is outside the Art. 201 list altogether; otherwise a corporate
+    lacks the rating Art. 201(1)(g)/(2) requires.
     """
     dropped = (
         exposures.filter(pl.col("_guarantor_ineligible"))
-        .select("parent_exposure_reference", "guarantor_reference", "guarantor_entity_type")
+        .select(
+            "parent_exposure_reference",
+            "guarantor_reference",
+            "guarantor_entity_type",
+            "guarantor_is_natural_person",
+            "_guarantor_declined_as_natural_person",
+        )
         .collect()
     )
     for row in dropped.iter_rows(named=True):
         loan_ref = row.get("parent_exposure_reference")
         guar_ref = row.get("guarantor_reference")
         entity_type = row.get("guarantor_entity_type")
-        if entity_type in NATURAL_PERSON_ENTITY_TYPES:
+        if row.get("_guarantor_declined_as_natural_person"):
+            flagged = (
+                ", is_natural_person flag set" if row.get("guarantor_is_natural_person") else ""
+            )
             cause = (
-                f"a natural person (entity_type '{entity_type}') is not an eligible "
-                "provider of unfunded credit protection under Art. 201(1)/(2)"
+                f"a natural person (entity_type '{entity_type}'{flagged}) is not an "
+                "eligible provider of unfunded credit protection under Art. 201(1)/(2)"
             )
             reference = "CRR Art. 201(1)"
         else:

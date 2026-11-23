@@ -414,6 +414,13 @@ mortgage, R = 0.04 QRRE, decay form for retail-other).
     Art. 236(1)(a)(ii) can only be an SME corporate entity eligible under Art. 201(2). The
     engine maps only natural persons to a retail guarantor class, and declines their
     guarantees on SA, slotting and F-IRB beneficiaries with a CRM013 warning (P1.384).
+    A guarantor whose own counterparty row has `is_natural_person` True is declined the
+    same way whatever its `entity_type`: a sole trader booked `corporate` is not one of
+    the "other corporate entities" of Art. 201(1)(g) or (2), so its ECAI assessment or
+    internal rating does not admit it (P1.395). The decline holds in the outcome for
+    every entity type, `ccp` included: the covered leg keeps the borrower's PD, LGD and
+    output-floor SA-equivalent, because the guarantor risk-weight chain prices nothing
+    once the gate has cleared the guarantor class.
     It still recognises them on an A-IRB beneficiary, as under CRR Art. 108(2). Whether
     PS1/26 should decline them there too is an open owner decision: the LGD Adjustment
     Method that admits retail guarantors (Art. 183(1)(c)) is not implemented.

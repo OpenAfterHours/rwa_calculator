@@ -996,11 +996,33 @@ and names each rejected guarantor in a CRM013 warning.
 | Corporates with an ECAI credit assessment | (1)(g)(i) | Yes | Yes |
 | Corporates with an internal rating only | (1)(g)(ii), (2) | No | Yes (parameter substitution) |
 | Qualifying central counterparties | (1)(h) | Yes | Yes |
-| Natural persons | none | **No** (CRM013) | **No** (CRM013) |
+| Natural persons (`is_natural_person` True, or `entity_type` `individual` / `natural_person` / `retail`) | none | **No** (CRM013) | **No** (CRM013) |
 
 Art. 201(1)(g)(ii) admits an internally rated corporate for *"institutions calculating
 risk-weighted exposure amounts and expected loss amounts under the IRB Approach"*. The
 engine applies it to F-IRB and A-IRB beneficiaries, not to slotting.
+
+**The guarantor's `is_natural_person` flag decides, whatever its `entity_type`.** Limb (g)
+admits *"other corporate entities"*. A sole trader booked `entity_type` `corporate`,
+`company` or `specialised_lending` with `is_natural_person` True is a natural person, not
+a corporate entity, so neither its ECAI assessment nor its internal rating admits it: the
+guarantee is declined on SA, slotting and F-IRB beneficiaries with the natural-person
+CRM013 (P1.395). The signal is the one the classifier uses for the obligor
+(`natural_person_expr`), read on the guarantor's own counterparty row, never the
+obligor's. A flagged row booked under any other type (for example `sovereign`,
+`institution` or `ccp`) is contradictory input; the engine takes the conservative reading
+and declines it too, including the domestic-currency CGCB 0% short-circuit, and the CRM013
+names the flag and the entity type so the record can be corrected.
+
+A declined guarantee is declined in the outcome, not only in its labels. The gate clears
+the guarantor class, and the guarantor risk-weight chain (`build_guarantor_rw_expr`, used
+by both the SA and the IRB substitution paths) prices nothing for an empty class. Its CCP
+branch reads the entity type, so it also requires a class; without that, a flagged
+guarantor booked `ccp` kept its QCCP 2% / 4% weight and was substituted on SA and F-IRB
+legs. The covered leg therefore keeps the borrower's own risk weight, PD and LGD, and its
+output-floor SA-equivalent, for a flagged guarantor of every entity type. This is pinned
+end to end in both regimes by
+`tests/acceptance/test_p1_395_flagged_natural_person_guarantor_pipeline.py`.
 
 **A-IRB (own-LGD) beneficiaries are outside this list.** Art. 108(2): *"For an exposure to
 which an institution applies the IRB Approach by using their own estimates of LGD and

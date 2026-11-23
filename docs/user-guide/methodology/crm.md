@@ -215,7 +215,7 @@ guarantee from anyone else is not recognised.
 | Institutions (and financial institutions treated as institutions under Art. 119(5)) | (1)(f) | Yes | — |
 | Other corporates, including parents, subsidiaries and affiliates | (1)(g), (2) | Yes | An ECAI credit assessment; or, for an F-IRB / A-IRB beneficiary, an internal rating |
 | Qualifying central counterparties | (1)(h) | Yes | — |
-| Natural persons (`entity_type` `individual`, `natural_person` or `retail`) | none | **No** | Not recognised; CRM013 |
+| Natural persons (`is_natural_person` True, or `entity_type` `individual`, `natural_person` or `retail`) | none | **No** | Not recognised; CRM013. The flag decides whatever the `entity_type`: a sole trader booked `corporate` is not a corporate entity, so a rating does not make it eligible |
 
 A guarantee from an ineligible provider is not recognised: the covered part keeps the
 borrower's own risk weight (or PD and LGD), no exposure moves to the guarantor's class

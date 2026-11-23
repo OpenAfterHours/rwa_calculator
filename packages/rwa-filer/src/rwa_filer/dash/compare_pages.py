@@ -11,6 +11,10 @@ Key responsibilities:
 - Draw the comparison with every filter in the address, earlier and later
   swappable. The comparison itself is worked out once per pair, by the
   workspace, so filtering never re-evaluates the rules.
+- Work out a pair's first comparison as a dashboard task, as opening a return
+  is: every rule is traced on both returns, which takes seconds on a large one.
+  A comparison done within a moment is drawn at once, as before; a longer one
+  shows the progress page, which moves on to the comparison when it is done.
 
 References:
 - rwa_filer.cli — ``rwa-filer diff`` and ``rwa-filer compare``, which this shows
@@ -18,14 +22,17 @@ References:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
+from starlette.responses import RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.dash.compare import compare_page
 from rwa_filer.dash.forms import form_values, page_number, read_open_form
 from rwa_filer.dash.pages import OPENING_PHASES
-from rwa_filer.dash.task_pages import follow
+from rwa_filer.dash.task_pages import follow, outcome
+from rwa_filer.dash.tasks import STATUS_DONE
+from rwa_filer.progress import PHASE_RULES
 from rwa_filer.release import release_packs, shipped_releases
 
 if TYPE_CHECKING:
@@ -33,8 +40,13 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
     from rwa_filer.dash.context import DashContext
+    from rwa_filer.dash.tasks import Task
     from rwa_filer.dash.workspace import OpenedReturn
     from rwa_filer.progress import ProgressCallback
+
+#: The steps of a first comparison: the rules, traced on both returns. The
+#: comparison reports no count of them, so the page shows the step under way.
+COMPARING_PHASES: Final = (PHASE_RULES,)
 
 
 def routes(context: DashContext) -> list[Route]:
@@ -53,14 +65,27 @@ class ComparePages:
         self.context = context
 
     def compare(self, request: Request) -> Response:
-        """The comparison with the return the address names, or the choice of one."""
+        """The comparison with the return the address names, or the choice of one.
+
+        A pair compared for the first time is compared as a task. This handler
+        runs in a worker thread, so it waits for the task where it is: a
+        comparison done within ``progress_after`` is drawn at once, and a longer
+        one is answered with its progress page.
+        """
         opened = self.context.opened(request)
         query = request.query_params
-        other = self.context.workspace.get(query.get("against", ""))
+        workspace = self.context.workspace
+        other = workspace.get(query.get("against", ""))
         if other is None or other.return_id == opened.return_id:
             return self._choose(request, opened)
         swap = query.get("swap") == "1"
         earlier, later = (opened, other) if swap else (other, opened)
+        if workspace.kept_comparison(earlier, later) is None:
+            task = self._compare_first(request, earlier, later)
+            task.wait(self.context.progress_after)
+            if task.status != STATUS_DONE:
+                waiting = RedirectResponse(f"/tasks/{task.task_id}", status_code=303)
+                return outcome(request, task) or waiting
         view = compare_page(
             earlier,
             later,
@@ -69,12 +94,12 @@ class ComparePages:
             page=page_number(query.get("page")),
             category=query.get("category", ""),
             finding=page_number(query.get("finding")) if query.get("finding") else 0,
-            comparison=self.context.workspace.comparison(earlier, later),
+            comparison=workspace.comparison(earlier, later),
         )
         return self.context.render(
             request,
             "compare.html",
-            working=self.context.workspace.working(opened),
+            working=workspace.working(opened),
             section="compare",
             view=view,
             swap=swap,
@@ -108,6 +133,31 @@ class ComparePages:
             f"Validating {asked.name} to compare", work, phases=OPENING_PHASES, refused=refused
         )
         return await follow(self.context, request, task)
+
+    def _compare_first(self, request: Request, earlier: OpenedReturn, later: OpenedReturn) -> Task:
+        """Start comparing the pair; when it is done, its page is the one asked for."""
+        workspace = self.context.workspace
+        asked = f"{request.url.path}?{request.url.query}"
+
+        def work(_progress: ProgressCallback) -> str:
+            workspace.comparison(earlier, later)
+            return asked
+
+        def refused(request: Request, error: str, status_code: int) -> Response:
+            return self.context.render(
+                request,
+                "error.html",
+                status_code=status_code,
+                title="The two returns could not be compared",
+                message=error,
+            )
+
+        return self.context.tasks.start(
+            f"Comparing {later.name} with {earlier.name}",
+            work,
+            phases=COMPARING_PHASES,
+            refused=refused,
+        )
 
     def _choose(  # noqa: PLR0913 - the page and the states it can be drawn in
         self,

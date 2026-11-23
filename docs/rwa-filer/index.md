@@ -39,6 +39,18 @@ it with `uv tool install`, type `rwa-filer` in its place, with any extra the
 example names installed (`uv tool install "rwa-filer[excel]"`); in a uv
 project, type `uv run rwa-filer`.
 
+`@latest` has a cost: `uvx` asks PyPI for the newest release on every run,
+which added about half a second to each command when it was measured (0.7-0.8 s
+for `rwa-filer --version` against 0.24 s installed). That is most of the wait on
+a small return, so for repeated, interactive use install the command with
+`uv tool install` and upgrade it when a release is out.
+
+Each `rwa-filer` command runs with Python's garbage collector switched off,
+because nearly everything it builds lives until it exits; reading a workbook is
+the exception, and is collected. `RWA_FILER_COLLECTOR=on` in the environment
+keeps the collector on for a run. `rwa-filer dash` turns it back on before it
+serves.
+
 !!! warning "The regulator's validation is authoritative"
     A clean result from `rwa-filer` is evidence that a return is well-formed. It
     is not a guarantee that the regulator will accept it: the checks run on
@@ -111,9 +123,12 @@ everything.
 
 ### Seeing how far a check has got
 
-A full PRA001 return takes tens of seconds to validate, nearly all of it spent
-evaluating the published rules one by one. `validate`, `build` and `dash FILE`
-say on stderr which step they are on and how many rules are done:
+A typical PRA001 return validates in under a second, most of it start-up:
+Python, Polars and loading the taxonomy pack. The published rules take a
+fraction of a second there, and most of the time only on large returns: one
+reporting 200 countries takes about one and a half seconds. `validate`, `build`
+and `dash FILE` say on stderr which step they are on and how many rules are
+done:
 
 ```text
 Evaluating the published rules: 612 of 1,441 (42%) - 8s
@@ -130,7 +145,16 @@ unless asked for, so scripts that read stderr see what they always did.
 
 Progress never goes to stdout, so `--format json` piped into another program
 is unaffected. The steps are reading the file, checking its structure,
-evaluating the rules and, for `build`, writing the package. Only the rules are
+evaluating the rules and, for `build`, writing the package. When the structure
+check finds something, a line says so as soon as it returns, before the rules
+run, naming how many findings there are and the first:
+
+```text
+Checking the structure against taxonomy 4.1.1: 11 finding(s); the first: [STR004] ERROR: ...
+```
+
+The findings themselves are in the report, as always; the line is only there so
+that a return with a malformed file is not a wait for the whole rule run. Only the rules are
 counted: the others are single steps, reported as they start. The count moves
 unevenly, since a few rules that read whole templates take seconds each.
 
@@ -770,7 +794,10 @@ print(evidence.validation.status, evidence.identity["evidence_id"])
 `build --evidence FILE` writes the evidence whether or not the return is
 written, and records its checksum and `evidence_id` in the manifest, so a
 sign-off of the manifest covers the evidence too. The dashboard's overview
-offers the same file as **Download evidence**.
+offers the same file as **Download evidence**: it is collected once for each
+validation of the return and served from then on, so a second click is
+immediate and two clicks at once get the same whole file. Each validation's file
+is kept in the dashboard's session folder until the dashboard stops.
 
 ## Writing the submission file
 

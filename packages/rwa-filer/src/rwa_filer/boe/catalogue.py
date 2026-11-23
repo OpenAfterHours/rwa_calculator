@@ -16,6 +16,11 @@ Key responsibilities:
 - Keep a rule that cannot be parsed IN the rule book, marked as such. A rule
   this package cannot read is a rule it cannot check, and that must be visible
   — it is counted, not dropped.
+- Work out what a rule's cells say ONCE. Each cell is parsed the first time
+  any of its readers asks, and a fingerprint is digested the first time it is
+  asked for; the answer is kept on the rule, and the first one kept is never
+  replaced — the engine recognises a rule's references by the tree's own
+  nodes, from however many threads.
 
 A rule's identity is its framework version AND its code: the same code names
 different rules in different workbooks.
@@ -105,6 +110,11 @@ class Rule:
             which: ``isum({.., c: 0040; 0050; 0060, seq: True})`` reads the same
             either way. A variable absent here is read from the text alone, as
             is every variable of a rule book built without a taxonomy package.
+
+    What is worked out from the cells — the parsed parts, why the rule cannot
+    be read, its fingerprints — is kept on the object after first use. None of
+    it is a field: it is not compared, and ``dataclasses.replace`` gives a rule
+    with nothing kept, which reads its own cells.
     """
 
     rule_id: str
@@ -138,31 +148,21 @@ class Rule:
         The code alone does not identify a rule across releases: the same code
         can carry a changed expression, scope or severity. Two runs whose rules
         share a fingerprint ran the same check.
+
+        Digested once for each severity and kept: of all that is hashed, only
+        the severity depends on the module, and every report asks for every
+        rule's fingerprint again.
         """
-        content: dict[str, Any] = {
-            "rule_id": self.rule_id,
-            "framework_version": self.framework_version,
-            "expression": self.expression,
-            "scope": self.scope,
-            "where": self.where,
-            "join": self.join,
-            "tables": list(self.tables),
-            "severity": self.severity(module),
-            "always_execute": self.always_execute,
-            "closed": sorted(self.closed),
-            "closed_by_variable": {
-                variable: sorted(closed)
-                for variable, closed in sorted(self.closed_by_variable.items())
-            },
-        }
-        # Stated only where a formula binds a sequence, so a rule without one
-        # keeps the fingerprint it has always had.
-        if self.spans_by_variable:
-            content["spans_by_variable"] = {
-                variable: sorted(spans)
-                for variable, spans in sorted(self.spans_by_variable.items())
-            }
-        return canonical_sha256(content)
+        severity = self.severity(module)
+        digest = self._fingerprints.get(severity)
+        if digest is None:
+            digest = self._fingerprints.setdefault(severity, _fingerprint(self, severity))
+        return digest
+
+    @cached_property
+    def _fingerprints(self) -> dict[str, str]:
+        """The digests ``fingerprint`` has taken so far, by severity."""
+        return _keep_first(self, "_fingerprints", {})
 
     @cached_property
     def parse_error(self) -> str | None:
@@ -170,11 +170,10 @@ class Rule:
         if self.truncated:
             return "the workbook cell is cut at the spreadsheet cell limit"
         try:
-            parse_expression(self.expression)
-            parse_scope(self.scope or "")
-            parse_join(self.join or "")
-            if self.where:
-                parse_expression(self.where)
+            # Read through the four parts below, which keep what they parse: a
+            # rule found readable here is not parsed again when it is run. In
+            # this order, so the first cell that fails is the one reported.
+            _ = self.tree, self.scope_groups, self.joins, self.where_tree
         except GrammarError as error:
             return str(error)
         return None
@@ -182,19 +181,19 @@ class Rule:
     @cached_property
     def tree(self) -> Node:
         """The parsed expression. Raises ``GrammarError`` if it does not parse."""
-        return parse_expression(self.expression)
+        return _keep_first(self, "tree", parse_expression(self.expression))
 
     @cached_property
     def scope_groups(self) -> tuple[ScopeGroup, ...]:
-        return parse_scope(self.scope or "")
+        return _keep_first(self, "scope_groups", parse_scope(self.scope or ""))
 
     @cached_property
     def joins(self) -> tuple[JoinKey | JoinEquality, ...]:
-        return parse_join(self.join or "")
+        return _keep_first(self, "joins", parse_join(self.join or ""))
 
     @cached_property
     def where_tree(self) -> Node | None:
-        return parse_expression(self.where) if self.where else None
+        return _keep_first(self, "where_tree", parse_expression(self.where) if self.where else None)
 
 
 @dataclass(frozen=True)
@@ -308,3 +307,49 @@ def canonical_sha256(content: object) -> str:
     """
     text = json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# =============================================================================
+# Private helpers
+# =============================================================================
+
+
+def _keep_first[T](rule: Rule, name: str, value: T) -> T:
+    """Keep ``value`` as ``rule``'s ``name`` unless one is kept already; return the one kept.
+
+    ``functools.cached_property`` alone is not enough. Two threads that read a
+    part nothing has read yet both work it out, and ``cached_property`` stores
+    whatever each hands it: the second tree replaces the first after the first
+    reader has gone on to use it. The engine keys a rule's selectors by
+    ``id()`` of the nodes of the tree it was handed, so a replaced tree is a
+    ``KeyError`` — and the dashboard runs each validation in its own thread.
+    ``dict.setdefault`` is one step: whichever value is stored first is the
+    one every reader is given, and no later store puts another in its place.
+    """
+    return rule.__dict__.setdefault(name, value)
+
+
+def _fingerprint(rule: Rule, severity: str) -> str:
+    """The digest of ``rule`` as it runs where a break is treated as ``severity``."""
+    content: dict[str, Any] = {
+        "rule_id": rule.rule_id,
+        "framework_version": rule.framework_version,
+        "expression": rule.expression,
+        "scope": rule.scope,
+        "where": rule.where,
+        "join": rule.join,
+        "tables": list(rule.tables),
+        "severity": severity,
+        "always_execute": rule.always_execute,
+        "closed": sorted(rule.closed),
+        "closed_by_variable": {
+            variable: sorted(closed) for variable, closed in sorted(rule.closed_by_variable.items())
+        },
+    }
+    # Stated only where a formula binds a sequence, so a rule without one
+    # keeps the fingerprint it has always had.
+    if rule.spans_by_variable:
+        content["spans_by_variable"] = {
+            variable: sorted(spans) for variable, spans in sorted(rule.spans_by_variable.items())
+        }
+    return canonical_sha256(content)

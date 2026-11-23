@@ -3,7 +3,7 @@ Compare — two returns for the same entity and date, and why they differ.
 
 Pipeline position:
     baseline SourceReading + candidate SourceReading  ->  compare_returns
-        ->  boe.engine.trace_rules (each file)
+        ->  boe.engine._trace_lean (each file: the trace without its comparison log)
         ->  validate.execution.apply_deny_list (the gateway on the submission date)
         ->  explain.explain_differences
         ->  ReturnComparison  ->  render_text (``rwa-filer compare``) / as_record (JSON)
@@ -55,7 +55,7 @@ from rwa_filer.boe.engine import (
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     RuleTrace,
-    trace_rules,
+    _trace_lean,
 )
 from rwa_filer.model import COORDINATE_COLUMNS
 from rwa_filer.release import resolve_release
@@ -488,7 +488,11 @@ def _trace(ret: CanonicalReturn, release: Release, day: date) -> RuleTrace | Non
             module,
         )
         return None
-    traced = trace_rules(ret, release.pack, release.rulebook.enforced(module))
+    # A comparison reads each evaluation's place, verdict, relation and its two
+    # sides, never the log of comparisons inside a rule, so the trace is made
+    # without that log: about half the cost of tracing. A lean trace is never
+    # evidence (``evidence.Evidence`` refuses one).
+    traced = _trace_lean(ret, release.pack, release.rulebook.enforced(module))
     return trace_as_run(traced, apply_deny_list(traced.results, release.deny_list, module, day))
 
 

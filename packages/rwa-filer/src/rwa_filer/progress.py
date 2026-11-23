@@ -17,6 +17,10 @@ Key responsibilities:
 - Write progress to a terminal as one line rewritten in place, and to anything
   else (a log, a pipe) as one line per step and per tenth of the rules — never
   to stdout, which carries the command's result.
+- Carry a note when a step has found something a person should hear before
+  the run ends — a return the taxonomy does not accept is told so when the
+  structure check returns, not after the rules — and write it as a line that
+  stays, on a terminal as in a log.
 
 References:
 - rwa_filer.validate.returns.validate_return — the steps a validation reports
@@ -27,7 +31,7 @@ from __future__ import annotations
 
 import shutil
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Self, TextIO
 
 if TYPE_CHECKING:
@@ -81,12 +85,18 @@ class Progress:
         total: How many items the step has; 0 when it is not counted.
         subject: What the step is about, where that helps: the file being read,
             the taxonomy release the structure is checked against.
+        note: What the step found that a person should hear now, rather than
+            when the run ends: the structure findings of a return the taxonomy
+            does not accept. Empty for an event that only says where the run
+            is. It is left out of the ``repr``, so an event without one prints
+            as it always has.
     """
 
     phase: str
     done: int = 0
     total: int = 0
     subject: str = ""
+    note: str = field(default="", repr=False)
 
     @property
     def label(self) -> str:
@@ -107,7 +117,12 @@ class Progress:
 
     def describe(self) -> str:
         """One line saying what is being done: ``Evaluating the published rules: 612 of
-        1,441 (42%)``, ``Reading return.xbrl``."""
+        1,441 (42%)``, ``Reading return.xbrl``; with a note, the note after the step:
+        ``Checking the structure against taxonomy 4.1.1: 2 finding(s); ...``."""
+        step = self._step()
+        return f"{step}: {self.note}" if self.note else step
+
+    def _step(self) -> str:
         if self.phase == PHASE_READING and self.subject:
             return f"Reading {self.subject}"
         if self.phase == PHASE_STRUCTURE and self.subject:
@@ -140,6 +155,10 @@ class StreamProgress:
     a while is visibly still going. Only plain ASCII control is used — a
     carriage return and spaces — so no terminal needs escape sequences.
 
+    An event with a note is always written, and as a line that stays: on a
+    terminal it takes the place of the live line and ends it, and the next
+    event starts a new live line below it, which is the one ``close`` clears.
+
     Use it as a context manager, or call ``close`` when the work is done.
     """
 
@@ -160,10 +179,12 @@ class StreamProgress:
         self._width = 0
 
     def __call__(self, event: Progress) -> None:
-        """Show ``event``, if it is time to."""
+        """Show ``event``, if it is time to; an event with a note, always."""
         changed = event.phase != self._phase
         self._phase = event.phase
-        if self.live:
+        if event.note:
+            self._write_note(event)
+        elif self.live:
             self._draw_live(event, changed=changed)
         else:
             self._draw_log(event, changed=changed)
@@ -209,6 +230,19 @@ class StreamProgress:
             return
         self._logged_tenth = tenth
         self.stream.write(self._line(event, self._clock()) + "\n")
+        self.stream.flush()
+
+    def _write_note(self, event: Progress) -> None:
+        line = self._line(event, self._clock())
+        if self.live:
+            # Over the live line, blanking what it leaves, then ended: the note
+            # stays on the screen, and the next event draws a new live line at
+            # once, below it.
+            self.stream.write("\r" + line.ljust(self._width) + "\n")
+            self._width = 0
+            self._drawn_at = None
+        else:
+            self.stream.write(line + "\n")
         self.stream.flush()
 
     def _line(self, event: Progress, now: float) -> str:

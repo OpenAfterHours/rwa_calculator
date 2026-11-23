@@ -28,7 +28,7 @@ classifiers = [
 # any `rwa_calc` import under src/rwa_filer, and CI runs these tests in an
 # environment that holds this package alone.
 dependencies = [
-    "polars>=1.0.0",
+    "polars>=1.24.0",
     # `rwa-filer dash`, the local web dashboard. Required rather than an extra so
     # that `uvx rwa-filer dash` works as typed: an extra would need
     # `uvx --from 'rwa-filer[dash]' rwa-filer dash`. A small, pure-Python stack —
@@ -55,8 +55,11 @@ arelle = [
     "arelle-release>=2.37",
 ]
 
+# The process entry, not `rwa_filer.cli:main`: it runs the one command with the
+# garbage collector off and freezes the heap before exit (rwa_filer/entry.py).
+# `main` stays the in-process API and changes nothing about its caller's process.
 [project.scripts]
-rwa-filer = "rwa_filer.cli:main"
+rwa-filer = "rwa_filer.entry:run"
 
 [project.urls]
 Homepage = "https://github.com/OpenAfterHours/rwa_calculator"
@@ -101,6 +104,10 @@ addopts = "--tb=short --strict-markers --import-mode=importlib"
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    # The suite runs on parallel workers (`-n auto --dist=loadfile`), in CI's
+    # isolated job too, which installs this group alone. Never in addopts: a
+    # single file run with `-x` should not pay for starting workers.
+    "pytest-xdist>=3.5.0",
     "openpyxl>=3.1.5",  # the importer tests build throwaway rule workbooks
     "httpx>=0.27.0",  # Starlette's TestClient, for the dashboard tests
     "jsonschema>=4.20.0",  # the shipped report and evidence schemas, checked against output

@@ -8,6 +8,10 @@ synthetic pack, where each case can be read at a glance.
 
 from __future__ import annotations
 
+import copy
+import subprocess
+import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from xml.etree import ElementTree
@@ -15,9 +19,10 @@ from xml.etree import ElementTree
 import polars as pl
 import pytest
 
-from pack_builders import build_pack, build_return
+from pack_builders import SAMPLE_COMPILED, SAMPLE_VALID_FROM, build_pack, build_return
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
-from rwa_filer.taxonomy.pack import TaxonomyPack
+from rwa_filer.taxonomy.pack import TaxonomyPack, load_pack, write_pack
+from rwa_filer.xbrl import writer
 from rwa_filer.xbrl.writer import (
     BASE_CONTEXT,
     NS_FIND,
@@ -158,6 +163,77 @@ def test_no_namespace_is_declared_that_the_file_does_not_use(pack: TaxonomyPack)
         "tst_dim",
         "tst_BA",
     }
+
+
+def test_a_fact_in_a_context_already_written_still_has_its_own_prefix_declared(
+    tmp_path: Path,
+) -> None:
+    """A context's prefixes are registered when it is first seen; a metric's with every fact.
+
+    Mutation evidence, measured 2026-11-22: registering the metric's prefix only
+    for a new context drops ``tst_m2`` here (the second fact reuses the first's
+    context) and the file no longer parses.
+    """
+    # Arrange — a pack whose ratio is a metric of ANOTHER namespace: the two facts
+    # below have the same members, so one context, and different metric prefixes.
+    compiled = copy.deepcopy(SAMPLE_COMPILED)
+    compiled["namespaces"]["tst_m2"] = "http://example.test/xbrl/dict/met2"
+    compiled["metrics"]["tst_m2:pi1"] = compiled["metrics"].pop("tst_met:pi1")
+    compiled["datapoints"] = [
+        ["tst_m2:pi1" if metric == "tst_met:pi1" else metric, *rest]
+        for metric, *rest in compiled["datapoints"]
+    ]
+    write_pack(compiled, tmp_path / "pack", valid_from=SAMPLE_VALID_FROM, valid_to=None)
+    two_namespaces = load_pack(tmp_path / "pack")
+    sample = ret(
+        ("T01.00.01.01", None, None, "0010", "0010", 5.0),
+        ("T01.00.01.01", None, None, "0010", "0020", 0.25),
+    )
+
+    # Act
+    content = write_instance(sample, two_namespaces).content
+    root = parse(content)
+
+    # Assert
+    contexts = [fact.get("contextRef") for fact in root if fact.get("contextRef")]
+    assert contexts == ["c1", "c1"], "the two facts must share one context"
+    assert {fact.tag for fact in root if fact.get("contextRef")} == {
+        f"{MET}mi1",
+        "{http://example.test/xbrl/dict/met2}pi1",
+    }
+    assert 'xmlns:tst_m2="http://example.test/xbrl/dict/met2"' in content.decode()
+
+
+def test_a_contexts_prefixes_are_registered_once_however_many_facts_share_it(
+    pack: TaxonomyPack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — count every prefix registration the document makes.
+    registered: list[str] = []
+    use = writer._Document._use
+
+    def counting(self: object, qname: str) -> None:
+        registered.append(qname)
+        use(self, qname)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(writer._Document, "_use", counting)
+    sample = ret(
+        ("T01.00.01.01", None, None, "0010", "0010", 5.0),
+        ("T01.00.01.01", None, None, "0010", "0020", 0.25),
+        ("T01.00.01.01", None, None, "0010", "0030", None, "note"),
+        ("T01.00.01.01", None, None, "0020", "0010", 7.0),
+    )
+
+    # Act
+    instance = write_instance(sample, pack)
+
+    # Assert — four facts in two contexts of one member each: a metric per fact,
+    # and a dimension and a member per CONTEXT (per fact it would be twelve).
+    assert (instance.facts, instance.contexts) == (4, 3), "facts must share a context"
+    assert sorted(registered) == sorted(
+        ["tst_met:mi1", "tst_met:pi1", "tst_met:si1", "tst_met:mi1"]
+        + ["tst_dim:BAS", "tst_BA:x1"]
+        + ["tst_dim:BAS", "tst_BA:x2"]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +528,83 @@ def test_declared_indicators_are_written_as_declared(pack: TaxonomyPack) -> None
 
     # Assert
     assert indicators(root) == {"T01.00.01": "true", "T02.00.01": "true", "T03.00.01": "false"}
+
+
+# ---------------------------------------------------------------------------
+# Text taken from the return or the pack
+# ---------------------------------------------------------------------------
+
+
+def test_markup_characters_are_escaped_wherever_text_is_written(tmp_path: Path) -> None:
+    """Six places take text from the return or the pack; none may break the document."""
+    # Arrange — a pack whose open-row key is text, with a filing indicator and an
+    # entry point that hold markup characters; a return with them in its entity,
+    # a text fact and a row key.
+    compiled = copy.deepcopy(SAMPLE_COMPILED)
+    compiled["dimensions"]["tst_dim:OGR"]["typed_type"] = "string"
+    compiled["tables"]["T04.00.01.01"]["open_keys"][0]["typed_type"] = "string"
+    compiled["tables"]["T01.00.01.01"]["filing_indicator"] = "T01&<00>"
+    write_pack(compiled, tmp_path / "pack", valid_from=SAMPLE_VALID_FROM, valid_to=None)
+    loaded = load_pack(tmp_path / "pack")
+    entry_point = 'http://example.test/mod/tst001.xsd?a=1&b="2"'
+    marked = replace(loaded, info=replace(loaded.info, entry_point=entry_point))
+    scheme = 'http://example.test/scheme?a="1"&b=2'
+    sample = ret(
+        ("T01.00.01.01", None, None, "0010", "0030", None, 'R&D <ltd> "q"'),
+        ("T04.00.01.01", None, None, "a", "0005", None, "K&1<x>"),
+        ("T04.00.01.01", None, None, "a", "0010", 500.0),
+        entity_identifier="A&B<1>",
+        entity_scheme=scheme,
+    )
+
+    # Act
+    content = write_instance(sample, marked).content
+    text = content.decode()
+    root = parse(content)
+
+    # Assert — the bytes, written out; then the document read back gives the text.
+    assert "xlink:href='http://example.test/mod/tst001.xsd?a=1&amp;b=\"2\"'/>" in text
+    assert (
+        "<xbrli:identifier scheme='http://example.test/scheme?a=\"1\"&amp;b=2'>"
+        "A&amp;B&lt;1&gt;</xbrli:identifier>"
+    ) in text
+    assert "<tst_typ:ID>K&amp;1&lt;x&gt;</tst_typ:ID>" in text
+    assert '<tst_met:si1 contextRef="c1">R&amp;D &lt;ltd&gt; "q"</tst_met:si1>' in text
+    assert '<find:filingIndicator contextRef="c0">T01&amp;&lt;00&gt;</find:filingIndicator>' in text
+    identifier = next(root.iter(f"{{{NS_XBRLI}}}identifier"))
+    (schema_ref,) = root.findall("link:schemaRef", NS)
+    assert (identifier.get("scheme"), identifier.text) == (scheme, "A&B<1>")
+    assert schema_ref.get(f"{{{NS_XLINK}}}href") == entry_point
+    assert members(root, "c2") == {"tst_dim:OGR": "{http://example.test/xbrl/dict/typ}ID=K&1<x>"}
+    assert [fact.text for fact in facts_of(root) if fact.tag == f"{MET}si1"] == ['R&D <ltd> "q"']
+    assert "T01&<00>" in indicators(root)
+
+
+def test_importing_the_writer_does_not_import_the_xml_escaping_module() -> None:
+    """``xml.sax.saxutils`` imports ``urllib.request``, and with it the network stack.
+
+    The reader imports this module for its namespace names, so the import would
+    be paid by every command that reads a return and writes none.
+    """
+    # Act — a fresh interpreter, so nothing this test session imported counts.
+    # Polars is imported first and whatever it brings is not the writer's: some
+    # Polars releases (1.24, the declared floor) import ``ssl`` themselves.
+    loaded = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys, polars; before = set(sys.modules);"
+            "import rwa_filer.xbrl.writer;"
+            "names = ('rwa_filer.xbrl.writer', 'xml.sax.saxutils', 'urllib.request', 'ssl');"
+            "print(sorted(name for name in names if name in set(sys.modules) - before))",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    # Assert — the writer itself was imported (the probe is live), and only it.
+    assert loaded == "['rwa_filer.xbrl.writer']"
 
 
 # ---------------------------------------------------------------------------

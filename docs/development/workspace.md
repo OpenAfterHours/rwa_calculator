@@ -250,8 +250,8 @@ uv sync
 # rwa-calc's tests — does NOT collect packages/
 uv run pytest tests/
 
-# rwa-filer's tests, in the shared environment
-uv run pytest packages/rwa-filer
+# rwa-filer's tests, in the shared environment, on parallel workers
+uv run pytest packages/rwa-filer -n auto --dist=loadfile
 
 # Lint, format and types cover both
 uv run ruff check src tests scripts packages
@@ -273,7 +273,7 @@ the member's environment somewhere else:
 ```bash
 export UV_PROJECT_ENVIRONMENT=/tmp/rwa-filer-venv
 uv sync --package rwa-filer
-RWA_FILER_ISOLATED=1 uv run --no-sync pytest packages/rwa-filer
+RWA_FILER_ISOLATED=1 uv run --no-sync pytest packages/rwa-filer -n auto --dist=loadfile
 unset UV_PROJECT_ENVIRONMENT
 ```
 

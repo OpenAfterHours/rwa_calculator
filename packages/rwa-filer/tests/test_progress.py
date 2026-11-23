@@ -9,6 +9,10 @@ What is pinned, and against what:
   or double-counted rules cannot agree with it.
 - The verdict is the same with a watcher as without: progress is told, never
   asked, so it cannot change what is found.
+- A return the taxonomy does not accept is told so as soon as the structure
+  check returns, before the rules run: one more structure event carrying a
+  note, its count and first finding taken from the validation's own findings.
+  A return with no structure finding hears no note.
 - The printer is driven by a hand-wound clock, so throttling is measured, not
   slept through.
 """
@@ -40,6 +44,18 @@ if TYPE_CHECKING:
 
     from rwa_filer.readers import SourceReading
 
+#: A return the taxonomy does not accept — three facts in rows their tables do
+#: not have, in two tables, so two structure findings — whose rules still run.
+MALFORMED_CSV = (
+    "table,sheet,row,column,value\n"
+    "OF07.00.01.01,0008,0010,0010,1000000\n"
+    "OF07.00.01.01,0008,9990,0010,5\n"
+    "OF07.00.01.01,0008,9991,0010,6\n"
+    "OF02.01.01.01,,9990,0010,7\n"
+)
+#: A note as a validation words it.
+NOTE = "2 finding(s); the first: [STR002] ERROR: 1 fact(s) of OF02.01.01.01 sit in a cell"
+
 
 @pytest.fixture
 def broken(tmp_path: Path) -> SourceReading:
@@ -52,6 +68,13 @@ def broken(tmp_path: Path) -> SourceReading:
 def clean(tmp_path: Path) -> SourceReading:
     path = tmp_path / "clean.csv"
     path.write_text(CLEAN_CSV)
+    return open_source(path, HEADER)
+
+
+@pytest.fixture
+def malformed(tmp_path: Path) -> SourceReading:
+    path = tmp_path / "malformed.csv"
+    path.write_text(MALFORMED_CSV)
     return open_source(path, HEADER)
 
 
@@ -88,6 +111,50 @@ def test_a_validation_reports_the_structure_then_every_rule_one_by_one(
     assert {event.phase for event in rules} == {PHASE_RULES}
     assert [event.done for event in rules] == list(range(enforced + 1))
     assert {event.total for event in rules} == {enforced}
+
+
+def test_structure_findings_are_told_when_the_check_returns_before_the_rules(
+    malformed: SourceReading,
+) -> None:
+    # Arrange
+    heard: list[Progress] = []
+
+    # Act
+    validation = validate_return(malformed.ret, release=malformed.release, progress=heard.append)
+
+    # Assert — the return is malformed, and its rules ran all the same.
+    structure = validation.structure
+    assert len(structure) > 1, "one finding cannot show that the count is the count"
+    assert validation.report is not None
+    assert validation.report.rules_executed > 0
+    version = malformed.release.version
+    assert heard[0] == Progress(PHASE_STRUCTURE, subject=version)
+    assert (heard[1].phase, heard[1].subject) == (PHASE_STRUCTURE, version)
+    assert {event.phase for event in heard[2:]} == {PHASE_RULES}
+    assert not any(event.note for event in heard[2:])
+    # The note: how many, then the first as the report prints it, cut to its first sentence.
+    first = structure[0]
+    lead = f"{len(structure)} finding(s); the first: [{first.code}] {first.severity}: "
+    assert heard[1].note.startswith(lead)
+    sentence = heard[1].note.removeprefix(lead)
+    assert first.message.startswith(sentence + ". "), (sentence, first.message)
+
+
+@pytest.mark.parametrize("fixture", ["clean", "broken"])
+def test_a_return_with_no_structure_finding_hears_no_note(
+    fixture: str, request: pytest.FixtureRequest
+) -> None:
+    # Arrange
+    source: SourceReading = request.getfixturevalue(fixture)
+    heard: list[Progress] = []
+
+    # Act
+    validation = validate_return(source.ret, release=source.release, progress=heard.append)
+
+    # Assert
+    assert validation.structure == ()
+    assert heard, "the validation was not watched at all"
+    assert [event.note for event in heard] == [""] * len(heard)
 
 
 def test_watching_a_validation_does_not_change_its_verdict(broken: SourceReading) -> None:
@@ -168,10 +235,25 @@ def test_a_build_refused_by_its_rules_never_reports_writing(
             "Evaluating the published rules: 612 of 1,441 (42%)",
         ),
         (Progress(PHASE_WRITING), "Writing the filing package"),
+        (
+            Progress(PHASE_STRUCTURE, subject="4.1.1", note=NOTE),
+            f"Checking the structure against taxonomy 4.1.1: {NOTE}",
+        ),
     ],
 )
 def test_each_step_reads_as_a_sentence(event: Progress, line: str) -> None:
     assert event.describe() == line
+
+
+def test_an_event_without_a_note_is_the_event_it_always_was() -> None:
+    """The note is an addition: positional use, equality and the printed form are unchanged."""
+    # Arrange
+    event = Progress(PHASE_RULES, 612, 1441, "4.1.1")
+
+    # Assert
+    assert repr(event) == "Progress(phase='rules', done=612, total=1441, subject='4.1.1')"
+    assert event == Progress(phase=PHASE_RULES, done=612, total=1441, subject="4.1.1", note="")
+    assert event != Progress(PHASE_RULES, 612, 1441, "4.1.1", note=NOTE)
 
 
 def test_a_count_is_never_rounded_up_to_finished() -> None:
@@ -262,6 +344,42 @@ def test_a_shorter_line_blanks_what_the_longer_one_left() -> None:
     assert stream.getvalue().endswith("\r" + shorter + " " * (longer - len(shorter)))
 
 
+def test_on_a_terminal_a_note_is_a_line_of_its_own_and_the_live_line_carries_on() -> None:
+    # Arrange
+    stream, clock = io.StringIO(), _Clock()
+    printer = StreamProgress(stream, live=True, clock=clock)
+    printer(Progress(PHASE_STRUCTURE, subject="4.1.1"))
+
+    # Act — the note within the redraw interval, then the next step.
+    printer(Progress(PHASE_STRUCTURE, subject="4.1.1", note=NOTE))
+    clock.now = 1.0
+    printer(Progress(PHASE_RULES, 0, 3))
+    printer.close()
+
+    # Assert — the note replaced the live line and stays; the rules line was
+    # drawn below it and is the only thing cleared at the end.
+    kept, live = stream.getvalue().split("\n")
+    assert kept.rsplit("\r", 1)[1] == f"Checking the structure against taxonomy 4.1.1: {NOTE} - 0s"
+    rules = "Evaluating the published rules: 0 of 3 (0%) - 1s"
+    assert live == "\r" + rules + "\r" + " " * len(rules) + "\r"
+
+
+def test_a_note_shorter_than_the_live_line_blanks_what_that_line_left() -> None:
+    # Arrange
+    stream = io.StringIO()
+    printer = StreamProgress(stream, live=True, clock=_Clock())
+    printer(Progress(PHASE_STRUCTURE, subject="4.1.1"))
+    longer = len("Checking the structure against taxonomy 4.1.1 - 0s")
+
+    # Act
+    printer(Progress(PHASE_WRITING, note="done"))
+
+    # Assert
+    note = "Writing the filing package: done - 0s"
+    assert len(note) < longer, "the note is not shorter: nothing is left to blank"
+    assert stream.getvalue().endswith("\r" + note + " " * (longer - len(note)) + "\n")
+
+
 def test_a_log_gets_one_line_per_step_and_per_tenth_of_the_rules() -> None:
     # Arrange
     stream = io.StringIO()
@@ -284,4 +402,23 @@ def test_a_log_gets_one_line_per_step_and_per_tenth_of_the_rules() -> None:
     rules = [line for line in lines if line.startswith("Evaluating")]
     assert [line.split("(")[1].split(")")[0] for line in rules] == [
         f"{tenth * 10}%" for tenth in range(11)
+    ]
+
+
+def test_a_log_gets_a_note_as_one_line_where_it_was_told() -> None:
+    # Arrange
+    stream = io.StringIO()
+    printer = StreamProgress(stream, live=False, clock=_Clock())
+
+    # Act
+    printer(Progress(PHASE_STRUCTURE, subject="4.1.1"))
+    printer(Progress(PHASE_STRUCTURE, subject="4.1.1", note=NOTE))
+    printer(Progress(PHASE_RULES, 0, 200))
+    printer.close()
+
+    # Assert
+    assert stream.getvalue().splitlines() == [
+        "Checking the structure against taxonomy 4.1.1 - 0s",
+        f"Checking the structure against taxonomy 4.1.1: {NOTE} - 0s",
+        "Evaluating the published rules: 0 of 200 (0%) - 0s",
     ]

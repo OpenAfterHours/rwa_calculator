@@ -53,8 +53,10 @@ import logging
 import math
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import IO, TYPE_CHECKING, Any, Final
 
+from rwa_filer.boe.engine import _LeanTrace
 from rwa_filer.validate.identity import identity_record, source_identity
 from rwa_filer.validate.issue_labels import evaluation_issues
 from rwa_filer.validate.report import (
@@ -67,6 +69,7 @@ from rwa_filer.validate.returns import trace_return
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
     from datetime import date, datetime
+    from hashlib import _Hash
     from pathlib import Path
 
     from rwa_filer.boe.catalogue import Rule, RuleBook
@@ -133,6 +136,13 @@ BODY_RECORDS: Final = (
 
 _GZIP_SUFFIX: Final = ".gz"
 
+#: Lines gathered before they are hashed and written. A 26,000-fact return is
+#: some 100,000 lines, and on the compressed path every write is a call into
+#: the gzip stream: a block at a time makes that fifty calls. The file's bytes
+#: do not depend on this number — the same lines reach the hash and the stream
+#: in the same order whatever it is.
+_BLOCK_LINES: Final = 2048
+
 
 # =============================================================================
 # Public entry points
@@ -154,9 +164,32 @@ class Evidence:
     validation: ReturnValidation
     trace: RuleTrace | None
 
-    @property
+    def __post_init__(self) -> None:
+        """Refuse a trace made without its comparisons.
+
+        ``compare`` traces without the log of comparisons inside a rule
+        (``boe.engine._trace_lean``), which it never reads. Evidence records that
+        log, so a lean trace written as evidence would be a record with its
+        comparisons missing and nothing to say so.
+
+        Raises:
+            ValueError: ``trace`` is a lean trace. A programming error, not a
+                condition in the data.
+        """
+        if isinstance(self.trace, _LeanTrace):
+            raise ValueError(
+                "evidence needs a full trace; this one was made without its comparisons"
+            )
+
+    @cached_property
     def identity(self) -> dict[str, Any]:
-        """The ``identity`` block the report and the file share."""
+        """The ``identity`` block the report and the file share.
+
+        Computed once and kept: it fingerprints every fact of the return, and
+        one run reads it for the evidence header, for the JSON record and for
+        the manifest. Every reader is handed this one block, so read it, do
+        not edit it.
+        """
         return identity_record(self.ret, self.validation)
 
 
@@ -251,11 +284,14 @@ def write_evidence(
     with path.open("wb") as raw:
         stream = _compressed(raw) if path.suffix == _GZIP_SUFFIX else raw
         try:
+            pending: list[bytes] = []
             for record in _records(evidence, identity, generated_at):
-                line = _line(record)
-                digest.update(line)
                 counts[record["record"]] += 1
-                stream.write(line)
+                pending.append(_line(record))
+                if len(pending) >= _BLOCK_LINES:
+                    _write_block(stream, digest, pending)
+            if pending:
+                _write_block(stream, digest, pending)
             body = {name: counts[name] for name in BODY_RECORDS}
             stream.write(
                 _line(
@@ -373,22 +409,23 @@ def _records(
             if validation.rulebook
             else {}
         )
-        notes = validation.report.issue_notes if validation.report is not None else ()
+        notes = _notes_by_rule(validation)
         register = validation.release.issues
         for result in trace.results:
             yield _rule_record(
-                result,
-                rules.get(result.rule_id),
-                module,
-                tuple(note for note in notes if note.rule_id == result.rule_id),
+                result, rules.get(result.rule_id), module, notes.get(result.rule_id, ())
             )
         sequence: Counter[str] = Counter()
         for evaluation in trace.evaluations:
+            labels = notes.get(evaluation.rule_id)
             yield _evaluation_record(
                 evaluation,
                 sequence[evaluation.rule_id],
                 cells,
-                evaluation_issues(evaluation, notes, register, module),
+                # A rule no issue labels has nothing to say about its
+                # evaluations, which is what ``evaluation_issues`` answers for
+                # it; all but a handful of rules are such, so it is not asked.
+                evaluation_issues(evaluation, labels, register, module) if labels else None,
             )
             sequence[evaluation.rule_id] += 1
     for index, finding in enumerate(findings):
@@ -416,6 +453,19 @@ def _numbered(cells: Mapping[CellAddress, CellFact]) -> dict[CellAddress, int]:
         ),
     )
     return {address: number for number, address in enumerate(ordered)}
+
+
+def _notes_by_rule(validation: ReturnValidation) -> dict[str, tuple[IssueNote, ...]]:
+    """The known-issue labels of each labelled rule, in the report's order.
+
+    Built once per file: the labels are a handful, and looking them up per rule
+    and per evaluation by scanning them all was a scan per record written.
+    """
+    found: dict[str, list[IssueNote]] = {}
+    if validation.report is not None:
+        for note in validation.report.issue_notes:
+            found.setdefault(note.rule_id, []).append(note)
+    return {rule_id: tuple(notes) for rule_id, notes in found.items()}
 
 
 def _cell_record(number: int, fact: CellFact) -> dict[str, Any]:
@@ -479,11 +529,21 @@ def _evaluation_record(
 
 
 def _side(addresses: Sequence[CellAddress], cells: Mapping[CellAddress, int]) -> dict[str, Any]:
-    """The cells one side read: reported ones by id, the rest by address."""
-    return {
-        "cells": [cells[address] for address in addresses if address in cells],
-        "unreported": [_address(address) for address in addresses if address not in cells],
-    }
+    """The cells one side read: reported ones by id, the rest by address.
+
+    One pass and one lookup per cell: an address is hashed in Python, and this
+    runs twice for every evaluation written.
+    """
+    reported: list[int] = []
+    unreported: list[dict[str, Any]] = []
+    for address in addresses:
+        number = cells.get(address)
+        # ``is None``, not falsy: the first cell's id is 0.
+        if number is None:
+            unreported.append(_address(address))
+        else:
+            reported.append(number)
+    return {"cells": reported, "unreported": unreported}
 
 
 def _comparison_record(comparison: Comparison, cells: Mapping[CellAddress, int]) -> dict[str, Any]:
@@ -566,6 +626,14 @@ def _finite(value: float | None) -> float | None:
 def _line(record: Mapping[str, Any]) -> bytes:
     text = json.dumps(record, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     return (text + "\n").encode("utf-8")
+
+
+def _write_block(stream: IO[bytes] | gzip.GzipFile, digest: _Hash, pending: list[bytes]) -> None:
+    """Hash and write the gathered lines as one block, and empty the list for the next."""
+    block = b"".join(pending)
+    digest.update(block)
+    stream.write(block)
+    pending.clear()
 
 
 def _compressed(raw: IO[bytes]) -> gzip.GzipFile:

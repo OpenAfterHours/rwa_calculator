@@ -79,8 +79,9 @@ from rwa_filer.boe.engine import (
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
     Accuracy,
-    evaluate_rules,
-    trace_rules,
+    _evaluate_indexed,
+    _Store,
+    _trace_indexed,
 )
 from rwa_filer.progress import PHASE_STRUCTURE, Progress, notify
 from rwa_filer.release import choose_release
@@ -572,6 +573,15 @@ def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
     pack = chosen.pack
     notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version))
     structure = (*source_findings, *check_structure(ret, pack))
+    if structure:
+        # Told now, not with the report: the rules take most of the run, and a
+        # return the taxonomy does not accept is worth hearing about first.
+        first = structure[0]
+        found = f"{len(structure)} finding(s); the first: [{first.code}] {first.severity}: "
+        notify(
+            progress,
+            Progress(PHASE_STRUCTURE, subject=chosen.version, note=found + _lead(first.message)),
+        )
     release_findings = tuple(check_reference_date(ret, pack))
     module = pack.info.module
     effective = accuracy or Accuracy()
@@ -596,28 +606,25 @@ def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
         return unchecked, None
 
     enforced = rulebook.enforced(module)
+    # The return is indexed for the engine ONCE: the rule pass and the
+    # publisher-issue pass (``_issue_notes``) read the same store.
+    store = _Store(ret, pack, effective)
     traced = (
-        trace_rules(
-            ret, pack, enforced, accuracy=accuracy, progress=progress, max_failures=max_failures
-        )
+        _trace_indexed(store, enforced, progress=progress, max_failures=max_failures)
         if trace
         else None
     )
     published = (
         traced.results
         if traced is not None
-        else tuple(
-            evaluate_rules(
-                ret, pack, enforced, accuracy=accuracy, progress=progress, max_failures=max_failures
-            )
-        )
+        else tuple(_evaluate_indexed(store, enforced, progress=progress, max_failures=max_failures))
     )
     # The gateway's execution configuration, after evaluation: the published
     # verdict stays on each result it changes (``RuleResult.formula``).
     deny_date = on or chosen.run_date
     results = apply_deny_list(published, chosen.deny_list, module, deny_date)
     traced = trace_as_run(traced, results) if traced is not None else None
-    notes = _issue_notes(ret, chosen, rulebook, results, traced, accuracy)
+    notes = _issue_notes(chosen, rulebook, results, traced, store)
     report = replace(_report(ret, pack, rulebook, results), issue_notes=notes)
     validation = ReturnValidation(
         release=chosen,
@@ -634,13 +641,12 @@ def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
     return validation, traced
 
 
-def _issue_notes(  # noqa: PLR0913 - the parts of one validation the labels read
-    ret: CanonicalReturn,
+def _issue_notes(
     chosen: Release,
     rulebook: RuleBook,
     results: tuple[RuleResult, ...],
     traced: RuleTrace | None,
-    accuracy: Accuracy | None,
+    store: _Store,
 ) -> tuple[IssueNote, ...]:
     """The labels the release's publisher issues put on ``results``.
 
@@ -648,7 +654,8 @@ def _issue_notes(  # noqa: PLR0913 - the parts of one validation the labels read
     unsatisfied evaluation classified, so it is traced: from the trace when
     there is one, else by ONE more pass over just those rules. That pass is a
     deterministic re-run, never a second verdict — its counts are checked
-    against the results, and a difference is logged.
+    against the results, and a difference is logged. It reads ``store``, the
+    return as the rule pass indexed it, and does not index the return again.
     """
     register = chosen.issues
     module = chosen.pack.info.module
@@ -660,7 +667,7 @@ def _issue_notes(  # noqa: PLR0913 - the parts of one validation the labels read
     rules = [rule for rule in rulebook.enforced(module) if rule.rule_id in wanted]
     evaluations = ()
     if rules:
-        again = trace_rules(ret, chosen.pack, rules, accuracy=accuracy)
+        again = _trace_indexed(store, rules)
         published = {result.rule_id: formula_result(result) for result in results}
         for result in again.results:
             first = published[result.rule_id]
@@ -879,3 +886,22 @@ def _coverage_finding(report: RuleReport) -> Finding | None:
         expected="at least one rule executed on every reported template that has rules",
         actual=f"{report.rules_executed} rule(s) executed",
     )
+
+
+def _lead(message: str) -> str:
+    """A finding's message up to its first full stop, for the one-line progress note.
+
+    A full stop inside brackets does not end the sentence: STR004 says which
+    members an open axis accepts as ``(252 accepted, e.g. AD, AE, AF)``, and the
+    note would otherwise stop at the ``e.g``. A message with no full stop is
+    given whole.
+    """
+    depth = 0
+    for index, character in enumerate(message):
+        if character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth = max(depth - 1, 0)
+        elif character == "." and depth == 0 and message[index + 1 : index + 2] in (" ", ""):
+            return message[:index]
+    return message

@@ -65,7 +65,9 @@ overview. If the work is still going after a second, which a full PRA001 return
 always is, a progress page replaces the frozen form. It shows each step
 (reading the file, checking its structure, evaluating the published rules), a
 bar with how many of the rules are done, and how long the work has run. The page
-updates every second and moves on to the overview by itself. If the file
+keeps itself up to date and moves on to the overview the moment the work ends,
+not at the next refresh. A page of the same return asked for while it is being
+validated waits for that validation rather than starting another. If the file
 cannot be opened, the reason appears on the Open page with the form still
 filled in. You can leave the page meanwhile: the work is listed under **Under
 way** in the side navigation until it ends. The same progress page appears when
@@ -236,7 +238,9 @@ any header field that differs, and what the change did to the verdict: the
 broken rules the later version fixed, the ones it newly breaks, and the
 blocking findings before and after. Swap the two to read the change the other
 way. The counts are `rwa-filer diff`'s own. A pair is compared once per
-session, so filtering does not re-run the rules.
+session, so filtering does not re-run the rules. The first comparison of a pair
+that takes more than a second runs behind the progress page, and a second tab
+asking for the same pair waits for it rather than comparing again.
 
 **Referee (Arelle).** The second opinion `rwa-filer referee` gives: the Arelle
 XBRL processor checks a written instance against the Bank's taxonomy package,

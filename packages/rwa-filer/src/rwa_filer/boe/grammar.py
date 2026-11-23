@@ -73,6 +73,12 @@ _CREATE_DATE: Final = re.compile(
     r"^CreateDate\(\s*(\d{4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})\s*\)$", re.I
 )
 _CODE: Final = re.compile(r"^\d{3,4}$")
+#: Where the text of a reference stops being plain: a string opens, a second
+#: reference opens, or the reference closes.
+_REFERENCE_STOP: Final = re.compile(r'["{}]')
+#: What can hold a comma that does not separate two parts of a reference: a
+#: string, a parenthesis, a bracket.
+_NESTING: Final = re.compile(r'["()\[\]]')
 
 
 # =============================================================================
@@ -378,19 +384,19 @@ def _operator_at(text: str, index: int) -> str:
 def _reference_end(text: str, start: int) -> int:
     """Index of the ``}`` closing the ``{`` at ``start``. Strings inside are skipped."""
     index = start + 1
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            end = text.find('"', index + 1)
-            if end < 0:
-                raise GrammarError("unterminated string inside a reference", index)
-            index = end + 1
-            continue
-        if char == "{":
-            raise GrammarError("a reference inside a reference", index)
-        if char == "}":
+    # One compiled scan to the next character that decides anything, not a step
+    # per character: a reference is mostly keys and codes, and the first run in
+    # a process parses every reference of every rule the module enforces.
+    while (stop := _REFERENCE_STOP.search(text, index)) is not None:
+        index = stop.start()
+        if text[index] == "}":
             return index
-        index += 1
+        if text[index] == "{":
+            raise GrammarError("a reference inside a reference", index)
+        end = text.find('"', index + 1)
+        if end < 0:
+            raise GrammarError("unterminated string inside a reference", index)
+        index = end + 1
     raise GrammarError("unterminated reference", start)
 
 
@@ -582,6 +588,10 @@ def _parse_reference(text: str, position: int) -> Reference:
 
 def _split_top_level(body: str) -> list[str]:
     """Split on commas that are outside parentheses, brackets and strings."""
+    if _NESTING.search(body) is None:
+        # Nothing a comma could be inside: the depth below would never leave
+        # zero, so every comma separates two parts. Most references are this.
+        return body.split(",")
     pieces: list[str] = []
     current: list[str] = []
     depth = 0

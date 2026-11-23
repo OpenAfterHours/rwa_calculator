@@ -4,15 +4,35 @@ The filing package: when a return is written, what is written, and what is recor
 The synthetic module has no packaged rule book. Validating it without one is a
 ``VAL003`` (nothing but structure would have been checked), so each build here
 is handed a small rule book of its own: ``SOUND`` satisfies ``FOOTING``.
+
+A build validates and then writes, and the writer is handed the return the
+validation has just found structurally sound: it does not check the structure a
+second time (``xbrl.writer._write_checked``). What that rests on is pinned in
+"What stops a return being written" and counted in "One structure check per
+build". Mutation evidence, each probe one change, measured 2026-11-22:
+
+- the build's own stop for a structure finding removed, so the unchecked writer
+  is reached: red on ``test_a_structure_finding_always_stops_the_file``,
+  ``test_findings_from_reading_the_source_stop_the_file``,
+  ``test_a_blocked_build_still_writes_its_evidence``,
+  ``test_the_writer_called_on_its_own_still_refuses_what_a_build_would_stop``
+  and ``test_cli_build.py::test_build_refuses_a_structure_error_even_when_forced``;
+- the public ``write_instance`` writing without acting on its check: red on
+  ``xbrl/test_writer.py::test_a_return_with_a_structure_finding_is_not_written``
+  and on ``test_the_writer_called_on_its_own_still_refuses_what_a_build_would_stop``;
+- the build calling the public, checking writer again: red on
+  ``test_a_build_checks_the_structure_once`` (2 checks, as before the change).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 import pytest
@@ -28,9 +48,10 @@ from rwa_filer.filing import (
 )
 from rwa_filer.model import CanonicalReturn
 from rwa_filer.taxonomy.pack import TaxonomyPack
+from rwa_filer.validate import structure
 from rwa_filer.validate.checker import Finding
 from rwa_filer.xbrl.reader import read_instance
-from rwa_filer.xbrl.writer import InstanceOptions
+from rwa_filer.xbrl.writer import InstanceOptions, UnwritableReturnError, write_instance
 
 COLUMNS = ["table", "sheet", "open_key", "row", "column", "value", "text_value"]
 BASE = f"{VALID_LEI}_TST001_2027-03-31"
@@ -278,6 +299,79 @@ def test_findings_from_reading_the_source_stop_the_file(pack: TaxonomyPack, tmp_
     # Assert
     assert package.blocked_by == BLOCKED_BY_STRUCTURE
     assert package.validation.structure[0] is stray
+
+
+# ---------------------------------------------------------------------------
+# One structure check per build
+# ---------------------------------------------------------------------------
+
+
+def _structure_checks(monkeypatch: pytest.MonkeyPatch) -> list[CanonicalReturn]:
+    """Count ``check_structure`` calls, in every module that has imported it.
+
+    Each importer holds its own name for the function, so the count is put on
+    all of them: a new call site in a module already loaded is counted too.
+    """
+    real = structure.check_structure
+    checked: list[CanonicalReturn] = []
+
+    def counting(ret: CanonicalReturn, *args: Any, **kwargs: Any) -> list[Finding]:
+        checked.append(ret)
+        return real(ret, *args, **kwargs)
+
+    importers = [
+        module
+        for name, module in list(sys.modules.items())
+        if name.startswith("rwa_filer") and getattr(module, "check_structure", None) is real
+    ]
+    assert {"rwa_filer.validate.returns", "rwa_filer.xbrl.writer"} <= {
+        module.__name__ for module in importers
+    }, "the validation and the writer must both be counted"
+    for module in importers:
+        monkeypatch.setattr(module, "check_structure", counting)
+    return checked
+
+
+@pytest.mark.parametrize("with_evidence", [False, True])
+def test_a_build_checks_the_structure_once(
+    with_evidence: bool, pack: TaxonomyPack, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — the count is live on the writer: called on its own, it checks.
+    sound = ret(*SOUND)
+    checked = _structure_checks(monkeypatch)
+    write_instance(sound, pack)
+    assert len(checked) == 1, "the writer's own check is not being counted"
+    checked.clear()
+
+    # Act
+    package = build_filing(
+        sound,
+        tmp_path / "out",
+        pack=pack,
+        rulebook=RULES,
+        evidence=tmp_path / "e.jsonl" if with_evidence else None,
+    )
+
+    # Assert
+    assert package.written
+    assert len(checked) == 1, f"{len(checked)} structure checks in one build"
+    assert checked[0] is sound
+
+
+def test_the_writer_called_on_its_own_still_refuses_what_a_build_would_stop(
+    pack: TaxonomyPack, tmp_path: Path
+) -> None:
+    # Arrange — a figure in a greyed cell, on top of a sound return.
+    broken = ret(*SOUND, ("T01.00.01.01", None, None, "0030", "0020", 0.5))
+
+    # Act
+    package = build_filing(broken, tmp_path / "out", pack=pack, rulebook=RULES)
+
+    # Assert — the build stops it, and so does the writer anyone else calls.
+    assert package.blocked_by == BLOCKED_BY_STRUCTURE
+    assert not (tmp_path / "out").exists()
+    with pytest.raises(UnwritableReturnError, match="1 structure finding"):
+        write_instance(broken, pack)
 
 
 # ---------------------------------------------------------------------------

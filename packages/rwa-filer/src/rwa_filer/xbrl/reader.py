@@ -22,6 +22,14 @@ Key responsibilities:
   of a Filing Manual rule the reader can see — as findings, never by dropping
   it in silence.
 
+Cost: what depends only on the taxonomy is worked out once per pack and kept
+with it (``TaxonomyPack.derived``) — the index of the module's data points that
+every fact is matched through. What depends only on a context is worked out
+once per context, not once per fact that refers to it. The cyclic garbage
+collector is paused for the length of a read (``rwa_filer._gc``): a read builds
+thousands of small objects that all live until the return is assembled, which
+gives the collector a great deal to walk and nothing to free.
+
 What the reader does NOT do: validate the file as XBRL. It does not load the
 taxonomy's schemas or linkbases, so it cannot say that the file is valid
 against them — that is what the Arelle referee is for.
@@ -46,12 +54,14 @@ import zipfile
 from dataclasses import dataclass
 from datetime import date
 from itertools import combinations
+from operator import lt
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 from xml.etree import ElementTree
 
 import polars as pl
 
+from rwa_filer._gc import collector_paused
 from rwa_filer.model import DECIMALS_EXACT, FACT_SCHEMA, CanonicalReturn, ReturnHeader
 from rwa_filer.release import ReleaseNotFoundError, release_for_pack, resolve_release
 from rwa_filer.rules.catalogue import SEVERITY_ERROR
@@ -61,7 +71,7 @@ from rwa_filer.validate.structure import local_name
 from rwa_filer.xbrl.writer import NS_FIND, NS_ISO4217, NS_LINK, NS_XBRLDI, NS_XBRLI, NS_XLINK
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
 
     from rwa_filer.release import Release
     from rwa_filer.taxonomy.pack import Table, TaxonomyPack
@@ -98,6 +108,13 @@ _INDICATOR: Final = f"{{{NS_FIND}}}filingIndicator"
 _FILED: Final = f"{{{NS_FIND}}}filed"
 _HREF: Final = f"{{{NS_XLINK}}}href"
 _NIL: Final = f"{{{_NS_XSI}}}nil"
+_ENTITY: Final = f"{{{NS_XBRLI}}}entity"
+_IDENTIFIER: Final = f"{{{NS_XBRLI}}}identifier"
+_SEGMENT: Final = f"{{{NS_XBRLI}}}segment"
+_PERIOD: Final = f"{{{NS_XBRLI}}}period"
+_INSTANT: Final = f"{{{NS_XBRLI}}}instant"
+_EXPLICIT: Final = f"{{{NS_XBRLDI}}}explicitMember"
+_TYPED: Final = f"{{{NS_XBRLDI}}}typedMember"
 
 _NUMERIC_TYPES: Final = frozenset({"monetary", "percentage", "integer", "decimal"})
 
@@ -106,6 +123,9 @@ _ROW_KEY_SEPARATOR: Final = "|"
 
 #: One dimension of a fact as read: (member QName or typed value, typed element).
 _Value = tuple[str, str | None]
+
+#: (dimension, member) pairs, as a data point lists them.
+_Pairs = tuple[tuple[str, str], ...]
 
 
 # =============================================================================
@@ -142,6 +162,7 @@ class InstanceReading:
         return self.release.pack
 
 
+@collector_paused()
 def read_instance(
     source: Path | bytes,
     *,
@@ -230,6 +251,35 @@ class _Document:
     uris: dict[str, str]
 
 
+@dataclass(frozen=True)
+class _Scope:
+    """The namespace prefixes in force at one point of the file.
+
+    One is built per set of declarations, not per element: a filing declares
+    its namespaces on the root, so one scope serves the whole file. A scope is
+    never added to — a later declaration that maps a prefix to another
+    namespace starts a new one — and that is what keeps ``clark``, the names
+    already resolved under it, true. A declaration that repeats the mapping in
+    force changes nothing and starts nothing: a writer that declares a fact's
+    prefix on every fact still reads under one scope.
+
+    In force means declared anywhere earlier in the file, not only on the
+    element or its ancestors: that is the reader's reading today, and not XML
+    Namespaces scoping (plan item P6.66).
+    """
+
+    pairs: tuple[tuple[str, str], ...]
+    uris: dict[str, str]
+    clark: dict[str, str]
+
+    def clark_of(self, qname: str) -> str:
+        """``qname`` as ``{uri}local`` under these prefixes."""
+        known = self.clark.get(qname)
+        if known is None:
+            known = self.clark[qname] = _clark(qname, self.uris)
+        return known
+
+
 def _content(source: Path | bytes) -> bytes:
     """The instance's bytes, taken out of a zip where the source is one."""
     data = source if isinstance(source, bytes) else Path(source).read_bytes()
@@ -255,6 +305,7 @@ def _parse(data: bytes) -> _Document:
         )
     document = _Document([], {}, {}, {}, set(), [], {})
     prefixes: list[tuple[str, str]] = []
+    scope: _Scope | None = None
     depth = 0
     root_seen = False
     try:
@@ -263,8 +314,12 @@ def _parse(data: bytes) -> _Document:
         ):
             if event == "start-ns":
                 prefix, uri = payload
+                if document.uris.get(prefix) == uri:
+                    # Repeats what is in force: no new scope, and nothing to copy into one.
+                    continue
                 prefixes.append((prefix, uri))
                 document.uris[prefix] = uri
+                scope = None
                 continue
             element = payload
             if event == "start":
@@ -280,7 +335,9 @@ def _parse(data: bytes) -> _Document:
             depth -= 1
             if depth != 1:
                 continue
-            _read_top_level(element, document, tuple(prefixes))
+            if scope is None:
+                scope = _Scope(tuple(prefixes), dict(document.uris), {})
+            _read_top_level(element, document, scope)
             element.clear()
     except ElementTree.ParseError as error:
         raise InstanceFormatError(f"The file is not well-formed XML: {error}") from error
@@ -289,18 +346,16 @@ def _parse(data: bytes) -> _Document:
     return document
 
 
-def _read_top_level(
-    element: ElementTree.Element, document: _Document, prefixes: tuple[tuple[str, str], ...]
-) -> None:
+def _read_top_level(element: ElementTree.Element, document: _Document, scope: _Scope) -> None:
     """Record one child of the root: a context, unit, schemaRef, indicator set or fact."""
     tag = element.tag
     if tag == _SCHEMA_REF:
         document.schema_refs.append(element.get(_HREF, ""))
     elif tag == _CONTEXT:
-        document.contexts[element.get("id", "")] = _read_context(element, dict(prefixes))
+        document.contexts[element.get("id", "")] = _read_context(element, scope)
     elif tag == _UNIT:
         measure = (element.findtext(f"{{{NS_XBRLI}}}measure") or "").strip()
-        document.units[element.get("id", "")] = _split(measure, dict(prefixes))
+        document.units[element.get("id", "")] = _split(measure, scope.uris)
     elif tag == _INDICATORS:
         for indicator in element.iter(_INDICATOR):
             code = (indicator.text or "").strip()
@@ -318,30 +373,74 @@ def _read_top_level(
                 has_precision=element.get("precision") is not None,
                 is_nil=element.get(_NIL, "false").strip().lower() in ("true", "1"),
                 text=element.text or "",
-                prefixes=prefixes,
+                prefixes=scope.pairs,
             )
         )
 
 
-def _read_context(element: ElementTree.Element, prefixes: dict[str, str]) -> _Context:
-    identifier = element.find(f"{{{NS_XBRLI}}}entity/{{{NS_XBRLI}}}identifier")
-    members: list[tuple[str, _Value]] = []
-    for explicit in element.iter(f"{{{NS_XBRLDI}}}explicitMember"):
-        dimension = _clark(explicit.get("dimension", ""), prefixes)
-        members.append((dimension, (_clark((explicit.text or "").strip(), prefixes), None)))
-    for typed in element.iter(f"{{{NS_XBRLDI}}}typedMember"):
-        dimension = _clark(typed.get("dimension", ""), prefixes)
-        child = next(iter(typed), None)
-        if child is not None:
-            members.append((dimension, ((child.text or "").strip(), child.tag)))
+def _read_context(element: ElementTree.Element, scope: _Scope) -> _Context:
+    """One context: who reports, as at when, and the dimension members it carries.
+
+    The reporter is the first identifier directly under any entity, the date
+    the first instant directly under any period, and a segment counts where it
+    sits directly under an entity — read in one walk of the context's children.
+    Dimension members are taken wherever they sit, the explicit ones first.
+    """
+    identifier: ElementTree.Element | None = None
+    instant: ElementTree.Element | None = None
+    has_segment = False
+    for section in element:
+        if section.tag == _ENTITY:
+            identifier, segment_here = _read_entity(section, identifier)
+            has_segment = has_segment or segment_here
+        elif section.tag == _PERIOD and instant is None:
+            instant = next((part for part in section if part.tag == _INSTANT), None)
     return _Context(
         identifier=(identifier.text or "").strip() if identifier is not None else "",
         scheme=identifier.get("scheme", "") if identifier is not None else "",
-        instant=(element.findtext(f"{{{NS_XBRLI}}}period/{{{NS_XBRLI}}}instant") or "").strip()
-        or None,
-        members=tuple(members),
-        has_segment=element.find(f"{{{NS_XBRLI}}}entity/{{{NS_XBRLI}}}segment") is not None,
+        instant=((instant.text or "").strip() or None) if instant is not None else None,
+        members=_context_members(element, scope),
+        has_segment=has_segment,
     )
+
+
+def _read_entity(
+    entity: ElementTree.Element, identifier: ElementTree.Element | None
+) -> tuple[ElementTree.Element | None, bool]:
+    """One entity's children: the reporter so far, and whether a segment sits directly under it.
+
+    ``identifier`` is the one an earlier entity of the context gave, and is kept
+    where there is one: the reporter is the first identifier under ANY entity.
+    """
+    has_segment = False
+    for part in entity:
+        if part.tag == _IDENTIFIER:
+            if identifier is None:
+                identifier = part
+        elif part.tag == _SEGMENT:
+            has_segment = True
+    return identifier, has_segment
+
+
+def _context_members(element: ElementTree.Element, scope: _Scope) -> tuple[tuple[str, _Value], ...]:
+    """A context's dimension members wherever they sit in it, the explicit ones first.
+
+    Each is ``(dimension, (member, None))`` for an explicit member and
+    ``(dimension, (value, element))`` for a typed one, every name in them as
+    ``{uri}local``. A typed member with no child element holds no value and is
+    left out.
+    """
+    clark = scope.clark_of
+    members: list[tuple[str, _Value]] = []
+    for explicit in element.iter(_EXPLICIT):
+        dimension = clark(explicit.get("dimension", ""))
+        members.append((dimension, (clark((explicit.text or "").strip()), None)))
+    for typed in element.iter(_TYPED):
+        dimension = clark(typed.get("dimension", ""))
+        child = next(iter(typed), None)
+        if child is not None:
+            members.append((dimension, ((child.text or "").strip(), child.tag)))
+    return tuple(members)
 
 
 def _split(qname: str, prefixes: dict[str, str]) -> tuple[str, str]:
@@ -430,11 +529,17 @@ def _distinct_facts(document: _Document, pack: TaxonomyPack) -> tuple[list[_Fact
     cannot both be filed: the first is kept and the clash is reported.
     """
     prefix_of = {uri: prefix for prefix, uri in pack.namespaces.items()}
+    names: dict[str, str] = {}
 
     def canonical(clark: str) -> str:
-        uri, _, name = clark[1:].partition("}")
-        return f"{prefix_of.get(uri, uri)}:{name}"
+        known = names.get(clark)
+        if known is None:
+            uri, _, name = clark[1:].partition("}")
+            known = names[clark] = f"{prefix_of.get(uri, uri)}:{name}"
+        return known
 
+    # Several facts refer to one context, and its members are the same for each.
+    members_of: dict[str, tuple[tuple[str, _Value], ...]] = {}
     distinct: dict[tuple[str, tuple[tuple[str, _Value], ...]], _Fact] = {}
     clashes: list[_Fact] = []
     for raw in document.facts:
@@ -442,18 +547,9 @@ def _distinct_facts(document: _Document, pack: TaxonomyPack) -> tuple[list[_Fact
         if context is None:
             continue
         metric = f"{prefix_of.get(raw.name[0], raw.name[0])}:{raw.name[1]}"
-        members = tuple(
-            sorted(
-                (
-                    canonical(dimension),
-                    (
-                        value if element else canonical(value),
-                        canonical(element) if element else None,
-                    ),
-                )
-                for dimension, (value, element) in context.members
-            )
-        )
+        members = members_of.get(raw.context)
+        if members is None:
+            members = members_of[raw.context] = _members_in_pack_prefixes(context, canonical)
         fact = _typed_fact(metric, members, raw, pack, prefix_of)
         seen = distinct.setdefault((metric, members), fact)
         if (seen.value, seen.text) != (fact.value, fact.text):
@@ -478,6 +574,21 @@ def _distinct_facts(document: _Document, pack: TaxonomyPack) -> tuple[list[_Fact
         else []
     )
     return list(distinct.values()), findings
+
+
+def _members_in_pack_prefixes(
+    context: _Context, canonical: Callable[[str], str]
+) -> tuple[tuple[str, _Value], ...]:
+    """A context's dimension members in the pack's own prefixes, sorted by dimension."""
+    return tuple(
+        sorted(
+            (
+                canonical(dimension),
+                (value if element else canonical(value), canonical(element) if element else None),
+            )
+            for dimension, (value, element) in context.members
+        )
+    )
 
 
 def _typed_fact(
@@ -526,19 +637,20 @@ def _place(
     A fact is placed in every reported template that shows its data point —
     some figures appear in two tables, and the rules of both read them.
     """
-    index = _DataPointIndex(pack)
+    index = pack.derived(_index_of)
     reported = None if indicators is None else {code for code, filed in indicators.items() if filed}
+    matched = [index.match(fact) for fact in facts]
+    shown = _cells_showing(pack, matched)
     rows: dict[tuple[object, ...], tuple[object, ...]] = {}
     unknown: list[_Fact] = []
     orphaned: list[_Fact] = []
-    for fact in facts:
-        points = index.match(fact)
+    for fact, points in zip(facts, matched, strict=True):
         if not points:
             unknown.append(fact)
             continue
         placed = False
         for point in points:
-            for table_code, row, column, sheet in index.cells.get(point, ()):
+            for table_code, row, column, sheet in shown.get(point, ()):
                 table = pack.tables[table_code]
                 if reported is not None and table.filing_indicator not in reported:
                     continue
@@ -577,56 +689,96 @@ def _place(
     return list(rows.values()), findings
 
 
+def _cells_showing(
+    pack: TaxonomyPack, matched: list[list[int]]
+) -> dict[int, list[tuple[str, str | None, str, str | None]]]:
+    """The cell(s) showing each matched data point, in the order the pack lists them.
+
+    Read from the pack's cell table for the data points this file reports and
+    no others: a file fills a fraction of the module's cells.
+    """
+    wanted = sorted({point for points in matched for point in points})
+    shown: dict[int, list[tuple[str, str | None, str, str | None]]] = {}
+    if not wanted:
+        return shown
+    for table, row, column, sheet, point in (
+        pack.cells.filter(pl.col("datapoint").is_in(wanted))
+        .select("table", "row", "column", "sheet", "datapoint")
+        .iter_rows()
+    ):
+        shown.setdefault(point, []).append((table, row, column, sheet))
+    return shown
+
+
+@dataclass(frozen=True, slots=True)
 class _DataPointIndex:
     """Finds the data point(s) a fact's metric and members identify.
 
     A data point fixes most of its members and may leave some OPEN, to be
     chosen by the filer. A fact matches when its members are exactly the fixed
     ones plus a member for each open dimension (an optional one may be absent).
+
+    One index serves every read against a pack, on every thread (``_index_of``),
+    so it is never changed once built: reading only looks things up.
     """
 
-    def __init__(self, pack: TaxonomyPack) -> None:
-        self._fixed: dict[tuple[str, frozenset[tuple[str, str]]], list[int]] = {}
-        self._open: dict[int, tuple[tuple[str, str], ...]] = {}
-        self._open_names: set[str] = set()
-        for number, point in enumerate(pack.datapoints):
-            fixed = frozenset(
-                (dimension, member)
-                for dimension, member in point.dimensions
-                if not member.startswith("*")
-            )
-            opened = tuple(
-                (dimension, member)
-                for dimension, member in point.dimensions
-                if member.startswith("*")
-            )
-            self._fixed.setdefault((point.metric, fixed), []).append(number)
-            if opened:
-                self._open[number] = opened
-                self._open_names.update(dimension for dimension, _member in opened)
-        self.cells: dict[int, list[tuple[str, str | None, str, str | None]]] = {}
-        for table, row, column, sheet, point in pack.cells.select(
-            "table", "row", "column", "sheet", "datapoint"
-        ).iter_rows():
-            self.cells.setdefault(point, []).append((table, row, column, sheet))
+    #: By metric, then by the members a data point fixes (in order, each once):
+    #: the data point with them, or the data points in the pack's order where
+    #: several share them.
+    fixed: Mapping[str, Mapping[_Pairs, int | tuple[int, ...]]]
+    #: The (dimension, placeholder) pairs a data point leaves open, where it does.
+    opened: Mapping[int, _Pairs]
+    #: Every dimension some data point leaves open.
+    open_names: frozenset[str]
+    #: The most dimensions any one data point leaves open.
+    most_open: int
 
     def match(self, fact: _Fact) -> list[int]:
-        members = dict(fact.members)
-        candidates = [dimension for dimension in members if dimension in self._open_names]
+        """The data points ``fact`` reports, fewest supplied dimensions first."""
         matches: list[int] = []
-        for size in range(len(candidates) + 1):
+        bucket = self.fixed.get(fact.metric)
+        if bucket is None:
+            return matches
+        members = dict(fact.members)
+        candidates = [dimension for dimension in members if dimension in self.open_names]
+        # A typed member is never one a data point fixes: the fact supplies it.
+        typed = {
+            dimension for dimension, (_value, element) in members.items() if element is not None
+        }
+        pairs = sorted([(dimension, value) for dimension, (value, _element) in members.items()])
+        # A fact is matched by a data point only if every dimension it supplies
+        # is one that data point leaves open (``_accepts``), and none leaves
+        # more than ``most_open`` open. Larger choices cannot match and are not
+        # tried: trying every subset is 2**k for a fact carrying k of them.
+        for size in range(min(len(candidates), self.most_open) + 1):
             for supplied in combinations(candidates, size):
-                rest = {d: v for d, v in members.items() if d not in supplied}
-                if any(element is not None for _value, element in rest.values()):
+                if not typed.issubset(supplied):
                     continue
-                fixed = frozenset((d, value) for d, (value, _element) in rest.items())
-                for number in self._fixed.get((fact.metric, fixed), ()):
-                    if self._accepts(number, set(supplied), members):
-                        matches.append(number)
+                found = bucket.get(tuple(pair for pair in pairs if pair[0] not in supplied))
+                # Only a hit pays for the call: most subsets fix no data point.
+                if found is not None:
+                    self._collect_accepting(found, supplied, members, matches)
         return matches
 
+    def _collect_accepting(
+        self,
+        found: int | tuple[int, ...],
+        supplied: tuple[str, ...],
+        members: dict[str, _Value],
+        matches: list[int],
+    ) -> None:
+        """Append to ``matches`` each data point in ``found`` that accepts ``supplied``.
+
+        ``found`` is one bucket entry of ``fixed``: the bare number of a data
+        point, or the numbers of several sharing their fixed members, in the
+        pack's order — the order they are appended in.
+        """
+        for number in (found,) if isinstance(found, int) else found:
+            if self._accepts(number, set(supplied), members):
+                matches.append(number)
+
     def _accepts(self, number: int, supplied: set[str], members: dict[str, _Value]) -> bool:
-        opened = self._open.get(number, ())
+        opened = self.opened.get(number, ())
         if not supplied <= {dimension for dimension, _placeholder in opened}:
             return False
         for dimension, placeholder in opened:
@@ -641,6 +793,52 @@ class _DataPointIndex:
             if is_typed and placeholder[len(MEMBER_TYPED_PREFIX) :] != element:
                 return False
         return True
+
+
+@collector_paused()
+def _index_of(pack: TaxonomyPack) -> _DataPointIndex:
+    """The index of ``pack``'s data points: built once per pack by ``pack.derived(_index_of)``.
+
+    It is kept for as long as the pack is, so it is built small, and out of
+    things the garbage collector does not have to walk: a data point that
+    leaves nothing open (most do) is keyed by the tuple of members the pack
+    already holds, and its entry is the bare number of the data point. Only
+    data points that share their fixed members get a tuple of numbers.
+
+    The key is the fixed members in order, each once — one spelling of the SET
+    of them, so the order a pack lists a data point's members in, or a member
+    listed twice, does not decide what it matches.
+    """
+    fixed: dict[str, dict[_Pairs, int | tuple[int, ...]]] = {}
+    opened: dict[int, _Pairs] = {}
+    for number, point in enumerate(pack.datapoints):
+        pairs = point.dimensions
+        left_open = [pair for pair in pairs if pair[1].startswith("*")]
+        if left_open:
+            opened[number] = tuple(left_open)
+            pairs = tuple(pair for pair in pairs if not pair[1].startswith("*"))
+        # In order and each once already, as every packaged pack lists them:
+        # then the pack's own tuple is the key, and nothing is allocated.
+        if not all(map(lt, pairs, pairs[1:])):
+            pairs = tuple(sorted(set(pairs)))
+        bucket = fixed.get(point.metric)
+        if bucket is None:
+            bucket = fixed[point.metric] = {}
+        seen = bucket.get(pairs)
+        if seen is None:
+            bucket[pairs] = number
+        elif isinstance(seen, int):
+            bucket[pairs] = (seen, number)
+        else:
+            bucket[pairs] = (*seen, number)
+    return _DataPointIndex(
+        fixed=fixed,
+        opened=opened,
+        open_names=frozenset(
+            dimension for pairs in opened.values() for dimension, _placeholder in pairs
+        ),
+        most_open=max((len(pairs) for pairs in opened.values()), default=0),
+    )
 
 
 def _cells(

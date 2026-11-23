@@ -17,6 +17,9 @@ Key responsibilities:
 - Index the packaged packs by ``<module>-<version>`` and read each one's
   identity and dates (``pack_info``) without loading its tables. Which pack a
   run uses is ``rwa_filer.release``'s decision, made by release, never here.
+- Be the one home for what other modules work out from a loaded pack and want
+  to keep (``TaxonomyPack.derived``): kept in the pack object, so it lasts
+  exactly as long as the pack does.
 
 Why package data and not a taxonomy parser: an XBRL taxonomy for one module is
 hundreds of megabytes of linkbase XML, and loading it is the slow, memory-hungry
@@ -44,14 +47,16 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import date
-from functools import cache
+from functools import cache, cached_property
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Final
 
 import polars as pl
 
+from rwa_filer._gc import collector_paused
+
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from importlib.resources.abc import Traversable
     from pathlib import Path
 
@@ -95,6 +100,12 @@ MEMBER_TYPED_PREFIX: Final = "*typed:"
 #: Where a cell's reportability was established.
 SOURCE_WORKBOOK: Final = "workbook"
 SOURCE_LINKBASE: Final = "linkbase"
+
+#: Where a pack object keeps what has been worked out from it
+#: (``TaxonomyPack.derived``): an entry of the instance dictionary that is not a
+#: field, so equality, ``repr``, ``dataclasses.fields`` and
+#: ``dataclasses.replace`` never see it.
+_DERIVED: Final = "_derived"
 
 #: The cell table, in column order. ``sheet`` is null for a table with no fixed
 #: sheet axis; ``row`` is null for an open-row table, whose rows the filer keys.
@@ -248,6 +259,12 @@ class Table:
     ``filing_indicator`` is the code reported when the table is filed; several
     tables can share one. ``open_rows`` marks a table with no fixed row list,
     whose rows are keyed by ``open_keys``.
+
+    The sheet axes and the code tuples are worked out from the fields on first
+    use and kept on the table (``cached_property``): they are read for every
+    fact placed and every code looked up, and the fields they come from never
+    change. A table made with ``dataclasses.replace`` is a new object that has
+    kept nothing. The class must therefore stay without ``__slots__``.
     """
 
     code: str
@@ -260,28 +277,28 @@ class Table:
     open_keys: tuple[OpenKey, ...] = ()
     z_axes: tuple[ZAxis, ...] = ()
 
-    @property
+    @cached_property
     def fixed_axis(self) -> ZAxis | None:
         """The table's fixed sheet axis, if it has one."""
         return next((axis for axis in self.z_axes if axis.kind == AXIS_FIXED), None)
 
-    @property
+    @cached_property
     def open_axis(self) -> ZAxis | None:
         """The table's open sheet axis, if it has one."""
         return next((axis for axis in self.z_axes if axis.kind == AXIS_OPEN), None)
 
-    @property
+    @cached_property
     def sheet_codes(self) -> tuple[str, ...]:
         """The codes of the fixed sheets, in the publisher's order."""
         axis = self.fixed_axis
         return tuple(sheet.code for sheet in axis.sheets) if axis else ()
 
-    @property
+    @cached_property
     def row_codes(self) -> tuple[str, ...]:
         """The fixed row codes, in the publisher's order."""
         return tuple(code for code, _label in self.rows)
 
-    @property
+    @cached_property
     def column_codes(self) -> tuple[str, ...]:
         """The column codes, in the publisher's order."""
         return tuple(code for code, _label in self.columns)
@@ -292,16 +309,21 @@ class Table:
 
     def column_code(self, written: str) -> str:
         """``written`` as this table writes that column code."""
-        return match_code((*self.key_codes, *self.column_codes), written)
+        return match_code(self._key_and_column_codes, written)
 
     def sheet_code(self, written: str) -> str:
         """``written`` as this table writes that sheet code."""
         return match_code(self.sheet_codes, written)
 
-    @property
+    @cached_property
     def key_codes(self) -> tuple[str, ...]:
         """The key-column codes of an open-row table; empty for any other."""
         return tuple(key.code for key in self.open_keys)
+
+    @cached_property
+    def _key_and_column_codes(self) -> tuple[str, ...]:
+        """Every code a column lookup is matched against: the key codes, then the column codes."""
+        return (*self.key_codes, *self.column_codes)
 
     @property
     def entry_columns(self) -> tuple[tuple[str, str], ...]:
@@ -365,6 +387,43 @@ class TaxonomyPack:
         """The data points as a frame (``DATAPOINT_SCHEMA``), for joins."""
         return _datapoint_frame(self.datapoints)
 
+    def derived[T](self, build: Callable[[TaxonomyPack], T]) -> T:
+        """``build(self)``, worked out on first request and kept with this pack.
+
+        The one home for a value that is a pure function of the pack and
+        costly to rebuild, such as an index over its data points. ``build`` is
+        both the recipe and the key: pass a module-level function or a class.
+        A lambda or closure made at the call site is a new key every time, so
+        it would be rebuilt on every call and every result kept.
+
+        Where the value lives. In the pack object and nowhere else: there is
+        no table beside the packs and nothing is keyed by ``id()``, so a value
+        lasts exactly as long as its pack. A pack made with
+        ``dataclasses.replace`` is a new object and starts with nothing; so
+        does a copied or unpickled pack (``__getstate__``). The pack's
+        equality, ``repr`` and ``dataclasses.fields`` read its fields and are
+        unchanged by anything kept here.
+
+        Written once. Two threads that ask at the same moment may both run
+        ``build``, but both are handed the object stored first, so every
+        caller in the process holds the same one. ``build`` must therefore be
+        safe to run twice, and what it returns is shared by every user of the
+        pack: it must never be changed afterwards.
+        """
+        kept: dict[Callable[..., Any], Any] = self.__dict__.setdefault(_DERIVED, {})
+        try:
+            return kept[build]
+        except KeyError:
+            return kept.setdefault(build, build(self))
+
+    def __getstate__(self) -> dict[str, Any]:
+        """The fields alone, so a copy or a pickle of a pack carries nothing derived.
+
+        What has been derived can be large and need not be picklable; leaving
+        it behind keeps copying and pickling a pack exactly what they were.
+        """
+        return {name: value for name, value in self.__dict__.items() if name != _DERIVED}
+
 
 def match_code(codes: Sequence[str], written: str) -> str:
     """``written`` as one of ``codes`` writes it, where it differs only in leading zeros.
@@ -423,8 +482,14 @@ def load_packaged(key: str) -> TaxonomyPack:
     return load_pack(directory)
 
 
+@collector_paused()
 def load_pack(directory: Traversable | Path) -> TaxonomyPack:
     """Read a pack from ``directory`` (the three files ``write_pack`` produces).
+
+    Runs with the cyclic garbage collector paused (``rwa_filer._gc``): a pack
+    is tens of thousands of objects that are kept and hold no cycles, and the
+    collector re-walking them as they were built was about half of a cold
+    load. The collector is left as the caller had it.
 
     Raises:
         ValueError: the directory holds a pack in a format this version cannot
@@ -644,17 +709,91 @@ def _datapoint_frame(datapoints: tuple[DataPoint, ...]) -> pl.DataFrame:
 
 
 def _datapoints_from_frame(frame: pl.DataFrame) -> tuple[DataPoint, ...]:
-    """Rebuild the indexed data points from their frame, checking the index is dense."""
-    ordered = frame.sort("datapoint")
-    indices = ordered["datapoint"].to_list()
-    if indices != list(range(len(indices))):
-        raise ValueError("Taxonomy pack data points are not densely indexed from 0")
-    return tuple(
-        DataPoint(metric, tuple(zip(dimensions, members, strict=True)))
-        for metric, dimensions, members in zip(
-            ordered["metric"].to_list(),
-            ordered["dimensions"].to_list(),
-            ordered["members"].to_list(),
-            strict=True,
+    """Rebuild the indexed data points from their frame, checking the index is dense.
+
+    Equal (dimension, member) pairs are one shared tuple. PRA001's 61,428 data
+    points name 518,270 pairs of which 1,442 are distinct, and building a tuple
+    for each one was most of a cold pack load. The value is the same either
+    way — ``tests/taxonomy/test_pack_datapoints.py`` holds every data point of
+    every packaged pack to a row-by-row build — and a table the shared build
+    cannot take (see ``_shared_pairs``) is read one row at a time, as before.
+    """
+    ordered = _in_index_order(frame)
+    metrics = ordered["metric"].to_list()
+    dimensions, members = ordered["dimensions"], ordered["members"]
+    shared = _shared_pairs(dimensions, members)
+    if shared is None:
+        return tuple(
+            DataPoint(metric, tuple(zip(named, chosen, strict=True)))
+            for metric, named, chosen in zip(
+                metrics, dimensions.to_list(), members.to_list(), strict=True
+            )
         )
+    pairs, sizes = shared
+    points: list[DataPoint] = []
+    start = 0
+    for metric, size in zip(metrics, sizes, strict=True):
+        points.append(DataPoint(metric, pairs[start : start + size]))
+        start += size
+    return tuple(points)
+
+
+def _in_index_order(frame: pl.DataFrame) -> pl.DataFrame:
+    """``frame`` in data-point order, once its index is known to be dense from 0.
+
+    ``write_pack`` writes the table in that order, so the sort — a copy of every
+    list in it — is skipped when a whole-number index already reads 0, 1, 2, ...
+    Such an index is strictly increasing, so sorting by it would change nothing.
+    """
+    dense = list(range(frame.height))
+    if "datapoint" in frame.columns:
+        index = frame["datapoint"]
+        if index.dtype.is_integer() and index.to_list() == dense:
+            return frame
+    ordered = frame.sort("datapoint")
+    if ordered["datapoint"].to_list() != dense:
+        raise ValueError("Taxonomy pack data points are not densely indexed from 0")
+    return ordered
+
+
+def _shared_pairs(
+    dimensions: pl.Series, members: pl.Series
+) -> tuple[tuple[tuple[str, str], ...], list[int]] | None:
+    """Every data point's pairs laid end to end, equal pairs one object, and each point's count.
+
+    ``None`` for a table this cannot be done for: columns that are not lists of
+    strings, a null list, lists of unequal length, or a null inside a list. The
+    caller reads such a table row by row, so a damaged pack gives exactly the
+    value or the error it always gave.
+    """
+    listed = pl.List(pl.String)
+    if dimensions.dtype != listed or members.dtype != listed:
+        return None
+    if dimensions.null_count() or members.null_count():
+        return None
+    sizes = dimensions.list.len().to_list()
+    if sizes != members.list.len().to_list():
+        return None
+    # Empty lists are dropped before the lists are laid end to end, so the two
+    # spellings of ``explode`` below give the same rows.
+    filled = pl.DataFrame({"dimensions": dimensions, "members": members}).filter(
+        pl.col("dimensions").list.len() > 0
     )
+    try:
+        flat = filled.explode("dimensions", "members", empty_as_null=False)
+    except TypeError:
+        # A Polars from before ``explode`` took ``empty_as_null``. Newer ones
+        # warn when it is left out, which is why it is tried first.
+        flat = filled.explode("dimensions", "members")
+    if flat["dimensions"].null_count() or flat["members"].null_count():
+        return None
+    distinct = flat.unique(maintain_order=True).with_row_index("_pair")
+    # A join does not promise to keep the left table's order on every Polars
+    # this package runs on; the row number restores it.
+    numbered = (
+        flat.with_row_index("_at")
+        .join(distinct, on=["dimensions", "members"], how="left")
+        .sort("_at")
+    )
+    values = list(zip(distinct["dimensions"].to_list(), distinct["members"].to_list(), strict=True))
+    return tuple(values[number] for number in numbered["_pair"].to_list()), sizes

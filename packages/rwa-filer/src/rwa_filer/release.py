@@ -14,6 +14,9 @@ Key responsibilities:
   module on the run date; a module with no live release takes its future
   release when there is exactly one. The default never chooses between
   several: with more than one candidate it stops and asks for a version.
+- Keep choosing apart from loading. Choosing reads each release's dates and
+  entry point and nothing else; ``release_choice`` stops there, for a command
+  that never reads the release, and ``resolve_release`` goes on to load it.
 - Take the taxonomy pack, the rule book, the Bank's validations deny list and
   the register of known issues with the published rules (``boe.issues``) from
   the SAME release, always.
@@ -219,21 +222,59 @@ def resolve_release(
             and more than one could be the default.
     """
     run_date = today or date.today()
-    named = taxonomy.strip() if taxonomy is not None else None
-    if named is not None and named not in shipped_releases():
-        raise ReleaseNotFoundError(_not_shipped(named, shipped_releases()))
-    wanted = _module_for(module, entry_point, run_date)
-    options = module_releases(wanted, today=run_date)
-    if named is not None:
-        return _named(wanted, named, options, entry_point, run_date)
-    candidates = tuple(
-        option
-        for option in options
-        if entry_point is None or option.info.entry_point == entry_point
-    )
-    if not candidates:
-        raise ReleaseNotFoundError(_nothing_for(wanted, entry_point))
-    return _release(_default(wanted, candidates), CHOSEN_DEFAULT, options, run_date)
+    chosen, chosen_by, options = _choose(module, taxonomy, entry_point, run_date)
+    return _release(chosen, chosen_by, options, run_date)
+
+
+def release_choice(
+    module: str | None,
+    taxonomy: str | None = None,
+    *,
+    entry_point: str | None = None,
+    today: date | None = None,
+) -> ModuleRelease:
+    """The shipped release ``resolve_release`` would use, with nothing loaded.
+
+    For a caller that reads a return and never its release — ``rwa-filer diff``
+    compares two returns cell by cell. Resolving a release loads its taxonomy
+    pack, rule book, deny list and issue register; choosing it needs none of
+    them, only each release's dates and entry point for the module. The choice
+    is made here by the step ``resolve_release`` makes it by (``_choose``), so
+    the two choose the same release and refuse the same requests, in the same
+    words.
+
+    Args:
+        module: As for ``resolve_release``.
+        taxonomy: As for ``resolve_release``.
+        entry_point: As for ``resolve_release``.
+        today: The run date. Defaults to today.
+
+    Returns:
+        The release chosen: its version, its pack's identity and dates, and the
+        module's status in it on the run date.
+
+    Raises:
+        ReleaseNotFoundError: as ``resolve_release`` raises it.
+    """
+    return _choose(module, taxonomy, entry_point, today or date.today())[0]
+
+
+def default_release_version(module: str, *, today: date | None = None) -> str:
+    """The version ``resolve_release(module, today=today)`` uses, with nothing loaded.
+
+    For a caller that only names the default, such as a listing of every
+    module: ``release_choice`` with no release named and no file's entry point,
+    reduced to the version.
+
+    Args:
+        module: The reporting module (case-insensitive).
+        today: The run date. Defaults to today.
+
+    Raises:
+        ReleaseNotFoundError: no shipped release has the module, or more than
+            one could be the default — as ``resolve_release`` raises them.
+    """
+    return release_choice(module, today=today).version
 
 
 def release_for_pack(
@@ -494,13 +535,31 @@ def _module_for(module: str | None, entry_point: str | None, run_date: date) -> 
     raise ReleaseNotFoundError(_nothing_for(None, entry_point))
 
 
+def _choose(
+    module: str | None, taxonomy: str | None, entry_point: str | None, run_date: date
+) -> tuple[ModuleRelease, str, tuple[ModuleRelease, ...]]:
+    """Which shipped release a request is for — every check, and nothing loaded.
+
+    Returns:
+        The release chosen, how (``CHOSEN_VERSION`` or ``CHOSEN_DEFAULT``), and
+        every shipped release with a pack for the module, newest first.
+
+    Raises:
+        ReleaseNotFoundError: see ``resolve_release``.
+    """
+    named = taxonomy.strip() if taxonomy is not None else None
+    if named is not None and named not in shipped_releases():
+        raise ReleaseNotFoundError(_not_shipped(named, shipped_releases()))
+    wanted = _module_for(module, entry_point, run_date)
+    options = module_releases(wanted, today=run_date)
+    if named is not None:
+        return _named(wanted, named, options, entry_point), CHOSEN_VERSION, options
+    return _default_option(wanted, options, entry_point), CHOSEN_DEFAULT, options
+
+
 def _named(
-    module: str,
-    version: str,
-    options: tuple[ModuleRelease, ...],
-    entry_point: str | None,
-    run_date: date,
-) -> Release:
+    module: str, version: str, options: tuple[ModuleRelease, ...], entry_point: str | None
+) -> ModuleRelease:
     """The release the user named (a shipped one), or an error saying why it cannot be used."""
     match = next((option for option in options if option.version == version), None)
     if match is None:
@@ -514,7 +573,26 @@ def _named(
             f"{match.info.entry_point}. The file can only be read against a release with "
             f"its own entry point. {_shipped_for(module, options)}"
         )
-    return _release(match, CHOSEN_VERSION, options, run_date)
+    return match
+
+
+def _default_option(
+    module: str, options: tuple[ModuleRelease, ...], entry_point: str | None
+) -> ModuleRelease:
+    """The release a run that names none uses, among those with the file's entry point.
+
+    Raises:
+        ReleaseNotFoundError: no option has the entry point (or there is no
+            option at all), or more than one could be the default.
+    """
+    candidates = tuple(
+        option
+        for option in options
+        if entry_point is None or option.info.entry_point == entry_point
+    )
+    if not candidates:
+        raise ReleaseNotFoundError(_nothing_for(module, entry_point))
+    return _default(module, candidates)
 
 
 def _default(module: str, candidates: tuple[ModuleRelease, ...]) -> ModuleRelease:

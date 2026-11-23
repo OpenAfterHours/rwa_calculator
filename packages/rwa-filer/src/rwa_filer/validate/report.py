@@ -60,7 +60,7 @@ from rwa_filer.validate.returns import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from rwa_filer.boe.engine import CellAddress, RuleResult
     from rwa_filer.model import CanonicalReturn
@@ -79,12 +79,26 @@ _REASONS_SHOWN = 5
 _MISSING_SHOWN = 5
 
 
-def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, Any]:
+def to_record(
+    ret: CanonicalReturn,
+    validation: ReturnValidation,
+    *,
+    identity: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """A JSON-ready record of one validated return.
 
     The record holds what it was computed from (``identity``), the verdict and
     whether the check was complete, the counts behind them, every finding, and
     one entry per enforced rule — passed, failed or not evaluated.
+
+    Args:
+        ret: The return validated.
+        validation: Its validation.
+        identity: The ``identity`` block of THIS return and validation, where
+            the run has already computed it (``Evidence.identity``): the block
+            fingerprints every fact, so a run that also writes evidence should
+            not compute it twice. Computed here when not given. The record
+            holds the block itself, not a copy: read it, do not edit it.
     """
     report = validation.report
     info = validation.pack.info
@@ -95,7 +109,7 @@ def to_record(ret: CanonicalReturn, validation: ReturnValidation) -> dict[str, A
     return {
         "schema": {"name": REPORT_SCHEMA_NAME, "version": REPORT_SCHEMA_VERSION},
         "generator": f"rwa-filer {__version__}",
-        "identity": identity_record(ret, validation),
+        "identity": identity_record(ret, validation) if identity is None else identity,
         "header": ret.header.as_fields(),
         "taxonomy": release_record(validation.release, ret.header.reference_date),
         "status": validation.status,

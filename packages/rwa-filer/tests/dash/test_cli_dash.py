@@ -5,17 +5,26 @@ from __future__ import annotations
 import socket
 import subprocess
 import sys
+import threading
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 import rwa_filer.dash
-from dash_builders import HEADER_FORM
+from dash_builders import HEADER_FORM, PATIENCE
 from rwa_filer.cli import EXIT_FAILED, EXIT_OK, main
-from rwa_filer.dash.server import LOOPBACK, free_port, session_address
+from rwa_filer.dash import server
+from rwa_filer.dash.server import LOOPBACK, free_port, serve, session_address
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from rwa_filer.dash import Workspace
+
+#: A wait for the server no test outlasts: a browser opened under it was opened
+#: because the server answered, not because the wait ran out.
+NEVER = 10 * PATIENCE
+ADDRESS = "http://localhost:8765/?token=t"
 
 HEADER_ARGS = [
     "--entity",
@@ -95,6 +104,102 @@ def test_a_taken_port_moves_to_the_next_free_one() -> None:
 
 def test_the_session_address_is_this_machine_with_the_token() -> None:
     assert session_address(8765, "/returns/ab", "t") == "http://localhost:8765/returns/ab?token=t"
+
+
+@pytest.fixture
+def browser(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The addresses the browser is opened at, instead of opening one."""
+    opened: list[str] = []
+    monkeypatch.setattr(server, "_open", opened.append)
+    return opened
+
+
+def test_the_browser_is_opened_as_soon_as_the_server_answers(
+    browser: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — the server answers the third time it is asked.
+    answers = iter([False, False, True])
+    asked: list[int] = []
+
+    def listening(port: int) -> bool:
+        asked.append(port)
+        return next(answers)
+
+    monkeypatch.setattr(server, "_listening", listening)
+
+    # Act — a wait no test outlasts, so only the server's answer can end it.
+    opener = threading.Thread(
+        target=server._open_when_listening, args=(ADDRESS, 8765, NEVER), daemon=True
+    )
+    opener.start()
+    opener.join(PATIENCE)
+
+    # Assert
+    assert browser == [ADDRESS], "the browser waited for its whole patience"
+    assert asked == [8765, 8765, 8765]
+
+
+def test_the_browser_is_opened_anyway_once_its_patience_runs_out(
+    browser: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a server that never answers.
+    monkeypatch.setattr(server, "_listening", lambda _port: False)
+
+    # Act
+    opener = threading.Thread(
+        target=server._open_when_listening, args=(ADDRESS, 8765, 0.0), daemon=True
+    )
+    opener.start()
+    opener.join(PATIENCE)
+
+    # Assert
+    assert browser == [ADDRESS]
+
+
+def test_a_port_is_answered_only_while_something_listens_on_it() -> None:
+    # Arrange
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind((LOOPBACK, 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+
+        # Act
+        while_listening = server._listening(port)
+
+    # Assert
+    assert while_listening
+    assert not server._listening(port)
+
+
+def test_serve_opens_the_address_it_printed_once_the_server_listens(
+    workspace: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a wait no test outlasts, and a stand-in for uvicorn that listens
+    # until the browser is opened.
+    monkeypatch.setattr(server, "_BROWSER_DELAY", NEVER)
+    opened: list[str] = []
+    told = threading.Event()
+
+    def open_browser(address: str) -> None:
+        opened.append(address)
+        told.set()
+
+    def run(_app: object, *, host: str, port: int, log_level: str) -> None:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind((host, port))
+            listener.listen()
+            assert told.wait(PATIENCE), "the browser was not opened while the server listened"
+
+    monkeypatch.setattr(server, "_open", open_browser)
+    monkeypatch.setattr(server.uvicorn, "run", run)
+    printed: list[str] = []
+
+    # Act
+    serve(workspace, port=free_port(server.DEFAULT_PORT), announce=printed.append)
+
+    # Assert
+    (address,) = opened
+    assert printed[0].endswith(f" at {address}")
 
 
 def test_there_is_no_option_to_listen_beyond_this_machine(

@@ -3,7 +3,9 @@ XBRL instance writer — a canonical return as the file the regulator accepts.
 
 Pipeline position:
     CanonicalReturn -> validate.structure (must be clean) -> write_instance
-        -> Instance(content: bytes)  ->  filing.build_filing  ->  <name>.xbrl
+        -> Instance(content: bytes)
+    filing.build_filing: validate_return (structure clean) -> _write_checked
+        -> Instance(content: bytes)  ->  <name>.xbrl
 
 Key responsibilities:
 - Turn each reported cell into the XBRL fact its data point defines: the metric
@@ -26,6 +28,11 @@ What the writer does NOT do: decide whether the return may be filed. It refuses
 a return that is not structurally expressible — a fact with no data point has no
 element to be written as — and nothing else. Rule breaks are the caller's
 decision (``filing.build_filing``).
+
+The check and the writing are two steps. ``write_instance`` is the public entry
+and always does both. A build has just made the same check as part of its
+validation, on the same return and pack, so it calls the second step alone
+(``_write_checked``): one structure check per build, not two.
 
 Numbers
 - A monetary value is written as known, to the penny, in units of the reporting
@@ -53,7 +60,6 @@ import logging
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Decimal
 from typing import TYPE_CHECKING, Final
-from xml.sax.saxutils import escape, quoteattr
 
 import polars as pl
 
@@ -75,6 +81,7 @@ from rwa_filer.validate.structure import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import date, datetime
 
     from rwa_filer.model import CanonicalReturn, ReturnHeader
@@ -209,7 +216,21 @@ def write_instance(
             f"The return has {len(findings)} structure finding(s) and cannot be written; "
             f"the first is {findings[0].code}: {findings[0].message}"
         )
+    return _write_checked(ret, pack, options)
 
+
+def _write_checked(ret: CanonicalReturn, pack: TaxonomyPack, options: InstanceOptions) -> Instance:
+    """Write a return whose structure the caller has ALREADY checked against ``pack``.
+
+    Private, and it stays so: this is ``write_instance`` without the check that
+    makes it safe to call. It has two callers. ``write_instance`` checks and
+    then calls it. ``filing.build_filing`` calls it straight after its own
+    validation found no structure finding for this very return and this very
+    pack: the structure check is part of that validation, and running it again
+    on the same two objects could only find the same nothing. A caller holding
+    a return changed since it was checked, or a pack other than the one it was
+    checked against, has not checked it, and must use ``write_instance``.
+    """
     facts = _xbrl_facts(ret, pack)
     document = _Document(ret.header, pack, options)
     for fact in facts:
@@ -419,15 +440,29 @@ class _Document:
         self._units: dict[str, str] = {}
         self._prefixes: set[str] = set()
         self._facts: list[str] = []
+        # Imported when a document is written, not with this module:
+        # xml.sax.saxutils imports urllib.request, and with it http.client, ssl,
+        # email and socket (34 modules). The reader imports this module for its
+        # namespace names, so a command that only reads a return would pay for
+        # all of them. Bound once here, so a fact costs no import of its own.
+        from xml.sax.saxutils import escape, quoteattr
+
+        self._escape: Callable[[str], str] = escape
+        self._quoteattr: Callable[[str], str] = quoteattr
 
     def add(self, fact: _Fact) -> None:
         """Write one fact, registering the context, unit and prefixes it needs."""
         metric = self._pack.metrics[fact.metric]
-        context = self.contexts.setdefault(fact.members, f"c{len(self.contexts)}")
+        context = self.contexts.get(fact.members)
+        if context is None:
+            context = self.contexts[fact.members] = f"c{len(self.contexts)}"
+            # A context IS its members, so their prefixes are registered when it
+            # is first seen: most facts share a context with others (some 26,000
+            # facts over 11,000 contexts on a 200-country return).
+            for dimension, member, element in fact.members:
+                self._use(dimension)
+                self._use(element if element is not None else member)
         self._use(fact.metric)
-        for dimension, member, element in fact.members:
-            self._use(dimension)
-            self._use(element if element is not None else member)
 
         if metric.is_numeric:
             if fact.value is None:
@@ -437,7 +472,7 @@ class _Document:
             stated = "INF" if decimals >= DECIMALS_EXACT else str(decimals)
             attributes = f'contextRef="{context}" decimals="{stated}" unitRef="{unit}"'
         else:
-            body = escape(self._text(fact, metric.data_type, metric.enumeration))
+            body = self._escape(self._text(fact, metric.data_type, metric.enumeration))
             attributes = f'contextRef="{context}"'
         self._facts.append(f"  <{fact.metric} {attributes}>{body}</{fact.metric}>")
 
@@ -458,8 +493,8 @@ class _Document:
 
         entity = (
             "    <xbrli:entity>\n"
-            f"      <xbrli:identifier scheme={quoteattr(header.entity_scheme)}>"
-            f"{escape(header.entity_identifier)}</xbrli:identifier>\n"
+            f"      <xbrli:identifier scheme={self._quoteattr(header.entity_scheme)}>"
+            f"{self._escape(header.entity_identifier)}</xbrli:identifier>\n"
             "    </xbrli:entity>\n"
             "    <xbrli:period>\n"
             f"      <xbrli:instant>{header.reference_date.isoformat()}</xbrli:instant>\n"
@@ -468,9 +503,8 @@ class _Document:
         lines = ['<?xml version="1.0" encoding="UTF-8"?>', self._generator()]
         declarations = " ".join(f'xmlns:{prefix}="{uri}"' for prefix, uri in namespaces.items())
         lines.append(f"<xbrli:xbrl {declarations}>")
-        lines.append(
-            f'  <link:schemaRef xlink:type="simple" xlink:href={quoteattr(pack.info.entry_point)}/>'
-        )
+        href = self._quoteattr(pack.info.entry_point)
+        lines.append(f'  <link:schemaRef xlink:type="simple" xlink:href={href}/>')
         for unit, measure in sorted(self._units.items()):
             lines.append(
                 f'  <xbrli:unit id="{unit}">\n'
@@ -478,15 +512,14 @@ class _Document:
                 "  </xbrli:unit>"
             )
         for members, context in self.contexts.items():
-            lines.append(
-                f'  <xbrli:context id="{context}">\n{entity}{_scenario(members)}  </xbrli:context>'
-            )
+            scenario = _scenario(members, self._escape)
+            lines.append(f'  <xbrli:context id="{context}">\n{entity}{scenario}  </xbrli:context>')
         lines.extend(self._facts)
         lines.append("  <find:fIndicators>")
         for code, filed in sorted(indicators.items()):
             flag = "" if filed else ' find:filed="false"'
             lines.append(
-                f'    <find:filingIndicator contextRef="{BASE_CONTEXT}"{flag}>{escape(code)}'
+                f'    <find:filingIndicator contextRef="{BASE_CONTEXT}"{flag}>{self._escape(code)}'
                 "</find:filingIndicator>"
             )
         lines.append("  </find:fIndicators>")
@@ -533,8 +566,11 @@ class _Document:
         return f'<?instance-generator id="{GENERATOR_ID}" version="{__version__}"{stamp}?>'
 
 
-def _scenario(members: tuple[_Member, ...]) -> str:
-    """A context's ``xbrli:scenario``, or nothing for the dimensionless context."""
+def _scenario(members: tuple[_Member, ...], escape: Callable[[str], str]) -> str:
+    """A context's ``xbrli:scenario``, or nothing for the dimensionless context.
+
+    ``escape`` is the document's XML text escape (see ``_Document.__init__``).
+    """
     if not members:
         return ""
     lines = ["    <xbrli:scenario>"]

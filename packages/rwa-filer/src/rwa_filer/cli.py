@@ -2,10 +2,16 @@
 The ``rwa-filer`` command line.
 
 Pipeline position:
-    shell  ->  rwa_filer.cli.main  ->  the package's public API
+    shell  ->  rwa_filer.entry.run  ->  rwa_filer.cli.main  ->  the package's public API
 
 Key responsibilities:
-- Parse the command line and dispatch to a subcommand.
+- Parse the command line and dispatch to a subcommand. ``main(argv)`` is also
+  the in-process way to run a command: it leaves the process it is called in
+  as it found it. (While it loads a taxonomy pack or reads an XBRL instance the
+  library pauses the cyclic collector for the whole interpreter and then puts it
+  back - ``rwa_filer._gc.collector_paused``.) What is right only for a process
+  that runs one command and ends — the garbage-collector policy — belongs to
+  ``rwa_filer.entry``.
 - Write results to stdout and diagnostics to stderr, and return a process exit
   code. This module holds no validation or filing logic of its own.
 - Report a missing optional extra (``MissingExtraError``, from whichever
@@ -131,12 +137,21 @@ from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, lo
 from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
 from rwa_filer.boe.engine import Accuracy
 from rwa_filer.boe.issues_document import render_document, render_issue, render_listing
+from rwa_filer.entry import keep_collecting, run
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.extras import MissingExtraError
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
-from rwa_filer.model import LEI_SCHEME
+from rwa_filer.model import LEI_SCHEME, CanonicalReturn, ReturnHeader
 from rwa_filer.progress import StreamProgress
-from rwa_filer.readers import DetailSpec, HeaderFields, SourceReading, load_source, open_source
+from rwa_filer.readers import (
+    SUPPORTED_SUFFIXES,
+    DetailSpec,
+    HeaderFields,
+    SourceReading,
+    carries_header,
+    load_source,
+    open_source,
+)
 from rwa_filer.readers.detail import ON_REPEAT_CHOICES, ON_REPEAT_STOP
 from rwa_filer.referee import (
     RefereePlanError,
@@ -148,7 +163,9 @@ from rwa_filer.referee import report as referee_report
 from rwa_filer.referee.differential import compare
 from rwa_filer.release import (
     ReleaseNotFoundError,
+    default_release_version,
     module_releases,
+    release_choice,
     release_deny_list,
     release_issues,
     release_lines,
@@ -462,13 +479,21 @@ def _validate(args: argparse.Namespace) -> int:
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
 
-    record = to_record(source.ret, validation)
     breakdown = _attributions(source, validation)
-    if breakdown:
-        record["breakdown"] = {
-            "detail": source.detail.as_record() if source.detail else None,
-            "by": [attribution_record(item) for item in breakdown],
-        }
+    # The record costs a fingerprint per enforced rule and one of every fact, and
+    # only --report and --format json read it: the text report is built from the
+    # validation itself. A run that also writes evidence hands its identity block
+    # along, so the facts are fingerprinted once for the record and the file.
+    record: dict[str, Any] | None = None
+    if args.report is not None or args.format == "json":
+        record = to_record(
+            source.ret, validation, identity=None if evidence is None else evidence.identity
+        )
+        if breakdown:
+            record["breakdown"] = {
+                "detail": source.detail.as_record() if source.detail else None,
+                "by": [attribution_record(item) for item in breakdown],
+            }
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -836,8 +861,8 @@ def _verify(args: argparse.Namespace) -> int:
 def _diff(args: argparse.Namespace) -> int:
     """``rwa-filer diff`` — two versions of a return, cell by cell."""
     try:
-        previous = _load(argparse.Namespace(**{**vars(args), "file": args.previous})).ret
-        current = _load(argparse.Namespace(**{**vars(args), "file": args.current})).ret
+        previous = _diff_side(args, args.previous)
+        current = _diff_side(args, args.current)
     except (ValueError, ReleaseNotFoundError) as exc:
         return _fail(str(exc))
     difference = diff_returns(previous, current)
@@ -862,6 +887,57 @@ def _diff(args: argparse.Namespace) -> int:
     if difference.changes.height > _DIFF_ROWS_SHOWN:
         _out(f"  ... and {difference.changes.height - _DIFF_ROWS_SHOWN} more (use --format json)")
     return EXIT_OK if difference.is_identical else EXIT_FAILED
+
+
+def _diff_side(args: argparse.Namespace, path: Path) -> CanonicalReturn:
+    """One of the two returns ``rwa-filer diff`` compares, read from ``path``.
+
+    ``diff`` compares cells and headers and reads nothing of a taxonomy
+    release, so a file that names no taxonomy — a fact table or a workbook — is
+    read here without loading one: the pack, rule book, deny list and issue
+    register were two thirds of the command. Its release is still chosen
+    (``release_choice``), so a module or a version no shipped release has is
+    refused in the words ``_load`` refuses it in.
+
+    Everything else goes to ``_load``: an XBRL instance, whose reader places
+    each fact with its pack, and every file ``open_source`` refuses before
+    reading it (missing, of an unsupported type, a fact table without the three
+    header options), so each refusal is the one it always was.
+
+    The header options are applied as ``readers.open_source`` applies them: the
+    three of entity, date and module together make the header the file is read
+    with, and each option given then overrides that field of the header read.
+    ``tests/test_cli_diff.py`` holds this reading to ``open_source``'s.
+
+    Raises:
+        ValueError: as ``_load`` raises it.
+        ReleaseNotFoundError: as ``_load`` raises it.
+    """
+    fields = _header_fields(args)
+    header = None
+    if fields.entity and fields.reference_date and fields.module:
+        # Currency and scheme take the header's defaults here; given, they are
+        # set below with the other options, as open_source sets them.
+        header = ReturnHeader(fields.entity, fields.reference_date, fields.module)
+    if (
+        path.suffix.lower() not in SUPPORTED_SUFFIXES
+        or not path.is_file()
+        or (header is None and not carries_header(path))
+    ):
+        return _load(argparse.Namespace(**{**vars(args), "file": path})).ret
+    ret = load_source(path, header).ret
+    options = {
+        "entity_identifier": fields.entity,
+        "reference_date": fields.reference_date,
+        "module": fields.module,
+        "currency": fields.currency,
+        "entity_scheme": fields.entity_scheme,
+    }
+    given = {name: value for name, value in options.items() if value}
+    if given:
+        ret = replace(ret, header=replace(ret.header, **given))
+    release_choice(ret.header.module, args.taxonomy)
+    return ret
 
 
 def _compare(args: argparse.Namespace) -> int:
@@ -1024,6 +1100,10 @@ def _dash(args: argparse.Namespace) -> int:
         except (ValueError, ReleaseNotFoundError) as exc:
             return _fail(str(exc))
         start = f"/returns/{opened.return_id}"
+    # From here the command does not end with its work. Opening the file above was
+    # one-shot work, and the process entry runs that with the garbage collector
+    # off; a server must have it back before it starts.
+    keep_collecting()
     try:
         serve(
             workspace,
@@ -1103,7 +1183,9 @@ def _taxonomy_list(args: argparse.Namespace) -> int:
     )
     for module in modules:
         try:
-            default = resolve_release(module, today=today).version
+            # Only the version is printed: the release itself (its pack, rule book,
+            # deny list and issue register) is not loaded to name it.
+            default = default_release_version(module, today=today)
         except ReleaseNotFoundError:
             default = None
         for option in module_releases(module, today=today):
@@ -1790,4 +1872,6 @@ def _unwritable(path: Path | None, option: str, *, directory: bool = False) -> s
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # ``python -m rwa_filer.cli`` is a process started for one command, as the
+    # console script is: it goes through the same entry.
+    run()

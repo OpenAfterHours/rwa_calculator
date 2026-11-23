@@ -9,6 +9,7 @@ The last section checks the same resolver against the real packaged data.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -28,11 +29,15 @@ from rwa_filer.release import (
     STATUS_FUTURE,
     STATUS_LIVE,
     STATUS_SUPERSEDED,
+    Release,
     ReleaseNotFoundError,
     choose_release,
+    default_release_version,
     long_date,
+    release_choice,
     release_for_pack,
     release_lines,
+    release_packs,
     release_record,
     resolve_release,
     shipped_releases,
@@ -227,6 +232,89 @@ def test_a_module_no_shipped_release_has_is_refused(releases: Releases) -> None:
 
 
 # ---------------------------------------------------------------------------
+# The default's version, with nothing loaded
+# ---------------------------------------------------------------------------
+
+#: Four releases that never overlap, with a gap in 2027: on one run date or
+#: another every way the default is chosen — or refused — is reached.
+LADDER = (
+    ("4.0.0", date(2025, 1, 1), date(2025, 12, 31)),
+    ("4.1.0", date(2026, 1, 1), date(2026, 12, 31)),
+    ("4.2.0", date(2028, 1, 1), date(2028, 12, 31)),
+    ("4.3.0", date(2029, 1, 1), date(2029, 12, 31)),
+)
+#: Two releases live at once from 2027, and one release alone.
+OVERLAP = (("4.1.1", date(2027, 1, 1), None), ("4.1.2", date(2027, 1, 1), None))
+ALONE = (("4.1.1", date(2027, 1, 1), date(2027, 12, 31)),)
+SHIPPED = {"ladder": LADDER, "overlap": OVERLAP, "alone": ALONE}
+
+
+def _default_or_refusal(
+    resolve: Callable[..., str | Release], module: str, day: date
+) -> tuple[str, str]:
+    """What asking for the default gave: ``("version", v)`` or ``("refused", message)``."""
+    try:
+        chosen = resolve(module, today=day)
+    except ReleaseNotFoundError as refusal:
+        return "refused", str(refusal)
+    return "version", chosen if isinstance(chosen, str) else chosen.version
+
+
+@pytest.mark.parametrize(
+    ("shipped", "module", "day", "expected"),
+    [
+        pytest.param("ladder", SAMPLE_MODULE, date(2025, 6, 30), "4.0.0", id="the-live-one"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2028, 6, 30), "4.2.0", id="a-later-live-one"),
+        pytest.param("overlap", SAMPLE_MODULE, TODAY, "4.1.2", id="newest-of-two-live"),
+        pytest.param("alone", SAMPLE_MODULE, date(2026, 11, 15), "4.1.1", id="the-only-future"),
+        pytest.param("alone", SAMPLE_MODULE, date(2030, 1, 1), "4.1.1", id="a-lone-superseded"),
+        pytest.param("alone", SAMPLE_MODULE.lower(), TODAY, "4.1.1", id="module-in-lower-case"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2024, 6, 30), None, id="four-future"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2027, 6, 30), None, id="two-future-two-past"),
+        pytest.param("ladder", SAMPLE_MODULE, date(2030, 6, 30), None, id="four-superseded"),
+        pytest.param("alone", "XYZ999", TODAY, None, id="no-release-has-the-module"),
+    ],
+)
+def test_the_defaults_version_is_what_resolving_the_release_gives(
+    releases: Releases, shipped: str, module: str, day: date, expected: str | None
+) -> None:
+    """The same version — or the same refusal, word for word."""
+    # Arrange
+    for version, valid_from, valid_to in SHIPPED[shipped]:
+        releases.add(version, valid_from, valid_to)
+
+    # Act
+    shortcut = _default_or_refusal(default_release_version, module, day)
+    resolved = _default_or_refusal(resolve_release, module, day)
+
+    # Assert — the expectation is written out, so the two cannot be wrong together.
+    assert resolved[0] == ("refused" if expected is None else "version")
+    assert expected is None or resolved[1] == expected
+    assert shortcut == resolved
+
+
+def test_the_defaults_version_is_found_without_loading_the_release(
+    releases: Releases, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a release whose pack, rule book, deny list and issues cannot be loaded.
+    releases.add("4.1.1", date(2027, 1, 1))
+
+    def unloadable(*_args: object) -> None:
+        raise AssertionError("the release was loaded to name its version")
+
+    for loader in ("load_packaged", "load_rulebook", "load_deny_list", "load_issues"):
+        monkeypatch.setattr(release_module, loader, unloadable)
+
+    # Act
+    version = default_release_version(SAMPLE_MODULE, today=TODAY)
+
+    # Assert — and resolving it does load: the stand-ins are where the loading goes.
+    assert version == "4.1.1"
+    with pytest.raises(AssertionError, match="the release was loaded"):
+        resolve_release(SAMPLE_MODULE, today=TODAY)
+
+
+# ---------------------------------------------------------------------------
 # A release the user names
 # ---------------------------------------------------------------------------
 
@@ -339,6 +427,177 @@ def test_an_entry_point_of_a_retired_release_names_where_it_went(releases: Relea
 
     with pytest.raises(ReleaseNotFoundError, match=r"only taxonomy 4\.1\.1 has.*rwa-filer 0\.2\.0"):
         resolve_release(None, entry_point=ENTRY_A, today=TODAY)
+
+
+# ---------------------------------------------------------------------------
+# Choosing without loading
+# ---------------------------------------------------------------------------
+
+
+def _two_entry_points(releases: Releases) -> None:
+    releases.add("4.1.1", date(2026, 1, 1), date(2026, 12, 31), entry_point=ENTRY_A)
+    releases.add("4.2.0", date(2027, 1, 1), entry_point=ENTRY_B)
+
+
+def _one_and_a_retired(releases: Releases) -> None:
+    releases.add("4.2.0", date(2028, 1, 1), entry_point=ENTRY_B)
+    releases.retired.append(
+        {"version": "4.1.1", "last_shipped_in": "0.2.0", "entry_points": [ENTRY_A]}
+    )
+
+
+def _one_without_the_module(releases: Releases) -> None:
+    releases.add("4.1.1", date(2027, 1, 1))
+    releases.add("4.2.0", date(2028, 1, 1))
+    del releases.packs[f"{SAMPLE_MODULE}-4.2.0".lower()]
+
+
+def _two_future(releases: Releases) -> None:
+    releases.add("4.2.0", date(2028, 1, 1))
+    releases.add("4.3.0", date(2028, 7, 1))
+
+
+#: Every way a release is chosen or refused: how it is asked for, and what comes back.
+CHOICES = [
+    pytest.param(
+        _two_entry_points,
+        (SAMPLE_MODULE, None, None),
+        ("4.2.0", STATUS_LIVE),
+        id="the-default",
+    ),
+    pytest.param(
+        _two_entry_points,
+        (SAMPLE_MODULE, "4.1.1", None),
+        ("4.1.1", STATUS_SUPERSEDED),
+        id="a-named-release",
+    ),
+    pytest.param(
+        _two_entry_points,
+        (SAMPLE_MODULE, " 4.1.1 ", None),
+        ("4.1.1", STATUS_SUPERSEDED),
+        id="a-named-release-with-spaces",
+    ),
+    pytest.param(
+        _two_entry_points,
+        (None, None, ENTRY_A),
+        ("4.1.1", STATUS_SUPERSEDED),
+        id="the-default-among-those-with-the-files-entry-point",
+    ),
+    pytest.param(
+        _two_entry_points, (None, "4.2.0", ENTRY_B), ("4.2.0", STATUS_LIVE), id="named-and-its-own"
+    ),
+    pytest.param(
+        _two_entry_points,
+        (SAMPLE_MODULE, "9.9.9", None),
+        "Taxonomy 9.9.9 is not shipped in this version of rwa-filer",
+        id="not-shipped",
+    ),
+    pytest.param(
+        _one_and_a_retired,
+        (SAMPLE_MODULE, "4.1.1", None),
+        "Taxonomy 4.1.1 is no longer shipped",
+        id="retired",
+    ),
+    pytest.param(
+        _one_without_the_module,
+        (SAMPLE_MODULE, "4.2.0", None),
+        "Taxonomy 4.2.0 has no pack for module TST001",
+        id="named-without-the-module",
+    ),
+    pytest.param(
+        _two_entry_points,
+        (None, "4.2.0", ENTRY_A),
+        "Taxonomy 4.2.0 cannot read this file",
+        id="named-with-another-entry-point",
+    ),
+    pytest.param(
+        _two_entry_points,
+        (None, None, "http://example.test/other/mod/tst001.xsd"),
+        "No shipped taxonomy release has the entry point",
+        id="an-entry-point-nothing-has",
+    ),
+    pytest.param(
+        _one_and_a_retired,
+        (None, None, ENTRY_A),
+        "which only taxonomy 4.1.1 has, and that release is no longer shipped",
+        id="a-retired-releases-entry-point",
+    ),
+    pytest.param(
+        _two_entry_points,
+        ("XYZ999", None, None),
+        "No shipped taxonomy release has module XYZ999",
+        id="a-module-nothing-has",
+    ),
+    pytest.param(
+        _two_future,
+        (SAMPLE_MODULE, None, None),
+        "TST001 has no live release and more than one other could apply",
+        id="several-could-be-the-default",
+    ),
+]
+
+
+def _chosen_or_refusal(
+    choose: Callable[..., object], request: tuple[str | None, str | None, str | None]
+) -> tuple[str, ...]:
+    """``(version, status)`` of what was chosen, or ``("refused", message)``."""
+    module, taxonomy, entry_point = request
+    try:
+        chosen = choose(module, taxonomy, entry_point=entry_point, today=TODAY)
+    except ReleaseNotFoundError as refusal:
+        return "refused", str(refusal)
+    return chosen.version, chosen.status  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(("ship", "request_", "expected"), CHOICES)
+def test_choosing_a_release_chooses_or_refuses_exactly_as_resolving_it_does(
+    releases: Releases,
+    ship: Callable[[Releases], None],
+    request_: tuple[str | None, str | None, str | None],
+    expected: tuple[str, str] | str,
+) -> None:
+    """The same release, or the same refusal word for word, with and without loading."""
+    # Arrange
+    ship(releases)
+
+    # Act
+    checked = _chosen_or_refusal(release_choice, request_)
+    resolved = _chosen_or_refusal(resolve_release, request_)
+
+    # Assert — the expectation is written out, so the two cannot be wrong together.
+    if isinstance(expected, str):
+        assert resolved[0] == "refused"
+        assert expected in resolved[1]
+    else:
+        assert resolved == expected
+    assert checked == resolved
+
+
+@pytest.mark.parametrize("taxonomy", [None, "4.1.1"], ids=["the-default", "a-named-release"])
+def test_a_release_is_chosen_without_being_loaded(
+    releases: Releases, monkeypatch: pytest.MonkeyPatch, taxonomy: str | None
+) -> None:
+    # Arrange — a release whose pack, rule book, deny list and issues cannot be loaded.
+    releases.add("4.1.1", date(2027, 1, 1))
+    releases.add("4.2.0", date(2028, 1, 1))
+
+    def unloadable(*_args: object) -> None:
+        raise AssertionError("the release was loaded to choose it")
+
+    for loader in ("load_packaged", "load_rulebook", "load_deny_list", "load_issues"):
+        monkeypatch.setattr(release_module, loader, unloadable)
+
+    # Act
+    chosen = release_choice(SAMPLE_MODULE, taxonomy, today=TODAY)
+
+    # Assert — and resolving it does load: the stand-ins are where the loading goes.
+    assert (chosen.version, chosen.status, chosen.info.entry_point) == (
+        "4.1.1",
+        STATUS_LIVE,
+        ENTRY_A,
+    )
+    with pytest.raises(AssertionError, match="the release was loaded"):
+        resolve_release(SAMPLE_MODULE, taxonomy, today=TODAY)
 
 
 # ---------------------------------------------------------------------------
@@ -455,3 +714,23 @@ def test_a_module_of_the_same_release_can_be_live_while_pra001_is_future() -> No
 
     assert resolve_release("LVR001", today=day).status == STATUS_LIVE
     assert resolve_release("PRA001", today=day).status == STATUS_FUTURE
+
+
+@pytest.mark.parametrize(
+    "day",
+    [date(2020, 1, 1), date(2026, 1, 15), date(2026, 11, 22), date(2027, 1, 1), date(2030, 6, 30)],
+    ids=lambda day: day.isoformat(),
+)
+def test_every_shipped_modules_default_version_is_its_resolved_releases(day: date) -> None:
+    """Past, present and future run dates, on every module the package ships."""
+    # Arrange
+    modules = sorted(
+        {info.module for version in shipped_releases() for info in release_packs(version)}
+    )
+    assert len(modules) >= 14, f"only {modules} shipped: the packaged data is not what this reads"
+
+    # Act
+    shortcut = {module: default_release_version(module, today=day) for module in modules}
+
+    # Assert
+    assert shortcut == {module: resolve_release(module, today=day).version for module in modules}

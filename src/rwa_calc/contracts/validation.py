@@ -21,6 +21,9 @@ Key responsibilities:
 - SA-CCR trade inputs priced with a conservative fallback (CCR021-CCR023,
   ``contracts/ccr_input_checks.py``)
 - Regulatory output bounds on the aggregated results frame
+- Branch-reason findings at the pipeline exit: BR001 (a row on
+  ``UNKNOWN_FALLBACK``) and IRB009 (a retail IRB row priced on an Art. 161(1)
+  corporate supervisory LGD)
 
 Every per-table check in the bundle gate is a ``_TableCheck`` — a lazy plan
 plus the reader that turns its frame into errors — and
@@ -51,6 +54,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.ccr_input_checks import ccr_trade_errors, ccr_trade_findings
 from rwa_calc.contracts.errors import (
@@ -72,6 +76,7 @@ from rwa_calc.contracts.errors import (
     ERROR_RW_NEGATIVE,
     ERROR_RWA_NEGATIVE,
     ERROR_RWA_NULL,
+    ERROR_UNAUTHORISED_RETAIL_SUPERVISORY_LGD,
     ERROR_UNKNOWN_BRANCH_FALLBACK,
     CalculationError,
     ErrorCategory,
@@ -90,7 +95,12 @@ from rwa_calc.contracts.errors import (
     unresolved_obs_risk_type_warning,
     unsupported_ciu_holding_class_warning,
 )
-from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
+from rwa_calc.domain.branch_reasons import (
+    BRANCH_REASON_VOCABULARIES,
+    IRB_LGD_BRANCH_REASON,
+    UNKNOWN_FALLBACK,
+    IrbLgdReason,
+)
 from rwa_calc.domain.enums import ExposureClass
 
 if TYPE_CHECKING:
@@ -2018,6 +2028,21 @@ _AGG_BOUND_SPECS: tuple[
     ),
 )
 
+#: CRR / PS1/26 Art. 147(2)(d): the IRB retail classes, keyed on the enum so a
+#: string the classifier never writes cannot silently never match (LESSONS B2).
+_RETAIL_IRB_CLASSES: tuple[str, ...] = (
+    ExposureClass.RETAIL_MORTGAGE.value,
+    ExposureClass.RETAIL_QRRE.value,
+    ExposureClass.RETAIL_OTHER.value,
+)
+
+#: Art. 164(1): the one purchased-receivables subtype whose supervisory LGD is a
+#: retail rate (dilution risk). Spelled exactly as the engine dispatch matches it
+#: (``engine/irb/transforms.py::apply_firb_lgd``, a case-sensitive ``==``): any
+#: other value on the ``supervisory_subtype`` branch was priced on an Art. 161(1)
+#: corporate rate, whether (e)/(f) or the (a)/(b) seniority fallback.
+_RETAIL_SUPERVISORY_SUBTYPE = "dilution_risk"
+
 
 def validate_aggregated_bundle(
     bundle: AggregatedResultBundle,
@@ -2108,9 +2133,15 @@ def validate_branch_reasons(
     bundle: AggregatedResultBundle,
     sample_cap: int = 5,
 ) -> list[CalculationError]:
-    """Raise BR001 for every row whose branch reason reads ``UNKNOWN_FALLBACK``.
+    """Name the rows whose branch reason the engine could not, or may not, justify.
 
-    This is the enforcement half of
+    Two codes, one scan of each reason column:
+
+    - **BR001** for every row whose branch reason reads ``UNKNOWN_FALLBACK``.
+    - **IRB009** for every retail IRB row priced on an Art. 161(1) corporate
+      supervisory LGD (:func:`_retail_corporate_supervisory_lgd_finding`).
+
+    BR001 is the enforcement half of
     ``docs/plans/test-space-correctness-proposal.md`` Phase 3. Emitting a
     ``*_branch_reason`` column beside the value only *records* that the engine
     could not justify a row's treatment; it takes an error to make the record
@@ -2134,18 +2165,22 @@ def validate_branch_reasons(
     rather than fixed. The census (``scripts/check_branch_census.py``) is what
     ratchets the population; this error is what names the rows.
 
-    Follows :func:`validate_aggregated_bundle`'s sampling contract exactly: up
-    to ``sample_cap`` row-named errors per column, then one summary carrying
-    the omitted count. ``tests/robustness/harness.py`` clause (c) already
-    depends on that shape, so a new code that named every row would change the
-    triage arithmetic of a suite that has nothing to do with this one.
+    Both codes follow :func:`validate_aggregated_bundle`'s sampling contract
+    exactly: up to ``sample_cap`` row-named errors per finding, then one
+    summary carrying the omitted count. ``tests/robustness/harness.py`` clause
+    (c) already depends on that shape, so a new code that named every row would
+    change the triage arithmetic of a suite that has nothing to do with this
+    one. Each reason column costs ONE collect whatever the number of findings
+    on it — the sample and the total of every finding come back as a single
+    aggregated row — because ``tests/contracts/test_pipeline_collect_budget.py``
+    ratchets the run's collect count.
 
     Args:
         bundle: AggregatedResultBundle to inspect.
-        sample_cap: Maximum per-row errors emitted per column (default 5).
+        sample_cap: Maximum per-row errors emitted per finding (default 5).
 
     Returns:
-        List of CalculationError objects (empty when no row is unjustified).
+        List of CalculationError objects (empty when every row is justified).
     """
     results_lf = bundle.results
     schema_names = set(results_lf.collect_schema().names())
@@ -2156,47 +2191,180 @@ def validate_branch_reasons(
     for column in BRANCH_REASON_VOCABULARIES:
         if column not in schema_names:
             continue
-        offending = (
-            results_lf.filter(pl.col(column).cast(pl.String) == UNKNOWN_FALLBACK)
-            .select("exposure_reference")
-            .collect()
-        )
-        total = offending.height
-        if total == 0:
-            continue
+        findings = [_unknown_fallback_finding(column)]
+        if column == IRB_LGD_BRANCH_REASON:
+            findings.extend(_retail_corporate_supervisory_lgd_finding(schema_names))
+        errors.extend(_collect_row_findings(results_lf, findings, sample_cap))
 
-        message = (
+    return errors
+
+
+@dataclass(frozen=True, eq=False)
+class _RowFinding:
+    """One row-level finding at the pipeline exit: which rows, and how to name each.
+
+    ``predicate`` selects the offending rows (a null counts as not offending);
+    ``actual`` is the per-row value the error reports as ``actual_value``.
+    """
+
+    code: str
+    predicate: pl.Expr
+    actual: pl.Expr
+    message: str
+    field_name: str
+    regulatory_reference: str | None = None
+
+
+def _unknown_fallback_finding(column: str) -> _RowFinding:
+    """BR001: the row's ``column`` reads ``UNKNOWN_FALLBACK``."""
+    return _RowFinding(
+        code=ERROR_UNKNOWN_BRANCH_FALLBACK,
+        predicate=pl.col(column).cast(pl.String) == UNKNOWN_FALLBACK,
+        actual=pl.lit(UNKNOWN_FALLBACK),
+        message=(
             f"{column} is {UNKNOWN_FALLBACK}: the deciding predicate could not be "
             "evaluated, or a value was substituted for absent input, so this row's "
             "treatment is unjustified rather than merely defaulted"
+        ),
+        field_name=column,
+    )
+
+
+@cites("CRR Art. 151(7)")
+@cites("CRR Art. 164(1)")
+@cites("PS1/26, paragraph 164")
+def _retail_corporate_supervisory_lgd_finding(schema_names: set[str]) -> list[_RowFinding]:
+    """IRB009: a retail IRB row priced on an Art. 161(1) corporate supervisory LGD.
+
+    Art. 161(1) is a corporates / institutions article in both regimes — PS1/26
+    heads it "CORPORATES AND INSTITUTIONS" and opens it "An institution using
+    the Foundation IRB Approach"; CRR Art. 151(8) applies it to the classes of
+    Art. 147(2)(a)-(c) only. Retail IRB takes own LGD estimates (CRR
+    Art. 151(7), Art. 164(1); PS1/26 Art. 147A(1)(g), Art. 164(1)(a)). The one
+    supervisory retail LGD is for dilution risk of purchased receivables
+    (Art. 164(1); PS1/26 Art. 164(1)(b)). So a retail row fires when it took:
+
+    - ``supervisory_firb`` — the Art. 161(1)(a)/(aa)/(b) seniority fallback; or
+    - ``supervisory_subtype`` with any subtype other than exactly
+      ``dilution_risk`` — Art. 161(1)(e)/(f) for ``senior`` / ``subordinated``,
+      the (a)/(b) seniority fallback for every other spelling.
+
+    The subtype test mirrors the engine dispatch, which matches the subtype
+    exactly and has no other branch: a row on ``supervisory_subtype`` whose
+    subtype is not exactly ``dilution_risk`` was not priced on the Art. 164(1)
+    retail rate, so naming it cannot be a false positive. An allowlist of
+    ``senior`` / ``subordinated`` would let a respelled subtype through in
+    silence: the input gate's DQ006 lower-cases both sides before checking, so
+    ``Subordinated`` or ``Dilution_Risk`` passes it, while the dispatch prices
+    the row on the seniority fallback. Nothing but this finding names such a
+    row. A frame without the subtype column cannot show the rate missed, so its
+    ``supervisory_subtype`` rows are not named.
+
+    The class is read from ``exposure_class_irb`` (the IRB class, as the PD-side
+    sibling in ``engine/classify/subtypes.py`` reads it), never from
+    ``exposure_class``, whose null reads as corporate in
+    ``engine/irb/formulas.py``. A null class is not shown to be retail and is
+    not named. Nothing is revalued: which treatment such a row should get (SA,
+    refusal, or the firm's own estimate) is a separate decision, so the code
+    is a WARNING on the error channel only.
+
+    Returns:
+        The finding, or an empty list when the frame lacks the IRB class.
+    """
+    if "exposure_class_irb" not in schema_names:
+        return []
+    reason = pl.col(IRB_LGD_BRANCH_REASON).cast(pl.String)
+    # ``ne_missing`` mirrors the dispatch's ``when(subtype == "dilution_risk")``:
+    # a null subtype is not the dilution rate there either.
+    subtype_off_dilution_rate = (
+        (reason == IrbLgdReason.SUPERVISORY_SUBTYPE.value)
+        & pl.col("purchased_receivables_subtype")
+        .cast(pl.String)
+        .ne_missing(_RETAIL_SUPERVISORY_SUBTYPE)
+        if "purchased_receivables_subtype" in schema_names
+        else pl.lit(False)
+    )
+    is_retail = pl.col("exposure_class_irb").cast(pl.String).is_in(_RETAIL_IRB_CLASSES)
+    return [
+        _RowFinding(
+            code=ERROR_UNAUTHORISED_RETAIL_SUPERVISORY_LGD,
+            predicate=is_retail
+            & ((reason == IrbLgdReason.SUPERVISORY_FIRB.value) | subtype_off_dilution_rate),
+            actual=reason,
+            message=(
+                "retail IRB exposure priced on an Art. 161(1) corporate supervisory "
+                "LGD: retail IRB requires own LGD estimates, and the only supervisory "
+                "retail LGD is for dilution risk of purchased receivables. The value "
+                "is unchanged; the IRB permission for this retail class needs review"
+            ),
+            field_name=IRB_LGD_BRANCH_REASON,
+            regulatory_reference=(
+                "CRR Art. 151(7), Art. 161(1), Art. 164(1); "
+                "PS1/26 Art. 147A(1)(g), Art. 161(1), Art. 164(1)"
+            ),
         )
+    ]
+
+
+def _collect_row_findings(
+    results_lf: pl.LazyFrame, findings: list[_RowFinding], sample_cap: int
+) -> list[CalculationError]:
+    """Evaluate every finding in ONE collect and turn each into sampled errors.
+
+    The collect returns a single row: per finding, its first ``sample_cap``
+    offending rows (in frame order, as a list of ``{ref, actual}`` structs) and
+    its total. No eager frame operation follows, because each one is a lazy
+    collect of its own and would count against the collect budget.
+    """
+    sampled = results_lf.select(
+        *(
+            pl.struct(
+                pl.col("exposure_reference").alias("ref"),
+                finding.actual.cast(pl.String).alias("actual"),
+            )
+            .filter(finding.predicate)
+            .head(sample_cap)
+            .implode()
+            .alias(f"_rows_{index}")
+            for index, finding in enumerate(findings)
+        ),
+        *(
+            finding.predicate.sum().alias(f"_total_{index}")
+            for index, finding in enumerate(findings)
+        ),
+    ).collect()
+    values = sampled.row(0, named=True)
+
+    errors: list[CalculationError] = []
+    for index, finding in enumerate(findings):
         errors.extend(
             CalculationError(
-                code=ERROR_UNKNOWN_BRANCH_FALLBACK,
-                message=message,
+                code=finding.code,
+                message=finding.message,
                 severity=ErrorSeverity.WARNING,
                 category=ErrorCategory.DATA_QUALITY,
-                exposure_reference=row["exposure_reference"],
-                field_name=column,
-                actual_value=UNKNOWN_FALLBACK,
+                exposure_reference=row["ref"],
+                regulatory_reference=finding.regulatory_reference,
+                field_name=finding.field_name,
+                actual_value=row["actual"],
             )
-            for row in offending.head(sample_cap).iter_rows(named=True)
+            for row in values[f"_rows_{index}"]
         )
-
-        if total > sample_cap:
+        omitted = (values[f"_total_{index}"] or 0) - sample_cap
+        if omitted > 0:
             errors.append(
                 CalculationError(
-                    code=ERROR_UNKNOWN_BRANCH_FALLBACK,
+                    code=finding.code,
                     message=(
-                        f"{message}: {total - sample_cap} additional row(s) omitted "
+                        f"{finding.message}: {omitted} additional row(s) omitted "
                         f"beyond sample_cap={sample_cap}"
                     ),
                     severity=ErrorSeverity.WARNING,
                     category=ErrorCategory.DATA_QUALITY,
-                    field_name=column,
+                    regulatory_reference=finding.regulatory_reference,
+                    field_name=finding.field_name,
                 )
             )
-
     return errors
 
 

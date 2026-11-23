@@ -1,47 +1,64 @@
 """
-Generate P1.351 fixtures: CRR F-IRB retail purchased-receivables LGD guard.
+Generate P1.351 fixtures: retail F-IRB rows priced on corporate supervisory LGDs.
 
 Pipeline position:
-    fixture-builder output -> test-writer -> engine-implementer (irb/transforms.py)
+    fixture-builder output -> test-writer -> pipeline exit
+    (contracts/validation.py::validate_branch_reasons, IRB009)
 
 Key responsibilities:
 - Reach the ``IrbLgdReason.SUPERVISORY_SUBTYPE`` branch in
-  ``engine/irb/transforms.py::apply_firb_lgd`` on a RETAIL row, which
-  ``scripts/branch_census_baseline.json`` banks ``dead`` (owner P1.341) —
-  every fixture in the estate leaves ``purchased_receivables_subtype`` null.
-- Provide the FOUR-row minimum the Wave 0 premise audit specified, two that
-  FIRE the guard and two that stay SILENT, so a future
-  ``IrbLgdReason.SUPERVISORY_SUBTYPE_UNAUTHORISED_CLASS`` partition (retail +
-  senior/subordinated subtype -> new reason; Art. 161(1)(e)/(f) confine those
-  supervisory rates to purchased CORPORATE receivables) can be told apart from
-  both an over-broad implementation (catches every subtype) and an
-  over-reaching one (catches every class):
+  ``engine/irb/transforms.py::apply_firb_lgd`` on a RETAIL row. The branch census
+  (``scripts/branch_census_baseline.json``, owner P1.341) still banks it ``dead``:
+  the census walks a fixed run matrix, not ``tests/fixtures/``, and every
+  portfolio in that matrix leaves ``purchased_receivables_subtype`` null.
+- Provide the rows that tell the IRB009 warning (a retail IRB row priced on an
+  Art. 161(1) corporate supervisory LGD) apart from both an over-broad
+  implementation (catches every subtype) and an over-reaching one (catches
+  every class):
 
     1. retail + "senior" + null lgd        -> FIRES  (LOAN_P1351_RETAIL_SENIOR)
     2. retail + "subordinated" + null lgd   -> FIRES  (LOAN_P1351_RETAIL_SUB)
     3. retail + "dilution_risk" + null lgd  -> SILENT (LOAN_P1351_RETAIL_DILUTION)
        Anti-false-positive control: Art. 164(1) legislates a retail dilution-risk
-       rate and the engine already handles it correctly. If the future guard is
-       ever written as ``!= "dilution_risk"`` instead of an allowlist of
-       ["senior", "subordinated"], this row fires and the guard is inverted.
+       rate and the engine already handles it correctly. A guard that keys on
+       the ``supervisory_subtype`` branch alone (every subtype) fires here.
     4. corporate + "senior" + null lgd      -> SILENT (LOAN_P1351_CORP_SENIOR)
        Anti-over-reach control: the authorised Art. 161(1)(e) population.
-- A fifth row (LOAN_P1351_RETAIL_NOSUBTYPE, no subtype, null lgd) is a
-  documentation control, not one of the four guard rows: it reaches
-  ``IrbLgdReason.UNKNOWN_FALLBACK`` and the BR001 pipeline-exit error today,
-  in contrast to rows 1-3's clean ``SUPERVISORY_SUBTYPE``. Registering the
-  contrast in the fixture itself (rather than citing it from memory) lets the
-  contrast be re-verified by anyone running this module standalone.
+    5. retail + no subtype + null lgd       -> FIRES  (LOAN_P1351_RETAIL_NOSUBTYPE)
+       Reaches ``IrbLgdReason.SUPERVISORY_FIRB`` — the Art. 161(1)(a) seniority
+       fallback — NOT ``UNKNOWN_FALLBACK``, so it raises no BR001.
+       ``is_firb_cleared`` in ``apply_firb_lgd`` fires for any F-IRB row with a
+       null LGD before the ``otherwise`` clause is reached. Art. 161(1)(a) is a
+       corporates/institutions rate exactly as (e)/(f) are, so a retail row
+       priced on it is just as unauthorised: this row is why IRB009 keys on the
+       branch reason and not on the subtype alone.
 
-Route constraints (measured by the Wave 0 premise audit — CRR ONLY):
-    No B31 route to a retail row with a null LGD could be constructed: Art.
-    147A blocks retail F-IRB under Basel 3.1, the A-IRB gate at
-    ``engine/classify/permissions.py:340`` requires ``has_modelled_lgd``
-    (which a null-LGD row cannot satisfy), and the two remaining B31 retail
-    limbs are mutually exclusive with an IRB route. This fixture is CRR-only;
-    treat B31 as not demonstrated reachable for this scenario.
+Case-variant leg (``respell_p1351_subtypes``, in memory only — no parquet):
+    The same rows with each subtype respelled (``Senior``, ``Subordinated``,
+    ``Dilution_Risk``; the corporate row ``Senior``) plus one corporate row on an
+    out-of-vocabulary ``junior``. The input gate's DQ006 lower-cases both sides
+    before checking, so it accepts every respelling and names only ``junior``;
+    the engine dispatch in ``engine/irb/transforms.py::apply_firb_lgd`` matches
+    exactly, so every respelled row — ``Dilution_Risk`` included — is priced on
+    the Art. 161(1)(a)/(b) seniority fallback. Nothing else names those rows, so
+    IRB009 must fire on every retail row whose subtype is not exactly
+    ``dilution_risk``: it is the only finding that does.
 
-Two traps a naive retail-F-IRB fixture falls into (both avoided here):
+Route (measured — reachable in BOTH regimes):
+    The engine accepts a ``retail_other`` / ``foundation_irb`` model permission
+    (``engine/classify/permissions.py`` takes any class/approach pair) and then
+    clears whatever LGD the firm supplied (``engine/classify/approach.py``,
+    F-IRB LGD clearing). Neither is lawful — CRR Art. 151(7) requires own LGD
+    estimates for retail and PS1/26 Art. 147A(1)(g) allows retail only SA or
+    A-IRB — and that root cause is a separate plan item. Under CRR the frames
+    below reach it as they stand. Under Basel 3.1 two input deltas are needed
+    (``create_p1351_b31_counterparty`` / ``create_p1351_b31_loans``): the retail
+    obligor managed as retail (Art. 147(5)(c), or its IRB class becomes
+    CORPORATE) and an own LGD estimate on each retail loan (a managed-as-retail
+    row without one is routed to SA before the F-IRB branch). The firm's 0.30 is
+    then discarded and the rows take the Basel 3.1 Art. 161(1) rates.
+
+Two traps a naive CRR retail-F-IRB fixture falls into (both avoided here):
     - ``approach="advanced_irb"`` in the model_permission row sends the row to
       SA (RW 0.75) instead of F-IRB — ``airb_expr`` requires
       ``has_modelled_lgd``, which a null-LGD row can never satisfy. This
@@ -81,21 +98,22 @@ EAD=100,000 GBP, no maturity adjustment for retail — CRR Art. 154(1)):
     Row 1's LGD (0.45) is IDENTICAL to the CRR unsecured-senior F-IRB fallback
     (``firb_supervisory_lgd_values(pack)["unsecured_senior"]`` = 0.45) — the
     subtype routing changes nothing about row 1's RWA. Its only observable
-    effect there is which ``irb_lgd_branch_reason`` is recorded (and, after
-    the engine change, suppressing the CalculationError a bare null-LGD row
-    would otherwise raise) — see LOAN_P1351_RETAIL_NOSUBTYPE below for the
-    contrast this depends on.
+    effect there is which ``irb_lgd_branch_reason`` is recorded — see
+    LOAN_P1351_RETAIL_NOSUBTYPE, which takes the same 0.45 on
+    ``supervisory_firb``.
 
 References:
     - CRR Art. 161(1)(e)/(f)/(g): F-IRB supervisory LGD for purchased
       receivables (senior 45%, subordinated 100%, dilution risk 75%).
     - CRR Art. 164(1): retail dilution-risk LGD (row 3's SILENT control).
+    - CRR Art. 151(7); PS1/26 Art. 147A(1)(g), Art. 164(1): retail IRB takes
+      own LGD estimates; Art. 161(1) is a corporates/institutions article.
     - src/rwa_calc/engine/irb/transforms.py::apply_firb_lgd — dispatch site.
     - src/rwa_calc/domain/branch_reasons.py::IrbLgdReason — instrumented
       vocabulary (SUPERVISORY_SUBTYPE / UNKNOWN_FALLBACK).
     - scripts/branch_census_baseline.json:
-      irb_lgd_branch_reason::supervisory_subtype — the "dead" entry this
-      fixture retires. OWNER: P1.341.
+      irb_lgd_branch_reason::supervisory_subtype — banked "dead"; this fixture
+      is outside the census matrix, so it does not retire it. OWNER: P1.341.
 
 Usage:
     uv run python tests/fixtures/p1_351/p1_351.py
@@ -130,7 +148,20 @@ LOAN_REF_RETAIL_SENIOR = "LOAN_P1351_RETAIL_SENIOR"  # Row 1 — FIRES
 LOAN_REF_RETAIL_SUB = "LOAN_P1351_RETAIL_SUB"  # Row 2 — FIRES
 LOAN_REF_RETAIL_DILUTION = "LOAN_P1351_RETAIL_DILUTION"  # Row 3 — SILENT (anti-false-positive)
 LOAN_REF_CORP_SENIOR = "LOAN_P1351_CORP_SENIOR"  # Row 4 — SILENT (anti-over-reach)
-LOAN_REF_RETAIL_NOSUBTYPE = "LOAN_P1351_RETAIL_NOSUBTYPE"  # Row 5 — contrast control
+LOAN_REF_RETAIL_NOSUBTYPE = "LOAN_P1351_RETAIL_NOSUBTYPE"  # Row 5 — FIRES (supervisory_firb)
+# Case-variant leg only: a corporate row on an out-of-vocabulary subtype, the
+# live-gate control that shows DQ006 runs on this path at all.
+LOAN_REF_CORP_JUNIOR = "LOAN_P1351_CORP_JUNIOR"
+
+#: Case-variant leg: each subtype-bearing loan respelled. DQ006 accepts every one
+#: of these (it lower-cases both sides); the engine dispatch matches none of them.
+CASE_VARIANT_SUBTYPES: dict[str, str] = {
+    LOAN_REF_RETAIL_SENIOR: "Senior",
+    LOAN_REF_RETAIL_SUB: "Subordinated",
+    LOAN_REF_RETAIL_DILUTION: "Dilution_Risk",
+    LOAN_REF_CORP_SENIOR: "Senior",
+}
+OUT_OF_VOCABULARY_SUBTYPE = "junior"
 
 RATING_REF_RETAIL = "RTG_P1351_RETAIL"
 RATING_REF_CORP = "RTG_P1351_CORP"
@@ -140,6 +171,7 @@ MODEL_ID_CORP = "M_P1351_CORP_FIRB"
 
 # Reporting and maturity dates (CRR window — before the 2027-01-01 B31 cutover)
 REPORTING_DATE = date(2026, 12, 31)
+B31_REPORTING_DATE = date(2027, 6, 30)  # Basel 3.1 leg (create_p1351_b31_*)
 VALUE_DATE = date(2026, 1, 1)
 MATURITY_DATE = date(2027, 12, 31)  # residual maturity 1.0y from reporting date
 RATING_DATE = date(2026, 1, 1)
@@ -156,6 +188,10 @@ DRAWN_AMOUNT: float = 100_000.0  # GBP, on-balance-sheet, no CRM
 LGD_SENIOR: float = 0.45  # Art. 161(1)(e) — identical to the CRR unsecured-senior fallback
 LGD_SUB: float = 1.00  # Art. 161(1)(f)
 LGD_DILUTION: float = 0.75  # Art. 161(1)(g) under CRR (Basel 3.1 raises this to 1.00)
+
+# The firm's own retail LGD estimate on the Basel 3.1 leg. The engine discards it
+# on the F-IRB route (the root-cause defect), so no expected value below uses it.
+RETAIL_FIRM_LGD: float = 0.30
 
 # ---------------------------------------------------------------------------
 # Expected outputs (measured by the Wave 0 premise audit; test-writer reference)
@@ -415,10 +451,10 @@ def create_p1351_loans() -> pl.DataFrame:
         The authorised Art. 161(1)(e) population — must keep reaching
         SUPERVISORY_SUBTYPE with no new warning after the engine change.
 
-    LOAN_P1351_RETAIL_NOSUBTYPE (Row 5 — contrast control, not a guard row):
+    LOAN_P1351_RETAIL_NOSUBTYPE (Row 5 — FIRES):
         retail, purchased_receivables_subtype=null, lgd=null. Reaches
-        UNKNOWN_FALLBACK + BR001 today — the "no signal at all" case that
-        rows 1-3's clean SUPERVISORY_SUBTYPE contrasts against.
+        SUPERVISORY_FIRB (the Art. 161(1)(a) seniority fallback, LGD 0.45) with
+        no BR001 — a corporate rate on a retail row, reached without a subtype.
     """
     _common = {
         "currency": "GBP",
@@ -477,6 +513,68 @@ def create_p1351_loans() -> pl.DataFrame:
     ]
 
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(LOAN_SCHEMA))
+
+
+def create_p1351_b31_counterparty() -> pl.DataFrame:
+    """
+    Return the P1.351 counterparties for the Basel 3.1 leg.
+
+    Identical to :func:`create_p1351_counterparty` except that
+    CP_P1351_RETAIL is managed as retail. Under Basel 3.1 a natural person with
+    ``is_managed_as_retail`` False fails PS1/26 Art. 147(5)(c) and its IRB
+    class becomes CORPORATE, so the retail population this item is about
+    would not exist.
+    """
+    is_retail = pl.col("counterparty_reference") == COUNTERPARTY_REF_RETAIL
+    return create_p1351_counterparty().with_columns(
+        pl.when(is_retail)
+        .then(pl.lit(True))
+        .otherwise(pl.col("is_managed_as_retail"))
+        .alias("is_managed_as_retail")
+    )
+
+
+def create_p1351_b31_loans() -> pl.DataFrame:
+    """
+    Return the P1.351 loans for the Basel 3.1 leg.
+
+    Identical to :func:`create_p1351_loans` except that the four retail loans
+    carry the firm's own LGD estimate (``RETAIL_FIRM_LGD``). A managed-as-retail
+    row with no LGD is routed to SA before the F-IRB branch; with one, the
+    retail F-IRB model permission routes it to F-IRB and the LGD is cleared, so
+    the row is priced on the Basel 3.1 Art. 161(1) corporate rates.
+    """
+    is_retail = pl.col("counterparty_reference") == COUNTERPARTY_REF_RETAIL
+    return create_p1351_loans().with_columns(
+        pl.when(is_retail)
+        .then(pl.lit(RETAIL_FIRM_LGD))
+        .otherwise(pl.col("lgd"))
+        .cast(pl.Float64)
+        .alias("lgd")
+    )
+
+
+def respell_p1351_subtypes(loans: pl.DataFrame) -> pl.DataFrame:
+    """
+    Return ``loans`` with the subtypes respelled, plus one out-of-vocabulary row.
+
+    Applies to either regime's loan frame (:func:`create_p1351_loans` or
+    :func:`create_p1351_b31_loans`). Each loan in ``CASE_VARIANT_SUBTYPES`` takes
+    its respelled subtype; the no-subtype row stays null. A copy of the corporate
+    row is appended as ``LOAN_P1351_CORP_JUNIOR`` with subtype ``junior``: the
+    one spelling DQ006 rejects, so a test can show the gate ran and still let
+    every respelling through.
+    """
+    respelled = loans.with_columns(
+        pl.col("loan_reference")
+        .replace_strict(CASE_VARIANT_SUBTYPES, default=pl.col("purchased_receivables_subtype"))
+        .alias("purchased_receivables_subtype")
+    )
+    junior = loans.filter(pl.col("loan_reference") == LOAN_REF_CORP_SENIOR).with_columns(
+        pl.lit(LOAN_REF_CORP_JUNIOR).alias("loan_reference"),
+        pl.lit(OUT_OF_VOCABULARY_SUBTYPE).alias("purchased_receivables_subtype"),
+    )
+    return pl.concat([respelled, junior])
 
 
 def create_p1351_facility_mapping() -> pl.DataFrame:
@@ -557,7 +655,7 @@ def print_summary(saved: dict[str, Path]) -> None:
             EXPECTED_RWA_RETAIL_DILUTION,
         ),
         (LOAN_REF_CORP_SENIOR, "corporate", "senior", "SILENT (anti-over-reach)", LGD_SENIOR, None),
-        (LOAN_REF_RETAIL_NOSUBTYPE, "retail", None, "control (UNKNOWN_FALLBACK/BR001)", None, None),
+        (LOAN_REF_RETAIL_NOSUBTYPE, "retail", None, "FIRES (supervisory_firb)", LGD_SENIOR, None),
     ]
     for ref, cls, subtype, expectation, lgd, rwa in rows_data:
         lgd_str = f"{lgd:.0%}" if lgd is not None else "n/a"
@@ -566,7 +664,7 @@ def print_summary(saved: dict[str, Path]) -> None:
             f"  {ref:<28}  {cls:<10}  {str(subtype):<15}  {expectation:<35}  LGD={lgd_str:>5}  RWA={rwa_str}"
         )
     print("")
-    print("  Retires scripts/branch_census_baseline.json dead entry:")
+    print("  Outside the branch-census matrix: does not retire the dead entry")
     print("    irb_lgd_branch_reason::supervisory_subtype (OWNER: P1.341)")
 
 

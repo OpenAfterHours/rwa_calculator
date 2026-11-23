@@ -9,6 +9,10 @@ The function raises four categories of bound violations:
 - OUT004: ead_final is null   (data quality)
 - OUT005: rwa_final is null   (data quality; P1.345)
 
+It also pins IRB009 (P1.351), which ``validate_branch_reasons`` raises at the
+same exit for a retail IRB row priced on an Art. 161(1) corporate supervisory
+LGD (CRR Art. 151(7) / 164(1); PS1/26 Art. 164(1)).
+
 References:
 - CRR Art. 92(3): minimum capital requirement
 - CRR Art. 153: IRB risk weight function
@@ -22,6 +26,15 @@ import pytest
 
 import rwa_calc.contracts.validation as _validation_module
 from rwa_calc.contracts.bundles import AggregatedResultBundle
+from rwa_calc.contracts.errors import ErrorCategory, ErrorSeverity
+from rwa_calc.contracts.validation import validate_branch_reasons
+from rwa_calc.domain.branch_reasons import (
+    IRB_LGD_BRANCH_REASON,
+    UNKNOWN_FALLBACK,
+    IrbLgdReason,
+    reason_dtype,
+)
+from rwa_calc.domain.enums import ExposureClass
 
 # Defer resolution of validate_aggregated_bundle so collection succeeds even
 # before the engine-implementer adds the function.  Each test that calls it
@@ -342,3 +355,195 @@ class TestValidateAggregatedBundle:
             assert len(rw_codes) == 1, f"Expected 1 RW violation error for rw={rw}, got {rw_codes}"
         else:
             assert rw_codes == set(), f"Expected no RW violation for rw={rw}, got {rw_codes}"
+
+
+# ---------------------------------------------------------------------------
+# IRB009 — retail IRB row priced on a corporate supervisory LGD (P1.351)
+# ---------------------------------------------------------------------------
+
+#: The code, written out so the test is anchored to the published value.
+_IRB009 = "IRB009"
+
+#: CRR / PS1/26 Art. 147(2)(d): the IRB retail classes, as enum members. The
+#: tripwire test below fails if the enum gains a retail member this set lacks.
+_RETAIL_IRB_CLASSES = frozenset(
+    {ExposureClass.RETAIL_MORTGAGE, ExposureClass.RETAIL_QRRE, ExposureClass.RETAIL_OTHER}
+)
+
+
+def _irb_results(
+    rows: list[tuple[str, str | None, str | None, str | None]],
+    *,
+    with_subtype: bool = True,
+) -> AggregatedResultBundle:
+    """Build a results bundle from ``(ref, exposure_class_irb, reason, subtype)`` rows.
+
+    The reason column carries the sealed ``irb_lgd_branch_reason`` dtype (an
+    Enum over ``IrbLgdReason``), so the validator meets the exit's real shape.
+    ``with_subtype=False`` builds a frame that genuinely OMITS
+    ``purchased_receivables_subtype`` rather than holding it as a typed null
+    (LESSONS B1: absent and null are different code paths).
+    """
+    columns: dict[str, pl.Series] = {
+        "exposure_reference": pl.Series([r[0] for r in rows], dtype=pl.String),
+        "exposure_class_irb": pl.Series([r[1] for r in rows], dtype=pl.String),
+        IRB_LGD_BRANCH_REASON: pl.Series([r[2] for r in rows], dtype=reason_dtype(IrbLgdReason)),
+    }
+    if with_subtype:
+        columns["purchased_receivables_subtype"] = pl.Series([r[3] for r in rows], dtype=pl.String)
+    return _make_bundle(pl.LazyFrame(columns))
+
+
+def _irb009(bundle: AggregatedResultBundle, sample_cap: int = 5) -> list:
+    """The IRB009 errors ``validate_branch_reasons`` raises on a bundle."""
+    return [e for e in validate_branch_reasons(bundle, sample_cap=sample_cap) if e.code == _IRB009]
+
+
+class TestIrb009RetailCorporateSupervisoryLgd:
+    """``validate_branch_reasons`` names retail rows priced on Art. 161(1) (P1.351).
+
+    CRR Art. 151(7) / Art. 164(1) and PS1/26 Art. 164(1)(a) require own LGD
+    estimates for retail IRB; Art. 161(1) is a corporates / institutions
+    article. The only supervisory retail LGD is for dilution risk of purchased
+    receivables (Art. 164(1)). The end-to-end pin, in both regimes, is
+    ``tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py``; these
+    tests pin the predicate's edges on the sealed exit's column shape.
+    """
+
+    def test_retail_class_set_covers_every_retail_enum_member(self) -> None:
+        """Tripwire: a new retail ExposureClass member must join the guard (LESSONS B2)."""
+        retail_members = {m for m in ExposureClass if m.value.startswith("retail")}
+
+        assert retail_members == _RETAIL_IRB_CLASSES
+
+    @pytest.mark.parametrize("exposure_class", list(ExposureClass), ids=lambda m: m.value)
+    def test_supervisory_firb_fires_on_retail_classes_only(
+        self, exposure_class: ExposureClass
+    ) -> None:
+        """Art. 161(1)(a)/(b) on a retail row fires; on any other class it does not."""
+        bundle = _irb_results([("E1", exposure_class.value, "supervisory_firb", None)])
+
+        named = [e.exposure_reference for e in _irb009(bundle)]
+
+        expected = ["E1"] if exposure_class in _RETAIL_IRB_CLASSES else []
+        assert named == expected
+
+    @pytest.mark.parametrize(
+        ("subtype", "fires"),
+        [
+            ("senior", True),
+            ("subordinated", True),
+            ("dilution_risk", False),
+            # Case variants pass the input gate (DQ006 lower-cases both sides) but
+            # miss the engine's exact-match dispatch, which prices them on the
+            # Art. 161(1)(a)/(b) seniority fallback - a corporate rate.
+            ("Senior", True),
+            ("Subordinated", True),
+            ("SUBORDINATED", True),
+            ("Dilution_Risk", True),
+            ("DILUTION_RISK", True),
+            # Out of vocabulary: DQ006 names the spelling, and the dispatch still
+            # prices the row on the seniority fallback.
+            ("junior", True),
+        ],
+    )
+    def test_supervisory_subtype_fires_unless_priced_on_the_dilution_rate(
+        self, subtype: str, fires: bool
+    ) -> None:
+        """Only the exact ``dilution_risk`` spelling reaches Art. 164(1)'s retail rate.
+
+        The engine dispatch (``engine/irb/transforms.py::apply_firb_lgd``) matches
+        the subtype exactly; every other spelling on this branch is priced on an
+        Art. 161(1) corporate rate, (e)/(f) or the (a)/(b) seniority fallback.
+        """
+        bundle = _irb_results([("E1", "retail_other", "supervisory_subtype", subtype)])
+
+        named = [e.exposure_reference for e in _irb009(bundle)]
+
+        assert named == (["E1"] if fires else [])
+
+    def test_null_subtype_on_the_subtype_branch_fires(self) -> None:
+        """Mirrors the dispatch: a null subtype is not the dilution rate.
+
+        The engine never writes ``supervisory_subtype`` beside a null subtype, but
+        if a frame did, its ``when(subtype == "dilution_risk")`` would not match
+        and the row would take the seniority fallback - a corporate rate.
+        """
+        bundle = _irb_results([("E1", "retail_other", "supervisory_subtype", None)])
+
+        assert [e.exposure_reference for e in _irb009(bundle)] == ["E1"]
+
+    @pytest.mark.parametrize(
+        "subtype",
+        ["senior", "subordinated", "dilution_risk", "Senior", "Dilution_Risk", "junior"],
+    )
+    def test_corporate_supervisory_subtype_is_authorised(self, subtype: str) -> None:
+        """Art. 161(1) is the corporate population's own article: never IRB009, any spelling."""
+        bundle = _irb_results([("E1", "corporate", "supervisory_subtype", subtype)])
+
+        assert _irb009(bundle) == []
+
+    @pytest.mark.parametrize("reason", ["own_estimate", "ccr_modelled", UNKNOWN_FALLBACK, None])
+    def test_retail_rows_not_on_a_supervisory_rate_are_silent(self, reason: str | None) -> None:
+        """Own estimates are what Art. 164(1) requires; UNKNOWN_FALLBACK is BR001's."""
+        bundle = _irb_results([("E1", "retail_other", reason, "senior")])
+
+        assert _irb009(bundle) == []
+
+    def test_null_irb_class_is_silent(self) -> None:
+        """A row with no IRB class is not shown to be retail, so it is not named."""
+        bundle = _irb_results([("E1", None, "supervisory_firb", None)])
+
+        assert _irb009(bundle) == []
+
+    def test_absent_subtype_column_still_names_supervisory_firb_rows(self) -> None:
+        """Without the subtype column the (a)/(b) limb still fires; nothing raises."""
+        bundle = _irb_results(
+            [
+                ("E1", "retail_qrre", "supervisory_firb", None),
+                ("E2", "retail_other", "own_estimate", None),
+            ],
+            with_subtype=False,
+        )
+
+        assert [e.exposure_reference for e in _irb009(bundle)] == ["E1"]
+
+    def test_warning_shape(self) -> None:
+        """WARNING / DATA_QUALITY, row-named, on the branch-reason column."""
+        bundle = _irb_results([("E1", "retail_mortgage", "supervisory_subtype", "subordinated")])
+
+        (error,) = _irb009(bundle)
+
+        assert error.severity == ErrorSeverity.WARNING
+        assert error.category == ErrorCategory.DATA_QUALITY
+        assert error.exposure_reference == "E1"
+        assert error.field_name == IRB_LGD_BRANCH_REASON
+        assert error.actual_value == "supervisory_subtype"
+        assert "Art. 164(1)" in (error.regulatory_reference or "")
+
+    def test_sample_cap_then_one_summary(self) -> None:
+        """Up to ``sample_cap`` row-named errors, then one summary with the omitted count.
+
+        ``tests/robustness/harness.py`` clause (c) depends on this shape.
+        """
+        rows = [(f"E{i}", "retail_other", "supervisory_firb", None) for i in range(7)]
+
+        errors = _irb009(_irb_results(rows), sample_cap=5)
+
+        assert [e.exposure_reference for e in errors] == ["E0", "E1", "E2", "E3", "E4", None]
+        assert "2 additional row(s) omitted" in errors[-1].message
+
+    def test_br001_is_unaffected_by_the_retail_scan(self) -> None:
+        """The two codes share one scan of the reason column; neither swallows the other."""
+        bundle = _irb_results(
+            [
+                ("E1", "retail_other", "supervisory_firb", None),
+                ("E2", "corporate", UNKNOWN_FALLBACK, None),
+            ]
+        )
+
+        codes = sorted(
+            (e.code, e.exposure_reference) for e in validate_branch_reasons(bundle, sample_cap=5)
+        )
+
+        assert codes == [("BR001", "E2"), (_IRB009, "E1")]

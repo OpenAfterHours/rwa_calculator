@@ -1,93 +1,169 @@
-"""P1.351 — the retail purchased-receivable supervisory-LGD population, pinned.
+"""P1.351 — retail IRB rows priced on a corporate supervisory LGD are named (IRB009).
 
-CRR Art. 161(1)(e)/(f) confine the senior/subordinated supervisory LGD rates to
-purchased **corporate** receivables (`crr.pdf` p.157), and Art. 164(1) supplies a
-retail rate for **dilution risk only**. So a retail A-IRB/F-IRB purchased
-receivable carrying subtype ``senior`` or ``subordinated`` with a null LGD sits
-outside every supervisory limb — and today takes the corporate rate silently.
+CRR Art. 161(1) is a corporates / institutions article: (e)/(f) confine the
+senior/subordinated supervisory LGD rates to purchased **corporate** receivables
+and (a)/(b) are the corporate seniority fallbacks (`crr.pdf` p.157). For retail,
+Art. 151(7) and Art. 164(1) require own LGD estimates, and the only supervisory
+retail LGD is for **dilution risk** of purchased receivables (Art. 164(1)).
+PS1/26 doubles the confinement: Art. 161 is headed "CORPORATES AND
+INSTITUTIONS" and para 1 opens "An institution using the Foundation IRB
+Approach"; Art. 164(1)(a) requires own retail estimates and (b) sets retail
+dilution at 100%; Art. 147A(1)(g) allows retail only SA or A-IRB.
 
-**These tests pin TODAY'S behaviour, deliberately.** P1.351's fix is an error
-channel signal (IRB009), not a value change, and it is currently BLOCKED on the
-branch-census matrix (see the plan bullet). Until it lands, this file is the only
-thing in the estate that exercises the ``supervisory_subtype`` dispatch end to
-end — `scripts/branch_census_baseline.json` banks that branch as *dead* precisely
-because ``purchased_receivables_subtype`` is null in every other fixture.
+The engine nevertheless accepts a ``retail_other`` / ``foundation_irb`` model
+permission and prices the retail rows on the Art. 161(1) rates. That root cause
+(accepting the permission, discarding the firm's LGD) is a separate item whose
+remedy is an owner decision. **P1.351 is the error-channel half only:** the
+pipeline exit raises an IRB009 WARNING naming every retail IRB row priced on a
+corporate supervisory LGD, and no LGD or RWA moves.
 
-So this is a **fail-first anchor held in advance**: when IRB009 ships, the
-``errors`` assertions below invert for rows 1 and 2 and must stay unchanged for
-rows 3, 4 and 5. That asymmetry is the whole guard — a fix that emits on the
-dilution row (Art. 164(1) legislates for it) or the corporate row (Art. 161(1)(e)
-authorises it) is over-reaching, and nothing else would catch that.
+The guard is asymmetric, and the asymmetry is the whole test:
+
+- FIRES on retail ``senior`` and ``subordinated`` subtypes (Art. 161(1)(e)/(f))
+  and on the retail row with NO subtype, which takes ``supervisory_firb`` — the
+  Art. 161(1)(a) seniority fallback, every bit as corporate as (e)/(f).
+- SILENT on the retail ``dilution_risk`` row (Art. 164(1) legislates it) and on
+  the corporate ``senior`` row (Art. 161(1)(e) authorises it).
+
+The silent limb is the EXACT spelling ``dilution_risk``, not an allowlist of
+``senior`` / ``subordinated``. The input gate's DQ006 lower-cases both sides, so
+``Subordinated`` or ``Dilution_Risk`` passes it; the engine dispatch matches
+exactly, so it prices those rows on the Art. 161(1)(a)/(b) seniority fallback.
+``TestCaseVariantSubtypes`` runs that input in both regimes: IRB009 is the only
+finding that names those rows.
+
+Both regimes are covered and each can fail on its own (the error-channel class
+is parametrised). The Basel 3.1 leg needs two input deltas
+(``create_p1351_b31_counterparty`` / ``create_p1351_b31_loans``) to reach retail
+F-IRB at all; the adequacy test asserts it got there, so the leg cannot pass by
+the rows going to SA.
 
 Two measured facts recorded here because they are easy to get backwards:
 
 - Row 1 (``senior``) applies **the same LGD as row 5 (no subtype at all)** —
-  0.45. On this F-IRB route the subtype's only observable effect is the audit
-  trail, not the number. ``is_firb_cleared`` in ``apply_firb_lgd`` has no subtype
-  condition, so any null-LGD F-IRB row clears via the seniority fallback.
-- ``UNKNOWN_FALLBACK``/BR001 is therefore **not** reachable on this route, and
-  that is **deliberate, not a coverage gap**. ``is_firb_cleared`` fires for any
-  F-IRB row with a null LGD, so the ``SUPERVISORY_FIRB`` case is reached before
-  the ``otherwise`` clause is ever evaluated — an F-IRB row always has a
-  supervisory fallback by construction, i.e. it IS justified (CRR Art. 161(1)(a)).
-  ``scripts/branch_census_baseline.json`` banks that limb as desired-dead with the
-  note that rows newly landing on it are "a loss of justification". So a fixture
-  aimed at it would be **lighting a limb the estate wants dark**. Do not build one
-  for this item.
-
-Basel 3.1 is **not covered and cannot be**: Art. 147A blocks retail F-IRB, the
-A-IRB gate requires ``has_modelled_lgd`` (which a null-LGD row cannot satisfy),
-and the remaining B31 retail limbs are mutually exclusive with an IRB route. CRR
-only, and that is a finding rather than an omission.
+  0.45 under CRR. The subtype changes the recorded branch reason, not the
+  number.
+- Row 5 reaches ``SUPERVISORY_FIRB``, **not** ``UNKNOWN_FALLBACK``, so no BR001
+  is raised for it. ``is_firb_cleared`` fires for any F-IRB row with a null LGD
+  before the ``otherwise`` clause, and ``scripts/branch_census_baseline.json``
+  banks ``UNKNOWN_FALLBACK`` as desired-dead. IRB009 therefore keys on the
+  branch reason and the IRB class, never on the subtype alone.
 
 References:
-- CRR Art. 161(1)(e)/(f): senior / subordinated purchased CORPORATE receivables
-- CRR Art. 164(1): retail LGD — dilution risk only
-- PS1/26 Art. 161(1)(e)/(f), Art. 164(1)(b): the Basel 3.1 equivalents
+- CRR Art. 151(7), Art. 161(1)(a)/(e)/(f), Art. 164(1)
+- PS1/26 Art. 147A(1)(g), Art. 161(1), Art. 164(1)(a)/(b)
 """
 
 from __future__ import annotations
 
+from functools import cache
+
 import pytest
 from tests.fixtures.p1_351.p1_351 import (
+    B31_REPORTING_DATE,
+    CASE_VARIANT_SUBTYPES,
+    LOAN_REF_CORP_JUNIOR,
     LOAN_REF_CORP_SENIOR,
     LOAN_REF_RETAIL_DILUTION,
     LOAN_REF_RETAIL_NOSUBTYPE,
     LOAN_REF_RETAIL_SENIOR,
     LOAN_REF_RETAIL_SUB,
     REPORTING_DATE,
+    create_p1351_b31_counterparty,
+    create_p1351_b31_loans,
     create_p1351_counterparty,
     create_p1351_loans,
     create_p1351_model_permissions,
     create_p1351_rating,
+    respell_p1351_subtypes,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ErrorCategory, ErrorSeverity
+from rwa_calc.domain.branch_reasons import UNKNOWN_FALLBACK
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+#: The IRB009 code, written out rather than imported so the test is anchored to
+#: the published code and not to whatever the constant happens to hold.
+_IRB009 = "IRB009"
+_BR001 = "BR001"
+
+_RETAIL_REFS = (
+    LOAN_REF_RETAIL_SENIOR,
+    LOAN_REF_RETAIL_SUB,
+    LOAN_REF_RETAIL_DILUTION,
+    LOAN_REF_RETAIL_NOSUBTYPE,
+)
+
+#: The rows priced on an Art. 161(1) corporate rate although their IRB class is
+#: retail — senior (e), subordinated (f) and the no-subtype (a) fallback.
+_UNAUTHORISED_RETAIL_REFS = frozenset(
+    {LOAN_REF_RETAIL_SENIOR, LOAN_REF_RETAIL_SUB, LOAN_REF_RETAIL_NOSUBTYPE}
+)
+
+
+#: Case-variant leg: the four retail rows, each priced on an Art. 161(1) corporate
+#: rate, the respelled ``Dilution_Risk`` row included.
+_RESPELLED_UNAUTHORISED_RETAIL_REFS = frozenset(_RETAIL_REFS)
+
+#: The Art. 161(1)(a) senior seniority fallback each regime prices a respelled
+#: senior-seniority row on: CRR 45%; PS1/26 40% for a non-financial obligor
+#: (Art. 161(1)(aa)). Not the Art. 164(1) dilution rate (CRR 75%, PS1/26 100%).
+_SENIOR_FALLBACK_LGD = {"crr": 0.45, "b31": 0.40}
+
+#: The Art. 161(1)(b) subordinated fallback, in both regimes — not (f)'s 100%.
+_SUBORDINATED_FALLBACK_LGD = 0.75
+
+
+@cache
+def _run(regime: str, *, respelled: bool = False):
+    """Run the P1.351 bundle once per regime, from the fixture's own frames.
+
+    ``respelled`` swaps in the case-variant leg (``respell_p1351_subtypes``).
+    """
+    if regime == "crr":
+        counterparties, loans = create_p1351_counterparty(), create_p1351_loans()
+        config = CalculationConfig.crr(reporting_date=REPORTING_DATE)
+    else:
+        counterparties, loans = create_p1351_b31_counterparty(), create_p1351_b31_loans()
+        config = CalculationConfig.basel_3_1(reporting_date=B31_REPORTING_DATE)
+    if respelled:
+        loans = respell_p1351_subtypes(loans)
+    bundle = make_raw_bundle(
+        counterparties=counterparties,
+        loans=loans,
+        ratings=create_p1351_rating(),
+        model_permissions=create_p1351_model_permissions(),
+    )
+    return PipelineOrchestrator().run_with_data(bundle, config)
+
+
+def _rows_by_reference(result) -> dict[str, dict]:
+    """Index a result's rows by exposure reference."""
+    frame = result.results.collect()
+    return {
+        row["exposure_reference"]: row for row in frame.to_dicts() if row.get("exposure_reference")
+    }
 
 
 @pytest.fixture(scope="module")
 def p1351_result():
-    """Run the P1.351 bundle once under CRR, from the fixture's own frames."""
-    bundle = make_raw_bundle(
-        counterparties=create_p1351_counterparty(),
-        loans=create_p1351_loans(),
-        ratings=create_p1351_rating(),
-        model_permissions=create_p1351_model_permissions(),
-    )
-    return PipelineOrchestrator().run_with_data(
-        bundle, CalculationConfig.crr(reporting_date=REPORTING_DATE)
-    )
+    """The P1.351 bundle run under CRR."""
+    return _run("crr")
 
 
 @pytest.fixture(scope="module")
 def p1351_rows(p1351_result) -> dict[str, dict]:
-    """Index the result rows by exposure reference."""
-    frame = p1351_result.results.collect()
-    return {
-        row["exposure_reference"]: row for row in frame.to_dicts() if row.get("exposure_reference")
-    }
+    """Index the CRR result rows by exposure reference."""
+    return _rows_by_reference(p1351_result)
+
+
+@pytest.fixture(scope="module", params=["crr", "b31"])
+def regime_run(request) -> tuple[str, object, dict[str, dict]]:
+    """The P1.351 bundle run under each regime: (regime, result, rows)."""
+    result = _run(request.param)
+    return request.param, result, _rows_by_reference(result)
 
 
 class TestSupervisorySubtypeReachesTheDispatch:
@@ -163,14 +239,78 @@ class TestTodaysLgdValues:
         assert without_subtype["irb_lgd_branch_reason"] == "supervisory_firb"
 
 
-class TestErrorChannelIsSilentToday:
-    """Pinned so P1.351's fix inverts EXACTLY two of these and no others."""
+class TestIrb009NamesRetailRowsOnCorporateSupervisoryLgd:
+    """The P1.351 fix, in both regimes: IRB009 on exactly three rows, no value moved."""
 
-    def test_no_errors_are_raised_for_any_row(self, p1351_result) -> None:
-        """Today the unauthorised retail rows are silent. That IS the defect."""
-        assert [e.code for e in p1351_result.errors] == [], (
-            "Pre-fix this bundle is error-free. When IRB009 ships, exactly the "
-            "senior and subordinated RETAIL rows gain a warning — the dilution row "
+    def test_retail_rows_reach_foundation_irb_on_a_retail_class(self, regime_run) -> None:
+        """Adequacy: the population the warning is about exists in this regime.
+
+        Without this the Basel 3.1 leg could pass by every retail row going to
+        SA (no ``irb_lgd_branch_reason``, so nothing to warn about).
+        """
+        regime, _, rows = regime_run
+
+        for ref in _RETAIL_REFS:
+            assert rows[ref]["approach_applied"] == "foundation_irb", (
+                f"{regime}: {ref} did not reach F-IRB - the IRB009 assertions below "
+                "would be vacuous"
+            )
+            assert rows[ref]["exposure_class_irb"] == "retail_other", f"{regime}: {ref}"
+        assert rows[LOAN_REF_CORP_SENIOR]["exposure_class_irb"] == "corporate"
+        assert rows[LOAN_REF_RETAIL_NOSUBTYPE]["irb_lgd_branch_reason"] == "supervisory_firb"
+        for ref in (LOAN_REF_RETAIL_SENIOR, LOAN_REF_RETAIL_SUB, LOAN_REF_RETAIL_DILUTION):
+            assert rows[ref]["irb_lgd_branch_reason"] == "supervisory_subtype", f"{regime}: {ref}"
+
+    def test_irb009_names_exactly_the_unauthorised_retail_rows(self, regime_run) -> None:
+        """Retail senior / subordinated / no-subtype fire; dilution and corporate do not.
+
+        Arrange: the five P1.351 rows under one regime.
+        Act:     read the IRB009 errors the pipeline exit raised.
+        Assert:  they name exactly the three retail rows priced on an Art. 161(1)
+                 corporate rate, once each. The retail dilution row (Art. 164(1)
+                 legislates it) and the corporate row (Art. 161(1)(e) authorises
+                 it) must stay silent, or the guard over-reaches.
+        """
+        regime, result, _ = regime_run
+
+        named = [e.exposure_reference for e in result.errors if e.code == _IRB009]
+
+        assert sorted(named) == sorted(_UNAUTHORISED_RETAIL_REFS), (
+            f"{regime}: IRB009 named {sorted(named)}; expected exactly "
+            f"{sorted(_UNAUTHORISED_RETAIL_REFS)}"
+        )
+
+    def test_irb009_is_a_data_quality_warning(self, regime_run) -> None:
+        """WARNING, not ERROR: the row keeps its number; the error names the authority gap."""
+        regime, result, _ = regime_run
+
+        irb009 = [e for e in result.errors if e.code == _IRB009]
+
+        assert irb009, f"{regime}: no IRB009 raised"
+        for error in irb009:
+            assert error.severity == ErrorSeverity.WARNING
+            assert error.category == ErrorCategory.DATA_QUALITY
+            assert error.field_name == "irb_lgd_branch_reason"
+            assert "Art. 164(1)" in (error.regulatory_reference or "")
+
+    def test_no_p1351_row_lands_on_unknown_fallback(self, regime_run) -> None:
+        """Row 5 is justified-by-construction (``supervisory_firb``), so no BR001."""
+        regime, result, rows = regime_run
+
+        br001 = [e.exposure_reference for e in result.errors if e.code == _BR001]
+
+        assert br001 == [], f"{regime}: unexpected BR001 on {br001}"
+        assert all(row["irb_lgd_branch_reason"] != UNKNOWN_FALLBACK for row in rows.values())
+
+
+class TestCrrErrorChannel:
+    """Under CRR the bundle is otherwise clean, so IRB009 is the whole error list."""
+
+    def test_irb009_is_the_only_error_raised(self, p1351_result) -> None:
+        """Pre-fix this list was ``[]`` — the silence that WAS the defect."""
+        assert sorted(e.code for e in p1351_result.errors) == [_IRB009] * 3, (
+            "Under CRR exactly the senior, subordinated and no-subtype RETAIL rows "
+            "carry an IRB009 warning and nothing else is raised. The dilution row "
             "(Art. 164(1) legislates for it) and the corporate row (Art. 161(1)(e) "
             "authorises it) must stay silent, or the guard is over-reaching."
         )
@@ -207,3 +347,83 @@ class TestClassSplitIsWhatDistinguishes:
         assert retail["lgd_floored"] == pytest.approx(corporate["lgd_floored"], abs=1e-9)
         assert retail["exposure_class_irb"] == "retail_other"
         assert corporate["exposure_class_irb"] == "corporate"
+
+
+@pytest.fixture(scope="module", params=["crr", "b31"])
+def respelled_run(request) -> tuple[str, object, dict[str, dict]]:
+    """The case-variant leg under each regime: (regime, result, rows)."""
+    result = _run(request.param, respelled=True)
+    return request.param, result, _rows_by_reference(result)
+
+
+class TestCaseVariantSubtypes:
+    """A respelled subtype passes the input gate and misses the dispatch: IRB009 names it.
+
+    DQ006 lower-cases both sides before checking (``contracts/validation.py``),
+    so ``Senior`` / ``Subordinated`` / ``Dilution_Risk`` are valid input. The
+    engine dispatch (``engine/irb/transforms.py::apply_firb_lgd``) matches the
+    exact lower-case spelling, so each respelled row takes the ``otherwise``
+    seniority fallback — an Art. 161(1)(a)/(b) corporate rate — on the
+    ``supervisory_subtype`` branch. ``Dilution_Risk`` is therefore NOT priced on
+    the Art. 164(1) retail dilution rate, and IRB009 is the only finding that
+    names it. A guard that allowlisted ``senior`` / ``subordinated`` (and left an
+    off-vocabulary spelling to DQ006) lets all three through in silence.
+    """
+
+    def test_respelled_rows_take_the_seniority_fallback_on_the_subtype_branch(
+        self, respelled_run
+    ) -> None:
+        """Adequacy: the respelled rows reach the dispatch and miss every subtype rate.
+
+        Arrange: the case-variant leg under one regime.
+        Act:     read the respelled retail rows.
+        Assert:  each is on ``supervisory_subtype`` and priced on the Art. 161(1)
+                 seniority fallback by its ``seniority`` column — so the
+                 ``Dilution_Risk`` row is on the corporate senior rate, not the
+                 Art. 164(1) dilution rate.
+        """
+        regime, _, rows = respelled_run
+        senior_fallback = _SENIOR_FALLBACK_LGD[regime]
+        expected_lgd = {
+            LOAN_REF_RETAIL_SENIOR: senior_fallback,
+            LOAN_REF_RETAIL_SUB: _SUBORDINATED_FALLBACK_LGD,
+            LOAN_REF_RETAIL_DILUTION: senior_fallback,
+        }
+
+        for ref, lgd in expected_lgd.items():
+            row = rows[ref]
+            assert row["purchased_receivables_subtype"] == CASE_VARIANT_SUBTYPES[ref]
+            assert row["exposure_class_irb"] == "retail_other", f"{regime}: {ref}"
+            assert row["irb_lgd_branch_reason"] == "supervisory_subtype", f"{regime}: {ref}"
+            assert row["lgd_floored"] == pytest.approx(lgd, abs=1e-9), f"{regime}: {ref}"
+
+    def test_input_gate_names_only_the_out_of_vocabulary_spelling(self, respelled_run) -> None:
+        """DQ006 runs on this path and accepts every respelling: it names ``junior`` only.
+
+        This pins the premise the IRB009 design must not lean on: an
+        off-vocabulary subtype is NOT always named by DQ006.
+        """
+        regime, result, _ = respelled_run
+
+        dq006 = [e.actual_value for e in result.errors if e.code == "DQ006"]
+
+        assert dq006 == ["junior"], f"{regime}: DQ006 raised on {dq006}"
+
+    def test_irb009_names_every_retail_row_on_a_corporate_rate(self, respelled_run) -> None:
+        """All four retail rows fire, ``Dilution_Risk`` included; both corporate rows do not.
+
+        Arrange: the case-variant leg under one regime.
+        Act:     read the IRB009 errors the pipeline exit raised.
+        Assert:  they name exactly the four retail rows, once each. The corporate
+                 ``Senior`` and ``junior`` rows are Art. 161(1)'s own population
+                 and stay silent, whatever the spelling.
+        """
+        regime, result, _ = respelled_run
+
+        named = [e.exposure_reference for e in result.errors if e.code == _IRB009]
+
+        assert sorted(named) == sorted(_RESPELLED_UNAUTHORISED_RETAIL_REFS), (
+            f"{regime}: IRB009 named {sorted(named)}; expected exactly "
+            f"{sorted(_RESPELLED_UNAUTHORISED_RETAIL_REFS)}"
+        )
+        assert LOAN_REF_CORP_JUNIOR not in named

@@ -585,6 +585,19 @@ ERROR_RETAIL_RE_PORTFOLIO_LGD_FLOOR = "IRB007"
 # one would reduce the exposure value. Emitted by the input-domain gate
 # (contracts/validation.py::_validate_numeric_ranges), never floored silently.
 ERROR_CCF_OUT_OF_RANGE = "IRB008"
+# Retail IRB row priced on an Art. 161(1) corporate supervisory LGD (P1.351).
+# Art. 161(1) is a corporates / institutions article in both regimes (PS1/26
+# heads it "CORPORATES AND INSTITUTIONS"); retail IRB takes own LGD estimates
+# (CRR Art. 151(7), Art. 164(1); PS1/26 Art. 147A(1)(g), Art. 164(1)(a)), and
+# the only supervisory retail LGD is for dilution risk of purchased receivables
+# (Art. 164(1)). Raised at the pipeline exit by
+# contracts/validation.py::validate_branch_reasons for a retail row on the
+# ``supervisory_firb`` branch, or on ``supervisory_subtype`` with any subtype
+# other than exactly ``dilution_risk`` (the engine dispatch is case-sensitive,
+# so a respelled subtype is priced on the seniority fallback). WARNING: the
+# value is not changed. Which treatment is right (SA, refusal, or the firm's
+# own estimate) is a separate decision.
+ERROR_UNAUTHORISED_RETAIL_SUPERVISORY_LGD = "IRB009"
 
 # SA error codes
 ERROR_INVALID_CQS = "SA001"

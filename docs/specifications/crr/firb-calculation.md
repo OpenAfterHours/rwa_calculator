@@ -130,6 +130,35 @@ in the LGD in accordance with Chapter 4.
     reachable under both regimes wherever A-IRB is genuinely granted. Regressions:
     `tests/unit/classifier/test_p1_278_top_down_pd.py`.
 
+!!! warning "Retail rows on a corporate supervisory LGD are named, not revalued — IRB009 (P1.351)"
+    Art. 161(1) sits in the Sub-Section for corporates, institutions and central governments:
+    (a)/(b) are that population's seniority fallbacks, (e)/(f) name purchased **corporate**
+    receivables, and Art. 151(8) applies Art. 161(1) to the classes of Art. 147(2)(a)–(c)
+    only. Retail IRB takes **own**
+    LGD estimates (Art. 151(7), Art. 164(1)); the one supervisory retail LGD is for dilution
+    risk of purchased receivables (Art. 164(1)).
+
+    The engine nevertheless accepts a retail-class `foundation_irb` model permission and
+    prices such a row on the Art. 161(1) rates. The pipeline exit raises an **IRB009**
+    WARNING (`contracts/validation.py::validate_branch_reasons`) naming every row whose
+    `exposure_class_irb` is a retail class and whose `irb_lgd_branch_reason` is:
+
+    - `supervisory_firb` — the Art. 161(1)(a)/(b) seniority fallback; or
+    - `supervisory_subtype` with any subtype other than exactly `dilution_risk` —
+      Art. 161(1)(e)/(f) for `senior` / `subordinated`, the (a)/(b) seniority fallback for
+      any other spelling.
+
+    A retail `dilution_risk` row (Art. 164(1) legislates it) and every corporate row stay
+    silent. The subtype test mirrors the engine dispatch, which is case-sensitive, rather
+    than allowlisting `senior` / `subordinated`: the input gate's DQ006 lower-cases both
+    sides, so a respelled `Subordinated` or `Dilution_Risk` passes it and is priced on the
+    seniority fallback by its `seniority` column, with no other finding — a respelled
+    `Dilution_Risk` row on a senior loan takes 45%, not the 75% dilution rate.
+    **No LGD or RWA changes**: which treatment such a row should get —
+    SA, refusal, or the firm's own estimate — is a separate decision. Regressions:
+    `tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py` (both regimes) and
+    `tests/contracts/test_aggregated_bundle_validation.py`.
+
 ### Art. 230 Table 5 LGDS Values (Foundation Collateral Method)
 
 When exposures are secured by eligible collateral, the LGD* formula (Art. 230) uses the

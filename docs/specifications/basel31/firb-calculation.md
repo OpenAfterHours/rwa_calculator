@@ -436,6 +436,29 @@ default-risk exposure on the same pool. The two components have independent para
     dilution M is not yet modelled (review TR-08). Review TR-03 (retail dilution had taken the
     retail curve: −39.5% RWA at PD 2%).
 
+!!! warning "Retail rows on a corporate supervisory LGD are named, not revalued — IRB009 (P1.351)"
+    PS1/26 Art. 161 is headed "LOSS GIVEN DEFAULT (LGD): CORPORATES AND INSTITUTIONS" and
+    para 1 opens "An institution using the Foundation IRB Approach". Art. 147A(1)(g) allows
+    retail only the Standardised Approach or A-IRB, Art. 164(1)(a) requires own retail LGD
+    estimates, and Art. 164(1)(b) sets the one supervisory retail LGD — 100% for dilution
+    risk of purchased receivables.
+
+    The engine does not yet enforce Art. 147A(1)(g): a retail-class `foundation_irb` model
+    permission is accepted, a firm-supplied LGD is cleared, and the row is priced on the
+    Art. 161(1) rates. The pipeline exit raises an **IRB009** WARNING
+    (`contracts/validation.py::validate_branch_reasons`) naming every row whose
+    `exposure_class_irb` is a retail class and whose `irb_lgd_branch_reason` is
+    `supervisory_firb` (the (a)/(aa)/(b) fallback), or `supervisory_subtype` with any subtype
+    other than exactly `dilution_risk` — (e)/(f) for `senior` / `subordinated`, the seniority
+    fallback for any other spelling. Retail `dilution_risk` rows and corporate rows stay
+    silent. The input gate's `DQ006` ignores case, so a respelled subtype (`Subordinated`,
+    `Dilution_Risk`) passes it, but the engine dispatch is case-sensitive and prices that row
+    on the seniority fallback by its `seniority` column — a respelled `Dilution_Risk` row on a
+    senior loan takes 40%, not the 100% dilution rate; IRB009 is the only finding that names
+    it. **No LGD or RWA changes** — the remedy for the permission itself
+    is a separate item. Regression: `tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py`
+    (parametrised over both regimes).
+
 !!! info "EAD Interaction — Art. 166A(5)"
     For the default-risk exposure, the EAD is the drawn pool value **minus** the own-funds
     requirement for dilution risk, computed before credit risk mitigation. This avoids

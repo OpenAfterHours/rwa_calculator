@@ -336,6 +336,7 @@ Error codes are prefixed by domain and numbered sequentially:
 | `IRB005` | `ERROR_MISSING_LGD` | IRB | No LGD value available for A-IRB exposure |
 | `IRB006` | `ERROR_MISSING_EXPECTED_LOSS` | IRB | Expected-loss value missing on an IRB exposure where EL is required |
 | `IRB008` | `ERROR_CCF_OUT_OF_RANGE` | IRB | Own-estimate CCF outside `[0, 1.5]`. Retail A-IRB additional drawdown can exceed 100%, so 1.0 is not the ceiling; null is valid (the field is optional) |
+| `IRB009` | `ERROR_UNAUTHORISED_RETAIL_SUPERVISORY_LGD` | IRB | **WARNING.** A retail IRB row (`exposure_class_irb` retail) priced on an Art. 161(1) corporate supervisory LGD: `irb_lgd_branch_reason` is `supervisory_firb`, or `supervisory_subtype` with any subtype other than exactly `dilution_risk`. Retail IRB takes own LGD estimates (CRR Art. 151(7), Art. 164(1); PS1/26 Art. 147A(1)(g), Art. 164(1)(a)); the only supervisory retail LGD is for dilution risk (Art. 164(1)), so a retail `dilution_risk` row is never named. A respelled subtype (`Subordinated`, `Dilution_Risk`) passes `DQ006`, which ignores case, but misses the engine's case-sensitive dispatch and is priced on the seniority fallback, so it is named. The value is not changed. Emitted at the pipeline exit by `contracts/validation.py::validate_branch_reasons`, in the same scan as `BR001` |
 | `SA001` | `ERROR_INVALID_CQS` | SA | CQS value not in valid range |
 | `SA002` | `ERROR_MISSING_RISK_WEIGHT` | SA | Cannot determine risk weight |
 | `SA003` | `ERROR_INVALID_LTV` | SA | LTV ratio invalid for property class |

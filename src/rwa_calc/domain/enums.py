@@ -814,6 +814,16 @@ class PpuReason(StrEnum):
       ("of which: Exposures under sequential IRB implementation")
     - null / no-match (SA fallback, no permission)          -> neither (row 0010 only)
 
+    Regime status of the Art. 150(1) points the ``ART_150_1_*`` members name:
+
+    - UK CRR (to 31 Dec 2026): points (a)-(j) are all in the text, but point (f)
+      cross-refers to a paragraph the UK omitted (see ``ART_150_1_F``).
+    - Basel 3.1 (PS1/26, from 1 Jan 2027): points (a)-(d) and (f)-(j) are
+      "[Note: Provision left blank]", i.e. deleted. Of these members only point (e)
+      survives; the new points (k) (roll-out classes) and (l) (types of exposures)
+      have no member yet. The deleted codes are still accepted on Basel 3.1 runs —
+      the value is provenance only and moves no risk weight.
+
     References:
     - CRR Art. 150(1)(a)-(j): permanent partial use (PPU) conditions
     - CRR Art. 148: sequential IRB roll-out
@@ -835,7 +845,19 @@ class PpuReason(StrEnum):
     """Art. 150(1)(e): intra-group exposures to parent / subsidiary / sister entities."""
 
     ART_150_1_F = "art_150_1_f"
-    """Art. 150(1)(f): inter-institution exposures meeting Art. 113(7) (IPS)."""
+    """Art. 150(1)(f): inter-institution exposures meeting Art. 113(7) — inoperative in the UK.
+
+    UK CRR (to 31 Dec 2026): point (f) is unamended and still cross-refers to
+    Art. 113(7), but that paragraph (the institutional protection scheme provision)
+    was omitted on 31.12.2020 by S.I. 2018/1401 reg. 111(3). The cross-reference is
+    left dangling, so no UK exposure can meet point (f).
+
+    Basel 3.1 (PS1/26, from 1 Jan 2027): point (f) is
+    "[Note: Provision left blank]", i.e. deleted. PS1/26 reuses the number
+    Art. 113(7) for an unrelated rule — the conditions a firm holding the
+    Art. 113(6) intragroup 0% permission must keep meeting — so point (f) must not
+    be read as pointing there. Intragroup PPU is point (e) (``ART_150_1_E``), not (f).
+    """
 
     ART_150_1_G = "art_150_1_g"
     """Art. 150(1)(g): equity exposures to 0% RW entities under Chapter 2."""

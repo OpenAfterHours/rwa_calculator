@@ -8,6 +8,15 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ### Added
 - (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.6] - 2026-11-23
+
+### Added
 - **The progress line names the first structure finding before the rules run.**
   When `validate`, `build` or `dash FILE` checks a return whose structure is
   wrong, stderr says so as soon as the check returns - `Checking the structure
@@ -50,7 +59,6 @@ and released independently of `rwa-calc`; its release tags are prefixed
   existing output is unchanged.
 
 ### Changed
-- (Next release changes will go here)
 - **Every check runs in about half the time or less.** Cold `rwa-filer`
   commands, wall clock, best of three, measured interleaved against the code
   before this change (`scripts/rwa_filer_benchmark.py run --against merge-base`):

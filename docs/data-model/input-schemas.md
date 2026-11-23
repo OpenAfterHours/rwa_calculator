@@ -449,7 +449,7 @@ rows identically under both frameworks.
     `INFRASTRUCTURE`, or equal to `DEVELOPMENT_FINANCE` / `CONSTRUCTION_LOAN`: the
     classifier does read `product_type` for those unrelated signals.
 
-Two adjacent lease mechanics are separate from this convention:
+Three adjacent lease mechanics are separate from this convention:
 
 - **Residual value** of a leased asset is its own exposure, carried by
   `entity_type = "other_residual_lease"` on the counterparty and risk-weighted at
@@ -457,10 +457,42 @@ Two adjacent lease mechanics are separate from this convention:
 - **The leased asset as collateral** (CRR Art. 199(7)/211) is supplied as an ordinary
   non-financial collateral row with `is_lease_collateral_attested = True`. See
   [Collateral Schema](#collateral-schema).
+- **A third party's obligation to pay the residual value** — a manufacturer, dealer or
+  insurer standing behind it — is supplied as an ordinary [guarantee](#guarantee-schema)
+  row whose `beneficiary_reference` is the **residual-value** loan (the one under the
+  `other_residual_lease` counterparty), with the third party as `guarantor`.
 
-A third-party obligation to cover the residual value, recognisable as unfunded credit
-protection where it meets Art. 201 and Art. 213, is **not implemented** — the last
-sentence of each provision above is out of scope and tracked separately.
+!!! note "Residual-value guarantees take the ordinary guarantee path"
+    The closing sentence of each provision in the table above — CRR Art. 134(7) and
+    Art. 166(4), PS1/26 Art. 134(7) and Art. 166A(4) — lets that obligation count as
+    unfunded credit protection where the third party is an eligible protection provider
+    (Art. 201) and the obligation meets the requirements for guarantees (Art. 213-215;
+    the IRB provisions name Art. 213). Art. 213(1)(c)(iii) in both frameworks sets the
+    payout test for this case at lease expiry: the contract may hold no clause that could
+    prevent the provider from paying out in a timely manner "when the leasing contract
+    has expired for the purposes of recognising guaranteed residual value".
+
+    There is no separate product or flag. The row goes through the same guarantor
+    eligibility checks as any other guarantee, and the conditions the engine has no
+    input for are the firm's to attest by supplying the row. If it is eligible, the
+    Standardised Approach substitutes the guarantor's risk weight for the residual
+    value's (Art. 235(1)), subject to the Art. 193(1) benefit test: a guarantor whose
+    risk weight is not below the residual value's own is declined, with
+    `guarantee_status = "GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"`. For example, a
+    1,000,000 residual value at 100%, fully guaranteed by a CQS 2 institution, falls to
+    500,000 RWA under CRR (50%) and to 300,000 under Basel 3.1 (ECRA 30%); a CQS 5
+    corporate guarantor (150%) is declined and the RWA stays at 1,000,000.
+
+    Attach the guarantee to the residual-value exposure, not to the lessee's lease
+    receivable: attached to the receivable, the engine substitutes the guarantor for the
+    lessee on that receivable instead.
+
+    For an IRB firm the residual value is an other non-credit-obligation asset (CRR
+    Art. 156(b); PS1/26 Art. 147(8), Art. 156). An `other_residual_lease` counterparty
+    with no internal rating is risk-weighted on the Standardised Approach, so the
+    substitution uses the guarantor's SA risk weight. Whether Art. 166(4) / 166A(4)
+    instead calls for IRB parameter substitution (Art. 236) on that leg is an open
+    question the engine does not settle.
 
 **Example:**
 

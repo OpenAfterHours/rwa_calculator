@@ -425,7 +425,7 @@ supervisory value (Art. 161(1)(a) 45% CRR / Art. 161(1)(aa) 40% B31 non-FSE), an
 `CRM014` warning is raised.
 
 !!! note "Scope"
-    P1.273 covers the F-IRB Foundation Collateral Method secured-LGD path only. Two
+    P1.273 covers the F-IRB Foundation Collateral Method secured-LGD path only. Three
     adjacent lease mechanics are separate and unaffected by it:
 
     - The **lease input convention** — `drawn_amount` must arrive as the discounted
@@ -435,10 +435,19 @@ supervisory value (Art. 161(1)(a) 45% CRR / Art. 161(1)(aa) 40% B31 non-FSE), an
       [Lease exposures — the `drawn_amount` convention](../../data-model/input-schemas.md#lease-exposures-the-drawn_amount-convention).
     - **Residual-value treatment** (Art. 134(7), the `other_residual_lease` entity type
       → OTHER class 100% RW at 1/t × 100%).
-
-    The third-party residual-value payment obligation recognisable as unfunded credit
-    protection under Art. 201 / Art. 213 — the closing sentence of Art. 166(4),
-    Art. 166A(4) and Art. 134(7) — remains unimplemented and is tracked separately.
+    - The **third-party residual-value payment obligation**, recognisable as unfunded
+      credit protection under Art. 201 and Art. 213-215 — the closing sentence of
+      CRR Art. 134(7) and Art. 166(4), and of PS1/26 Art. 134(7) and Art. 166A(4).
+      Art. 213(1)(c)(iii) sets its payout test at lease expiry (no clause may prevent
+      timely payment "when the leasing contract has expired"). It is supplied as an
+      ordinary guarantee row whose `beneficiary_reference` is the residual-value
+      exposure, and takes the generic SA risk-weight substitution
+      (Art. 235(1)) with its Art. 193(1) benefit test — no lease-specific code. Pinned
+      by `tests/acceptance/{crr,basel31}/test_p1_300_residual_value_guarantee.py`
+      (1,000,000 residual value, CQS 2 institution guarantor: 500,000 RWA under CRR,
+      300,000 under Basel 3.1; a CQS 5 corporate guarantor is declined). See
+      [Lease exposures](../../data-model/input-schemas.md#lease-exposures-the-drawn_amount-convention),
+      which also records the open IRB question.
 
 ### Overcollateralisation Ratios
 

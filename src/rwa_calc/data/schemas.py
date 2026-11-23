@@ -653,8 +653,12 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # (discount rate vs undiscounted flows) is unbuildable until those inputs
     # exist. Requirement is regime- AND approach-invariant. The residual-value leg
     # is a separate exposure (``other_residual_lease`` entity type, Art. 134(7)
-    # 1/t x 100%); the Art. 201/213 third-party residual-value guarantee limb of
-    # the same provisions is not implemented. See
+    # 1/t x 100%). A third party's obligation to pay that residual value (the
+    # closing sentence of each provision above: eligible per Art. 201 and Art.
+    # 213-215, Art. 213(1)(c)(iii) setting the payout test at lease expiry) is an
+    # ordinary GUARANTEE_SCHEMA row whose beneficiary_reference is the
+    # residual-value loan, never the lessee's: the generic SA risk-weight
+    # substitution and its Art. 193(1) benefit test then apply. See
     # docs/data-model/input-schemas.md (Loan schema, "Lease exposures").
     "drawn_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "interest": ColumnSpec(pl.Float64, default=0.0, required=False),

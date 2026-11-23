@@ -3919,23 +3919,26 @@ class TestDefaultedResiREBasel31:
 
 
 # =============================================================================
-# PAYROLL / PENSION LOAN — 35% (PRA PS1/26 Art. 123(3)(a-b))
+# PAYROLL / PENSION LOAN — 35% (PRA PS1/26 Art. 123(4))
 # =============================================================================
 
 
 class TestB31PayrollPensionLoan:
-    """Basel 3.1 payroll/pension loan — 35% risk weight (Art. 123(3)(a-b)).
+    """Basel 3.1 payroll/pension loan — 35% risk weight (Art. 123(4)).
 
     Why these tests matter:
         Under Basel 3.1, loans secured by assignment of the borrower's payroll
         or pension income receive a preferential 35% risk weight instead of the
-        standard 75% regulatory retail rate. This is a new Basel 3.1 retail
-        sub-category not present in CRR. Without this treatment, payroll/pension
-        loans are overcharged by 40pp (75% vs 35%), overstating capital.
+        standard 75% regulatory retail rate. The treatment is not new to Basel
+        3.1: CRR carries the same 35% in the payroll/pension paragraph of its
+        Art. 123 (inserted by CRR2), so this class also pins the CRR path
+        (P2.17). Without this treatment, payroll/pension loans are overcharged
+        by 40pp (75% vs 35%), overstating capital.
 
     References:
-    - PRA PS1/26 Art. 123(3)(a-b): payroll/pension loans = 35%
+    - PRA PS1/26 Art. 123(4): payroll/pension loans = 35%
     - PRA PS1/26 Art. 123A: qualifying criteria for regulatory retail
+    - CRR Art. 123 (payroll/pension paragraph): the CRR-path 35% (P2.17)
     """
 
     def test_payroll_loan_gets_35pct(
@@ -4109,7 +4112,7 @@ class TestB31PayrollPensionLoan:
 
         # P2.17: CRR Art. 123 second subparagraph (added by CRR2, Reg (EU)
         # 2019/876 Art. 1 §68) now grants payroll / pension loans the 35% RW
-        # — parity with PRA PS1/26 Art. 123(3)(a-b). Pre-P2.17 the engine
+        # — parity with PRA PS1/26 Art. 123(4). Pre-P2.17 the engine
         # defaulted to the flat 75% retail; the carve-out is now active.
         assert df["risk_weight"][0] == pytest.approx(0.35)
 

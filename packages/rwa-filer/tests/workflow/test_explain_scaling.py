@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import gc
 import sys
-import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -70,6 +69,7 @@ from compare_builders import (
     country_codes,
     geographical_return,
 )
+from cpu_clock import best_cpu_seconds
 from rwa_filer.readers import SourceReading
 from rwa_filer.workflow import compare as compare_module
 from rwa_filer.workflow.explain import (
@@ -255,17 +255,16 @@ def _best_cpu_time(handed: dict[str, Any]) -> float:
 
     The cyclic collector is paused while the clock runs: a collection that
     walks the loaded taxonomy pack costs more than the whole measurement and
-    falls on whichever run happens to trigger it.
+    falls on whichever run happens to trigger it. Read by ``cpu_clock``: at
+    ``SMALL`` countries one run is shorter than a Windows clock tick (15.625 ms)
+    and was read as 0.0 s.
     """
-    best = float("inf")
     collecting = gc.isenabled()
     gc.disable()
     try:
-        for _ in range(REPEATS):
-            started = time.thread_time()
-            explain_differences(*handed["args"], **handed["kwargs"])
-            best = min(best, time.thread_time() - started)
+        return best_cpu_seconds(
+            lambda: explain_differences(*handed["args"], **handed["kwargs"]), REPEATS
+        )
     finally:
         if collecting:
             gc.enable()
-    return best

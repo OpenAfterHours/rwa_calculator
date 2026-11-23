@@ -141,7 +141,6 @@ References:
 from __future__ import annotations
 
 import sys
-import time
 from collections import Counter
 from datetime import date
 from functools import cache
@@ -149,6 +148,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cpu_clock import best_cpu_seconds
 from pack_builders import VALID_LEI
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS, evaluate_rules, trace_rules
 from rwa_filer.boe.grammar import references
@@ -615,11 +615,8 @@ def _best_cpu(act: Callable[[], object]) -> float:
     """The least CPU time this thread spent in ``act``, of ``REPEATS`` runs, in seconds.
 
     This thread's CPU time, not the clock's: the rule loop is pure Python on the
-    calling thread, and time spent waiting for a loaded box is not counted.
+    calling thread, and time spent waiting for a loaded box is not counted. Read
+    by ``cpu_clock``, so a size that runs in under one of the clock's steps (a
+    Windows tick is 15.625 ms) is not read as zero.
     """
-    best = float("inf")
-    for _ in range(REPEATS):
-        started = time.thread_time()
-        act()
-        best = min(best, time.thread_time() - started)
-    return best
+    return best_cpu_seconds(act, REPEATS)

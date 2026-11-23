@@ -30,7 +30,7 @@ article,heading,crr_article,left_blank,not_in_rulebook,in_snapshot,pack_entries,
 109,TREATMENT OF SECURITISATION POSITIONS,,,whole,yes,,
 110,TREATMENT OF CREDIT RISK ADJUSTMENTS,110,,(4),yes,,
 110A,DUE DILIGENCE,,,,yes,b31:sa_due_diligence_override,engine/sa/rw_adjustments.py::apply_due_diligence_override
-111,EXPOSURE VALUE,,,,yes,b31:obs_product_to_risk_type; b31:sa_ccf; b31:sa_revised_ccf_table,engine/ccf.py::CCFCalculator._apply_uk_residential_mortgage_ccf; engine/ccf.py::CCFCalculator._compute_ccf; engine/ccf.py::build_product_to_risk_type_expr; engine/hierarchy/facility_undrawn.py::_undrawn_select_expressions; reporting/corep/ccf_buckets.py::of08_01_ccf_row_expr
+111,EXPOSURE VALUE,,,,yes,b31:obs_product_to_risk_type; b31:sa_ccf; b31:sa_revised_ccf_table,engine/ccf.py::CCFCalculator._apply_uk_residential_mortgage_ccf; engine/ccf.py::CCFCalculator._compute_ccf; engine/ccf.py::build_product_to_risk_type_expr; engine/hierarchy/facility_undrawn.py::_undrawn_select_expressions; reporting/corep/ccf_buckets.py::of08_01_ccf_row_expr; reporting/corep/ccf_buckets.py::sa_ccf_bucket_expr
 112,EXPOSURE CLASSES,112,(1)(n),,yes,,engine/classify/audit.py::_null_entity_type_warnings; reporting/corep/c07_sheet_scope.py::memo_key_exprs
 113,CALCULATION OF RISK-WEIGHTED EXPOSURE AMOUNTS,113,,,yes,b31:intragroup_zero_rw; b31:intragroup_zero_rw_pct,
 114,EXPOSURES TO CENTRAL GOVERNMENTS OR CENTRAL BANKS,114,(5); (6),(7),yes,b31:central_bank_uses_sovereign_cqs,engine/sa/central_bank.py::ecb_rw_expr; engine/sa/central_bank.py::is_ecb_expr; engine/sa/central_bank.py::lift_central_bank_cqs
@@ -179,7 +179,7 @@ article,heading,crr_article,left_blank,not_in_rulebook,in_snapshot,pack_entries,
 232,OTHER FUNDED CREDIT PROTECTION METHOD,232,,,yes,,
 233,VALUATION UNDER THE RISK-WEIGHT SUBSTITUTION METHOD AND THE PARAMETER SUBSTITUTION METHOD,233,,,yes,,engine/crm/protection_value.py::_apply_fx_mismatch; engine/crm/protection_value.py::_apply_restructuring_exclusion; engine/crm/protection_value.py::value_unfunded_protection
 234,CALCULATING RISK-WEIGHTED EXPOSURE AMOUNTS AND EXPECTED LOSS AMOUNTS IN THE EVENT OF PARTIAL PROTECTION AND TRANCHING,234,,,yes,,engine/crm/protection_screen.py::screen_unfunded_protection
-235,CALCULATING RISK-WEIGHTED EXPOSURE AMOUNTS UNDER THE RISK- WEIGHT SUBSTITUTION METHOD,235,,,yes,b31:slotting_guarantee_substitution,engine/eu_sovereign.py::build_domestic_cgcb_guarantor_expr; engine/slotting/transforms.py::apply_guarantee_substitution; engine/slotting/transforms.py::zero_covered_expected_loss
+235,CALCULATING RISK-WEIGHTED EXPOSURE AMOUNTS UNDER THE RISK- WEIGHT SUBSTITUTION METHOD,235,,,yes,b31:slotting_guarantee_substitution,engine/eu_sovereign.py::build_domestic_cgcb_guarantor_expr; engine/slotting/transforms.py::apply_guarantee_substitution; engine/slotting/transforms.py::zero_covered_expected_loss; reporting/corep/crm_substitution.py::covered_pre_ccf
 236,APPLICATION AND DEFINITIONS,4; 236,(2); (3),,yes,,
 237,MATURITY MISMATCH,237,,,yes,,engine/crm/guarantees.py::_apply_maturity_mismatch_to_guarantees
 238,MATURITY OF CREDIT PROTECTION,238,,,yes,,engine/crm/haircuts.py::with_derived_residual_maturity

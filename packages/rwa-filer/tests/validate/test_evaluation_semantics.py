@@ -21,7 +21,8 @@ Key responsibilities:
   marks 35; the EBA none), so a failing comparison over zero-filled blanks is a
   named skip, never a break; a holding one stays VACUOUS, and a reported zero
   is still evaluated. Pinned on the packaged boe_b0778 and its EBA twin
-  v09796_m.
+  v09796_m: the count, the reason at the empty place, and the reason the
+  rule carries where no place is evaluated.
 
 Why: a false negative in this evaluator is worse than no evaluator, because it
 gives false confidence that a return is submittable. Each test below is one way
@@ -575,6 +576,114 @@ def test_eba_v09796_m_still_breaks_where_one_share_is_reported_as_zero() -> None
 
     # Assert
     assert (outcome.status, outcome.passed, outcome.failed) == (STATUS_FAIL, 1, 1)
+
+
+def _packaged_rule_skips(framework: str, rule_id: str, cells: Cells) -> dict[str, tuple[str, str]]:
+    """Where one packaged rule is not evaluated, by row: ``{row: (status, reason)}``.
+
+    Expands and evaluates the rule the way ``evaluate_index`` does, but keeps the
+    per-coordinate outcomes that the rule's roll-up reduces to a skip count.
+    """
+    rules = load_rules(framework)
+    rule = next(rule for rule in rules.enforced if rule.rule_id == rule_id)
+    expression = parse_expression(rule.expression)
+    index = build_index(framework, c08_07=build_frame(cells))
+    expansion = expand_rule(
+        rule,
+        index,
+        needs_row_axis=expression.needs_row_axis,
+        needs_column_axis=expression.needs_column_axis,
+        needs_sheet_axis=expression.needs_sheet_axis,
+    )
+    outcomes = [
+        evaluate_at(
+            expression,
+            coordinate,
+            index,
+            missing_value=rule.missing_value,
+            arithmetic=rule.arithmetic,
+            always_execute=rule.always_execute,
+        )
+        for coordinate in expansion.coordinates
+    ]
+    return {
+        str(outcome.coordinate.row): (outcome.status, outcome.reason)
+        for outcome in outcomes
+        if outcome.status == STATUS_NOT_EVALUATED
+    }
+
+
+def test_boe_b0778_skips_the_empty_row_because_nothing_is_reported_there() -> None:
+    """The one skip the count test records is row 0180, and it is the guard's skip.
+
+    ``test_boe_b0778_records_the_empty_row_as_skipped_rather_than_dropping_it``
+    pins the count, and would pass whatever the reason: a row the index does not
+    hold, a non-finite operand, or an aggregation refused over no reported cell
+    would each be one skip too. This pins ``nothing_reported`` on the packaged
+    rule's own expression (an ``isum`` over the three share columns, ``dv:
+    emptySequence()``), at the coordinates the rule actually visits. The guard
+    itself is pinned on a hand-built stand-in below.
+    """
+    # Arrange: the frame the count test uses.
+    cells = {"0180": _shares(None, None, None), "0210": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    skipped = _packaged_rule_skips(FRAMEWORK_BASEL_3_1, "boe_b0778", cells)
+
+    # Assert
+    assert skipped == {"0180": (STATUS_NOT_EVALUATED, SKIP_NOTHING_REPORTED)}
+
+
+def test_eba_v09796_m_skips_the_empty_row_because_nothing_is_reported_there() -> None:
+    """The CRR twin: the one skip the count test records is row 0010, for the guard's reason."""
+    # Arrange: the frame the count test uses.
+    cells = {"0010": _shares(None, None, None), "0020": _shares(1.0, 0.0, 0.0)}
+
+    # Act
+    skipped = _packaged_rule_skips(FRAMEWORK_CRR, "v09796_m", cells)
+
+    # Assert
+    assert skipped == {"0010": (STATUS_NOT_EVALUATED, SKIP_NOTHING_REPORTED)}
+
+
+def test_boe_b0778_is_not_evaluated_where_no_row_reports_a_share() -> None:
+    """Every place skipped, so the RULE is not evaluated, and says why.
+
+    Where no place is evaluated the roll-up names the commonest reason its
+    places were skipped for; on the two-row frames above the rule has a verdict
+    and no reason at all. A roll-up that named a fixed reason here would pass
+    every count test in this file.
+    """
+    # Arrange: the only roll-out row reports no share.
+    cells = {"0180": _shares(None, None, None)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_BASEL_3_1, "boe_b0778", cells)
+
+    # Assert
+    assert (outcome.status, outcome.reason, outcome.evaluated, outcome.skipped) == (
+        STATUS_NOT_EVALUATED,
+        SKIP_NOTHING_REPORTED,
+        0,
+        1,
+    )
+
+
+def test_eba_v09796_m_is_not_evaluated_where_no_row_reports_a_share() -> None:
+    """The CRR twin: a C 08.07 reporting no share leaves the rule not evaluated, as nothing reported."""
+    # Arrange
+    cells = {"0010": _shares(None, None, None)}
+
+    # Act
+    outcome = _packaged_rule_outcome(FRAMEWORK_CRR, "v09796_m", cells)
+
+    # Assert
+    assert (outcome.status, outcome.reason, outcome.evaluated, outcome.skipped) == (
+        STATUS_NOT_EVALUATED,
+        SKIP_NOTHING_REPORTED,
+        0,
+        1,
+    )
 
 
 def _evaluate_on_blanks(expression: str, *, always_execute: bool) -> CoordinateOutcome:

@@ -18,8 +18,8 @@ What is pinned:
 - every unsatisfied evaluation is classified, beyond the five a result keeps;
 - a rule whose fingerprint is not the one the issue pinned is not labelled;
 - each effect labels only the result it is about, a rule the Bank deactivated
-  is told by the deny list and never labelled, and a withdrawn issue labels
-  nothing;
+  is told by the deny list and never labelled, whatever the issue's effect, and
+  a withdrawn issue labels nothing;
 - the report and the evidence carry the labels where their schemas say.
 
 References:
@@ -46,6 +46,8 @@ from rwa_filer.boe.engine import (
     REASON_DEACTIVATED_BY_PUBLISHER,
     REASON_NO_DATA,
     REASON_NOT_REPORTED,
+    REASON_UNKNOWN_TABLE,
+    REASON_UNSUPPORTED,
     STATUS_FAIL,
     STATUS_NOT_EVALUATED,
     STATUS_PASS,
@@ -369,6 +371,16 @@ def _outcome(status: str, reason: str = "", **counts: int) -> RuleResult:
         (EFFECT_NEVER_RUNS, _outcome(STATUS_NOT_EVALUATED, REASON_CLOSED_BY_FORMULA), True),
         (EFFECT_NEVER_RUNS, _outcome(STATUS_NOT_EVALUATED, REASON_NO_DATA), True),
         (EFFECT_NEVER_RUNS, _outcome(STATUS_NOT_EVALUATED, REASON_NOT_REPORTED), False),
+        # With the row above, every not-run reason outside NEVER_RUNS_REASONS
+        # is pinned unlabelled: the Bank's deny list, a table the taxonomy does
+        # not have, and grammar the engine does not implement.
+        (
+            EFFECT_NEVER_RUNS,
+            _outcome(STATUS_NOT_EVALUATED, REASON_DEACTIVATED_BY_PUBLISHER),
+            False,
+        ),
+        (EFFECT_NEVER_RUNS, _outcome(STATUS_NOT_EVALUATED, REASON_UNKNOWN_TABLE), False),
+        (EFFECT_NEVER_RUNS, _outcome(STATUS_NOT_EVALUATED, REASON_UNSUPPORTED), False),
         (EFFECT_NEVER_RUNS, _outcome(STATUS_FAIL, unsatisfied=1), False),
         (EFFECT_NO_RULE_EFFECT, _outcome(STATUS_FAIL, unsatisfied=1), False),
         (

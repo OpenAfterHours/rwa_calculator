@@ -103,6 +103,19 @@ END_STATE_RW = 2.50
 END_STATE_HIGHER_RISK_RW = 4.00
 EAD = 1_000_000.0
 
+#: A firm whose only IRB permission is slotting — an IRB Approach (Art. 143(2A)(a)).
+SLOTTING_ONLY = IRBPermissions(
+    permissions={ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING}}
+)
+
+#: A permission map that names classes but grants only the Standardised Approach.
+STANDARDISED_ONLY = IRBPermissions(
+    permissions={
+        ExposureClass.EQUITY: {ApproachType.SA},
+        ExposureClass.CORPORATE: {ApproachType.SA},
+    }
+)
+
 #: Rows that rule 4.2 moves: ordinary equity exposures under Art. 133(3).
 STANDARD_ROWS: dict[str, dict[str, Any]] = {
     "listed": {"equity_type": "listed", "is_exchange_traded": True},
@@ -288,7 +301,8 @@ class TestRule41FirmWithIrbPermission:
     Standardised permission; 4.6: the higher of the legacy Art. 155 weight and
     the 4.2 / 4.3 weight for equity it held under the IRB Approach) are not
     implemented, so it keeps the Art. 133 weights — which is the rule 4.9
-    election — and the run says so with a warning.
+    election — and the run says so with a warning. A map that grants only the
+    Standardised Approach is the negative control: it is no IRB permission.
     """
 
     def test_irb_firm_keeps_the_article_133_weights(self) -> None:
@@ -349,14 +363,9 @@ class TestRule41FirmWithIrbPermission:
         at 160% would understate it by 36% against the Art. 133 weight it keeps.
         """
         # Arrange
-        slotting_only = IRBPermissions(
-            permissions={
-                ExposureClass.SPECIALISED_LENDING: {ApproachType.SA, ApproachType.SLOTTING},
-            }
-        )
         config = dataclasses.replace(
             _config(date(2027, 6, 30), permission_mode=PermissionMode.IRB),
-            irb_permissions=slotting_only,
+            irb_permissions=SLOTTING_ONLY,
         )
 
         # Act
@@ -367,6 +376,71 @@ class TestRule41FirmWithIrbPermission:
         assert result["listed"]["risk_weight"] == pytest.approx(END_STATE_RW)
         assert result["listed"]["equity_transitional_approach"] is None
         assert len(warnings) == 1
+
+    def test_a_slotting_only_firm_that_made_the_rule_4_9_election_is_not_warned(self) -> None:
+        """A slotting-only firm's ``opt_out`` is the rule 4.9 election, and is honoured.
+
+        p.21, 4.4: rules 4.5 to 4.6 apply "to an institution which, on 31
+        December 2026, had permission to apply the Internal Ratings Based
+        Approach under Article 143 of CRR", which a slotting-only firm had; p.22,
+        4.9: such a firm "may choose to calculate [...] risk weights for equity
+        exposures in accordance with [...] Article 133, instead of in accordance
+        with the two approaches set out in 4.5 and 4.6". So it keeps 250% with
+        no transitional label, and is warned of nothing: not that it has failed
+        to elect (it has), nor that it elected without IRB permission (it had
+        one).
+
+        The empty warning list is the assertion that matters. Were ``opt_out``
+        honoured only for an F-IRB / A-IRB firm, this firm would be warned that
+        it had not elected while its weight and carriers stayed exactly as here.
+        """
+        # Arrange
+        config = dataclasses.replace(
+            _config(date(2027, 6, 30), permission_mode=PermissionMode.IRB, opt_out=True),
+            irb_permissions=SLOTTING_ONLY,
+        )
+
+        # Act
+        result = _branch(config)
+        warnings = _bundle_errors(config)
+
+        # Assert
+        assert result["listed"]["risk_weight"] == pytest.approx(END_STATE_RW)
+        assert result["listed"]["equity_transitional_approach"] is None
+        assert warnings == []
+
+    @pytest.mark.parametrize(
+        "mode", [PermissionMode.IRB, PermissionMode.STANDARDISED], ids=lambda m: m.name.lower()
+    )
+    def test_a_map_permitting_only_the_standardised_approach_is_not_irb_permission(
+        self, mode: PermissionMode
+    ) -> None:
+        """The negative control for rule 4.1's firm fact: what the map grants, not its shape.
+
+        p.20, 4.1 turns on "permission to use the Internal Ratings Based Approach
+        under Article 143 of CRR". A map that names equity and corporates but
+        grants each only the Standardised Approach grants no IRB Approach
+        (Art. 143(2A) lists slotting, F-IRB and A-IRB), so the firm is inside rule
+        4.1 and its listed equity takes the rule 4.2(1) 160% in 2027, labelled,
+        with no CFG003. Every other config in this file has an empty map, a
+        full-IRB map or a slotting map, so none of them can tell the derivation
+        from one keyed on the run being in IRB mode, or on the map being
+        non-empty. The IRB-mode case catches both; the Standardised-mode case
+        catches the second.
+        """
+        # Arrange
+        config = dataclasses.replace(
+            _config(date(2027, 6, 30), permission_mode=mode), irb_permissions=STANDARDISED_ONLY
+        )
+
+        # Act
+        result = _branch(config)
+        warnings = _bundle_errors(config)
+
+        # Assert
+        assert result["listed"]["risk_weight"] == pytest.approx(1.60)
+        assert result["listed"]["equity_transitional_approach"] == "sa_transitional"
+        assert warnings == []
 
     def test_irb_firm_that_made_the_rule_4_9_election_is_not_warned(self) -> None:
         # Arrange

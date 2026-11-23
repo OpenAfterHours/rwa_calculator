@@ -297,9 +297,7 @@ def test_no_eba_rule_is_always_execute() -> None:
     assert always == []
 
 
-def test_the_bank_runs_none_of_the_eba_treat_as_zero_rules_it_restates_where_nothing_is_reported() -> (
-    None
-):
+def test_the_banks_restated_eba_treat_as_zero_rules_are_defaulted_never_always_execute() -> None:
     """The Bank's own XBRL of the EBA's "treat as zero" rules is a fallback, never always-execute.
 
     The Bank's package carries 46 of the EBA's "treat as zero" rules under the
@@ -307,7 +305,10 @@ def test_the_bank_runs_none_of_the_eba_treat_as_zero_rules_it_restates_where_not
     marked "Always execute", and 45 give every reference a ``dv`` default, the
     Bank's spelling of XBRL ``@fallbackValue``. That is the publisher evidence
     behind ``test_no_eba_rule_is_always_execute``; it reads only the two raw
-    extracts, so it cannot drift with the catalogue it supports.
+    extracts, so it cannot drift with the catalogue it supports. It asserts the
+    extracts' structure, not how a rule runs: the run behaviour (a place where
+    nothing is reported is not evaluated) is pinned on the packaged boe_b0778
+    and v09796_m in ``validate/test_evaluation_semantics.py``.
     """
     # Arrange
     eba = {r["id"]: r for r in raw_extract(FRAMEWORK_CRR)["rules"]}

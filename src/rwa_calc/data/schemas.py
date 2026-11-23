@@ -928,7 +928,15 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     #     - "specialised_lending" → SA: CORPORATE (sub-type), IRB: SPECIALISED_LENDING
     #   Other items class (CRR Art. 112(q), Art. 134):
     #     - "other_cash"              → SA: OTHER, 0% RW (Art. 134(3) 2nd sentence)
-    #     - "other_gold"              → SA: OTHER, 0% RW (Art. 134(4))
+    #     - "other_gold"              → SA: OTHER, 0% RW (Art. 134(4)) — ONLY the
+    #       share of gold bullion held in own vaults or on an allocated basis
+    #       that is backed by bullion liabilities ("to the extent backed"; the
+    #       IRB twin Art. 156(1)(a) states the same condition). The condition is
+    #       read as binding both the own-vaults and the allocated limb.
+    #     - "other_gold_unbacked"     → SA: OTHER, 100% RW — the rest of the
+    #       holding, booked as a separate row against its own pseudo-
+    #       counterparty. Arts. 114-134 provide no calculation for it, so it
+    #       takes the Art. 113(5) 100% (IRB: Art. 156(1) 100%).
     #     - "other_items_in_collection" → SA: OTHER, 20% RW (Art. 134(3))
     #     - "other_tangible"          → SA: OTHER, 100% RW (Art. 134(1)/(2))
     #     - "other_residual_lease"    → SA: OTHER, 1/t × 100% RW (Art. 134(7))
@@ -2327,6 +2335,9 @@ VALID_ENTITY_TYPES = {
     "covered_bond",
     "other_cash",
     "other_gold",
+    # The unbacked share of a gold-bullion holding (Art. 134(4) gives 0% only "to
+    # the extent backed by bullion liabilities"); OTHER class, 100% residual.
+    "other_gold_unbacked",
     "other_items_in_collection",
     "other_tangible",
     "other_residual_lease",

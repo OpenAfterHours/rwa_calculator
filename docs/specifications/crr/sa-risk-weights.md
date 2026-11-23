@@ -1502,7 +1502,8 @@ Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
 | Item | Risk Weight | Reference |
 |------|-------------|-----------|
 | Cash and equivalent (notes, coins) | 0% | Art. 134(3) |
-| Gold bullion (held in own vaults or allocated) | 0% | Art. 134(4) |
+| Gold bullion held in own vaults or on an allocated basis, **only to the extent backed by bullion liabilities** (`other_gold`) | 0% | Art. 134(4) |
+| Gold bullion **not** backed by bullion liabilities (`other_gold_unbacked`) | 100% | Art. 113(5) — see below |
 | Items in course of collection | 20% | Art. 134(3) |
 | Repo-style transactions — RW of underlying asset | Asset RW | Art. 134(5) |
 | Nth-to-default basket credit derivatives (protection **sold**) | **NOT IMPLEMENTED** — see below | Art. 134(6) |
@@ -1566,6 +1567,54 @@ Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
     programme, not a risk-weight edit.
 | Residual value of leased assets | 1/t × 100% (t = remaining lease years, min 1) | Art. 134(7) |
 | All other | 100% | Art. 134(2) |
+
+!!! info "Art. 134(4) is conditional — book the unbacked share of a bullion holding separately (P1.288)"
+    The 0% is not a weight for gold. Verbatim, identical under both regimes
+    (PS1/26 Art. 134(4), `ps126app1.pdf` p.68, carrying `[Note: This rule
+    corresponds to Article 134 of CRR ...]`; CRR Art. 134(4)):
+
+    > "Gold bullion held in own vaults or on an allocated basis to the extent
+    > backed by bullion liabilities shall be assigned a 0% risk weight."
+
+    Arts. 114-134 give no weight for the rest of the holding, so it takes the
+    Art. 113(5) residual: *"Exposures for which no calculation is provided in
+    Articles 114 to 134 ... shall be assigned a risk weight of 100%"* (CRR
+    Art. 113(5) says the same of Section 2). The IRB twin states the same
+    condition with the 100% explicit — PS1/26 Art. 156(1)(a) / CRR Art. 156(a):
+    *"gold bullion held in own vault or on an allocated basis to the extent
+    backed by bullion liabilities, to which an institution shall assign a 0%
+    risk weight instead of a 100% risk weight"*.
+
+    **Input convention.** `entity_type` is a counterparty attribute, so a
+    holding is split at the backing line into two rows, each against its own
+    pseudo-counterparty: the backed share as `other_gold` (0%, read from the
+    cited pack entry `other_items_gold_rw`) and the remainder as
+    `other_gold_unbacked` (OTHER class, the `other_items_default_rw` 100%
+    residual). A GBP 5m holding of which 3m is backed by bullion liabilities is
+    therefore 3m at 0% plus 2m at 100% = **2m** RWEA. There is no per-row
+    backing-proportion column: a column whose null meant "fully backed" would
+    be an anti-conservative fill, and the row split already expresses the share
+    exactly.
+
+    **Reading of the condition.** "To the extent backed by bullion liabilities"
+    is read as binding **both** the own-vaults and the allocated limb. That is
+    the conservative reading; confining it to the allocated limb would lower
+    RWA and is not adopted without sourcing beyond the article text.
+
+    **Both regimes.** The rule and the pack value are regime-invariant (one
+    common-pack scalar; identical CRR and Basel 3.1 class maps), and the SA
+    ladder also supplies the Basel 3.1 output-floor SA-equivalent. Pinned by
+    `tests/unit/test_other_items_risk_weights.py::TestGoldBullionBackingSplit`.
+
+    **IRB scope.** No IRB permission set built by `IRBPermissions.full_irb()` /
+    `full_irb_b31()` covers the OTHER class, so for those firms OTHER rows are
+    SA-routed and reach the same 0% / 100% that Art. 156(1)(a) prescribes. A
+    `model_permissions` row naming the `other` class is NOT rejected, and it
+    routes OTHER rows — gold and cash included — into the IRB PD/LGD formula,
+    where Art. 156 is not implemented (measured: a 3m backed `other_gold` row
+    at PD 1% F-IRB comes out at about 111%, not 0%). That is a general Art. 156
+    gap across all other non-credit obligation assets, open and outside this
+    treatment.
 
 ## Export Credit Agency Assessments (CRR Art. 137 / Table 9)
 
@@ -1659,7 +1708,7 @@ table.
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100%, high-quality PF=80% — Done
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
-- **Other items** (Art. 134): Cash=0%, gold=0%, collection=20%, tangible=100% — Done
+- **Other items** (Art. 134): Cash=0%, gold=0% to the extent backed by bullion liabilities (unbacked share 100%, `other_gold_unbacked`), collection=20%, tangible=100% — Done
 - **Covered bonds** (Art. 129): CQS-based risk weights, eligibility criteria, unrated derivation, PRA deviation — Added
 - **Pre-2007 covered bond grandfathering** (Art. 129(6)): CRR carve-out from Art. 129(1)/(3) eligibility tests retained until maturity; PRA PS1/26 Art. 129(6) retains the carve-out but additionally requires Art. 129(7) disclosure conditions — Added
 - **RGLA/PSE/MDB/Int'l Org tables** (Art. 115-118): Missing from original spec — Added

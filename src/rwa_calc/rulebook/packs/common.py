@@ -477,7 +477,12 @@ ENTRIES: dict[str, RuleEntry] = {
     "other_items_gold_rw": ScalarParam(
         name="other_items_gold_rw",
         value=Decimal("0.00"),
-        citation=Citation("CRR", "134", "(4) gold bullion held in own vaults 0%"),
+        citation=Citation(
+            "CRR",
+            "134",
+            "(4) gold bullion held in own vaults or on an allocated basis, only to the "
+            "extent backed by bullion liabilities 0% (unbacked share: Art. 113(5) 100%)",
+        ),
     ),
     "other_items_collection_rw": ScalarParam(
         name="other_items_collection_rw",
@@ -829,6 +834,9 @@ ENTRIES: dict[str, RuleEntry] = {
             "covered_bond": ExposureClass.COVERED_BOND.value,
             "other_cash": ExposureClass.OTHER.value,
             "other_gold": ExposureClass.OTHER.value,
+            # Art. 112(1)(q): the unbacked share of a bullion holding is still an
+            # other item; it is the Art. 134(4) 0% it misses, not the class.
+            "other_gold_unbacked": ExposureClass.OTHER.value,
             "other_items_in_collection": ExposureClass.OTHER.value,
             "other_tangible": ExposureClass.OTHER.value,
             "other_residual_lease": ExposureClass.OTHER.value,
@@ -873,6 +881,8 @@ ENTRIES: dict[str, RuleEntry] = {
             "covered_bond": ExposureClass.COVERED_BOND.value,
             "other_cash": ExposureClass.OTHER.value,
             "other_gold": ExposureClass.OTHER.value,
+            # Art. 147(2)(g) other non-credit obligation assets; Art. 156(1) 100%.
+            "other_gold_unbacked": ExposureClass.OTHER.value,
             "other_items_in_collection": ExposureClass.OTHER.value,
             "other_tangible": ExposureClass.OTHER.value,
             "other_residual_lease": ExposureClass.OTHER.value,

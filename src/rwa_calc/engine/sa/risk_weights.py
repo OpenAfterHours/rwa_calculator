@@ -244,6 +244,8 @@ _SA_SHARED_RW: dict[str, float] = {
     "io": float(IO_ZERO_RW),
     # Other Items (Art. 134)
     "other_cash": scalar_value(_CRR_PACK.scalar_param("other_items_cash_rw")),
+    # Art. 134(4): the backed share of a gold-bullion holding only (P1.288).
+    "other_gold": scalar_value(_CRR_PACK.scalar_param("other_items_gold_rw")),
     "other_collection": scalar_value(_CRR_PACK.scalar_param("other_items_collection_rw")),
     "other_default": scalar_value(_CRR_PACK.scalar_param("other_items_default_rw")),
     # Regulatory retail — 75% flat (Art. 123 / CRE20.65)
@@ -1253,12 +1255,12 @@ def _apply_b31_risk_weight_overrides(
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
         .then(b31_unrated_cb_rw_expr(_SA_B31_RW["unrated_cb_default"]))
-        # Other Items (Art. 134): sub-type-specific risk weights.
-        .when(
-            (uc == "OTHER")
-            & (pl.col("cp_entity_type").fill_null("").is_in(["other_cash", "other_gold"]))
-        )
+        # Other Items (Art. 134): sub-type-specific risk weights. other_gold is
+        # the backed share only; other_gold_unbacked falls to the 100% residual.
+        .when((uc == "OTHER") & pl.col("cp_entity_type").eq_missing("other_cash"))
         .then(pl.lit(_SA_SHARED_RW["other_cash"]))
+        .when((uc == "OTHER") & pl.col("cp_entity_type").eq_missing("other_gold"))
+        .then(pl.lit(_SA_SHARED_RW["other_gold"]))
         .when(
             (uc == "OTHER")
             & (pl.col("cp_entity_type").fill_null("") == "other_items_in_collection")
@@ -1454,12 +1456,12 @@ def _apply_crr_risk_weight_overrides(
         # to the OTHER (residual) class at 100% under UK CRR. The 150% treatment
         # is re-introduced under PRA PS1/26 Basel 3.1 — see
         # _apply_b31_risk_weight_overrides.
-        # Other Items (Art. 134): sub-type-specific risk weights.
-        .when(
-            (uc == "OTHER")
-            & (pl.col("cp_entity_type").fill_null("").is_in(["other_cash", "other_gold"]))
-        )
+        # Other Items (Art. 134): sub-type-specific risk weights. other_gold is
+        # the backed share only; other_gold_unbacked falls to the 100% residual.
+        .when((uc == "OTHER") & pl.col("cp_entity_type").eq_missing("other_cash"))
         .then(pl.lit(_SA_SHARED_RW["other_cash"]))
+        .when((uc == "OTHER") & pl.col("cp_entity_type").eq_missing("other_gold"))
+        .then(pl.lit(_SA_SHARED_RW["other_gold"]))
         .when(
             (uc == "OTHER")
             & (pl.col("cp_entity_type").fill_null("") == "other_items_in_collection")

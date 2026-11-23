@@ -775,20 +775,37 @@ All qualifying retail exposures receive a flat **75%** risk weight.
 
 ### Payroll / Pension Loans (CRR Art. 123, CRR2)
 
-Introduced by CRR2 (Regulation (EU) 2019/876, amendment F68), CRR Art. 123 second subparagraph
-assigns a **35%** risk weight to loans granted to pensioners or employees with permanent contracts
-against unconditional transfer of salary or pension, subject to four conditions:
+Introduced by CRR2 (Regulation (EU) 2019/876, amendment F68), the final subparagraph of CRR
+Art. 123 assigns a **35%** risk weight to loans granted to pensioners or employees with permanent
+contracts against unconditional transfer of salary or pension, "provided that all the following
+conditions are met":
 
 - **(a)** unconditional payroll/pension deduction authorisation to the credit institution;
 - **(b)** insurance covering death, inability to work, unemployment, or salary/pension reduction;
 - **(c)** aggregate loan payments ≤ 20% of net monthly salary/pension;
-- **(d)** original maturity ≤ 10 years.
+- **(d)** "the maximum original maturity of the loan is equal to or less than ten years".
 
-!!! warning "Code Divergence — CRR Path"
-    The CRR code path (`sa/calculator.py`) does not implement the 35% payroll/pension treatment.
-    All CRR retail exposures receive the flat 75% weight regardless of the `is_payroll_loan` flag.
-    The `B31_RETAIL_PAYROLL_LOAN_RW` constant and `is_payroll_loan` check exist only in the Basel 3.1
-    branch. This is a known code gap — the 35% treatment should also apply under CRR (since CRR2).
+!!! note "Implementation — attestation plus a maturity contradiction check"
+    The 35% is gated on the caller-attested `is_payroll_loan` flag, which stands for all four
+    conditions; the engine has no input for (a)–(c). Condition (d) is the one the row's own data
+    can contradict, so `engine/sa/payroll_loan.py` withholds the 35% where **either** source shows
+    an original maturity over the cap (`retail_payroll_loan_max_original_maturity_years`):
+
+    - both `value_date` and `maturity_date` present, and `maturity_date` falls after
+      `value_date` plus the cap **on the calendar** — so a loan of exactly ten calendar years
+      keeps the 35%, and one of ten years and a day does not. The SA stage's derived
+      `original_maturity_years` (days / 365) is never compared with the cap: it puts every
+      exactly-ten-year term above 10.0;
+    - a supplied `original_maturity_years` above the cap (an explicit 10.0 meets it). Loan and
+      facility inputs reach the SA stage through their dates — the sealed stage edges before it
+      do not carry an input `original_maturity_years` — so this limb serves direct
+      `calculate_branch` callers. A payroll **facility** that gives only an explicit
+      `original_maturity_years` over ten, with no dates, therefore keeps the 35% (an open
+      residual).
+
+    Where neither source is present the attestation stands and the row keeps 35%. A row that
+    fails (d) takes the regulatory retail 75% (a row that fails the Art. 123 retail criteria
+    has already taken 100% before the payroll limb is reached).
 
 ### Basel 3.1 Retail Sub-Treatments (Art. 123)
 
@@ -1638,7 +1655,7 @@ table.
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Done
-- **Payroll/pension loans** (CRR Art. 123, CRR2 / PRA PS1/26 Art. 123(4)): 35% — Done (Basel 3.1 only; CRR code gap)
+- **Payroll/pension loans** (CRR Art. 123, CRR2 / PRA PS1/26 Art. 123(4)): 35% — Done (both regimes; (a)–(c) attested via `is_payroll_loan`, (d) withheld where the loan's own maturity data exceeds ten years)
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100%, high-quality PF=80% — Done
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done

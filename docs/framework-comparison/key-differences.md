@@ -1043,10 +1043,10 @@ forward unchanged to Basel 3.1. CRR Art. 123 second subparagraph → PRA PS1/26 
 Four conditions apply: unconditional salary/pension deduction, insurance coverage, payments
 ≤ 20% of net income, maturity ≤ 10 years.
 
-!!! warning "Code Divergence — CRR Path"
-    The CRR code path does not implement the 35% payroll/pension treatment — all CRR retail
-    exposures receive flat 75%. The `is_payroll_loan` flag is only checked in the Basel 3.1
-    branch. See [CRR SA Risk Weights spec](../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
+Both regimes take the 35% on the `is_payroll_loan` attestation and withhold it where the loan's
+own `value_date` and `maturity_date` show an original maturity over ten years (condition (d));
+without both dates the attestation stands. See
+[CRR SA Risk Weights spec](../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
 
 ### Currency Mismatch Multiplier (CRE20.76)
 

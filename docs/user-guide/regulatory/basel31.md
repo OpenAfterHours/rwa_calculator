@@ -454,9 +454,10 @@ Basel 3.1. The four qualifying conditions (unconditional salary/pension deductio
 payments ≤ 20% of net income, maturity ≤ 10 years) are carried forward unchanged from CRR
 Art. 123 second subparagraph to PRA PS1/26 Art. 123(4).
 
-!!! warning "Code Divergence — CRR Path"
-    The CRR code path applies flat 75% to all retail exposures. The `is_payroll_loan` flag is
-    only checked in the Basel 3.1 branch. See [CRR SA Risk Weights spec](../../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
+Both regimes take the 35% on the `is_payroll_loan` attestation and withhold it where the loan's
+own `value_date` and `maturity_date` show an original maturity over ten years (condition (d));
+without both dates the attestation stands. See
+[CRR SA Risk Weights spec](../../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
 
 #### Currency Mismatch Multiplier
 

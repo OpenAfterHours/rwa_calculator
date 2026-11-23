@@ -127,6 +127,11 @@ from rwa_calc.engine.sa.jurisdiction import (
     pse_jurisdiction_not_permitted_expr,
     pse_short_term_eligible_expr,
 )
+from rwa_calc.engine.sa.payroll_loan import (
+    PAYROLL_MATURITY_OVER_CAP_COL,
+    payroll_loan_35pct_expr,
+    payroll_maturity_over_cap_expr,
+)
 from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
 from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
 from rwa_calc.engine.sa.sovereign_derived import (
@@ -417,6 +422,7 @@ def apply_risk_weights(
         "_cqs_risk_weight",
         "_sovereign_rw",
         "risk_weight_rw",
+        PAYROLL_MATURITY_OVER_CAP_COL,
     ]
     return exposures.drop([c for c in temp_cols if c in schema_names])
 
@@ -555,7 +561,8 @@ def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 
     Covers the retail classes (uc contains "RETAIL"):
     - Transactor: 45% (Art. 123(3)(a)).
-    - Payroll/pension loans: 35% (Art. 123(4)).
+    - Payroll/pension loans: 35% (Art. 123(4)), unless the row's own maturity
+      data shows an original maturity over the (d) cap (``payroll_loan.py``).
     - Non-regulatory retail (fails Art. 123A criteria): 100% (Art. 123(3)(c)).
     - Regulatory retail (non-mortgage): 75% flat (Art. 123(3)(b)).
 
@@ -588,11 +595,12 @@ def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
             & qualifies
         )
         .then(pl.lit(_SA_B31_RW["qrre_transactor"]))
-        # Payroll/pension loans: 35% (Art. 123(4)). Ordering against the
+        # Payroll/pension loans: 35% (Art. 123(4)), withheld where the row's own
+        # maturity data fails (d) (engine/sa/payroll_loan.py). Ordering against the
         # transactor branch above is untouched here and audited by P1.350 —
         # Art. 123(3) opens "Subject to paragraph 4", which reads as payroll
         # outranking the whole paragraph-3 ladder rather than sitting inside it.
-        .when(uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False))
+        .when(uc.str.contains("RETAIL", literal=True) & payroll_loan_35pct_expr())
         .then(pl.lit(_SA_B31_RW["payroll"]))
         # Non-regulatory retail (fails Art. 123A criteria): 100%.
         .when(uc.str.contains("RETAIL", literal=True) & ~qualifies)
@@ -733,9 +741,10 @@ def _crr_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 
     Covers the regulatory retail class only (uc contains "RETAIL"):
     - Non-regulatory retail (fails qualifying criteria): 100% (Art. 123(c)).
-    - Payroll/pension loans: 35% (CRR Art. 123 second subparagraph, inserted
+    - Payroll/pension loans: 35% (CRR Art. 123 final subparagraph, inserted
       by CRR2 Reg. (EU) 2019/876 F68 — scalar identical to PRA PS1/26
-      Art. 123(4), reused from ``_SA_B31_RW``).
+      Art. 123(4), reused from ``_SA_B31_RW``), unless the row's own maturity
+      data shows an original maturity over the point (d) cap (``payroll_loan.py``).
     - Regulatory retail (non-mortgage): 75% flat (Art. 123).
 
     The SME-managed-as-retail branch stays in the parent override (it gates
@@ -749,11 +758,12 @@ def _crr_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
             & (pl.col("qualifies_as_retail").fill_null(False) == False)  # noqa: E712
         )
         .then(pl.lit(_SA_CRR_RW["non_reg_retail"]))
-        # Payroll/pension loans: 35% (CRR Art. 123 second subparagraph,
-        # inserted by CRR2 Reg. (EU) 2019/876 F68). Scalar identical to the
-        # Basel 3.1 payroll RW (PRA PS1/26 Art. 123(4)), so the same
-        # B31_RETAIL_PAYROLL_LOAN_RW constant is reused via _SA_B31_RW.
-        .when(uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False))
+        # Payroll/pension loans: 35% (CRR Art. 123 final subparagraph,
+        # inserted by CRR2 Reg. (EU) 2019/876 F68), withheld where the row's own
+        # maturity data fails point (d) (engine/sa/payroll_loan.py). Scalar
+        # identical to the Basel 3.1 payroll RW (PRA PS1/26 Art. 123(4)), so the
+        # same B31_RETAIL_PAYROLL_LOAN_RW constant is reused via _SA_B31_RW.
+        .when(uc.str.contains("RETAIL", literal=True) & payroll_loan_35pct_expr())
         .then(pl.lit(_SA_B31_RW["payroll"]))
         # Regulatory retail (non-mortgage): 75% flat.
         .when(uc.str.contains("RETAIL", literal=True))
@@ -959,7 +969,9 @@ def _prepare_risk_weight_lookup(
         pl.when(pl.col("original_maturity_years").is_null())
         .then(derived_original)
         .otherwise(pl.col("original_maturity_years"))
-        .alias("original_maturity_years")
+        .alias("original_maturity_years"),
+        # Art. 123 payroll condition (d), read from the PRE-back-fill columns.
+        payroll_maturity_over_cap_expr(resolved_pack),
     )
     schema = exposures.collect_schema()
 

@@ -1482,6 +1482,15 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.35"),
         citation=Citation("PS1/26", "123", "(4) payroll/pension loan 35%"),
     ),
+    # PS1/26 Art. 123(4)(d): the 35% above needs "the maximum original maturity of
+    # the loan is equal to or less than 10 years". INCLUSIVE bound, compared on the
+    # calendar (engine/sa/payroll_loan.py). Overrides the CRR entry of the same name
+    # (same value, CRR Art. 123 final subparagraph point (d)).
+    "retail_payroll_loan_max_original_maturity_years": ScalarParam(
+        name="retail_payroll_loan_max_original_maturity_years",
+        value=Decimal(10),
+        citation=Citation("PS1/26", "123", "(4)(d) payroll/pension loan original maturity <= 10y"),
+    ),
     "b31_retail_non_regulatory_rw": ScalarParam(
         name="b31_retail_non_regulatory_rw",
         value=Decimal("1.00"),

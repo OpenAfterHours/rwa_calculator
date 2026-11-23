@@ -1188,6 +1188,21 @@ progression.
     to PRA PS1/26 Art. 123(4). The four qualifying conditions (unconditional salary/pension
     deduction, insurance, payments ≤ 20% of net income, maturity ≤ 10 years) are identical.
 
+!!! note "Condition (d) is checked; (a)–(c) are attested"
+    Art. 123(4) applies the 35% "provided that all the following conditions are met", the last
+    being "(d) the maximum original maturity of the loan is equal to or less than 10 years". The
+    `is_payroll_loan` flag attests all four. For loan and facility input the engine checks (d)
+    from the row's dates only: it withholds the 35% where `value_date` and `maturity_date` are
+    both present and `maturity_date` falls after `value_date` plus ten calendar years, and keeps
+    it where either date is missing. A supplied `original_maturity_years` above 10 is honoured
+    only where that column reaches the SA stage — direct `calculate_branch` callers. Loan input
+    has no such column, and the facility input's `original_maturity_years` does not survive the
+    stage edges before SA, so **a payroll facility that gives only an explicit original
+    maturity over ten years, with no dates, keeps the 35%** (an open residual). A row that fails
+    (d) falls to the Art. 123(3) ladder: 45% for a qualifying transactor, 75% for other
+    regulatory retail, 100% where Art. 123A is not met. The same check applies under CRR; see
+    the [CRR SA spec](../crr/sa-risk-weights.md#payroll-pension-loans-crr-art-123-crr2).
+
 The retail threshold is changed from EUR 1m to **GBP 880,000** under PRA PS1/26 Art. 123(1)(b)(ii).
 
 ### Transactor Exposure Eligibility (Art. 123(3)(a), PRA Glossary)

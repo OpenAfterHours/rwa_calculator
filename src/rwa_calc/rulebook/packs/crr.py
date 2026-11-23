@@ -1497,6 +1497,18 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("1.00"),
         citation=Citation("CRR", "123", "non-regulatory retail 100%"),
     ),
+    # CRR Art. 123 final subparagraph (inserted by Reg. (EU) 2019/876), point (d):
+    # the payroll / pension loan 35% needs "the maximum original maturity of the
+    # loan is equal to or less than ten years". INCLUSIVE bound, compared on the
+    # calendar (engine/sa/payroll_loan.py), never on a days/365 year fraction.
+    # Overridden in packs/b31.py by the same value cited to PS1/26 Art. 123(4)(d).
+    "retail_payroll_loan_max_original_maturity_years": ScalarParam(
+        name="retail_payroll_loan_max_original_maturity_years",
+        value=Decimal(10),
+        citation=Citation(
+            "CRR", "123", "final subparagraph (d) payroll/pension loan original maturity <= 10y"
+        ),
+    ),
     "crr_defaulted_rw_high_provision": ScalarParam(
         name="crr_defaulted_rw_high_provision",
         value=Decimal("1.00"),

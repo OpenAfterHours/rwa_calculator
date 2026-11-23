@@ -1,4 +1,9 @@
 {
+  "rwa_calc.contracts.validation::_retail_corporate_supervisory_lgd_finding": [
+    "CRR Art. 151(7)",
+    "CRR Art. 164(1)",
+    "PS1/26, paragraph 164"
+  ],
   "rwa_calc.engine.aggregator._floor::apply_floor_with_impact": [
     "PS1/26, paragraph 92"
   ],
@@ -311,6 +316,10 @@
   "rwa_calc.engine.crm.haircuts::collateral_currency_mismatch_expr": [
     "CRR Art. 224",
     "PS1/26 Art. 230"
+  ],
+  "rwa_calc.engine.crm.haircuts::prior_claim_amount_expr": [
+    "CRR Art. 229",
+    "PS1/26 Art. 229"
   ],
   "rwa_calc.engine.crm.haircuts::with_derived_residual_maturity": [
     "CRR Art. 238",
@@ -697,6 +706,14 @@
   "rwa_calc.engine.sa.jurisdiction::pse_short_term_eligible_expr": [
     "CRR Art. 116(3)",
     "PS1/26, paragraph 116"
+  ],
+  "rwa_calc.engine.sa.payroll_loan::payroll_loan_35pct_expr": [
+    "CRR Art. 123",
+    "PS1/26, paragraph 123"
+  ],
+  "rwa_calc.engine.sa.payroll_loan::payroll_maturity_over_cap_expr": [
+    "CRR Art. 123",
+    "PS1/26, paragraph 123"
   ],
   "rwa_calc.engine.sa.rgla::is_rgla_sovereign_expr": [
     "CRR Art. 115",

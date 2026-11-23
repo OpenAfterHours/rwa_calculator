@@ -67,6 +67,7 @@ Key column: `entity_type`
 | `covered_bond` | `covered_bond` |
 | `other_cash` | `other` |
 | `other_gold` | `other` |
+| `other_gold_unbacked` | `other` |
 | `other_items_in_collection` | `other` |
 | `other_tangible` | `other` |
 | `other_residual_lease` | `other` |
@@ -108,6 +109,7 @@ Key column: `entity_type`
 | `covered_bond` | `covered_bond` |
 | `other_cash` | `other` |
 | `other_gold` | `other` |
+| `other_gold_unbacked` | `other` |
 | `other_items_in_collection` | `other` |
 | `other_tangible` | `other` |
 | `other_residual_lease` | `other` |

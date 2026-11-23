@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.34`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 223 entries, content hash `774ef42c3b8e15a7`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 256 entries, content hash `282c880fc41e4227`
+- **CRR** (`crr` @ 2026-01-01) — 224 entries, content hash `b33d26f9f5105c0b`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 257 entries, content hash `b9f2a7b1a4b96130`
 
 ## Regime features
 
@@ -188,6 +188,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `restructuring_exclusion_exposure_cap` | `0.60` | `0.60` | CRR Art. 233(2)(b) |
 | `restructuring_exclusion_haircut` | `0.40` | `0.40` | CRR Art. 233(2) |
 | `retail_commercial_re_portfolio_lgd_floor` | `0.15` | — | CRR Art. 164 |
+| `retail_payroll_loan_max_original_maturity_years` | `10` | `10` | CRR Art. 123 / PS1/26, paragraph 123 |
 | `retail_residential_re_portfolio_lgd_floor` | `0.10` | — | CRR Art. 164 |
 | `retail_risk_weight` | `0.75` | `0.75` | CRR Art. 123 |
 | `rgla_domestic_currency_rw` | `0.20` | `0.20` | CRR Art. 115 |
@@ -1154,6 +1155,7 @@ Key column: `entity_type`
 | `covered_bond` | `covered_bond` |
 | `other_cash` | `other` |
 | `other_gold` | `other` |
+| `other_gold_unbacked` | `other` |
 | `other_items_in_collection` | `other` |
 | `other_tangible` | `other` |
 | `other_residual_lease` | `other` |
@@ -1195,6 +1197,7 @@ Key column: `entity_type`
 | `covered_bond` | `covered_bond` |
 | `other_cash` | `other` |
 | `other_gold` | `other` |
+| `other_gold_unbacked` | `other` |
 | `other_items_in_collection` | `other` |
 | `other_tangible` | `other` |
 | `other_residual_lease` | `other` |

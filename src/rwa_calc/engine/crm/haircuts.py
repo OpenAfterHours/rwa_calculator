@@ -13,12 +13,17 @@ Key responsibilities:
 - Collateral residual maturity derived from ``maturity_date`` when not supplied
   (Art. 238(1))
 - Art. 227 zero-haircut conditions for repo-style transactions
+- Art. 229(1) claims ranking ahead on a property (``prior_charge_ltv``) deducted
+  from its haircut value, floored at zero: MV (1 - HC - Hfx) - P, which is CRR's
+  MV - P (property HC 0%, no Hfx) and PS1/26 Art. 229(1)(b)'s P / (1 - HC - Hfx)
+  reduction carried into the ES
 - Maturity mismatch adjustments (CRR Art. 237-238)
 - Art. 237(2) ineligibility: original maturity <1yr, 1-day M floor exposures
 
 References:
     CRR Art. 224: Supervisory haircuts (3 maturity bands)
     CRR Art. 227: Zero volatility adjustments for qualifying repos/SFTs
+    CRR Art. 229(1) / PS1/26 Art. 229(1)(b): property value net of prior claims
     CRR Art. 237: Maturity mismatch — eligibility conditions
     CRR Art. 238: Maturity mismatch — adjustment formula (CVAM)
     CRE22.52-53: Basel 3.1 supervisory haircuts (5 maturity bands, higher equity/long-dated)
@@ -36,7 +41,7 @@ from watchfire import cites
 
 from rwa_calc.contracts.errors import ERROR_MATURITY_MISMATCH, crm_warning
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.schemas import NON_FINANCIAL_COLLATERAL_TYPES
+from rwa_calc.data.schemas import NON_FINANCIAL_COLLATERAL_TYPES, REAL_ESTATE_COLLATERAL_TYPES
 from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.crm.eligibility import (
     credit_linked_note_ineligible_expr,
@@ -80,6 +85,10 @@ _HAIRCUT_OPTIONAL_COLUMNS: dict[str, ColumnSpec] = {
     "original_currency": ColumnSpec(pl.String, required=False),
     "maturity_date": ColumnSpec(pl.Date, required=False),
     "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    # Art. 229(1) claims ranking ahead on a property, as a share of its market
+    # value. Absent on the CCR engine's frame (engine/ccr/collateral.py); a null
+    # deducts nothing (``prior_claim_amount_expr``).
+    "prior_charge_ltv": ColumnSpec(pl.Float64, required=False),
 }
 
 
@@ -153,6 +162,10 @@ class HaircutCalculator:
 
         Expects exposure_currency and exposure_maturity columns to already be
         present on collateral (joined via _join_collateral_to_lookups before calling).
+
+        ``value_after_haircut`` is ``max(0, MV x (1 - HC - Hfx) - P)``, where P is a
+        property row's prior claims (``prior_claim_amount_expr``, CRR / PS1/26
+        Art. 229(1)) and 0 on every other row.
 
         Args:
             collateral: Collateral data with market values, exposure_currency, exposure_maturity
@@ -273,12 +286,19 @@ class HaircutCalculator:
         )
         collateral = collateral.with_columns([fx_expr.alias("fx_haircut")])
 
-        # Calculate adjusted value after haircuts
+        # Calculate adjusted value after haircuts, net of the Art. 229(1) claims that
+        # rank ahead on a property (``prior_claim_amount_expr``; 0 on every other row).
+        # PS1/26 Art. 229(1)(b) reduces the property value by P / (1 - HC - Hfx), so
+        # ES = MV (1 - HC - Hfx) - P, and a negative value is assigned zero. Under CRR
+        # the pack's property HC is 0% and Hfx is off for non-financial collateral, so
+        # the same expression is Art. 229(1)'s MV - P. Applied before the Art. 237-239
+        # maturity adjustment, which scales this value.
         collateral = collateral.with_columns(
             [
                 (
                     pl.col("market_value")
                     * (1.0 - pl.col("collateral_haircut") - pl.col("fx_haircut"))
+                    - prior_claim_amount_expr()
                 )
                 .clip(lower_bound=0.0)
                 .alias("value_after_haircut"),
@@ -331,7 +351,9 @@ class HaircutCalculator:
                         (pl.col("collateral_haircut") * 100).round(1).cast(pl.String),
                         pl.lit("%; Hfx="),
                         (pl.col("fx_haircut") * 100).round(1).cast(pl.String),
-                        pl.lit("%; Adj="),
+                        pl.lit("%; P="),
+                        prior_claim_amount_expr().round(0).cast(pl.String),
+                        pl.lit("; Adj="),
                         pl.col("value_after_haircut").round(0).cast(pl.String),
                     ]
                 ).alias("haircut_calculation"),
@@ -1073,6 +1095,53 @@ def collateral_denomination_expr() -> pl.Expr:
     """The collateral's own currency: ``original_currency`` (pre-FX-conversion),
     else ``currency`` per row. Null when the row states neither."""
     return pl.coalesce("original_currency", "currency")
+
+
+@cites("CRR Art. 229")
+@cites("PS1/26 Art. 229")
+def prior_claim_amount_expr() -> pl.Expr:
+    """P — the claims ranking ahead of the institution's on a property, in money.
+
+    ``prior_charge_ltv`` x ``market_value`` (the input is a share of the property
+    value, as the SA Art. 124C(3) LTV reads it) on a real-estate row; 0 on every
+    other row, on a null ``prior_charge_ltv`` (no prior claim reported) and when a
+    caller's frame carries no such column (``_HAIRCUT_OPTIONAL_COLUMNS`` injects a
+    typed null). A negative input — outside the column's domain, which the input
+    gate reports — deducts nothing rather than adding value.
+
+    A real-estate row is any case-insensitive ``REAL_ESTATE_COLLATERAL_TYPES``
+    spelling: the set ``collateral_category_expr`` files under the real-estate
+    category, which carries the row into ``collateral_re_value``,
+    ``crm_alloc_real_estate`` and the C* test. It is deliberately not the literal
+    ``"real_estate"`` that the SA LTV derivation (``engine/hierarchy/re_ltv.py``)
+    reads, which would leave a ``"CRE"`` pledge in that pool at its full value. On a
+    row valued by ``pledge_percentage`` alone, ``market_value`` is the pledged amount
+    the CRM processor resolves (``pledge_percentage`` x the beneficiary's EAD), so P
+    is read against that; the SA LTV derivation has no counterpart, as it ignores a
+    property without a ``market_value``.
+
+    ``apply_haircuts`` subtracts it from the haircut value: CRR Art. 229(1) values
+    the property net of "any prior claims", and PS1/26 Art. 229(1)(b) reduces it by
+    P / (1 - HC - Hfx), "P = total value of all claims ranking higher than the
+    institution's claim", which nets to MV (1 - HC - Hfx) - P on the ES.
+
+    The whole of ``prior_charge_ltv`` is taken as P. The input covers prior AND
+    pari-passu claims (Art. 124C(3)) in one figure, so the PS1/26 Art. 229(1)(c)
+    pari-passu limb — keep the institution's proportion of what remains — is not
+    applied. Deducting a pari-passu claim Q in full never recognises more than that
+    limb (for a loan; an exposure-side haircut HE is not considered): with R the
+    haircut value and E the institution's claim, R - Q is at most R x E / (E + Q)
+    whenever R <= E + Q, and above that both exceed E, the most ES can be. CRR
+    Art. 229(1) names prior claims only, so there the deduction of a pari-passu claim
+    is conservative outright. Both hold until the input is split into prior,
+    pari-passu and own-share amounts (P1.449).
+    """
+    is_property = pl.col("collateral_type").str.to_lowercase().is_in(REAL_ESTATE_COLLATERAL_TYPES)
+    return (
+        pl.when(is_property & pl.col("prior_charge_ltv").is_not_null())
+        .then(pl.col("prior_charge_ltv").clip(lower_bound=0.0) * pl.col("market_value"))
+        .otherwise(pl.lit(0.0))
+    )
 
 
 def _resolve_pack_for_haircut(

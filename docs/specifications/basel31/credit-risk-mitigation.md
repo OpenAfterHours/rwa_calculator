@@ -21,6 +21,8 @@ and IRB parameter substitution replacing double default.
 | FR-8.7 | Unfunded credit protection transitional (Rule 4.11) | P2 | Not Implemented |
 | FR-8.8 | Art. 123B currency mismatch 1.5x multiplier (retail/RRE) | P1 | Partial (flag only; auto-detection and 90% hedge test not implemented) |
 | FR-8.9 | Art. 232(3) life insurance derivation table with B31 input tiers (30% / 65% / 135%) | P1 | Done |
+| FR-8.10 | Art. 229(1)(b) prior claims on immovable property: `P / (1 − HC − Hfx)` reduction, negative value → 0 | P0 | Done |
+| FR-8.11 | Art. 229(1)(c) pari-passu claims: institution's proportion of the remaining value | P1 | Not Implemented (needs the P1.449 input split; the whole prior/pari-passu input is deducted as P, conservatively) |
 
 ---
 
@@ -226,6 +228,58 @@ For F-IRB exposures, supervisory LGD values for secured exposures:
 
 See [F-IRB Specification](firb-calculation.md) for full LGD details including unsecured
 values and the blended LGD formula.
+
+### Prior Claims on Immovable Property (Art. 229(1)(b))
+
+PS1/26 Art. 229 applies to the Foundation Collateral Method (A1). Paragraph 1 reduces
+the property's market value "(b) to take account of any claims on the immovable
+property with priority over the institution's claim. This shall be done by reducing
+the value of the property by: P / (1 − HC − Hfx) where: P = total value of all claims
+ranking higher than the institution's claim; HC and Hfx are as determined pursuant to
+Article 230", and "Where the calculations under this paragraph 1 result in a negative
+value, the institution shall assign zero value to the collateral." Carried into the
+Art. 230(1) ES, the gross-up cancels against the haircuts:
+
+```
+ES = (MV − P / (1 − HC − Hfx)) × (1 − HC − Hfx) × MM = max(0, MV × (1 − HC − Hfx) − P) × MM
+P  = prior_charge_ltv × MV
+```
+
+`engine/crm/haircuts.py::apply_haircuts` deducts P (`prior_claim_amount_expr`) from
+`value_after_haircut`, before the Art. 237-239 maturity factor `MM`. The same
+expression gives CRR Art. 229(1)'s `MV − P` (the CRR pack's property HC is 0% and CRR
+takes no Hfx on non-financial collateral), so no regime Feature is needed. It reaches
+the F-IRB LGD\*, the A-IRB LGD input floors (Art. 161(5)(b) / 164(4)(c) compute LGD\*
+"using the Foundation Collateral Method"), and the Foundation-limb carrier
+`collateral_re_value` (OF 08.01 col 0190, the adjusted `Ci`); the AIRB market-value
+carrier `collateral_re_market_value` stays the gross property value. A null or zero
+`prior_charge_ltv` deducts nothing. Only real-estate rows read it: any
+`REAL_ESTATE_COLLATERAL_TYPES` spelling in any letter case (`real_estate`,
+`residential_property`, `CRE`, ...), the set `collateral_category_expr` files as real
+estate.
+
+| Prior charge | ES (10m loan, 10m property, HC 40%) | LGD\* (LGDU 40%, LGDS 20%) |
+|---|---|---|
+| 0% | 6m | 28% |
+| 30% | 6m − 3m = 3m | 34% |
+| 60% | 6m − 6m = 0 | 40% |
+| 120% | negative → 0 | 40% |
+
+The 30% row is the one that separates `MV × (1 − HC) − P` (3m) from the wrong
+`(MV − P) × (1 − HC)` (4.2m).
+
+**Pari-passu claims, Art. 229(1)(c), are not separately modelled.** The limb keeps
+"only the proportion of the remaining value that is attributable to the institution",
+but `prior_charge_ltv` carries prior and pari-passu claims in one figure and there is
+no own-share input, so the whole figure is deducted as P. That never recognises more
+than limb (c) would: with `R` the haircut value, `E` the institution's claim and `Q`
+the pari-passu claims, `R − Q ≤ R × E / (E + Q)` whenever `R ≤ E + Q`, and above that
+both exceed `E`, the most ES can be for a loan (no exposure haircut, `HE = 0`). The
+input split is P1.449. Pinned by
+`tests/acceptance/basel31/test_p1_415_art_229_firb_prior_claims.py` (F-IRB LGD\*, a
+synonym spelling, P before the maturity factor, and the A-IRB input floor: a 10m
+property behind a 10m A-IRB corporate loan floors at 16% with no prior charge, 20.5%
+at a 30% prior charge and 25% at 60%) and `tests/unit/crm/test_p1_415_fcm_prior_claims.py`.
 
 ---
 

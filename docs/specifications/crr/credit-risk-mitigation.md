@@ -19,6 +19,7 @@ Collateral haircuts, overcollateralisation, FX mismatch, maturity mismatch, and 
 | FR-2.5 | Guarantee substitution | P0 | Done |
 | FR-2.6 | Cross-approach CCF substitution | P0 | Done |
 | FR-2.7 | CCF=100% override for CRM exposure value (Art. 223(4)) | P0 | Done |
+| FR-2.8 | Immovable-property collateral valued net of prior claims (Art. 229(1)) | P0 | Done |
 
 ---
 
@@ -452,6 +453,44 @@ The code implements overcollateralisation ratios (1.25x receivables, 1.4x RE/phy
 | Life insurance | 1.00 | 0% |
 
 Regulatory basis: These ratios appear in CRR Art. 230(2) (conditions for non-financial collateral recognition) and are preserved under PRA PS1/26. They are not the same as the supervisory volatility haircuts in Art. 224.
+
+### Prior Claims on Immovable Property (CRR Art. 229(1))
+
+CRR Art. 229(1): "The value of the collateral shall be the market value or mortgage
+lending value reduced as appropriate to reflect the results of the monitoring required
+under Article 208(3) and to take account of any prior claims on the immovable
+property." So the property's `C` is its market value less the claims that rank ahead
+of the institution's, **before** the C\* test and the C\*\* split:
+
+```
+C = max(0, MV - P)        P = prior_charge_ltv × MV
+```
+
+`prior_charge_ltv` is the collateral row's prior-charge input (a share of the property
+value — the same input the SA real-estate LTV derivation adds in). The deduction is made in
+`engine/crm/haircuts.py::apply_haircuts` (`prior_claim_amount_expr`), on
+`value_after_haircut`, so it reaches the Art. 231 waterfall, the C\* test and the
+Foundation-limb carrier `collateral_re_value` (COREP C 08.01 col 0190 — Annex II:
+"values shall be determined in accordance with ... Article 229 CRR"). The AIRB
+market-value carrier `collateral_re_market_value` stays the gross property value.
+A null or zero `prior_charge_ltv` deducts nothing. Only real-estate rows read it: any
+`REAL_ESTATE_COLLATERAL_TYPES` spelling in any letter case (`real_estate`,
+`residential_property`, `CRE`, ...), the set `collateral_category_expr` files as real
+estate and so carries into the C\* test. A maturity mismatch scales the net value,
+`C = (MV − P) × MM` (Art. 237-239), because Art. 229(1) sets the value it applies to.
+
+| Prior charge | C (10m loan, 10m property) | Outcome | LGD\* |
+|---|---|---|---|
+| 0% | 10m | ES = 10m / 1.4 | 37.86% |
+| 30% | 7m | ES = 7m / 1.4 = 5m | 40.00% |
+| 60% | 4m | ES = 4m / 1.4 | 42.14% |
+| 80% | 2m | C/E = 20% < C\* 30% — fully unsecured, `CRM022` | 45.00% |
+
+The input carries prior **and** pari-passu claims in one figure, and CRR Art. 229(1)
+names prior claims only, so deducting a pari-passu claim in full is conservative. A
+split of the input into prior, pari-passu and own-share amounts is P1.449. Pinned by
+`tests/acceptance/crr/test_p1_415_art_229_firb_prior_claims.py` and
+`tests/unit/crm/test_p1_415_fcm_prior_claims.py`.
 
 ### Minimum Coverage Requirements
 

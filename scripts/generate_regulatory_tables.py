@@ -27,6 +27,18 @@ byte-identical and ``tests/contracts/test_docs_freshness.py`` can gate
 freshness by simple string equality. A pack edit that skips regeneration turns
 that test red.
 
+A stale skill target is reported by entry, not only by file. One region,
+``regime-divergence``, has computed membership (every simple-shape entry carried
+by both packs whose values differ), so a routine new on/off ``Feature`` restages
+a ``.claude/skills`` file its author never named. Where ``.claude/`` cannot be
+written, that used to surface as a freshness failure naming only the file. Both
+``--check`` and a write now list, per stale region, each entry that entered,
+left or changed, mark a computed-membership region as such, and say that
+``scripts/sync_agent_skills.py`` has to follow, because this script never
+touches the ``.agents/skills`` mirror (IMPLEMENTATION_PLAN.md P5.57). A write
+prints that report before it writes anything, so a refused ``.claude/`` write
+still shows it.
+
 Usage:
     uv run python scripts/generate_regulatory_tables.py           # rewrite targets
     uv run python scripts/generate_regulatory_tables.py --check   # exit 1 if stale
@@ -46,7 +58,7 @@ import tomllib
 from dataclasses import dataclass, fields, is_dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -65,6 +77,9 @@ from rwa_calc.rulebook.model import (  # noqa: E402
     Schedule,
 )
 from rwa_calc.rulebook.resolve import ResolvedRulepack, resolve  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 OUTPUT_PATH = REPO_ROOT / "docs" / "data-model" / "regulatory-tables.md"
 
@@ -117,6 +132,13 @@ SIMPLE_SHAPES: tuple[type, ...] = (Feature, ScalarParam, IntParam, DateParam)
 
 BEGIN_MARKER = re.compile(r"^<!-- BEGIN GENERATED: ([a-z0-9-]+) -->$")
 END_MARKER = re.compile(r"^<!-- END GENERATED: ([a-z0-9-]+) -->$")
+
+#: The header of every simple-shape comparison table. The stale-region
+#: diagnostic reads a region back by these three line forms, so the render and
+#: the reader share them rather than each spelling its own.
+SIMPLE_TABLE_HEADER = "| Name | CRR | Basel 3.1 | Citation |"
+SIMPLE_ROW = re.compile(r"^\| `([^`]+)` \|")
+STRUCTURED_HEADING = re.compile(r"^### `([^`]+)`$")
 
 
 @dataclass(frozen=True)
@@ -650,9 +672,14 @@ TARGET_PATHS: tuple[Path, ...] = (
 )
 
 
+def resolve_packs() -> dict[str, ResolvedRulepack]:
+    """Resolve every regime at its canonical date — the one input every render reads."""
+    return {regime: resolve(regime, on) for regime, on in REGIME_DATES}
+
+
 def render() -> str:
     """Render the whole page from freshly resolved packs."""
-    packs = {regime: resolve(regime, on) for regime, on in REGIME_DATES}
+    packs = resolve_packs()
     lines = _header(packs)
     for title, shape, blurb in SECTIONS:
         lines.extend(_render_section(title, shape, blurb, packs))
@@ -666,7 +693,7 @@ def render_targets() -> dict[Path, str]:
     One resolve pass feeds the page and all skill fragments, so a fragment can
     never disagree with the page it was rendered alongside.
     """
-    packs = {regime: resolve(regime, on) for regime, on in REGIME_DATES}
+    packs = resolve_packs()
     targets: dict[Path, str] = {OUTPUT_PATH: render()}
     for path, fragments in _fragments_by_path().items():
         bodies = {f.fragment_id: _render_fragment_body(f, packs) for f in fragments}
@@ -695,10 +722,20 @@ def main() -> int:
     # TARGET_PATHS and the content from `targets` — never both from the mapping;
     # see TARGET_PATHS for why that separation is load-bearing.
     stale: list[Path] = []
+    committed: dict[Path, str] = {}
     for path in TARGET_PATHS:
-        committed = path.read_text(encoding="utf-8") if path.exists() else ""
-        if committed != targets[path]:
+        committed[path] = path.read_text(encoding="utf-8") if path.exists() else ""
+        if committed[path] != targets[path]:
             stale.append(path)
+
+    # Name what moved, not only where: a stale skill region may have been
+    # restaged by an entry its author never named (P5.57). Worked out only when
+    # a skill target is stale, so a fresh run pays nothing for it.
+    drift = (
+        "".join(f"{line}\n" for line in format_drift(skill_drift(committed, resolve_packs())))
+        if any(path != OUTPUT_PATH for path in stale)
+        else ""
+    )
 
     if args.check:
         if stale:
@@ -708,6 +745,7 @@ def main() -> int:
                 f"{listing}\n"
                 "Regenerate (never hand-edit inside the GENERATED markers):\n"
                 "  uv run python scripts/generate_regulatory_tables.py\n"
+                f"{drift}"
             )
             return 1
         return 0
@@ -728,11 +766,116 @@ def main() -> int:
     # sink. Behaviour is identical — `write_text` is exactly this open-and-
     # write. This is a false-positive remedy, not a vulnerability fix; see
     # TARGET_PATHS for the flow and for the two fixes that misread it.
+    #
+    # The drift report goes out before the first write, not after the last.
+    # Where `.claude/` cannot be written, the first skill target's open raises,
+    # and a report queued behind the loop never reaches the author it exists
+    # for (P5.57).
+    sys.stderr.write(drift)
     for path in stale:
         with path.open("w", encoding="utf-8") as handle:
             handle.write(targets[path])
     sys.stderr.write(f"wrote {len(stale)} of {len(TARGET_PATHS)} target(s)\n")
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Stale-target diagnostics — which entry moved a skill region
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FragmentDrift:
+    """What moved inside one skill region between the committed file and a fresh render.
+
+    Entry names are read off both sides by the same reader (``_entry_blocks``):
+    a simple-shape entry is its comparison row, a structured entry the block
+    under its ``### `name``` heading. ``entered`` and ``changed`` follow the
+    fresh render's order, ``left`` the committed region's.
+
+    ``region_differs`` with all three tuples empty means the entries are the
+    same and only their order or the surrounding layout moved.
+    """
+
+    fragment: Fragment
+    entered: tuple[str, ...]
+    left: tuple[str, ...]
+    changed: tuple[str, ...]
+    region_differs: bool
+
+    @property
+    def computed_membership(self) -> bool:
+        """True when the region lists no entries and is filled by ``_divergent_names``."""
+        return not self.fragment.entries
+
+
+def fragment_drift(
+    fragment: Fragment, committed: str, packs: dict[str, ResolvedRulepack]
+) -> FragmentDrift:
+    """Compare one fragment's committed region with a fresh render, by entry.
+
+    ``committed`` is the full text of the fragment's file as it stands; nothing
+    is read or written here, so a test can hand in packs carrying a probe entry
+    and the committed text, and see exactly what ``--check`` would report.
+    """
+    before_lines = _committed_region(committed, fragment.fragment_id)
+    after_lines = _render_fragment_body(fragment, packs)
+    before = _entry_blocks(before_lines)
+    after = _entry_blocks(after_lines)
+    return FragmentDrift(
+        fragment=fragment,
+        entered=tuple(name for name in after if name not in before),
+        left=tuple(name for name in before if name not in after),
+        changed=tuple(name for name in after if name in before and after[name] != before[name]),
+        region_differs=before_lines != after_lines,
+    )
+
+
+def skill_drift(
+    committed: Mapping[Path, str], packs: dict[str, ResolvedRulepack]
+) -> list[FragmentDrift]:
+    """The drift of every skill region that differs from a fresh render, in spec order.
+
+    ``committed`` maps each target path to its text as it stands (a missing
+    path reads as an empty file, so its regions' entries all count as entered).
+    """
+    drifts = [
+        fragment_drift(fragment, committed.get(fragment.path, ""), packs) for fragment in FRAGMENTS
+    ]
+    return [drift for drift in drifts if drift.region_differs]
+
+
+def format_drift(drifts: Iterable[FragmentDrift]) -> list[str]:
+    """Render the drift report ``--check`` appends to its listing and a write prints first.
+
+    Empty when nothing drifted, so the mirror reminder fires only when a skill
+    region actually moved.
+    """
+    lines: list[str] = []
+    for drift in drifts:
+        rel = drift.fragment.path.relative_to(REPO_ROOT).as_posix()
+        lines.append(f"  {rel}, region `{drift.fragment.fragment_id}`")
+        if drift.computed_membership:
+            lines.extend(
+                (
+                    "    computed membership: holds every simple-shape entry carried by both",
+                    "    packs whose CRR and Basel 3.1 values differ, so entries join and leave",
+                    "    it with no author action",
+                )
+            )
+        lines.extend(f"    + `{name}` entered" for name in drift.entered)
+        lines.extend(f"    - `{name}` left" for name in drift.left)
+        lines.extend(f"    ~ `{name}` changed" for name in drift.changed)
+        if not (drift.entered or drift.left or drift.changed):
+            lines.append("    (no entry entered, left or changed - only order or layout moved)")
+    if not lines:
+        return []
+    return [
+        "What moved inside each stale skill region (committed -> fresh render):",
+        *lines,
+        "The .agents/skills mirror must follow; this generator does not refresh it:",
+        "  uv run python scripts/sync_agent_skills.py",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -756,7 +899,7 @@ def _validate_fragment_spec() -> None:
     file, a marker in the file that no fragment fills, and an entry name that
     resolves in neither pack — the signature of a renamed pack entry.
     """
-    packs = {regime: resolve(regime, on) for regime, on in REGIME_DATES}
+    packs = resolve_packs()
     known = {name for pack in packs.values() for name in pack.entries}
     problems: list[str] = []
 
@@ -862,6 +1005,65 @@ def _splice(path: Path, bodies: dict[str, list[str]]) -> str:
     return "\n".join(out) + "\n"
 
 
+def _committed_region(text: str, fragment_id: str) -> list[str]:
+    """The lines strictly between one fragment's BEGIN and END markers in ``text``.
+
+    A missing BEGIN marker yields no lines; ``_validate_fragment_spec`` reports
+    that case itself before any diagnostic runs.
+    """
+    region: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not inside:
+            match = BEGIN_MARKER.match(stripped)
+            inside = match is not None and match.group(1) == fragment_id
+            continue
+        match = END_MARKER.match(stripped)
+        if match is not None and match.group(1) == fragment_id:
+            break
+        region.append(line)
+    return region
+
+
+def _entry_blocks(lines: list[str]) -> dict[str, tuple[str, ...]]:
+    """Each entry's rendered lines in a region body, keyed by entry name.
+
+    A simple-shape entry is its row of a comparison table, recognised only
+    between a ``SIMPLE_TABLE_HEADER`` and the blank line that closes the table,
+    because a structured entry's own key/value rows also open with a backticked
+    name. A structured entry is everything under its ``### `name``` heading up
+    to the next heading or comparison table, trailing blank lines dropped.
+    """
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    in_simple_table = False
+    for line in lines:
+        if line == SIMPLE_TABLE_HEADER:
+            current, in_simple_table = None, True
+            continue
+        if heading := STRUCTURED_HEADING.match(line):
+            current, in_simple_table = heading.group(1), False
+            blocks[current] = []
+            continue
+        if in_simple_table:
+            if row := SIMPLE_ROW.match(line):
+                blocks[row.group(1)] = [line]
+            elif not line.strip():
+                in_simple_table = False
+            continue
+        if current is not None:
+            blocks[current].append(line)
+    return {name: tuple(_without_blank_tail(block)) for name, block in blocks.items()}
+
+
+def _without_blank_tail(lines: list[str]) -> list[str]:
+    end = len(lines)
+    while end and not lines[end - 1].strip():
+        end -= 1
+    return lines[:end]
+
+
 # ---------------------------------------------------------------------------
 # Private helpers — page assembly
 # ---------------------------------------------------------------------------
@@ -930,7 +1132,7 @@ def _render_simple_table(
     `ScalarParam` it gates, and splitting those apart helps no reader.
     """
     lines = [
-        "| Name | CRR | Basel 3.1 | Citation |",
+        SIMPLE_TABLE_HEADER,
         "|---|---|---|---|",
     ]
     for name in names:

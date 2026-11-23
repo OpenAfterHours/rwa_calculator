@@ -10,6 +10,7 @@ The project includes several scripts for setup, deployment, test data generation
 | `scripts/extract_validation_rules.py` | Re-extract the committed validation-rule JSON from those workbooks | After refreshing the workbooks |
 | `scripts/deploy.py` | Version bump + PyPI publish | Cutting a release |
 | `scripts/generate_dependency_graph.py` | Regenerate the module dependency graph docs page | After structural refactors |
+| `scripts/generate_regulatory_tables.py` | Regenerate the regulatory-tables page and the skill value fragments from the rulepacks | After any rulepack change |
 | `scripts/arch_check.py` | The numbered architectural invariants — the project's main structural gate | Every commit (pre-commit hook) and in CI |
 | `scripts/validator_reachability.py` | Census of which contracts-layer guards production can actually reach | When draining an `arch_check` check 20 failure |
 | `scripts/check_parked_registers.py` | Shrink-only ratchet over the declared registers of parked findings | Runs in-suite on every pytest run; by hand when adding or draining a known disagreement |
@@ -187,6 +188,33 @@ uv run python scripts/generate_dependency_graph.py
 uv run curfew show --mermaid                       # full module graph to stdout
 uv run curfew report rwa_calc.engine.classify  # one module's deps + dependents
 ```
+
+### `scripts/generate_regulatory_tables.py` — Regenerate the pack-derived tables
+
+Resolves both rulepacks and renders `docs/data-model/regulatory-tables.md` plus the `<!-- BEGIN/END GENERATED -->` regions inside the `basel31` and `crr` skill reference files under `.claude/skills/`. `tests/contracts/test_docs_freshness.py` runs it with `--check` and fails on any target that differs from a fresh render. It also runs on every release, because the page carries the package version.
+
+```bash
+uv run python scripts/generate_regulatory_tables.py           # rewrite stale targets
+uv run python scripts/generate_regulatory_tables.py --check   # exit 1 if any is stale
+uv run python scripts/sync_agent_skills.py                    # then refresh the .agents/skills mirror
+```
+
+Most skill regions list their entries explicitly in the script's `FRAGMENTS` spec, so they move only when a named entry or the spec itself changes. One does not: `regime-divergence` in `basel31/references/what-changed.md` holds every simple-shape entry (`Feature`, `ScalarParam`, `IntParam`, `DateParam`) that both packs carry with different values. A new on/off `Feature` therefore joins it with no author action, and so does any existing entry whose two values start to differ. When a skill region is stale, both `--check` and a write list what moved in it, entry by entry. A write prints that list before it writes anything, so it still appears when `.claude/` cannot be written and the write fails. The `--check` output is what the freshness test shows when it fails:
+
+```text
+What moved inside each stale skill region (committed -> fresh render):
+  .claude/skills/basel31/references/what-changed.md, region `regime-divergence`
+    computed membership: holds every simple-shape entry carried by both
+    packs whose CRR and Basel 3.1 values differ, so entries join and leave
+    it with no author action
+    + `new_feature_applies` entered
+  .claude/skills/crr/references/sa-risk-weights.md, region `crr-sa-public-sector`
+    ~ `mdb_risk_weights_table_2b` changed
+The .agents/skills mirror must follow; this generator does not refresh it:
+  uv run python scripts/sync_agent_skills.py
+```
+
+`-` marks an entry that left a region. A region whose entries only changed places, or whose layout moved, is still listed, with `(no entry entered, left or changed - only order or layout moved)` under it. A structured entry (`LookupTable`, `BandedTable`, `FormulaParams` and the like) renders its citation note on its own line, so a note-only edit moves its region. A simple-shape entry renders no note, so the same edit moves nothing.
 
 ---
 

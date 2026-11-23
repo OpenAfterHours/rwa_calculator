@@ -18,6 +18,8 @@ Pipeline position:
 References:
     - CRR/PS1-26 Art. 194(4): correlation / connected-issuer ineligibility.
     - BCBS CRE22: own-issued securities expressly ineligible.
+    - CRR Art. 223(2) / CRR Art. 224: a recognised bond's post-haircut value at
+      the Art. 224(2)(a) 20-day secured-lending liquidation period.
     - IMPLEMENTATION_PLAN.md: P1.270.
 """
 
@@ -40,6 +42,20 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_OWN_ISSUE_COLLATERAL
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
+
+# Post-haircut value of a RECOGNISED bond, hand-calculated from the article text
+# (not read off the engine — LESSONS B3):
+#   Art. 223(2): C_VA = C · (1 − Hc − Hfx), C = 20,000,000, Hfx = 0 (GBP/GBP).
+#   Art. 224(2)(a): the loan is a secured lending transaction -> 20-day period
+#     (the frame supplies no liquidation_period_days, so nothing overrides it).
+#   CRR Art. 224(1) Table 1, CQS 1, Art. 197(1)(c)/(d) issuer, "> 5 years",
+#     20-day column: Hc = 11.314%.
+#   20,000,000 × (1 − 0.11314) = 17,737,200.
+# The engine derives the 20-day Hc by Art. 226(2) scaling (8% × √2 = 11.3137%),
+# giving 17,737,258.30 — 3.3e-6 relative, inside the tolerance; the 10-day 8%
+# (18,400,000) and a halved haircut (18,868,600) both fall outside it.
+RECOGNISED_BOND_ADJUSTED_VALUE: float = 17_737_200.00
+RECOGNISED_REL_TOL: float = 1e-4
 
 
 @pytest.fixture
@@ -67,8 +83,11 @@ def _create_bundle(
     """FIRB corporate exposure secured by a CQS1 corporate bond.
 
     ``issuer_counterparty_reference`` drives the Art. 194(4) gate. A recognised
-    bond carries a positive post-haircut ``collateral_adjusted_value``; when the
-    gate zeroes the bond, that value collapses to 0 (no CRM benefit).
+    bond carries the post-haircut ``collateral_adjusted_value``
+    RECOGNISED_BOND_ADJUSTED_VALUE; when the gate zeroes the bond, that value
+    collapses to 0 (no CRM benefit). ``liquidation_period_days`` is a typed null
+    (the loader's shape for an omitted optional column), so the Art. 224(2)(a)
+    20-day secured-lending period applies.
 
     ``beneficiary_type`` / ``beneficiary_reference`` set the pledge level so the
     obligor-map union (exposure / facility / counterparty keys) can be exercised;
@@ -122,9 +141,12 @@ def _create_bundle(
                 "is_eligible_irb_collateral": [True],
                 "issuer_counterparty_reference": [issuer_counterparty_reference],
                 "residual_maturity_years": [10.0],
-                "liquidation_period_days": [10],
+                "liquidation_period_days": [None],
             },
-            schema_overrides={"issuer_counterparty_reference": pl.String},
+            schema_overrides={
+                "issuer_counterparty_reference": pl.String,
+                "liquidation_period_days": pl.Int32,
+            },
         ).lazy()
     )
 
@@ -152,8 +174,9 @@ def _collateral_adjusted_value(result: CRMAdjustedBundle) -> float:
     """The post-haircut collateral value attributed to the exposure.
 
     The Art. 194(4) gate zeroes the collateral's market_value, which cascades to
-    this value — so it is 0 for a gated (own-issue) row and > 0 for a recognised
-    one, independent of the downstream LGD/EAD categorisation.
+    this value — so it is 0 for a gated (own-issue) row and
+    RECOGNISED_BOND_ADJUSTED_VALUE for a recognised one, independent of the
+    downstream LGD/EAD categorisation.
     """
     row = result.exposures.collect().filter(pl.col("exposure_reference") == "EXP1")
     return row["collateral_adjusted_value"][0]
@@ -169,12 +192,14 @@ class TestOwnIssueGate:
     def test_third_party_bond_recognised(
         self, processor: CRMProcessor, firb_crr_config: CalculationConfig
     ) -> None:
-        """Control: a bond issued by an unrelated third party is recognised (value > 0)."""
+        """Control: a bond issued by an unrelated third party keeps its full C_VA."""
         bundle = _create_bundle("BANK_X")
 
         result = _run_crm(processor, firb_crr_config, bundle)
 
-        assert _collateral_adjusted_value(result) > 0.0
+        assert _collateral_adjusted_value(result) == pytest.approx(
+            RECOGNISED_BOND_ADJUSTED_VALUE, rel=RECOGNISED_REL_TOL
+        )
         assert _crm015_errors(result) == []
 
     def test_null_issuer_permissive(
@@ -185,7 +210,9 @@ class TestOwnIssueGate:
 
         result = _run_crm(processor, firb_crr_config, bundle)
 
-        assert _collateral_adjusted_value(result) > 0.0
+        assert _collateral_adjusted_value(result) == pytest.approx(
+            RECOGNISED_BOND_ADJUSTED_VALUE, rel=RECOGNISED_REL_TOL
+        )
         assert _crm015_errors(result) == []
 
     def test_own_issue_bond_zeroed(
@@ -255,7 +282,9 @@ class TestConnectedIssuerGroupGate:
 
         result = _run_crm(processor, firb_crr_config, bundle)
 
-        assert _collateral_adjusted_value(result) > 0.0
+        assert _collateral_adjusted_value(result) == pytest.approx(
+            RECOGNISED_BOND_ADJUSTED_VALUE, rel=RECOGNISED_REL_TOL
+        )
         assert _crm015_errors(result) == []
 
 
@@ -301,7 +330,9 @@ class TestMultiLevelPledgeResolution:
 
         result = _run_crm(processor, firb_crr_config, bundle)
 
-        assert _collateral_adjusted_value(result) > 0.0
+        assert _collateral_adjusted_value(result) == pytest.approx(
+            RECOGNISED_BOND_ADJUSTED_VALUE, rel=RECOGNISED_REL_TOL
+        )
         assert _crm015_errors(result) == []
 
     def test_counterparty_level_own_issue_filtered(

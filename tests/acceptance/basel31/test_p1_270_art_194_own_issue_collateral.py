@@ -4,12 +4,16 @@ P1.270 Basel 3.1 — Art. 194(4): own-issue / connected-issuer collateral inelig
 Scenario: £10m unrated SA corporate loan (100% RW) secured by a £10m CQS1
 corporate bond. Everything is held constant except the bond's issuer:
 
-    b31_third_party — bond issued by an unrelated bank -> recognised, EAD/RWA fall
+    b31_third_party — bond issued by an unrelated bank -> recognised, RWA falls
+                      to the hand-calculated E* of 848,500
     b31_own_issue   — bond issued by the obligor itself -> zeroed, RWA stays gross
                       and a CRM015 data-quality warning is raised.
 
 References:
     - PS1/26 Art. 194(4): correlation / connected-issuer ineligibility.
+    - PS1/26 Art. 223(5): fully adjusted exposure value E*.
+    - PS1/26 Art. 224(2)(a): 20-business-day secured-lending liquidation period,
+      which selects the 20-day column of Art. 224(1) Table 1.
     - PS1/26 Art. 122: unrated corporate 100% risk weight (SCRA fallback).
     - IMPLEMENTATION_PLAN.md: P1.270.
 """
@@ -25,7 +29,13 @@ from rwa_calc.contracts.errors import ERROR_OWN_ISSUE_COLLATERAL
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.acceptance.p1_190_pipeline_helpers import find_loan_rows
-from tests.fixtures.p1_270.p1_270 import GROSS_RWA, SCENARIOS, build_p1_270_bundle
+from tests.fixtures.p1_270.p1_270 import (
+    EXPECTED_RWA_REL_TOL,
+    EXPECTED_THIRD_PARTY_RWA_B31,
+    GROSS_RWA,
+    SCENARIOS,
+    build_p1_270_bundle,
+)
 
 REPORTING_DATE = date(2030, 6, 30)
 
@@ -53,9 +63,19 @@ class TestP1270B31OwnIssue:
     """Basel 3.1: collateral issued by the obligor is stripped of CRM benefit."""
 
     def test_third_party_bond_reduces_rwa(self) -> None:
-        """Control: a third-party bond reduces RWA below the £10m gross value."""
+        """Control: a third-party bond earns exactly its Art. 223(5) FCCM relief.
+
+        Pinned to the hand-calc in ``tests/fixtures/p1_270/p1_270.py``: the
+        20-day (Art. 224(2)(a) secured lending) CQS1 corporate-bond haircut of
+        8.485% from PS1/26 Art. 224(1) Table 1, "> 5 ≤ 10 years" band, leaves
+        E* = 848,500 at 100% RW. The bond's 10.0y residual maturity sits on that
+        band's upper edge, so a ``<=`` -> ``<`` band regression (16.971%,
+        1,697,100) fails here too.
+        """
         result = _run("b31_third_party")
-        assert 0 < _rwa(result, SCENARIOS["b31_third_party"].loan_ref) < GROSS_RWA
+        assert _rwa(result, SCENARIOS["b31_third_party"].loan_ref) == pytest.approx(
+            EXPECTED_THIRD_PARTY_RWA_B31, rel=EXPECTED_RWA_REL_TOL
+        )
         assert _crm015(result) == []
 
     def test_own_issue_bond_no_benefit(self) -> None:

@@ -9,8 +9,12 @@ only the bond's ``issuer_counterparty_reference`` differs:
 
     <regime>_own_issue    — bond issued by the obligor  -> excluded, RWA stays gross
     <regime>_third_party  — bond issued by an unrelated bank -> recognised, RWA falls
+                            to the Art. 223(5) E* pinned below
 
-Own-issue also raises one CRM015 data-quality warning.
+Own-issue also raises one CRM015 data-quality warning. The third-party control's
+relief is pinned to a hand-calc from Art. 224(1) Table 1 at the Art. 224(2)(a)
+20-day secured-lending liquidation period (EXPECTED_THIRD_PARTY_RWA_*), so an
+over- or under-sized haircut fails it rather than merely landing below gross.
 
 The bundle is assembled IN MEMORY (mirroring P1.234) — no parquet dependency, so
 the acceptance tests are reproducible on a fresh checkout without a fixture-
@@ -19,7 +23,11 @@ generation step.
 References:
     - CRR/PS1-26 Art. 194(4): correlation / connected-issuer ineligibility.
     - BCBS CRE22: own-issued securities expressly ineligible.
-    - CRR Art. 224 Table 1: corporate bond supervisory haircut.
+    - CRR Art. 223(5) / PS1/26 Art. 223(5): fully adjusted exposure value E*.
+    - CRR Art. 224 / PS1/26 Art. 224, para (1) Table 1: CQS1 corporate bond
+      supervisory haircut.
+    - CRR Art. 224(2)(a) / PS1/26 Art. 224(2)(a): 20-business-day secured-lending
+      liquidation period.
     - CRR Art. 122: unrated corporate 100% risk weight.
     - IMPLEMENTATION_PLAN.md: P1.270.
 """
@@ -46,6 +54,34 @@ DRAWN_AMOUNT: float = 10_000_000.00
 COLLATERAL_MV: float = 10_000_000.00
 GROSS_RWA: float = 10_000_000.00  # £10m EAD × 100% unrated-corporate RW, no benefit
 THIRD_PARTY_ISSUER = "P1270-BANK-X"
+
+# Hand-calculated RWA of the recognised third-party control, taken from the
+# article text — NOT read off the engine (LESSONS B3).
+#
+#   Art. 223(5): E* = max{0, E·(1 + He) − C·(1 − Hc − Hfx)}
+#     E   = 10,000,000 drawn, He = 0 (a loan, not a lent security)
+#     C   = 10,000,000 CQS1 corporate bond, Art. 197(1)(d)
+#     Hfx = 0 (GBP loan, GBP bond)
+#     no Art. 239 mismatch: collateral 10.0y residual >= loan 3y
+#   Art. 224(2)(a): a secured lending transaction takes the 20-business-day
+#     liquidation period (the fixture supplies none, so nothing overrides it).
+#   Art. 224(1) Table 1, CQS 1, issuers in Art. 197(1)(c)/(d), 20-day column:
+#     CRR    "> 5 years"        11.314%
+#     PS1/26 "> 5 ≤ 10 years"    8.485%   (10.0y sits ON this band's upper edge)
+#   RWA = E* × 100% (unrated corporate):
+#     CRR    10,000,000 − 10,000,000 × (1 − 0.11314) = 1,131,400
+#     PS1/26 10,000,000 − 10,000,000 × (1 − 0.08485) =   848,500
+#
+# The engine reaches the 20-day figure by Art. 226(2) square-root-of-time
+# scaling of the 10-day column (8% × √2 = 11.3137%, 6% × √2 = 8.4853%), which
+# matches Table 1 to its printed three decimals: 1,131,370.85 and 848,528.14,
+# 2.6e-5 and 3.3e-5 relative from the table figures. EXPECTED_RWA_REL_TOL admits
+# that rounding and nothing a wrong haircut produces: the 10-day column gives
+# 800,000 / 600,000, the PS1/26 "> 10 years" band 1,697,100, a halved haircut
+# 565,700 / 424,250.
+EXPECTED_THIRD_PARTY_RWA_CRR: float = 1_131_400.00
+EXPECTED_THIRD_PARTY_RWA_B31: float = 848_500.00
+EXPECTED_RWA_REL_TOL: float = 1e-4
 
 
 @dataclass(frozen=True)
@@ -109,7 +145,15 @@ def _loan(s: Scenario, reporting_date: date) -> dict:
 
 
 def _collateral(s: Scenario) -> dict:
-    """A CQS1 corporate bond pledged at loan level; issuer set per scenario."""
+    """A CQS1 corporate bond pledged at loan level; issuer set per scenario.
+
+    No ``liquidation_period_days`` is supplied (the schema-typed frame carries it
+    as an Int32 null, the loader's shape for an omitted optional column): the
+    loan is modelled with no daily-margin right, so it is a secured lending
+    transaction and Art. 224(2)(a)'s 20-business-day period applies — the
+    engine's default for a non-SFT exposure. The 10.0y residual maturity is
+    deliberately on the PS1/26 Table 1 "> 5 ≤ 10 years" upper band edge.
+    """
     return {
         "collateral_reference": s.coll_ref,
         "collateral_type": "bond",
@@ -124,7 +168,6 @@ def _collateral(s: Scenario) -> dict:
         "issuer_counterparty_reference": s.issuer_ref,
         "residual_maturity_years": 10.0,
         "original_maturity_years": 10.0,
-        "liquidation_period_days": 10,
     }
 
 

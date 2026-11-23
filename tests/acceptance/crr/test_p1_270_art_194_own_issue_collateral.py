@@ -4,12 +4,16 @@ P1.270 CRR — Art. 194(4): own-issue / connected-issuer collateral is ineligibl
 Scenario: £10m unrated SA corporate loan (100% RW) secured by a £10m CQS1
 corporate bond. Everything is held constant except the bond's issuer:
 
-    crr_third_party — bond issued by an unrelated bank -> recognised, EAD/RWA fall
+    crr_third_party — bond issued by an unrelated bank -> recognised, RWA falls
+                      to the hand-calculated E* of 1,131,400
     crr_own_issue   — bond issued by the obligor itself -> zeroed, RWA stays gross
                       and a CRM015 data-quality warning is raised.
 
 References:
     - CRR Art. 194(4): correlation / connected-issuer ineligibility.
+    - CRR Art. 223(5): fully adjusted exposure value E*.
+    - CRR Art. 224(2)(a): 20-business-day secured-lending liquidation period,
+      which selects the 20-day column of Art. 224(1) Table 1.
     - CRR Art. 122: unrated corporate 100% risk weight.
     - IMPLEMENTATION_PLAN.md: P1.270.
 """
@@ -20,7 +24,13 @@ from datetime import date
 
 import pytest
 from tests.acceptance.p1_190_pipeline_helpers import find_loan_rows
-from tests.fixtures.p1_270.p1_270 import GROSS_RWA, SCENARIOS, build_p1_270_bundle
+from tests.fixtures.p1_270.p1_270 import (
+    EXPECTED_RWA_REL_TOL,
+    EXPECTED_THIRD_PARTY_RWA_CRR,
+    GROSS_RWA,
+    SCENARIOS,
+    build_p1_270_bundle,
+)
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_OWN_ISSUE_COLLATERAL
@@ -53,9 +63,16 @@ class TestP1270CrrOwnIssue:
     """CRR: collateral issued by the obligor is stripped of CRM benefit."""
 
     def test_third_party_bond_reduces_rwa(self) -> None:
-        """Control: a third-party bond reduces RWA below the £10m gross value."""
+        """Control: a third-party bond earns exactly its Art. 223(5) FCCM relief.
+
+        Pinned to the hand-calc in ``tests/fixtures/p1_270/p1_270.py``: the
+        20-day (Art. 224(2)(a) secured lending) CQS1 corporate-bond haircut of
+        11.314% from CRR Art. 224(1) Table 1 leaves E* = 1,131,400 at 100% RW.
+        """
         result = _run("crr_third_party")
-        assert 0 < _rwa(result, SCENARIOS["crr_third_party"].loan_ref) < GROSS_RWA
+        assert _rwa(result, SCENARIOS["crr_third_party"].loan_ref) == pytest.approx(
+            EXPECTED_THIRD_PARTY_RWA_CRR, rel=EXPECTED_RWA_REL_TOL
+        )
         assert _crm015(result) == []
 
     def test_own_issue_bond_no_benefit(self) -> None:

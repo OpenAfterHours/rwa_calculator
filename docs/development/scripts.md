@@ -54,6 +54,41 @@ Two manifest entries carry the published supervisory validation rules — the ch
 
 These are the raw inputs to [`scripts/extract_validation_rules.py`](#scriptsextract_validation_rulespy-extract-the-committed-validation-rule-json) below.
 
+#### Published template workbooks
+
+The row and column codes of a reporting template, and the band labels and column letters of a fixed-format disclosure template, are only in the published workbook. The instruction PDFs give column *ranges*. The manifest therefore carries the workbooks too:
+
+| File | Templates |
+|------|-----------|
+| `CRR - corep-own-funds.xlsx` | CRR COREP, one sheet per template (`2` = C 02.00, `7` = C 07.00, `8.1`–`8.7`, `9.1`/`9.2`) |
+| `0F07 - annex-i-of-07-00-credit-risk-sa-reporting-template.xlsx` | Basel 3.1 OF 07.00 |
+| `OF0801-annex-i-of-08-01-credit-risk-irb-reporting-template.xlsx` | Basel 3.1 OF 08.01 |
+| `OF0802-annex-i-of-08-02-credit-risk-irb-reporting-template.xlsx` | Basel 3.1 OF 08.02 |
+| `ps1-26-annex-i-output-floor-and-capital-summaries-disclosure-templates.xlsx` | UKB OV1, KM1, CMS1, CMS2; UK INS1, INS2, OVC |
+| `ps1-26-annex-xix-credit-risk-sa-disclosure-templates.xlsx` | UKB CRD, CR4, CR5 |
+| `ps1-26-annex-xxi-credit-risk-irb-disclosure-templates.xlsx` | UKB CRE, CR6, CR6-A, CR7, CR7-A; UK CR8, CR9, CR9.1 |
+| `ps1-26-annex-xxiii-credit-risk-irb-disclosure-templates.xlsx` | UKB CR10 |
+| `ps1-26-annex-xxv-ccr-disclosure-templates.xlsx` | Table UK CCRA; UKB CCR1, CCR3; UK CCR4, CCR5, CCR6, CCR7, CCR8 |
+
+The first four keep the filenames the specifications cite them by. In the Disclosure (CRR) Part the templates are the odd-numbered annexes (XIX, XXI, XXIII, XXV) and the instructions are the even-numbered ones (XX, XXII, XXIV, XXVI).
+
+#### XBRL Filing Manual
+
+`boe-xbrl-filing-manual.pdf` is the Bank's XBRL Filing Manual v1.0.1 (30 May 2024), published as `xbrl-filing-manual-april-2024.pdf`. The rwa-filer publisher-issue register quotes it page by page, and `tests/contracts/test_publisher_issue_quotes.py` checks those quotes against it once it is downloaded.
+
+#### Keeping the manifest complete
+
+`tests/contracts/test_asset_manifest_coverage.py` fails when the repository names a `docs/assets/` file that the manifest does not fetch, either as an entry or as an archive member it extracts. It reads names in four forms:
+
+1. `docs/assets/<name>` written out in a tracked Markdown, Python, TOML, YAML, text, shell or config file. The extension may be any case of `pdf`, `xls`, `xlsx`, `xlsm`, `doc`, `docx`, `zip` or `csv`, and the name may contain spaces and brackets.
+2. A literal name joined onto an assets-directory constant in Python, such as `ASSETS_DIR / "eba-validation-rules.xlsx"`.
+3. The `file` of each document in every packaged rwa-filer publisher-issue register.
+4. `scripts/regulation_text.py`'s `REGIME_DOCUMENTS`.
+
+It does not read a bare filename held in a variable and joined elsewhere, a glob pattern, or JSON other than the registers. `IMPLEMENTATION_PLAN.md` is exempt, because a plan bullet may name an artefact that is still to be acquired. A name in a form the test does not read needs its own check, or a citation in one of the four forms.
+
+The test also fails when it no longer finds a known citation of each form, so a scan that has gone blind cannot pass on an empty population. It fails as well when one of the template workbooks above loses its download URL. To cite a new document, add its `DocEntry` in the same change.
+
 #### Archive entries and extraction
 
 A manifest entry may name a member to pull out of a downloaded archive, via two optional `DocEntry` fields:

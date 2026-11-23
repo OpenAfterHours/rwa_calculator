@@ -153,7 +153,12 @@ supervisory validation-rule workbooks) to `docs/assets/`.
 New collaborators should run this after cloning and installing dependencies. Files with
 known direct URLs are fetched automatically; remaining files are listed with manual
 download instructions. Everything it fetches is gitignored, so this script — not the
-repository — is how `docs/assets/` gets populated and repopulated.
+repository — is how `docs/assets/` gets populated and repopulated. A document the
+repository cites therefore needs a manifest entry.
+`tests/contracts/test_asset_manifest_coverage.py` fails a `docs/assets/<name>` citation
+in a tracked file, a name joined onto an assets-directory constant, a publisher-issue
+register document or a `regulation_text.py` source PDF that the manifest cannot fetch.
+It does not see a filename held in a variable or a glob; see `docs/development/scripts.md`.
 
 ### Usage
 

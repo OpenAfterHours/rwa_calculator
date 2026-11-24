@@ -474,6 +474,56 @@ is **44 passed**.
   1-year trade. The plugin prints how many dated frames it changed (36 on this
   set) and fails the session at zero.
 
+## The QRRE per-individual aggregate set
+
+Written for P5.54 (2026-11-24) — the reporting-tier guard for P1.320's
+one-limit-per-facility dedupe in `qrre_obligor_aggregate_limit_expr`. Each plugin
+runs the original and replaces exactly one part of what it returns. Baseline for
+`tests/acceptance/reporting/test_qrre_headroom_reporting.py` is **12 passed**,
+with the QRRE sheet's col 0020 at 90,000 and the retail-other sheet's at 340,000
+in both regimes.
+
+| plugin | what it changes | red / green | reddens |
+|---|---|---|---|
+| `mutate_qrre_aggregate_sums_every_leg` | the returned aggregate becomes `candidate_limit.sum()` per individual — the pre-P1.320 leg multiplication | **6 / 6** | the class test and both sheet tests, **per regime**: MOVER's two legs leave QRRE (QRRE sheet col 0020 90,000 -> 30,000; retail-other 340,000 -> 400,000) |
+| `mutate_qrre_aggregate_takes_obligor_max` | the per-individual `sum` over the dedupe column becomes a `max` | **6 / 6** | the same six: PAST_CAP's two facilities are admitted (QRRE 90,000 -> 190,000; retail-other 340,000 -> 240,000) |
+| `mutate_qrre_aggregate_divides_by_line_count` | the dedupe column becomes `candidate_limit / pl.len()` over (obligor, facility) — the `attributes.py` sibling's shape | **6 / 6** | the same six: MIXED's drawn leg and MOF's `LR` leg are admitted (QRRE 90,000 -> 200,000; retail-other 340,000 -> 230,000) |
+| `mutate_qrre_aggregate_takes_first_row` | the intra-facility ordinal becomes `pl.int_range(pl.len()).over(...) == 0` (the first ROW of the group) in place of the `cum_sum` of the candidate mask | **6 / 6** | the same six: MOF's `LR` leg is admitted (QRRE 90,000 -> 160,000; retail-other 340,000 -> 270,000). Also **4 red** in `tests/unit/classifier/test_p1_320_qrre_leg_multiplication.py` (`TestLegVIMixedCandidateGroup`, both regimes) |
+
+- **The green 6 are the right 6**: the two adequacy tests, the two two-leg
+  tests and the two MOF-order tests describe the fixture, and no aggregate's
+  output reads into any of them (the order test spies on the aggregate's INPUT,
+  which every plugin leaves alone).
+- **Each regime is red on its own** (LESSONS C7): every red test is parametrised
+  over `crr` / `b31`, and both ids fail under every plugin.
+- **Why two mixed-candidacy obligors.** A row-count ordinal agrees with the
+  candidate-count one wherever a facility's FIRST leg is a candidate. On a
+  single-level facility it always is: `engine/hierarchy/unify.py` concatenates
+  loans and contingents before the `_UNDRAWN` row, and only the `_UNDRAWN` row
+  can fail the cancellability limb (a drawn or contingent leg carries
+  `undrawn_amount` 0). So `MIXED` reddens the line-count divide and NOT the
+  row-count ordinal — measured: on the portfolio with `MOF` filtered out,
+  `takes_first_row` moves no leg's class in either regime (seven legs each);
+  with it, exactly `MOF`'s `LR` leg moves, in both. `MOF` is a multi-option root whose waterfall sorts its sub-line
+  rows by descending SA CCF, so the non-cancellable `MR` row reaches the
+  classifier first and the row-count ordinal gives the candidate `LR` row zero.
+  The order is the waterfall's sort, not an accident of a join — but it is an
+  order, so `test_mof_non_candidate_leg_reaches_the_aggregate_first` asserts it
+  on the frame `qrre_obligor_aggregate_limit_expr` is handed (a spy around
+  whichever aggregate is installed). A change that reorders that frame fails
+  there, loudly, rather than silently blinding this plugin's guard: handing the
+  aggregate its input in reversed row order (a scratch plugin, not committed)
+  reddens exactly that test's two ids, **2 / 10**. Then make a non-candidate
+  leg lead again, and re-run this plugin.
+- **The gap they close was measured, not asserted.** Each of the four was
+  applied to every other run of `RUNS` (thirty-six, on the tree this portfolio
+  was rebased onto on 2026-11-24) and the exposure class of every row compared
+  with the unmutated run: **zero rows moved** under any of the four, on any
+  portfolio — so no reporting output in the register could move. On
+  `qrre-headroom` itself every plugin moves rows in both regimes (2, 2, 2 and 1
+  legs respectively), the probe's positive control. The SURVIVOR row keeps the QRRE sheet non-zero under all four, so
+  each red is "the wrong legs are on the sheet", never "the sheet is empty".
+
 ## Writing another
 
 Five rules, all learned the expensive way in the batch that produced these:

@@ -404,6 +404,36 @@ Individual counterparties qualify for retail treatment when:
 - **CRR:** Aggregate exposure < EUR 1m (GBP ~873k at default EUR/GBP rate of 0.8732)
 - **Basel 3.1:** Aggregate exposure < GBP 880k
 - **QRRE limit (IRB Art. 147(5A)(c)):** Largest aggregate nominal exposure to any single individual in the QRRE sub-portfolio ≤ EUR 100k (CRR) / **GBP 90,000** (Basel 3.1). This is a **portfolio-level** constraint, not a per-facility check.
+    - The nominal basis is each QRRE-candidate facility's committed limit, counted
+      **once per (individual, parent facility)** however many hierarchy legs share that
+      parent (a drawn loan plus its `_UNDRAWN` headroom row; a multi-option root's
+      waterfall rows, which all key on the root) —
+      `engine/classify/subtypes.py::qrre_obligor_aggregate_limit_expr`. The one leg
+      that carries the limit is the first *candidate* leg of the group, not its first
+      row. Distinct facilities of one individual are summed, so two that each clear the
+      limit can together breach it.
+    - **Residual (P1.355), still live:** the dedupe key is the leg's *immediate*
+      parent, so a multi-option facility is counted once at each grain it has legs on.
+      A loan under a sub-line keys on the sub-line, while the root's waterfall and
+      `_RESIDUAL` rows key on the root: a 70,000 root with a 25,000 sub-line that
+      carries a loan counts 95,000 (`tests/fixtures/p1_320` leg (v)). This
+      over-counts, which denies QRRE (the conservative direction), and it is not
+      fixed by the once-per-parent rule above.
+    - **Reporting-tier guard:** `tests/fixtures/reporting_qrre_headroom_portfolio.py`,
+      registered in the supervisory register as `qrre-headroom` under both regimes. It
+      holds an individual whose one facility qualifies counted once and fails counted
+      per leg, one well inside the limit, one with two facilities past it together, and
+      two facilities whose legs differ in candidacy — one whose candidate leg comes
+      first, and a loan-free multi-option root whose non-candidate leg comes first.
+      `tests/acceptance/reporting/test_qrre_headroom_reporting.py` asserts the C 08.01 /
+      OF 08.01 sheet (qualifying revolving or retail other) each leg reports on, reading
+      the limit from the pack rather than restating it. It does not reach the P1.355
+      residual: that root has no loans. The multi-option root's expected class
+      (retail other) is a reading, not the text: the engine counts the root's limit,
+      and the owner's P1.355 sign-off keeps that "conservative treatment ... when some
+      sibling sub-lines are not QRRE-eligible". Read on the eligible sub-line's own
+      limit, its cancellable leg would be QRRE, so adopting that reading reddens the
+      test by design.
 
 #### QRRE assignment gates (CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b))
 

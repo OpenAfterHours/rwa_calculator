@@ -75,11 +75,25 @@ Under CRR the 0.03% floor sits INSIDE the first leaf band (``0.00 to <0.10``), s
 there the floor cannot move a corporate across a band boundary at all.
 
 ``LN_QRRE`` is drawn to exactly its parent facility's limit. That is deliberate:
-a facility with headroom emits a synthetic ``_UNDRAWN`` exposure which inherits
-no internal rating and routes standardised, so the QRRE row would never reach a
-C 08.xx sheet at all. Drawn == limit leaves the loan as the sole QRRE candidate
-and keeps the Art. 154(4)(c) per-individual aggregate at one facility limit,
-below both the EUR 100k (CRR) and GBP 90k (PS1/26) caps. The facility supplies
+a facility with headroom emits a synthetic ``_UNDRAWN`` exposure, and on THIS
+fixture that row would route standardised, so the QRRE headroom would never
+reach a C 08.xx sheet. Measured 2026-11-24 (P5.54) with ``DRAWN_QRRE`` set to
+20,000: ``IRC-FAC-QRRE_UNDRAWN`` reports ``reporting_approach_origin``
+standardised with a null ``lgd`` in both regimes, while ``IRC-LN-QRRE`` stays
+A-IRB. CORRECTED (P5.54): this paragraph used to give the CAUSE as the row
+"inherits no internal rating". It does inherit one — ratings join on
+``counterparty_reference`` for every row, so the headroom row carries the
+obligor's internal PD. The cause is the missing ``lgd``: a headroom row takes
+``lgd`` from its FACILITY, ``FAC_QRRE`` carries none, and retail may only be
+A-IRB (CRR Art. 151(4) / PS1/26 Art. 147A), so a row with no own-estimate LGD
+falls back to SA. Setting ``FAC_QRRE``'s ``lgd`` alone (to 0.55, nothing else
+varied) routes the headroom row A-IRB in both regimes, measured the same day;
+that is how ``reporting_qrre_headroom_portfolio.py`` gets its ``_UNDRAWN`` rows
+onto the A-IRB sheets. Drawn == limit also leaves the loan as the sole QRRE candidate and keeps
+the Art. 154(4)(c) per-individual aggregate at one facility limit, below both
+the EUR 100k (CRR) and GBP 90k (PS1/26) caps, so this row cannot exercise the
+aggregate across legs — that is what the headroom portfolio is for. Adding
+headroom here would move this portfolio's goldens. The facility supplies
 ``is_revolving`` / ``is_secured=False`` / ``risk_type="LR"`` / ``limit``; the
 classifier reads all four off the drawn leg after the hierarchy stage coalesces
 them (the pattern ``tests/fixtures/p1_244`` pins).

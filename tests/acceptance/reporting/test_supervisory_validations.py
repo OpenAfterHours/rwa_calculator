@@ -287,8 +287,8 @@ Cost, and why every run is load-bearing:
     entry of ``RUNS`` (most portfolios under both regimes, a few under one only),
     one more for each IRB-permissioned entry's prior period, and two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
-    this prose — on 2026-11-24 it held forty-two runs, twenty-two of them Basel
-    3.1 and twenty-one with a prior period. The gateway leg adds one canonical
+    this prose — on 2026-11-24 it held forty-four runs, twenty-three of them Basel
+    3.1 and twenty-three with a prior period. The gateway leg adds one canonical
     return and one ``validate_return`` per Basel 3.1 run and no pipeline run: the
     pack is loaded once per process and the COREP bundle is the one the template
     leg already generated.
@@ -352,6 +352,14 @@ Cost, and why every run is load-bearing:
                            defaulted standardised legs, so the only route to
                            C 07.00 / OF 07.00 row 0300, a figure in c0030 of the
                            memo rows, and (Basel 3.1) the high-risk sheet 0012.
+    - ``qrre-headroom``    the ONLY portfolio with a QRRE candidate that has
+                           more than one leg under a facility, or a row past
+                           the Art. 147(5A)(c) / 154(4)(c) per-individual
+                           ceiling — so the only route by which a MULTI-LEG or
+                           PAST-THE-CAP change to the QRRE aggregate moves a
+                           C 08.01 sheet. ``irb-classes``' single-leg QRRE row
+                           still moves under a change that inflates one
+                           facility's own contribution past the ceiling.
 
     Measured: ``sa-classes`` and ``irb-classes`` together move 53 CRR and 32
     Basel 3.1 rules out of NOT_EVALUATED. The ten prior-period runs exist
@@ -479,6 +487,7 @@ from tests.fixtures.reporting_over_collateralised_portfolio import (
     build_over_collateralised_bundle,
 )
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
+from tests.fixtures.reporting_qrre_headroom_portfolio import build_reporting_qrre_headroom_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
 from tests.fixtures.reporting_row_scope_portfolio import build_reporting_row_scope_bundle
 from tests.fixtures.reporting_rw_ladder_portfolio import (
@@ -1548,6 +1557,37 @@ RUNS: tuple[GateInput, ...] = (
         build_reporting_ig_election_bundle,
         ig_election_config,
         ig_election_prior_config,
+    ),
+    # The QRRE per-individual aggregate (CRR Art. 154(4)(c) / PS1/26 Art.
+    # 147(5A)(c)) — LESSONS B5, fourth form. ``irb-classes`` keeps the QRRE sheets
+    # live, but its one QRRE row is a single leg drawn to its limit, so with the
+    # P1.320 one-limit-per-facility dedupe reverted (or over-applied as a per-
+    # individual ``max``, copied as the ``attributes.py`` line-count divide, or
+    # keyed on the first ROW of a facility) no exposure in any run above changes
+    # class — measured on all thirty-six, rebased 2026-11-24, under each of the
+    # four ``tests/mutations/mutate_qrre_aggregate_*`` plugins. This
+    # portfolio holds a mover with a headroom leg, a survivor, a pair of
+    # facilities past the cap together, and two facilities whose legs differ in
+    # candidacy (one with the candidate leg first, a multi-option root with it
+    # second); ``test_qrre_headroom_reporting.py`` asserts the sheet each lands
+    # on. A-IRB retail, so ``_irb_config`` (whose Basel 3.1 arm keeps the
+    # optional retail granularity test off, without which the QRRE sheet
+    # vanishes) and a prior frame for C 08.04.
+    GateInput(
+        "crr",
+        "CRR",
+        "qrre-headroom",
+        build_reporting_qrre_headroom_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "qrre-headroom",
+        build_reporting_qrre_headroom_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
     ),
 )
 

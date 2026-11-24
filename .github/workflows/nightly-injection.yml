@@ -73,10 +73,11 @@ jobs:
     #
     # UNMEASURED: nobody has run a full campaign, so the real wall clock is
     # unknown. If a leg hits this ceiling, the fix is NOT to raise it past 360 —
-    # it is to shard the catalogue across more matrix legs. Note that
-    # `--resume` is not a shortcut for this: it filters the mutants it runs but
-    # overwrites `--out` with only the resumed subset, so a resumed scorecard is
-    # incomplete and the ratchet will refuse it.
+    # it is to shard the catalogue across more matrix legs. `--resume` is not a
+    # shortcut for this: it merges into an earlier scorecard at the same `--out`,
+    # but each leg here starts from a fresh checkout with no earlier file, and
+    # the ratchet takes one scorecard per ladder — so sharding still needs a step
+    # that combines the legs' scorecards before the ratchet reads them.
     timeout-minutes: 330
     strategy:
       # Both ladders run to completion even if one fails. `legacy` is the BEFORE
@@ -131,7 +132,15 @@ jobs:
       # `if-no-files-found: error`, as the benchmarks job does. An absent
       # scorecard must fail the job, never read as a clean run — absence is this
       # project's dominant escape class (.claude/LESSONS.md B4).
+      #
+      # `if: always()`: the harness rewrites the scorecard after every scored
+      # mutant, so a campaign stopped part-way — a crash, or this job's own
+      # timeout — still holds everything it measured, and uploading it whatever
+      # the campaign step's outcome is what lets `--resume` finish it on the same
+      # commit instead of losing the leg's hours with the runner. The stopped leg
+      # still fails the workflow, and `ratchet` below does not run.
       - name: Upload scorecard
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: injection-scorecard-${{ matrix.ladder }}
@@ -187,9 +196,10 @@ jobs:
       # It fails on any of: a catalogue mutant with no verdict, a mutant whose
       # reachability contradicts its `expect_unreachable` flag (which is what
       # licenses every "not detected" verdict), any gate that TIMED OUT (neither
-      # a pass nor a failure — a gate that never finished, so an ESCAPED verdict
-      # resting on it is unproven), known-defect detection below 90%, an
-      # un-banked baseline, or any movement in the banked verdict sets.
+      # a pass nor a failure — a gate that never finished, so the harness scores
+      # a mutant no gate caught while one timed out UNPROVEN, never ESCAPED or
+      # UNREACHABLE), any UNPROVEN or ERROR verdict, known-defect detection below
+      # 90%, an un-banked baseline, or any movement in the banked verdict sets.
       #
       # Invoked as the script rather than through pytest so the exit code is the
       # gate's own — the pattern the template-coverage and coverage-ratchet jobs

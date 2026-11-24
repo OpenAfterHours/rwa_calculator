@@ -47,10 +47,20 @@ uv run python scripts/defect_injection.py --ladder legacy      # the before rate
 uv run python scripts/defect_injection.py --ladder full        # the after rate
 ```
 
-`--mutants`, `--categories`, `--timeout`, `--resume` and `--out` all work as you
-would expect. Every pytest gate carries `-n 0`: this runs on a machine with
-~2.7 GB free, and `-n auto` would spawn sixteen workers each building session
-fixtures.
+`--mutants` and `--categories` filter the run, and `--timeout` overrides every
+gate's timeout. `--out` names the scorecard: its directory must already exist
+and be writable, and so must the file if there is one. The harness refuses to
+start otherwise (exit 4) rather than find out when it first writes. The
+scorecard is replaced after **every** scored mutant — written beside `--out` as
+`<name>.partial` and renamed over it, never rewritten in place — so a campaign
+that dies part-way, a crash or a Ctrl-C even mid-write, keeps everything it
+measured, and `--resume` finishes it (see
+[Resuming a campaign](#resuming-a-campaign)). Without `--resume`, `--out` is
+replaced by this run's selection alone, whatever the file held. The nightly
+uploads each leg's scorecard whatever the campaign step's outcome, so a leg
+stopped by the job's own timeout publishes what it measured too. Every pytest
+gate carries `-n 0`: this runs on a machine with ~2.7 GB free, and `-n auto`
+would spawn sixteen workers each building session fixtures.
 
 Where `uv` is unavailable — a bare venv, a git worktree with no `.venv` — set
 `DEFECT_INJECTION_PYTHON` to an interpreter and every gate command is retargeted
@@ -104,6 +114,43 @@ detections at that rung.
 **Do not run a campaign while another agent is testing `src/`.** The harness
 edits real source files. Their failures would be yours.
 
+### Resuming a campaign
+
+`--resume` merges into the scorecard already at `--out`. It keeps every
+**settled** verdict — `DETECTED`, `ESCAPED` or `UNREACHABLE` (`PROBED` or
+`UNREACHABLE` for `--reachability-only`) with no gate timed out — and measures
+the rest of the selection: mutants the file does not have, and any `ERROR`,
+`UNPROVEN`, or verdict a gate timed out on. A detection behind a timed-out gate
+is measured again too, because the ratchet refuses any `TIMEOUT` and a kept one
+could never be cleared. It writes the **union**, this run's result winning, with
+the scorecard recomputed over all of it, so a resumed campaign over the whole
+catalogue is a complete, bankable one. The union includes every earlier result
+this run did not select: a campaign too long for one window is chunked with
+`--categories` (or `--mutants`), each later chunk resumed into the same `--out`,
+and re-running one timed-out mutant with `--resume --mutants <id>` keeps the
+rest of the file.
+
+It refuses to merge (exit 5, nothing written) unless the earlier file was
+measured the same way: same ladder, gate list, interpreter, mode
+(`--reachability-only` or not), commit, and narrow and wide baseline digests. The
+first five are checked before anything is spawned, the digests once the baselines
+are captured. A file holding two estates' measurements would read as one
+campaign, and the ratchet could not tell — the catalogue would be complete. A
+field the earlier file does not record is a mismatch, never a match, so every
+scorecard written before `--resume` merged (none records the mode, the commit or
+the wide digest) is refused: kept, a probe-only file's gate-less `UNREACHABLE`
+verdicts would be banked as if a gate had run.
+
+What it cannot see is an **uncommitted** edit outside the catalogue targets — a
+gate's test file, a gate command. The dirty-target refusal covers only the
+catalogue's `src/` targets, and such an edit moves neither the commit nor either
+digest, so the earlier file would merge. Do not edit the tree between a run and
+its resume; commit first, and the changed commit is refused.
+
+`--resume` does not shard a campaign across parallel CI legs: each leg starts
+from a fresh checkout with no earlier file, and the ratchet takes one scorecard
+per ladder. Sharding still needs a step that combines the legs' scorecards.
+
 ## Three verdicts, not two
 
 | Verdict | Meaning |
@@ -117,9 +164,17 @@ the rendered board, and in the ratchet. Collapsing `UNREACHABLE` into `ESCAPED`
 makes the headline rate fiction in the pessimistic direction; the reverse makes
 it fiction in the optimistic one.
 
-`TIMEOUT` is a fourth gate *outcome*, and is never counted as a pass. It is not a
-verdict — see the caveat under [Reading the board](#reading-the-board) for what
-the harness does with it today and why the ratchet treats it as a hard failure.
+`TIMEOUT` is a fourth gate *outcome*, and is never counted as a pass — nor as
+the evidence for a verdict. `ESCAPED` and `UNREACHABLE` both say every gate stayed
+green, and a gate that timed out never finished: it may be the one that would
+have caught the mutant. So a mutant **no gate caught while any gate timed out**
+is scored `UNPROVEN`, whatever the probe said — on the probe-dead branch as much
+as the reachable one, because gates do catch mutants the probe calls dead.
+`UNPROVEN` is not a result. It is outside the rate, the escape list and the
+unreachable list, listed on its own with the gates that timed out, and the
+ratchet refuses a scorecard that carries it. A gate that goes red after an
+earlier one timed out is still `DETECTED`: the ladder carries on past a timeout,
+and the red rung is a measured catch.
 
 ### Why UNREACHABLE has to exist
 
@@ -348,7 +403,8 @@ compared against a baseline:
 - no verdicts for mutants absent from the catalogue (a stale scorecard);
 - no mutant's reachability contradicts its `expect_unreachable` flag;
 - no gate `TIMEOUT` anywhere;
-- no verdict outside `DETECTED` / `ESCAPED` / `UNREACHABLE`;
+- no verdict outside `DETECTED` / `ESCAPED` / `UNREACHABLE` (an `ERROR`, a
+  `PROBED`, or an `UNPROVEN` resting on a timed-out gate);
 - the scorecard records which interpreter produced it.
 
 A ladder that fails any of these has its verdict sets **skipped**, not compared:
@@ -513,24 +569,23 @@ catches the second.
 
 The headline detection rate is computed over **scored** mutants only —
 `UNREACHABLE` ones are excluded from both numerator and denominator, because
-counting them either way is a lie in one direction or the other.
+counting them either way is a lie in one direction or the other. `UNPROVEN` ones
+are excluded from both halves too, and listed separately with the gates that
+timed out: an escape resting on a gate that never finished is unproven, not
+measured.
 
 The escaped list is the deliverable. A detection rate is a number; its complement
 is a work queue. The plan's target is **≥ 90% on the known-defect mutants** —
 they have already escaped once, so failing to catch them is inexcusable — with a
 published, tracked figure on the generic set. Neither figure exists yet.
 
-Two caveats found while wiring the nightly, both in `defect_injection.py` and
-both **still open**:
-
-- **A gate `TIMEOUT` does not stop the ladder and does not score as a
-  detection** — the runner continues to the next rung. That is right as far as it
-  goes, but it means a mutant whose only catching gate timed out can still finish
-  as `ESCAPED`, and an escape resting on a gate that never completed is
-  *unproven*, not measured. The ratchet therefore treats any `TIMEOUT` as a hard
-  failure of the whole campaign rather than letting it be banked.
-- **`--resume` does not merge earlier results into the scorecard it writes.** It
-  filters which mutants it runs, then overwrites `--out` with only the resumed
-  subset. A resumed run is therefore not a complete one and cannot be banked —
-  which is also why sharding a long campaign needs a real combine step, not
-  `--resume`.
+Three defects found while wiring the nightly were closed on 2026-11-23 (P5.46).
+Until then a mutant whose only catching gate timed out finished as `ESCAPED`, in
+the published escape list and indistinguishable from a real escape, or as
+`UNREACHABLE` when the probe called it dead; `--resume` overwrote `--out` with
+only the mutants it had just run; and the scorecard was written once, at the very
+end, into a directory nothing had checked existed, so any abort before that write
+lost the whole campaign. The ratchet refused both corrupted shapes throughout (any
+`TIMEOUT`, and any catalogue mutant with no verdict), so nothing wrong was ever
+bankable — but the board and the scorecard JSON published it. Pinned in
+`tests/contracts/test_defect_injection_probe.py`.

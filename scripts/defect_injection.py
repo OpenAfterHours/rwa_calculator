@@ -25,7 +25,28 @@ sees only the RUNS portfolios' templates, and a unit test that goes red on a pat
 no portfolio exercises is still a detection. The catalogue carries two deliberate
 controls (one reachable, one not) whose PROBE results prove the probe still works.
 
-``TIMEOUT`` is its own outcome and is never counted as a pass.
+``TIMEOUT`` is its own gate outcome and is never counted as a pass -- nor as the
+evidence for a verdict. "Every gate stayed green" is a claim about gates that
+FINISHED, so a mutant no gate caught while any gate timed out is ``UNPROVEN``,
+whatever the probe said: not an escape, not a dead path, and not in the rate. A
+red gate after a timed-out one is still ``DETECTED``. ``injection_ratchet.py``
+refuses a scorecard carrying ``UNPROVEN``; raise the timeout and re-measure.
+
+Resuming and checkpointing
+--------------------------
+The scorecard is replaced after every scored mutant -- written beside ``--out``
+and renamed over it, never rewritten in place -- so a campaign that dies
+part-way keeps everything it measured. ``--resume`` then merges into that file:
+it keeps each settled verdict, measures the rest (``UNPROVEN``, ``ERROR``, and any
+verdict a gate timed out on), and writes the union -- every result the file
+held, selected this time or not, so a campaign chunked by ``--categories`` builds
+one file -- with the scorecard recomputed over it. Without ``--resume``, ``--out``
+is replaced by this run's selection alone. ``--resume`` refuses to merge a file
+measured on another ladder, gate list, interpreter, mode, commit or baseline
+digest, because one file holding two estates' measurements would read as one
+campaign. What it cannot see is an uncommitted edit outside the catalogue
+targets -- a gate's test file, say -- since that moves neither the commit nor
+the digests: do not edit the tree between a run and its resume.
 
 Two ladders from one build
 --------------------------
@@ -85,7 +106,7 @@ import shlex
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -107,6 +128,10 @@ VERDICT_DETECTED = "DETECTED"
 VERDICT_ESCAPED = "ESCAPED"
 VERDICT_UNREACHABLE = "UNREACHABLE"
 VERDICT_ERROR = "ERROR"
+#: No gate went red and at least one gate never finished. Not a result.
+VERDICT_UNPROVEN = "UNPROVEN"
+#: ``--reachability-only``: the probe found the mutant moves output; no gate ran.
+VERDICT_PROBED = "PROBED"
 
 OUTCOME_RED = "RED"
 OUTCOME_GREEN = "GREEN"
@@ -670,8 +695,14 @@ def run_campaign(
     *,
     reachability_only: bool,
     wide_baseline_digest: str | None = None,
+    on_result: Callable[[list[MutantResult]], None] | None = None,
 ) -> list[MutantResult]:
-    """Probe, then ladder, one mutant at a time."""
+    """Probe, then ladder, one mutant at a time.
+
+    ``on_result`` is handed the results so far after every scored mutant --
+    ``main`` uses it to rewrite the scorecard, so an abort part-way loses at most
+    the mutant in flight.
+    """
     results: list[MutantResult] = []
     for position, mutant in enumerate(mutants, start=1):
         print(f"\n[{position}/{len(mutants)}] {mutant.id} ({mutant.category})", flush=True)
@@ -685,6 +716,8 @@ def run_campaign(
                 wide_baseline_digest=wide_baseline_digest,
             )
         )
+        if on_result is not None:
+            on_result(results)
     return results
 
 
@@ -717,7 +750,7 @@ def _score_mutant(
         )
 
     if reachability_only:
-        result.verdict = "PROBED" if reachable else VERDICT_UNREACHABLE
+        result.verdict = VERDICT_PROBED if reachable else VERDICT_UNREACHABLE
         return result
 
     # Gates first, whatever the probe said. The probe only sees the RUNS
@@ -738,8 +771,13 @@ def _score_mutant(
                 result.caught_at_tier = gate.tier
                 break
         else:
-            result.verdict = VERDICT_ESCAPED if reachable else VERDICT_UNREACHABLE
+            result.verdict = _uncaught_verdict(result, reachable=reachable)
     return result
+
+
+def timed_out_gates(result: MutantResult) -> list[str]:
+    """The gates that never finished on this mutant, in ladder order."""
+    return [gate.gate for gate in result.gates if gate.outcome == OUTCOME_TIMEOUT]
 
 
 # =============================================================================
@@ -792,10 +830,15 @@ def self_test() -> int:
 
 
 def scorecard(results: list[MutantResult]) -> dict[str, Any]:
-    """Detection rate overall and by category, plus the escape list."""
+    """Detection rate overall and by category, plus the escape list.
+
+    ``UNPROVEN`` mutants are in neither half of the rate nor in any list but their
+    own: each names the gates that timed out, which is what has to be re-run.
+    """
     scored = [r for r in results if r.verdict in (VERDICT_DETECTED, VERDICT_ESCAPED)]
     detected = [r for r in scored if r.verdict == VERDICT_DETECTED]
     unreachable = [r for r in results if r.verdict == VERDICT_UNREACHABLE]
+    unproven = [r for r in results if r.verdict == VERDICT_UNPROVEN]
 
     by_category: dict[str, dict[str, Any]] = {}
     for category in sorted({r.category for r in results}):
@@ -814,6 +857,7 @@ def scorecard(results: list[MutantResult]) -> dict[str, Any]:
         "detected": len(detected),
         "escaped": len(scored) - len(detected),
         "unreachable": len(unreachable),
+        "unproven": len(unproven),
         "detection_rate": round(len(detected) / len(scored), 4) if scored else None,
         "mean_tier_of_detection": round(sum(tiers) / len(tiers), 2) if tiers else None,
         "by_category": by_category,
@@ -824,6 +868,15 @@ def scorecard(results: list[MutantResult]) -> dict[str, Any]:
         ],
         "unreachable_list": [
             {"id": r.mutant_id, "summary": r.summary, "note": r.note} for r in unreachable
+        ],
+        "unproven_list": [
+            {
+                "id": r.mutant_id,
+                "category": r.category,
+                "summary": r.summary,
+                "timed_out": timed_out_gates(r),
+            }
+            for r in unproven
         ],
         "expectation_mismatches": [{"id": r.mutant_id, "note": r.note} for r in results if r.note],
     }
@@ -837,10 +890,11 @@ def print_scorecard(payload: dict[str, Any]) -> None:
     print("=" * 78)
     print(f"  ladder            {payload['ladder']}")
     print(f"  mutants           {board['mutants_total']}")
-    print(f"  scored            {board['scored']}  (unreachable excluded)")
+    print(f"  scored            {board['scored']}  (unreachable and unproven excluded)")
     print(f"  detected          {board['detected']}")
     print(f"  escaped           {board['escaped']}")
     print(f"  unreachable       {board['unreachable']}")
+    print(f"  unproven          {board['unproven']}")
     if board["detection_rate"] is not None:
         print(f"  DETECTION RATE    {board['detection_rate']:.1%}")
     if board["mean_tier_of_detection"] is not None:
@@ -863,10 +917,193 @@ def print_scorecard(payload: dict[str, Any]) -> None:
         for entry in board["unreachable_list"]:
             print(f"    {entry['id']:<40} {entry['summary']}")
 
+    _print_unproven(board)
+
     if board["expectation_mismatches"]:
         print("\n  EXPECTATION MISMATCHES — the probe or the catalogue is stale:")
         for entry in board["expectation_mismatches"]:
             print(f"    {entry['id']}: {entry['note']}")
+
+
+# =============================================================================
+# Resume: merging into an earlier scorecard
+# =============================================================================
+
+
+class ResumeRefused(RuntimeError):
+    """An earlier scorecard ``--resume`` must not merge into."""
+
+
+@dataclass(frozen=True)
+class EarlierScorecard:
+    """What ``--resume`` carries forward from the file already at ``--out``."""
+
+    provenance: dict[str, Any]
+    results: tuple[MutantResult, ...]
+    runtime_seconds: float
+
+
+@dataclass(frozen=True)
+class ResumePlan:
+    """What a run carries forward from an earlier scorecard, and what it measures."""
+
+    carried: tuple[MutantResult, ...]
+    prior_seconds: float
+    to_measure: tuple[Mutant, ...]
+
+
+#: What a scorecard records about how it was measured. ``--resume`` merges only
+#: into a file that matches on every one of these: the first five are known
+#: before anything is measured, the digests only once the baselines are captured.
+PROVENANCE_KEYS: tuple[str, ...] = (
+    "ladder",
+    "interpreter",
+    "gates",
+    "reachability_only",
+    "commit",
+    "baseline_digest",
+    "wide_baseline_digest",
+)
+
+
+def head_commit() -> str:
+    """The commit being measured: provenance, and one thing ``--resume`` must match."""
+    proc = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return proc.stdout.strip()
+
+
+def earlier_to_merge(out: Path, known: dict[str, Any]) -> EarlierScorecard | None:
+    """The scorecard ``--resume`` merges into, checked against what is known so far.
+
+    Called before anything is spawned, with the provenance knowable from the
+    command line and the checkout -- so a file from another ladder, gate list,
+    interpreter, mode or commit is refused without a preflight or a baseline.
+    Raises ``ResumeRefused``; ``None`` when there is no file yet.
+    """
+    earlier = read_earlier(out)
+    if earlier is not None:
+        refuse_incompatible(earlier, known)
+    return earlier
+
+
+def resume_plan(
+    earlier: EarlierScorecard | None,
+    provenance: dict[str, Any],
+    selected: list[Mutant],
+    *,
+    reachability_only: bool,
+) -> ResumePlan:
+    """What this run carries forward, and which of the selected mutants it measures.
+
+    With no earlier scorecard nothing is carried and the whole selection is
+    measured. With one, it is checked again against the FULL provenance -- the
+    baseline digests exist only now -- and only the mutants it holds no settled
+    verdict for are measured. Raises ``ResumeRefused``.
+    """
+    if earlier is None:
+        return ResumePlan((), 0.0, tuple(selected))
+    refuse_incompatible(earlier, provenance)
+    remaining = _still_to_measure(selected, earlier.results, reachability_only=reachability_only)
+    return ResumePlan(earlier.results, earlier.runtime_seconds, tuple(remaining))
+
+
+def read_earlier(out: Path) -> EarlierScorecard | None:
+    """The scorecard already at ``out``, or ``None`` when there is none yet."""
+    if not out.exists():
+        return None
+    try:
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        results = tuple(_result_from_json(entry) for entry in payload["results"])
+        runtime_seconds = float(payload.get("runtime_seconds", 0.0))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise ResumeRefused(
+            f"--resume cannot read {out.name} as a scorecard ({type(exc).__name__}: {exc}). "
+            "Re-run without --resume, or point --out at a new file."
+        ) from exc
+    provenance = {key: payload.get(key) for key in PROVENANCE_KEYS}
+    return EarlierScorecard(provenance, results, runtime_seconds)
+
+
+def refuse_incompatible(earlier: EarlierScorecard, current: dict[str, Any]) -> None:
+    """Refuse to merge unless ``earlier`` matches every provenance key known so far.
+
+    A merged file is published, and banked, as ONE campaign. Two measurements of
+    different estates -- another commit, another gate list, another baseline
+    digest -- would sit in it indistinguishably, and the ratchet could not tell:
+    the catalogue would be complete. A key the earlier file does not record reads
+    as ``None`` and is refused like any other mismatch: it cannot be shown to
+    match, and tolerating it would merge every scorecard written before this
+    check existed -- a probe-only one's gate-less ``UNREACHABLE`` kept as settled.
+    """
+    mismatched = [key for key, value in current.items() if earlier.provenance.get(key) != value]
+    if not mismatched:
+        return
+    detail = "\n  ".join(
+        f"{key}: earlier {earlier.provenance.get(key)!r}, this run {current[key]!r}"
+        for key in mismatched
+    )
+    raise ResumeRefused(
+        "--resume refuses to merge: the earlier scorecard was measured on something "
+        f"else.\n  {detail}\nOne file holding two estates' measurements would read as "
+        "one campaign. Re-run without --resume, or point --out at a new file."
+    )
+
+
+def is_settled(result: MutantResult, *, reachability_only: bool) -> bool:
+    """Whether a resumed run keeps this verdict rather than measuring it again.
+
+    A probe-only run settles on its probe; a gate run on ``DETECTED``, ``ESCAPED``
+    or ``UNREACHABLE``. ``ERROR`` and ``UNPROVEN`` are measured again, and so is
+    ANY verdict a gate timed out on, a detection included: ``injection_ratchet``
+    refuses a scorecard holding any ``TIMEOUT``, so a kept one would leave the
+    merged file unbankable with no way to clear it but starting over.
+    """
+    if timed_out_gates(result):
+        return False
+    if reachability_only:
+        return result.verdict in (VERDICT_PROBED, VERDICT_UNREACHABLE)
+    return result.verdict in (VERDICT_DETECTED, VERDICT_ESCAPED, VERDICT_UNREACHABLE)
+
+
+def merge_results(
+    carried: tuple[MutantResult, ...], scored: list[MutantResult]
+) -> list[MutantResult]:
+    """The union by mutant id, this run's result winning, in catalogue order."""
+    by_id = {r.mutant_id: r for r in carried} | {r.mutant_id: r for r in scored}
+    order = {mutant.id: position for position, mutant in enumerate(CATALOGUE)}
+    return sorted(by_id.values(), key=lambda r: order.get(r.mutant_id, len(order)))
+
+
+def build_payload(
+    provenance: dict[str, Any], results: list[MutantResult], runtime_seconds: float
+) -> dict[str, Any]:
+    """The scorecard JSON: provenance, the board, and every result behind it."""
+    return {
+        **provenance,
+        "runtime_seconds": round(runtime_seconds, 1),
+        "scorecard": scorecard(results),
+        "results": [asdict(result) for result in results],
+    }
+
+
+def write_scorecard(out: Path, payload: dict[str, Any]) -> None:
+    """The one place the scorecard is written: after every mutant, and at the end.
+
+    Written beside ``out`` and renamed over it, never rewritten in place: an
+    interrupt between truncating ``out`` and finishing the write would leave a
+    file ``--resume`` refuses to read, and every result measured so far with it.
+    The rename either lands or leaves the previous checkpoint whole.
+    """
+    partial = out.with_name(f"{out.name}.partial")
+    with partial.open("w", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, indent=2) + "\n")
+    os.replace(partial, out)
 
 
 # =============================================================================
@@ -888,6 +1125,98 @@ def _confine_path(raw: Path) -> Path:
 
 
 def main() -> int:
+    """Run the campaign. Exit codes: 1 dirty target, 2 interpreter unusable,
+    3 probe unstable, 4 ``--out`` cannot take the scorecard, 5 ``--resume`` refused."""
+    args = _parse_args()
+    out = _confine_path(args.out)
+
+    if args.self_test:
+        return self_test()
+
+    # Refused, not created: --out is operator-supplied. An unusable path would
+    # otherwise fail only at the first checkpoint, after the baselines and the
+    # first mutant's ladder had been measured.
+    unusable = _unusable_out(out)
+    if unusable is not None:
+        print(
+            f"refusing to run: --out {out} cannot take the scorecard: {unusable}", file=sys.stderr
+        )
+        return 4
+
+    try:
+        assert_targets_clean()
+    except DirtyTree as exc:
+        print(exc)
+        return 1
+
+    ladder, gates = _ladder_with_timeout(args.ladder, args.timeout)
+    provenance = _known_provenance(ladder, gates, reachability_only=args.reachability_only)
+    try:
+        earlier = earlier_to_merge(out, provenance) if args.resume else None
+    except ResumeRefused as exc:
+        print(exc, file=sys.stderr)
+        return 5
+
+    # Before anything is mutated or measured. Skipped only where no gate will be
+    # spawned: --reachability-only probes in-process, so a broken interpreter
+    # cannot corrupt its verdicts.
+    if not args.reachability_only:
+        try:
+            preflight()
+        except InterpreterUnusable as exc:
+            print(exc, file=sys.stderr)
+            return 2
+
+    baseline_dir = _REPO_ROOT / ".claude" / "state" / "defect-injection"
+    baseline_dir.mkdir(parents=True, exist_ok=True)
+
+    started = time.perf_counter()
+    print("Capturing the unmutated baseline digest (twice, to prove it stable) ...", flush=True)
+    try:
+        provenance["baseline_digest"] = stable_baseline()
+        print(f"  narrow baseline {provenance['baseline_digest'][:16]} (rich)")
+        provenance["wide_baseline_digest"] = stable_baseline(portfolios=None)
+        print(f"  wide   baseline {provenance['wide_baseline_digest'][:16]} (whole RUNS matrix)")
+    except ProbeUnstable as exc:
+        print(exc, file=sys.stderr)
+        return 3
+
+    try:
+        plan = resume_plan(
+            earlier,
+            provenance,
+            select(args.mutants, args.categories),
+            reachability_only=args.reachability_only,
+        )
+    except ResumeRefused as exc:
+        print(exc, file=sys.stderr)
+        return 5
+
+    if not args.reachability_only:
+        _prepare_gate_baselines(gates, baseline_dir)
+
+    def _snapshot(scored: list[MutantResult]) -> dict[str, Any]:
+        elapsed = plan.prior_seconds + time.perf_counter() - started
+        return build_payload(provenance, merge_results(plan.carried, scored), elapsed)
+
+    results = run_campaign(
+        list(plan.to_measure),
+        gates,
+        baseline_dir,
+        provenance["baseline_digest"],
+        reachability_only=args.reachability_only,
+        wide_baseline_digest=provenance["wide_baseline_digest"],
+        on_result=lambda scored: write_scorecard(out, _snapshot(scored)),
+    )
+
+    payload = _snapshot(results)
+    write_scorecard(out, payload)
+    print_scorecard(payload)
+    print(f"\nWrote {out.name} in {payload['runtime_seconds']}s")
+    return 0
+
+
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Defect-injection scorecard (C6)")
     parser.add_argument(
         "--self-test", action="store_true", help="verify the catalogue, apply nothing"
@@ -900,86 +1229,94 @@ def main() -> int:
         "--timeout", type=float, default=None, help="override every gate timeout, minutes"
     )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--resume", action="store_true", help="skip mutants already in --out")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="merge into --out: keep its settled verdicts, measure the rest",
+    )
+    return parser.parse_args()
 
-    out = _confine_path(args.out)
 
-    if args.self_test:
-        return self_test()
-
-    try:
-        assert_targets_clean()
-    except DirtyTree as exc:
-        print(exc)
-        return 1
-
-    # Before anything is mutated or measured. Skipped only where no gate will be
-    # spawned: --reachability-only probes in-process, so a broken interpreter
-    # cannot corrupt its verdicts.
-    if not args.reachability_only:
-        try:
-            preflight()
-        except InterpreterUnusable as exc:
-            print(exc, file=sys.stderr)
-            return 2
-
-    mutants = select(args.mutants, args.categories)
-    if args.resume and out.exists():
-        done = {
-            entry["mutant_id"]
-            for entry in json.loads(out.read_text(encoding="utf-8")).get("results", [])
-        }
-        mutants = [mutant for mutant in mutants if mutant.id not in done]
-        print(f"resuming: {len(done)} already scored, {len(mutants)} to go")
-
-    ladder, gates = ladder_for(args.ladder)
-    if args.timeout is not None:
-        gates = tuple(
-            Gate(g.name, g.tier, g.cmd, g.legacy, args.timeout, g.baseline_cmd) for g in gates
-        )
-
-    baseline_dir = _REPO_ROOT / ".claude" / "state" / "defect-injection"
-    baseline_dir.mkdir(parents=True, exist_ok=True)
-
-    started = time.perf_counter()
-    print("Capturing the unmutated baseline digest (twice, to prove it stable) ...", flush=True)
-    try:
-        baseline_digest = stable_baseline()
-        print(f"  narrow baseline {baseline_digest[:16]} (rich)")
-        wide_baseline_digest = stable_baseline(portfolios=None)
-        print(f"  wide   baseline {wide_baseline_digest[:16]} (whole RUNS matrix)")
-    except ProbeUnstable as exc:
-        print(exc, file=sys.stderr)
-        return 3
-
-    if not args.reachability_only:
-        _prepare_gate_baselines(gates, baseline_dir)
-
-    results = run_campaign(
-        mutants,
-        gates,
-        baseline_dir,
-        baseline_digest,
-        reachability_only=args.reachability_only,
-        wide_baseline_digest=wide_baseline_digest,
+def _ladder_with_timeout(name: str, timeout: float | None) -> tuple[str, tuple[Gate, ...]]:
+    """``ladder_for``, with ``--timeout`` applied to every gate when given."""
+    ladder, gates = ladder_for(name)
+    if timeout is None:
+        return ladder, gates
+    return ladder, tuple(
+        Gate(g.name, g.tier, g.cmd, g.legacy, timeout, g.baseline_cmd) for g in gates
     )
 
-    payload = {
+
+def _known_provenance(
+    ladder: str, gates: tuple[Gate, ...], *, reachability_only: bool
+) -> dict[str, Any]:
+    """The provenance known before anything is measured; the digests are added later."""
+    return {
         "ladder": ladder,
         # Provenance: a scorecard has to say which interpreter produced it, or a
         # reader cannot tell an override apart from the default.
         "interpreter": " ".join(interpreter_override() or _UV_PREFIX),
         "gates": [g.name for g in gates],
-        "runtime_seconds": round(time.perf_counter() - started, 1),
-        "baseline_digest": baseline_digest,
-        "scorecard": scorecard(results),
-        "results": [asdict(result) for result in results],
+        "reachability_only": reachability_only,
+        "commit": head_commit(),
     }
-    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    print_scorecard(payload)
-    print(f"\nWrote {out.name} in {payload['runtime_seconds']}s")
-    return 0
+
+
+def _unusable_out(out: Path) -> str | None:
+    """Why ``--out`` cannot take the scorecard, or ``None`` when it can."""
+    if not out.parent.is_dir():
+        return "its directory does not exist"
+    if out.is_dir():
+        return "it is a directory"
+    # Every write creates a file in the directory and renames it over ``out``
+    # (``write_scorecard``), so the directory must take one; an existing
+    # scorecard the operator made read-only is refused rather than replaced.
+    if not os.access(out.parent, os.W_OK | os.X_OK):
+        return "its directory is not writable"
+    if out.exists() and not os.access(out, os.W_OK):
+        return "it is not writable"
+    return None
+
+
+def _still_to_measure(
+    selected: list[Mutant], carried: tuple[MutantResult, ...], *, reachability_only: bool
+) -> list[Mutant]:
+    """The selected mutants the earlier scorecard has no settled verdict for."""
+    settled = {r.mutant_id for r in carried if is_settled(r, reachability_only=reachability_only)}
+    remaining = [mutant for mutant in selected if mutant.id not in settled]
+    print(
+        f"resuming: {len(carried)} carried, {len(settled)} settled, "
+        f"{len(remaining)} of the {len(selected)} selected to measure"
+    )
+    return remaining
+
+
+def _uncaught_verdict(result: MutantResult, *, reachable: bool) -> str:
+    """The verdict for a mutant no gate went red on.
+
+    ``ESCAPED`` and ``UNREACHABLE`` both say "every gate stayed green", which a
+    gate that timed out did not do -- it never finished, so it may be the one that
+    would have caught the mutant. That holds on the probe-dead branch too: gates
+    do catch mutants the probe calls dead.
+    """
+    if timed_out_gates(result):
+        return VERDICT_UNPROVEN
+    return VERDICT_ESCAPED if reachable else VERDICT_UNREACHABLE
+
+
+def _print_unproven(board: dict[str, Any]) -> None:
+    """The board's UNPROVEN block: each mutant, and the gates that never finished."""
+    if not board["unproven_list"]:
+        return
+    print("\n  UNPROVEN — no gate went red, but these gates never finished:")
+    for entry in board["unproven_list"]:
+        print(f"    {entry['id']:<40} timed out: {', '.join(entry['timed_out'])}")
+
+
+def _result_from_json(entry: dict[str, Any]) -> MutantResult:
+    """One ``results`` entry back into the dataclass it was written from."""
+    fields = {key: value for key, value in entry.items() if key != "gates"}
+    return MutantResult(**fields, gates=[GateResult(**gate) for gate in entry.get("gates", [])])
 
 
 def _prepare_gate_baselines(gates: tuple[Gate, ...], baseline_dir: Path) -> None:

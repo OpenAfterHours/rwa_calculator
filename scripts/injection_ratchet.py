@@ -13,7 +13,7 @@ Key responsibilities:
   of detection, and the ``ESCAPED`` list, which is the load-bearing output.
 - Refuse to draw any conclusion from a scorecard that cannot be trusted: a
   filtered campaign, a mutant whose reachability verdict contradicts the
-  catalogue, a gate that timed out, an ``ERROR`` verdict.
+  catalogue, a gate that timed out, an ``ERROR`` or ``UNPROVEN`` verdict.
 - Ratchet the ABSOLUTE verdict SETS per ladder, two ways, against
   ``scripts/injection_baseline.json``.
 - Fail loudly, and non-zero, while that baseline is un-banked.
@@ -154,7 +154,8 @@ class Board:
     timeouts: dict[str, list[str]]
     #: mutant id -> the harness's own expectation-mismatch note.
     notes: dict[str, str]
-    #: Verdicts that are neither detected, escaped nor unreachable (ERROR, PROBED).
+    #: Verdicts that are neither detected, escaped nor unreachable (ERROR, PROBED,
+    #: UNPROVEN). Each is a trust failure: none of them is a measurement to bank.
     other_verdicts: dict[str, str]
     escaped_rows: tuple[tuple[str, str, str], ...]
 
@@ -279,8 +280,9 @@ def trust_failures(board: Board) -> list[str]:
             f"{board.ladder}: {_plural(len(missing), 'catalogue mutant')} carrying no verdict "
             f"({', '.join(missing[:5])}{' ...' if len(missing) > 5 else ''}). A filtered or "
             "sharded campaign cannot be ratcheted — the un-run mutants would bank as if "
-            "they did not exist. Note --resume does NOT merge earlier results into the "
-            "scorecard it writes, so a resumed run is not a complete one."
+            "they did not exist. A campaign that stopped part-way is finished by re-running "
+            "it with --resume against the same --out, which measures only the missing "
+            "mutants and merges them in."
         )
     unknown = sorted(scored_ids - catalogue_ids)
     if unknown:
@@ -324,8 +326,9 @@ def trust_failures(board: Board) -> list[str]:
         failures.append(
             f"{board.ladder}: {_plural(len(board.timeouts), 'mutant')} had a gate TIME OUT ({detail}). "
             "A timeout is not a pass and not a failure — it is a gate that never finished, "
-            "so any ESCAPED verdict resting on it is unproven. Raise the gate timeout or "
-            "shard the campaign, then re-measure."
+            "so no escape or dead path can rest on it (the harness scores those UNPROVEN). "
+            "Raise the gate timeout and re-run with --resume against the same --out: it "
+            "re-measures every mutant a gate timed out on."
         )
 
     if board.other_verdicts:

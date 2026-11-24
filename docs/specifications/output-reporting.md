@@ -327,6 +327,23 @@ Approach's), but always allocated to row 0261 in Section 3.
       the covered part inside one blended row (P1.347), and a covered leg the due
       diligence override or the Art. 113(6) intra-group 0% re-weights after
       substitution is banded on its own weight as it stood before those steps.
+    - **Substitution flows are pre-conversion-factor, on both templates.** C 07.00
+      cols 0050/0060/0090/0100 and C 08.01/02 cols 0040/0050/0070/0080 book "the
+      covered part of the Original Exposure pre-conversion factors" (CRR Annex II
+      pp.88/100; PS1/26 Annex II pp.83-84/103-104), not the covered exposure value
+      `guaranteed_portion`. `reporting/corep/crm_substitution.py::covered_pre_ccf`
+      adds back the covered share of what the conversion factor took off the leg
+      (`nominal_after_provision - ead_from_ccf`), so a drawn leg's flow is
+      unchanged, collateralised or not. Worked example (a 70% SA guarantee of an
+      F-IRB commitment of 1,000,000 drawn to 600,000, 50% factor): 700,000 leaves
+      C 08.01 and arrives on C 07.00, where cols 0160-0190 hold the covered undrawn
+      280,000 in the 50% column and col 0200 reports 560,000. That column is the
+      factor the covered part was converted at, `ccf_guaranteed`
+      (`corep/ccf_buckets.py::sa_ccf_bucket_expr`), not the obligor's F-IRB 75%,
+      which has no C 07.00 column. **Not yet:** OF 08.01 col 0100 still leaves out
+      the off-balance-sheet inflow (`boe_b0307`), and `boe_b0735` compares that
+      post-substitution column with OF 08.03's pre-substitution col 0020, so the
+      two cannot both hold where an off-balance-sheet covered part changes sheet.
     - Equity exposures under the Standardised Transitional Approach (Rules 4.1–4.10
       of the Credit Risk: General Provisions (CRR) Part) are allocated to rows 0250
       and 0261 per Art. 133, and additionally reported against memorandum rows

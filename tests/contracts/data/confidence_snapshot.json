@@ -359,7 +359,8 @@
         "rwa_calc.engine.ccf::build_product_to_risk_type_expr",
         "rwa_calc.engine.ccf::sa_ccf_expression",
         "rwa_calc.engine.crm.provisions::resolve_provisions",
-        "rwa_calc.engine.hierarchy.facility_undrawn::_undrawn_select_expressions"
+        "rwa_calc.engine.hierarchy.facility_undrawn::_undrawn_select_expressions",
+        "rwa_calc.reporting.corep.ccf_buckets::sa_ccf_bucket_expr"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -392,6 +393,7 @@
         "engine/kernels/allocation.py",
         "reporting/corep/__init__.py",
         "reporting/corep/c07.py",
+        "reporting/corep/ccf_buckets.py",
         "reporting/corep/generator.py",
         "reporting/kernel/columns.py",
         "reporting/lineage.py",
@@ -4287,6 +4289,7 @@
         "rwa_calc.engine.sa.guarantor_rw::build_guarantor_rw_expr",
         "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution",
         "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution",
+        "rwa_calc.reporting.corep.crm_substitution::covered_pre_ccf",
         "rwa_calc.reporting.kernel.bases::origin_risk_weight",
         "rwa_calc.reporting.kernel.bases::substituted_leg"
       ],
@@ -4332,6 +4335,7 @@
         "tests/fixtures/p1_218/p1_218.py",
         "tests/fixtures/p1_229/p1_229.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/fixtures/reporting_offbs_substitution_portfolio.py",
         "tests/integration/test_pre_post_crm_reporting.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/corpus.py",
@@ -6149,7 +6153,6 @@
         "reporting/corep/c08_07.py",
         "reporting/corep/c08_sheets.py",
         "reporting/corep/c09.py",
-        "reporting/corep/crm_substitution.py",
         "reporting/corep/of02.py"
       ],
       "test_files": [],
@@ -6366,7 +6369,8 @@
         "rwa_calc.engine.ccf::CCFCalculator._compute_ccf",
         "rwa_calc.engine.ccf::build_product_to_risk_type_expr",
         "rwa_calc.engine.hierarchy.facility_undrawn::_undrawn_select_expressions",
-        "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr"
+        "rwa_calc.reporting.corep.ccf_buckets::of08_01_ccf_row_expr",
+        "rwa_calc.reporting.corep.ccf_buckets::sa_ccf_bucket_expr"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -9262,7 +9266,8 @@
       "code_functions": [
         "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr",
         "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution",
-        "rwa_calc.engine.slotting.transforms::zero_covered_expected_loss"
+        "rwa_calc.engine.slotting.transforms::zero_covered_expected_loss",
+        "rwa_calc.reporting.corep.crm_substitution::covered_pre_ccf"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -9279,7 +9284,8 @@
         "engine/eu_sovereign.py",
         "engine/irb/guarantee.py",
         "engine/sa/guarantor_rw.py",
-        "engine/slotting/transforms.py"
+        "engine/slotting/transforms.py",
+        "reporting/corep/crm_substitution.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_f8_guarantee_rwa_benefit.py",

@@ -19,7 +19,10 @@ Key responsibilities:
   (``of08_01_ccf_row_expr``).
 
 OF 07.00 (``corep/c07.py``, columns 0160-0190) reads the same carrier ladder
-and bucket rule from here, with its own factor-to-column maps.
+and bucket rule from here, with its own factor-to-column maps, through
+``sa_ccf_bucket_expr``: on the SA template a leg that crossed from an IRB obligor
+to an SA protection provider is bucketed by the SA factor its covered part was
+converted at (``ccf_guaranteed``), not by the obligor's IRB ``ccf``.
 
 THE OF 08.01 ROWS. PS1/26 Annex II p.116, rows "0031, 0032, 0001, 0033, 0035
 BREAKDOWN OF OFF-BALANCE SHEET ITEMS BY CONVERSION FACTORS": "For exposures
@@ -74,7 +77,7 @@ from typing import TYPE_CHECKING, Final
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.reporting.corep.irb_sheets import AIRB
+from rwa_calc.reporting.corep.irb_sheets import AIRB, FIRB, SLOTTING
 from rwa_calc.reporting.kernel import pick
 
 if TYPE_CHECKING:
@@ -107,6 +110,12 @@ OF08_01_CCF_ROWS: Final[tuple[str, ...]] = (*OF08_01_ROW_BY_CCF.values(), OWN_ES
 _PLACES: Final = 4
 
 _ORIGIN_APPROACH: Final = "reporting_approach_origin"
+_POST_APPROACH: Final = "reporting_approach"
+#: The factor the engine converted a leg's COVERED part at. Equal to ``ccf`` except
+#: where ``engine/crm/guarantees.py::_apply_cross_approach_ccf`` swapped an IRB
+#: obligor's factor for the SA one of its standardised protection provider.
+_COVERED_CCF: Final = "ccf_guaranteed"
+_IRB_APPROACHES: Final[tuple[str, ...]] = (FIRB, AIRB, SLOTTING)
 _OWN_EAD: Final = "ead_modelled"
 _OWN_CCF: Final = "ccf_modelled"
 _REVOLVING: Final = "is_revolving"
@@ -115,18 +124,56 @@ _PURCHASED_RECEIVABLE: Final = "is_purchased_receivable_commitment"
 _FULL_CONVERSION: Final = 1.0
 
 
-def ccf_bucket_expr(ccf_col: str, refs: Mapping[float, str]) -> pl.Expr:
-    """The ref of the bucket whose factor ``ccf_col`` holds; null when none does.
+def ccf_bucket_expr(ccf: str | pl.Expr, refs: Mapping[float, str]) -> pl.Expr:
+    """The ref of the bucket whose factor ``ccf`` holds; null when none does.
 
-    ``refs`` maps each bucket's conversion factor to the ref the caller reports
-    it under (a column of OF 07.00, a row of OF 08.01). The factor is compared
-    rounded to ``_PLACES`` decimal places.
+    ``ccf`` is a carrier column name or an expression for the factor. ``refs``
+    maps each bucket's conversion factor to the ref the caller reports it under
+    (a column of OF 07.00, a row of OF 08.01). The factor is compared rounded to
+    ``_PLACES`` decimal places.
     """
-    factor = pl.col(ccf_col).cast(pl.Float64, strict=False).round(_PLACES)
+    applied = pl.col(ccf) if isinstance(ccf, str) else ccf
+    factor = applied.cast(pl.Float64, strict=False).round(_PLACES)
     bucket: pl.Expr = pl.lit(None, dtype=pl.String)
     for value, ref in refs.items():
         bucket = pl.when(factor == round(value, _PLACES)).then(pl.lit(ref)).otherwise(bucket)
     return bucket
+
+
+@cites("CRR Art. 111")
+@cites("PS1/26, paragraph 111")
+def sa_ccf_bucket_expr(cols: set[str], ccf_col: str, refs: Mapping[float, str]) -> pl.Expr:
+    """OF 07.00's conversion-factor bucket: the factor the leg was converted at.
+
+    Cols 0160-0190 break down col 0150 on the POST-substitution basis, and col 0200
+    is that breakdown converted (``v0308_m`` / ``boe_b0471``), so a leg belongs in
+    the column of the factor its exposure value was actually computed with. For
+    every leg but one kind that is ``ccf_col``. The exception is a covered part an
+    IRB obligor's guarantee moved to an SA protection provider: the engine converts
+    it at the provider's SA factor (``ccf_guaranteed``) and leaves ``ccf`` holding
+    the obligor's IRB one. Under CRR an F-IRB commitment's 75% has no OF 07.00
+    column at all, so the leg's undrawn amount reached col 0150 through the col
+    0100 inflow and no breakdown column (``v6364_m`` on row 0080). Under Basel 3.1
+    the F-IRB factor is the SA one, so only an A-IRB leg's own estimate can differ;
+    read from the swap, not measured (no portfolio holds such a leg).
+
+    A leg crosses when its origin approach is an IRB one and its post-substitution
+    approach is not (the ``crm_substitution`` partition). A frame without the two
+    approach columns or ``ccf_guaranteed`` (synthetic unit frames) buckets on
+    ``ccf_col``, and so does a crossing leg whose ``ccf_guaranteed`` is null.
+    """
+    if not {_COVERED_CCF, _ORIGIN_APPROACH, _POST_APPROACH} <= cols:
+        return ccf_bucket_expr(ccf_col, refs)
+    crossed = (
+        pl.col(_ORIGIN_APPROACH).is_in(list(_IRB_APPROACHES))
+        & ~pl.col(_POST_APPROACH).is_in(list(_IRB_APPROACHES))
+    ).fill_null(value=False)
+    applied = (
+        pl.when(crossed)
+        .then(pl.coalesce(pl.col(_COVERED_CCF), pl.col(ccf_col)))
+        .otherwise(pl.col(ccf_col))
+    )
+    return ccf_bucket_expr(applied, refs)
 
 
 @cites("PS1/26, paragraph 111")

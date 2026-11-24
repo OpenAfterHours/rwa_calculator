@@ -958,6 +958,14 @@
     "PS1/26, paragraph 111",
     "PS1/26, paragraph 166D"
   ],
+  "rwa_calc.reporting.corep.ccf_buckets::sa_ccf_bucket_expr": [
+    "CRR Art. 111",
+    "PS1/26, paragraph 111"
+  ],
+  "rwa_calc.reporting.corep.crm_substitution::covered_pre_ccf": [
+    "CRR Art. 235",
+    "PS1/26, paragraph 235"
+  ],
   "rwa_calc.reporting.corep.of02::generate_of_02_01": [
     "PS1/26, paragraph 1.3"
   ],

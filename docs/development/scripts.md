@@ -257,7 +257,7 @@ A *parked finding* is one a gate made and the estate then agreed to tolerate: a 
 
 This script gates the two registers whose membership is **declared**:
 
-- `tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`
+- `tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS` — keyed by oracle id for the direct-branch cases, and by `"<id>@pipeline"` for a disagreement seen only when that record runs end to end through `PipelineOrchestrator` in `tests/oracle/test_oracle_pipeline.py`
 - `tests/conformance/classification_table.toml`'s `[[known_disagreement]]`
 
 ```bash

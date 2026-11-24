@@ -31,8 +31,9 @@ passes. That defect class belongs to this suite alone.
 | `derivations/` | The shadow calculator. Stdlib-only modules that recompute the expected values. **Never imports `rwa_calc`.** |
 | `derive.py` | Assembles the derivation records and writes `expected_values.json`. |
 | `expected_values.json` | Generated. Carries a SHA-256 hash of `ORACLE_DERIVATIONS.md` so the doc and JSON cannot drift apart. |
-| `drivers.py` | The only module here that imports `rwa_calc`. Supplies *inputs* to a calculator's `calculate_branch` — or, for phase O3, to the CRM stage and then the SA branch — and collects the row back. Derives nothing. |
+| `drivers.py` | The only module here that imports `rwa_calc`. Supplies *inputs* to a calculator's `calculate_branch` — or, for phase O3, to the CRM stage and then the SA branch — and collects the row back. `run_pipeline` instead translates a record into raw input tables and runs the whole pipeline. Derives nothing. |
 | `test_oracle.py` | Pytest module. Compares engine output against the oracle within relative error 1e-6, asserts the doc-hash lock, and asserts the derivation modules never import the engine. |
+| `test_oracle_pipeline.py` | Pytest module. Runs a curated subset of the same records end to end through `PipelineOrchestrator` and holds the pipeline to the same expected values at the same tolerance, after asserting each run reaches the record's fact pattern. |
 
 ### Layout of `derivations/`
 
@@ -61,7 +62,9 @@ uv run pytest tests/oracle -n 0
 Pass `-n 0`. Phases O1, O2 and O4 are scalar arithmetic against direct calculator
 calls; letting xdist spin up workers costs more than they do. Phase O3 runs the
 CRM stage per oracle and dominates the runtime — the whole suite is around a
-minute, most of it O3.
+minute, most of it O3. `test_oracle_pipeline.py` adds about twenty seconds
+(17–23 s measured with `-n 0` on a shared 4-core machine): one full pipeline
+run per curated record, shared by that record's two tests.
 
 If the doc-hash test fails, see the failure message — it has the recovery recipe
 inline.
@@ -151,13 +154,77 @@ test skips it and the gap stays visible.
   scenario coverage and 1% tolerance. The oracle suite has narrow coverage
   and 1e-6 tolerance: it answers "is the math right?", not "does the
   pipeline still produce the same answer it produced last week?"
-- **Not an integration test.** Phases O1, O2 and O4 bypass hierarchy, classifier
-  and CRM by calling the relevant calculator's `calculate_branch` directly. This
-  is deliberate: the oracle isolates regulatory math from pipeline plumbing.
-  Phase O3 is the one exception — it runs the CRM stage and then the SA branch,
-  because the CRM stage *is* what O3 tests. It still bypasses hierarchy and the
-  classifier.
-- **Not exhaustive.** 215 exposures across phases O1, O2, O3 and O4.
+- **Not, in `test_oracle.py`, an integration test.** Phases O1, O2 and O4 bypass
+  hierarchy, classifier and CRM by calling the relevant calculator's
+  `calculate_branch` directly. This is deliberate: the oracle isolates regulatory
+  math from pipeline plumbing. Phase O3 is the one exception — it runs the CRM
+  stage and then the SA branch, because the CRM stage *is* what O3 tests. It
+  still bypasses hierarchy and the classifier.
+
+  The cost of that isolation is that a green branch case cannot show the input
+  it hands the calculator ever reaches it in production. P1.316 is the measured
+  case: the Art. 121(1) Table 5 oracles went green and discharged their xfails
+  while a real portfolio still took the 100% fallback on every leg, because the
+  driver sets `cp_sovereign_cqs` itself. `test_oracle_pipeline.py` (P5.43) is
+  the end-to-end half: a curated subset of the same records — the Table 5
+  family, an SCRA institution, F-IRB, the three O3 methods, slotting and equity,
+  across both regimes — translated into raw input tables by
+  `drivers.run_pipeline` and run through `PipelineOrchestrator`. Each run is
+  first held to the record's fact pattern — class, approach, and each stated
+  input listed in `drivers.PIPELINE_ECHOES` (unchanged) or
+  `drivers.PIPELINE_YEAR_ECHOES` (within a day) — because the classifier
+  re-derives both and a mistranslated record would otherwise test something
+  else. The stated inputs the aggregator exit does not carry as stated (`ead`,
+  residual maturity, the null `lgd`, `crm_method`, collateral, guarantee and
+  guarantor items, `is_exchange_traded`) are named, with the reason, in
+  `drivers.PIPELINE_UNECHOED_INPUTS`. Most are held by the numbers; the two
+  residual-maturity inputs and `is_exchange_traded` are inert on every curated
+  record that states them (varied, and no compared figure moved), so nothing
+  holds them and they are not coverage. A test keeps the three maps a partition
+  of what the curated records state. The Table 5 family covers each wrong
+  variant separately: sovereign CQS 1 / 2 / 6 against the 100% unrated
+  fallback, CQS 3 against the rated-institution Art. 120 Table 3 (the one step
+  the two tables differ on), and the unrated sovereign as the survivor — it
+  stays green when the sovereign CQS is lost, and catches one that is invented.
+  RWA is read before the output floor. The same test fails a run in which any
+  leg's treatment rests on a branch the engine itself calls unjustified —
+  `UNKNOWN_FALLBACK` in a branch-reason column, or BR001 among the errors (it
+  is WARNING severity, so the ERROR check does not see it) — and no record is
+  exempt, because such a figure can agree with the oracle by coincidence.
+  ORC-052 did: a US bank lent USD reached 40% on the PS1/26 Art. 121(6)
+  unknown-domesticity limb (P1.333) until the translation loaded the obligor's
+  `local_currency` (`drivers._JURISDICTION_LOCAL_CURRENCY`); it now reaches the
+  record's own case, `domestic_currency` at 40%.
+
+  A fact-pattern failure is never parked: it is a translation slip or a stage
+  losing or inventing an input (an engine defect, as P1.316 was), and either is
+  fixed. A record whose fact pattern holds but whose numbers disagree only
+  there may be parked in `KNOWN_DISAGREEMENTS` under `"<id>@pipeline"`, with an
+  OWNER token. That key strict-xfails the record's `test_pipeline_matches_oracle`
+  and nothing else: its fact-pattern test keeps running unmarked, and
+  `test_oracle.py` reads bare ids only.
+
+  The curated records run every stage but do not reach every path:
+  `drivers.py`'s module docstring lists the ones no record exercises (FX
+  conversion, the date-derived IRB `M`, the real-estate splitter, CCF and
+  off-balance-sheet conversion, the facility hierarchy, provisions, a binding
+  output floor, and two limbs of the Art. 121(6) sovereign floor: the floor
+  binding, and the engine's fallback domesticity test for an obligor loaded
+  with no `local_currency`, including the P1.333 indeterminate case for a
+  non-UK/EU obligor, which the branch cases ORC-052 to ORC-055 reach instead),
+  and a green pipeline case says nothing about them.
+
+  To add a record to it: put its id in `PIPELINE_ORACLES`. If
+  `drivers.run_pipeline` refuses one of its inputs, add a translation rule in
+  `_translate_record` — never drop the input — and keep the rule exercised:
+  `test_pipeline_oracles_hold_every_translated_approach_in_both_regimes` fails
+  if an approach the driver translates has no curated record in either regime.
+  An input no curated record has stated before must also be classified: echo it
+  at the exit if the exit carries it, otherwise name it in
+  `PIPELINE_UNECHOED_INPUTS` with the reason and what holds it — vary it on the
+  record and say which compared figure moved, or that none did
+  (`test_every_stated_input_is_echoed_or_named_unechoed` fails until you do).
+- **Not exhaustive.** 219 exposures across phases O1, O2, O3 and O4.
   Off-balance-sheet conversion factors and the entity-level output floor are out
   of scope, as are the O3 items listed in the roadmap below — see the "Scope not
   yet covered" section of `ORACLE_DERIVATIONS.md`.

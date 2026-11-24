@@ -28,9 +28,13 @@ tighter than the 1% used by the regression-style acceptance tests, because the
 oracle is testing analytical correctness, not data-quality robustness.
 
 Pipeline position tested: each oracle calls the relevant calculator's
-`calculate_branch` directly via tests/oracle/drivers.py. This deliberately
-bypasses hierarchy / classifier / CRM so the oracle exercises only the
-regulatory math. Pipeline-integration concerns are tested elsewhere.
+`calculate_branch` directly via tests/oracle/drivers.py (phase O3 runs the CRM
+stage first). This deliberately bypasses hierarchy / classifier (and, outside
+O3, CRM) so the oracle exercises only the regulatory math -- which also means a
+green case here cannot show that the inputs it hands the branch ever reach it in
+production. tests/oracle/test_oracle_pipeline.py closes that gap for a curated
+subset of these same records by running them through PipelineOrchestrator
+(P5.43); it reuses this module's comparisons, tolerance and register.
 """
 
 from __future__ import annotations
@@ -90,7 +94,14 @@ TOLERANCE = PAYLOAD["tolerance_relative"]
 # and all six run as ordinary passing cases alongside ORC-021 (Art. 121(2)).
 # The shared `_ART_121_TABLE_5` reason string had exactly these three consumers
 # and was deleted with them. Do not re-add without an engine change that
-# re-breaks them; the six-step family plus ORC-021 is the regression guard.
+# re-breaks them. The six-step family plus ORC-021 guards the ARITHMETIC only:
+# the branch driver sets `cp_sovereign_cqs` itself, so these cases stay green if
+# the sovereign CQS stops reaching the branch in production. That half is
+# guarded by ORC-105 / 020 / 106 / 109 / 021 in test_oracle_pipeline.py (P5.43).
+#
+# A disagreement that appears only in test_oracle_pipeline.py is parked here
+# too, under the key "<id>@pipeline": same ratchet, same OWNER grammar, and the
+# key reaches that module's parametrisation only.
 _ART_154_4A_B_SCOPE = (
     "PS1/26 Art. 154(4A)(b) confines the 10% RWEA floor to (i) NON-DEFAULTED, "
     "(ii) RETAIL exposures secured by RESIDENTIAL immovable property, (iii) in "

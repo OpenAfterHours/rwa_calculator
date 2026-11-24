@@ -245,10 +245,15 @@ See [Classification](../features/classification.md) for the complete classificat
 
 **Valid `seniority` values:**
 
-| Value | F-IRB LGD | Description |
-|-------|-----------|-------------|
-| `senior` | 45% | Senior unsecured claims |
-| `subordinated` | 75% | Subordinated claims |
+| Value | F-IRB LGD | CRR Art. 501a infrastructure factor | Description |
+|-------|-----------|-------------------------------------|-------------|
+| `senior` | 45% | Not withheld on seniority | Senior unsecured claims |
+| `subordinated` | 75% | Withheld (Art. 501a(1)(h)) | Subordinated claims |
+
+The infrastructure factor reads `seniority` case-insensitively. A null (missing) value counts as
+`senior`. Any value other than `senior`, including an empty string and out-of-domain values such as
+`junior` (which raise a DQ006 warning but are passed through), withholds the factor. See
+[Supporting Factors](../specifications/crr/supporting-factors.md).
 
 **Valid `risk_type` values (CRR Art. 111 Annex I / PRA PS1/26 Art. 111 Table A1):**
 

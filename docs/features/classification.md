@@ -165,10 +165,15 @@ exposure_class      # Unified class (SA class for backwards compatibility)
 - Sets `exposure_class_for_sa = DEFAULTED` (SA treatment)
 - IRB exposures keep their class but use default LGD
 
-**Infrastructure classification** — identifies infrastructure exposures per CRR Art. 501a:
+**Infrastructure candidate** — nominates exposures for the CRR Art. 501a infrastructure factor:
 - Checks product_type for "INFRASTRUCTURE" pattern
-- Sets `is_infrastructure = True`
-- Eligible for 0.75 supporting factor under CRR (not Basel 3.1)
+- Sets `is_infrastructure = True` (a derived flag; there is no `is_infrastructure` input)
+- The flag is a candidate, not eligibility. The 0.75 factor (CRR only, not Basel 3.1) is applied
+  by the supporting-factor calculator only where the exposure also meets Art. 501a(1)(a)
+  (corporate, corporate-SME or specialised-lending class, not in default) and its `seniority` is
+  `senior` (case-insensitive) or null (missing) (limb (h)); an empty string is
+  not null and is denied. The other Art. 501a limbs are firm attestations the calculator
+  does not check — see [Supporting Factors](../specifications/crr/supporting-factors.md)
 
 **FI scalar classification** — determines FI scalar eligibility per CRR Art. 153(2):
 

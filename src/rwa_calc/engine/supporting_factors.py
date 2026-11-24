@@ -39,19 +39,24 @@ blended factor is applied to each SME row's full RWA.
 Infrastructure Supporting Factor (CRR Art. 501a):
 - Qualifying infrastructure: factor of 0.75
 
-**Only limb (a) of Art. 501a(1) is enforced — this is not full Art. 501a
-compliance.** ``apply_factors`` gates the factor on the exposure being "included
-either in the corporate exposure class or in the specialised lending exposures
-class, with the exclusion of exposures in default", and on the
-``is_infrastructure`` candidate flag. Limbs (b)-(o) — the special-purpose entity
-test (b), the two-thirds cash-flow source (c), stressed conditions (d),
-predictable cash flows (e), refinancing risk (f), the seven lender-protection
-tests (g), seniority (h), the construction-phase equity-investor tests (i),
-completion safeguards (j), operating risk (k), tested technology (l), permits
-(m), derivatives use (n) and the environmental assessment (o) — and paragraph 2
-(what makes cash flows "predictable") are implemented nowhere in this codebase.
-Most of them are attestations rather than derivations and need an input field
-that does not exist yet.
+**Only limbs (a) and (h) of Art. 501a(1) are enforced, and (h) only as a
+denial — this is not full Art. 501a compliance.** ``apply_factors`` gates the
+factor on the ``is_infrastructure`` candidate flag (a ``product_type`` substring
+match), on the exposure being "included either in the corporate exposure class
+or in the specialised lending exposures class, with the exclusion of exposures
+in default" (limb (a)), and on the ``seniority`` input not contradicting limb
+(h) — "the obligation is senior to all other claims other than statutory claims
+and claims from derivatives counterparties". A row whose seniority is anything
+other than ``"senior"`` (case-folded) or null is denied; a ``"senior"`` row is
+not thereby proven senior to every non-statutory claim. Limbs (b)-(g) and
+(i)-(o) — the special-purpose entity test (b), the two-thirds cash-flow source
+(c), stressed conditions (d), predictable cash flows (e), refinancing risk (f),
+the seven lender-protection tests (g), the construction-phase equity-investor
+tests (i), completion safeguards (j), operating risk (k), tested technology (l),
+permits (m), derivatives use (n) and the environmental assessment (o) — and
+paragraph 2 (what makes cash flows "predictable") are implemented nowhere in
+this codebase. They are firm attestations rather than derivations; no input
+field carries them.
 
 Cumulation of the two factors: where a row is eligible for both, the engine
 takes the lower (more beneficial) factor. That is a **firm policy choice, not a
@@ -64,6 +69,7 @@ References:
 - CRR2 Art. 501 (EU 2019/876 amending EU 575/2013)
 - CRR Art. 501a: Infrastructure supporting factor
 - CRR Art. 501a(1)(a): corporate / specialised lending class, non-defaulted
+- CRR Art. 501a(1)(h): seniority (denial on a non-senior ``seniority`` input)
 """
 
 from __future__ import annotations
@@ -208,14 +214,18 @@ class SupportingFactorCalculator:
         The tier calculation uses drawn_amount + interest ("amount owed"),
         NOT ead_final which includes CCF-adjusted undrawn commitments.
 
-        The infrastructure factor (Art. 501a) is gated on limb (1)(a) only:
-        ``is_infrastructure`` AND ``exposure_class`` in {corporate,
-        corporate_sme, specialised_lending} AND not defaulted. The class and
-        default limbs are independently necessary — a defaulted corporate keeps
-        its corporate ``exposure_class`` in the engine, so the class test alone
-        would not exclude it. Limbs (b)-(o) and paragraph 2 of Art. 501a are not
-        implemented anywhere; see the module docstring. Where both factors
-        apply, the lower is taken — a policy choice CRR does not prescribe.
+        The infrastructure factor (Art. 501a) is gated on limbs (1)(a) and
+        (1)(h): ``is_infrastructure`` AND ``exposure_class`` in {corporate,
+        corporate_sme, specialised_lending} AND not defaulted AND ``seniority``
+        null or ``"senior"`` (case-folded). The class and default limbs are
+        independently necessary — a defaulted corporate keeps its corporate
+        ``exposure_class`` in the engine, so the class test alone would not
+        exclude it. Limb (h) is a denial only: a non-senior input fails it, a
+        senior one is not thereby proven to meet it. Limbs (b)-(g), (i)-(o) and
+        paragraph 2 of Art. 501a are not implemented anywhere; see the module
+        docstring. Where both factors apply, the lower is taken — a policy
+        choice CRR does not prescribe — so an SME row denied Art. 501a keeps
+        its Art. 501 factor (Art. 501 has no seniority condition).
 
         Expects columns:
         - is_sme: bool
@@ -225,6 +235,8 @@ class SupportingFactorCalculator:
         - exposure_class: str (optional; Art. 501a(1)(a) class limb — always
           present on the pipeline's branch edges, absent only on minimal test
           harness frames, where the class limb is skipped)
+        - seniority: str (optional; Art. 501a(1)(h) limb — a required crm_exit
+          column; absent only on harness frames, where it reads as senior)
         - drawn_amount: float (on-balance-sheet drawn amount)
         - interest: float (accrued interest)
         - ead_final: float (fallback if drawn_amount not available)
@@ -281,9 +293,15 @@ class SupportingFactorCalculator:
         schema = exposures.collect_schema()
         # ``risk_type`` feeds the own-funds-line exclusion below; minimal test
         # frames may omit it, and a typed null reads as "not an own-funds line".
+        # ``seniority`` feeds the Art. 501a(1)(h) limb; it is a required
+        # crm_exit column, and on harness frames without it a typed null reads
+        # as senior (the loader's own default for an absent column).
         exposures = ensure_columns(
             exposures,
-            {"risk_type": ColumnSpec(pl.String, default=None, required=False)},
+            {
+                "risk_type": ColumnSpec(pl.String, default=None, required=False),
+                "seniority": ColumnSpec(pl.String, default=None, required=False),
+            },
             present=schema.names(),
         )
         has_counterparty = "counterparty_reference" in schema.names()
@@ -491,8 +509,16 @@ class SupportingFactorCalculator:
             if "exposure_class" in schema.names()
             else pl.lit(True)
         )
+        # Art. 501a(1)(h): "the obligation is senior to all other claims other
+        # than statutory claims and claims from derivatives counterparties". A
+        # one-way DENIAL on the ``seniority`` input — see
+        # ``_art_501a_seniority_permits`` for the null and vocabulary readings.
         infra_eligible = (
-            pl.col("is_infrastructure") & infra_class_eligible & ~is_defaulted & ~is_own_funds_line
+            pl.col("is_infrastructure")
+            & infra_class_eligible
+            & ~is_defaulted
+            & ~is_own_funds_line
+            & _art_501a_seniority_permits()
         )
         infra_factor_expr = (
             pl.when(infra_eligible).then(pl.lit(infra_factor)).otherwise(pl.lit(1.0))
@@ -677,6 +703,47 @@ def e_star_contribution_expr(names: Collection[str]) -> pl.Expr:
         pl.col("residential_collateral_value").fill_nan(0.0).fill_null(0.0).clip(lower_bound=0.0)
     )
     return drawn_expr - pl.min_horizontal(res_coll_expr, drawn_expr)
+
+
+@cites("CRR Art. 501a(1)(h)")
+def _art_501a_seniority_permits() -> pl.Expr:
+    """Whether the ``seniority`` input leaves Art. 501a(1)(h) open — never null.
+
+    CRR Art. 501a(1)(h) grants the infrastructure factor only where "the
+    obligation is senior to all other claims other than statutory claims and
+    claims from derivatives counterparties". The input cannot PROVE that
+    ("senior" says nothing about every non-statutory claim), so this is a
+    one-way denial, not a test of the limb: it can only remove the factor.
+
+    Two readings, deliberately pinned by
+    ``tests/unit/crr/test_p1_375_art_501a_seniority.py`` and each reversible
+    here alone:
+
+    - **Null permits.** An absent column is filled with ``"senior"`` at load;
+      a present-but-null one is not, and reaches this point as null. Both are
+      read as senior, so a missing value does not silently re-price the row.
+      An empty string is not null: it is denied by the next reading.
+      ``is_null() | ...`` and not ``~(... == "subordinated")``: the negated
+      comparison propagates null into ``infra_eligible``, and ``pl.when``
+      routes null to ``otherwise`` (factor 1.0) — a silent denial of every
+      null-seniority row. No ``fill_null`` either: ``engine_fill_null_sites``
+      (arch_check check 11) is at its baseline.
+    - **Anything that is not "senior", case-folded, denies.** That is
+      ``"subordinated"`` in any case and every out-of-domain value
+      (``"junior"``, ``"mezzanine"``, ``""``, a whitespace-padded
+      ``" senior"``): validation only warns on those (DQ006) and passes them
+      through, and limb (h) is a requirement the input has to evidence.
+      Case-folded like the ``engine/irb/transforms.py`` and
+      ``engine/crm/collateral.py`` seniority reads; the exact-match siblings
+      (``engine/irb/guarantee.py``, ``engine/sa/subordinated_debt.py``) would
+      grant to ``"Subordinated"``, which validation accepts.
+
+    The ``String`` cast is for harness frames only: the crm_exit seal already
+    types the column, but a frame built from ``[None]`` alone carries the
+    ``Null`` dtype, on which ``str.to_lowercase`` raises.
+    """
+    seniority = pl.col("seniority").cast(pl.String)
+    return seniority.is_null() | (seniority.str.to_lowercase() == "senior")
 
 
 def _optional_bool_column(schema: pl.Schema, column: str) -> pl.Expr:

@@ -28,7 +28,20 @@ a common source of hand-calc mismatch.
 ## Infrastructure Supporting Factor (Art. 501a)
 
 A flat factor for qualifying infrastructure lending, applied regardless of exposure size.
-The exposure must be flagged `is_infrastructure = true`.
+Art. 501a(1) requires all of criteria (a) to (o); the calculator checks only three things:
+
+- **Candidate**: `product_type` contains `INFRASTRUCTURE` (case-insensitive), which sets the
+  derived `is_infrastructure` flag. There is no `is_infrastructure` input column, and the name
+  match is not an attestation that the exposure meets Art. 501a.
+- **Limb (a)**: corporate, corporate-SME or specialised-lending class, not in default.
+- **Limb (h), as a denial only**: any `seniority` other than `senior` (case-insensitive) withholds
+  the factor — `subordinated`, out-of-domain values and an empty string alike. A null seniority
+  counts as senior; `senior` does not prove limb (h), it only does not contradict it.
+
+Settlement-risk and CCP default-fund rows never take the factor (their amount is an own funds
+requirement, not an exposure). Limbs (b)-(g), (i)-(o) and paragraph 2 are firm judgements no input
+carries, so use an infrastructure `product_type` only where the firm has assessed all of them. An
+SME row denied Art. 501a keeps the Art. 501 SME factor, which has no seniority condition.
 
 Art. 501a is one of the few alphanumeric CRR articles the citation index covers — cite it
 as `501a`, not as a PS1/26 paragraph.

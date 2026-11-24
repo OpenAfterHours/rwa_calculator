@@ -67,27 +67,41 @@ Factor = [2.2m × 0.7619 + 2.8m × 0.85] / 5.0m
 
 ### Infrastructure Supporting Factor
 
-A 0.75 factor (25% reduction) applies to qualifying infrastructure project finance:
+A 0.75 factor (25% reduction) applies to qualifying infrastructure exposures. Art. 501a(1)
+grants it only where the exposure meets **all** of criteria (a) to (o).
 
-**Eligibility Criteria (Art. 501a):**
-- Project finance exposure
-- Exposure to an infrastructure project entity
-- Revenues predominantly in EUR/GBP or hedged (Art. 501a(1)(d))
+**What the calculator checks:**
+
+- **Candidate.** `product_type` contains `INFRASTRUCTURE` (case-insensitive). The match sets a
+  derived `is_infrastructure` flag. There is **no** `is_infrastructure` input column, and the
+  match is a name, not an attestation that the exposure meets Art. 501a.
+- **Limb (a).** The exposure is in the corporate, corporate-SME or specialised-lending class and
+  is not in default.
+- **Limb (h), as a denial only.** The obligation must be "senior to all other claims other than
+  statutory claims and claims from derivatives counterparties". Where `seniority` is anything
+  other than `senior` (case-insensitive), the factor is withheld. That covers `subordinated`
+  and out-of-domain values such as `junior` or an empty string. A null (missing) `seniority`
+  counts as senior. A `senior` value does not prove limb (h); it only does not contradict it.
+- Settlement-risk and CCP default-fund rows never receive the factor: their amount is an own
+  funds requirement, not an exposure to an infrastructure entity.
 
 ```
 RWA_adjusted = RWA × 0.75
 ```
 
-!!! warning "Not validated in calculator"
-    The calculator applies the 0.75 factor when an exposure is flagged with
-    `is_infrastructure = true`. The detailed Art. 501a(1) eligibility conditions —
-    including the revenue-currency requirement (Art. 501a(1)(d)), the cash-flow
-    predictability test, the contractual framework requirements, and the credit
-    quality of the obligor — are **not** enforced by the engine or the input
-    schema. Firms remain responsible for ensuring the flag is only set for
-    exposures that genuinely meet the full Art. 501a criteria. See the
-    [supporting factors specification](../../specifications/crr/supporting-factors.md)
-    for the implemented scope.
+!!! warning "Limbs (b)-(g), (i)-(o) and paragraph 2 are not checked"
+    The special-purpose-entity test (b), the two-thirds repayment source (c), stressed
+    conditions (d), predictable cash flows (e) with paragraph 2's definition, refinancing risk
+    (f), the lender protections (g), the construction-phase equity-investor tests (i), and
+    (j)-(o) are judgements the firm makes about the obligor and the facility. No input carries
+    them, so the calculator cannot test them. Use an infrastructure `product_type` only for
+    exposures the firm has assessed as meeting all of Art. 501a.
+
+An SME exposure that fails Art. 501a, for example a subordinated infrastructure loan to an SME,
+can still receive the [SME supporting factor](#sme-supporting-factor), which has no seniority
+condition. See the
+[supporting factors specification](../../specifications/crr/supporting-factors.md) for the
+implemented scope.
 
 ### Uniform PD Floor
 

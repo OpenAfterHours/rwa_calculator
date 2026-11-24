@@ -68,8 +68,44 @@ A flat **0.75** factor applied to qualifying infrastructure lending exposures.
 
 ### Eligibility
 
-- Exposure must be flagged as `is_infrastructure = true`
-- Applied regardless of exposure size
+Art. 501a(1) grants the factor only where the exposure meets **all** of criteria (a) to (o). The
+calculator checks three things against Art. 501a and nothing else:
+
+- **Candidate.** `product_type` contains `INFRASTRUCTURE` (case-insensitive). That match sets the
+  derived `is_infrastructure` flag. There is **no** `is_infrastructure` input column, and the
+  match is a name, not an attestation that the exposure meets Art. 501a.
+- **Limb (a).** The exposure is in the corporate, corporate-SME or specialised-lending class and
+  is not in default.
+- **Limb (h), as a denial only.** The obligation must be "senior to all other claims other than
+  statutory claims and claims from derivatives counterparties". Where the `seniority` input is
+  anything other than `senior` (case-insensitive), the factor is withheld: `subordinated` in any
+  case, out-of-domain values such as `junior` (validation warns on them, DQ006, but passes them
+  through) and an empty string. A null (missing) `seniority` is treated as senior, matching the
+  loader default for an absent column; an empty string is not null. A `senior` value does not
+  prove limb (h); it only does not contradict it.
+
+Settlement-risk and CCP default-fund rows (`risk_type` of a failed trade or a default-fund
+contribution) never receive the factor: their amount is an own funds requirement, not an exposure
+to an infrastructure entity.
+
+The factor is applied regardless of exposure size.
+
+!!! warning "Limbs (b)-(g), (i)-(o) and paragraph 2 are not checked"
+    The special-purpose-entity test (b), the two-thirds repayment source (c), stressed conditions
+    (d), predictable cash flows (e) with paragraph 2's definition, refinancing risk (f), the lender
+    protections (g), the construction-phase equity-investor tests (i), and (j)-(o) are judgements
+    the firm makes about the obligor and the facility. No input carries them, so the calculator
+    cannot test them. Use an infrastructure `product_type` only for exposures the firm has assessed
+    as meeting all of Art. 501a.
+
+An SME exposure that fails Art. 501a can still receive the Art. 501 SME factor, which has no
+seniority condition.
+
+!!! note "Reporting of a denied SME infrastructure row (open item P2.56)"
+    COREP C 07.00 row 0035 and col 0217 read the raw `is_infrastructure` flag. An
+    infrastructure-named SME row that is denied Art. 501a, for example because it is subordinated,
+    currently has its Art. 501 SME relief reported in col 0217 and row 0035 instead of col 0216.
+    Totals and the `0215 + 0216 + 0217 = 0220` footing are unaffected.
 
 ## Combined Application
 

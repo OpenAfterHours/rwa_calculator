@@ -25,9 +25,11 @@ reconcile with each other. This is the first in-house analogue of the
 supervisory validation rules (e.g. the EBA COREP/Pillar 3 validation rules)
 that check exactly these cross-template identities.
 
-The comparable ties (all hold on both frameworks on a real IRB+SA pipeline run).
-The C 02.00 rows are named by what they are — ``corep/c02_rows.py`` holds the
-row code each regime's published template gives them:
+The comparable ties (all hold on both frameworks on a real IRB+SA pipeline run,
+IRB-method equity of every CRR method included — bar the Basel 3.1 floor gap
+recorded below). The C 02.00 rows are named by what they are —
+``corep/c02_rows.py`` holds the row code each regime's published template gives
+them:
 
 - ``total_rwea_c02_vs_ov1``    C 02.00 TREA == OV1 [29] (total). TREA is the
                                total row under CRR; under Basel 3.1 it is
@@ -45,8 +47,15 @@ row code each regime's published template gives them:
                                C 10.01 (``v4260_i``), not C 08.01. The CLASS
                                sheets: OF 08.01 also carries two Total sheets,
                                which are their sum (``c08_class_sheets``).
-- ``irb_rwea_c08_01_vs_ov1``   Σ C 08.01 sheets [0010][0260] == OV1 [3]+[4]+[5]
-                               (F-IRB + slotting + A-IRB).
+- ``irb_rwea_c08_01_vs_ov1``   Σ C 08.01 sheets [0010][0260] + C 02.00 "Equity
+                               IRB" == OV1 [3]+[4]+[UK4a]+[5] (F-IRB + slotting +
+                               simple-RW equity + A-IRB). OV1 has no Equity IRB
+                               row: its IRB equity is UK 4a (Art. 155(2)) and
+                               row 3 (Art. 155(3) PD/LGD, an IRB firm's
+                               Art. 48(4) fixed RW), and C 08.01 holds none of
+                               it. Neither equity row exists under Basel 3.1
+                               (PS1/26 Art. 147A(1)(h)), so there both terms are
+                               nil and the tie is C 08.01 == [3]+[4]+[5].
 
 RECORDED CORRECTION (2026-11-13). The two C 02.00 class ties carried the equity
 term on the WRONG tie: the SA tie subtracted "Equity IRB" from the SA line and
@@ -56,6 +65,20 @@ and Σ C 08.01 = 127,597,353.77 against 152,697,353.77 — two false TIE001
 findings on a consistent estate, each off by exactly the IRB equity. The premise
 behind it ("C 07.00 has no equity sheet") stopped being true when the
 Art. 112(1)(p) sheet was added.
+
+RECORDED CORRECTION (2026-11-24, P1.343). ``irb_rwea_c08_01_vs_ov1`` was stated
+as Σ C 08.01 == OV1 [3]+[4]+[5], which held only while OV1 rows 3-5 carried no
+equity. P1.343 moved Art. 155(3) PD/LGD and an IRB firm's Art. 48(4) fixed-RW
+equity out of OV1 row 2 (Chapter 2 only) into row 3, and C 08.01 never holds
+equity, so the tie fired on a consistent estate by exactly that equity's RWEA.
+Measured on the rich CRR book with ``RP-EQ-LISTED`` made a significant
+investment: Σ C 08.01 = 127,597,353.77 against OV1 [3]+[4]+[5] =
+130,097,353.77 (-2,500,000.00); with ``equity_pd_lgd`` as well, -27,628,496.01.
+Restated on template cells only, both sides now carry ALL the CRR IRB equity —
+C 02.00 r0420 on the left, OV1 UK 4a + row 3 on the right: 127,597,353.77 +
+24,700,000.00 == 152,297,353.77 on that book. The restated tie also catches the
+defect P1.343 fixed: with the PD/LGD / fixed-RW legs back in OV1 row 2 it is
+short on the OV1 side by exactly their RWEA.
 
 WHERE THE BASEL 3.1 FLOOR BINDS, ``irb_rwea_c08_01_vs_ov1`` FIRES, AND THAT IS A
 FINDING ABOUT OV1. Every COREP RWEA figure is the own-approach amount
@@ -108,6 +131,7 @@ from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.reporting.corep import c02_rows as rows
 from rwa_calc.reporting.corep.c07 import c07_class_sheets
 from rwa_calc.reporting.corep.c08_sheets import c08_class_sheets
+from rwa_calc.reporting.pillar3.templates import get_ov1_rows
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -139,6 +163,11 @@ _ALL_FRAMEWORKS: tuple[str, ...] = ("CRR", "BASEL_3_1")
 _TEMPLATE_C02 = "C 02.00"
 _TEMPLATE_C07 = "C 07.00"
 _TEMPLATE_C08_01 = "C 08.01"
+
+# OV1's IRB rows (Chapter 3 of Title II of Part Three): F-IRB, slotting, the
+# CRR-only Art. 155(2) simple-RW equity row, A-IRB. ``_ov1_irb_rows`` reads the
+# ones the bundle's regime lays out.
+_OV1_IRB_ROWS: tuple[str, ...] = ("3", "4", "UK4a", "5")
 
 # A tie extractor reads one scalar aggregate out of the two bundles, or returns
 # None to signal "this template / cell was not produced — skip the tie".
@@ -333,21 +362,26 @@ TIE_OUTS: list[TieOut] = [
     TieOut(
         name="irb_rwea_c08_01_vs_ov1",
         description=(
-            "Aggregate IRB RWEA across the C 08.01 class sheets equals the "
-            "Pillar 3 OV1 IRB rows (F-IRB row 3 + slotting row 4 + A-IRB row "
-            "5). BOTH sides key the POST-substitution approach. Verify any "
-            "change to either with a NON-zero-RW guarantor — a 0%-RW one "
-            "crosses no RWEA and cannot tell correct from incomplete."
+            "Aggregate IRB RWEA across the C 08.01 class sheets plus C 02.00 "
+            "'Equity IRB' (row 0420, CRR only — IRB equity reports in C 10.01, "
+            "never C 08.01) equals the Pillar 3 OV1 IRB rows (F-IRB row 3 + "
+            "slotting row 4 + simple-RW equity row UK 4a, CRR only + A-IRB row "
+            "5): OV1 discloses Art. 155(2) equity in UK 4a and Art. 155(3) / "
+            "Art. 48(4) IRB equity in row 3. BOTH sides key the "
+            "POST-substitution approach. Verify any change to either with a "
+            "NON-zero-RW guarantor — a 0%-RW one crosses no RWEA and cannot "
+            "tell correct from incomplete."
         ),
         regulatory_reference=(
-            "COREP Annex II C 08.01 col 0260; Pillar 3 OV1 rows 3/4/5 "
-            "(CRR Art. 438; PS1/26 Annex XX)"
+            "COREP Annex II C 08.01 col 0260 / C 02.00 row 0420; Pillar 3 OV1 "
+            "rows 3/4/UK 4a/5 (CRR Art. 438, Art. 155(2)/(3), Art. 48(4); "
+            "PS1/26 Annex XX)"
         ),
-        templates=(_TEMPLATE_C08_01, "OV1"),
-        lhs_label="Σ C 08.01 [0010][0260] IRB RWEA",
-        rhs_label="OV1 [3]+[4]+[5] IRB RWEA",
-        lhs=lambda c, _p: _sheet_total(c08_class_sheets(c.c08_01), "0260"),
-        rhs=lambda _c, p: _rows_sum(p.ov1, ("3", "4", "5"), "a"),
+        templates=(_TEMPLATE_C08_01, _TEMPLATE_C02, "OV1"),
+        lhs_label="Σ C 08.01 [0010][0260] IRB RWEA + C 02.00 [0420] Equity IRB",
+        rhs_label="OV1 [3]+[4]+[UK4a]+[5] IRB RWEA",
+        lhs=lambda c, _p: _c08_01_plus_equity_irb(c),
+        rhs=lambda _c, p: _ov1_irb_rows(p),
     ),
 ]
 
@@ -497,6 +531,34 @@ def _c02_irb_excluding_equity(corep: COREPTemplateBundle) -> float | None:
         return irb
     equity = _c02_cell(corep, rows.EQUITY_IRB)
     return None if equity is None else irb - equity
+
+
+def _c08_01_plus_equity_irb(corep: COREPTemplateBundle) -> float | None:
+    """Σ C 08.01 IRB RWEA plus C 02.00 "Equity IRB", where the template has that row.
+
+    C 08.01 never carries equity (it reports in C 10.01 / C 02.00 r0420), and OV1
+    discloses the IRB equity inside its IRB rows, so this is the side of
+    ``irb_rwea_c08_01_vs_ov1`` that covers the same population. OF 02.00 has no
+    such row (PS1/26 Art. 147A(1)(h)): there the term is nil, not missing. Where
+    the row IS laid out but unreadable, the whole side is ``None``.
+    """
+    irb = _sheet_total(c08_class_sheets(corep.c08_01), "0260")
+    if irb is None or rows.EQUITY_IRB.ref(corep.framework) is None:
+        return irb
+    equity = _c02_cell(corep, rows.EQUITY_IRB)
+    return None if equity is None else irb + equity
+
+
+def _ov1_irb_rows(pillar3: Pillar3TemplateBundle) -> float | None:
+    """OV1 column a over the IRB rows the bundle's own regime lays out.
+
+    Rows 3 / 4 / UK 4a / 5 under CRR; UKB OV1 has no UK 4a row, so under Basel
+    3.1 it is rows 3 / 4 / 5. A row the regime lays out but the frame lacks
+    skips the tie (``_rows_sum``); a row the regime does not lay out is nil.
+    """
+    laid_out = {row.ref for row in get_ov1_rows(pillar3.framework)}
+    refs = tuple(ref for ref in _OV1_IRB_ROWS if ref in laid_out)
+    return _rows_sum(pillar3.ov1, refs, "a")
 
 
 def _rows_sum(df: pl.DataFrame | None, row_refs: tuple[str, ...], col_ref: str) -> float | None:

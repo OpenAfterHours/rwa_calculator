@@ -180,6 +180,27 @@ over-read:
    generator's own classification held to the taxonomy's members, not a second
    opinion. Nor do the three Total-sheet cells settle what a Total reports in a
    NON-additive column (limits 6).
+
+9. IRB-METHOD EQUITY IN OV1 (recorded 2026-11-24, P1.343). This portfolio's
+   only equity leg (LN011, `entity_type="equity"` on the LOANS table) never
+   passes the equity calculator, so no leg seals an `equity_method` and no IRB
+   equity exists here. Two OV1 re-derivations below are therefore NARROWER than
+   the rule and pass only because of that:
+   - `ov1-2-a` / `ov1-2-c` put every `equity`-origin leg in row 2. Stale since
+     P1.332: an Art. 155(2) `irb_simple` leg is row UK 4a, and row 2 is
+     "Chapter 2 of Title II of Part Three CRR" only.
+   - `ov1-3-a` / `ov1-3-c` re-derive row 3 as `foundation_irb` only. Since
+     P1.343, Art. 155(3) `pd_lgd` and an IRB firm's Art. 48(4) `irb_fixed_rw`
+     equity are disclosed in row 3 as well (Chapter 3, not UK 4a; prescribed
+     LGD/M under Art. 165(2)/(3), hence F-IRB, not A-IRB).
+   A future IRB-equity leg in PORTFOLIO will turn all four red. Re-derive them
+   from the UK OV1 instructions (rows 2 / 3 / UK 4a / 5) when that happens. Do
+   NOT copy `pillar3/ov1.py`'s predicate into them: a second opinion written
+   from the code's own sentence proves nothing (.claude/LESSONS.md B3). Until
+   then, the CRR IRB-equity split is held by
+   `tests/acceptance/reporting/test_p1_343_ov1_irb_method_equity.py` and
+   `test_p1_332_ov1_equity_partition.py`, against hand-derived values and
+   C 02.00.
 """
 
 # ===========================================================================

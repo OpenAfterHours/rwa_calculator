@@ -46,11 +46,14 @@ The independent cross-checks — neither can drift with ``ov1.py``:
     OV1 row UK4a == CR10 equity sheet row 4 ("Total") column e (RWEA)
 
 ``reporting/corep/c02.py`` and ``reporting/pillar3/cr10.py`` ALREADY key equity on
-the sealed ``equity_method`` (``_EQUITY_IRB_METHODS = ("irb_simple", "pd_lgd")``
-through an absent-tolerant ``.is_in(...).fill_null(False)``), which is why they
-are a second opinion rather than an echo: on the rich CRR book C 02.00 reports
-r0060 = 16,228,450.00 and r0420 = 2,900,000.00 today, against an OV1 that
-contradicts both.
+the sealed ``equity_method`` (``EQUITY_IRB_METHODS = ("irb_simple", "pd_lgd",
+"irb_fixed_rw")`` through an absent-tolerant ``.is_in(...).fill_null(False)``), which
+is why they are a second opinion rather than an echo: on the rich CRR book C 02.00
+reported r0060 = 16,228,450.00 and r0420 = 2,900,000.00 against an OV1 that
+contradicted both. UK 4a is the Art. 155(2) PART of r0420 only: the other two IRB
+methods (Art. 155(3) PD/LGD and an IRB firm's Art. 48(4) fixed-RW leg) are OV1
+row 3 (P1.343, ``test_p1_343_ov1_irb_method_equity.py``), so the UK 4a == r0420
+identity below holds net of them — on these books, which seal neither, exactly.
 
 Basel 3.1 is the control and NOTHING there may move: the UKB OV1 row list emits
 no UK 4a row at all, and PS1/26 Art. 147A stamps every equity leg ``sa``, so the
@@ -80,6 +83,7 @@ from tests.acceptance.reporting.test_reporting_golden import _REGIMES as _RICH_R
 from tests.fixtures.reporting_portfolio import ALL_EQUITY_REFERENCES, build_reporting_bundle
 from tests.properties import portfolios as props
 
+from rwa_calc.domain.enums import EquityApproach
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
@@ -97,9 +101,19 @@ _OF_WHICH: tuple[str, ...] = ("2", "3", "4", "UK4a", "5")
 _ROW_SA = "2"
 _ROW_EQUITY_SIMPLE = "UK4a"
 
-# The sealed ``equity_method`` values that mean "IRB, therefore UK 4a"
-# (domain.enums.EquityApproach; the same tuple c02.py binds row 0420 on).
-_IRB_EQUITY_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd")
+# The sealed ``equity_method`` values that mean "IRB-method equity" — C 02.00
+# r0420 "Equity IRB" — anchored on the enum, not on c02.py's tuple
+# (.claude/LESSONS.md B3). Only ``irb_simple`` is UK 4a; the other two are OV1
+# row 3 (P1.343).
+_IRB_EQUITY_METHODS: tuple[str, ...] = (
+    EquityApproach.IRB_SIMPLE.value,
+    EquityApproach.PD_LGD.value,
+    EquityApproach.IRB_FIXED_RISK_WEIGHT.value,
+)
+_IRB_EQUITY_OUTSIDE_UK4A: tuple[str, ...] = (
+    EquityApproach.PD_LGD.value,
+    EquityApproach.IRB_FIXED_RISK_WEIGHT.value,
+)
 
 # The C 02.00 rows OV1's two equity-bearing cells must agree with.
 _C02_SA_TOTAL = "0060"
@@ -522,26 +536,43 @@ def test_ov1_row_2_agrees_with_corep_c02_standardised_total(
 def test_ov1_uk4a_agrees_with_corep_c02_equity_irb_and_cr10(
     portfolio: str, regime: str, runs: dict[tuple[str, str], _Run]
 ) -> None:
-    """OV1 UK 4a == C 02.00 r0420 == CR10 equity Total — two second opinions.
+    """OV1 UK 4a == C 02.00 r0420 (net) == CR10 equity Total — two second opinions.
 
     Both companion cells are already keyed on the sealed ``equity_method``:
-    C 02.00 r0420 ("Equity IRB") through ``_EQUITY_IRB_METHODS``, and CR10's
+    C 02.00 r0420 ("Equity IRB") through ``EQUITY_IRB_METHODS``, and CR10's
     equity sheet — the Art. 155(2) simple risk-weighted disclosure itself —
     through ``equity_method == "irb_simple"``. They pin BOTH directions: on the
-    rich book they say 2,900,000.00 (so UK 4a may not be zeroed) and on the
+    rich book they say 25,100,000.00 (so UK 4a may not be zeroed) and on the
     absent-method book they say nothing at all (so UK 4a may not keep an SA leg).
+
+    r0420 is wider than UK 4a: it also holds Art. 155(3) PD/LGD legs and an IRB
+    firm's Art. 48(4) fixed-RW legs, which OV1 discloses in row 3 (P1.343). So
+    the identity is UK 4a == r0420 LESS those legs' RWEA, read off the ledger by
+    the enum value. These two books seal neither — the subtraction is 0.00 here,
+    and the identity is the exact one it always was.
 
     CR10's equity sheet reports null rather than 0.00 when no leg qualifies —
     "not applicable" rather than "nil" — so a null Total is read as 0.00 here.
 
     Arrange: a CRR reporting portfolio (rich | absent-method).
     Act:     run the pipeline -> Pillar 3 OV1 + CR10 AND COREP C 02.00, one run.
-    Assert:  UK 4a column a == C 02.00 r0420 == CR10 equity row 4 column e.
+    Assert:  UK 4a column a == C 02.00 r0420 net of the non-simple IRB methods
+             == CR10 equity row 4 column e.
     """
     # Arrange + Act
     run = runs[(portfolio, regime)]
     uk4a = run.ov1_row(_ROW_EQUITY_SIMPLE)["a"]
-    c02_equity_irb = run.c02_cell(_C02_EQUITY_IRB)
+    # The absent-method book seals no ``equity_method`` column at all.
+    outside_uk4a = (
+        float(
+            run.equity_origin()
+            .filter(pl.col("equity_method").is_in(_IRB_EQUITY_OUTSIDE_UK4A))["rwa_final"]
+            .sum()
+        )
+        if "equity_method" in run.ledger.columns
+        else 0.0
+    )
+    c02_equity_irb = run.c02_cell(_C02_EQUITY_IRB) - outside_uk4a
     cr10_total = _cr10_equity_rwea(run)
 
     # Assert
@@ -552,8 +583,9 @@ def test_ov1_uk4a_agrees_with_corep_c02_equity_irb_and_cr10(
     )
     assert uk4a == pytest.approx(c02_equity_irb, rel=_REL, abs=_ABS), (
         f"[{portfolio}/{regime}] OV1 row UK 4a reports {uk4a}, but COREP C 02.00 r0420 "
-        f"('Equity IRB') reports {c02_equity_irb:,.6f} on the SAME run. Both disclose "
-        "the IRB-method equity book; C 02.00 keys it on the sealed equity_method."
+        f"('Equity IRB') net of {outside_uk4a:,.6f} of PD/LGD and fixed-RW equity reports "
+        f"{c02_equity_irb:,.6f} on the SAME run. Both disclose the Art. 155(2) simple "
+        "risk-weighted equity; C 02.00 keys it on the sealed equity_method."
     )
     assert uk4a == pytest.approx(cr10_total, rel=_REL, abs=_ABS), (
         f"[{portfolio}/{regime}] OV1 row UK 4a reports {uk4a}, but Pillar 3 CR10's "

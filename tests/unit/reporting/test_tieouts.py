@@ -28,6 +28,7 @@ from rwa_calc.reporting.tieouts import (
 #   SA (C 07.00) = 100   IRB (C 08.01) = 200   Equity IRB (C 02.00 0420) = 10
 #   C 02.00 0050 = 0060 (SA) = 100   0240 (IRB, incl. Equity IRB) = 210
 #   C 02.00 0040 (credit risk) = 0010 (total) = OV1 29 = 310
+#   OV1 3 = 200 (F-IRB)   UK 4a = 10 (the Equity IRB, all simple risk-weighted)
 #
 # RE-ANCHORED 2026-11-13. This fixture put credit risk at 0050, IRB at 0220 and
 # netted "equity (0420)" from the SA line ("0060 = SA incl. equity = 110"), on
@@ -94,7 +95,7 @@ def _consistent_bundles(
         framework=framework,
     )
     pillar3 = Pillar3TemplateBundle(
-        ov1=_ov1({"29": total, "3": irb, "4": 0.0, "5": 0.0}),
+        ov1=_ov1({"29": total, "3": irb, "4": 0.0, "UK4a": equity, "5": 0.0}),
         framework=framework,
     )
     return corep, pillar3
@@ -172,6 +173,111 @@ def test_irb_equity_is_netted_from_the_irb_tie_and_not_the_sa_tie():
 
     # Assert
     assert findings == []
+
+
+def test_irb_method_equity_in_ov1_row_3_ties_to_c02_equity_irb():
+    """OV1 has no "Equity IRB" row: UK 4a holds the Art. 155(2) simple-RW legs and
+    row 3 the Art. 155(3) PD/LGD and an IRB firm's Art. 48(4) fixed-RW legs
+    (P1.343), while C 08.01 holds none of them — they report in C 10.01, i.e.
+    C 02.00 r0420. So the OV1 IRB tie must add r0420 to C 08.01 and UK 4a to rows
+    3 / 4 / 5; without both terms a consistent estate fires TIE001 by exactly the
+    row-3 equity."""
+    # Arrange: r0420 = 10 = 4 simple-RW (UK 4a) + 6 PD/LGD or fixed-RW (row 3).
+    corep, _ = _consistent_bundles()
+    pillar3 = Pillar3TemplateBundle(
+        ov1=_ov1(
+            {
+                "29": _CREDIT_RISK,
+                "2": _SA_RWEA,
+                "3": _IRB_RWEA + 6.0,
+                "4": 0.0,
+                "UK4a": 4.0,
+                "5": 0.0,
+            }
+        ),
+        framework="CRR",
+    )
+
+    # Act
+    findings = check_cross_template_consistency(corep, pillar3, "CRR")
+
+    # Assert
+    assert findings == [], [str(f) for f in findings]
+
+
+def test_irb_method_equity_disclosed_in_ov1_row_2_breaks_the_ov1_irb_tie():
+    """The pre-P1.343 OV1 shape: the 6 of PD/LGD / fixed-RW equity sits in row 2
+    (the SA, Chapter 2) instead of row 3. C 02.00 counts it as Equity IRB, so the
+    tie must fire — short on the OV1 side by exactly that 6."""
+    # Arrange: the same estate, the 6 moved from row 3 to row 2.
+    corep, _ = _consistent_bundles()
+    pillar3 = Pillar3TemplateBundle(
+        ov1=_ov1(
+            {
+                "29": _CREDIT_RISK,
+                "2": _SA_RWEA + 6.0,
+                "3": _IRB_RWEA,
+                "4": 0.0,
+                "UK4a": 4.0,
+                "5": 0.0,
+            }
+        ),
+        framework="CRR",
+    )
+
+    # Act
+    findings = check_cross_template_consistency(corep, pillar3, "CRR")
+
+    # Assert
+    breaks = [f for f in findings if f.field_name == "irb_rwea_c08_01_vs_ov1"]
+    assert len(breaks) == 1, [str(f) for f in findings]
+    lhs = float(str(breaks[0].actual_value).replace(",", ""))
+    rhs = float(str(breaks[0].expected_value).replace(",", ""))
+    assert (lhs, rhs) == pytest.approx((_IRB_RWEA + _EQUITY_RWEA, _IRB_RWEA + 4.0))
+
+
+def test_crr_ov1_without_its_uk4a_row_skips_the_ov1_irb_tie():
+    """CRR OV1 lays out UK 4a, so an OV1 frame without it is an absent cell, not a
+    zero: a partial sum is never a valid side, so the tie is skipped rather than
+    fired on a figure the template did not state."""
+    # Arrange: a CRR OV1 with rows 3 / 4 / 5 but no UK 4a row.
+    corep, _ = _consistent_bundles()
+    pillar3 = Pillar3TemplateBundle(
+        ov1=_ov1({"29": _CREDIT_RISK, "3": _IRB_RWEA, "4": 0.0, "5": 0.0}), framework="CRR"
+    )
+
+    # Act
+    findings = check_cross_template_consistency(corep, pillar3, "CRR")
+
+    # Assert
+    assert findings == [], [str(f) for f in findings]
+
+
+def test_b31_ov1_irb_tie_has_no_equity_terms_and_still_resolves():
+    """OF 02.00 has no "Equity IRB" row and UKB OV1 no UK 4a (PS1/26
+    Art. 147A(1)(h) sends equity to the SA), so under Basel 3.1 the tie is
+    C 08.01 == OV1 3 + 4 + 5, exactly as before P1.343. It must still RESOLVE: a
+    tie waiting for a row its regime does not lay out is skipped silently, and
+    its green would mean nothing. A non-moving control (.claude/LESSONS.md C7)."""
+    # Arrange: C 08.01 = 200, no Equity IRB row, no UK 4a row.
+    corep = COREPTemplateBundle(
+        c07_00={"corporate": _single_sheet("0220", 100.0)},
+        c08_01={"corporate": _single_sheet("0260", 200.0)},
+        c08_02={},
+        c_02_00=_c02({"0010": 300.0, "0040": 300.0, "0050": 100.0, "0060": 100.0, "0240": 200.0}),
+        framework="BASEL_3_1",
+    )
+
+    def ov1_irb_tie_fires(row_3: float) -> bool:
+        pillar3 = Pillar3TemplateBundle(
+            ov1=_ov1({"29": 300.0, "3": row_3, "4": 0.0, "5": 0.0}), framework="BASEL_3_1"
+        )
+        findings = check_cross_template_consistency(corep, pillar3, "BASEL_3_1")
+        return any(f.field_name == "irb_rwea_c08_01_vs_ov1" for f in findings)
+
+    # Act / Assert
+    assert not ov1_irb_tie_fires(200.0)
+    assert ov1_irb_tie_fires(201.0), "a resolvable Basel 3.1 OV1 IRB break must be caught"
 
 
 def test_b31_total_is_the_greater_of_the_unfloored_total_and_the_floor():

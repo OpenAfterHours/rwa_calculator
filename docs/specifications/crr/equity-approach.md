@@ -161,6 +161,32 @@ assertion that the row is the **non-deducted** threshold amount — the engine p
 own-funds deduction. Short-position netting (Art. 155(2)) still runs before the weight is
 assigned; a hedged significant investment is not separated from that step.
 
+### Where IRB equity is disclosed (Pillar 3 OV1)
+
+UK OV1 splits the sealed `equity_method` three ways, so that its of-which rows partition
+row 1 and agree with COREP C 02.00:
+
+| Sealed `equity_method` | Rule | OV1 row | C 02.00 row |
+|---|---|---|---|
+| `irb_simple` | Art. 155(2) simple risk weight | UK 4a | 0420 (Equity IRB) |
+| `pd_lgd` | Art. 155(3) PD/LGD | 3 (F-IRB) | 0420 (Equity IRB) |
+| `irb_fixed_rw` | Art. 48(4) 250%, IRB firm | 3 (F-IRB) | 0420 (Equity IRB) |
+| `sa`, null, or no column | Art. 133 | 2 (standardised) | 0210 (SA equity) |
+
+Row 2 is "the CR standardised approach (Chapter 2 of Title II of Part Three CRR ...)"
+only, and UK 4a is Art. 155(2) only, so PD/LGD and fixed-RW equity — Chapter 3 IRB
+equity — belong in row 3 or row 5. Row 3 is the reading taken: Art. 165(2)/(3)
+prescribe the equity LGD and M, so no own estimate of LGD or conversion factor is used,
+which is the published F-IRB/A-IRB line (C 02.00 rows 0250 / 0310). The OV1
+instructions name neither article, so this is an inference, confirmed by the owner
+(P1.343). Basel 3.1 has no such split: PS1/26 deletes Art. 155 and Art. 147A(1)(h)
+sends all equity to the SA, so every leg is `sa` and UKB OV1 has no UK 4a row.
+
+C 08.01 never holds equity: IRB equity is reported in C 10.01 and C 02.00 row 0420.
+The cross-template tie `irb_rwea_c08_01_vs_ov1` (`reporting/tieouts.py`) therefore
+compares Σ C 08.01 col 0260 plus C 02.00 row 0420 with OV1 rows 3 + 4 + UK 4a + 5.
+Under Basel 3.1 both equity terms are nil, so it compares C 08.01 with rows 3 + 4 + 5.
+
 ### Simple Risk Weight Approach — Art. 155(2)
 
 | Equity Category | Risk Weight | Reference |

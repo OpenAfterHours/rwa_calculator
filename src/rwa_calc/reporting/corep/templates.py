@@ -575,7 +575,9 @@ _C07_DEFAULTED_ROW_CLASSES: dict[str, tuple[str, ...]] = {
 # ``{C 02.00, r0210, c0010} == {C 07.00.a, r0010, c0220, s0016}``. C 02.00 splits
 # rows 0210 (SA class) / 0420 (Equity IRB) on this tuple and C 07.00 admits its
 # equity population on it, so one copy each would let the two drift either side of
-# that identity.
+# that identity. Pillar 3 OV1 reads it too (``pillar3/ov1.py``): its row 2 is the
+# SA and its rows 3 / UK 4a the IRB equity, so it must agree with C 02.00 r0050 /
+# r0420 on which methods are IRB (P1.343).
 EQUITY_IRB_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd", "irb_fixed_rw")
 
 

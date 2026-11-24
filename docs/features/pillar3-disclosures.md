@@ -119,6 +119,14 @@ across all risk categories. It is the top-level disclosure from which credit ris
     | 24 | Amounts below the thresholds for deduction (250% RW) — Art. 48(4) memo |
     | 29 | **Total** |
 
+    Rows 2, 3, 4, UK 4a and 5 partition row 1. Equity is split on the sealed
+    `equity_method`: Art. 155(2) simple risk-weighted equity in UK 4a, the other
+    IRB-method equity (Art. 155(3) PD/LGD, and an IRB firm's Art. 48(4) 250% leg) in
+    row 3, and SA equity in row 2. Row 2 is Chapter 2 (the SA) only; row 3 rather
+    than row 5 because the equity LGD and maturity are prescribed (Art. 165(2)/(3)),
+    not own estimates. See
+    [Equity — where IRB equity is disclosed](../specifications/crr/equity-approach.md#where-irb-equity-is-disclosed-pillar-3-ov1).
+
 === "Basel 3.1 (UKB OV1)"
 
     | Row | Description |

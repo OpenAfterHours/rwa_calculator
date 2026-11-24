@@ -331,8 +331,11 @@ Regenerating the baseline:
     (rule, portfolio): a rule that breaks on ONE MORE portfolio arrives
     unclassified, because a spread is a new break until someone says why; where the mechanism is visible but the defect is
     not established, the honest reason is the greppable ``unattributed - needs
-    investigation``, not a guess. Never bulk-regen to make a red gate green: a
-    new break is a new filing defect until someone has said otherwise in writing.
+    investigation``, not a guess. A break reason that is not wholly a publisher
+    issue's - ours, in part ours, or unattributed - also carries ``OWNER: P<n>.<n>``
+    naming an open plan bullet (``tests/contracts/test_register_owners.py``). Never
+    bulk-regen to make a red gate green: a new break is a new filing defect until
+    someone has said otherwise in writing.
     The same applies to a new ``known_vacuous_rules`` entry: a rule that has
     stopped asserting anything is a check we have LOST, so it is banked only with
     a written account of what emptied it.
@@ -519,7 +522,7 @@ REGISTER_NOTES: dict[str, str] = {
         "rule passes wrong returns or never runs cannot be why it fails. A (rule, portfolio) "
         "pair whose places have two causes - some the issue's case, the rest ours - has one "
         "reason, so it reads 'publisher issue PI-nn, in part: <the issue's places> ...; <the "
-        "rest> our defect, plan item ...': the citation keeps the Bank's share findable, and "
+        "rest> our defect, OWNER: P<n>.<n> ...': the citation keeps the Bank's share findable, and "
         "naming ours in the same reason keeps it from hiding behind the citation. Every Basel "
         "3.1 break on a rule that a fails_correct_returns issue names as its subject carries "
         "one of the labels - open or fixed in a later release alike, since this register is "
@@ -530,7 +533,8 @@ REGISTER_NOTES: dict[str, str] = {
         "rule an issue names that are not that issue (a reason sits after the reason key in "
         "the JSON, so a bare '^not PI-' matches nothing). An entry with neither label is "
         "one of two kinds: a break on a rule that no fails_correct_returns issue names as its "
-        "subject (ours, said with its plan item, or 'unattributed - needs investigation'), or an "
+        "subject (ours, or 'unattributed - needs investigation', either with its OWNER - see "
+        "reading_an_owner), or an "
         "entry the requirement does not cover - a vacuous rule (known_vacuous_rules is not a "
         "break, so a rule an issue names may sit there unlabelled), or a break on a rule an "
         "issue names only as related or contradicting, about whose breaks the issue claims "
@@ -538,6 +542,25 @@ REGISTER_NOTES: dict[str, str] = {
         "verdict: an ERROR "
         "labelled with an issue still rejects the return at the gateway until the Bank changes "
         "or deactivates the rule."
+    ),
+    "reading_an_owner": (
+        "A break of ours names who fixes it. Every reason in known_broken_rules, "
+        "known_gateway_breaks and known_engine_disagreements that is not wholly a publisher "
+        "issue's - one that says 'our defect', cites an issue only 'in part', or cites none in "
+        "full ('unattributed - needs investigation', a 'not PI-nn - ' rebuttal that cites no "
+        "other issue, and every CRR entry, whose EBA rule no issue covers) - carries 'OWNER: "
+        "P<n>.<n>' after its label, naming the IMPLEMENTATION_PLAN.md bullet that owns the fix "
+        "('our defect, OWNER: P<n>.<n>: ...'). 'plan item P<n>.<n>' is prose, not an owner: "
+        "reasons cite closed bullets as history. The trigger is who the cause is, not whether "
+        "the reason says 'capital': of the four reasons that once parked a capital defect with "
+        "no owner, two said so and two pointed at it with '(see boe_b0283)'. Every OWNER here, "
+        "in a reason or a note, names a bullet the plan holds open (any status box but [x]; "
+        "closed bullets are pruned, so a missing one is closed), so the change that closes or "
+        "prunes an "
+        "owning bullet removes the entries it fixed, re-owns the ones it did not, or reopens "
+        "the bullet. tests/contracts/test_register_owners.py enforces both halves on this file "
+        "and the plan; scripts/check_parked_registers.py holds the oracle and classification "
+        "registers to the same open-owner rule. grep -n 'OWNER: P' lists every owned entry."
     ),
     "what_a_vacuity_entry_MEANS": (
         "known_vacuous_rules lists rules that REACH a verdict on at least one registered run and "

@@ -175,10 +175,20 @@ rule is the cause, as recorded in the publisher-issue register
 a reason that starts `not PI-nn - ...` says the issue names the rule but this
 break is not that issue, and goes on to say whose it is (usually ours). A pair
 whose places have both causes reads `publisher issue PI-nn, in part: ...` and
-names our defect, with its plan item, for the rest in the same reason. A Basel
-3.1 break on a rule a `fails_correct_returns` issue names as its subject must
-carry one of the labels, and a cited issue must have that effect
+names our defect, with its `OWNER: P<n>.<n>`, for the rest in the same reason. A
+Basel 3.1 break on a rule a `fails_correct_returns` issue names as its subject
+must carry one of the labels, and a cited issue must have that effect
 (`tests/contracts/test_register_publisher_issues.py`, fast).
+
+A reason that is not wholly a publisher issue's — it says "our defect", cites an
+issue only "in part", or cites none in full, which covers an unattributed break,
+a rebuttal citing no other issue and every CRR entry — names the plan bullet that
+owns the fix with `OWNER: P<n>.<n>` after its label (`our defect, OWNER: P2.100:
+...`). `plan item P<n>.<n>` in prose is not an owner: reasons cite closed bullets
+as history. Every `OWNER:` in the register must name a bullet
+`IMPLEMENTATION_PLAN.md` still holds open, so a change that closes or prunes an
+owning bullet must remove or re-own the entries it owned
+(`tests/contracts/test_register_owners.py`, fast; it reads the plan).
 
 ## The referee differential
 

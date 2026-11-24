@@ -18,7 +18,10 @@ Key responsibilities:
   shared mechanism in ``scripts/tolerated_findings.py``:
   (a) no register entry outside the committed baseline — additions are
       shrink-only, and this script will not bank one;
-  (c) every entry names an owning plan bullet via an ``OWNER: P<n>.<n>`` token.
+  (c) every entry names an owning plan bullet via an ``OWNER: P<n>.<n>`` token;
+  (d) every bullet an entry names with the token — the owning first one and any
+      other — is still open in ``IMPLEMENTATION_PLAN.md``: an owner the plan has
+      closed or pruned owns nothing (P5.83).
   Requirement (b) — no baseline entry that no longer disagrees — is already
   discharged by ``xfail(strict=True)`` on both registers and is deliberately not
   re-implemented here; see "Why (b) is absent" below.
@@ -61,7 +64,7 @@ copy. What this script adds is the direction ``strict=True`` is blind to:
 GROWTH.
 
 References:
-- ``IMPLEMENTATION_PLAN.md`` P5.41 (a)(b)(c)
+- ``IMPLEMENTATION_PLAN.md`` P5.41 (a)(b)(c), P5.83 (d)
 - ``docs/development/escape-log.md`` — 2026-08-09 entry 4, ``caught-and-parked``
 - `.claude/LESSONS.md` B7, B8
 - ``scripts/check_doc_links.py`` — the ``--check`` / ``--update-baseline`` shape
@@ -79,20 +82,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Collection, Iterator
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.tolerated_findings import (  # noqa: E402  (needs REPO_ROOT on sys.path)
+    STALE_OWNER_GUIDANCE,
     UNOWNED_GUIDANCE,
+    closed_owners,
     diff,
+    open_bullets,
     owner_of,
+    stale_owners,
     unowned,
 )
 
 BASELINE_PATH = REPO_ROOT / "scripts" / "parked_registers_baseline.json"
+PLAN_PATH = REPO_ROOT / "IMPLEMENTATION_PLAN.md"
 CLASSIFICATION_TABLE_PATH = REPO_ROOT / "tests" / "conformance" / "classification_table.toml"
 
 BASELINE_COMMENT = (
@@ -160,12 +168,21 @@ def _classification_register() -> Register:
 # ---------------------------------------------------------------------------
 
 
-def check(registers: tuple[Register, ...], baseline: dict[str, dict[str, str]]) -> tuple[int, str]:
+def check(
+    registers: tuple[Register, ...],
+    baseline: dict[str, dict[str, str]],
+    open_owners: Collection[str],
+) -> tuple[int, str]:
     """Ratchet every register against the baseline. Returns ``(exit code, report)``.
+
+    ``open_owners`` is the set of plan bullets still open — :func:`read_open_bullets`
+    for the real gate.
 
     Failing conditions, and nothing else:
       * an entry the baseline does not admit to (an ADDITION — shrink-only);
       * an entry naming no owning plan bullet (requirement (c));
+      * an entry naming, with any token, a bullet the plan does not hold open
+        (requirement (d));
       * a baseline register key with no register behind it (structural drift —
         a register renamed or deleted without its baseline, which would silently
         stop gating).
@@ -191,6 +208,7 @@ def check(registers: tuple[Register, ...], baseline: dict[str, dict[str, str]]) 
         banked = baseline.get(register.name, {})
         movement = diff(register.entries, banked)
         missing = unowned(register.entries)
+        stale = stale_owners(register.entries, open_owners)
 
         if register.name not in baseline:
             failed = True
@@ -224,6 +242,19 @@ def check(registers: tuple[Register, ...], baseline: dict[str, dict[str, str]]) 
                 + f"\n  {UNOWNED_GUIDANCE}"
             )
 
+        if stale:
+            failed = True
+            lines.append(
+                f"OWNER NOT OPEN ({register.source}): {len(stale)} entry/entries name a plan "
+                f"bullet {PLAN_PATH.name} does not hold open:\n"
+                + "\n".join(
+                    f"    {key}  (not open: "
+                    f"{', '.join(closed_owners(register.entries[key], open_owners))})"
+                    for key in stale
+                )
+                + f"\n  {STALE_OWNER_GUIDANCE}"
+            )
+
         if movement.removed:
             lines.append(
                 f"IMPROVED ({register.source}): {len(movement.removed)} baseline entry/entries "
@@ -237,7 +268,7 @@ def check(registers: tuple[Register, ...], baseline: dict[str, dict[str, str]]) 
         total = sum(len(register.entries) for register in registers)
         lines.append(
             f"[OK] {total} parked finding(s) across {len(registers)} register(s), "
-            "every one baselined and owned"
+            "every one baselined and owned by an open plan bullet"
         )
     return (1 if failed else 0, "\n".join(lines) + "\n")
 
@@ -285,6 +316,11 @@ def update_baseline(registers: tuple[Register, ...], baseline: dict[str, dict[st
 # ---------------------------------------------------------------------------
 
 
+def read_open_bullets() -> frozenset[str]:
+    """The plan bullets ``IMPLEMENTATION_PLAN.md`` holds open — what an owner must name."""
+    return open_bullets(PLAN_PATH.read_text(encoding="utf-8"))
+
+
 def read_baseline() -> dict[str, dict[str, str]]:
     """``{register name: {finding id: owning bullet}}`` from the committed file."""
     if not BASELINE_PATH.exists():
@@ -306,11 +342,13 @@ def _write_baseline(registers: tuple[Register, ...], payload: dict[str, dict[str
     BASELINE_PATH.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
 
-def _census(registers: tuple[Register, ...]) -> Iterator[str]:
+def _census(registers: tuple[Register, ...], open_owners: Collection[str]) -> Iterator[str]:
     for register in registers:
         yield f"{register.name}  ({register.source})"
         for key, reason in sorted(register.entries.items()):
-            yield f"  {key:<48} {owner_of(reason) or 'NO OWNER'}"
+            closed = closed_owners(reason, open_owners)
+            flag = f"  (NOT OPEN: {', '.join(closed)})" if closed else ""
+            yield f"  {key:<48} {owner_of(reason) or 'NO OWNER'}{flag}"
         yield f"  -- {len(register.entries)} entry/entries"
 
 
@@ -331,10 +369,10 @@ def main() -> int:
     if args.update_baseline:
         return update_baseline(registers, read_baseline())
     if args.check:
-        code, report = check(registers, read_baseline())
+        code, report = check(registers, read_baseline(), read_open_bullets())
         sys.stderr.write(report)
         return code
-    sys.stderr.write("\n".join(_census(registers)) + "\n")
+    sys.stderr.write("\n".join(_census(registers, read_open_bullets())) + "\n")
     return 0
 
 

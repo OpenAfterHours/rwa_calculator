@@ -33,8 +33,9 @@ The label grammar (also in the register's own ``notes``,
   places have two causes — some the issue's case, the rest ours. The register is
   keyed per (rule, portfolio) and holds one reason per pair, so such a pair cites
   the issue (a grep for the Bank's share finds it) and names "our defect", with
-  its plan item, for the rest in the same reason (nothing of ours hides behind the
-  citation either).
+  its ``OWNER: P<n>.<n>``, for the rest in the same reason (nothing of ours hides
+  behind the citation either; ``tests/contracts/test_register_owners.py`` holds the
+  owner to an open plan bullet).
 - ``not PI-nn - <cause>`` (``not PI-aa, PI-bb - ...`` for several) at the START
   of a reason REBUTS the issue: the issue names the rule, and this break is not
   it — ours, our engine's, or (rarely) another issue's cited in the same reason. The issue must name the rule as its SUBJECT (it
@@ -167,8 +168,8 @@ def citation_problems(section: str, entry: dict[str, Any], register: IssueRegist
         problems += _effect_problems(where, attributed, register)
     problems += [
         f"{where}: cites {issue_id} in part but does not name the rest of the cause - a "
-        "mixed-cause pair says which of its places are 'our defect' (with the plan item) "
-        "in the same reason"
+        "mixed-cause pair says which of its places are 'our defect' (with its OWNER) in "
+        "the same reason"
         for issue_id in sorted(set(PARTIAL_CITATION.findall(reason)))
         if not OUR_SHARE.search(reason)
     ]
@@ -518,7 +519,7 @@ def test_the_check_wants_our_share_named_beside_a_partial_citation() -> None:
     both = _entry(
         "boe_b0356",
         "publisher issue PI-29, in part: slotting rows have no PD; the other places are "
-        "our defect, plan item P2.70",
+        "our defect, OWNER: P2.70",
     )
 
     # Act

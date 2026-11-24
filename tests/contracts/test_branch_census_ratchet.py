@@ -27,6 +27,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from scripts.check_parked_registers import read_open_bullets
+from scripts.tolerated_findings import (
+    STALE_OWNER_GUIDANCE,
+    closed_owners,
+    owner_of,
+    stale_owners,
+)
 
 from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
 
@@ -114,14 +121,15 @@ class TestBaselineIntegrity:
 
         Arrange: the committed baseline's dead entries.
         Act:     read each reason.
-        Assert:  every one is non-empty and names an owning plan bullet.
+        Assert:  every one is non-empty and names an owning plan bullet with the
+                 ``OWNER: P<n>.<n>`` token (``scripts/tolerated_findings.py``).
         """
         # Arrange
         dead: list[dict[str, str]] = _baseline()["dead"]
 
         # Act
         unreasoned = [e["id"] for e in dead if not str(e.get("reason", "")).strip()]
-        unowned = [e["id"] for e in dead if "OWNER:" not in str(e.get("reason", ""))]
+        unowned = [e["id"] for e in dead if owner_of(str(e.get("reason", ""))) is None]
 
         # Assert
         assert not unreasoned, (
@@ -132,6 +140,31 @@ class TestBaselineIntegrity:
         assert not unowned, (
             f"{len(unowned)} dead branch(es) name no owning plan bullet. Add "
             "`OWNER: P<tier>.<n>`:\n  " + "\n  ".join(unowned)
+        )
+
+    def test_every_dead_branch_owner_is_an_open_plan_bullet(self) -> None:
+        """An owner the plan has closed or pruned owns nothing (P5.83).
+
+        Every ``OWNER:`` token in a reason is held open, not only the owning first one.
+
+        Arrange: the committed baseline's dead entries and the plan's open bullets.
+        Act:     find entries naming, with any token, a bullet that is not open.
+        Assert:  there are none.
+        """
+        # Arrange
+        reasons = {e["id"]: str(e.get("reason", "")) for e in _baseline()["dead"]}
+
+        # Act
+        open_ids = read_open_bullets()
+        stale = stale_owners(reasons, open_ids)
+
+        # Assert
+        assert not stale, (
+            f"{len(stale)} dead branch(es) are owned by a closed plan bullet:\n  "
+            + "\n  ".join(
+                f"{key} ({', '.join(closed_owners(reasons[key], open_ids))})" for key in stale
+            )
+            + f"\n{STALE_OWNER_GUIDANCE}"
         )
 
     def test_the_unknown_fallback_limb_is_banked_for_every_instrumented_column(self) -> None:

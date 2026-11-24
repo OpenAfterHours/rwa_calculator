@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .formulas import blend_two_bands
+from .formulas import B31_SUPPORTING_FACTOR, blend_two_bands
 from .record import oracle
 
 FRAMEWORK = "BASEL_3_1"
@@ -59,6 +59,7 @@ def _sa(
     ead: float = M,
     rwa: float | None = None,
     intermediate: dict[str, Any] | None = None,
+    extra_expected: dict[str, Any] | None = None,
     unasserted: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     return oracle(
@@ -73,6 +74,7 @@ def _sa(
         inputs={"exposure_class": exposure_class, **inputs},
         intermediate=intermediate,
         rwa=rwa,
+        extra_expected=extra_expected,
         unasserted=unasserted,
     )
 
@@ -339,7 +341,9 @@ def corporates() -> list[dict[str, Any]]:
         _sa(
             "ORC-060",
             "corporate_sme",
-            "PS1/26 Art. 122(11): unrated SME that is not a retail exposure -> 85% RW",
+            "PS1/26 Art. 122(11): unrated SME that is not a retail exposure -> 85% RW, "
+            "and no SME supporting factor on the RWEA (CRR Art. 501 revoked from "
+            "1 January 2027 by S.I. 2026/45 reg. 3(b) and Schedule Part 1)",
             CORPORATE_SME_UNRATED_RW,
             {
                 "cqs": None,
@@ -347,12 +351,14 @@ def corporates() -> list[dict[str, Any]]:
                 "is_sme": True,
                 "qualifies_as_retail": False,
             },
-            # The RWEA would also depend on whether the CRR Art. 501 SME
-            # supporting factor survives Basel 3.1. Art. 501 sits in Part Ten,
-            # which is in neither ps126app1.pdf nor the comparison document, so
-            # that could not be sourced here: the risk weight is asserted, the
-            # RWEA is published but not compared.
-            unasserted=("rwa",),
+            # The RWEA is EAD x RW, with no supporting factor. CRR Art. 501 is
+            # revoked by HM Treasury, not by PS1/26: S.I. 2026/45 reg. 3(b) and
+            # Schedule Part 1 bring the revocation into force on 1 January 2027,
+            # and nothing in the instrument saves it. The factor is asserted
+            # alongside the RWEA, so a Basel 3.1 run that re-applied it fails here.
+            rwa=M * CORPORATE_SME_UNRATED_RW * B31_SUPPORTING_FACTOR,
+            intermediate={"supporting_factor": B31_SUPPORTING_FACTOR},
+            extra_expected={"supporting_factor": B31_SUPPORTING_FACTOR},
         ),
     ]
 

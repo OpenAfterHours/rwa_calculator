@@ -35,7 +35,10 @@ refer to the corresponding [CRR specification](../crr/sa-risk-weights.md).
 Specifications that have no Basel 3.1 equivalent:
 
 - **Supporting Factors** — SME (Art. 501) and infrastructure (Art. 501a) factors are **removed** under Basel 3.1.
-  The SME corporate exposure class (85% RW, Art. 122(4)) replaces the supporting factor mechanism.
+  The removal is made by HM Treasury, not by PS1/26: S.I. 2026/45 (FSMA 2023 Commencement No. 12) reg. 3(b) and
+  Schedule Part 1 bring the revocation of CRR Art. 501 and 501a into force on 1 January 2027, and no saving
+  provision keeps them. PS1/26 restates nothing in their place. The unrated non-retail SME risk weight
+  (85% RW, PS1/26 Art. 122(11)) replaces the supporting factor mechanism on the SA.
 - **Credit Conversion Factors** — B31 CCF changes are documented within the [CRR CCF specification](../crr/credit-conversion-factors.md)
   as comparison tables, since the structure is unchanged and only values differ.
 

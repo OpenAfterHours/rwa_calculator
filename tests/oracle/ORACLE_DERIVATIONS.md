@@ -745,13 +745,36 @@ assumption: without it Art. 122(5) would give 100%, which ORC-058 pins.
 
 **Inputs:** EAD £1,000,000; class `corporate_sme`; unrated; does not qualify as
 a retail exposure.
-**Regulation:** Art. 122(11) — 85%.
-**Arithmetic:** `RW = 0.85`.
+**Regulation:** Art. 122(11) — 85%. No SME supporting factor applies to the
+RWEA: CRR Art. 501 is revoked from 1 January 2027 (see below).
+**Arithmetic:**
 
-> **Not asserted:** the RWEA. It would also depend on whether the CRR Art. 501
-> SME supporting factor survives Basel 3.1. Art. 501 sits in Part Ten, which is
-> in neither `ps126app1.pdf` nor the comparison document, so that could not be
-> sourced. The published figure of £850,000 assumes no supporting factor.
+```
+RW  = 0.85                                   (Art. 122(11))
+SF  = 1                                      (no Art. 501 factor under Basel 3.1)
+RWA = 1,000,000 × 0.85 × 1 = 850,000.00
+```
+
+> **Why there is no supporting factor.** PS1/26 is silent on CRR Art. 501:
+> `ps126app1.pdf` and the comparison document never mention Article 501, 501a
+> or a supporting factor. The silence is not an open question. The revocation is
+> made by HM Treasury, not the PRA. S.I. 2026/45 (the Financial Services and
+> Markets Act 2023 (Commencement No. 12 and Saving Provisions) Regulations 2026,
+> made 13 January 2026), reg. 3: "The following provisions of FSMA 2023 come
+> into force on 1st January 2027— … (b) in Part 1 (assimilated direct principal
+> legislation) of Schedule 1, the revocation of the provisions of the Capital
+> Requirements Regulation specified in Part 1 of the Schedule to these
+> Regulations". The Schedule, Part 1 "The Capital Requirements Regulation",
+> lists "Article 501 (adjustment of risk-weighted non-defaulted SME exposures).
+> Article 501a (adjustment to own funds requirements for credit risk for
+> exposures to entities that operate or finance physical structures or
+> facilities, systems and networks that provide or support essential public
+> services)." None of the saving provisions in regs. 4 to 8 keeps either
+> article. The Basel 3.1 reporting basis agrees: PS1/26 Annex II defines
+> OF 07.00 col 0220 as "Paragraphs 1 to 5 of Article 113 of the Credit Risk:
+> Standardised Approach (CRR) Part", with no supporting-factor column beside it.
+> Both the RWEA and `SF = 1` are asserted, so a Basel 3.1 run that re-applied the
+> CRR factor fails here. ORC-038 is the CRR counterpart, where it still applies.
 
 ### Retail (Art. 123)
 
@@ -1265,12 +1288,17 @@ adjustment  = 0.04 × (1 − (22.0 − 4.4)/39.6)
             = 0.0222222…
 R           = 0.192783679165516 − 0.0222222… = 0.1705614569
 RW          = 0.7209125549
+SF          = 1                          (no Art. 501 factor under Basel 3.1)
+RWA         = 10,000,000 × 0.7209125549 × 1 = 7,209,125.55
 ```
 
-> **Not asserted:** the RWEA. Whether the CRR Art. 501 SME supporting factor
-> survives Basel 3.1 could not be sourced — Art. 501 sits in Part Ten, which is
-> in neither `ps126app1.pdf` nor the comparison document. The published figure
-> of £7,209,125.55 assumes no supporting factor.
+> **No supporting factor.** CRR Art. 501 and Art. 501a are revoked from
+> 1 January 2027 by S.I. 2026/45 reg. 3(b) and Schedule Part 1, and no saving
+> provision keeps them. ORC-060 quotes the instrument. The Basel 3.1 IRB
+> reporting basis agrees: PS1/26 Annex II OF 08.01 col 0260 is col 0251
+> "adjust[ed] for values reported in columns 0252 to 0254", and none of those
+> columns is a supporting factor. Both the RWEA and `SF = 1` are asserted.
+> ORC-087 is the CRR counterpart, where the 0.7619 factor still applies.
 
 ## ORC-098 — A-IRB other retail (PS1/26)
 

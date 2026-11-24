@@ -10,6 +10,10 @@ SME supporting factor and infrastructure supporting factor under CRR.
 
 !!! warning "CRR Only"
     Supporting factors are **not available under Basel 3.1**. They are disabled automatically when using the Basel 3.1 configuration.
+    CRR Art. 501 and 501a are revoked from 1 January 2027 by S.I. 2026/45 (FSMA 2023 Commencement No. 12)
+    reg. 3(b) and Schedule Part 1. The revocation is a Treasury instrument, which is why PS1/26 does not
+    mention either article. The Basel 3.1 oracle cases ORC-060 (SA) and ORC-097 (F-IRB) assert the
+    un-factored RWEA.
 
 ## SME Supporting Factor (CRR Art. 501)
 

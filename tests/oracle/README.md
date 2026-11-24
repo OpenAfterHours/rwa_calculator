@@ -34,6 +34,7 @@ passes. That defect class belongs to this suite alone.
 | `drivers.py` | The only module here that imports `rwa_calc`. Supplies *inputs* to a calculator's `calculate_branch` — or, for phase O3, to the CRM stage and then the SA branch — and collects the row back. `run_pipeline` instead translates a record into raw input tables and runs the whole pipeline. Derives nothing. |
 | `test_oracle.py` | Pytest module. Compares engine output against the oracle within relative error 1e-6, asserts the doc-hash lock, and asserts the derivation modules never import the engine. |
 | `test_oracle_pipeline.py` | Pytest module. Runs a curated subset of the same records end to end through `PipelineOrchestrator` and holds the pipeline to the same expected values at the same tolerance, after asserting each run reaches the record's fact pattern. |
+| `test_supporting_factor_pins.py` | Pins the SME supporting-factor oracles in both regimes (ORC-038, ORC-087 under CRR; ORC-060, ORC-097 under Basel 3.1). Each must assert both its RWEA and its factor, and the engine must publish the factor, because `test_oracle.py` skips an unasserted key and a key the engine does not publish. |
 
 ### Layout of `derivations/`
 
@@ -146,6 +147,13 @@ frames. Both are live risks, not hypotheticals:
 If a value cannot be sourced from a document available here, say so rather than
 reconstructing it: publish the figure and list the key in `unasserted` so the
 test skips it and the gap stays visible.
+
+Before you do, check whether the answer is made outside PS1/26. PS1/26 is a PRA
+rule instrument: it restates the CRR provisions the PRA now makes as rules, and
+HM Treasury revokes CRR provisions by statutory instrument. So PS1/26's silence
+on a provision is not evidence either way. ORC-060 and ORC-097 left their RWEA
+unasserted for that reason until P1.323 found that S.I. 2026/45 revokes the CRR
+Art. 501 SME supporting factor from 1 January 2027.
 
 ## What this suite is NOT
 

@@ -29,6 +29,7 @@ from typing import Any
 
 from .formulas import (
     B31_IRB_SCALING_FACTOR,
+    B31_SUPPORTING_FACTOR,
     CORRELATION_RETAIL_MORTGAGE,
     CORRELATION_RETAIL_QRRE,
     CRR_IRB_SCALING_FACTOR,
@@ -104,15 +105,23 @@ def _corporate(
     exposure_class: str = "corporate",
     inputs: dict[str, Any] | None = None,
     ead: float = EAD,
+    supporting_factor: float | None = None,
     unasserted: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Build a corporate/institution IRB oracle with all intermediates recorded.
 
     ``approach`` also decides what the bank supplies as LGD: a Foundation IRB
     row supplies none, so the engine has to reach for the Art. 161 table.
+
+    ``supporting_factor``, when given, is recorded as an intermediate and as an
+    expected value, and multiplies the RWEA. Omit it where the oracle makes no
+    claim about the factor.
     """
     declared_inputs = dict(inputs or {})
     supervisory: dict[str, Any] = {}
+    factor: dict[str, Any] = {}
+    if supporting_factor is not None:
+        factor["supporting_factor"] = supporting_factor
     if approach == "FIRB":
         # The bank supplies no own LGD estimate; the CRM stage hands the branch
         # the Art. 161 supervisory value. Recording it as ``firb_supervisory_lgd``
@@ -137,6 +146,7 @@ def _corporate(
         regulation=regulation,
         ead=ead,
         risk_weight=risk_weight,
+        rwa=None if supporting_factor is None else ead * risk_weight * supporting_factor,
         inputs={"exposure_class": exposure_class, **declared_inputs},
         intermediate={
             "pd_applied": pd_value,
@@ -149,7 +159,9 @@ def _corporate(
             "scaling_factor": scaling_factor,
             "expected_loss_rate": expected_loss(pd_value, lgd),
             **supervisory,
+            **factor,
         },
+        extra_expected=factor or None,
         unasserted=unasserted,
     )
 
@@ -534,7 +546,9 @@ def b31_corporate() -> list[dict[str, Any]]:
             "BASEL_3_1",
             "FIRB",
             "PS1/26 Art. 153(4): SME corporate with total annual revenue "
-            "S = GBP 22m -- correlation reduced by 0.04 * (1 - (S-4.4)/39.6)",
+            "S = GBP 22m -- correlation reduced by 0.04 * (1 - (S-4.4)/39.6), and "
+            "no SME supporting factor on the RWEA (CRR Art. 501 revoked from "
+            "1 January 2027 by S.I. 2026/45 reg. 3(b) and Schedule Part 1)",
             pd_value=pd_1pc,
             lgd=B31_FIRB_LGD_SENIOR_CORPORATE,
             maturity=FIRB_FIXED_MATURITY,
@@ -548,13 +562,12 @@ def b31_corporate() -> list[dict[str, Any]]:
                 "is_sme": True,
                 "sme_size_metric_gbp": 22_000_000.0,
             },
-            # PS1/26 restates Part Three of CRR; the SME supporting factor lives
-            # in Part Ten Art. 501, which is in neither ps126app1.pdf nor the
-            # comparison document. Whether it survives Basel 3.1 could not be
-            # sourced here, so the correlation and risk weight are asserted and
-            # the RWEA -- which would depend on that factor -- is published but
-            # deliberately not compared.
-            unasserted=("rwa",),
+            # The RWEA is EAD x RW, with no supporting factor. CRR Art. 501 is
+            # revoked by HM Treasury, not by PS1/26: S.I. 2026/45 reg. 3(b) and
+            # Schedule Part 1 bring the revocation into force on 1 January 2027,
+            # and nothing in the instrument saves it. Contrast ORC-087, the CRR
+            # case, where the 0.7619 factor still applies.
+            supporting_factor=B31_SUPPORTING_FACTOR,
         ),
     ]
 

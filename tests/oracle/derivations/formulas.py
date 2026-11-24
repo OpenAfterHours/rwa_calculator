@@ -35,6 +35,15 @@ NORMAL = statistics.NormalDist(0.0, 1.0)
 CRR_IRB_SCALING_FACTOR = 1.06
 B31_IRB_SCALING_FACTOR = 1.0
 
+#: Basel 3.1 has no SME or infrastructure supporting factor, so the RWEA
+#: multiplier is exactly 1. CRR Art. 501 and Art. 501a are revoked by HM
+#: Treasury, not by the PRA: S.I. 2026/45 (FSMA 2023 Commencement No. 12)
+#: reg. 3(b) and Schedule Part 1 bring the revocation into force on 1 January
+#: 2027, and none of regs. 4-8 saves either article. PS1/26 restates nothing in
+#: their place, which is why ``ps126app1.pdf`` never mentions them. For CRR,
+#: in force until 31 December 2026, see :func:`sme_supporting_factor`.
+B31_SUPPORTING_FACTOR = 1.0
+
 
 def systemic_factor(pd_value: float, decay: float) -> float:
     """The ``(1 - e^(-k*PD)) / (1 - e^(-k))`` term shared by every correlation.

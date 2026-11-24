@@ -417,11 +417,13 @@ class TestDoubleDefaultProviderList:
             pytest.param(
                 "financial_institution", "institution", 2, 0.50, id="financial_institution_cqs2"
             ),
+            # A qualifying CCP guarantor is booked as an institution (Art. 107(2)(a)) and,
+            # since P1.396, takes that class's CQS 2 weight, not the Art. 306 2%.
+            pytest.param("ccp", "institution", 2, 0.50, id="ccp"),
             # Red before P1.203 on eligibility / C 08.01 col 0220 only: DD was never
-            # beneficial against a 0% or 2% substitution RW.
+            # beneficial against a 0% substitution RW.
             pytest.param("sovereign", "central_govt_central_bank", 1, 0.0, id="sovereign_cqs1"),
             pytest.param("mdb_named", "mdb", 1, 0.0, id="named_mdb"),
-            pytest.param("ccp", "institution", 2, 0.02, id="ccp"),
         ],
     )
     def test_provider_outside_art_202_list_takes_no_double_default(

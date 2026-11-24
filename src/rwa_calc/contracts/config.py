@@ -636,6 +636,8 @@ class CalculationConfig:
         post_model_adjustments: Post-model adjustments (Basel 3.1 only)
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
         use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%
+        slotting_short_maturity_election: PS1/26 Art. 153(5)(d) election — slotting
+            column A/C (instead of the default B/D) where < 2.5 years remain
         collect_engine: Polars engine for .collect() - 'cpu' (default) for
             in-memory processing, 'streaming' for batched lower-memory execution.
         spill_dir: Directory for temp parquet files during streaming materialization.
@@ -723,6 +725,22 @@ class CalculationConfig:
     # existing ``output_floor`` pack Feature (arch_check check 17). Accepted and
     # inert under CRR, where that Feature is off and P0 applies either way.
     facility_share_metric: Literal["floor_aware", "own_approach"] = "floor_aware"
+    # PS1/26 Art. 153(5)(d): firm election to weight a slotting exposure with
+    # less than 2.5 years to maturity on Table A column A ('Strong') / column C
+    # ('Good') instead of the Art. 153(5)(c) default, column B / column D. The
+    # default is False because (c) is a "shall" and (d) only a "may" — the
+    # rule's own default, not a direction-of-RWA choice. When True it covers
+    # every specialised-lending category, HVCRE included, and the Art. 158(6)
+    # EL rate follows the column applied; 'Satisfactory' / 'Weak' / 'Default'
+    # have one Table A column each and are unaffected. A firm choice, so it
+    # lives here and not in the rulepack; the REGIME gate is the existing
+    # ``slotting_revised_tables`` pack Feature (arch_check check 17). Inert
+    # under CRR, whose Art. 153(5) Table 1 maturity rows are mandatory either
+    # way. Electing lowers U-TREA and EL, but NOT necessarily TREA: the lower EL
+    # raises OF-ADJ by 12.5 x the EL saved, so where the output floor binds the
+    # election can RAISE the floored TREA (a binding pre-operational PF case
+    # pinned in the P1.204 acceptance test goes 7,300,000 -> 7,800,000).
+    slotting_short_maturity_election: bool = False
     use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
     # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
     # or para 6 (65%/135% IG assessment) for unrated corporates. This choice
@@ -959,6 +977,7 @@ class CalculationConfig:
         enforce_retail_granularity: bool = False,
         enable_collateral_link_splitting: bool = True,
         facility_share_metric: Literal["floor_aware", "own_approach"] = "floor_aware",
+        slotting_short_maturity_election: bool = False,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
         log_level: str = "INFO",
@@ -1020,6 +1039,17 @@ class CalculationConfig:
                 assignments end to end and keeps the larger; "own_approach" pins
                 the un-floored rule. The election LOWERS RWA wherever the floor
                 binds and is opt-in for that reason.
+            slotting_short_maturity_election: PS1/26 Art. 153(5)(d) election —
+                when True, a slotting exposure with less than 2.5 years to
+                maturity takes Table A column A ('Strong') / column C ('Good'),
+                and its Art. 158(6) EL rate the matching Table B cell. When
+                False (default) it takes the Art. 153(5)(c) column B / column D,
+                whatever its maturity. Applies to every specialised-lending
+                category, HVCRE included; 'Satisfactory' / 'Weak' / 'Default'
+                have one column each and do not move. Off by default because
+                (c) is a "shall" and (d) a "may". It lowers U-TREA and EL but
+                can RAISE the floored TREA where the output floor binds (the
+                lower EL raises OF-ADJ).
             collect_engine: Polars engine for .collect() - 'cpu' (default) for
                 in-memory processing, 'streaming' for batched lower-memory execution.
             sft_method: SFT EAD method (CRR Art. 271(2)). "fccm" (default,
@@ -1068,6 +1098,7 @@ class CalculationConfig:
             enable_collateral_link_splitting=enable_collateral_link_splitting,
             enforce_retail_granularity=enforce_retail_granularity,
             facility_share_metric=facility_share_metric,
+            slotting_short_maturity_election=slotting_short_maturity_election,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
             log_level=log_level,

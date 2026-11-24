@@ -346,9 +346,10 @@ Cell semantics (recorded decisions, this slice):
   row definition), live rows and both maturity-split Total rows compute on
   data (0050/0060/0070/0031 null where the retired code reported None; a CRR
   Total's 0070 is always blank, ``c08_06_cells.c08_06_risk_weight_cell``).
-  CRR's 0080 prefers ``rwa_post_factor``; the maturity fallback is
-  asymmetric (no ``is_short_maturity`` column -> short band empty, long
-  band absorbs the category); the "substantially stronger" sub-rows are
+  CRR's 0080 prefers ``rwa_post_factor``; the maturity band is the sealed
+  ``slotting_short_maturity_rw_applied`` (``kernel.slotting_maturity_band``,
+  P1.204) and its fallback is asymmetric (no band column -> short band empty,
+  long band absorbs the category); the "substantially stronger" sub-rows are
   unconditionally empty. Lineage-instrumented (R24): ``c08_06_plans`` exposes
   the per-SL-type plans, and because the row set is number-neutral but the
   EMPTY-row set is per-sheet, each sheet gets its OWN spec — an empty non-Total
@@ -457,6 +458,7 @@ from rwa_calc.reporting.kernel import (
     pick,
     sheet_axis,
     sheet_frame,
+    slotting_maturity_band,
     with_own_rwea_as,
 )
 from rwa_calc.reporting.metadata import ReportingContext
@@ -1780,10 +1782,17 @@ def _c08_06_row_preds(
     row_defs: list[tuple[str, str, bool | None, str]], cols: set[str]
 ) -> dict[str, RowPredicate]:
     """Each row's category x maturity subset predicate (the asymmetric
-    ``is_short_maturity`` fallback preserved)."""
-    has_maturity = "is_short_maturity" in cols
+    maturity fallback preserved).
+
+    The maturity band is ``kernel.slotting_maturity_band``: a Basel 3.1
+    short-dated 'Strong' / 'Good' leg without the Art. 153(5)(d) election is
+    weighted on column B / D and belongs on the long-band row (70% / 90%), not
+    the 50% / 70% one; every other short-dated leg — CRR, the election, or a
+    'Satisfactory' / 'Weak' / 'Default' grade, whose Table A column is the same
+    on both rows — sits on its < 2.5-year row."""
+    band_col = slotting_maturity_band(cols)
     return {
-        row_def[0]: _c08_06_row_pred(row_def[1], row_def[2], has_maturity=has_maturity)
+        row_def[0]: _c08_06_row_pred(row_def[1], row_def[2], band_col=band_col)
         for row_def in row_defs
     }
 
@@ -1954,9 +1963,10 @@ def _c08_06_prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     )
 
 
-def _c08_06_row_pred(label: str, is_short: bool | None, *, has_maturity: bool) -> RowPredicate:
-    """One category x maturity row subset. The retired asymmetric fallback
-    is preserved: with no maturity column the SHORT band is empty while the
+def _c08_06_row_pred(label: str, is_short: bool | None, *, band_col: str | None) -> RowPredicate:
+    """One category x maturity row subset, keyed on ``band_col`` (the maturity
+    band carrier ``_c08_06_row_preds`` resolved). The retired asymmetric
+    fallback is preserved: with no band column the SHORT band is empty while the
     LONG band absorbs the whole category."""
     never = RowPredicate(equals=(("c0806_never", True),))
     if "substantially stronger" in label:
@@ -1965,8 +1975,8 @@ def _c08_06_row_pred(label: str, is_short: bool | None, *, has_maturity: bool) -
     if label != "Total":
         terms.append(("slotting_category", C08_06_CATEGORY_MAP[label]))
     if is_short is not None:
-        if has_maturity:
-            terms.append(("is_short_maturity", is_short))
+        if band_col is not None:
+            terms.append((band_col, is_short))
         elif is_short:
             return never
     return RowPredicate(equals=tuple(terms))

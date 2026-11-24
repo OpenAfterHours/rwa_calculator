@@ -252,6 +252,7 @@ from rwa_calc.reporting.corep.templates import (
     get_irb_row_sections,
     get_sa_row_sections,
 )
+from rwa_calc.reporting.kernel.columns import SLOTTING_SHORT_RW_CARRIER
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -1667,6 +1668,7 @@ def _projection_exprs(
     """The rename/cast expressions, and the ledger columns they supply."""
     exprs: list[pl.Expr] = []
     supplied: set[str] = set()
+    emitted: dict[str, pl.Expr] = {}
 
     def emit(expr: pl.Expr, target: str, source: str) -> None:
         if target in supplied:
@@ -1676,6 +1678,7 @@ def _projection_exprs(
             return
         exprs.append(expr)
         supplied.add(target)
+        emitted[target] = expr
 
     # The join keys, positionally aligned: ``our_keys`` names OUR frame's
     # columns, which ARE ledger columns, so the existing grammar already says
@@ -1734,6 +1737,24 @@ def _projection_exprs(
         maturity_carrier = LEDGER_CARRIERS_BY_NAME["remaining_maturity_years"]
         maturity = _carrier_value(maturity_source, maturity_carrier, maturity_mapping)
         emit((maturity < 2.5).alias("is_short_maturity"), "is_short_maturity", maturity_source)
+
+    # C 08.06 / CR10 cut their maturity rows on ONE key, the short-maturity band
+    # (``reporting.kernel.slotting_maturity_band``), which our pipeline seals as the
+    # PS1/26 Art. 153(5) band decision. An extract records a maturity band, not the
+    # firm's Art. 153(5)(d) column decision, so the band here IS that maturity band.
+    # That is right under CRR (Table 1's "less than 2,5 years" row is mandatory),
+    # for every Satisfactory / Weak / Default leg (one Table A column each) and for
+    # a firm that elected (d). For a Basel 3.1 firm that did not, a short-dated
+    # Strong / Good leg it weighted on column B / D lands on the short rows here and
+    # on the long rows our side reports: a row migration no weighting difference
+    # caused (P1.204 residual; a firm that records its column decision has no
+    # carrier to map it onto yet).
+    if "is_short_maturity" in supplied:
+        emit(
+            emitted["is_short_maturity"].alias(SLOTTING_SHORT_RW_CARRIER),
+            SLOTTING_SHORT_RW_CARRIER,
+            "is_short_maturity",
+        )
     return exprs, supplied
 
 

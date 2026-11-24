@@ -16,6 +16,7 @@ maturity differentiation and no separate pre-operational project finance distinc
 | FR-5.2 | No separate pre-operational PF table (PRA deviation from BCBS) | P0 | Done |
 | FR-5.3 | HVCRE elevated risk weights | P0 | Done |
 | FR-5.4 | Default category EL treatment (0% RW) | P0 | Done |
+| FR-5.5 | Column A/C (< 2.5yr) only on the firm's Art. 153(5)(d) election; column B/D default; EL follows the column applied | P0 | Done (P1.204) |
 
 ---
 
@@ -103,14 +104,15 @@ pp. 103 and 108: HVCRE risk weights split A/B for Strong (70%/95%) and C/D for G
 the EL side** for HVCRE only — non-HVCRE retains the EL split (col A=0%/0.4%,
 col B=0.4%, col C=0.4%, col D=0.8%).
 
-!!! info "HVCRE Short-Maturity Subgrades — Implemented (Art. 153(5)(d), P1.117 closed)"
+!!! info "HVCRE Short-Maturity Subgrades — Implemented (Art. 153(5)(d), P1.117 / P1.204)"
     HVCRE Table A has distinct short-maturity values in columns A and C (Strong A = 70%,
-    Good C = 95%) — see the same rows above. The calculator now honours these: the b31
-    pack supplies a distinct `slotting_rw_hvcre_short` entry, and
-    `engine/slotting/transforms.py::lookup_rw` fires the `weights["hvcre_short"]` branch
-    when `is_short` is set for an HVCRE exposure (with `is_short_maturity` derived from
-    `remaining_maturity < 2.5`). Short-maturity HVCRE Strong exposures therefore receive
-    70% (col A) and Good exposures 95% (col C). See
+    Good C = 95%) — see the same rows above. The b31 pack supplies a distinct
+    `slotting_rw_hvcre_short` entry, and `engine/slotting/transforms.py::lookup_rw` fires
+    the `weights["hvcre_short"]` branch for an HVCRE exposure with less than 2.5 years to
+    maturity **when the firm has made the Art. 153(5)(d) election**
+    (`CalculationConfig.basel_3_1(..., slotting_short_maturity_election=True)`). Without
+    the election — the default — a short-dated HVCRE Strong exposure takes 95% (col B) and
+    Good 120% (col D). See
     [Subgrade Treatment](#subgrade-treatment-table-a-columns-abcd) below for the
     consolidated column A/C behaviour covering both HVCRE and non-HVCRE.
 
@@ -244,26 +246,57 @@ Table A structure:
     (CRR "≥ 2.5yr" = column B/D; CRR "< 2.5yr" = column A/C). Column A/C assignment is
     explicitly optional ("may") under Art. 153(5)(d)–(f).
 
-!!! info "Column A/C Concession — Maturity Subgrades Implemented; Enhanced-Underwriting Concession Outstanding"
-    Maturity-based column A/C assignment is now implemented for Basel 3.1 slotting via
-    `engine/slotting/transforms.py::lookup_rw`, which dispatches on `is_short`
-    (`is_short_maturity` derived from `remaining_maturity < 2.5`) against distinct
-    short-maturity weight entries supplied by the b31 pack:
+!!! info "Column A/C Concession — a firm election (Art. 153(5)(d), P1.204); Enhanced-Underwriting Concession Outstanding"
+    Art. 153(5)(c) is a "shall" (column B for Strong, column D for Good) and (d) is a
+    "may" (column A / C where less than 2.5 years remain), so the engine applies column
+    A/C **only on the firm's election**:
 
-    - **Non-HVCRE short maturity (P1.97 closed):** the b31 pack supplies a
-      `slotting_rw_short` entry; `lookup_rw` fires `weights["short"]` for short-dated
-      non-HVCRE exposures. Short-dated Strong receives 50% (col A) and Good 70% (col C).
-    - **HVCRE short maturity (P1.117 closed):** the b31 pack supplies a
-      `slotting_rw_hvcre_short` entry; `lookup_rw` fires `weights["hvcre_short"]` for
-      short-dated HVCRE exposures. Short-dated Strong receives 70% (col A) and Good
-      95% (col C).
+    - **The election** is the firm-wide `CalculationConfig.slotting_short_maturity_election`
+      (`CalculationConfig.basel_3_1(..., slotting_short_maturity_election=True)`),
+      **default `False`**. It covers every specialised-lending category, HVCRE and
+      pre-operational project finance included ("for all categories of specialised
+      lending exposures").
+    - **Default (not elected):** a short-dated Strong exposure takes 70% (non-HVCRE col B)
+      / 95% (HVCRE col B), Good 90% (col D) / 120% (HVCRE col D) — the same as a
+      long-dated one.
+    - **Elected:** `engine/slotting/transforms.py::lookup_rw` takes the b31 pack's
+      `slotting_rw_short` (Strong 50% col A, Good 70% col C) and `slotting_rw_hvcre_short`
+      (Strong 70%, Good 95%) entries for an exposure with `is_short_maturity` (remaining
+      maturity < 2.5 years).
+    - **EL follows the column applied (Art. 158(6)).** `apply_el_rates` keys on the same
+      decision, so a non-elected short-dated non-HVCRE Strong exposure carries column B's
+      0.4% EL (not 0%), Good column D's 0.8% (not 0.4%). HVCRE EL is flat at 0.4% and does
+      not move.
+    - **Satisfactory, Weak and Default have no column to elect.** Table A gives each of
+      them one column, and (d) names only Strong (A for B) and Good (C for D), so their
+      weight and EL are the same with or without the election.
+    - **The band is sealed** as `slotting_short_maturity_rw_applied` on the slotting
+      branch and aggregator exit edges. `is_short_maturity` stays the plain maturity fact;
+      the band differs from it only for a short-dated Strong / Good exposure of a firm
+      without the election (band long, column B / D). C 08.06 / OF 08.06 and Pillar 3 CR10
+      key their maturity rows on the band: a column-B Strong leg is never reported on the
+      fixed 50% row, and a short-dated Satisfactory / Weak / Default leg stays on its
+      "< 2.5 years" row (both of its rows carry the same fixed weight, so the remaining
+      maturity the row label states is the only key). (The Basel 3.1 OF 08.06 is still laid
+      out on the CRR row grid — the Strong "Preferential" / "Other" taxonomy rows are
+      P2.72.)
     - **Enhanced-underwriting concessions** (Art. 153(5)(e) IPRE, Art. 153(5)(f) PF)
       remain **not implemented** — no input field exists to mark an exposure as meeting
-      the enhanced-criteria threshold.
+      the enhanced-criteria threshold. That is conservative: (e)/(f) only ever lower a
+      weight.
 
-    CRR maturity-based differentiation is implemented the same way, via the crr pack's
-    `slotting_rw_short` / `slotting_rw_hvcre_short` entries read by the CRR branch of
-    `lookup_rw`.
+    **Output floor.** The election lowers U-TREA, but its EL limb moves OF-ADJ the other
+    way: with no provisions, a non-elected short-dated Strong exposure of 10,000,000 adds
+    2,000,000 to U-TREA and 40,000 to the Art. 36(1)(d) CET1 deduction, which lowers OF-ADJ
+    by 12.5 × 40,000 = 500,000. Where the floor binds, TREA is therefore 500,000 LOWER
+    without the election than with it (pinned in
+    `tests/acceptance/basel31/test_p1_204_slotting_short_maturity_election.py`). The
+    default is `False` because (c) is a "shall" and (d) a "may", not because electing
+    lowers TREA — where the floor binds it does not.
+
+    CRR is different: UK CRR Art. 153(5) Table 1's "less than 2,5 years" row is a "shall",
+    so the CRR branch of `lookup_rw` applies the crr pack's `slotting_rw_short` to every
+    short-dated exposure whatever the election says.
 
 ## Default Category (0% RW, EL Treatment)
 

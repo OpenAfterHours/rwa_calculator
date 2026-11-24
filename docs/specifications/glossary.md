@@ -102,9 +102,14 @@ on the loader. Instead the calculator derives the column from the exposure's res
 maturity and (for B31) HVCRE flag:
 
 - `is_short_maturity = remaining_maturity_years < 2.5` triggers column A / C under
-  Art. 153(5)(d). This concession is implemented for **CRR** only; the B31 calculator
-  currently routes all slotting exposures to column B / D regardless of maturity (tracked
-  as `IMPLEMENTATION_PLAN.md` items P1.97 non-HVCRE, P1.117 HVCRE).
+  Art. 153(5)(d). Under **CRR** the Table 1 maturity split is mandatory and always
+  applied. Under **Basel 3.1** (d) is a firm election ("may") against the (c) default
+  ("shall", column B / D), so column A / C applies only when the run is configured with
+  `slotting_short_maturity_election=True` (default `False`). The short-maturity band is
+  sealed as `slotting_short_maturity_rw_applied` (P1.204): the maturity fact, except a
+  Basel 3.1 short-dated Strong / Good exposure without the election (column B / D, long
+  band). Satisfactory, Weak and Default have one column each, so their band is the
+  maturity fact in both regimes.
 - The IPRE / PF enhanced-underwriting concessions in Art. 153(5)(e)–(f) are **not**
   implemented — there is no input field to mark an exposure as meeting those tests.
 

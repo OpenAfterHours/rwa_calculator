@@ -283,14 +283,14 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     both side inputs, so no register rule sees either cell populated.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: seventeen portfolios x two
-    regimes plus ``equity-transitional`` under Basel 3.1 alone and ``irb-mdb``
-    under CRR alone (thirty-six runs, eighteen of them Basel 3.1), plus a
-    prior-period run for each of the seventeen IRB ones, is FIFTY-THREE full
-    pipeline runs, plus two for leg (m)'s probe
-    (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not this prose.
-    The gateway leg adds one canonical return and one ``validate_return`` per
-    Basel 3.1 run (eighteen) and no pipeline run: the pack is loaded once per
+    This file is the most expensive test in the suite: eighteen portfolios x two
+    regimes plus three single-regime runs (``equity-transitional`` and
+    ``slotting-maturity-elected`` under Basel 3.1, ``irb-mdb`` under CRR) is
+    thirty-nine runs, twenty of them Basel 3.1, plus a prior-period run for each
+    of the twenty IRB ones: FIFTY-NINE full pipeline runs, plus two for leg (m)'s
+    probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
+    this prose. The gateway leg adds one canonical return and one
+    ``validate_return`` per Basel 3.1 run (twenty) and no pipeline run: the pack is loaded once per
     process and the COREP bundle is the one the template leg already generated.
     Timed directly (2026-11-16, 4-core box, when the matrix held fifteen Basel 3.1
     runs): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
@@ -474,6 +474,14 @@ from tests.fixtures.reporting_rw_ladder_portfolio import (
     rw_ladder_config,
 )
 from tests.fixtures.reporting_sa_classes_portfolio import build_reporting_sa_classes_bundle
+from tests.fixtures.reporting_slotting_maturity_portfolio import (
+    REPORTING_DATE as SLOTTING_MATURITY_DATE,
+)
+from tests.fixtures.reporting_slotting_maturity_portfolio import (
+    build_reporting_slotting_maturity_bundle,
+    slotting_maturity_config,
+    slotting_maturity_prior_config,
+)
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
@@ -1426,6 +1434,44 @@ RUNS: tuple[GateInput, ...] = (
         build_reporting_declined_guarantee_bundle,
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
+    ),
+    # Short-dated slotting legs — LESSONS B5. Until P1.204 no registered run held a
+    # slotting leg with less than 2.5 years to maturity in EITHER regime, so the
+    # C 08.06 / OF 08.06 short-maturity rows (0010, 0030, 0050, ..., 0110) and the
+    # CR10 short rows (1, 3, 5, ..., 11) were dead estate-wide, and P1.204's re-key
+    # of those rows on the band a leg is weighted in (PS1/26 Art. 153(5)(d): column
+    # A / C only on the firm's election) was invisible to this register and both
+    # ratchets. THREE runs because the band has three states: CRR (Table 1's
+    # short row is mandatory), Basel 3.1 without the election (short Strong / Good
+    # on the column B / D rows, short Satisfactory still on its short row) and
+    # Basel 3.1 with it. Two legs move between rows across the states and two must
+    # not (see the portfolio docstring), so an emptied row is distinguishable from
+    # a moved leg. Its own config helpers, not ``_irb_config``: the book has no
+    # retail obligor and the election is not a parameter of that helper; IRB
+    # permission, so each run takes a prior frame for C 08.04.
+    GateInput(
+        "crr",
+        "CRR",
+        "slotting-maturity",
+        partial(build_reporting_slotting_maturity_bundle, SLOTTING_MATURITY_DATE["CRR"]),
+        lambda: slotting_maturity_config("CRR"),
+        lambda: slotting_maturity_prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "slotting-maturity",
+        partial(build_reporting_slotting_maturity_bundle, SLOTTING_MATURITY_DATE["BASEL_3_1"]),
+        lambda: slotting_maturity_config("BASEL_3_1"),
+        lambda: slotting_maturity_prior_config("BASEL_3_1"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "slotting-maturity-elected",
+        partial(build_reporting_slotting_maturity_bundle, SLOTTING_MATURITY_DATE["BASEL_3_1"]),
+        lambda: slotting_maturity_config("BASEL_3_1", elected=True),
+        lambda: slotting_maturity_prior_config("BASEL_3_1", elected=True),
     ),
 )
 

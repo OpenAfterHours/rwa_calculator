@@ -5,6 +5,13 @@ Tests PRA PS1/26 Appendix 1, Art. 153(5)(d) — the column-A/C concession that
 applies reduced risk weights when residual maturity is < 2.5 years for non-HVCRE
 specialised lending under the Basel 3.1 supervisory slotting approach.
 
+Art. 153(5)(d) is an institution "may" against the Art. 153(5)(c) "shall"
+(column B / D), so the concession applies only on the firm's election. This
+scenario is the ELECTED firm: its pipeline runs with
+``slotting_short_maturity_election=True`` (P1.204). The un-elected default —
+short Strong at column B's 70% / EL 0.4% — is pinned end to end in
+``test_p1_204_slotting_short_maturity_election.py``.
+
 Key assertion:
     Strong, short maturity (<2.5yr) → RW = 50% (Table A col A)
     Strong, long maturity (>=2.5yr) → RW = 70% (Table A col B)
@@ -14,9 +21,9 @@ Key assertion:
     Weak,         any maturity      → RW = 250% (no col split)
     Default,      any maturity      → RW = 0%   (no col split)
 
-Current engine behaviour (before fix):
-    B31 lookup_rw ignores is_short for non-HVCRE — always returns base table.
-    Strong short → 70% (WRONG — should be 50%).
+Historical engine behaviour (before the B31-E5 fix):
+    B31 lookup_rw ignored is_short for non-HVCRE — always returned the base
+    table, so an ELECTED firm's Strong short got 70% instead of 50%.
 
 Regulatory references:
     - PRA PS1/26 Appendix 1, Art. 153(5)(d), Table A (p. 103)
@@ -154,9 +161,12 @@ def b31_e5_slotting_results_df() -> pl.DataFrame:
         model_permissions=model_permissions,
     )
 
+    # The scenario's firm has made the Art. 153(5)(d) election (P1.204): without
+    # it the short-dated Strong / Good legs take column B / D.
     config = CalculationConfig.basel_3_1(
         reporting_date=_REPORTING_DATE,
         permission_mode=PermissionMode.IRB,
+        slotting_short_maturity_election=True,
     )
 
     pipeline = PipelineOrchestrator()
@@ -178,8 +188,9 @@ class TestB31E5SlottingShortMaturityColumnA:
     under Basel 3.1.
 
     Art. 153(5)(d) PRA PS1/26: firms may apply the column-A/C weights when
-    residual maturity < 2.5 years.  The scenario assumes the firm has elected to
-    apply column A, represented by is_short_maturity=True.
+    residual maturity < 2.5 years.  The scenario's firm has elected to apply
+    column A (``slotting_short_maturity_election=True`` on its config) and the
+    leg has is_short_maturity=True.
     """
 
     def test_b31_e5_strong_short_risk_weight_is_50_pct(

@@ -59,7 +59,8 @@ CRR_SLOTTING_LONG = {
 #
 # Art. 153(5)(c): assign column B to Strong and column D to Good.
 # Art. 153(5)(d): where less than 2.5 years remain, an institution may assign
-#   column A to Strong and column C to Good instead.
+#   column A to Strong and column C to Good instead. "May": a firm election,
+#   carried on the oracle as the ``slotting_short_maturity_election`` input.
 B31_SLOTTING_LONG = {
     "strong": 0.70,
     "good": 0.90,
@@ -178,10 +179,11 @@ def slotting() -> list[dict[str, Any]]:
             "ORC-117",
             "BASEL_3_1",
             "PS1/26 Art. 153(5)(d)(i) Table A column A: strong project finance "
-            "with less than 2.5 years to maturity -> 50% RW",
+            "with less than 2.5 years to maturity, the institution having "
+            "elected point (d) -> 50% RW",
             "strong",
             B31_SLOTTING_SHORT["strong"],
-            short_dated,
+            {**short_dated, "slotting_short_maturity_election": True},
         ),
         _slotting(
             "ORC-118",

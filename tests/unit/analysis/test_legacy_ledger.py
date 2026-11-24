@@ -95,6 +95,10 @@ _COMMON_SCHEMA: dict[str, pl.DataType] = {
     "sl_type": pl.String(),
     "slotting_category": pl.String(),
     "is_short_maturity": pl.Boolean(),
+    # The C 08.06 / CR10 band: projectable because the projection derives it from
+    # the maturity band (P1.204). Equal to it here — CRR-shaped, and the strong
+    # short leg is weighted at column A's 50%, so a Basel 3.1 firm electing (d).
+    "slotting_short_maturity_rw_applied": pl.Boolean(),
     "is_hvcre": pl.Boolean(),
     "ccf": pl.Float64(),
     "ead_final": pl.Float64(),
@@ -215,6 +219,18 @@ _COMMON_ROWS: dict[str, list[object]] = {
         "satisfactory",
     ],
     "is_short_maturity": [None, None, None, None, None, None, None, True, False, False],
+    "slotting_short_maturity_rw_applied": [
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        True,
+        False,
+        False,
+    ],
     "is_hvcre": [None, None, None, None, None, None, None, False, False, True],
     "ccf": [0.0, 0.5, 0.0, 0.2, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0],
     "ead_final": [
@@ -722,6 +738,9 @@ def test_numeric_maturity_derives_band_with_exact_boundary_long(
 
     assert projected["remaining_maturity_years"].to_list()[-3:] == [2.49, 2.5, 4.0]
     assert projected["is_short_maturity"].to_list()[-3:] == [True, False, False]
+    # The C 08.06 / CR10 band (P1.204) is the extract's maturity band: an extract
+    # records no PS1/26 Art. 153(5)(d) column decision.
+    assert projected["slotting_short_maturity_rw_applied"].to_list()[-3:] == [True, False, False]
     assert "c08_06" in coverage.reachable_templates
     assert _cell(
         COREPGenerator().generate(source).c08_06["object_finance"], "0040", "0040"
@@ -751,6 +770,7 @@ def test_direct_maturity_band_wins_over_numeric_derivation(tmp_path: Path) -> No
     projected = source.scan_results().collect()
 
     assert projected["is_short_maturity"].to_list()[-3:] == [True, False, False]
+    assert projected["slotting_short_maturity_rw_applied"].to_list()[-3:] == [True, False, False]
     assert "c08_06" in coverage.reachable_templates
 
 

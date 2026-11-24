@@ -5,6 +5,13 @@ Tests PRA PS1/26 Appendix 1, Art. 153(5)(d) — the column-A/C concession that
 applies reduced risk weights when residual maturity is < 2.5 years for HVCRE
 specialised lending under the Basel 3.1 supervisory slotting approach.
 
+Art. 153(5)(d) is an institution "may" against the Art. 153(5)(c) "shall"
+(column B / D), so the concession applies only on the firm's election. This
+scenario is the ELECTED firm: its pipeline runs with
+``slotting_short_maturity_election=True`` (P1.204). Without it the short HVCRE
+legs take column B / D (95% / 120%) — pinned at unit level in
+``tests/unit/test_p1_204_slotting_short_maturity_election.py``.
+
 Key assertions:
     HVCRE Strong, short (<2.5yr) → RW = 70%  (Table A col A)
     HVCRE Good,   short (<2.5yr) → RW = 95%  (Table A col C)
@@ -202,9 +209,12 @@ def p1117_hvcre_slotting_results_df() -> pl.DataFrame:
         model_permissions=model_permissions,
     )
 
+    # The scenario's firm has made the Art. 153(5)(d) election (P1.204): without
+    # it the short-dated HVCRE Strong / Good legs take column B / D.
     config = CalculationConfig.basel_3_1(
         reporting_date=_REPORTING_DATE,
         permission_mode=PermissionMode.IRB,
+        slotting_short_maturity_election=True,
     )
 
     pipeline = PipelineOrchestrator()

@@ -86,6 +86,7 @@ def _slotting_results() -> pl.LazyFrame:
             ],
             "is_hvcre": [False, False, False, False, False, False],
             "is_short_maturity": [True, False, True, False, False, False],
+            "slotting_short_maturity_rw_applied": [True, False, True, False, False, False],
             "risk_weight": [0.50, 0.90, 1.15, 2.50, 0.0, 0.70],
             "ead_final": [1_000_000, 2_000_000, 500_000, 300_000, 100_000, 1_500_000],
             "rwa_final": [500_000, 1_800_000, 575_000, 750_000, 0, 1_050_000],
@@ -117,6 +118,7 @@ def _slotting_results_with_irb() -> pl.LazyFrame:
             "slotting_category": ["strong", "good", None, None],
             "is_hvcre": [False, False, None, None],
             "is_short_maturity": [True, False, None, None],
+            "slotting_short_maturity_rw_applied": [True, False, None, None],
             "risk_weight": [0.50, 0.90, 0.65, 0.45],
             "ead_final": [1_000_000, 2_000_000, 500_000, 300_000],
             "rwa_final": [500_000, 1_800_000, 325_000, 135_000],
@@ -145,6 +147,7 @@ def _b31_slotting_with_hvcre() -> pl.LazyFrame:
             "slotting_category": ["strong", "strong"],
             "is_hvcre": [False, True],
             "is_short_maturity": [False, False],
+            "slotting_short_maturity_rw_applied": [False, False],
             "risk_weight": [0.70, 0.95],
             "ead_final": [2_000_000, 1_000_000],
             "rwa_final": [1_400_000, 950_000],
@@ -179,6 +182,7 @@ def _fully_substituted_slotting_result() -> pl.LazyFrame:
             "slotting_category": ["strong"],
             "is_hvcre": [False],
             "is_short_maturity": [True],
+            "slotting_short_maturity_rw_applied": [True],
             "exposure_type": ["loan"],
             "risk_weight": [0.50],
             "ead_final": [80.0],
@@ -221,6 +225,7 @@ def _slotting_with_supporting_factors() -> pl.LazyFrame:
             "slotting_category": ["strong"],
             "is_hvcre": [False],
             "is_short_maturity": [False],
+            "slotting_short_maturity_rw_applied": [False],
             "risk_weight": [0.70],
             "ead_final": [1_000_000],
             "rwa_final": [525_000],
@@ -604,6 +609,7 @@ def _mixed_gross_side_carrier_data():
             "sl_type": ["project_finance"] * 3,
             "slotting_category": ["strong"] * 3,
             "is_short_maturity": [True, True, True],
+            "slotting_short_maturity_rw_applied": [True, True, True],
             "exposure_type": ["loan", "contingent", "facility_undrawn"],
             "risk_weight": [0.5, 0.5, 0.5],
             "ead_final": [5000.0, 1000.0, 3000.0],
@@ -833,6 +839,7 @@ class TestC0806EdgeCases:
                 "approach_applied": ["slotting"],
                 "slotting_category": ["strong"],
                 "is_short_maturity": [True],
+                "slotting_short_maturity_rw_applied": [True],
                 "risk_weight": [0.50],
                 "ead_final": [1_000_000],
                 "rwa_final": [500_000],
@@ -845,7 +852,7 @@ class TestC0806EdgeCases:
         assert "specialised_lending" in bundle.c08_06
 
     def test_no_maturity_column_defaults_to_long(self):
-        """Without is_short_maturity, all exposures go to long maturity rows."""
+        """Without the maturity band carrier, all exposures go to long maturity rows."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL01"],
@@ -879,6 +886,7 @@ class TestC0806EdgeCases:
                 "sl_type": ["project_finance"],
                 "slotting_category": ["strong"],
                 "is_short_maturity": [True],
+                "slotting_short_maturity_rw_applied": [True],
                 "risk_weight": [0.50],
                 "ead_final": [0.0],
                 "rwa_final": [0.0],
@@ -908,6 +916,7 @@ class TestC0806EdgeCases:
                 "sl_type": ["project_finance"],
                 "slotting_category": ["strong"],
                 "is_short_maturity": [True],
+                "slotting_short_maturity_rw_applied": [True],
                 "risk_weight": [0.50],
                 "ead_final": [0.0],
                 "rwa_final": [0.0],

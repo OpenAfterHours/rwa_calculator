@@ -177,6 +177,8 @@ class TestProjectionIsRetained:
             "sl_type",
             "slotting_category",
             "is_short_maturity",
+            # Derived from the maturity band: C 08.06 / CR10 key on it (P1.204).
+            "slotting_short_maturity_rw_applied",
             "is_hvcre",
         }
 

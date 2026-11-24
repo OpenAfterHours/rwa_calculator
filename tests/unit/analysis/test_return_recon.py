@@ -188,6 +188,11 @@ class _Leg:
             "sl_type": self.sl_type,
             "slotting_category": self.slotting_category,
             "is_short_maturity": self.is_short_maturity,
+            # The C 08.06 / CR10 short-maturity band both ledgers carry: our
+            # pipeline seals it; the legacy projection derives it from the band
+            # it maps (``legacy_ledger._projection_exprs``). These legs are
+            # CRR-shaped, where Table 1 makes it the maturity fact.
+            "slotting_short_maturity_rw_applied": self.is_short_maturity,
             "is_hvcre": self.is_hvcre,
         }
 
@@ -354,6 +359,7 @@ def _ledger(legs: list[_Leg]) -> pl.LazyFrame:
             # membership schema declares it, rather than as pl.Null.
             "source_exposure_reference": pl.String,
             "is_short_maturity": pl.Boolean,
+            "slotting_short_maturity_rw_applied": pl.Boolean,
         },
     )
     return with_reporting_ledger(raw)

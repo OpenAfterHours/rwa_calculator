@@ -405,11 +405,19 @@ class TestB31GroupG_PortfolioELSummary:
 
             Non-defaulted pool (58 F-IRB rows + 9 slotting rows = 67):
                 IRB      A_irb  = 383,364.9133618003   B_irb  = 1,668,571.4285714286
-                Slotting A_slot = 660,000.0            B_slot = 0.0
-                A = ΣEL     = 1,043,364.9133618003
+                Slotting A_slot = 740,000.0            B_slot = 0.0
+                A = ΣEL     = 1,123,364.9133618003
                 B = Σpool_b = 1,668,571.4285714286
                 nd_shortfall = max(0, A - B) = 0.0
-                nd_excess    = max(0, B - A) = 625,206.5152096283
+                nd_excess    = max(0, B - A) = 545,206.5152096283
+
+            (A_slot rose by 80,000 with P1.204: PS1/26 Art. 153(5)(d) column A / C is
+            a firm election and this config makes none, so the two short-dated
+            non-HVCRE legs take column B / D and, by Art. 158(6), the matching
+            Table B cell — LOAN_SL_PF_003 Strong 10,000,000 x 0.4% (was column A,
+            0%) = +40,000 and LOAN_SL_PF_004 Good 10,000,000 x 0.8% (was column C,
+            0.4%) = +40,000. The short HVCRE legs' EL is flat at 0.4% and does not
+            move.)
 
             (A_slot fell by 20,000 with review IV-02 / RG-01: LOAN_SL_HVCRE_TABLE1_FIX
             — HVCRE strong, 5,000,000, slotting EL 0.4% = 20,000 — has no internal
@@ -459,12 +467,16 @@ class TestB31GroupG_PortfolioELSummary:
         Same aggregate ingredients as ``test_el_shortfall_pool_aggregate_nets_to_zero``:
 
             Non-defaulted: nd_excess = max(0, B - A)
-                         = 1,668,571.4285714286 - 1,043,364.9133618003
-                         = 625,206.5152096283
+                         = 1,668,571.4285714286 - 1,123,364.9133618003
+                         = 545,206.5152096283
             Defaulted:     d_excess = 0
 
             art_159_3_applies = False -> combined branch:
-            total_el_excess = nd_excess + d_excess = 625,206.5152096283
+            total_el_excess = nd_excess + d_excess = 545,206.5152096283
+
+        A moved by +80,000.00 with P1.204 (the Art. 153(5)(d) election is not made,
+        so the short-dated Strong / Good slotting legs carry column B / D EL — see
+        the shortfall test above); before it the excess was 625,206.52.
 
         A moved by +800.00 with review finding CM-01: the uncommitted facility
         ``FAC_CORP_UNCOMMIT_001`` (limit 2,000,000, committed=False) now emits
@@ -483,9 +495,9 @@ class TestB31GroupG_PortfolioELSummary:
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.total_el_excess) == pytest.approx(625_206.5152096283, rel=1e-6), (
+        assert float(el.total_el_excess) == pytest.approx(545_206.5152096283, rel=1e-6), (
             "Portfolio el_excess should be the pool-aggregate netted value "
-            f"625,206.52 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
+            f"545,206.52 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
         )
 
     def test_t2_credit_cap_is_point_six_pct(self, firb_pipeline_results) -> None:

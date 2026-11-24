@@ -11,8 +11,9 @@ Key responsibilities:
 - Map slotting categories to risk weights (Art. 153(5))
 - Map slotting categories to expected loss rates (Art. 158(6) Table B)
 - Handle HVCRE (High Volatility Commercial Real Estate) distinction
-- Handle maturity-based splits (CRR: <2.5yr / >=2.5yr)
-- Handle PF pre-operational vs operational distinction (Basel 3.1)
+- Handle maturity-based splits (CRR: <2.5yr / >=2.5yr, mandatory Table 1 rows;
+  Basel 3.1: Table A column A/C only on the firm's Art. 153(5)(d) election,
+  ``CalculationConfig.slotting_short_maturity_election``, else column B/D)
 - Calculate RWA = EAD x RW
 - Apply supporting factors (CRR Art. 501/501a: SME + infrastructure)
 - Calculate EL = EL_rate x EAD
@@ -76,9 +77,11 @@ class SlottingCalculator:
     Note: The EU CRR HVCRE Table 2 was not onshored into UK CRR, so is_hvcre
     is preserved for audit but does not change the risk weight under CRR.
 
-    Basel 3.1 (PRA PS1/26 Art. 153(5) Table A):
+    Basel 3.1 (PRA PS1/26 Art. 153(5) Table A, column B/D default per (c)):
     - All SL (incl. PF pre-op): Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
     - HVCRE: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
+    Column A/C (Strong 50% / Good 70%; HVCRE 70% / 95%) applies to a leg with
+    < 2.5 years to maturity only on the firm's Art. 153(5)(d) election.
     Note: PRA did not adopt the BCBS CRE33 separate pre-operational PF table.
 
     Usage:

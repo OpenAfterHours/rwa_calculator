@@ -291,8 +291,26 @@ class TestSlottingTransformsELRateLookup:
         assert el_rates[0] == pytest.approx(0.004)  # HVCRE Strong long = non-HVCRE long = 0.4%
         assert el_rates[1] == pytest.approx(0.0)  # HVCRE Strong short = non-HVCRE short = 0.0%
 
-    def test_b31_el_rates_are_maturity_dependent(self, b31_config: CalculationConfig) -> None:
-        """B31 EL rates vary by maturity even though B31 risk weights do not."""
+    @pytest.mark.parametrize(
+        ("elected", "expected_short_el_rate"),
+        [
+            pytest.param(True, 0.0, id="elected-col-A"),
+            pytest.param(False, 0.004, id="default-col-B"),
+        ],
+    )
+    def test_b31_el_rates_follow_the_applied_column(
+        self, elected: bool, expected_short_el_rate: float
+    ) -> None:
+        """B31 non-HVCRE Strong EL follows the Table A column assigned (Art. 158(6)).
+
+        P1.204: the column-A cell (0%) applies to a short-dated leg only on the
+        firm's Art. 153(5)(d) election; without it the leg is weighted on column
+        B and takes column B's 0.4%, whatever its maturity. This test used to
+        key the 0% on maturity alone.
+        """
+        b31_config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30), slotting_short_maturity_election=elected
+        )
         lf = pl.LazyFrame(
             {
                 "slotting_category": ["strong", "strong"],
@@ -311,8 +329,8 @@ class TestSlottingTransformsELRateLookup:
         ).collect()
 
         el_rates = result["slotting_el_rate"].to_list()
-        assert el_rates[0] == pytest.approx(0.004)  # long maturity
-        assert el_rates[1] == pytest.approx(0.0)  # short maturity
+        assert el_rates[0] == pytest.approx(0.004)  # long maturity: column B
+        assert el_rates[1] == pytest.approx(expected_short_el_rate)  # short maturity
 
 
 # =============================================================================

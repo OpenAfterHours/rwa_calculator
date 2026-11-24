@@ -95,6 +95,7 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.kernel import slotting_maturity_band
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.irb_scope import irb_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import (
@@ -118,8 +119,9 @@ from rwa_calc.reporting.plans import SheetPlan
 _EQUITY_RW_TOL = 0.05
 
 # The derived per-leg maturity-band discriminator the slotting cell predicates
-# key off. Sealed ``is_short_maturity`` where present, else literal False (every
-# leg falls to the >= 2.5-year band — the C 08.06 asymmetric fallback: the
+# key off: the carrier ``kernel.slotting_maturity_band`` resolves (the sealed
+# Art. 153(5) band decision), else literal False
+# (every leg falls to the >= 2.5-year band — the C 08.06 asymmetric fallback: the
 # short-band rows go empty and the long-band rows absorb the whole category).
 _CR10_IS_SHORT = "cr10_is_short"
 
@@ -363,16 +365,24 @@ def _equity_simple_population(data: pl.DataFrame) -> pl.DataFrame:
 
 def _with_is_short(frame: pl.DataFrame) -> pl.DataFrame:
     """Derive the ``cr10_is_short`` maturity-band discriminator on a slotting
-    frame. ``is_short_maturity`` (remaining maturity < 2.5 years) is sealed onto
-    every slotting leg by the aggregator; when absent (a synthetic frame that
-    never set it) or null (a null maturity date, which the engine treats as
-    long), the leg falls to the >= 2.5-year band — the C 08.06 asymmetric
-    fallback: short-band rows go empty, long-band rows absorb the category."""
-    if "is_short_maturity" in frame.columns:
-        expr = pl.col("is_short_maturity").fill_null(value=False)
-    else:
-        expr = pl.lit(value=False)
-    return frame.with_columns(expr.alias(_CR10_IS_SHORT))
+    frame.
+
+    Column c is "a fixed column ... specified in accordance with Table A in
+    Article 153(5)" (Annex XXIV), and each row names a remaining-maturity band:
+    the band is the Art. 153(5) band decision resolved by
+    ``kernel.slotting_maturity_band`` — the same carrier C 08.06 cuts on. Under
+    Basel 3.1 a 'Strong' / 'Good' leg with < 2.5 years to run takes the 50% / 70%
+    short rows only on the firm's PS1/26 Art. 153(5)(d) election, and otherwise
+    sits on the column-B / D rows; a short-dated 'Satisfactory' / 'Weak' /
+    'Default' leg, whose single Table A column both rows carry, sits on its
+    < 2.5-year row either way. Absent the carrier, or null (a null maturity date, which
+    the engine treats as long), the leg falls to the >= 2.5-year band — the
+    C 08.06 asymmetric fallback: short-band rows go empty, long-band rows absorb
+    the category."""
+    band_col = slotting_maturity_band(set(frame.columns))
+    if band_col is None:
+        return frame.with_columns(pl.lit(value=False).alias(_CR10_IS_SHORT))
+    return frame.with_columns(pl.col(band_col).fill_null(value=False).alias(_CR10_IS_SHORT))
 
 
 def _type_data(slotting: pl.DataFrame, cols: set[str], sl_key: str, framework: str) -> pl.DataFrame:

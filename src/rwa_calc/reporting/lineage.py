@@ -796,10 +796,14 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "under CRR IPRE absorbs HVCRE, under Basel 3.1 HVCRE is its own sheet), "
             "NOT the exposure class; an SL type with no legs emits no sheet",
             "Rows are the supervisory slotting category (strong/good/satisfactory/"
-            "weak/default) x maturity band (short/long via the derived "
-            "is_short_maturity, with the asymmetric fallback: absent the maturity "
-            "column the short band is empty and the long band absorbs the "
-            "category), plus the two maturity-split Total rows",
+            "weak/default) x maturity band (short/long via the sealed "
+            "slotting_short_maturity_rw_applied - the remaining maturity, except "
+            "that a Basel 3.1 short-dated strong/good leg without the Art. "
+            "153(5)(d) election is weighted on column B/D and sits on the long "
+            "band; a legacy ledger derives it from its maturity band - with the "
+            "asymmetric fallback: absent the column the short band is empty and "
+            "the long band absorbs the category), plus the two maturity-split "
+            "Total rows",
             "An EMPTY non-Total row is hard zero-filled post-execute with the row "
             "definition's FIXED display risk weight in col 0070 — a template "
             "artefact, not a measured weighted average — so that one cell is left "

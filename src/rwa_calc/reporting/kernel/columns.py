@@ -13,11 +13,14 @@ Key responsibilities:
   e.g. ``ead_final`` / ``final_ead`` / ``ead``)
 - Resolve the own-approach (un-floored) RWEA carrier every COREP RWEA figure
   reads (``own_rwea``), and alias it across frames (``with_own_rwea_as``)
+- Resolve the slotting maturity-band carrier C 08.06 and CR10 cut their rows on
+  (``slotting_maturity_band``)
 
 References:
 - Regulation (EU) 2021/451, Annex I/II (COREP templates)
 - CRR Part 8 (Pillar 3 disclosure templates)
 - PRA PS1/26 Appendix 1, Art. 92(2A) / 92(3) (output floor; U-TREA)
+- PRA PS1/26 Appendix 1, Art. 153(5)(c)-(d) (slotting Table A columns)
 """
 
 from __future__ import annotations
@@ -30,6 +33,10 @@ from rwa_calc.engine.materialise import materialise_frame
 #: The un-floored own-approach RWEA the output floor seals beside ``rwa_final``
 #: (``engine/aggregator/_floor.py``); absent wherever the floor never ran.
 OWN_RWEA_CARRIER = "rwa_pre_floor"
+
+#: The slotting short-maturity BAND decision the slotting calculator seals on
+#: every slotting leg (``engine/slotting/transforms.py::apply_slotting_weights``).
+SLOTTING_SHORT_RW_CARRIER = "slotting_short_maturity_rw_applied"
 
 #: exposure_type values inside the on/off-balance-sheet credit-risk gross scope
 #: (CRR Art. 111 SA / Art. 166 IRB). CCR / settlement legs sit outside it.
@@ -140,6 +147,39 @@ def own_rwea(cols: set[str], *fallbacks: str) -> str | None:
     directly.
     """
     return pick(cols, OWN_RWEA_CARRIER, *fallbacks)
+
+
+@cites("PS1/26, paragraph 153")
+def slotting_maturity_band(cols: set[str]) -> str | None:
+    """Resolve the column C 08.06 / OF 08.06 and CR10 cut their maturity rows on.
+
+    Both templates place a slotting leg on a category x remaining-maturity row —
+    Annex II allocates OF 08.06 rows "to the appropriate category and maturity in
+    accordance with Article 153(5)", and CR10 column c is "a fixed column ...
+    specified in accordance with Table A in Article 153(5)". Which of a grade's
+    two rows holds the leg depends on the grade:
+
+    - 'Strong' / 'Good' under PS1/26 Art. 153(5)(c)-(d): the two rows carry
+      different fixed weights (column A / B, C / D), and a leg with less than
+      2.5 years to run takes column A / C only on the firm's (d) election —
+      otherwise column B / D like a long-dated one, so it belongs on the long row.
+    - 'Satisfactory' / 'Weak' / 'Default': Table A has one column, so both rows
+      carry the same fixed weight and the remaining maturity the row labels
+      state is the only key.
+    - CRR: Table 1's "less than 2,5 years" row is mandatory for every grade.
+
+    ``slotting_short_maturity_rw_applied`` encodes exactly that, so it is the band
+    — the ONE key, with no ``is_short_maturity`` rung beneath it. Both production
+    ledgers carry it: our pipeline seals it on every slotting leg
+    (``engine/slotting/transforms.py::apply_slotting_weights``), and a legacy
+    ledger projected from a firm's extract derives it from the firm's maturity band
+    (``analysis/legacy_ledger.py``), because an extract records a maturity, not the
+    firm's Art. 153(5)(d) column decision. One definition for both templates, so
+    COREP and Pillar 3 cannot place the same leg on different rows. ``None`` means
+    the band is absent; the caller applies the asymmetric fallback (the short band
+    empty, the long band absorbs the category).
+    """
+    return pick(cols, SLOTTING_SHORT_RW_CARRIER)
 
 
 def with_own_rwea_as(

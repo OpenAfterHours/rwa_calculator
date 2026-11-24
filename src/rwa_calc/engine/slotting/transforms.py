@@ -11,14 +11,21 @@ Pipeline position:
 Key responsibilities:
 - Column preparation (maturity derivation, slotting metadata defaults)
 - Risk weight lookup by category / HVCRE flag / maturity (CRR Art. 153(5))
+- The short-maturity band decision, sealed as
+  ``slotting_short_maturity_rw_applied`` for the EL lookup and reporting
 - RWA calculation (EAD x RW, pre-supporting-factor)
 - Expected loss rates (Art. 158(6) Table B) and EL shortfall/excess (Art. 159)
 - Audit trail construction
 
-CRR weights vary by maturity (<2.5yr vs >=2.5yr) per Art. 153(5); the EU HVCRE
-Table 2 was not onshored, so ``is_hvcre`` is ignored under CRR. Basel 3.1
-weights vary by HVCRE flag and PF pre-operational status per PRA PS1/26
-Art. 153(5) Table A.
+CRR weights vary by maturity (<2.5yr vs >=2.5yr) per Art. 153(5), and that
+Table 1 split is mandatory ("shall"); the EU HVCRE Table 2 was not onshored, so
+``is_hvcre`` is ignored under CRR. Basel 3.1 weights vary by HVCRE flag per PRA
+PS1/26 Art. 153(5) Table A. Table A has two columns for 'Strong' (A / B) and two
+for 'Good' (C / D) and ONE for each of 'Satisfactory', 'Weak' and 'Default'; the
+'Strong' / 'Good' weight varies by maturity ONLY on the firm's Art. 153(5)(d)
+election (``CalculationConfig.slotting_short_maturity_election``): column B /
+column D is the Art. 153(5)(c) default, column A / column C the election. The
+Art. 158(6) EL rate follows the column applied in both regimes.
 
 Usage:
     from rwa_calc.engine.slotting.transforms import (
@@ -37,6 +44,7 @@ References:
 - CRR Art. 153(5): Supervisory slotting approach (Tables 1 & 2)
 - CRR Art. 158(6), Table B: Expected loss rates for slotting
 - CRR Art. 159: EL shortfall/excess treatment
+- PRA PS1/26 Art. 153(5)(c)-(d) Table A; Art. 158(6) Table B
 - BCBS CRE33: Basel 3.1 specialised lending slotting
 """
 
@@ -56,6 +64,7 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
+from rwa_calc.domain.enums import SlottingCategory
 from rwa_calc.engine.sa.rw_adjustments import (
     apply_guarantee_substitution as sa_apply_guarantee_substitution,
 )
@@ -101,14 +110,14 @@ _SLOTTING_WEIGHTS: dict[str, dict[str, dict[str, float]]] = {
     "basel_3_1": {
         "base": _to_float_map(_B31_PACK.lookup("slotting_rw_base")),
         "short": _to_float_map(_B31_PACK.lookup("slotting_rw_short")),
-        "preop": _to_float_map(_B31_PACK.lookup("slotting_rw_preop")),
         "hvcre": _to_float_map(_B31_PACK.lookup("slotting_rw_hvcre")),
         "hvcre_short": _to_float_map(_B31_PACK.lookup("slotting_rw_hvcre_short")),
     },
 }
 
 # EL rate constants — sourced from the rulepack (Art. 158(6) Table B).
-# EL rates are maturity-dependent for non-HVCRE under both CRR and B31.
+# The non-HVCRE EL rate follows the short-maturity band decision in both
+# regimes (Art. 158(6): the Table B cell matching the Table A weight assigned).
 # HVCRE EL rates are flat (same for both maturities).
 _SLOTTING_EL_RATES: dict[str, dict[str, dict[str, float]]] = {
     "crr": {
@@ -157,33 +166,38 @@ def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig | None = None) -
 
 
 @cites("CRR Art. 153(5)")
+@cites("PS1/26, paragraph 153")
 def apply_slotting_weights(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     *,
     pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
-    """Apply slotting risk weights based on framework, category, HVCRE flag, and maturity."""
+    """Apply slotting risk weights by framework, category, HVCRE flag and maturity.
+
+    Produces:
+        slotting_short_maturity_rw_applied: True when the leg sits in the
+            short-maturity band of Art. 153(5) — see ``_short_maturity_rw_applied``
+            for the rule per regime and per grade. ``is_short_maturity`` stays the
+            plain maturity fact; this is the band the EL lookup and the C 08.06 /
+            CR10 rows read. It differs from the fact on one population only: a
+            Basel 3.1 short-dated 'Strong' / 'Good' leg of a firm without the
+            Art. 153(5)(d) election (False here, column B / D).
+        risk_weight: the Art. 153(5) Table 1 / Table A weight.
+    """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     is_crr = not resolved_pack.feature("slotting_revised_tables")
-
-    if is_crr:
-        rw_expr = lookup_rw(
-            col("slotting_category"),
-            is_crr=True,
-            is_hvcre=col("is_hvcre"),
-            is_short=col("is_short_maturity"),
-        )
-    else:
-        rw_expr = lookup_rw(
-            col("slotting_category"),
-            is_crr=False,
-            is_hvcre=col("is_hvcre"),
-            is_short=col("is_short_maturity"),
-            is_preop=col("is_pre_operational"),
-        )
-
-    return lf.with_columns(risk_weight=rw_expr)
+    applied = _short_maturity_rw_applied(config, is_crr=is_crr)
+    rw_expr = lookup_rw(
+        col("slotting_category"),
+        is_crr=is_crr,
+        is_hvcre=col("is_hvcre"),
+        is_short=applied,
+    )
+    return lf.with_columns(
+        applied.alias("slotting_short_maturity_rw_applied"),
+        risk_weight=rw_expr,
+    )
 
 
 def calculate_rwa(lf: pl.LazyFrame) -> pl.LazyFrame:
@@ -260,6 +274,7 @@ def zero_covered_expected_loss(
     )
 
 
+@cites("PS1/26, paragraph 158")
 def apply_el_rates(
     lf: pl.LazyFrame,
     config: CalculationConfig,
@@ -268,18 +283,24 @@ def apply_el_rates(
 ) -> pl.LazyFrame:
     """Apply slotting expected loss rates per Art. 158(6) Table B.
 
+    Art. 158(6) takes "the EL value in the cell of Table B that is in the
+    corresponding row and column to the risk weight value in Table A that the
+    institution has assigned", so the rate is keyed on the SAME short-maturity
+    band decision ``apply_slotting_weights`` makes — not on raw maturity. A
+    Basel 3.1 short-dated Strong leg without the Art. 153(5)(d) election takes
+    column B's 0.4%, not column A's 0%.
+
     Produces:
-        slotting_el_rate: The EL rate for this category/maturity/HVCRE combination
+        slotting_el_rate: The EL rate for this category/column/HVCRE combination
         expected_loss: EL rate x EAD (the expected loss amount)
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     is_crr = not resolved_pack.feature("slotting_revised_tables")
-    # EL rates are always maturity-dependent (even under B31 where RW is not)
     el_rate_expr = lookup_el_rate(
         col("slotting_category"),
         is_crr=is_crr,
         is_hvcre=col("is_hvcre"),
-        is_short=col("is_short_maturity"),
+        is_short=_short_maturity_rw_applied(config, is_crr=is_crr),
     )
     return lf.with_columns(
         slotting_el_rate=el_rate_expr,
@@ -370,6 +391,7 @@ def build_audit(lf: pl.LazyFrame) -> pl.LazyFrame:
         "slotting_category",
         "is_hvcre",
         "is_short_maturity",
+        "slotting_short_maturity_rw_applied",
         "remaining_maturity_years",
         "ead_final",
         "risk_weight",
@@ -409,14 +431,20 @@ def lookup_rw(
     is_crr: bool = True,
     is_hvcre: bool | pl.Expr = False,
     is_short: bool | pl.Expr = False,
-    is_preop: bool | pl.Expr = False,
 ) -> pl.Expr:
-    """Look up risk weight based on slotting category."""
+    """Look up risk weight based on slotting category.
+
+    ``is_short`` selects the short-maturity weights: CRR Table 1's "less than
+    2,5 years" row, or PS1/26 Table A column A / column C for 'Strong' / 'Good'
+    (the 'Satisfactory' / 'Weak' / 'Default' short and base weights are the same
+    single Table A column). It is the band decision, not the raw maturity fact:
+    under Basel 3.1 a short-dated 'Strong' / 'Good' leg is short only on the
+    Art. 153(5)(d) election (``apply_slotting_weights``).
+    """
     cat = category.str.to_lowercase()
 
     is_hvcre_expr = lit(is_hvcre) if isinstance(is_hvcre, bool) else is_hvcre
     is_short_expr = lit(is_short) if isinstance(is_short, bool) else is_short
-    is_preop_expr = lit(is_preop) if isinstance(is_preop, bool) else is_preop
 
     if is_crr:
         # UK CRR Art. 153(5) has a single slotting weight table — the EU
@@ -431,17 +459,18 @@ def lookup_rw(
         )
     else:
         weights = _SLOTTING_WEIGHTS["basel_3_1"]
-        # PRA PS1/26 Art. 153(5)(d) Table A: when remaining maturity < 2.5
-        # years, both non-HVCRE and HVCRE pick the col-A/C subgrade table.
-        # HVCRE short must fire before the generic HVCRE catch-all so the
-        # is_short flag is honoured for HVCRE exposures.
+        # PRA PS1/26 Art. 153(5)(c)/(d) Table A: column B / D by default; the
+        # column-A/C table where the caller's is_short holds (for 'Strong' /
+        # 'Good', the (d) election on a < 2.5-year leg; the other grades' single
+        # column is in both tables), for non-HVCRE and HVCRE alike. HVCRE short
+        # must fire before the generic HVCRE catch-all. There is no
+        # pre-operational arm: PRA did not adopt the CRE33 pre-op PF table, and
+        # (d) covers "all categories", pre-operational PF included.
         return (
             pl.when(is_hvcre_expr & is_short_expr)
             .then(_map_category(cat, weights["hvcre_short"]))
             .when(is_hvcre_expr)
             .then(_map_category(cat, weights["hvcre"]))
-            .when(is_preop_expr)
-            .then(_map_category(cat, weights["preop"]))
             .when(is_short_expr)
             .then(_map_category(cat, weights["short"]))
             .otherwise(_map_category(cat, weights["base"]))
@@ -460,7 +489,10 @@ def lookup_el_rate(
     Under UK CRR Art. 158(6) Table B has a single specialised-lending
     column — the EU HVCRE row was not onshored, so ``is_hvcre`` is
     ignored on the CRR branch. Under Basel 3.1, HVCRE EL rates are flat
-    (same value for both maturities) while non-HVCRE is maturity-split.
+    (same value in columns A-D) while non-HVCRE splits A/C from B/D; the
+    'Satisfactory' / 'Weak' / 'Default' rates are one cell each, in both bands.
+    ``is_short`` is the short-maturity band decision, exactly as for
+    ``lookup_rw`` — the EL cell must sit in the column the weight came from.
     """
     cat = category.str.to_lowercase()
 
@@ -491,6 +523,47 @@ def lookup_el_rate(
 # =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
+
+
+def _short_maturity_rw_applied(config: CalculationConfig, *, is_crr: bool) -> pl.Expr:
+    """Whether a leg sits in the short-maturity band of Art. 153(5).
+
+    Per regime and grade:
+
+    - CRR Art. 153(5) Table 1: the "less than 2,5 years" row is mandatory for
+      every grade, so the band is the maturity fact.
+    - PS1/26 'Strong' / 'Good': Art. 153(5)(c) makes column B / D the default and
+      (d) lets the institution use column A / C "if less than 2.5 years remain",
+      so the band is the maturity fact AND the firm's election. Without it a
+      short-dated leg is weighted on column B / D, the long band's column.
+    - PS1/26 'Satisfactory' / 'Weak' / 'Default' (and an unrecognised grade,
+      which ``_map_category`` weights as 'Satisfactory'): Table A has ONE column
+      for each, and (d) offers no other, so there is nothing to elect and the
+      band is the maturity fact. Both bands carry the same Table A weight and
+      Table B EL rate for these grades, HVCRE included, so the band moves no
+      figure; it decides only which C 08.06 / CR10 row — each labelled by
+      remaining maturity — the leg is reported on.
+
+    An unknown (null) maturity flag is not short: the leg keeps the long band,
+    the conservative weight.
+    """
+    is_short = col("is_short_maturity").eq_missing(lit(value=True))
+    if is_crr or config.slotting_short_maturity_election:
+        return is_short
+    return is_short & ~_has_short_maturity_column(col("slotting_category"))
+
+
+def _has_short_maturity_column(category: pl.Expr) -> pl.Expr:
+    """The grades PS1/26 Art. 153(5)(d) offers a short-maturity column for.
+
+    (d)(i) 'Strong' (column A instead of B) and (d)(ii) 'Good' (column C instead
+    of D) — no other grade. Never null: an unrecognised or null grade has no
+    column choice.
+    """
+    grade = category.str.to_lowercase()
+    return grade.eq_missing(lit(SlottingCategory.STRONG.value)) | grade.eq_missing(
+        lit(SlottingCategory.GOOD.value)
+    )
 
 
 def _map_category(cat_expr: pl.Expr, weights: dict[str, float]) -> pl.Expr:
@@ -533,7 +606,8 @@ def _default_columns(schema: pl.Schema) -> list[pl.Expr]:
 
     ``is_pre_operational`` is the only non-contract input here; the
     crm_exit edge guarantees ``slotting_category`` / ``is_hvcre`` /
-    ``sl_type`` are always present.
+    ``sl_type`` are always present. It is an audit carrier only: no weight
+    or EL lookup reads it (PS1/26 Table A has no pre-operational row).
     """
     defaults = {
         "is_pre_operational": lit(False),

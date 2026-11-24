@@ -1616,8 +1616,12 @@ maturity rows.
 
 ## ORC-117 — Slotting, strong project finance, < 2.5 years (PS1/26)
 
-**Inputs:** EAD £1,000,000; project finance; category `strong`; short maturity.
-**Regulation:** Art. 153(5)(d)(i) with Table A column A → 50%.
+**Inputs:** EAD £1,000,000; project finance; category `strong`; short maturity;
+the institution has made the Art. 153(5)(d) election
+(`slotting_short_maturity_election`).
+**Regulation:** Art. 153(5)(d)(i) with Table A column A → 50%. Point (d) is an
+institution "may" against the point (c) "shall" (column B, 70%): without the
+election the same exposure takes 70%, whatever its maturity.
 **Arithmetic:** `RW = 0.50`; `RWA = 500,000.00`.
 
 ## ORC-118 — Slotting, good project finance, ≥ 2.5 years (PS1/26)

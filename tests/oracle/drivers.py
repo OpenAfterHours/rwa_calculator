@@ -107,7 +107,10 @@ REPORTING_DATE_B31 = date(2027, 6, 30)
 #: regulation makes conditional (e.g. PS1/26 Art. 122(6) needs PRA permission
 #: before the 65% / 135% investment-grade weights become available), so they
 #: belong on the config rather than on the exposure row.
-_CONFIG_ELECTIONS = ("use_investment_grade_assessment",)
+_CONFIG_ELECTIONS = (
+    "use_investment_grade_assessment",
+    "slotting_short_maturity_election",  # PS1/26 Art. 153(5)(d), Basel 3.1 only
+)
 
 
 def config_for(
@@ -571,11 +574,11 @@ def run_slotting(*, framework: str, ead: float, **overrides: Any) -> dict[str, A
     """Run the slotting branch on one row."""
     data = dict(_SLOTTING_DEFAULTS)
     data["ead_final"] = ead
-    columns = resolve_aliases(overrides)
+    columns, elections = split_elections(resolve_aliases(overrides))
     reject_unknown_columns(columns, _SLOTTING_DEFAULTS)
     data.update(columns)
     lf = _frame(data, extra_schema={"maturity_date": pl.Date()}).lazy()
-    config = config_for(framework, PermissionMode.IRB)
+    config = config_for(framework, PermissionMode.IRB, elections)
     return SlottingCalculator().calculate_branch(lf, config).collect().to_dicts()[0]
 
 

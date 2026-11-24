@@ -147,8 +147,8 @@ For every specialised-lending row, set:
 |---------------|------|---------|---------------------|
 | `slotting_category` | `str` (one of `"strong"`, `"good"`, `"satisfactory"`, `"weak"`, `"default"`, case-insensitive) | The coarse five-bucket category. Must be set before the calculator can look up a risk weight: a slotted row with a null or unrecognised category is weighted at the `satisfactory` pack default (risk weight and expected-loss rate) and the run raises the **CLS012** warning with the row count. | Yes — selects the row of Table A. |
 | `is_hvcre` | `bool` (default `False`) | High-Volatility CRE flag. PRA PS1/26 introduces a separate, elevated table for HVCRE; under CRR this flag has no UK legal basis (see code divergence D3.22). | Yes — selects the HVCRE table vs. the standard Non-HVCRE table. |
-| `residual_maturity_years` | `float` | Years to maturity. The calculator derives `is_short_maturity = residual_maturity_years < 2.5` if not already set. | Yes (CRR only — see warning below). |
-| `is_short_maturity` | `bool` (optional, derived from `residual_maturity_years`) | Pre-computed maturity flag. A pre-existing value is never overwritten. | Yes (CRR only). |
+| `residual_maturity_years` | `float` | Years to maturity. The calculator derives `is_short_maturity = residual_maturity_years < 2.5` if not already set. | Yes (CRR always; Basel 3.1 only with the Art. 153(5)(d) election — see below). |
+| `is_short_maturity` | `bool` (optional, derived from `residual_maturity_years`) | Pre-computed maturity flag. A pre-existing value is never overwritten. | Yes (CRR always; Basel 3.1 only with the election). |
 | `sl_type` | `str` (one of `"project_finance"`, `"object_finance"`, `"commodities_finance"`, `"ipre"`, `"hvcre"`) | Specialised-lending sub-type. Does not affect the slotting table directly except that PRA PS1/26 routes IPRE / HVCRE to slotting wherever an IRB permission covers them (an SA-only firm keeps them on SA). | No (does not change the column lookup). |
 
 There is **no** `slotting_subgrade` column. The A/B/C/D refinement is derived, not declared.
@@ -158,7 +158,8 @@ There is **no** `slotting_subgrade` column. The A/B/C/D refinement is derived, n
 ```text
 slotting_category = STRONG | GOOD          ──┐
 is_hvcre          = True | False             │   →  Table A row + column → risk weight
-is_short_maturity = True | False  (CRR only) │
+is_short_maturity = True | False             │
+election (Basel 3.1 config, Art. 153(5)(d))  │
 ```
 
 - **Strong, default column (B)** is used unless a concession applies.
@@ -166,15 +167,22 @@ is_short_maturity = True | False  (CRR only) │
   short-maturity column).
 - **Good, default column (D)** is used unless a concession applies.
 - **Good, column C** is the short-maturity concession.
-- **Satisfactory, Weak, Default** — single column, `is_short_maturity` is ignored.
+- **Satisfactory, Weak, Default** — single column, so `is_short_maturity` does not move the
+  weight or the EL rate (it still decides which C 08.06 / CR10 maturity row reports the
+  exposure, election or not).
 
-!!! warning "Basel 3.1 short-maturity concession is not yet implemented"
-    Under **Basel 3.1**, the calculator currently routes all slotting exposures to columns
-    B (Strong) / D (Good) regardless of `is_short_maturity` (`IMPLEMENTATION_PLAN.md`
-    items P1.97 non-HVCRE and P1.117 HVCRE). The Art. 153(5)(e) IPRE and Art. 153(5)(f)
-    PF enhanced-underwriting concessions are also unimplemented — there is no input
-    field to flag "meets enhanced-criteria threshold". Under **CRR** the maturity-based
-    columns A/C are fully implemented via separate short / long maturity tables.
+!!! info "Basel 3.1: the short-maturity concession is a firm election"
+    PS1/26 Art. 153(5)(c) assigns columns B / D ("shall"); (d) lets the institution use
+    columns A / C where less than 2.5 years remain ("may"). The calculator therefore
+    applies A / C under **Basel 3.1** only when the run is configured with
+    `CalculationConfig.basel_3_1(..., slotting_short_maturity_election=True)` — the
+    default is `False`, and a short-dated Strong / Good exposure then takes column B / D
+    like a long-dated one. The election covers every specialised-lending type, HVCRE
+    included, and the Art. 158(6) expected-loss rate follows the column applied (a
+    non-elected short-dated non-HVCRE Strong exposure carries 0.4% EL, not 0%). Under
+    **CRR** the Table 1 maturity split is mandatory and is always applied. The
+    Art. 153(5)(e) IPRE and Art. 153(5)(f) PF enhanced-underwriting concessions are
+    unimplemented — there is no input field to flag "meets enhanced-criteria threshold".
 
 ### Worked example: "I have a Strong CRE exposure" → RW
 
@@ -185,7 +193,8 @@ is_short_maturity = True | False  (CRR only) │
    (see [Assessment Criteria](#assessment-criteria) above).
 3. Set `residual_maturity_years` from the loan's contractual maturity. The calculator
    derives `is_short_maturity = residual_maturity_years < 2.5` automatically.
-4. The calculator combines (Strong × HVCRE flag × maturity) → column → risk weight.
+4. The calculator combines (Strong × HVCRE flag × maturity × the Basel 3.1 Art. 153(5)(d)
+   election) → column → risk weight.
 
 For the **actual numerical risk weights** at each (category × subgrade × HVCRE)
 combination, do **not** rely on the summary tables on this page — they show only the

@@ -2096,6 +2096,15 @@ SLOTTING_BRANCH_EDGE: EdgeContract = EdgeContract(
         "expected_loss": EdgeColumn(dtype=pl.Float64),
         "is_pre_operational": EdgeColumn(dtype=pl.Boolean),
         "is_short_maturity": EdgeColumn(dtype=pl.Boolean),
+        # The short-maturity BAND decision, distinct from the maturity fact
+        # above on one population only: CRR Table 1's < 2.5y row (mandatory,
+        # every grade) and the PS1/26 'Satisfactory'/'Weak'/'Default' single
+        # columns follow the fact; a PS1/26 'Strong'/'Good' leg is short only on
+        # column A/C, the firm's Art. 153(5)(d) election. The Art. 158(6) EL rate
+        # and the C 08.06 / CR10 maturity rows follow it.
+        "slotting_short_maturity_rw_applied": EdgeColumn(
+            dtype=pl.Boolean, citation="PS1/26 Art. 153(5)(c)-(d)"
+        ),
         "remaining_maturity_years": EdgeColumn(dtype=pl.Float64),
         "rwa": EdgeColumn(dtype=pl.Float64),
         "slotting_el_rate": EdgeColumn(dtype=pl.Float64),
@@ -2456,6 +2465,15 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "is_pre_operational": EdgeColumn(dtype=pl.Boolean),
         "is_presold": EdgeColumn(dtype=pl.Boolean),
         "is_short_maturity": EdgeColumn(dtype=pl.Boolean),
+        # Slotting legs only (null elsewhere): the short-maturity band — see
+        # SLOTTING_BRANCH_EDGE. C 08.06 / CR10 key their maturity rows on it, so
+        # a column-B 'Strong' leg never sits on the 50% row, and a short-dated
+        # 'Satisfactory'/'Weak'/'Default' leg sits on its < 2.5-year row.
+        "slotting_short_maturity_rw_applied": EdgeColumn(
+            dtype=pl.Boolean,
+            citation="PS1/26 Art. 153(5)(c)-(d)",
+            null_meaning="null = not a slotting leg",
+        ),
         "k": EdgeColumn(dtype=pl.Float64),
         "lgd_floored": EdgeColumn(dtype=pl.Float64),
         "lgd_input": EdgeColumn(dtype=pl.Float64),

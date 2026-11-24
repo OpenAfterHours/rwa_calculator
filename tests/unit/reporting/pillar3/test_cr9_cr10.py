@@ -134,7 +134,7 @@ class TestCR10Generation:
 
     def test_cr10_risk_weight_populated(self, generator: Pillar3Generator):
         """Fixed col c per (category x maturity) row: Strong = 50% (< 2.5y) /
-        70% (>= 2.5y). The synthetic frame sets no is_short_maturity, so the
+        70% (>= 2.5y). The synthetic frame sets no maturity band, so the
         strong leg falls to the >= 2.5y row (row 2); the empty < 2.5y row
         (row 1) still displays its fixed 50%."""
         data = _make_slotting_data()
@@ -181,6 +181,8 @@ class TestCR10Generation:
             sl_type=["project_finance", "project_finance"],
             slotting_category=["strong", "strong"],
             is_short_maturity=[True, False],
+            # The sealed short-maturity band (CRR Table 1: the maturity fact).
+            slotting_short_maturity_rw_applied=[True, False],
             risk_weight=[0.50, 0.70],  # the engine's applied maturity-split weights
             ead_final=[1000.0, 2000.0],
             rwa_final=[500.0, 1400.0],
@@ -233,6 +235,7 @@ class TestCR10GrossSideCarriersAndCCRExclusion:
                 "sl_type": ["project_finance"] * 3,
                 "slotting_category": ["strong"] * 3,
                 "is_short_maturity": [False, False, False],
+                "slotting_short_maturity_rw_applied": [False, False, False],
                 "exposure_type": ["loan", "facility_undrawn", "ccr_netting_set"],
                 "drawn_amount": [5000.0, 0.0, 0.0],
                 "interest": [0.0, 0.0, 0.0],

@@ -75,7 +75,9 @@ def c08_06_risk_weight_cell(
 
     A category row binds the exposure-weighted risk weight of its legs. Under CRR
     that is the row's Table 1 weight wherever the engine's lookup and the row key
-    a leg on the same ``slotting_category`` and ``is_short_maturity`` (measured on
+    a leg on the same ``slotting_category`` and short-maturity band
+    (``slotting_short_maturity_rw_applied``, equal to ``is_short_maturity`` under
+    CRR's mandatory Table 1 split; measured on
     every registered portfolio). A CRR Total row binds a constant blank: Table 1
     has no weight for a total, and the column "shall not be altered" (Annex II
     p.115). Basel 3.1 is unchanged here. PS1/26 Annex II OF 08.06 has no column

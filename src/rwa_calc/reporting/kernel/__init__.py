@@ -43,6 +43,7 @@ from rwa_calc.reporting.kernel.columns import (
     materialise_results,
     own_rwea,
     pick,
+    slotting_maturity_band,
     with_own_rwea_as,
 )
 from rwa_calc.reporting.kernel.excel import (
@@ -82,6 +83,7 @@ __all__ = [
     "sanitise_sheet_name",
     "sheet_axis",
     "sheet_frame",
+    "slotting_maturity_band",
     "with_own_rwea_as",
     "write_metadata_sheet",
     "write_template_sheet",

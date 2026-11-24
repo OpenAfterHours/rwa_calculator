@@ -304,6 +304,64 @@ The baseline is
 [Workspace & Packages](workspace.md#the-filing-mapping-ratchet) for the counts
 and what each reason means.
 
+### `scripts/coverage_report.py` — The reporting coverage ratchet
+
+Measures how much of the generated estate the supervisory gates can see. It runs
+the supervisory register's whole portfolio × regime matrix (`RUNS`), evaluates
+every published rule, and folds every generated template cell into union sets
+keyed by (regime, template, sheet, row, column).
+
+```bash
+uv run python scripts/coverage_report.py                    # measure and print
+uv run python scripts/coverage_report.py --check            # gate against the baseline
+uv run python scripts/coverage_report.py --update-baseline  # bank a deliberate move
+```
+
+`--check` fails if a floor falls or a ceiling rises, against
+`scripts/coverage_baseline.json`:
+
+| Metric | Counts | Direction |
+|---|---|---|
+| `union_binding_rules_crr` / `_b31` | rules reaching PASS or FAIL in at least one run | may not fall |
+| `cells_live` | cells holding any value, 0.00 included, in at least one run | may not fall |
+| `cells_nonzero` | cells holding a value above 1e-6 in magnitude in at least one run | may not fall |
+| `template_cell_liveness_bp` | `cells_live` as a share of declared cells | may not fall |
+| `dead_cells` | declared cells never holding a value | may not rise |
+| `never_evaluated_rules` | rules never evaluated in any run | may not rise |
+
+The two cell floors catch different losses. A figure that falls to 0.00 is still
+live, so only `cells_nonzero` falls. A filed 0.00 that becomes a blank (the
+"uninteresting zeros" clean-ups) moves only `cells_live`. `cells_nonzero` counts
+cell addresses, keyed by (regime, template, sheet, row, column), so it also falls
+when a figure goes to 0.00 on one sheet while the same column stays lit on another.
+`scripts/check_template_cell_coverage.py` counts (template, column) pairs and cannot
+see that. Both cell floors are **net counts**,
+not per-cell guards: a figure that moves from one cell to another moves neither,
+and cells lit since the last bank absorb an equal number of later losses. The
+liveness ratio and the dead-cell count can improve while coverage is destroyed,
+because their denominator moves with their numerator; read the two floors first.
+
+`cells_nonzero` counts a cell only when its magnitude is above
+`NONZERO_TOLERANCE` (1e-6), not on the template census's exact non-zero test. A
+figure worked out as a running sum, such as a closing balance built from an opening
+balance plus flows, can end up with a rounding residue whose size depends on how
+many threads Polars uses. One C 08.04 closing balance was exactly 0.0 at 1 and 4
+threads and 7.45e-09 at 2, so an exact count gave different results on CI runners
+with different core counts. Every value in the matrix is either below 7.45e-09 or
+at least 2e-04, so the 1e-6 cut-off does not drop any real figure. Re-measured on the
+39-run matrix (2026-11-24): no dust at 1, 2 or 4 threads, and 5440 non-zero cells at
+each.
+
+A cell that is 0.00 in every run cannot be caught by any ratchet. The metrics JSON
+lists those addresses as `always_zero_cell_list`, so you can check whether the
+cell you are changing is non-zero anywhere before you trust a green run.
+
+The metrics are a union over `RUNS`, so the baseline records the matrix it was
+measured over and `--check` refuses to compare across a change to it. The gate runs
+in its own CI job (`Reporting Coverage Ratchet`); its local mirror,
+`tests/contracts/test_coverage_ratchet.py`, is `slow`-marked apart from its fast
+structural and zero-ness tests.
+
 
 ### `scripts/build_filer_release.py` — Packaging an rwa-filer taxonomy release
 

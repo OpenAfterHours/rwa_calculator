@@ -10,7 +10,7 @@ published rulebook binds anywhere at all.
 
 This script answers that. It runs the same portfolio x regime matrix the gate
 runs -- imported from ``RUNS``, never re-declared, so it cannot silently shrink
--- and measures five things:
+-- and measures six things:
 
 ``union_binding_rules_crr`` / ``union_binding_rules_b31``
     Distinct rules reaching PASS or FAIL in at least one run. VACUOUS is
@@ -18,8 +18,25 @@ runs -- imported from ``RUNS``, never re-declared, so it cannot silently shrink
     This is the honest headline the per-run summary cannot produce.
 ``cells_live``
     Template cells carrying a value in at least one run, as an ABSOLUTE count.
-    The cell-coverage floor: it falls if and only if the estate stopped
-    reporting a figure it used to report.
+    The NULL-ness floor: it falls when more addresses stop reporting anything
+    than start. A 0.00 counts as a value, so a figure that falls to 0.00 does
+    not move it — that is what the next metric is for.
+``cells_nonzero``
+    Template cells holding a NON-ZERO value in at least one run, as an ABSOLUTE
+    count. The ZERO-ness floor: it falls when more addresses lose their figure
+    (to 0.00 or to a blank) than gain one. Turning a filed 0.00 into a blank —
+    the "uninteresting zeros" clean-ups — moves ``cells_live`` and not this.
+    "Non-zero" means a magnitude above ``NONZERO_TOLERANCE`` (1e-6), not the
+    template census's exact ``!= 0``: summation-order dust varies with the
+    Polars thread count, and an exact count read differently on 2 threads than
+    on 1 or 4 (see the constant).
+    Both are NET counts, not per-cell guards: a figure that moves from one
+    address to another leaves both unchanged, and cells lit since the last bank
+    absorb an equal number of later losses, because an unbanked improvement
+    passes. Neither is a guard against a row re-key or a misroute
+    (``.claude/LESSONS.md`` B6), and neither makes a cell that is 0.00 for its
+    whole life visible: those addresses are listed, not ratcheted, as
+    ``always_zero_cell_list`` in the JSON.
 ``template_cell_liveness``
     The same thing as a fraction of declared cells. Useful reading, **not** a
     floor: its denominator moves with its numerator, so it can improve while
@@ -52,12 +69,13 @@ Output:
 
 How this gates
 --------------
-``--check`` ratchets six metrics against ``scripts/coverage_baseline.json``
+``--check`` ratchets seven metrics against ``scripts/coverage_baseline.json``
 and exits non-zero on a regression: the two ``union_binding_rules_*`` counts,
-``cells_live`` and ``template_cell_liveness_bp`` may not FALL, ``dead_cells`` and
-``never_evaluated_rules`` may not RISE.
+``cells_live``, ``cells_nonzero`` and ``template_cell_liveness_bp`` may not FALL,
+``dead_cells`` and ``never_evaluated_rules`` may not RISE.
 
-Of those, ``cells_live`` is the one that makes destroying cell coverage fail. The
+Of those, ``cells_live`` and ``cells_nonzero`` are the two that make destroying cell
+coverage fail — the first when figures vanish, the second when they fall to 0.00. The
 ratio and the dead-cell count are **sometimes anti-signal** — both improve when
 declared cells are dropped faster than live ones, and deleting a single run has been
 measured doing exactly that. See the note on ``_RATCHET_MIN``. Two gates invoke it:
@@ -200,6 +218,31 @@ PRINTED_ROWS = 20
 #: never runs anywhere is the worst case: the estate is unchecked exactly where
 #: the publisher said a break is fatal.
 SEVERITY_RANK = {"ERROR": 0, "WARNING": 1, "INFO": 2}
+
+#: A cell counts towards ``cells_nonzero`` only when its magnitude EXCEEDS this.
+#: Deliberately not the template census's exact ``.ne(0)``
+#: (``check_template_cell_coverage.py::_scan_run``). This metric is a ratcheted
+#: count of single cells, and a figure computed as a difference or a running sum —
+#: a closing balance as opening plus flows — carries summation-order dust that
+#: depends on the Polars thread count. Measured (P5.71 review):
+#: ``crr/C 08.04[corporate][r0080][c0010]`` on crm-substitution is exactly 0.0 at
+#: POLARS_MAX_THREADS=1 and 4 and 7.450580596923828e-09 at 2 (opening
+#: 34188682.930795796 against closing 34188682.9307958). Counted exactly,
+#: ``--check`` read one cell more on a 2-vCPU CI runner than at 1 or 4 threads, so
+#: whichever count is banked the other setting goes red for nothing, or a real
+#: single-cell loss hides inside one cell of permanent slack. The census is less
+#: exposed: its unit is a whole (template, column) pair, which a dust cell moves only
+#: when no other cell of that column holds a figure in any run.
+#:
+#: The margin, measured over every value the matrix folds at 1, 2 and 4 threads: on
+#: the 31-run matrix the largest dust was 7.45e-09; on the 39-run matrix (2026-11-24)
+#: no run carried dust at any of the three settings and ``cells_nonzero`` read 5440 at
+#: each. The smallest real figure is 2e-04 (``crr/C 09.02[US][r0010][c0080]``) and
+#: nothing lies in (1e-06, 1e-04] on either. Both ends are pinned in
+#: ``tests/contracts/test_coverage_ratchet.py``. ``cells_live`` is
+#: unaffected: a dust value is still a value. A NaN is not counted (``abs(nan) >``
+#: anything is False), so a figure turning into NaN reads as a lost figure.
+NONZERO_TOLERANCE = 1e-6
 
 
 class CellAddress(NamedTuple):
@@ -344,7 +387,13 @@ def _absorb_frame(
     sheet: str,
     frame: pl.DataFrame,
 ) -> None:
-    """Fold one emitted sheet's numeric cells into the liveness sets."""
+    """Fold one emitted sheet's numeric cells into the liveness sets.
+
+    Every numeric cell is declared; a non-null one is live; a live one whose
+    magnitude exceeds ``NONZERO_TOLERANCE`` is non-zero. The tolerance keeps
+    summation-order dust, which varies with the Polars thread count, out of the
+    ratcheted ``cells_nonzero`` count.
+    """
     rows = _row_refs(frame)
     for column, dtype in zip(frame.columns, frame.dtypes, strict=True):
         # Template cells are numeric. The string columns are the row
@@ -358,7 +407,7 @@ def _absorb_frame(
             observation.cells_declared.add(address)
             if value is not None:
                 observation.cells_live.add(address)
-                if value != 0:
+                if abs(value) > NONZERO_TOLERANCE:
                     observation.cells_nonzero.add(address)
 
 
@@ -424,6 +473,7 @@ def summarise(observation: Observation) -> dict[str, Any]:
         )
 
     dead = sorted(observation.cells_declared - observation.cells_live)
+    always_zero = sorted(observation.cells_live - observation.cells_nonzero)
     declared = len(observation.cells_declared)
     live = len(observation.cells_live)
     liveness = live / declared if declared else 0.0
@@ -432,12 +482,17 @@ def summarise(observation: Observation) -> dict[str, Any]:
         # Ratchet: may not decrease.
         "union_binding_rules_crr": binding.get("crr", 0),
         "union_binding_rules_b31": binding.get("b31", 0),
-        # Ratchet: may not decrease. THE cell-coverage floor, and the only one of
-        # the three cell numbers that behaves like a floor — see the note on
-        # _RATCHET_MIN. An absolute count of cells some run puts a value in: it can
-        # only fall if the estate really stopped reporting a figure it used to
-        # report, whatever happens to the denominator.
+        # Ratchet: may not decrease. The NULL-ness floor — see the note on
+        # _RATCHET_MIN. An absolute count of cells some run puts a value in, so a
+        # shrinking denominator cannot flatter it; but a 0.00 is a value, so a
+        # figure falling to 0.00 leaves it unmoved. A NET count, not a per-cell
+        # guard: a figure moving between addresses leaves it unchanged.
         "cells_live": live,
+        # Ratchet: may not decrease. The ZERO-ness floor beside it: cells some run
+        # puts a NON-ZERO value in. Falls when a figure goes to 0.00 or to a blank;
+        # does not move when a filed 0.00 becomes a blank, which cells_live does.
+        # The same net-count limit applies.
+        "cells_nonzero": len(observation.cells_nonzero),
         # Ratchet: may not decrease — but read the note on _RATCHET_MIN before
         # trusting it. A RATIO whose denominator shrinks with its numerator, so it
         # can IMPROVE while coverage is destroyed. Kept because it is the plan's
@@ -471,9 +526,9 @@ def summarise(observation: Observation) -> dict[str, Any]:
             "live": live,
             "dead": len(dead),
             # A cell that is only ever 0.00 is present but asserts nothing about
-            # the portfolio. Not part of the headline metric (the plan defines
-            # liveness as non-null), but a cheap and useful second reading.
-            "live_but_always_zero": live - len(observation.cells_nonzero),
+            # the portfolio. Evidence, not ratcheted: cells_nonzero guards a figure
+            # going TO zero, and nothing can force a lifelong 0.00 to light.
+            "live_but_always_zero": len(always_zero),
         },
         # The full list is the record; the roll-up is what somebody acts on.
         # A template with thousands of dead cells is a portfolio-matrix gap; one
@@ -486,6 +541,9 @@ def summarise(observation: Observation) -> dict[str, Any]:
             )
         ],
         "dead_cell_list": [address.describe() for address in dead],
+        # Live only as 0.00 in every run. Turns .claude/LESSONS.md B5's manual step —
+        # confirm the cell you are changing is non-zero somewhere — into a lookup.
+        "always_zero_cell_list": [address.describe() for address in always_zero],
         "never_evaluated_list": [entry for regime in regimes for entry in never[regime]],
     }
 
@@ -661,6 +719,7 @@ def _print_cells(metrics: dict[str, Any], cells: dict[str, Any]) -> None:
     print("\nTemplate cells")
     print(f"  declared             {cells['declared']:>7}")
     print(f"  live (non-null)      {cells['live']:>7}")
+    print(f"  non-zero somewhere   {metrics['cells_nonzero']:>7}")
     print(f"  dead                 {cells['dead']:>7}")
     print(f"  live but always zero {cells['live_but_always_zero']:>7}")
     print(f"  liveness             {metrics['template_cell_liveness']:>7.4f}")
@@ -730,8 +789,19 @@ def _confine_path(raw: Path) -> Path:
 
 BASELINE_PATH = _REPO_ROOT / "scripts" / "coverage_baseline.json"
 
-# Coverage must ratchet the RIGHT WAY on each metric. Binding rules, LIVE CELLS
-# and cell liveness may not fall; dead cells and never-evaluated rules may not rise.
+# Coverage must ratchet the RIGHT WAY on each metric. Binding rules, LIVE CELLS,
+# NON-ZERO CELLS and cell liveness may not fall; dead cells and never-evaluated rules
+# may not rise.
+#
+# `cells_nonzero` is the zero-ness floor beside `cells_live` (plan P5.71). `cells_live`
+# tests NULL-ness, so a figure that falls to 0.00 is still "live" and moved no metric
+# here; the template census (check_template_cell_coverage.py) sees it only when EVERY
+# cell of the (template, column) pair goes to zero. The two floors are not redundant
+# either way: a 0.00 becoming a blank moves `cells_live` and not `cells_nonzero`, a
+# figure becoming 0.00 the reverse. Both are NET counts — a figure moving from one
+# address to another leaves both unchanged, and unbanked improvements absorb an equal
+# number of later losses — so neither guards a re-key or misroute. Both pinned in
+# tests/contracts/test_coverage_ratchet.py, the limit included.
 #
 # `cells_live` is the cell-coverage floor, and it is here because the other two cell
 # numbers are not floors at all — they are sometimes ANTI-signal:
@@ -764,6 +834,7 @@ _RATCHET_MIN = (
     "union_binding_rules_crr",
     "union_binding_rules_b31",
     "cells_live",
+    "cells_nonzero",
     "template_cell_liveness_bp",
 )
 _RATCHET_MAX = ("dead_cells", "never_evaluated_rules")
@@ -772,10 +843,16 @@ _RATCHET_MAX = ("dead_cells", "never_evaluated_rules")
 #: script cannot drift apart, as in ``check_template_cell_coverage.py``.
 BASELINE_COMMENT = (
     "Coverage ratchet baseline (scripts/coverage_report.py --check). union_binding_*, "
-    "cells_live and template_cell_liveness_bp may not DECREASE; dead_cells and "
-    "never_evaluated_rules may not INCREASE. Update only after a deliberate, recorded "
+    "cells_live, cells_nonzero and template_cell_liveness_bp may not DECREASE; dead_cells "
+    "and never_evaluated_rules may not INCREASE. Update only after a deliberate, recorded "
     "improvement — never to clear a red gate. READ THIS BEFORE TRUSTING A GREEN: "
-    "cells_live is the cell-coverage floor. template_cell_liveness_bp is a RATIO whose "
+    "cells_live and cells_nonzero are the cell-coverage floors. cells_live counts a 0.00 "
+    "as live, so a figure falling to 0.00 does not move it; cells_nonzero is the zero-ness "
+    "floor and does not move when a filed 0.00 becomes a blank. Both are NET counts, not "
+    "per-cell guards: a figure moving to another cell passes, and cells lit since the last "
+    "bank absorb an equal number of later losses. cells_nonzero counts magnitudes above "
+    "NONZERO_TOLERANCE (1e-6), so float dust that varies with the Polars thread count "
+    "cannot move it. template_cell_liveness_bp is a RATIO whose "
     "denominator shrinks with its numerator and dead_cells is declared-minus-live, so both "
     "can IMPROVE while coverage is destroyed — measured, deleting the b31/rich run loses "
     "689 live cells while moving liveness 1285->1374bp and dead 55553->47123. Only "

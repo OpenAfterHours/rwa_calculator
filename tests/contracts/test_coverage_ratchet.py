@@ -8,12 +8,23 @@ Pipeline position:
 
 ``scripts/coverage_report.py`` measures how much of the published rulebook the
 gates can actually SEE, over the same portfolio x regime matrix the supervisory
-register runs (``RUNS``, imported and never re-declared). It emits six
+register runs (``RUNS``, imported and never re-declared). It emits seven
 ratchetable numbers: ``union_binding_rules_crr`` / ``union_binding_rules_b31``,
-``cells_live`` and ``template_cell_liveness_bp`` may not FALL, ``dead_cells`` and
-``never_evaluated_rules`` may not RISE.
+``cells_live``, ``cells_nonzero`` and ``template_cell_liveness_bp`` may not FALL,
+``dead_cells`` and ``never_evaluated_rules`` may not RISE.
 
-``cells_live`` is the one that makes destroying cell coverage fail, and it is worth
+``cells_live`` tests NULL-ness and ``cells_nonzero`` ZERO-ness, and neither is
+redundant: a figure falling to 0.00 stays live and fails only ``cells_nonzero``; a
+filed 0.00 becoming a blank fails only ``cells_live``. ``cells_nonzero`` counts cell
+ADDRESSES (regime, template, sheet, row, column), so it fails on a figure zeroed on one
+sheet while the same column stays lit on another — the move the per-column template
+census cannot see — and each of the five parts of that key is pinned by its own leg. A
+cell counts as non-zero only above ``NONZERO_TOLERANCE``, so summation-order dust that
+varies with the Polars thread count cannot move it. Both are NET counts — a figure
+moving from one address to another fails neither — and the zero-ness tests below pin
+each of these facts, the limit included, through the script's real ``_absorb_frame``.
+
+``cells_live`` is what makes destroying cell coverage fail, and it is worth
 knowing why before reading a green. ``template_cell_liveness_bp`` is a RATIO whose
 denominator moves with its numerator, and ``dead_cells`` is ``declared - live``, so
 both IMPROVE when declared cells are dropped faster than live ones. Measured over all
@@ -53,6 +64,15 @@ mode above. So the work is split, deliberately unevenly:
   were measured over a matrix that no longer exists, a portfolio that never
   entered the gated matrix at all, a baseline weakened in the working tree, and
   the CI job itself being deleted.
+- Eight **always-on zero-ness tests** that fold hand-built frames through the
+  script's own ``_absorb_frame`` / ``summarise`` / ``_ratchet_deltas`` (no
+  pipeline): what ``cells_nonzero`` catches — including a figure zeroed on one
+  sheet while its (template, column) pair stays lit on another, which the template
+  census cannot see — what only ``cells_live`` catches, the cell-to-cell move
+  neither catches, the always-zero address list (live 0.00s, not dead blanks), each
+  of the five parts of the cell key on its own, and the zero tolerance at both ends
+  (measured dust not counted, the smallest real figure counted, and a cell flipping
+  between 0.0 and dust moving nothing).
 - One ``slow`` test that shells out to the real ``--check``. Excluded from the
   dev loop by the marker, so it binds only where something opts in.
 
@@ -128,7 +148,7 @@ wording that says the comparison is INVALID and names the only correct action;
 regression, which by then is known to have been measured over the same matrix.
 
 References:
-- scripts/coverage_report.py — the measurement and the four-way ratchet
+- scripts/coverage_report.py — the measurement and the seven-metric ratchet
 - scripts/coverage_baseline.json — the banked values (never weaken to clear a red)
 - tests/contracts/test_template_cell_coverage.py — the same shape, per COLUMN
 - .claude/LESSONS.md B5 — the register fails open; a dead cell reads as clean
@@ -142,8 +162,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
+import polars as pl
 import pytest
 from tests.contracts._ci_workflow import (
     JOB_CONDITIONAL,
@@ -586,9 +607,494 @@ def _weakenings(committed: dict[str, Any], working: dict[str, Any]) -> list[str]
     return described
 
 
+class _Shape(NamedTuple):
+    """One template column carried on two sheets of the same template.
+
+    ``sheet`` and ``sibling`` both carry ``column``. That is the shape the template
+    census (``check_template_cell_coverage.py``) cannot resolve: its unit is the
+    (template, column) pair, which stays live while ANY one sheet holds a figure, so
+    a figure zeroed on ``sibling`` is invisible to it while ``sheet`` stays lit.
+    """
+
+    regime: str
+    template: str
+    sheet: str
+    sibling: str
+    column: str
+
+    def address(self, sheet: str, row: str) -> Any:
+        """The regime-qualified ``CellAddress`` of ``row`` on ``sheet`` in this column."""
+        return COVERAGE.CellAddress(self.regime, self.template, sheet, row, self.column)
+
+
+#: Real addresses from each regime's estate, so the legs fold cells shaped like the
+#: ones ``--check`` folds. CRR: C 08.01's SME-supporting-factor column 0256 on
+#: ``corporate_sme`` beside ``corporate`` — the shape that motivated the metric (plan
+#: P5.71). Column 0256 does not exist under Basel 3.1 (supporting factors are gone —
+#: ``reporting/corep/templates.py``), so b31 uses OF 08.01's mortgage-RW-floor column
+#: 0253, the column ``.claude/LESSONS.md`` B5 records as having held 0.00 in every
+#: golden portfolio.
+#:
+#: The fold path is regime-independent, so the two cases check the address shape;
+#: they are NOT two independent proofs. What each part of the key does — the regime
+#: included — is pinned on its own by
+#: ``test_every_part_of_the_cell_address_keeps_a_lost_figure_from_being_masked``.
+_CRR_SHAPE = _Shape("crr", "C 08.01.a", "corporate_sme", "corporate", "0256")
+_B31_SHAPE = _Shape(
+    "b31",
+    "OF08.01.01.01",
+    "retail_residential_re_non_sme_airb",
+    "retail_other_non_sme_airb",
+    "0253",
+)
+_ZERO_NESS_CASES = [
+    pytest.param(_CRR_SHAPE, id="crr"),
+    pytest.param(_B31_SHAPE, id="b31"),
+]
+
+
+def _fold(cells: dict[Any, float | None]) -> tuple[Any, dict[str, Any]]:
+    """Cells keyed by ``CellAddress``, folded through the REAL ``_absorb_frame``.
+
+    The cells are grouped into one emitted frame per (regime, template, sheet), the
+    unit ``_absorb_cells`` hands to ``_absorb_frame``, with one row per row ref and
+    one ``Float64`` column per column named, and every frame is accumulated into ONE
+    ``Observation`` the way a matrix run accumulates every sheet of every run. A
+    (row, column) of a frame that ``cells`` leaves out is a blank: declared, never
+    live, and the same in any two measurements that name the same addresses.
+
+    Built through the script's own accumulator rather than by filling the sets by
+    hand, so the test reads liveness and zero-ness exactly as ``--check`` does
+    (``.claude/LESSONS.md`` B3) — a hand-filled set would share whatever assumption
+    the test's author made about which values count.
+    """
+    sheets: dict[tuple[str, str, str], dict[str, dict[str, float | None]]] = {}
+    for address, value in cells.items():
+        rows = sheets.setdefault((address.regime, address.template, address.sheet), {})
+        rows.setdefault(address.row, {})[address.column] = value
+
+    observation = COVERAGE.Observation()
+    for (regime, template, sheet), rows in sheets.items():
+        columns = sorted({column for row in rows.values() for column in row})
+        frame = pl.DataFrame(
+            {
+                "row_ref": list(rows),
+                **{column: [row.get(column) for row in rows.values()] for column in columns},
+            },
+            schema={"row_ref": pl.String, **dict.fromkeys(columns, pl.Float64)},
+        )
+        COVERAGE._absorb_frame(observation, regime, template, sheet, frame)
+    return observation, COVERAGE.summarise(observation)
+
+
+def _fold_shape(
+    shape: _Shape, sheets: dict[str, dict[str, float | None]]
+) -> tuple[Any, dict[str, Any]]:
+    """Fold ``{sheet: {row_ref: value}}`` under the shape's regime, template and column."""
+    return _fold(
+        {
+            shape.address(sheet, row): value
+            for sheet, rows in sheets.items()
+            for row, value in rows.items()
+        }
+    )
+
+
+def _ratchet(before: dict[str, Any], after: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """``(regressions, improvements)`` of ``after`` against ``before``, as ``--check`` does."""
+    return COVERAGE._ratchet_deltas(
+        COVERAGE._ratchet_values(before), COVERAGE._ratchet_values(after)
+    )
+
+
+def _census_unit(observation: Any) -> set[tuple[str, str]]:
+    """The non-zero cells projected onto the template census's unit, (template, column).
+
+    ``check_template_cell_coverage.py`` keys a column by (family, template, column) —
+    deliberately not by regime or sheet — and calls it live when any run puts a
+    non-zero value anywhere in it. Projecting the same accumulator onto that unit
+    shows what the census would see of a fixture, without running its pipelines.
+    """
+    return {(address.template, address.column) for address in observation.cells_nonzero}
+
+
+@pytest.mark.parametrize("shape", _ZERO_NESS_CASES)
+def test_a_net_loss_of_non_zero_cells_is_a_coverage_regression(shape: _Shape) -> None:
+    """A reported figure falling to 0.00, uncompensated, fails the ratchet.
+
+    ``cells_live`` tests NULL-ness: a cell that drops from a figure to 0.00 is still
+    "carrying a value", so it stays live and every cell metric is unchanged. Before
+    ``cells_nonzero`` was ratcheted that move failed nothing here.
+
+    What this guards is a NET count, not each cell — see
+    ``test_a_figure_moving_to_another_cell_is_not_caught_by_the_net_count`` below.
+
+    Arrange: one cell holding 5.0, and the same cell holding 0.0.
+    Act:     ratchet the second measurement against the first.
+    Assert:  the only regression is ``cells_nonzero``.
+    """
+    # Arrange
+    _, before = _fold_shape(shape, {shape.sheet: {"0010": 5.0}})
+    _, after = _fold_shape(shape, {shape.sheet: {"0010": 0.0}})
+    assert before["metrics"]["cells_live"] == after["metrics"]["cells_live"] == 1, (
+        "both states must hold one LIVE cell — otherwise cells_live can catch the move "
+        "and this test proves nothing about zero-ness"
+    )
+
+    # Act
+    regressions, improvements = _ratchet(before, after)
+
+    # Assert
+    assert regressions == ["cells_nonzero: 1 -> 0 (may not decrease)"], (
+        f"{shape.regime}: a figure falling to 0.00 must fail the coverage ratchet as a "
+        f"lost non-zero cell, and nothing else moved; got regressions {regressions}"
+    )
+    assert improvements == []
+
+
+@pytest.mark.parametrize("shape", _ZERO_NESS_CASES)
+def test_a_figure_zeroed_on_one_sheet_fails_while_its_column_stays_lit_on_another(
+    shape: _Shape,
+) -> None:
+    """The case this metric exists for: the template census cannot see it.
+
+    ``check_template_cell_coverage.py`` counts (template, column) pairs, so a pair
+    stays live while ANY sheet holds a figure in it. On the CRR shape, C 08.01
+    column 0256 carries a figure on ``corporate_sme``; if it falls to 0.00 on
+    ``corporate`` the pair is still lit and the census reports nothing. Only a count
+    per cell ADDRESS — sheet and row included — can fail on that. A metric built at
+    the census's column granularity passes the leg above (one cell, one column) and
+    fails this one, which is why this leg exists.
+
+    Arrange: the column holds 5.0 on both sheets; then 5.0 on ``sheet`` and 0.0 on
+             ``sibling``. Guard: the census unit is lit, unchanged, in both.
+    Act:     ratchet the second measurement against the first.
+    Assert:  the only regression is ``cells_nonzero: 2 -> 1``.
+    """
+    # Arrange
+    observed_before, before = _fold_shape(
+        shape, {shape.sheet: {"0010": 5.0}, shape.sibling: {"0010": 5.0}}
+    )
+    observed_after, after = _fold_shape(
+        shape, {shape.sheet: {"0010": 5.0}, shape.sibling: {"0010": 0.0}}
+    )
+    pair = {(shape.template, shape.column)}
+    assert _census_unit(observed_before) == _census_unit(observed_after) == pair, (
+        "the (template, column) pair must be lit in BOTH measurements — otherwise the "
+        "census could catch this move too, and the leg would not show what only the "
+        "per-address count sees"
+    )
+
+    # Act
+    regressions, improvements = _ratchet(before, after)
+
+    # Assert
+    assert regressions == ["cells_nonzero: 2 -> 1 (may not decrease)"], (
+        f"{shape.regime}: {shape.address(shape.sibling, '0010').describe()} fell to 0.00 "
+        f"while {shape.address(shape.sheet, '0010').describe()} stayed lit; that must "
+        f"fail as a lost non-zero cell; got regressions {regressions}"
+    )
+    assert improvements == []
+
+
+@pytest.mark.parametrize("shape", _ZERO_NESS_CASES)
+def test_a_zero_falling_to_null_regresses_cells_live_but_not_cells_nonzero(
+    shape: _Shape,
+) -> None:
+    """The mirror leg: the two cell floors are not redundant in either direction.
+
+    A filed 0.00 that becomes a blank is what the "uninteresting zeros" clean-ups do
+    (``.claude/LESSONS.md`` B4), and it is ``cells_live`` — not ``cells_nonzero`` —
+    that moves on it. So neither floor can be retired in favour of the other: this
+    leg is caught only by ``cells_live``, the ones above only by ``cells_nonzero``.
+
+    Arrange: one cell holding 0.0, and the same cell null.
+    Act:     ratchet the second measurement against the first.
+    Assert:  ``cells_live`` regresses and ``cells_nonzero`` does not.
+    """
+    # Arrange
+    _, before = _fold_shape(shape, {shape.sheet: {"0010": 0.0}})
+    _, after = _fold_shape(shape, {shape.sheet: {"0010": None}})
+
+    # Act
+    regressions, _ = _ratchet(before, after)
+
+    # Assert
+    assert "cells_live: 1 -> 0 (may not decrease)" in regressions, (
+        f"{shape.regime}: a 0.00 becoming a blank must still fail cells_live; got {regressions}"
+    )
+    assert not [line for line in regressions if line.startswith("cells_nonzero")], (
+        f"{shape.regime}: cells_nonzero counted a 0.00 as a figure; got {regressions}"
+    )
+
+
+@pytest.mark.parametrize("shape", _ZERO_NESS_CASES)
+def test_a_figure_moving_to_another_cell_is_not_caught_by_the_net_count(shape: _Shape) -> None:
+    """Pins the LIMIT of ``cells_nonzero``: it is a net count, not a per-cell guard.
+
+    Kept so that nobody later cites this ratchet as a guard against a row re-key or
+    a misroute (``.claude/LESSONS.md`` B6). A figure that leaves one address and
+    lands on another leaves the count unchanged, and so passes; so does a zeroing
+    offset by cells lit since the last bank, because an unbanked improvement exits 0.
+    If this test ever goes red, the ratchet has become per-address — update the
+    docstrings that say it is not.
+
+    Arrange: two cells, the figure on row 0010; then the figure on row 0020.
+    Act:     ratchet the second measurement against the first.
+    Assert:  an address really lost its figure, and no metric regressed.
+    """
+    # Arrange
+    observed_before, before = _fold_shape(shape, {shape.sheet: {"0010": 5.0, "0020": 0.0}})
+    observed_after, after = _fold_shape(shape, {shape.sheet: {"0010": 0.0, "0020": 5.0}})
+    lost = observed_before.cells_nonzero - observed_after.cells_nonzero
+    assert lost == {shape.address(shape.sheet, "0010")}, (
+        "the fixture must really move a figure off an address, or there is no limit to pin"
+    )
+
+    # Act
+    regressions, _ = _ratchet(before, after)
+
+    # Assert
+    assert regressions == [], (
+        f"{shape.regime}: the net-count ratchet now reports a cell-to-cell move "
+        f"({regressions}). That makes it a per-address guard — update the docstrings "
+        "that say it is not."
+    )
+
+
+@pytest.mark.parametrize("shape", _ZERO_NESS_CASES)
+def test_the_always_zero_cells_are_listed_by_address(shape: _Shape) -> None:
+    """A cell that is live only as 0.00 is named in the evidence, not just counted.
+
+    ``cells_nonzero`` cannot make a cell that is 0.00 for its whole life visible —
+    the C 08.01 column-0253 shape of ``.claude/LESSONS.md`` B5. Listing those
+    addresses turns B5's manual step ("confirm the cell you are changing is non-zero
+    somewhere") into a lookup in the metrics JSON. Evidence only, never ratcheted.
+
+    The list is the LIVE cells that are never non-zero — not every cell that is
+    never non-zero, which would also sweep in the dead (null) cells that
+    ``dead_cell_list`` already names, and bury the 0.00s among them.
+
+    Arrange: one sheet with a figure on row 0010, 0.00 on row 0020 and a blank on
+             row 0030.
+    Act:     summarise it.
+    Assert:  exactly row 0020 is listed; the blank row is dead and not listed; the
+             count agrees with the list.
+    """
+    # Arrange / Act
+    _, payload = _fold_shape(shape, {shape.sheet: {"0010": 5.0, "0020": 0.0, "0030": None}})
+    zero = shape.address(shape.sheet, "0020").describe()
+    blank = shape.address(shape.sheet, "0030").describe()
+    assert payload["dead_cell_list"] == [blank], (
+        "the fixture must hold exactly one dead cell, or the leg cannot tell a 0.00 from a blank"
+    )
+
+    # Assert
+    assert blank not in payload["always_zero_cell_list"], (
+        f"{shape.regime}: a dead (null) cell was listed as always-zero"
+    )
+    assert payload["always_zero_cell_list"] == [zero]
+    assert payload["cells"]["live_but_always_zero"] == len(payload["always_zero_cell_list"])
+
+
+_A = COVERAGE.CellAddress
+
+#: For each of the five parts of the cell key, two addresses that differ in THAT part
+#: only. Every pair but the regime one is two real addresses that both hold a figure
+#: in the measured estate (31-run matrix, P5.71 review), so a count keyed without the
+#: part would merge two cells that ``--check`` really folds. Without the row it would
+#: merge most of them: measured on the 31-run matrix, 4550 of 4755 non-zero addresses
+#: share (regime, template, sheet, column) with another non-zero address.
+#:
+#: No real pair differs only in the regime: the two regimes' table-code spaces are
+#: disjoint (``C 08.01.a`` against ``OF08.01.01.01``; no code from
+#: ``_template_codes`` is in both), so the regime row places the CRR address under b31
+#: as well. It pins the key, not a collision the estate has today — and it is what
+#: makes the crr / b31 parametrisation of the other legs mean anything.
+_ONE_PART_APART = [
+    pytest.param(
+        "regime",
+        _A("crr", "C 08.01.a", "corporate_sme", "0010", "0256"),
+        _A("b31", "C 08.01.a", "corporate_sme", "0010", "0256"),
+        id="regime",
+    ),
+    pytest.param(
+        "template",
+        _A("crr", "C 08.01.a", "corporate_sme", "0010", "0010"),
+        _A("crr", "C 08.04", "corporate_sme", "0010", "0010"),
+        id="crr-template",
+    ),
+    pytest.param(
+        "template",
+        _A("b31", "OF08.03.01.01", "retail_residential_re_non_sme_airb", "0060", "0010"),
+        _A("b31", "OF08.05.00.01", "retail_residential_re_non_sme_airb", "0060", "0010"),
+        id="b31-template",
+    ),
+    pytest.param(
+        "sheet",
+        _A("crr", "C 08.01.a", "corporate_sme", "0010", "0010"),
+        _A("crr", "C 08.01.a", "corporate", "0010", "0010"),
+        id="crr-sheet",
+    ),
+    pytest.param(
+        "sheet",
+        _A("b31", "OF08.01.01.01", "retail_residential_re_non_sme_airb", "0010", "0253"),
+        _A("b31", "OF08.01.01.01", "total_airb", "0010", "0253"),
+        id="b31-sheet",
+    ),
+    pytest.param(
+        "row",
+        _A("crr", "C 08.01.a", "corporate_sme", "0010", "0256"),
+        _A("crr", "C 08.01.a", "corporate_sme", "0020", "0256"),
+        id="crr-row",
+    ),
+    pytest.param(
+        "row",
+        _A("b31", "OF08.01.01.01", "retail_residential_re_non_sme_airb", "0010", "0253"),
+        _A("b31", "OF08.01.01.01", "retail_residential_re_non_sme_airb", "0020", "0253"),
+        id="b31-row",
+    ),
+    pytest.param(
+        "column",
+        _A("crr", "C 08.01.a", "corporate_sme", "0010", "0256"),
+        _A("crr", "C 08.01.a", "corporate_sme", "0010", "0257"),
+        id="crr-column",
+    ),
+    pytest.param(
+        "column",
+        _A("b31", "OF08.01.01.01", "retail_residential_re_non_sme_airb", "0010", "0253"),
+        _A("b31", "OF08.01.01.01", "retail_residential_re_non_sme_airb", "0010", "0251"),
+        id="b31-column",
+    ),
+]
+
+
+def _without(part: str, observation: Any) -> set[Any]:
+    """The non-zero cells keyed WITHOUT ``part`` — what a coarser count would see."""
+    return {address._replace(**{part: ""}) for address in observation.cells_nonzero}
+
+
+@pytest.mark.parametrize(("part", "kept", "zeroed"), _ONE_PART_APART)
+def test_every_part_of_the_cell_address_keeps_a_lost_figure_from_being_masked(
+    part: str, kept: Any, zeroed: Any
+) -> None:
+    """``cells_nonzero`` counts the full five-part address, each part pinned on its own.
+
+    A count keyed without any one part — regime, template, sheet, row or column —
+    merges two cells that differ only in that part, so a figure lost from one is
+    masked while the other stays lit and the ratchet passes. Dropping the row is the
+    row-granular blind spot ``.claude/LESSONS.md`` B5 names. Each case's guard proves
+    the coarser count would really read ``1 -> 1`` on it, so the leg fails exactly the
+    count that drops its part.
+
+    Arrange: two addresses differing in ``part`` only, both 5.0; then ``zeroed`` 0.0.
+    Act:     ratchet the second measurement against the first.
+    Assert:  the only regression is ``cells_nonzero: 2 -> 1``.
+    """
+    # Arrange
+    differs = [name for name in kept._fields if getattr(kept, name) != getattr(zeroed, name)]
+    assert differs == [part], f"the pair must differ in {part} only; it differs in {differs}"
+    observed_before, before = _fold({kept: 5.0, zeroed: 5.0})
+    observed_after, after = _fold({kept: 5.0, zeroed: 0.0})
+    assert len(_without(part, observed_before)) == len(_without(part, observed_after)) == 1, (
+        f"keyed without {part} the non-zero count must read 1 -> 1, or this leg does not "
+        "show that the part is needed"
+    )
+
+    # Act
+    regressions, improvements = _ratchet(before, after)
+
+    # Assert
+    assert regressions == ["cells_nonzero: 2 -> 1 (may not decrease)"], (
+        f"{zeroed.describe()} fell to 0.00 while {kept.describe()}, which differs only in "
+        f"its {part}, stayed lit; that must fail as a lost non-zero cell; got {regressions}"
+    )
+    assert improvements == []
+
+
+#: Summation-order dust measured on the real estate (P5.71 review):
+#: ``crr/C 08.04[corporate][r0080][c0010]`` on crm-substitution is exactly 0.0 at
+#: POLARS_MAX_THREADS=1 and 4 and this at 2 — a closing balance of
+#: 34188682.9307958 against an opening of 34188682.930795796.
+_MEASURED_DUST = 7.450580596923828e-09
+
+#: The smallest real figure the matrix folds: ``crr/C 09.02[US][r0010][c0080]``.
+_SMALLEST_FIGURE = 2e-4
+
+
+@pytest.mark.parametrize("shape", _ZERO_NESS_CASES)
+def test_summation_dust_is_not_counted_as_a_figure_and_the_smallest_figure_is(
+    shape: _Shape,
+) -> None:
+    """``cells_nonzero`` reads magnitudes above ``NONZERO_TOLERANCE``, both signs.
+
+    Counted exactly (``!= 0``, as the template census does), the dust cell above
+    lit at 2 Polars threads and not at 1 or 4, so the 2-vCPU CI runner and the
+    1-thread pytest mirror measured different ``cells_nonzero`` and one of them was
+    always red against any bank. The tolerance has to sit between the largest dust
+    and the smallest real figure the estate folds; this pins both ends, and both
+    signs, because a count of ``value > tolerance`` would silently drop every
+    negative figure.
+
+    Arrange: the dust and the smallest real figure, each positive and negative, on
+             four rows of one column.
+    Act:     summarise it.
+    Assert:  the non-zero cells are exactly the two real figures; the two dust cells
+             are live, and listed as always-zero.
+    """
+    # Arrange
+    cells = {
+        "0010": _MEASURED_DUST,
+        "0020": -_MEASURED_DUST,
+        "0030": _SMALLEST_FIGURE,
+        "0040": -_SMALLEST_FIGURE,
+    }
+
+    # Act
+    observation, payload = _fold_shape(shape, {shape.sheet: cells})
+
+    # Assert
+    figures = {shape.address(shape.sheet, "0030"), shape.address(shape.sheet, "0040")}
+    dust = [shape.address(shape.sheet, row).describe() for row in ("0010", "0020")]
+    assert observation.cells_nonzero == figures, (
+        f"{shape.regime}: expected exactly the ±{_SMALLEST_FIGURE} cells to count as "
+        f"figures; counted {sorted(a.describe() for a in observation.cells_nonzero)}"
+    )
+    assert payload["metrics"]["cells_live"] == 4
+    assert payload["always_zero_cell_list"] == dust
+
+
+@pytest.mark.parametrize("shape", _ZERO_NESS_CASES)
+def test_a_cell_flipping_between_zero_and_dust_moves_no_metric(shape: _Shape) -> None:
+    """The thread-count flip the tolerance exists for passes in both directions.
+
+    The same tree measured at two Polars thread counts reads the dust cell as 0.0 in
+    one and as the dust in the other. Neither is a change in coverage, so neither
+    order may regress or improve any metric — otherwise the gate's verdict depends
+    on the runner's core count.
+
+    Arrange: one cell at 0.0, and the same cell at the measured dust.
+    Act:     ratchet each measurement against the other.
+    Assert:  no regression and no improvement either way.
+    """
+    # Arrange
+    _, exact_zero = _fold_shape(shape, {shape.sheet: {"0010": 0.0}})
+    _, dusty = _fold_shape(shape, {shape.sheet: {"0010": _MEASURED_DUST}})
+
+    # Act
+    forward = _ratchet(exact_zero, dusty)
+    backward = _ratchet(dusty, exact_zero)
+
+    # Assert
+    assert forward == backward == ([], []), (
+        f"{shape.regime}: a cell flipping between 0.0 and {_MEASURED_DUST} moved the "
+        f"ratchet (0.0 -> dust: {forward}; dust -> 0.0: {backward})"
+    )
+
+
 @pytest.mark.slow
 def test_measured_coverage_matches_the_baseline() -> None:
-    """Re-measure the estate and ratchet all six metrics against the baseline.
+    """Re-measure the estate and ratchet all seven metrics against the baseline.
 
     Excluded from the dev loop: 24 pipeline runs (16 portfolio x regime, plus a
     prior-period run for each of the 8 with IRB permission) through both
@@ -611,12 +1117,14 @@ def test_measured_coverage_matches_the_baseline() -> None:
 
     # Assert
     assert result.returncode == 0, (
-        "Reporting coverage moved off the baseline. A FALLING binding-rule count or "
-        "cells_live means the estate lost sight of something it used to check; a RISING "
+        "Reporting coverage moved off the baseline. A FALLING binding-rule count, "
+        "cells_live or cells_nonzero means the estate lost sight of something it used to "
+        "check (a figure that vanished, or one that fell to 0.00); a RISING "
         "never-evaluated count means a fresh blind spot. Neither fails "
         "loudly on its own — the supervisory register reports an unreachable rule as "
         "NOT_EVALUATED, which reads exactly like a clean estate (.claude/LESSONS.md B5). "
-        "Read cells_live first: it is the cell-coverage floor, whereas a move in "
+        "Read cells_live and cells_nonzero first: they are the cell-coverage floors, "
+        "whereas a move in "
         "template_cell_liveness_bp or dead_cells can be nothing but the denominator "
         "changing. Fix the coverage rather than banking the loss; if the move is a real "
         "improvement, or RUNS grew, re-measure and bank it deliberately:\n"

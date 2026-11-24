@@ -34,6 +34,14 @@ rules that are evaluated at all:
   (m) no banked rule left with no verdict on any run — a PASS -> NOT_EVALUATED fails;
   (n) no rule with a verdict that the register omits — a first verdict must be banked.
 
+And a census of the output-floor STATE each Basel 3.1 run is in, held in this
+module rather than the register file:
+
+  (m) every Basel 3.1 run has a floor state, no CRR run has one;
+  (n) the runs whose floor binds are ``BINDING_FLOOR_RUNS``, both ways;
+  (o) OF 02.00's reported activation is the engine's state on every run;
+  (p) the row shapes each state reaches are ``FLOOR_STATE_SHAPES``, both ways.
+
 An Error-severity break rejects the entire return at submission, so every
 ``ERROR`` line in the register is a blocking filing defect.
 
@@ -121,6 +129,38 @@ only is (h)'s or (i)'s):
     SHRINK-ONLY, with no bulk affordance that adds an entry at all, because an
     entry there is a decision to ship a figure an independent derivation has
     shown is wrong. Each caller states which it is.
+
+Why there is an output-floor state census, (m)-(p):
+    PS1/26 Art. 92(2A) makes TREA a maximum, ``max{U-TREA; x . S-TREA +
+    OF-ADJ}``, so every Basel 3.1 return is in one of two states and a published
+    rule over a floored figure has a branch for each. ``boe_b0751`` /
+    ``boe_b0763`` (OF 08.01 / 08.02 col 0260) broke the first time a registered
+    run bound the floor, because none had before (escape log 2026-11-16) —
+    LESSONS B5 in the form "registered, live cell, but the portfolio never
+    enters the state". The cell and rule ratchets cannot see it, since a cell is
+    live and a rule holds a verdict in both states; the cell-coverage ratchet's
+    banked caveat from ``reporting/corep/c02.py::_warn_if_the_engine_floor_differs``
+    sees it only indirectly — it fires on a binding run that also holds SA rows,
+    is blind to an all-modelled one, and goes when P1.367 lands. UK CRR
+    Art. 92(3) has no maximum, so the CRR runs carry no floor and (m) says so.
+
+    The census costs no pipeline run: each run's ``OutputFloorSummary``, the
+    OF 02.00 the template leg reads and one six-boolean select over its ledger.
+    It records the ENGINE state (``portfolio_floor_binding``: strict ``>`` over
+    the modelled subset) and the REPORTED one (OF 02.00 r0034 c0030: ``>=`` over
+    the whole book, Annex II p.29, what ``boe_b0383`` checks), because the two
+    are computed apart (P1.367, the output-floor-subset bullet). The banked
+    binding set is a SET, not a count (LESSONS B8).
+
+    What it does NOT do: put any row the binding state lacks into it. The one
+    binding run holds F-IRB corporates only, so slotting, A-IRB retail,
+    defaulted, LFSE and CCR rows have met every published rule with the floor
+    slack. (p) holds that gap still — it cannot widen silently — and
+    ``FLOOR_STATE_SHAPES`` names who owes it. Nor does a slack-state guard on
+    "some run with modelled exposure" add anything (p) does not: the slack
+    state's six shapes are all modelled or CCR rows. ``test_of08_binding_floor.py``
+    forces the floor on three registered books, test-locally, for about eight
+    named rules; that is not this census.
 
 Why (c)/(d) matter as much as (a)/(b): ``check_supervisory_validations`` FAILS
 OPEN. On a bundle it cannot read, every rule is NOT_EVALUATED, so there are no
@@ -422,7 +462,8 @@ from tests.fixtures.reporting_row_scope_portfolio import build_reporting_row_sco
 from tests.fixtures.reporting_sa_classes_portfolio import build_reporting_sa_classes_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
+from rwa_calc.engine.aggregator._schemas import SA_CCR_APPROACH
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.filing.checks import evaluate_all
@@ -437,7 +478,7 @@ from rwa_filer.validate.evaluate import (
 )
 
 if TYPE_CHECKING:
-    from rwa_calc.contracts.bundles import RawDataBundle
+    from rwa_calc.contracts.bundles import OutputFloorSummary, RawDataBundle
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
     from rwa_filer.boe.engine import RuleResult
@@ -1293,6 +1334,77 @@ RUNS: tuple[GateInput, ...] = (
 
 
 # ---------------------------------------------------------------------------
+# The output-floor state census, banked over RUNS
+# ---------------------------------------------------------------------------
+# See "Why there is an output-floor state census" in the module docstring. Both
+# constants are held two-way by legs (n) and (p): a run or a shape that joins or
+# leaves a state fails until the constant is edited, with the reason, in the
+# same change.
+
+#: The Basel 3.1 runs of ``RUNS`` whose engine output floor binds — a SET, never a
+#: count (LESSONS B8), so one run starting to bind while another stops is two
+#: findings rather than a net zero. The facility-share pair differ in one input,
+#: the non-member anchor obligor's PD, and that input decides the state
+#: (``tests/fixtures/facility_share_portfolio.py``).
+BINDING_FLOOR_RUNS: frozenset[str] = frozenset({"b31/facility-share-binding"})
+
+_MODELLED_APPROACHES = (
+    ApproachType.FIRB.value,
+    ApproachType.AIRB.value,
+    ApproachType.SLOTTING.value,
+)
+_RETAIL_CLASSES = (
+    ExposureClass.RETAIL_MORTGAGE.value,
+    ExposureClass.RETAIL_QRRE.value,
+    ExposureClass.RETAIL_OTHER.value,
+)
+
+#: The row shapes of the floored book the census looks for, each a predicate on
+#: the sealed ledger. A binding floor's shortfall is spread over the
+#: floor-eligible rows (``engine/aggregator/_floor.py``: IRB, slotting and the
+#: CCR-routed standardised rows, PS1/26 Art. 92(3A)); the last five are the
+#: shapes the escape log (2026-11-16) found no registered run had put in the
+#: binding state. ``defaulted`` and ``lfse`` count on modelled rows only: a
+#: defaulted or financial-sector STANDARDISED leg is not in the floored book.
+#: ``lfse`` reads ``cp_apply_fi_scalar``, the carrier OF 08.01's
+#: large-financial-sector-entity rows read (``reporting/corep/c08.py``); ``ccr``
+#: is ``SA_CCR_APPROACH``, which tags SA-CCR derivatives and FCCM SFTs alike.
+FLOOR_SHAPES: dict[str, pl.Expr] = {
+    "foundation_irb": pl.col("approach_applied") == ApproachType.FIRB.value,
+    "advanced_irb_retail": (pl.col("approach_applied") == ApproachType.AIRB.value)
+    & pl.col("exposure_class").is_in(_RETAIL_CLASSES),
+    "slotting": pl.col("approach_applied") == ApproachType.SLOTTING.value,
+    "defaulted": pl.col("approach_applied").is_in(_MODELLED_APPROACHES) & pl.col("is_defaulted"),
+    "lfse": pl.col("approach_applied").is_in(_MODELLED_APPROACHES) & pl.col("cp_apply_fi_scalar"),
+    "ccr": pl.col("approach_applied") == SA_CCR_APPROACH,
+}
+
+#: The ``FLOOR_SHAPES`` each floor state reaches across ``RUNS``.
+#:
+#: The binding state OWES five of the six. Its one run holds three F-IRB
+#: corporate legs and nothing else (``facility_share_portfolio.py``: no retail,
+#: slotting, CCR, defaulted or financial-sector obligor), so every published rule
+#: over a slotting, A-IRB retail, defaulted, LFSE or CCR row has been evaluated
+#: only with the floor slack — the shape of the ``boe_b0751`` / ``boe_b0763``
+#: escape. Owed under the P5.64 residual (its Part B: register a Basel 3.1 book
+#: whose floor binds and which holds them), sequenced after P1.367 — the
+#: output-floor-subset bullet, plan line 204, not its namesake (P6.56) — because
+#: that fix changes which runs bind. Registering it grows this entry and re-banks
+#: the register, the coverage, cell-coverage, filing-mapping and referee
+#: baselines in one change.
+FLOOR_STATE_SHAPES: dict[str, frozenset[str]] = {
+    "binding": frozenset({"foundation_irb"}),
+    "not binding": frozenset(FLOOR_SHAPES),
+}
+
+#: Where OF 02.00 reports the floor's state (PS1/26 Annex II p.29): row 0034
+#: "Output floor activated", column 0030 only. Literal, from the instruction, so
+#: the census does not inherit a mis-mapped row from ``c02_rows`` (LESSONS B3).
+_ACTIVATED_ROW = "0034"
+_ACTIVATED_COLUMN = "0030"
+
+
+# ---------------------------------------------------------------------------
 # Register records
 # ---------------------------------------------------------------------------
 
@@ -1445,15 +1557,51 @@ class DisagreementFact(NamedTuple):
     gateway_detail: str
 
 
+class FloorState(NamedTuple):
+    """One run's output-floor state, as the engine holds it and as OF 02.00 reports it.
+
+    ``engine_binding`` is ``OutputFloorSummary.portfolio_floor_binding``: the
+    floor threshold strictly above U-TREA, both over the floor-eligible subset
+    (``engine/aggregator/_floor.py``). ``reported_activated`` is OF 02.00 row
+    0034 column 0030 — Yes when row 0010 column 0030 is "equal to or greater
+    than" column 0010, over the whole book (PS1/26 Annex II p.29) — and None
+    where the return states nothing. The two definitions differ (P1.367, the
+    output-floor-subset bullet), which is why both are recorded and leg (o)
+    holds them equal. ``u_trea`` and ``floor_threshold`` are the engine's, kept
+    for the failure message; ``shapes`` names the ``FLOOR_SHAPES`` the run holds.
+    """
+
+    engine_binding: bool
+    reported_activated: bool | None
+    u_trea: float
+    floor_threshold: float
+    shapes: frozenset[str]
+
+    @property
+    def state(self) -> str:
+        """The engine's state, under the name ``FLOOR_STATE_SHAPES`` banks it by."""
+        return "binding" if self.engine_binding else "not binding"
+
+    def describe(self) -> str:
+        """Both states, the engine's two figures and the shapes, for a failure message."""
+        reported = {True: "Yes", False: "No", None: "nothing"}[self.reported_activated]
+        return (
+            f"engine {self.state} (U-TREA {self.u_trea:,.2f}, floor "
+            f"{self.floor_threshold:,.2f}); OF 02.00 r0034 reports {reported}; "
+            f"shapes: {', '.join(sorted(self.shapes)) or 'none'}"
+        )
+
+
 class RunVerdicts(NamedTuple):
     """One run of ``RUNS`` as the gate judged it — what ``_fold_runs`` adds up.
 
     ``report`` is the template-level engine's verdict on every enforced rule;
     ``gateway`` and ``disagreements`` are the gateway leg's findings on the same
-    return (empty under CRR, which files nothing). Kept on ``GateRun`` so that a
-    test can re-judge ONE run from a mutated bundle and fold the matrix again
-    without re-running the rest of it — which is how leg (m) is watched failing
-    on a real row-drop (``test_a_rule_darkened_on_its_only_run_fails_leg_m_alone``).
+    return (empty under CRR, which files nothing). ``floor`` is the run's
+    output-floor state, None where the run carried no ``OutputFloorSummary``.
+    Kept on ``GateRun`` so that a test can re-judge ONE run from a mutated bundle
+    and fold the matrix again without re-running the rest of it — which is how
+    leg (m) is watched failing on a real row-drop (``test_a_rule_darkened_on_its_only_run_fails_leg_m_alone``).
     """
 
     regime: str
@@ -1461,6 +1609,7 @@ class RunVerdicts(NamedTuple):
     report: ValidationReport
     gateway: dict[GatewayKey, GatewayFact]
     disagreements: dict[DisagreementKey, DisagreementFact]
+    floor: FloorState | None = None
 
 
 class GateRun(NamedTuple):
@@ -1477,6 +1626,10 @@ class GateRun(NamedTuple):
     ``evaluated`` is every rule that reaches a verdict (``VERDICT_STATUSES``) on
     at least one run — the set legs (m)/(n) ratchet. ``runs`` is the per-run
     record it and every other field were folded from.
+
+    ``floors`` is the output-floor state census, keyed ``regime/portfolio`` over
+    every run that carried an ``OutputFloorSummary``; ``unfloored`` names the runs
+    that carried none. See "Why there is an output-floor state census".
     """
 
     broken: dict[RuleKey, RuleFact]
@@ -1487,6 +1640,8 @@ class GateRun(NamedTuple):
     disagreements: dict[DisagreementKey, DisagreementFact]
     evaluated: frozenset[RuleKey]
     runs: tuple[RunVerdicts, ...]
+    floors: dict[str, FloorState]
+    unfloored: tuple[str, ...]
 
 
 # ---------------------------------------------------------------------------
@@ -1499,8 +1654,15 @@ def _run_gate() -> GateRun:
     return _fold_runs(tuple(_judge_run(run, *_generate_run(run)) for run in RUNS))
 
 
-def _generate_run(run: GateInput) -> tuple[COREPTemplateBundle, Pillar3TemplateBundle]:
-    """One run's COREP and Pillar 3 bundles, generated as production generates them."""
+def _generate_run(
+    run: GateInput,
+) -> tuple[COREPTemplateBundle, Pillar3TemplateBundle, FloorState | None]:
+    """One run's COREP and Pillar 3 bundles, generated as production generates them.
+
+    The third element is the run's output-floor state (``_floor_state``), read from
+    the same pipeline result and the OF 02.00 just generated, or None where the run
+    carried no ``OutputFloorSummary`` (every CRR run).
+    """
     result = PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_config())
     prior = (
         PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_prior_config())
@@ -1515,18 +1677,29 @@ def _generate_run(run: GateInput) -> tuple[COREPTemplateBundle, Pillar3TemplateB
         previous_period_results=None if prior is None else prior.results,
     )
     pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=run.framework)
-    return corep, pillar3
+    floor = (
+        None
+        if result.output_floor_summary is None
+        else _floor_state(result.output_floor_summary, corep.c_02_00, result.results)
+    )
+    return corep, pillar3, floor
 
 
 def _judge_run(
-    run: GateInput, corep: COREPTemplateBundle, pillar3: Pillar3TemplateBundle
+    run: GateInput,
+    corep: COREPTemplateBundle,
+    pillar3: Pillar3TemplateBundle,
+    floor: FloorState | None = None,
 ) -> RunVerdicts:
-    """Both engines' verdicts on one run's bundles — the gateway's under Basel 3.1 only."""
+    """Both engines' verdicts on one run's bundles — the gateway's under Basel 3.1 only.
+
+    ``floor`` is carried through unjudged: the floor-state legs read it from the fold.
+    """
     report = evaluate_all(corep, pillar3, run.framework)
     if run.framework != GATEWAY_FRAMEWORK:
-        return RunVerdicts(run.regime, run.portfolio, report, {}, {})
+        return RunVerdicts(run.regime, run.portfolio, report, {}, {}, floor)
     breaks, opposed = _gateway_leg(run.portfolio, corep, report)
-    return RunVerdicts(run.regime, run.portfolio, report, breaks, opposed)
+    return RunVerdicts(run.regime, run.portfolio, report, breaks, opposed, floor)
 
 
 def _fold_runs(runs: Sequence[RunVerdicts]) -> GateRun:
@@ -1559,6 +1732,9 @@ def _fold_runs(runs: Sequence[RunVerdicts]) -> GateRun:
     its template with no rule executed (``uncovered``); when it takes the rule's
     LAST verdict, it always shows here, and a move that does not take the last
     verdict shows here not at all.
+
+    ``floors`` / ``unfloored`` are per run, from the run's own summary and the
+    OF 02.00 the template leg reads — no pipeline run of their own: ``_generate_run`` reads them and ``_judge_run`` carries them on each run's ``RunVerdicts``.
     """
     broken: dict[RuleKey, RuleFact] = {}
     uncovered: dict[TemplateKey, int] = {}
@@ -1567,9 +1743,15 @@ def _fold_runs(runs: Sequence[RunVerdicts]) -> GateRun:
     real_verdict: set[RuleKey] = set()
     gateway: dict[GatewayKey, GatewayFact] = {}
     disagreements: dict[DisagreementKey, DisagreementFact] = {}
-    for regime, portfolio, report, breaks, opposed in runs:
+    floors: dict[str, FloorState] = {}
+    unfloored: list[str] = []
+    for regime, portfolio, report, breaks, opposed, floor in runs:
         gateway.update(breaks)
         disagreements.update(opposed)
+        if floor is None:
+            unfloored.append(f"{regime}/{portfolio}")
+        else:
+            floors[f"{regime}/{portfolio}"] = floor
         summary[f"{regime}/{portfolio}"] = {
             **report.status_counts(),
             "rules_enforced": report.rules_enforced,
@@ -1631,6 +1813,8 @@ def _fold_runs(runs: Sequence[RunVerdicts]) -> GateRun:
         disagreements=disagreements,
         evaluated=_rules_with_a_verdict(runs),
         runs=tuple(runs),
+        floors=floors,
+        unfloored=tuple(unfloored),
     )
 
 
@@ -1736,6 +1920,56 @@ def _template_verdict(outcome: RuleOutcome | None) -> str:
 def _gateway_verdict(result: RuleResult) -> str:
     """The gateway verdict in words: status and the formula's counts."""
     return f"{result.status} ({result.unsatisfied} unsatisfied / {result.satisfied} satisfied)"
+
+
+def _floor_state(
+    summary: OutputFloorSummary, c_02_00: pl.DataFrame | None, results: pl.LazyFrame
+) -> FloorState:
+    """One run's floor state, from its summary, its OF 02.00 and its sealed ledger."""
+    return FloorState(
+        engine_binding=summary.portfolio_floor_binding,
+        reported_activated=_reported_activation(c_02_00),
+        u_trea=summary.u_trea,
+        floor_threshold=summary.floor_threshold,
+        shapes=_modelled_shapes(results),
+    )
+
+
+def _reported_activation(c_02_00: pl.DataFrame | None) -> bool | None:
+    """OF 02.00 row 0034 column 0030 as Yes / No, or None where nothing is reported.
+
+    An absent template, row, column or value is None, never False: an empty
+    cell is not a "No" (LESSONS B4), and reading it as one would let a return
+    that states nothing agree with every run whose floor is slack.
+    """
+    if c_02_00 is None or _ACTIVATED_COLUMN not in c_02_00.columns:
+        return None
+    values = (
+        c_02_00.filter(pl.col("row_ref") == _ACTIVATED_ROW)[_ACTIVATED_COLUMN]
+        .drop_nulls()
+        .to_list()
+    )
+    if not values:
+        return None
+    (value,) = values
+    return bool(value)
+
+
+def _modelled_shapes(results: pl.LazyFrame) -> frozenset[str]:
+    """The ``FLOOR_SHAPES`` at least one row of ``results`` holds.
+
+    Every predicate names its carrier with ``pl.col``, so a carrier the ledger no
+    longer seals raises ``ColumnNotFoundError`` rather than reading as a shape
+    never reached (LESSONS B1). The one collect selects six booleans.
+    """
+    held = (
+        results.select(
+            **{name: shape.fill_null(value=False).any() for name, shape in FLOOR_SHAPES.items()}
+        )
+        .collect()
+        .row(0, named=True)
+    )
+    return frozenset(name for name, present in held.items() if present)
 
 
 @pytest.fixture(scope="module")
@@ -2211,6 +2445,38 @@ def _disagreements_removed(
 ) -> tuple[DisagreementKey, ...]:
     """Banked disagreements the two engines no longer have."""
     return diff(measured, baseline).removed
+
+
+# ---------------------------------------------------------------------------
+# The output-floor state census, as three named predicates
+# ---------------------------------------------------------------------------
+# Named for the same reason as the gateway predicates: legs (n)-(p) cost the
+# whole run matrix to watch fail, while these take a synthetic state map —
+# tests/contracts/test_output_floor_state_census.py drives each failure mode.
+
+
+def _binding_runs(floors: Mapping[str, FloorState]) -> frozenset[str]:
+    """The runs whose ENGINE floor binds; the reported state is leg (o)'s business."""
+    return frozenset(run for run, state in floors.items() if state.engine_binding)
+
+
+def _activation_disagreements(floors: Mapping[str, FloorState]) -> tuple[str, ...]:
+    """Runs whose OF 02.00 activation is not the engine's state, or is not reported."""
+    return tuple(
+        sorted(
+            run
+            for run, state in floors.items()
+            if state.reported_activated is None or state.reported_activated != state.engine_binding
+        )
+    )
+
+
+def _shapes_by_state(floors: Mapping[str, FloorState]) -> dict[str, frozenset[str]]:
+    """The union of the runs' shapes per floor state; a state no run reaches is empty."""
+    by_state: dict[str, set[str]] = {name: set() for name in FLOOR_STATE_SHAPES}
+    for state in floors.values():
+        by_state[state.state].update(state.shapes)
+    return {name: frozenset(shapes) for name, shapes in by_state.items()}
 
 
 def _describe_vacuity(keys: Sequence[RuleKey], facts: dict[RuleKey, VacuityFact]) -> str:
@@ -2791,8 +3057,8 @@ def test_a_rule_darkened_on_its_only_run_fails_leg_m_alone(gate_run: GateRun) ->
     regime, portfolio = PROBE_RUN
     run = next(item for item in RUNS if (item.regime, item.portfolio) == PROBE_RUN)
     stored = next(item for item in gate_run.runs if (item.regime, item.portfolio) == PROBE_RUN)
-    corep, pillar3 = _generate_run(run)
-    assert _statuses(_judge_run(run, corep, pillar3)) == _statuses(stored), (
+    corep, pillar3, floor = _generate_run(run)
+    assert _statuses(_judge_run(run, corep, pillar3, floor)) == _statuses(stored), (
         f"re-generating {regime}/{portfolio} did not reproduce the gate's verdicts, so a "
         "change below could not be attributed to the dropped row"
     )
@@ -2804,7 +3070,7 @@ def test_a_rule_darkened_on_its_only_run_fails_leg_m_alone(gate_run: GateRun) ->
     index = _outcome_index(gate_run.runs)
 
     # Act
-    probe = _judge_run(run, dropped, pillar3)
+    probe = _judge_run(run, dropped, pillar3, floor)
     mutated = _fold_runs(tuple(probe if item is stored else item for item in gate_run.runs))
     dark = _rules_newly_unevaluated(mutated.evaluated, gate_run.evaluated)
 
@@ -2887,3 +3153,137 @@ def test_the_summary_keeps_unevaluable_rules_apart_from_passes(gate_run: GateRun
         assert sum(counts[status] for status in statuses) == counts["rules_enforced"], (
             f"{run_key}: outcome counts do not account for the enforced population"
         )
+
+
+# ---------------------------------------------------------------------------
+# The output-floor state census
+# ---------------------------------------------------------------------------
+
+
+def test_the_floor_census_sees_every_basel_3_1_run_and_no_crr_run(gate_run: GateRun) -> None:
+    """Leg (m): every Basel 3.1 run carries a floor state; no CRR run carries one.
+
+    A Basel 3.1 run with no ``OutputFloorSummary`` would sit outside legs (n)-(p)
+    without a word — the census failing open. Under CRR there is no floor to
+    record: Art. 92(3) sums points (a) to (f) with no maximum, and the CRR pack's
+    ``output_floor`` Feature is off, so a CRR run that carried a summary would be
+    a regime leak.
+
+    Arrange: the runs of ``RUNS``, split by framework.
+    Act:     read which runs the census recorded a floor state for.
+    Assert:  exactly the Basel 3.1 runs; the CRR runs are exactly the unfloored.
+    """
+    # Arrange
+    basel_3_1 = {f"{run.regime}/{run.portfolio}" for run in RUNS if run.framework == "BASEL_3_1"}
+    crr = {f"{run.regime}/{run.portfolio}" for run in RUNS if run.framework == "CRR"}
+
+    # Act
+    floored = set(gate_run.floors)
+    unfloored = set(gate_run.unfloored)
+
+    # Assert
+    assert floored == basel_3_1, (
+        "the output-floor census does not see every Basel 3.1 run: no floor state for "
+        f"{sorted(basel_3_1 - floored)}; a floor state on a non-Basel 3.1 run for "
+        f"{sorted(floored - basel_3_1)}"
+    )
+    assert unfloored == crr, f"runs with no OutputFloorSummary: {sorted(unfloored)}"
+
+
+def test_the_output_floor_binds_on_exactly_the_banked_runs(gate_run: GateRun) -> None:
+    """Leg (n): the binding set is ``BINDING_FLOOR_RUNS``, two-way, as a set.
+
+    PS1/26 Art. 92(2A) puts every return in one of two states, and a published
+    rule over a floored figure has a branch for each. A run leaving the binding
+    state takes every rule's binding branch out of the estate (``boe_b0751`` /
+    ``boe_b0763`` were never evaluated there until a run first bound); a run
+    entering it is a capital move to explain. Either way the constant is edited
+    in the same change, with the reason.
+
+    Arrange: the census over every Basel 3.1 run.
+    Act:     set-diff the runs whose engine floor binds against the banked set.
+    Assert:  nothing gained, nothing lost.
+    """
+    # Arrange
+    floors = gate_run.floors
+
+    # Act
+    moves = diff(_binding_runs(floors), BINDING_FLOOR_RUNS)
+
+    # Assert
+    detail = "\n".join(
+        f"  {verb} {run}: {floors[run].describe() if run in floors else 'not in RUNS'}"
+        for verb, runs in (("now binds:", moves.added), ("no longer binds:", moves.removed))
+        for run in runs
+    )
+    assert not moves.added and not moves.removed, (
+        f"the Basel 3.1 runs whose output floor binds have moved from "
+        f"{sorted(BINDING_FLOOR_RUNS)}:\n{detail}\n"
+        "If the move is intended, edit BINDING_FLOOR_RUNS (and FLOOR_STATE_SHAPES if the "
+        "shapes moved too) and say why in the same change. A banked run that no longer "
+        "binds takes every published rule's binding branch out of the estate."
+    )
+
+
+def test_the_reported_floor_activation_agrees_with_the_engine(gate_run: GateRun) -> None:
+    """Leg (o): OF 02.00 row 0034 says Yes exactly where the engine floor binds.
+
+    The two are computed apart. The engine floors the modelled subset with a
+    strict ``>`` (``engine/aggregator/_floor.py``); Annex II p.29 activates the
+    floor when row 0010 column 0030 is "equal to or greater than" column 0010,
+    over the whole book, and ``boe_b0383`` holds the return to that. Where they
+    part, the return files a state the engine did not apply, or the reverse —
+    the output-floor-subset defect (P1.367, plan line 204) showing on a
+    registered book. None of the registered runs shows it today.
+
+    Arrange: the census over every Basel 3.1 run.
+    Act:     list the runs whose reported activation is not the engine's state.
+    Assert:  none.
+    """
+    # Arrange
+    floors = gate_run.floors
+
+    # Act
+    disagreements = _activation_disagreements(floors)
+
+    # Assert
+    detail = "\n".join(f"  {run}: {floors[run].describe()}" for run in disagreements)
+    assert not disagreements, (
+        f"{len(disagreements)} Basel 3.1 run(s) report an output-floor state (OF 02.00 "
+        f"r0034 c0030) that is not the engine's:\n{detail}\n"
+        "The engine binds on the modelled subset (strict >); the return activates on "
+        "the whole book (>=, Annex II p.29). See P1.367 (the output-floor-subset bullet)."
+    )
+
+
+def test_each_floor_state_reaches_exactly_the_banked_row_shapes(gate_run: GateRun) -> None:
+    """Leg (p): the shapes each floor state reaches are ``FLOOR_STATE_SHAPES``, two-way.
+
+    Registered, live and binding is not enough: the binding run must hold the row
+    a rule is written over, or that rule's binding branch is never evaluated. The
+    binding state reaches one of the six shapes today and owes five (see
+    ``FLOOR_STATE_SHAPES``); the slack state reaches all six. A shape that joins
+    either state is coverage to bank; one that leaves is coverage lost.
+
+    Arrange: the census over every Basel 3.1 run.
+    Act:     union the runs' shapes per floor state and diff each against the bank.
+    Assert:  no state gains or loses a shape.
+    """
+    # Arrange
+    reached = _shapes_by_state(gate_run.floors)
+
+    # Act
+    moves = {state: diff(reached[state], banked) for state, banked in FLOOR_STATE_SHAPES.items()}
+
+    # Assert
+    detail = "\n".join(
+        f"  {state}: gained {list(move.added)}, lost {list(move.removed)}"
+        for state, move in moves.items()
+        if move.added or move.removed
+    )
+    assert not detail, (
+        f"the row shapes the output-floor states reach have moved:\n{detail}\n"
+        "Bank a gain in FLOOR_STATE_SHAPES (a binding-state gain closes owed coverage). "
+        "A loss means the registered runs no longer put that row in that state, and every "
+        "published rule over it has lost that branch."
+    )

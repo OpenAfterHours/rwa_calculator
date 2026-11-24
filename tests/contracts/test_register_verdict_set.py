@@ -100,6 +100,8 @@ def _gate(evaluated: frozenset[RuleKey], runs: tuple[RunVerdicts, ...] = ()) -> 
         disagreements={},
         evaluated=evaluated,
         runs=runs,
+        floors={},
+        unfloored=(),
     )
 
 

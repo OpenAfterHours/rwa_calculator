@@ -17,10 +17,14 @@ binding floor's shortfall over ``rwa_final`` (``engine/aggregator/_floor.py``);
 every template RWEA reads the un-floored ``rwa_pre_floor`` instead.
 
 ``facility-share-binding`` is the one registered run whose floor binds (shortfall
-453,708.71 on three F-IRB corporate legs). The three forced cases reach the
-states no registered run does — slotting, A-IRB retail, defaulted, LFSE and
-SA-CCR rows under a binding floor — by giving the firm an Art. 62(c) SA T2
-credit (OF-ADJ = 12.5 x the credit), a real engine run with nothing edited.
+453,708.71 on three F-IRB corporate legs); the supervisory register banks that
+set as ``BINDING_FLOOR_RUNS`` and the shapes each state reaches as
+``FLOOR_STATE_SHAPES``. The three forced cases reach the states no registered
+run does — slotting, A-IRB retail, defaulted, LFSE and SA-CCR rows under a
+binding floor — by giving the firm an Art. 62(c) SA T2 credit (OF-ADJ = 12.5 x
+the credit), a real engine run with nothing edited. They are test-local: the
+register's other legs never see them, which is the gap ``FLOOR_STATE_SHAPES``
+records as owed.
 
 Before the fix (measured 2026-11-16): OF 08.01 r0010 c0260 summed 1,559,200.00
 against U-TREA 1,105,491.29 on facility-share-binding; STR007 on OF02.00.01.01 and

@@ -617,6 +617,40 @@ The output floor has two structural invariants verified by acceptance tests:
 
 These invariants hold regardless of portfolio composition or floor percentage.
 
+### Floor state in the supervisory register
+
+Art. 92(2A) puts every Basel 3.1 return in one of two states, floor binding or
+floor slack, and a published rule over a floored figure has a branch for each.
+`boe_b0751` and `boe_b0763` (OF 08.01 / OF 08.02 column 0260) broke the first
+time a registered portfolio bound the floor, because none had before. The
+supervisory register (`tests/acceptance/reporting/test_supervisory_validations.py`)
+therefore records the floor state of every registered Basel 3.1 run, at no
+extra pipeline run, and holds four things:
+
+| Leg | Holds |
+|-----|-------|
+| (m) | Every Basel 3.1 run carries an `OutputFloorSummary`; no CRR run does (UK CRR Art. 92(3) has no floor) |
+| (n) | The runs whose floor binds are exactly `BINDING_FLOOR_RUNS`, as a set, both ways |
+| (o) | OF 02.00 row 0034 column 0030 ("Output floor activated", Annex II p.29: column 0030 equal to or greater than column 0010 on row 0010) says Yes exactly where `portfolio_floor_binding` is true |
+| (p) | The row shapes each state reaches — F-IRB, A-IRB retail, slotting, defaulted, large financial sector entity and CCR rows — are exactly `FLOOR_STATE_SHAPES`, both ways |
+
+The engine state and the reported state are recorded separately because they
+are computed apart: the engine compares over the floor-eligible subset with a
+strict `>`, OF 02.00 over the whole book with `>=`. Leg (o) fails on any
+registered book that the subset formula floors and the whole-book formula does
+not.
+
+`b31/facility-share-binding` is the only binding run today, and it holds F-IRB
+corporate legs only, so the binding state still owes the other five shapes:
+every rule over a slotting, A-IRB retail, defaulted, LFSE or CCR row has been
+evaluated only with the floor slack. Leg (p) keeps that gap from widening
+silently. Closing it means registering a Basel 3.1 book whose floor binds and
+which holds those rows, after the change to take the floor over entity totals
+rather than the modelled subset, since that change moves which runs bind.
+`tests/acceptance/reporting/test_of08_binding_floor.py` forces the floor on
+three registered books for a handful of named rules; that is not a
+registration, and the register's other legs do not see those runs.
+
 ## Per-exposure vs portfolio-level reporting
 
 !!! warning "Per-exposure `floor_rwa` does NOT include OF-ADJ"

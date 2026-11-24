@@ -354,22 +354,66 @@ gate that shipped.
   only appears on a runner nobody had tried.
 - **Gate change**: in this change-set, from the injection-harness runner
   override — `DEFECT_INJECTION_PYTHON` (`INTERPRETER_ENV_VAR`,
-  `scripts/defect_injection.py:127`) retargets the ladder through a named
-  interpreter via a single `resolve_command` chokepoint (`:150`) that every gate
+  `scripts/defect_injection.py:129`) retargets the ladder through a named
+  interpreter via a single `resolve_command` chokepoint (`:152`) that every gate
   command and the baseline command pass through. A partially retargeted ladder is
   worse than an unretargeted one, so a command it cannot rewrite is a hard error
-  rather than a silent pass-through. `preflight()` (`:187`) then imports
+  rather than a silent pass-through. `preflight()` (`:189`) then imports
   `rwa_calc.engine.pipeline` — not bare `rwa_calc`, whose lazy `__init__` imports
   in ~150µs without touching polars — and raises `InterpreterUnusable`, exiting 2
   from `main()`, so a broken interpreter aborts the campaign instead of reddening
   every gate.
 
-  **Owed, not done**: no test guards any of this. Nothing under `tests/` imports
-  `defect_injection` at all. The graduation target is a contract test asserting
-  that an unset env var leaves every `LADDER` command and `baseline_cmd` byte
-  identical, and that `preflight()` raises on a nonexistent interpreter. Until
-  that exists the guard is correct-by-inspection-and-one-manual-run, which is what
-  this file exists to stop people calling a gate.
+  **Owed when this entry was written, built 2026-11-23 (P5.47)**: at the time no
+  test guarded any of this, so the guard was correct-by-inspection-and-one-manual-run,
+  which is what this file exists to stop people calling a gate.
+  `tests/contracts/test_defect_injection_spawn.py` is that gate now. It drives
+  every spawn site (`preflight`, `run_gate`, `_prepare_gate_baselines`) over the
+  whole `LADDER` through a recorder on `subprocess.run`. Unset, each argv must be
+  byte-identical to its declaration. Set, each must be the override's rewrite,
+  and a command that cannot be rewritten must be refused. `preflight()` must
+  raise `InterpreterUnusable` on each of its four failure branches, on an
+  interpreter killed by a signal (exit `-9`), and on an interpreter that imports
+  `rwa_calc` but cannot import the engine's dependency stack. That last case is
+  the `/usr/bin/python3` red below. It is built with `-S` and an explicit
+  `PYTHONPATH` naming `src`, so a probe weakened to bare `import rwa_calc`
+  passes it and the test goes red. The non-zero-exit branch is
+  driven by the failure measured here: `error: Could not acquire lock: Read-only
+  file system` on stderr, then exit 2. The abort must quote that error. `main()`
+  must return exactly 2 before the baseline digest, any gate baseline, any mutant
+  or the scorecard write. That is checked three ways: with the override naming a
+  missing interpreter; with the override unset and `uv` unfindable; and with the
+  override unset and a `uv` stub on `PATH` that fails as `uv` did here. The last
+  is the measured failure on the default path: the harness started from the
+  venv's Python with no override, and the inner `uv` failing on its lock. Each
+  runs under every ladder, with `--mutants` naming one mutant, and with
+  `--resume`. Of the three `main()` cases, only that one goes red under two
+  changes: a refusal of non-zero exits made conditional on the override being
+  set, and one that tolerates "lock" in stderr. The first turns nothing else in
+  the file red. A pre-flight, or a `return 2`, made conditional on the override
+  fails both unset cases. Twenty-nine isolating mutations of
+  `scripts/defect_injection.py` each turned it red. Each was applied to a scratch
+  copy whose `__file__` was checked. Three of them were partial retargets,
+  leaving only the gates, only the `baseline_cmd` or only the pytest gates on
+  `uv`. Among those that weakened the pre-flight were probing bare
+  `import rwa_calc`, probing `pass`, accepting exit 2, accepting a negative
+  (signal) exit, refusing a non-zero exit only when the override is set,
+  tolerating a non-zero exit whose stderr mentions "lock", and skipping the
+  pre-flight when `--mutants` or `--resume` is given.
+
+  **Still open, for a new plan item**: the tests cover the two spawn failures, not
+  a gate that is red on the clean tree for a reason of its own while the
+  interpreter starts and imports the engine. A second instance, measured in
+  review: an override interpreter that imports the engine but has no `pytest`
+  passes the pre-flight and turns every pytest gate red. With `DEFECT_INJECTION_PYTHON` set on a runner with no
+  `uv`, the pre-flight passes, but the `contracts` rung is red on the clean tree
+  because `tests/contracts/test_wheel_install_gate.py` requires `uv` on `PATH`.
+  `main()` never runs a gate on the unmutated tree and the controls are judged on
+  the in-process probe, so every mutant that gets past the rungs below it
+  (`arch_check` and `unit` on the legacy ladder) is scored `DETECTED` at tier
+  4. That is the same fabricated score by a path the pre-flight cannot see. The
+  graduation target is a clean-tree run of every ladder gate before any mutant,
+  aborting non-zero with nothing scored unless each is green.
 - **Verified red**: the pre-flight aborting a real campaign invocation
   (`--ladder fast --mutants control-reachable-output-floor-schedule`) with
   `DEFECT_INJECTION_PYTHON=/nonexistent/python`, exit code 2, before the baseline

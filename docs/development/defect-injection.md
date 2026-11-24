@@ -57,7 +57,49 @@ Where `uv` is unavailable — a bare venv, a git worktree with no `.venv` — se
 through it. Before any gate runs, the harness makes that interpreter import an
 engine entry point once; if it cannot spawn, the campaign **aborts non-zero with
 nothing scored**, rather than scoring every gate red and publishing a fabricated
-~100% detection rate.
+~100% detection rate. That covers an interpreter that cannot start, hangs, is
+killed, or cannot import the engine; it does not cover one that imports the
+engine but cannot run a gate's own tool (see below).
+
+`tests/contracts/test_defect_injection_spawn.py` gates both behaviours without
+running the real `uv`:
+
+- Unset, every spawned argv is byte-identical to its declaration: the pre-flight,
+  every gate and every `baseline_cmd`.
+- Set, every spawned argv is retargeted, and a command that cannot be retargeted
+  is refused rather than left on `uv`.
+- Every pre-flight failure branch raises, including an interpreter that starts
+  and imports `rwa_calc` but not the engine's dependency stack. So the probe
+  cannot be weakened from `rwa_calc.engine.pipeline` to bare `rwa_calc`, which is
+  lazy and lets that interpreter through. An interpreter killed by a signal (an
+  OOM kill reports exit `-9`) is refused too, so a refusal of only positive exit
+  codes fails the test.
+- `uv`'s own lock failure is refused: `error: Could not acquire lock: Read-only
+  file system` on stderr, then exit 2. It is refused on the default path, with
+  the override unset and a `uv` stub on `PATH` that fails that way. That models
+  the sandbox where this was measured: the harness started from the venv's
+  Python, and the inner `uv` failing. It is also refused through an override
+  interpreter that fails the same way. The abort must quote that error. So a
+  refusal made conditional on the override, or one that tolerates "lock" in
+  stderr, fails the test.
+- `main()` exits 2 before the baseline digest, before any mutant and before
+  writing a scorecard. This is checked with the override set to a missing
+  interpreter. With the override unset it is checked twice: `uv` that cannot be
+  found, and `uv` that exits 2 on its lock. Each case runs under the legacy,
+  `full` and `fast` ladders, with `--mutants` naming one mutant, and with
+  `--resume`. So a pre-flight skipped for any of those runs fails the test.
+
+What these tests do not cover is a gate that is red on the clean tree for a
+reason of its own while the interpreter starts and imports the engine. The
+pre-flight passes, and every mutant that gets past the rungs below that gate is
+scored `DETECTED` at it. Two instances are known. On a runner with no `uv`, the
+`contracts` rung is one such gate: `tests/contracts/test_wheel_install_gate.py`
+requires `uv` on `PATH`. And an override interpreter that imports the engine but
+has no `pytest` (a wheel-only or `--no-dev` environment) passes the pre-flight
+and turns every pytest gate red. Until the
+harness runs every gate once on the clean tree before any mutant, a campaign
+with `DEFECT_INJECTION_PYTHON` set on a machine without `uv` can fabricate
+detections at that rung.
 
 **Do not run a campaign while another agent is testing `src/`.** The harness
 edits real source files. Their failures would be yours.

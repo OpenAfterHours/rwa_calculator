@@ -194,7 +194,8 @@ def ccr_rows_to_exposures(
         config_ccr: CCR configuration. Not read for alpha: every netting set
             carries its own ``alpha_applied`` (Art. 274(2)).
         reporting_date: As-of date for the calculation; used to compute
-            ``years_to_maturity`` and ``adjusted_notional`` per Art. 279b
+            ``years_to_maturity`` and ``adjusted_notional`` per Art. 279b and
+            the option supervisory delta's time to expiry T per Art. 279a(1)(a),
             and is written to the synthetic exposure row's ``value_date``.
         base_currency: Reporting currency for FX adjusted notional per
             Art. 279b(1)(b); typically ``CalculationConfig.base_currency``.
@@ -313,11 +314,12 @@ def ccr_rows_to_exposures(
     # five named categories.
     trades_enriched = compute_adjusted_notional_other(trades_enriched, reporting_date)
     # Supervisory delta per CRR Art. 279a: the option branch applies the
-    # Black-Scholes Phi(d1) formula (Art. 279a(2)) when a trade carries both
+    # Black-Scholes Phi(d1) formula (Art. 279a(1)(a)) when a trade carries both
     # ``option_strike`` and ``option_underlying_price`` and falls back to the
-    # linear +/- 1 delta (Art. 279a(1)) for non-option rows. This single call
-    # therefore covers both directional and option trades in the book.
-    trades_enriched = compute_supervisory_delta_option(trades_enriched)
+    # linear +/- 1 delta (Art. 279a(1)(c)) for non-option rows. This single call
+    # therefore covers both directional and option trades in the book. Its T is
+    # the time from ``reporting_date`` (the calculation date) to expiry.
+    trades_enriched = compute_supervisory_delta_option(trades_enriched, reporting_date)
 
     # Denormalise the Art. 285 MPOR-cascade inputs onto each trade so the
     # margined maturity factor (Art. 279c(2)) can be computed at trade grain.

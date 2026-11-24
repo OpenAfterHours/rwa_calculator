@@ -265,9 +265,9 @@ def test_null_quality_credit_equals_explicit_non_rated_leg(regime: str) -> None:
 # (skeptic review of CC-06).
 # ---------------------------------------------------------------------------
 
-#: Long at-the-money call, P = K = 100. T = (maturity - start) / 365 per
-#: compute_supervisory_delta_option: CRR 1826 / 365 = 5.002740; B31 1827 / 365 =
-#: 5.005479. d1 = 0.5 × σ × sqrt(T); δ = Φ(d1).
+#: Long at-the-money call, P = K = 100. T = (maturity - reporting date) / 365 per
+#: Art. 279a(1)(a) (the trade starts on the reporting date): CRR 1826 / 365 =
+#: 5.002740; B31 1827 / 365 = 5.005479. d1 = 0.5 × σ × sqrt(T); δ = Φ(d1).
 #: Art. 279a(1)(a) Table 1: "Commodity | Electricity | 150%", "Other commodities
 #: (excluding electricity) | 70%", "Others | All | 150%".
 #:   σ = 150%: CRR δ = 0.953278640, B31 δ = 0.953323489

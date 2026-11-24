@@ -12,7 +12,7 @@ Key responsibilities:
 - Validate equity adjusted notional per CRR Art. 279b(1)(c):
   d = market_price × number_of_units = 100.0 × 500_000 = 50_000_000 GBP.
 - Validate supervisory delta ≈ +Phi(d1) with d1 computed from sigma=0.75 (equity idx),
-  T = (maturity - start).days / 365 = 1.0y, P=100, K=110.
+  T = (maturity - reporting_date).days / 365 = 1.0y, P=100, K=110.
 - Validate equity PFE add-on per Art. 277a + Art. 280b: SF_IDX=0.20, rho_IDX=0.80
   (single-entity collapse → AddOn = SF × EN).
 - Validate EAD = alpha × (RC + PFE) with RC = 0 (at-par, unmargined).
@@ -28,7 +28,8 @@ Scenario:
 
 Hand-calculation reference (see golden_ccr_a6.py docstring for full derivation):
     sigma (equity idx, Art. 279a(2) / BCBS CRE52.47) = 0.75
-    T_delta  = (2027-01-15 - 2026-01-15).days / 365 = 1.0  (Art. 279a(2) convention)
+    T_delta  = (2027-01-15 - 2026-01-15).days / 365 = 1.0  (expiry - reporting date,
+               Art. 279a(1)(a); start = reporting date here)
     d1       ≈ 0.24791976  (ln(100/110) + 0.5·0.75²·1.0) / (0.75·1.0)
     delta    ≈ +Phi(0.24791976) ≈ +0.59790
     adjusted_notional = 100.0 × 500_000 = 50_000_000 GBP
@@ -79,7 +80,6 @@ from tests.fixtures.ccr.golden_ccr_a6 import (
     CCR_A6_OPTION_UNDERLYING_PRICE,
     CCR_A6_PFE_MULTIPLIER,
     CCR_A6_RC_UNMARGINED,
-    CCR_A6_START_DATE,
     build_ccr_a6_bundle,
 )
 
@@ -98,8 +98,12 @@ _EXPOSURE_REF: str = _EXPECTED["exposure_reference"]  # "ccr__NS_EQ_OPT_001"
 # Live recomputation helpers (computed once at import, used across the class)
 # ---------------------------------------------------------------------------
 
-# supervisory_delta.py uses: t_years = (maturity_date - start_date).days / 365
-_T_DELTA: float = (CCR_A6_MATURITY_DATE - CCR_A6_START_DATE).days / 365.0
+_REPORTING_DATE: date = date(2026, 1, 15)
+
+# Art. 279a(1)(a): T runs from the calculation (reporting) date to expiry. The
+# trade starts on the reporting date, so this scenario cannot tell T from the
+# original tenor — tests/acceptance/ccr/test_option_delta_time_to_expiry.py can.
+_T_DELTA: float = (CCR_A6_MATURITY_DATE - _REPORTING_DATE).days / 365.0
 # sigma for "equity" asset class from SA_CCR_OPTION_VOLATILITY_EQUITY_IDX = 0.75
 _SIGMA_EQ_IDX: float = 0.75
 _D1: float = (
@@ -118,7 +122,7 @@ _PHI_D1: float = float(
 # The 1y option spans ≈ 261 business days (≥ 250), so MF = 1.0.
 _BD_MF: int = int(
     pl.DataFrame({"m": [CCR_A6_MATURITY_DATE]}).with_columns(
-        pl.business_day_count(pl.lit(date(2026, 1, 15)), pl.col("m")).alias("bd")
+        pl.business_day_count(pl.lit(_REPORTING_DATE), pl.col("m")).alias("bd")
     )["bd"][0]
 )
 _MF: float = math.sqrt(min(_BD_MF, 250) / 250)
@@ -159,7 +163,7 @@ def ccr_a6_result() -> dict:
     """Run CCR-A6 through the CRR SA pipeline; return the synthetic CCR row."""
     bundle = build_ccr_a6_bundle()
     config = CalculationConfig.crr(
-        reporting_date=date(2026, 1, 15),
+        reporting_date=_REPORTING_DATE,
         permission_mode=PermissionMode.STANDARDISED,
     )
 

@@ -23,63 +23,21 @@ Scenario design:
         legally enforceable (Art. 295), unmargined (CCR-A6 scope).
     Empty margin agreements and CCR collateral.
 
-Regulatory hand-calc (CRR Art. 279a(2) + Art. 279b(1)(c) + Art. 279c(1) + Art. 280b + Art. 278 + 274):
+Regulatory hand-calc (Art. 279a(1)(a) + 279b(1)(c) + 279c(1) + 280b + 278 + 274):
 
-    Supervisory volatility (equity, Art. 280b Table 2):
-        σ = 0.80 (equity supervisory vol)
+    sigma = 0.75 (Art. 279a(1)(a) Table 1, equity multiple names)
+    T     = (expiry - reporting date) / 365 = (2027-01-15 - 2026-01-15) / 365 = 1.0
+            (the trade starts on the reporting date, so T also equals the tenor)
+    d1    = (ln(100/110) + 0.5 * 0.75^2 * 1.0) / 0.75 = 0.24791976
+    delta = +Phi(d1) = 0.597902 (long call)
+    adjusted_notional = 100.0 * 500_000 = 50_000_000 GBP
+    MF    = sqrt(min(BD, 250) / 250) = 1.0 (>= 250 business days)
+    AddOn = 0.20 * delta * 50_000_000 * MF (index, single-trade collapse)
+    EAD   = 1.4 * AddOn (RC = 0, PFE multiplier 1); RWA = 0.50 * EAD
 
-    T_to_maturity = (2027-01-15 - 2026-01-15) / 365.25
-                  = 365 / 365.25 ≈ 0.99931553723477    (engine convention)
-
-    Black-Scholes d1 (Art. 279a(2)):
-        d1 = (ln(P/K) + 0.5 · σ² · T) / (σ · √T)
-           = (ln(100/110) + 0.5 · 0.64 · 0.99931554) / (0.80 · √0.99931554)
-           = (-0.09531018 + 0.31978097) / (0.79972762)
-           = 0.22447079 / 0.79972762
-           ≈ 0.28068...
-
-    supervisory_delta = +Phi(d1)  (long call, Art. 279a(2)(a)):
-        delta ≈ Phi(0.28068) ≈ 0.61055...
-        (exact value determined by polars-normal-stats backend in test)
-
-    adjusted_notional = market_price × number_of_units           (Art. 279b(1)(c))
-                      = 100.0 × 500_000 = 50_000_000 GBP
-
-    MF                = sqrt(min(T, 1.0) / 1.0)                  (Art. 279c(1))
-                      = sqrt(0.99931554) ≈ 0.99965770
-
-    effective_notional = delta × adjusted_notional × MF
-                       = 0.61055... × 50_000_000 × 0.99965770
-                       ≈ 30_506_419.53...  GBP  (depends on Phi backend)
-
-    is_index=True → SF_EQ = 0.20, rho = 0.80                     (Art. 280b, Table 2)
-
-    Single-trade collapse (sum_D ≈ 30_506_419.53):
-    AddOn_HS = SF × sqrt((rho × sum_D)^2 + (1−rho^2) × sum_D^2)
-             = 0.20 × sqrt((0.80 × D)^2 + (1 - 0.64) × D^2)
-             = 0.20 × sqrt(D^2 × (0.64 + 0.36))
-             = 0.20 × D
-             ≈ 0.20 × 30_506_419.53
-             ≈ 5_976_656.65... GBP                                (Art. 277a, 280b)
-
-    RC                = max(V - C, 0) = max(0 - 0, 0) = 0        (Art. 275(1))
-
-    PFE multiplier    = 1.0  (V=0, C=0, unmargined)              (Art. 278(3))
-
-    PFE_addon         = 1.0 × AddOn_aggregate                     (Art. 278(1))
-                      ≈ 5_976_656.65... GBP
-
-    EAD               = α × (RC + PFE) = 1.4 × 5_976_656.65...  (Art. 274(2))
-                      ≈ 8_367_319.31... GBP
-
-    RWA               = EAD × RW = 8_367_319.31... × 0.50
-                      ≈ 4_183_659.66... GBP                       (Art. 120(1) Table 3)
-
-Note on expected values:
-    The JSON pin values (addon_aggregate=5976656.65, ead=8367319.31, rwa=4183659.66)
-    are computed from the exact Phi(d1) output of the polars-normal-stats backend.
-    The exact delta used is ~0.61055. Acceptance tests recompute against the live
-    backend and compare within monetary relative tolerance 1e-6.
+    The full derivation, recomputed live against the engine's Phi backend, is in
+    the tests/acceptance/ccr/test_ccr_a6_equity_index_option.py docstring; the
+    pins are tests/expected_outputs/ccr/CCR-A6.json.
 
 Counterparty reuse:
     CCR-A6 reuses the CCR-A1 institution counterparty (CP_001, GB, CQS 2) so the

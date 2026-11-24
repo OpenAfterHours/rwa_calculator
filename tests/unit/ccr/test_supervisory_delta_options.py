@@ -45,6 +45,7 @@ import polars as pl
 import pytest
 
 from tests.fixtures.ccr.option_delta_builder import (
+    START_DATE,
     make_cdo_trades_only,
     make_linear_trade,
     make_option_trades_only,
@@ -94,7 +95,7 @@ def test_atm_long_ir_call_delta_phi_d1() -> None:
         d1 = (ln(P/K) + 0.5·σ²·T) / (σ·√T) = 0.25
         Expected: +Φ(0.25) ≈ 0.598706.
 
-    Act: compute_supervisory_delta_option(option_trades).collect()
+    Act: compute_supervisory_delta_option(option_trades, START_DATE).collect()
 
     Assert: supervisory_delta[OPT_001] ≈ +0.598706 (abs=1e-4).
 
@@ -105,7 +106,7 @@ def test_atm_long_ir_call_delta_phi_d1() -> None:
     lf = make_option_trades_only()
 
     # Act
-    result = compute_supervisory_delta_option(lf).collect()
+    result = compute_supervisory_delta_option(lf, START_DATE).collect()
 
     # Assert
     row = result.filter(pl.col("trade_id") == "OPT_001")
@@ -131,7 +132,7 @@ def test_atm_long_ir_put_delta_neg_phi_neg_d1() -> None:
         OPT_002: IR, long put, P=K=0.03 (ATM), T=1.0y, σ=0.50.
         d1 = 0.25, long put → −Φ(−0.25) ≈ −0.401294.
 
-    Act: compute_supervisory_delta_option(option_trades).collect()
+    Act: compute_supervisory_delta_option(option_trades, START_DATE).collect()
 
     Assert: supervisory_delta[OPT_002] ≈ −0.401294 (abs=1e-4).
 
@@ -142,7 +143,7 @@ def test_atm_long_ir_put_delta_neg_phi_neg_d1() -> None:
     lf = make_option_trades_only()
 
     # Act
-    result = compute_supervisory_delta_option(lf).collect()
+    result = compute_supervisory_delta_option(lf, START_DATE).collect()
 
     # Assert
     row = result.filter(pl.col("trade_id") == "OPT_002")
@@ -169,7 +170,7 @@ def test_otm_short_equity_index_call_delta() -> None:
         OPT_003: equity, short call, P=100, K=110, T=91/365y, σ=0.75.
         d1 ≈ −0.0673, short call → −Φ(d1) ≈ −0.47318.
 
-    Act: compute_supervisory_delta_option(option_trades).collect()
+    Act: compute_supervisory_delta_option(option_trades, START_DATE).collect()
 
     Assert: supervisory_delta[OPT_003] ≈ −0.47318 (abs=1e-4).
 
@@ -180,7 +181,7 @@ def test_otm_short_equity_index_call_delta() -> None:
     lf = make_option_trades_only()
 
     # Act
-    result = compute_supervisory_delta_option(lf).collect()
+    result = compute_supervisory_delta_option(lf, START_DATE).collect()
 
     # Assert
     row = result.filter(pl.col("trade_id") == "OPT_003")
@@ -206,7 +207,7 @@ def test_itm_long_fx_put_delta() -> None:
         OPT_004: FX, long put, P=1.20, K=1.30, T=182/365y, σ=0.15.
         d1 ≈ −0.7027, long put → −Φ(−d1) ≈ −0.75889.
 
-    Act: compute_supervisory_delta_option(option_trades).collect()
+    Act: compute_supervisory_delta_option(option_trades, START_DATE).collect()
 
     Assert: supervisory_delta[OPT_004] ≈ −0.75889 (abs=1e-4).
 
@@ -217,7 +218,7 @@ def test_itm_long_fx_put_delta() -> None:
     lf = make_option_trades_only()
 
     # Act
-    result = compute_supervisory_delta_option(lf).collect()
+    result = compute_supervisory_delta_option(lf, START_DATE).collect()
 
     # Assert
     row = result.filter(pl.col("trade_id") == "OPT_004")
@@ -247,7 +248,7 @@ def test_linear_branch_preserved_after_extension() -> None:
     Arrange:
         LIN_001: IR swap, is_long=True, option_type=null, no cdo fields.
 
-    Act: compute_supervisory_delta_option(linear_trade).collect()
+    Act: compute_supervisory_delta_option(linear_trade, START_DATE).collect()
 
     Assert: supervisory_delta == +1.0.
 
@@ -258,7 +259,7 @@ def test_linear_branch_preserved_after_extension() -> None:
     lf = make_linear_trade()
 
     # Act
-    result = compute_supervisory_delta_option(lf).collect()
+    result = compute_supervisory_delta_option(lf, START_DATE).collect()
 
     # Assert
     actual = result["supervisory_delta"][0]
@@ -366,7 +367,7 @@ def test_supervisory_delta_dtype_float64() -> None:
 
     Arrange: 4-row option LazyFrame.
 
-    Act: compute_supervisory_delta_option(option_trades).collect_schema()
+    Act: compute_supervisory_delta_option(option_trades, START_DATE).collect_schema()
 
     Assert: supervisory_delta dtype == pl.Float64.
 
@@ -377,7 +378,7 @@ def test_supervisory_delta_dtype_float64() -> None:
     lf = make_option_trades_only()
 
     # Act
-    result_lf = compute_supervisory_delta_option(lf)
+    result_lf = compute_supervisory_delta_option(lf, START_DATE)
     schema = result_lf.collect_schema()
 
     # Assert

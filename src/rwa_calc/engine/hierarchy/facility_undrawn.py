@@ -14,7 +14,10 @@ Key responsibilities:
   priced in the UCC bucket ``LR`` (CM-01).
 - Expand Multiple Option Facility (MOF) parents into per-sub CCF-descending
   waterfall rows plus an optional residual row, each sub-line governed by its
-  OWN ``committed`` flag (SF-02).
+  OWN ``committed`` flag (SF-02) and priced as its OWN item: its row carries the
+  sub's ``underlying_risk_type``, Row 4(b) / Art. 166A(5) / trade-LC flags and
+  ``obs_product`` (a sub described only by its product gets a row), and the
+  waterfall ranks each sub on the SA CCF that row is priced at (P1.452).
 - Facility Share candidate fan-out: emit one undrawn CANDIDATE row per member
   counterparty, each carrying the FULL headroom, so every member is priced by
   the real downstream pipeline and the aggregator can pick the riskiest.
@@ -37,6 +40,9 @@ References:
 - PRA PS1/26 Glossary "commitment" / Art. 111 Table A1 row (7) and CRR Annex I
   4(a): an unconditionally cancellable commitment is a commitment (10% / 0%)
 - CRR Art. 166(8)(d) / Art. 166(10): commitment vs issued-item CCF buckets
+- CRR Art. 166(8)(b): short-term trade letters of credit (a sub-limit's own flag)
+- PRA PS1/26 Art. 111(1)(b)/(c): each item at its own Table A1 row; the
+  commitment-to-issue lower-of (a sub-limit's own ``underlying_risk_type``)
 - CRR Art. 195 / 219: on-balance-sheet netting of drawn balances
 - CRR Art. 147(5) / CRE30.55: QRRE classification fields
 - PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential mortgage commitments
@@ -48,12 +54,20 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.engine.ccf import sa_ccf_expression
+from rwa_calc.engine.ccf import (
+    build_product_to_risk_type_expr,
+    commitment_to_issue_ccf_expression,
+    oc_original_maturity_ccf_expression,
+    original_maturity_days_expression,
+    sa_ccf_expression,
+    uk_residential_mortgage_ccf_expression,
+)
 from rwa_calc.engine.hierarchy.facility_fx import (
     build_facility_fx,
     facility_currency_lookup,
@@ -64,11 +78,14 @@ from rwa_calc.engine.hierarchy.graph import (
     resolve_to_root_facility,
 )
 from rwa_calc.engine.utils import has_required_columns
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.engine.hierarchy.facility_fx import FacilityFx
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +104,8 @@ def calculate_facility_undrawn(
     counterparty_lookup: CounterpartyLookup | None = None,
     config: CalculationConfig | None = None,
     fx_rates: pl.LazyFrame | None = None,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Calculate undrawn amounts for facilities.
@@ -102,9 +121,11 @@ def calculate_facility_undrawn(
     Two facility-product expansions are applied to the resulting undrawn rows:
 
     - **Multiple Option Facility (MOF)**: any facility with at least one
-      ``child_type='facility'`` mapping inherits the descendant ``risk_type``
-      producing the highest SA CCF, ensuring the parent's undrawn EAD
-      reflects the worst-case off-balance commitment among its components.
+      ``child_type='facility'`` mapping has its headroom allocated to its
+      sub-limits in descending order of the SA CCF each sub-limit's row is
+      priced at, one row per sub-limit carrying that sub-limit's OWN item
+      nature (P1.452), plus a residual row at the umbrella's own terms -
+      the worst-case off-balance commitment among its components.
     - **Facility Share**: when the facility's own owner plus the counterparties
       on its descendant loans / contingents / sub-facilities form more than one
       distinct member, the single undrawn row is FANNED OUT into one candidate
@@ -141,10 +162,15 @@ def calculate_facility_undrawn(
             counterparty attribute is read here any more. Retained on the
             signature because it is part of the hierarchy stage's calling
             contract and the SA-preview it once fed may not silently come back.
-        config: Calculation configuration (frame switch for the MOF waterfall's
-            SA CCF weighting basis; reporting currency and the FX on/off switch)
+        config: Calculation configuration (reporting currency and the FX on/off
+            switch; the source of the rulepack when ``pack`` is None)
         fx_rates: The run's FX rates (``currency_from`` / ``currency_to`` /
             ``rate``), or None when none were supplied
+        pack: The run's resolved rulepack (so an injected overlay is honoured).
+            The MOF waterfall reads the regime's ``obs_product_to_risk_type`` map
+            and the ``firb_uses_sa_ccf`` Feature from it. Falls back to
+            ``RulepackV0.from_config(config).pack``, and with no config either to
+            the CRR pack (the historical no-config default).
 
     Returns:
         LazyFrame with facility_undrawn exposure records
@@ -206,14 +232,11 @@ def calculate_facility_undrawn(
         pl.lit(None).cast(pl.String).alias("share_counterparty_reference")
     )
 
-    # Regime boolean, check-17 allowlisted. Its ONE live consumer is the MOF
-    # waterfall's ``sa_ccf_expression(risk_type_col="_sub_risk_type",
-    # is_basel_3_1=...)`` in ``_expand_mof_facility_undrawn`` — the CCF that
-    # WEIGHTS each sub-facility's slice of the parent headroom, unrelated to the
-    # deleted facility-share risk-weight preview. Retiring it means threading the
-    # resolved pack into ``engine/ccf.py``'s expression signature, so do not
-    # delete this line as leftover preview plumbing.
-    is_basel_3_1 = bool(getattr(config, "is_basel_3_1", False)) if config is not None else False
+    # The run's rulepack, read only by the MOF waterfall: the regime's
+    # obs_product -> risk_type map, and the ``firb_uses_sa_ccf`` Feature that
+    # selects Table A1 / Annex I for the SA CCF each sub-limit is RANKED on - the
+    # same Feature ``engine/ccf.py`` prices the emitted row with (P1.452).
+    resolved_pack = _resolve_waterfall_pack(pack, config)
 
     # Expand MOF parents into per-sub waterfall rows + optional residual.
     # Non-MOF parents pass through unchanged. After this step
@@ -229,7 +252,7 @@ def calculate_facility_undrawn(
         loans,
         contingents,
         facility_mappings,
-        is_basel_3_1,
+        resolved_pack,
         facility_currency,
         fx,
     )
@@ -717,9 +740,11 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         pl.col("underlying_risk_type"),
         # CRR Annex I / Art. 111(1): the facility's concrete OBS product, carried
         # to the CCF stage so the product -> risk_type fill can run on undrawn
-        # commitment rows. MOF waterfall / residual sub-rows inherit the parent
-        # facility's product; the sub-row's own risk_type still wins via
-        # mof_risk_type above, and an explicit risk_type always beats the fill.
+        # commitment rows. A MOF waterfall row carries its SUB-LIMIT's product
+        # (and its underlying_risk_type, Row 4(b), Art. 166A(5) and trade-LC
+        # flags), written over the umbrella's by ``_expand_mof_facility_undrawn``
+        # (P1.452); the residual row keeps the umbrella's. An explicit risk_type
+        # always beats the fill.
         pl.col("obs_product"),
         pl.col("ccf_modelled").cast(pl.Float64, strict=False),
         pl.col("ead_modelled").cast(pl.Float64, strict=False),
@@ -774,7 +799,7 @@ def _expand_mof_facility_undrawn(
     loans: pl.LazyFrame,
     contingents: pl.LazyFrame | None,
     facility_mappings: pl.LazyFrame,
-    is_basel_3_1: bool,
+    pack: ResolvedRulepack,
     facility_currency: pl.LazyFrame,
     fx: FacilityFx,
 ) -> pl.LazyFrame:
@@ -787,11 +812,50 @@ def _expand_mof_facility_undrawn(
 
     For MOF parents, the parent row is replaced by:
         - One waterfall row per eligible descendant sub-facility with
-          positive headroom, sorted by descending SA CCF (tie-break:
+          positive headroom, sorted by descending SA CCF - the one the row
+          will be priced at (:func:`_sub_ranking_sa_ccf`; tie-break:
           alphabetical risk_type, then descendant reference).
         - At most one residual row when ``parent_headroom`` exceeds the
           sum of sub allocations — emitted at the parent's own ``risk_type``
           and ``counterparty_reference``.
+
+    **Each sub row is priced as the sub-limit's OWN item (P1.452).** PS1/26 Art.
+    111(1)(b) prices an off-balance-sheet item at "the percentage specified in
+    the corresponding row of Column B" of Table A1, and CRR Art. 111(1) / Art.
+    166(8) / (10) assign each item to its own Annex I / Art. 166 category. So a
+    sub row takes, from the SUB, outright - never coalesced to the umbrella,
+    because a null there carries meaning:
+
+    - its ``risk_type`` (resolved from its own ``obs_product`` through the
+      regime's ``obs_product_to_risk_type`` map when it states none, so a sub
+      described only by its product gets a row rather than falling into the
+      residual), its counterparty, limit, currency and ``committed`` flag;
+    - ``underlying_risk_type`` - null means "not a commitment to issue", so no
+      Art. 111(1)(c) cap: a cash sub under an umbrella tagged as an LC
+      commitment is not capped at 20%;
+    - ``is_uk_residential_mortgage_commitment`` - tri-state, null means "derive
+      Row 4(b) on the row's own evidence", so an umbrella's explicit False does
+      not suppress it. The one fall-back: a sub that states nothing takes an
+      umbrella's True (:func:`_sub_residential_flag`), so a silent sub-line of a
+      flagged mortgage umbrella is not moved off Row 4(b)'s 50%;
+    - ``is_purchased_receivable_commitment`` (PS1/26 Art. 166A(5)),
+      ``is_short_term_trade_lc`` (CRR Art. 166(8)(b)) and ``obs_product``.
+
+    The trade-LC flag reaches every consumer of it, read against the row's
+    (umbrella's) dates: the Art. 162(3) one-day M floor on RESIDUAL maturity -
+    so in the final year of any umbrella - and the SA six-month trade windows /
+    Art. 121(6)(b) exemption on ORIGINAL maturity.
+
+    **Held on the umbrella pending the owner's decision:** ``value_date`` /
+    ``maturity_date`` (the CRR Annex I 2(b)/3(b) original-maturity split, and
+    IRB M), ``is_obs_commitment`` and ``ccf_modelled``. Under a committed,
+    limited umbrella the headroom a sub takes is still the umbrella's commitment
+    (the SF-02 rule below), so a shorter-dated or issued-item sub-line must not
+    lower the CCF on its own terms until that is decided. ``ead_modelled`` also
+    stays the umbrella's, so it is copied onto every sub and residual row - a
+    separate open defect (it multiplies the single facility exposure value of
+    PS1/26 Art. 166D(3)), not settled here. ``is_revolving`` and the other
+    ``_FACILITY_QRRE_COUPLED_COLUMNS`` stay the root's (P1.355).
 
     Allocation rule per parent (every amount in the PARENT's currency):
         sub_headroom_i = max(0, sub_limit_i - sub_drawn_i)         # per-sub netting,
@@ -820,13 +884,15 @@ def _expand_mof_facility_undrawn(
         facility_with_drawn: One row per parent with ``_is_mof_parent`` flag,
             aggregate ``undrawn_amount`` (= parent_headroom), parent fields,
             and ``share_counterparty_reference`` (suppressed for MOF parents).
-        facilities: Facilities frame; supplies sub-facility risk_type,
-            counterparty_reference, limit, and committed flag.
+        facilities: Facilities frame; supplies each sub-facility's own
+            risk_type / obs_product, counterparty_reference, limit, currency,
+            committed flag and item-nature columns.
         root_lookup: Output of :func:`graph.build_facility_root_lookup`.
         loans: Loans frame; per-sub drawn aggregates net each sub's headroom.
         contingents: Contingents frame (optional); same role as loans.
         facility_mappings: Mappings between facilities and children.
-        is_basel_3_1: Frame switch passed to :func:`sa_ccf_expression`.
+        pack: The run's resolved rulepack - the ``obs_product_to_risk_type``
+            map and the ``firb_uses_sa_ccf`` Feature (:func:`_sub_ranking_sa_ccf`).
         facility_currency: Facility -> currency lookup for per-sub netting.
         fx: The run's resolved rates (:func:`facility_fx.build_facility_fx`).
 
@@ -882,9 +948,34 @@ def _expand_mof_facility_undrawn(
     # `_sub_currency` converts the sub's headroom into the parent's currency;
     # `_sub_ref` is the join key and is also baked into `_exposure_suffix`
     # so each waterfall row gets a unique `<facility>_UNDRAWN_<sub>` reference.
+    # The `_sub_<column>` copies of `sub_item_columns` are the sub-limit's OWN
+    # item nature, written over the umbrella's on its row (P1.452).
     # All scratch columns are dropped via `helper_cols` before concat.
     # `committed` is loader-defaulted (schema default True), so we can
     # read it directly here.
+    sub_item_columns = (
+        "underlying_risk_type",
+        "is_uk_residential_mortgage_commitment",
+        "is_purchased_receivable_commitment",
+        "is_short_term_trade_lc",
+        "obs_product",
+    )
+    # CRR Annex I / PS1/26 Table A1: a sub stating no risk_type is bucketed by
+    # its own obs_product on the regime's map, exactly as the CCF stage fills a
+    # blank risk_type - so it gets its own row instead of being dropped by the
+    # null filter below. An explicit risk_type always wins.
+    declared_risk_type = pl.col("risk_type")
+    product_risk_type = build_product_to_risk_type_expr(
+        pack.category_map("obs_product_to_risk_type").entries
+    )
+    own_risk_type = (
+        pl.when(
+            (declared_risk_type.is_null() | (declared_risk_type == ""))
+            & product_risk_type.is_not_null()
+        )
+        .then(product_risk_type)
+        .otherwise(declared_risk_type)
+    )
     sub_facilities = facilities.select(
         [
             pl.col("facility_reference").alias("_sub_ref"),
@@ -892,12 +983,13 @@ def _expand_mof_facility_undrawn(
             # emitted in the LR bucket whatever risk_type it declared.
             pl.when(pl.col("committed").eq_missing(False))
             .then(pl.lit(UCC_RISK_TYPE))
-            .otherwise(pl.col("risk_type"))
+            .otherwise(own_risk_type)
             .alias("_sub_risk_type"),
             pl.col("counterparty_reference").alias("_sub_counterparty"),
             pl.col("limit").alias("_sub_limit"),
             pl.col("committed").alias("_sub_committed"),
             pl.col("currency").alias("_sub_currency"),
+            *(pl.col(column).alias(f"_sub_{column}") for column in sub_item_columns),
         ]
     )
 
@@ -919,11 +1011,6 @@ def _expand_mof_facility_undrawn(
                 pl.col("sub_drawn_loans").fill_null(0.0)
                 + pl.col("sub_drawn_contingents").fill_null(0.0)
             ),
-            # No ``commitment_col``: this is a projected sub-facility frame
-            # carrying only the ``_sub_*`` columns, and naming the flag would
-            # put it in the expression's footprint. The CCF here is a headroom
-            # WEIGHTING basis, not a capital number.
-            sub_sa_ccf=sa_ccf_expression(risk_type_col="_sub_risk_type", is_basel_3_1=is_basel_3_1),
         )
         .with_columns(
             # In the SUB's currency; converted to the parent's below.
@@ -932,13 +1019,19 @@ def _expand_mof_facility_undrawn(
     )
 
     # Join parent_headroom (= parent's undrawn_amount), sort by descending
-    # SA CCF then risk_type then sub reference, and apply the waterfall.
+    # SA CCF then risk_type then sub reference, and apply the waterfall. The
+    # umbrella's commitment flag and dates are the ones the emitted sub row
+    # carries, so the ranking CCF reads them (:func:`_sub_ranking_sa_ccf`).
     parent_headroom = mof_parents.select(
         [
             pl.col("facility_reference"),
             pl.col("undrawn_amount").alias("_parent_headroom"),
             pl.col("committed").alias("_parent_committed"),
             pl.col("currency").alias("_parent_currency"),
+            pl.col("is_obs_commitment").alias("_parent_is_obs_commitment"),
+            pl.col("value_date").alias("_parent_value_date"),
+            pl.col("maturity_date").alias("_parent_maturity_date"),
+            pl.col("is_uk_residential_mortgage_commitment").alias("_parent_resi_commitment"),
         ]
     )
 
@@ -961,9 +1054,22 @@ def _expand_mof_facility_undrawn(
             facility_currency="_parent_currency",
             factor="_sub_fx_factor",
         )
+        # The Row 4(b) flag the sub row carries: the sub's own, an umbrella's
+        # True filling a sub that states nothing (:func:`_sub_residential_flag`).
+        # Composed before the ranking so both read the same flag.
+        .with_columns(
+            _sub_is_uk_residential_mortgage_commitment=_sub_residential_flag(
+                "_sub_is_uk_residential_mortgage_commitment", "_parent_resi_commitment"
+            )
+        )
         # The sub's headroom in the PARENT's currency, which the waterfall caps
         # and emits in. Null where no rate exists (HIE005): no slice is taken.
-        .with_columns(sub_headroom=pl.col("_sub_own_headroom") * pl.col("_sub_fx_factor"))
+        # The ranking CCF is the SA CCF the sub's row will be priced at - a
+        # headroom WEIGHTING basis (worst case first), not a capital number.
+        .with_columns(
+            sub_headroom=pl.col("_sub_own_headroom") * pl.col("_sub_fx_factor"),
+            sub_sa_ccf=_sub_ranking_sa_ccf(pack.feature("firb_uses_sa_ccf")),
+        )
         .sort(
             ["facility_reference", "sub_sa_ccf", "_sub_risk_type", "_sub_ref"],
             descending=[False, True, False, False],
@@ -984,7 +1090,8 @@ def _expand_mof_facility_undrawn(
     )
 
     # Build sub waterfall rows: replicate parent's row per sub, then override
-    # the per-row attributes (allocation, risk_type, counterparty, suffix).
+    # the per-row attributes (allocation, risk_type, counterparty, suffix, and
+    # the sub's own item-nature columns - outright, P1.452).
     # The helper columns are dropped at the end so the schema matches non-MOF.
     helper_cols = [
         "_sub_ref",
@@ -993,6 +1100,7 @@ def _expand_mof_facility_undrawn(
         "_sub_limit",
         "_sub_committed",
         "_sub_currency",
+        *(f"_sub_{column}" for column in sub_item_columns),
         "sub_drawn_loans",
         "sub_drawn_contingents",
         "sub_drawn",
@@ -1005,6 +1113,10 @@ def _expand_mof_facility_undrawn(
         "_parent_headroom",
         "_parent_committed",
         "_parent_currency",
+        "_parent_is_obs_commitment",
+        "_parent_value_date",
+        "_parent_maturity_date",
+        "_parent_resi_commitment",
     ]
     sub_rows = (
         mof_parents.join(waterfall, on="facility_reference", how="inner")
@@ -1015,6 +1127,7 @@ def _expand_mof_facility_undrawn(
                 pl.col("_sub_ref").alias("mof_risk_type_source"),
                 pl.col("_sub_counterparty").alias("share_counterparty_reference"),
                 (pl.lit("_") + pl.col("_sub_ref")).alias("_exposure_suffix"),
+                *(pl.col(f"_sub_{column}").alias(column) for column in sub_item_columns),
             ]
         )
         .drop(helper_cols)
@@ -1184,3 +1297,92 @@ def _derive_facility_share_members(
             ]
         )
     )
+
+
+def _resolve_waterfall_pack(
+    pack: ResolvedRulepack | None, config: CalculationConfig | None
+) -> ResolvedRulepack:
+    """The rulepack the MOF waterfall reads: the run's, else the config's, else CRR.
+
+    The CRR fallback is the no-config bootstrap path (unit tests calling the
+    hierarchy helpers directly), matching the historical default of ranking the
+    waterfall on CRR Annex I when no configuration was supplied.
+    """
+    if pack is not None:
+        return pack
+    if config is not None:
+        return RulepackV0.from_config(config).pack
+    return resolve("crr", date(2026, 1, 1))
+
+
+@cites("PS1/26, paragraph 111")
+def _sub_residential_flag(sub_col: str, umbrella_col: str) -> pl.Expr:
+    """The Table A1 Row 4(b) flag a MOF sub row carries: the sub's own, else the umbrella's True.
+
+    ``is_uk_residential_mortgage_commitment`` is tri-state, and a null means
+    "derive Row 4(b) on the row's own evidence" (the CCF stage reads the exposure
+    class, the obligor's country and the currency). So:
+
+    - a sub that STATES the flag keeps it - True or False - because the row is
+      priced as the sub-limit's own item (PS1/26 Art. 111(1)(b));
+    - a sub that states nothing takes the umbrella's True: an affirmative
+      statement about the whole commitment covers a sub-line that says nothing
+      of itself, so a silent sub of a flagged mortgage umbrella is not moved
+      from Row 4(b)'s 50% down to its own bucket;
+    - an umbrella's False (or null) is NOT copied, so it cannot suppress the
+      derivation on a sub that states nothing.
+
+    Basel-3.1-only in effect: the CCF stage gates Row 4(b) on the
+    ``firb_uses_sa_ccf`` Feature, so the flag is inert under CRR.
+
+    Args:
+        sub_col: The sub-limit's own flag.
+        umbrella_col: The umbrella (root) facility's flag.
+    """
+    umbrella_true = pl.when(pl.col(umbrella_col).eq_missing(True)).then(pl.lit(True))
+    return pl.coalesce(pl.col(sub_col), umbrella_true)
+
+
+@cites("CRR Art. 111(1)")
+@cites("PS1/26, paragraph 111")
+def _sub_ranking_sa_ccf(table_a1_applies: bool) -> pl.Expr:
+    """The SA conversion factor a MOF sub row will be priced at - what the waterfall ranks on.
+
+    Composed from the same ``engine/ccf.py`` expressions, in the same order, as
+    the SA carrier of ``CCFCalculator._compute_ccf``, on the columns the emitted
+    sub row carries: the sub's own ``risk_type`` bucket with the UMBRELLA's
+    ``is_obs_commitment`` (Table A1 row 5 vs row 3 residual), then
+
+    - CRR (``table_a1_applies`` False): the Annex I 2(b)/3(b) original-maturity
+      split of an ``OC`` bucket, on the umbrella's dates;
+    - Basel 3.1: Table A1 Row 4(b) where the row's flag is True (the sub's own,
+      or the umbrella's True filling a silent sub - :func:`_sub_residential_flag`),
+      then the PS1/26 Art. 111(1)(c) lower-of against the sub's
+      ``underlying_risk_type``.
+
+    Row 4(b) is ranked only on a stated flag: the CCF stage also derives it
+    from the exposure class and the obligor's country, neither of which exists
+    before classification. The ranking is a worst-case-first policy for
+    allocating the umbrella's headroom, not regulation (neither regime mentions
+    multiple-option facilities); its only regulatory content is that each slice
+    is ranked on the factor it is priced at.
+
+    Args:
+        table_a1_applies: The ``firb_uses_sa_ccf`` Feature - PS1/26 Table A1
+            (True) or CRR Annex I (False), as the CCF stage reads it.
+    """
+    ccf = sa_ccf_expression(
+        "_sub_risk_type",
+        is_basel_3_1=table_a1_applies,
+        commitment_col="_parent_is_obs_commitment",
+    )
+    if not table_a1_applies:
+        return oc_original_maturity_ccf_expression(
+            ccf,
+            original_maturity_days_expression("_parent_value_date", "_parent_maturity_date"),
+            risk_type_col="_sub_risk_type",
+        )
+    ccf = uk_residential_mortgage_ccf_expression(
+        ccf, pl.col("_sub_is_uk_residential_mortgage_commitment").eq_missing(True)
+    )
+    return commitment_to_issue_ccf_expression(ccf, "_sub_underlying_risk_type")

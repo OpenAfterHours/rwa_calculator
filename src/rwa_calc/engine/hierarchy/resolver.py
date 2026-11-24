@@ -126,6 +126,7 @@ class HierarchyResolver:
             counterparty_lookup,
             config,
             fx_rates=data.fx_rates,
+            pack=resolved_pack,
         )
         errors.extend(exp_errors)
 
@@ -264,6 +265,8 @@ class HierarchyResolver:
         counterparty_lookup: CounterpartyLookup | None = None,
         config: CalculationConfig | None = None,
         fx_rates: pl.LazyFrame | None = None,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Delegate to :func:`facility_undrawn.calculate_facility_undrawn`."""
         return calculate_facility_undrawn(
@@ -275,6 +278,7 @@ class HierarchyResolver:
             counterparty_lookup=counterparty_lookup,
             config=config,
             fx_rates=fx_rates,
+            pack=pack,
         )
 
     def _unify_exposures(
@@ -286,6 +290,8 @@ class HierarchyResolver:
         counterparty_lookup: CounterpartyLookup,
         config: CalculationConfig | None = None,
         fx_rates: pl.LazyFrame | None = None,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> tuple[pl.LazyFrame, list[CalculationError]]:
         """Delegate to :func:`unify.unify_exposures`."""
         return unify_exposures(
@@ -296,6 +302,7 @@ class HierarchyResolver:
             counterparty_lookup,
             config,
             fx_rates=fx_rates,
+            pack=pack,
         )
 
     def _apply_short_term_rating_override(

@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,8 @@ def unify_exposures(
     counterparty_lookup: CounterpartyLookup,
     config: CalculationConfig | None = None,
     fx_rates: pl.LazyFrame | None = None,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> tuple[pl.LazyFrame, list[CalculationError]]:
     """
     Unify loans, contingents, and facility undrawn into a single exposures LazyFrame.
@@ -82,6 +85,11 @@ def unify_exposures(
     ``fx_rates`` is the run's raw rate table: headroom is netted here, BEFORE
     ``engine/fx`` rebases the unified frame, so it is needed to compare a
     drawing with a limit in another currency (review findings CM-02 / SF-01).
+
+    ``pack`` is the run's resolved rulepack, handed to
+    :func:`facility_undrawn.calculate_facility_undrawn` for the MOF waterfall
+    (the regime's ``obs_product`` map and SA CCF basis); None falls back to
+    ``config``'s.
 
     Returns:
         Tuple of (unified exposures LazyFrame, list of errors) — the errors
@@ -137,6 +145,7 @@ def unify_exposures(
         counterparty_lookup=counterparty_lookup,
         config=config,
         fx_rates=fx_rates,
+        pack=pack,
     )
     exposure_frames.append(facility_undrawn)
     if facilities is not None:

@@ -265,9 +265,10 @@ REGIME_BOOL_ALLOWLIST: dict[str, str] = {
     "engine/pipeline.py": "CRR-only EUR/GBP threshold-sync regime asymmetry",
     # No-pack bootstrap fallback (unit-test path); production always threads the
     # resolved rulepack and reads its Features. Retired when the pack becomes a
-    # mandatory argument on these entry points.
+    # mandatory argument on these entry points. (engine/hierarchy/facility_undrawn.py
+    # was retired by P1.452: the MOF waterfall now reads the ``firb_uses_sa_ccf``
+    # Feature off the run's pack.)
     "engine/crm/haircuts.py": "no-pack bootstrap fallback (pack-mandatory pending)",
-    "engine/hierarchy/facility_undrawn.py": ("no-pack bootstrap fallback (pack-mandatory pending)"),
 }
 
 _REGIME_BOOL_ATTRS = frozenset({"is_crr", "is_basel_3_1"})

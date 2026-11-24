@@ -233,13 +233,14 @@ def sa_ccf_expression(
 
             Defaults to ``None``, which selects Row 3 outright and references
             no column. That default is deliberate and load-bearing: naming a
-            column here puts it in the EXPRESSION'S FOOTPRINT, and several
+            column here puts it in the EXPRESSION'S FOOTPRINT, and some
             callers apply this expression to projected frames that carry
-            ``risk_type`` and nothing else (the sub-facility undrawn
-            allocation, the provisions weighting basis). Defaulting to the
-            column raised ``ColumnNotFoundError`` in both. Callers that hold
-            the flag and are computing a capital number — i.e. ``_compute_ccf``
-            — opt in explicitly.
+            ``risk_type`` and nothing else (the provisions weighting basis).
+            Defaulting to the column raised ``ColumnNotFoundError`` there, and
+            in the MOF waterfall before it projected the umbrella's flag.
+            Callers that hold the flag — ``_compute_ccf``, and the waterfall's
+            ranking, which must rank on the factor the row is priced at
+            (P1.452) — opt in explicitly.
     """
     table = _SA_CCF_B31_MAP if is_basel_3_1 else _SA_CCF_CRR_MAP
     canonical = _normalize_risk_type(risk_type_col)
@@ -289,6 +290,100 @@ def _sa_ccf_residual(
         pl.when(pl.col(commitment_col))
         .then(pl.lit(table["OC"]))
         .otherwise(pl.lit(table["MR_ISSUED"]))
+    )
+
+
+@cites("PS1/26, paragraph 111")
+def commitment_to_issue_ccf_expression(
+    ccf: pl.Expr, underlying_risk_type_col: str = "underlying_risk_type"
+) -> pl.Expr:
+    """Cap ``ccf`` at the Table A1 factor of the item a commitment is to issue.
+
+    PS1/26 Art. 111(1)(c): "a commitment to issue an off-balance sheet item
+    listed in Table A1 shall be calculated ... using the lower of: (i) the
+    percentage specified in Column B that is applicable to the off-balance sheet
+    item on which the commitment is made; and (ii) the percentage specified in
+    Column B that is applicable to the type of commitment". A null or blank
+    ``underlying_risk_type`` means the row is not a commitment to issue, and
+    ``ccf`` is returned unchanged.
+
+    The underlying is the item to BE ISSUED, so its residual is Table A1 Row 3
+    by construction (no ``commitment_col``); the outer row's
+    ``is_obs_commitment`` describes the commitment and would be the wrong flag.
+
+    Basel-3.1-only: CRR Art. 111(1) has no lower-of (P1.265), so callers gate
+    this on the ``firb_uses_sa_ccf`` pack Feature. Shared by the CCF stage and
+    the MOF waterfall's ranking (P1.452) so the two cannot price a sub-limit
+    differently.
+
+    Args:
+        ccf: The conversion factor the row's own bucket gives it.
+        underlying_risk_type_col: Column holding the underlying item's bucket.
+    """
+    has_underlying = pl.col(underlying_risk_type_col).fill_null("").str.len_chars() > 0
+    underlying_sa = sa_ccf_expression(underlying_risk_type_col, is_basel_3_1=True)
+    return pl.when(has_underlying).then(pl.min_horizontal(ccf, underlying_sa)).otherwise(ccf)
+
+
+@cites("PS1/26, paragraph 111")
+def uk_residential_mortgage_ccf_expression(ccf: pl.Expr, is_resi_commitment: pl.Expr) -> pl.Expr:
+    """Move ``ccf`` to the Table A1 Row 4(b) 50% for a UK residential mortgage commitment.
+
+    PRA PS1/26 Art. 111(1) Table A1 Row 4(b): "UK residential mortgage
+    commitments that are not subject to a conversion factor of 10% or 100%"
+    attract 50%. A row whose ``ccf`` is already 10% (Row 7 UCC) or 100% (Rows
+    1 / 2) sits in the carve-out and keeps it; a null ``is_resi_commitment``
+    takes the ``otherwise`` branch, so an unevidenced row keeps its bucket.
+
+    Basel-3.1-only: callers gate this on the ``firb_uses_sa_ccf`` pack Feature.
+    Shared by the CCF stage (both carriers) and the MOF waterfall's ranking.
+
+    Args:
+        ccf: The conversion factor the row would otherwise take.
+        is_resi_commitment: Boolean expression - the row is a Row 4(b) commitment.
+    """
+    row_4b_ccf = _SA_CCF_B31_MAP["MR"]
+    carve_out_ccfs = (_SA_CCF_B31_MAP["LR"], _SA_CCF_B31_MAP["FR"])
+    return (
+        pl.when(is_resi_commitment & ~ccf.is_in(carve_out_ccfs))
+        .then(pl.lit(row_4b_ccf))
+        .otherwise(ccf)
+    )
+
+
+@cites("CRR Art. 111(1)")
+def oc_original_maturity_ccf_expression(
+    ccf: pl.Expr, original_maturity_days: pl.Expr, risk_type_col: str = "risk_type"
+) -> pl.Expr:
+    """Remap an ``OC`` ("other commitments") ``ccf`` to 20% on a short ORIGINAL maturity (CRR).
+
+    CRR Annex I items 2(b)(ii) / 3(b)(i) split undrawn credit facilities on
+    their original maturity: 50% (medium risk) above one year, 20% (medium/low
+    risk) at or below it. ``sa_ccf_expression`` supplies the 50% default; this
+    drops it to ``oc_short_maturity_ccf`` where ``original_maturity_days`` is at
+    or below ``oc_short_maturity_threshold_days``. A null maturity keeps
+    ``ccf``. CRR-only: callers gate it on the ``firb_uses_sa_ccf`` Feature being
+    off. Shared by the CCF stage and the MOF waterfall's ranking.
+
+    Args:
+        ccf: The conversion factor from the row's bucket.
+        original_maturity_days: The row's original maturity in days, or null.
+        risk_type_col: Column holding the row's bucket.
+    """
+    normalized_rt = pl.col(risk_type_col).fill_null("").str.to_lowercase()
+    is_oc = normalized_rt.is_in(["oc", "other_commit"])
+    is_short_original = original_maturity_days <= _OC_SHORT_MATURITY_THRESHOLD_DAYS
+    return pl.when(is_oc & is_short_original).then(pl.lit(_OC_SHORT_MATURITY_CCF)).otherwise(ccf)
+
+
+def original_maturity_days_expression(
+    value_date_col: str = "value_date", maturity_date_col: str = "maturity_date"
+) -> pl.Expr:
+    """Original maturity in days from a start and a maturity date; null if either is null."""
+    return (
+        (pl.col(maturity_date_col).cast(pl.Date) - pl.col(value_date_col).cast(pl.Date))
+        .dt.total_days()
+        .cast(pl.Float64)
     )
 
 
@@ -657,20 +752,13 @@ class CCFCalculator:
         # Table A1 overrides above use) rather than on a config regime flag,
         # per arch_check check 17.
         if is_b31:
-            has_underlying = pl.col("underlying_risk_type").fill_null("").str.len_chars() > 0
-            # No ``commitment_col``: the underlying is the item to BE ISSUED, so
-            # its residual is Table A1 Row 3 by construction. ``is_obs_commitment``
-            # describes the OUTER commitment and would be the wrong flag here.
-            underlying_sa = sa_ccf_expression("underlying_risk_type", is_basel_3_1=True)
             exposures = exposures.with_columns(
-                pl.when(has_underlying)
-                .then(pl.min_horizontal(pl.col("_sa_ccf_from_risk_type"), underlying_sa))
-                .otherwise(pl.col("_sa_ccf_from_risk_type"))
-                .alias("_sa_ccf_from_risk_type"),
-                pl.when(has_underlying)
-                .then(pl.min_horizontal(pl.col("_firb_ccf_from_risk_type"), underlying_sa))
-                .otherwise(pl.col("_firb_ccf_from_risk_type"))
-                .alias("_firb_ccf_from_risk_type"),
+                commitment_to_issue_ccf_expression(pl.col("_sa_ccf_from_risk_type")).alias(
+                    "_sa_ccf_from_risk_type"
+                ),
+                commitment_to_issue_ccf_expression(pl.col("_firb_ccf_from_risk_type")).alias(
+                    "_firb_ccf_from_risk_type"
+                ),
             )
 
         # PS1/26 Art. 166A(5): the IRB-only, final purchased-receivables
@@ -774,10 +862,9 @@ class CCFCalculator:
 
         Original maturity is taken from ``original_maturity_years`` when present,
         else the ``(maturity_date - value_date)`` start-date fallback. With neither
-        source the row keeps the conservative 50% MR default.
+        source the row keeps the conservative 50% MR default: the days are null,
+        and :func:`oc_original_maturity_ccf_expression` leaves a null untouched.
         """
-        normalized_rt = pl.col("risk_type").fill_null("").str.to_lowercase()
-        is_oc = normalized_rt.is_in(["oc", "other_commit"])
         schema_names = exposures.collect_schema().names()
 
         # Preferred explicit source: original_maturity_years (years -> days on a
@@ -791,33 +878,21 @@ class CCFCalculator:
             original_years_available = pl.lit(False)
             original_years_days = pl.lit(None, dtype=pl.Float64)
 
-        # Fallback source: (maturity_date - value_date) in days.
+        # Fallback source: (maturity_date - value_date) in days, null when either
+        # date is null.
         if "maturity_date" in schema_names and "value_date" in schema_names:
-            start_available = (
-                pl.col("maturity_date").is_not_null() & pl.col("value_date").is_not_null()
-            )
-            start_days = (
-                (pl.col("maturity_date").cast(pl.Date) - pl.col("value_date").cast(pl.Date))
-                .dt.total_days()
-                .cast(pl.Float64)
-            )
+            start_days = original_maturity_days_expression()
         else:
-            start_available = pl.lit(False)
             start_days = pl.lit(None, dtype=pl.Float64)
 
         original_maturity_days = (
             pl.when(original_years_available).then(original_years_days).otherwise(start_days)
         )
-        has_original_source = original_years_available | start_available
-        is_short_original = has_original_source & (
-            original_maturity_days <= _OC_SHORT_MATURITY_THRESHOLD_DAYS
-        )
 
         return exposures.with_columns(
-            pl.when(is_oc & is_short_original)
-            .then(pl.lit(_OC_SHORT_MATURITY_CCF))
-            .otherwise(pl.col("_sa_ccf_from_risk_type"))
-            .alias("_sa_ccf_from_risk_type"),
+            oc_original_maturity_ccf_expression(
+                pl.col("_sa_ccf_from_risk_type"), original_maturity_days
+            ).alias("_sa_ccf_from_risk_type"),
         )
 
     # PRA PS1/26 Art. 111(1) Table A1 Row 4(b), read into the F-IRB / Slotting
@@ -856,26 +931,18 @@ class CCFCalculator:
         (S9c); Table A1 Row 4(b) is a PRA construct with no CRR Annex I
         equivalent, so the flag is a no-op under CRR.
         """
-        row_4b_ccf = _SA_CCF_B31_MAP["MR"]
-        carve_out_ccfs = (_SA_CCF_B31_MAP["LR"], _SA_CCF_B31_MAP["FR"])
-
         # A null that the evidence cannot settle stays null, and ``when(null)``
         # takes the ``otherwise`` branch: the row keeps its bucket.
         is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(
             _derived_uk_residential_mortgage_commitment(denomination_ccy)
         )
-        sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
-        firb_not_in_carve_out = ~pl.col("_firb_ccf_from_risk_type").is_in(carve_out_ccfs)
-
         return exposures.with_columns(
-            pl.when(is_resi_commitment & sa_not_in_carve_out)
-            .then(pl.lit(row_4b_ccf))
-            .otherwise(pl.col("_sa_ccf_from_risk_type"))
-            .alias("_sa_ccf_from_risk_type"),
-            pl.when(is_resi_commitment & firb_not_in_carve_out)
-            .then(pl.lit(row_4b_ccf))
-            .otherwise(pl.col("_firb_ccf_from_risk_type"))
-            .alias("_firb_ccf_from_risk_type"),
+            uk_residential_mortgage_ccf_expression(
+                pl.col("_sa_ccf_from_risk_type"), is_resi_commitment
+            ).alias("_sa_ccf_from_risk_type"),
+            uk_residential_mortgage_ccf_expression(
+                pl.col("_firb_ccf_from_risk_type"), is_resi_commitment
+            ).alias("_firb_ccf_from_risk_type"),
         )
 
     # PRA PS1/26 Art. 166A(5) — no CRR equivalent; the watchfire PS-instrument

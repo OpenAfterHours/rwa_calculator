@@ -139,8 +139,8 @@ class ExposureClassifier:
         exposures = resolve_sl_project_phase(exposures, pack=resolved_pack)
 
         # Single schema snapshot — used by the remaining schema-conditional
-        # helpers (non-contract scratch columns and the EU-sovereign currency
-        # probe) without re-scanning the LazyFrame. Contract columns
+        # helpers (non-contract scratch columns) without re-scanning the
+        # LazyFrame. Contract columns
         # (hierarchy_exit / cp_lookup_* / raw_model_permissions) need no
         # presence gate — sealed inputs always carry them.
         schema_names = set(exposures.collect_schema().names())
@@ -168,7 +168,6 @@ class ExposureClassifier:
         classified = assign_approach(
             classified,
             config,
-            schema_names,
             has_model_permissions=has_model_permissions,
             pack=resolved_pack,
         )

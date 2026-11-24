@@ -15,11 +15,15 @@ Key responsibilities:
 
 References:
 - CRR Art. 147-153: IRB approach assignment
-- CRR Art. 114(4)/(7): EU domestic sovereign SA routing (B31 approach gate)
 - CRR Art. 150(1): PPU election (CRR path keeps IRB routing available)
 - PRA PS1/26 Art. 147A(1)(a)-(e): B31 approach restrictions
   (sovereign-like SA-only, institution no-AIRB, FSE / large-corp no-AIRB,
   IPRE / HVCRE slotting-only for a firm whose IRB permission covers them)
+- The sovereign-class SA gate keys on counterparty entity type alone: PS1/26
+  Art. 147A(1)(a) has no currency, country or funding limb. The domestic-
+  currency 0% of CRR Art. 114(4)/(7) is an SA risk weight
+  (``engine/sa/risk_weights.py``), never an approach gate — under CRR a firm
+  with a central-government IRB permission routes such a row to IRB.
 - PRA PS1/26 Art. 107(1): IRB approaches, slotting included, need permission
 - CRR Art. 300-311 / CRE54.14-15: CCP trade exposures → SA
 - Art. 155 / CRE60: equity SA-only under Basel 3.1
@@ -49,10 +53,6 @@ from rwa_calc.engine.classify.permissions import (
     build_sl_irb_permission_expr,
 )
 from rwa_calc.engine.crm.own_funds_lines import own_funds_line_expr
-from rwa_calc.engine.eu_sovereign import (
-    build_eu_domestic_currency_expr,
-    denomination_currency_expr,
-)
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 
@@ -78,7 +78,6 @@ _B31_SLOTTING_ONLY_SL_TYPES = {
 def assign_approach(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
-    schema_names: set[str],
     *,
     has_model_permissions: bool = False,
     pack: ResolvedRulepack | None = None,
@@ -148,7 +147,6 @@ def assign_approach(
 
     # Step 3: approach decision ladder
     approach_expr = _build_approach_expr(
-        schema_names=schema_names,
         config=config,
         airb_expr=airb_expr,
         firb_expr=firb_expr,
@@ -257,6 +255,14 @@ def _apply_b31_approach_restrictions(
     # the institution-typed rgla_institution / pse_institution are in scope
     # (this supersedes the CRR-era Art. 147(4)(b) "treated as institutions"
     # routing). See ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` for the full list.
+    # This is the only sovereign-class SA gate in the classifier (the org-wide
+    # ``IRBPermissions.full_irb_b31()`` table separately grants these classes
+    # SA only), and it is keyed on entity type alone: Art. 147A(1)(a) has no
+    # currency, country or funding limb (P1.357 deleted a currency-keyed
+    # duplicate that this gate fully subsumed). It stays complete only while
+    # every entity type the rulepack maps to the CGCB / RGLA / PSE / MDB SA
+    # class is in the tuple — pinned by
+    # tests/contracts/test_sovereign_approach_gate.py.
     b31_sa_only = pl.col("cp_entity_type").is_in(list(B31_SOVEREIGN_LIKE_ENTITY_TYPES))
 
     # Art. 155 / CRE60 / PRA PS1/26: equity exposures are SA-only under
@@ -274,7 +280,6 @@ def _apply_b31_approach_restrictions(
 
 def _build_approach_expr(
     *,
-    schema_names: set[str],
     config: CalculationConfig,
     airb_expr: pl.Expr,
     firb_expr: pl.Expr,
@@ -290,17 +295,21 @@ def _build_approach_expr(
     Branch order (top wins):
     1. Own-funds lines (settlement risk, CCP default fund) → SA (CC-08)
     2. Managed-as-retail without LGD → SA
-    3. Art. 114(4) EU domestic sovereign → SA (forced 0% RW)
-    4. CCP trade exposures → SA (CRE54.14-15)
-    5. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting, where an IRB
+    3. CCP trade exposures → SA (CRE54.14-15)
+    4. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting, where an IRB
        permission covers the row (``sl_irb_permitted``); otherwise the row
        falls through and, holding no SL permission, lands on SA
-    6. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
-    7. SL slotting fallback (no internal rating required)
-    8. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
-    9. F-IRB (model or org-wide)
-    10. Equity → EQUITY approach
-    11. Otherwise → SA
+    5. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
+    6. SL slotting fallback (no internal rating required)
+    7. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
+    8. F-IRB (model or org-wide)
+    9. Equity → EQUITY approach
+    10. Otherwise → SA
+
+    There is no sovereign-class branch: under Basel 3.1 the Art. 147A(1)(a)
+    SA-only restriction has already removed A-IRB and F-IRB from every
+    sovereign-like entity type (``_apply_b31_approach_restrictions``), so
+    branches 7 and 8 cannot fire for one.
 
     Branch 1 is first because the row is not a credit exposure at all: its
     ``drawn_amount`` is an own-funds requirement (CRR Art. 378 "own funds
@@ -315,24 +324,6 @@ def _build_approach_expr(
         (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
         & (pl.col("lgd").is_null())
-    )
-
-    # Art. 114(4)/(7): EU domestic sovereign → SA. Use original
-    # (pre-FX) denomination — `currency` is overwritten by the FX
-    # converter with the reporting currency, which would otherwise
-    # reject legitimate Art. 114(4) treatment for any non-base-currency
-    # exposure. Gated to Basel 3.1: under CRR, Art. 114(4) sets only the
-    # SA *risk weight*, not the *approach* — Art. 150(1) PPU is an
-    # election ("may apply"), so a firm holding CGCB IRB permission must
-    # be allowed to route to IRB. Under B31 (PS1/26 Art. 147A(1)(a)),
-    # sovereign-like exposures are SA-only as a mandatory restriction,
-    # also backstopped by the `b31_sa_only` IRB-blocker.
-    is_eu_domestic_sovereign = (
-        pl.lit(resolved_pack.feature("approach_restrictions_b31_applicable"))
-        & (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
-        & build_eu_domestic_currency_expr(
-            "cp_country_code", denomination_currency_expr(schema_names)
-        )
     )
 
     # Art. 147A(1)(c): IPRE/HVCRE → slotting only, overriding an F-IRB / A-IRB
@@ -355,8 +346,6 @@ def _build_approach_expr(
         pl.when(own_funds_line_expr())
         .then(pl.lit(ApproachType.SA.value))
         .when(managed_as_retail_without_lgd)
-        .then(pl.lit(ApproachType.SA.value))
-        .when(is_eu_domestic_sovereign)
         .then(pl.lit(ApproachType.SA.value))
         .when(is_ccp)
         .then(pl.lit(ApproachType.SA.value))

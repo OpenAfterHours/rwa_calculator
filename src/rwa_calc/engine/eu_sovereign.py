@@ -4,10 +4,14 @@ EU member-state sovereign domestic-currency expression helpers.
 Pipeline position:
     Consumed by the SA risk-weight + guarantee-substitution paths
     (``sa/risk_weights.py``, ``sa/rw_adjustments.py``), the IRB guarantee path
-    (``irb/guarantee.py``), the CRM guarantee path (``crm/guarantees.py``) and
-    the approach classifier (``engine/classify/approach.py``) to identify EU
-    domestic-currency central-government / central-bank exposures eligible for
-    the Art. 114(4)/(7) 0% risk weight.
+    (``irb/guarantee.py``) and the CRM guarantor-eligibility path
+    (``crm/guarantor_eligibility.py``) to identify EU domestic-currency
+    central-government / central-bank exposures eligible for the Art. 114(4)/(7)
+    0% risk weight; ``ccf.py`` and ``crm/life_insurance.py`` use only the pre-FX
+    denomination-currency selector. These are SA risk-weight and CRM rules, never
+    approach routing: the approach classifier (``engine/classify/approach.py``)
+    does not import this module (pinned by
+    ``tests/contracts/test_sovereign_approach_gate.py``).
 
 Key responsibilities:
 - Rebind the cited ``eu_country_domestic_currency`` rulepack ``CategoryMap``

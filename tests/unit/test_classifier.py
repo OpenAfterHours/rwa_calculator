@@ -1611,10 +1611,12 @@ class TestApproachAssignment:
         that supplies an internal rating and LGD must be routed to AIRB, not locked
         to SA.
 
-        The existing engine has a hard SA override in _build_approach_expr that is
-        not gated on config.is_basel_3_1; this test pins the correct post-fix
-        behaviour and MUST FAIL on the unmodified engine (approach will be
-        ApproachType.SA.value instead of ApproachType.AIRB.value).
+        P1.192 found a hard, currency-keyed SA override in _build_approach_expr
+        that ignored the regime; it was first regime-gated and then (P1.357)
+        deleted outright, because under Basel 3.1 the entity-type gate
+        ``b31_sa_only`` already covers every sovereign-class row. This test pins
+        the CRR outcome: a currency-keyed forced-SA override re-attached without
+        a regime gate turns it red (approach SA instead of A-IRB).
 
         References:
             CRR Art. 114(1)/(4) — SA risk-weight ladder; 0% for EU domestic sovereign.
@@ -1646,6 +1648,11 @@ class TestApproachAssignment:
                 "value_date": [date(2023, 1, 1)],
                 "maturity_date": [date(2028, 1, 1)],
                 "currency": ["EUR"],
+                # The FX converter keeps the pre-conversion denomination here, and
+                # a currency-keyed override reads this carrier, not ``currency``.
+                # Left as the hierarchy_exit seal's typed null, the row is never
+                # "domestic" and the P1.192 defect could not turn this test red.
+                "original_currency": ["EUR"],
                 "drawn_amount": [5000000.0],
                 "undrawn_amount": [0.0],
                 "nominal_amount": [0.0],
@@ -1674,8 +1681,13 @@ class TestApproachAssignment:
 
         df = result.all_exposures.collect()
 
-        # Assert — CRR firm with CGCB IRB permission, internal rating, and LGD must route to AIRB.
-        # Defect: unmodified engine returns ApproachType.SA.value (hard SA override ignores framework).
+        # Assert — adequacy first: the row is a CGCB-class EUR-denominated German
+        # sovereign on the pre-FX carrier, i.e. the Art. 114(7) domestic shape a
+        # currency-keyed override would match.
+        assert df["exposure_class"][0] == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
+        assert df["original_currency"][0] == "EUR"
+        # CRR firm with CGCB IRB permission, internal rating, and LGD must route to AIRB.
+        # P1.192 defect: a hard SA override that ignored the framework returned SA here.
         assert df["approach"][0] == ApproachType.AIRB.value
 
     def test_b31_eu_domestic_sovereign_with_irb_permission_still_routes_to_sa(
@@ -1684,11 +1696,14 @@ class TestApproachAssignment:
     ) -> None:
         """P1.192 / Scenario B — B31 regression guard (Art. 147A(1)(a)).
 
-        Under PRA PS1/26 Art. 147A(1)(a) read with Art. 147(3), sovereign / 0%-RW
+        Under PRA PS1/26 Art. 147A(1)(a) read with Art. 147(3), sovereign and
         quasi-sovereign exposures are SA-*only* — a mandatory approach restriction
-        that must survive the Scenario A fix.  This test asserts that gating the
-        is_eu_domestic_sovereign branch on config.is_basel_3_1 preserves the forced-SA
+        that must survive the Scenario A fix.  This test asserts the forced-SA
         outcome under Basel 3.1 even when the firm holds full CGCB IRB permission.
+        The gate doing it is ``b31_sa_only`` in
+        ``approach._apply_b31_approach_restrictions``, keyed on entity type alone;
+        the currency-keyed ``is_eu_domestic_sovereign`` branch once credited with
+        it was fully subsumed by that gate and was deleted (P1.357).
 
         References:
             PRA PS1/26 Art. 147A(1)(a) + Art. 147(3) — sovereign SA-only mandatory.
@@ -1765,41 +1780,28 @@ class TestApproachAssignment:
         Green on BOTH sides of P1.314, deliberately. P1.314 added the
         "denominated **and funded**" limb of CRR Art. 114(4)/(7) and Art.
         115(5)/(2) to the SA *risk-weight* chain
-        (``engine/sa/risk_weights.py``). ``_build_approach_expr``'s
-        ``is_eu_domestic_sovereign`` predicate
-        (``engine/classify/approach.py``) carries the same
-        denomination-only Art. 114(4)/(7) shape and deliberately did NOT get
-        the limb: it is an approach-**routing** gate justified by PS1/26
-        Art. 147A(1)(a), and Art. 147A says nothing about funding currency.
+        (``engine/sa/risk_weights.py``). The approach ladder has no
+        currency-keyed branch to attach that limb to: PS1/26 Art. 147A(1)(a)
+        routes the whole sovereign class to SA by entity type alone, through
+        ``b31_sa_only`` (``cp_entity_type in B31_SOVEREIGN_LIKE_ENTITY_TYPES``)
+        in ``approach._apply_b31_approach_restrictions``, and says nothing
+        about funding currency.
 
-        **What this test can and cannot prove — measured, not assumed.** It is
-        NOT a leak detector for that over-application, and no test on this
-        shape can be. ``is_eu_domestic_sovereign`` is **redundant in both
-        regimes** on the production classifier path:
+        History: until P1.357 the ladder also carried an
+        ``is_eu_domestic_sovereign`` branch with the denomination-only
+        Art. 114(4)/(7) shape. It was dead in both regimes — ANDed with a pack
+        Feature that is False under CRR, and a strict subset of ``b31_sa_only``
+        under Basel 3.1 (only ``sovereign`` / ``central_bank`` /
+        ``central_bank_ecb`` reach the CGCB SA class, and all three are
+        SA-only by entity type) — so it was deleted. The contract
+        ``tests/contracts/test_sovereign_approach_gate.py`` now pins both that
+        the approach module reads no currency or country column and that every
+        CGCB / RGLA / PSE / MDB-mapped entity type is in the SA-only set.
 
-        - CRR — the predicate is ANDed with the
-          ``approach_restrictions_b31_applicable`` pack Feature, which is
-          False, so the branch is dead. Forcing
-          ``build_eu_domestic_currency_expr`` to ``pl.lit(True)`` leaves the
-          CRR twin at ``advanced_irb``.
-        - Basel 3.1 — ``b31_sa_only`` (Art. 147A(1)(a), keyed on
-          ``cp_entity_type in B31_SOVEREIGN_LIKE_ENTITY_TYPES``) forces SA
-          independently, and a sweep of all 13 entity types through
-          ``ExposureClassifier.classify`` shows the only ones reaching
-          ``exposure_class == central_govt_central_bank`` are ``sovereign`` /
-          ``central_bank`` / ``central_bank_ecb`` — all three in that set.
-          Forcing the predicate to ``pl.lit(False)`` produces output identical
-          to shipped for every entity type.
-
-        So wrapping the predicate in ``eu_sovereign.with_funding_limb(...)``
-        changes no reachable approach: measured shipped vs over-applied, this
-        row is ``standardised`` either way. Do not re-file "approach.py needs
-        a funding-limb leak detector" — the branch it would guard is already
-        subsumed. If ``b31_sa_only`` is ever narrowed, that subsumption ends
-        and this test becomes discriminating; until then it is a plain
-        regression guard on the boundary, plus a presence check that
-        ``funding_currency`` survives the hierarchy_exit seal into the
-        classifier frame.
+        This test is a plain regression guard on the boundary, plus a presence
+        check that ``funding_currency`` survives the hierarchy_exit seal into
+        the classifier frame. It turns red if ``b31_sa_only`` is ever narrowed
+        to exclude ``sovereign``.
 
         References:
             PRA PS1/26 Art. 147A(1)(a) + Art. 147(3) — sovereign SA-only mandatory.
@@ -1876,8 +1878,8 @@ class TestApproachAssignment:
             f"P1.314: a USD-funded EUR sovereign must still be SA-only under "
             f"PS1/26 Art. 147A(1)(a). Got {df['approach'][0]!r}; "
             f"{ApproachType.AIRB.value!r} would mean the mandatory-SA restriction "
-            f"was escaped into IRB (RWA-reducing) — check both b31_sa_only and "
-            f"the is_eu_domestic_sovereign branch in approach.py."
+            f"was escaped into IRB (RWA-reducing) — check b31_sa_only in "
+            f"approach._apply_b31_approach_restrictions."
         )
 
     def test_eu_sovereign_foreign_currency_not_forced_to_sa(

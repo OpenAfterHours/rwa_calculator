@@ -93,9 +93,16 @@ Each member state's domestic currency must match — e.g., a Polish sovereign ex
 in EUR does **not** qualify (EUR is not Poland's domestic currency), but a Polish
 sovereign exposure in PLN does.
 
-EU domestic sovereign exposures are also **forced to the Standardised Approach (SA)**,
-even if the firm has IRB permissions for the CGCB exposure class. This ensures the
-regulatory 0% RW is applied rather than an internal model estimate.
+The domestic-currency test decides the **risk weight only, not the approach**:
+
+- **CRR** — Art. 114(4)/(7) set an SA risk weight. Permanent partial use under
+  Art. 150(1) is an election ("may apply the Standardised Approach"), so a firm
+  holding an IRB permission for the central government class routes a
+  domestic-currency sovereign exposure to IRB like any other sovereign exposure.
+- **Basel 3.1** — PRA PS1/26 Art. 147A(1)(a) puts the whole central governments,
+  central banks and quasi-sovereigns class on the Standardised Approach, in
+  **any** currency. The engine applies it by counterparty entity type alone, so a
+  foreign-currency sovereign exposure is SA-only too.
 
 ### Treatment
 
@@ -110,8 +117,7 @@ if counterparty.entity_type == "central_bank_ecb":
 elif counterparty.country_code == "GB" and exposure.currency == "GBP":
     risk_weight = 0.00  # Art. 114(4) UK domestic currency 0% RW
 elif is_eu_member(counterparty.country_code) and exposure.currency == domestic_currency(counterparty.country_code):
-    risk_weight = 0.00  # Art. 114(7) EU domestic currency 0% RW
-    approach = "SA"     # Forced to standardised approach
+    risk_weight = 0.00  # Art. 114(7) EU domestic currency 0% RW (risk weight only)
 elif counterparty.cqs is None and counterparty.sovereign_cqs is not None and is_basel_3_1:
     # PS1/26 Art. 114(2A): an unrated central bank takes its government's CQS.
     # Basel 3.1 only — CRR Art. 114 has no paragraph 2A.

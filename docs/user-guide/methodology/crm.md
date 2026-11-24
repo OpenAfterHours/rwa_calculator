@@ -729,14 +729,19 @@ CRR Article 153(3) and CRE31.4 — when a guarantee provides credit protection, 
 
 ### SA Treatment (Art. 111(1)(a)-(b) Compliant)
 
-Provisions are resolved **before** CCF application using a drawn-first deduction approach:
+Provisions are resolved **before** CCF application using a drawn-first deduction approach.
+Only **specific** credit risk adjustments are deducted — provision rows whose `provision_type` is
+`SCRA` (any case) or left blank. A `GCRA` row never reduces an SA exposure value: CRR / PS1/26
+Art. 110(1) treat SA general credit risk adjustments as Tier 2 under Art. 62(c). The same specific
+amount is the numerator of the Art. 127(1) 20% default test, so a GCRA cannot move a defaulted
+exposure from 150% to 100% either.
 
 ```python
-# Step 1: Drawn-first deduction
-provision_on_drawn = min(provision_allocated, max(0, drawn_amount))
+# Step 1: Drawn-first deduction (specific CRA only)
+provision_on_drawn = min(provision_specific_allocated, max(0, drawn_amount))
 
 # Step 2: Remainder reduces nominal before CCF
-provision_on_nominal = provision_allocated - provision_on_drawn
+provision_on_nominal = min(provision_specific_allocated - provision_on_drawn, nominal_amount)
 nominal_after_provision = nominal_amount - provision_on_nominal
 
 # Step 3: CCF applied to adjusted nominal

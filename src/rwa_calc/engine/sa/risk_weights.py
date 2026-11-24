@@ -1551,7 +1551,14 @@ def _apply_defaulted_risk_weight(
     that is not materially dependent on cash-flows of the property is
     assigned 100% flat, regardless of provisions.
 
+    The coverage numerator is ``provision_specific_allocated``: both
+    regimes' Art. 127(1) count "specific credit risk adjustments" only, so a
+    general CRA (Tier 2 under Art. 110(1)) cannot buy the 100% weight. This
+    runs on every row of the unified frame, so it also sets the SA-equivalent
+    weight of a defaulted IRB row for the Basel 3.1 output floor.
+
     References:
+    - CRR Art. 110(1) / PS1/26 Art. 110(1): SA general CRA are Tier 2
     - PS1/26 Art. 127(1): unsecured part 100%/150% by provision coverage
     - PS1/26 Art. 127(2): unsecured part determined by the CRM method
     - PS1/26 Art. 127(3) / CRE20.88: RESI RE non-income flat 100%
@@ -1560,6 +1567,10 @@ def _apply_defaulted_risk_weight(
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     _uc = pl.col("exposure_class").fill_null("").str.to_uppercase()
     ead = pl.col("ead_final")
+    # Both regimes test SPECIFIC credit risk adjustments only (general CRA go
+    # to Tier 2, Art. 110(1)). Null only on a frame that bypassed the CRM stage
+    # (SA_INPUT_CONTRACT injects it), which has no split: its total is used.
+    specific_cra = pl.coalesce("provision_specific_allocated", "provision_allocated")
 
     if resolved_pack.feature("sa_revised_defaulted_treatment"):
         # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88).
@@ -1575,10 +1586,7 @@ def _apply_defaulted_risk_weight(
         # provision_deducted.
         gross_outstanding = pl.col("ead_gross") + pl.col("provision_deducted")
         provision_rw = (
-            pl.when(
-                pl.col("provision_allocated")
-                >= _SA_B31_RW["defaulted_threshold"] * gross_outstanding
-            )
+            pl.when(specific_cra >= _SA_B31_RW["defaulted_threshold"] * gross_outstanding)
             .then(pl.lit(_SA_B31_RW["defaulted_high"]))
             .otherwise(pl.lit(_SA_B31_RW["defaulted_low"]))
         )
@@ -1597,10 +1605,7 @@ def _apply_defaulted_risk_weight(
         # (ead_final is post-provision, so add provision_deducted back).
         unsecured_pre_prov = ead + pl.col("provision_deducted")
         provision_rw = (
-            pl.when(
-                pl.col("provision_allocated")
-                >= _SA_CRR_RW["defaulted_threshold"] * unsecured_pre_prov
-            )
+            pl.when(specific_cra >= _SA_CRR_RW["defaulted_threshold"] * unsecured_pre_prov)
             .then(pl.lit(_SA_CRR_RW["defaulted_high"]))
             .otherwise(pl.lit(_SA_CRR_RW["defaulted_low"]))
         )

@@ -177,10 +177,11 @@ logger = logging.getLogger(__name__)
 #:   formulas.py`` relies on ``sum(crm_alloc_*) == total_collateral_for_lgd
 #:   <= ead_for_crm`` for the LGD* convexity invariant, so ``ead_for_crm``
 #:   belongs to the same group.
-#: - ``ead_gross`` + ``provision_deducted`` (with ``provision_allocated``,
-#:   allocated by ``scale_provision_expr``): the defaulted-exposure provision
-#:   coverage test compares the allocated provision against
-#:   ``ead_gross + provision_deducted``. All three share one basis.
+#: - ``ead_gross`` + ``provision_deducted`` + ``provision_specific_allocated``
+#:   (with ``provision_allocated``, allocated by ``scale_provision_expr``): the
+#:   defaulted-exposure provision coverage test compares the allocated SPECIFIC
+#:   provision against ``ead_gross + provision_deducted``. All four share one
+#:   basis; an inherited specific amount would buy each leg the 100% weight.
 #: - ``fcsm_collateral_value`` / ``life_ins_collateral_value`` /
 #:   ``third_party_deposit_value``: each drives a substitution blend in
 #:   ``engine/sa/rw_adjustments.py`` through
@@ -235,6 +236,7 @@ _PRORATA_CARRIERS: tuple[str, ...] = (
     "ead_after_collateral",
     "ead_after_guarantee",
     # Provisions (``provision_allocated`` is written by scale_provision_expr).
+    "provision_specific_allocated",
     "provision_deducted",
     "provision_on_drawn",
     "provision_on_nominal",

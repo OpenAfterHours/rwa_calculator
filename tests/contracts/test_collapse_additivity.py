@@ -75,7 +75,12 @@ RECONCILED_COLUMNS: frozenset[str] = frozenset(
 #: would have misled the next editor with more authority than a comment deserves.
 #: If this figure moves, a carrier was added to the allocation sets without a
 #: decision about its collapse behaviour, and that decision should be conscious.
-KNOWN_LATENT_NON_ADDITIVE_COUNT = 45
+#:
+#: 45 -> 46 (P1.208): ``provision_specific_allocated`` joined ``_PRORATA_CARRIERS``.
+#: Decided latent: it is the SA Art. 127(1) coverage numerator, read inside the
+#: SA calculator and stripped at the ``sa_branch`` seal (it is on no branch or
+#: aggregator exit contract), so it never reaches ``_collapse.py``.
+KNOWN_LATENT_NON_ADDITIVE_COUNT = 46
 
 #: Measured on a split parent (one corporate loan, drawn 1,000,000 / interest
 #: 40,000, one 1,000,000 residential pledge, CRR). Each was allocated across the

@@ -260,11 +260,11 @@ Where:
 
 ### Provision-Adjusted EAD (Art. 111(1)(a)-(b))
 
-When provisions are present (SA only), they are resolved **before** CCF application using a drawn-first deduction:
+When provisions are present (SA only), the specific credit risk adjustments (`provision_type` `scra` or blank) are resolved **before** CCF application using a drawn-first deduction. General adjustments (`gcra`) are not deducted (Art. 110(1)):
 
 ```
-provision_on_drawn = min(provision_allocated, max(0, Drawn Amount))
-provision_on_nominal = min(provision_allocated - provision_on_drawn, Undrawn Amount)
+provision_on_drawn = min(provision_specific_allocated, max(0, Drawn Amount))
+provision_on_nominal = min(provision_specific_allocated - provision_on_drawn, Undrawn Amount)
 nominal_after_provision = Undrawn Amount - provision_on_nominal
 
 EAD = (max(0, Drawn Amount) - provision_on_drawn) + Accrued Interest

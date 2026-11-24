@@ -46,15 +46,29 @@ consequently affecting the EL shortfall/excess comparison.
 For SA exposures, provisions are deducted from the exposure value before risk weighting:
 
 ```
-EAD_net = EAD_gross - specific_provisions - other_provisions_allocated
+EAD_net = EAD_gross - specific_provisions_allocated
 ```
 
 This is the drawn-first deduction approach per Art. 111(1)(a)–(b):
 
-1. Specific credit risk adjustments reduce the exposure value
-2. General credit risk adjustments may be included in Tier 2 capital
+1. Specific credit risk adjustments reduce the exposure value (Art. 111(1)(a) "after specific
+   credit risk adjustments"; (b)(i) "nominal value after reduction of specific credit risk
+   adjustments")
+2. General credit risk adjustments do **not** reduce it — Art. 110(1) treats them under
+   Art. 62(c) (Tier 2)
 
-No changes from CRR for the SA provision mechanism.
+The engine deducts `provision_specific_allocated` (rows typed `scra`, any case, or untyped) and
+keeps the specific + general total in `provision_allocated` for the Art. 159 comparison. The
+Art. 127(1) default test ("the amount of specific credit risk adjustments ... is less than 20% of
+the outstanding amount") reads the specific amount as well (P1.208). That test runs on every row,
+IRB included, so it also sets the SA-equivalent risk weight a defaulted IRB exposure contributes to
+the output floor: a general CRA cannot move that weight from 150% to 100% either. A row with any
+other `provision_type` label is not deducted either: the input validator reports it as a DQ006
+warning and keeps the row, so it still counts in `provision_allocated` (the IRB EL comparison) but
+not in the SA exposure value or the Art. 127(1) numerator.
+
+No changes from CRR for the SA provision mechanism. See the
+[CRR Provisions Spec](../crr/provisions.md) for the formulae.
 
 ---
 

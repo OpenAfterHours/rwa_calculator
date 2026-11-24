@@ -126,7 +126,7 @@ Output Schemas:
 Intermediate Pipeline-Stage Schemas (emitted mid-pipeline; consumed downstream
 via ``ensure_columns``; not user inputs):
 - Hierarchy_output          # ``cp_*`` columns joined from counterparty data during hierarchy resolution
-- CRM_output                # Collateral buckets + provision allocations after the CRM stage (Art. 111(2), 127)
+- CRM_output                # Collateral buckets + provision allocations after the CRM stage (Art. 111(1), 127)
 - Classifier_output         # SME / retail / RE / SL flags + LTV + RE loan-split candidate flags
 - RE_splitter_output        # ``split_parent_id`` + ``re_split_role`` rows from the real-estate splitter
 
@@ -3488,12 +3488,17 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
 
 # Columns produced by the CRM stage: collateral value buckets and provision
 # allocations. Calculators consume these when computing secured/unsecured
-# splits (Art. 127) and EAD net of provisions (Art. 111(2)).
+# splits (Art. 127) and EAD net of specific provisions (Art. 111(1)).
 CRM_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "collateral_re_value": ColumnSpec(pl.Float64, default=0.0, required=False),
     "collateral_receivables_value": ColumnSpec(pl.Float64, default=0.0, required=False),
     "collateral_other_physical_value": ColumnSpec(pl.Float64, default=0.0, required=False),
     "provision_allocated": ColumnSpec(pl.Float64, default=0.0, required=False),
+    # Specific CRA only (CRR Art. 111(1) / 127(1)). No default on purpose: the
+    # CRM exit edge requires it, so it is absent only on a frame that bypassed
+    # the CRM stage, where the SA Art. 127 test reads ``provision_allocated``
+    # (that frame carries no specific / general split to honour).
+    "provision_specific_allocated": ColumnSpec(pl.Float64, required=False),
     "provision_deducted": ColumnSpec(pl.Float64, default=0.0, required=False),
 }
 

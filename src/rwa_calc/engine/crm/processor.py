@@ -830,7 +830,8 @@ class CRMProcessor:
         §6; re-validate per Polars upgrade.
         """
         exposures = data.all_exposures
-        # Step 1: Resolve provisions BEFORE CCF (CRR Art. 111(2))
+        # Step 1: Resolve provisions BEFORE CCF (CRR Art. 111(1): an off-balance
+        # sheet item is its nominal value after specific CRA, times the CCF)
         # This adds provision_on_drawn, provision_on_nominal, nominal_after_provision
         # so CCF can use the provision-adjusted nominal amount
         if has_required_columns(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
@@ -1420,17 +1421,16 @@ class CRMProcessor:
         has_provision_cols = "provision_allocated" in schema.names()
 
         # Provision columns: preserve if already set by resolve_provisions,
-        # otherwise initialize to zero
-        if has_provision_cols:
-            provision_cols = [
-                pl.col("provision_allocated"),
-                pl.col("provision_deducted"),
-            ]
-        else:
-            provision_cols = [
-                pl.lit(0.0).alias("provision_allocated"),
-                pl.lit(0.0).alias("provision_deducted"),
-            ]
+        # otherwise initialize to zero (the specific-CRA carrier included: the
+        # SA Art. 127(1) default test reads it, CRR Art. 111(1)).
+        provision_cols = [
+            pl.col(name) if has_provision_cols else pl.lit(0.0).alias(name)
+            for name in (
+                "provision_allocated",
+                "provision_specific_allocated",
+                "provision_deducted",
+            )
+        ]
 
         # Art. 159(1) Pool B additional components: AVAs (Art. 34) and other
         # own funds reductions.  Preserve if already on the frame; default 0.0.

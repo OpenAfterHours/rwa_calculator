@@ -54,14 +54,27 @@ Direct allocations are applied first. Facility-level and counterparty-level prov
 
 ## SA Approach (CRR Art. 110, 111(1))
 
-Under the Standardised Approach, provisions use a **drawn-first deduction** approach:
+Under the Standardised Approach, **specific** credit risk adjustments are deducted with a
+**drawn-first** approach. General credit risk adjustments are not: Art. 110(1) sends SA general
+CRA to Tier 2 under Art. 62(c), and Art. 111(1) values an asset item "after specific credit risk
+adjustments" and an off-balance sheet item at "its nominal value after reduction of specific
+credit risk adjustments".
+
+Two amounts are therefore allocated to each exposure, on the same levels and pro-rata basis:
+
+- `provision_allocated` — every provision row, specific and general. The IRB / slotting
+  EL comparison reads it (Art. 159 Pool B includes general CRA).
+- `provision_specific_allocated` — rows whose `provision_type` is `scra` (any case) or null.
+  A null type is what the loader injects when a book omits the optional column; it is treated as
+  specific, as untyped provisions always were. A `gcra` row is excluded, and so is a row with any
+  other label (the input validator reports it as a DQ006 warning and keeps the row).
 
 ```
-# Step 1: Absorb provision against drawn amount first
-provision_on_drawn = min(provision_allocated, max(0, drawn_amount))
+# Step 1: Absorb the specific provision against drawn amount first
+provision_on_drawn = min(provision_specific_allocated, max(0, drawn_amount))
 
 # Step 2: Remainder reduces nominal before CCF (capped at nominal)
-provision_on_nominal = min(provision_allocated - provision_on_drawn, nominal_amount)
+provision_on_nominal = min(provision_specific_allocated - provision_on_drawn, nominal_amount)
 nominal_after_provision = nominal_amount - provision_on_nominal
 
 # Step 3: CCF applied to adjusted nominal
@@ -73,6 +86,12 @@ EAD = (max(0, drawn) - provision_on_drawn) + interest + ead_from_ccf
 
 The `finalize_ead()` step does **not** subtract provisions again — they are already reflected in `ead_pre_crm` via the drawn-first deduction.
 
+The Art. 127(1) defaulted-exposure test ("the sum of specific credit risk adjustments ... is less
+than 20 %") reads `provision_specific_allocated` as its numerator too, so a general CRA can
+neither reduce an SA exposure value nor move a defaulted exposure from 150% to 100% (P1.208).
+Example: a defaulted unrated corporate drawn 100,000 with SCRA 15,000 and GCRA 10,000 has
+EAD 85,000 and coverage 15% < 20%, so 150% (RWA 127,500).
+
 ### New Columns (SA)
 
 | Column | Type | Description |
@@ -80,8 +99,9 @@ The `finalize_ead()` step does **not** subtract provisions again — they are al
 | `provision_on_drawn` | `Float64` | Provision absorbed by drawn amount |
 | `provision_on_nominal` | `Float64` | Provision reducing nominal before CCF |
 | `nominal_after_provision` | `Float64` | `nominal_amount - provision_on_nominal` |
-| `provision_deducted` | `Float64` | Total = `provision_on_drawn + provision_on_nominal` |
-| `provision_allocated` | `Float64` | Total provision matched to this exposure |
+| `provision_deducted` | `Float64` | Total = `provision_on_drawn + provision_on_nominal` (specific CRA only) |
+| `provision_allocated` | `Float64` | Total provision matched to this exposure (specific + general) |
+| `provision_specific_allocated` | `Float64` | Specific CRA matched to this exposure, all approaches; CRM-stage carrier, not on the results frame |
 
 ## IRB Approach (Art. 158-159)
 

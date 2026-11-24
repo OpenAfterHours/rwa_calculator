@@ -391,8 +391,9 @@ class CRMProcessor:
         Called before CCF (CRR Art. 111(1)(a)-(b)).
 
         Adds columns:
-        - provision_allocated: Total provision matched to this exposure
-        - provision_on_drawn: Provision absorbed by drawn amount (SA only)
+        - provision_allocated: Total provision matched to this exposure (specific and general)
+        - provision_specific_allocated: Specific credit risk adjustments only (scra or blank)
+        - provision_on_drawn: Specific provision absorbed by drawn amount (SA only)
         - provision_on_nominal: Provision reducing nominal before CCF (SA only)
         - provision_deducted: Total = provision_on_drawn + provision_on_nominal
         - nominal_after_provision: nominal_amount - provision_on_nominal

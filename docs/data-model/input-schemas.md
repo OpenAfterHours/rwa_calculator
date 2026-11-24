@@ -747,7 +747,7 @@ guarantees = pl.DataFrame({
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `provision_reference` | `String` | Yes | Unique identifier |
-| `provision_type` | `String` | Yes | `scra` (specific) or `gcra` (general) |
+| `provision_type` | `String` | No | `scra` (specific) or `gcra` (general); blank is read as specific |
 | `ifrs9_stage` | `Int8` | No | IFRS 9 stage (1, 2, or 3) |
 | `currency` | `String` | Yes | ISO 4217 currency code |
 | `amount` | `Float64` | Yes | Provision amount |
@@ -759,8 +759,10 @@ guarantees = pl.DataFrame({
 
 | Value | Description | Usage |
 |-------|-------------|-------|
-| `scra` | Specific Credit Risk Adjustment | Reduces exposure value; affects defaulted RW |
-| `gcra` | General Credit Risk Adjustment | Reduces exposure value |
+| `scra` | Specific Credit Risk Adjustment | Reduces the SA exposure value (Art. 111(1)) and counts towards the Art. 127(1) defaulted-coverage test; enters the IRB/slotting EL comparison (Art. 159) |
+| `gcra` | General Credit Risk Adjustment | Does **not** reduce the SA exposure value or count towards the Art. 127(1) test (Art. 110(1): general adjustments are Tier 2 under Art. 62(c)); enters the IRB/slotting EL comparison (Art. 159) |
+| *(blank)* | Untyped | Treated as specific, as before this column was read |
+| any other value | Unrecognised | Reported as a DQ006 warning; kept in `provision_allocated` (the EL comparison) but not deducted from the SA exposure value |
 
 **Valid `beneficiary_type` values:**
 

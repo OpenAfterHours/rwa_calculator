@@ -265,8 +265,17 @@ _WATERFALL_FOR_UNIFORMITY: tuple[str, ...] = (
     "ead_after_guarantee",
 )
 
+#: The Art. 127(1) coverage numerator — "specific credit risk adjustments" in
+#: both regimes (P1.208) — compared in engine/sa/risk_weights.py against
+#: ``ead_gross + provision_deducted``. Pinned for UNIFORMITY with those two, on
+#: the same argument as the waterfall above: split legs cannot reach Art. 127
+#: today (``flagging.py`` excludes defaulted rows), but an inherited amount
+#: would hand every leg the parent's whole specific provision.
+_COVERAGE_NUMERATOR_FOR_UNIFORMITY: tuple[str, ...] = ("provision_specific_allocated",)
+
 _MUST_BE_PRORATA: dict[str, tuple[str, ...]] = {
     "EAD waterfall (uniformity)": _WATERFALL_FOR_UNIFORMITY,
+    "Art. 127(1) coverage numerator (uniformity)": _COVERAGE_NUMERATOR_FOR_UNIFORMITY,
     "substitution secured_pct (capital)": _CAPITAL_CRITICAL_SUBSTITUTION,
     "Art. 123B hedge ratio (capital)": _CAPITAL_CRITICAL_HEDGE_RATIO,
     "guarantee blend (capital)": _CAPITAL_CRITICAL_GUARANTEE,

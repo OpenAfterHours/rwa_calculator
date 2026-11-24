@@ -1363,8 +1363,8 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
     values / nulls, never as absent columns.
     """
     return {
-        # Provision resolution (CRR Art. 111(2)) and CCF (Art. 111 / 166)
-        "nominal_after_provision": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(2)"),
+        # Provision resolution (CRR Art. 111(1)) and CCF (Art. 111 / 166)
+        "nominal_after_provision": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(1)"),
         "ccf": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(1)"),
         "ccf_calculation": EdgeColumn(dtype=pl.String),
         "ccf_original": EdgeColumn(dtype=pl.Float64),
@@ -1454,9 +1454,13 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         "post_crm_counterparty_guaranteed": EdgeColumn(dtype=pl.String),
         "post_crm_exposure_class_guaranteed": EdgeColumn(dtype=pl.String),
         "protection_type": EdgeColumn(dtype=pl.String),
-        # Provisions
+        # Provisions. ``provision_allocated`` is every provision row (the IRB
+        # EL comparison needs general CRA, Art. 159(1) 'B'(i));
+        # ``provision_specific_allocated`` is specific CRA only — what the SA
+        # deduction nets (Art. 111(1)) and the Art. 127(1) default test reads.
         "provision_allocated": EdgeColumn(dtype=pl.Float64),
-        "provision_deducted": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(2)"),
+        "provision_specific_allocated": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(1)"),
+        "provision_deducted": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(1)"),
         # Path-dependent OPTIONAL columns: real values only when the
         # producing sub-step ran (guarantee / provision / FCSM); injected as
         # typed nulls otherwise so the downstream shape is uniform. The

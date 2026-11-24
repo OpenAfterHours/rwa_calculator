@@ -287,8 +287,8 @@ Cost, and why every run is load-bearing:
     entry of ``RUNS`` (most portfolios under both regimes, a few under one only),
     one more for each IRB-permissioned entry's prior period, and two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
-    this prose — on 2026-11-24 it held fifty runs, twenty-six of them Basel
-    3.1 and twenty-five with a prior period. The gateway leg adds one canonical
+    this prose — on 2026-11-24 it held fifty-six runs, twenty-nine of them Basel
+    3.1 and thirty-one with a prior period. The gateway leg adds one canonical
     return and one ``validate_return`` per Basel 3.1 run and no pipeline run: the
     pack is loaded once per process and the COREP bundle is the one the template
     leg already generated.
@@ -491,7 +491,12 @@ from tests.fixtures.reporting_intragroup_portfolio import (
     intragroup_config,
 )
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
+from tests.fixtures.reporting_irb_coverage_portfolio import build_reporting_irb_coverage_bundle
+from tests.fixtures.reporting_irb_pairings_portfolio import build_reporting_irb_pairings_bundle
 from tests.fixtures.reporting_irb_shapes_portfolio import build_reporting_irb_shapes_bundle
+from tests.fixtures.reporting_irb_specialised_lending_portfolio import (
+    build_reporting_irb_specialised_lending_bundle,
+)
 from tests.fixtures.reporting_netting_mismatch_portfolio import build_netting_mismatch_bundle
 from tests.fixtures.reporting_netting_portfolio import build_reporting_netting_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
@@ -1710,6 +1715,124 @@ RUNS: tuple[GateInput, ...] = (
         "unrated-covered-bond",
         build_reporting_unrated_covered_bond_bundle,
         lambda: _sa_config("BASEL_3_1"),
+    ),
+    # IRB template coverage (P5.81) — LESSONS B5. Measured over the 39 runs above
+    # (2026-11-24): Basel 3.1 OF 08.01 lit only class sheets 0006, 0010, 0012,
+    # 0015, 0017, 0021 and 0023, and 0011 only beside 0012 (``declined-guarantee``):
+    # no corporate above the Art. 147(4C) large threshold or flagged a financial
+    # sector entity (sheet 0022, OF 09.02 r0048), no SME managed as retail (sheets
+    # 0016, 0018, 0020; OF 09.02 r0120), no retail commercial pledge (0019), no
+    # lone A-IRB non-SME corporate (0011), no F-IRB SME (0024), no IRB
+    # off-balance-sheet item at 10% or 20% (rows 0031 / 0032), no A-IRB
+    # specialised lending (0009), no Basel 3.1 class sheet fed only by a
+    # guarantor's inflow, and no off-balance-sheet leg substituted onto an IRB
+    # guarantor in either regime. (The short-maturity slotting rows are the
+    # ``slotting-maturity`` runs' above, P1.204; CRR's first inflow-only sheet is
+    # ``irb-mdb``'s corporate sheet, P1.366.)
+    #
+    # ``irb-coverage`` and ``irb-specialised-lending`` each hold at most ONE
+    # non-retail A-IRB sheet and never 0011 beside 0012, so they light their sheets
+    # without the PI-02 or PI-31 break. All IRB-permissioned with a prior frame.
+    #
+    # What registering ``irb-coverage`` surfaced, measured then (read the register
+    # for what each is now): its institution-guaranteed 20% trade item (nominal
+    # 800,000, 60% covered) is the estate's first off-balance-sheet leg substituted
+    # onto an IRB guarantor's class (``declined-guarantee``'s recognised DG-KEPT
+    # goes to the SA, and shows R0 too: its outflow c0070 is 140,000 where the
+    # covered nominal is 280,000). Two of our own defects meet on it, each owned by
+    # its own plan item, beside one open reading of a Bank rule (R2). Fix the two on
+    # Annex II's basis, R0 first, or the figures move from one wrong value to another:
+    # - R0 (P1.490): the substitution columns c0040 / c0070 / c0080 / c0090 of
+    #   C 08.01 and C 08.02, both regimes (C 07.00 reads the same carrier), take
+    #   ``guaranteed_portion``, the covered EXPOSURE VALUE after the 20% factor
+    #   (96,000), where Annex II asks for "the covered part of the original exposure
+    #   pre-conversion factors" (480,000). So the institution sheet files an inflow
+    #   of 96,000, and the SME's sheet keeps 704,000 where 320,000 remains.
+    # - R1 (P1.491): c0100 ("of which: off balance sheet items", an of-which of
+    #   c0090) of C 08.01 and C 08.02, both regimes, leaves the inflow out while
+    #   c0090 carries it. Under Basel 3.1 OF 08.01 r0010 c0100 and row 0030 c0090
+    #   are one PRA001 data point (STR007), so ``boe_b0307`` fails on sheet 0002
+    #   (2,604,000 against 2,700,000) and 0006 (0 against 96,000); under CRR the
+    #   institution sheet's r0010 c0100 is 0 against r0030 c0090 96,000, the pair
+    #   the EBA's live ``v3354_i``-``v3370_i`` hold equal (the published C 08.01.b
+    #   carries c0100 on rows 0010 / 0015 / 0016 / 0070 / 0080 / 0160 / 0170, per
+    #   ``v0333_m``: not on row 0030). On Annex II's basis the inflow cells are
+    #   480,000 and sheet 0002 2,700,000; adding today's 96,000 to c0100 fixes 0002
+    #   and not the inflow sheets.
+    # - R2 (INVESTIGATE; an open reading, not a defect of ours): ``boe_b0735`` ties
+    #   OF 08.01 r0010 c0100 (post-substitution) to the sum of OF 08.03 c0020, which
+    #   reads the obligor's pre-substitution population by recorded decision
+    #   (``corep/c08.py``, ``c08_03_cells.py``): Annex II allocates OF 08.03 to PD
+    #   rows "without considering ... any substitution effects due to CRM", its
+    #   c0010 is "before ... credit risk mitigation", and EBA Q&A 2023_6718's
+    #   resultant-obligor columns (0040-0080) leave 0020 out. The rule's CRR twin
+    #   ``v09773_m`` has been deactivated since 2021-03-10. As generated it breaks on
+    #   sheet 0002 (2,604,000 against 2,700,000: R1) and sheet 0024 (704,000 against
+    #   800,000: R0); sheet 0006 holds (0 = 0) only because R1 leaves the inflow out
+    #   of c0100. On the same return with R0 and R1 corrected by hand, the gateway
+    #   engine still fails it on sheets 0006 (480,000 against 0) and 0024 (320,000
+    #   against 800,000), and ``declined-guarantee`` fails it on 0002 and 0012
+    #   (810,000 against 950,000; 670,000 with the outflow on Annex II's 280,000)
+    #   for the same cause, an off-balance-sheet outflow (there from IRB to the
+    #   SA). Publisher issue PI-24 is its slotting case only, and neither the Bank's
+    #   deny list nor its November 2026 known-issues log names the rule: a
+    #   publisher-issue candidate (LESSONS C5), to be confirmed before any reason
+    #   calls it one.
+    # None of the three is a slotting case (this book has none), so none is PI-24.
+    GateInput(
+        "crr",
+        "CRR",
+        "irb-coverage",
+        build_reporting_irb_coverage_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "irb-coverage",
+        build_reporting_irb_coverage_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
+    ),
+    GateInput(
+        "crr",
+        "CRR",
+        "irb-specialised-lending",
+        build_reporting_irb_specialised_lending_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "irb-specialised-lending",
+        build_reporting_irb_specialised_lending_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
+    ),
+    # The sheet PAIRINGS on which the Bank's own rules fail a correct return
+    # (P5.81, operator-approved): sheets 0011 and 0012 together break
+    # ``boe_b1053``-``b1055`` (publisher issue PI-02), and two non-retail A-IRB
+    # sheets reporting a maturity break ``boe_b0748`` (PI-31). Banked in the
+    # register's gateway section with those publisher-issue reasons. Kept as its
+    # own portfolio so removing these two entries reverses the decision without
+    # touching the coverage above.
+    GateInput(
+        "crr",
+        "CRR",
+        "irb-pairings",
+        build_reporting_irb_pairings_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "irb-pairings",
+        build_reporting_irb_pairings_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
     ),
 )
 

@@ -25,9 +25,16 @@ the residual could grow unseen:
   §3.3.4 ¶77A keeps slotting out of OF 08.02. The rule asks every in-scope row
   with exposure for a PD, and these rows hold exposure that has none - a limit
   of the published rule, confirmed with Arelle on the Bank's package.
+  On ``irb-specialised-lending`` the FIRB-and-slotting Total 0002 holds slotting
+  only (its specialised lending outside slotting is A-IRB, on sheet 0009), so
+  Total rows 0010 / 0020 have no PD either.
 - ``crm-substitution`` sheet 0006 row 0190: column 0110 is on the
   post-substitution basis (legs that arrived from corporate obligors) and
   column 0010 on the obligor basis (no leg of its own there). Ours, open.
+  ``irb-coverage``'s sheet 0006 is the same case on a whole sheet: the
+  institution guarantor has no exposure of its own, so every row its inflow
+  reaches (0010, 0030, the 20% row 0032, 0070 and 0190) has exposure value
+  and no obligor PD.
 
 References:
 - PRA PS1/26 Annex I OF 08.01 (column 0010, shaded on rows 0080 and 0170);
@@ -107,6 +114,20 @@ RESIDUAL: dict[str, dict[tuple[str, str], str]] = {
         ("0010", "0020"): SLOTTING_ONLY,
         ("0006", "0190"): OBLIGOR_BASIS,
     },
+    "irb-coverage": {
+        ("0006", "0010"): OBLIGOR_BASIS,
+        ("0006", "0030"): OBLIGOR_BASIS,
+        ("0006", "0032"): OBLIGOR_BASIS,
+        ("0006", "0070"): OBLIGOR_BASIS,
+        ("0006", "0190"): OBLIGOR_BASIS,
+    },
+    "irb-specialised-lending": {
+        ("0002", "0010"): SLOTTING_ONLY,
+        ("0002", "0020"): SLOTTING_ONLY,
+        ("0010", "0010"): SLOTTING_ONLY,
+        ("0010", "0020"): SLOTTING_ONLY,
+    },
+    "irb-pairings": {},
 }
 
 

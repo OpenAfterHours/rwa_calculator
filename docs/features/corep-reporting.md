@@ -1007,7 +1007,47 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
     way ("Not every row carries every column, and not every sheet every column", below). The OF 08.05 observed default rate is re-derived from the Total's own counts.
     `boe_b0748` also lists column 0250 (maturity) as a sum; the Total reports the average,
     so that rule breaks on column 0250 wherever two non-retail AIRB sheets report a
-    maturity. A Total has no drill-down of its own: open the same cell on a class sheet.
+    maturity (publisher issue PI-31; banked on the registered `b31/irb-pairings` book,
+    whose two A-IRB corporate sheets carry different exposures and maturities so the
+    Total's figure is visibly the exposure-weighted mean). A Total has no drill-down of its
+    own: open the same cell on a class sheet.
+
+    **Every published sheet is exercised.** Each of the fifteen class sheets is reached by
+    a registered portfolio of the supervisory register (P5.81):
+    `tests/fixtures/reporting_irb_coverage_portfolio.py` (sheet 0006 by a guarantor's
+    inflow alone, sheet 0011 alone, sheets 0016-0020, 0022 and 0024, and the 10% / 20%
+    rows 0031 / 0032), `reporting_irb_specialised_lending_portfolio.py` (sheet 0009, beside
+    a slotting control on sheet 0010) and `reporting_irb_pairings_portfolio.py`
+    (sheets 0011 and 0012 together, and 0011 beside 0023). The first two hold at most one
+    non-retail A-IRB sheet and never 0011 beside 0012, so neither raises the PI-02 or PI-31
+    break; the pairings book exists for those two. The owner of each sheet is pinned in
+    `tests/acceptance/reporting/test_irb_coverage_legs.py`.
+
+    **Known gap: a guaranteed off-balance-sheet item (both regimes).** Annex II splits an
+    exposure for the substitution columns "prior to the application of conversion
+    factors" (Basel 3.1 c0040) and makes the outflow and inflow "the covered part of the
+    original exposure pre-conversion factors" (c0070-c0080, CRR and Basel 3.1 alike;
+    c0090 is pre-conversion factors too). On C 08.01 / OF 08.01 and C 08.02 / OF 08.02
+    these columns currently take the guarantee's covered *exposure value*, after the
+    conversion factor (plan item P1.490). So the coverage book's 60%-guaranteed 20% trade
+    item (nominal 800,000) moves 96,000 instead of 480,000 to the institution's sheet,
+    and the SME's sheet keeps 704,000 where 320,000 remains. Separately, column 0100 (of
+    which off-balance-sheet items, an of-which of c0090) leaves the inflow out on C 08.01
+    and C 08.02 in both regimes while c0090 carries it (plan item P1.491): under Basel 3.1
+    that files two values for one PRA001 data point (OF 08.01 r0010 c0100 and row 0030
+    c0090). Exposure value (c0110) and RWEA are right. Strict xfails in the same test
+    file pin the Annex II figures in both regimes and turn XPASS when the reporting is
+    fixed.
+
+    **Open question: `boe_b0735` on a guaranteed off-balance-sheet item.** The Bank's
+    rule ties OF 08.01 row 0010 c0100 (after substitution) to the sum of OF 08.03 c0020,
+    which this calculator reports on the obligor's basis before substitution (Annex II
+    allocates OF 08.03 "without considering ... any substitution effects due to CRM";
+    see the recorded decision in `reporting/corep/c08.py`). So the rule also fails a
+    return that follows Annex II wherever a guarantee moves an off-balance-sheet item's
+    covered part to another sheet or to the SA. The EBA deactivated the rule's CRR twin
+    (`v09773_m`) in 2021. Publisher issue PI-24 covers only the rule's slotting case, so
+    this is recorded as a reading to investigate, not as a publisher issue.
 
     **Maturity in the filed return.** The PRA001 taxonomy types the exposure-weighted
     average maturity as a whole number: OF 08.01 / OF 08.02 column 0250 in days
@@ -2400,6 +2440,15 @@ and once per material country.
       rather than the sheet itself so that a leg moved to a retail guarantor's class while
       keeping its obligor's F-IRB approach stays in the retail row its parent row 0060
       counts it in; OF 08 keeps that leg on its obligor's sheet (plan P1.384).
+
+    **Row 0055 is both approaches' sheets, and two of the Bank's rules disagree.** Annex II
+    p.143 defines row 0055 as the other corporate exposures not reported in rows 0042-0050,
+    so it is sheet 0011 (A-IRB) plus sheet 0012 (F-IRB). `boe_b1053`-`boe_b1055` test row
+    0055 against each sheet separately, so a correct return with figures on both sheets fails
+    them (publisher issue PI-02). The registered `b31/irb-pairings` book holds both sheets
+    on purpose (and `b31/declined-guarantee` happens to); the breaks are banked in the
+    supervisory register with that citation, and the figures are not changed to satisfy
+    them.
 
     CRR C 09.02 is unchanged: it has no financial-and-large row and keeps C 07.00's
     row-0020 SME test.

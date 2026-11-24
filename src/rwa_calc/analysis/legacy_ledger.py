@@ -197,7 +197,10 @@ different footing from ours):
 - **No ``is_guarantee_beneficial``.** C 07.00 ``_protection_exprs`` and
   ``crm_substitution.irb_protection_exprs`` gate the substitution block on it
   (CRR Art. 193(1)/(3): a guarantee the calculator declined has no substitution
-  effect). Absent, EVERY mapped ``guaranteed_portion`` produces an outflow.
+  effect). Absent, EVERY mapped ``guaranteed_portion`` produces an outflow. The
+  same holds for ``fcsm_substitution_applied``, C 07.00 col 0070's gate on a
+  Simple-Method leg the calculator declined (P1.346): absent, every mapped
+  ``fcsm_collateral_value`` is reported.
 - **No ``post_crm_exposure_class_guaranteed``.** The col 0090 / col 0070 outflow
   is then reported with no matching col 0100 / col 0080 inflow anywhere in the
   estate. This one IS flagged, on the inflow cell.

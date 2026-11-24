@@ -1980,6 +1980,18 @@ SA_BRANCH_EDGE: EdgeContract = EdgeContract(
         "due_diligence_override_applied": EdgeColumn(
             dtype=pl.Boolean, required=False, inject=False, citation="PS1/26 Art. 122(4)"
         ),
+        # The Simple-Method decline (P1.346): True where the Art. 222(3) blend was
+        # applied, False where the exposure's collateral outweighed it and the leg
+        # was declined (CRR Art. 193(1); PS1/26 Art. 193(2A) election). CONDITIONAL:
+        # written on every row of a Simple-Method run, never otherwise. C 07.00 /
+        # OF 07.00 col 0070 gates on it, so it must survive to the aggregator exit.
+        "fcsm_substitution_applied": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            inject=False,
+            citation="CRR Art. 193(1); PS1/26 Art. 193(2A)",
+            null_meaning="the Simple Method was not elected; absent = Comprehensive run",
+        ),
     },
 )
 
@@ -2471,6 +2483,8 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "due_diligence_override_applied": EdgeColumn(
             dtype=pl.Boolean, required=False, inject=False, citation="PS1/26 Art. 122(4)"
         ),
+        # C 07.00 col 0070's gate — see SA_BRANCH_EDGE (P1.346).
+        "fcsm_substitution_applied": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
         "risk_weight_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rw_direct": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rwa_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),

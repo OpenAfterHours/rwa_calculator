@@ -22,6 +22,9 @@ Key responsibilities:
 References:
 - CRR Art. 193: CRM recognition principles (the no-worse cap and the
   election to amend the calculation) — the basis for declining a guarantee
+  and a Simple-Method collateral leg that would raise the RWEA
+- PRA PS1/26 Art. 193(2A): the Basel 3.1 election to disregard an item of
+  credit protection (PS1/26 Art. 193(1) is left blank)
 - CRR Art. 235: SA guarantee substitution formula
 - CRR Art. 213-217: Eligibility of the protection (gated upstream in
   ``engine/crm/guarantees.py``, not here)
@@ -134,8 +137,15 @@ _DUE_DILIGENCE_OVERRIDE_COLUMNS: dict[str, ColumnSpec] = {
 }
 
 
+@cites("CRR Art. 193")
 @cites("CRR Art. 222")
-def apply_fcsm_rw_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+@cites("PS1/26, paragraph 193")
+def apply_fcsm_rw_substitution(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
     """Apply Art. 222 Financial Collateral Simple Method risk weight substitution.
 
     When the Simple Method is elected, the secured portion of each SA exposure
@@ -144,45 +154,89 @@ def apply_fcsm_rw_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> p
 
     Blended RW = secured_pct × collateral_rw + unsecured_pct × exposure_rw
 
-    The 20% floor (Art. 222(1)/(3)) and same-currency 0% carve-outs (CRR
-    Art. 222(4) / PRA PS1/26 Art. 222(6)) are applied per item in
-    ``compute_fcsm_columns``. Applying the floor again on the aggregate would
-    re-impose it on carve-out items — contrary to "except as specified in
-    paragraphs 4 to 6".
+    The 20% floor (Art. 222(3)) and the same-currency 0% carve-out (CRR and
+    PRA PS1/26 Art. 222(6)) are applied per item in ``compute_fcsm_columns``.
+    Applying the floor again on the aggregate would re-impose it on carve-out
+    items — contrary to "except as specified in paragraphs 4 to 6".
 
-    This function is a no-op when the Comprehensive Method is elected (default)
-    or when fcsm_collateral_value is zero/null — the crm_exit contract
-    injects both fcsm_* columns as typed nulls when the FCSM sub-step did
-    not run, and ``fill_null(0.0)`` makes an all-null column equivalent to
-    the historical absent-column early return.
+    THE DECLINE (P1.346). Art. 222(3) floors the collateralised portion and sets
+    no ceiling, so collateral weighted ABOVE the exposure's own weight would RAISE
+    the blend: cross-currency cash (20% floor) on a 0% sovereign, a 100% bond on a
+    20% institution, Basel 3.1 250% equity on a 100% corporate. Since
+    ``blended - rw = secured_pct x (collateral_rw - rw)``, that happens exactly
+    where the exposure's value-weighted ``fcsm_collateral_rw`` is above its own
+    weight. There the whole Simple-Method leg is DECLINED: the exposure keeps its
+    unsecured weight and ``fcsm_substitution_applied`` is False, the flag C 07.00 /
+    OF 07.00 col 0070 gates on so the template never reports a substitution the
+    RWEA does not reflect. The basis is the cited pack Feature
+    ``fcsm_decline_non_beneficial``, which differs by regime:
+
+    - CRR Art. 193(1), MANDATORY and per exposure: "No exposure in respect of
+      which an institution obtains credit risk mitigation shall produce a higher
+      risk-weighted exposure amount ... than an otherwise identical exposure in
+      respect of which an institution has no credit risk mitigation."
+    - PS1/26 Art. 193(1) is "[Note: Provision left blank]"; Art. 193(2A) lets the
+      firm "choose to disregard any item of credit protection" for the methods
+      paragraph A1 lists, the Simple Method among them. Under Basel 3.1 the
+      decline is an owner ELECTION (P1.346 sign-off), never a 193(1) cap.
+
+    Two choices the text leaves open, recorded here. (1) The decline is per
+    EXPOSURE and whole-leg: every Simple-Method item on the exposure goes, not
+    only the items weighted above it. That is the minimum CRR 193(1) needs and
+    mirrors the guarantee decline (``apply_guarantee_substitution``); 193(2A) is
+    per item, so a per-item decline would also be compliant and could only be
+    lower. (2) At EQUALITY the substitution STANDS — equal is not "higher" and the
+    capital is the same either way — unlike the guarantee path's strict ``<``, so
+    the collateral stays in col 0070 and the row stays ``"simple"``. A declined
+    row is ``"simple"`` too: the method was elected, its collateral disregarded.
+
+    ``calculate_unified`` runs this on every row, IRB rows included, so under
+    Basel 3.1 the decline also sets the SA-equivalent weight the output floor's
+    S-TREA reads.
+
+    No-op when the Comprehensive Method is elected (default). A row whose
+    fcsm_collateral_value is zero/null keeps its weight and reads not-applied —
+    the crm_exit contract injects both fcsm_* columns as typed nulls when the
+    FCSM sub-step did not run, and ``fill_null(0.0)`` makes an all-null column
+    equivalent to the historical absent-column early return.
     """
     if config.crm_collateral_method != CRMCollateralMethod.SIMPLE:
         return lf
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
     ead = pl.col("ead_final").fill_null(0.0)
     fcsm_value = pl.col("fcsm_collateral_value").fill_null(0.0)
     fcsm_rw = pl.col("fcsm_collateral_rw").fill_null(0.0)
+    unsecured_rw = pl.col("risk_weight")
 
     # Secured percentage (capped at 100%)
     secured_pct = pl.when(ead > 0).then((fcsm_value / ead).clip(0.0, 1.0)).otherwise(0.0)
     unsecured_pct = pl.lit(1.0) - secured_pct
 
     # Blended risk weight; secured RW already reflects per-item floor + carve-outs.
-    blended_rw = secured_pct * fcsm_rw + unsecured_pct * pl.col("risk_weight")
+    blended_rw = secured_pct * fcsm_rw + unsecured_pct * unsecured_rw
 
-    # Only apply when there is actual collateral value
+    # Only apply when there is actual collateral value — and, under the decline,
+    # only where the collateral does not outweigh the exposure. The comparison is
+    # on the two weights, not on the blend, so the blend's float dust cannot turn
+    # an equal-weight row into a decline; the tolerance does the same for the
+    # value-weighted average behind ``fcsm_collateral_rw``.
     has_fcsm = fcsm_value > 0
+    applied = has_fcsm
+    if resolved_pack.feature("fcsm_decline_non_beneficial"):
+        applied = has_fcsm & ((fcsm_rw - unsecured_rw) <= 1e-12)
 
     return lf.with_columns(
         # Save pre-FCSM risk weight for audit
-        pl.col("risk_weight").alias("pre_fcsm_risk_weight"),
+        unsecured_rw.alias("pre_fcsm_risk_weight"),
         # Apply blended RW
-        pl.when(has_fcsm).then(blended_rw).otherwise(pl.col("risk_weight")).alias("risk_weight"),
+        pl.when(applied).then(blended_rw).otherwise(unsecured_rw).alias("risk_weight"),
         # Track method for audit/COREP
         pl.when(has_fcsm)
         .then(pl.lit("simple"))
         .otherwise(pl.lit("comprehensive"))
         .alias("ead_calculation_method"),
+        applied.alias("fcsm_substitution_applied"),
     )
 
 
@@ -337,9 +391,9 @@ def apply_guarantee_substitution(
         reading of the text. Remove the mandatory cap and a THIRD option appears
         — apply Art. 235(1) UNCAPPED, returning a HIGHER RWEA — at which point
         the election stops being capital-neutral and our decline stops being the
-        only permissible behaviour. Whether that coincidence survives into
-        PS1/26 is UNVERIFIED (below); if it does not, this election acquires a
-        capital consequence and needs a recorded policy basis rather than a code
+        only permissible behaviour. That coincidence does NOT survive into
+        PS1/26 (below), so from 1 Jan 2027 this election has a capital
+        consequence and needs a recorded policy basis rather than a code
         comment. Note the scope: this is the ENGINE gate, which moves RWA. The
         reporting gates that consume its flag
         (``engine/aggregator/aggregator.py::_beneficial_gate``,
@@ -353,19 +407,23 @@ def apply_guarantee_substitution(
         zero capital effect, and a real effect on which sheet the exposure
         appears on.
 
-    A PS1/26 GAP, STATED RATHER THAN GLOSSED. PS1/26 Art. 113(3) is word for word
-    the CRR text with "the Credit Risk Mitigation (CRR) Part" substituted for
-    "Chapter 4", so the permissive hook carries into 2027. A PS1/26 equivalent of
-    Art. 193(1) has NOT been verified: the PRA renumbers (in ``ps126app1.pdf``
-    "Article 193" is the CRR Art. 161 IRB-parameter-substitution rule — read the
-    ``[Note: This rule corresponds to Article NNN of CRR ...]`` line, never the
-    number), and the PRA Credit Risk Mitigation (CRR) Part is not in
-    ``docs/assets/`` at all. The consequence matters: under CRR the decline is
-    COMPELLED, so doing neither it nor apply-and-cap is a breach; if the PRA CRM
-    Part turns out to lack the equivalent, from 1 Jan 2027 this becomes a pure
-    ELECTION — and an election needs a recorded policy basis in a way that
-    compliance with a mandatory cap does not. No PS1/26 citation is asserted
-    here, because none has been read.
+    THE PS1/26 POSITION, READ VERBATIM (P1.346). PS1/26 Art. 113(3) is word for
+    word the CRR text with "the Credit Risk Mitigation (CRR) Part" substituted for
+    "Chapter 4", so the permissive hook carries into 2027. The Credit Risk
+    Mitigation (CRR) Part IS in ``docs/assets/ps126app1.pdf``: its Art. 193 (p.169,
+    "[Note: This rule corresponds to Article 193 of CRR ...]") has paragraph 1
+    "[Note: Provision left blank]" — the no-worse rule is DELETED — and a new
+    paragraph 2A: "For the purpose of applying the methods set out in paragraph
+    A1, an institution may choose to disregard any item of credit protection",
+    A1 naming the Risk-Weight Substitution Method. (An earlier note here took
+    the cross-reference to "paragraph 7 of Credit Risk Mitigation (CRR) Part
+    Article 193" printed just above the PS1/26 Art. 161 note for a renumbering
+    of Art. 193 itself; it is not.) So under CRR the decline is COMPELLED, and
+    doing neither it nor apply-and-cap is a breach; from 1 Jan 2027 it is a firm
+    ELECTION under Art. 193(2A). The Simple-Method twin of this decline records
+    that election as the cited pack Feature ``fcsm_decline_non_beneficial``
+    (``apply_fcsm_rw_substitution``); this guarantee decline has no Feature of
+    its own yet, so its Basel 3.1 basis is this paragraph alone.
 
     References:
         CRR Art. 193(1), (3): CRM recognition principles — the no-worse outcome

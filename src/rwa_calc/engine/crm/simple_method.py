@@ -2,7 +2,7 @@
 Financial Collateral Simple Method (Art. 222).
 
 Pipeline position:
-    CRMProcessor (Step 4 alternative) -> SACalculator._apply_fcsm_rw_substitution
+    CRMProcessor (Step 4 alternative) -> engine/sa/rw_adjustments.py::apply_fcsm_rw_substitution
 
 Key responsibilities:
 - Aggregate eligible financial collateral per exposure (raw market value, no haircuts)
@@ -11,8 +11,8 @@ Key responsibilities:
   PS1/26 Art. 133(3) 250%, modified for 2027-2029 to the PS1/26 General
   Provisions rule 4.2 160% / 190% / 220% for a firm without IRB permission on
   31 December 2026 (rule 4.1)
-- Apply the 20% floor per item (Art. 222(1)/(3))
-- Apply the same-currency 0% RW carve-out per item — CRR Art. 222(4) / PRA PS1/26
+- Apply the 20% floor per item (Art. 222(3))
+- Apply the same-currency 0% RW carve-out per item — CRR and PRA PS1/26
   Art. 222(6) — for cash and 0%-RW sovereign bonds
 - Set fcsm_* columns on exposure frame for SA calculator RW substitution
 - Do NOT reduce EAD (that is the Comprehensive Method's mechanism)
@@ -297,8 +297,8 @@ def _fcsm_equity_collateral_rw(pack: ResolvedRulepack, config: CalculationConfig
 def _is_art_222_6_carveout_expr() -> pl.Expr:
     """Non-SFT same-currency cash / 0%-RW sovereign carve-out (Art. 222(6)).
 
-    PRA PS1/26 Art. 222(6) (= CRR Art. 222(4) pre-renumbering): the 20% floor
-    from Art. 222(1)/(3) does not apply to the following same-currency carve-outs
+    CRR and PRA PS1/26 Art. 222(6) (the same paragraph number in both): the 20%
+    floor from Art. 222(3) does not apply to the following same-currency carve-outs
     when the exposure is NOT an SFT:
     (a) Cash deposit or cash assimilated instrument
     (b) 0%-RW sovereign debt securities (subject to 20% market-value discount)
@@ -377,9 +377,15 @@ def compute_fcsm_columns(
     - fcsm_collateral_rw: weighted-average SA risk weight of the collateral
 
     Does NOT modify any EAD columns. The SA calculator uses these columns
-    for risk weight substitution via _apply_fcsm_rw_substitution().
+    for risk weight substitution via ``apply_fcsm_rw_substitution``, which
+    also declines a leg whose collateral outweighs the exposure (Art. 193;
+    P1.346).
 
-    IRB exposures are unaffected — Simple Method is SA-only per Art. 222.
+    There is no approach filter: IRB rows linked to collateral carry the
+    columns too. Their IRB RWEA ignores them, but ``calculate_unified`` prices
+    every row on the SA path, so under Basel 3.1 they DO reach the
+    SA-equivalent ``sa_rwa`` the output floor reads — the Simple Method is
+    SA-only per Art. 222(1), and the IRB row's own capital is unaffected.
 
     Args:
         exposures: Exposure frame with ead_gross, exposure_reference, etc.

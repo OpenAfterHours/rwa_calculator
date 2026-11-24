@@ -4035,6 +4035,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "fcsm_collateral_value": pl.Float64,  # Total eligible financial collateral (raw market value)
     "fcsm_collateral_rw": pl.Float64,  # Weighted-average SA RW of collateral
     "pre_fcsm_risk_weight": pl.Float64,  # Risk weight before FCSM substitution
+    "fcsm_substitution_applied": pl.Boolean,  # Blend applied (False = Art. 193 decline)
     # -------------------------------------------------------------------------
     # RISK WEIGHT DETERMINATION - SA
     # -------------------------------------------------------------------------

@@ -1296,6 +1296,40 @@ Eligibility: Collateral must be eligible financial collateral per Art. 197.
 The calculator uses the Financial Collateral Comprehensive Method by default; the FCSM
 path is reserved for firms that elect it under Art. 148(1) / Art. 150(1).
 
+### Art. 193(1) — The Simple Method May Not Raise the RWEA
+
+Art. 222(3) floors the collateralised portion (*"shall be at least 20 %"*) and sets no
+ceiling, so collateral weighted **above** the obligor would *raise* the blended weight:
+cross-currency cash (20% floor) against a 0% domestic sovereign, or a 100% corporate bond
+against a 20% institution. Art. 193(1) forbids that outcome, and it is mandatory and per
+exposure (current UK text, legislation.gov.uk/eur/2013/575/article/193):
+
+!!! quote "CRR Art. 193(1)"
+    No exposure in respect of which an institution obtains credit risk mitigation shall
+    produce a higher risk-weighted exposure amount or expected loss amount than an
+    otherwise identical exposure in respect of which an institution has no credit risk
+    mitigation.
+
+Because `RW_blended − RW_obligor = secured share × (RW_collateral − RW_obligor)`, the blend
+rises exactly where the exposure's value-weighted collateral weight (`fcsm_collateral_rw`)
+is above its own. There `apply_fcsm_rw_substitution` (`engine/sa/rw_adjustments.py`)
+**declines the whole Simple-Method leg** of that exposure: the exposure keeps its unsecured
+weight (`pre_fcsm_risk_weight`), and `fcsm_substitution_applied` is `False`, which C 07.00
+column 0070 gates on so the template reports no substitution the RWEA does not reflect.
+Gated by the pack Feature `fcsm_decline_non_beneficial` (cited CRR Art. 193(1)).
+
+| Obligor RW | Collateral RW | Cover | Uncapped blend | Result |
+|---|---|---|---|---|
+| 0% (domestic sovereign) | 20% (EUR cash, Art. 222(3) floor) | 100% | 20% | **0%** — declined |
+| 20% | 100% (CQS 3 corporate bond) | 50% | 60% | **20%** — declined |
+| 100% | 100% (equity, Art. 133(2)) | 40% | 100% | **100%** — applied (equal is not "higher") |
+| 100% | 20% | 100% | 20% | **20%** — applied |
+
+Two choices the text leaves open: the decline is **per exposure, whole-leg** (the minimum
+Art. 193(1) needs, mirroring the guarantee decline), and at **equality** the substitution
+stands — the capital is identical, and the collateral stays in column 0070. Oracle cases
+ORC-285 / ORC-286 pin the bound (P1.346).
+
 !!! note "Change log — Art. 222 carve-outs clarified (21 April 2026, D2.63)"
     Earlier drafts of this section conflated the Art. 222(4) SFT rule (0% core-market
     participant / 10% otherwise, subject to Art. 227 criteria) with the Art. 222(6)

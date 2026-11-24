@@ -133,7 +133,7 @@ class SACalculator:
         # IRB output floor.
         exposures = (
             exposures.pipe(apply_risk_weights, config, pack=pack)
-            .pipe(apply_fcsm_rw_substitution, config)
+            .pipe(apply_fcsm_rw_substitution, config, pack=pack)
             .pipe(apply_life_insurance_rw_mapping)
             .pipe(apply_third_party_deposit_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
@@ -204,7 +204,7 @@ class SACalculator:
 
         exposures = (
             exposures.pipe(apply_risk_weights, config, pack=pack)
-            .pipe(apply_fcsm_rw_substitution, config)
+            .pipe(apply_fcsm_rw_substitution, config, pack=pack)
             .pipe(apply_life_insurance_rw_mapping)
             .pipe(apply_third_party_deposit_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)

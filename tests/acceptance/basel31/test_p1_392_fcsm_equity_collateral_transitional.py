@@ -59,7 +59,13 @@ later is inside rule 4.1, so its collateral takes 160% in 2027, including on the
 SA-equivalent weight the output floor reads.
 
 Hand calculation (pipeline leg; unrated corporate loan 1,000,000 at 100%,
-main-index equity collateral 600,000, so 60% covered, no EAD reduction):
+main-index equity collateral 600,000, so 60% covered, no EAD reduction). These
+are the uncapped Art. 222(3) blends. Since P1.346 every Basel 3.1 blend here is
+above the unsecured 100%, so the leg is declined under the firm's PS1/26
+Art. 193(2A) election and its weight stays 1.00 (RWEA 1,000,000). The pipeline
+tests therefore pin the blend from the row's own carriers (the collateral
+weight is what this item changed) and the final weight as the lower of the
+blend and the unsecured weight:
     2027  0.60 x 1.60 + 0.40 x 1.00 = 1.36  ->  RWEA 1,360,000 (pre-fix 1,900,000)
     2028  0.60 x 1.90 + 0.40 x 1.00 = 1.54  ->  RWEA 1,540,000
     2029  0.60 x 2.20 + 0.40 x 1.00 = 1.72  ->  RWEA 1,720,000
@@ -287,6 +293,15 @@ def _blended(collateral_rw: float) -> float:
     return _COVERED * collateral_rw + (1 - _COVERED) * _UNSECURED_RW
 
 
+def _final(collateral_rw: float) -> float:
+    """The applied weight: the blend, unless it would raise the unsecured weight.
+
+    CRR Art. 193(1) forbids a higher RWEA; under Basel 3.1 the firm's PS1/26
+    Art. 193(2A) election disregards the protection (P1.346). Equality applies.
+    """
+    return min(_blended(collateral_rw), _UNSECURED_RW)
+
+
 # ---------------------------------------------------------------------------
 # Rule 4.2 reaches the Art. 222(3) direct-exposure weight
 # ---------------------------------------------------------------------------
@@ -443,12 +458,19 @@ class TestPipelineCarriesTheTransitionalCollateralWeight:
         # Assert
         assert row["fcsm_collateral_value"] == pytest.approx(_COLLATERAL_VALUE)
         assert row["ead_final"] == pytest.approx(_EAD)
-        assert row["risk_weight"] == pytest.approx(_blended(collateral_rw))
-        assert row["rwa_final"] == pytest.approx(_EAD * _blended(collateral_rw))
+        assert _COVERED * row["fcsm_collateral_rw"] + (1 - _COVERED) * row[
+            "pre_fcsm_risk_weight"
+        ] == pytest.approx(_blended(collateral_rw))
+        assert row["risk_weight"] == pytest.approx(_final(collateral_rw))
+        assert row["rwa_final"] == pytest.approx(_EAD * _final(collateral_rw))
 
 
 class TestOutputFloorFollowsTheCollateralWeight:
     """An F-IRB row's SA-equivalent weight carries the Simple Method blend into S-TREA.
+
+    Since P1.346 both legs' blends are above the unsecured 100% and are declined
+    under the PS1/26 Art. 193(2A) election, so S-TREA is the unsecured RWEA on
+    both; the transitional weight is pinned on the row's own collateral weight.
 
     The blend runs in the unconditional SA weight pipe, so the collateral weight
     reaches the output floor on an IRB row. A firm that states it had no IRB
@@ -485,5 +507,6 @@ class TestOutputFloorFollowsTheCollateralWeight:
             "the loan did not reach F-IRB - S-TREA would be SA RWEA and prove nothing here"
         )
         assert row["fcsm_collateral_value"] == pytest.approx(_COLLATERAL_VALUE)
+        assert row["fcsm_collateral_rw"] == pytest.approx(collateral_rw)
         assert floor is not None
-        assert floor.s_trea == pytest.approx(_EAD * _blended(collateral_rw))
+        assert floor.s_trea == pytest.approx(_EAD * _final(collateral_rw))

@@ -567,12 +567,18 @@ test"; Art. 213 is an eligibility article (conditions on the protection contract
 carries no benefit test. It is a *precondition* of the Art. 193(3) election, not the
 election itself, which is how the two came to be conflated.
 
-> **PS1/26 caveat.** The Art. 193(1) cap is verified for CRR only. The PRA Credit Risk
-> Mitigation (CRR) Part is not held locally, and a full search of `ps126app1.pdf`
-> returns no equivalent language. If PS1/26 carries no such cap, then from 1 Jan 2027
-> this gate stops being compelled and becomes a firm election with a capital
-> consequence — see the CRR-vs-B3.1 caveat under
+> **PS1/26 position (read verbatim, P1.346).** The Credit Risk Mitigation (CRR) Part
+> is in `ps126app1.pdf`. Its Art. 193 (p.169, *"[Note: This rule corresponds to
+> Article 193 of CRR …]"*) has paragraph 1 *"[Note: Provision left blank]"* — the
+> no-worse cap is **deleted** — and a new paragraph 2A: *"For the purpose of applying
+> the methods set out in paragraph A1, an institution may choose to disregard any item
+> of credit protection"*. So from 1 Jan 2027 this gate is a **firm election** under
+> Art. 193(2A), with a capital consequence (the uncapped substitution is permitted) —
+> see the CRR-vs-B3.1 caveat under
 > [Anti-Double-Counting and Consistency Rules](#anti-double-counting-and-consistency-rules).
+> The Simple-Method twin of the decline records that election as a cited pack Feature
+> ([below](#art-1932a-the-simple-method-decline-is-an-election)); the guarantee gate has
+> no Feature of its own yet.
 
 ### Expected Loss Under PSM (Art. 236(1A))
 
@@ -851,14 +857,13 @@ collateral.
     is why the pre-2027 route ran through Art. 193(2) plus per-form CRM application.
 
     The same framework caution applies to the **Art. 193(1)** no-worse cap relied on
-    by the PSM benefit gate above: it is verified for **CRR only**. The PRA Credit
-    Risk Mitigation (CRR) Part is not held in `docs/assets/`, and a full search of
-    `ps126app1.pdf` returns no equivalent language — the PRA also renumbers, so
-    "Article 193" there is the CRR Art. 161 parameter-substitution rule, not this
-    one. Read the `[Note: This rule corresponds to Article NNN of CRR …]` line, never
-    the number. If PS1/26 carries no equivalent cap, the benefit gate stops being
-    compelled from 1 Jan 2027 and becomes a firm election with a capital
-    consequence.
+    by the PSM benefit gate above: it exists in **CRR only**. PS1/26 Art. 193 (in the
+    Credit Risk Mitigation (CRR) Part of `ps126app1.pdf`, p.169) leaves paragraph 1
+    blank and adds paragraph 2A, the election to *"disregard any item of credit
+    protection"*. (An earlier note here read the cross-reference to *"paragraph 7 of
+    Credit Risk Mitigation (CRR) Part Article 193"*, printed just above the PS1/26
+    Art. 161 note, as a renumbering of Art. 193; it is not.) So from 1 Jan 2027 the
+    benefit gate is a firm election with a capital consequence, not compliance.
 
 - **Para 2(d)**: Funded and unfunded CRM must not be recognised simultaneously on the same
   portion of an exposure (no double-counting).
@@ -1068,6 +1073,31 @@ in the **same currency**, the floor drops to **0%** if either:
     the same-currency cash / 0%-RW sovereign carve-out for non-SFT transactions.
     There is no sub-point (d) in Art. 222(4); sub-points (a) and (b) sit under
     Art. 222(**6**).
+
+### Art. 193(2A) — The Simple-Method Decline Is an Election
+
+Art. 222(3) keeps the 20% floor on the collateralised portion and sets no ceiling, so
+collateral weighted above the obligor would raise the blend — most visibly 250% equity
+(PS1/26 Art. 133) against a 100% corporate: 40% cover takes the exposure to 160%. Under
+CRR, Art. 193(1) forbids that (see the
+[CRR spec](../crr/credit-risk-mitigation.md#art-1931-the-simple-method-may-not-raise-the-rwea)).
+Under PS1/26 it does not: Art. 193(1) is *"[Note: Provision left blank]"*, and
+Art. 193(2A) instead lets the firm *"choose to disregard any item of credit protection"*
+for the methods paragraph A1 lists — the Financial Collateral Simple Method among them.
+
+The uncapped blend is therefore **permitted** under Basel 3.1, and declining it is a firm
+**election**. The calculator makes it (owner decision, P1.346): wherever an exposure's
+value-weighted collateral weight is above its own, `apply_fcsm_rw_substitution` declines
+the whole Simple-Method leg, holds the exposure at its unsecured weight, sets
+`fcsm_substitution_applied = False` and drops the collateral from OF 07.00 column 0070
+(*"the portion … identified as collateralised under article 222(3)"*). It is gated by the
+pack Feature `fcsm_decline_non_beneficial`, cited **PS1/26 Art. 193(2A)** — never
+193(1) — and switching it off restores the uncapped Art. 222(3) blend. At equality the
+substitution stands.
+
+The decline is RWA-reducing, and because `calculate_unified` prices every row on the SA
+path, it also lowers the SA-equivalent `sa_rwa` of IRB rows that carry Simple-Method
+collateral, and with it S-TREA — which moves capital only where the output floor binds.
 
 ### Art. 222 — No Maturity Mismatch
 

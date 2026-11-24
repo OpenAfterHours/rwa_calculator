@@ -427,14 +427,14 @@ _SUBSTITUTION_BLOCK_COLS: tuple[str, ...] = (
 # The capped unfunded limb (cols 0050 + 0060 per row) that col 0100's inflow is
 # measured on — see ``_protection_exprs``.
 _UNFUNDED_COL: str = "c07_prot_unfunded"
-# The CRM decline flag — CONDITIONAL on the edge, so every read is presence-tolerant.
-# A DECLINED guarantee (it would have raised capital, which CRR Art. 193(1)
-# forbids) produces no substitution effect, so it must not appear in the Annex II
-# block headed "CRM TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE". Gating
-# the unfunded magnitude gates the col 0100 INFLOW too, since that binds the same
-# carrier. Basis and the recorded elections (decline vs apply-and-cap; the strict
-# ``<``): ``engine/sa/rw_adjustments.py::apply_guarantee_substitution``.
+# The CRM decline flags — CONDITIONAL on the edge, so every read is presence-tolerant.
+# A DECLINED guarantee or Simple-Method leg (it would have raised capital) has no
+# substitution effect, so it must not appear in the Annex II block headed "CRM
+# TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE" (``_protection_exprs``).
+# Bases and recorded elections: ``engine/sa/rw_adjustments.py`` —
+# ``apply_guarantee_substitution`` and ``apply_fcsm_rw_substitution``.
 _BENEFICIAL_COL: str = "is_guarantee_beneficial"
+_FCSM_APPLIED_COL: str = "fcsm_substitution_applied"
 
 # The guarantor's exposure class (the col 0100 destination key) and the origin
 # approaches whose inflow half ``crm_substitution.irb_origin_inflows`` owns.
@@ -1361,17 +1361,18 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     ``0110 = 0040 - 0090 + 0100`` non-negative by construction — the property
     rules ``v10293_s`` / ``boe_b0667`` ({template} >= 0) assert.
 
-    A DECLINED GUARANTEE CONTRIBUTES NOTHING TO COLS 0050/0060. The block heading
-    is "CRM TECHNIQUES **WITH SUBSTITUTION EFFECTS ON THE EXPOSURE**", and a
-    guarantee the calculator declined has none: Art. 193(1) bars a guarantee from
-    raising the RWEA and Art. 193(3) leaves amending the calculation an election,
-    so where the guarantor's weight does not beat the obligor's the engine leaves
-    the RWA on the borrower basis and ``is_guarantee_beneficial`` is
-    false. Reporting it here booked a col 0090 outflow that no exposure ever left
-    and — because the col 0100 inflow binds the same ``_UNFUNDED_COL`` — a
-    matching phantom inflow onto the guarantor's sheet, banded at the BORROWER's
-    own risk weight. Gating the CARRIER, not the two cells, is what keeps outflow
-    and inflow on a single decision, so neither can move without the other.
+    DECLINED PROTECTION CONTRIBUTES NOTHING. The block heading is "CRM TECHNIQUES
+    **WITH SUBSTITUTION EFFECTS ON THE EXPOSURE**", and protection the calculator
+    declined has none: a guarantee whose guarantor does not beat the obligor
+    (``is_guarantee_beneficial`` false; Art. 193(1)/(3)), and a Simple-Method leg
+    whose collateral outweighs the exposure (``fcsm_substitution_applied`` false;
+    CRR Art. 193(1), PS1/26 Art. 193(2A) — OF 07.00 col 0070 is "the portion ...
+    identified as collateralised under article 222(3)", and none was). Reporting
+    either booked a col 0090 outflow no exposure ever left and, for a guarantee, a
+    phantom col 0100 inflow (it binds ``_UNFUNDED_COL``) banded at the BORROWER's
+    weight. Gating the CARRIER, not the cells, keeps outflow and inflow on one
+    decision. ``== True`` is the null-safe reading of both flags: an unknown
+    benefit is not a substitution, and it must not be filled the other way.
     """
     guaranteed = (
         pl.col("guaranteed_portion").fill_null(0.0) if "guaranteed_portion" in cols else pl.lit(0.0)
@@ -1391,16 +1392,14 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
         guarantee = guaranteed
         credit_derivative = pl.lit(0.0)
 
-    if _BENEFICIAL_COL in cols:
-        # A DECLINED guarantee has no substitution effect at all, so it belongs in
-        # neither the outflow nor the inflow — see the docstring's closing note.
-        # ``== True`` is the null-safe reading: an unknown benefit is not a
-        # substitution, and it must not be filled the other way.
-        applied = pl.col(_BENEFICIAL_COL) == True  # noqa: E712 - null-safe, see above
+    if _BENEFICIAL_COL in cols:  # a DECLINED guarantee: no outflow, no inflow (docstring)
+        applied = pl.col(_BENEFICIAL_COL) == True  # noqa: E712 - null-safe, see docstring
         guarantee = pl.when(applied).then(guarantee).otherwise(pl.lit(0.0))
         credit_derivative = pl.when(applied).then(credit_derivative).otherwise(pl.lit(0.0))
 
     fcsm = pl.col(_FCSM_CARRIER).fill_null(0.0) if _FCSM_CARRIER in cols else pl.lit(0.0)
+    if _FCSM_APPLIED_COL in cols:  # a DECLINED Simple-Method leg (docstring; P1.346)
+        fcsm = pl.when(pl.col(_FCSM_APPLIED_COL) == True).then(fcsm).otherwise(0.0)  # noqa: E712
     ofcp_parts = [pl.col(col).fill_null(0.0) for col in _OFCP_CARRIERS if col in cols]
     other_funded = pl.sum_horizontal(ofcp_parts) if ofcp_parts else pl.lit(0.0)
 

@@ -1030,6 +1030,24 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "222(3)", "Chapter 2 weight for a direct equity holding (Art. 133(2), 100%)"
         ),
     ),
+    # The Simple Method may not RAISE an exposure's RWEA (P1.346). Art. 222(3)
+    # floors the collateralised portion at 20% and sets no ceiling, so collateral
+    # weighted above the obligor (cross-currency cash against a 0% sovereign, a
+    # 100% bond against a 20% institution) would lift the blend. CRR Art. 193(1),
+    # read verbatim from legislation.gov.uk (current text), is MANDATORY and per
+    # exposure: "No exposure in respect of which an institution obtains credit risk
+    # mitigation shall produce a higher risk-weighted exposure amount ... than an
+    # otherwise identical exposure in respect of which an institution has no credit
+    # risk mitigation." Gates the whole-leg decline in
+    # engine/sa/rw_adjustments.py::apply_fcsm_rw_substitution. Not an election
+    # under CRR: switching it off would breach 193(1).
+    "fcsm_decline_non_beneficial": Feature(
+        name="fcsm_decline_non_beneficial",
+        enabled=True,
+        citation=Citation(
+            "CRR", "193(1)", "mandatory: CRM may not raise an exposure's risk-weighted amount"
+        ),
+    ),
     # The unrated-institution sovereign RW floor does NOT exist under CRR.
     # Verified verbatim (crr.pdf PAGE_INDEX 119): UK CRR Art. 121 runs
     # (1) Table 5, (2) unrated-sovereign 100%, (3) <=3-month 20%, (4) trade

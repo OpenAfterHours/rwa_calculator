@@ -152,7 +152,7 @@ FCSM_CP: str = "RFP-CP-FCSM"
 
 FCSM_LN_ANCHOR: str = "RFP-LN-FCSM-ANCHOR"  # no collateral — the survivor
 FCSM_LN_BOND: str = "RFP-LN-FCSM-BOND"  # Art. 222(1) floored collateral RW
-FCSM_LN_CASH: str = "RFP-LN-FCSM-CASH"  # Art. 222(4)(a) same-currency 0%
+FCSM_LN_CASH: str = "RFP-LN-FCSM-CASH"  # Art. 222(6)(a) same-currency 0%
 
 FCSM_DRAWN_ANCHOR: float = 1_000_000.0
 FCSM_DRAWN_BOND: float = 2_000_000.0

@@ -1024,6 +1024,25 @@ ENTRIES: dict[str, RuleEntry] = {
             "Art. 222(3) Chapter 2 weight for a direct equity holding (Art. 133, 250%)",
         ),
     ),
+    # The Simple-Method decline (P1.346), on its Basel 3.1 basis. PS1/26 Art. 193
+    # (ps126app1.pdf p.169) has no no-worse rule: paragraph 1 is "[Note: Provision
+    # left blank]". Paragraph 2A instead lets the firm "choose to disregard any item
+    # of credit protection" for the methods paragraph A1 lists, the Financial
+    # Collateral Simple Method among them. So under Basel 3.1 the uncapped
+    # Art. 222(3) blend is PERMITTED and declining is a FIRM ELECTION. Owner
+    # decision (P1.346 sign-off, 2026-11-23): elect it, for the whole Simple-Method
+    # leg of an exposure, wherever its collateral weighs more than the exposure
+    # itself — the CRR outcome carried forward. Never cite 193(1) for it. Flip
+    # enabled=False to apply the uncapped blend.
+    "fcsm_decline_non_beneficial": Feature(
+        name="fcsm_decline_non_beneficial",
+        enabled=True,
+        citation=Citation(
+            "PS1/26",
+            "193",
+            "(2A) firm election to disregard Simple-Method collateral that would raise the RWEA",
+        ),
+    ),
     # PS1/26 Art. 121(6): "Notwithstanding paragraphs 2 to 5, the risk weight
     # assigned to an exposure to an institution for which a credit assessment by
     # a nominated ECAI is not available may not be less than the risk weight

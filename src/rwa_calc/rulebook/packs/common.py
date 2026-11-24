@@ -87,15 +87,17 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # Financial Collateral Simple Method (CRR Art. 222 / PRA PS1/26 Art. 222).
     # Single-regime: PS1/26 retains Art. 222 unchanged for SA exposures.
+    # The 20% floor is Art. 222(3) (222(1) is the method's scope rule) and the
+    # sovereign-bond discount is Art. 222(6)(b) (222(4) is the SFT rule) — P1.346.
     "fcsm_rw_floor": ScalarParam(
         name="fcsm_rw_floor",
         value=Decimal("0.20"),
-        citation=Citation("CRR", "222(1)", "minimum 20% RW floor for the secured portion"),
+        citation=Citation("CRR", "222(3)", "minimum 20% RW floor for the secured portion"),
     ),
     "fcsm_sovereign_bond_discount": ScalarParam(
         name="fcsm_sovereign_bond_discount",
         value=Decimal("0.20"),
-        citation=Citation("CRR", "222(4)(b)", "20% market-value discount on 0%-RW sovereign bonds"),
+        citation=Citation("CRR", "222(6)(b)", "20% market-value discount on 0%-RW sovereign bonds"),
     ),
     "fcsm_sft_cmp_floor": ScalarParam(
         name="fcsm_sft_cmp_floor",

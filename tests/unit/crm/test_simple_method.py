@@ -381,7 +381,7 @@ class TestZeroRWExceptions:
     """Test Art. 222(4) 0% RW exceptions."""
 
     def test_same_currency_cash_gets_zero_rw(self, crr_simple_config):
-        """Art. 222(4)(a): cash deposit in same currency → 0% RW."""
+        """Art. 222(6)(a): cash deposit in same currency → 0% RW."""
         exposures = _make_exposures(currency="GBP")
         collateral = _make_collateral(
             collateral_type="cash",
@@ -407,7 +407,7 @@ class TestZeroRWExceptions:
         assert result["fcsm_collateral_rw"][0] == pytest.approx(0.20)
 
     def test_zero_rw_sovereign_bond_same_currency(self, crr_simple_config):
-        """Art. 222(4)(b): 0%-RW sovereign bond in same currency with 20% discount."""
+        """Art. 222(6)(b): 0%-RW sovereign bond in same currency with 20% discount."""
         exposures = _make_exposures(currency="GBP")
         collateral = _make_collateral(
             collateral_type="government_bond",

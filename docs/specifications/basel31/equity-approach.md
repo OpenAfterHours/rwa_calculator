@@ -230,6 +230,16 @@ weight on every date and carry no transitional label:
 Government-supported equity is ordinary Art. 133(3) equity under Basel 3.1
 (there is no CRR Art. 133(3)(c) carve-out) and takes the Rule 4.2 weight.
 
+!!! note "Rule 4.2 also reaches Simple Method equity collateral"
+    Art. 222(3) weights the part of an exposure covered by Simple Method
+    collateral at the weight of "a direct exposure to the collateral
+    instrument". For main-index equity collateral that is the Art. 133(3)
+    weight as Rule 4.2 modifies it, so the same firm, on the same dates, takes
+    160% / 190% / 220% on the covered portion instead of 250% (P1.392). The
+    firm fact and the period are read from the same helpers
+    (`engine/equity_transitional.py`). See
+    [Credit Risk Mitigation — Art. 222(3) equity collateral](credit-risk-mitigation.md#art-2223-equity-collateral-and-the-rule-42-transitional).
+
 ### SA Transitional (Rules 4.1–4.3) — Firms Without IRB Permission
 
 Rule 4.1 restricts Rules 4.2–4.3 to firms that **did not** have permission to use the

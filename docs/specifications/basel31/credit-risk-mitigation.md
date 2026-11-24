@@ -984,6 +984,38 @@ The risk weight of the collateralised portion is the RW that would apply to a
 direct exposure to the collateral instrument, with a minimum **20%** floor
 (Art. 222(3), second sub-paragraph), **except** as specified in paragraphs 4 and 6.
 
+### Art. 222(3) — Equity Collateral and the Rule 4.2 Transitional
+
+Only equity "included in a main index" is eligible under the Simple Method
+(Art. 197(1)(f); the Art. 198(1)(a) listed-equity extension is for the
+Comprehensive Method only). Its weight is the weight of a direct equity
+exposure, Art. 133(3)'s **250%** (pack entry `fcsm_equity_collateral_rw`, the
+end state). PS1/26 Credit Risk: General Provisions rule 4.2 *"modifies
+paragraph 3 of [...] Article 133 for a transitional period beginning with
+1 January 2027 and ending with 31 December 2029"*, so for a firm that did not
+have IRB permission on 31 December 2026 (rule 4.1) the direct-exposure weight
+in those years is the `equity_transitional_std_rw` Schedule: **160%** (2027),
+**190%** (2028), **220%** (2029). The engine
+(`engine/crm/simple_method.py::_fcsm_equity_collateral_rw`) applies that weight
+only when all three hold:
+
+| Condition | Read from |
+|---|---|
+| Basel 3.1 run | `equity_transitional` Feature |
+| 1 Jan 2027 ≤ reporting date < 1 Jan 2030 | `equity_transitional_std_rw` Schedule steps |
+| No IRB permission on 31 Dec 2026 | `EquityTransitionalConfig.irb_permission_at_2026_year_end`, else any F-IRB, A-IRB or slotting permission in the run (`engine/equity_transitional.py`) |
+
+Otherwise the collateral keeps 250%: before 2027 on a Basel 3.1 config, from
+2030, and for a firm that had IRB permission (F-IRB, A-IRB or slotting). That
+last case mirrors the engine's interim treatment of such a firm's direct
+equity, whose own rules 4.5 / 4.6 are not implemented (CFG003). Rule 4.3
+(higher risk equity) cannot be reached: a main-index share is listed, so never a
+"higher risk equity exposure". The blend has no benefit-only cap and runs in
+the SA weight pipe that also feeds the output floor's SA-equivalent weight, so
+the rule 4.2 weight lowers both the SA RWEA of the covered portion and, for a
+firm with IRB rows, S-TREA. Under CRR the weight is Art. 133(2)'s 100%, with no
+transitional.
+
 ### Art. 222(4) — 0% / 10% Floor for SFTs (Art. 227 Criteria)
 
 For **securities financing transactions** that meet the criteria in Art. 227, the

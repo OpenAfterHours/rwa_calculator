@@ -64,6 +64,10 @@ from rwa_calc.domain.enums import (
     ErrorSeverity,
     ExposureClass,
 )
+from rwa_calc.engine.equity_transitional import (
+    had_irb_permission_at_2026_year_end,
+    standardised_transitional_weights,
+)
 from rwa_calc.engine.irb.formulas import (
     _capital_k_expr_from_params,
     _correlation_expr_from_pd,
@@ -1082,7 +1086,7 @@ class EquityCalculator:
         - outside 1 January 2027 - 31 December 2029 (the schedule's last step
           is the end state; Annex II: no values in rows 0371-0374 from 2030);
         - a firm that HAD IRB permission on 31 December 2026 (rule 4.1; F-IRB,
-          A-IRB or slotting, see ``_had_irb_permission_at_2026_year_end``). Its
+          A-IRB or slotting, see ``had_irb_permission_at_2026_year_end``). Its
           own rules are not implemented: 4.5(1), the 4.2 / 4.3 weights for
           equity it held under Art. 148 / 150 Standardised permission, and 4.6,
           the higher of the legacy Art. 155 weight and the 4.2 / 4.3 weight for
@@ -1100,12 +1104,12 @@ class EquityCalculator:
         if not resolved_pack.feature("equity_transitional"):
             return exposures
 
-        weights = _standardised_transitional_weights(resolved_pack, config.reporting_date)
+        weights = standardised_transitional_weights(resolved_pack, config.reporting_date)
         if weights is None:
             return _with_null_transitional_carriers(exposures)
 
         opt_out = config.equity_transitional.opt_out
-        if _had_irb_permission_at_2026_year_end(config):
+        if had_irb_permission_at_2026_year_end(config):
             if errors is not None and not opt_out:
                 errors.append(_irb_firm_transitional_warning())
             return _with_null_transitional_carriers(exposures)
@@ -1246,56 +1250,6 @@ def _has_irb_model_permission(config: CalculationConfig) -> bool:
         ApproachType.FIRB in approaches or ApproachType.AIRB in approaches
         for approaches in permissions.values()
     )
-
-
-@cites("CRR Art. 143")
-@cites("CRR Art. 153(5)")
-@cites("PS1/26, paragraph 4.1")
-def _had_irb_permission_at_2026_year_end(config: CalculationConfig) -> bool:
-    """Rule 4.1's firm fact: IRB permission under Art. 143 of CRR on 31 December 2026.
-
-    Rule 4.1 (ps126app1.pdf p.20): "4.2 and 4.3 only apply to an institution
-    that did not have permission to use the Internal Ratings Based Approach
-    under Article 143 of CRR on 31 December 2026." Slotting is one of those
-    approaches: Art. 143(2A) (p.81) has an application name "one or more of the
-    following IRB Approaches instead of the Standardised Approach: (a) the
-    Slotting Approach; (b) the Foundation IRB Approach; or (c) the Advanced IRB
-    Approach", and Art. 153(5) (p.102), "The Slotting Approach applies as
-    follows for specialised lending exposures", sits in the IRB Part. So a firm
-    whose only IRB permission is slotting HAD IRB permission and is outside
-    rules 4.2 / 4.3.
-
-    ``EquityTransitionalConfig.irb_permission_at_2026_year_end`` states the fact
-    when the run's permissions do not (a Standardised shadow run of an IRB firm,
-    or a permission granted after that date). Left as None, it is derived from
-    the run: any F-IRB, A-IRB or slotting permission. That is deliberately wider
-    than ``_has_irb_model_permission``, which ``EquityCalculator._determine_approach``
-    reads to route CRR equity to Art. 155 and which this fact does not change.
-    """
-    stated = config.equity_transitional.irb_permission_at_2026_year_end
-    if stated is not None:
-        return stated
-    # irb_permissions is derived non-None in CalculationConfig.__post_init__.
-    permissions = config.irb_permissions.permissions  # ty: ignore[unresolved-attribute]
-    irb_approaches = {ApproachType.FIRB, ApproachType.AIRB, ApproachType.SLOTTING}
-    return any(not irb_approaches.isdisjoint(approaches) for approaches in permissions.values())
-
-
-def _standardised_transitional_weights(
-    pack: ResolvedRulepack, on: date
-) -> tuple[float, float] | None:
-    """Rules 4.2 / 4.3 (standard, higher risk) weights for ``on``, or None outside the period.
-
-    The period is the ``equity_transitional_std_rw`` Schedule's first step
-    (1 January 2027) up to, not including, its last step (1 January 2030), which
-    is the Art. 133(3) / (4) end state rather than a transitional weight.
-    """
-    standard = pack.schedule("equity_transitional_std_rw")
-    first_day, end_state_day = standard.steps[0][0], standard.steps[-1][0]
-    if not first_day <= on < end_state_day:
-        return None
-    higher_risk = pack.schedule("equity_transitional_hr_rw")
-    return float(standard.resolve(on)), float(higher_risk.resolve(on))
 
 
 @cites("PS1/26, paragraph 133")

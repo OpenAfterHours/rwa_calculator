@@ -12,10 +12,19 @@ Art. 222(1) — cited by the old entry and by the source comment this item
 rewrote — is the *usage restriction* on electing the Simple Method and
 prescribes no weight at all.
 
+The Basel 3.1 scalar is the Art. 133(3) END-STATE weight. PS1/26 General
+Provisions rule 4.2 modifies Art. 133(3) to 160% / 190% / 220% in 2027-2029 for
+a firm without IRB permission on 31 December 2026 (rule 4.1), and the engine
+selects that weight in place of this scalar
+(``engine/crm/simple_method.py::_fcsm_equity_collateral_rw``, P1.392; pinned by
+tests/acceptance/basel31/test_p1_392_fcsm_equity_collateral_transitional.py).
+The Basel 3.1 pack is therefore read here on an end-state date.
+
 References:
 - CRR Art. 222(3): Financial Collateral Simple Method, collateralised portion
 - CRR Art. 133(2): equity SA risk weight (100%)
-- PS1/26 Art. 133: equity SA risk weight (250%)
+- PS1/26 Art. 133(3): equity SA risk weight (250%, end state)
+- PS1/26 Credit Risk: General Provisions rules 4.1-4.2: the 2027-2029 weights
 """
 
 from __future__ import annotations
@@ -27,11 +36,16 @@ from rwa_calc.domain.enums import EquityType
 from rwa_calc.rulebook.resolve import resolve
 
 CRR_ON = date(2026, 1, 1)
-B31_ON = date(2027, 1, 1)
+#: The Art. 133(3) end state: after the rule 4.2 period (1 Jan 2027 - 31 Dec 2029).
+B31_ON = date(2030, 1, 1)
 
 
 def test_b31_fcsm_equity_collateral_rw_is_250_pct() -> None:
-    """Basel 3.1 FCSM equity collateral takes PS1/26 Art. 133's 250%."""
+    """The Basel 3.1 end-state FCSM equity collateral weight is PS1/26 Art. 133(3)'s 250%.
+
+    In 2027-2029 a firm without IRB permission on 31 December 2026 takes the
+    rule 4.2 weight instead; the engine selects it, not this scalar (P1.392).
+    """
     # Arrange
     pack = resolve("b31", B31_ON)
 
@@ -79,14 +93,20 @@ def test_fcsm_equity_collateral_rw_is_regime_divergent() -> None:
 
 
 def test_fcsm_equity_collateral_rw_tracks_chapter_2_equity_table() -> None:
-    """Art. 222(3) DERIVES the weight, so it cannot drift from Chapter 2.
+    """Art. 222(3) DERIVES the weight, so the end-state scalar cannot drift from Chapter 2.
 
-    Ties the FCSM scalar to ``equity_sa_risk_weights`` in each regime. Only
-    main-index equity reaches the Simple Method (P1.330 gated it on
-    Art. 197(1)(f)), and a main-index holding is listed / exchange-traded, so
-    those are the rows the derivation must match. Without this, a later edit to
-    the equity table would leave the FCSM scalar quietly stale — exactly how
+    Ties the FCSM scalar to the end-state ``equity_sa_risk_weights`` in each
+    regime. Only main-index equity reaches the Simple Method (P1.330 gated it
+    on Art. 197(1)(f)), and a main-index holding is listed / exchange-traded,
+    so those are the rows the derivation must match. Without this, a later edit
+    to the equity table would leave the FCSM scalar quietly stale — exactly how
     the 100% survived.
+
+    Both are end-state weights: in 2027-2029 rule 4.2 modifies Art. 133(3) for
+    a firm without IRB permission on 31 December 2026, for direct equity and so
+    for the Art. 222(3) collateral weight alike (P1.392). That modification is
+    applied in the engine and pinned by
+    tests/acceptance/basel31/test_p1_392_fcsm_equity_collateral_transitional.py.
     """
     for regime, on in (("crr", CRR_ON), ("b31", B31_ON)):
         # Arrange

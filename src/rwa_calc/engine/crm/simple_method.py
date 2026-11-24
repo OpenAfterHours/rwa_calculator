@@ -7,6 +7,10 @@ Pipeline position:
 Key responsibilities:
 - Aggregate eligible financial collateral per exposure (raw market value, no haircuts)
 - Derive collateral risk weight from issuer type and CQS (Art. 114-134)
+- Weight equity collateral as a direct equity exposure: CRR Art. 133(2) 100%;
+  PS1/26 Art. 133(3) 250%, modified for 2027-2029 to the PS1/26 General
+  Provisions rule 4.2 160% / 190% / 220% for a firm without IRB permission on
+  31 December 2026 (rule 4.1)
 - Apply the 20% floor per item (Art. 222(1)/(3))
 - Apply the same-currency 0% RW carve-out per item — CRR Art. 222(4) / PRA PS1/26
   Art. 222(6) — for cash and 0%-RW sovereign bonds
@@ -18,6 +22,8 @@ Key responsibilities:
 References:
 - CRR Art. 222: Financial Collateral Simple Method
 - PRA PS1/26 Art. 222: Retained for SA exposures under Basel 3.1
+- PRA PS1/26 Art. 133(3) and Credit Risk: General Provisions (CRR) Part rules
+  4.1-4.2: the direct equity weight Art. 222(3) takes for equity collateral
 - CRR Art. 191A / PRA PS1/26 Art. 191A: CRM method selection framework
 """
 
@@ -33,6 +39,10 @@ from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
 from rwa_calc.engine.crm.eligibility import financial_collateral_ineligible_expr
 from rwa_calc.engine.crm.expressions import ccr_engine_row_expr, sa_fccm_type_eligible_expr
+from rwa_calc.engine.equity_transitional import (
+    had_irb_permission_at_2026_year_end,
+    standardised_transitional_weights,
+)
 from rwa_calc.engine.sa.b31_risk_weight_tables import B31_CORPORATE_RISK_WEIGHTS
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
@@ -62,12 +72,14 @@ _FCSM_EXP_DENOMINATION = "_fcsm_exp_denomination"
 
 @dataclass(frozen=True)
 class _FcsmFloors:
-    """Art. 222 FCSM floors and discount resolved from the rulepack.
+    """Art. 222 FCSM floors, discount and equity collateral weight, resolved once per call.
 
-    The five regime-invariant Financial Collateral Simple Method scalars
-    (CRR Art. 222 / PRA PS1/26 Art. 222 — the common pack) read once per call
-    and threaded into the per-item expression builders (superseding the deleted
-    ``data/tables/crr_simple_method`` module-level constants).
+    Four regime-invariant Financial Collateral Simple Method scalars (CRR
+    Art. 222 / PRA PS1/26 Art. 222 — the common pack) and the equity collateral
+    weight (``_fcsm_equity_collateral_rw``: the regime packs' Art. 133 weight,
+    modified by PS1/26 rule 4.2 where it applies), threaded into the per-item
+    expression builders (superseding the deleted ``data/tables/crr_simple_method``
+    module-level constants).
     """
 
     rw_floor: float
@@ -77,14 +89,14 @@ class _FcsmFloors:
     equity_collateral_rw: float
 
     @classmethod
-    def from_pack(cls, pack: ResolvedRulepack) -> _FcsmFloors:
-        """Read the five Art. 222 scalars from the resolved rulepack."""
+    def from_pack(cls, pack: ResolvedRulepack, config: CalculationConfig) -> _FcsmFloors:
+        """Read the Art. 222 scalars, and resolve the equity weight for the run's firm and date."""
         return cls(
             rw_floor=scalar_value(pack.scalar_param("fcsm_rw_floor")),
             sovereign_bond_discount=scalar_value(pack.scalar_param("fcsm_sovereign_bond_discount")),
             sft_cmp_floor=scalar_value(pack.scalar_param("fcsm_sft_cmp_floor")),
             sft_non_cmp_floor=scalar_value(pack.scalar_param("fcsm_sft_non_cmp_floor")),
-            equity_collateral_rw=scalar_value(pack.scalar_param("fcsm_equity_collateral_rw")),
+            equity_collateral_rw=_fcsm_equity_collateral_rw(pack, config),
         )
 
 
@@ -100,10 +112,12 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False, *, equity_rw: float =
     Args:
         is_basel_3_1: Whether Basel 3.1 tables apply (affects institution CQS 2
             ECRA divergence and corporate CQS 5).
-        equity_rw: SA risk weight for equity held as FCSM collateral
-            (``fcsm_equity_collateral_rw``, regime packs — CRR 1.0, B31 2.5).
-            Defaults to 1.0 (100%) for direct callers; production supplies the
-            resolved pack value.
+        equity_rw: SA risk weight for equity held as FCSM collateral, resolved
+            by ``_fcsm_equity_collateral_rw``: the regime packs'
+            ``fcsm_equity_collateral_rw`` (CRR 1.0, B31 2.5), or the PS1/26
+            rule 4.2 weight (1.6 / 1.9 / 2.2) in 2027-2029 for a firm without IRB
+            permission on 31 December 2026. Defaults to 1.0 (100%) for direct
+            callers; production supplies the resolved value.
 
     Returns:
         Polars expression producing the collateral's own risk weight (float).
@@ -173,9 +187,11 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False, *, equity_rw: float =
     # from Chapter 2, not prescribed by Art. 222 — Art. 222(1) is the usage
     # restriction on electing the method and fixes no weight. So equity-exposure
     # character is exactly what governs, and the two regimes diverge: CRR
-    # Art. 133(2) 100%, PS1/26 Art. 133 250%. Value comes from the rulepack
-    # (``fcsm_equity_collateral_rw``, regime packs); the keyword default is only
-    # for direct callers.
+    # Art. 133(2) 100%, PS1/26 Art. 133(3) 250%, which PS1/26 rule 4.2 modifies
+    # to 160% / 190% / 220% in 2027-2029 for a firm without IRB permission on
+    # 31 December 2026. The weight is resolved once per call
+    # (``_fcsm_equity_collateral_rw``); the keyword default is only for direct
+    # callers.
     #
     # The membership test is wider than the Art. 197(1)(f) eligibility gate that
     # runs upstream (P1.330), so only main-index equity actually reaches here.
@@ -226,6 +242,52 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False, *, equity_rw: float =
         .then(pl.lit(equity_rw))
         .otherwise(corporate_rw)  # default: treat as corporate bond
     )
+
+
+@cites("CRR Art. 222(3)")
+@cites("PS1/26, paragraph 222")
+@cites("PS1/26, paragraph 4.1")
+@cites("PS1/26, paragraph 4.2")
+def _fcsm_equity_collateral_rw(pack: ResolvedRulepack, config: CalculationConfig) -> float:
+    """The Art. 222(3) weight of equity collateral: the weight of a direct equity exposure.
+
+    Art. 222(3) (ps126app1.pdf p.199) assigns the collateralised portion "the
+    risk weight that it would assign [...] where the institution had a direct
+    exposure to the collateral instrument". For equity that is Art. 133(3)'s
+    250% (``fcsm_equity_collateral_rw``; CRR Art. 133(2): 100%), and rule 4.2
+    (p.20) "modifies paragraph 3 of [...] Article 133 for a transitional period
+    beginning with 1 January 2027 and ending with 31 December 2029" to 160% /
+    190% / 220%, for a firm that "did not have permission to use the Internal
+    Ratings Based Approach under Article 143 of CRR on 31 December 2026" (rule
+    4.1). The rule 4.2 weight therefore replaces 250% only when all three hold:
+    the ``equity_transitional`` Feature is on (Basel 3.1), the reporting date
+    is inside the period, and the firm had no IRB permission on 31 December
+    2026 (``had_irb_permission_at_2026_year_end``: F-IRB, A-IRB or slotting, or
+    the stated fact). This is the treatment ``EquityCalculator`` gives the firm's
+    direct equity.
+
+    Only the rule 4.2 (standard) weight is reachable: Simple Method equity must
+    be "included in a main index" (Art. 197(1)(f)), so it is listed and never a
+    Glossary "higher risk equity exposure" (rule 4.3). Rule 4.2 also excludes an
+    exposure "within the scope of paragraph 6" of Art. 133 (a deduction, an
+    Art. 89(3) 1,250% item or an Art. 48(4) 250% significant investment). That
+    turns on the firm's own holdings in the issuer, which the collateral frame
+    does not carry, so it is not modelled here, as it is not for the end-state
+    weight either.
+
+    Outside those conditions the collateral keeps 250%. For a firm that HAD IRB
+    permission that is the engine's interim treatment of its direct equity too
+    (rules 4.5 / 4.6 are not implemented and the run is warned, CFG003); when
+    they are, this weight should be revisited with them.
+    """
+    end_state_rw = scalar_value(pack.scalar_param("fcsm_equity_collateral_rw"))
+    if not pack.feature("equity_transitional"):
+        return end_state_rw
+    weights = standardised_transitional_weights(pack, config.reporting_date)
+    if weights is None or had_irb_permission_at_2026_year_end(config):
+        return end_state_rw
+    standard_rw, _higher_risk_rw = weights
+    return standard_rw
 
 
 def _is_art_222_6_carveout_expr() -> pl.Expr:
@@ -330,7 +392,7 @@ def compute_fcsm_columns(
         return _add_default_fcsm_columns(exposures)
 
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
-    floors = _FcsmFloors.from_pack(resolved_pack)
+    floors = _FcsmFloors.from_pack(resolved_pack, config)
 
     schema = exposures.collect_schema()
     schema_names = schema.names()

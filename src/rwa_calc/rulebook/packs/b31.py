@@ -924,9 +924,12 @@ ENTRIES: dict[str, RuleEntry] = {
     # first step <= date < last step (rule 4.2: "beginning with 1 January 2027 and
     # ending with 31 December 2029"; Annex II: no values in OF 07.00 rows 0371-0374
     # from 1 January 2030). before_first=0.0 marks "before the first step"; the
-    # engine never reads it as a weight. Consumed in engine/equity/calculator.py
-    # (_standardised_transitional_weights for direct equity; _equity_transitional_rw
-    # for the rule 4.8 CIU look-through higher-of).
+    # engine never reads it as a weight. Consumed through
+    # engine/equity_transitional.py::standardised_transitional_weights (direct
+    # equity in engine/equity/calculator.py, and the Art. 222(3) Simple Method
+    # equity collateral weight in engine/crm/simple_method.py) and
+    # engine/equity/calculator.py::_equity_transitional_rw (the rule 4.8 CIU
+    # look-through higher-of).
     "equity_transitional_std_rw": Schedule(
         name="equity_transitional_std_rw",
         steps=(
@@ -969,13 +972,15 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # FCSM equity collateral (Art. 222(3)). The weight is DERIVED from what
     # Chapter 2 would assign a direct exposure to the collateral instrument, so
-    # under Basel 3.1 it follows PS1/26 Art. 133's 250% listed-equity weight
-    # rather than CRR Art. 133(2)'s 100%. Overrides the CRR scalar of the same
-    # name. Whether the PS1/26 General Provisions rules 4.2/4.3 weights (which a
-    # firm without IRB permission is assigned for direct equity in 2027-2029,
-    # rule 4.1) also reach this Art. 222(3) "direct exposure" weight is an open
-    # plan item; the earlier note here, that 4.2/4.3 are a grandfathering for
-    # firms coming off IRB permission, inverted rule 4.1. Tied to
+    # under Basel 3.1 it follows PS1/26 Art. 133(3)'s 250% equity weight rather
+    # than CRR Art. 133(2)'s 100%. Overrides the CRR scalar of the same name.
+    # This is the END-STATE weight. PS1/26 General Provisions rule 4.2 "modifies
+    # paragraph 3 of [...] Article 133" for 2027-2029, so for a firm without IRB
+    # permission on 31 December 2026 (rule 4.1) the direct-exposure weight in
+    # those years is the ``equity_transitional_std_rw`` Schedule (160% / 190% /
+    # 220%); engine/crm/simple_method.py::_fcsm_equity_collateral_rw selects it
+    # (P1.392). Rule 4.3 is unreachable: Simple Method equity is main-index
+    # (Art. 197(1)(f)), so listed, so never higher risk. Tied to the end-state
     # ``equity_sa_risk_weights`` by
     # tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py.
     "fcsm_equity_collateral_rw": ScalarParam(

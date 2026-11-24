@@ -715,6 +715,9 @@
     "CRR Art. 123",
     "PS1/26, paragraph 123"
   ],
+  "rwa_calc.engine.sa.re_class::is_residential_property": [
+    "PS1/26, paragraph 124J"
+  ],
   "rwa_calc.engine.sa.rgla::is_rgla_sovereign_expr": [
     "CRR Art. 115",
     "PS1/26, paragraph 115"
@@ -778,7 +781,10 @@
     "PS1/26, paragraph 123B"
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_due_diligence_override": [
-    "PS1/26, paragraph 110A"
+    "PS1/26, paragraph 110A",
+    "PS1/26, paragraph 120",
+    "PS1/26, paragraph 122",
+    "PS1/26, paragraph 129"
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_fcsm_rw_substitution": [
     "CRR Art. 222"
@@ -795,6 +801,12 @@
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_third_party_deposit_rw_mapping": [
     "CRR Art. 232"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::due_diligence_census_exprs": [
+    "PS1/26, paragraph 110A"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::due_diligence_not_performed_warnings": [
+    "PS1/26, paragraph 110A"
   ],
   "rwa_calc.engine.sa.rw_adjustments::income_currency_unknown_census_exprs": [
     "PS1/26, paragraph 123B"
@@ -977,6 +989,9 @@
   ],
   "rwa_calc.reporting.corep.of02::generate_of_02_01": [
     "PS1/26, paragraph 1.3"
+  ],
+  "rwa_calc.reporting.corep.re_limbs::re_limb_exprs": [
+    "PS1/26, paragraph 124"
   ],
   "rwa_calc.reporting.kernel.bases::origin_risk_weight": [
     "CRR Art. 235"
